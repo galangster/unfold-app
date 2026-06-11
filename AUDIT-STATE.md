@@ -85,6 +85,13 @@ Strip is from `1e155db` "fix: remove App Groups entitlement that blocks IPA buil
 
 iOS 26.5-beta SIMULATOR gallery artifact: chronod widget gallery is empty for ALL third-party apps on this sim; Nick's physical device HAS the Unfold widgets installed (he sees them blank — that's NAT-1, fixed in plan-05). Verification moves to post-219 device protocol; reopen only if a physical device also shows an empty gallery.
 
+## Late-scope additions (Nick Q&A 2026-06-10)
+
+- **Visual design critique** running `wf_ffc5756a-b9d` (7 frontier critics over screenshot corpus → DESIGN-CRITIQUE.md, ranked top-10) — feeds report TASTE section.
+- **CVE scans** (bun audit → cve-audit-{mobile,backend}.txt): mobile 12 (5 high — xmldom/lodash/minimatch, all absent from backend lockfile → build-tooling transitive, low runtime risk; classify in roadmap). Backend: PRODUCTION-reachable advisories — qs + path-to-regexp (Express transitive, ReDoS), drizzle-orm <0.45.2, fast-xml-parser; pre-existing in prod (NOT audit regressions) → top dependency-bump item for deploy-prep, deliberately NOT bumped on the verified branch.
+- **Privacy-declaration cross-check** running (agent privacy-label-crosscheck → privacy-label-crosscheck.md): App Privacy labels / policy text vs verified actual data flows.
+- Acknowledged untouched (by design or deferral): physical-device verification (219 QA protocol), real purchase flows (RC env), Android runtime, web target, content/prose quality vs vault rubric, DB operational health, observability build-out, load testing.
+
 ## Finding ledger
 
 Schema: `{id, dimension, severity(P0/P1/P2/TASTE), file:line, claim, evidence, proposed_fix, confidence, status(new/verified/refuted/fixed/deferred), verdicts, commit}`
