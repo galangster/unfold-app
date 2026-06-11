@@ -44,7 +44,6 @@ import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
 import { INPUT_LIMITS } from '@/lib/validation';
 import { TypewriterText } from '@/components/TypewriterText';
-import { AIConsentNotice } from '@/components/AIConsentNotice';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
 import { useUnfoldStore, UserProfile, BibleTranslation, ThemeCategory, DevotionalType, ACCENT_THEMES, WritingTone, ContentDepth, FaithBackground, LifeStage, RelationshipWithGod, BibleFrequency } from '@/lib/store';
@@ -351,7 +350,6 @@ const ALL_STEPS = [
   // PURCHASE CONFIRMATION: premium success moment before discovery
   { id: 'purchaseConfirmation', question: '', subtext: '', type: 'purchaseConfirmation' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
   // AI CONSENT: explicit disclosure before first generation (PRIV-1 / Guideline 5.1.2(i))
-  { id: 'aiConsent', question: '', subtext: '', type: 'aiConsent' as const, adaptive: false, skipIfHasValue: true, hasVariations: false },
   // EXPLORATION: Theme/topic selection (optional)
   { id: 'themeType', question: 'Is there something specific you want\u00A0to\u00A0explore?', subtext: 'Pick one that resonates, or skip to let us\u00A0guide\u00A0you.', type: 'themeType' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // SUBJECT SELECTION: After choosing a study type, pick the specific subject (book, character, etc.)
@@ -365,7 +363,7 @@ const ALL_STEPS = [
   { id: 'reminderTime', question: 'When should the\u00A0reminder\u00A0come?', subtext: 'A gentle nudge to pause and reflect. You can change\u00A0this\u00A0anytime.', type: 'timeChoice' as const, placeholder: '', adaptive: false, skipIfHasValue: true, hasVariations: false, options: [{ value: '6:00 AM', label: 'Early morning', time: '6:00 AM' }, { value: '8:00 AM', label: 'Morning', time: '8:00 AM' }, { value: '12:00 PM', label: 'Midday', time: '12:00 PM' }, { value: '6:00 PM', label: 'Evening', time: '6:00 PM' }, { value: '9:00 PM', label: 'Night', time: '9:00 PM' }] },
 ];
 
-type StepId = 'hook' | 'solution' | 'unfoldIntro' | 'name' | 'aboutMe' | 'stylePreferences1' | 'stylePreferences2' | 'relationshipWithGod' | 'bibleFrequency' | 'shockStat' | 'growthGraph' | 'growthGoals' | 'obstacles' | 'aspiration' | 'vulnerabilityValidation' | 'mirrorBack' | 'featureSummary' | 'founderNote' | 'devotionalSegue' | 'readDevotional' | 'celebration' | 'commitment1' | 'commitment2' | 'threeStepPaywall' | 'purchaseConfirmation' | 'aiConsent' | 'themeType' | 'studySubject' | 'currentSituation' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime';
+type StepId = 'hook' | 'solution' | 'unfoldIntro' | 'name' | 'aboutMe' | 'stylePreferences1' | 'stylePreferences2' | 'relationshipWithGod' | 'bibleFrequency' | 'shockStat' | 'growthGraph' | 'growthGoals' | 'obstacles' | 'aspiration' | 'vulnerabilityValidation' | 'mirrorBack' | 'featureSummary' | 'founderNote' | 'devotionalSegue' | 'readDevotional' | 'celebration' | 'commitment1' | 'commitment2' | 'threeStepPaywall' | 'purchaseConfirmation' | 'themeType' | 'studySubject' | 'currentSituation' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime';
 
 // Discovery chips — tappable quick-select options for the 3 discovery questions
 // Each chip is a feeling/situation that seeds context without requiring typing
@@ -442,18 +440,7 @@ export default function OnboardingScreen() {
   const setUser = useUnfoldStore((s) => s.setUser);
   const updateUser = useUnfoldStore((s) => s.updateUser);
   const setCompanionName = useUnfoldStore((s) => s.setCompanionName);
-  const hasConsentedToAI = useUnfoldStore((s) => s.hasConsentedToAI);
-  const setHasConsentedToAI = useUnfoldStore((s) => s.setHasConsentedToAI);
 
-  // RV-UI-2: hasConsentedToAI lives at the store ROOT, not on the user object.
-  // The step helpers read it off the object they're given, so passing
-  // `existingUser` alone means skipIfHasValue('aiConsent') can never fire for
-  // already-consented users. Merge the root flag into the shape we hand them.
-  const existingUserWithConsent = useMemo(
-    () => ({ ...(existingUser ?? {}), hasConsentedToAI }),
-    [existingUser, hasConsentedToAI],
-  );
-  
   // Companion naming state (saved to store on continue)
   const [companionNameInput, setCompanionNameInput] = useState('');
 
@@ -585,7 +572,7 @@ export default function OnboardingScreen() {
 
   // Track which step we're on (from filtered list)
   const [currentStepId, setCurrentStepId] = useState<StepId>(() =>
-    getInitialOnboardingStepId(ALL_STEPS, existingUserWithConsent, undefined, requestedStartStepId) as StepId,
+    getInitialOnboardingStepId(ALL_STEPS, existingUser, undefined, requestedStartStepId) as StepId,
   );
 
   // Dev: step picker visibility + show-all toggle
@@ -769,11 +756,11 @@ export default function OnboardingScreen() {
     // Dev: bypass all filtering to show every screen
     if (__DEV__ && devShowAllSteps) return ALL_STEPS;
 
-    return getFilteredOnboardingSteps(ALL_STEPS, existingUserWithConsent, {
+    return getFilteredOnboardingSteps(ALL_STEPS, existingUser, {
       selectedMainOption: data.selectedMainOption,
       selectedType: data.selectedType,
     });
-  }, [existingUserWithConsent, data.selectedMainOption, data.selectedType, devShowAllSteps]);
+  }, [existingUser, data.selectedMainOption, data.selectedType, devShowAllSteps]);
   
   // Find current step from filtered STEPS array
   const step = useMemo(() => STEPS.find((s) => s.id === currentStepId), [STEPS, currentStepId]);
@@ -875,9 +862,7 @@ export default function OnboardingScreen() {
     }
 
     // Mirror-back, AI consent, founder note, companion naming, style preferences, cinematic steps, and three-step paywall always allow proceeding
-    // aiConsent: canProceed is always true — the CTA handler sets consent and advances, but the
-    // normal bottom-continue button is hidden (aiConsent is in TOP_CONTINUE_HIDDEN_STEP_TYPES).
-    if (step.type === 'mirrorBack' || step.type === 'founderNote' || step.type === 'featureSummary' || step.type === 'devotionalSegue' || step.type === 'readDevotional' || step.type === 'stylePreferences1' || step.type === 'stylePreferences2' || step.type === 'threeStepPaywall' || step.type === 'purchaseConfirmation' || step.type === 'aiConsent' || step.type === 'shockStat' || step.type === 'growthGraph' || step.type === 'vulnerabilityValidation' || step.type === 'celebration' || step.type === 'commitment1' || step.type === 'commitment2') {
+    if (step.type === 'mirrorBack' || step.type === 'founderNote' || step.type === 'featureSummary' || step.type === 'devotionalSegue' || step.type === 'readDevotional' || step.type === 'stylePreferences1' || step.type === 'stylePreferences2' || step.type === 'threeStepPaywall' || step.type === 'purchaseConfirmation' || step.type === 'shockStat' || step.type === 'growthGraph' || step.type === 'vulnerabilityValidation' || step.type === 'celebration' || step.type === 'commitment1' || step.type === 'commitment2') {
       return true;
     }
 
@@ -1506,21 +1491,6 @@ export default function OnboardingScreen() {
             </View>
           </View>
         </TouchableOpacity>
-      );
-    }
-
-    // AI CONSENT (PRIV-1): explicit disclosure before first generation.
-    // Copy + CTA live in the shared AIConsentNotice (also rendered inline by
-    // /generating for consent-false arrivals outside this funnel — RV-UI-1).
-    if (step.type === 'aiConsent') {
-      return (
-        <AIConsentNotice
-          colors={colors}
-          onAccept={() => {
-            setHasConsentedToAI(true);
-            advanceToNextStep();
-          }}
-        />
       );
     }
 

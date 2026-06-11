@@ -35,7 +35,6 @@ import { registerPushToken } from '@/lib/push-notifications';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
 import { mmkvStorage } from '@/lib/mmkv-storage';
-import { AIConsentNotice } from '@/components/AIConsentNotice';
 
 // MMKV key for persisting in-flight generation job across app kills
 const INFLIGHT_KEY = 'inflight-generation-job';
@@ -102,8 +101,6 @@ export default function GeneratingScreen() {
   };
 
   const user = useUnfoldStore((s) => s.user);
-  const hasConsentedToAI = useUnfoldStore((s) => s.hasConsentedToAI);
-  const setHasConsentedToAI = useUnfoldStore((s) => s.setHasConsentedToAI);
   const addDevotional = useUnfoldStore((s) => s.addDevotional);
   const addUsedScriptures = useUnfoldStore((s) => s.addUsedScriptures);
   const addGeneratedDay = useUnfoldStore((s) => s.addGeneratedDay);
@@ -112,11 +109,6 @@ export default function GeneratingScreen() {
   const completeGenerationSession = useUnfoldStore((s) => s.completeGenerationSession);
   const failGenerationSession = useUnfoldStore((s) => s.failGenerationSession);
   const clearGenerationSession = useUnfoldStore((s) => s.clearGenerationSession);
-  // AI consent is explicitly collected via the shared AIConsentNotice (PRIV-1).
-  // The auto-set has been removed — hasConsentedToAI is only set true when the user
-  // taps the 'I understand — continue' CTA, either on the onboarding 'aiConsent'
-  // step or on the inline consent gate this screen renders for consent-false
-  // arrivals from outside the onboarding funnel (RV-UI-1).
 
   const [isComplete, setIsComplete] = useState(false);
   const [devotionalTitle, setDevotionalTitle] = useState('');
@@ -146,16 +138,14 @@ export default function GeneratingScreen() {
   const [isGenerating, setIsGenerating] = useState(true);
   const notificationPromptTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Prevent swipe-back during generation; re-enable on error and while the
-  // consent gate is showing — leaving must stay possible until consent (RV-UI-1).
+  // Prevent swipe-back during generation; re-enable on error.
   useEffect(() => {
-    navigation.setOptions({ gestureEnabled: !!error || !hasConsentedToAI });
-  }, [navigation, error, hasConsentedToAI]);
+    navigation.setOptions({ gestureEnabled: !!error });
+  }, [navigation, error]);
 
   // Block deep-link / external navigation while generation is in progress.
-  // While unconsented nothing is in flight, so navigation is never trapped (RV-UI-1).
   useEffect(() => {
-    if (!isGenerating || !hasConsentedToAI) return;
+    if (!isGenerating) return;
 
     const unsubscribe = navigation.addListener('beforeRemove' as never, (e: { data: { action: { type: string } }; preventDefault: () => void }) => {
       const actionType = e.data.action.type;
@@ -167,7 +157,7 @@ export default function GeneratingScreen() {
     });
 
     return unsubscribe;
-  }, [navigation, isGenerating, hasConsentedToAI]);
+  }, [navigation, isGenerating]);
 
   // Notification state
   const [notificationPermission, setNotificationPermission] = useState<'unknown' | 'granted' | 'denied'>('unknown');
@@ -487,11 +477,7 @@ export default function GeneratingScreen() {
   // ========== JOB SUBMISSION ==========
 
   useEffect(() => {
-    // PRIV-1: never submit a job until the user has explicitly consented to AI
-    // processing. The 'aiConsent' onboarding step is the sole setter; if the
-    // user somehow reaches this screen before consenting (deep-link, dev reload,
-    // future flow rearrangement) the effect aborts here.
-    if (!user || !hasConsentedToAI || jobSubmittedRef.current) return;
+    if (!user || jobSubmittedRef.current) return;
     jobSubmittedRef.current = true;
 
     // Check MMKV for an inflight job from a previous session (app-kill recovery)
@@ -586,7 +572,7 @@ export default function GeneratingScreen() {
       pollingRef.current = false;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, hasConsentedToAI]);
+  }, [user]);
 
   // ========== HANDLERS ==========
 
@@ -718,25 +704,6 @@ export default function GeneratingScreen() {
     clearGenerationSession();
     router.replace('/(tabs)/(today)');
   };
-
-  // ========== RENDER: AI CONSENT GATE (RV-UI-1) ==========
-  // /generating is the universal consent collection point: any route that lands
-  // here without explicit AI consent (returning-user new series, 218-upgrader
-  // migrated stores, deep links) gets the consent notice inline instead of a
-  // spinner that can never complete. Accepting sets the flag, which arms the
-  // submission effect above; declining is simply leaving — back-navigation is
-  // not blocked while unconsented. Error/complete states are unreachable here
-  // because nothing was ever submitted without consent.
-
-  if (!hasConsentedToAI) {
-    return (
-      <View style={genStyles.transparentFlex}>
-        <SafeAreaView style={genStyles.consentSafeArea} edges={['top', 'bottom']}>
-          <AIConsentNotice colors={colors} onAccept={() => setHasConsentedToAI(true)} />
-        </SafeAreaView>
-      </View>
-    );
-  }
 
   // ========== RENDER: ERROR STATE ==========
 

@@ -196,13 +196,11 @@ if (version < 18) {
   }
 }
 
-// Migration from version 18 to 19: Add AI data consent flag
+// Migration from version 18 to 19: previously seeded the AI consent flag.
+// The consent feature was removed (product decision 2026-06-11); the version
+// step is kept as a no-op so the migration chain ordering is unchanged.
 if (version < 19) {
-  try {
-    (state as any).hasConsentedToAI = (state as any).hasConsentedToAI ?? false;
-  } catch (err) {
-    console.error('[store] Migration v18→19 failed:', err);
-  }
+  // no-op
 }
 
 // Migration from version 19 to 20: Add notebook notes

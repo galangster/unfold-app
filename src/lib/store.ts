@@ -735,10 +735,6 @@ interface UnfoldState {
   markMiddayCheckInCompleted: () => void;
   markEveningWindDownCompleted: () => void;
 
-  // AI data consent (App Store Guideline 5.1.2(i))
-  hasConsentedToAI: boolean;
-  setHasConsentedToAI: (consented: boolean) => void;
-
   // Story deduplication
   addUsedStoryId: (devotionalId: string, storyId: string) => void;
 
@@ -807,8 +803,6 @@ const initialState = {
   eveningWindDownByDay: null,
   lastMiddayCompletedDate: null as string | null,
   lastEveningCompletedDate: null as string | null,
-  // AI data consent
-  hasConsentedToAI: false,
   // Notebook
   notes: [] as Note[],
   folders: [] as NoteFolder[],
@@ -1451,9 +1445,6 @@ export const useUnfoldStore = create<UnfoldState>()(
         set({ lastMiddayCompletedDate: new Date().toLocaleDateString('en-CA') }),
       markEveningWindDownCompleted: () =>
         set({ lastEveningCompletedDate: new Date().toLocaleDateString('en-CA') }),
-
-      // AI data consent
-      setHasConsentedToAI: (consented) => set({ hasConsentedToAI: consented }),
 
       // Deferred generation
       addUsedStoryId: (devotionalId, storyId) => set((state) => {
