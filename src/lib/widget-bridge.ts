@@ -63,6 +63,10 @@ function buildSyncFingerprint(now: Date): string {
     dayId: devotional ? `${devotional.id}:${devotional.currentDay}` : null,
     dayTitle: currentDay?.title ?? null,
     weeklyProgress: getWeeklyProgress(state.devotionals ?? [], now),
+    // FAP-LIB-4: readingDuration is rendered by widgets (totalMinutes field) but was
+    // omitted from the fingerprint, so changing reading duration in settings never
+    // triggered a widget sync.
+    readingMinutes: state.user?.readingDuration ?? 5,
   });
 }
 

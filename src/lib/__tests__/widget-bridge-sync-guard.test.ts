@@ -160,6 +160,28 @@ describe('syncWidgets fingerprint guard (RS10-1)', () => {
     expect(totalUpdateTimelineCalls()).toBe(6);
   });
 
+  it('state change (readingDuration / readingMinutes) → second sync fires updateTimeline again (FAP-LIB-4)', () => {
+    // Baseline: user with readingDuration=5
+    mockStoreState.user = { readingDuration: 5 };
+    syncWidgets();
+
+    // Change reading duration — widgets render this value (totalMinutes) so
+    // the fingerprint must include it to trigger a re-sync.
+    mockStoreState.user = { readingDuration: 15 };
+    syncWidgets();
+
+    // 3 widgets × 2 calls = 6
+    expect(totalUpdateTimelineCalls()).toBe(6);
+  });
+
+  it('same readingDuration repeated → second sync does not fire updateTimeline again', () => {
+    mockStoreState.user = { readingDuration: 15 };
+    syncWidgets();
+    syncWidgets(); // identical state
+
+    expect(totalUpdateTimelineCalls()).toBe(3);
+  });
+
   it('three syncs: first fires, second and third (same state) skip', () => {
     syncWidgets();
     syncWidgets();
