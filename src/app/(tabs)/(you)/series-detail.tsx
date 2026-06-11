@@ -46,7 +46,7 @@ function getSealedLine(dayNumber: number): string {
 
 // ── Bottom glow for locked rows ────────────────────────────────
 // Accent-colored gradient that pulses from the bottom of the card,
-// matching the home screen's GoldEmberField ambient glow style.
+// matching the home screen's EmberSystem ambient glow style.
 function BottomGlow({
   accentColor,
   stagger,
@@ -55,8 +55,15 @@ function BottomGlow({
   stagger: number;
 }) {
   const pulse = useSharedValue(0);
+  const reducedMotion = useReducedMotion();
 
   useEffect(() => {
+    if (reducedMotion) {
+      // Designed still: hold the glow at its midpoint instead of pulsing —
+      // this was the ember-glow loop that kept drifting under reduce motion.
+      pulse.value = 0.5;
+      return;
+    }
     pulse.value = withDelay(
       stagger,
       withRepeat(
@@ -65,7 +72,7 @@ function BottomGlow({
         true,
       ),
     );
-  }, [pulse, stagger]);
+  }, [pulse, stagger, reducedMotion]);
 
   const glowStyle = useAnimatedStyle(() => {
     const opacity = interpolate(pulse.value, [0, 1], [0.08, 0.5]);
