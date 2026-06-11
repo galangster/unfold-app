@@ -357,6 +357,40 @@ describe('mmkv-storage boot (218→219 upgrade populations)', () => {
     expect(world.files.get(META_ID)!.data.get(MARKER_KEY)).toBe('encrypted');
   });
 
+  it("(g) RS5-3 recrypt-throw: marker='plain' is written so the file mode is recorded truthfully", () => {
+    const world = new FakeWorld({ secureKey: KEY, recryptThrows: true });
+    world.seedStore(STORE_ID, 'plain', undefined, { [STORAGE_KEY]: PAYLOAD });
+
+    const storage = bootWith(world);
+
+    // Plain open succeeded; the upgrade failed; nothing was lost.
+    expect(storage.mmkvStorage.getItem(STORAGE_KEY)).toBe(PAYLOAD);
+    expect(world.files.get(STORE_ID)!.mode).toBe('plain');
+    // RS5-3: the marker must say 'plain' — the ACTUAL file mode. The old code
+    // skipped the write entirely, leaving marker=null (re-probe ambiguity);
+    // writing 'encrypted' would make the next boot discard the plain file.
+    expect(world.files.get(META_ID)!.data.get(MARKER_KEY)).toBe('plain');
+    expectNoProbeLeftovers(world);
+  });
+
+  it('(g2) RS5-3 next-boot retry: marker=plain → row 3 recrypts without re-probing', () => {
+    const world = new FakeWorld({ secureKey: KEY, recryptThrows: true });
+    world.seedStore(STORE_ID, 'plain', undefined, { [STORAGE_KEY]: PAYLOAD });
+
+    bootWith(world); // boot 1: recrypt throws, marker='plain' written
+    const copyCallsAfterFirstBoot = world.copyCalls.length;
+
+    world.opts.recryptThrows = false; // transient failure clears
+    const storage = bootWith(world); // boot 2: marker row 3 retries the upgrade
+
+    expect(storage.mmkvStorage.getItem(STORAGE_KEY)).toBe(PAYLOAD);
+    expect(world.files.get(STORE_ID)!.mode).toBe('encrypted');
+    expect(world.files.get(STORE_ID)!.key).toBe(KEY);
+    expect(world.files.get(META_ID)!.data.get(MARKER_KEY)).toBe('encrypted');
+    // The marker made boot 2 deterministic: no second probe ran.
+    expect(world.copyCalls.length).toBe(copyCallsAfterFirstBoot);
+  });
+
   it('stale probe files from a crashed previous probe are cleared and re-probed safely', () => {
     const world = new FakeWorld({ secureKey: KEY });
     world.seedStore(STORE_ID, 'encrypted', KEY, { [STORAGE_KEY]: PAYLOAD });

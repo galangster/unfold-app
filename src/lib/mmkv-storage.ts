@@ -190,14 +190,26 @@ if (openPlan.mode === 'recovery') {
     '[MMKV] Keychain unavailable but store is encrypted — running in recovery namespace this session; user data preserved on disk',
   );
 }
-if (openPlan.recrypt && encryptionKey) {
-  try {
-    mmkv.recrypt(encryptionKey);
-    storageMeta.set(MODE_MARKER_KEY, 'encrypted');
-    logger.log('[MMKV] Upgraded plain store to encrypted via recrypt');
-  } catch (error) {
-    logger.warn('[MMKV] recrypt failed; staying plain', error);
+if (openPlan.recrypt) {
+  // Recrypt rows open plain and upgrade in place. The marker we persist must
+  // reflect the ACTUAL resulting file mode (RS5-3): recrypt() can throw,
+  // leaving the file plain on disk. The old code skipped the marker write
+  // entirely in that case (the else-if never fired), so the next boot saw
+  // marker=null again instead of a deterministic 'plain' retry.
+  let recrypted = false;
+  if (encryptionKey !== undefined) {
+    try {
+      mmkv.recrypt(encryptionKey);
+      recrypted = true;
+      logger.log('[MMKV] Upgraded plain store to encrypted via recrypt');
+    } catch (error) {
+      logger.warn(
+        '[MMKV] recrypt failed; file remains plain — marker=plain so next boot retries the upgrade',
+        error,
+      );
+    }
   }
+  storageMeta.set(MODE_MARKER_KEY, recrypted ? 'encrypted' : 'plain');
 } else if (openPlan.writeMarker) {
   storageMeta.set(MODE_MARKER_KEY, openPlan.writeMarker);
 }
