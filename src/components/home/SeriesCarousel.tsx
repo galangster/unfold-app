@@ -20,6 +20,7 @@ import { Duration, Ease, Stagger } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, type Devotional } from '@/lib/store';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
+import { Typography } from '@/constants/typography';
 
 const CARD_WIDTH = 160;
 const CARD_GAP = parseInt(String(Spacing['3']), 10) || 12;
@@ -174,8 +175,8 @@ export function SeriesCarousel() {
     >
       {/* Header row */}
       <View style={styles.headerRow}>
-        <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>
-          YOUR DEVOTIONALS
+        <Text style={[styles.sectionLabel, { color: colors.text }]}>
+          Your devotionals
         </Text>
 
         {showSeeAll && (
@@ -187,10 +188,10 @@ export function SeriesCarousel() {
             accessibilityLabel="See all studies"
           >
             <View style={styles.seeAllRow}>
-              <Text style={[styles.seeAllText, { color: colors.accent }]}>
-                See All
+              <Text style={[styles.seeAllText, { color: colors.textMuted }]}>
+                See all
               </Text>
-              <CaretRightIcon size={12} color={colors.accent} weight="bold" />
+              <CaretRightIcon size={12} color={colors.textMuted} weight="bold" />
             </View>
           </TouchableOpacity>
         )}
@@ -225,10 +226,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing['3'],
   },
   sectionLabel: {
-    fontFamily: FontFamily.uiSemiBold,
-    fontSize: FontSize.sm,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
+    ...Typography.sectionHeader,
   },
   seeAllRow: {
     flexDirection: 'row',

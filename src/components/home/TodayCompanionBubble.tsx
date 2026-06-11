@@ -22,6 +22,7 @@ import { buildBubblePath } from '@/lib/bubble-path';
 import { animateCardDismiss } from '@/lib/card-dismiss-animation';
 import { useTheme } from '@/lib/theme';
 import type { ColorTheme } from '@/constants/colors';
+import { Typography } from '@/constants/typography';
 
 interface Props {
   colors: ColorTheme;
@@ -153,20 +154,17 @@ export function TodayCompanionBubble({
         </Svg>
       ) : null}
 
-      {label ? (
-        <View style={styles.kickerRow}>
-          <View style={[styles.kickerRule, { backgroundColor: accentColor }]} />
-          <Text style={[styles.label, { color: accentColor }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
-            {label}
-          </Text>
-        </View>
-      ) : null}
-
       {children ?? (
         <Text style={[styles.text, { color: colors.text }]} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}>
           {text}
         </Text>
       )}
+
+      {label ? (
+        <Text style={[styles.label, { color: colors.textMuted }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
+          {label}
+        </Text>
+      ) : null}
 
       {actionLabel ? (
         <View style={styles.actionLink}>
@@ -280,21 +278,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
   },
-  kickerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing['2'],
-    marginBottom: Spacing['1.5'],
-  },
-  kickerRule: {
-    width: 16,
-    height: 1,
-  },
   label: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 10,
-    letterSpacing: 1.1,
-    textTransform: 'uppercase',
+    ...Typography.cardMeta,
+    marginTop: Spacing['2'],
   },
   text: {
     position: 'relative',

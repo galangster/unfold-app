@@ -31,6 +31,7 @@ import {
 } from '@/lib/today-card-stack-motion';
 import type { ColorTheme } from '@/constants/colors';
 import { smartQuotes } from '@/lib/smart-quotes';
+import { Typography } from '@/constants/typography';
 
 export interface TodayCardStackAction {
   label: string;
@@ -93,18 +94,15 @@ function StackDismissButton({ card, colors }: { card: TodayCardStackCard; colors
 function TopCardBody({ card, colors }: { card: TodayCardStackCard; colors: ColorTheme }) {
   const body = (
     <View style={[styles.content, card.onDismiss && styles.contentDismissible]}>
-      {card.eyebrow ? (
-        <View style={styles.eyebrowRow}>
-          <View style={[styles.eyebrowRule, { backgroundColor: colors.accent }]} />
-          <Text style={[styles.eyebrow, { color: colors.accent }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
-            {card.eyebrow}
-          </Text>
-        </View>
-      ) : null}
-
       <Text style={[styles.title, { color: colors.text }]} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE} numberOfLines={2}>
         {smartQuotes(card.title)}
       </Text>
+
+      {card.eyebrow ? (
+        <Text style={[styles.cardMeta, { color: colors.textMuted }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
+          {card.eyebrow}
+        </Text>
+      ) : null}
 
       {card.body ? (
         <Text style={[styles.body, { color: colors.textMuted }]} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE} numberOfLines={3}>
@@ -441,21 +439,9 @@ const styles = StyleSheet.create({
   contentDismissible: {
     paddingRight: Spacing['10'],
   },
-  eyebrowRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: Spacing['2'],
-  },
-  eyebrowRule: {
-    height: 1,
-    opacity: 0.9,
-    width: 18,
-  },
-  eyebrow: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 10,
-    letterSpacing: 1.1,
-    textTransform: 'uppercase',
+  cardMeta: {
+    ...Typography.cardMeta,
+    marginTop: 2,
   },
   title: {
     fontFamily: FontFamily.display,

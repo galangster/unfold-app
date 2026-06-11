@@ -115,11 +115,6 @@ function ResumeCard({
           accessibilityHint={isJournalResume ? 'Opens the saved journal reflection' : 'Returns to the saved devotional reading'}
         >
           <View style={[styles.resumeContent, onDismiss && styles.resumeContentDismissible]}>
-            <View style={styles.resumeKickerRow}>
-              <View style={[styles.resumeKickerRule, { backgroundColor: colors.accent }]} />
-              <Text style={[styles.resumeLabel, { color: colors.accent }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>{resumeProps.label}</Text>
-            </View>
-
             <View style={styles.resumeTitleRow}>
               <View style={[styles.resumeIcon, { borderColor: alpha(colors.accent, 0.16), backgroundColor: alpha(colors.accent, 0.075) }]}>
                 {isJournalResume ? (
@@ -132,7 +127,7 @@ function ResumeCard({
                 <Text numberOfLines={2} style={[styles.resumeTitle, { color: colors.text }]} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}>
                   {resumeProps.title}
                 </Text>
-                <Text style={[styles.resumeTimeAgo, { color: colors.textMuted }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>{resumeProps.timeAgo}</Text>
+                <Text style={[styles.resumeTimeAgo, { color: colors.textMuted }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>{resumeProps.label} · {resumeProps.timeAgo}</Text>
               </View>
             </View>
 
@@ -279,22 +274,6 @@ const styles = StyleSheet.create({
     top: -9,
     right: -9,
     zIndex: 4,
-  },
-  resumeKickerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing['2'],
-  },
-  resumeKickerRule: {
-    width: 18,
-    height: 1,
-    opacity: 0.9,
-  },
-  resumeLabel: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 10,
-    letterSpacing: 1.1,
-    textTransform: 'uppercase',
   },
   resumeTitleRow: {
     flexDirection: 'row',

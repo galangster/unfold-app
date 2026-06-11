@@ -127,7 +127,6 @@ export function RecommendedSeriesCard({
   }
 
   const isCompletion = variant === 'completion';
-  const eyebrow = isCompletion ? 'Up next' : 'Recommended for you';
   const introCopy = isCompletion
     ? `${completedSeriesTitle ?? 'This series'} is complete. Here’s a next thread for the season you’re carrying now.`
     : 'A quiet next thread shaped around the season you named.';
@@ -149,11 +148,6 @@ export function RecommendedSeriesCard({
             },
           ]}
         >
-          <View style={styles.kickerRow}>
-            <View style={[styles.kickerRule, { backgroundColor: colors.accent }]} />
-            <Text style={[styles.eyebrow, { color: colors.accent }]}>Discerning what’s next</Text>
-          </View>
-
           <Text style={[styles.loadingTitle, { color: colors.text }]}>Finding your next thread.</Text>
           <Text style={[styles.loadingCopy, { color: colors.textMuted }]}>Unfold is matching a devotional to your story and rhythm.</Text>
 
@@ -197,11 +191,6 @@ export function RecommendedSeriesCard({
         ]}
       >
         <View style={styles.contentColumn}>
-          <View style={styles.kickerRow}>
-            <View style={[styles.kickerRule, { backgroundColor: colors.accent }]} />
-            <Text style={[styles.eyebrow, { color: colors.accent }]}>{eyebrow}</Text>
-          </View>
-
           <Text style={[styles.introCopy, { color: colors.textMuted }]}>{introCopy}</Text>
 
           <Text style={[styles.themeName, { color: colors.text }]}>
@@ -274,24 +263,6 @@ const styles = StyleSheet.create({
   },
   contentColumn: {
     zIndex: 2,
-  },
-  kickerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing['3'],
-    marginBottom: Spacing['4'],
-  },
-  kickerRule: {
-    width: 34,
-    height: 1.5,
-    borderRadius: 1,
-  },
-  eyebrow: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 11,
-    letterSpacing: 1.6,
-    lineHeight: 16,
-    textTransform: 'uppercase',
   },
   introCopy: {
     width: '100%',
