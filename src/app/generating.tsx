@@ -101,6 +101,7 @@ export default function GeneratingScreen() {
   };
 
   const user = useUnfoldStore((s) => s.user);
+  const hasConsentedToAI = useUnfoldStore((s) => s.hasConsentedToAI);
   const addDevotional = useUnfoldStore((s) => s.addDevotional);
   const addUsedScriptures = useUnfoldStore((s) => s.addUsedScriptures);
   const addGeneratedDay = useUnfoldStore((s) => s.addGeneratedDay);
@@ -480,7 +481,11 @@ export default function GeneratingScreen() {
   // ========== JOB SUBMISSION ==========
 
   useEffect(() => {
-    if (!user || jobSubmittedRef.current) return;
+    // PRIV-1: never submit a job until the user has explicitly consented to AI
+    // processing. The 'aiConsent' onboarding step is the sole setter; if the
+    // user somehow reaches this screen before consenting (deep-link, dev reload,
+    // future flow rearrangement) the effect aborts here.
+    if (!user || !hasConsentedToAI || jobSubmittedRef.current) return;
     jobSubmittedRef.current = true;
 
     // Check MMKV for an inflight job from a previous session (app-kill recovery)
@@ -575,7 +580,7 @@ export default function GeneratingScreen() {
       pollingRef.current = false;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [user, hasConsentedToAI]);
 
   // ========== HANDLERS ==========
 
