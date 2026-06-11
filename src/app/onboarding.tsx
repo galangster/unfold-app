@@ -443,6 +443,15 @@ export default function OnboardingScreen() {
   const setCompanionName = useUnfoldStore((s) => s.setCompanionName);
   const hasConsentedToAI = useUnfoldStore((s) => s.hasConsentedToAI);
   const setHasConsentedToAI = useUnfoldStore((s) => s.setHasConsentedToAI);
+
+  // RV-UI-2: hasConsentedToAI lives at the store ROOT, not on the user object.
+  // The step helpers read it off the object they're given, so passing
+  // `existingUser` alone means skipIfHasValue('aiConsent') can never fire for
+  // already-consented users. Merge the root flag into the shape we hand them.
+  const existingUserWithConsent = useMemo(
+    () => ({ ...(existingUser ?? {}), hasConsentedToAI }),
+    [existingUser, hasConsentedToAI],
+  );
   
   // Companion naming state (saved to store on continue)
   const [companionNameInput, setCompanionNameInput] = useState('');
@@ -575,7 +584,7 @@ export default function OnboardingScreen() {
 
   // Track which step we're on (from filtered list)
   const [currentStepId, setCurrentStepId] = useState<StepId>(() =>
-    getInitialOnboardingStepId(ALL_STEPS, existingUser, undefined, requestedStartStepId) as StepId,
+    getInitialOnboardingStepId(ALL_STEPS, existingUserWithConsent, undefined, requestedStartStepId) as StepId,
   );
 
   // Dev: step picker visibility + show-all toggle
@@ -759,11 +768,11 @@ export default function OnboardingScreen() {
     // Dev: bypass all filtering to show every screen
     if (__DEV__ && devShowAllSteps) return ALL_STEPS;
 
-    return getFilteredOnboardingSteps(ALL_STEPS, existingUser, {
+    return getFilteredOnboardingSteps(ALL_STEPS, existingUserWithConsent, {
       selectedMainOption: data.selectedMainOption,
       selectedType: data.selectedType,
     });
-  }, [existingUser, data.selectedMainOption, data.selectedType, devShowAllSteps]);
+  }, [existingUserWithConsent, data.selectedMainOption, data.selectedType, devShowAllSteps]);
   
   // Find current step from filtered STEPS array
   const step = useMemo(() => STEPS.find((s) => s.id === currentStepId), [STEPS, currentStepId]);

@@ -19,6 +19,10 @@ type ExistingUserLike = {
   reminderTime?: string | null;
   bibleTranslation?: string | null;
   writingStyle?: WritingStyleLike | null;
+  // NOTE: hasConsentedToAI lives at the store ROOT, not on the persisted user
+  // object. Call sites must merge it in (see onboarding.tsx
+  // `existingUserWithConsent`) or the aiConsent skip can never fire (RV-UI-2).
+  hasConsentedToAI?: boolean;
 } | null | undefined;
 
 type OnboardingSelectionContext = {
@@ -205,7 +209,7 @@ export function getFilteredOnboardingSteps<T extends OnboardingStepLike>(
       if (step.id === 'aboutMe' && hasValue(existingUser?.aboutMe)) return false;
       if (step.id === 'reminderTime' && hasValue(existingUser?.reminderTime)) return false;
       // Skip AI consent step for users who have already explicitly consented
-      if (step.id === 'aiConsent' && (existingUser as { hasConsentedToAI?: boolean } | null | undefined)?.hasConsentedToAI === true) return false;
+      if (step.id === 'aiConsent' && existingUser?.hasConsentedToAI === true) return false;
     }
 
     return true;

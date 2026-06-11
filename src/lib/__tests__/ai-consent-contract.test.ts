@@ -70,4 +70,27 @@ describe('PRIV-1: AI consent contract', () => {
     // The 'I understand — continue' CTA must call setHasConsentedToAI(true) before advancing
     expect(onboardingSrc).toMatch(/setHasConsentedToAI\(true\)/);
   });
+
+  it('aiConsent step is NOT skipped when the passed shape lacks hasConsentedToAI (RV-UI-2)', () => {
+    // hasConsentedToAI lives at the store ROOT (store.ts), not on the user object.
+    // A bare user object — the shape of `s.user` — must NOT trigger the skip:
+    // the consent step has to show for anyone whose consent we cannot prove.
+    const steps = [
+      { id: 'aiConsent', skipIfHasValue: true },
+      { id: 'reminderTime', skipIfHasValue: false },
+    ];
+    const bareUser = { hasCompletedOnboarding: true, name: 'Nick', aboutMe: 'Builder' };
+    const ids = getFilteredOnboardingSteps(steps, bareUser, {}).map((s) => s.id);
+    expect(ids).toContain('aiConsent');
+  });
+
+  it('onboarding merges store-level hasConsentedToAI into the shape passed to the step helpers (RV-UI-2)', () => {
+    const onboardingSrc = fs.readFileSync(path.join(srcRoot, 'app', 'onboarding.tsx'), 'utf8');
+    // Both step-helper call sites must receive a shape that carries the root-level
+    // consent flag — passing `existingUser` (s.user) alone means
+    // skipIfHasValue('aiConsent') can never fire for already-consented users.
+    expect(onboardingSrc).toMatch(/existingUserWithConsent/);
+    expect(onboardingSrc).toMatch(/getInitialOnboardingStepId\(ALL_STEPS,\s*existingUserWithConsent/);
+    expect(onboardingSrc).toMatch(/getFilteredOnboardingSteps\(ALL_STEPS,\s*existingUserWithConsent/);
+  });
 });
