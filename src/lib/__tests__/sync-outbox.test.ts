@@ -32,7 +32,7 @@ import {
   OUTBOX_KEY,
 } from '../sync-outbox';
 import type { SyncPushChange } from '../sync-outbox';
-import { mmkvStorage } from '../mmkv-storage';
+import { mmkvStorage, getDeviceId } from '../mmkv-storage';
 
 function makeChange(id: string, table: string, ts: string): SyncPushChange {
   return {
@@ -200,6 +200,38 @@ describe('sync-outbox', () => {
     expect(outbox).toHaveLength(1);
     expect(outbox[0].id).toBe('d1');
     expect(outbox[0].clientUpdatedAt).toBe('2026-06-02T00:00:00Z');
+  });
+
+  describe('ephemeral recovery identity refusal (FAP-LIB-1)', () => {
+    afterEach(() => {
+      // jest.clearAllMocks() does NOT undo mockImplementation — restore the
+      // real-identity default explicitly so it cannot leak between tests.
+      (getDeviceId as jest.Mock).mockImplementation(() => 'test-device-id');
+    });
+
+    it('refuses to ENQUEUE under an ephemeral identity — entry ids derive from the device id and would orphan server rows', () => {
+      (getDeviceId as jest.Mock).mockImplementation(() => 'ephemeral-recovery-uuid');
+
+      enqueueSyncChanges([makeChange('d1', 'devotionals', '2026-06-01T00:00:00Z')]);
+
+      expect(peekSyncOutbox()).toHaveLength(0);
+    });
+
+    it('refuses to DRAIN under an ephemeral identity — outbox kept intact for the post-recovery real identity', async () => {
+      const mockFetch = jest.fn();
+      global.fetch = mockFetch as any;
+
+      // Queued under the REAL identity (e.g. carried across a recovery boot).
+      enqueueSyncChanges([makeChange('d1', 'devotionals', '2026-06-01T00:00:00Z')]);
+      (getDeviceId as jest.Mock).mockImplementation(() => 'ephemeral-recovery-uuid');
+
+      await expect(drainSyncOutbox()).resolves.toBeUndefined();
+
+      // No POST under the one-session X-Device-ID; entries survive for the
+      // normal-boot merge + drain under the real identity (RS5-4/RS2-1).
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(peekSyncOutbox()).toHaveLength(1);
+    });
   });
 
   it('partial answers drop only the answered snapshot entries, never mid-flight arrivals', async () => {

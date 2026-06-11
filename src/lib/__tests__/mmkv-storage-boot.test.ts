@@ -74,6 +74,10 @@ class FakeWorld {
   files = new Map<string, FakeStoreFile>();
   crcs = new Set<string>(); // base ids that have a .crc sibling on disk
   copyCalls: { from: string; to: string }[] = [];
+  /** Every SecureStore.setItem ATTEMPT (recorded even when secureThrows). */
+  secureSetCalls: { key: string; value: string }[] = [];
+  /** Monotonic uuid counter so successive v4() calls are distinguishable. */
+  uuidSeq = 0;
   opts: WorldOptions;
 
   constructor(opts: WorldOptions = {}) {
@@ -233,7 +237,8 @@ function bootWith(world: FakeWorld): typeof import('@/lib/mmkv-storage') {
       if (world.opts.secureThrows) throw new Error('Keychain unavailable');
       return world.opts.secureKey ?? null;
     }),
-    setItem: jest.fn((_k: string, v: string): void => {
+    setItem: jest.fn((k: string, v: string): void => {
+      world.secureSetCalls.push({ key: k, value: v });
       if (world.opts.secureThrows) throw new Error('Keychain unavailable');
       world.opts.secureKey = v;
     }),
@@ -242,8 +247,9 @@ function bootWith(world: FakeWorld): typeof import('@/lib/mmkv-storage') {
     logger: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
   }));
   // uuid ships untransformed ESM; only used by getDeviceId/rotateDeviceId,
-  // which the boot path never calls.
-  jest.doMock('uuid', () => ({ v4: jest.fn(() => 'test-uuid-v4') }));
+  // which the boot path never calls. Counter-based so successive mints are
+  // distinguishable in identity tests.
+  jest.doMock('uuid', () => ({ v4: jest.fn(() => `test-uuid-${++world.uuidSeq}`) }));
 
   let mod: typeof import('@/lib/mmkv-storage') | undefined;
   jest.isolateModules(() => {
@@ -446,6 +452,29 @@ describe('mmkv-storage boot (218→219 upgrade populations)', () => {
     expect(normalStorage.mmkvStorage.getItem(STORAGE_KEY)).toBe(PAYLOAD);
     expect(world.files.get(STORE_ID)!.data.get(OUTBOX_KEY)).toBe(JSON.stringify([outboxEntry]));
     expect(world.files.get(RECOVERY_ID)!.data.has(OUTBOX_KEY)).toBe(false);
+  });
+
+  it('(f5) FAP-LIB-1/FAP-X-4: recovery getDeviceId is EPHEMERAL — prefixed, session-stable, never persisted', () => {
+    // Pre-fix, a recovery boot minted a brand-new UUID (SecureStore throws →
+    // null; the mirror lives in the just-wiped recovery namespace → null) and
+    // persisted it into the void — RC identity churn every recovery boot and
+    // sync rows keyed to one-session identities. The fix: a session-scoped
+    // ephemeral id, in-memory only, prefixed so sync code can refuse it.
+    const world = new FakeWorld({ secureThrows: true });
+    world.seedStore(STORE_ID, 'encrypted', KEY, { [STORAGE_KEY]: PAYLOAD });
+    world.seedStore(META_ID, 'plain', undefined, { [MARKER_KEY]: 'encrypted' });
+
+    const storage = bootWith(world);
+    expect(storage.isRecoverySession()).toBe(true);
+
+    const id = storage.getDeviceId();
+    expect(id.startsWith('ephemeral-')).toBe(true);
+    // Stable within the session: a second resolve returns the SAME id.
+    expect(storage.getDeviceId()).toBe(id);
+    // NEVER persisted: no mirror in the recovery namespace, no Keychain
+    // write even attempted.
+    expect(world.files.get(RECOVERY_ID)!.data.has('unfold-device-id')).toBe(false);
+    expect(world.secureSetCalls.filter((c) => c.key === 'unfold-device-id')).toHaveLength(0);
   });
 
   it('(f4) FAP-X-3: migrateData skips recovery sessions — legacy v1 data is neither cleared nor pulled into the throwaway namespace', () => {

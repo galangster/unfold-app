@@ -15,7 +15,8 @@
  *    retried forever.
  */
 
-import { mmkvStorage } from '@/lib/mmkv-storage';
+import { mmkvStorage, getDeviceId } from '@/lib/mmkv-storage';
+import { isEphemeralDeviceId } from '@/lib/device-id';
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from '@/lib/api-config';
 import type { SyncPushChange } from '@/lib/sync-types';
 // RS13-1: single owner — the key is defined in mmkv-recovery-outbox.ts (pure, no native deps)
@@ -73,6 +74,15 @@ let lastDrainCompletedAt = 0;
 let lastEnqueueAt = 0;
 
 export function enqueueSyncChanges(changes: SyncPushChange[]): void {
+  // FAP-LIB-1: never queue work minted under an ephemeral recovery identity.
+  // Sync row ids derive from getDeviceId() (user-profile-sync, onboarding
+  // sample ids), so entries built this session are keyed to an identity that
+  // dies with the session — draining them later (even under the restored real
+  // identity) would create permanently orphaned server rows. The recovery
+  // session's local data is throwaway by design (REVM-4); dropping its queue
+  // entries is the consistent choice.
+  if (isEphemeralDeviceId(getDeviceId())) return;
+
   const current = readOutbox();
 
   // Build a map keyed by table:id for O(n) dedup
@@ -116,6 +126,13 @@ export function resetDrainStateForTesting(): void {
 let inflight: Promise<void> | null = null;
 
 export function drainSyncOutbox(): Promise<void> {
+  // FAP-LIB-1 (orphaned-pushes): never POST under an ephemeral recovery
+  // identity — the X-Device-ID header would file every change under a
+  // one-session identity the real client can never read back. Keep the
+  // outbox intact: entries are carried across recovery boots (RS5-4) and
+  // drained after a normal boot restores the real identity (RS2-1 merge).
+  if (isEphemeralDeviceId(getDeviceId())) return Promise.resolve();
+
   // Min-interval guard (RS10-4): skip if a drain completed recently AND no
   // new entries were enqueued since then. Bypassed by new enqueues so
   // fresh offline work always gets a chance to drain promptly.

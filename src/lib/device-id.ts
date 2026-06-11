@@ -11,6 +11,20 @@
  * in mmkv-storage.ts which uses this logic.
  */
 
+/**
+ * FAP-LIB-1/FAP-X-4: prefix of the identity used for a RECOVERY session when
+ * no Keychain value is readable. Such an id is in-memory only — NEVER
+ * persisted — and dies with the session, so sync code must refuse to queue
+ * or push work under it (server rows would be permanently orphaned). A v4
+ * UUID can never start with this prefix.
+ */
+export const EPHEMERAL_DEVICE_ID_PREFIX = 'ephemeral-';
+
+/** True when the id is a one-session recovery identity (see prefix above). */
+export function isEphemeralDeviceId(id: string): boolean {
+  return id.startsWith(EPHEMERAL_DEVICE_ID_PREFIX);
+}
+
 export interface ResolveDeviceIdArgs {
   secureValue: string | null;
   mmkvValue: string | null;

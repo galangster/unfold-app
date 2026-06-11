@@ -21,7 +21,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { File as FsFile } from 'expo-file-system';
 import { logger } from '@/lib/logger';
 import { resolveMmkvOpenPlan, type MmkvStoreProbeResult } from '@/lib/mmkv-open-mode';
-import { resolveDeviceId } from '@/lib/device-id';
+import { resolveDeviceId, EPHEMERAL_DEVICE_ID_PREFIX } from '@/lib/device-id';
 import { mergeRecoveryOutbox, RECOVERY_OUTBOX_KEY } from '@/lib/mmkv-recovery-outbox';
 
 // Re-export so consumers only need one import location (backward compat).
@@ -426,6 +426,10 @@ export function purgeRealStoreForRecoveryReset(): void {
 const DEVICE_ID_KEY = 'unfold-device-id';
 const SECURE_DEVICE_ID_KEY = 'unfold-device-id'; // SecureStore namespace is separate from MMKV
 
+// FAP-LIB-1/FAP-X-4: one-session identity for recovery sessions with no
+// readable Keychain value. In-memory ONLY — never persisted (see getDeviceId).
+let ephemeralDeviceId: string | null = null;
+
 /**
  * Get or create a stable device ID (UUID v4) for anonymous identification.
  *
@@ -443,6 +447,20 @@ export function getDeviceId(): string {
     secureValue = SecureStore.getItem(SECURE_DEVICE_ID_KEY);
   } catch {
     secureAvailable = false; // Keychain down — MMKV mirror keeps us working
+  }
+
+  // FAP-LIB-1/FAP-X-4: during a recovery session the MMKV mirror lives in the
+  // just-wiped throwaway namespace, so with no Keychain value resolveDeviceId
+  // would mint a fresh UUID on EVERY recovery boot and persist it into the
+  // void — churning the RevenueCat identity and keying sync writes to
+  // one-session identities (orphaned server rows). And if the Keychain came
+  // back EMPTY mid-session, persisting a new id would permanently shadow the
+  // real mirror id (unreachable this session) on the next normal boot. Use a
+  // session-scoped EPHEMERAL id instead: in-memory only, never persisted,
+  // prefixed so sync-outbox refuses to queue/push under it.
+  if (openPlan.mode === 'recovery' && secureValue === null) {
+    ephemeralDeviceId ??= EPHEMERAL_DEVICE_ID_PREFIX + uuidv4();
+    return ephemeralDeviceId;
   }
 
   const plan = resolveDeviceId({
