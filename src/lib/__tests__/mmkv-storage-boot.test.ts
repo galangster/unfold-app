@@ -52,10 +52,14 @@ interface WorldOptions {
   secureThrows?: boolean;
   /** File.copySync throws (probe copy fails). */
   fsCopyThrows?: boolean;
+  /** File.copySync throws ONLY for the .crc sibling copy (main copy succeeds). */
+  fsCrcCopyThrows?: boolean;
   /** The expo-file-system module itself fails to load. */
   fsRequireThrows?: boolean;
   /** MMKV.recrypt throws (RS5-3). */
   recryptThrows?: boolean;
+  /** MMKV constructor throws when opening the probe id (RS9-2). */
+  probeMMKVThrows?: boolean;
 }
 
 class FakeWorld {
@@ -85,8 +89,12 @@ class FakeWorld {
 
   copyPath(from: string, to: string): void {
     if (this.opts.fsCopyThrows) throw new Error('simulated File.copySync failure');
-    this.copyCalls.push({ from, to });
     const fromId = this.idOf(from);
+    // fsCrcCopyThrows: let the main-file copy succeed, throw only on .crc copy
+    if (this.opts.fsCrcCopyThrows && fromId.endsWith('.crc')) {
+      throw new Error('simulated .crc File.copySync failure');
+    }
+    this.copyCalls.push({ from, to });
     const toId = this.idOf(to);
     if (fromId.endsWith('.crc')) {
       if (!this.crcs.has(fromId.slice(0, -4))) throw new Error(`copy source missing: ${from}`);
@@ -114,6 +122,10 @@ function makeMMKVClass(world: FakeWorld) {
 
     constructor(config: { id: string; encryptionKey?: string }) {
       const { id, encryptionKey } = config;
+      // RS9-2: probe MMKV constructor failure simulation
+      if (world.opts.probeMMKVThrows && id === PROBE_ID) {
+        throw new Error('simulated MMKV probe constructor failure');
+      }
       let file = world.files.get(id);
       if (!file) {
         file = {
@@ -447,6 +459,42 @@ describe('mmkv-storage boot (218→219 upgrade populations)', () => {
 
     expect(storage.mmkvStorage.getItem(STORAGE_KEY)).toBe(PAYLOAD);
     expect(world.files.get(META_ID)!.data.get(MARKER_KEY)).toBe('encrypted');
+    expectNoProbeLeftovers(world);
+  });
+
+  // RS9-1: main copy succeeds but .crc copy throws — split failure.
+  // The probe must return 'probe-unavailable' and the main probe file must be
+  // cleaned up by the finally block. The real store data is preserved.
+  it('(e3) RS9-1 split-failure: main copy succeeds + .crc copy throws → probe-unavailable, probe file cleaned, data preserved', () => {
+    const world = new FakeWorld({ secureKey: KEY, fsCrcCopyThrows: true });
+    world.seedStore(STORE_ID, 'encrypted', KEY, { [STORAGE_KEY]: PAYLOAD });
+
+    const storage = bootWith(world);
+
+    // Majority-safe encrypted fallback: data preserved.
+    expect(storage.mmkvStorage.getItem(STORAGE_KEY)).toBe(PAYLOAD);
+    expect(world.files.get(STORE_ID)!.mode).toBe('encrypted');
+    expect(world.files.get(META_ID)!.data.get(MARKER_KEY)).toBe('encrypted');
+    // The main copy was attempted (non-crc copyPath was recorded).
+    expect(world.copyCalls.some((c) => !c.from.endsWith('.crc') && c.to.includes(PROBE_ID))).toBe(true);
+    // The finally block cleaned up the probe file that was created by the main copy.
+    expectNoProbeLeftovers(world);
+  });
+
+  // RS9-2: MMKV constructor throws when opening the probe store — probe unavailable.
+  // The probe must return 'probe-unavailable', fall back to encrypted (majority-safe),
+  // and still clean up the probe file copy.
+  it('(e4) RS9-2 probe MMKV constructor throws → probe-unavailable, majority-safe encrypted fallback, probe file cleaned', () => {
+    const world = new FakeWorld({ secureKey: KEY, probeMMKVThrows: true });
+    world.seedStore(STORE_ID, 'encrypted', KEY, { [STORAGE_KEY]: PAYLOAD });
+
+    const storage = bootWith(world);
+
+    // Majority-safe encrypted fallback: data preserved.
+    expect(storage.mmkvStorage.getItem(STORAGE_KEY)).toBe(PAYLOAD);
+    expect(world.files.get(STORE_ID)!.mode).toBe('encrypted');
+    expect(world.files.get(META_ID)!.data.get(MARKER_KEY)).toBe('encrypted');
+    // The probe copy should have been cleaned up by the finally block.
     expectNoProbeLeftovers(world);
   });
 });
