@@ -52,6 +52,22 @@ export function peekSyncOutbox(): SyncPushChange[] {
   return readOutbox();
 }
 
+/**
+ * Minimum interval (ms) between completed drain cycles (RS10-4).
+ * Two trigger sources — NetInfo + Today-focus — can both fire within
+ * a few hundred milliseconds of reconnect. The guard collapses them
+ * into one POST unless new entries were enqueued after the last drain.
+ */
+export const MIN_DRAIN_INTERVAL_MS = 15_000;
+
+// Timestamp (Date.now()) when the last drain cycle completed successfully
+// (i.e. the POST returned ok). 0 means "never drained".
+let lastDrainCompletedAt = 0;
+
+// Timestamp (Date.now()) when entries were last enqueued.
+// Used to bypass the interval guard when fresh work arrived.
+let lastEnqueueAt = 0;
+
 export function enqueueSyncChanges(changes: SyncPushChange[]): void {
   const current = readOutbox();
 
@@ -79,12 +95,33 @@ export function enqueueSyncChanges(changes: SyncPushChange[]): void {
   }
 
   writeOutbox(merged);
+  lastEnqueueAt = Date.now();
+}
+
+/**
+ * Reset drain interval state. Exported for test isolation only —
+ * production code must never call this.
+ */
+export function resetDrainStateForTesting(): void {
+  inflight = null;
+  lastDrainCompletedAt = 0;
+  lastEnqueueAt = 0;
 }
 
 // Single-flight guard — concurrent drains collapse into one POST
 let inflight: Promise<void> | null = null;
 
 export function drainSyncOutbox(): Promise<void> {
+  // Min-interval guard (RS10-4): skip if a drain completed recently AND no
+  // new entries were enqueued since then. Bypassed by new enqueues so
+  // fresh offline work always gets a chance to drain promptly.
+  const now = Date.now();
+  const intervalNotExpired = now - lastDrainCompletedAt < MIN_DRAIN_INTERVAL_MS;
+  const noNewEnqueueSinceDrain = lastEnqueueAt <= lastDrainCompletedAt;
+  if (lastDrainCompletedAt > 0 && intervalNotExpired && noNewEnqueueSinceDrain) {
+    return Promise.resolve();
+  }
+
   if (inflight) return inflight;
 
   inflight = (async () => {
@@ -128,6 +165,8 @@ export function drainSyncOutbox(): Promise<void> {
         return sentAt === undefined || c.clientUpdatedAt > sentAt;
       });
       writeOutbox(remaining);
+      // Mark successful completion for the interval guard (RS10-4).
+      lastDrainCompletedAt = Date.now();
     } catch {
       // Network error / timeout / abort — keep the outbox intact for retry
     } finally {

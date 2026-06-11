@@ -28,6 +28,7 @@ import {
   enqueueSyncChanges,
   peekSyncOutbox,
   drainSyncOutbox,
+  resetDrainStateForTesting,
   OUTBOX_KEY,
 } from '../sync-outbox';
 import type { SyncPushChange } from '../sync-outbox';
@@ -50,7 +51,9 @@ beforeEach(() => {
   // Explicitly clear the outbox key so the cap test's 200 entries
   // don't leak into subsequent tests (the mock store is a shared Map).
   mmkvStorage.removeItem(OUTBOX_KEY);
-  // Clear the module-level inflight guard by re-requiring the module
+  // Reset module-level drain state (inflight, interval timestamps) so
+  // the interval guard from RS10-4 doesn't bleed between tests.
+  resetDrainStateForTesting();
   jest.resetModules();
 });
 
