@@ -72,6 +72,11 @@ interface ThreeStepPaywallProps {
   // App Store Connect. We must not promise a trial anywhere in the UI — skip
   // the trial-reminder screen and drop trial copy from CTAs + disclosures.
   hasFreeTrial: boolean;
+  // True once RC offerings have loaded and both packages are present (PRICE-1).
+  // When false, price strings are hidden and the purchase CTA is disabled
+  // with a 'Loading plans… / Tap to retry' state.
+  offeringsReady: boolean;
+  onRetryOfferings: () => void;
   onPurchaseSuccess: () => void;
   onSkip: () => void;
 }
@@ -601,9 +606,12 @@ function ScreenPricing({
   onSelectPlan: (plan: 'yearly' | 'monthly') => void;
 }) {
   const savings = monthlyRaw > 0 ? Math.round((1 - yearlyRaw / 12 / monthlyRaw) * 100) : 0;
+  // Extract currency symbol from RC's locale-aware priceString (e.g. "$" from "$59.99",
+  // "€" from "49,99 €") — never hardcode "$" around a raw number (FAP-UI-2).
+  const currencySymbol = yearlyPrice ? (yearlyPrice.replace(/[\d.,\s]/g, '').trim() || '$') : '';
   const yearlyMonthlyEquivalent =
-    monthlyRaw > 0
-      ? `$${(Math.floor((yearlyRaw / 12) * 100) / 100).toFixed(2)}/mo`
+    monthlyRaw > 0 && currencySymbol
+      ? `${currencySymbol}${(Math.floor((yearlyRaw / 12) * 100) / 100).toFixed(2)}/mo`
       : yearlyPrice;
 
   // --- Stacked card carousel state ---
@@ -753,26 +761,30 @@ function ScreenPricing({
           >
             Monthly
           </Text>
-          <Text
-            style={{
-              fontFamily: FontFamily.uiSemiBold,
-              fontSize: FontSize.lg,
-              color:
-                selectedPlan === 'monthly' ? colors.accent : colors.text,
-              marginTop: Spacing['1.5'],
-            }}
-          >
-            {monthlyPrice}
+          {monthlyPrice ? (
             <Text
               style={{
-                fontFamily: FontFamily.ui,
-                fontSize: FontSize.sm,
-                color: colors.textMuted,
+                fontFamily: FontFamily.uiSemiBold,
+                fontSize: FontSize.lg,
+                color:
+                  selectedPlan === 'monthly' ? colors.accent : colors.text,
+                marginTop: Spacing['1.5'],
               }}
             >
-              /mo
+              {monthlyPrice}
+              <Text
+                style={{
+                  fontFamily: FontFamily.ui,
+                  fontSize: FontSize.sm,
+                  color: colors.textMuted,
+                }}
+              >
+                /mo
+              </Text>
             </Text>
-          </Text>
+          ) : (
+            <ActivityIndicator size="small" color={colors.accent} style={{ marginTop: Spacing['1.5'] }} />
+          )}
         </TouchableOpacity>
 
         {/* Yearly -- with SAVE badge on top border */}
@@ -823,17 +835,21 @@ function ScreenPricing({
             >
               Yearly
             </Text>
-            <Text
-              style={{
-                fontFamily: FontFamily.uiSemiBold,
-                fontSize: FontSize.lg,
-                color:
-                  selectedPlan === 'yearly' ? colors.accent : colors.text,
-                marginTop: Spacing['1.5'],
-              }}
-            >
-              {yearlyMonthlyEquivalent}
-            </Text>
+            {yearlyMonthlyEquivalent ? (
+              <Text
+                style={{
+                  fontFamily: FontFamily.uiSemiBold,
+                  fontSize: FontSize.lg,
+                  color:
+                    selectedPlan === 'yearly' ? colors.accent : colors.text,
+                  marginTop: Spacing['1.5'],
+                }}
+              >
+                {yearlyMonthlyEquivalent}
+              </Text>
+            ) : (
+              <ActivityIndicator size="small" color={colors.accent} style={{ marginTop: Spacing['1.5'] }} />
+            )}
           </TouchableOpacity>
         </View>
       </View>
@@ -929,6 +945,8 @@ function BottomCTA({
   totalPages,
   hasFreeTrial,
   trialDays,
+  yearlyPrice,
+  monthlyPrice,
   yearlyRaw,
   monthlyRaw,
   selectedPlan,
@@ -941,6 +959,8 @@ function BottomCTA({
   totalPages: number;
   hasFreeTrial: boolean;
   trialDays: number;
+  yearlyPrice: string;
+  monthlyPrice: string;
   yearlyRaw: number;
   monthlyRaw: number;
   selectedPlan: 'yearly' | 'monthly';
@@ -955,12 +975,14 @@ function BottomCTA({
   // Guideline 3.1.2 misrepresentation risk otherwise.
   const effectiveHasTrial = hasFreeTrial && selectedPlan === 'yearly';
 
+  // Use RC's locale-aware priceStrings in disclosure — never hardcode '$' around raw numbers (FAP-UI-2).
+  // yearlyPrice/monthlyPrice are the priceString values from the RC package (e.g. "$59.99", "€49,99").
   const disclosureText =
     selectedPlan === 'yearly'
       ? effectiveHasTrial
-        ? `${trialDays} days free, then $${yearlyRaw.toFixed(2)}/yr. Cancel anytime.`
-        : `$${yearlyRaw.toFixed(2)}/yr. Cancel anytime.`
-      : `$${monthlyRaw.toFixed(2)}/mo. Cancel anytime.`;
+        ? `${trialDays} days free, then ${yearlyPrice}/yr. Cancel anytime.`
+        : `${yearlyPrice}/yr. Cancel anytime.`
+      : `${monthlyPrice}/mo. Cancel anytime.`;
 
   return (
     <View style={styles.ctaContainer}>
@@ -1040,6 +1062,8 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
   trialDuration,
   trialDays,
   hasFreeTrial,
+  offeringsReady,
+  onRetryOfferings,
   onPurchaseSuccess,
   onSkip,
 }: ThreeStepPaywallProps) {
@@ -1295,19 +1319,43 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
           { paddingBottom: Math.max(insets.bottom, Spacing['4']) },
         ]}
       >
-        <BottomCTA
-          colors={colors}
-          currentPage={currentPage}
-          totalPages={totalPages}
-          hasFreeTrial={stableHasFreeTrial}
-          trialDays={trialDays}
-          yearlyRaw={yearlyRaw}
-          monthlyRaw={monthlyRaw}
-          selectedPlan={selectedPlan}
-          isLoading={isLoading}
-          purchaseError={purchaseError}
-          onPress={handleCTAPress}
-        />
+        {/* When offerings haven't resolved, show a loading / retry state instead of the
+            purchase CTA so we never render a non-store-derived price (PRICE-1). */}
+        {!offeringsReady && currentPage === totalPages - 1 ? (
+          <View style={{ alignItems: 'center', paddingVertical: Spacing['3'], gap: Spacing['2'] }}>
+            <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.sm, color: colors.textMuted }}>
+              Loading plans…
+            </Text>
+            <TouchableOpacity
+              activeOpacity={0.6}
+              onPress={onRetryOfferings}
+              hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }}
+              style={{ paddingVertical: 4, paddingHorizontal: 12 }}
+              accessibilityRole="button"
+              accessibilityLabel="Tap to retry loading plans"
+            >
+              <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.sm, color: colors.accent }}>
+                Tap to retry
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <BottomCTA
+            colors={colors}
+            currentPage={currentPage}
+            totalPages={totalPages}
+            hasFreeTrial={stableHasFreeTrial}
+            trialDays={trialDays}
+            yearlyPrice={yearlyPrice}
+            monthlyPrice={monthlyPrice}
+            yearlyRaw={yearlyRaw}
+            monthlyRaw={monthlyRaw}
+            selectedPlan={selectedPlan}
+            isLoading={isLoading}
+            purchaseError={purchaseError}
+            onPress={currentPage === totalPages - 1 && !offeringsReady ? () => {} : handleCTAPress}
+          />
+        )}
         {isQaToolsEnabled() && currentPage === totalPages - 1 && (
           <TouchableOpacity
             activeOpacity={1}

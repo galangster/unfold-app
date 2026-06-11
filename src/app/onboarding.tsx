@@ -61,7 +61,7 @@ import {
   isTrialEligibleForProduct,
 } from '@/lib/revenuecatClient';
 import type { PurchasesPackage } from 'react-native-purchases';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { alpha } from '@/components/ui';
 import { EmberParticles } from '@/components/EmberParticles';
 import { Current } from '@/components/Current';
@@ -433,6 +433,7 @@ export default function OnboardingScreen() {
   }, [accentThemeId]);
   const isDark = true;
   const reducedMotion = useReducedMotion();
+  const queryClient = useQueryClient();
 
   const iconMap = useMemo(() => getIconMap(colors.accent), [colors.accent]);
 
@@ -482,16 +483,21 @@ export default function OnboardingScreen() {
   });
 
   // RevenueCat — fetch offerings for direct purchase from threeStepPaywall
-  const { data: offeringsResult } = useQuery({
+  const { data: offeringsResult, isLoading: isLoadingOfferings } = useQuery({
     queryKey: ['revenuecat', 'offerings'],
     queryFn: getOfferings,
     enabled: isRevenueCatEnabled(),
+    retry: 3,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
   });
   const rcOfferings = offeringsResult?.ok ? offeringsResult.data : null;
   const yearlyPackage = rcOfferings?.current?.availablePackages.find(
     (pkg) => pkg.identifier === '$rc_annual'
   );
-  const yearlyPrice = yearlyPackage?.product.priceString ?? '$59.99';
+  // Use RC's locale-aware priceString — never a hardcoded fallback (PRICE-1).
+  // An empty string signals "offerings not yet loaded"; ThreeStepPaywall hides
+  // price text and disables the purchase CTA until offeringsReady=true.
+  const yearlyPrice = yearlyPackage?.product.priceString ?? '';
   // Honest source of truth: only true when (a) App Store Connect advertises
   // a zero-price intro offer on the yearly SKU AND (b) RevenueCat confirms
   // *this user* is eligible to receive it. Everywhere in the paywall UI reads
@@ -2941,9 +2947,11 @@ export default function OnboardingScreen() {
       const monthlyPkg = rcOfferings?.current?.availablePackages.find(
         (pkg) => pkg.identifier === '$rc_monthly'
       );
-      const mPrice = monthlyPkg?.product.priceString ?? '$9.99';
-      const mRaw = monthlyPkg?.product.price ?? 9.99;
-      const yRaw = yearlyPackage?.product.price ?? 59.99;
+      // Use RC's locale-aware priceStrings — never hardcoded fallbacks (PRICE-1).
+      // Empty string when absent; ThreeStepPaywall hides price text until offeringsReady.
+      const mPrice = monthlyPkg?.product.priceString ?? '';
+      const mRaw = monthlyPkg?.product.price ?? 0;
+      const yRaw = yearlyPackage?.product.price ?? 0;
       const tDays = (() => {
         const intro = yearlyPackage?.product.introPrice;
         if (!intro || intro.price !== 0) return 3;
@@ -2952,6 +2960,8 @@ export default function OnboardingScreen() {
         if (unit === 'week') return intro.periodNumberOfUnits * 7;
         return 3;
       })();
+      // Offerings are ready when both packages resolved from RC (not loading and not absent)
+      const offeringsReady = !isLoadingOfferings && !!yearlyPackage && !!monthlyPkg;
 
       return (
         <ThreeStepPaywall
@@ -2966,6 +2976,8 @@ export default function OnboardingScreen() {
           trialDuration={yearlyTrialDuration}
           trialDays={tDays}
           hasFreeTrial={yearlyHasFreeTrial}
+          offeringsReady={offeringsReady}
+          onRetryOfferings={() => { void queryClient.invalidateQueries({ queryKey: ['revenuecat', 'offerings'] }); }}
           onPurchaseSuccess={() => {
             setPurchasedDuringOnboarding(true);
             updateUser({ isPremium: true });
