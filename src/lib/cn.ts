@@ -34,3 +34,22 @@ export function preventOrphan(text: string): string {
   const lastTwo = words.slice(-2).join('\u00A0');
   return `${beforeLast} ${lastTwo}`;
 }
+
+/**
+ * Strips one layer of leading/trailing quote punctuation (straight + curly,
+ * single + double) so decorative quote wrapping never doubles marks.
+ * Double quotes are stripped even when unbalanced (a verse can open dialogue
+ * that closes in a later verse); single quotes are stripped only when BOTH
+ * ends carry one, so trailing possessive apostrophes ("Jesus’") survive.
+ * Display-time only — never apply when writing to the store: highlight text
+ * is re-located in documents by exact text match.
+ */
+export function stripOuterQuotes(text: string): string {
+  if (!text || typeof text !== 'string') return text;
+  let t = text.trim();
+  t = t.replace(/^[“”"]+/, '').replace(/[“”"]+$/, '').trim();
+  if (t.length >= 2 && /^[‘’']/.test(t) && /[‘’']$/.test(t)) {
+    t = t.slice(1, -1).trim();
+  }
+  return t;
+}

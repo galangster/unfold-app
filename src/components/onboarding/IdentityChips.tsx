@@ -137,6 +137,8 @@ export function IdentityChips({
           onChangeText={onTextChange}
           placeholder="What's on your heart right now?"
           placeholderTextColor={colors.textMuted}
+          selectionColor={colors.accent}
+          cursorColor={colors.accent}
           style={{
             fontFamily: FontFamily.body,
             fontSize: 17,

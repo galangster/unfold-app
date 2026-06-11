@@ -19,6 +19,7 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, Highlight, HighlightColor } from '@/lib/store';
+import { stripOuterQuotes } from '@/lib/cn';
 
 const HIGHLIGHT_COLORS: Record<HighlightColor, { label: string; light: string; dark: string }> = {
   yellow: { label: 'General', light: '#FFDC64', dark: '#C8A55C' },
@@ -194,7 +195,7 @@ export default function HighlightsScreen() {
                       }}
                       numberOfLines={3}
                     >
-                      "{highlight.highlightedText}"
+                      "{stripOuterQuotes(highlight.highlightedText)}"
                     </Text>
                   </View>
                 </TouchableOpacity>

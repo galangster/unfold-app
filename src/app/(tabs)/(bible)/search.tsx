@@ -61,6 +61,8 @@ export default function BibleSearchScreen() {
             onChangeText={setQuery}
             placeholder="Search the Bible..."
             placeholderTextColor={colors.textSubtle}
+            selectionColor={colors.accent}
+            cursorColor={colors.accent}
             style={[styles.input, { color: colors.text }]}
             autoFocus
             returnKeyType="search"

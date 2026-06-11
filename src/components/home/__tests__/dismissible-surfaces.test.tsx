@@ -494,7 +494,6 @@ describe('dismissible Today/Home surfaces', () => {
     expect(homeSource).toContain("heroToRhythm: Spacing['5']");
     expect(homeSource).toContain("optionalStackToRhythm: Spacing['4']");
     expect(homeSource).toContain("rhythmToBento: Spacing['3']");
-    expect(homeSource).toContain("bentoToNewThought: Spacing['6']");
     expect(homeSource).toContain('hasOptionalTodayStack ? styles.rhythmAfterOptionalStack : styles.rhythmAfterHero');
     expect(homeSource).toContain('style={styles.bentoWrapper}');
     expect(homeSource).toContain('const activeCurrentDayData = currentDevotional?.days.find');

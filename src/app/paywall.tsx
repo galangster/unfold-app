@@ -39,6 +39,8 @@ import {
 } from '@/lib/paywall-diagnostics';
 import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
 import { mmkvStorage } from '@/lib/mmkv-storage';
+import { getPerMonthEquivalent } from '@/lib/paywall-pricing';
+import { getPaywallRenewalDisclosure } from '@/lib/paywall-disclosure';
 
 type PlanChoice = 'yearly' | 'monthly';
 
@@ -493,9 +495,8 @@ export default function PaywallScreen() {
   const yearlyPrice = yearlyPackage?.product.priceString ?? '$59.99';
   const monthlyRaw = monthlyPackage?.product.price ?? 9.99;
   const yearlyRaw = yearlyPackage?.product.price ?? 59.99;
-  // Extract currency symbol from locale-aware priceString (e.g., "$" from "$49.99", "€" from "49,99 €")
-  const currencySymbol = (yearlyPrice.replace(/[\d.,\s]/g, '').trim()) || '$';
-  const perMonthFromYearly = `${currencySymbol}${(yearlyRaw / 12).toFixed(2)}`;
+  // Shared trunc-to-cent formatter — both paywalls must show the same $/mo
+  const perMonthFromYearly = getPerMonthEquivalent(yearlyRaw, yearlyPrice);
   const savingsPercent = Math.round((1 - yearlyRaw / 12 / monthlyRaw) * 100);
 
   // Personalized hero copy
@@ -749,7 +750,7 @@ export default function PaywallScreen() {
                     <BellIcon size={16} color={colors.textMuted} weight="light" />
                   </View>
                   <Text style={{ fontFamily: FontFamily.uiSemiBold, fontSize: 11, color: colors.text, marginBottom: 2 }}>Day {parseInt(selectedTrialDuration) - 2 || 12}</Text>
-                  <Text style={{ fontFamily: FontFamily.ui, fontSize: 10, color: colors.textMuted, textAlign: 'center' }}>We'll remind{'\n'}you</Text>
+                  <Text style={{ fontFamily: FontFamily.ui, fontSize: 10, color: colors.textMuted, textAlign: 'center' }}>We’ll remind{'\n'}you</Text>
                 </View>
                 {/* Connector */}
                 <View style={{ flex: 0.5, justifyContent: 'flex-start', paddingTop: 16 }}>
@@ -887,13 +888,14 @@ export default function PaywallScreen() {
             marginBottom: 12,
           }}
         >
-          {selectedPlan === 'yearly'
-            ? (isTrialEligible
-              ? `${selectedTrialDuration} free trial, then ${yearlyPrice}/year \u00B7 Cancel anytime`
-              : `Billed as ${yearlyPrice}/year \u00B7 Cancel anytime`)
-            : (isTrialEligible
-              ? `${selectedTrialDuration} free trial, then ${monthlyPrice}/month \u00B7 Cancel anytime`
-              : `Billed as ${monthlyPrice}/month \u00B7 Cancel anytime`)}
+          {getPaywallRenewalDisclosure({
+            offeringsReady: true, // this paywall keeps honest hardcoded fallbacks — prices are never ''
+            selectedPlan,
+            hasFreeTrial: isTrialEligible, // RC-verified for the SELECTED plan (see isTrialEligible)
+            trialDays: parseInt(selectedTrialDuration, 10) || 3,
+            yearlyPrice,
+            monthlyPrice,
+          })}
         </Text>
 
         {/* CTA button */}

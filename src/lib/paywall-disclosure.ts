@@ -6,9 +6,11 @@
  *    null — yearlyPrice/monthlyPrice are '' until RevenueCat resolves, and
  *    PRICE-1 forbids rendering any non-store-derived price text, so the only
  *    honest output is no disclosure at all.
- *  - `hasFreeTrial` reflects YEARLY-plan eligibility only. Monthly has its own
- *    cadence and unverified intro-offer state, so trial copy is never attached
- *    to the monthly plan (Guideline 3.1.2 misrepresentation risk).
+ *  - `hasFreeTrial` is the CALLER's contract: it must be true only when the
+ *    trial is store-verified for the SELECTED plan (Guideline 3.1.2 —
+ *    ThreeStepPaywall passes effectiveHasTrial, which is yearly-verified AND
+ *    yearly-selected; paywall.tsx passes its per-product RC-verified
+ *    isTrialEligible).
  *  - Prices are RC's locale-aware priceStrings — never '$' wrapped around raw
  *    numbers (FAP-UI-2).
  */
@@ -35,5 +37,7 @@ export function getPaywallRenewalDisclosure({
       : `${yearlyPrice}/yr. Cancel anytime.`;
   }
 
-  return `${monthlyPrice}/mo. Cancel anytime.`;
+  return hasFreeTrial
+    ? `${trialDays} days free, then ${monthlyPrice}/mo. Cancel anytime.`
+    : `${monthlyPrice}/mo. Cancel anytime.`;
 }

@@ -37,7 +37,7 @@ function buildQaBibleUser(themeMode: ThemeMode, accentTheme: AccentThemeId, exis
     spiritualSeeking: existing?.spiritualSeeking ?? 'A steady rhythm with God in the middle of work and decisions.',
     readingDuration: existing?.readingDuration ?? 5,
     devotionalLength: existing?.devotionalLength ?? 3,
-    reminderTime: existing?.reminderTime ?? '08:00',
+    reminderTime: existing?.reminderTime ?? '8:00 AM',
     hasCompletedOnboarding: true,
     hasCompletedStyleOnboarding: true,
     isPremium: existing?.isPremium ?? false,

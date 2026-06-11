@@ -14,6 +14,7 @@ import { mmkvStorage } from './mmkv-storage';
 
 import { getAuthHeaders, PRIMARY_BACKEND_URL } from '@/lib/api-config';
 import type { DeepLinkData } from './parse-deep-links';
+import { BOOK_NAME_TO_ID } from './bible-constants';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -80,15 +81,11 @@ const TITLE_FILLER_PREFIXES = [
   /^how can i\s+/i,
 ];
 
-function toTitleCase(words: string[]): string {
-  const smallWords = new Set(['a', 'an', 'and', 'as', 'at', 'for', 'in', 'of', 'on', 'or', 'the', 'to', 'with']);
-  return words
-    .map((word, index) => {
-      const lower = word.toLowerCase();
-      if (index > 0 && smallWords.has(lower)) return lower;
-      return lower.charAt(0).toUpperCase() + lower.slice(1);
-    })
-    .join(' ');
+function toSentenceCase(words: string[]): string {
+  // Preserve the user's own casing — the words come from their typed message,
+  // so proper nouns survive as typed. Only ensure the first char is capitalized.
+  const joined = words.join(' ');
+  return joined.charAt(0).toUpperCase() + joined.slice(1);
 }
 
 export function deriveConversationTitleFromText(text: string): string | null {
@@ -115,8 +112,43 @@ export function deriveConversationTitleFromText(text: string): string | null {
   if (words.length === 0) return null;
 
   const selected = words.slice(0, 6);
-  const title = toTitleCase(selected);
+  const title = toSentenceCase(selected);
   return title.length > 0 ? title : null;
+}
+
+// Words that stay capitalized mid-title (faith proper nouns + first person).
+const TITLE_KEEP_WORDS = new Set([
+  'i', "i'm", "i'll", "i've", "i'd",
+  'god', "god's", 'jesus', "jesus'", 'christ', "christ's", 'lord', "lord's",
+  'holy', 'spirit', 'bible', 'scripture', 'scriptures', 'christian', 'christians',
+]);
+
+/**
+ * Display-side de-slop for stored/AI conversation titles (machine Title Case
+ * is a model fingerprint): lowercase Title-Cased words after the first,
+ * keeping likely proper nouns — Bible book names (via BOOK_NAME_TO_ID), faith
+ * terms, "I" — plus acronyms (NIV), mixed-case words, anything with digits
+ * (Psalm 23, 3:16), and the word after a numbered-book digit (1 Corinthians).
+ */
+export function sentenceCaseTitle(title: string): string {
+  const words = title.split(' ');
+  return words
+    .map((word, index) => {
+      if (index === 0) return word;
+      if (/\d/.test(word)) return word;
+      // Only simple Title Case words (Xxxx…) are candidates; ALL-CAPS (NIV)
+      // and mixed-case (McRae) pass through untouched.
+      const letters = word.replace(/[^A-Za-z'’]+$/g, '');
+      if (!/^[A-Z][a-z'’]*$/.test(letters)) return word;
+      const bare = word.toLowerCase().replace(/’/g, "'").replace(/[^a-z']/g, '');
+      if (TITLE_KEEP_WORDS.has(bare)) return word;
+      if (BOOK_NAME_TO_ID[bare] !== undefined) return word;
+      // Numbered books: "1 Corinthians", "2 Timothy" — keyed with the digit
+      const prev = words[index - 1] ?? '';
+      if (/^[1-3]$/.test(prev) && BOOK_NAME_TO_ID[`${prev} ${bare}`] !== undefined) return word;
+      return word.toLowerCase();
+    })
+    .join(' ');
 }
 
 export function generateTitle(conversation: Conversation): string {
@@ -133,7 +165,7 @@ export function generateTitle(conversation: Conversation): string {
   const derived = firstUserMsg ? deriveConversationTitleFromText(firstUserMsg.content) : null;
   if (derived) return derived;
 
-  return 'New Chat';
+  return 'New chat';
 }
 
 // ── External selectors (proper Zustand subscription tracking) ─────────────

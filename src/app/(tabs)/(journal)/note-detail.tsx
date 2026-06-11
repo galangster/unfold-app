@@ -1377,6 +1377,7 @@ export default function NoteDetailScreen() {
             editable
             autoFocus={isNewNote}
             selectionColor={colors.accent}
+            cursorColor={colors.accent}
             style={[
               styles.titleInput,
               { color: colors.text },

@@ -872,6 +872,8 @@ Their journal entry:
                     onChangeText={handleTextChange}
                     placeholder={buildFreeWritePlaceholder({ reflectionQuestions: currentDay?.reflectionQuestions })}
                     placeholderTextColor={colors.textHint}
+                    selectionColor={colors.accent}
+                    cursorColor={colors.accent}
                     multiline
                     textAlignVertical="top"
                     accessibilityLabel="Journal entry"
@@ -989,6 +991,8 @@ Their journal entry:
                                   onChangeText={(text) => handleQuestionResponseChange(index, prompt, text)}
                                   placeholder="Write your response..."
                                   placeholderTextColor={colors.textHint}
+                                  selectionColor={colors.accent}
+                                  cursorColor={colors.accent}
                                   multiline
                                   textAlignVertical="top"
                                   style={[jStyles.questionTextInput, { color: colors.text, paddingBottom: 40 }]}
@@ -1112,6 +1116,8 @@ Their journal entry:
                               onChangeText={(text) => handleSoapChange(section.key, text)}
                               placeholder={section.placeholder}
                               placeholderTextColor={colors.textHint}
+                              selectionColor={colors.accent}
+                              cursorColor={colors.accent}
                               multiline
                               textAlignVertical="top"
                               accessibilityLabel={`${section.label} journal entry`}
@@ -1219,6 +1225,8 @@ Their journal entry:
                       onChangeText={setNewPrayerText}
                       placeholder="What would you like to pray for?"
                       placeholderTextColor={colors.textHint}
+                      selectionColor={colors.accent}
+                      cursorColor={colors.accent}
                       multiline
                       textAlignVertical="top"
                       autoFocus

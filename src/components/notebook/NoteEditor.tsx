@@ -331,6 +331,8 @@ export function NoteEditor({
         onChangeText={handleTitleChange}
         placeholder="Title"
         placeholderTextColor={colors.textHint}
+        selectionColor={colors.accent}
+        cursorColor={colors.accent}
         style={[styles.titleInput, { color: colors.text }]}
         returnKeyType="next"
         onSubmitEditing={() => editor.focus('end')}

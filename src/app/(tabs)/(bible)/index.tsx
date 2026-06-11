@@ -10,7 +10,7 @@ import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { useBibleDb } from '@/hooks/useBibleDb';
-import { OT_BOOKS, NT_BOOKS, getBookColor, getBookCategory, CATEGORY_LABELS, type BibleBookInfo, type BibleCategory } from '@/lib/bible-constants';
+import { OT_BOOKS, NT_BOOKS, getBookColor, getBookCategory, CATEGORY_LABELS, citationBookName, type BibleBookInfo, type BibleCategory } from '@/lib/bible-constants';
 import { DownloadBibleSheet } from '@/components/bible/DownloadBibleSheet';
 import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
@@ -173,7 +173,7 @@ export default function BibleHomeScreen() {
                 backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
               }]}
               activeOpacity={0.6}
-              accessibilityLabel={`Continue reading ${lastPosition.bookName} ${lastPosition.chapter}`}
+              accessibilityLabel={`Continue reading ${citationBookName(lastPosition.bookName)} ${lastPosition.chapter}`}
             >
               <View style={styles.continueLeft}>
                 <ClockIcon size={14} color={colors.textSubtle} weight="light" />
@@ -183,7 +183,7 @@ export default function BibleHomeScreen() {
               </View>
               <View style={styles.continueRight}>
                 <Text style={[styles.continueRef, { color: colors.text }]}>
-                  {lastPosition.bookName} {lastPosition.chapter}
+                  {citationBookName(lastPosition.bookName)} {lastPosition.chapter}
                 </Text>
                 <CaretRightIcon size={12} color={colors.textSubtle} weight="light" />
               </View>

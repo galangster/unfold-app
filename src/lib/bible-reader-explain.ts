@@ -1,4 +1,5 @@
 import type { ScriptureExplainRequest } from './scripture-explain-api';
+import { formatScriptureReference } from './bible-constants';
 
 interface BibleVerseForExplanation {
   verse: number;
@@ -31,9 +32,7 @@ export function buildSelectedPassageForExplanation({
 
   const verseStart = sorted[0];
   const verseEnd = sorted[sorted.length - 1];
-  const reference = verseStart === verseEnd
-    ? `${bookName.trim()} ${chapter}:${verseStart}`
-    : `${bookName.trim()} ${chapter}:${verseStart}-${verseEnd}`;
+  const reference = formatScriptureReference(bookName, chapter, verseStart, verseEnd);
 
   return {
     reference,

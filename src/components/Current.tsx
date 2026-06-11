@@ -8,9 +8,9 @@
  * All position math runs inline inside useDerivedValue (worklet-safe).
  * Rendered via Skia Atlas for 60fps with 40-80+ particles.
  *
- * Usage:
- *   <Current type="wind" color="#C8A55C" />
- *   <Current type="storm" color="#C8A55C" intensity={0.8} />
+ * Usage (color must track the user-selectable accent, never a hardcoded hex):
+ *   <Current type="wind" color={colors.accent} />
+ *   <Current type="storm" color={colors.accent} intensity={0.8} />
  */
 
 import { useMemo } from 'react';

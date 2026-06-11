@@ -22,7 +22,7 @@ import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { useUnfoldStore } from '@/lib/store';
 import { fetchVerse, fetchVerseLocal, type VerseResult } from '@/lib/bible-api';
-import { BIBLE_BOOKS } from '@/lib/bible-constants';
+import { referenceToRoute } from '@/lib/bible-constants';
 import { ScriptureExplainSheet } from '@/components/ScriptureExplainSheet';
 
 interface ScriptureTapSheetProps {
@@ -41,19 +41,12 @@ const SWIPE_DISMISS_OFFSCREEN = 520;
 
 /** Parse "Romans 8:28" into { bookId, chapter, verse } for Bible reader navigation */
 function parseReferenceForNav(reference: string): { bookId: number; chapter: number; verse: number } | null {
-  const match = reference.match(/^(.+?)\s+(\d+)(?::(\d+))?/);
-  if (!match) return null;
-
-  const bookName = match[1].trim();
-  const chapter = parseInt(match[2], 10);
-  const verse = match[3] ? parseInt(match[3], 10) : 1;
-
-  const book = BIBLE_BOOKS.find(
-    (b) => b.name.toLowerCase() === bookName.toLowerCase()
-  );
-  if (!book) return null;
-
-  return { bookId: book.id, chapter, verse };
+  // referenceToRoute's alias table resolves citation forms ("Psalm 46:10")
+  // to the book entry named "Psalms" — exact-name matching silently dropped
+  // the Read in Bible affordance for the most common Psalm references.
+  const parsed = referenceToRoute(reference);
+  if (!parsed) return null;
+  return { bookId: parsed.bookId, chapter: parsed.chapter, verse: parsed.verse ?? 1 };
 }
 
 export function ScriptureTapSheet({

@@ -16,6 +16,7 @@ import { alpha } from '@/components/ui';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { parseScriptureReferences, type ScriptureRef } from '@/lib/scripture-parser';
+import { smartQuotes } from '@/lib/smart-quotes';
 
 interface Props {
   text: string;
@@ -289,8 +290,8 @@ export function RichMessageText({ text, onVersePress }: Props) {
   const { colors } = useTheme();
 
   const blocks = useMemo(() => {
-    // Pre-process markdown: strip headers, convert lists to bullets
-    const processed = preprocessMarkdown(text);
+    // Typographic quotes, then markdown pre-process (headers, lists -> bullets)
+    const processed = preprocessMarkdown(smartQuotes(text));
 
     // Split on double newlines for paragraphs
     const paragraphs = processed.split(/\n{2,}/);

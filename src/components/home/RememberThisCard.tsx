@@ -17,6 +17,7 @@ import { Spacing } from '@/constants/spacing';
 import { useUnfoldStore, type HighlightColor } from '@/lib/store';
 import { DismissCircleButton } from '@/components/home/DismissCircleButton';
 import { animateCardDismiss } from '@/lib/card-dismiss-animation';
+import { stripOuterQuotes } from '@/lib/cn';
 
 const HIGHLIGHT_COLORS: Record<HighlightColor, { light: string; dark: string }> = {
   yellow: { light: '#FFDC64', dark: '#C8A55C' },
@@ -131,7 +132,7 @@ export function RememberThisCard() {
               numberOfLines={3}
               maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}
             >
-              {highlight.highlightedText}
+              {stripOuterQuotes(highlight.highlightedText)}
             </Text>
           </View>
 

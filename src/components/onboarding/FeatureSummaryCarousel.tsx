@@ -171,6 +171,8 @@ export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
                           onChangeText={onCompanionNameChange}
                           placeholder="e.g. Grace, Selah, Guide"
                           placeholderTextColor={colors.textMuted}
+                          selectionColor={colors.accent}
+                          cursorColor={colors.accent}
                           style={{
                             fontFamily: FontFamily.body,
                             fontSize: FontSize.lg,

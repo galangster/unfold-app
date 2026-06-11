@@ -62,6 +62,7 @@ import {
   areNotificationsEnabled,
   scheduleDevotionalReadyTapTestNotification,
 } from '@/lib/notifications';
+import { formatReminderTime } from '@/lib/format-reminder-time';
 // NOTE: scheduleMiddayCheckIn / scheduleEveningWindDown / cancelMiddayCheckIn /
 // cancelEveningWindDown are NOT imported here anymore. Check-in notification
 // scheduling is owned exclusively by `useCheckInNotifications` — this screen
@@ -107,13 +108,6 @@ const REMINDER_TIMES = [
   { value: '6:00 PM', label: 'Evening' },
   { value: '9:00 PM', label: 'Night' },
 ];
-
-function formatCheckInTime(time: string): string {
-  const [h, m] = time.split(':').map(Number);
-  const period = h >= 12 ? 'PM' : 'AM';
-  const hour12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
-  return `${hour12}:${m.toString().padStart(2, '0')} ${period}`;
-}
 
 const TONE_OPTIONS: { value: WritingTone; label: string; description: string }[] = [
   { value: 'warm', label: 'Like a friend', description: 'Gentle, encouraging, and personal' },
@@ -500,6 +494,8 @@ export default function YouScreen() {
                 returnKeyType="done"
                 placeholder="Your name"
                 placeholderTextColor={colors.textHint}
+                selectionColor={colors.accent}
+                cursorColor={colors.accent}
                 style={{
                   fontFamily: FontFamily.display,
                   fontSize: 28,
@@ -1225,7 +1221,7 @@ export default function YouScreen() {
                       color: colors.textMuted,
                     }}
                   >
-                    {user?.reminderTime ?? '8:00 AM'}
+                    {formatReminderTime(user?.reminderTime ?? '8:00 AM')}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -1266,7 +1262,7 @@ export default function YouScreen() {
                       marginTop: Spacing['0.5'],
                     }}
                   >
-                    {checkInGranted ? formatCheckInTime(middayCheckInTime) : 'Premium'}
+                    {checkInGranted ? formatReminderTime(middayCheckInTime) : 'Premium'}
                   </Text>
                 </View>
                 {checkInGranted ? (
@@ -1333,7 +1329,7 @@ export default function YouScreen() {
                       marginTop: Spacing['0.5'],
                     }}
                   >
-                    {checkInGranted ? formatCheckInTime(eveningWindDownTime) : 'Premium'}
+                    {checkInGranted ? formatReminderTime(eveningWindDownTime) : 'Premium'}
                   </Text>
                 </View>
                 {checkInGranted ? (
@@ -1404,7 +1400,7 @@ export default function YouScreen() {
                           color: colors.textMuted,
                         }}
                       >
-                        {time.value}
+                        {formatReminderTime(time.value)}
                       </Text>
                     </View>
                   </TouchableOpacity>

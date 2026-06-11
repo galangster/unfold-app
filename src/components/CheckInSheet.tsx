@@ -308,6 +308,8 @@ function QuestionStep({
             onChangeText={setTypedAnswer}
             placeholder="Type your answer..."
             placeholderTextColor={colors.textHint}
+            selectionColor={colors.accent}
+            cursorColor={colors.accent}
             style={[
               styles.typeOwnInput,
               {
@@ -433,6 +435,8 @@ function NoteStep({
         onChangeText={setNoteText}
         placeholder="Write or speak a thought, prayer, or feeling..."
         placeholderTextColor={colors.textHint}
+        selectionColor={colors.accent}
+        cursorColor={colors.accent}
         style={[
           styles.noteInput,
           {

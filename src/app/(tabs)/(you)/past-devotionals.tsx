@@ -742,6 +742,8 @@ export default function PastDevotionalsScreen() {
                 onChangeText={setSearchQuery}
                 placeholder="Search devotionals, days, scriptures..."
                 placeholderTextColor={colors.textHint}
+                selectionColor={colors.accent}
+                cursorColor={colors.accent}
                 style={[
                   searchStyles.input,
                   { color: colors.text },

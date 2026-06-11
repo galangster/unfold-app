@@ -299,6 +299,8 @@ export function BookChapterNavigator({
         style={[styles.searchInput, { color: colors.text }]}
         placeholder="Search books or verses..."
         placeholderTextColor={colors.textHint}
+        selectionColor={colors.accent}
+        cursorColor={colors.accent}
         value={searchQuery}
         onChangeText={setSearchQuery}
         onSubmitEditing={handleGoToRef}

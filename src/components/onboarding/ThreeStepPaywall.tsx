@@ -48,6 +48,7 @@ import { EmberParticles } from '@/components/EmberParticles';
 import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
 import { mmkvStorage } from '@/lib/mmkv-storage';
 import { isQaToolsEnabled } from '@/lib/qa-tools';
+import { getPerMonthEquivalent } from '@/lib/paywall-pricing';
 import {
   getThreeStepPaywallPrimaryAction,
   resolvePurchaseOutcome,
@@ -97,7 +98,7 @@ const REVIEWS = [
     name: 'Sarah M.',
     location: 'Nashville, TN',
     quote:
-      'I opened this on a random Tuesday morning and the devotional was EXACTLY what I needed to hear. Like eerily specific to what I was going through. Genuinely grateful for this app \u{1F64F}',
+      'I opened this on a random Tuesday morning and the devotional was EXACTLY what I needed to hear. Like eerily specific to what I was going through. Genuinely grateful for this app.',
   },
   {
     name: 'Marcus',
@@ -109,7 +110,7 @@ const REVIEWS = [
     name: 'Priya J.',
     location: 'Austin, TX',
     quote:
-      'This is the first quiet time app where I actually WANT to come back every day. The journal prompts are \u{1F525} and the companion actually asks good questions back',
+      'This is the first quiet time app where I actually WANT to come back every day. The journal prompts are so good and the companion actually asks good questions back',
   },
 ] as const;
 
@@ -130,7 +131,7 @@ const CARD_SPRING = { damping: 28, stiffness: 200, mass: 1 };
 function ctaLabel(page: number, totalPages: number, hasFreeTrial: boolean): string {
   const isFinal = page === totalPages - 1;
   if (!hasFreeTrial) {
-    return isFinal ? 'Subscribe' : 'Continue';
+    return isFinal ? 'Unlock Premium' : 'Continue';
   }
   if (page === 0) return 'Start Free Trial';
   if (page === 1) return 'See your free trial';
@@ -607,12 +608,12 @@ function ScreenPricing({
   onSelectPlan: (plan: 'yearly' | 'monthly') => void;
 }) {
   const savings = monthlyRaw > 0 ? Math.round((1 - yearlyRaw / 12 / monthlyRaw) * 100) : 0;
-  // Extract currency symbol from RC's locale-aware priceString (e.g. "$" from "$59.99",
-  // "€" from "49,99 €") — never hardcode "$" around a raw number (FAP-UI-2).
-  const currencySymbol = yearlyPrice ? (yearlyPrice.replace(/[\d.,\s]/g, '').trim() || '$') : '';
+  // Shared trunc-to-cent formatter — both paywalls must show the same $/mo.
+  // yearlyPrice truthiness mirrors the old currencySymbol gate (it was ''
+  // exactly when yearlyPrice was '').
   const yearlyMonthlyEquivalent =
-    monthlyRaw > 0 && currencySymbol
-      ? `${currencySymbol}${(Math.floor((yearlyRaw / 12) * 100) / 100).toFixed(2)}/mo`
+    monthlyRaw > 0 && yearlyPrice
+      ? `${getPerMonthEquivalent(yearlyRaw, yearlyPrice)}/mo`
       : yearlyPrice;
 
   // --- Stacked card carousel state ---
@@ -984,7 +985,7 @@ function BottomCTA({
   const disclosureText = getPaywallRenewalDisclosure({
     offeringsReady,
     selectedPlan,
-    hasFreeTrial,
+    hasFreeTrial: effectiveHasTrial, // verified for the SELECTED plan — monthly intro state is unverified here
     trialDays,
     yearlyPrice,
     monthlyPrice,

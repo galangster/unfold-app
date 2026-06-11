@@ -202,7 +202,7 @@ export default function WelcomeScreen() {
   }, [titleChars, charOrder]);
   const titleEndTime = useMemo(() => Math.max(...charDelays) + 600 + 100, [charDelays]);
 
-  const subtitleLine1 = useMemo(() => "The world's most personal".split(' '), []);
+  const subtitleLine1 = useMemo(() => 'The world’s most personal'.split(' '), []);
   const subtitleLine2 = useMemo(() => 'Bible experience'.split(' '), []);
   const subtitleWords = useMemo(() => [...subtitleLine1, '\n', ...subtitleLine2], []);
   const subtitleWordDelays = useMemo(() => {

@@ -146,6 +146,8 @@ export function AdaptiveQuestionFlow({ studyContext, onComplete, onBack }: Adapt
             multiline
             placeholder="Your thoughts..."
             placeholderTextColor={colors.textMuted}
+            selectionColor={colors.accent}
+            cursorColor={colors.accent}
             value={answer}
             onChangeText={setAnswer}
             autoFocus

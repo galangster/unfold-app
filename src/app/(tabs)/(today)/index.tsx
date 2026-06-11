@@ -1,13 +1,12 @@
 import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { drainSyncOutbox } from '@/lib/sync-outbox';
 import { usePrevious } from '@/hooks/usePrevious';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, type LayoutChangeEvent } from 'react-native';
+import { View, StyleSheet, Alert, type LayoutChangeEvent } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { FontFamily } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { shouldShowCompletedBottomGlow } from '@/lib/today-ambient-rive';
@@ -67,7 +66,6 @@ const TODAY_RELATIONSHIP_SPACING = {
   heroToRhythm: Spacing['5'],
   optionalStackToRhythm: Spacing['4'],
   rhythmToBento: Spacing['3'],
-  bentoToNewThought: Spacing['6'],
 } as const;
 
 type TodayPremiumFeature = 'streak' | 'audio' | 'series' | 'general';
@@ -87,6 +85,7 @@ import { GreetingRow } from '@/components/home/GreetingRow';
 import { BentoGrid } from '@/components/home/BentoGrid';
 import { SeriesCarousel } from '@/components/home/SeriesCarousel';
 import { CompactStreakRow } from '@/components/home/CompactStreakRow';
+import { stripOuterQuotes } from '@/lib/cn';
 
 function formatResumeRelativeTime(iso?: string): string {
   if (!iso) return 'Saved just now';
@@ -1050,7 +1049,7 @@ export default function HomeScreen() {
         priority: 80,
         eyebrow: 'Saved echo',
         title: 'A line worth carrying',
-        body: `“${rememberedHighlight.highlightedText}” — Day ${rememberedHighlight.dayNumber} · ${rememberedHighlightSourceTitle}`,
+        body: `“${stripOuterQuotes(rememberedHighlight.highlightedText)}” — Day ${rememberedHighlight.dayNumber} · ${rememberedHighlightSourceTitle}`,
         actionLabel: 'Open highlight',
         onPress: handleSavedEchoPress,
         onDismiss: handleDismissRememberThisCard,
@@ -1282,43 +1281,6 @@ export default function HomeScreen() {
           <View style={styles.bentoWrapper}>
             <BentoGrid />
           </View>
-
-          {/* QA: Preview reveal screen (QA builds, only when Today has no active devotional) */}
-          {isQaToolsEnabled() && !currentDevotional && (
-            <TouchableOpacity
-              onPress={() => {
-                // Use real devotional if available, otherwise fake params
-                if (currentDevotional && currentDayData) {
-                  handleReveal();
-                } else {
-                  router.push({
-                    pathname: '/reveal',
-                    params: {
-                      devotionalId: 'debug',
-                      dayNumber: '1',
-                      seriesTitle: 'Preview Series',
-                      dayTitle: 'When the Map Dissolves',
-                      totalDays: '7',
-                    },
-                  });
-                }
-              }}
-              style={{
-                alignSelf: 'center',
-                marginTop: TODAY_RELATIONSHIP_SPACING.bentoToNewThought,
-                paddingHorizontal: Spacing['4'],
-                paddingVertical: Spacing['2'],
-                borderWidth: 1,
-                borderColor: colors.border,
-                borderRadius: 8,
-              }}
-            >
-              <Text style={{ fontFamily: FontFamily.ui, fontSize: 11, color: colors.textSubtle }}>
-                QA: Preview reveal
-              </Text>
-            </TouchableOpacity>
-          )}
-
 
         </Animated.ScrollView>
       </SafeAreaView>

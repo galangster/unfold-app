@@ -27,7 +27,6 @@ import type { ColorTheme } from '@/constants/colors';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GRAPH_WIDTH = SCREEN_WIDTH - Spacing['6'] * 2 - 32;
 const GRAPH_HEIGHT = 160;
-const ACCENT = '#C8A55C';
 
 const LABELS = ['3 Days', '7 Days', '30 Days'];
 
@@ -52,6 +51,7 @@ interface GrowthGraphProps {
 }
 
 export function GrowthGraph({ colors, animationDelay = 0, onDrawComplete }: GrowthGraphProps) {
+  const accent = colors.accent;
   const reducedMotion = useReducedMotion();
   const path = useMemo(
     () => Skia.Path.MakeFromSVGString(buildCurvePath(GRAPH_WIDTH, GRAPH_HEIGHT)),
@@ -157,7 +157,7 @@ export function GrowthGraph({ colors, animationDelay = 0, onDrawComplete }: Grow
               <LinearGradient
                 start={vec(0, 0)}
                 end={vec(0, GRAPH_HEIGHT)}
-                colors={[`${ACCENT}40`, `${ACCENT}00`]}
+                colors={[`${accent}40`, `${accent}00`]}
               />
             </Path>
           )}
@@ -169,16 +169,16 @@ export function GrowthGraph({ colors, animationDelay = 0, onDrawComplete }: Grow
                 path={path}
                 style="stroke"
                 strokeWidth={2.5}
-                color={ACCENT}
+                color={accent}
                 strokeCap="round"
               />
             </Group>
           )}
 
           {/* Traveling dot — follows the leading edge of the curve reveal */}
-          <Circle cx={dotX} cy={dotY} r={5} color={ACCENT} opacity={dotPulse} />
+          <Circle cx={dotX} cy={dotY} r={5} color={accent} opacity={dotPulse} />
           {/* Outer glow ring */}
-          <Circle cx={dotX} cy={dotY} r={10} color={ACCENT} opacity={useDerivedValue(() => dotPulse.value * 0.25)} />
+          <Circle cx={dotX} cy={dotY} r={10} color={accent} opacity={useDerivedValue(() => dotPulse.value * 0.25)} />
         </Group>
         </Canvas>
 

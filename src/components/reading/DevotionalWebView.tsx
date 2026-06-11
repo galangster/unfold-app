@@ -7,6 +7,7 @@ import { useReadingFont } from '@/lib/useReadingFont';
 import { FONT_SIZE_VALUES, FontSize, DevotionalDay, Highlight, HighlightColor, Bookmark, useUnfoldStore } from '@/lib/store';
 import { parseScriptureReferences } from '@/lib/scripture-parser';
 import { logger } from '@/lib/logger';
+import { stripOuterQuotes } from '@/lib/cn';
 
 interface Quote {
   text: string;
@@ -970,7 +971,7 @@ export function DevotionalWebView({
             </svg>
           </div>
           <span class="deco-quote">\u201C</span>
-          <p>${escapeHtml(q.text)}</p>
+          <p>${escapeHtml(stripOuterQuotes(q.text))}</p>
           <cite>\u2014\u2009${escapeHtml(q.author)}</cite>
         </blockquote>
       `).join('')

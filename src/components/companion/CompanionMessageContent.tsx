@@ -19,6 +19,7 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { RichMessageText } from './RichMessageText';
 import { DevotionalCard } from './DevotionalCard';
 import type { CompanionMessage } from '@/lib/companion-chat-store';
+import { smartQuotes } from '@/lib/smart-quotes';
 
 /** Lightweight markdown strip for streaming text — removes syntax chars only */
 function stripMarkdownLight(text: string): string {
@@ -51,7 +52,7 @@ const ENTERING = FadeIn.duration(Duration.normal).easing(Ease.out);
 
 /** Memoized streaming text that strips markdown on the fly */
 function StreamingText({ content, color }: { content: string; color: string }) {
-  const stripped = useMemo(() => stripMarkdownLight(content), [content]);
+  const stripped = useMemo(() => smartQuotes(stripMarkdownLight(content)), [content]);
   return (
     <Text
       style={{

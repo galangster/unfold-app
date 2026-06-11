@@ -27,6 +27,7 @@ import { Radius } from '@/constants/radius';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
+import { smartQuotes } from '@/lib/smart-quotes';
 
 const EASE_OUT = Easing.out(Easing.cubic);
 
@@ -96,7 +97,7 @@ function AnimatedChip({
           }}
           numberOfLines={1}
         >
-          {text}
+          {smartQuotes(text)}
         </Text>
       </TouchableOpacity>
     </Animated.View>

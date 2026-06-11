@@ -23,6 +23,7 @@ import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, BibleHighlight, Highlight, HighlightColor, BibleHighlightColor } from '@/lib/store';
+import { stripOuterQuotes } from '@/lib/cn';
 
 type HighlightKey = HighlightColor | BibleHighlightColor;
 
@@ -267,6 +268,8 @@ export default function MyContentScreen() {
               onChangeText={setSearchQuery}
               placeholder="Search your library..."
               placeholderTextColor={colors.textHint}
+              selectionColor={colors.accent}
+              cursorColor={colors.accent}
               autoFocus
               style={{
                 flex: 1,
@@ -634,7 +637,7 @@ export default function MyContentScreen() {
                               lineHeight: 24,
                             }}
                           >
-                            "{item.text}"
+                            "{stripOuterQuotes(item.text)}"
                           </Text>
                         </View>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing['2'] }}>
@@ -729,7 +732,7 @@ export default function MyContentScreen() {
                       }}
                       numberOfLines={3}
                     >
-                      "{bookmark.quotedText || (['Quote', 'Historical Context', 'Word Study'].includes(bookmark.scriptureReference) ? bookmark.scriptureText : null) || day?.quotableLine || day?.scriptureText || bookmark.scriptureText}"
+                      "{stripOuterQuotes(bookmark.quotedText || (['Quote', 'Historical Context', 'Word Study'].includes(bookmark.scriptureReference) ? bookmark.scriptureText : null) || day?.quotableLine || day?.scriptureText || bookmark.scriptureText)}"
                     </Text>
                   </TouchableOpacity>
                 );

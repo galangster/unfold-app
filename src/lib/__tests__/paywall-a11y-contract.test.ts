@@ -25,14 +25,17 @@ describe('paywall close button (RT-PAYWALL-1)', () => {
 });
 
 describe('paywall billing disclosure (RT-PAYWALL-2/RT-PAYWALL-8)', () => {
-  it('discloses the real annual charge near the plan selector, RC-derived with honest fallback', () => {
-    expect(src).toContain('`Billed as ${yearlyPrice}/year \\u00B7 Cancel anytime`');
-    expect(src).toContain('`Billed as ${monthlyPrice}/month \\u00B7 Cancel anytime`');
+  it('discloses the real charge via the shared renewal-disclosure helper, RC-derived with honest fallback', () => {
+    expect(src).toContain('getPaywallRenewalDisclosure({');
     expect(src).toContain("yearlyPackage?.product.priceString ?? '$59.99'");
   });
 
-  it('states the post-trial charge when trial-eligible', () => {
-    expect(src).toContain('`${selectedTrialDuration} free trial, then ${yearlyPrice}/year \\u00B7 Cancel anytime`');
+  it('passes RC-verified per-selected-plan trial eligibility to the disclosure', () => {
+    expect(src).toContain('hasFreeTrial: isTrialEligible');
+  });
+
+  it('derives the per-month price from the shared trunc-to-cent formatter', () => {
+    expect(src).toContain('getPerMonthEquivalent(yearlyRaw, yearlyPrice)');
   });
 });
 

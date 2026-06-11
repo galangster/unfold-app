@@ -415,6 +415,49 @@ export function referenceToRoute(reference: string): ParsedReference | null {
 }
 
 /**
+ * Book name for citations. The book is "Psalms"; a citation of one psalm is
+ * "Psalm 46:10".
+ */
+export function citationBookName(bookName: string): string {
+  const trimmed = bookName.trim();
+  return trimmed === 'Psalms' ? 'Psalm' : trimmed;
+}
+
+/**
+ * Canonical scripture-reference format: "Psalm 46:10", "Psalm 23:1-6",
+ * "John 3", "1 Corinthians 13:4". The single normalization point for every
+ * locally-built reference string (de-slop item 9: one reference format).
+ */
+export function formatScriptureReference(
+  bookName: string,
+  chapter: number,
+  verseStart?: number,
+  verseEnd?: number,
+): string {
+  let ref = `${citationBookName(bookName)} ${chapter}`;
+  if (verseStart !== undefined) {
+    ref += `:${verseStart}`;
+    if (verseEnd !== undefined && verseEnd !== verseStart) {
+      ref += `-${verseEnd}`;
+    }
+  }
+  return ref;
+}
+
+/**
+ * Round-trip normalization for reference strings from external sources
+ * (bible-api.com canonicalizes psalm queries to the plural "Psalms 46:10").
+ * Unparseable strings pass through unchanged.
+ */
+export function normalizeScriptureReference(reference: string): string {
+  const parsed = referenceToRoute(reference);
+  if (!parsed) return reference;
+  const book = BOOK_BY_ID[parsed.bookId];
+  if (!book) return reference;
+  return formatScriptureReference(book.name, parsed.chapter, parsed.verse, parsed.verseEnd);
+}
+
+/**
  * Format a structured reference back into a human-readable string.
  *
  * @example
@@ -424,17 +467,7 @@ export function referenceToRoute(reference: string): ParsedReference | null {
 export function routeToReference(parsed: ParsedReference): string | null {
   const book = BOOK_BY_ID[parsed.bookId];
   if (!book) return null;
-
-  let ref = `${book.name} ${parsed.chapter}`;
-
-  if (parsed.verse !== undefined) {
-    ref += `:${parsed.verse}`;
-    if (parsed.verseEnd !== undefined) {
-      ref += `-${parsed.verseEnd}`;
-    }
-  }
-
-  return ref;
+  return formatScriptureReference(book.name, parsed.chapter, parsed.verse, parsed.verseEnd);
 }
 
 // ─── Utilities ───────────────────────────────────────────────────────────────

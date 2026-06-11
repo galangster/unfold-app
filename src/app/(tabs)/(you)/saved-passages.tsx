@@ -10,6 +10,7 @@ import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
+import { stripOuterQuotes } from '@/lib/cn';
 
 export default function SavedPassagesScreen() {
   const router = useRouter();
@@ -118,7 +119,7 @@ export default function SavedPassagesScreen() {
                       marginBottom: 14,
                     }}
                   >
-                    "{bookmark.scriptureText}"
+                    "{stripOuterQuotes(bookmark.scriptureText)}"
                   </Text>
 
                   {/* Context */}

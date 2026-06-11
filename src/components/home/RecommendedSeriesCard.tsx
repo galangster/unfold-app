@@ -178,7 +178,10 @@ export function RecommendedSeriesCard({
     );
   }
 
-  const typeLabel = formatRecommendationType(recommendation!.type);
+  // 'theme' is the backend recommendation-kind discriminator, not a display value —
+  // the actual theme name is already the card headline, so the chip would render
+  // the bare word 'Theme' with no value attached.
+  const typeLabel = recommendation!.type === 'theme' ? null : formatRecommendationType(recommendation!.type);
   const actionLabel = isCompletion ? 'Begin the Next Study' : 'Start This Study';
 
   return (
@@ -213,9 +216,11 @@ export function RecommendedSeriesCard({
             <View style={[styles.metaPill, { backgroundColor: alpha(colors.accent, 0.1), borderColor: alpha(colors.accent, 0.18) }]}>
               <Text style={[styles.metaText, { color: colors.accent }]}>{recommendation!.suggestedLength} days</Text>
             </View>
-            <View style={[styles.metaPill, { backgroundColor: alpha(colors.text, 0.045), borderColor: alpha(colors.text, 0.08) }]}>
-              <Text style={[styles.metaText, { color: colors.textMuted }]}>{typeLabel}</Text>
-            </View>
+            {typeLabel != null && (
+              <View style={[styles.metaPill, { backgroundColor: alpha(colors.text, 0.045), borderColor: alpha(colors.text, 0.08) }]}>
+                <Text style={[styles.metaText, { color: colors.textMuted }]}>{typeLabel}</Text>
+              </View>
+            )}
           </View>
 
           <TouchableOpacity

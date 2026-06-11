@@ -31,8 +31,8 @@ import { Duration } from '@/constants/animations';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
 
 const PLACEHOLDERS = [
-  "What's on your mind?",
-  'Ask me anything...',
+  'What’s on your mind?',
+  'Ask me anything…',
   'What are you thinking about?',
   'How can I help today?',
 ];
@@ -135,6 +135,8 @@ export function CompanionInput({ onSend, onStop, isStreaming }: Props) {
           onChangeText={setText}
           placeholder={placeholder}
           placeholderTextColor={colors.textHint}
+          selectionColor={colors.accent}
+          cursorColor={colors.accent}
           multiline
           scrollEnabled
           textAlignVertical="center"

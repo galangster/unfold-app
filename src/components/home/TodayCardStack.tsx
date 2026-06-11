@@ -30,6 +30,7 @@ import {
   TODAY_STACK_MAX_ROTATION_DEG,
 } from '@/lib/today-card-stack-motion';
 import type { ColorTheme } from '@/constants/colors';
+import { smartQuotes } from '@/lib/smart-quotes';
 
 export interface TodayCardStackAction {
   label: string;
@@ -102,12 +103,12 @@ function TopCardBody({ card, colors }: { card: TodayCardStackCard; colors: Color
       ) : null}
 
       <Text style={[styles.title, { color: colors.text }]} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE} numberOfLines={2}>
-        {card.title}
+        {smartQuotes(card.title)}
       </Text>
 
       {card.body ? (
         <Text style={[styles.body, { color: colors.textMuted }]} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE} numberOfLines={3}>
-          {card.body}
+          {smartQuotes(card.body)}
         </Text>
       ) : null}
 

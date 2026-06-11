@@ -439,12 +439,14 @@ function ReflectionQuestionCard({
                 // an optional compatibility hook for any keyboard-aware wrapper.
                 (scrollViewRef?.current as { assureFocusedInputVisible?: () => void } | null)?.assureFocusedInputVisible?.();
               }}
-              placeholder={editable ? 'Write your thoughts...' : 'Subscribe to journal your reflections'}
+              placeholder={editable ? 'Write your thoughts...' : 'Unlock Premium to journal your reflections'}
               placeholderTextColor={colors.textHint}
+              selectionColor={colors.accent}
+              cursorColor={colors.accent}
               multiline
               textAlignVertical="top"
               accessibilityLabel={`Your response to: ${question}`}
-              accessibilityHint={editable ? 'Write your reflection. Auto-saved.' : 'Subscribe to write reflections.'}
+              accessibilityHint={editable ? 'Write your reflection. Auto-saved.' : 'Unlock Premium to write reflections.'}
               style={{
                 minHeight: 80,
                 fontFamily: FontFamily.body,

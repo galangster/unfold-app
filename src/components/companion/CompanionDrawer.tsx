@@ -44,6 +44,7 @@ import {
   useCompanionChatStore,
   type Conversation,
   deriveConversationTitleFromText,
+  sentenceCaseTitle,
 } from '@/lib/companion-chat-store';
 
 // ── Constants ─────────────────────────────────────────────────────────────
@@ -80,9 +81,12 @@ type ListItem =
 // ── Helpers ───────────────────────────────────────────────────────────────
 
 function getConversationTitle(conv: Conversation): string {
-  // Use AI-generated title if available (capped at 60 chars for safety)
+  // Use AI-generated title if available (capped at 60 chars for safety).
+  // sentenceCaseTitle de-slops machine Title Case from the backend title
+  // endpoint and from legacy persisted titles.
   if (conv.title) {
-    return conv.title.length > 60 ? conv.title.slice(0, 57) + '…' : conv.title;
+    const display = sentenceCaseTitle(conv.title);
+    return display.length > 60 ? display.slice(0, 57) + '…' : display;
   }
   // Fallback: first user message, truncated
   const firstUser = (conv.messages ?? []).find(m => m.role === 'user');
@@ -90,7 +94,7 @@ function getConversationTitle(conv: Conversation): string {
     const derived = deriveConversationTitleFromText(firstUser.content);
     if (derived) return derived;
   }
-  return 'New Chat';
+  return 'New chat';
 }
 
 function formatRelativeDate(timestamp: number): string {

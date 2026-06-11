@@ -36,6 +36,8 @@ import { alpha } from '@/components/ui';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { RecommendedSeriesCard } from './RecommendedSeriesCard';
 import type { DevotionalCardState } from './compute-devotional-state';
+import { smartQuotes } from '@/lib/smart-quotes';
+import { stripOuterQuotes } from '@/lib/cn';
 
 // ─── Props ──────────────────────────────────────────────────────
 
@@ -321,7 +323,7 @@ function RevealReadyState({ state }: { state: Extract<DevotionalCardState, { typ
             numberOfLines={3}
             maxFontSizeMultiplier={DISPLAY_TEXT_MAX_SCALE}
           >
-            {state.dayData.title}
+            {smartQuotes(state.dayData.title)}
           </Text>
 
           <View style={styles.heroQuoteBlock}>
@@ -609,7 +611,7 @@ function MainCard({ state }: MainCardProps) {
   const showProgress = daysCompleted > 0;
   const totalDays = state.totalDays;
   const seriesTitle = state.seriesTitle;
-  const statusLabel = hasCompletedToday ? 'Completed' : isTomorrowLocked ? 'Tomorrow' : isYesterday ? 'Overdue' : dayLabel;
+  const statusLabel = hasCompletedToday ? 'Completed' : isTomorrowLocked ? 'Tomorrow' : isYesterday ? 'Still waiting' : dayLabel;
   const studyMethodName = dayData.studyMethod && BIBLE_STUDY_METHODS[dayData.studyMethod]
     ? BIBLE_STUDY_METHODS[dayData.studyMethod].name
     : null;
@@ -617,16 +619,17 @@ function MainCard({ state }: MainCardProps) {
   const scripturePreview = dayData.scriptureText
     ? dayData.scriptureText.replace(/\s+/g, ' ').trim().slice(0, 104)
     : '';
+  const quotable = stripOuterQuotes(dayData.quotableLine || '');
   const devotionalLine = usesEmberState
-    ? (dayData.quotableLine || 'Today’s reading is tucked into your rhythm.')
-    : (dayData.quotableLine || (scripturePreview ? `${scripturePreview}…` : 'A personalized reading is ready for this part of your story.'));
+    ? (quotable || 'Today’s reading is tucked into your rhythm.')
+    : (quotable || (scripturePreview ? `${scripturePreview}…` : 'A personalized reading is ready for this part of your story.'));
 
   const ctaText = hasCompletedToday
     ? 'Read Again'
     : isTomorrowLocked
-      ? "Return to Today's Reading"
+      ? 'Return to Today’s Reading'
       : isYesterday
-        ? "Finish Yesterday's Devotional"
+        ? 'Finish Yesterday’s Devotional'
         : state.type === 'unread'
           ? state.ctaText
           : 'Continue Reading';
@@ -697,7 +700,7 @@ function MainCard({ state }: MainCardProps) {
               numberOfLines={3}
               maxFontSizeMultiplier={DISPLAY_TEXT_MAX_SCALE}
             >
-              {dayData.title}
+              {smartQuotes(dayData.title)}
             </Text>
 
             <View style={styles.heroQuoteBlock}>
@@ -707,11 +710,11 @@ function MainCard({ state }: MainCardProps) {
                 numberOfLines={4}
                 maxFontSizeMultiplier={DISPLAY_TEXT_MAX_SCALE}
               >
-                {devotionalLine}
+                {smartQuotes(devotionalLine)}
               </Text>
               {state.type === 'tomorrow-locked' && state.tomorrowTeaser ? (
                 <Text style={[styles.heroTomorrowTeaser, { color: colors.textMuted }]} numberOfLines={3} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}>
-                  Tomorrow’s thread: {state.tomorrowTeaser}
+                  Tomorrow’s thread: {smartQuotes(state.tomorrowTeaser)}
                 </Text>
               ) : null}
             </View>

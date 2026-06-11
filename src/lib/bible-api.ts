@@ -10,7 +10,7 @@
 
 import { MMKV } from 'react-native-mmkv';
 import { logger } from '@/lib/logger';
-import { referenceToRoute, BIBLE_BOOKS } from '@/lib/bible-constants';
+import { referenceToRoute, BIBLE_BOOKS, formatScriptureReference, normalizeScriptureReference } from '@/lib/bible-constants';
 import { getVerseByReference, getBibleDbStatus, type BibleTranslation } from '@/lib/bible-db';
 import { PRIMARY_BACKEND_URL, getAuthHeaders, sanitizeForPrompt } from '@/lib/api-config';
 import { checkRateLimit, incrementRateLimit } from '@/lib/rate-limit';
@@ -151,7 +151,8 @@ export async function fetchVerse(
   const cached = getCachedVerse(reference, translation);
   if (cached) {
     logger.log('[BibleAPI] Cache hit:', reference, translation);
-    return cached;
+    // MMKV cache has infinite TTL and may hold pre-normalization plural refs
+    return { ...cached, reference: normalizeScriptureReference(cached.reference) };
   }
 
   logger.log('[BibleAPI] Cache miss, fetching:', reference, translation);
@@ -201,7 +202,7 @@ export async function fetchVerse(
     }
 
     const result: VerseResult = {
-      reference: data.reference,
+      reference: normalizeScriptureReference(data.reference),
       text: cleanText,
       translation: data.translation_id ?? translation,
     };
@@ -261,13 +262,7 @@ export async function fetchVerseLocal(
   const bookName = book?.name ?? '';
 
   // Build canonical reference string
-  let refStr = `${bookName} ${parsed.chapter}`;
-  if (parsed.verse) {
-    refStr += `:${parsed.verse}`;
-    if (parsed.verseEnd && parsed.verseEnd !== parsed.verse) {
-      refStr += `-${parsed.verseEnd}`;
-    }
-  }
+  const refStr = formatScriptureReference(bookName, parsed.chapter, parsed.verse, parsed.verseEnd);
 
   return {
     reference: refStr,

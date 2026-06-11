@@ -1156,6 +1156,8 @@ export default function JournalHubScreen() {
                   onChangeText={setSearchQuery}
                   placeholder="Search entries..."
                   placeholderTextColor={colors.textHint}
+                  selectionColor={colors.accent}
+                  cursorColor={colors.accent}
                   autoFocus
                   style={[mainStyles.searchInput, { color: colors.text }]}
                 />

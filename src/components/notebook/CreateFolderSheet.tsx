@@ -231,6 +231,8 @@ export function CreateFolderSheet({ visible, onClose, onSubmit, parentFolderId, 
                   ]}
                   placeholder="Folder name"
                   placeholderTextColor={colors.textHint}
+                  selectionColor={colors.accent}
+                  cursorColor={colors.accent}
                   value={folderName}
                   onChangeText={setFolderName}
                   onPressIn={() => inputRef.current?.focus()}

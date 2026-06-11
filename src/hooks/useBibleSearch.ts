@@ -22,7 +22,7 @@ import {
   type BibleSearchResult as BibleSearchResultRaw,
   type BibleTranslation,
 } from '@/lib/bible-db';
-import { BOOK_BY_ID } from '@/lib/bible-constants';
+import { BOOK_BY_ID, formatScriptureReference } from '@/lib/bible-constants';
 import { logger } from '@/lib/logger';
 import { useBibleDb } from './useBibleDb';
 
@@ -105,7 +105,7 @@ function useBibleSearchCore(
     return data.map((result) => {
       const book = BOOK_BY_ID[result.bookId];
       const bookName = book?.name ?? `Book ${result.bookId}`;
-      const reference = `${bookName} ${result.chapter}:${result.verse}`;
+      const reference = formatScriptureReference(bookName, result.chapter, result.verse);
 
       return {
         ...result,

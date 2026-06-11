@@ -11,6 +11,7 @@ import { Radius } from "@/constants/radius";
 import { Spacing } from "@/constants/spacing";
 import { FontFamily, FontSize } from "@/constants/fonts";
 import type { DeepLinkData } from "@/lib/parse-deep-links";
+import { smartQuotes } from '@/lib/smart-quotes';
 
 interface Props {
   data: DeepLinkData;
@@ -76,7 +77,7 @@ export function DevotionalCard({ data }: Props) {
         }}
         numberOfLines={1}
       >
-        {data.preview.title}
+        {smartQuotes(data.preview.title)}
       </Text>
 
       {data.preview.scripture && (

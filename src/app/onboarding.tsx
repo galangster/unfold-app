@@ -87,6 +87,7 @@ import { ReadDevotionalStep } from '@/components/onboarding/ReadDevotionalStep';
 import { OnboardingCelebration } from '@/components/onboarding/OnboardingCelebration';
 import { CommitmentStep } from '@/components/onboarding/CommitmentStep';
 import { ThreeStepPaywall } from '@/components/onboarding/ThreeStepPaywall';
+import { stripOuterQuotes } from '@/lib/cn';
 
 
 // Slow-pulsing text — opacity breathes in and out gently
@@ -2050,6 +2051,8 @@ export default function OnboardingScreen() {
             onEndEditing={(e) => commitName(e.nativeEvent.text)}
             placeholder={step.placeholder}
             placeholderTextColor={colors.textMuted}
+            selectionColor={colors.accent}
+            cursorColor={colors.accent}
             style={{
               fontFamily: FontFamily.body,
               fontSize: FontSize.lg,
@@ -2148,6 +2151,8 @@ export default function OnboardingScreen() {
                 ? 'Want to share more? (optional)'
                 : step.placeholder}
               placeholderTextColor={colors.textMuted}
+              selectionColor={colors.accent}
+              cursorColor={colors.accent}
               style={{
                 flex: isDiscoveryStep ? undefined : 1,
                 fontFamily: FontFamily.body,
@@ -2336,7 +2341,7 @@ export default function OnboardingScreen() {
                 color: alpha(colors.text, 0.85),
                 lineHeight: 30,
               }}>
-                "{displayContent.verse}"
+                "{stripOuterQuotes(displayContent.verse)}"
               </Text>
               <Text style={{
                 fontFamily: FontFamily.ui,

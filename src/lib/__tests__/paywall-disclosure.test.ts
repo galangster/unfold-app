@@ -52,9 +52,15 @@ describe('getPaywallRenewalDisclosure', () => {
     expect(getPaywallRenewalDisclosure(ready)).toBe('$59.99/yr. Cancel anytime.');
   });
 
-  it('monthly never promises a trial — eligibility is yearly-only (Guideline 3.1.2)', () => {
+  it('monthly with caller-verified trial states the trial then the real monthly charge', () => {
     expect(
       getPaywallRenewalDisclosure({ ...ready, selectedPlan: 'monthly', hasFreeTrial: true }),
+    ).toBe('3 days free, then $9.99/mo. Cancel anytime.');
+  });
+
+  it('monthly without verified trial states the monthly charge only (Guideline 3.1.2 lives at the call site)', () => {
+    expect(
+      getPaywallRenewalDisclosure({ ...ready, selectedPlan: 'monthly', hasFreeTrial: false }),
     ).toBe('$9.99/mo. Cancel anytime.');
   });
 });

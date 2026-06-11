@@ -155,6 +155,11 @@ jest.mock('expo-clipboard', () => ({
 
 jest.mock('@/lib/bible-constants', () => ({
   BIBLE_BOOKS: [{ id: 43, name: 'John' }],
+  referenceToRoute: (reference: string) => {
+    const match = reference.match(/^John\s+(\d+)(?::(\d+))?/);
+    if (!match) return null;
+    return { bookId: 43, chapter: parseInt(match[1], 10), verse: match[2] ? parseInt(match[2], 10) : undefined };
+  },
 }));
 
 const verseResult = {

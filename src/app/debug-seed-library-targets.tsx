@@ -33,7 +33,7 @@ const qaUser: UserProfile = {
   spiritualSeeking: 'A steady rhythm with God in the middle of work and decisions.',
   readingDuration: 5,
   devotionalLength: 3,
-  reminderTime: '08:00',
+  reminderTime: '8:00 AM',
   hasCompletedOnboarding: true,
   hasCompletedStyleOnboarding: true,
   isPremium: false,

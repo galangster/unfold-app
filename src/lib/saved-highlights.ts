@@ -4,6 +4,7 @@ import type {
   Highlight,
   HighlightColor,
 } from '@/lib/store';
+import { formatScriptureReference } from '@/lib/bible-constants';
 
 export type SavedItemSource = 'devotional' | 'bible';
 export type SavedItemKind = 'highlight' | 'note';
@@ -61,10 +62,7 @@ export function toDevotionalSavedItem(h: Highlight): SavedItem {
 }
 
 export function toBibleSavedItem(h: BibleHighlight): SavedItem | null {
-  const ref =
-    h.verseStart === h.verseEnd
-      ? `${h.bookName} ${h.chapter}:${h.verseStart}`
-      : `${h.bookName} ${h.chapter}:${h.verseStart}-${h.verseEnd}`;
+  const ref = formatScriptureReference(h.bookName, h.chapter, h.verseStart, h.verseEnd);
   const note = h.note?.trim();
   const hasNote = Boolean(note);
 

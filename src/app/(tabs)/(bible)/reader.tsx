@@ -20,7 +20,7 @@ import { useReadingFont } from '@/lib/useReadingFont';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { useBibleChapter } from '@/hooks/useBibleChapter';
 import { useBibleDb } from '@/hooks/useBibleDb';
-import { BIBLE_BOOKS, getNextChapter, getPreviousChapter } from '@/lib/bible-constants';
+import { BIBLE_BOOKS, getNextChapter, getPreviousChapter, formatScriptureReference } from '@/lib/bible-constants';
 import type { BibleTranslation } from '@/lib/bible-db';
 import { ReadingSettingsSheet } from '@/components/bible/ReadingSettingsSheet';
 import { BookChapterNavigator } from '@/components/bible/BookChapterNavigator';
@@ -556,9 +556,7 @@ export default function BibleReaderScreen() {
     if (!verses || selectedVerses.size === 0 || !book) return;
     const sorted = Array.from(selectedVerses).sort((a, b) => a - b);
     const selectedTexts = sorted.map((v) => verses.find((vr) => vr.verse === v)?.text ?? '').join(' ');
-    const refStr = sorted.length === 1
-      ? `${book.name} ${chapter}:${sorted[0]}`
-      : `${book.name} ${chapter}:${sorted[0]}-${sorted[sorted.length - 1]}`;
+    const refStr = formatScriptureReference(book.name, chapter, sorted[0], sorted[sorted.length - 1]);
 
     await Clipboard.setStringAsync(`${selectedTexts}\n— ${refStr} (${bibleReaderSettings.translation})`);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -594,9 +592,7 @@ export default function BibleReaderScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const sorted = Array.from(selectedVerses).sort((a, b) => a - b);
     const selectedTexts = sorted.map((v) => verses.find((vr) => vr.verse === v)?.text ?? '').join(' ');
-    const refStr = sorted.length === 1
-      ? `${book.name} ${chapter}:${sorted[0]}`
-      : `${book.name} ${chapter}:${sorted[0]}-${sorted[sorted.length - 1]}`;
+    const refStr = formatScriptureReference(book.name, chapter, sorted[0], sorted[sorted.length - 1]);
 
     router.push({
       pathname: '/share-card',
@@ -680,9 +676,7 @@ export default function BibleReaderScreen() {
     }
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    const refStr = verseStart === verseEnd
-      ? `${book.name} ${chapter}:${verseStart}`
-      : `${book.name} ${chapter}:${verseStart}-${verseEnd}`;
+    const refStr = formatScriptureReference(book.name, chapter, verseStart, verseEnd);
     showToast(noteText.trim() ? `Note saved on ${refStr}` : `Note removed from ${refStr}`);
     setShowNoteInput(false);
     setNoteText('');
@@ -1144,6 +1138,8 @@ export default function BibleReaderScreen() {
                 }]}
                 placeholder="Add a note..."
                 placeholderTextColor={colors.textHint}
+                selectionColor={colors.accent}
+                cursorColor={colors.accent}
                 value={noteText}
                 onChangeText={setNoteText}
                 multiline

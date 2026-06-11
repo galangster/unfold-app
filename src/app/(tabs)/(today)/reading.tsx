@@ -60,7 +60,7 @@ import { CompletionCelebration } from '@/components/CompletionCelebration';
 // ShareDevotionalModal removed — pull quote share now uses /share-card route
 import { DevotionalContent } from '@/components/reading/DevotionalContent';
 import { StudyMethodSheet } from '@/components/reading/StudyMethodSheet';
-import { createReviewPromptManager } from '@/lib/review-prompt';
+import { createReviewPromptManager, type ReviewPromptManager } from '@/lib/review-prompt';
 import { useGlobalAudioPlayer } from '@/hooks/useGlobalAudioPlayer';
 import { useAudioPlayerState } from '@/lib/audio-player-state';
 import { ScriptureTapSheet } from '@/components/ScriptureTapSheet';
@@ -219,9 +219,8 @@ export default function ReadingScreen() {
   const [targetScrollRequest, setTargetScrollRequest] = useState<{ id: number; y: number } | null>(null);
   const [readerScrollReady, setReaderScrollReady] = useState(0);
   const [readerLayoutVersion, setReaderLayoutVersion] = useState(0);
-  const mountedRef = useRef(true);
   const [studyMethodVisible, setStudyMethodVisible] = useState(false);
-  const reviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingReviewRef = useRef<{ manager: ReviewPromptManager; totalDaysCompleted: number } | null>(null);
   const autoBackgroundKickoffRef = useRef<Record<string, number>>({});
   const autoRetryAttemptsRef = useRef<Record<string, number>>({});
   const autoRetryTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -404,15 +403,6 @@ export default function ReadingScreen() {
     const firstSentence = stripped.match(/^.+?[.!?]/s);
     return firstSentence ? firstSentence[0].trim() : stripped.slice(0, 130) + '\u2026';
   }, [tomorrowDayData]);
-
-  // Cleanup mounted ref and timers on unmount
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-      if (reviewTimerRef.current) clearTimeout(reviewTimerRef.current);
-    };
-  }, []);
 
   // Audio narration disabled — TTS pipeline not yet production-ready
   // useEffect(() => {
@@ -898,15 +888,9 @@ export default function ReadingScreen() {
           currentStreak: streakCurrent,
           justCompletedSeries: completingLastDay,
         })) {
-          // Delay lets celebration animation play first
-          if (reviewTimerRef.current) clearTimeout(reviewTimerRef.current);
-          reviewTimerRef.current = setTimeout(async () => {
-            if (!mountedRef.current) return;
-            const shown = await reviewManager.showPrompt();
-            if (shown) {
-              recordReviewPrompt(totalDaysCompleted);
-            }
-          }, 2000);
+          // Defer the rating sheet until the celebration is dismissed —
+          // consumed in CompletionCelebration's onDismiss below.
+          pendingReviewRef.current = { manager: reviewManager, totalDaysCompleted };
         }
       }
     }
@@ -2103,7 +2087,7 @@ export default function ReadingScreen() {
                                 color: retryCtaButtonText,
                               }}
                             >
-                              Subscribe to Continue
+                              Continue with Premium
                             </Text>
                           </TouchableOpacity>
                         )}
@@ -2219,6 +2203,16 @@ export default function ReadingScreen() {
         visible={showCelebration}
         onDismiss={() => {
           setShowCelebration(false);
+          const pending = pendingReviewRef.current;
+          pendingReviewRef.current = null;
+          if (pending) {
+            void (async () => {
+              const shown = await pending.manager.showPrompt();
+              if (shown) {
+                recordReviewPrompt(pending.totalDaysCompleted);
+              }
+            })();
+          }
         }}
         type={celebrationType}
         seriesReflectionSummary={

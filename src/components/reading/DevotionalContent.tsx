@@ -18,7 +18,7 @@ import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { useReadingFont } from '@/lib/useReadingFont';
 import { DevotionalDay, FONT_SIZE_VALUES, FontSize, Highlight, HighlightColor, Bookmark } from '@/lib/store';
-import { preventOrphan } from '@/lib/cn';
+import { preventOrphan, stripOuterQuotes } from '@/lib/cn';
 import { fetchVerseLocal, fetchVerse } from '@/lib/bible-api';
 import { DevotionalWebView } from './DevotionalWebView';
 import { InlineReflectionJournal } from './InlineReflectionJournal';
@@ -302,7 +302,7 @@ export function DevotionalContent({
             minHeight: displayScripture ? 'auto' : 60,
           }}
         >
-          {displayScripture ? `\u201C${preventOrphan(displayScripture)}\u201D` : `Scripture text not available for ${day.scriptureReference || 'this passage'}.`}
+          {displayScripture ? `\u201C${preventOrphan(stripOuterQuotes(displayScripture))}\u201D` : `Scripture text not available for ${day.scriptureReference || 'this passage'}.`}
         </Text>
       </View>
 
@@ -358,7 +358,7 @@ export function DevotionalContent({
                   lineHeight: Math.round(fontSizes.body * 1.15) * 1.7,
                 }}
               >
-                {`\u201C${preventOrphan(ref.text)}\u201D`}
+                {`\u201C${preventOrphan(stripOuterQuotes(ref.text))}\u201D`}
               </Text>
             </View>
           ))}

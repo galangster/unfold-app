@@ -12,6 +12,7 @@ import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
+import { formatReminderTime } from '@/lib/format-reminder-time';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 // NOTE: scheduleMiddayCheckIn / scheduleEveningWindDown are NOT imported here.
 // `useCheckInNotifications` owns the OS queue — this screen only mutates
@@ -30,13 +31,6 @@ function timeStringToDate(time: string): Date {
 
 function dateToTimeString(d: Date): string {
   return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
-}
-
-function formatTime(time: string): string {
-  const [h, m] = time.split(':').map(Number);
-  const period = h >= 12 ? 'PM' : 'AM';
-  const hour12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
-  return `${hour12}:${m.toString().padStart(2, '0')} ${period}`;
 }
 
 type CheckInType = 'midday' | 'evening';
@@ -295,7 +289,7 @@ export default function CheckInScheduleScreen() {
                 color: colors.accent,
               }}
             >
-              {formatTime(localDefaultTime)}
+              {formatReminderTime(localDefaultTime)}
             </Text>
           </TouchableOpacity>
 
@@ -462,7 +456,7 @@ export default function CheckInScheduleScreen() {
                             color: activePicker === day ? colors.accent : colors.text,
                           }}
                         >
-                          {formatTime(dayTime)}
+                          {formatReminderTime(dayTime)}
                         </Text>
                       </TouchableOpacity>
                     )}

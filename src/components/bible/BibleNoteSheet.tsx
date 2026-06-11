@@ -41,6 +41,7 @@ import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import type { BibleHighlight } from '@/lib/store';
+import { formatScriptureReference } from '@/lib/bible-constants';
 
 interface BibleNoteSheetProps {
   highlight: BibleHighlight | null;
@@ -141,9 +142,7 @@ export function BibleNoteSheet({ highlight, onClose, onSave, onDelete }: BibleNo
 
   if (!visible || !active) return null;
 
-  const refStr = active.verseStart === active.verseEnd
-    ? `${active.bookName} ${active.chapter}:${active.verseStart}`
-    : `${active.bookName} ${active.chapter}:${active.verseStart}-${active.verseEnd}`;
+  const refStr = formatScriptureReference(active.bookName, active.chapter, active.verseStart, active.verseEnd);
 
   return (
     <Modal
@@ -190,6 +189,8 @@ export function BibleNoteSheet({ highlight, onClose, onSave, onDelete }: BibleNo
                   onChangeText={setDraft}
                   placeholder="Write a note..."
                   placeholderTextColor={colors.textHint}
+                  selectionColor={colors.accent}
+                  cursorColor={colors.accent}
                   multiline
                   autoFocus
                   maxLength={1000}

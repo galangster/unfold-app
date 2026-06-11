@@ -327,6 +327,8 @@ export function ScriptureSearchSheet({
                     onChangeText={handleQueryChange}
                     placeholder='e.g. John 3:16, Psalm 23:1-6'
                     placeholderTextColor={colors.textHint}
+                    selectionColor={colors.accent}
+                    cursorColor={colors.accent}
                     style={[sheetStyles.input, { color: colors.text }]}
                     autoCorrect={false}
                     autoCapitalize="words"
