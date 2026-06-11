@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo } from 'react';
-import { View } from 'react-native';
+import { View, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -15,7 +15,11 @@ import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 interface SparkleBurstProps {
   trigger: boolean;
   color?: string;
+  /** Optional multi-color palette, cycled per particle (overrides `color`). */
+  palette?: ReadonlyArray<string>;
   particleCount?: number;
+  /** Position override for the burst origin (defaults to parent center). */
+  style?: StyleProp<ViewStyle>;
 }
 
 interface Particle {
@@ -173,7 +177,9 @@ const SparkleParticle = React.memo(function SparkleParticle({ particle, color, t
 export function SparkleBurst({
   trigger,
   color: propColor,
+  palette,
   particleCount = 16,
+  style,
 }: SparkleBurstProps) {
   const { colors } = useTheme();
   const { reducedMotion } = useAccessibleAnimation();
@@ -199,21 +205,24 @@ export function SparkleBurst({
 
   return (
     <View
-      style={{
-        position: 'absolute',
-        top: '50%',
-        left: '50%',
-        width: 0,
-        height: 0,
-        zIndex: 100,
-        pointerEvents: 'none',
-      }}
+      style={[
+        {
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          width: 0,
+          height: 0,
+          zIndex: 100,
+          pointerEvents: 'none',
+        },
+        style,
+      ]}
     >
       {particles.map((particle, i) => (
         <SparkleParticle
           key={i}
           particle={particle}
-          color={color}
+          color={palette && palette.length > 0 ? palette[i % palette.length]! : color}
           trigger={trigger}
         />
       ))}

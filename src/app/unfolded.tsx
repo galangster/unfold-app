@@ -47,6 +47,7 @@ import { Duration } from '@/constants/animations';
 import { useUnfoldStore } from '@/lib/store';
 import { logger } from '@/lib/logger';
 import { computeRecapData, type RecapData } from '@/lib/recap-stats';
+import { SparkleBurst } from '@/components/SparkleBurst';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -297,106 +298,6 @@ function ProgressFill({
 
   return <Animated.View style={[s.progressFill, fillStyle]} />;
 }
-
-// ─── Sparkle Burst (finale) ──────────────────────────────────
-function SparkleBurst({ count = 30 }: { count?: number }) {
-  const particles = useMemo(() => {
-    return Array.from({ length: count }, (_, i) => {
-      const angle = (i / count) * Math.PI * 2 + (Math.random() * 0.5 - 0.25);
-      const distance = 40 + Math.random() * 160;
-      return {
-        targetX: Math.cos(angle) * distance,
-        targetY: Math.sin(angle) * distance,
-        size: 2 + Math.random() * 5,
-        delay: Math.random() * 600,
-        index: i,
-        isGold: i % 3 === 0,
-      };
-    });
-  }, [count]);
-
-  return (
-    <View style={sparkleS.container} pointerEvents="none">
-      {particles.map((p) => (
-        <SparkleParticle key={p.index} {...p} />
-      ))}
-    </View>
-  );
-}
-
-const SparkleParticle = React.memo(function SparkleParticle({
-  targetX,
-  targetY,
-  size,
-  delay,
-  isGold,
-}: {
-  targetX: number;
-  targetY: number;
-  size: number;
-  delay: number;
-  index: number;
-  isGold: boolean;
-}) {
-  const progress = useSharedValue(0);
-  const opacity = useSharedValue(0);
-
-  useEffect(() => {
-    progress.value = withDelay(
-      delay,
-      withTiming(1, { duration: 1000, easing: Easing.out(Easing.cubic) }),
-    );
-    opacity.value = withDelay(
-      delay,
-      withSequence(
-        withTiming(1, { duration: Duration.normal, easing: Easing.out(Easing.ease) }),
-        withDelay(300, withTiming(0, { duration: 500, easing: Easing.in(Easing.ease) })),
-      ),
-    );
-  }, []);
-
-  const animStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    transform: [
-      { translateX: progress.value * targetX },
-      { translateY: progress.value * targetY },
-      { scale: interpolate(progress.value, [0, 0.3, 1], [0, 1.4, 0.4]) },
-    ],
-  }));
-
-  const color = isGold ? PALETTE.gold : PALETTE.cream;
-
-  return (
-    <Animated.View
-      style={[
-        {
-          position: 'absolute',
-          width: size,
-          height: size,
-          borderRadius: size / 2,
-          backgroundColor: color,
-          shadowColor: color,
-          shadowOffset: { width: 0, height: 0 },
-          shadowOpacity: 1,
-          shadowRadius: size * 4,
-        },
-        animStyle,
-      ]}
-    />
-  );
-});
-
-const sparkleS = StyleSheet.create({
-  container: {
-    position: 'absolute',
-    top: '40%',
-    left: '50%',
-    width: 0,
-    height: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
 
 // ─── Floating Ember Particles ─────────────────────────────────
 const FloatingEmber = React.memo(function FloatingEmber({ index, color }: { index: number; color: string }) {
@@ -1199,7 +1100,14 @@ function ClosingCard({ data, userName }: { data: RecapData; userName: string }) 
 
   return (
     <View style={s.closingContainer}>
-      {showBurst && !reducedMotion && <SparkleBurst count={40} />}
+      {showBurst && !reducedMotion && (
+        <SparkleBurst
+          trigger={showBurst}
+          particleCount={32}
+          palette={[PALETTE.gold, PALETTE.cream, PALETTE.cream]}
+          style={s.finaleBurst}
+        />
+      )}
 
       <Reveal delay={300} from={30}>
         <Text style={s.closingTitle}>Keep{'\n'}Unfolding</Text>
@@ -1901,6 +1809,9 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Spacing['6'],
+  },
+  finaleBurst: {
+    top: '40%',
   },
   closingTitle: {
     fontFamily: FontFamily.display,
