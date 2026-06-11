@@ -101,6 +101,10 @@ iOS 26.5-beta SIMULATOR gallery artifact: chronod widget gallery is empty for AL
 
 FINAL BATCH QUEUE (post-Codex, one batch + gates + mini-sweep): Codex findings + PRIV-1/2 + bundled R4 P2s (RS12-001/002/003, RS13-1/2, RS14-001/002).
 
+## DB ops health (read-only, 2026-06-10 — memo: db-ops-health.md)
+
+Postgres 18.3, 15MB/4.9GB used, 13/100 conns, 0 locks. **BSEC-1 NOT exploited** (1 is_premium row = QA seed 04-29). Jobs queue drained (0 pending/processing; 28 failed-at-max-retries, stale, not growing). Dedup index present + used (119 scans). BDAT-4 not yet manifesting (1 row w/ history). NOTES: **no PITR/WAL archiving visible — confirm Railway platform snapshots in dashboard (Nick gate)**; 2 tiny tables never autovacuumed (manual VACUUM housekeeping); 35 unused indexes ~600kB (roadmap).
+
 ## Finding ledger
 
 Schema: `{id, dimension, severity(P0/P1/P2/TASTE), file:line, claim, evidence, proposed_fix, confidence, status(new/verified/refuted/fixed/deferred), verdicts, commit}`
