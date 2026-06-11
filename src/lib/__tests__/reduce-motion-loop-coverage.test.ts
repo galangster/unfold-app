@@ -47,11 +47,16 @@ describe('reduce-motion loop coverage', () => {
     expect(src).toContain('flamePulse.value = 1;');
   });
 
-  it('renders no onboarding ember particles under reduce motion', () => {
-    const src = readSource('components/EmberParticles.tsx');
-    const fnStart = src.indexOf('export function EmberParticles');
-    const gate = src.indexOf('if (reducedMotion) return null;', fnStart);
-    expect(gate).toBeGreaterThan(fnStart);
+  it('renders the designed EmberSystem still (a poster, not null) under reduce motion', () => {
+    const src = readSource('components/EmberSystem.tsx');
+    const fnStart = src.indexOf('export function EmberSystem');
+    expect(fnStart).toBeGreaterThan(-1);
+    // Particle loops never start under reduce motion…
+    const particleGate = src.indexOf('if (reducedMotion) return [];', fnStart);
+    expect(particleGate).toBeGreaterThan(fnStart);
+    // …and the surface renders the designed still instead of disappearing.
+    expect(src).toContain('<EmberStillPoster');
+    expect(src).not.toContain('if (reducedMotion) return null;');
   });
 
   it('keeps the paywall Lottie bell and CTA glow static under reduce motion', () => {

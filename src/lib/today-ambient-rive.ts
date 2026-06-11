@@ -1,4 +1,10 @@
-export type TodayAmbientMode = 'none' | 'wind-particles' | 'light-rays' | 'rain-particles';
+// Today-tab ambient state logic.
+//
+// The Rive ambient path (wind/light-rays/rain loops) was dead code — the mode
+// resolver always returned 'none' because Today motion only unlocks after
+// completion, and completed/rest ambience is rendered by the shared
+// EmberSystem layer (plans/07-ui-deslop-brief.md §2). The Rive component,
+// mode mapping, and input plumbing were deleted with it.
 
 export type TodayAmbientStateType =
   | 'empty'
@@ -10,120 +16,18 @@ export type TodayAmbientStateType =
   | 'reveal-ready'
   | 'journey-complete';
 
-export interface TodayAmbientModeInput {
+export interface CompletedEmberAmbienceInput {
   stateType: TodayAmbientStateType;
   hasReadToday: boolean;
-}
-
-export interface CompletedBottomGlowInput {
-  stateType: TodayAmbientStateType;
-  hasReadToday: boolean;
-}
-
-export interface RgbColor {
-  r: number;
-  g: number;
-  b: number;
-}
-
-export interface TodayAmbientRiveInputs {
-  lineThickness?: number;
-  opacity?: number;
-  particleCount?: number;
-  spawnRate?: number;
-  accentR?: number;
-  accentG?: number;
-  accentB?: number;
-  width?: number;
-  height?: number;
-  centerMaskRadius?: number;
-  centerMaskSoftness?: number;
-}
-
-export function getTodayAmbientMode(_input: TodayAmbientModeInput): TodayAmbientMode {
-  // Today-tab Rive motion is intentionally not state-driven before completion.
-  // Reveal-ready light rays were a regression: the reveal affordance can exist
-  // before the user finishes the day, while the product rule says Today motion
-  // should unlock only after completion. Completed/rest ambience is rendered by
-  // the higher-fidelity native GoldEmberField layer instead of the rain Rive loop,
-  // whose asset reads visually as ripples.
-  return 'none';
 }
 
 export function shouldShowCompletedEmberAmbience({
   stateType,
   hasReadToday,
-}: CompletedBottomGlowInput): boolean {
+}: CompletedEmberAmbienceInput): boolean {
   return hasReadToday && (
     stateType === 'complete-today'
     || stateType === 'tomorrow-locked'
     || stateType === 'journey-complete'
   );
-}
-
-export function shouldShowCompletedBottomGlow(input: CompletedBottomGlowInput): boolean {
-  return shouldShowCompletedEmberAmbience(input);
-}
-
-export function hexToRiveRgb(hex: string): RgbColor {
-  const normalized = hex.replace('#', '').trim();
-  const full = normalized.length === 3
-    ? normalized.split('').map((part) => `${part}${part}`).join('')
-    : normalized;
-
-  if (!/^[0-9a-fA-F]{6}$/.test(full)) {
-    return { r: 1, g: 199 / 255, b: 92 / 255 };
-  }
-
-  return {
-    r: parseInt(full.slice(0, 2), 16) / 255,
-    g: parseInt(full.slice(2, 4), 16) / 255,
-    b: parseInt(full.slice(4, 6), 16) / 255,
-  };
-}
-
-export function getTodayAmbientRiveInputs({
-  mode,
-  accent,
-}: {
-  mode: TodayAmbientMode;
-  stateType: TodayAmbientStateType;
-  accent: string;
-  width: number;
-  height: number;
-}): TodayAmbientRiveInputs | null {
-  if (mode === 'none') {
-    return null;
-  }
-
-  if (mode !== 'light-rays') {
-    // Wind/rain assets are still authored as self-contained loops. Keep their
-    // runtime contract empty until those .riv files expose the same inputs.
-    return {};
-  }
-
-  const rgb = hexToRiveRgb(accent);
-
-  return {
-    accentR: rgb.r,
-    accentG: rgb.g,
-    accentB: rgb.b,
-  };
-}
-
-export function getTodayLightRayInputs({
-  stateType,
-  accent,
-  width,
-  height,
-}: {
-  stateType: TodayAmbientStateType;
-  accent: string;
-  width: number;
-  height: number;
-}): TodayAmbientRiveInputs | null {
-  const mode = getTodayAmbientMode({ stateType, hasReadToday: false });
-  if (mode !== 'light-rays') return null;
-
-  return getTodayAmbientRiveInputs({ mode, stateType, accent, width, height });
 }

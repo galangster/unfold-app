@@ -24,9 +24,6 @@ import { registerPushToken, setNotificationNavigationReady, setupNotificationLis
 import { shouldMarkNotificationNavigationReady } from '@/lib/push-notification-helpers';
 import { migrateGenerationDataToServer } from '@/lib/generation-migration';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-// GlowBackground disabled — 18 infinite Reanimated animations saturate the main thread,
-// blocking touch events and causing audio playback freezes. See GlowBackground.tsx for details.
-// import { GlowBackground } from '@/components/GlowBackground';
 import { AudioPlayerOverlay } from '@/components/AudioPlayerOverlay';
 
 export const unstable_settings = {
@@ -138,7 +135,6 @@ function RootLayoutNav() {
   return (
     <NavigationThemeProvider value={navigationTheme}>
       <View style={{ flex: 1, backgroundColor: colors.background }}>
-        {/* GlowBackground disabled — infinite Reanimated animations block JS thread */}
         <Stack
           screenOptions={{
             headerShown: false,
