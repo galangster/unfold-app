@@ -486,13 +486,26 @@ export function getDeviceId(): string {
  * SecureStore and MMKV. Called by performFullLocalReset() after a data wipe
  * so that server-side data becomes permanently unreachable (orphaned by
  * design per product decision #1).
+ *
+ * FAP-LIB-3 (atomicity): SecureStore is the AUTHORITATIVE source in
+ * resolveDeviceId, so it must commit FIRST; the MMKV mirror is only updated
+ * after the Keychain write succeeds. The old best-effort order updated the
+ * mirror even when the Keychain write failed, leaving keychain=old vs
+ * mirror=new — the session ran under the new id while the next boot silently
+ * resolved the OLD id (keychain wins), orphaning everything written under
+ * the "new" identity. On Keychain failure the rotation now ABORTS cleanly:
+ * the old identity stays everywhere and the CURRENT identity is returned.
  */
 export function rotateDeviceId(): string {
   const id = uuidv4();
   try {
     SecureStore.setItem(SECURE_DEVICE_ID_KEY, id);
-  } catch {
-    // Best-effort
+  } catch (error) {
+    logger.warn(
+      '[MMKV] Device ID rotation aborted — Keychain write failed; keeping current identity',
+      error,
+    );
+    return getDeviceId();
   }
   mmkv.set(DEVICE_ID_KEY, id);
   logger.log('[MMKV] Device ID rotated');

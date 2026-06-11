@@ -607,6 +607,32 @@ describe('mmkv-storage boot (218→219 upgrade populations)', () => {
     expectNoProbeLeftovers(world);
   });
 
+  it('FAP-LIB-3: rotateDeviceId commits the Keychain FIRST and aborts cleanly when the Keychain write fails', () => {
+    const world = new FakeWorld({ secureKey: KEY });
+    world.seedStore(STORE_ID, 'encrypted', KEY, { [STORAGE_KEY]: PAYLOAD });
+    world.seedStore(META_ID, 'plain', undefined, { [MARKER_KEY]: 'encrypted' });
+
+    const storage = bootWith(world);
+
+    // Successful rotation: Keychain and mirror converge on the new id.
+    const rotated = storage.rotateDeviceId();
+    expect(rotated).toBe('test-uuid-1');
+    expect(world.opts.secureKey).toBe('test-uuid-1');
+    expect(world.files.get(STORE_ID)!.data.get('unfold-device-id')).toBe('test-uuid-1');
+
+    // Keychain outage mid-rotation: the rotation must ABORT atomically.
+    // SecureStore is AUTHORITATIVE in resolveDeviceId — pre-fix, the mirror
+    // still advanced to the new id while the Keychain kept the old one, so
+    // the session ran under an id the next boot silently reverted (keychain
+    // wins), orphaning anything written under the 'new' identity.
+    world.opts.secureThrows = true;
+    const result = storage.rotateDeviceId();
+
+    expect(result).toBe('test-uuid-1'); // old identity returned, not a half-rotated one
+    expect(world.files.get(STORE_ID)!.data.get('unfold-device-id')).toBe('test-uuid-1'); // mirror NOT advanced
+    expect(world.opts.secureKey).toBe('test-uuid-1'); // keychain unchanged
+  });
+
   // RS9-2: MMKV constructor throws when opening the probe store — probe unavailable.
   // The probe must return 'probe-unavailable', fall back to encrypted (majority-safe),
   // and still clean up the probe file copy.
