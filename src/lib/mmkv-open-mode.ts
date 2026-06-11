@@ -4,71 +4,121 @@
  * The marker stored in 'unfold-storage-meta' tells us what mode the
  * 'unfold-store-v2' file was last successfully opened in. We must NEVER open
  * the file in the wrong mode — react-native-mmkv silently discards the
- * contents when the mode mismatches.
+ * contents on a mode mismatch IN BOTH DIRECTIONS (plain-open of an encrypted
+ * file AND encrypted-open of a plain file), and offers no safe probe against
+ * the real file.
  *
- * Residual window (legacy installs, no marker yet): if the first launch of
- * this build hits a transient Keychain failure, we infer 'plain' (row 6) —
- * one-launch exposure. Eliminated for all subsequent launches by the marker
- * backfill written on this run.
+ * Build-218 upgrade hazard (RS3-1 → RS5-1/RS6-1 history):
+ *   Build 218 shipped no marker system. It opened 'unfold-store-v2' encrypted
+ *   whenever the SecureStore key was available — the MAJORITY population has
+ *   an ENCRYPTED file — and plain only on a rare Keychain failure (tiny
+ *   LEGACY-PLAIN population). A 219-upgrade user with no marker can therefore
+ *   have either file mode on disk.
  *
- * Build-218 upgrade hazard (RS3-1):
- *   Build 218 always attempted encrypted-open for 'unfold-store-v2', with a
- *   fallback to plain when SecureStore failed. That means a 219-upgrade user
- *   who has no mode marker could have a plain file OR an encrypted file on
- *   disk. Opening a plain file with an encryption key, or vice-versa, causes
- *   react-native-mmkv to silently discard ALL content.
+ *   Round 1 (d9bbd6c) inferred 'encrypted' for marker=null + keyAvailable:
+ *   correct for the majority, destroys legacy-plain stores (RS3-1).
+ *   Round 2 (96bf578) flipped the ambiguous case to plain+recrypt: that
+ *   destroyed the MAJORITY instead — plain-opening an encrypted file silently
+ *   discards everything, then recrypt() re-encrypts the now-empty store
+ *   (P0 RS5-1/RS6-1).
  *
- *   Safe resolution (fileExists parameter):
- *     marker=null, keyAvailable=true,  fileExists=false → FRESH INSTALL →
- *       encrypted (row 5a): no file exists, safe to create encrypted.
- *     marker=null, keyAvailable=true,  fileExists=true  → 218 UPGRADE AMBIGUOUS →
- *       plain + recrypt (row 5b): treat as if marker='plain'. Opening plain on
- *       an already-encrypted file would also discard — but this is the lesser
- *       risk because the 218 failure path (plain file) is the ONE we must
- *       protect; happy-path 218 users have a key stored AND an encrypted file,
- *       so they already have the marker written on their first 219 boot via the
- *       row-5b recrypt path which writes marker='encrypted'. Subsequent boots
- *       hit row 1.
+ *   Resolution — DISPOSABLE-COPY PROBE, performed by the caller
+ *   (mmkv-storage.ts) in the ambiguous case ONLY (marker=null + keyAvailable):
+ *   copy the store file (and its .crc sibling) to a scratch id, plain-open the
+ *   COPY, and classify the original by whether readable data appears. The
+ *   original file is never opened in an unproven mode; only the disposable
+ *   copy ever absorbs a mismatch. This function stays pure — it receives the
+ *   probe RESULT as an input and performs no IO.
  *
- * Decision table:
- *   marker='encrypted', keyAvailable=true,  fileExists=*    → { mode:'encrypted', writeMarker:null,        recrypt:false, clearOnOpen:false }
- *   marker='encrypted', keyAvailable=false, fileExists=*    → { mode:'recovery',  writeMarker:null,        recrypt:false, clearOnOpen:true  }
- *   marker='plain',     keyAvailable=true,  fileExists=*    → { mode:'plain',     writeMarker:'encrypted', recrypt:true,  clearOnOpen:false }
- *   marker='plain',     keyAvailable=false, fileExists=*    → { mode:'plain',     writeMarker:null,        recrypt:false, clearOnOpen:false }
- *   marker=null,        keyAvailable=true,  fileExists=false → { mode:'encrypted', writeMarker:'encrypted', recrypt:false, clearOnOpen:false }  [row 5a: fresh install]
- *   marker=null,        keyAvailable=true,  fileExists=true  → { mode:'plain',     writeMarker:'encrypted', recrypt:true,  clearOnOpen:false }  [row 5b: 218 upgrade ambiguous — plain+recrypt]
- *   marker=null,        keyAvailable=false, fileExists=*    → { mode:'plain',     writeMarker:'plain',     recrypt:false, clearOnOpen:false }
+ * `probeResult` values (disk state, supplied by the caller):
+ *   'no-file'           → 'unfold-store-v2' does not exist. Fresh install;
+ *                         safe to create encrypted.
+ *   'plain-data'        → plain-open of the disposable COPY surfaced data, so
+ *                         the original is PLAIN (218 legacy-plain). Open plain
+ *                         and recrypt (rescue path).
+ *   'no-plain-data'     → plain-open of the COPY surfaced nothing, so the
+ *                         original is ENCRYPTED or genuinely empty. Encrypted
+ *                         open is correct for the former and harmless for the
+ *                         latter (zero risk).
+ *   'probe-unavailable' → the probe could not run (copy failed,
+ *                         expo-file-system unavailable). Fall back to the
+ *                         MAJORITY-SAFE choice: encrypted open (the d9bbd6c
+ *                         behavior). Truthful caveat: if the file was actually
+ *                         218-legacy-plain (tiny population) its contents are
+ *                         discarded — the alternative (plain open) would
+ *                         destroy the majority instead, which is exactly the
+ *                         RS5-1/RS6-1 P0. Never fall back to plain.
+ *
+ * Rows with a non-null marker ignore `probeResult` (the marker is
+ * authoritative) and the caller must not perform any probe IO for them.
+ *
+ * Decision table (every row tells the truth):
+ *   marker='encrypted', key=true,  probe=*                   → { mode:'encrypted', writeMarker:null,        recrypt:false, clearOnOpen:false }
+ *   marker='encrypted', key=false, probe=*                   → { mode:'recovery',  writeMarker:null,        recrypt:false, clearOnOpen:true  }
+ *   marker='plain',     key=true,  probe=*                   → { mode:'plain',     writeMarker:'encrypted', recrypt:true,  clearOnOpen:false }
+ *   marker='plain',     key=false, probe=*                   → { mode:'plain',     writeMarker:null,        recrypt:false, clearOnOpen:false }
+ *   marker=null,        key=true,  probe='no-file'           → { mode:'encrypted', writeMarker:'encrypted', recrypt:false, clearOnOpen:false }  [fresh install]
+ *   marker=null,        key=true,  probe='plain-data'        → { mode:'plain',     writeMarker:'encrypted', recrypt:true,  clearOnOpen:false }  [218 legacy-plain rescue]
+ *   marker=null,        key=true,  probe='no-plain-data'     → { mode:'encrypted', writeMarker:'encrypted', recrypt:false, clearOnOpen:false }  [218 majority: encrypted (or empty) file]
+ *   marker=null,        key=true,  probe='probe-unavailable' → { mode:'encrypted', writeMarker:'encrypted', recrypt:false, clearOnOpen:false }  [majority-safe fallback; legacy-plain caveat above]
+ *   marker=null,        key=false, probe=*                   → { mode:'plain',     writeMarker:'plain',     recrypt:false, clearOnOpen:false }
+ *
+ * Residual windows (documented, accepted):
+ *   - marker=null + keyAvailable=false (last row): we infer 'plain'. If the
+ *     file was actually encrypted this is a mismatch — one-launch exposure on
+ *     a first 219 boot that ALSO hits a Keychain failure, same exposure 218
+ *     itself had. Eliminated for subsequent launches by the marker backfill.
+ *   - probe='probe-unavailable' (row 8): legacy-plain caveat above.
  */
 
 export type MmkvMode = 'encrypted' | 'plain' | 'recovery';
 
+/**
+ * Result of the caller-side disposable-copy probe of 'unfold-store-v2'.
+ * Only meaningful for marker=null + keyAvailable=true (the ambiguous
+ * 218-upgrade case); ignored on every other row.
+ */
+export type MmkvStoreProbeResult =
+  | 'no-file'
+  | 'plain-data'
+  | 'no-plain-data'
+  | 'probe-unavailable';
+
 export interface MmkvOpenPlan {
   mode: MmkvMode;
+  /**
+   * Marker to persist for the SUCCESS path. When `recrypt` is true the caller
+   * must only write 'encrypted' after recrypt() actually succeeds; if recrypt
+   * throws, the file on disk is still plain and the caller must write 'plain'
+   * instead so the next boot retries the upgrade (RS5-3).
+   */
   writeMarker: 'encrypted' | 'plain' | null;
   recrypt: boolean;
   /** Recovery only: wipe the throwaway namespace so it is an EMPTY
    *  one-session sandbox — a previous outage's writes must not resurrect
-   *  as "current" data (REVM-4). Never true for the real store file. */
+   *  as "current" data (REVM-4). Never true for the real store file.
+   *  (The unmerged sync outbox is carried across the wipe by the caller —
+   *  RS5-4 — because it is a pending-upload queue, not "current" data.) */
   clearOnOpen: boolean;
 }
 
 /**
- * Resolve how to open the MMKV store given the persisted mode marker,
- * whether the encryption key is currently available, and whether the
- * 'unfold-store-v2' file already exists on disk.
+ * Resolve how to open the MMKV store given the persisted mode marker, whether
+ * the encryption key is currently available, and the result of the
+ * disposable-copy probe of the 'unfold-store-v2' file.
  *
- * `fileExists` must be supplied by the caller via a disk probe BEFORE any
- * MMKV open — never via a side-effecting MMKV read, which would itself open
- * the file in an unknown mode and risk a silent discard.
+ * `probeResult` must come from probing a disposable COPY of the store file —
+ * never from opening the real file, which would itself risk a silent discard.
+ * It defaults to 'probe-unavailable' (the majority-safe encrypted fallback).
  *
- * When `marker` is non-null `fileExists` is unused (the marker is
+ * When `marker` is non-null, `probeResult` is unused (the marker is
  * authoritative). Only the `marker=null` + `keyAvailable=true` branch
- * differentiates by `fileExists` (see module comment above).
+ * differentiates by `probeResult` (see module comment above).
  */
 export function resolveMmkvOpenPlan(
   marker: 'encrypted' | 'plain' | null,
   keyAvailable: boolean,
-  fileExists: boolean = false,
+  probeResult: MmkvStoreProbeResult = 'probe-unavailable',
 ): MmkvOpenPlan {
   if (marker === 'encrypted') {
     if (keyAvailable) {
@@ -90,30 +140,24 @@ export function resolveMmkvOpenPlan(
     }
   }
 
-  // marker === null: legacy install — no marker written yet.
+  // marker === null: no marker written yet (218 upgrade or fresh install).
   if (keyAvailable) {
-    if (fileExists) {
-      // Build-218 upgrade: the file exists but no marker was written.
-      // Build 218 could have created the file either plain (Keychain failure)
-      // or encrypted (happy path). We cannot distinguish without reading the
-      // file — and opening in the wrong mode would silently discard data.
-      // Safe strategy: treat as 'plain' and let recrypt() upgrade it.
-      //  - If file is actually plain  → plain-open succeeds, recrypt encrypts it. ✓
-      //  - If file is actually encrypted → plain-open on an encrypted file is a
-      //    mismatch; BUT 218-happy-path users have an encryption key stored in
-      //    SecureStore. If keyAvailable=true AND file was encrypted by 218, they
-      //    should have succeeded the 219 SecureStore read and written a marker on
-      //    the FIRST 219 boot (this path never fires for them on boot #2+). The
-      //    only unprotected case is a reinstall-without-Keychain-wipe on 218 where
-      //    the file is encrypted but the key is gone — that user's data is already
-      //    irrecoverable regardless of mode choice. Treating as plain+recrypt is
-      //    no worse than the previous eager-encrypted choice.
+    if (probeResult === 'plain-data') {
+      // The disposable-copy probe POSITIVELY identified a plain file
+      // (218 legacy-plain population). Open plain — the only matching mode —
+      // then recrypt() to upgrade. Encrypted-open would silently discard it.
       return { mode: 'plain', writeMarker: 'encrypted', recrypt: true, clearOnOpen: false };
-    } else {
-      // No file on disk: genuinely fresh install. Safe to create encrypted.
-      return { mode: 'encrypted', writeMarker: 'encrypted', recrypt: false, clearOnOpen: false };
     }
+    // 'no-file'           → fresh install, safe to create encrypted.
+    // 'no-plain-data'     → file is encrypted (correct) or empty (harmless).
+    // 'probe-unavailable' → majority-safe fallback: the encrypted-file
+    //   population vastly outnumbers legacy-plain; plain-opening here is the
+    //   RS5-1/RS6-1 P0. Accepted caveat: a legacy-plain file is discarded.
+    return { mode: 'encrypted', writeMarker: 'encrypted', recrypt: false, clearOnOpen: false };
   } else {
+    // No marker and no key: infer plain (the only mode we can open without a
+    // key). Residual one-launch mismatch window if the file was actually
+    // encrypted — see module comment.
     return { mode: 'plain', writeMarker: 'plain', recrypt: false, clearOnOpen: false };
   }
 }

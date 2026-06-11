@@ -18,8 +18,9 @@ import type { StateStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { v4 as uuidv4 } from 'uuid';
+import type { File as FsFile } from 'expo-file-system';
 import { logger } from '@/lib/logger';
-import { resolveMmkvOpenPlan } from '@/lib/mmkv-open-mode';
+import { resolveMmkvOpenPlan, type MmkvStoreProbeResult } from '@/lib/mmkv-open-mode';
 import { resolveDeviceId } from '@/lib/device-id';
 import { mergeRecoveryOutbox, RECOVERY_OUTBOX_KEY } from '@/lib/mmkv-recovery-outbox';
 
@@ -85,31 +86,94 @@ const MODE_MARKER_KEY = 'unfold-store-v2-mode';
 const storedMarker =
   (storageMeta.getString(MODE_MARKER_KEY) as 'encrypted' | 'plain' | undefined) ?? null;
 
-// Probe whether the 'unfold-store-v2' file already exists on disk BEFORE any
-// MMKV open — required for the 218-upgrade disambiguation in resolveMmkvOpenPlan
-// (RS3-1). The File API is synchronous; no MMKV instance is opened here.
-// MMKV files live at <documentDirectory>/mmkv/<id> on both platforms.
-// Dynamic require keeps this off the Jest module graph (expo-file-system
-// requires native bindings unavailable in the test runner).
-let storeFileExists = false;
-try {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { File, Paths } = require('expo-file-system') as typeof import('expo-file-system');
-  const mmkvFile = new File(Paths.document, 'mmkv/unfold-store-v2');
-  storeFileExists = mmkvFile.exists;
-} catch {
-  // expo-file-system unavailable in test/non-native environments; keep false
+// ---------------------------------------------------------------------------
+// 218-upgrade disambiguation probe (RS5-1/RS6-1).
+//
+// With no mode marker but an available encryption key, the store file (if it
+// exists) was created by build 218 in an unknown mode: ENCRYPTED for the
+// happy-path MAJORITY, plain only for the tiny Keychain-failure population.
+// react-native-mmkv silently discards contents on a mode mismatch in BOTH
+// directions and offers no safe in-place probe, so we classify the file by
+// copying it to a DISPOSABLE scratch id and plain-opening the COPY:
+//   - data visible   → original is PLAIN     → open plain + recrypt (rescue)
+//   - nothing        → original is ENCRYPTED (or empty) → open encrypted
+//   - probe failure  → 'probe-unavailable'   → open encrypted (majority-safe;
+//                      NEVER fall back to plain — that is the RS5-1/RS6-1 P0)
+// The real file is never opened in an unproven mode; only the disposable copy
+// ever absorbs a mismatch, and it is deleted in `finally`.
+//
+// MMKV file layout: <documentDirectory>/mmkv/<id> plus a <id>.crc sibling
+// (copied too so the CRC check on the copy cannot misclassify a healthy plain
+// file as corrupt). The new expo-file-system File API is synchronous
+// (`copySync`/`delete`/`exists`); no MMKV instance touches the real file here.
+// Dynamic require keeps expo-file-system off the default Jest module graph
+// (native bindings); tests mock it explicitly.
+// ---------------------------------------------------------------------------
+
+const STORE_ID = 'unfold-store-v2';
+const PROBE_ID = 'unfold-store-v2-probe';
+
+function probeAmbiguousStoreFile(): MmkvStoreProbeResult {
+  let probeFile: FsFile | null = null;
+  let probeCrcFile: FsFile | null = null;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { File, Paths } = require('expo-file-system') as typeof import('expo-file-system');
+    const storeFile = new File(Paths.document, `mmkv/${STORE_ID}`);
+    if (!storeFile.exists) return 'no-file';
+
+    probeFile = new File(Paths.document, `mmkv/${PROBE_ID}`);
+    probeCrcFile = new File(Paths.document, `mmkv/${PROBE_ID}.crc`);
+    // Remove stale probe files left behind by a previous crashed probe so the
+    // copy below starts from a clean slate.
+    if (probeFile.exists) probeFile.delete();
+    if (probeCrcFile.exists) probeCrcFile.delete();
+
+    storeFile.copySync(probeFile);
+    const storeCrcFile = new File(Paths.document, `mmkv/${STORE_ID}.crc`);
+    if (storeCrcFile.exists) storeCrcFile.copySync(probeCrcFile);
+
+    // Plain-open the disposable COPY. If the original is encrypted, MMKV
+    // discards only the COPY's contents (the original is untouched) and we
+    // see an empty store; if the original is plain, its keys are readable.
+    const probeStore = new MMKV({ id: PROBE_ID });
+    return probeStore.getAllKeys().length > 0 ? 'plain-data' : 'no-plain-data';
+  } catch (error) {
+    logger.warn(
+      '[MMKV] 218-upgrade probe failed — falling back to encrypted open (majority-safe)',
+      error,
+    );
+    return 'probe-unavailable';
+  } finally {
+    try {
+      if (probeFile?.exists) probeFile.delete();
+    } catch {
+      // Best-effort cleanup; a stale copy is removed at the start of the next probe.
+    }
+    try {
+      if (probeCrcFile?.exists) probeCrcFile.delete();
+    } catch {
+      // Best-effort cleanup.
+    }
+  }
 }
 
-const openPlan = resolveMmkvOpenPlan(storedMarker, encryptionKey !== undefined, storeFileExists);
+// Probe ONLY in the ambiguous 218-upgrade case (marker=null + key available).
+// Every other row's plan ignores probeResult, so it must not pay the probe IO.
+const probeResult: MmkvStoreProbeResult =
+  storedMarker === null && encryptionKey !== undefined
+    ? probeAmbiguousStoreFile()
+    : 'probe-unavailable';
+
+const openPlan = resolveMmkvOpenPlan(storedMarker, encryptionKey !== undefined, probeResult);
 
 // Use 'unfold-store-v2' for the encrypted instance.
 // The old 'unfold-store' (unencrypted) is migrated below and then cleared.
 const mmkv =
   openPlan.mode === 'encrypted'
-    ? new MMKV({ id: 'unfold-store-v2', encryptionKey })
+    ? new MMKV({ id: STORE_ID, encryptionKey })
     : openPlan.mode === 'plain'
-      ? new MMKV({ id: 'unfold-store-v2' })
+      ? new MMKV({ id: STORE_ID })
       : // recovery: Keychain down but the real file is encrypted — run this session
         // on a throwaway namespace; NEVER open the real file in the wrong mode.
         new MMKV({ id: 'unfold-store-v2-recovery' });
