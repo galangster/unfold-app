@@ -13,7 +13,7 @@ import UnfoldDashboardWidget from '@/widgets/ios/UnfoldDashboard';
 import UnfoldReadingSessionActivity from '@/widgets/ios/UnfoldReadingSession';
 import { useUnfoldStore } from '@/lib/store';
 import type { LiveActivity } from 'expo-widgets';
-import { buildWidgetTimelineEntries } from '@/lib/widget-timeline';
+import { buildWidgetTimelineEntries, getWeeklyProgress } from '@/lib/widget-timeline';
 
 // Track active reading session
 let activeReadingSession: LiveActivity<{
@@ -27,13 +27,66 @@ let activeReadingSession: LiveActivity<{
   streakCount: number;
 }> | null = null;
 
+// ---------------------------------------------------------------------------
+// Fingerprint guard (RS10-1)
+//
+// syncWidgets() is called on every Today useFocusEffect. Pushing new timeline
+// entries to WidgetKit has a measurable IPC cost, so we skip the native call
+// when nothing material has changed. The fingerprint captures exactly the four
+// shared-prop dimensions that affect widget rendering:
+//   1. streakCurrent — badge count + streak display
+//   2. streakLastReadDate — determines hasReadToday (self-expires at midnight)
+//   3. current day id/title — which day the "Today" widget labels
+//   4. weeklyProgress — the M-Su "read" indicator dots
+//
+// The fingerprint is a JSON-stringified plain object of these values. It is
+// intentionally NOT a hash — the string compare is cheap and human-readable
+// in debugger output.
+// ---------------------------------------------------------------------------
+
+let lastWidgetSyncFingerprint: string | null = null;
+
+/** Build the fingerprint string for the current store state. */
+function buildSyncFingerprint(now: Date): string {
+  const state = useUnfoldStore.getState();
+  const devotional = state.getCurrentDevotional();
+  const currentDay = devotional?.days?.find((d) => d.dayNumber === devotional.currentDay);
+
+  const hasReadToday = state.streakLastReadDate
+    ? new Date(state.streakLastReadDate).toDateString() === now.toDateString()
+    : false;
+
+  return JSON.stringify({
+    streakCurrent: state.streakCurrent,
+    streakLastReadDate: state.streakLastReadDate,
+    hasReadToday,
+    dayId: devotional ? `${devotional.id}:${devotional.currentDay}` : null,
+    dayTitle: currentDay?.title ?? null,
+    weeklyProgress: getWeeklyProgress(state.devotionals ?? [], now),
+  });
+}
+
+/**
+ * Reset the last-sync fingerprint. Exported for test isolation only —
+ * production code must never call this.
+ */
+export function resetWidgetSyncFingerprintForTesting(): void {
+  lastWidgetSyncFingerprint = null;
+}
+
 /**
  * Push current app state to all widgets as a two-entry timeline
  * (now + next midnight) so the "read today" state self-expires at 00:00.
  * Call this whenever streak, devotional, or reading state changes.
+ * Skips the native push when the material widget inputs are unchanged
+ * since the last successful sync (RS10-1).
  */
 export function syncWidgets(): void {
   try {
+    const now = new Date();
+    const fingerprint = buildSyncFingerprint(now);
+    if (fingerprint === lastWidgetSyncFingerprint) return;
+
     const state = useUnfoldStore.getState();
 
     const entries = buildWidgetTimelineEntries(
@@ -45,12 +98,14 @@ export function syncWidgets(): void {
         currentDevotional: state.getCurrentDevotional(),
         allDevotionals: state.devotionals ?? [],
       },
-      new Date()
+      now
     );
 
     UnfoldStreakWidget.updateTimeline(entries);
     UnfoldTodayWidget.updateTimeline(entries);
     UnfoldDashboardWidget.updateTimeline(entries);
+
+    lastWidgetSyncFingerprint = fingerprint;
   } catch (error) {
     // Widgets may not be configured yet — fail silently
     logger.log('[Widgets] sync error (non-fatal):', error);
