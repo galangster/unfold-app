@@ -349,6 +349,8 @@ const ALL_STEPS = [
   { id: 'threeStepPaywall', question: '', subtext: '', type: 'threeStepPaywall' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
   // PURCHASE CONFIRMATION: premium success moment before discovery
   { id: 'purchaseConfirmation', question: '', subtext: '', type: 'purchaseConfirmation' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
+  // AI CONSENT: explicit disclosure before first generation (PRIV-1 / Guideline 5.1.2(i))
+  { id: 'aiConsent', question: '', subtext: '', type: 'aiConsent' as const, adaptive: false, skipIfHasValue: true, hasVariations: false },
   // EXPLORATION: Theme/topic selection (optional)
   { id: 'themeType', question: 'Is there something specific you want\u00A0to\u00A0explore?', subtext: 'Pick one that resonates, or skip to let us\u00A0guide\u00A0you.', type: 'themeType' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // SUBJECT SELECTION: After choosing a study type, pick the specific subject (book, character, etc.)
@@ -362,7 +364,7 @@ const ALL_STEPS = [
   { id: 'reminderTime', question: 'When should the\u00A0reminder\u00A0come?', subtext: 'A gentle nudge to pause and reflect. You can change\u00A0this\u00A0anytime.', type: 'timeChoice' as const, placeholder: '', adaptive: false, skipIfHasValue: true, hasVariations: false, options: [{ value: '6:00 AM', label: 'Early morning', time: '6:00 AM' }, { value: '8:00 AM', label: 'Morning', time: '8:00 AM' }, { value: '12:00 PM', label: 'Midday', time: '12:00 PM' }, { value: '6:00 PM', label: 'Evening', time: '6:00 PM' }, { value: '9:00 PM', label: 'Night', time: '9:00 PM' }] },
 ];
 
-type StepId = 'hook' | 'solution' | 'unfoldIntro' | 'name' | 'aboutMe' | 'stylePreferences1' | 'stylePreferences2' | 'relationshipWithGod' | 'bibleFrequency' | 'shockStat' | 'growthGraph' | 'growthGoals' | 'obstacles' | 'aspiration' | 'vulnerabilityValidation' | 'mirrorBack' | 'featureSummary' | 'founderNote' | 'devotionalSegue' | 'readDevotional' | 'celebration' | 'commitment1' | 'commitment2' | 'threeStepPaywall' | 'purchaseConfirmation' | 'themeType' | 'studySubject' | 'currentSituation' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime';
+type StepId = 'hook' | 'solution' | 'unfoldIntro' | 'name' | 'aboutMe' | 'stylePreferences1' | 'stylePreferences2' | 'relationshipWithGod' | 'bibleFrequency' | 'shockStat' | 'growthGraph' | 'growthGoals' | 'obstacles' | 'aspiration' | 'vulnerabilityValidation' | 'mirrorBack' | 'featureSummary' | 'founderNote' | 'devotionalSegue' | 'readDevotional' | 'celebration' | 'commitment1' | 'commitment2' | 'threeStepPaywall' | 'purchaseConfirmation' | 'aiConsent' | 'themeType' | 'studySubject' | 'currentSituation' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime';
 
 // Discovery chips — tappable quick-select options for the 3 discovery questions
 // Each chip is a feeling/situation that seeds context without requiring typing
@@ -857,7 +859,9 @@ export default function OnboardingScreen() {
     }
 
     // Mirror-back, AI consent, founder note, companion naming, style preferences, cinematic steps, and three-step paywall always allow proceeding
-    if (step.type === 'mirrorBack' || step.type === 'founderNote' || step.type === 'featureSummary' || step.type === 'devotionalSegue' || step.type === 'readDevotional' || step.type === 'stylePreferences1' || step.type === 'stylePreferences2' || step.type === 'threeStepPaywall' || step.type === 'purchaseConfirmation' || step.type === 'shockStat' || step.type === 'growthGraph' || step.type === 'vulnerabilityValidation' || step.type === 'celebration' || step.type === 'commitment1' || step.type === 'commitment2') {
+    // aiConsent: canProceed is always true — the CTA handler sets consent and advances, but the
+    // normal bottom-continue button is hidden (aiConsent is in TOP_CONTINUE_HIDDEN_STEP_TYPES).
+    if (step.type === 'mirrorBack' || step.type === 'founderNote' || step.type === 'featureSummary' || step.type === 'devotionalSegue' || step.type === 'readDevotional' || step.type === 'stylePreferences1' || step.type === 'stylePreferences2' || step.type === 'threeStepPaywall' || step.type === 'purchaseConfirmation' || step.type === 'aiConsent' || step.type === 'shockStat' || step.type === 'growthGraph' || step.type === 'vulnerabilityValidation' || step.type === 'celebration' || step.type === 'commitment1' || step.type === 'commitment2') {
       return true;
     }
 
@@ -1486,6 +1490,101 @@ export default function OnboardingScreen() {
             </View>
           </View>
         </TouchableOpacity>
+      );
+    }
+
+    // AI CONSENT (PRIV-1): explicit disclosure before first generation.
+    // Guideline 5.1.2(i) requires explicit consent before transmitting to 3rd-party AI processors.
+    // The 'I understand — continue' CTA is the sole consent action — nothing pre-checked.
+    if (step.type === 'aiConsent') {
+      return (
+        <View style={{ flex: 1, justifyContent: 'space-between', paddingHorizontal: Spacing['1'] }}>
+          <View style={{ gap: Spacing['4'] }}>
+            {/* Gold accent line — matches founderNote visual conventions */}
+            <Animated.View
+              entering={FadeIn.delay(200).duration(600)}
+              style={{
+                width: 40,
+                height: 1.5,
+                backgroundColor: colors.accent,
+                opacity: 0.4,
+                marginBottom: Spacing['3'],
+                borderRadius: 1,
+              }}
+            />
+
+            <Animated.Text
+              entering={FadeIn.delay(400).duration(700)}
+              style={{
+                fontFamily: FontFamily.display,
+                fontSize: 28,
+                color: colors.text,
+                lineHeight: 36,
+              }}
+            >
+              A note on privacy
+            </Animated.Text>
+
+            <Animated.View entering={FadeIn.delay(700).duration(700)} style={{ gap: Spacing['3'] }}>
+              <Text style={{
+                fontFamily: FontFamily.body,
+                fontSize: FontSize.base,
+                color: colors.text,
+                lineHeight: 26,
+              }}>
+                To generate your personalized devotionals, Unfold sends the context you've shared — such as what's on your heart and your growth goals — to Anthropic (Claude) and xAI (Grok).
+              </Text>
+              <Text style={{
+                fontFamily: FontFamily.body,
+                fontSize: FontSize.base,
+                color: colors.textMuted,
+                lineHeight: 26,
+              }}>
+                These services process your reflections to craft content shaped around where you are. Your data is never sold or used for advertising.
+              </Text>
+              <Text style={{
+                fontFamily: FontFamily.body,
+                fontSize: FontSize.base,
+                color: colors.textMuted,
+                lineHeight: 26,
+              }}>
+                You can review our full privacy practices in Settings at any time.
+              </Text>
+            </Animated.View>
+          </View>
+
+          {/* Explicit consent CTA — the tap itself is the consent action */}
+          <Animated.View
+            entering={FadeIn.delay(1200).duration(600)}
+            style={{ paddingTop: Spacing['6'], paddingBottom: Spacing['4'] }}
+          >
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setHasConsentedToAI(true);
+                advanceToNextStep();
+              }}
+              style={{
+                backgroundColor: colors.accent,
+                paddingVertical: Spacing['4'],
+                borderRadius: Radius.md,
+                alignItems: 'center',
+              }}
+              accessibilityLabel="I understand — continue"
+              accessibilityRole="button"
+            >
+              <Text style={{
+                fontFamily: FontFamily.uiMedium,
+                fontSize: FontSize.base,
+                color: colors.background,
+                letterSpacing: 0.3,
+              }}>
+                I understand — continue
+              </Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
       );
     }
 

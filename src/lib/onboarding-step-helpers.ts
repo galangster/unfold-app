@@ -78,6 +78,7 @@ const TOP_CONTINUE_HIDDEN_STEP_TYPES = new Set([
   'readDevotional',
   'threeStepPaywall',
   'founderNote',
+  'aiConsent', // consent step has its own explicit CTA — the default continue button must be hidden
   'vulnerabilityValidation',
   'celebration',
   'commitment1',
@@ -203,6 +204,8 @@ export function getFilteredOnboardingSteps<T extends OnboardingStepLike>(
       if (step.id === 'name' && hasValue(existingUser?.name)) return false;
       if (step.id === 'aboutMe' && hasValue(existingUser?.aboutMe)) return false;
       if (step.id === 'reminderTime' && hasValue(existingUser?.reminderTime)) return false;
+      // Skip AI consent step for users who have already explicitly consented
+      if (step.id === 'aiConsent' && (existingUser as { hasConsentedToAI?: boolean } | null | undefined)?.hasConsentedToAI === true) return false;
     }
 
     return true;

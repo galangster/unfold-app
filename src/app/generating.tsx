@@ -109,14 +109,9 @@ export default function GeneratingScreen() {
   const completeGenerationSession = useUnfoldStore((s) => s.completeGenerationSession);
   const failGenerationSession = useUnfoldStore((s) => s.failGenerationSession);
   const clearGenerationSession = useUnfoldStore((s) => s.clearGenerationSession);
-  // AI consent is implied by using the app — consent screen removed from onboarding.
-  // Auto-set the flag on first generation so persisted state stays consistent.
-  // Reads directly from store (no selector subscription) since this is a one-time fire-and-forget.
-  useEffect(() => {
-    if (!useUnfoldStore.getState().hasConsentedToAI) {
-      useUnfoldStore.getState().setHasConsentedToAI(true);
-    }
-  }, []);
+  // AI consent is now explicitly collected in the 'aiConsent' onboarding step (PRIV-1).
+  // The auto-set has been removed — hasConsentedToAI is only set true when the user taps
+  // the 'I understand — continue' CTA on the consent screen.
 
   const [isComplete, setIsComplete] = useState(false);
   const [devotionalTitle, setDevotionalTitle] = useState('');
