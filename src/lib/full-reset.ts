@@ -22,7 +22,11 @@
 import { cancelAllReminders } from '@/lib/notifications';
 import { useUnfoldStore } from '@/lib/store';
 import { useCompanionChatStore } from '@/lib/companion-chat-store';
-import { mmkvStorage, rotateDeviceId } from '@/lib/mmkv-storage';
+import {
+  mmkvStorage,
+  rotateDeviceId,
+  purgeRealStoreForRecoveryReset,
+} from '@/lib/mmkv-storage';
 import { clearBridgeCache } from '@/lib/bridge-service';
 import { clearExamenCache } from '@/lib/examen-service';
 import { clearScriptureExplainCache } from '@/lib/scripture-explain-api';
@@ -65,6 +69,14 @@ export async function performFullLocalReset(): Promise<void> {
   for (const key of FULL_RESET_MMKV_KEYS) {
     mmkvStorage.removeItem(key);
   }
+
+  // 3b. Recovery sessions (FAP-LIB-2/FAP-X-2): the wipe above only touched
+  //     the throwaway recovery namespace — the user's REAL store file is
+  //     encrypted and unopenable this session, so without this the reset
+  //     silently no-ops and everything resurrects on the next normal boot.
+  //     Delete the real store files on disk + clear the mode marker so the
+  //     next boot is a true fresh start. Strict no-op on normal sessions.
+  purgeRealStoreForRecoveryReset();
 
   // 4. AI caches derived from personal context
   clearBridgeCache();

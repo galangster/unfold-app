@@ -448,6 +448,53 @@ describe('mmkv-storage boot (218→219 upgrade populations)', () => {
     expect(world.files.get(RECOVERY_ID)!.data.has(OUTBOX_KEY)).toBe(false);
   });
 
+  it('(f3) FAP-LIB-2/FAP-X-2: recovery-session full reset purges the REAL store files + marker → next boot is a true fresh start', () => {
+    const world = new FakeWorld({ secureThrows: true });
+    world.seedStore(STORE_ID, 'encrypted', KEY, { [STORAGE_KEY]: PAYLOAD });
+    world.seedStore(META_ID, 'plain', undefined, { [MARKER_KEY]: 'encrypted' });
+    // Legacy v1 source still on disk — a later normal boot would migrate it
+    // straight back in unless the reset purges it too.
+    world.seedStore('unfold-store', 'plain', undefined, { [STORAGE_KEY]: 'legacy-v1-data' });
+
+    const storage = bootWith(world);
+    expect(storage.isRecoverySession()).toBe(true);
+
+    storage.purgeRealStoreForRecoveryReset();
+
+    // Real (unopenable) store files deleted on disk, incl. .crc siblings.
+    expect(world.files.has(STORE_ID)).toBe(false);
+    expect(world.crcs.has(STORE_ID)).toBe(false);
+    expect(world.files.has('unfold-store')).toBe(false);
+    expect(world.crcs.has('unfold-store')).toBe(false);
+    // Marker cleared → next boot takes the fresh-install row, not recovery.
+    expect(world.files.get(META_ID)!.data.has(MARKER_KEY)).toBe(false);
+
+    // Keychain returns → the next boot is a TRUE fresh start: no resurrected
+    // data, encrypted create, marker backfilled.
+    world.opts.secureThrows = false;
+    world.opts.secureKey = KEY;
+    const next = bootWith(world);
+    expect(next.mmkvStorage.getItem(STORAGE_KEY)).toBeNull();
+    expect(world.files.get(STORE_ID)!.mode).toBe('encrypted');
+    expect(world.files.get(META_ID)!.data.get(MARKER_KEY)).toBe('encrypted');
+  });
+
+  it('(f3b) purgeRealStoreForRecoveryReset is a strict NO-OP outside recovery sessions', () => {
+    const world = new FakeWorld({ secureKey: KEY });
+    world.seedStore(STORE_ID, 'encrypted', KEY, { [STORAGE_KEY]: PAYLOAD });
+    world.seedStore(META_ID, 'plain', undefined, { [MARKER_KEY]: 'encrypted' });
+
+    const storage = bootWith(world);
+    expect(storage.isRecoverySession()).toBe(false);
+
+    storage.purgeRealStoreForRecoveryReset();
+
+    // Normal sessions wipe through the OPEN instance (full-reset key list);
+    // deleting the file under a live MMKV instance is never safe.
+    expect(world.files.get(STORE_ID)!.data.get(STORAGE_KEY)).toBe(PAYLOAD);
+    expect(world.files.get(META_ID)!.data.get(MARKER_KEY)).toBe('encrypted');
+  });
+
   it("(g) RS5-3 recrypt-throw: marker='plain' is written so the file mode is recorded truthfully", () => {
     const world = new FakeWorld({ secureKey: KEY, recryptThrows: true });
     world.seedStore(STORE_ID, 'plain', undefined, { [STORAGE_KEY]: PAYLOAD });

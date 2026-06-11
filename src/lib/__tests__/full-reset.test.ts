@@ -9,6 +9,7 @@ jest.mock('../mmkv-storage', () => ({
   getDeviceId: jest.fn(() => 'old-device-id'),
   rotateDeviceId: jest.fn(() => 'new-id'),
   getSharedEncryptionKey: jest.fn(() => 'test-key'),
+  purgeRealStoreForRecoveryReset: jest.fn(),
 }));
 
 jest.mock('../notifications', () => ({
@@ -57,7 +58,11 @@ jest.mock('../bug-logger', () => ({
 }));
 
 import { performFullLocalReset, FULL_RESET_MMKV_KEYS } from '../full-reset';
-import { mmkvStorage, rotateDeviceId } from '../mmkv-storage';
+import {
+  mmkvStorage,
+  rotateDeviceId,
+  purgeRealStoreForRecoveryReset,
+} from '../mmkv-storage';
 import { cancelAllReminders } from '../notifications';
 import { useUnfoldStore } from '../store';
 import { clearBridgeCache } from '../bridge-service';
@@ -107,6 +112,16 @@ describe('performFullLocalReset', () => {
     // in this list (REVM-8); the trial instance is cleared via
     // clearTrialNotificationMirror() in step 5.
     expect(FULL_RESET_MMKV_KEYS).not.toContain('unfold-trial-notification');
+  });
+
+  it('purges the real store files for recovery sessions (FAP-LIB-2/FAP-X-2)', async () => {
+    // During a recovery session every mmkvStorage.removeItem above hits the
+    // throwaway namespace, so the reset must ALSO delete the real (encrypted,
+    // unopenable) store files on disk. The helper no-ops on normal sessions,
+    // so it is safe to call unconditionally.
+    await performFullLocalReset();
+
+    expect(purgeRealStoreForRecoveryReset).toHaveBeenCalledTimes(1);
   });
 
   it('clears caches, bug log, trial mirror, and rotates identity', async () => {

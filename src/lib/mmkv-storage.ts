@@ -331,6 +331,85 @@ export function getSharedEncryptionKey(): string | undefined {
 }
 
 // ---------------------------------------------------------------------------
+// Recovery-session full reset (FAP-LIB-2/FAP-X-2)
+// ---------------------------------------------------------------------------
+
+const LEGACY_STORE_ID = 'unfold-store';
+
+/**
+ * True when this session runs on the throwaway recovery namespace
+ * (marker='encrypted' + Keychain down — the real file cannot be opened).
+ */
+export function isRecoverySession(): boolean {
+  return openPlan.mode === 'recovery';
+}
+
+/**
+ * FAP-LIB-2/FAP-X-2: during a recovery session every mmkvStorage write goes
+ * to the throwaway 'unfold-store-v2-recovery' namespace, so the
+ * performFullLocalReset() key wipe never touches the user's REAL store —
+ * the reset would silently no-op on the data the user asked to delete, and
+ * it would all resurrect on the next normal boot.
+ *
+ * The real file cannot be OPENED this session (encrypted, key unavailable),
+ * but it can be DELETED: no MMKV instance holds it open (the recovery
+ * namespace is active instead, the probe never runs when the marker is
+ * authoritative, and the outbox merge skips recovery sessions), so we remove
+ * the files on disk via expo-file-system — store id + .crc sibling — for the
+ * real store AND the legacy v1 store (which may still hold data a later
+ * normal boot would migrate straight back in). The mode marker is cleared
+ * ONLY after the real file is gone, so the next boot takes the clean
+ * fresh-install row; if deletion fails the marker stays 'encrypted', which
+ * remains the truth for the file left on disk.
+ *
+ * Strict NO-OP outside recovery sessions: the normal reset path wipes
+ * through the OPEN instance, and deleting the file under a live MMKV
+ * instance is never safe.
+ */
+export function purgeRealStoreForRecoveryReset(): void {
+  if (openPlan.mode !== 'recovery') return;
+
+  let realFileGone = false;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { File, Paths } = require('expo-file-system') as typeof import('expo-file-system');
+    const deleteStoreFiles = (id: string): void => {
+      const storeFile = new File(Paths.document, `mmkv/${id}`);
+      const crcFile = new File(Paths.document, `mmkv/${id}.crc`);
+      if (storeFile.exists) storeFile.delete();
+      if (crcFile.exists) crcFile.delete();
+    };
+
+    deleteStoreFiles(STORE_ID);
+    realFileGone = true;
+
+    try {
+      deleteStoreFiles(LEGACY_STORE_ID);
+    } catch (error) {
+      logger.warn('[MMKV] Recovery reset: legacy v1 store delete failed', error);
+    }
+  } catch (error) {
+    logger.warn(
+      '[MMKV] Recovery reset: real store file delete failed — keeping marker so the file stays recoverable',
+      error,
+    );
+  }
+
+  if (realFileGone) {
+    try {
+      storageMeta.delete(MODE_MARKER_KEY);
+      logger.warn('[MMKV] Recovery reset: real store files purged; next boot is a fresh start');
+    } catch (error) {
+      logger.warn('[MMKV] Recovery reset: marker clear failed', error);
+    }
+  }
+
+  // Legacy AsyncStorage source (very old installs) — also unreachable through
+  // the recovery namespace's key wipe.
+  AsyncStorage.removeItem(PERSIST_ROOT_KEY).catch(() => {});
+}
+
+// ---------------------------------------------------------------------------
 // Device ID — stable anonymous identifier, generated once on first launch
 // ---------------------------------------------------------------------------
 
