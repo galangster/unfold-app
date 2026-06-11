@@ -8,12 +8,12 @@ const readSource = (relativePath: string) =>
 describe('onboarding paywall accessibility contract', () => {
   const src = readSource('components/onboarding/ThreeStepPaywall.tsx');
 
-  it('exposes the Monthly plan card as a selectable tab with a price-bearing label', () => {
+  it('exposes the Monthly plan card as a radio with a price-bearing label', () => {
     expect(src).toContain('accessibilityLabel={`Monthly plan, ${monthlyPrice} per month`}');
     expect(src).toContain("accessibilityState={{ selected: selectedPlan === 'monthly', checked: selectedPlan === 'monthly' }}");
   });
 
-  it('exposes the Yearly plan card as a selectable tab with price and savings in the label', () => {
+  it('exposes the Yearly plan card as a radio with price and savings in the label', () => {
     expect(src).toContain(
       "accessibilityLabel={`Yearly plan, ${yearlyPrice} per year${savings > 0 ? `, save ${savings} percent` : ''}`}",
     );
