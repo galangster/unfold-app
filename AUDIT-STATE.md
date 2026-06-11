@@ -92,6 +92,15 @@ iOS 26.5-beta SIMULATOR gallery artifact: chronod widget gallery is empty for AL
 - **Privacy-declaration cross-check** running (agent privacy-label-crosscheck → privacy-label-crosscheck.md): App Privacy labels / policy text vs verified actual data flows.
 - Acknowledged untouched (by design or deferral): physical-device verification (219 QA protocol), real purchase flows (RC env), Android runtime, web target, content/prose quality vs vault rubric, DB operational health, observability build-out, load testing.
 
+## PRIV findings (privacy cross-check, 2026-06-10) — memo: privacy-label-crosscheck.md
+
+- **PRIV-1 (P0-class for submission)**: AI consent screen removed; generating.tsx:112-118 auto-sets hasConsentedToAI=true ("implied by using the app") — violates Apple 5.1.2(i) Nov-2025 (named providers + explicit tap required). Infra exists (store field, migration, onboarding step type). FIX: restore consent step, name Anthropic + xAI, warm minimal copy. → FINAL BATCH (held for Codex).
+- **PRIV-2 (P1)**: ios/Unfold/PrivacyInfo.xcprivacy declares NSPrivacyCollectedDataTypes=[] while actual flows = Other User Content, Device ID, Purchase History (RevenueCat's own manifest declares it — scanner-detectable mismatch), diagnostics, timezone. FIX: populate manifest. → FINAL BATCH.
+- **PRIV-3 (Nick gate)**: live ASC description must be checked against old metadata's false "Your data stays on your device" + "iCloud backup for prayer journals" claims (current draft Option A is clean).
+- **PRIV-4 (Nick gate)**: ASC App Privacy questionnaire — declaration checklist in memo (User Content/Device ID/Purchase History/Diagnostics/Coarse-timezone, all linked, App Functionality; no tracking).
+
+FINAL BATCH QUEUE (post-Codex, one batch + gates + mini-sweep): Codex findings + PRIV-1/2 + bundled R4 P2s (RS12-001/002/003, RS13-1/2, RS14-001/002).
+
 ## Finding ledger
 
 Schema: `{id, dimension, severity(P0/P1/P2/TASTE), file:line, claim, evidence, proposed_fix, confidence, status(new/verified/refuted/fixed/deferred), verdicts, commit}`
