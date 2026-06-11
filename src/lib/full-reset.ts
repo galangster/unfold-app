@@ -30,6 +30,8 @@ import { clearVerseCache } from '@/lib/bible-api';
 import { cancelTrialEndingNotification, clearTrialNotificationMirror } from '@/lib/trial-notification';
 import { clearBugLogEntries } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
+// RS13-1: import the canonical key — don't repeat the string literal here.
+import { OUTBOX_KEY } from '@/lib/sync-outbox';
 
 /**
  * All MMKV keys that hold user-specific data and must be cleared on reset.
@@ -43,7 +45,7 @@ export const FULL_RESET_MMKV_KEYS: readonly string[] = [
   '@unfold_exclusive_offer_seen',
   '@unfold_onboarding_offer_seen',
   'inflight-generation-job',
-  'unfold-sync-outbox-v1',
+  OUTBOX_KEY,
   // NOTE: 'unfold-trial-notification' is an MMKV INSTANCE id, not a key here — cleared via clearTrialNotificationMirror() in step 5 (REVM-8).
 ] as const;
 

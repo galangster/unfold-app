@@ -11,7 +11,13 @@
  * without pulling in native MMKV / expo-secure-store / uuid bindings.
  */
 
-export const RECOVERY_OUTBOX_KEY = 'unfold-sync-outbox-v1'; // same key as sync-outbox.ts
+/**
+ * Single owner of the outbox MMKV key (RS13-1).
+ * Both the normal sync path (sync-outbox.ts) and the recovery merge path
+ * operate on the same logical key — defined here once and re-exported by
+ * sync-outbox.ts so all consumers import from one canonical location.
+ */
+export const RECOVERY_OUTBOX_KEY = 'unfold-sync-outbox-v1';
 
 /** Minimal KV accessor used by the recovery-outbox merge logic. */
 export interface KVAccessor {

@@ -18,11 +18,15 @@
 import { mmkvStorage } from '@/lib/mmkv-storage';
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from '@/lib/api-config';
 import type { SyncPushChange } from '@/lib/sync-types';
+// RS13-1: single owner — the key is defined in mmkv-recovery-outbox.ts (pure, no native deps)
+// and re-exported here so all consumers import from one place via sync-outbox.
+import { RECOVERY_OUTBOX_KEY } from '@/lib/mmkv-recovery-outbox';
 
 // Re-export the type so consumers can import from one place
 export type { SyncPushChange };
 
-export const OUTBOX_KEY = 'unfold-sync-outbox-v1';
+// Re-export the canonical key so consumers don't need to know where it lives.
+export const OUTBOX_KEY = RECOVERY_OUTBOX_KEY;
 const OUTBOX_CAP = 200;
 
 // mmkvStorage.getItem has a union return type (string | null | Promise<...>)
