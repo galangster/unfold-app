@@ -22,10 +22,22 @@ describe('PRIV-1: AI consent contract', () => {
     const storeSrc = fs.readFileSync(path.join(srcRoot, 'lib', 'store.ts'), 'utf8');
     // The initial value must be false
     expect(storeSrc).toMatch(/hasConsentedToAI:\s*false/);
-    // Auto-set pattern (setHasConsentedToAI(true) outside of the consent CTA handler)
-    // should NOT appear inside generating.tsx
+    // generating.tsx may set consent ONLY from the explicit accept CTA of the
+    // shared AIConsentNotice (RV-UI-1) — never from an effect/auto-set. Exactly
+    // one occurrence, and it must be the onAccept handler.
     const generatingSrc = fs.readFileSync(path.join(srcRoot, 'app', 'generating.tsx'), 'utf8');
-    expect(generatingSrc).not.toMatch(/setHasConsentedToAI\(true\)/);
+    const setters = generatingSrc.match(/setHasConsentedToAI\(true\)/g) ?? [];
+    expect(setters).toHaveLength(1);
+    expect(generatingSrc).toMatch(/onAccept=\{\(\) => setHasConsentedToAI\(true\)\}/);
+  });
+
+  it('both consent surfaces render the shared AIConsentNotice (RV-UI-1)', () => {
+    // One copy of the disclosure copy/CTA — onboarding step AND the /generating
+    // inline gate must both come from the shared component so they can't drift.
+    const onboardingSrc = fs.readFileSync(path.join(srcRoot, 'app', 'onboarding.tsx'), 'utf8');
+    const generatingSrc = fs.readFileSync(path.join(srcRoot, 'app', 'generating.tsx'), 'utf8');
+    expect(onboardingSrc).toMatch(/<AIConsentNotice/);
+    expect(generatingSrc).toMatch(/<AIConsentNotice/);
   });
 
   it('aiConsent step is registered in the onboarding STEPS definition', () => {

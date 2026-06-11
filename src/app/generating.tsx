@@ -35,6 +35,7 @@ import { registerPushToken } from '@/lib/push-notifications';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
 import { mmkvStorage } from '@/lib/mmkv-storage';
+import { AIConsentNotice } from '@/components/AIConsentNotice';
 
 // MMKV key for persisting in-flight generation job across app kills
 const INFLIGHT_KEY = 'inflight-generation-job';
@@ -102,6 +103,7 @@ export default function GeneratingScreen() {
 
   const user = useUnfoldStore((s) => s.user);
   const hasConsentedToAI = useUnfoldStore((s) => s.hasConsentedToAI);
+  const setHasConsentedToAI = useUnfoldStore((s) => s.setHasConsentedToAI);
   const addDevotional = useUnfoldStore((s) => s.addDevotional);
   const addUsedScriptures = useUnfoldStore((s) => s.addUsedScriptures);
   const addGeneratedDay = useUnfoldStore((s) => s.addGeneratedDay);
@@ -110,9 +112,11 @@ export default function GeneratingScreen() {
   const completeGenerationSession = useUnfoldStore((s) => s.completeGenerationSession);
   const failGenerationSession = useUnfoldStore((s) => s.failGenerationSession);
   const clearGenerationSession = useUnfoldStore((s) => s.clearGenerationSession);
-  // AI consent is now explicitly collected in the 'aiConsent' onboarding step (PRIV-1).
-  // The auto-set has been removed — hasConsentedToAI is only set true when the user taps
-  // the 'I understand — continue' CTA on the consent screen.
+  // AI consent is explicitly collected via the shared AIConsentNotice (PRIV-1).
+  // The auto-set has been removed — hasConsentedToAI is only set true when the user
+  // taps the 'I understand — continue' CTA, either on the onboarding 'aiConsent'
+  // step or on the inline consent gate this screen renders for consent-false
+  // arrivals from outside the onboarding funnel (RV-UI-1).
 
   const [isComplete, setIsComplete] = useState(false);
   const [devotionalTitle, setDevotionalTitle] = useState('');
@@ -142,14 +146,16 @@ export default function GeneratingScreen() {
   const [isGenerating, setIsGenerating] = useState(true);
   const notificationPromptTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Prevent swipe-back during generation, re-enable on error
+  // Prevent swipe-back during generation; re-enable on error and while the
+  // consent gate is showing — leaving must stay possible until consent (RV-UI-1).
   useEffect(() => {
-    navigation.setOptions({ gestureEnabled: !!error });
-  }, [navigation, error]);
+    navigation.setOptions({ gestureEnabled: !!error || !hasConsentedToAI });
+  }, [navigation, error, hasConsentedToAI]);
 
   // Block deep-link / external navigation while generation is in progress.
+  // While unconsented nothing is in flight, so navigation is never trapped (RV-UI-1).
   useEffect(() => {
-    if (!isGenerating) return;
+    if (!isGenerating || !hasConsentedToAI) return;
 
     const unsubscribe = navigation.addListener('beforeRemove' as never, (e: { data: { action: { type: string } }; preventDefault: () => void }) => {
       const actionType = e.data.action.type;
@@ -161,7 +167,7 @@ export default function GeneratingScreen() {
     });
 
     return unsubscribe;
-  }, [navigation, isGenerating]);
+  }, [navigation, isGenerating, hasConsentedToAI]);
 
   // Notification state
   const [notificationPermission, setNotificationPermission] = useState<'unknown' | 'granted' | 'denied'>('unknown');
@@ -712,6 +718,25 @@ export default function GeneratingScreen() {
     clearGenerationSession();
     router.replace('/(tabs)/(today)');
   };
+
+  // ========== RENDER: AI CONSENT GATE (RV-UI-1) ==========
+  // /generating is the universal consent collection point: any route that lands
+  // here without explicit AI consent (returning-user new series, 218-upgrader
+  // migrated stores, deep links) gets the consent notice inline instead of a
+  // spinner that can never complete. Accepting sets the flag, which arms the
+  // submission effect above; declining is simply leaving — back-navigation is
+  // not blocked while unconsented. Error/complete states are unreachable here
+  // because nothing was ever submitted without consent.
+
+  if (!hasConsentedToAI) {
+    return (
+      <View style={genStyles.transparentFlex}>
+        <SafeAreaView style={genStyles.consentSafeArea} edges={['top', 'bottom']}>
+          <AIConsentNotice colors={colors} onAccept={() => setHasConsentedToAI(true)} />
+        </SafeAreaView>
+      </View>
+    );
+  }
 
   // ========== RENDER: ERROR STATE ==========
 
@@ -1293,6 +1318,12 @@ const genStyles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: Spacing['8'],
+  },
+  consentSafeArea: {
+    flex: 1,
+    paddingHorizontal: Spacing['6'],
+    paddingTop: Spacing['10'],
+    paddingBottom: Spacing['4'],
   },
   errorIcon: {
     width: 64,
