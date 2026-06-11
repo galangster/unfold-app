@@ -99,7 +99,9 @@ iOS 26.5-beta SIMULATOR gallery artifact: chronod widget gallery is empty for AL
 - **PRIV-3 (Nick gate)**: live ASC description must be checked against old metadata's false "Your data stays on your device" + "iCloud backup for prayer journals" claims (current draft Option A is clean).
 - **PRIV-4 (Nick gate)**: ASC App Privacy questionnaire — declaration checklist in memo (User Content/Device ID/Purchase History/Diagnostics/Coarse-timezone, all linked, App Functionality; no tracking).
 
-FINAL BATCH QUEUE (post-Codex, one batch + gates + mini-sweep): Codex findings + PRIV-1/2 + bundled R4 P2s (RS12-001/002/003, RS13-1/2, RS14-001/002).
+FINAL BATCH QUEUE (post-Codex, one batch + gates + mini-sweep): Codex findings + PRIV-1/2 + **PRICE-1 (P1): hardcoded paywall fallbacks ($4.99/$59.99) contradict REAL store config ($9.99/mo, $69.99/yr, 3-day trial) — RC-failure path would display wrong prices vs charged amount; fix = never render non-store-derived prices (hide/disable purchase UI w/ retry when offerings absent), delete stale constants** + bundled R4 P2s (RS12-001/002/003, RS13-1/2, RS14-001/002).
+
+## Paywall-RC recheck (2026-06-10, evidence runtime/paywall-rc/): ALL PASS — RC initializes w/ eas.json key, real prices render both paywalls, SAVE 42% derived live, restore = graceful 2.6s real call ("No active subscription found." + retry), layout holds, no purchase (no sandbox acct). RC notes products WAITING_FOR_REVIEW (expected pre-review). Metro left running PID 6503 WITH RC env.
 
 ## DB ops health (read-only, 2026-06-10 — memo: db-ops-health.md)
 
