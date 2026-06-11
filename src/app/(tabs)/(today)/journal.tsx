@@ -455,13 +455,11 @@ export default function JournalScreen() {
 
     if (soapSaveTimerRef.current) clearTimeout(soapSaveTimerRef.current);
     soapSaveTimerRef.current = setTimeout(() => {
-      const entryId = ensureEntry();
-      if (entryId) {
-        updateSoapResponse(entryId, field, text);
-      }
-      hasPendingSoapRef.current = false;
+      // Route through flushSoapSaves so ALL pending fields (not just the last
+      // one captured in this closure) are persisted (FAP-UI-1 / COR-6).
+      flushSoapSavesRef.current();
     }, 800);
-  }, [ensureEntry, updateSoapResponse, gate]);
+  }, [gate]);
 
   // Flush all pending SOAP values to the store immediately. Writes every
   // field that differs from the persisted entry — including cleared (empty)
