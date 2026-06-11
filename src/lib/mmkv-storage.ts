@@ -95,12 +95,27 @@ const storedMarker =
 // react-native-mmkv silently discards contents on a mode mismatch in BOTH
 // directions and offers no safe in-place probe, so we classify the file by
 // copying it to a DISPOSABLE scratch id and plain-opening the COPY:
-//   - data visible   → original is PLAIN     → open plain + recrypt (rescue)
-//   - nothing        → original is ENCRYPTED (or empty) → open encrypted
+//   - KNOWN KEY visible → original is PLAIN  → open plain + recrypt (rescue)
+//   - known key absent  → original is ENCRYPTED (or has no zustand data)
+//                         → open encrypted
 //   - probe failure  → 'probe-unavailable'   → open encrypted (majority-safe;
 //                      NEVER fall back to plain — that is the RS5-1/RS6-1 P0)
 // The real file is never opened in an unproven mode; only the disposable copy
 // ever absorbs a mismatch, and it is deleted in `finally`.
+//
+// FAP-X-1 — why a KNOWN-KEY check instead of getAllKeys().length > 0:
+// a plain-open of encrypted bytes is NOT guaranteed to discard to an empty
+// store. MMKV core's decoder (MiniPBCoder::decodeOneMap) retains entries
+// parsed before a mid-stream protobuf exception, and the copied .crc sibling
+// guarantees the CRC gate passes (same raw payload bytes in both modes), so
+// AES-CFB ciphertext has a material per-user probability of decoding to one
+// or more garbage pseudo-keys. Under any-key classification those phantom
+// keys would mark the (encrypted, MAJORITY-population) original as plain →
+// plain-open silently discards it → recrypt() seals the loss → marker makes
+// it permanent. Requiring PERSIST_ROOT_KEY closes that: phantom keys from
+// decoding ciphertext can never equal the known key, and a genuine 218
+// legacy-plain store that LACKS the key has no zustand data to lose, so the
+// encrypted-open it gets classified into is harmless.
 //
 // MMKV file layout: <documentDirectory>/mmkv/<id> plus a <id>.crc sibling
 // (copied too so the CRC check on the copy cannot misclassify a healthy plain
@@ -112,6 +127,9 @@ const storedMarker =
 
 const STORE_ID = 'unfold-store-v2';
 const PROBE_ID = 'unfold-store-v2-probe';
+// Zustand persist root key — MUST match the persist config name in store.ts
+// (`name: 'unfold-storage'`). Every 218 store with user data contains it.
+const PERSIST_ROOT_KEY = 'unfold-storage';
 
 function probeAmbiguousStoreFile(): MmkvStoreProbeResult {
   let probeFile: FsFile | null = null;
@@ -133,11 +151,14 @@ function probeAmbiguousStoreFile(): MmkvStoreProbeResult {
     const storeCrcFile = new File(Paths.document, `mmkv/${STORE_ID}.crc`);
     if (storeCrcFile.exists) storeCrcFile.copySync(probeCrcFile);
 
-    // Plain-open the disposable COPY. If the original is encrypted, MMKV
-    // discards only the COPY's contents (the original is untouched) and we
-    // see an empty store; if the original is plain, its keys are readable.
+    // Plain-open the disposable COPY. If the original is plain, its keys are
+    // readable and the zustand root key is present; if the original is
+    // encrypted, MMKV discards only the COPY's contents (the original is
+    // untouched) — usually to empty, but possibly to garbage pseudo-keys
+    // (FAP-X-1, see block comment above), so classification requires the
+    // KNOWN persist root key rather than any non-empty key set.
     const probeStore = new MMKV({ id: PROBE_ID });
-    return probeStore.getAllKeys().length > 0 ? 'plain-data' : 'no-plain-data';
+    return probeStore.contains(PERSIST_ROOT_KEY) ? 'plain-data' : 'no-plain-data';
   } catch (error) {
     logger.warn(
       '[MMKV] 218-upgrade probe failed — falling back to encrypted open (majority-safe)',

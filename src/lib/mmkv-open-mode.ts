@@ -25,20 +25,31 @@
  *   Resolution — DISPOSABLE-COPY PROBE, performed by the caller
  *   (mmkv-storage.ts) in the ambiguous case ONLY (marker=null + keyAvailable):
  *   copy the store file (and its .crc sibling) to a scratch id, plain-open the
- *   COPY, and classify the original by whether readable data appears. The
- *   original file is never opened in an unproven mode; only the disposable
- *   copy ever absorbs a mismatch. This function stays pure — it receives the
- *   probe RESULT as an input and performs no IO.
+ *   COPY, and classify the original by whether the KNOWN zustand persist root
+ *   key ('unfold-storage') is readable. The original file is never opened in
+ *   an unproven mode; only the disposable copy ever absorbs a mismatch. This
+ *   function stays pure — it receives the probe RESULT as an input and
+ *   performs no IO.
+ *
+ *   FAP-X-1 — why the probe requires the KNOWN KEY, not any non-empty key
+ *   set: plain-decoding encrypted bytes is not guaranteed to yield an empty
+ *   store — MMKV's decoder can retain garbage pseudo-keys from a partial
+ *   protobuf parse of ciphertext (and the copied .crc sibling means the CRC
+ *   gate cannot reject the copy). Phantom keys can never equal the known key,
+ *   so an encrypted original always classifies 'no-plain-data'; a legacy-plain
+ *   store LACKING the key has no zustand data to lose, so the encrypted open
+ *   it receives is harmless.
  *
  * `probeResult` values (disk state, supplied by the caller):
  *   'no-file'           → 'unfold-store-v2' does not exist. Fresh install;
  *                         safe to create encrypted.
- *   'plain-data'        → plain-open of the disposable COPY surfaced data, so
- *                         the original is PLAIN (218 legacy-plain). Open plain
- *                         and recrypt (rescue path).
- *   'no-plain-data'     → plain-open of the COPY surfaced nothing, so the
- *                         original is ENCRYPTED or genuinely empty. Encrypted
- *                         open is correct for the former and harmless for the
+ *   'plain-data'        → plain-open of the disposable COPY surfaced the known
+ *                         persist root key, so the original is PLAIN (218
+ *                         legacy-plain). Open plain and recrypt (rescue path).
+ *   'no-plain-data'     → plain-open of the COPY did NOT surface the known
+ *                         key (empty or phantom-only keys), so the original is
+ *                         ENCRYPTED or holds no zustand data. Encrypted open
+ *                         is correct for the former and harmless for the
  *                         latter (zero risk).
  *   'probe-unavailable' → the probe could not run (copy failed,
  *                         expo-file-system unavailable). Fall back to the

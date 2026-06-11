@@ -60,6 +60,14 @@ interface WorldOptions {
   recryptThrows?: boolean;
   /** MMKV constructor throws when opening the probe id (RS9-2). */
   probeMMKVThrows?: boolean;
+  /**
+   * FAP-X-1: keys the plain-open of the (actually encrypted) probe COPY
+   * surfaces instead of an empty store. Models MMKV core's partial protobuf
+   * decode of AES-CFB ciphertext (MiniPBCoder::decodeOneMap retains entries
+   * parsed before a mid-stream exception), which can yield garbage
+   * pseudo-keys — NOT the silent-discard-to-empty assumed by default.
+   */
+  probePhantomKeys?: string[];
 }
 
 class FakeWorld {
@@ -142,10 +150,14 @@ function makeMMKVClass(world: FakeWorld) {
         if (mismatched) {
           if (id === PROBE_ID) {
             // The disposable copy is DESIGNED to absorb a mismatch: reproduce
-            // production react-native-mmkv semantics (silent discard → empty).
+            // production react-native-mmkv semantics — usually silent discard
+            // to empty, but partial protobuf decode of ciphertext can also
+            // surface garbage pseudo-keys (FAP-X-1: probePhantomKeys).
             file.mode = encryptionKey ? 'encrypted' : 'plain';
             file.key = encryptionKey;
-            file.data = new Map();
+            file.data = new Map(
+              (world.opts.probePhantomKeys ?? []).map((k) => [k, 'garbage-bytes']),
+            );
           } else {
             throw new Error(
               `LOUD MOCK FAILURE: MMKV id="${id}" opened ${encryptionKey ? 'ENCRYPTED' : 'PLAIN'} ` +
@@ -264,6 +276,27 @@ describe('mmkv-storage boot (218→219 upgrade populations)', () => {
     expect(world.files.get(STORE_ID)!.key).toBe(KEY);
     // Marker backfilled so subsequent boots skip the probe entirely.
     expect(world.files.get(META_ID)!.data.get(MARKER_KEY)).toBe('encrypted');
+  });
+
+  it('(a2) FAP-X-1 paranoia: probe copy decoding ciphertext to phantom keys must NOT misclassify the encrypted store as plain', () => {
+    // MMKV's plain-open of encrypted bytes is not guaranteed to discard to
+    // EMPTY: partial protobuf decode can retain garbage pseudo-keys, and the
+    // copied .crc sibling guarantees the CRC gate passes. Classification must
+    // therefore require the KNOWN zustand persist root key ('unfold-storage',
+    // store.ts persist config) — a phantom key can never equal it. Any-key
+    // classification would plain-open the REAL encrypted file (silent total
+    // discard), recrypt the emptied store, and seal the loss with the marker.
+    const world = new FakeWorld({ secureKey: KEY, probePhantomKeys: ['x9f3'] });
+    world.seedStore(STORE_ID, 'encrypted', KEY, { [STORAGE_KEY]: PAYLOAD });
+
+    const storage = bootWith(world);
+
+    // Phantom keys ≠ 'unfold-storage' → 'no-plain-data' → encrypted open.
+    expect(storage.mmkvStorage.getItem(STORAGE_KEY)).toBe(PAYLOAD);
+    expect(world.files.get(STORE_ID)!.mode).toBe('encrypted');
+    expect(world.files.get(STORE_ID)!.key).toBe(KEY);
+    expect(world.files.get(META_ID)!.data.get(MARKER_KEY)).toBe('encrypted');
+    expectNoProbeLeftovers(world);
   });
 
   it('(b) 218 legacy-plain rescue: plain file + key + no marker → plain open + recrypt, data preserved', () => {
