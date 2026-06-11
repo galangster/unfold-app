@@ -72,7 +72,11 @@ describe('reduce-motion loop coverage', () => {
 
   it('keeps the unfolded finale burst and ember field out of the reduce-motion tree', () => {
     const src = readSource('app/unfolded.tsx');
-    expect(src).toContain('{showBurst && !reducedMotion && <SparkleBurst count={40} />}');
+    // The finale now uses the shared SparkleBurst (no duplicate local impl)
+    // and stays out of the tree entirely under reduce motion.
+    expect(src).toContain("import { SparkleBurst } from '@/components/SparkleBurst';");
+    expect(src).toContain('{showBurst && !reducedMotion && (');
+    expect(src).not.toContain('function SparkleBurst(');
   });
 
   it('holds the series-detail locked-row glow static under reduce motion', () => {
