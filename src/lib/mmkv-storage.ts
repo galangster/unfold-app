@@ -21,6 +21,11 @@ import { v4 as uuidv4 } from 'uuid';
 import { logger } from '@/lib/logger';
 import { resolveMmkvOpenPlan } from '@/lib/mmkv-open-mode';
 import { resolveDeviceId } from '@/lib/device-id';
+import { mergeRecoveryOutbox, RECOVERY_OUTBOX_KEY } from '@/lib/mmkv-recovery-outbox';
+
+// Re-export so consumers only need one import location (backward compat).
+export type { KVAccessor } from '@/lib/mmkv-recovery-outbox';
+export { mergeRecoveryOutbox, RECOVERY_OUTBOX_KEY };
 
 // ---------------------------------------------------------------------------
 // Encryption key management — stored in iOS Keychain / Android Keystore
@@ -79,7 +84,24 @@ const MODE_MARKER_KEY = 'unfold-store-v2-mode';
 
 const storedMarker =
   (storageMeta.getString(MODE_MARKER_KEY) as 'encrypted' | 'plain' | undefined) ?? null;
-const openPlan = resolveMmkvOpenPlan(storedMarker, encryptionKey !== undefined);
+
+// Probe whether the 'unfold-store-v2' file already exists on disk BEFORE any
+// MMKV open — required for the 218-upgrade disambiguation in resolveMmkvOpenPlan
+// (RS3-1). The File API is synchronous; no MMKV instance is opened here.
+// MMKV files live at <documentDirectory>/mmkv/<id> on both platforms.
+// Dynamic require keeps this off the Jest module graph (expo-file-system
+// requires native bindings unavailable in the test runner).
+let storeFileExists = false;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { File, Paths } = require('expo-file-system') as typeof import('expo-file-system');
+  const mmkvFile = new File(Paths.document, 'mmkv/unfold-store-v2');
+  storeFileExists = mmkvFile.exists;
+} catch {
+  // expo-file-system unavailable in test/non-native environments; keep false
+}
+
+const openPlan = resolveMmkvOpenPlan(storedMarker, encryptionKey !== undefined, storeFileExists);
 
 // Use 'unfold-store-v2' for the encrypted instance.
 // The old 'unfold-store' (unencrypted) is migrated below and then cleared.
@@ -115,6 +137,29 @@ if (openPlan.recrypt && encryptionKey) {
 } else if (openPlan.writeMarker) {
   storageMeta.set(MODE_MARKER_KEY, openPlan.writeMarker);
 }
+
+// ---------------------------------------------------------------------------
+// Recovery-outbox merge (RS2-1): on a normal (non-recovery) open, drain any
+// sync-outbox entries written during a previous recovery session into the real
+// store. See mmkv-recovery-outbox.ts for the pure merge logic + unit tests.
+// ---------------------------------------------------------------------------
+
+function mergeRecoveryOutboxOnNormalBoot(): void {
+  if (openPlan.mode === 'recovery') return; // This session IS recovery — nothing to merge yet.
+
+  try {
+    const recoveryMmkv = new MMKV({ id: 'unfold-store-v2-recovery' });
+    // Quick-exit: skip if the recovery namespace has nothing for this key.
+    if (!recoveryMmkv.getString(RECOVERY_OUTBOX_KEY)) return;
+
+    mergeRecoveryOutbox(mmkv, recoveryMmkv, RECOVERY_OUTBOX_KEY);
+    logger.log('[MMKV] Merged recovery-outbox entries into real store');
+  } catch (error) {
+    logger.warn('[MMKV] Recovery-outbox merge failed; entries may be lost', error);
+  }
+}
+
+mergeRecoveryOutboxOnNormalBoot();
 
 // Track whether migration has been attempted this session
 let migrationAttempted = false;
