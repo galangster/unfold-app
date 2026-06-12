@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		02174C9B09BA0491AAB9925A /* Unfold.icon in Resources */ = {isa = PBXBuildFile; fileRef = DEE41C89CD25EA0E34DF70C5 /* Unfold.icon */; };
 		0B6F890D6C6CF1BD7B1334D1 /* libPods-ExpoWidgetsTarget.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 0F7F18B6D62DFBAB9BDCBC74 /* libPods-ExpoWidgetsTarget.a */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		17D3622C6EFC492DAAC0AD3B /* UnfoldStreak.swift in Sources */ = {isa = PBXBuildFile; fileRef = C08EE1452D3C4F80ADC8C74F /* UnfoldStreak.swift */; };
@@ -70,6 +71,7 @@
 		C6799072DF2288FECDEDE238 /* Pods-Unfold.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Unfold.debug.xcconfig"; path = "Target Support Files/Pods-Unfold/Pods-Unfold.debug.xcconfig"; sourceTree = "<group>"; };
 		CC363CA855E545F280046C7D /* UnfoldToday.swift */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 4; includeInIndex = 0; lastKnownFileType = sourcecode.swift; name = UnfoldToday.swift; path = UnfoldToday.swift; sourceTree = "<group>"; };
 		D00F79485C1748B3C2114791 /* Pods-ExpoWidgetsTarget.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-ExpoWidgetsTarget.release.xcconfig"; path = "Target Support Files/Pods-ExpoWidgetsTarget/Pods-ExpoWidgetsTarget.release.xcconfig"; sourceTree = "<group>"; };
+		DEE41C89CD25EA0E34DF70C5 /* Unfold.icon */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.iconcomposer.icon; name = Unfold.icon; path = Unfold/Unfold.icon; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = Unfold/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* Unfold-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "Unfold-Bridging-Header.h"; path = "Unfold/Unfold-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -117,6 +119,7 @@
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
 				33EEBCCC32EAA4417066DEDF /* PrivacyInfo.xcprivacy */,
+				DEE41C89CD25EA0E34DF70C5 /* Unfold.icon */,
 			);
 			name = Unfold;
 			sourceTree = "<group>";
@@ -307,6 +310,7 @@
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
 				BFADA100D2267EA15CF76F42 /* PrivacyInfo.xcprivacy in Resources */,
+				02174C9B09BA0491AAB9925A /* Unfold.icon in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -589,7 +593,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = C6799072DF2288FECDEDE238 /* Pods-Unfold.debug.xcconfig */;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = Unfold;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Unfold/Unfold.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
@@ -628,7 +632,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 998C332CB27F2DA5C20724B7 /* Pods-Unfold.release.xcconfig */;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = Unfold;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Unfold/Unfold.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
