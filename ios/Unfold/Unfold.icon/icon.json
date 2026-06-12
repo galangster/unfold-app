@@ -1,7 +1,7 @@
 {
   "fill-specializations" : [
     {
-      "value" : "system-light"
+      "value" : "automatic"
     },
     {
       "appearance" : "dark",
@@ -20,7 +20,22 @@
           ],
           "fill-specializations" : [
             {
-              "value" : "system-dark"
+              "value" : {
+                "linear-gradient" : [
+                  "srgb:0.00000,0.00000,0.00000,1.00000",
+                  "display-p3:0.12379,0.12379,0.12379,1.00000"
+                ],
+                "orientation" : {
+                  "start" : {
+                    "x" : 0.5,
+                    "y" : 0
+                  },
+                  "stop" : {
+                    "x" : 0.5,
+                    "y" : 0.7
+                  }
+                }
+              }
             },
             {
               "appearance" : "dark",
@@ -33,23 +48,15 @@
               "value" : "system-light"
             }
           ],
-          "glass-specializations" : [
-            {
-              "value" : false
-            },
-            {
-              "appearance" : "dark",
-              "value" : true
-            }
-          ],
+          "glass" : true,
           "hidden" : false,
           "image-name" : "Group 6.svg",
           "name" : "Group 6",
           "position" : {
-            "scale" : 1,
+            "scale" : 1.45,
             "translation-in-points" : [
-              0.41649999999992815,
-              0.04499999999995907
+              0.6039250000001175,
+              0.06524999999999181
             ]
           }
         },
@@ -59,14 +66,21 @@
           "image-name" : "Vector.png",
           "name" : "Vector",
           "position" : {
-            "scale" : 1,
+            "scale" : 1.39,
             "translation-in-points" : [
-              149.90072508530488,
-              -114.95500000000004
+              217.99974551401965,
+              -150
             ]
           }
         }
       ],
+      "position" : {
+        "scale" : 0.85,
+        "translation-in-points" : [
+          0,
+          0
+        ]
+      },
       "shadow" : {
         "kind" : "neutral",
         "opacity" : 0.6
