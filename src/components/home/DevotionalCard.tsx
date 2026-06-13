@@ -199,7 +199,7 @@ function FirstTimeEmptyState({ onCreateNew }: { onCreateNew: () => void }) {
         entering={entering(FadeIn.duration(Duration.normal).delay(titleEndTime).easing(Ease.out))}
         style={[styles.emptySubtitle, { color: alpha(colors.accent, 0.72) }]}
       >
-        The world's most personal{'\n'}Bible studies.
+        Tell us what you’re walking{'\n'}through, and we’ll shape a study{'\n'}around it.
       </Animated.Text>
 
       <Animated.View entering={entering(FadeIn.duration(Duration.normal).delay(titleEndTime + 400).easing(Ease.out))}>
