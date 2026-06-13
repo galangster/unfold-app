@@ -22,6 +22,7 @@ import {
 } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
+import { Typography } from '@/constants/typography';
 import {
   BIBLE_BOOKS,
   OT_BOOKS,
@@ -664,10 +665,7 @@ const styles = StyleSheet.create({
   // Book sections
   bookSection: { marginBottom: Spacing['4'] },
   sectionLabel: {
-    fontFamily: FontFamily.ui,
-    fontSize: FontSize.xs,
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
+    ...Typography.sectionHeader,
     marginBottom: 10,
     paddingHorizontal: 4,
   },

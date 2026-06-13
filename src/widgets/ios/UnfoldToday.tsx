@@ -148,12 +148,11 @@ const TodayWidget = (
       >
         <Text
           modifiers={[
-            font({ size: 11, weight: 'semibold' }),
-            foregroundStyle(c.accent),
-            kerning(1.5),
+            font({ size: 11, weight: 'regular' }),
+            foregroundStyle(c.t55),
           ]}
         >
-          {seriesTitle.toUpperCase()}
+          {seriesTitle}
         </Text>
 
         <Text

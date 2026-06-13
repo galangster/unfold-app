@@ -35,6 +35,7 @@ import { registerPushToken } from '@/lib/push-notifications';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
 import { mmkvStorage } from '@/lib/mmkv-storage';
+import { Typography } from '@/constants/typography';
 
 // MMKV key for persisting in-flight generation job across app kills
 const INFLIGHT_KEY = 'inflight-generation-job';
@@ -782,12 +783,9 @@ export default function GeneratingScreen() {
             <Animated.View entering={entering(FadeIn.duration(600).delay(100))} style={{ marginBottom: Spacing['7'] }}>
               <Text
                 style={{
-                  fontFamily: FontFamily.ui,
-                  fontSize: 13,
+                  ...Typography.cardMeta,
                   color: colors.textSubtle,
                   textAlign: 'left',
-                  letterSpacing: 3,
-                  textTransform: 'uppercase',
                 }}
               >
                 Your {user?.devotionalLength}-day series
@@ -1167,11 +1165,8 @@ export default function GeneratingScreen() {
                 {/* Scripture reference */}
                 <Text
                   style={{
-                    fontFamily: FontFamily.uiMedium,
-                    fontSize: FontSize.xs,
+                    ...Typography.cardMeta,
                     color: colors.accent,
-                    letterSpacing: 1.5,
-                    textTransform: 'uppercase',
                     marginBottom: Spacing['2'],
                   }}
                 >
@@ -1229,15 +1224,12 @@ export default function GeneratingScreen() {
                 >
                   <Text
                     style={{
-                      fontFamily: FontFamily.uiMedium,
-                      fontSize: 11,
+                      ...Typography.cardMeta,
                       color: colors.accent,
-                      letterSpacing: 1.5,
-                      textTransform: 'uppercase',
                       marginBottom: Spacing['2'],
                     }}
                   >
-                    REFLECT
+                    Reflect
                   </Text>
                   <Text
                     style={{

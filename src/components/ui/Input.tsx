@@ -126,7 +126,7 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
       {label && (
         <Text
           style={[
-            Typography.label,
+            Typography.cardMeta,
             { color: error ? colors.error : colors.textMuted, marginBottom: Spacing[2] },
           ]}
         >

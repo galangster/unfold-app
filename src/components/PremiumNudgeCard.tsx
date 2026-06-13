@@ -24,6 +24,7 @@ import { Radius } from '@/constants/radius';
 import { Duration, Ease } from '@/constants/animations';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
+import { Typography } from '@/constants/typography';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { DismissCircleButton } from '@/components/home/DismissCircleButton';
 import { alpha } from '@/components/ui/utils/alpha';
@@ -273,11 +274,7 @@ const styles = StyleSheet.create({
     paddingRight: Spacing['7'],
   },
   kicker: {
-    fontFamily: FontFamily.uiSemiBold,
-    fontSize: 10,
-    lineHeight: 14,
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
+    ...Typography.cardMeta,
     marginBottom: 3,
   },
   title: {

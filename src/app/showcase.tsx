@@ -15,6 +15,7 @@ import { SparkleBurst } from '../components/SparkleBurst';
 import { FontFamily } from '../constants/fonts';
 import { Spacing } from '../constants/spacing';
 import { Duration, Ease } from '../constants/animations';
+import { Typography } from '../constants/typography';
 
 function ShowcaseContent() {
   const { colors, isDark } = useTheme();
@@ -180,12 +181,9 @@ const styles = StyleSheet.create({
     marginBottom: Spacing['7'],
   },
   sectionTitle: {
-    fontSize: 13,
-    fontFamily: FontFamily.uiSemiBold,
+    ...Typography.sectionHeader,
     marginBottom: Spacing['3'],
     opacity: 0.6,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
   },
   sectionContent: {
     padding: Spacing['5'],

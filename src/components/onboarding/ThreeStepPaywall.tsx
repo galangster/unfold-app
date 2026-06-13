@@ -757,8 +757,6 @@ function ScreenPricing({
               fontFamily: selectedPlan === 'monthly' ? FontFamily.uiSemiBold : FontFamily.uiMedium,
               fontSize: 11,
               color: selectedPlan === 'monthly' ? colors.accent : colors.textSubtle,
-              textTransform: 'uppercase',
-              letterSpacing: 1.2,
             }}
           >
             Monthly
@@ -804,7 +802,7 @@ function ScreenPricing({
                   { color: colors.background },
                 ]}
               >
-                SAVE {savings}%
+                Save {savings}%
               </Text>
             </View>
           )}
@@ -831,8 +829,6 @@ function ScreenPricing({
                 fontFamily: selectedPlan === 'yearly' ? FontFamily.uiSemiBold : FontFamily.uiMedium,
                 fontSize: 11,
                 color: selectedPlan === 'yearly' ? colors.accent : colors.textSubtle,
-                textTransform: 'uppercase',
-                letterSpacing: 1.2,
               }}
             >
               Yearly
@@ -1658,7 +1654,6 @@ const styles = StyleSheet.create({
   saveBadgeText: {
     fontFamily: FontFamily.uiSemiBold,
     fontSize: 10,
-    letterSpacing: 0.5,
   },
 
   // ------- Bottom CTA -------

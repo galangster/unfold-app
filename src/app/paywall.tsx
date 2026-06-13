@@ -671,11 +671,11 @@ export default function PaywallScreen() {
             <View style={{ flexDirection: 'row', marginBottom: 10, paddingLeft: 4 }}>
               <Text style={{ flex: 1, fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textSubtle }}>
               </Text>
-              <Text style={{ width: 60, fontFamily: FontFamily.uiMedium, fontSize: 11, color: colors.textSubtle, textAlign: 'center', letterSpacing: 0.5 }}>
-                FREE
+              <Text style={{ width: 60, fontFamily: FontFamily.uiMedium, fontSize: 11, color: colors.textSubtle, textAlign: 'center' }}>
+                Free
               </Text>
-              <Text style={{ width: 100, fontFamily: FontFamily.uiSemiBold, fontSize: 11, color: colors.accent, textAlign: 'center', letterSpacing: 0.5 }}>
-                PREMIUM
+              <Text style={{ width: 100, fontFamily: FontFamily.uiSemiBold, fontSize: 11, color: colors.accent, textAlign: 'center' }}>
+                Premium
               </Text>
             </View>
 
@@ -819,7 +819,7 @@ export default function PaywallScreen() {
                   importantForAccessibility="no-hide-descendants"
                 >
                   <Text style={{ fontFamily: FontFamily.uiSemiBold, fontSize: 10, color: colors.background }}>
-                    SAVE {savingsPercent}%
+                    Save {savingsPercent}%
                   </Text>
                 </View>
               )}

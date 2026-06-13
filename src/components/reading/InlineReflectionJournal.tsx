@@ -16,6 +16,7 @@ import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
 import { useUnfoldStore, FontSize } from '@/lib/store';
 import { getReflectionTypography, type ReflectionTypography } from '@/lib/reflection-typography';
+import { Typography } from '@/constants/typography';
 
 import { preventOrphan } from '@/lib/cn';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
@@ -232,21 +233,15 @@ export function InlineReflectionJournal({
           marginBottom: Spacing['7'],
         }}
       >
-        <View style={{ width: 32, height: 0.5, backgroundColor: colors.accent, opacity: 0.5 }} />
         <Text
           style={{
-            fontFamily: FontFamily.uiMedium,
-            fontSize: 10,
-            color: colors.accent,
-            letterSpacing: 2.5,
-            textTransform: 'uppercase',
+            ...Typography.sectionHeader,
+            color: colors.text,
             textAlign: 'center',
-            marginHorizontal: 14,
           }}
         >
           For Reflection
         </Text>
-        <View style={{ width: 32, height: 0.5, backgroundColor: colors.accent, opacity: 0.5 }} />
       </View>
 
       {/* Progress indicator */}

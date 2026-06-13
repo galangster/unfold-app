@@ -21,6 +21,7 @@ import { Duration, Ease } from '@/constants/animations';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
+import { Typography } from '@/constants/typography';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { generateExamen } from '@/lib/examen-service';
@@ -115,11 +116,8 @@ function MovementCard({
     >
       <Text
         style={{
-          fontFamily: FontFamily.uiMedium,
-          fontSize: 10,
-          color: accentColor,
-          letterSpacing: 1.5,
-          textTransform: 'uppercase',
+          ...Typography.cardMeta,
+          color: mutedColor,
           marginBottom: Spacing['2'],
           opacity: 0.7,
         }}
@@ -480,11 +478,8 @@ export default function EveningWindDownScreen() {
 
                 <Text
                   style={{
-                    fontFamily: FontFamily.uiMedium,
-                    fontSize: 10,
-                    color: colors.accent,
-                    letterSpacing: 1.5,
-                    textTransform: 'uppercase',
+                    ...Typography.cardMeta,
+                    color: colors.textMuted,
                     marginBottom: Spacing['5'],
                     opacity: 0.7,
                   }}

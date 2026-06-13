@@ -17,6 +17,7 @@ import { Duration, Ease } from '@/constants/animations';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
+import { Typography } from '@/constants/typography';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, Highlight, HighlightColor } from '@/lib/store';
 import { stripOuterQuotes } from '@/lib/cn';
@@ -105,11 +106,8 @@ export default function HighlightsScreen() {
           <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)} style={{ marginBottom: Spacing['6'] }}>
             <Text
               style={{
-                fontFamily: FontFamily.ui,
-                fontSize: 13,
+                ...Typography.cardMeta,
                 color: colors.textMuted,
-                textTransform: 'uppercase',
-                letterSpacing: 1,
                 marginBottom: Spacing['2'],
               }}
             >

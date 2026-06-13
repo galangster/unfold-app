@@ -29,6 +29,7 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { useUIState } from '@/lib/ui-state';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
+import { Typography } from '@/constants/typography';
 import { Shadow } from '@/constants/shadows';
 import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
@@ -1734,10 +1735,10 @@ export default function ReadingScreen() {
                         fontFamily: FontFamily.uiMedium,
                         fontSize: 9,
                         color: colors.accent,
-                        letterSpacing: 0.8,
+                        letterSpacing: 0.3,
                       }}
                     >
-                      TODAY
+                      Today
                     </Text>
                   </View>
                 )}
@@ -2112,11 +2113,8 @@ export default function ReadingScreen() {
                         <SunHorizonIcon size={18} color={colors.accent} weight="light" />
                         <Text
                           style={{
-                            fontFamily: FontFamily.uiMedium,
-                            fontSize: FontSize.xs,
-                            color: colors.accent,
-                            letterSpacing: 1,
-                            textTransform: 'uppercase',
+                            ...Typography.sectionHeader,
+                            color: colors.text,
                           }}
                         >
                           Tomorrow
@@ -2167,11 +2165,8 @@ export default function ReadingScreen() {
                         <SunHorizonIcon size={18} color={colors.accent} weight="light" />
                         <Text
                           style={{
-                            fontFamily: FontFamily.uiMedium,
-                            fontSize: FontSize.xs,
-                            color: colors.accent,
-                            letterSpacing: 1,
-                            textTransform: 'uppercase',
+                            ...Typography.sectionHeader,
+                            color: colors.text,
                           }}
                         >
                           Tomorrow

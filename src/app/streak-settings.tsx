@@ -18,6 +18,7 @@ import {
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
+import { Typography } from '@/constants/typography';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
@@ -485,10 +486,7 @@ const ssStyles = StyleSheet.create({
     alignItems: 'center',
   },
   tierSocietyLabel: {
-    fontFamily: FontFamily.ui,
-    fontSize: 11,
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
+    ...Typography.cardMeta,
   },
   tierName: {
     fontFamily: FontFamily.display,

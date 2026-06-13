@@ -23,6 +23,7 @@ import { fetchVerseLocal, fetchVerse } from '@/lib/bible-api';
 import { DevotionalWebView } from './DevotionalWebView';
 import { InlineReflectionJournal } from './InlineReflectionJournal';
 import { getReflectionTypography } from '@/lib/reflection-typography';
+import { Typography } from '@/constants/typography';
 
 interface DevotionalContentProps {
   day: DevotionalDay;
@@ -62,17 +63,14 @@ function SectionDivider({ color, style }: { color: string; style?: object }) {
 }
 
 /**
- * Ornamental header with decorative lines flanking a centered label.
- * Used for "FOR REFLECTION" and "A PRAYER" section headers.
+ * Section header for reader content blocks.
  */
-function OrnamentalHeader({ label, accentColor }: { label: string; accentColor: string }) {
+function ReaderSectionHeader({ label, textColor }: { label: string; textColor: string }) {
   return (
     <View style={dcStyles.ornamentalRow}>
-      <View style={[dcStyles.ornamentalLine, { backgroundColor: accentColor }]} />
-      <Text style={[dcStyles.ornamentalLabel, { color: accentColor }]}>
+      <Text style={[dcStyles.ornamentalLabel, { color: textColor }]}>
         {label}
       </Text>
-      <View style={[dcStyles.ornamentalLine, { backgroundColor: accentColor }]} />
     </View>
   );
 }
@@ -381,7 +379,7 @@ export function DevotionalContent({
             />
           ) : (
             <View>
-              <OrnamentalHeader label="For Reflection" accentColor={colors.accent} />
+              <ReaderSectionHeader label="For Reflection" textColor={colors.text} />
               {day.reflectionQuestions.map((question, index) => (
                 <View key={question} style={dcStyles.reflectionItem}>
                   <View style={dcStyles.reflectionRow}>
@@ -419,7 +417,7 @@ export function DevotionalContent({
       {day.closingPrayer && (
         <View style={dcStyles.prayerSection}>
           <SectionDivider color={colors.textMuted} style={{ marginTop: 0, marginBottom: 32 }} />
-          <OrnamentalHeader label="A Prayer" accentColor={colors.accent} />
+          <ReaderSectionHeader label="A Prayer" textColor={colors.text} />
           <Text
             style={{
               fontFamily: readingFont.bodyItalic,
@@ -463,18 +461,9 @@ const dcStyles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: Spacing['7'],
   },
-  ornamentalLine: {
-    width: 32,
-    height: 0.5,
-    opacity: 0.5,
-  },
   ornamentalLabel: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 10,
-    letterSpacing: 2.5,
-    textTransform: 'uppercase',
+    ...Typography.sectionHeader,
     textAlign: 'center',
-    marginHorizontal: 14,
   },
   dayTitle: {
     fontFamily: FontFamily.display,
@@ -495,10 +484,7 @@ const dcStyles = StyleSheet.create({
     marginBottom: Spacing['5'],
   },
   methodName: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 10,
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
+    ...Typography.cardMeta,
     flex: 1,
   },
   scriptureBlock: {
@@ -515,10 +501,7 @@ const dcStyles = StyleSheet.create({
     gap: Spacing['2.5'],
   },
   scriptureRef: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 10.5,
-    letterSpacing: 2,
-    textTransform: 'uppercase',
+    ...Typography.cardMeta,
   },
   bookmarkButton: {
     padding: 4,
@@ -532,10 +515,7 @@ const dcStyles = StyleSheet.create({
     marginBottom: Spacing['4'],
   },
   crossRefLabel: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 10.5,
-    letterSpacing: 1.8,
-    textTransform: 'uppercase',
+    ...Typography.cardMeta,
     marginLeft: 10,
   },
   crossRefItem: {
@@ -543,9 +523,7 @@ const dcStyles = StyleSheet.create({
     paddingLeft: 4,
   },
   crossRefReference: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 12,
-    letterSpacing: 1.2,
+    ...Typography.cardMeta,
     marginBottom: 8,
   },
   reflectionItem: {

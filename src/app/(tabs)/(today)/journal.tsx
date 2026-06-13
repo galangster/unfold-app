@@ -47,6 +47,7 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
+import { Typography } from '@/constants/typography';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, JournalMode, SoapResponses } from '@/lib/store';
 import { isOnline } from '@/lib/network-error-handler';
@@ -932,9 +933,8 @@ Their journal entry:
                 {/* Deeper prompts */}
                 {allQuestions.length > 0 && (
                   <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).easing(Ease.out)} style={jStyles.deeperPromptsSection}>
-                    <View style={[jStyles.deeperAccentLine, { backgroundColor: colors.accent }]} />
                     <View style={jStyles.deeperHeaderRow}>
-                      <Text style={[jStyles.deeperLabel, { color: colors.accent }]}>
+                      <Text style={[jStyles.deeperLabel, { color: colors.text }]}>
                         Go Deeper
                       </Text>
                       {allQuestions.length > 0 && (
@@ -1163,12 +1163,10 @@ Their journal entry:
             >
               {/* Divider */}
               <View style={jStyles.prayerDivider}>
-                <View style={[jStyles.prayerDividerLine, { backgroundColor: colors.textMuted }]} />
                 <HandsPrayingIcon size={14} color={colors.accent} weight="light" style={jStyles.prayerDividerIcon} />
-                <Text style={[jStyles.prayerDividerLabel, { color: colors.accent }]}>
+                <Text style={[jStyles.prayerDividerLabel, { color: colors.text }]}>
                   Prayer Requests
                 </Text>
-                <View style={[jStyles.prayerDividerLineRight, { backgroundColor: colors.textMuted }]} />
               </View>
 
               {/* Existing prayer requests */}
@@ -1329,9 +1327,7 @@ const jStyles = StyleSheet.create({
     padding: Spacing['2'],
   },
   dayLabel: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: FontSize.xs,
-    letterSpacing: 1,
+    ...Typography.cardMeta,
   },
   modeSelector: {
     flexDirection: 'row',
@@ -1417,12 +1413,6 @@ const jStyles = StyleSheet.create({
     marginTop: Spacing['8'],
     marginBottom: Spacing['8'],
   },
-  deeperAccentLine: {
-    width: 24,
-    height: 1.5,
-    marginBottom: Spacing['5'],
-    borderRadius: 1,
-  },
   deeperHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1430,10 +1420,7 @@ const jStyles = StyleSheet.create({
     marginBottom: Spacing['4'],
   },
   deeperLabel: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 11,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
+    ...Typography.sectionHeader,
     opacity: 0.8,
   },
   deeperProgress: {
@@ -1583,25 +1570,11 @@ const jStyles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: Spacing['5'],
   },
-  prayerDividerLine: {
-    flex: 1,
-    height: 0.5,
-    opacity: 0.15,
-  },
-  prayerDividerLineRight: {
-    flex: 1,
-    height: 0.5,
-    opacity: 0.15,
-    marginLeft: Spacing['3'],
-  },
   prayerDividerIcon: {
-    marginHorizontal: Spacing['3'],
+    marginRight: Spacing['3'],
   },
   prayerDividerLabel: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 10,
-    letterSpacing: 2,
-    textTransform: 'uppercase',
+    ...Typography.sectionHeader,
     opacity: 0.75,
   },
   prayerItemWrapper: {

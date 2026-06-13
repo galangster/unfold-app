@@ -57,7 +57,7 @@ describe('paywall plan selector semantics (RT-PAYWALL-3/4/6)', () => {
   });
 
   it('SAVE badge uses background ink on solid accent and is hidden from the a11y tree', () => {
-    const badge = src.slice(src.indexOf('SAVE {savingsPercent}%') - 600, src.indexOf('SAVE {savingsPercent}%'));
+    const badge = src.slice(src.indexOf('Save {savingsPercent}%') - 600, src.indexOf('Save {savingsPercent}%'));
     expect(badge).toContain('backgroundColor: colors.accent,');
     expect(badge).toContain('accessibilityElementsHidden');
     expect(badge).toContain('color: colors.background');

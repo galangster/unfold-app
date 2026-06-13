@@ -20,6 +20,7 @@ import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { format } from 'date-fns';
 import { alpha } from '@/components/ui';
+import { Typography } from '@/constants/typography';
 
 function SoapSectionDisplay({
   soapKey,
@@ -41,11 +42,8 @@ function SoapSectionDisplay({
         {icon}
         <Text
           style={{
-            fontFamily: FontFamily.uiMedium,
-            fontSize: FontSize.xs,
+            ...Typography.cardMeta,
             color: colors.accent,
-            letterSpacing: 1,
-            textTransform: 'uppercase',
           }}
         >
           {label}
@@ -141,7 +139,6 @@ export default function JournalDetailScreen() {
                   fontFamily: FontFamily.uiMedium,
                   fontSize: 10,
                   color: colors.accent,
-                  letterSpacing: 1,
                 }}
               >
                 SOAP
@@ -159,11 +156,8 @@ export default function JournalDetailScreen() {
             <View style={{ marginBottom: Spacing['6'] }}>
               <Text
                 style={{
-                  fontFamily: FontFamily.uiMedium,
-                  fontSize: 11,
+                  ...Typography.cardMeta,
                   color: colors.textHint,
-                  letterSpacing: 1,
-                  textTransform: 'uppercase',
                   marginBottom: Spacing['2'],
                 }}
               >
@@ -260,11 +254,8 @@ export default function JournalDetailScreen() {
                     <ChatCircleDotsIcon size={14} color={colors.accent} weight="light" />
                     <Text
                       style={{
-                        fontFamily: FontFamily.uiMedium,
-                        fontSize: 10,
+                        ...Typography.cardMeta,
                         color: colors.accent,
-                        letterSpacing: 1.5,
-                        textTransform: 'uppercase',
                         opacity: 0.8,
                       }}
                     >
@@ -318,11 +309,8 @@ export default function JournalDetailScreen() {
                   <HandsPrayingIcon size={14} color={colors.accent} weight="light" />
                   <Text
                     style={{
-                      fontFamily: FontFamily.uiMedium,
-                      fontSize: 10,
+                      ...Typography.cardMeta,
                       color: colors.accent,
-                      letterSpacing: 1.5,
-                      textTransform: 'uppercase',
                       opacity: 0.8,
                     }}
                   >

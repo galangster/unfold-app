@@ -80,12 +80,4 @@ export const Typography = {
     letterSpacing: 0,
   },
 
-  // Label — uppercase small text (section headers, metadata)
-  label: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 11,
-    lineHeight: Math.round(11 * LineHeight.tight), // 13
-    letterSpacing: 1.5,
-    textTransform: 'uppercase' as const,
-  },
 } as const;

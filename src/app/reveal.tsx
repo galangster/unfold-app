@@ -26,6 +26,7 @@ import { alpha } from '@/components/ui';
 import { ScatterTitle } from '@/components/ScatterTitle';
 import { ShimmerText } from '@/components/ShimmerText';
 import { buildReadingRouteFromRevealParams } from '@/lib/push-notification-helpers';
+import { Typography } from '@/constants/typography';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -284,7 +285,7 @@ export default function RevealScreen() {
             numberOfLines={1}
             accessibilityRole="text"
           >
-            {(seriesTitle ?? 'YOUR SERIES').toUpperCase()}
+            {seriesTitle ?? 'Your series'}
           </Animated.Text>
 
           {/* Day title — scatter-in animation */}
@@ -308,7 +309,7 @@ export default function RevealScreen() {
             ]}
             accessibilityRole="text"
           >
-            {`DAY ${dayNum} OF ${total}`}
+            {`Day ${dayNum} of ${total}`}
           </Animated.Text>
         </View>
 
@@ -350,21 +351,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   eyebrow: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 12,
-    letterSpacing: 2,
+    ...Typography.cardMeta,
     marginBottom: 12,
-    textTransform: 'uppercase',
   },
   titleContainer: {
     marginBottom: 16,
     overflow: 'hidden',
   },
   dayCounter: {
-    fontFamily: FontFamily.ui,
-    fontSize: 11,
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
+    ...Typography.cardMeta,
   },
   swipePrompt: {
     alignItems: 'center',
