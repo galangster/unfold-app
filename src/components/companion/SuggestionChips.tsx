@@ -20,6 +20,8 @@ import Animated, {
   withSpring,
   Easing,
 } from 'react-native-reanimated';
+import MaskedView from '@react-native-masked-view/masked-view';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
@@ -30,6 +32,11 @@ import { Duration } from '@/constants/animations';
 import { smartQuotes } from '@/lib/smart-quotes';
 
 const EASE_OUT = Easing.out(Easing.cubic);
+
+// Edge-fade bands as a fraction of the row width. Leading kept tight so the
+// 56pt companion-text alignment stays crisp; trailing carries the bezel softening.
+const CHIP_LEADING_FADE = 0.02;
+const CHIP_TRAILING_FADE = 0.09;
 
 interface Props {
   suggestions: string[];
@@ -111,27 +118,45 @@ export function SuggestionChips({ suggestions, onSelect, visible }: Props) {
 
   return (
     <View style={{ paddingVertical: Spacing['2'] }}>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{
-          paddingLeft: 56, // aligned with companion text (16 + 28 + 12)
-          paddingRight: Spacing['4'],
-          gap: Spacing['2'],
-        }}
+      {/* Horizontal edge fade — chips soften at the screen bezel instead of
+          hard-clipping mid-pill. The mask only touches alpha, so it reads
+          identically on dark and light. The leading band is kept narrow so the
+          56pt companion-text alignment is preserved; the trailing band carries
+          the bezel fade. */}
+      <MaskedView
         style={{ flexGrow: 0 }}
-      >
-        {suggestions.map((text, i) => (
-          <AnimatedChip
-            key={text}
-            text={text}
-            onPress={() => onSelect(text)}
-            delay={i * 60}
-            accentColor={colors.accent}
-            colors={colors}
+        maskElement={
+          <LinearGradient
+            style={{ flex: 1 }}
+            colors={['transparent', 'black', 'black', 'transparent']}
+            locations={[0, CHIP_LEADING_FADE, 1 - CHIP_TRAILING_FADE, 1]}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
           />
-        ))}
-      </ScrollView>
+        }
+      >
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{
+            paddingLeft: 56, // aligned with companion text (16 + 28 + 12)
+            paddingRight: Spacing['6'],
+            gap: Spacing['2'],
+          }}
+          style={{ flexGrow: 0 }}
+        >
+          {suggestions.map((text, i) => (
+            <AnimatedChip
+              key={text}
+              text={text}
+              onPress={() => onSelect(text)}
+              delay={i * 60}
+              accentColor={colors.accent}
+              colors={colors}
+            />
+          ))}
+        </ScrollView>
+      </MaskedView>
     </View>
   );
 }

@@ -76,6 +76,9 @@ describe('reading.tsx server-side generation migration', () => {
     expect(readingSource).toContain('missingDevotionalHydrationAttemptRef');
     expect(readingSource).toContain('pullDevotionalContent(devotionalId)');
     expect(readingSource).toContain('hydrated-missing-devotional-from-sync-pull');
-    expect(readingSource).toContain('Loading series…');
+    // While hydrating, the reader shows a serif-toned loading skeleton (PR4 #24),
+    // distinct from the quiet "No series found" fallback for the genuine empty case.
+    expect(readingSource).toContain('<ReaderLoadingSkeleton colors={colors} />');
+    expect(readingSource).toContain('No series found');
   });
 });

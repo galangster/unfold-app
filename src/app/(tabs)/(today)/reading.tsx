@@ -99,6 +99,88 @@ function ReadingProgressBar({ progress, accentColor }: { progress: SharedValue<n
   );
 }
 
+// ── Reader loading skeleton ──────────────────────────────────────
+// Serif-toned placeholder blocks that match the reader's type rhythm
+// (display title → scripture reference → scripture block → body
+// paragraphs), so a loading screen reads as "content arriving" rather
+// than blank dividers that look like a crash. Reduce-motion shows a
+// static poster (no shimmer); otherwise a single gentle opacity breath.
+function ReaderSkeletonBlock({
+  width,
+  height,
+  color,
+  pulse,
+  marginBottom = 0,
+}: {
+  width: number | `${number}%`;
+  height: number;
+  color: string;
+  pulse: SharedValue<number>;
+  marginBottom?: number;
+}) {
+  const style = useAnimatedStyle(() => ({ opacity: pulse.value }));
+  return (
+    <Animated.View
+      style={[
+        { width, height, borderRadius: 6, backgroundColor: color, marginBottom },
+        style,
+      ]}
+    />
+  );
+}
+
+function ReaderLoadingSkeleton({ colors }: { colors: any }) {
+  const reducedMotion = useReducedMotion();
+  const pulse = useSharedValue(reducedMotion ? 0.5 : 0.35);
+
+  useEffect(() => {
+    if (reducedMotion) return;
+    // Gentle breath only — no bounce, no spring; a slow opacity sweep that
+    // settles. withTiming keeps it on the timing curve the motion law allows.
+    pulse.value = withRepeat(
+      withSequence(
+        withTiming(0.6, { duration: 900, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0.35, { duration: 900, easing: Easing.inOut(Easing.ease) }),
+      ),
+      -1,
+      false,
+    );
+  }, [reducedMotion, pulse]);
+
+  // Slightly warmer than the divider so blocks read as "type", not chrome.
+  const block = alpha(colors.text, 0.07);
+  const accentBlock = alpha(colors.accent, 0.1);
+
+  return (
+    <View
+      accessibilityRole="progressbar"
+      accessibilityLabel="Loading reading"
+      style={{ paddingHorizontal: Spacing['6'], paddingTop: Spacing['10'] }}
+    >
+      {/* Display title — two lines, matches Gupter title rhythm */}
+      <ReaderSkeletonBlock width="86%" height={30} color={block} pulse={pulse} marginBottom={12} />
+      <ReaderSkeletonBlock width="58%" height={30} color={block} pulse={pulse} marginBottom={28} />
+
+      {/* Scripture reference chip — accent-toned, like the live ref row */}
+      <ReaderSkeletonBlock width={132} height={16} color={accentBlock} pulse={pulse} marginBottom={18} />
+
+      {/* Scripture block — three lines of body rhythm */}
+      <ReaderSkeletonBlock width="100%" height={15} color={block} pulse={pulse} marginBottom={12} />
+      <ReaderSkeletonBlock width="94%" height={15} color={block} pulse={pulse} marginBottom={12} />
+      <ReaderSkeletonBlock width="70%" height={15} color={block} pulse={pulse} marginBottom={28} />
+
+      {/* Divider rhythm */}
+      <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: alpha(colors.textMuted, 0.4), marginBottom: 28 }} />
+
+      {/* Body paragraph — four lines */}
+      <ReaderSkeletonBlock width="100%" height={15} color={block} pulse={pulse} marginBottom={12} />
+      <ReaderSkeletonBlock width="97%" height={15} color={block} pulse={pulse} marginBottom={12} />
+      <ReaderSkeletonBlock width="100%" height={15} color={block} pulse={pulse} marginBottom={12} />
+      <ReaderSkeletonBlock width="64%" height={15} color={block} pulse={pulse} marginBottom={0} />
+    </View>
+  );
+}
+
 export default function ReadingScreen() {
   console.log('[Reading] RENDER CALLED');
   const router = useRouter();
@@ -1322,11 +1404,22 @@ export default function ReadingScreen() {
       shouldShowMissingSeriesRecovery,
       isHydratingMissingDevotional,
     });
+    // While the series is hydrating, show a serif-toned reader skeleton instead
+    // of a bare spinner so the screen reads as "your reading is arriving" rather
+    // than an empty/crashed state. The genuine empty case keeps its quiet copy.
+    if (shouldShowMissingSeriesRecovery) {
+      return (
+        <View style={{ flex: 1, backgroundColor: colors.background }}>
+          <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'bottom']}>
+            <ReaderLoadingSkeleton colors={colors} />
+          </SafeAreaView>
+        </View>
+      );
+    }
     return (
       <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center', gap: Spacing['3'] }}>
-        {shouldShowMissingSeriesRecovery && <ActivityIndicator color={colors.accent} />}
         <Text style={{ fontFamily: FontFamily.body, color: colors.textMuted }}>
-          {shouldShowMissingSeriesRecovery ? 'Loading series…' : 'No series found'}
+          No series found
         </Text>
       </View>
     );
