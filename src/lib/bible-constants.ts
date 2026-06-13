@@ -142,39 +142,10 @@ export const CATEGORY_LABELS: Record<BibleCategory, string> = {
   prophecy: 'Prophecy',
 };
 
-/** Category text colors — brighter tones that pop on deep black backgrounds */
-export const CATEGORY_COLORS_DARK: Record<BibleCategory, string> = {
-  pentateuch: '#F59378',
-  historical: '#B8B0A2',
-  wisdom: '#A3C489',
-  majorProphets: '#8DB6D8',
-  minorProphets: '#7ED0BE',
-  gospels: '#F59378',
-  acts: '#7ED0BE',
-  paulineEpistles: '#C79BD9',
-  generalEpistles: '#9EB2E0',
-  prophecy: '#7DD5A0',
-};
-
-/** Category text colors — deeper tones for light backgrounds */
-export const CATEGORY_COLORS_LIGHT: Record<BibleCategory, string> = {
-  pentateuch: '#B84A32',
-  historical: '#6E685E',
-  wisdom: '#4A7038',
-  majorProphets: '#3D6488',
-  minorProphets: '#2E7A6A',
-  gospels: '#B84A32',
-  acts: '#2E7A6A',
-  paulineEpistles: '#7A4A90',
-  generalEpistles: '#4A5E94',
-  prophecy: '#2E7A4A',
-};
-
-/** Get category color for a book, respecting dark/light mode */
-export function getBookColor(bookId: number, isDark: boolean): string {
-  const category = getBookCategory(bookId);
-  return isDark ? CATEGORY_COLORS_DARK[category] : CATEGORY_COLORS_LIGHT[category];
-}
+// The per-category "rainbow" book colors and their lookup helper were removed
+// in PR4 #25 — book chips now use neutral text + a single accent selected-state
+// (the accent follows the user's theme). Category grouping + labels remain, but
+// they carry no per-category color.
 
 // ─── Derived collections ─────────────────────────────────────────────────────
 

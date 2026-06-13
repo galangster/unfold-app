@@ -27,9 +27,9 @@ import {
   OT_BOOKS,
   NT_BOOKS,
   referenceToRoute,
-  getBookColor,
   type BibleBookInfo,
 } from '@/lib/bible-constants';
+import { alpha } from '@/components/ui';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { useBibleSearch } from '@/hooks/useBibleSearch';
@@ -387,22 +387,24 @@ export function BookChapterNavigator({
       <View style={styles.chipGrid}>
         {books.map((book) => {
           const isCurrentBook = book.id === currentBookId;
-          const bookColor = getBookColor(book.id, isDark);
+          // Single-accent / neutral coding — no per-book rainbow. The current
+          // book reads as the one accent moment; everything else is neutral text.
           return (
             <TouchableOpacity
               key={book.id}
               onPress={() => handleBookSelect(book)}
               style={[
                 styles.bookChip,
-                { backgroundColor: chipBg },
-                isCurrentBook && { borderWidth: 1.5, borderColor: bookColor },
+                { backgroundColor: isCurrentBook ? alpha(colors.accent, 0.16) : chipBg },
+                isCurrentBook && { borderWidth: 1.5, borderColor: colors.accent },
               ]}
               accessibilityLabel={`${book.name}${isCurrentBook ? ', current book' : ''}`}
+              accessibilityState={{ selected: isCurrentBook }}
             >
               <Text
                 style={[
                   styles.chipText,
-                  { color: bookColor },
+                  { color: isCurrentBook ? colors.accent : colors.text },
                   isCurrentBook && { fontFamily: FontFamily.uiMedium },
                 ]}
                 numberOfLines={1}
