@@ -42,6 +42,7 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Shadow } from '@/constants/shadows';
 import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
+import { ACCENT_THEMES } from '@/lib/store';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Button, alpha } from '@/components/ui';
@@ -61,14 +62,12 @@ const VELOCITY_THRESHOLD = 500;
 // Preset color options
 // ---------------------------------------------------------------------------
 
-const FOLDER_COLORS = [
-  '#5B9BD5', // Ocean blue
-  '#6DAF7B', // Forest green
-  '#D4828F', // Rose
-  '#D4895C', // Ember
-  '#9B8EC4', // Lavender
-  '#C8A55C', // Gold
-];
+// Folder swatches reuse the brand accent palette (single source of truth in
+// ACCENT_THEMES) so a folder color can never drift into an off-palette candy
+// hex — the hardcoded set above was just the accent dark-variants copied by hand
+// (and was missing Slate). The dark-variant hex is the canonical stored swatch,
+// matching the value the picker has always persisted.
+const FOLDER_COLORS = ACCENT_THEMES.map((theme) => theme.dark);
 
 const CREATE_FOLDER_INPUT_LAYOUT = getCreateFolderInputLayout();
 
