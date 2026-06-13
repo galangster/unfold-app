@@ -41,12 +41,28 @@ export function preventOrphan(text: string): string {
  * Double quotes are stripped even when unbalanced (a verse can open dialogue
  * that closes in a later verse); single quotes are stripped only when BOTH
  * ends carry one, so trailing possessive apostrophes ("Jesus’") survive.
+ * A leading scripture verse marker (superscript or ASCII digits, e.g. "¹⁰ " or
+ * "10 ") is preserved — the quote marks that follow it are stripped while the
+ * marker itself stays put.
  * Display-time only — never apply when writing to the store: highlight text
  * is re-located in documents by exact text match.
  */
 export function stripOuterQuotes(text: string): string {
   if (!text || typeof text !== 'string') return text;
-  let t = text.trim();
+  const trimmed = text.trim();
+
+  // Preserve a leading verse marker (superscript or ASCII digits + space),
+  // strip the quotes off the remainder, then re-attach the marker. The
+  // superscript digits are spread across two Unicode blocks (¹²³ live at
+  // U+00B9/B2/B3, the rest at U+2070-2079), so the class is enumerated.
+  const verseMarkerMatch = trimmed.match(/^((?:[⁰¹²³⁴⁵⁶⁷⁸⁹0-9]+)\s+)([\s\S]*)$/);
+  if (verseMarkerMatch) {
+    const marker = verseMarkerMatch[1];
+    const body = stripOuterQuotes(verseMarkerMatch[2]);
+    return `${marker}${body}`;
+  }
+
+  let t = trimmed;
   t = t.replace(/^[“”"]+/, '').replace(/[“”"]+$/, '').trim();
   if (t.length >= 2 && /^[‘’']/.test(t) && /[‘’']$/.test(t)) {
     t = t.slice(1, -1).trim();

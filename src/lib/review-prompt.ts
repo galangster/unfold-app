@@ -1,5 +1,45 @@
 import * as StoreReview from 'expo-store-review';
+import * as Application from 'expo-application';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { logger } from '@/lib/logger';
+import {
+  getReviewPromptVersionKey,
+  shouldRequestReviewForVersion,
+} from '@/lib/review-prompt-policy';
+
+/** AsyncStorage key holding the version/build we last fired a native prompt for. */
+const REVIEW_PROMPT_VERSION_STORAGE_KEY = '@unfold_review_prompt_version';
+
+/**
+ * Fire the native App Store review sheet at most once per shipped binary.
+ *
+ * Derives the current version/build key from the native app metadata, reads the
+ * last-prompted key from AsyncStorage, and only requests a review when this
+ * binary has not prompted before. Persists the key after a successful request so
+ * the next prompt only re-arms on a new version/build. All failures are
+ * swallowed — the review prompt is best-effort and must never block the UI.
+ */
+export async function requestReviewOncePerVersion(): Promise<void> {
+  try {
+    const currentKey = getReviewPromptVersionKey(
+      Application.nativeApplicationVersion,
+      Application.nativeBuildVersion,
+    );
+    const lastPromptedKey = await AsyncStorage.getItem(
+      REVIEW_PROMPT_VERSION_STORAGE_KEY,
+    );
+
+    if (!shouldRequestReviewForVersion(lastPromptedKey, currentKey)) return;
+
+    const isAvailable = await StoreReview.isAvailableAsync();
+    if (!isAvailable) return;
+
+    await StoreReview.requestReview();
+    await AsyncStorage.setItem(REVIEW_PROMPT_VERSION_STORAGE_KEY, currentKey);
+  } catch (error) {
+    logger.error('[ReviewPrompt] requestReviewOncePerVersion failed:', error);
+  }
+}
 
 interface ReviewPromptConfig {
   // Minimum days completed before eligible

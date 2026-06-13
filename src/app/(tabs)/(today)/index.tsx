@@ -10,7 +10,7 @@ import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { isQaToolsEnabled } from '@/lib/qa-tools';
 import { useUnfoldStore, type MoodLevel } from '@/lib/store';
-import * as StoreReview from 'expo-store-review';
+import { requestReviewOncePerVersion } from '@/lib/review-prompt';
 import { useQuery } from '@tanstack/react-query';
 import { StreakBox } from '@/components/StreakBox';
 import { HomeOnboardingTooltips } from '@/components/HomeOnboardingTooltips';
@@ -716,14 +716,7 @@ export default function HomeScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setHasSeenDay1Review();
     if (option === 'love') {
-      try {
-        const isAvailable = await StoreReview.isAvailableAsync();
-        if (isAvailable) {
-          await StoreReview.requestReview();
-        }
-      } catch {
-        // Silently fail — review prompt is non-critical
-      }
+      await requestReviewOncePerVersion();
     }
   }, [setHasSeenDay1Review]);
 

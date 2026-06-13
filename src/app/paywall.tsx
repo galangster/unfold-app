@@ -116,6 +116,9 @@ export default function PaywallScreen() {
   const yearlyPackage = offerings?.current?.availablePackages.find(
     (pkg) => pkg.identifier === '$rc_annual'
   );
+  // Both store-verified prices must be present before we render any price text,
+  // the renewal disclosure, or enable the subscribe CTA (PRICE-1).
+  const offeringsReady = Boolean(yearlyPackage && monthlyPackage);
   const offeringsResultOk = offeringsResult?.ok ?? null;
   const offeringsResultReason = offeringsResult && !offeringsResult.ok ? offeringsResult.reason : null;
   const currentOfferingIdentifier = offerings?.current?.identifier ?? null;
@@ -496,15 +499,35 @@ export default function PaywallScreen() {
   };
 
   const isPurchasing = purchaseMutation.isPending || restoreMutation.isPending || isRetryingOfferings;
+  const isSubscribeDisabled = isPurchasing || !offeringsReady;
 
-  // Pull real prices from RevenueCat packages, fall back to hardcoded defaults
-  const monthlyPrice = monthlyPackage?.product.priceString ?? '$9.99';
-  const yearlyPrice = yearlyPackage?.product.priceString ?? '$59.99';
-  const monthlyRaw = monthlyPackage?.product.price ?? 9.99;
-  const yearlyRaw = yearlyPackage?.product.price ?? 59.99;
+  // Never render stale fallback prices (PRICE-1): wait for RevenueCat packages.
+  // Prices are the empty string until both offerings resolve — the CTA is
+  // disabled and the renewal disclosure is suppressed while offerings load.
+  const monthlyPrice = monthlyPackage?.product.priceString ?? '';
+  const yearlyPrice = yearlyPackage?.product.priceString ?? '';
+  const monthlyRaw = monthlyPackage?.product.price ?? 0;
+  const yearlyRaw = yearlyPackage?.product.price ?? 0;
   // Shared trunc-to-cent formatter — both paywalls must show the same $/mo
   const perMonthFromYearly = getPerMonthEquivalent(yearlyRaw, yearlyPrice);
-  const savingsPercent = Math.round((1 - yearlyRaw / 12 / monthlyRaw) * 100);
+  const savingsPercent = monthlyRaw > 0 ? Math.round((1 - yearlyRaw / 12 / monthlyRaw) * 100) : 0;
+
+  // Plan chip labels carry the real annual price only after offerings resolve —
+  // never announce a stale/empty price to VoiceOver while plans are loading.
+  const yearlyPlanAccessibilityLabel = offeringsReady
+    ? `Yearly plan, ${yearlyPrice} per year, equal to ${perMonthFromYearly} per month${savingsPercent > 0 ? `, save ${savingsPercent} percent` : ''}`
+    : 'Yearly plan loading';
+
+  // Renewal disclosure (App Review 3.1.2) — null until offerings resolve so we
+  // never render a price built from empty/stale priceStrings.
+  const disclosureText = getPaywallRenewalDisclosure({
+    offeringsReady,
+    selectedPlan,
+    hasFreeTrial: isTrialEligible, // RC-verified for the SELECTED plan (see isTrialEligible)
+    trialDays: parseInt(selectedTrialDuration, 10) || 3,
+    yearlyPrice,
+    monthlyPrice,
+  });
 
   // Personalized hero copy
   const heroTitle = isFromOnboarding
@@ -796,7 +819,7 @@ export default function PaywallScreen() {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               setSelectedPlan('yearly');
             }}
-            accessibilityLabel={`Yearly plan, ${yearlyPrice} per year, equal to ${perMonthFromYearly} per month${savingsPercent > 0 ? `, save ${savingsPercent} percent` : ''}`}
+            accessibilityLabel={yearlyPlanAccessibilityLabel}
             accessibilityRole="radio"
             accessibilityState={{ selected: selectedPlan === 'yearly', checked: selectedPlan === 'yearly' }}
             style={{
@@ -897,30 +920,23 @@ export default function PaywallScreen() {
             marginBottom: 12,
           }}
         >
-          {getPaywallRenewalDisclosure({
-            offeringsReady: true, // this paywall keeps honest hardcoded fallbacks — prices are never ''
-            selectedPlan,
-            hasFreeTrial: isTrialEligible, // RC-verified for the SELECTED plan (see isTrialEligible)
-            trialDays: parseInt(selectedTrialDuration, 10) || 3,
-            yearlyPrice,
-            monthlyPrice,
-          })}
+          {disclosureText}
         </Text>
 
         {/* CTA button */}
         <TouchableOpacity
           activeOpacity={0.8}
           onPress={handleSubscribe}
-          disabled={isPurchasing || isLoadingOfferings}
+          disabled={isSubscribeDisabled}
           accessibilityLabel={
-            isLoadingOfferings
+            isLoadingOfferings || !offeringsReady
               ? 'Loading subscription plans'
               : isTrialEligible
                 ? `Start your ${selectedTrialDuration} free trial`
                 : 'Unlock Unfold Premium'
           }
           accessibilityRole="button"
-          accessibilityState={{ disabled: isPurchasing || isLoadingOfferings }}
+          accessibilityState={{ disabled: isSubscribeDisabled }}
           style={{
             backgroundColor: colors.accent,
             paddingVertical: 17,
@@ -929,7 +945,7 @@ export default function PaywallScreen() {
             alignItems: 'center',
             justifyContent: 'center',
             marginBottom: 4,
-            opacity: (isPurchasing || isLoadingOfferings) ? 0.7 : 1,
+            opacity: isSubscribeDisabled ? 0.7 : 1,
           }}
         >
           {(isPurchasing || isLoadingOfferings) ? (
@@ -957,14 +973,42 @@ export default function PaywallScreen() {
                 letterSpacing: 0.3,
               }}
             >
-              {isTrialEligible
-                ? `Start My Free Trial`
-                : selectedPlan === 'yearly'
-                  ? `Unlock Premium \u2014 ${perMonthFromYearly}/mo`
-                  : `Unlock Premium \u2014 ${monthlyPrice}/mo`}
+              {!offeringsReady
+                ? 'Unlock Premium'
+                : isTrialEligible
+                  ? `Start My Free Trial`
+                  : selectedPlan === 'yearly'
+                    ? `Unlock Premium \u2014 ${perMonthFromYearly}/mo`
+                    : `Unlock Premium \u2014 ${monthlyPrice}/mo`}
             </Text>
           )}
         </TouchableOpacity>
+
+        {/* Offerings failed to load \u2014 disabled CTA above, explicit retry here.
+            Shown only when offerings are not loading and still not ready, so the
+            user is never stranded with a dead button and no recovery path. */}
+        {!offeringsReady && !isLoadingOfferings ? (
+          <View style={{ alignItems: 'center', marginTop: 6, gap: 4 }}>
+            <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, color: colors.textMuted, textAlign: 'center' }}>
+              Subscription plans unavailable
+            </Text>
+            <TouchableOpacity
+              activeOpacity={0.6}
+              onPress={() => {
+                setSubscribeError('');
+                refetchOfferings();
+              }}
+              accessibilityLabel="Retry loading subscription plans"
+              accessibilityRole="button"
+              hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }}
+              style={{ paddingVertical: 4, paddingHorizontal: 12 }}
+            >
+              <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.accent }}>
+                Tap to retry
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
 
         {/* Error */}
         {subscribeError ? (

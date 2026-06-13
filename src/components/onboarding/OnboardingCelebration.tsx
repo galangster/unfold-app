@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import * as StoreReview from 'expo-store-review';
+import { requestReviewOncePerVersion } from '@/lib/review-prompt';
 import { CompletionCelebration } from '@/components/CompletionCelebration';
 import type { ColorTheme } from '@/constants/colors';
 
@@ -18,14 +18,7 @@ export function OnboardingCelebration({ colors: _colors, onContinue }: Props) {
     onContinue();
     if (reviewFiredRef.current) return;
     reviewFiredRef.current = true;
-    void (async () => {
-      try {
-        const available = await StoreReview.isAvailableAsync();
-        if (available) await StoreReview.requestReview();
-      } catch {
-        // Silently fail — review prompt is best-effort
-      }
-    })();
+    void requestReviewOncePerVersion();
   };
 
   return (
