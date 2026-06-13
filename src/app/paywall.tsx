@@ -9,6 +9,8 @@ import * as Haptics from 'expo-haptics';
 import * as Application from 'expo-application';
 import Constants from 'expo-constants';
 import { XIcon, PaletteIcon, BookOpenTextIcon, InfinityIcon, PencilLineIcon, CircleNotchIcon, CheckIcon, XCircleIcon, BellIcon, CreditCardIcon, SunHorizonIcon, BooksIcon, ChatCircleDotsIcon } from 'phosphor-react-native';
+import MaskedView from '@react-native-masked-view/masked-view';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/lib/theme';
 import { EmberSystem } from '@/components/EmberSystem';
 import type { ExclusionZone } from '@/lib/ember-system';
@@ -45,11 +47,22 @@ import { getPaywallRenewalDisclosure } from '@/lib/paywall-disclosure';
 
 type PlanChoice = 'yearly' | 'monthly';
 
+// Shared SAVE-badge dim level — the badge is full strength while the yearly
+// plan is selected and dims to this opacity when the user focuses monthly.
+// ThreeStepPaywall.tsx hardcodes the same value; keep them in lockstep so the
+// SAVE badge behaves identically across both paywall surfaces.
+const SAVE_BADGE_DIMMED_OPACITY = 0.45;
+
 // Hard exclusion over the pricing cards, CTA, and renewal disclosure — falling
 // embers must never collide with payment copy (normalized screen rect).
 const PAYWALL_TEXT_EXCLUSION: ReadonlyArray<ExclusionZone> = [
   { x: 0, y: 0.52, width: 1, height: 0.48 },
 ];
+
+// Height of the soft fade band at each scroll boundary, as a fraction of the
+// scroll viewport. Content fades over the top ~6% and bottom ~6% so rows never
+// hard-clip mid-glyph where the scroll region meets the drag handle / footer.
+const PAYWALL_FADE_BAND = 0.06;
 
 /** Get human-readable trial duration from a package */
 function getTrialDuration(pkg: PurchasesPackage | undefined | null): string | null {
@@ -581,6 +594,29 @@ export default function PaywallScreen() {
       </View>
 
       {/* ─── Scrollable content ─── */}
+      {/* Fade mask at the scroll boundaries: rows soften into the background at
+          the top (under the drag handle) and bottom (into the sticky footer)
+          instead of hard-clipping mid-glyph. The mask is a black→transparent
+          gradient applied to the alpha of the ScrollView; because the mask only
+          uses opacity, it is theme-agnostic and reads identically on the dark
+          and light routes (porting the light route's mask to dark). */}
+      <MaskedView
+        style={{ flex: 1 }}
+        maskElement={
+          <LinearGradient
+            style={{ flex: 1 }}
+            colors={[
+              'transparent',
+              'black',
+              'black',
+              'transparent',
+            ]}
+            locations={[0, PAYWALL_FADE_BAND, 1 - PAYWALL_FADE_BAND, 1]}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+          />
+        }
+      >
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: Spacing['6'], paddingTop: 18 }}
@@ -670,7 +706,11 @@ export default function PaywallScreen() {
                     <Icon size={18} color={colors.accent} weight="light" />
                   </View>
                   <View style={{ flex: 1 }}>
+                    {/* Benefit copy is write-to-fit: no numberOfLines clamp, so a
+                        sentence is never cut on a payment screen. The multiplier
+                        caps keep large Dynamic Type bounded without truncating. */}
                     <Text
+                      maxFontSizeMultiplier={1.3}
                       style={{
                         fontFamily: FontFamily.uiMedium,
                         fontSize: 15,
@@ -681,6 +721,7 @@ export default function PaywallScreen() {
                       {benefit.title}
                     </Text>
                     <Text
+                      maxFontSizeMultiplier={1.4}
                       style={{
                         fontFamily: FontFamily.ui,
                         fontSize: 13,
@@ -801,6 +842,7 @@ export default function PaywallScreen() {
           )}
         </View>
       </ScrollView>
+      </MaskedView>
 
       {/* ─── Sticky footer: plans + CTA + legal ─── */}
       <View
@@ -844,9 +886,19 @@ export default function PaywallScreen() {
               >
                 Yearly
               </Text>
+              {/* Shared SAVE-badge dim rule (must match ThreeStepPaywall): the
+                  badge is full strength while the yearly plan is selected and
+                  dims to SAVE_BADGE_DIMMED_OPACITY when the user focuses monthly
+                  so it stops shouting from the de-emphasized card. */}
               {savingsPercent > 0 && (
                 <View
-                  style={{ backgroundColor: colors.accent, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}
+                  style={{
+                    backgroundColor: colors.accent,
+                    paddingHorizontal: 6,
+                    paddingVertical: 2,
+                    borderRadius: 4,
+                    opacity: selectedPlan === 'yearly' ? 1 : SAVE_BADGE_DIMMED_OPACITY,
+                  }}
                   accessibilityElementsHidden
                   importantForAccessibility="no-hide-descendants"
                 >
@@ -910,8 +962,11 @@ export default function PaywallScreen() {
         </View>
 
         {/* Billing disclosure — real charge amount and period (App Review 3.1.2).
-            yearlyPrice/monthlyPrice are RC priceStrings with honest fallbacks. */}
+            yearlyPrice/monthlyPrice are RC priceStrings with honest fallbacks.
+            No clamp: the renewal terms must wrap, never truncate mid-sentence on
+            a payment screen. Multiplier cap keeps large Dynamic Type bounded. */}
         <Text
+          maxFontSizeMultiplier={1.4}
           style={{
             fontFamily: FontFamily.ui,
             fontSize: FontSize.xs,

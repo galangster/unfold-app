@@ -92,6 +92,18 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const TOTAL_PAGES_WITH_TRIAL = 3;
 const TOTAL_PAGES_NO_TRIAL = 2;
 
+// Aggregate App Store rating shown in the social-proof row. The stars beside it
+// render a partial fill matching this value so the visual never overstates the
+// number (e.g. 4.8 must not paint five full stars). Update when the real
+// store rating changes.
+const APP_STORE_RATING = 4.8;
+
+// Shared SAVE-badge dim level — the badge is full strength while the yearly
+// plan is selected and dims to this opacity when the user focuses monthly.
+// paywall.tsx hardcodes the same value; keep them in lockstep so the SAVE
+// badge behaves identically across both paywall surfaces.
+const SAVE_BADGE_DIMMED_OPACITY = 0.45;
+
 const DEVICE_BEZEL_WIDTH = SCREEN_WIDTH * 0.62;
 
 // Ember exclusion zones (normalized): benefit copy band + the stacked-card
@@ -150,13 +162,52 @@ function ctaLabel(page: number, totalPages: number, hasFreeTrial: boolean): stri
 // Sub-components (inline, single file)
 // ---------------------------------------------------------------------------
 
-/** Five filled stars rendered inline. */
-function FiveStars({ color }: { color: string }) {
+const STAR_SIZE = 14;
+const STAR_GAP = 2;
+
+/**
+ * Five inline stars. With no `rating`, renders five fully-filled stars (used by
+ * individual five-star testimonials). With a `rating` (e.g. 4.8), renders an
+ * honest partial fill: outline stars beneath, a width-clipped filled row on top
+ * so the visual fill matches the number instead of overstating it as 5/5.
+ */
+function FiveStars({ color, rating }: { color: string; rating?: number }) {
+  if (rating == null) {
+    return (
+      <View style={styles.starsRow}>
+        {Array.from({ length: 5 }).map((_, i) => (
+          <StarIcon key={i} size={STAR_SIZE} color={color} weight="fill" />
+        ))}
+      </View>
+    );
+  }
+
+  // One row of N stars spans N*size + (N-1)*gap. Clip the filled overlay to the
+  // proportion of the rating so 4.8/5 paints 96% of the bar — honest, not 5/5.
+  const clamped = Math.max(0, Math.min(rating, 5));
+  const fullWidth = 5 * STAR_SIZE + 4 * STAR_GAP;
+  const fillWidth = (clamped / 5) * fullWidth;
+
   return (
-    <View style={styles.starsRow}>
-      {Array.from({ length: 5 }).map((_, i) => (
-        <StarIcon key={i} size={14} color={color} weight="fill" />
-      ))}
+    <View
+      style={[styles.starsRow, { width: fullWidth }]}
+      accessibilityRole="image"
+      accessibilityLabel={`Rated ${clamped} out of 5 stars`}
+    >
+      {/* Base: outline stars (the empty track) */}
+      <View style={styles.starsRow}>
+        {Array.from({ length: 5 }).map((_, i) => (
+          <StarIcon key={i} size={STAR_SIZE} color={color} weight="regular" />
+        ))}
+      </View>
+      {/* Overlay: filled stars clipped to the rating proportion */}
+      <View style={[styles.starsFillOverlay, { width: fillWidth }]} pointerEvents="none">
+        <View style={[styles.starsRow, { width: fullWidth }]}>
+          {Array.from({ length: 5 }).map((_, i) => (
+            <StarIcon key={i} size={STAR_SIZE} color={color} weight="fill" />
+          ))}
+        </View>
+      </View>
     </View>
   );
 }
@@ -703,9 +754,11 @@ function ScreenPricing({
               marginRight: Spacing['1'],
             }}
           >
-            4.8
+            {APP_STORE_RATING.toFixed(1)}
           </Text>
-          <FiveStars color={colors.accent} />
+          {/* Partial fill so the stars match the 4.8 number instead of
+              overstating it as a perfect 5/5 (trust, payment surface). */}
+          <FiveStars color={colors.accent} rating={APP_STORE_RATING} />
         </View>
       </View>
 
@@ -802,7 +855,16 @@ function ScreenPricing({
           {/* SAVE badge overlapping top border */}
           {savings > 0 && (
             <View
-              style={[styles.saveBadge, { backgroundColor: colors.accent }]}
+              style={[
+                styles.saveBadge,
+                {
+                  backgroundColor: colors.accent,
+                  // Shared SAVE-badge dim rule (must match paywall.tsx): full
+                  // strength on the selected yearly plan, dimmed when the user
+                  // has moved focus to monthly so the badge stops shouting.
+                  opacity: selectedPlan === 'yearly' ? 1 : SAVE_BADGE_DIMMED_OPACITY,
+                },
+              ]}
               accessibilityElementsHidden
               importantForAccessibility="no-hide-descendants"
             >
@@ -1045,10 +1107,13 @@ function BottomCTA({
       />
 
       {/* Renewal disclosure -- reflects selected plan; hidden until offerings
-          resolve so we never render price-less text (RV-UI-3) */}
+          resolve so we never render price-less text (RV-UI-3). Must NOT clamp:
+          this is the App-Review 3.1.2 billing sentence, and a 1-line ellipsis
+          under large Dynamic Type would cut the renewal terms mid-sentence on a
+          payment screen. Wrap freely; cap the multiplier so it stays bounded. */}
       {disclosureText != null && (
         <Text
-          numberOfLines={1}
+          maxFontSizeMultiplier={1.4}
           style={{
             fontFamily: FontFamily.ui,
             fontSize: FontSize.xs,
@@ -1605,7 +1670,15 @@ const styles = StyleSheet.create({
   },
   starsRow: {
     flexDirection: 'row',
-    gap: 2,
+    gap: STAR_GAP,
+  },
+  // Clips the filled-star overlay to the rating proportion (left-anchored).
+  starsFillOverlay: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    overflow: 'hidden',
   },
 
   // ------- Stacked card carousel -------
