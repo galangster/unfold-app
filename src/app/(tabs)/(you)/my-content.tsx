@@ -181,9 +181,15 @@ export default function MyContentScreen() {
     });
   };
 
+  // The 'highlights' tab holds BOTH saved highlights and notes (saved.count.all),
+  // so labeling it "Highlights" both mislabels the mixed collection and collides
+  // with the in-tab "Highlights" filter chip below — a duplicated taxonomy
+  // (brief §3 #28). Display it as "Saved"; the chip keeps the only "Highlights"
+  // label, now meaning highlight-type items only. The tab `id` stays
+  // 'highlights' so deep-link routing (?tab=highlights) is unchanged.
   const tabs: { id: Tab; label: string; count: number }[] = [
     { id: 'journal', label: 'Journal', count: journalEntries.length },
-    { id: 'highlights', label: 'Highlights', count: saved.count.all },
+    { id: 'highlights', label: 'Saved', count: saved.count.all },
     { id: 'bookmarks', label: 'Bookmarks', count: bookmarks.length },
   ];
 
@@ -357,47 +363,14 @@ export default function MyContentScreen() {
         {activeTab === 'journal' && (
           <Animated.View entering={libraryContentEntering}>
             {filteredJournal.length === 0 ? (
-              <View style={{ alignItems: 'center', paddingVertical: 60, paddingHorizontal: Spacing['10'] }}>
-                <View
-                  style={{
-                    width: 64,
-                    height: 64,
-                    borderRadius: 32,
-                    backgroundColor: colors.inputBackground,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginBottom: Spacing['5'],
-                  }}
-                >
-                  <PencilLineIcon size={28} color={colors.textMuted} weight="light" />
-                </View>
-                <Text
-                  style={{
-                    fontFamily: FontFamily.display,
-                    fontSize: 22,
-                    color: colors.text,
-                    marginBottom: Spacing['2'],
-                    textAlign: 'center',
-                  }}
-                >
-                  No journal entries yet
-                </Text>
-                <Text
-                  style={{
-                    fontFamily: FontFamily.ui,
-                    fontSize: 15,
-                    color: colors.textMuted,
-                    textAlign: 'center',
-                    lineHeight: 22,
-                    marginBottom: Spacing['6'],
-                  }}
-                >
-                  Reflect on your readings to capture your thoughts.
-                </Text>
-                
-                {/* Start Your First Entry CTA */}
-                <TouchableOpacity activeOpacity={0.7}
-                  onPress={() => {
+              <EmptyState
+                icon={PencilLineIcon}
+                title="No journal entries yet."
+                subtitle="Reflect on your readings to capture your thoughts."
+                cta={{
+                  label: 'Start your first entry',
+                  accessibilityLabel: 'Start your first journal entry',
+                  onPress: () => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     // Navigate to the current reading day to open journal
                     const currentDevotional = devotionals.find(d => d.id === currentDevotionalId);
@@ -410,31 +383,9 @@ export default function MyContentScreen() {
                         },
                       });
                     }
-                  }}
-                  style={{
-                    paddingVertical: 14,
-                    paddingHorizontal: 24,
-                    borderRadius: Radius.md,
-                    borderWidth: 1.5,
-                    borderColor: colors.accent,
-                    backgroundColor: 'transparent',
-                    opacity: 1,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: Spacing['2'],
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontFamily: FontFamily.uiSemiBold,
-                      fontSize: 15,
-                      color: colors.accent,
-                    }}
-                  >
-                    Start your first entry
-                  </Text>
-                </TouchableOpacity>
-              </View>
+                  },
+                }}
+              />
             ) : (
               filteredJournal.map((entry, index) => {
                 const devotional = devotionals.find(d => d.id === entry.devotionalId);
@@ -539,7 +490,7 @@ export default function MyContentScreen() {
             {filteredHighlights.length === 0 ? (
               <EmptyState
                 icon={HighlighterIcon}
-                title="No highlights yet"
+                title="No highlights yet."
                 subtitle={
                   activeHighlightChip === 'bible'
                     ? 'Tap a verse in the Bible reader to save it here.'
@@ -667,7 +618,7 @@ export default function MyContentScreen() {
             {filteredBookmarks.length === 0 ? (
               <EmptyState
                 icon={BookmarkSimpleIcon}
-                title="No bookmarks yet"
+                title="No bookmarks yet."
                 subtitle="Tap the bookmark icon while reading to save scriptures."
               />
             ) : (
@@ -745,7 +696,26 @@ export default function MyContentScreen() {
   );
 }
 
-function EmptyState({ icon: Icon, title, subtitle }: { icon: typeof PencilLineIcon; title: string; subtitle: string }) {
+/** Optional primary action for an empty state — rendered with the same
+ *  filled-accent-pill anatomy as the Notebook ghost-note CTA (the quality bar
+ *  this surface unifies toward, brief §3 #28 / §4 #3). */
+type EmptyStateCta = {
+  label: string;
+  onPress: () => void;
+  accessibilityLabel?: string;
+};
+
+function EmptyState({
+  icon: Icon,
+  title,
+  subtitle,
+  cta,
+}: {
+  icon: typeof PencilLineIcon;
+  title: string;
+  subtitle: string;
+  cta?: EmptyStateCta;
+}) {
   const { colors } = useTheme();
   const reducedMotion = useReducedMotion();
 
@@ -788,7 +758,8 @@ function EmptyState({ icon: Icon, title, subtitle }: { icon: typeof PencilLineIc
           iconPulseStyle,
         ]}
       >
-        <Icon size={28} color={colors.textMuted} />
+        {/* Accent icon at the quality-bar weight/opacity (matches Notebook). */}
+        <Icon size={28} color={colors.accent} weight="light" style={{ opacity: 0.5 }} />
       </Animated.View>
       <Text
         style={{
@@ -808,10 +779,40 @@ function EmptyState({ icon: Icon, title, subtitle }: { icon: typeof PencilLineIc
           color: colors.textMuted,
           textAlign: 'center',
           lineHeight: 22,
+          marginBottom: cta ? Spacing['6'] : 0,
         }}
       >
         {subtitle}
       </Text>
+      {cta && (
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={cta.onPress}
+          accessibilityRole="button"
+          accessibilityLabel={cta.accessibilityLabel ?? cta.label}
+          style={{
+            backgroundColor: colors.accent,
+            borderRadius: Radius.md,
+            paddingVertical: 14,
+            paddingHorizontal: 24,
+            shadowColor: colors.accent,
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.2,
+            shadowRadius: 12,
+            elevation: 4,
+          }}
+        >
+          <Text
+            style={{
+              fontFamily: FontFamily.uiSemiBold,
+              fontSize: 15,
+              color: colors.background,
+            }}
+          >
+            {cta.label}
+          </Text>
+        </TouchableOpacity>
+      )}
     </Animated.View>
   );
 }

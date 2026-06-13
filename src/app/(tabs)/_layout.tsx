@@ -14,6 +14,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/lib/theme';
+import { alpha } from '@/components/ui';
 import { FontFamily } from '@/constants/fonts';
 import { Duration, Spring } from '@/constants/animations';
 import { Spacing } from '@/constants/spacing';
@@ -29,6 +30,20 @@ type TabBarProps = {
 };
 
 const SPRING_CONFIG = Spring.snappy;
+
+// Dynamic Type cap for the tiny tab labels. Without a cap the iOS XXL/AX
+// traits clip "Companion" → "Compani" / "Today" → "Toda" mid-word; with the
+// cap + numberOfLines the label truncates at a glyph boundary instead of
+// splitting a word, and the row never blows out its fixed height (brief §3
+// #14b). Mirrors the per-file *_MAX_SCALE pattern used elsewhere.
+const TAB_LABEL_MAX_SCALE = 1.2;
+
+// Opacity of the solid plane painted UNDER the blur so the gold "Complete Day"
+// pill's accent glow cannot bleed through the translucent tab bar (brief §3
+// #20). Tuned per scheme: dark surfaces hide bleed at a lower alpha, light
+// surfaces need more coverage against a bright accent.
+const TAB_BAR_SCRIM_OPACITY_DARK = 0.82;
+const TAB_BAR_SCRIM_OPACITY_LIGHT = 0.86;
 
 function NoteDraftDock() {
   const router = useRouter();
@@ -197,16 +212,33 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
       }, tabBarAnimStyle]}
       pointerEvents={tabBarHidden ? 'none' : 'auto'}
     >
-      {/* Blur background layer */}
+      {/* Blur background layer. Heavier blur (#20) so the gold "Complete Day"
+          pill's accent glow does not read through the tab bar. */}
       {Platform.OS === 'ios' && (
         <BlurView
-          intensity={90}
+          intensity={100}
           tint={isDark ? 'dark' : 'light'}
           style={StyleSheet.absoluteFill}
         />
       )}
 
-      {/* Subtle top border */}
+      {/* Opaque scrim under the chrome (#20). The blur alone leaves the bar
+          translucent enough for the accent glow to bleed through; a solid
+          theme-toned plane seals it while the blur keeps the frosted feel. */}
+      <View
+        style={[
+          StyleSheet.absoluteFill,
+          {
+            backgroundColor: alpha(
+              colors.background,
+              isDark ? TAB_BAR_SCRIM_OPACITY_DARK : TAB_BAR_SCRIM_OPACITY_LIGHT,
+            ),
+          },
+        ]}
+      />
+
+      {/* Hairline top border — separates the bar from content above so the
+          pill's glow has a hard edge to stop at (#20). */}
       <View
         style={{
           position: 'absolute',
@@ -215,8 +247,8 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
           right: 0,
           height: StyleSheet.hairlineWidth,
           backgroundColor: isDark
-            ? 'rgba(245, 240, 235, 0.06)'
-            : 'rgba(28, 23, 16, 0.06)',
+            ? 'rgba(245, 240, 235, 0.10)'
+            : 'rgba(28, 23, 16, 0.10)',
         }}
       />
 
@@ -334,12 +366,15 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
                 {renderIcon()}
               </AnimatedTabIcon>
               <Text
+                numberOfLines={1}
+                maxFontSizeMultiplier={TAB_LABEL_MAX_SCALE}
                 style={{
                   fontFamily: FontFamily.uiMedium,
                   fontSize: 10,
                   color: currentColor,
                   marginTop: 2,
                   letterSpacing: 0.2,
+                  textAlign: 'center',
                 }}
               >
                 {label}
