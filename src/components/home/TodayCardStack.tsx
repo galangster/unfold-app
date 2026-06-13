@@ -31,6 +31,7 @@ import {
 } from '@/lib/today-card-stack-motion';
 import type { ColorTheme } from '@/constants/colors';
 import { smartQuotes } from '@/lib/smart-quotes';
+import { balanceHeadline } from '@/lib/balance-headline';
 
 export interface TodayCardStackAction {
   label: string;
@@ -44,6 +45,12 @@ export interface TodayCardStackCard extends TodayStackCardItem {
   eyebrow?: string;
   title: string;
   body?: string;
+  /**
+   * Real-overflow clamp for genuinely variable body copy (e.g. a quoted user
+   * highlight). Omit for authored copy so it wraps fully and is never cut
+   * mid-clause (de-slop #15).
+   */
+  bodyNumberOfLines?: number;
   actionLabel?: string;
   actions?: TodayCardStackAction[];
   onPress?: () => void;
@@ -103,11 +110,15 @@ function TopCardBody({ card, colors }: { card: TodayCardStackCard; colors: Color
       ) : null}
 
       <Text style={[styles.title, { color: colors.text }]} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE} numberOfLines={2}>
-        {smartQuotes(card.title)}
+        {balanceHeadline(smartQuotes(card.title))}
       </Text>
 
       {card.body ? (
-        <Text style={[styles.body, { color: colors.textMuted }]} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE} numberOfLines={3}>
+        <Text
+          style={[styles.body, { color: colors.textMuted }]}
+          maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}
+          numberOfLines={card.bodyNumberOfLines}
+        >
           {smartQuotes(card.body)}
         </Text>
       ) : null}

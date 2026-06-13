@@ -228,7 +228,15 @@ describe('TodayCardStack fixture shell', () => {
     const tree = renderInAct(<TodayCardStack cards={[fixtureCard()]} colors={mockTestColors} />);
 
     expect(tree.root.findByProps({ testID: 'today-card-stack-top-card' })).toBeTruthy();
-    expect(tree.root.findAll((node: any) => node.children?.includes('Return to today’s reading'))).toHaveLength(1);
+    // Title renders balanced (last two words bound by a non-breaking space to
+    // avoid a widow); normalise the NBSP back to a space for the text match.
+    expect(
+      tree.root.findAll(
+        (node: any) =>
+          typeof node.children?.[0] === 'string' &&
+          textContent(node).replace(/ /g, ' ') === 'Return to today’s reading',
+      ).length,
+    ).toBeGreaterThan(0);
     expect(tree.root.findAll((node: any) => node.props.testID === 'today-card-stack-count')).toHaveLength(0);
     expect(tree.root.findAll((node: any) => /^today-card-stack-back-card-/.test(node.props.testID))).toHaveLength(0);
   });
@@ -376,5 +384,55 @@ describe('TodayCardStack fixture shell', () => {
     expect(source).not.toMatch(/ContextSlot|NotificationCard|DailyBridgeCard|RememberThisCard|PremiumNudgeCard|useUnfoldStore/);
     expect(source).toMatch(/GestureDetector|Gesture\.Pan/);
     expect(source).not.toMatch(/PanGestureHandler|Swipeable/);
+  });
+});
+
+describe('TodayCardStack de-slop typography (#15, #16)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  function findBodyText(tree: any, body: string) {
+    return tree.root.find(
+      (node: any) => node.type === 'Text' && textContent(node).includes(body.replace(/'/g, '’').slice(0, 12)),
+    );
+  }
+
+  it('#15 wraps authored body copy fully — no mid-clause numberOfLines clamp by default', () => {
+    const body = 'One quiet response helps Unfold shape the next few days. No pressure — just a pulse check.';
+    const tree = renderInAct(
+      <TodayCardStack colors={mockTestColors} cards={[fixtureCard({ body })]} />,
+    );
+
+    const bodyNode = findBodyText(tree, 'One quiet response');
+    expect(bodyNode.props.numberOfLines).toBeUndefined();
+  });
+
+  it('#15 clamps a body only when bodyNumberOfLines is set (genuine variable overflow)', () => {
+    const body = '“A very long saved highlight that is genuinely variable in length” — Day 4 · Some Series';
+    const tree = renderInAct(
+      <TodayCardStack
+        colors={mockTestColors}
+        cards={[fixtureCard({ body, bodyNumberOfLines: 3 })]}
+      />,
+    );
+
+    const bodyNode = findBodyText(tree, 'A very long saved');
+    expect(bodyNode.props.numberOfLines).toBe(3);
+  });
+
+  it('#16 balances the hero title — last two words bound by a non-breaking space', () => {
+    const tree = renderInAct(
+      <TodayCardStack
+        colors={mockTestColors}
+        cards={[fixtureCard({ title: 'When the Path Is Quiet' })]}
+      />,
+    );
+
+    const titleNode = tree.root.find(
+      (node: any) => node.type === 'Text' && textContent(node).startsWith('When the Path'),
+    );
+    expect(textContent(titleNode)).toBe('When the Path Is Quiet');
+    expect(textContent(titleNode)).not.toMatch(/ Quiet$/);
   });
 });

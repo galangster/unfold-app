@@ -1039,7 +1039,10 @@ export default function HomeScreen() {
         priority: 80,
         eyebrow: 'Saved echo',
         title: 'A line worth carrying',
+        // Quoted highlight is genuinely variable-length — keep a real-overflow
+        // clamp (de-slop #15: authored copy wraps; only true overflow clamps).
         body: `“${stripOuterQuotes(rememberedHighlight.highlightedText)}” — Day ${rememberedHighlight.dayNumber} · ${rememberedHighlightSourceTitle}`,
+        bodyNumberOfLines: 3,
         actionLabel: 'Open highlight',
         onPress: handleSavedEchoPress,
         onDismiss: handleDismissRememberThisCard,
