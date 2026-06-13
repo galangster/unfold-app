@@ -10,8 +10,9 @@ import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { useBibleDb } from '@/hooks/useBibleDb';
-import { OT_BOOKS, NT_BOOKS, getBookColor, getBookCategory, CATEGORY_LABELS, citationBookName, type BibleBookInfo, type BibleCategory } from '@/lib/bible-constants';
+import { OT_BOOKS, NT_BOOKS, getBookCategory, CATEGORY_LABELS, citationBookName, type BibleBookInfo, type BibleCategory } from '@/lib/bible-constants';
 import { DownloadBibleSheet } from '@/components/bible/DownloadBibleSheet';
+import { alpha } from '@/components/ui';
 import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
 
@@ -83,24 +84,32 @@ export default function BibleHomeScreen() {
       <View style={{ marginBottom: Spacing['7'] }}>
         {groups.map((group) => (
           <View key={group.category} style={{ marginBottom: Spacing['4'] }}>
-            <Text style={[styles.categoryLabel, { color: getBookColor(group.books[0].id, isDark) }]}>
+            {/* Single-accent / neutral coding — no per-book rainbow */}
+            <Text style={[styles.categoryLabel, { color: colors.textSubtle }]}>
               {CATEGORY_LABELS[group.category]}
             </Text>
             <View style={styles.bookGrid}>
               {group.books.map((book) => {
-                const bookColor = getBookColor(book.id, isDark);
+                const isSelected = selectedBook?.id === book.id;
                 return (
                   <TouchableOpacity
                     key={book.id}
                     onPress={() => handleBookPress(book)}
                     style={[styles.bookPill, {
-                      backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
+                      backgroundColor: isSelected
+                        ? alpha(colors.accent, 0.16)
+                        : isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
+                      borderColor: isSelected ? colors.accent : 'transparent',
                     }]}
                     activeOpacity={0.6}
                     accessibilityLabel={book.name}
                     accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
                   >
-                    <Text style={[styles.bookName, { color: bookColor }]} numberOfLines={1}>
+                    <Text
+                      style={[styles.bookName, { color: isSelected ? colors.accent : colors.text }]}
+                      numberOfLines={1}
+                    >
                       {book.name}
                     </Text>
                   </TouchableOpacity>
@@ -111,7 +120,7 @@ export default function BibleHomeScreen() {
         ))}
       </View>
     );
-  }, [isDark, handleBookPress]);
+  }, [isDark, colors, selectedBook, handleBookPress]);
 
   // Show download prompt if Bible not ready (including during download)
   if (!isReady) {
@@ -358,6 +367,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing['3'],
     paddingVertical: 10,
     borderRadius: Radius.sm,
+    borderWidth: 1,
     minWidth: '30%',
     flexGrow: 1,
     flexBasis: '30%',
