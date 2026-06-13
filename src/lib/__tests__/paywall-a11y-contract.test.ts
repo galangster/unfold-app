@@ -25,9 +25,17 @@ describe('paywall close button (RT-PAYWALL-1)', () => {
 });
 
 describe('paywall billing disclosure (RT-PAYWALL-2/RT-PAYWALL-8)', () => {
-  it('discloses the real charge via the shared renewal-disclosure helper, RC-derived with honest fallback', () => {
-    expect(src).toContain('getPaywallRenewalDisclosure({');
-    expect(src).toContain("yearlyPackage?.product.priceString ?? '$59.99'");
+  it('waits for RevenueCat packages instead of rendering stale fallback prices', () => {
+    expect(src).toContain('const offeringsReady = Boolean(yearlyPackage && monthlyPackage);');
+    expect(src).toContain("yearlyPackage?.product.priceString ?? ''");
+    expect(src).toContain("monthlyPackage?.product.priceString ?? ''");
+    expect(src).not.toContain("yearlyPackage?.product.priceString ?? '$59.99'");
+    expect(src).not.toContain("monthlyPackage?.product.priceString ?? '$9.99'");
+  });
+
+  it('passes the real offerings state into the shared renewal-disclosure helper', () => {
+    expect(src).toContain('const disclosureText = getPaywallRenewalDisclosure({');
+    expect(src).toContain('offeringsReady,');
   });
 
   it('passes RC-verified per-selected-plan trial eligibility to the disclosure', () => {
@@ -47,8 +55,16 @@ describe('paywall plan selector semantics (RT-PAYWALL-3/4/6)', () => {
     expect(src).not.toContain('accessibilityRole="tab"');
   });
 
-  it('yearly chip label carries the real annual price', () => {
+  it('yearly chip label carries the real annual price only after plans resolve', () => {
+    expect(src).toContain('const yearlyPlanAccessibilityLabel = offeringsReady');
+    expect(src).toContain('Yearly plan loading');
     expect(src).toContain('`Yearly plan, ${yearlyPrice} per year, equal to ${perMonthFromYearly} per month');
+  });
+
+  it('disables purchase CTA and exposes retry while prices are unavailable', () => {
+    expect(src).toContain('const isSubscribeDisabled = isPurchasing || !offeringsReady;');
+    expect(src).toContain('Subscription plans unavailable');
+    expect(src).toContain('Tap to retry');
   });
 
   it('comparison boolean cells expose Free/Premium inclusion labels', () => {

@@ -39,4 +39,11 @@ describe('stripOuterQuotes', () => {
   it('trims whitespace exposed by stripping', () => {
     expect(stripOuterQuotes('“ Be still ”')).toBe('Be still');
   });
+
+  it('strips quote marks after leading scripture verse markers', () => {
+    expect(stripOuterQuotes('¹⁰ "Be still and know that I am God."')).toBe(
+      '¹⁰ Be still and know that I am God.',
+    );
+    expect(stripOuterQuotes('10 “Be still.”')).toBe('10 Be still.');
+  });
 });
