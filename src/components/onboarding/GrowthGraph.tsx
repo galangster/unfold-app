@@ -134,7 +134,9 @@ export function GrowthGraph({ colors, animationDelay = 0, onDrawComplete }: Grow
 
   return (
     <View>
-      {/* Graph label */}
+      {/* Graph label — explicitly illustrative. This curve is a drawn illustration
+          of how Unfold is designed to grow more personal over time, not a chart of
+          measured data, so it must not read as real growth metrics. */}
       <Text style={{
         fontFamily: FontFamily.ui,
         fontSize: 10,
@@ -144,7 +146,7 @@ export function GrowthGraph({ colors, animationDelay = 0, onDrawComplete }: Grow
         marginBottom: Spacing['3'],
         textAlign: 'center',
       }}>
-        How personal your devotionals become
+        Illustrative — how personal your devotionals are designed to become
       </Text>
 
       {/* Canvas */}

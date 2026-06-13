@@ -183,7 +183,10 @@ const DEFAULT_SCRIPTURES = [
   { text: 'I am with you always, to the end of the age.', ref: 'Matthew 28:20' },
 ];
 const pickRandom = <T,>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)];
-const selectedAccentSurface = (accent: string, opacity = 0.16) => alpha(accent, opacity);
+// One selection-state vocabulary: selected option controls share accent border +
+// accent-tinted fill (this surface) + accent text. Keep the default tint aligned
+// with the chip/pill controls (alpha 0.18) so every selected control matches.
+const selectedAccentSurface = (accent: string, opacity = 0.18) => alpha(accent, opacity);
 
 // MirrorBackContent type imported from devotional-service
 
@@ -1913,7 +1916,7 @@ export default function OnboardingScreen() {
                               {Icon}
                             </View>
                             <View style={{ flex: 1 }}>
-                              <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 15, color: colors.text }}>{type.name}</Text>
+                              <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 15, color: isSelected ? colors.accent : colors.text }}>{type.name}</Text>
                               <Text style={{ fontFamily: FontFamily.body, fontSize: 13, color: colors.textMuted, marginTop: 2, lineHeight: 18 }}>{type.description}</Text>
                             </View>
                           </View>
@@ -1978,7 +1981,7 @@ export default function OnboardingScreen() {
                     borderColor: isSelected ? colors.accent : colors.border,
                     minHeight: 72,
                   }}>
-                    <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.sm, color: colors.text }} numberOfLines={1}>{char.name}</Text>
+                    <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.sm, color: isSelected ? colors.accent : colors.text }} numberOfLines={1}>{char.name}</Text>
                     <Text style={{ fontFamily: FontFamily.body, fontSize: 12, color: colors.textMuted, marginTop: 3, lineHeight: 16 }} numberOfLines={3}>{char.description}</Text>
                   </View>
                 </TouchableOpacity>
@@ -2034,7 +2037,7 @@ export default function OnboardingScreen() {
                           borderWidth: 1,
                           borderColor: isSelected ? colors.accent : colors.border,
                         }}>
-                          <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.base, color: colors.text }}>{subject.name}</Text>
+                          <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.base, color: isSelected ? colors.accent : colors.text }}>{subject.name}</Text>
                           <Text style={{ fontFamily: FontFamily.body, fontSize: 13, color: colors.textMuted, marginTop: 3, lineHeight: 18 }}>{subject.description}</Text>
                         </View>
                   </TouchableOpacity>
@@ -2276,7 +2279,7 @@ export default function OnboardingScreen() {
                       opacity: isLockedOption ? 0.6 : 1,
                     }}>
                       <View style={{ flex: 1 }}>
-                        <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.base, color: colors.text }}>{option.label}</Text>
+                        <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.base, color: isSelected ? colors.accent : colors.text }}>{option.label}</Text>
                         {'description' in option && option.description && (
                           <Text style={{ fontFamily: FontFamily.body, fontSize: 13, color: colors.textMuted, marginTop: 2 }}>{option.description}</Text>
                         )}
@@ -2711,7 +2714,7 @@ export default function OnboardingScreen() {
                     }}
                   >
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.base, color: colors.text }}>{opt.label}</Text>
+                      <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.base, color: isSelected ? colors.accent : colors.text }}>{opt.label}</Text>
                       <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, color: colors.textMuted, marginTop: 2 }}>{opt.description}</Text>
                     </View>
                     <View style={{
@@ -2749,7 +2752,7 @@ export default function OnboardingScreen() {
                     }}
                   >
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.base, color: colors.text }}>{opt.label}</Text>
+                      <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.base, color: isSelected ? colors.accent : colors.text }}>{opt.label}</Text>
                       <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, color: colors.textMuted, marginTop: 2 }}>{opt.description}</Text>
                     </View>
                     <View style={{
@@ -2805,7 +2808,7 @@ export default function OnboardingScreen() {
                   >
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                       <View style={{ flex: 1, marginRight: Spacing['3'] }}>
-                        <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.base, color: colors.text }}>{opt.label}</Text>
+                        <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.base, color: isSelected ? colors.accent : colors.text }}>{opt.label}</Text>
                         <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, color: colors.textMuted, marginTop: 2 }}>{opt.description}</Text>
                         <Text style={{ fontFamily: FontFamily.bodyItalic, fontSize: FontSize.xs, color: colors.textSubtle, marginTop: 6 }}>{opt.example}</Text>
                       </View>
@@ -2845,7 +2848,7 @@ export default function OnboardingScreen() {
                     }}
                   >
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.base, color: colors.text }}>{opt.label}</Text>
+                      <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.base, color: isSelected ? colors.accent : colors.text }}>{opt.label}</Text>
                       <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, color: colors.textMuted, marginTop: 2 }}>{opt.description}</Text>
                     </View>
                     <View style={{
@@ -2994,17 +2997,30 @@ export default function OnboardingScreen() {
               <View style={{ width: 40, height: 40 }} />
             )}
             
-            {/* Continue button - hide for self-navigating steps */}
+            {/* Primary advance affordance — one vocabulary across onboarding: an
+                accent-filled pill that reads as clearly enabled (never grey chrome).
+                Only rendered once a step can proceed; self-navigating and cinematic
+                "tap anywhere" steps keep their own affordance. */}
             {shouldShowOnboardingTopContinue({ canProceed: canProceed(), stepType: step.type }) ? (
               <TouchableOpacity activeOpacity={1}
                 onPress={handleNext}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                style={{ height: 40, justifyContent: 'center', paddingHorizontal: 8 }}
+                accessibilityRole="button"
+                accessibilityLabel={isLastStep ? 'Create' : 'Continue'}
+                style={{
+                  height: 36,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  paddingHorizontal: Spacing['4'],
+                  borderRadius: Radius.xl,
+                  backgroundColor: colors.accent,
+                }}
               >
-                <Text style={{ 
-                  fontFamily: FontFamily.uiMedium, 
-                  fontSize: FontSize.sm, 
-                  color: colors.text
+                <Text style={{
+                  fontFamily: FontFamily.uiSemiBold,
+                  fontSize: FontSize.sm,
+                  color: colors.background,
+                  letterSpacing: 0.3,
                 }}>
                   {isLastStep ? 'Create' : 'Continue'}
                 </Text>
