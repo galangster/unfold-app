@@ -10,7 +10,6 @@ import {
   NativeSyntheticEvent,
   NativeScrollEvent,
   Share,
-  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -30,14 +29,18 @@ import { Gesture, GestureDetector, Directions } from 'react-native-gesture-handl
 import * as Haptics from 'expo-haptics';
 import {
   PencilLineIcon,
+  PencilSimpleIcon,
   BookOpenIcon,
   MagnifyingGlassIcon,
   ArrowBendDownRightIcon,
   CheckCircleIcon,
+  CheckIcon,
   XIcon,
   PlusIcon,
   NotepadIcon,
   CaretRightIcon,
+  FolderSimplePlusIcon,
+  TrashIcon,
 } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
@@ -55,7 +58,7 @@ import { CreateFolderSheet } from '@/components/notebook/CreateFolderSheet';
 import { MoveFolderSheet } from '@/components/notebook/MoveFolderSheet';
 import { UndoToast } from '@/components/UndoToast';
 import { stripHtml, isHtmlContent } from '@/components/notebook/NoteEditor';
-import { alpha } from '@/components/ui';
+import { alpha, Sheet } from '@/components/ui';
 import { useCreationGate } from '@/hooks/useCreationGate';
 import { prepareJournalFolderDelete } from '@/lib/journal-folder-delete';
 import { applyUndoActions, type JournalUndoAction } from '@/lib/journal-undo';
@@ -482,6 +485,217 @@ const fabStyles = StyleSheet.create({
 });
 
 // ============================================================================
+// Folder Actions Sheet (#12 — replaces the stock OS long-press Alert)
+// ============================================================================
+
+interface FolderActionsSheetProps {
+  visible: boolean;
+  folderName: string;
+  onClose: () => void;
+  onRename: (newName: string) => void;
+  onAddSubfolder: () => void;
+  onDelete: () => void;
+}
+
+/**
+ * Branded bottom sheet for folder long-press actions (rename / add subfolder /
+ * delete). Replaces the stock OS long-press alert (whose inline rename prompt
+ * was iOS-only) so the rename flow works on Android too. Reuses the shared
+ * `Sheet` primitive — same anatomy as the New Folder sheet one surface away.
+ */
+function FolderActionsSheet({
+  visible,
+  folderName,
+  onClose,
+  onRename,
+  onAddSubfolder,
+  onDelete,
+}: FolderActionsSheetProps) {
+  const { colors } = useTheme();
+  const renameInputRef = useRef<TextInput>(null);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [draftName, setDraftName] = useState(folderName);
+
+  // Reset local state whenever the sheet opens for a (possibly different) folder.
+  useEffect(() => {
+    if (visible) {
+      setIsRenaming(false);
+      setDraftName(folderName);
+    }
+  }, [visible, folderName]);
+
+  const isRenameEnabled = draftName.trim().length > 0;
+
+  const handleStartRename = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setIsRenaming(true);
+    setTimeout(() => renameInputRef.current?.focus(), 120);
+  }, []);
+
+  const handleSubmitRename = useCallback(() => {
+    const trimmed = draftName.trim();
+    if (!trimmed) return;
+    onRename(trimmed);
+  }, [draftName, onRename]);
+
+  return (
+    <Sheet visible={visible} onClose={onClose} bottomPadding={24}>
+      {/* Header — folder name (branded, no platform chrome) */}
+      <Text
+        style={[folderSheetStyles.title, { color: colors.text }]}
+        numberOfLines={1}
+      >
+        {folderName}
+      </Text>
+
+      {isRenaming ? (
+        <View style={folderSheetStyles.renameRow}>
+          <TextInput
+            ref={renameInputRef}
+            testID="folder-rename-input"
+            style={[
+              folderSheetStyles.renameInput,
+              {
+                color: colors.text,
+                backgroundColor: colors.background,
+                borderColor: isRenameEnabled
+                  ? alpha(colors.accent, 0.25)
+                  : colors.border,
+              },
+            ]}
+            value={draftName}
+            onChangeText={setDraftName}
+            placeholder="Folder name"
+            placeholderTextColor={colors.textHint}
+            selectionColor={colors.accent}
+            cursorColor={colors.accent}
+            autoCapitalize="sentences"
+            autoCorrect={false}
+            returnKeyType="done"
+            maxLength={40}
+            onSubmitEditing={handleSubmitRename}
+            accessibilityLabel="Rename folder"
+            accessibilityHint="Edit the folder name, then tap the save button"
+          />
+          <TouchableOpacity
+            onPress={handleSubmitRename}
+            disabled={!isRenameEnabled}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Save folder name"
+            accessibilityState={{ disabled: !isRenameEnabled }}
+            style={[
+              folderSheetStyles.saveButton,
+              {
+                backgroundColor: colors.accent,
+                opacity: isRenameEnabled ? 1 : 0.4,
+              },
+            ]}
+          >
+            <CheckIcon size={20} color="#FFFFFF" weight="bold" />
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={folderSheetStyles.actions}>
+          <FolderActionRow
+            icon={<PencilSimpleIcon size={20} color={colors.text} weight="light" />}
+            label="Rename"
+            onPress={handleStartRename}
+          />
+          <FolderActionRow
+            icon={<FolderSimplePlusIcon size={20} color={colors.text} weight="light" />}
+            label="Add subfolder"
+            onPress={onAddSubfolder}
+          />
+          <FolderActionRow
+            icon={<TrashIcon size={20} color={colors.error} weight="light" />}
+            label="Delete folder"
+            destructive
+            onPress={onDelete}
+          />
+        </View>
+      )}
+    </Sheet>
+  );
+}
+
+interface FolderActionRowProps {
+  icon: React.ReactNode;
+  label: string;
+  onPress: () => void;
+  destructive?: boolean;
+}
+
+function FolderActionRow({ icon, label, onPress, destructive }: FolderActionRowProps) {
+  const { colors } = useTheme();
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={folderSheetStyles.actionRow}
+    >
+      <View style={folderSheetStyles.actionIcon}>{icon}</View>
+      <Text
+        style={[
+          folderSheetStyles.actionLabel,
+          { color: destructive ? colors.error : colors.text },
+        ]}
+      >
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
+const folderSheetStyles = StyleSheet.create({
+  title: {
+    fontFamily: FontFamily.uiSemiBold,
+    fontSize: FontSize.lg,
+    marginBottom: Spacing['4'],
+  },
+  actions: {
+    gap: Spacing['1'],
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing['3.5'],
+    paddingVertical: Spacing['3.5'],
+  },
+  actionIcon: {
+    width: 24,
+    alignItems: 'center',
+  },
+  actionLabel: {
+    fontFamily: FontFamily.ui,
+    fontSize: FontSize.base,
+  },
+  renameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing['3'],
+  },
+  renameInput: {
+    flex: 1,
+    fontFamily: FontFamily.ui,
+    fontSize: FontSize.base,
+    paddingHorizontal: Spacing['4'],
+    paddingVertical: Spacing['3'],
+    borderRadius: Radius.md,
+    borderWidth: 1,
+  },
+  saveButton: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});
+
+// ============================================================================
 // Main Journal Hub Screen
 // ============================================================================
 
@@ -522,9 +736,12 @@ export default function JournalHubScreen() {
   const [showMoveFolderSheet, setShowMoveFolderSheet] = useState(false);
   const [noteToMove, setNoteToMove] = useState<Note | null>(null);
 
+  // Folder long-press actions sheet (#12 — branded replacement for the OS Alert)
+  const [folderForActions, setFolderForActions] = useState<NoteFolder | null>(null);
+
   // Hide tab bar when any sheet is open so it doesn't show through the Modal
   const setTabBarHidden = useUIState((s) => s.setTabBarHidden);
-  const anySheetOpen = showCreateFolderSheet || showMoveFolderSheet;
+  const anySheetOpen = showCreateFolderSheet || showMoveFolderSheet || folderForActions !== null;
   useEffect(() => {
     setTabBarHidden(anySheetOpen, 'instant');
     return () => setTabBarHidden(false, 'instant');
@@ -857,73 +1074,67 @@ export default function JournalHubScreen() {
   // Track which parent folder we're creating a subfolder inside
   const [createFolderParent, setCreateFolderParent] = useState<{ id: string; name: string } | null>(null);
 
-  const handleFolderLongPress = useCallback(
-    (folder: NoteFolder) => {
-      Alert.alert(folder.name, undefined, [
-        {
-          text: 'Rename',
-          onPress: () => {
-            if (!gate()) return;
-            Alert.prompt(
-              'Rename Folder',
-              undefined,
-              (newName: string) => {
-                if (newName.trim()) {
-                  updateFolder(folder.id, { name: newName.trim() });
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                }
-              },
-              'plain-text',
-              folder.name,
-            );
-          },
-        },
-        {
-          text: 'Add Subfolder',
-          onPress: () => {
-            if (!gate()) return;
-            setCreateFolderParent({ id: folder.id, name: folder.name });
-            setShowCreateFolderSheet(true);
-          },
-        },
-        {
-          text: 'Delete Folder',
-          style: 'destructive',
-          onPress: () => {
-            if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
+  // Open the branded folder-actions sheet (#12 — replaces the OS long-press Alert)
+  const handleFolderLongPress = useCallback((folder: NoteFolder) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setFolderForActions(folder);
+  }, []);
 
-            const plan = prepareJournalFolderDelete({
-              folder,
-              folders,
-              notes,
-              descendantFolderIds: getDescendantFolderIds(folder.id),
-              activeFolderId,
-              currentParentId,
-            });
+  const closeFolderActions = useCallback(() => {
+    setFolderForActions(null);
+  }, []);
 
-            setUndoActions((prev) => [...prev, plan.undoAction]);
-            storeDeleteFolder(folder.id, false);
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-            if (plan.navigation.activeFolderId !== activeFolderId) {
-              setActiveFolderId(plan.navigation.activeFolderId);
-            }
-            if (plan.navigation.currentParentId !== currentParentId) {
-              setCurrentParentId(plan.navigation.currentParentId);
-            }
-
-            // Auto-dismiss undo after 4s
-            if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
-            deleteTimerRef.current = setTimeout(() => {
-              setUndoActions([]);
-            }, 4000);
-          },
-        },
-        { text: 'Cancel', style: 'cancel' },
-      ]);
+  const handleFolderRename = useCallback(
+    (newName: string) => {
+      if (!folderForActions) return;
+      if (!gate()) return;
+      updateFolder(folderForActions.id, { name: newName });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setFolderForActions(null);
     },
-    [updateFolder, storeDeleteFolder, activeFolderId, currentParentId, folders, notes, gate, getDescendantFolderIds],
+    [folderForActions, gate, updateFolder],
   );
+
+  const handleFolderAddSubfolder = useCallback(() => {
+    if (!folderForActions) return;
+    if (!gate()) return;
+    setCreateFolderParent({ id: folderForActions.id, name: folderForActions.name });
+    setFolderForActions(null);
+    setShowCreateFolderSheet(true);
+  }, [folderForActions, gate]);
+
+  const handleFolderDelete = useCallback(() => {
+    const folder = folderForActions;
+    if (!folder) return;
+    setFolderForActions(null);
+
+    if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
+
+    const plan = prepareJournalFolderDelete({
+      folder,
+      folders,
+      notes,
+      descendantFolderIds: getDescendantFolderIds(folder.id),
+      activeFolderId,
+      currentParentId,
+    });
+
+    setUndoActions((prev) => [...prev, plan.undoAction]);
+    storeDeleteFolder(folder.id, false);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    if (plan.navigation.activeFolderId !== activeFolderId) {
+      setActiveFolderId(plan.navigation.activeFolderId);
+    }
+    if (plan.navigation.currentParentId !== currentParentId) {
+      setCurrentParentId(plan.navigation.currentParentId);
+    }
+
+    // Auto-dismiss undo after 4s
+    deleteTimerRef.current = setTimeout(() => {
+      setUndoActions([]);
+    }, 4000);
+  }, [folderForActions, storeDeleteFolder, activeFolderId, currentParentId, folders, notes, getDescendantFolderIds]);
 
   const handleNoteDelete = useCallback(
     (note: Note) => {
@@ -1641,7 +1852,7 @@ export default function JournalHubScreen() {
         {activeSegment === 'notebook' && (
           <FloatingActionButton
             onPress={handleCreateNote}
-            visible={fabVisible && !showCreateFolderSheet && !showMoveFolderSheet}
+            visible={fabVisible && !anySheetOpen}
             tabBarHeight={tabBarHeight}
           />
         )}
@@ -1659,6 +1870,16 @@ export default function JournalHubScreen() {
           onUndo={handleUndoAction}
           onDismiss={handleUndoDismiss}
           duration={undoActions.length > 0 && undoActions[undoActions.length - 1]?.type === 'folder' ? 4000 : 3000}
+        />
+
+        {/* Folder long-press actions sheet (#12 — branded, replaces OS Alert) */}
+        <FolderActionsSheet
+          visible={folderForActions !== null}
+          folderName={folderForActions?.name ?? ''}
+          onClose={closeFolderActions}
+          onRename={handleFolderRename}
+          onAddSubfolder={handleFolderAddSubfolder}
+          onDelete={handleFolderDelete}
         />
 
         {/* Create Folder sheet */}
