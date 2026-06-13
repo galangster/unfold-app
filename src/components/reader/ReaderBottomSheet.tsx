@@ -24,6 +24,7 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
+import { alpha } from '@/components/ui/utils/alpha';
 
 export interface ReaderBottomSheetProps {
   visible: boolean;
@@ -91,9 +92,11 @@ export function ReaderBottomSheet({
         .activeOffsetY([-8, 8])
         .failOffsetX([-28, 28])
         .onUpdate((event) => {
-          if (event.translationY > 0) {
-            translateY.value = event.translationY;
-          }
+          // Down-drag tracks 1:1 toward dismissal; up-drag past the rest
+          // position gets rubber-band resistance so the sheet feels elastic
+          // instead of stiff/locked (matches the app's standard Sheet).
+          translateY.value =
+            event.translationY > 0 ? event.translationY : event.translationY * 0.2;
         })
         .onEnd((event) => {
           if (event.translationY > DISMISS_DISTANCE || event.velocityY > DISMISS_VELOCITY) {
@@ -112,10 +115,13 @@ export function ReaderBottomSheet({
 
   if (!visible) return null;
 
-  const bottomOffset = bottomInset + insets.bottom;
+  // Sheet is anchored flush to the screen bottom; the caller's bottomInset is
+  // folded into the content padding (with the home-indicator inset) so the last
+  // row clears the bottom edge instead of the whole sheet floating above it.
+  const contentBottomPadding = insets.bottom + bottomInset + Spacing['5'];
   const maxHeight = Math.max(320, Math.round(windowHeight * maxHeightRatio));
-  const sheetBackground = isDark ? colors.backgroundElevated : colors.backgroundElevated;
-  const closeBackground = isDark ? 'rgba(245, 240, 235, 0.08)' : 'rgba(28, 23, 16, 0.06)';
+  const sheetBackground = colors.backgroundElevated;
+  const closeBackground = alpha(colors.text, isDark ? 0.08 : 0.06);
 
   return (
     <Modal
@@ -145,7 +151,7 @@ export function ReaderBottomSheet({
             sheetAnimatedStyle,
             {
               maxHeight,
-              bottom: bottomOffset,
+              bottom: 0,
               backgroundColor: sheetBackground,
               borderColor: colors.border,
               shadowColor: '#000',
@@ -183,7 +189,7 @@ export function ReaderBottomSheet({
           <ScrollView
             testID={testID}
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.content}
+            contentContainerStyle={[styles.content, { paddingBottom: contentBottomPadding }]}
             bounces={false}
           >
             {children}
@@ -207,13 +213,13 @@ const styles = StyleSheet.create({
   },
   surface: {
     position: 'absolute',
-    left: 8,
-    right: 8,
-    borderWidth: StyleSheet.hairlineWidth,
+    left: 0,
+    right: 0,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopLeftRadius: Radius['2xl'],
     borderTopRightRadius: Radius['2xl'],
-    borderBottomLeftRadius: Radius.xl,
-    borderBottomRightRadius: Radius.xl,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
     overflow: 'hidden',
     shadowOffset: { width: 0, height: -8 },
     shadowOpacity: 0.20,

@@ -31,7 +31,6 @@ const TRANSLATION_OPTIONS: Array<BibleReaderSettings['translation']> = ['BSB', '
 export function ReadingSettingsSheet({
   visible,
   onClose,
-  tabBarHeight,
   onOpenSavedVerses,
   savedVersesCount,
   isPremium = true,
@@ -53,7 +52,7 @@ export function ReadingSettingsSheet({
       visible={visible}
       title="Reader preferences"
       onClose={onClose}
-      bottomInset={tabBarHeight + 16}
+      bottomInset={0}
       maxHeightRatio={0.72}
       testID="bible-reader-preferences-sheet"
       accessibilityLabel="Bible reader preferences"

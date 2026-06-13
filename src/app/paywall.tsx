@@ -593,6 +593,32 @@ export default function PaywallScreen() {
         <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.borderStrong }} />
       </View>
 
+      {/* Close (X) — sticky at the sheet's true top-right corner, OUTSIDE the
+          scroll + fade mask so it never scrolls, fades, or sits below the
+          status-bar inset. Previously it lived inside the scroll header padded
+          by insets.top, which floated it ~80pt below the sheet's top edge. */}
+      <Pressable
+        onPress={handleClose}
+        disabled={isPurchasing}
+        accessibilityLabel="Close"
+        accessibilityRole="button"
+        accessibilityState={{ disabled: isPurchasing }}
+        hitSlop={8}
+        style={{
+          position: 'absolute',
+          top: 12,
+          right: Spacing['5'],
+          zIndex: 11,
+          width: 44,
+          height: 44,
+          alignItems: 'center',
+          justifyContent: 'center',
+          opacity: isPurchasing ? 0.5 : 1,
+        }}
+      >
+        <XIcon size={22} color={colors.textMuted} weight="light" />
+      </Pressable>
+
       {/* ─── Scrollable content ─── */}
       {/* Fade mask at the scroll boundaries: rows soften into the background at
           the top (under the drag handle) and bottom (into the sticky footer)
@@ -622,36 +648,14 @@ export default function PaywallScreen() {
         contentContainerStyle={{ paddingBottom: Spacing['6'], paddingTop: 18 }}
         showsVerticalScrollIndicator={false}
       >
-        <View style={{ paddingHorizontal: Spacing['7'], paddingTop: insets.top }}>
-          {/* Unfold icon + close button row */}
-          <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing['6'] }}>
+        <View style={{ paddingHorizontal: Spacing['7'], paddingTop: Spacing['6'] }}>
+          {/* Unfold icon row (close button is now sticky at the sheet corner) */}
+          <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing['6'] }}>
             <Image
               source={require('@/app/icon-paywall-light.png')}
               style={{ width: 28, height: 28, tintColor: colors.accent, opacity: 0.8 }}
               resizeMode="contain"
             />
-            {/* RN Pressable, NOT the RNGH TouchableOpacity imported above: RNGH
-                touchables apply `style` to an inner view, which is what kept the
-                old absolute-positioned close button off-screen (RT-PAYWALL-1). */}
-            <Pressable
-              onPress={handleClose}
-              disabled={isPurchasing}
-              accessibilityLabel="Close"
-              accessibilityRole="button"
-              accessibilityState={{ disabled: isPurchasing }}
-              hitSlop={6}
-              style={{
-                width: 44,
-                height: 44,
-                marginVertical: -8,
-                marginRight: -11,
-                alignItems: 'center',
-                justifyContent: 'center',
-                opacity: isPurchasing ? 0.5 : 1,
-              }}
-            >
-              <XIcon size={22} color={colors.textMuted} weight="light" />
-            </Pressable>
           </Animated.View>
 
           {/* Hero — title + subtitle */}
