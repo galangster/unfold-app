@@ -29,8 +29,9 @@
         "EXPO_PUBLIC_ENABLE_QA_TOOLS": "1",
         "EAS_USE_CACHE": "1"
       },
+      "distribution": "internal",
       "ios": {
-        "distribution": "store"
+        "distribution": "internal"
       }
     },
     "production": {
