@@ -8,6 +8,7 @@ import { useTheme } from '@/lib/theme';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { Duration, Ease } from '@/constants/animations';
+import { Typography } from '@/constants/typography';
 import { alpha } from '@/components/ui';
 
 interface DayData {
@@ -174,10 +175,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   kicker: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 10,
-    letterSpacing: 1.1,
-    textTransform: 'uppercase',
+    ...Typography.cardMeta,
     marginBottom: 3,
   },
   motivationText: {

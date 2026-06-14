@@ -18,6 +18,7 @@ import { useUnfoldStore, type HighlightColor } from '@/lib/store';
 import { DismissCircleButton } from '@/components/home/DismissCircleButton';
 import { animateCardDismiss } from '@/lib/card-dismiss-animation';
 import { stripOuterQuotes } from '@/lib/cn';
+import { Typography } from '@/constants/typography';
 
 const HIGHLIGHT_COLORS: Record<HighlightColor, { light: string; dark: string }> = {
   yellow: { light: '#FFDC64', dark: '#C8A55C' },
@@ -112,8 +113,8 @@ export function RememberThisCard() {
         >
           <View style={styles.headerRow}>
             <View style={styles.headerTextGroup}>
-              <Text style={[styles.kicker, { color: highlightColorHex }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>Saved echo</Text>
               <Text style={[styles.title, { color: colors.text }]} maxFontSizeMultiplier={DISPLAY_TEXT_MAX_SCALE}>A line worth carrying</Text>
+              <Text style={[styles.kicker, { color: colors.textMuted }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>Saved echo</Text>
             </View>
           </View>
 
@@ -202,11 +203,8 @@ const styles = StyleSheet.create({
     paddingRight: Spacing['10'],
   },
   kicker: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 10,
-    lineHeight: 14,
-    letterSpacing: 1.35,
-    textTransform: 'uppercase',
+    ...Typography.cardMeta,
+    marginTop: 2,
   },
   title: {
     fontFamily: FontFamily.display,

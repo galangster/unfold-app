@@ -40,6 +40,7 @@ import Animated, {
   Easing,
   useReducedMotion,
 } from 'react-native-reanimated';
+import { Typography } from '@/constants/typography';
 
 // Animation config
 const OFFSCREEN = 500;
@@ -515,10 +516,7 @@ const sheetStyles = StyleSheet.create({
     marginBottom: Spacing['3'],
   },
   pillLabel: {
-    fontFamily: FontFamily.ui,
-    fontSize: 11,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
+    ...Typography.cardMeta,
     marginBottom: Spacing['2'],
   },
   pillScroll: {

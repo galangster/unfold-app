@@ -8,6 +8,7 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { Duration, Ease } from '@/constants/animations';
+import { Typography } from '@/constants/typography';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import {
   FEATURE_PAGES,
@@ -155,11 +156,8 @@ export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
                     <View style={{ marginTop: Spacing['4'] }}>
                       <Animated.View entering={reducedMotion ? undefined : FadeIn.delay(600).duration(Duration.slow).easing(Ease.out)}>
                         <Text style={{
-                          fontFamily: FontFamily.uiMedium,
-                          fontSize: FontSize.xs,
+                          ...Typography.cardMeta,
                           color: colors.textMuted,
-                          letterSpacing: 1.2,
-                          textTransform: 'uppercase',
                           marginBottom: Spacing['2'],
                         }}>
                           Companion name

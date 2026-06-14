@@ -10,6 +10,7 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
+import { Typography } from '@/constants/typography';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { formatReminderTime } from '@/lib/format-reminder-time';
@@ -246,15 +247,12 @@ export default function CheckInScheduleScreen() {
         <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}>
           <Text
             style={{
-              fontFamily: FontFamily.ui,
-              fontSize: FontSize.xs,
-              color: colors.textMuted,
-              letterSpacing: 0.5,
-              textTransform: 'uppercase',
+              ...Typography.sectionHeader,
+              color: colors.text,
               marginBottom: Spacing['3'],
             }}
           >
-            {customizeByDay ? 'Default Time' : 'Notification Time'}
+            {customizeByDay ? 'Default time' : 'Notification time'}
           </Text>
 
           <TouchableOpacity

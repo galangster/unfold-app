@@ -56,6 +56,7 @@ import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { ProfileAvatar } from '@/components/ProfileAvatar';
 import { alpha } from '@/components/ui';
 import { Spacing } from '@/constants/spacing';
+import { Typography } from '@/constants/typography';
 import {
   scheduleDailyReminder,
   cancelAllReminders,
@@ -451,12 +452,9 @@ export default function YouScreen() {
     <View>
       <Text
         style={{
-          fontFamily: FontFamily.ui,
-          fontSize: FontSize.xs,
-          color: colors.textHint,
-          letterSpacing: 1,
+          ...Typography.sectionHeader,
+          color: colors.text,
           marginBottom: Spacing['3'],
-          textTransform: 'uppercase',
         }}
       >
         {label}
@@ -667,11 +665,8 @@ export default function YouScreen() {
                         <SparkleIcon size={14} color={colors.accent} weight="fill" />
                         <Text
                           style={{
-                            fontFamily: FontFamily.ui,
-                            fontSize: 11,
+                            ...Typography.cardMeta,
                             color: colors.accent,
-                            letterSpacing: 1.5,
-                            textTransform: 'uppercase',
                           }}
                         >
                           Your story so far

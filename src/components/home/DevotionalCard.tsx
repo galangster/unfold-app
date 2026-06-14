@@ -38,6 +38,7 @@ import { RecommendedSeriesCard } from './RecommendedSeriesCard';
 import type { DevotionalCardState } from './compute-devotional-state';
 import { smartQuotes } from '@/lib/smart-quotes';
 import { stripOuterQuotes } from '@/lib/cn';
+import { Typography } from '@/constants/typography';
 
 // ─── Props ──────────────────────────────────────────────────────
 
@@ -256,7 +257,6 @@ function ReturningEmptyStateFallback({ onCreateNew }: { onCreateNew: () => void 
       ]}
     >
       <View style={styles.returningContent}>
-        <Text style={[styles.returningKicker, { color: colors.accent }]}>New study</Text>
         <Text style={[styles.returningTitle, { color: colors.text }]}>Begin the next quiet chapter.</Text>
         <Text style={[styles.returningSubtitle, { color: colors.textMuted }]}>Choose a new devotional thread for the season you’re in now.</Text>
 
@@ -447,10 +447,6 @@ function PreparingState({
       style={styles.preparingContainer}
     >
       <View style={styles.preparingContent}>
-        <View style={styles.preparingKickerRow}>
-          <View style={[styles.preparingAccentBar, { backgroundColor: alpha(colors.accent, 0.65) }]} />
-          <Text style={[styles.preparingKicker, { color: colors.textMuted }]}>Preparing today</Text>
-        </View>
 
         <Animated.Text style={[styles.preparingTitle, { color: colors.text }, shimmerStyle]}>
           Day {dayNumber} is almost ready.
@@ -491,7 +487,6 @@ function PremiumPausedState({ state }: { state: Extract<DevotionalCardState, { t
       ]}
     >
       <View style={styles.returningContent}>
-        <Text style={[styles.returningKicker, { color: colors.accent }]}>Premium paused</Text>
         <Text style={[styles.returningTitle, { color: colors.text }]}>Your series is waiting.</Text>
         <Text style={[styles.returningSubtitle, { color: colors.textMuted }]}>New personal readings pause while Premium is inactive. You can still read scripture today, or renew Premium when you’re ready.</Text>
         <Text style={[styles.premiumPausedProgress, { color: colors.textSubtle }]}>{progressLabel}</Text>
@@ -546,8 +541,6 @@ function JourneyCompleteStateFallback({
       ]}
     >
       <View style={styles.journeyCompleteContent}>
-        <View style={[styles.journeyCompleteAccent, { backgroundColor: colors.accent }]} />
-        <Text style={[styles.journeyCompleteKicker, { color: colors.accent }]}>Series complete</Text>
         <Text style={[styles.journeyCompleteTitle, { color: colors.text }]}>Carry the thread forward.</Text>
 
         <Text style={[styles.journeyCompleteSubtitle, { color: colors.textMuted }]}>
@@ -914,18 +907,11 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   completedStatusText: {
+    ...Typography.cardMeta,
     fontFamily: FontFamily.uiMedium,
-    fontSize: 11,
-    letterSpacing: 1.2,
-    lineHeight: 15,
-    textTransform: 'uppercase',
   },
   heroDayMetaDayText: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 11,
-    letterSpacing: 1.35,
-    lineHeight: 16,
-    textTransform: 'uppercase',
+    ...Typography.cardMeta,
   },
   heroDayTitle: {
     fontFamily: FontFamily.display,
@@ -982,10 +968,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing['5'],
   },
   heroMethodText: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 11,
-    letterSpacing: 1.3,
-    textTransform: 'uppercase',
+    ...Typography.cardMeta,
   },
   heroProgressSection: {
     marginBottom: Spacing['6'],
@@ -1107,14 +1090,6 @@ const styles = StyleSheet.create({
   returningContent: {
     padding: Spacing['7'],
   },
-  returningKicker: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 11,
-    letterSpacing: 1.5,
-    lineHeight: 16,
-    textTransform: 'uppercase',
-    marginBottom: Spacing['3'],
-  },
   returningTitle: {
     fontFamily: FontFamily.display,
     fontSize: 32,
@@ -1154,11 +1129,7 @@ const styles = StyleSheet.create({
     marginTop: -1,
   },
   premiumPausedProgress: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 12,
-    lineHeight: 18,
-    letterSpacing: 1.1,
-    textTransform: 'uppercase',
+    ...Typography.cardMeta,
     marginTop: -Spacing['4'],
     marginBottom: Spacing['5'],
   },
@@ -1212,24 +1183,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing['4'],
     alignItems: 'center',
     zIndex: 2,
-  },
-  preparingAccentBar: {
-    width: 24,
-    height: 1,
-    borderRadius: 1,
-  },
-  preparingKickerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing['2'],
-    marginBottom: Spacing['3'],
-  },
-  preparingKicker: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 10,
-    lineHeight: 14,
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
   },
   preparingTitle: {
     fontFamily: FontFamily.display,
@@ -1324,20 +1277,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 2,
   },
-  journeyCompleteAccent: {
-    width: 32,
-    height: 1.5,
-    marginBottom: Spacing['5'],
-    borderRadius: 1,
-  },
-  journeyCompleteKicker: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 11,
-    letterSpacing: 1.5,
-    lineHeight: 16,
-    textTransform: 'uppercase',
-    marginBottom: Spacing['3'],
-  },
   journeyCompleteTitle: {
     fontFamily: FontFamily.display,
     fontSize: 28,
@@ -1411,13 +1350,6 @@ const styles = StyleSheet.create({
     gap: Spacing['3'],
     marginBottom: Spacing['5'],
   },
-  sacredEyebrow: {
-    flex: 1,
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 12,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-  },
   sacredStatusPill: {
     borderWidth: 1,
     borderRadius: Radius.full,
@@ -1433,13 +1365,6 @@ const styles = StyleSheet.create({
   },
   sacredTitleBlock: {
     marginBottom: Spacing['3'],
-  },
-  sacredDayMeta: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 12,
-    letterSpacing: 1.4,
-    textTransform: 'uppercase',
-    marginBottom: Spacing['2'],
   },
   sacredDayTitle: {
     fontSize: 34,
@@ -1536,12 +1461,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: Spacing['1'],
     borderRadius: 6,
-  },
-  mainCardMethodText: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 10,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
   },
   mainCardProgressSection: {
     marginBottom: Spacing['6'],

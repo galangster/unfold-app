@@ -65,12 +65,19 @@ export const Typography = {
     lineHeight: Math.round(11 * LineHeight.normal), // 17
   },
 
-  // Label — uppercase small text (section headers, metadata)
-  label: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 11,
-    lineHeight: Math.round(11 * LineHeight.tight), // 13
-    letterSpacing: 1.5,
-    textTransform: 'uppercase' as const,
+  // Section header — sentence case, replaces label+rule eyebrows above content groups
+  sectionHeader: {
+    fontFamily: FontFamily.uiSemiBold, // Inter_600SemiBold
+    fontSize: FontSize.xl, // 20
+    lineHeight: Math.round(FontSize.xl * LineHeight.tight), // 24
+    letterSpacing: 0,
   },
+  // Card metadata — category/type info demoted BELOW card titles, Calm-style
+  cardMeta: {
+    fontFamily: FontFamily.ui, // Inter_400Regular
+    fontSize: FontSize.xs, // 12
+    lineHeight: Math.round(FontSize.xs * LineHeight.normal), // 18
+    letterSpacing: 0,
+  },
+
 } as const;

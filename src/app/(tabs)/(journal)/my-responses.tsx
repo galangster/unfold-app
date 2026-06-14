@@ -9,6 +9,7 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
+import { Typography } from '@/constants/typography';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { format } from 'date-fns';
@@ -134,11 +135,8 @@ export default function MyResponsesScreen() {
                         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing['3'] }}>
                           <Text
                             style={{
-                              fontFamily: FontFamily.uiMedium,
-                              fontSize: 11,
+                              ...Typography.cardMeta,
                               color: colors.textHint,
-                              letterSpacing: 1,
-                              textTransform: 'uppercase',
                             }}
                           >
                             Day {entry.dayNumber}

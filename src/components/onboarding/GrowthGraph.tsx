@@ -22,6 +22,7 @@ import {
 } from 'react-native-reanimated';
 import { FontFamily } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
+import { Typography } from '@/constants/typography';
 import type { ColorTheme } from '@/constants/colors';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -138,11 +139,8 @@ export function GrowthGraph({ colors, animationDelay = 0, onDrawComplete }: Grow
           of how Unfold is designed to grow more personal over time, not a chart of
           measured data, so it must not read as real growth metrics. */}
       <Text style={{
-        fontFamily: FontFamily.ui,
-        fontSize: 10,
+        ...Typography.cardMeta,
         color: colors.textHint,
-        textTransform: 'uppercase',
-        letterSpacing: 1.5,
         marginBottom: Spacing['3'],
         textAlign: 'center',
       }}>

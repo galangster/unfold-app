@@ -15,6 +15,7 @@ import { DownloadBibleSheet } from '@/components/bible/DownloadBibleSheet';
 import { alpha } from '@/components/ui';
 import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
+import { Typography } from '@/constants/typography';
 
 export default function BibleHomeScreen() {
   const { colors, isDark } = useTheme();
@@ -201,13 +202,13 @@ export default function BibleHomeScreen() {
         )}
 
         {/* Old Testament */}
-        <Text style={[styles.sectionHeader, { color: colors.textHint }]}>
+        <Text style={[styles.sectionHeader, { color: colors.text }]}>
           Old Testament
         </Text>
         {renderCategorizedBooks(OT_BOOKS)}
 
         {/* New Testament */}
-        <Text style={[styles.sectionHeader, { color: colors.textHint }]}>
+        <Text style={[styles.sectionHeader, { color: colors.text }]}>
           New Testament
         </Text>
         {renderCategorizedBooks(NT_BOOKS)}
@@ -343,18 +344,12 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   sectionHeader: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 11,
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
+    ...Typography.sectionHeader,
     marginBottom: Spacing['3'],
     marginTop: 4,
   },
   categoryLabel: {
-    fontFamily: FontFamily.ui,
-    fontSize: 11,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
+    ...Typography.cardMeta,
     marginBottom: 8,
     opacity: 0.7,
   },

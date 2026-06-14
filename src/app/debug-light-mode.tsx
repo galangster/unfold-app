@@ -29,6 +29,7 @@ import * as Haptics from 'expo-haptics';
 import { FontFamily } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
+import { Typography } from '@/constants/typography';
 import { useTheme } from '@/lib/theme';
 import { isQaToolsEnabled } from '@/lib/qa-tools';
 import { useUnfoldStore, type Note, type ThemeMode } from '@/lib/store';
@@ -72,11 +73,8 @@ function Section({
     <View style={{ marginBottom: Spacing['8'] }}>
       <Text
         style={{
-          fontFamily: FontFamily.uiMedium,
-          fontSize: 13,
-          letterSpacing: 1.2,
-          textTransform: 'uppercase',
-          color: colors.textHint,
+          ...Typography.sectionHeader,
+          color: colors.text,
           marginBottom: Spacing['2'],
           paddingHorizontal: Spacing['4'],
         }}

@@ -49,7 +49,7 @@ const ReadingSession = (props: ReadingSessionProps): LiveActivityLayout => {
                 foregroundStyle('#C8A55C'),
               ]}
             >
-              {title.toUpperCase()}
+              {title}
             </Text>
             <Text
               modifiers={[

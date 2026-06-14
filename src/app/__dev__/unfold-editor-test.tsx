@@ -650,8 +650,6 @@ const styles = StyleSheet.create({
     width: 48,
     color: '#888',
     fontSize: 11,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
   rowButtons: {
     flexDirection: 'row',

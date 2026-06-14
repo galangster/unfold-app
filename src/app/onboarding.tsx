@@ -89,6 +89,7 @@ import { OnboardingCelebration } from '@/components/onboarding/OnboardingCelebra
 import { CommitmentStep } from '@/components/onboarding/CommitmentStep';
 import { ThreeStepPaywall } from '@/components/onboarding/ThreeStepPaywall';
 import { stripOuterQuotes } from '@/lib/cn';
+import { Typography } from '@/constants/typography';
 
 // Ember exclusion zones (normalized to the ember layer's container) — keep
 // the quiet layers legible: welcome letter copy + "Tap anywhere", and the
@@ -1783,11 +1784,8 @@ export default function OnboardingScreen() {
                   <View key={groupName} style={{ gap: Spacing['3'] }}>
                     <Text
                       style={{
-                        fontFamily: FontFamily.uiMedium,
-                        fontSize: 11,
+                        ...Typography.cardMeta,
                         color: colors.textSubtle,
-                        letterSpacing: 0.8,
-                        textTransform: 'uppercase',
                       }}
                     >
                       {groupName}
@@ -1994,10 +1992,10 @@ export default function OnboardingScreen() {
           <View style={{ flex: 1 }}>
             <ScrollView showsVerticalScrollIndicator={false} onScroll={handleListScroll} scrollEventThrottle={16}>
               <View style={{ gap: 10, paddingBottom: 200 }}>
-                <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 12, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 2 }}>Old Testament</Text>
+                <Text style={{ ...Typography.sectionHeader, color: colors.text, marginBottom: 2 }}>Old Testament</Text>
                 {renderCharacterGrid(otCharacters)}
 
-                <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 12, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 1, marginTop: 10, marginBottom: 2 }}>New Testament</Text>
+                <Text style={{ ...Typography.sectionHeader, color: colors.text, marginTop: 10, marginBottom: 2 }}>New Testament</Text>
                 {renderCharacterGrid(ntCharacters)}
               </View>
             </ScrollView>
@@ -2694,7 +2692,7 @@ export default function OnboardingScreen() {
         <View style={{ gap: Spacing['8'] }}>
           {/* Faith Background */}
           <View style={{ gap: Spacing['3'] }}>
-            <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.textMuted, letterSpacing: 1, textTransform: 'uppercase' }}>
+            <Text style={{ ...Typography.sectionHeader, color: colors.text }}>
               Faith
             </Text>
             <View style={{ gap: Spacing['2'] }}>
@@ -2732,7 +2730,7 @@ export default function OnboardingScreen() {
           </View>
           {/* Life Stage */}
           <View style={{ gap: Spacing['3'] }}>
-            <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.textMuted, letterSpacing: 1, textTransform: 'uppercase' }}>
+            <Text style={{ ...Typography.sectionHeader, color: colors.text }}>
               Season of life
             </Text>
             <View style={{ gap: Spacing['2'] }}>
@@ -2788,7 +2786,7 @@ export default function OnboardingScreen() {
         <View style={{ gap: Spacing['8'] }}>
           {/* Tone */}
           <View style={{ gap: Spacing['3'] }}>
-            <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.textMuted, letterSpacing: 1, textTransform: 'uppercase' }}>
+            <Text style={{ ...Typography.sectionHeader, color: colors.text }}>
               Voice
             </Text>
             <View style={{ gap: Spacing['2'] }}>
@@ -2828,7 +2826,7 @@ export default function OnboardingScreen() {
           </View>
           {/* Depth */}
           <View style={{ gap: Spacing['3'] }}>
-            <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.textMuted, letterSpacing: 1, textTransform: 'uppercase' }}>
+            <Text style={{ ...Typography.sectionHeader, color: colors.text }}>
               Depth
             </Text>
             <View style={{ gap: Spacing['2'] }}>

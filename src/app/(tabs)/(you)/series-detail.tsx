@@ -27,6 +27,7 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
+import { Typography } from '@/constants/typography';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { alpha } from '@/components/ui';
@@ -395,10 +396,7 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   dateLabel: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 11,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
+    ...Typography.cardMeta,
     marginBottom: Spacing['2'],
   },
   seriesTitle: {
@@ -444,10 +442,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   dayNumber: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 11,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
+    ...Typography.cardMeta,
     marginBottom: 2,
   },
   dayTitle: {

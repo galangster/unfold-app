@@ -9,6 +9,7 @@ import * as Haptics from 'expo-haptics';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
+import { Typography } from '@/constants/typography';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import {
@@ -63,13 +64,9 @@ export default function DayMenuScreen() {
       <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)} style={{ paddingHorizontal: Spacing['8'], paddingTop: Spacing['5'], paddingBottom: Spacing['5'] }}>
         <Text
           style={{
-            fontFamily: FontFamily.uiMedium,
-            fontSize: FontSize.xs,
+            ...Typography.cardMeta,
             color: colors.textSubtle,
-            textTransform: 'uppercase',
-            letterSpacing: 1.2,
             textAlign: 'left',
-            lineHeight: 18,
           }}
           numberOfLines={2}
           adjustsFontSizeToFit
@@ -162,12 +159,9 @@ export default function DayMenuScreen() {
               <View style={{ flex: 1 }}>
                 <Text
                   style={{
-                    fontFamily: FontFamily.ui,
-                    fontSize: FontSize.xs,
+                    ...Typography.cardMeta,
                     color: colors.textSubtle,
                     marginBottom: 2,
-                    textTransform: 'uppercase',
-                    letterSpacing: 0.5,
                   }}
                 >
                   Day {dayNumber}

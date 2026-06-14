@@ -43,7 +43,7 @@ import { Button, Card, Chip, Input, Sheet, alpha } from '@/components/ui';
 function SectionTitle({ title }: { title: string }) {
   const { colors } = useTheme();
   return (
-    <Text style={[Typography.label, { color: colors.textMuted, marginBottom: Spacing[3], marginTop: Spacing[8] }]}>
+    <Text style={[Typography.sectionHeader, { color: colors.text, marginBottom: Spacing[3], marginTop: Spacing[8] }]}>
       {title}
     </Text>
   );
@@ -119,7 +119,7 @@ export default function ComponentCatalogScreen() {
         {/* BUTTON — VARIANTS                                             */}
         {/* ============================================================= */}
 
-        <SectionTitle title="BUTTON — VARIANTS" />
+        <SectionTitle title="Button variants" />
 
         <SubLabel text="Primary (main CTAs)" />
         <View style={styles.row}>
@@ -161,7 +161,7 @@ export default function ComponentCatalogScreen() {
         {/* BUTTON — SIZES                                                */}
         {/* ============================================================= */}
 
-        <SectionTitle title="BUTTON — SIZES" />
+        <SectionTitle title="Button sizes" />
 
         <SubLabel text="Large (full-width CTAs)" />
         <Button variant="primary" size="lg" label="Continue" fullWidth onPress={() => {}} />
@@ -184,7 +184,7 @@ export default function ComponentCatalogScreen() {
         {/* BUTTON — STATES                                               */}
         {/* ============================================================= */}
 
-        <SectionTitle title="BUTTON — STATES" />
+        <SectionTitle title="Button states" />
 
         <SubLabel text="Disabled" />
         <View style={styles.row}>
@@ -202,7 +202,7 @@ export default function ComponentCatalogScreen() {
         {/* BUTTON — WITH ICONS                                           */}
         {/* ============================================================= */}
 
-        <SectionTitle title="BUTTON — WITH ICONS" />
+        <SectionTitle title="Buttons with icons" />
 
         <SubLabel text="Icon left (default)" />
         <View style={styles.row}>
@@ -220,7 +220,7 @@ export default function ComponentCatalogScreen() {
         {/* BUTTON — REAL-WORLD EXAMPLES                                  */}
         {/* ============================================================= */}
 
-        <SectionTitle title="REAL-WORLD EXAMPLES" />
+        <SectionTitle title="Real-world examples" />
 
         <SubLabel text="Create Folder dialog" />
         <View style={[styles.exampleCard, { backgroundColor: colors.backgroundElevated, borderColor: colors.border }]}>
@@ -258,7 +258,7 @@ export default function ComponentCatalogScreen() {
         {/* CHIP — VARIANTS                                               */}
         {/* ============================================================= */}
 
-        <SectionTitle title="CHIP — FILTER VARIANT" />
+        <SectionTitle title="Filter chips" />
 
         <SubLabel text="Folder filter pills (tap to toggle)" />
         <View style={styles.row}>
@@ -291,7 +291,7 @@ export default function ComponentCatalogScreen() {
           })}
         </View>
 
-        <SectionTitle title="CHIP — SUGGESTION VARIANT" />
+        <SectionTitle title="Suggestion chips" />
 
         <SubLabel text="Companion follow-up prompts" />
         <View style={styles.row}>
@@ -300,7 +300,7 @@ export default function ComponentCatalogScreen() {
           <Chip variant="suggestion" label="What does Scripture say?" onPress={() => {}} />
         </View>
 
-        <SectionTitle title="CHIP — REFERENCE VARIANT" />
+        <SectionTitle title="Reference chips" />
 
         <SubLabel text="Scripture reference pills (md)" />
         <View style={styles.row}>
@@ -315,7 +315,7 @@ export default function ComponentCatalogScreen() {
           <Chip variant="reference" size="sm" label="Rev 22:21" icon={<BookOpenIcon />} onPress={() => {}} />
         </View>
 
-        <SectionTitle title="CHIP — STATES" />
+        <SectionTitle title="Chip states" />
 
         <SubLabel text="Disabled" />
         <View style={styles.row}>
@@ -324,7 +324,7 @@ export default function ComponentCatalogScreen() {
           <Chip variant="reference" label="Disabled Ref" disabled icon={<BookOpenIcon />} onPress={() => {}} />
         </View>
 
-        <SectionTitle title="CHIP — REAL-WORLD EXAMPLES" />
+        <SectionTitle title="Chip examples" />
 
         <SubLabel text="Notebook folder bar" />
         <View style={[styles.exampleCard, { backgroundColor: colors.backgroundElevated, borderColor: colors.border }]}>
@@ -358,7 +358,7 @@ export default function ComponentCatalogScreen() {
         {/* CARD — VARIANTS                                               */}
         {/* ============================================================= */}
 
-        <SectionTitle title="CARD — VARIANTS" />
+        <SectionTitle title="Card variants" />
 
         <SubLabel text="Default (elevated surface, shadow)" />
         <Card variant="default" style={{ marginBottom: Spacing[4] }}>
@@ -385,7 +385,7 @@ export default function ComponentCatalogScreen() {
         <Card variant="accent" style={{ marginBottom: Spacing[4] }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing[2] }}>
             <SparkleIcon size={16} weight="light" color={colors.accent} />
-            <Text style={[Typography.uiSm, { color: colors.accent }]}>PREMIUM</Text>
+            <Text style={[Typography.uiSm, { color: colors.accent }]}>Premium</Text>
           </View>
           <Text style={[Typography.bodySm, { color: colors.text, marginTop: Spacing[1] }]}>
             Unlock unlimited series, themes, and more.
@@ -402,7 +402,7 @@ export default function ComponentCatalogScreen() {
           </Text>
         </Card>
 
-        <SectionTitle title="CARD — PRESSABLE" />
+        <SectionTitle title="Pressable cards" />
 
         <SubLabel text="Tap to interact (haptic feedback)" />
         <Card variant="default" onPress={() => {}} style={{ marginBottom: Spacing[4] }}>
@@ -415,7 +415,7 @@ export default function ComponentCatalogScreen() {
           </View>
         </Card>
 
-        <SectionTitle title="CARD — REAL-WORLD EXAMPLES" />
+        <SectionTitle title="Card examples" />
 
         <SubLabel text="Note card" />
         <Card variant="default" onPress={() => {}} style={{ marginBottom: Spacing[4] }}>
@@ -457,7 +457,7 @@ export default function ComponentCatalogScreen() {
         {/* INPUT — VARIANTS                                              */}
         {/* ============================================================= */}
 
-        <SectionTitle title="INPUT — BASIC" />
+        <SectionTitle title="Basic input" />
 
         <SubLabel text="Default single-line" />
         <Input
@@ -500,7 +500,7 @@ export default function ComponentCatalogScreen() {
           wrapperStyle={{ marginBottom: Spacing[4] }}
         />
 
-        <SectionTitle title="INPUT — MULTILINE" />
+        <SectionTitle title="Multiline input" />
 
         <SubLabel text="Auto-growing textarea with character count" />
         <Input
@@ -513,7 +513,7 @@ export default function ComponentCatalogScreen() {
           wrapperStyle={{ marginBottom: Spacing[4] }}
         />
 
-        <SectionTitle title="INPUT — REAL-WORLD EXAMPLES" />
+        <SectionTitle title="Input examples" />
 
         <SubLabel text="Create folder dialog" />
         <Card variant="default" style={{ marginBottom: Spacing[4] }}>
@@ -545,7 +545,7 @@ export default function ComponentCatalogScreen() {
         {/* SHEET — BOTTOM SHEET                                          */}
         {/* ============================================================= */}
 
-        <SectionTitle title="SHEET — BOTTOM SHEET" />
+        <SectionTitle title="Bottom sheet" />
 
         <SubLabel text="Basic sheet (tap to open)" />
         <View style={styles.row}>
@@ -595,7 +595,7 @@ export default function ComponentCatalogScreen() {
         {/* TYPOGRAPHY PRESETS                                             */}
         {/* ============================================================= */}
 
-        <SectionTitle title="TYPOGRAPHY PRESETS" />
+        <SectionTitle title="Typography presets" />
 
         <Text style={[Typography.displayLg, { color: colors.text, marginBottom: Spacing[2] }]}>
           Display Large (36)
@@ -629,8 +629,8 @@ export default function ComponentCatalogScreen() {
         <Text style={[Typography.caption, { color: colors.textMuted, marginBottom: Spacing[2] }]}>
           Caption — Hints, timestamps, secondary info (11px)
         </Text>
-        <Text style={[Typography.label, { color: colors.textMuted, marginBottom: Spacing[2] }]}>
-          LABEL — SECTION HEADERS, UPPERCASE (11px)
+        <Text style={[Typography.sectionHeader, { color: colors.text, marginBottom: Spacing[2] }]}>
+          Section header — sentence case (20px)
         </Text>
 
         {/* Bottom padding */}

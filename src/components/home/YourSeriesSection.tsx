@@ -3,13 +3,14 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { BookOpenIcon, CaretRightIcon } from 'phosphor-react-native';
+import { CaretRightIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
 import { useUnfoldStore, type Devotional } from '@/lib/store';
+import { Typography } from '@/constants/typography';
 
 function SeriesCard({
   devotional,
@@ -112,9 +113,8 @@ export function YourSeriesSection() {
       {/* Section header */}
       <View style={styles.headerRow}>
         <View style={styles.headerLeft}>
-          <BookOpenIcon size={14} color={colors.textMuted} weight="light" />
-          <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>
-            YOUR DEVOTIONALS
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            Your devotionals
           </Text>
         </View>
 
@@ -127,10 +127,10 @@ export function YourSeriesSection() {
             accessibilityLabel="See all studies"
           >
             <View style={styles.seeAllRow}>
-              <Text style={[styles.seeAllText, { color: colors.accent }]}>
-                See All
+              <Text style={[styles.seeAllText, { color: colors.textMuted }]}>
+                See all
               </Text>
-              <CaretRightIcon size={12} color={colors.accent} weight="bold" />
+              <CaretRightIcon size={12} color={colors.textMuted} weight="bold" />
             </View>
           </TouchableOpacity>
         )}
@@ -166,10 +166,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   sectionTitle: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 11,
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
+    ...Typography.sectionHeader,
   },
   seeAllRow: {
     flexDirection: 'row',

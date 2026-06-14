@@ -71,7 +71,8 @@ jest.mock('@/constants/fonts', () => ({
     uiMedium: 'System-Medium',
     uiSemiBold: 'System-Semibold',
   },
-  FontSize: { xs: 12, sm: 14 },
+  FontSize: { xs: 12, sm: 14, base: 16, lg: 18, xl: 20, '2xl': 24, '4xl': 36 },
+  LineHeight: { tight: 1.2, normal: 1.5 },
 }));
 
 jest.mock('@/constants/radius', () => ({

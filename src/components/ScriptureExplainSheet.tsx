@@ -18,6 +18,7 @@ import { Spacing } from '@/constants/spacing';
 import { alpha } from '@/components/ui';
 import { AnalyticsEvents, logEvent } from '@/lib/analytics';
 import { useTheme } from '@/lib/theme';
+import { Typography } from '@/constants/typography';
 import {
   fetchScriptureExplanation,
   type ScriptureExplainApiErrorCode,
@@ -373,10 +374,7 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   eyebrow: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 11,
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
+    ...Typography.cardMeta,
   },
   referenceRow: {
     flexDirection: 'row',
@@ -426,10 +424,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing['3'],
   },
   scriptureLabel: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 10,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
+    ...Typography.cardMeta,
   },
   scriptureText: {
     fontFamily: FontFamily.display,
@@ -450,10 +445,7 @@ const styles = StyleSheet.create({
     gap: Spacing['4'],
   },
   sectionLabel: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 11,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
+    ...Typography.cardMeta,
   },
   explanationBody: {
     gap: Spacing['4'],
