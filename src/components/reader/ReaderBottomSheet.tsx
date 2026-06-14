@@ -3,7 +3,6 @@ import {
   Modal,
   ScrollView,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
   useWindowDimensions,
@@ -17,14 +16,11 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
-import { XIcon } from 'phosphor-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
-import { alpha } from '@/components/ui/utils/alpha';
 
 export interface ReaderBottomSheetProps {
   visible: boolean;
@@ -50,7 +46,6 @@ const SHEET_TIMING = {
 
 export function ReaderBottomSheet({
   visible,
-  title = 'Reader preferences',
   onClose,
   children,
   footer,
@@ -59,7 +54,7 @@ export function ReaderBottomSheet({
   testID,
   accessibilityLabel = 'Reader preferences',
 }: ReaderBottomSheetProps) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
   const reducedMotion = useReducedMotion();
@@ -121,7 +116,6 @@ export function ReaderBottomSheet({
   const contentBottomPadding = insets.bottom + bottomInset + Spacing['5'];
   const maxHeight = Math.max(320, Math.round(windowHeight * maxHeightRatio));
   const sheetBackground = colors.backgroundElevated;
-  const closeBackground = alpha(colors.text, isDark ? 0.08 : 0.06);
 
   return (
     <Modal
@@ -170,19 +164,6 @@ export function ReaderBottomSheet({
                   style={[styles.grabber, { backgroundColor: colors.borderStrong }]}
                 />
               </View>
-              <View style={styles.headerRow}>
-                <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
-                <TouchableOpacity
-                  testID="reader-bottom-sheet-close"
-                  style={[styles.closeButton, { backgroundColor: closeBackground }]}
-                  onPress={closeSheet}
-                  activeOpacity={0.72}
-                  accessibilityRole="button"
-                  accessibilityLabel="Close reader preferences"
-                >
-                  <XIcon size={15} color={colors.textMuted} weight="bold" />
-                </TouchableOpacity>
-              </View>
             </View>
           </GestureDetector>
 
@@ -190,7 +171,8 @@ export function ReaderBottomSheet({
             testID={testID}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={[styles.content, { paddingBottom: contentBottomPadding }]}
-            bounces={false}
+            bounces
+            alwaysBounceVertical
           >
             {children}
           </ScrollView>
@@ -227,38 +209,18 @@ const styles = StyleSheet.create({
     elevation: 18,
   },
   dragRegion: {
-    minHeight: 72,
     paddingHorizontal: Spacing['5'],
-    paddingTop: Spacing['2'],
+    paddingTop: Spacing['3'],
+    paddingBottom: Spacing['2'],
   },
   grabberRow: {
-    minHeight: 20,
     alignItems: 'center',
     justifyContent: 'center',
   },
   grabber: {
-    width: 38,
+    width: 36,
     height: 4,
     borderRadius: Radius.full,
-  },
-  headerRow: {
-    minHeight: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Spacing['3'],
-  },
-  title: {
-    flex: 1,
-    fontFamily: FontFamily.uiMedium,
-    fontSize: FontSize.base,
-  },
-  closeButton: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   content: {
     paddingHorizontal: Spacing['5'],

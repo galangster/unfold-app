@@ -110,30 +110,27 @@ describe('ReaderBottomSheet', () => {
     expect(tree.toJSON()).toBeNull();
   });
 
-  it('renders title, children, footer, backdrop, grabber, surface, and close affordance when visible', () => {
+  it('renders children, footer, backdrop, grabber, and surface when visible (no title/close chrome)', () => {
     const { tree } = renderSheet({ footer: <Text>Footer action</Text> });
 
     expect(tree.root.findByProps({ testID: 'reader-bottom-sheet-backdrop' })).toBeTruthy();
     expect(tree.root.findByProps({ testID: 'reader-bottom-sheet-surface' })).toBeTruthy();
     expect(tree.root.findByProps({ testID: 'reader-bottom-sheet-grabber' })).toBeTruthy();
-    expect(tree.root.findByProps({ testID: 'reader-bottom-sheet-close' })).toBeTruthy();
     expect(tree.root.findByProps({ testID: 'reader-preferences-sheet' })).toBeTruthy();
-    expect(JSON.stringify(tree.toJSON())).toContain('Reader preferences');
     expect(JSON.stringify(tree.toJSON())).toContain('Sheet body');
     expect(JSON.stringify(tree.toJSON())).toContain('Footer action');
+    // Title text + close button chrome were removed — dismissal is swipe-down + backdrop.
+    expect(() => tree.root.findByProps({ testID: 'reader-bottom-sheet-close' })).toThrow();
   });
 
-  it('closes from backdrop and close button presses', () => {
+  it('closes from a backdrop press', () => {
     const { tree, onClose } = renderSheet();
 
     act(() => {
       tree.root.findByProps({ testID: 'reader-bottom-sheet-backdrop' }).props.onPress();
     });
-    act(() => {
-      tree.root.findByProps({ testID: 'reader-bottom-sheet-close' }).props.onPress();
-    });
 
-    expect(onClose).toHaveBeenCalledTimes(2);
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it('wires downward pan on the grabber/header region without wrapping sheet controls', () => {

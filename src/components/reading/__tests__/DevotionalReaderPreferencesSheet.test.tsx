@@ -153,7 +153,9 @@ describe('DevotionalReaderPreferencesSheet', () => {
     const tree = renderSheet();
     const content = JSON.stringify(tree.toJSON());
 
-    expect(content).toContain('Reader preferences');
+    // Visible "Reader preferences" title + close X were removed (dismissal is
+    // swipe-down/backdrop); the sheet keeps its accessible name.
+    expect(content).toContain('Devotional reader preferences');
     expect(content).toContain('Appearance');
     expect(content).toContain('Theme');
     expect(content).toContain('Brightness');

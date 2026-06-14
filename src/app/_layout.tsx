@@ -160,6 +160,10 @@ function RootLayoutNav() {
           options={{
             presentation: 'modal',
             animation: 'slide_from_bottom',
+            // Opaque modal surface (like share-card) so the paywall can never
+            // bleed through the transparent (tabs) background if it lingers on
+            // the nav stack.
+            contentStyle: { backgroundColor: '#0A0A0A' },
           }}
         />
         <Stack.Screen
