@@ -82,13 +82,13 @@ describe('#19 SAVE badge dim behavior is identical across both paywall surfaces'
 
   it('keeps the badge hidden from the a11y tree on both surfaces (savings already in the card label)', () => {
     const paywallBadge = paywall.slice(
-      paywall.indexOf('SAVE {savingsPercent}%') - 700,
-      paywall.indexOf('SAVE {savingsPercent}%'),
+      paywall.indexOf('Save {savingsPercent}%') - 700,
+      paywall.indexOf('Save {savingsPercent}%'),
     );
     expect(paywallBadge).toContain('accessibilityElementsHidden');
     const threeBadge = threeStep.slice(
-      threeStep.indexOf('SAVE {savings}%') - 700,
-      threeStep.indexOf('SAVE {savings}%'),
+      threeStep.indexOf('Save {savings}%') - 700,
+      threeStep.indexOf('Save {savings}%'),
     );
     expect(threeBadge).toContain('accessibilityElementsHidden');
   });
