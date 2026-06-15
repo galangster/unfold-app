@@ -1278,12 +1278,6 @@ const genStyles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Spacing['8'],
   },
-  consentSafeArea: {
-    flex: 1,
-    paddingHorizontal: Spacing['6'],
-    paddingTop: Spacing['10'],
-    paddingBottom: Spacing['4'],
-  },
   errorIcon: {
     width: 64,
     height: 64,
