@@ -13,7 +13,6 @@ import {
   Alignment,
   DataBindMode,
   Fit,
-  RiveColor,
   RiveView,
   useRive,
   useRiveFile,
@@ -21,22 +20,11 @@ import {
   type RiveFileInput,
   type ViewModelInstance,
 } from '@rive-app/react-native';
-import { darken, hexToRgb, lighten } from '@/lib/ember-system';
+import { hexToRgb } from '@/lib/ember-system';
 
 const STATE_MACHINE_NAME = 'State Machine 1';
 const VIEW_MODEL_NAME = 'ViewModel1';
 const LOG_PREFIX = 'today-wind-leaves-rive';
-
-const optionalColorProperties = [
-  'background__color',
-  'glow_color',
-  'artwork_color',
-  'mask_gradient_start',
-  'mask_gradient_end',
-  // Present in the animator screenshot but not in the first bundled file. Set
-  // when future files expose it; otherwise silently skip to keep logs clean.
-  'waterfall_glow_color',
-] as const;
 
 const optionalNumberProperties = [
   'accentR',
@@ -57,48 +45,22 @@ interface TodayCompletionRiveProps {
 }
 
 interface RiveThemeValues {
-  colorValues: Record<(typeof optionalColorProperties)[number], number>;
   numberValues: Record<(typeof optionalNumberProperties)[number], number>;
-}
-
-function withAlpha(hex: string, alpha: number): string {
-  const normalized = hex.replace('#', '').trim();
-  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return '#00000000';
-  const a = Math.max(0, Math.min(255, Math.round(alpha * 255)));
-  return `#${normalized}${a.toString(16).padStart(2, '0')}`;
-}
-
-function riveColorInt(hex: string): number {
-  return RiveColor.fromHexString(hex).toInt();
 }
 
 function buildRiveThemeValues({
   accentColor,
-  isDark,
   width,
   height,
 }: {
   accentColor: string;
-  isDark: boolean;
   width: number;
   height: number;
 }): RiveThemeValues {
   const accent = /^[#][0-9a-fA-F]{6}$/.test(accentColor) ? accentColor : '#C8A55C';
-  const glow = isDark ? lighten(accent, 0.35) : lighten(accent, 0.18);
-  const background = isDark ? darken(accent, 0.72) : lighten(accent, 0.62);
-  const maskStart = isDark ? lighten(accent, 0.22) : accent;
-  const maskEnd = isDark ? darken(accent, 0.5) : lighten(accent, 0.72);
   const { r, g, b } = hexToRgb(accent);
 
   return {
-    colorValues: {
-      background__color: riveColorInt(withAlpha(background, isDark ? 0.16 : 0.1)),
-      glow_color: riveColorInt(withAlpha(glow, isDark ? 0.88 : 0.72)),
-      artwork_color: riveColorInt(withAlpha(accent, 0.95)),
-      mask_gradient_start: riveColorInt(withAlpha(maskStart, isDark ? 0.72 : 0.55)),
-      mask_gradient_end: riveColorInt(withAlpha(maskEnd, 0)),
-      waterfall_glow_color: riveColorInt(withAlpha(glow, isDark ? 0.68 : 0.5)),
-    },
     numberValues: {
       accentR: r / 255,
       accentG: g / 255,
@@ -112,13 +74,11 @@ function buildRiveThemeValues({
 function applyViewModelTheme(instance: ViewModelInstance | null | undefined, values: RiveThemeValues): void {
   if (!instance) return;
 
-  for (const propertyName of optionalColorProperties) {
-    const property = instance.colorProperty(propertyName);
-    if (property) {
-      property.set(values.colorValues[propertyName]);
-    }
-  }
-
+  // This asset's visual palette is authored in Rive. Do not override
+  // background/glow/artwork/mask color ViewModel properties from app accent
+  // colors; doing so turns the Today screen into a saturated theme wash.
+  // Keep only non-color runtime values here unless a future animator contract
+  // explicitly requires app-side color control and passes runtime proof.
   for (const propertyName of optionalNumberProperties) {
     const property = instance.numberProperty(propertyName);
     if (property) {
@@ -136,7 +96,7 @@ export function TodayCompletionRive({
   height,
   style,
 }: TodayCompletionRiveProps) {
-  const values = buildRiveThemeValues({ accentColor, isDark, width, height });
+  const values = buildRiveThemeValues({ accentColor, width, height });
   const { riveFile, error: riveFileError } = useRiveFile(source);
   const { riveViewRef, setHybridRef } = useRive();
   const { instance, error: viewModelError } = useViewModelInstance(riveFile, {
@@ -147,8 +107,10 @@ export function TodayCompletionRive({
 
   const animatedStyle = useAnimatedStyle(() => {
     const p = loopProgress.get();
+    const minOpacity = isDark ? 0.72 : 0.58;
+    const maxOpacity = isDark ? 0.88 : 0.72;
     return {
-      opacity: interpolate(p, [0, 0.5, 1], [0.9, 1, 0.9]),
+      opacity: interpolate(p, [0, 0.5, 1], [minOpacity, maxOpacity, minOpacity]),
       transform: [
         { translateX: interpolate(p, [0, 1], [-6, 6]) },
         { translateY: interpolate(p, [0, 0.5, 1], [4, -7, 4]) },

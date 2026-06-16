@@ -55,4 +55,17 @@ describe('AmbientArtCanvas Today completion ambience', () => {
   it('falls back to EmberSystem for reduced motion and low power instead of running Rive', () => {
     expect(source).toContain('if (reducedMotion || lowPowerMode === true) return renderEmberFallback(streakLevel, screenFocused);');
   });
+
+  it('leaves the wind/leaves Rive palette authored instead of app-recoloring the canvas', () => {
+    const riveWrapperSource = fs.readFileSync(
+      path.join(__dirname, '../TodayCompletionRive.tsx'),
+      'utf-8',
+    );
+
+    expect(riveWrapperSource).toContain("This asset's visual palette is authored in Rive");
+    expect(riveWrapperSource).not.toContain('instance.colorProperty(');
+    expect(riveWrapperSource).not.toContain('artwork_color: riveColorInt(withAlpha(accent');
+    expect(riveWrapperSource).not.toContain('glow_color: riveColorInt(withAlpha(glow');
+    expect(riveWrapperSource).toContain('instance.numberProperty(propertyName)');
+  });
 });
