@@ -2,41 +2,34 @@
 
 Bundled assets:
 
-- `today-wind-particles.riv`
-  - Today state: unread.
-  - Artboard: `Artboard`
-  - State machine: `State Machine 1`
-  - Runtime inputs used by the app today: none. The current file renders as a self-contained white loop.
-  - Rendered as the quiet/default ambient motion.
-- `today-light-rays.riv`
-  - Today state: reveal-ready.
-  - Artboard: `Artboard`
-  - State machine: `State Machine 1`
-  - Runtime inputs used by the app today: none. The current file renders as a self-contained white loop.
-  - Rendered directly (not through `MaskedView`) with a subtle native drift/pulse wrapper so the rays stay visibly alive.
-- `today-rain-particles.riv`
-  - Today states: complete-today, tomorrow-locked, and journey-complete after the person has read today.
-  - Artboard: `Artboard`
-  - State machine: `State Machine 1`
-  - Runtime inputs used by the app today: none. The current file renders as a self-contained white loop.
-  - Tomorrow-locked currently shares the same white loop until the updated controllable-color asset arrives.
+- `today-wind-leaves.riv`
+  - Today state: completed/rest ambience option (`complete-today`, `tomorrow-locked`, `journey-complete` after the person has read today).
+  - Source handoff: `wind_v3_unfold.riv` from Desktop intake, SHA-256 `57aa5348b877a034845b10a567b627317233b7037087f5c56405842026ae63b8`, size `19,810` bytes.
+  - Artboard-like string: `Unfold_leaf&wind_Animation`.
+  - State machine: `State Machine 1`.
+  - ViewModel string: `ViewModel1`.
+  - Data color fields visible in strings: `background__color`, `glow_color`, `artwork_color`, `mask_gradient_start`, `mask_gradient_end`.
+  - Script/numeric fields visible in strings: `accentR`, `accentG`, `accentB`, `width`, `height`, `particleCount`, `spawnRate`, etc.
+  - Rendered through `TodayCompletionRive`, not directly in `AmbientArtCanvas`.
+- `today-wind-particles.riv`, `today-light-rays.riv`, `today-rain-particles.riv`
+  - Legacy bundled Today Rive experiments retained for reference, but not mapped into current production Today ambience.
+  - Prior runtime finding: strings show names like `accentR`, `accentG`, `accentB`, `width`, and `height`, but React Native's legacy `RiveView.setNumberInputValue()` did not find those names as state-machine inputs at runtime.
 
-Note: `strings assets/rive/<file>.riv` shows names like `accentR`, `accentG`, `accentB`, `width`, and `height`, but React Native's `RiveView.setNumberInputValue()` does not currently find those names as state-machine inputs at runtime. Until the animator returns files with real runtime color controls, the app intentionally passes an empty input object so screenshots and logs stay clean.
+Current production behavior:
 
-All three Rive files use the same direct-render integration path:
-
-```ts
-const TODAY_RIVE_SOURCES = {
-  'wind-particles': require('../../../assets/rive/today-wind-particles.riv'),
-  'light-rays': require('../../../assets/rive/today-light-rays.riv'),
-  'rain-particles': require('../../../assets/rive/today-rain-particles.riv'),
-}
+```txt
+Completed Today ambience slot
+  options: EmberSystem | today-wind-leaves.riv
+  selection: deterministic hash of devotional/day/date completion key
+  pre-completion: no ambient Rive/embers
 ```
 
 Implementation notes:
 
 - Keep decorative Rive under `AmbientArtCanvas`; do not put it inside semantic card/text components.
-- Keep exactly one ambient slot active at a time.
-- Gate rendering on screen focus, active app state, not Low Power Mode, and not Reduce Motion.
-- Wait for `riveViewRef.awaitViewReady()`, then call `playIfNeeded()`/`play()`. Keep autoplay disabled so future controllable-color files can receive app inputs before playback.
+- Keep exactly one ambient slot active at a time. Do not stack Rive on top of EmberSystem except during deliberate crossfade experiments.
+- Gate rendering on screen focus, active app state, not Low Power Mode, and not Reduce Motion. Reduced Motion / Low Power currently falls back to EmberSystem's low-cost still path.
+- Wait for `riveViewRef.awaitViewReady()`, then call `playIfNeeded()`/`play()`. Keep autoplay disabled so runtime values can be applied before playback.
+- Prefer ViewModel data binding (`useViewModelInstance(..., { viewModelName: 'ViewModel1' })`) for `today-wind-leaves.riv`. Do not call legacy `RiveView.setNumberInputValue()` for the visible `accentR/G/B` strings unless the animator explicitly exports them as state-machine inputs; previous files logged missing-input warnings despite the strings existing in the binary.
+- Runtime-proof color binding with extreme red/blue and real accent values before claiming app theme colors work visually.
 - Use `strings assets/rive/<file>.riv` to verify runtime names if the Rive authoring contract drifts.

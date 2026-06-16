@@ -729,6 +729,13 @@ export default function HomeScreen() {
     ? activeCurrentDayData
     : homeDayData;
 
+  const completionAmbienceKey = useMemo(() => {
+    if (!currentDevotional || !hasReadToday) return null;
+    const readDayKey = streakDayKey ?? todayDate;
+    const completedDayMarker = daysCompleted > 0 ? daysCompleted : currentDayData?.dayNumber ?? currentDevotional.currentDay;
+    return `${currentDevotional.id}:${readDayKey}:${completedDayMarker}`;
+  }, [currentDevotional, currentDayData?.dayNumber, daysCompleted, hasReadToday, streakDayKey, todayDate]);
+
   const handleReflect = useCallback((dayNumber?: number) => {
     if (!currentDevotional) return;
     const targetDayNumber = dayNumber ?? currentDayData?.dayNumber ?? currentDevotional.currentDay;
@@ -1188,13 +1195,14 @@ export default function HomeScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      {/* Layer 0: Ambient art — single Today ambient ember slot. The glow has
-          one owner: EmberSystem's internal gradient (matches the celebration). */}
+      {/* Layer 0: Ambient art — one completed-day ambience owner. The
+          selected option is stable for the completed devotional/day/date. */}
       <AmbientArtCanvas
         streakLevel={streakCurrent}
         hasReadToday={hasReadToday}
         stateType={devotionalState.type}
         screenFocused={isTodayFocused}
+        completionAmbienceKey={completionAmbienceKey}
       />
 
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>

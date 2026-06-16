@@ -1,10 +1,10 @@
-// Today-tab ambient state logic.
+// Today-tab completion ambience state logic.
 //
-// The Rive ambient path (wind/light-rays/rain loops) was dead code — the mode
-// resolver always returned 'none' because Today motion only unlocks after
-// completion, and completed/rest ambience is rendered by the shared
-// EmberSystem layer (plans/07-ui-deslop-brief.md §2). The Rive component,
-// mode mapping, and input plumbing were deleted with it.
+// Completion motion unlocks only after the reader taps Complete Day. The Today
+// screen then chooses one stable ambience option for that completed day: the
+// native EmberSystem look or an approved bundled Rive loop. Pre-completion
+// states stay quiet so reveal-ready/unread surfaces never borrow completion
+// celebration language.
 
 export type TodayAmbientStateType =
   | 'empty'
@@ -16,9 +16,21 @@ export type TodayAmbientStateType =
   | 'reveal-ready'
   | 'journey-complete';
 
+export type TodayCompletionAmbience = 'ember' | 'wind-leaves-rive';
+
+export const TODAY_COMPLETION_AMBIENCE_OPTIONS: readonly TodayCompletionAmbience[] = [
+  'wind-leaves-rive',
+  'ember',
+];
+
 export interface CompletedEmberAmbienceInput {
   stateType: TodayAmbientStateType;
   hasReadToday: boolean;
+}
+
+export interface TodayCompletionAmbienceInput extends CompletedEmberAmbienceInput {
+  /** Stable per completed devotional/day/date. Never use a render counter. */
+  selectionKey: string | null | undefined;
 }
 
 export function shouldShowCompletedEmberAmbience({
@@ -30,4 +42,28 @@ export function shouldShowCompletedEmberAmbience({
     || stateType === 'tomorrow-locked'
     || stateType === 'journey-complete'
   );
+}
+
+export function selectTodayCompletionAmbience({
+  stateType,
+  hasReadToday,
+  selectionKey,
+}: TodayCompletionAmbienceInput): TodayCompletionAmbience | null {
+  if (!shouldShowCompletedEmberAmbience({ stateType, hasReadToday })) return null;
+  if (!selectionKey) return 'ember';
+
+  const index = stableHash(selectionKey) % TODAY_COMPLETION_AMBIENCE_OPTION_COUNT;
+  return TODAY_COMPLETION_AMBIENCE_OPTIONS[index] ?? 'ember';
+}
+
+const TODAY_COMPLETION_AMBIENCE_OPTION_COUNT = TODAY_COMPLETION_AMBIENCE_OPTIONS.length;
+
+/** FNV-1a 32-bit hash: tiny, deterministic, and stable across app launches. */
+export function stableHash(value: string): number {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash >>> 0;
 }
