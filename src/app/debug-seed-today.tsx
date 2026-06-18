@@ -16,6 +16,7 @@ import {
 } from '@/lib/store';
 import { useTheme } from '@/lib/theme';
 import { useUIState } from '@/lib/ui-state';
+import type { TodayCompletionAmbience } from '@/lib/today-ambient-rive';
 
 const QA_TODAY_PROFILE_MARKER = getQaTodayProfileMarker();
 const QA_TODAY_CONTEXT_SLOT_PREFIX = 'QA Today context slot:';
@@ -120,6 +121,26 @@ function getTodayPreviewAccentTheme(rawAccent: string | string[] | undefined): A
   const value = Array.isArray(rawAccent) ? rawAccent[0] : rawAccent;
   if (todayPreviewAccentThemes.includes(value as AccentThemeId)) return value as AccentThemeId;
   return 'gold';
+}
+
+// QA: short scene names → completion-ambience id, for the `scene=` deep-link
+// preview override. Unknown/absent → null (use the normal hash rotation).
+const QA_AMBIENCE_SCENE_ALIASES: Record<string, TodayCompletionAmbience> = {
+  ember: 'ember',
+  campfire: 'campfire-rive',
+  canopy: 'canopy-lights-rive',
+  'canopy-lights': 'canopy-lights-rive',
+  doors: 'doors-rive',
+  door: 'doors-rive',
+  tree: 'tree-rive',
+  waterfall: 'waterfall-rive',
+  'wind-leaves': 'wind-leaves-rive',
+  leaves: 'wind-leaves-rive',
+};
+
+function getTodayPreviewAmbienceScene(rawScene: string | undefined): TodayCompletionAmbience | null {
+  if (!rawScene) return null;
+  return QA_AMBIENCE_SCENE_ALIASES[rawScene] ?? null;
 }
 
 function isContextSlotPreviewState(state: TodayPreviewState): boolean {
@@ -410,16 +431,23 @@ function hideExpoDevToolsFabForPreview() {
 
 export default function DebugSeedTodayScreen() {
   const router = useRouter();
-  const { state, theme, themeMode, accent, accentTheme } = useLocalSearchParams<{
+  const { state, theme, themeMode, accent, accentTheme, ambience, scene } = useLocalSearchParams<{
     state?: string | string[];
     theme?: string | string[];
     themeMode?: string | string[];
     accent?: string | string[];
     accentTheme?: string | string[];
+    ambience?: string | string[];
+    scene?: string | string[];
   }>();
   const previewState = getTodayPreviewState(state);
   const previewThemeMode = getTodayPreviewThemeMode(theme ?? themeMode);
   const previewAccentTheme = getTodayPreviewAccentTheme(accent ?? accentTheme);
+  const rawAmbience = Array.isArray(ambience) ? ambience[0] : ambience;
+  const forceRiveAmbience = rawAmbience === 'rive';
+  // QA scene preview: force one exact completion-ambience scene for screenshots.
+  const rawScene = Array.isArray(scene) ? scene[0] : scene;
+  const sceneOverride = getTodayPreviewAmbienceScene(rawScene);
   const { colors } = useTheme();
 
   useEffect(() => {
@@ -431,10 +459,17 @@ export default function DebugSeedTodayScreen() {
     const store = useUnfoldStore.getState();
     const returningMarker = buildDevotionalSeed();
     const ui = useUIState.getState();
+    // QA-only visual proof selector: 2026-06-15 hashes to the Rive ambience
+    // option for `seeded-qa-devotional:*:1`, avoiding accidental Ember captures
+    // when validating Rive color binding.
+    const streakReadDateForAmbience = forceRiveAmbience
+      ? '2026-06-15T12:00:00.000Z'
+      : new Date().toISOString();
 
     ui.setDebugForceTrialExpired(previewState === 'premium-nudge');
     ui.setQaPremiumOverride(isPremiumContextPreviewState(previewState));
     ui.setRevenueCatResolved();
+    ui.setQaAmbienceOverride(sceneOverride);
 
     store.setUser(buildQaTodayUser(previewState, previewThemeMode, previewAccentTheme));
     store.removeDevotional(returningMarker.id);
@@ -451,7 +486,7 @@ export default function DebugSeedTodayScreen() {
       nudgeShownThisSession: false,
       streakJustReset: false,
       streakCurrent: 1,
-      streakLastReadDate: new Date().toISOString(),
+      streakLastReadDate: streakReadDateForAmbience,
       streakFreezes: 0,
       justCompletedSeriesTitle: null,
       hasUsedAudio: false,
@@ -547,7 +582,7 @@ export default function DebugSeedTodayScreen() {
     }
 
     router.replace('/(tabs)/(today)');
-  }, [previewState, previewThemeMode, previewAccentTheme, router]);
+  }, [forceRiveAmbience, previewState, previewThemeMode, previewAccentTheme, sceneOverride, router]);
 
   if (!isQaToolsEnabled()) {
     return <Redirect href="/(tabs)/(you)" />;

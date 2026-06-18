@@ -16,9 +16,24 @@ export type TodayAmbientStateType =
   | 'reveal-ready'
   | 'journey-complete';
 
-export type TodayCompletionAmbience = 'ember' | 'wind-leaves-rive';
+export type TodayCompletionAmbience =
+  | 'ember'
+  | 'campfire-rive'
+  | 'canopy-lights-rive'
+  | 'doors-rive'
+  | 'tree-rive'
+  | 'waterfall-rive'
+  | 'wind-leaves-rive';
 
+// The completed-day ambience rotates across the native ember look plus the
+// approved Rive scenes. Selection is a stable hash of the completion key, so a
+// given completed devotional/day always shows the same scene.
 export const TODAY_COMPLETION_AMBIENCE_OPTIONS: readonly TodayCompletionAmbience[] = [
+  'campfire-rive',
+  'canopy-lights-rive',
+  'doors-rive',
+  'tree-rive',
+  'waterfall-rive',
   'wind-leaves-rive',
   'ember',
 ];

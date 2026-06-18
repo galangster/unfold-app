@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { TodayCompletionAmbience } from '@/lib/today-ambient-rive';
 
 /** Ephemeral UI state — not persisted, used for cross-component animation coordination */
 export const useUIState = create<{
@@ -30,6 +31,12 @@ export const useUIState = create<{
       cannot drive side-effects before the source confirms the current session. */
   revenueCatResolved: boolean;
   setRevenueCatResolved: () => void;
+  /** QA-only Today completion ambience override (set by the debug-seed-today
+      `scene=` deep link). When set AND QA tools are enabled, AmbientArtCanvas
+      renders this exact ambience instead of the stable-hash rotation, so we can
+      preview/screenshot a specific scene. Ignored in production. Not persisted. */
+  qaAmbienceOverride: TodayCompletionAmbience | null;
+  setQaAmbienceOverride: (value: TodayCompletionAmbience | null) => void;
 }>((set) => ({
   tabBarHidden: false,
   tabBarHideMode: 'slide',
@@ -42,4 +49,6 @@ export const useUIState = create<{
   setQaPremiumOverride: (value) => set({ qaPremiumOverride: value }),
   revenueCatResolved: false,
   setRevenueCatResolved: () => set({ revenueCatResolved: true }),
+  qaAmbienceOverride: null,
+  setQaAmbienceOverride: (value) => set({ qaAmbienceOverride: value }),
 }));

@@ -12,7 +12,26 @@ describe('AmbientArtCanvas Today completion ambience', () => {
     path.join(__dirname, '../AmbientArtCanvas.tsx'),
     'utf-8',
   );
-  const windLeavesRivePath = path.join(__dirname, '../../../../assets/rive/today-wind-leaves.riv');
+  const riveWrapperSource = fs.readFileSync(
+    path.join(__dirname, '../TodayCompletionRive.tsx'),
+    'utf-8',
+  );
+  const riveThemeSource = fs.readFileSync(
+    path.join(__dirname, '../../../lib/rive-theme.ts'),
+    'utf-8',
+  );
+  const riveDir = path.join(__dirname, '../../../../assets/rive');
+  const bundledTodayRiveFiles = [
+    'today-campfire.riv',
+    'today-canopy-lights.riv',
+    'today-doors.riv',
+    'today-light-rays.riv',
+    'today-rain-particles.riv',
+    'today-tree.riv',
+    'today-waterfall.riv',
+    'today-wind-leaves.riv',
+    'today-wind-particles.riv',
+  ];
 
   it('keeps the native ember system as a completed-day option', () => {
     expect(source).toContain("import { EmberSystem } from '@/components/EmberSystem';");
@@ -22,15 +41,25 @@ describe('AmbientArtCanvas Today completion ambience', () => {
     expect(source).toContain('streakLevel={streakLevel}');
   });
 
-  it('renders approved Rive assets through the Today completion Rive wrapper', () => {
+  it('renders approved Rive scenes through the Today completion Rive wrapper', () => {
     expect(source).toContain("import { TodayCompletionRive } from '@/components/home/TodayCompletionRive';");
-    expect(source).toContain("import todayWindLeavesSource from '../../../assets/rive/today-wind-leaves.riv';");
+    expect(source).toContain("import todayCampfireSource from '../../../assets/rive/today-campfire.riv';");
+    expect(source).toContain("import todayWaterfallSource from '../../../assets/rive/today-waterfall.riv';");
+    expect(source).toContain('RIVE_SCENE_SOURCES');
+    expect(source).toContain('source={RIVE_SCENE_SOURCES[ambience]}');
     expect(source).toContain('<TodayCompletionRive');
   });
 
-  it('bundles the animator-supplied Rive file as a real RIVE binary', () => {
-    const header = fs.readFileSync(windLeavesRivePath).subarray(0, 4).toString('utf-8');
-    expect(header).toBe('RIVE');
+  it('bundles all Today Rive files as real RIVE binaries with accent controls', () => {
+    for (const fileName of bundledTodayRiveFiles) {
+      const binary = fs.readFileSync(path.join(riveDir, fileName));
+      const ascii = binary.toString('latin1');
+
+      expect(binary.subarray(0, 4).toString('utf-8')).toBe('RIVE');
+      expect(ascii).toContain('accentR');
+      expect(ascii).toContain('accentG');
+      expect(ascii).toContain('accentB');
+    }
   });
 
   it('uses a stable completion ambience key instead of randomizing on every render', () => {
@@ -54,18 +83,29 @@ describe('AmbientArtCanvas Today completion ambience', () => {
 
   it('falls back to EmberSystem for reduced motion and low power instead of running Rive', () => {
     expect(source).toContain('if (reducedMotion || lowPowerMode === true) return renderEmberFallback(streakLevel, screenFocused);');
+    expect(riveWrapperSource).toContain('useAccessibleAnimation');
+    expect(riveWrapperSource).toContain('if (!active || reducedMotion)');
   });
 
-  it('leaves the wind/leaves Rive palette authored instead of app-recoloring the canvas', () => {
-    const riveWrapperSource = fs.readFileSync(
-      path.join(__dirname, '../TodayCompletionRive.tsx'),
-      'utf-8',
-    );
+  it('passes both accent and background into the Rive theming blend', () => {
+    expect(source).toContain('accentColor={colors.accent}');
+    expect(source).toContain('backgroundColor={colors.background}');
+    expect(riveWrapperSource).toContain('buildRiveThemeValues');
+  });
 
-    expect(riveWrapperSource).toContain("This asset's visual palette is authored in Rive");
-    expect(riveWrapperSource).not.toContain('instance.colorProperty(');
-    expect(riveWrapperSource).not.toContain('artwork_color: riveColorInt(withAlpha(accent');
-    expect(riveWrapperSource).not.toContain('glow_color: riveColorInt(withAlpha(glow');
+  it('drives artwork/glow with the accent and uses the app surface for background + mask', () => {
+    expect(riveWrapperSource).toContain('RIVE_ACCENT_COLOR_PROPERTIES');
+    expect(riveWrapperSource).toContain('instance.colorProperty(propertyName)');
+    expect(riveWrapperSource).toContain('RIVE_ACCENT_NUMBER_PROPERTIES');
     expect(riveWrapperSource).toContain('instance.numberProperty(propertyName)');
+    // Particle systems get the accent via state-machine number inputs too.
+    expect(riveWrapperSource).toContain('setNumberInputValue');
+    // Artwork + glow carry the accent; background + mask come from the surface.
+    expect(riveThemeSource).toContain("'artwork_color'");
+    expect(riveThemeSource).toContain("'glow_color'");
+    expect(riveThemeSource).toContain("'background_color'");
+    expect(riveThemeSource).toContain("'mask_gradient_start'");
+    expect(riveThemeSource).toContain('artwork_color: accentOpaque');
+    expect(riveThemeSource).toContain('background_color: surfaceOpaque');
   });
 });

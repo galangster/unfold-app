@@ -13,7 +13,7 @@ Bundled assets:
   - Rendered through `TodayCompletionRive`, not directly in `AmbientArtCanvas`.
 - `today-wind-particles.riv`, `today-light-rays.riv`, `today-rain-particles.riv`
   - Legacy bundled Today Rive experiments retained for reference, but not mapped into current production Today ambience.
-  - Prior runtime finding: strings show names like `accentR`, `accentG`, `accentB`, `width`, and `height`, but React Native's legacy `RiveView.setNumberInputValue()` did not find those names as state-machine inputs at runtime.
+  - Each file exposes `accentR`, `accentG`, and `accentB` in strings; some also expose generic `color` / `Color` fields.
 
 Current production behavior:
 
@@ -30,7 +30,28 @@ Implementation notes:
 - Keep exactly one ambient slot active at a time. Do not stack Rive on top of EmberSystem except during deliberate crossfade experiments.
 - Gate rendering on screen focus, active app state, not Low Power Mode, and not Reduce Motion. Reduced Motion / Low Power currently falls back to EmberSystem's low-cost still path.
 - Wait for `riveViewRef.awaitViewReady()`, then call `playIfNeeded()`/`play()`. Keep autoplay disabled so runtime values can be applied before playback.
-- Prefer ViewModel data binding (`useViewModelInstance(..., { viewModelName: 'ViewModel1' })`) for non-color runtime fields on `today-wind-leaves.riv`. Do not call legacy `RiveView.setNumberInputValue()` for the visible `accentR/G/B` strings unless the animator explicitly exports them as state-machine inputs; previous files logged missing-input warnings despite the strings existing in the binary.
-- Keep `today-wind-leaves.riv` visually authored. Do not set `background__color`, `glow_color`, `artwork_color`, `mask_gradient_start`, or `mask_gradient_end` from app accent colors unless a future animator contract explicitly asks for that and the runtime proof shows the effect body itself recoloring correctly. High-alpha app-side color overrides make the entire screen read as a saturated gold/blue/rose wash.
-- Runtime-proof theme interactions across all production accents in both dark and light mode before reusing this Rive integration pattern for the next animation.
+- **MEASURED runtime contract (today-wind-leaves.riv, on-device 2026-06-16):** the file
+  exposes exactly ONE ViewModel (`ViewModel1`) with exactly 5 **color** properties and
+  ZERO number properties: `background__color`, `glow_color`, `artwork_color`,
+  `mask_gradient_start`, `mask_gradient_end`. The leaves/lines are drawn by an embedded
+  Rive script with a **baked** color; `accentR/G/B` are script-internal constants and are
+  **not** bindable (not as data-bind numbers, not as state-machine inputs). Measured
+  slot → element map:
+  - `background__color` → full-canvas fill → **the accent "wash"**. App keeps it `#00000000`.
+  - `mask_gradient_start/end` → text-protection gradient. App sets neutral surface (follows light/dark), never the accent.
+  - `glow_color` → bottom glow; `artwork_color` → diffuse haze. App keeps these off.
+- **To make the leaves/lines follow the accent, the `.riv` must be re-exported** with the
+  leaf/line paint bound to a ViewModel **color** property named `accent_color` (canonical)
+  — see `assets/rive/RIVE_ACCENT_CONTRACT.md` for the full animator spec. `buildRiveThemeValues`
+  already sets `accent_color`/`leaf_color`/`line_color` to the user accent, so the leaves
+  light up with zero code changes once the new file lands.
+- `TodayCompletionRive` applies the color properties in `RIVE_ACCENT_COLOR_PROPERTIES` and
+  (forward-compat) the `accentR/G/B` numbers; properties a file doesn't expose are skipped
+  quietly, so one wrapper covers current and future animator exports.
+- Light mode darkens the leaf/line accent slightly (`darken(accent, 0.06)`) so it keeps
+  contrast on paper; the app keeps the background transparent in both modes.
+- Avoid high-alpha app-side overrides on `background__color`/`mask_gradient_*`. Those are the
+  "atmosphere" the app keeps neutral; tinting them is what produced the rejected wash.
+- Runtime-proof theme interactions across all production accents in both dark and light mode before declaring the visual final.
+- Use a red/blue extreme probe or full accent matrix if a future animator file changes the exposed ViewModel contract.
 - Use `strings assets/rive/<file>.riv` to verify runtime names if the Rive authoring contract drifts.

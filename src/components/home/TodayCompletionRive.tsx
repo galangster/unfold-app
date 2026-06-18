@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, {
   Easing,
@@ -13,6 +13,7 @@ import {
   Alignment,
   DataBindMode,
   Fit,
+  RiveColor,
   RiveView,
   useRive,
   useRiveFile,
@@ -20,66 +21,47 @@ import {
   type RiveFileInput,
   type ViewModelInstance,
 } from '@rive-app/react-native';
-import { hexToRgb } from '@/lib/ember-system';
+import { useAccessibleAnimation } from '@/hooks/useAccessibility';
+import {
+  buildRiveThemeValues,
+  RIVE_ACCENT_COLOR_PROPERTIES,
+  RIVE_ACCENT_NUMBER_PROPERTIES,
+  type RiveThemeValues,
+} from '@/lib/rive-theme';
 
 const STATE_MACHINE_NAME = 'State Machine 1';
 const VIEW_MODEL_NAME = 'ViewModel1';
-const LOG_PREFIX = 'today-wind-leaves-rive';
-
-const optionalNumberProperties = [
-  'accentR',
-  'accentG',
-  'accentB',
-  'width',
-  'height',
-] as const;
+const LOG_PREFIX = 'today-rive';
 
 interface TodayCompletionRiveProps {
   source: RiveFileInput;
   active: boolean;
   accentColor: string;
+  backgroundColor: string;
   isDark: boolean;
   width: number;
   height: number;
   style?: StyleProp<ViewStyle>;
 }
 
-interface RiveThemeValues {
-  numberValues: Record<(typeof optionalNumberProperties)[number], number>;
-}
-
-function buildRiveThemeValues({
-  accentColor,
-  width,
-  height,
-}: {
-  accentColor: string;
-  width: number;
-  height: number;
-}): RiveThemeValues {
-  const accent = /^[#][0-9a-fA-F]{6}$/.test(accentColor) ? accentColor : '#C8A55C';
-  const { r, g, b } = hexToRgb(accent);
-
-  return {
-    numberValues: {
-      accentR: r / 255,
-      accentG: g / 255,
-      accentB: b / 255,
-      width: Math.max(1, Math.round(width)),
-      height: Math.max(1, Math.round(height)),
-    },
-  };
+function riveColorInt(hex: string): number {
+  return RiveColor.fromHexString(hex).toInt();
 }
 
 function applyViewModelTheme(instance: ViewModelInstance | null | undefined, values: RiveThemeValues): void {
   if (!instance) return;
 
-  // This asset's visual palette is authored in Rive. Do not override
-  // background/glow/artwork/mask color ViewModel properties from app accent
-  // colors; doing so turns the Today screen into a saturated theme wash.
-  // Keep only non-color runtime values here unless a future animator contract
-  // explicitly requires app-side color control and passes runtime proof.
-  for (const propertyName of optionalNumberProperties) {
+  // Every bundled Today Rive file must follow the user-selected accent. Older
+  // files expose generic `color`/`Color` slots; the wind/leaves file exposes
+  // named palette slots. Missing optional properties are skipped quietly.
+  for (const propertyName of RIVE_ACCENT_COLOR_PROPERTIES) {
+    const property = instance.colorProperty(propertyName);
+    if (property) {
+      property.set(riveColorInt(values.colorValues[propertyName]));
+    }
+  }
+
+  for (const propertyName of RIVE_ACCENT_NUMBER_PROPERTIES) {
     const property = instance.numberProperty(propertyName);
     if (property) {
       property.set(values.numberValues[propertyName]);
@@ -91,14 +73,22 @@ export function TodayCompletionRive({
   source,
   active,
   accentColor,
+  backgroundColor,
   isDark,
   width,
   height,
   style,
 }: TodayCompletionRiveProps) {
-  const values = buildRiveThemeValues({ accentColor, width, height });
+  const values = useMemo(() => buildRiveThemeValues({
+    accentColor,
+    backgroundColor,
+    isDark,
+    width,
+    height,
+  }), [accentColor, backgroundColor, height, isDark, width]);
   const { riveFile, error: riveFileError } = useRiveFile(source);
   const { riveViewRef, setHybridRef } = useRive();
+  const { reducedMotion } = useAccessibleAnimation();
   const { instance, error: viewModelError } = useViewModelInstance(riveFile, {
     viewModelName: VIEW_MODEL_NAME,
     onInit: (newInstance) => applyViewModelTheme(newInstance, values),
@@ -107,8 +97,13 @@ export function TodayCompletionRive({
 
   const animatedStyle = useAnimatedStyle(() => {
     const p = loopProgress.get();
-    const minOpacity = isDark ? 0.72 : 0.58;
-    const maxOpacity = isDark ? 0.88 : 0.72;
+    // Keep the ambient art clearly visible (a gentle breath, high floor) — the
+    // earlier low light-mode range washed the animation out almost entirely.
+    // Light mode holds the ambient art near full strength (0.92–1.0) so accent
+    // art stays legible on the light surface; dark breathes a little more
+    // (0.88–1.0). (Raised from an earlier 0.72–0.92 light range that washed out.)
+    const minOpacity = isDark ? 0.88 : 0.92;
+    const maxOpacity = 1;
     return {
       opacity: interpolate(p, [0, 0.5, 1], [minOpacity, maxOpacity, minOpacity]),
       transform: [
@@ -132,7 +127,7 @@ export function TodayCompletionRive({
   }, [viewModelError]);
 
   useEffect(() => {
-    if (!active) {
+    if (!active || reducedMotion) {
       loopProgress.set(0);
       return;
     }
@@ -155,14 +150,14 @@ export function TodayCompletionRive({
     );
 
     return () => loopProgress.set(0);
-  }, [active, loopProgress]);
+  }, [active, loopProgress, reducedMotion]);
 
   useEffect(() => {
     applyViewModelTheme(instance, values);
   }, [instance, values]);
 
   useEffect(() => {
-    if (!riveViewRef || !active) return;
+    if (!riveViewRef || !active || reducedMotion) return;
 
     let cancelled = false;
     const syncRive = async () => {
@@ -172,6 +167,17 @@ export function TodayCompletionRive({
 
         const boundInstance = instance ?? riveViewRef.getViewModelInstance();
         applyViewModelTheme(boundInstance, values);
+
+        // Some scenes consume the accent via state-machine number inputs (the
+        // particle systems) rather than ViewModel properties. Push the 0-255
+        // channels there too; harmlessly ignored when the input doesn't exist.
+        for (const propertyName of RIVE_ACCENT_NUMBER_PROPERTIES) {
+          try {
+            riveViewRef.setNumberInputValue(propertyName, values.numberValues[propertyName]);
+          } catch {
+            // Input not present on this scene's state machine — fine.
+          }
+        }
 
         riveViewRef.playIfNeeded();
         await riveViewRef.play();
@@ -191,9 +197,9 @@ export function TodayCompletionRive({
       cancelled = true;
       void riveViewRef.pause().catch(() => {});
     };
-  }, [active, instance, riveViewRef, values]);
+  }, [active, instance, reducedMotion, riveViewRef, values]);
 
-  if (!active || !riveFile) return null;
+  if (!active || reducedMotion || !riveFile) return null;
 
   return (
     <View

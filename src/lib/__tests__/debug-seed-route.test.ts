@@ -155,7 +155,9 @@ describe('debug seed routes', () => {
     expect(seedTodaySource).toContain('highlights: []');
     expect(seedTodaySource).toContain('justCompletedSeriesTitle: seeded.title');
     expect(seedTodaySource).toContain('nudgeShownThisSession: false');
-    expect(seedTodaySource).toContain('streakLastReadDate: new Date().toISOString()');
+    expect(seedTodaySource).toContain('const streakReadDateForAmbience = forceRiveAmbience');
+    expect(seedTodaySource).toContain("? '2026-06-15T12:00:00.000Z'");
+    expect(seedTodaySource).toContain('streakLastReadDate: streakReadDateForAmbience');
     expect(seedTodaySource).toContain("if (previewState === 'day1-review' || previewState === 'phase4-stack')");
     expect(seedTodaySource).toContain('store.setHasSeenFeatureOnboarding(true);');
     expect(seedTodaySource).toContain('store.setHasSeenDay1Review();');

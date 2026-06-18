@@ -39,8 +39,13 @@ describe('today completed ambience gating', () => {
     expect(TODAY_COMPLETION_AMBIENCE_OPTIONS).toContain(first);
   });
 
-  it('keeps the native ember look as one of the randomized options', () => {
+  it('rotates the native ember look plus the approved Rive scenes', () => {
     expect(TODAY_COMPLETION_AMBIENCE_OPTIONS).toContain('ember');
+    expect(TODAY_COMPLETION_AMBIENCE_OPTIONS).toContain('campfire-rive');
+    expect(TODAY_COMPLETION_AMBIENCE_OPTIONS).toContain('canopy-lights-rive');
+    expect(TODAY_COMPLETION_AMBIENCE_OPTIONS).toContain('doors-rive');
+    expect(TODAY_COMPLETION_AMBIENCE_OPTIONS).toContain('tree-rive');
+    expect(TODAY_COMPLETION_AMBIENCE_OPTIONS).toContain('waterfall-rive');
     expect(TODAY_COMPLETION_AMBIENCE_OPTIONS).toContain('wind-leaves-rive');
   });
 
