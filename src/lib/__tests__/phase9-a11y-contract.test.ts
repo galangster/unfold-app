@@ -23,6 +23,19 @@ describe('Phase 9 accessibility source contracts', () => {
     expect(drawerPanel).toContain("importantForAccessibility={isOpen ? 'yes' : 'no-hide-descendants'}");
   });
 
+  it('keeps Companion action controls accessible and non-system', () => {
+    const source = readSource('src/components/companion/CompanionDrawer.tsx');
+    const actionPanel = extractBlock(source, 'function ConversationActionPanel', '// ── CompanionDrawer');
+
+    expect(actionPanel).toContain('accessibilityViewIsModal');
+    expect(source).toContain('accessibilityHint="Long press for conversation actions"');
+    expect(actionPanel).toContain('accessibilityRole="button"');
+    expect(actionPanel).toContain('accessibilityState={{ disabled: !canSaveRename }}');
+    expect(actionPanel).toContain('accessibilityLabel="Permanently delete conversation"');
+    expect(source).not.toContain('ActionSheetIOS');
+    expect(source).not.toContain('Alert.prompt');
+  });
+
   it('keeps touched reader/settings controls on the shared 44pt accessible-control contract', () => {
     const appearanceSource = readSource('src/components/reader/ReaderAppearanceControls.tsx');
     const libraryRowSource = readSource('src/components/reader/ReaderLibraryRow.tsx');

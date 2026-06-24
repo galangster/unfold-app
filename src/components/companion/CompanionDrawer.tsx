@@ -9,16 +9,15 @@
  *   DRAWER_WIDTH       — constant for parent layout use
  */
 
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
+  TextInput,
   TouchableOpacity,
   FlatList,
   Dimensions,
   StyleSheet,
-  Alert,
-  ActionSheetIOS,
   LayoutAnimation,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
@@ -77,6 +76,8 @@ interface CompanionDrawerProps {
 type ListItem =
   | { type: 'header'; label: string }
   | { type: 'conversation'; conversation: Conversation };
+
+type ActionMode = 'actions' | 'rename' | 'delete';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -228,34 +229,18 @@ interface ConversationRowProps {
   conversation: Conversation;
   isCurrent: boolean;
   onSelect: (conv: Conversation) => void;
-  onDelete: (id: string) => void;
-  onRename: (id: string) => void;
-  onPin: (id: string) => void;
+  onOpenActions: (conv: Conversation) => void;
 }
 
-function ConversationRow({ conversation, isCurrent, onSelect, onDelete, onRename, onPin }: ConversationRowProps) {
+function ConversationRow({ conversation, isCurrent, onSelect, onOpenActions }: ConversationRowProps) {
   const { colors } = useTheme();
   const title = getConversationTitle(conversation);
   const dateLabel = formatRelativeDate(conversation.lastMessageAt);
 
-  const isPinned = conversation.pinned ?? false;
-
   const handleLongPress = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    ActionSheetIOS.showActionSheetWithOptions(
-      {
-        options: [isPinned ? 'Unstar' : 'Star', 'Rename', 'Delete', 'Cancel'],
-        destructiveButtonIndex: 2,
-        cancelButtonIndex: 3,
-        title: title,
-      },
-      (buttonIndex) => {
-        if (buttonIndex === 0) onPin(conversation.id);
-        if (buttonIndex === 1) onRename(conversation.id);
-        if (buttonIndex === 2) onDelete(conversation.id);
-      },
-    );
-  }, [conversation.id, title, isPinned, onPin, onRename, onDelete]);
+    onOpenActions(conversation);
+  }, [conversation, onOpenActions]);
 
   return (
     <TouchableOpacity
@@ -272,6 +257,7 @@ function ConversationRow({ conversation, isCurrent, onSelect, onDelete, onRename
       ]}
       accessibilityRole="button"
       accessibilityLabel={`${title}, ${dateLabel}${isCurrent ? ', current conversation' : ''}`}
+      accessibilityHint="Long press for conversation actions"
     >
       <Text
         style={[styles.convTitle, { color: colors.text }]}
@@ -281,6 +267,189 @@ function ConversationRow({ conversation, isCurrent, onSelect, onDelete, onRename
       </Text>
       <Text style={[styles.convDate, { color: colors.textMuted }]}>{dateLabel}</Text>
     </TouchableOpacity>
+  );
+}
+
+interface ConversationActionPanelProps {
+  conversation: Conversation | null;
+  mode: ActionMode;
+  renameDraft: string;
+  onRenameDraftChange: (value: string) => void;
+  onClose: () => void;
+  onPin: () => void;
+  onStartRename: () => void;
+  onConfirmRename: () => void;
+  onStartDelete: () => void;
+  onConfirmDelete: () => void;
+}
+
+function ConversationActionPanel({
+  conversation,
+  mode,
+  renameDraft,
+  onRenameDraftChange,
+  onClose,
+  onPin,
+  onStartRename,
+  onConfirmRename,
+  onStartDelete,
+  onConfirmDelete,
+}: ConversationActionPanelProps) {
+  const { colors } = useTheme();
+
+  if (!conversation) return null;
+
+  const title = getConversationTitle(conversation);
+  const isPinned = conversation.pinned ?? false;
+  const canSaveRename = renameDraft.trim().length > 0;
+  const heading = mode === 'rename'
+    ? 'Rename conversation'
+    : mode === 'delete'
+      ? 'Delete conversation'
+      : 'Conversation options';
+
+  return (
+    <View style={styles.actionOverlay} pointerEvents="auto">
+      <TouchableOpacity
+        style={StyleSheet.absoluteFill}
+        onPress={onClose}
+        activeOpacity={1}
+        accessible={false}
+      />
+
+      <View
+        style={[
+          styles.actionPanel,
+          {
+            backgroundColor: colors.backgroundElevated,
+            borderColor: colors.border,
+          },
+        ]}
+        accessibilityViewIsModal
+      >
+        <Text style={[styles.actionEyebrow, { color: colors.accent }]}>Companion</Text>
+        <Text style={[styles.actionHeading, { color: colors.text }]}>{heading}</Text>
+        <Text style={[styles.actionConversationTitle, { color: colors.textMuted }]} numberOfLines={2}>
+          {title}
+        </Text>
+
+        {mode === 'actions' && (
+          <View style={styles.actionButtonGroup}>
+            <TouchableOpacity
+              activeOpacity={0.76}
+              onPress={onPin}
+              style={[styles.actionButton, { borderColor: colors.border, backgroundColor: alpha(colors.accent, 0.08) }]}
+              accessibilityRole="button"
+              accessibilityLabel={isPinned ? 'Unstar conversation' : 'Star conversation'}
+            >
+              <Text style={[styles.actionButtonLabel, { color: colors.text }]}>
+                {isPinned ? 'Unstar' : 'Star'}
+              </Text>
+              <Text style={[styles.actionButtonMeta, { color: colors.textMuted }]}>
+                {isPinned ? 'Move this chat out of Starred' : 'Keep this chat easy to find'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.76}
+              onPress={onStartRename}
+              style={[styles.actionButton, { borderColor: colors.border }]}
+              accessibilityRole="button"
+              accessibilityLabel="Rename conversation"
+            >
+              <Text style={[styles.actionButtonLabel, { color: colors.text }]}>Rename</Text>
+              <Text style={[styles.actionButtonMeta, { color: colors.textMuted }]}>Give this thread a clearer title</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.76}
+              onPress={onStartDelete}
+              style={[styles.actionButton, { borderColor: alpha(colors.error, 0.35), backgroundColor: alpha(colors.error, 0.08) }]}
+              accessibilityRole="button"
+              accessibilityLabel="Delete conversation"
+            >
+              <Text style={[styles.actionButtonLabel, { color: colors.error }]}>Delete</Text>
+              <Text style={[styles.actionButtonMeta, { color: colors.textMuted }]}>Remove this conversation permanently</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {mode === 'rename' && (
+          <View style={styles.actionButtonGroup}>
+            <TextInput
+              value={renameDraft}
+              onChangeText={onRenameDraftChange}
+              autoFocus
+              selectTextOnFocus
+              placeholder="Conversation title"
+              placeholderTextColor={colors.textMuted}
+              selectionColor={colors.accent}
+              cursorColor={colors.accent}
+              style={[
+                styles.renameInput,
+                {
+                  color: colors.text,
+                  borderColor: colors.border,
+                  backgroundColor: colors.inputBackground,
+                },
+              ]}
+              accessibilityLabel="Conversation title"
+            />
+            <View style={styles.actionFooterRow}>
+              <TouchableOpacity
+                activeOpacity={0.76}
+                onPress={onClose}
+                style={[styles.secondaryAction, { borderColor: colors.border }]}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel rename"
+              >
+                <Text style={[styles.secondaryActionText, { color: colors.textMuted }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                activeOpacity={canSaveRename ? 0.76 : 1}
+                onPress={canSaveRename ? onConfirmRename : undefined}
+                disabled={!canSaveRename}
+                style={[
+                  styles.primaryAction,
+                  { backgroundColor: canSaveRename ? colors.accent : alpha(colors.textMuted, 0.25) },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Save conversation title"
+                accessibilityState={{ disabled: !canSaveRename }}
+              >
+                <Text style={[styles.primaryActionText, { color: colors.background }]}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {mode === 'delete' && (
+          <View style={styles.actionButtonGroup}>
+            <Text style={[styles.deleteCopy, { color: colors.textMuted }]}>This permanently removes the conversation from your history.</Text>
+            <View style={styles.actionFooterRow}>
+              <TouchableOpacity
+                activeOpacity={0.76}
+                onPress={onClose}
+                style={[styles.secondaryAction, { borderColor: colors.border }]}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel delete"
+              >
+                <Text style={[styles.secondaryActionText, { color: colors.textMuted }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                activeOpacity={0.76}
+                onPress={onConfirmDelete}
+                style={[styles.primaryAction, { backgroundColor: colors.error }]}
+                accessibilityRole="button"
+                accessibilityLabel="Permanently delete conversation"
+              >
+                <Text style={[styles.primaryActionText, { color: colors.background }]}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+      </View>
+    </View>
   );
 }
 
@@ -305,6 +474,26 @@ export function CompanionDrawer({
   const updateConversation = useCompanionChatStore((s) => s.updateConversation);
 
   const listItems = useMemo(() => buildListItems(allWithMessages), [allWithMessages]);
+  const [actionConversation, setActionConversation] = useState<Conversation | null>(null);
+  const [actionMode, setActionMode] = useState<ActionMode>('actions');
+  const [renameDraft, setRenameDraft] = useState('');
+
+  const activeActionConversation = useMemo(() => {
+    if (!actionConversation) return null;
+    return allWithMessages.find(c => c.id === actionConversation.id) ?? actionConversation;
+  }, [actionConversation, allWithMessages]);
+
+  const closeActionPanel = useCallback(() => {
+    setActionConversation(null);
+    setActionMode('actions');
+    setRenameDraft('');
+  }, []);
+
+  const openActionPanel = useCallback((conv: Conversation) => {
+    setActionConversation(conv);
+    setActionMode('actions');
+    setRenameDraft(getConversationTitle(conv));
+  }, []);
 
   const handleSelectConversation = useCallback(
     (conv: Conversation) => {
@@ -314,52 +503,9 @@ export function CompanionDrawer({
         setActiveConversation(conv.id);
         onClose();
       }
+      closeActionPanel();
     },
-    [activeId, setActiveConversation, onClose],
-  );
-
-  const handleDelete = useCallback(
-    (id: string) => {
-      Alert.alert(
-        'Delete Conversation',
-        'This conversation will be permanently removed.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Delete',
-            style: 'destructive',
-            onPress: () => {
-              LayoutAnimation.configureNext({
-                duration: 250,
-                update: { type: LayoutAnimation.Types.easeOut },
-                delete: { type: LayoutAnimation.Types.easeOut, property: LayoutAnimation.Properties.opacity },
-              });
-              deleteConversation(id);
-            },
-          },
-        ],
-      );
-    },
-    [deleteConversation],
-  );
-
-  const handleRename = useCallback(
-    (id: string) => {
-      const conv = allWithMessages.find(c => c.id === id);
-      const currentTitle = conv ? getConversationTitle(conv) : '';
-      Alert.prompt(
-        'Rename Conversation',
-        undefined,
-        (newTitle) => {
-          if (newTitle?.trim()) {
-            updateConversation(id, { title: newTitle.trim() });
-          }
-        },
-        'plain-text',
-        currentTitle,
-      );
-    },
-    [allWithMessages, updateConversation],
+    [activeId, setActiveConversation, onClose, closeActionPanel],
   );
 
   const handlePin = useCallback(
@@ -376,6 +522,44 @@ export function CompanionDrawer({
     },
     [allWithMessages, updateConversation],
   );
+
+  const handleActionPin = useCallback(() => {
+    if (!activeActionConversation) return;
+    handlePin(activeActionConversation.id);
+    closeActionPanel();
+  }, [activeActionConversation, handlePin, closeActionPanel]);
+
+  const handleStartRename = useCallback(() => {
+    if (!activeActionConversation) return;
+    setRenameDraft(getConversationTitle(activeActionConversation));
+    setActionMode('rename');
+  }, [activeActionConversation]);
+
+  const handleConfirmRename = useCallback(() => {
+    if (!activeActionConversation) return;
+    const title = renameDraft.trim();
+    if (!title) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    updateConversation(activeActionConversation.id, { title });
+    closeActionPanel();
+  }, [activeActionConversation, renameDraft, updateConversation, closeActionPanel]);
+
+  const handleStartDelete = useCallback(() => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    setActionMode('delete');
+  }, []);
+
+  const handleConfirmDelete = useCallback(() => {
+    if (!activeActionConversation) return;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    LayoutAnimation.configureNext({
+      duration: 250,
+      update: { type: LayoutAnimation.Types.easeOut },
+      delete: { type: LayoutAnimation.Types.easeOut, property: LayoutAnimation.Properties.opacity },
+    });
+    deleteConversation(activeActionConversation.id);
+    closeActionPanel();
+  }, [activeActionConversation, deleteConversation, closeActionPanel]);
 
   // Scrim animated style — opacity only. pointerEvents controlled by isOpen prop.
   // IMPORTANT: Do NOT set pointerEvents in animated style — it conflicts with
@@ -407,13 +591,11 @@ export function CompanionDrawer({
           conversation={item.conversation}
           isCurrent={item.conversation.id === activeId}
           onSelect={handleSelectConversation}
-          onDelete={handleDelete}
-          onRename={handleRename}
-          onPin={handlePin}
+          onOpenActions={openActionPanel}
         />
       );
     },
-    [colors, activeId, handleSelectConversation, handleDelete, handleRename, handlePin],
+    [colors, activeId, handleSelectConversation, openActionPanel],
   );
 
   const keyExtractor = useCallback(
@@ -484,6 +666,19 @@ export function CompanionDrawer({
             showsVerticalScrollIndicator={false}
           />
         )}
+
+        <ConversationActionPanel
+          conversation={activeActionConversation}
+          mode={actionMode}
+          renameDraft={renameDraft}
+          onRenameDraftChange={setRenameDraft}
+          onClose={closeActionPanel}
+          onPin={handleActionPin}
+          onStartRename={handleStartRename}
+          onConfirmRename={handleConfirmRename}
+          onStartDelete={handleStartDelete}
+          onConfirmDelete={handleConfirmDelete}
+        />
       </Animated.View>
     </>
   );
@@ -548,14 +743,104 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.body,
     fontSize: FontSize.xs,
   },
-  deleteAction: {
-    backgroundColor: '#E53E3E',
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: 64,
+  actionOverlay: {
+    ...StyleSheet.absoluteFill,
+    justifyContent: 'flex-end',
+    zIndex: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.18)',
+  },
+  actionPanel: {
+    marginHorizontal: Spacing['3'],
+    marginBottom: Spacing['3'],
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radius.xl,
+    padding: Spacing['4'],
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.22,
+    shadowRadius: 18,
+    elevation: 18,
+  },
+  actionEyebrow: {
+    fontFamily: FontFamily.uiSemiBold,
+    fontSize: 11,
+    lineHeight: 14,
     marginBottom: Spacing['1'],
-    marginRight: Spacing['3'],
-    borderRadius: Radius.md,
+  },
+  actionHeading: {
+    fontFamily: FontFamily.display,
+    fontSize: FontSize.xl,
+    lineHeight: 25,
+  },
+  actionConversationTitle: {
+    fontFamily: FontFamily.body,
+    fontSize: FontSize.sm,
+    lineHeight: 20,
+    marginTop: Spacing['1'],
+  },
+  actionButtonGroup: {
+    gap: Spacing['2'],
+    marginTop: Spacing['4'],
+  },
+  actionButton: {
+    minHeight: 58,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radius.lg,
+    paddingHorizontal: Spacing['3'],
+    paddingVertical: Spacing['2.5'],
+    justifyContent: 'center',
+  },
+  actionButtonLabel: {
+    fontFamily: FontFamily.uiSemiBold,
+    fontSize: FontSize.sm,
+    lineHeight: 18,
+  },
+  actionButtonMeta: {
+    fontFamily: FontFamily.body,
+    fontSize: FontSize.xs,
+    lineHeight: 18,
+    marginTop: 2,
+  },
+  renameInput: {
+    minHeight: 48,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radius.lg,
+    paddingHorizontal: Spacing['3'],
+    paddingVertical: Spacing['2.5'],
+    fontFamily: FontFamily.body,
+    fontSize: FontSize.base,
+  },
+  actionFooterRow: {
+    flexDirection: 'row',
+    gap: Spacing['2'],
+  },
+  secondaryAction: {
+    flex: 1,
+    minHeight: 44,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryAction: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  secondaryActionText: {
+    fontFamily: FontFamily.uiSemiBold,
+    fontSize: FontSize.sm,
+  },
+  primaryActionText: {
+    fontFamily: FontFamily.uiSemiBold,
+    fontSize: FontSize.sm,
+  },
+  deleteCopy: {
+    fontFamily: FontFamily.body,
+    fontSize: FontSize.sm,
+    lineHeight: 21,
   },
   emptyState: {
     flex: 1,

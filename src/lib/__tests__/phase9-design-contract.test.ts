@@ -38,4 +38,18 @@ describe('Phase 9 design source contracts', () => {
     expect(pdfExportSource).not.toContain('text-transform: uppercase;');
     expect(pdfExportSource).not.toEqual(expect.stringMatching(/letter-spacing:\s*0\.(?:1|12|15|2)em/));
   });
+
+  it('keeps Companion conversation management inside branded app chrome', () => {
+    const drawerSource = readSource('src/components/companion/CompanionDrawer.tsx');
+
+    expect(drawerSource).not.toContain('ActionSheetIOS');
+    expect(drawerSource).not.toContain('Alert.alert');
+    expect(drawerSource).not.toContain('Alert.prompt');
+    expect(drawerSource).toContain('ConversationActionPanel');
+    expect(drawerSource).toContain('Conversation options');
+    expect(drawerSource).toContain('Rename conversation');
+    expect(drawerSource).toContain('Delete conversation');
+    expect(drawerSource).toContain('selectionColor={colors.accent}');
+    expect(drawerSource).toContain('cursorColor={colors.accent}');
+  });
 });
