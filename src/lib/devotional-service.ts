@@ -1218,8 +1218,10 @@ Avoid the bad pattern. Follow the good pattern.`;
   const userPrompt = buildUserPrompt(context, startDay, endDay, seriesTitle, previousDayTitles, retryLevel, varietySchedule)
     + (storiesBlock ? `\n\n${storiesBlock}` : '');
 
-  // Sonnet 4.6 for core devotional generation — quality is the product
-  const model = 'claude-sonnet-4-6';
+  // Sonnet 5 for core devotional generation — quality is the product.
+  // (The backend proxy omits temperature + disables adaptive thinking for
+  // sonnet-5, so this stays a cost-stable drop-in.)
+  const model = 'claude-sonnet-5';
   const timeoutMs = 180000; // 3 min timeout for all days
 
   // Scale max_tokens based on batch size and reading duration to prevent truncation
