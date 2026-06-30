@@ -129,7 +129,7 @@ describe('Rive accent theming', () => {
     expect(values.numberValues.accentB).toBe(0x5C); // 92
   });
 
-  it('all bundled Today Rive binaries are RIVE files exposing accent RGB markers', () => {
+  it('all bundled Today Rive binaries are RIVE files exposing an accent control', () => {
     const riveDir = path.join(__dirname, '../../../assets/rive');
     const riveFiles = fs.readdirSync(riveDir).filter((file) => file.endsWith('.riv')).sort();
 
@@ -149,9 +149,11 @@ describe('Rive accent theming', () => {
       const binary = fs.readFileSync(path.join(riveDir, file));
       expect(binary.subarray(0, 4).toString('utf-8')).toBe('RIVE');
       const ascii = binary.toString('latin1');
-      expect(ascii).toContain('accentR');
-      expect(ascii).toContain('accentG');
-      expect(ascii).toContain('accentB');
+      // Each scene exposes an accent control the app can drive: the newer
+      // `accentColor` color input (data-bound to a ViewModel color slot) or the
+      // legacy per-channel `accentR/G/B`. Corrected particle scenes may keep
+      // both or drop the old channels (e.g. wind-leaves exposes only accentColor).
+      expect(ascii.includes('accentColor') || ascii.includes('accentR')).toBe(true);
     }
   });
 });

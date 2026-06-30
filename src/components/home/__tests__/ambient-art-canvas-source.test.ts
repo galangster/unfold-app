@@ -50,15 +50,18 @@ describe('AmbientArtCanvas Today completion ambience', () => {
     expect(source).toContain('<TodayCompletionRive');
   });
 
-  it('bundles all Today Rive files as real RIVE binaries with accent controls', () => {
+  it('bundles all Today Rive files as real RIVE binaries with an accent control', () => {
     for (const fileName of bundledTodayRiveFiles) {
       const binary = fs.readFileSync(path.join(riveDir, fileName));
       const ascii = binary.toString('latin1');
 
       expect(binary.subarray(0, 4).toString('utf-8')).toBe('RIVE');
-      expect(ascii).toContain('accentR');
-      expect(ascii).toContain('accentG');
-      expect(ascii).toContain('accentB');
+      // Each scene must expose an accent control the app can drive. Two valid
+      // contracts coexist: the newer `accentColor` color input (data-bound to a
+      // ViewModel color slot — used by the corrected particle scenes) or the
+      // legacy per-channel `accentR/G/B`. Corrected files may keep both or drop
+      // the old channels entirely (e.g. wind-leaves exposes only accentColor).
+      expect(ascii.includes('accentColor') || ascii.includes('accentR')).toBe(true);
     }
   });
 
