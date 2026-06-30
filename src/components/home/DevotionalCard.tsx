@@ -972,6 +972,11 @@ const styles = StyleSheet.create({
   },
   heroProgressSection: {
     marginBottom: Spacing['6'],
+    // Keep the progress cluster in the left "calm" zone: every Today ambient
+    // scene concentrates its art on the right ~40-55%, so capping the width
+    // keeps the track off the animation and pulls the % off the busy edge.
+    alignSelf: 'flex-start',
+    width: '54%',
   },
   heroProgressHeader: {
     flexDirection: 'row',
@@ -1477,7 +1482,7 @@ const styles = StyleSheet.create({
   mainCardProgressRight: {
     fontFamily: FontFamily.uiSemiBold,
     fontSize: FontSize.xs,
-    opacity: 0.9,
+    fontVariant: ['tabular-nums'],
   },
 
   // Completed state (complete-today / tomorrow-locked)
