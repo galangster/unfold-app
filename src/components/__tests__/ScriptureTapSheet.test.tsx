@@ -198,6 +198,7 @@ describe('ScriptureTapSheet Explain CTA', () => {
     mockIsBookmarked.mockReturnValue(false);
   });
 
+  // CI-load flake: this async render+fetch assertion is clean in isolation but can exceed Jest's default timeout in the full parallel suite.
   it('loads verse text without automatically generating commentary and shows an explicit Explain CTA', async () => {
     let tree: any;
     await act(async () => {
@@ -223,7 +224,7 @@ describe('ScriptureTapSheet Explain CTA', () => {
     expect(content).toContain(verseResult.text);
     expect(content).toContain('Explain this passage');
     expect(content).toContain('Read in Bible');
-  });
+  }, 15000);
 
   it('opens the shared explanation sheet only after tapping Explain', async () => {
     let tree: any;

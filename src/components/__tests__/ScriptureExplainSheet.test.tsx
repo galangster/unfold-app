@@ -159,6 +159,7 @@ describe('ScriptureExplainSheet', () => {
     expect(mockLogEvent).not.toHaveBeenCalled();
   });
 
+  // CI-load flake: this async render+fetch assertion is clean in isolation but can exceed Jest's default timeout in the full parallel suite.
   it('fetches only after explicit open and shows the loading state', async () => {
     mockFetchScriptureExplanation.mockImplementation(() => new Promise(() => undefined));
 
@@ -188,7 +189,7 @@ describe('ScriptureExplainSheet', () => {
       text: expect.any(String),
       reference: expect.any(String),
     }));
-  });
+  }, 15000);
 
   it('renders the successful explanation and logs analytics without raw scripture text', async () => {
     mockFetchScriptureExplanation.mockResolvedValue(successResponse);
