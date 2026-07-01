@@ -3,15 +3,27 @@ jest.mock('../api-config', () => ({
   getAuthHeaders: jest.fn(async () => ({ 'Content-Type': 'application/json' })),
 }));
 
-jest.mock('../mmkv-storage', () => ({
-  getDeviceId: jest.fn(() => 'test-device'),
-}));
+jest.mock('../mmkv-storage', () => {
+  const store = new Map<string, string>();
+  return {
+    mmkvStorage: {
+      getItem: jest.fn((key: string) => store.get(key) ?? null),
+      setItem: jest.fn((key: string, value: string) => store.set(key, value)),
+      removeItem: jest.fn((key: string) => store.delete(key)),
+    },
+    getDeviceId: jest.fn(() => 'test-device'),
+    __clearMockStorage: () => store.clear(),
+  };
+});
 
 import {
   buildUserProfileSyncChange,
   buildUserProfileSyncData,
   buildUserProfileSyncId,
+  syncUserProfileToBackend,
 } from '../user-profile-sync';
+import { drainSyncOutbox, peekSyncOutbox, resetDrainStateForTesting } from '../sync-outbox';
+import { mmkvStorage } from '../mmkv-storage';
 import type { UserProfile } from '../store';
 
 const baseUser: UserProfile = {
@@ -47,6 +59,12 @@ const baseUser: UserProfile = {
   growthGoals: ['prayer', 'scripture'],
   obstacles: ['busy'],
 };
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  (mmkvStorage as any).__clearMockStorage?.();
+  resetDrainStateForTesting();
+});
 
 describe('user profile sync payloads', () => {
   it('stores generation-writing preferences under sync_users.settings', () => {
@@ -91,5 +109,30 @@ describe('user profile sync payloads', () => {
       clientUpdatedAt: '2026-05-06T20:00:00.000Z',
       deleted: false,
     });
+  });
+
+  it('enqueues the profile push when the direct network call fails, then drains it later', async () => {
+    const mockFetch = jest
+      .fn()
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ results: [{ status: 'accepted' }] }),
+      });
+    global.fetch = mockFetch as unknown as typeof fetch;
+
+    await expect(syncUserProfileToBackend(baseUser, '2026-05-06T20:00:00.000Z')).rejects.toThrow('offline');
+
+    expect(peekSyncOutbox()).toHaveLength(1);
+    expect(peekSyncOutbox()[0]).toMatchObject({
+      table: 'users',
+      id: 'user-profile-test-device',
+      clientUpdatedAt: '2026-05-06T20:00:00.000Z',
+    });
+
+    await drainSyncOutbox();
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(peekSyncOutbox()).toHaveLength(0);
   });
 });

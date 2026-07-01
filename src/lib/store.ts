@@ -19,6 +19,20 @@ import type { NudgeType, NudgeImpression } from './nudges';
 import { NUDGE_INITIAL_STATE } from './nudges';
 import { applyStreakRead, getWeekStart, reconcileStreakState } from './streak-helpers';
 import { repairRehydratedState } from './store-rehydrate-repair';
+import {
+  bibleHighlightSyncData,
+  bibleReadingPositionSyncData,
+  bookmarkSyncData,
+  checkInSyncData,
+  devotionalHighlightSyncData,
+  enqueuePersonalDataSyncChange,
+  journalEntrySyncData,
+  methodUsageSyncData,
+  noteFolderSyncData,
+  noteSyncData,
+  seriesPersonaSyncData,
+  usedScriptureSyncData,
+} from './personal-data-sync-records';
 
 // Types
 export type FontSize = 'small' | 'medium' | 'large';
@@ -998,55 +1012,73 @@ export const useUnfoldStore = create<UnfoldState>()(
 
       // Journal actions
       addJournalEntry: (entry) =>
-        set((state) => ({
-          journalEntries: [
-            ...state.journalEntries,
-            {
-              ...entry,
-              id: `journal-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            },
-          ],
-        })),
+        set((state) => {
+          const now = new Date().toISOString();
+          const newEntry: JournalEntry = {
+            ...entry,
+            id: `journal-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            createdAt: now,
+            updatedAt: now,
+          };
+          enqueuePersonalDataSyncChange('journal_entries', newEntry.id, journalEntrySyncData(newEntry), now);
+          return { journalEntries: [...state.journalEntries, newEntry] };
+        }),
 
       updateJournalEntry: (id, content) =>
-        set((state) => ({
-          journalEntries: state.journalEntries.map((e) =>
-            e.id === id
-              ? { ...e, content, updatedAt: new Date().toISOString() }
-              : e
-          ),
-        })),
+        set((state) => {
+          const now = new Date().toISOString();
+          let changed: JournalEntry | null = null;
+          const journalEntries = state.journalEntries.map((e) => {
+            if (e.id !== id) return e;
+            changed = { ...e, content, updatedAt: now };
+            return changed;
+          });
+          const changedEntry = changed as JournalEntry | null;
+          if (changedEntry) enqueuePersonalDataSyncChange('journal_entries', changedEntry.id, journalEntrySyncData(changedEntry), now);
+          return { journalEntries };
+        }),
 
       updateJournalMode: (id, mode) =>
-        set((state) => ({
-          journalEntries: state.journalEntries.map((e) =>
-            e.id === id
-              ? { ...e, journalMode: mode, updatedAt: new Date().toISOString() }
-              : e
-          ),
-        })),
+        set((state) => {
+          const now = new Date().toISOString();
+          let changed: JournalEntry | null = null;
+          const journalEntries = state.journalEntries.map((e) => {
+            if (e.id !== id) return e;
+            changed = { ...e, journalMode: mode, updatedAt: now };
+            return changed;
+          });
+          const changedEntry = changed as JournalEntry | null;
+          if (changedEntry) enqueuePersonalDataSyncChange('journal_entries', changedEntry.id, journalEntrySyncData(changedEntry), now);
+          return { journalEntries };
+        }),
 
       updateSoapResponse: (id, field, value) =>
-        set((state) => ({
-          journalEntries: state.journalEntries.map((e) => {
+        set((state) => {
+          const now = new Date().toISOString();
+          let changed: JournalEntry | null = null;
+          const journalEntries = state.journalEntries.map((e) => {
             if (e.id !== id) return e;
             const soap = e.soapResponses ?? { scripture: '', observation: '', application: '', prayer: '' };
-            return {
+            changed = {
               ...e,
               soapResponses: { ...soap, [field]: value },
-              updatedAt: new Date().toISOString(),
+              updatedAt: now,
             };
-          }),
-        })),
+            return changed;
+          });
+          const changedEntry = changed as JournalEntry | null;
+          if (changedEntry) enqueuePersonalDataSyncChange('journal_entries', changedEntry.id, journalEntrySyncData(changedEntry), now);
+          return { journalEntries };
+        }),
 
       addPrayerRequest: (entryId, text) =>
-        set((state) => ({
-          journalEntries: state.journalEntries.map((e) => {
+        set((state) => {
+          const now = new Date().toISOString();
+          let changed: JournalEntry | null = null;
+          const journalEntries = state.journalEntries.map((e) => {
             if (e.id !== entryId) return e;
             const prayers = e.prayerRequests ?? [];
-            return {
+            changed = {
               ...e,
               prayerRequests: [
                 ...prayers,
@@ -1054,33 +1086,45 @@ export const useUnfoldStore = create<UnfoldState>()(
                   id: `prayer-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
                   text,
                   isAnswered: false,
-                  createdAt: new Date().toISOString(),
+                  createdAt: now,
                 },
               ],
-              updatedAt: new Date().toISOString(),
+              updatedAt: now,
             };
-          }),
-        })),
+            return changed;
+          });
+          const changedEntry = changed as JournalEntry | null;
+          if (changedEntry) enqueuePersonalDataSyncChange('journal_entries', changedEntry.id, journalEntrySyncData(changedEntry), now);
+          return { journalEntries };
+        }),
 
       togglePrayerAnswered: (entryId, prayerId) =>
-        set((state) => ({
-          journalEntries: state.journalEntries.map((e) => {
+        set((state) => {
+          const now = new Date().toISOString();
+          let changed: JournalEntry | null = null;
+          const journalEntries = state.journalEntries.map((e) => {
             if (e.id !== entryId) return e;
-            return {
+            changed = {
               ...e,
               prayerRequests: (e.prayerRequests ?? []).map((p) =>
                 p.id === prayerId
-                  ? { ...p, isAnswered: !p.isAnswered, answeredAt: !p.isAnswered ? new Date().toISOString() : undefined }
+                  ? { ...p, isAnswered: !p.isAnswered, answeredAt: !p.isAnswered ? now : undefined }
                   : p
               ),
-              updatedAt: new Date().toISOString(),
+              updatedAt: now,
             };
-          }),
-        })),
+            return changed;
+          });
+          const changedEntry = changed as JournalEntry | null;
+          if (changedEntry) enqueuePersonalDataSyncChange('journal_entries', changedEntry.id, journalEntrySyncData(changedEntry), now);
+          return { journalEntries };
+        }),
 
       updateQuestionResponse: (entryId, question, response) =>
-        set((state) => ({
-          journalEntries: state.journalEntries.map((e) => {
+        set((state) => {
+          const now = new Date().toISOString();
+          let changed: JournalEntry | null = null;
+          const journalEntries = state.journalEntries.map((e) => {
             if (e.id !== entryId) return e;
             const existing = e.questionResponses ?? [];
             const idx = existing.findIndex((qr) => qr.question === question);
@@ -1090,18 +1134,27 @@ export const useUnfoldStore = create<UnfoldState>()(
             } else {
               updated = [...existing, { question, response }];
             }
-            return { ...e, questionResponses: updated, updatedAt: new Date().toISOString() };
-          }),
-        })),
+            changed = { ...e, questionResponses: updated, updatedAt: now };
+            return changed;
+          });
+          const changedEntry = changed as JournalEntry | null;
+          if (changedEntry) enqueuePersonalDataSyncChange('journal_entries', changedEntry.id, journalEntrySyncData(changedEntry), now);
+          return { journalEntries };
+        }),
 
       setDeeperQuestions: (entryId, questions) =>
-        set((state) => ({
-          journalEntries: state.journalEntries.map((e) =>
-            e.id === entryId
-              ? { ...e, deeperQuestions: questions, updatedAt: new Date().toISOString() }
-              : e
-          ),
-        })),
+        set((state) => {
+          const now = new Date().toISOString();
+          let changed: JournalEntry | null = null;
+          const journalEntries = state.journalEntries.map((e) => {
+            if (e.id !== entryId) return e;
+            changed = { ...e, deeperQuestions: questions, updatedAt: now };
+            return changed;
+          });
+          const changedEntry = changed as JournalEntry | null;
+          if (changedEntry) enqueuePersonalDataSyncChange('journal_entries', changedEntry.id, journalEntrySyncData(changedEntry), now);
+          return { journalEntries };
+        }),
 
       getJournalEntry: (devotionalId, dayNumber) => {
         const state = get();
@@ -1119,6 +1172,9 @@ export const useUnfoldStore = create<UnfoldState>()(
             id: s.id ?? `us_${s.devotionalId}_${s.reference}`.replace(/[^a-zA-Z0-9_-]/g, '_'),
             updatedAt: now,
           }));
+          timestamped.forEach((scripture) => {
+            if (scripture.id) enqueuePersonalDataSyncChange('used_scriptures', scripture.id, usedScriptureSyncData(scripture), now);
+          });
           const combined = [...state.usedScriptures, ...timestamped];
           // Cap at 200 most recent scriptures to prevent unbounded growth
           const MAX_SCRIPTURES = 200;
@@ -1144,18 +1200,22 @@ export const useUnfoldStore = create<UnfoldState>()(
       addBookmark: (bookmark) =>
         set((state) => {
           const now = new Date().toISOString();
+          const newBookmark: Bookmark = { ...bookmark, id: `bm_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, savedAt: now, updatedAt: now };
+          enqueuePersonalDataSyncChange('bookmarks', newBookmark.id, bookmarkSyncData(newBookmark), now);
           return {
             bookmarks: [
-              { ...bookmark, id: `bm_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, savedAt: now, updatedAt: now },
+              newBookmark,
               ...state.bookmarks,
             ],
           };
         }),
 
       removeBookmark: (id) =>
-        set((state) => ({
-          bookmarks: state.bookmarks.filter((b) => b.id !== id),
-        })),
+        set((state) => {
+          const existing = state.bookmarks.find((b) => b.id === id);
+          if (existing) enqueuePersonalDataSyncChange('bookmarks', id, bookmarkSyncData(existing), new Date().toISOString(), true);
+          return { bookmarks: state.bookmarks.filter((b) => b.id !== id) };
+        }),
 
       isBookmarked: (devotionalId, dayNumber) => {
         const state = get();
@@ -1192,6 +1252,7 @@ export const useUnfoldStore = create<UnfoldState>()(
           }
           const now = new Date().toISOString();
           const newHighlight = { ...highlight, id: `hl_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, createdAt: now, updatedAt: now };
+          enqueuePersonalDataSyncChange('highlights', newHighlight.id, devotionalHighlightSyncData(newHighlight), now);
           return {
             highlights: [newHighlight, ...state.highlights],
           };
@@ -1199,9 +1260,11 @@ export const useUnfoldStore = create<UnfoldState>()(
       },
 
       removeHighlight: (id) =>
-        set((state) => ({
-          highlights: state.highlights.filter((h) => h.id !== id),
-        })),
+        set((state) => {
+          const existing = state.highlights.find((h) => h.id === id);
+          if (existing) enqueuePersonalDataSyncChange('highlights', id, devotionalHighlightSyncData(existing), new Date().toISOString(), true);
+          return { highlights: state.highlights.filter((h) => h.id !== id) };
+        }),
 
       getRandomHighlight: () => {
         const highlights = get().highlights;
@@ -1339,8 +1402,11 @@ export const useUnfoldStore = create<UnfoldState>()(
       // Cross-series persona tracking
       addSeriesPersonaRecord: (record) =>
         set((state) => {
+          const now = new Date().toISOString();
           const MAX_HISTORY = 10;
-          const updated = [{ ...record, updatedAt: new Date().toISOString() }, ...state.seriesPersonaHistory].slice(0, MAX_HISTORY);
+          const updatedRecord = { ...record, id: record.id ?? `persona_${record.devotionalId}`, updatedAt: now };
+          enqueuePersonalDataSyncChange('series_persona_history', updatedRecord.id, seriesPersonaSyncData(updatedRecord), now);
+          const updated = [updatedRecord, ...state.seriesPersonaHistory].slice(0, MAX_HISTORY);
           return { seriesPersonaHistory: updated };
         }),
 
@@ -1355,9 +1421,11 @@ export const useUnfoldStore = create<UnfoldState>()(
           if (exists) return state;
           const now = new Date().toISOString();
           const MAX_HISTORY = 200;
+          const newRecord = { methodId, devotionalId, dayNumber, usedAt: now, id: `method_${methodId}_${devotionalId}_${dayNumber}`, updatedAt: now };
+          enqueuePersonalDataSyncChange('method_usage_history', newRecord.id, methodUsageSyncData(newRecord), now);
           return {
             methodUsageHistory: [
-              { methodId, devotionalId, dayNumber, usedAt: now, updatedAt: now },
+              newRecord,
               ...state.methodUsageHistory,
             ].slice(0, MAX_HISTORY),
           };
@@ -1367,9 +1435,11 @@ export const useUnfoldStore = create<UnfoldState>()(
       addCheckIn: (checkIn) =>
         set((state) => {
           const now = new Date().toISOString();
+          const newCheckIn: CheckIn = { ...checkIn, id: newId(), createdAt: now, updatedAt: now };
+          enqueuePersonalDataSyncChange('check_ins', newCheckIn.id, checkInSyncData(newCheckIn), now);
           return {
             checkIns: [
-              { ...checkIn, id: newId(), createdAt: now, updatedAt: now },
+              newCheckIn,
               ...state.checkIns,
             ].slice(0, 200), // Cap at 200 entries
           };
@@ -1542,30 +1612,41 @@ export const useUnfoldStore = create<UnfoldState>()(
       addBibleHighlight: (highlight) =>
         set((state) => {
           const now = new Date().toISOString();
+          const newHighlight: BibleHighlight = {
+            ...highlight,
+            id: `bh_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            createdAt: now,
+            updatedAt: now,
+          };
+          enqueuePersonalDataSyncChange('bible_highlights', newHighlight.id, bibleHighlightSyncData(newHighlight), now);
           return {
             bibleHighlights: [
               ...state.bibleHighlights,
-              {
-                ...highlight,
-                id: `bh_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-                createdAt: now,
-                updatedAt: now,
-              },
+              newHighlight,
             ],
           };
         }),
 
       removeBibleHighlight: (id) =>
-        set((state) => ({
-          bibleHighlights: state.bibleHighlights.filter((h) => h.id !== id),
-        })),
+        set((state) => {
+          const existing = state.bibleHighlights.find((h) => h.id === id);
+          if (existing) enqueuePersonalDataSyncChange('bible_highlights', id, bibleHighlightSyncData(existing), new Date().toISOString(), true);
+          return { bibleHighlights: state.bibleHighlights.filter((h) => h.id !== id) };
+        }),
 
       updateBibleHighlightNote: (id, note) =>
-        set((state) => ({
-          bibleHighlights: state.bibleHighlights.map((h) =>
-            h.id === id ? { ...h, note, updatedAt: new Date().toISOString() } : h,
-          ),
-        })),
+        set((state) => {
+          const now = new Date().toISOString();
+          let changed: BibleHighlight | null = null;
+          const bibleHighlights = state.bibleHighlights.map((h) => {
+            if (h.id !== id) return h;
+            changed = { ...h, note, updatedAt: now };
+            return changed;
+          });
+          const changedHighlight = changed as BibleHighlight | null;
+          if (changedHighlight) enqueuePersonalDataSyncChange('bible_highlights', changedHighlight.id, bibleHighlightSyncData(changedHighlight), now);
+          return { bibleHighlights };
+        }),
 
       getBibleHighlightsForChapter: (bookId, chapter) => {
         return get().bibleHighlights.filter(
@@ -1582,6 +1663,7 @@ export const useUnfoldStore = create<UnfoldState>()(
             lastReadAt: now,
             updatedAt: now,
           };
+          if (newEntry.id) enqueuePersonalDataSyncChange('bible_reading_positions', newEntry.id, bibleReadingPositionSyncData(newEntry), now);
           // Keep last 100 entries, most recent first
           const history = [
             newEntry,
@@ -1608,9 +1690,11 @@ export const useUnfoldStore = create<UnfoldState>()(
       addNote: (note) => {
         const id = `note_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
         const now = new Date().toISOString();
+        const newNote: Note = { ...note, id, createdAt: now, updatedAt: now };
+        enqueuePersonalDataSyncChange('notes', id, noteSyncData(newNote), now);
         set((state) => ({
           notes: [
-            { ...note, id, createdAt: now, updatedAt: now },
+            newNote,
             ...state.notes,
           ],
         }));
@@ -1618,18 +1702,25 @@ export const useUnfoldStore = create<UnfoldState>()(
       },
 
       updateNote: (id, updates) =>
-        set((state) => ({
-          notes: state.notes.map((n) =>
-            n.id === id
-              ? { ...n, ...updates, updatedAt: new Date().toISOString() }
-              : n,
-          ),
-        })),
+        set((state) => {
+          const now = new Date().toISOString();
+          let changed: Note | null = null;
+          const notes = state.notes.map((n) => {
+            if (n.id !== id) return n;
+            changed = { ...n, ...updates, updatedAt: now };
+            return changed;
+          });
+          const changedNote = changed as Note | null;
+          if (changedNote) enqueuePersonalDataSyncChange('notes', id, noteSyncData(changedNote), now);
+          return { notes };
+        }),
 
       deleteNote: (id) =>
-        set((state) => ({
-          notes: state.notes.filter((n) => n.id !== id),
-        })),
+        set((state) => {
+          const existing = state.notes.find((n) => n.id === id);
+          if (existing) enqueuePersonalDataSyncChange('notes', id, noteSyncData(existing), new Date().toISOString(), true);
+          return { notes: state.notes.filter((n) => n.id !== id) };
+        }),
 
       getNotesForScripture: (bookId, chapter) => {
         return get().notes.filter(
@@ -1653,18 +1744,20 @@ export const useUnfoldStore = create<UnfoldState>()(
         const now = new Date().toISOString();
         set((state) => {
           const siblings = state.folders.filter((f) => (f.parentId ?? undefined) === parentId);
+          const newFolder: NoteFolder = {
+            id,
+            name,
+            color,
+            parentId,
+            sortOrder: siblings.length,
+            createdAt: now,
+            updatedAt: now,
+          };
+          enqueuePersonalDataSyncChange('note_folders', id, noteFolderSyncData(newFolder), now);
           return {
             folders: [
               ...state.folders,
-              {
-                id,
-                name,
-                color,
-                parentId,
-                sortOrder: siblings.length,
-                createdAt: now,
-                updatedAt: now,
-              },
+              newFolder,
             ],
           };
         });
@@ -1672,13 +1765,18 @@ export const useUnfoldStore = create<UnfoldState>()(
       },
 
       updateFolder: (id, updates) =>
-        set((state) => ({
-          folders: state.folders.map((f) =>
-            f.id === id
-              ? { ...f, ...updates, updatedAt: new Date().toISOString() }
-              : f,
-          ),
-        })),
+        set((state) => {
+          const now = new Date().toISOString();
+          let changed: NoteFolder | null = null;
+          const folders = state.folders.map((f) => {
+            if (f.id !== id) return f;
+            changed = { ...f, ...updates, updatedAt: now };
+            return changed;
+          });
+          const changedFolder = changed as NoteFolder | null;
+          if (changedFolder) enqueuePersonalDataSyncChange('note_folders', id, noteFolderSyncData(changedFolder), now);
+          return { folders };
+        }),
 
       deleteFolder: (id, deleteNotes = false) =>
         set((state) => {
@@ -1695,34 +1793,55 @@ export const useUnfoldStore = create<UnfoldState>()(
             }
           }
           const now = new Date().toISOString();
+          state.folders
+            .filter((f) => idsToDelete.has(f.id))
+            .forEach((folder) => enqueuePersonalDataSyncChange('note_folders', folder.id, noteFolderSyncData(folder), now, true));
+
+          const notes = deleteNotes
+            ? state.notes.filter((n) => {
+                const shouldDelete = !!n.folderId && idsToDelete.has(n.folderId);
+                if (shouldDelete) enqueuePersonalDataSyncChange('notes', n.id, noteSyncData(n), now, true);
+                return !shouldDelete;
+              })
+            : state.notes.map((n) => {
+                if (!n.folderId || !idsToDelete.has(n.folderId)) return n;
+                const updatedNote = { ...n, folderId: undefined, updatedAt: now };
+                enqueuePersonalDataSyncChange('notes', updatedNote.id, noteSyncData(updatedNote), now);
+                return updatedNote;
+              });
+
           return {
             folders: state.folders.filter((f) => !idsToDelete.has(f.id)),
-            notes: deleteNotes
-              ? state.notes.filter((n) => !n.folderId || !idsToDelete.has(n.folderId))
-              : state.notes.map((n) =>
-                  n.folderId && idsToDelete.has(n.folderId)
-                    ? { ...n, folderId: undefined, updatedAt: now }
-                    : n,
-                ),
+            notes,
           };
         }),
 
       moveNoteToFolder: (noteId, folderId) =>
-        set((state) => ({
-          notes: state.notes.map((n) =>
-            n.id === noteId
-              ? { ...n, folderId: folderId ?? undefined, updatedAt: new Date().toISOString() }
-              : n,
-          ),
-        })),
+        set((state) => {
+          const now = new Date().toISOString();
+          let changed: Note | null = null;
+          const notes = state.notes.map((n) => {
+            if (n.id !== noteId) return n;
+            changed = { ...n, folderId: folderId ?? undefined, updatedAt: now };
+            return changed;
+          });
+          const changedNote = changed as Note | null;
+          if (changedNote) enqueuePersonalDataSyncChange('notes', noteId, noteSyncData(changedNote), now);
+          return { notes };
+        }),
 
       reorderFolders: (orderedIds) => {
-        set((state) => ({
-          folders: state.folders.map((folder) => {
+        set((state) => {
+          const now = new Date().toISOString();
+          const folders = state.folders.map((folder) => {
             const sortOrder = orderedIds.indexOf(folder.id);
-            return sortOrder === -1 ? folder : { ...folder, sortOrder };
-          }),
-        }));
+            if (sortOrder === -1) return folder;
+            const updatedFolder = { ...folder, sortOrder, updatedAt: now };
+            enqueuePersonalDataSyncChange('note_folders', updatedFolder.id, noteFolderSyncData(updatedFolder), now);
+            return updatedFolder;
+          });
+          return { folders };
+        });
       },
 
       getSubfolders: (parentId) => {

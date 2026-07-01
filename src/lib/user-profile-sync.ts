@@ -1,6 +1,7 @@
 import { getAuthHeaders, PRIMARY_BACKEND_URL } from './api-config';
 import { getDeviceId } from './mmkv-storage';
 import { logger } from './logger';
+import { enqueueSyncChanges } from './sync-outbox';
 import type { UserProfile } from './store';
 
 export type UserProfileSyncChange = {
@@ -74,26 +75,33 @@ export async function syncUserProfileToBackend(
   user: UserProfile,
   clientUpdatedAt = new Date().toISOString()
 ): Promise<void> {
-  const response = await fetch(`${PRIMARY_BACKEND_URL}/api/sync/push`, {
-    method: 'POST',
-    headers: await getAuthHeaders(),
-    body: JSON.stringify({
-      changes: [buildUserProfileSyncChange(user, clientUpdatedAt)],
-      deviceTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    }),
-  });
+  const change = buildUserProfileSyncChange(user, clientUpdatedAt);
 
-  if (!response.ok) {
-    throw new Error(`User profile sync failed with HTTP ${response.status}`);
+  try {
+    const response = await fetch(`${PRIMARY_BACKEND_URL}/api/sync/push`, {
+      method: 'POST',
+      headers: await getAuthHeaders(),
+      body: JSON.stringify({
+        changes: [change],
+        deviceTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`User profile sync failed with HTTP ${response.status}`);
+    }
+
+    const payload = await response.json().catch(() => null) as {
+      results?: Array<{ status?: string; reason?: string }>;
+    } | null;
+    const result = payload?.results?.[0];
+    if (result?.status && result.status !== 'accepted') {
+      throw new Error(`User profile sync ${result.status}${result.reason ? `: ${result.reason}` : ''}`);
+    }
+
+    logger.log('[user-sync] Profile synced to backend');
+  } catch (error) {
+    enqueueSyncChanges([change]);
+    throw error;
   }
-
-  const payload = await response.json().catch(() => null) as {
-    results?: Array<{ status?: string; reason?: string }>;
-  } | null;
-  const result = payload?.results?.[0];
-  if (result?.status && result.status !== 'accepted') {
-    throw new Error(`User profile sync ${result.status}${result.reason ? `: ${result.reason}` : ''}`);
-  }
-
-  logger.log('[user-sync] Profile synced to backend');
 }

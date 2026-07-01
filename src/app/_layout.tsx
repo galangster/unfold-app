@@ -17,6 +17,7 @@ import { useCheckInNotifications } from '@/hooks/useCheckInNotifications';
 import { useDailyReminderSync } from '@/hooks/useDailyReminderSync';
 import { useStreakReconcile } from '@/hooks/useStreakReconcile';
 import { useUserProfileSync } from '@/hooks/useUserProfileSync';
+import { useFullSyncPull } from '@/hooks/useFullSyncPull';
 import { useSyncOutboxDrain } from '@/hooks/useSyncOutboxDrain';
 import { logger } from '@/lib/logger';
 import { useUnfoldStore } from '@/lib/store';
@@ -80,6 +81,9 @@ function RootLayoutNav() {
   // Keep backend sync_users profile/preferences current so Day 2+ generation
   // uses Settings edits such as writing style and faith background.
   useUserProfileSync();
+
+  // Pull all user-owned sync tables incrementally on app start/reconnect.
+  useFullSyncPull();
 
   // Drain the sync outbox on mount and on reconnect so offline completions
   // reach the server when connectivity returns.

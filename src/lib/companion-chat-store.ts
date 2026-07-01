@@ -15,6 +15,11 @@ import { mmkvStorage } from './mmkv-storage';
 import { getAuthHeaders, PRIMARY_BACKEND_URL } from '@/lib/api-config';
 import type { DeepLinkData } from './parse-deep-links';
 import { BOOK_NAME_TO_ID } from './bible-constants';
+import {
+  companionConversationSyncData,
+  companionMessageSyncData,
+  enqueuePersonalDataSyncChange,
+} from './personal-data-sync-records';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -225,6 +230,8 @@ export const useCompanionChatStore = create<CompanionChatState>()(
               archived: false,
               updatedAt: now,
             };
+            enqueuePersonalDataSyncChange('companion_conversations', newConv.id, companionConversationSyncData(newConv), now);
+            enqueuePersonalDataSyncChange('companion_messages', timestampedMsg.id, companionMessageSyncData(timestampedMsg, newConv.id), now);
             return {
               conversations: [...s.conversations, newConv],
               activeConversationId: newConv.id,
@@ -238,7 +245,7 @@ export const useCompanionChatStore = create<CompanionChatState>()(
               const nextTitle = c.title ?? (timestampedMsg.role === 'user'
                 ? deriveConversationTitleFromText(timestampedMsg.content)
                 : null);
-              return {
+              const nextConv: Conversation = {
                 ...c,
                 messages: updated.length > MAX_STORED_MESSAGES
                   ? updated.slice(-MAX_STORED_MESSAGES)
@@ -247,6 +254,9 @@ export const useCompanionChatStore = create<CompanionChatState>()(
                 title: nextTitle,
                 updatedAt: now,
               };
+              enqueuePersonalDataSyncChange('companion_conversations', nextConv.id, companionConversationSyncData(nextConv), now);
+              enqueuePersonalDataSyncChange('companion_messages', timestampedMsg.id, companionMessageSyncData(timestampedMsg, nextConv.id), now);
+              return nextConv;
             }),
           };
         }),
@@ -259,13 +269,20 @@ export const useCompanionChatStore = create<CompanionChatState>()(
           return {
             conversations: s.conversations.map(c => {
               if (c.id !== activeId) return c;
-              return {
+              let changedMessage: CompanionMessage | null = null;
+              const nextConv: Conversation = {
                 ...c,
                 updatedAt: now,
-                messages: (c.messages ?? []).map(m =>
-                  m.id === id ? { ...m, ...updates, updatedAt: now } : m
-                ),
+                messages: (c.messages ?? []).map(m => {
+                  if (m.id !== id) return m;
+                  changedMessage = { ...m, ...updates, updatedAt: now };
+                  return changedMessage;
+                }),
               };
+              enqueuePersonalDataSyncChange('companion_conversations', nextConv.id, companionConversationSyncData(nextConv), now);
+              const changedSyncMessage = changedMessage as CompanionMessage | null;
+              if (changedSyncMessage) enqueuePersonalDataSyncChange('companion_messages', changedSyncMessage.id, companionMessageSyncData(changedSyncMessage, nextConv.id), now);
+              return nextConv;
             }),
           };
         }),
@@ -304,13 +321,20 @@ export const useCompanionChatStore = create<CompanionChatState>()(
           return {
             conversations: s.conversations.map(c => {
               if (c.id !== activeId) return c;
-              return {
+              let changedMessage: CompanionMessage | null = null;
+              const nextConv: Conversation = {
                 ...c,
                 updatedAt: now,
-                messages: (c.messages ?? []).map(m =>
-                  m.id === id ? { ...m, feedback, updatedAt: now } : m
-                ),
+                messages: (c.messages ?? []).map(m => {
+                  if (m.id !== id) return m;
+                  changedMessage = { ...m, feedback, updatedAt: now };
+                  return changedMessage;
+                }),
               };
+              enqueuePersonalDataSyncChange('companion_conversations', nextConv.id, companionConversationSyncData(nextConv), now);
+              const changedSyncMessage = changedMessage as CompanionMessage | null;
+              if (changedSyncMessage) enqueuePersonalDataSyncChange('companion_messages', changedSyncMessage.id, companionMessageSyncData(changedSyncMessage, nextConv.id), now);
+              return nextConv;
             }),
           };
         }),
@@ -325,11 +349,12 @@ export const useCompanionChatStore = create<CompanionChatState>()(
           const activeMessages = active?.messages ?? [];
           if (active && activeMessages.length > 0) {
             const tags: string[] = []; // Topic tags now handled server-side
-            conversations = conversations.map(c =>
-              c.id === active.id
-                ? { ...c, archived: true, topicTags: tags, title: generateTitle({ ...c, topicTags: tags }), updatedAt: now }
-                : c
-            );
+            conversations = conversations.map(c => {
+              if (c.id !== active.id) return c;
+              const nextConv = { ...c, archived: true, topicTags: tags, title: generateTitle({ ...c, topicTags: tags }), updatedAt: now };
+              enqueuePersonalDataSyncChange('companion_conversations', nextConv.id, companionConversationSyncData(nextConv), now);
+              return nextConv;
+            });
           } else if (active && activeMessages.length === 0) {
             // Remove empty conversation instead of archiving
             conversations = conversations.filter(c => c.id !== active.id);
@@ -363,20 +388,24 @@ export const useCompanionChatStore = create<CompanionChatState>()(
         }),
 
       archiveActiveConversation: (title, topicTags) =>
-        set((s) => ({
-          conversations: s.conversations.map(c =>
-            c.id === s.activeConversationId
-              ? {
-                  ...c,
-                  archived: true,
-                  title: title ?? generateTitle(c),
-                  topicTags: topicTags ?? c.topicTags,
-                  updatedAt: new Date().toISOString(),
-                }
-              : c
-          ),
-          activeConversationId: null,
-        })),
+        set((s) => {
+          const now = new Date().toISOString();
+          return {
+            conversations: s.conversations.map(c => {
+              if (c.id !== s.activeConversationId) return c;
+              const nextConv = {
+                ...c,
+                archived: true,
+                title: title ?? generateTitle(c),
+                topicTags: topicTags ?? c.topicTags,
+                updatedAt: now,
+              };
+              enqueuePersonalDataSyncChange('companion_conversations', nextConv.id, companionConversationSyncData(nextConv), now);
+              return nextConv;
+            }),
+            activeConversationId: null,
+          };
+        }),
 
       checkAndArchiveStale: () => {
         const active = selectActiveConversation(get());
@@ -390,22 +419,45 @@ export const useCompanionChatStore = create<CompanionChatState>()(
       },
 
       deleteConversation: (id) =>
-        set((s) => ({
-          conversations: s.conversations.filter(c => c.id !== id),
-          activeConversationId: s.activeConversationId === id ? null : s.activeConversationId,
-        })),
+        set((s) => {
+          const now = new Date().toISOString();
+          const existing = s.conversations.find(c => c.id === id);
+          if (existing) {
+            enqueuePersonalDataSyncChange('companion_conversations', id, companionConversationSyncData(existing), now, true);
+            (existing.messages ?? []).forEach((message) => {
+              enqueuePersonalDataSyncChange('companion_messages', message.id, companionMessageSyncData(message, id), now, true);
+            });
+          }
+          return {
+            conversations: s.conversations.filter(c => c.id !== id),
+            activeConversationId: s.activeConversationId === id ? null : s.activeConversationId,
+          };
+        }),
 
       clearAllConversations: () =>
-        set({ conversations: [], activeConversationId: null }),
+        set((s) => {
+          const now = new Date().toISOString();
+          s.conversations.forEach((conversation) => {
+            enqueuePersonalDataSyncChange('companion_conversations', conversation.id, companionConversationSyncData(conversation), now, true);
+            (conversation.messages ?? []).forEach((message) => {
+              enqueuePersonalDataSyncChange('companion_messages', message.id, companionMessageSyncData(message, conversation.id), now, true);
+            });
+          });
+          return { conversations: [], activeConversationId: null };
+        }),
 
       updateConversation: (id, updates) =>
-        set((s) => ({
-          conversations: s.conversations.map(c =>
-            c.id === id
-              ? { ...c, ...updates, updatedAt: new Date().toISOString() }
-              : c
-          ),
-        })),
+        set((s) => {
+          const now = new Date().toISOString();
+          return {
+            conversations: s.conversations.map(c => {
+              if (c.id !== id) return c;
+              const nextConv = { ...c, ...updates, updatedAt: now };
+              enqueuePersonalDataSyncChange('companion_conversations', nextConv.id, companionConversationSyncData(nextConv), now);
+              return nextConv;
+            }),
+          };
+        }),
 
       setActiveConversation: (id) =>
         set((s) => {
@@ -418,19 +470,23 @@ export const useCompanionChatStore = create<CompanionChatState>()(
           let conversations = s.conversations;
 
           if (active && active.id !== id && (active.messages ?? []).length > 0) {
-            conversations = conversations.map(c =>
-              c.id === active.id
-                ? { ...c, archived: true, title: c.title ?? generateTitle(c), updatedAt: now }
-                : c
-            );
+            conversations = conversations.map(c => {
+              if (c.id !== active.id) return c;
+              const nextConv = { ...c, archived: true, title: c.title ?? generateTitle(c), updatedAt: now };
+              enqueuePersonalDataSyncChange('companion_conversations', nextConv.id, companionConversationSyncData(nextConv), now);
+              return nextConv;
+            });
           } else if (active && active.id !== id && (active.messages ?? []).length === 0) {
             conversations = conversations.filter(c => c.id !== active.id);
           }
 
           // Un-archive the target and set it active
-          conversations = conversations.map(c =>
-            c.id === id ? { ...c, archived: false, updatedAt: now } : c
-          );
+          conversations = conversations.map(c => {
+            if (c.id !== id) return c;
+            const nextConv = { ...c, archived: false, updatedAt: now };
+            enqueuePersonalDataSyncChange('companion_conversations', nextConv.id, companionConversationSyncData(nextConv), now);
+            return nextConv;
+          });
 
           return {
             conversations,
