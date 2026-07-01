@@ -97,20 +97,16 @@ export function TodayCompletionRive({
 
   const animatedStyle = useAnimatedStyle(() => {
     const p = loopProgress.get();
-    // Keep the ambient art clearly visible (a gentle breath, high floor) — the
-    // earlier low light-mode range washed the animation out almost entirely.
-    // Light mode holds the ambient art near full strength (0.92–1.0) so accent
-    // art stays legible on the light surface; dark breathes a little more
-    // (0.88–1.0). (Raised from an earlier 0.72–0.92 light range that washed out.)
+    // Gentle opacity-only breath. NO translate/scale: the scenes self-animate
+    // inside the .riv, and a container transform made the whole artwork visibly
+    // bob/drift up-and-down on top of that authored motion (unwanted). Keep only
+    // a subtle fade so the art stays legible without appearing to move.
+    // Light mode holds near full strength (0.92–1.0); dark breathes a little
+    // more (0.88–1.0).
     const minOpacity = isDark ? 0.88 : 0.92;
     const maxOpacity = 1;
     return {
       opacity: interpolate(p, [0, 0.5, 1], [minOpacity, maxOpacity, minOpacity]),
-      transform: [
-        { translateX: interpolate(p, [0, 1], [-6, 6]) },
-        { translateY: interpolate(p, [0, 0.5, 1], [4, -7, 4]) },
-        { scale: interpolate(p, [0, 0.5, 1], [1.01, 1.025, 1.01]) },
-      ],
     };
   });
 

@@ -14,9 +14,12 @@ export const RIVE_ACCENT_NUMBER_PROPERTIES = [
 export const RIVE_ACCENT_COLOR_PROPERTIES = [
   // ── Artwork (the accent) ─────────────────────────────────────────────────
   // `artwork_color` is the primary artwork color the animator binds the scene
-  // art to. The rest are aliases for older/other exports (wind/leaves' baked
-  // leaves don't yet expose these — they're skipped quietly until re-export).
+  // art to; `accentColor` (camelCase) is the wind-leaves / tree spelling for
+  // the same accent-driven art (verified via `strings` on the .riv files). The
+  // rest are aliases for older/other exports. Slots a scene doesn't expose are
+  // skipped quietly by applyViewModelTheme, so setting all of them is safe.
   'artwork_color',
+  'accentColor',
   'shadedArtwork_color',
   'accent_color',
   'leaf_color',
@@ -102,6 +105,7 @@ export function buildRiveThemeValues({
     colorValues: {
       // Artwork → accent.
       artwork_color: accentOpaque,
+      accentColor: accentOpaque,
       shadedArtwork_color: shadedArtwork,
       accent_color: accentOpaque,
       leaf_color: accentOpaque,

@@ -41,7 +41,7 @@ export const ACCENT_THEMES: AccentTheme[] = [
   { id: 'forest', name: 'Forest', dark: '#6DAF7B', light: '#4A8A5A' },
   { id: 'lavender', name: 'Lavender', dark: '#9B8EC4', light: '#6A5C9E' },
   { id: 'ember', name: 'Ember', dark: '#D4895C', light: '#A86840' },
-  { id: 'slate', name: 'Slate', dark: '#8A9BAE', light: '#4D6175' },
+  { id: 'slate', name: 'Slate', dark: '#7796C5', light: '#395D93' },
 ];
 
 // Reading font options (premium feature)
