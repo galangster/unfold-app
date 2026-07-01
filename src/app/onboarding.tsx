@@ -940,6 +940,7 @@ export default function OnboardingScreen() {
         readingDuration: data.readingDuration,
         devotionalLength: data.devotionalLength,
         reminderTime: data.reminderTime,
+        dailyReminderEnabled: true,
         hasCompletedOnboarding: true,
         hasCompletedStyleOnboarding: true,
         isPremium: isPrem,

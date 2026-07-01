@@ -9,6 +9,7 @@ export interface DailyReminderContentInput {
 
 export interface DailyReminderFingerprintInput {
   reminderTime?: string | null;
+  dailyReminderEnabled?: boolean;
   currentDevotional: Devotional | null | undefined;
   premiumPolicy: PremiumAccessPolicy;
 }
@@ -101,6 +102,7 @@ export function getDailyReminderContent({
 
 export function buildDailyReminderFingerprint({
   reminderTime,
+  dailyReminderEnabled = Boolean(reminderTime),
   currentDevotional,
   premiumPolicy,
 }: DailyReminderFingerprintInput): string {
@@ -109,6 +111,7 @@ export function buildDailyReminderFingerprint({
   // JSON.stringify prevents collisions from content containing separators.
   // Keep this aligned with getDailyReminderContent().
   return JSON.stringify([
+    dailyReminderEnabled ? 'enabled' : 'disabled',
     reminderTime ?? '',
     premiumPolicy,
     currentDevotional?.id ?? '',

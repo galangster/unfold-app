@@ -526,5 +526,20 @@ if (version < 37) {
   }
 }
 
+// Migration from version 37 to 38: Add durable daily-reminder intent.
+// Existing users with a reminder time keep reminders enabled; users without a
+// reminder time stay off until they explicitly enable the toggle.
+if (version < 38) {
+  try {
+    const user = (state as any).user;
+    if (user && typeof user === 'object' && user.dailyReminderEnabled === undefined) {
+      user.dailyReminderEnabled = Boolean(user.reminderTime);
+    }
+    logger.log('[store] Migration v37→38: Added daily reminder enabled flag');
+  } catch (err) {
+    console.error('[store] Migration v37→38 failed:', err);
+  }
+}
+
 return state;
 }

@@ -161,6 +161,7 @@ export interface UserProfile {
   readingDuration: 5 | 15 | 30;
   devotionalLength: 3 | 7 | 14 | 30;
   reminderTime: string;
+  dailyReminderEnabled: boolean;
   hasCompletedOnboarding: boolean;
   hasCompletedStyleOnboarding: boolean;
   isPremium: boolean;
@@ -1888,7 +1889,7 @@ export const useUnfoldStore = create<UnfoldState>()(
     {
       name: 'unfold-storage',
       storage: createJSONStorage(() => mmkvStorage),
-      version: 37, // v37: Add dismiss dates for optional Today bridge and saved-echo cards
+      version: 38, // v38: Add durable dailyReminderEnabled intent flag
       // Validate and migrate persisted state
       migrate: migrateUnfoldStore,
 

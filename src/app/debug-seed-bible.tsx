@@ -38,6 +38,7 @@ function buildQaBibleUser(themeMode: ThemeMode, accentTheme: AccentThemeId, exis
     readingDuration: existing?.readingDuration ?? 5,
     devotionalLength: existing?.devotionalLength ?? 3,
     reminderTime: existing?.reminderTime ?? '8:00 AM',
+    dailyReminderEnabled: existing?.dailyReminderEnabled ?? true,
     hasCompletedOnboarding: true,
     hasCompletedStyleOnboarding: true,
     isPremium: existing?.isPremium ?? false,

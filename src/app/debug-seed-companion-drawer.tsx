@@ -18,6 +18,7 @@ const qaCompanionUser: UserProfile = {
   readingDuration: 5,
   devotionalLength: 3,
   reminderTime: '8:00 AM',
+  dailyReminderEnabled: true,
   hasCompletedOnboarding: true,
   hasCompletedStyleOnboarding: true,
   isPremium: false,

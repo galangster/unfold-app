@@ -52,11 +52,13 @@ const DEBOUNCE_MS = 750;
 function useReminderFingerprint(premiumPolicy: ReturnType<typeof usePremiumAccessPolicy>): string {
   return useUnfoldStore((state) => {
     const reminderTime = state.user?.reminderTime ?? '';
+    const dailyReminderEnabled = state.user?.dailyReminderEnabled ?? Boolean(reminderTime);
     const currentDevotional =
       state.devotionals.find((devotional) => devotional.id === state.currentDevotionalId) ?? null;
 
     return buildDailyReminderFingerprint({
       reminderTime,
+      dailyReminderEnabled,
       currentDevotional,
       premiumPolicy,
     });
@@ -125,13 +127,15 @@ export function useDailyReminderSync() {
       // values, not whatever was current when it was enqueued.
       const state = useUnfoldStore.getState();
       const reminderTime = state.user?.reminderTime;
+      const dailyReminderEnabled = state.user?.dailyReminderEnabled ?? Boolean(reminderTime);
 
-      if (!reminderTime) {
-        // No reminder configured — make sure nothing is pending in the OS.
+      if (!reminderTime || !dailyReminderEnabled) {
+        // No reminder configured or user disabled it — make sure nothing is
+        // pending in the OS without touching check-in notifications.
         await cancelNotificationById(NOTIFICATION_IDS.DAILY_REMINDER);
         lastAppliedRef.current = latestFingerprintRef.current;
         lastAppliedDayRef.current = todayStr;
-        logger.log(`[useDailyReminderSync] No reminderTime; cancelled daily reminder (reason=${reason})`);
+        logger.log(`[useDailyReminderSync] Daily reminder disabled; cancelled daily reminder (reason=${reason})`);
         return;
       }
 
@@ -151,7 +155,8 @@ export function useDailyReminderSync() {
       // with `reset()` can leak a ghost notification past cancelAllReminders.
       const freshState = useUnfoldStore.getState();
       const freshReminderTime = freshState.user?.reminderTime;
-      if (!freshReminderTime || latestFingerprintRef.current !== target) {
+      const freshDailyReminderEnabled = freshState.user?.dailyReminderEnabled ?? Boolean(freshReminderTime);
+      if (!freshReminderTime || !freshDailyReminderEnabled || latestFingerprintRef.current !== target) {
         await cancelNotificationById(NOTIFICATION_IDS.DAILY_REMINDER);
         // Force another run to converge on the new state.
         pendingRef.current = true;

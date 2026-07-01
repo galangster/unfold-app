@@ -28,6 +28,7 @@ export function buildUserProfileSyncData(user: UserProfile): Record<string, unkn
     readingDuration: user.readingDuration,
     devotionalLength: user.devotionalLength,
     reminderTime: user.reminderTime,
+    dailyReminderEnabled: user.dailyReminderEnabled,
     bibleTranslation: user.bibleTranslation,
     fontSize: user.fontSize,
     themeMode: user.themeMode,

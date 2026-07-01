@@ -82,4 +82,23 @@ describe('daily reminder content', () => {
 
     expect(deniedFingerprint).not.toBe(unknownFingerprint);
   });
+
+  it('changes the fingerprint when durable reminder intent is toggled off', () => {
+    const currentDevotional = devotional({ currentDay: 6, days: [day({ dayNumber: 6 })] });
+
+    const enabledFingerprint = buildDailyReminderFingerprint({
+      reminderTime: '8:00 AM',
+      dailyReminderEnabled: true,
+      currentDevotional,
+      premiumPolicy: 'granted',
+    });
+    const disabledFingerprint = buildDailyReminderFingerprint({
+      reminderTime: '8:00 AM',
+      dailyReminderEnabled: false,
+      currentDevotional,
+      premiumPolicy: 'granted',
+    });
+
+    expect(disabledFingerprint).not.toBe(enabledFingerprint);
+  });
 });

@@ -59,7 +59,8 @@ import { Spacing } from '@/constants/spacing';
 import { Typography } from '@/constants/typography';
 import {
   scheduleDailyReminder,
-  cancelAllReminders,
+  cancelNotificationById,
+  NOTIFICATION_IDS,
   areNotificationsEnabled,
   scheduleDevotionalReadyTapTestNotification,
 } from '@/lib/notifications';
@@ -198,10 +199,11 @@ export default function YouScreen() {
   useEffect(() => {
     const checkNotifications = async () => {
       const enabled = await areNotificationsEnabled();
-      setNotificationsEnabled(enabled && !!user?.reminderTime);
+      const dailyReminderIntentEnabled = user?.dailyReminderEnabled ?? Boolean(user?.reminderTime);
+      setNotificationsEnabled(enabled && !!user?.reminderTime && dailyReminderIntentEnabled);
     };
     checkNotifications();
-  }, [user?.reminderTime]);
+  }, [user?.dailyReminderEnabled, user?.reminderTime]);
 
   // --- Handlers ---
 
@@ -212,15 +214,16 @@ export default function YouScreen() {
       const result = await scheduleDailyReminder(time);
       if (result) {
         setNotificationsEnabled(true);
-        updateUser({ reminderTime: time });
+        updateUser({ reminderTime: time, dailyReminderEnabled: true });
         // Midday / evening check-in scheduling is owned by
         // `useCheckInNotifications` — it will detect any permission change
         // on the next foreground reconcile (or immediately, via its
         // fingerprint watcher, if policy / enabled flags change here).
       }
     } else {
-      await cancelAllReminders();
+      await cancelNotificationById(NOTIFICATION_IDS.DAILY_REMINDER);
       setNotificationsEnabled(false);
+      updateUser({ dailyReminderEnabled: false });
     }
   };
 
@@ -275,7 +278,7 @@ export default function YouScreen() {
     // useDailyReminderSync picks this up via the fingerprint and reschedules.
     // Do not call scheduleDailyReminder here — that created a dual scheduling
     // authority that raced with the centralized sync hook.
-    updateUser({ reminderTime: time });
+    updateUser({ reminderTime: time, dailyReminderEnabled: true });
     setShowTimeSelector(false);
   };
 
@@ -1359,11 +1362,18 @@ export default function YouScreen() {
 
             {/* Time options (outside the card for cleaner expand) */}
             {showTimeSelector && (
-              <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)} style={{ marginTop: -Spacing['4'], marginBottom: Spacing['6'] }}>
+              <Animated.View
+                entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
+                accessibilityRole="radiogroup"
+                style={{ marginTop: -Spacing['4'], marginBottom: Spacing['6'] }}
+              >
                 {REMINDER_TIMES.map((time) => (
                   <TouchableOpacity activeOpacity={0.7}
                     key={time.value}
                     onPress={() => handleSelectTime(time.value)}
+                    accessibilityRole="radio"
+                    accessibilityLabel={formatReminderTime(time.value)}
+                    accessibilityState={{ selected: user?.reminderTime === time.value }}
                   >
                     <View
                       style={{
