@@ -81,4 +81,9 @@ describe('reading.tsx server-side generation migration', () => {
     expect(readingSource).toContain('<ReaderLoadingSkeleton colors={colors} />');
     expect(readingSource).toContain('No series found');
   });
+
+  it('does not ship unguarded Reading debug console logs (FE-04)', () => {
+    expect(readingSource).not.toContain("console.log('[Reading]");
+    expect(readingSource).not.toContain('RENDER CALLED');
+  });
 });

@@ -180,7 +180,10 @@
   "private": true,
   "overrides": {
     "react-dom": "19.2.3",
-    "react-native-css-interop": "0.1.22"
+    "react-native-css-interop": "0.1.22",
+    "markdown-it": "14.2.0",
+    "linkify-it": "5.0.2",
+    "lodash": "4.18.1"
   },
   "patchedDependencies": {
     "@nandorojo/galeria@2.0.0-rc.4": "patches/@nandorojo%2Fgaleria@2.0.0-rc.4.patch"

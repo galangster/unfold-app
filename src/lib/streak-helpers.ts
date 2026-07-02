@@ -1,5 +1,13 @@
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+function localCalendarDayUtcNoon(date: Date): number {
+  return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), 12);
+}
+
+function calendarDaySpan(from: Date, to: Date): number {
+  return Math.floor((localCalendarDayUtcNoon(to) - localCalendarDayUtcNoon(from)) / DAY_MS);
+}
+
 /** Maximum freezes a premium user can hold (free users cannot hold any). */
 export const MAX_FREEZES = 99;
 
@@ -83,8 +91,9 @@ export function decideStreakContinuation(
     return { ...base, kind: 'no-streak' };
   }
 
+  const lastReadDate = new Date(input.streakLastReadDate);
   const today = now.toDateString();
-  const lastRead = new Date(input.streakLastReadDate).toDateString();
+  const lastRead = lastReadDate.toDateString();
 
   // Same-day must win over no-streak so a completed read stays a no-op.
   if (lastRead === today) {
@@ -101,9 +110,7 @@ export function decideStreakContinuation(
     return { ...base, kind: 'continue' };
   }
 
-  const daySpan = Math.floor(
-    (new Date(today).getTime() - new Date(lastRead).getTime()) / DAY_MS,
-  );
+  const daySpan = calendarDaySpan(lastReadDate, now);
 
   // Count weekdays strictly between lastRead and today. Weekend amnesty
   // (when enabled) forgives Saturdays/Sundays in the gap. A future lastRead

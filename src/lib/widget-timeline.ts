@@ -10,6 +10,7 @@
  *   "midnight" entry are both built by buildWidgetSharedProps.
  */
 import type { Devotional } from '@/lib/store';
+import { hasReadTodayGlobal } from './home-devotional-state';
 
 export type WidgetSharedProps = {
   streakCount: number;
@@ -74,9 +75,10 @@ export function getWeeklyProgress(devotionals: Devotional[], forDate: Date): str
 export function buildWidgetSharedProps(slice: WidgetStateSlice, forDate: Date): WidgetSharedProps {
   const devotional = slice.currentDevotional;
 
-  const hasReadToday = slice.streakLastReadDate
-    ? new Date(slice.streakLastReadDate).toDateString() === forDate.toDateString()
-    : false;
+  const hasReadToday = hasReadTodayGlobal({
+    streakLastReadDate: slice.streakLastReadDate,
+    now: forDate,
+  });
 
   const currentDay = devotional?.days?.find((d) => d.dayNumber === devotional.currentDay);
   const nextDay = devotional?.days?.find(

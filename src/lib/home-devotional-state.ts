@@ -5,6 +5,27 @@ import { getServerOwnedSeriesTotalDays } from './devotional-series-boundary';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+function localDayKey(date: Date): string {
+  return date.toDateString();
+}
+
+function localDayKeyFromIso(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return localDayKey(date);
+}
+
+export function hasReadTodayGlobal({
+  streakLastReadDate,
+  now = new Date(),
+}: {
+  streakLastReadDate: string | null | undefined;
+  now?: Date;
+}): boolean {
+  return localDayKeyFromIso(streakLastReadDate) === localDayKey(now);
+}
+
 export function getCurrentDevotional(
   devotionals: readonly Devotional[],
   currentDevotionalId: string | null | undefined,
@@ -47,11 +68,11 @@ export function hasReadDevotionalToday({
   const devotional = getCurrentDevotional(devotionals, currentDevotionalId);
   if (!devotional) return false;
 
-  const today = now.toDateString();
+  const today = localDayKey(now);
   return devotional.days.some((day) => (
     day.isRead
     && day.readAt
-    && new Date(day.readAt).toDateString() === today
+    && localDayKeyFromIso(day.readAt) === today
   ));
 }
 

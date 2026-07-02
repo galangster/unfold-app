@@ -2,6 +2,7 @@ import {
   getCurrentDevotional,
   getHomeDevotionalDayData,
   hasReadDevotionalToday,
+  hasReadTodayGlobal,
   shouldAutoPrepareCurrentDevotionalDay,
   shouldPrepareCurrentDevotionalDay,
 } from '../home-devotional-state';
@@ -61,6 +62,26 @@ describe('home devotional state helpers', () => {
 
     expect(hasReadDevotionalToday({ devotionals: [current], currentDevotionalId: 'dev-1', now: today })).toBe(true);
     expect(hasReadDevotionalToday({ devotionals: [current], currentDevotionalId: 'missing', now: today })).toBe(false);
+  });
+
+  it('documents global streak read-today separately from current-devotional completion', () => {
+    const readSeries = devotional({
+      id: 'read-series',
+      days: [day({ devotionalId: 'read-series', isRead: true, readAt: new Date(2026, 3, 25, 9, 0, 0).toISOString() })],
+    });
+    const currentSeries = devotional({
+      id: 'current-series',
+      days: [day({ devotionalId: 'current-series', isRead: false })],
+    });
+
+    expect(hasReadTodayGlobal({ streakLastReadDate: new Date(2026, 3, 25, 9, 0, 0).toISOString(), now: today })).toBe(true);
+    expect(
+      hasReadDevotionalToday({
+        devotionals: [readSeries, currentSeries],
+        currentDevotionalId: 'current-series',
+        now: today,
+      }),
+    ).toBe(false);
   });
 
   it('keeps the Today hero focused on the completed day when the next generated day is tomorrow-locked', () => {

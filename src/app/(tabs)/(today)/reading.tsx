@@ -183,7 +183,6 @@ function ReaderLoadingSkeleton({ colors }: { colors: any }) {
 }
 
 export default function ReadingScreen() {
-  console.log('[Reading] RENDER CALLED');
   const router = useRouter();
   const params = useLocalSearchParams<{ dayNumber?: string; devotionalId?: string; highlightId?: string; bookmarkId?: string }>();
   const { colors, isDark } = useTheme();
@@ -193,14 +192,11 @@ export default function ReadingScreen() {
   // Clear reveal transition flag AFTER reading screen has painted to prevent
   // home screen from flashing behind during the transition handoff.
   useEffect(() => {
-    console.log('[Reading] MOUNTED', { dayNumber: params.dayNumber });
     const { revealTransitioning, setRevealTransitioning } = useUIState.getState();
-    console.log('[Reading] revealTransitioning was', revealTransitioning);
     if (revealTransitioning) {
       // Delay clearing the flag so the reading screen has time to fully render
       // on top of the home screen before the blank-home fallback disappears.
       const t = setTimeout(() => {
-        console.log('[Reading] clearing revealTransitioning flag (delayed)');
         setRevealTransitioning(false);
       }, 650);
       return () => clearTimeout(t);
@@ -1389,22 +1385,11 @@ export default function ReadingScreen() {
   const fallbackBottomPadding = Math.max(insets.bottom + 96, 112);
 
   // Early returns after all hooks
-  console.log('[Reading] early-return check', {
-    hasCurrentDevotional: !!currentDevotional,
-    currentDevotionalId,
-    hasCurrentDayData: !!currentDayData,
-    viewingDay,
-  });
   if (!currentDevotional) {
     const shouldShowMissingSeriesRecovery = Boolean(
       effectiveDevotionalId &&
         (isHydratingMissingDevotional || !missingDevotionalHydrationAttemptRef.current[effectiveDevotionalId]),
     );
-    console.log('[Reading] RETURNING missing-series state', {
-      effectiveDevotionalId,
-      shouldShowMissingSeriesRecovery,
-      isHydratingMissingDevotional,
-    });
     // While the series is hydrating, show a serif-toned reader skeleton instead
     // of a bare spinner so the screen reads as "your reading is arriving" rather
     // than an empty/crashed state. The genuine empty case keeps its quiet copy.
@@ -1427,7 +1412,6 @@ export default function ReadingScreen() {
   }
 
   if (!currentDayData) {
-    console.log('[Reading] RETURNING "Reading not ready yet" — currentDayData is null', { viewingDay, daysInSeries: currentDevotional.days.length });
     // Day hasn't been generated yet
     const daysReady = currentDevotional.days.length;
 

@@ -315,6 +315,30 @@ describe('decideStreakContinuation', () => {
     expect(d).toMatchObject({ kind: 'continue', usedGrace: false, freezesConsumed: 0, missedWeekdays: 0 });
   });
 
+  it('spring-forward calendar-day span still counts the missing Sunday when amnesty is off (FE-08)', () => {
+    const previousTz = process.env.TZ;
+    process.env.TZ = 'America/New_York';
+
+    try {
+      const now = at(2026, 3, 9); // Mon after US spring-forward Sunday
+      const d = decideStreakContinuation(
+        base(now, {
+          streakLastReadDate: iso(2026, 3, 7), // Sat before 23-hour Sunday
+          streakWeekStart: getWeekStart(now).toISOString(),
+          streakWeekendAmnesty: false,
+          streakGraceDaysUsedThisWeek: 1,
+          streakFreezes: 0,
+        }),
+        now,
+      );
+
+      expect(d.kind).toBe('reset');
+      expect(d.missedWeekdays).toBe(1);
+    } finally {
+      process.env.TZ = previousTz;
+    }
+  });
+
   it('fall-back weekend gap continues free in any timezone (DST)', () => {
     // lastRead Fri Oct 30 2026, now Mon Nov 2 2026; US DST ends Sun Nov 1.
     // DST zones: span 73h → daySpan 3; non-DST: 3. Between = {Sat 31, Sun 1} → 0 missed.

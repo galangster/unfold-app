@@ -14,6 +14,7 @@ import UnfoldReadingSessionActivity from '@/widgets/ios/UnfoldReadingSession';
 import { useUnfoldStore } from '@/lib/store';
 import type { LiveActivity } from 'expo-widgets';
 import { buildWidgetTimelineEntries, getWeeklyProgress } from '@/lib/widget-timeline';
+import { hasReadTodayGlobal } from './home-devotional-state';
 
 // Track active reading session
 let activeReadingSession: LiveActivity<{
@@ -52,9 +53,7 @@ function buildSyncFingerprint(now: Date): string {
   const devotional = state.getCurrentDevotional();
   const currentDay = devotional?.days?.find((d) => d.dayNumber === devotional.currentDay);
 
-  const hasReadToday = state.streakLastReadDate
-    ? new Date(state.streakLastReadDate).toDateString() === now.toDateString()
-    : false;
+  const hasReadToday = hasReadTodayGlobal({ streakLastReadDate: state.streakLastReadDate, now });
 
   return JSON.stringify({
     streakCurrent: state.streakCurrent,
