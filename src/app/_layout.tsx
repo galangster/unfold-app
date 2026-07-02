@@ -7,7 +7,7 @@ import NetInfo from '@react-native-community/netinfo';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { useEffect } from 'react';
-import { AppState, Platform, View } from 'react-native';
+import { AppState, Platform, Text as RNText, TextInput as RNTextInput, View } from 'react-native';
 import { useFonts } from 'expo-font';
 
 import { Colors } from '@/constants/colors';
@@ -30,6 +30,18 @@ import { AudioPlayerOverlay } from '@/components/AudioPlayerOverlay';
 export const unstable_settings = {
   initialRouteName: 'index',
 };
+
+// Global Dynamic Type ceiling (FEEL-05): at the largest accessibility text sizes,
+// uncapped scaling fragmented glyphs and broke layouts (Journal title/segmented
+// control, Companion chrome). Cap the multiplier so text still scales generously
+// for accessibility but layouts stay intact. No effect at default/XXL sizes
+// (multiplier < 1.8); only bounds the AX range. The reading view sets its own
+// explicit type sizes and is unaffected. Per-element overrides can raise/lower this.
+const MAX_FONT_SCALE = 1.8;
+// @ts-expect-error defaultProps is the RN-supported global default for these host components
+RNText.defaultProps = { ...(RNText.defaultProps ?? {}), maxFontSizeMultiplier: MAX_FONT_SCALE };
+// @ts-expect-error same for TextInput
+RNTextInput.defaultProps = { ...(RNTextInput.defaultProps ?? {}), maxFontSizeMultiplier: MAX_FONT_SCALE };
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();

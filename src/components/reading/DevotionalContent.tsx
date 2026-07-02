@@ -174,12 +174,12 @@ export function DevotionalContent({
     width: accentLineWidth.value,
   }));
 
-  // Bookmark spring animation — critically-damped scale
+  // Bookmark spring animation — clamped scale (damping 20 alone is ζ≈0.58; clamping enforces no-bounce)
   const bookmarkScale = useSharedValue(1);
 
   const handleBookmarkPress = useCallback(() => {
     bookmarkScale.value = 0.8;
-    bookmarkScale.value = withSpring(1, { damping: 20, stiffness: 300 });
+    bookmarkScale.value = withSpring(1, { damping: 20, stiffness: 300, overshootClamping: true });
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     onToggleBookmark?.();
   }, [onToggleBookmark, bookmarkScale]);

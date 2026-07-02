@@ -114,8 +114,8 @@ const EDGE_RESISTANCE = 3;
 const ARROW_REVEAL_DISTANCE = DRAG_MAX * 0.6;
 // Duration of the "slide off screen" exit after commit
 const NAV_EXIT_DURATION = 180;
-// Spring back when gesture ends without commit (critically damped, no bounce)
-const SWIPE_SPRING_BACK = { damping: 22, stiffness: 260, mass: 0.9 };
+// Spring back when gesture ends without commit (clamped — raw config is ζ≈0.72, so no-bounce needs overshootClamping)
+const SWIPE_SPRING_BACK = { damping: 22, stiffness: 260, mass: 0.9, overshootClamping: true };
 
 // ─── Verse Item with per-line highlight via onTextLayout ────────────────────
 

@@ -145,9 +145,13 @@ export function CompanionMessageContent({ message, showIcon, isStreaming, isSear
             ))}
           </>
         ) : (
-          // Streaming or pending — lightly stripped text (typing dots handle indicator)
+          // Streaming or pending — lightly stripped text (typing dots handle indicator).
+          // A single Text in a flex-row won't wrap and clips off-screen at large font
+          // scales (FEEL-04); flexShrink lets it wrap within the content column.
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-            <StreamingText content={message.content} color={colors.text} />
+            <View style={{ flexShrink: 1 }}>
+              <StreamingText content={message.content} color={colors.text} />
+            </View>
           </View>
         )}
 

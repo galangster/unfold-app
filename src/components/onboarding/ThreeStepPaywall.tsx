@@ -449,7 +449,7 @@ function ScreenProductInAction({
 
   const dragY = useSharedValue(0);
   const MAX_DRAG = 60; // 15% of ~400px content area
-  const SPRING_CONFIG = { damping: 30, stiffness: 300, mass: 1 };
+  const SPRING_CONFIG = { damping: 30, stiffness: 300, mass: 1, overshootClamping: true };
 
   const dragGesture = Gesture.Pan()
     .activeOffsetY([-8, 8])
@@ -568,7 +568,7 @@ function ScreenTrialReminder({
   const reducedMotion = useReducedMotion();
   const dragY = useSharedValue(0);
   const MAX_DRAG = 60;
-  const SPRING_CONFIG = { damping: 30, stiffness: 300, mass: 1 };
+  const SPRING_CONFIG = { damping: 30, stiffness: 300, mass: 1, overshootClamping: true };
 
   const dragGesture = Gesture.Pan()
     .activeOffsetY([-8, 8])
