@@ -43,6 +43,15 @@ export function createDebouncedJSONStorage<S>(
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let maxWaitTimer: ReturnType<typeof setTimeout> | null = null;
 
+  // A pending persist window must not hold a Node process (Jest) open. On
+  // React Native timers are plain numbers, so unref doesn't exist and this
+  // is a no-op.
+  const schedule = (fn: () => void, ms: number) => {
+    const timer = setTimeout(fn, ms);
+    (timer as unknown as { unref?: () => void }).unref?.();
+    return timer;
+  };
+
   const clearTimers = () => {
     if (debounceTimer) clearTimeout(debounceTimer);
     if (maxWaitTimer) clearTimeout(maxWaitTimer);
@@ -81,10 +90,10 @@ export function createDebouncedJSONStorage<S>(
       pending = { name, value };
 
       if (!maxWaitTimer) {
-        maxWaitTimer = setTimeout(writeNow, maxWaitMs);
+        maxWaitTimer = schedule(writeNow, maxWaitMs);
       }
       if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(writeNow, debounceMs);
+      debounceTimer = schedule(writeNow, debounceMs);
     },
 
     removeItem: (name) => {
