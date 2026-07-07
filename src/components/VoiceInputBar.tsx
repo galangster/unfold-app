@@ -34,6 +34,7 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
+import { pauseForVoiceInput, resumeAfterVoiceInput } from '@/hooks/useGlobalAudioPlayer';
 
 /* ─────────────────────────────────────────────────────────
  * ANIMATION STORYBOARD
@@ -55,6 +56,8 @@ const BAR_DELAYS    = [0,   80,  160, 40,  240] as const;
 
 let activeRecorder: symbol | null = null;
 let activeRecorderHandoff: (() => void) | null = null;
+/** Narration paused because dictation took the audio session; resume when the last owner ends. */
+let narrationPausedForDictation = false;
 
 function formatTimer(seconds: number): string {
   const m = Math.floor(seconds / 60).toString().padStart(2, '0');
@@ -191,6 +194,13 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoSt
       activeRecorder = null;
       activeRecorderHandoff = null;
     }
+    if (activeRecorder === null) {
+      // Last owner ended: STT flipped the shared AVAudioSession into record
+      // mode — re-arm playback mode, and resume narration if dictation paused it.
+      const shouldResume = narrationPausedForDictation;
+      narrationPausedForDictation = false;
+      void resumeAfterVoiceInput(shouldResume);
+    }
     isRecordingRef.current = false;
     userStoppedRef.current = false;
     committedSegmentsRef.current = '';
@@ -223,6 +233,9 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoSt
         activeRecorder = null;
         activeRecorderHandoff = null;
         if (isRecordingRef.current) ExpoSpeechRecognitionModule.stop();
+        const shouldResume = narrationPausedForDictation;
+        narrationPausedForDictation = false;
+        void resumeAfterVoiceInput(shouldResume);
       }
     };
   }, [clearTimer]);
@@ -238,11 +251,12 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoSt
     if (activeRecorder && activeRecorder !== instanceId.current) {
       // Hand off: commit the current owner's dictation to its own field
       // (spoken words must never silently vanish), then take the recognizer.
-      activeRecorderHandoff?.();
-      if (activeRecorder && activeRecorder !== instanceId.current) {
-        activeRecorder = null;
-        activeRecorderHandoff = null;
-      }
+      // Claim ownership BEFORE the handoff so the outgoing owner's reset sees
+      // a live owner and does not resume narration mid-handoff.
+      const handoff = activeRecorderHandoff;
+      activeRecorder = instanceId.current;
+      activeRecorderHandoff = null;
+      handoff?.();
       ExpoSpeechRecognitionModule.stop();
     }
 
@@ -254,6 +268,10 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoSt
     isRecordingRef.current = true;
     setIsRecording(true);
     setElapsedSeconds(0);
+
+    if (pauseForVoiceInput()) {
+      narrationPausedForDictation = true;
+    }
 
     ExpoSpeechRecognitionModule.start({
       lang: 'en-US',

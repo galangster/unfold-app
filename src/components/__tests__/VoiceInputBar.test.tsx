@@ -32,6 +32,13 @@ jest.mock('expo-speech-recognition', () => ({
   },
 }));
 
+const mockPauseForVoiceInput = jest.fn(() => false);
+const mockResumeAfterVoiceInput = jest.fn((_shouldResume: boolean) => Promise.resolve());
+jest.mock('@/hooks/useGlobalAudioPlayer', () => ({
+  pauseForVoiceInput: () => mockPauseForVoiceInput(),
+  resumeAfterVoiceInput: (shouldResume: boolean) => mockResumeAfterVoiceInput(shouldResume),
+}));
+
 jest.mock('expo-haptics', () => ({
   notificationAsync: jest.fn(),
   impactAsync: jest.fn(),
@@ -301,6 +308,48 @@ describe('VoiceInputBar', () => {
       });
 
       expect(mockStart).toHaveBeenCalledTimes(startsBeforeEnd + 1);
+    } finally {
+      if (tree) {
+        act(() => {
+          tree.unmount();
+        });
+      }
+    }
+  });
+
+  it('pauses narration for dictation and resumes it when the session ends', async () => {
+    mockPauseForVoiceInput.mockClear();
+    mockResumeAfterVoiceInput.mockClear();
+    mockPauseForVoiceInput.mockReturnValueOnce(true);
+    const onChangeText = jest.fn();
+    let tree: any;
+
+    try {
+      await act(async () => {
+        tree = renderer.create(<VoiceInputBar value="" onChangeText={onChangeText} />);
+      });
+
+      await act(async () => {
+        await findPressablesByLabel(tree.root, 'Tap to speak')[0].props.onPress();
+      });
+
+      expect(mockPauseForVoiceInput).toHaveBeenCalled();
+      expect(mockResumeAfterVoiceInput).not.toHaveBeenCalled();
+
+      act(() => {
+        dispatchSpeechEvent('result', {
+          isFinal: true,
+          results: [{ transcript: 'Narration test.' }],
+        });
+      });
+
+      act(() => {
+        findPressablesByLabel(tree.root, 'Accept voice input')[0].props.onPress();
+        jest.advanceTimersByTime(250);
+      });
+
+      expect(onChangeText).toHaveBeenCalledWith('Narration test.');
+      expect(mockResumeAfterVoiceInput).toHaveBeenCalledWith(true);
     } finally {
       if (tree) {
         act(() => {

@@ -193,6 +193,39 @@ async function ensureAudioSession(): Promise<void> {
   }
 }
 
+/**
+ * Voice-dictation coordination. Speech recognition flips the shared
+ * AVAudioSession into record mode, so narration must pause before the
+ * recognizer starts and the playback session must be re-applied when
+ * dictation ends (the lazy-init latch would otherwise never re-arm it).
+ */
+export function pauseForVoiceInput(): boolean {
+  const player = globalPlayer;
+  const { isPlaying } = useAudioPlayerState.getState();
+  if (!player || !isPlaying) return false;
+  try {
+    player.pause();
+    return true;
+  } catch (e) {
+    logger.warn('[AudioPlayer] pause for voice input failed', e);
+    return false;
+  }
+}
+
+export async function resumeAfterVoiceInput(shouldResume: boolean): Promise<void> {
+  // STT reconfigured the session — drop the latch so playback mode re-applies.
+  audioSessionConfigured = false;
+  await ensureAudioSession();
+  if (!shouldResume) return;
+  const player = globalPlayer;
+  if (!player) return;
+  try {
+    player.play();
+  } catch (e) {
+    logger.warn('[AudioPlayer] resume after voice input failed', e);
+  }
+}
+
 export function useGlobalAudioPlayer() {
 
   // ------ Actions ------
