@@ -26,6 +26,7 @@ import { shouldMarkNotificationNavigationReady } from '@/lib/push-notification-h
 import { migrateGenerationDataToServer } from '@/lib/generation-migration';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { AudioPlayerOverlay } from '@/components/AudioPlayerOverlay';
+import { PrivacyShield } from '@/components/PrivacyShield';
 
 export const unstable_settings = {
   initialRouteName: 'index',
@@ -213,6 +214,7 @@ function RootLayoutNav() {
         />
         </Stack>
         <AudioPlayerOverlay />
+        <PrivacyShield />
       </View>
       <StatusBar style={isDark ? 'light' : 'dark'} />
     </NavigationThemeProvider>
