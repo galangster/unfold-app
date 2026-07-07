@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react';
+import { AppState } from 'react-native';
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
+import { persist } from 'zustand/middleware';
 import type { ThemeCategory, DevotionalType } from '../constants/devotional-types';
 import { logBugError } from './bug-logger';
 import { logger } from './logger';
 import { mmkvStorage } from './mmkv-storage';
+import { createDebouncedJSONStorage } from './debounced-persist-storage';
+import { shouldFlushAutosaveOnAppState } from './autosave-controller';
 import { migrateUnfoldStore } from './store-migrations';
 import { normalizeDevotionalIdentity, normalizeGeneratedDayIdentity, normalizeGeneratedDaysIdentity } from './generation-reconciliation';
 import { canonicalGeneratedDayId } from './devotional-canonical-days';
@@ -837,6 +840,15 @@ const initialState = {
   } as BibleReaderSettings,
   readerBrightness: null as number | null,
 };
+
+// WR-23: session-scoped flags are reset on every launch (see
+// onRehydrateStorage) — no reason to serialize them on every write.
+type PersistedUnfoldState = Omit<UnfoldState, 'nudgeShownThisSession' | 'streakJustReset'>;
+
+// WR-23: coalesces persist writes so a burst of store updates (autosave
+// while typing) serializes the full state once per window instead of on
+// every set(). Flushed when the app backgrounds (listener below).
+const unfoldPersistStorage = createDebouncedJSONStorage<PersistedUnfoldState>(mmkvStorage);
 
 export const useUnfoldStore = create<UnfoldState>()(
   persist(
@@ -1897,10 +1909,17 @@ export const useUnfoldStore = create<UnfoldState>()(
     }),
     {
       name: 'unfold-storage',
-      storage: createJSONStorage(() => mmkvStorage),
+      storage: unfoldPersistStorage,
       version: 38, // v38: Add durable dailyReminderEnabled intent flag
-      // Validate and migrate persisted state
-      migrate: migrateUnfoldStore,
+      // WR-23: drop session-scoped flags from the persisted blob.
+      partialize: (state): PersistedUnfoldState => {
+        const { nudgeShownThisSession, streakJustReset, ...persisted } = state;
+        return persisted;
+      },
+      // Validate and migrate persisted state. Migrations work on the loose
+      // legacy shape (Record<string, any>); the repaired result is merged
+      // into the typed state on rehydrate.
+      migrate: migrateUnfoldStore as (persistedState: unknown, version: number) => PersistedUnfoldState,
 
       // Validate state on rehydration
       onRehydrateStorage: () => {
@@ -1972,6 +1991,18 @@ export const useUnfoldStore = create<UnfoldState>()(
     }
   )
 );
+
+// WR-23: a coalesced persist write can be pending for up to its debounce
+// window — land it before iOS suspends the app. Covers the app switcher on
+// the way to a force-kill; only a hard crash can lose the window.
+AppState.addEventListener('change', (status) => {
+  if (shouldFlushAutosaveOnAppState(status)) {
+    unfoldPersistStorage.flushPendingWrites();
+  }
+});
+
+/** Test/maintenance hook: force any pending coalesced persist write to disk. */
+export const flushUnfoldStorePersist = () => unfoldPersistStorage.flushPendingWrites();
 
 // Hydration tracking — components can check if persisted state has been loaded
 export const useHasHydrated = () => {
