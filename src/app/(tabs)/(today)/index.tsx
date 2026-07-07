@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react'
 import { drainSyncOutbox } from '@/lib/sync-outbox';
 import { usePrevious } from '@/hooks/usePrevious';
 import { View, StyleSheet, Alert, type LayoutChangeEvent } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useIsFocused } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -221,14 +221,7 @@ export default function HomeScreen() {
       scrollY.value = event.contentOffset.y;
     },
   });
-  const [isTodayFocused, setIsTodayFocused] = useState(false);
-
-  useFocusEffect(
-    useCallback(() => {
-      setIsTodayFocused(true);
-      return () => setIsTodayFocused(false);
-    }, [])
-  );
+  const isTodayFocused = useIsFocused();
 
   const [clockNow, setClockNow] = useState(() => new Date());
   const [showCheckInSheet, setShowCheckInSheet] = useState(false);

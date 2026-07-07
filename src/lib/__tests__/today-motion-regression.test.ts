@@ -93,6 +93,13 @@ describe('Today tab motion guardrails', () => {
     expect(todayIndexSource).not.toContain('day1ReviewArt');
   });
 
+  it('passes live route focus to the completed-day ambient canvas on first paint', () => {
+    expect(todayIndexSource).toContain("import { useRouter, useFocusEffect, useIsFocused } from 'expo-router';");
+    expect(todayIndexSource).toContain('const isTodayFocused = useIsFocused();');
+    expect(todayIndexSource).not.toContain('const [isTodayFocused, setIsTodayFocused] = useState(false);');
+    expect(todayIndexSource).toContain('screenFocused={isTodayFocused}');
+  });
+
   it('keeps the optional Today context stack under the hero instead of above it', () => {
     const contextZoneIndex = todayIndexSource.indexOf('/* Zone 2: Context stack moved under the hero in Phase 3. */');
     const heroZoneIndex = todayIndexSource.indexOf("/* Zone 3: Hero Devotional — Today's primary act */");

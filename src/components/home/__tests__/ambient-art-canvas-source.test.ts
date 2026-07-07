@@ -84,6 +84,12 @@ describe('AmbientArtCanvas Today completion ambience', () => {
     expect(source).toContain('if (!shouldShowCompletedAmbience || !ambience) return null;');
   });
 
+  it('seeds app activity as active on iOS cold-launch transient states', () => {
+    expect(source).toContain('useState<AppStateStatus>(() => getInitialAmbientAppStateStatus(AppState.currentState));');
+    expect(source).toContain("AppState.addEventListener('change', setAppState);");
+    expect(source).toContain("return appState === 'active';");
+  });
+
   it('falls back to EmberSystem for reduced motion and low power instead of running Rive', () => {
     expect(source).toContain('if (reducedMotion || lowPowerMode === true) return renderEmberFallback(streakLevel, screenFocused);');
     expect(riveWrapperSource).toContain('useAccessibleAnimation');

@@ -60,8 +60,12 @@ const HOME_CARD_STACK_EXCLUSION: ReadonlyArray<ExclusionZone> = [
   { x: 0.04, y: 0.18, width: 0.92, height: 0.38 },
 ];
 
+export function getInitialAmbientAppStateStatus(currentState: AppStateStatus | null | undefined): AppStateStatus {
+  return currentState === 'background' ? 'background' : 'active';
+}
+
 function useIsAppActive(): boolean {
-  const [appState, setAppState] = useState<AppStateStatus>(AppState.currentState);
+  const [appState, setAppState] = useState<AppStateStatus>(() => getInitialAmbientAppStateStatus(AppState.currentState));
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', setAppState);
