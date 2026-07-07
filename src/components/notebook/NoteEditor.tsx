@@ -54,8 +54,9 @@ import {
   shouldFlushAutosaveOnAppState,
   type AutosaveController,
 } from '@/lib/autosave-controller';
+import { reflectionBodyPx, type ReflectionFontSize } from '@/lib/reflection-typography';
 
-import { Note } from '@/lib/store';
+import { useUnfoldStore, type Note } from '@/lib/store';
 
 export type { Note };
 
@@ -117,6 +118,8 @@ export function NoteEditor({
   onScriptureInserted,
 }: NoteEditorProps) {
   const { colors, isDark } = useTheme();
+  const user = useUnfoldStore((s) => s.user);
+  const fontSize = user?.fontSize ?? 'medium';
   const reducedMotion = useReducedMotion();
 
   const [title, setTitle] = useState(initialNote?.title ?? '');
@@ -180,7 +183,7 @@ export function NoteEditor({
     const fallback = setTimeout(() => {
       setEditorReady(true);
       // Also inject CSS as a safety net
-      editor.injectCSS(buildEditorCSS(colors));
+      editor.injectCSS(buildEditorCSS(colors, fontSize));
     }, 1500);
     return () => clearTimeout(fallback);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -188,7 +191,7 @@ export function NoteEditor({
   // Inject CSS once editor is ready
   useEffect(() => {
     if (!editorState.isReady) return;
-    editor.injectCSS(buildEditorCSS(colors));
+    editor.injectCSS(buildEditorCSS(colors, fontSize));
     // Delay removing overlay until CSS has had time to paint
     setTimeout(() => {
       setEditorReady(true);
@@ -541,7 +544,9 @@ function ToolbarButton({
  * CSS injected into the TipTap WebView
  * ───────────────────────────────────────────────────────── */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function buildEditorCSS(colors: any): string {
+function buildEditorCSS(colors: any, fontSize: ReflectionFontSize): string {
+  const bodyFontSize = reflectionBodyPx(fontSize);
+
   return `
     *, *::before, *::after {
       box-sizing: border-box;
@@ -552,7 +557,7 @@ function buildEditorCSS(colors: any): string {
     }
     body {
       font-family: -apple-system, 'Helvetica Neue', sans-serif;
-      font-size: 17px;
+      font-size: ${bodyFontSize}px;
       line-height: 1.65;
       color: ${colors.text};
       background-color: ${colors.background} !important;

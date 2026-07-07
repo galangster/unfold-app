@@ -93,6 +93,7 @@ import {
   shouldFlushAutosaveOnAppState,
   type AutosaveController,
 } from '@/lib/autosave-controller';
+import { reflectionBodyPx, type ReflectionFontSize } from '@/lib/reflection-typography';
 
 
 /* ─────────────────────────────────────────────────────────
@@ -132,7 +133,9 @@ function legacyMarkdownToHtml(content: string): string {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function buildEditorCSS(colors: any, isEditing: boolean): string {
+function buildEditorCSS(colors: any, isEditing: boolean, fontSize: ReflectionFontSize): string {
+  const bodyFontSize = reflectionBodyPx(fontSize);
+
   return `
     *, *::before, *::after {
       box-sizing: border-box;
@@ -143,7 +146,7 @@ function buildEditorCSS(colors: any, isEditing: boolean): string {
     }
     body {
       font-family: -apple-system, 'Helvetica Neue', sans-serif;
-      font-size: 17px;
+      font-size: ${bodyFontSize}px;
       line-height: 1.65;
       color: ${colors.text};
       background-color: ${colors.background} !important;
@@ -277,6 +280,8 @@ export default function NoteDetailScreen() {
   const { isPremium, gate, showExclusiveOffer, dismissOffer } = useCreationGate();
 
   // Store selectors
+  const user = useUnfoldStore((s) => s.user);
+  const fontSize = user?.fontSize ?? 'medium';
   const notes = useUnfoldStore((s) => s.notes);
   const addNote = useUnfoldStore((s) => s.addNote);
   const updateNote = useUnfoldStore((s) => s.updateNote);
@@ -437,7 +442,7 @@ export default function NoteDetailScreen() {
     if (IS_NATIVE_EDITOR) return;
     const fallback = setTimeout(() => {
       setEditorReady(true);
-      editor.injectCSS(buildEditorCSS(colors, isEditingRef.current));
+      editor.injectCSS(buildEditorCSS(colors, isEditingRef.current, fontSize));
     }, 1500);
     return () => clearTimeout(fallback);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -446,7 +451,7 @@ export default function NoteDetailScreen() {
   useEffect(() => {
     if (IS_NATIVE_EDITOR) return;
     if (!editorState.isReady) return;
-    editor.injectCSS(buildEditorCSS(colors, isEditing));
+    editor.injectCSS(buildEditorCSS(colors, isEditing, fontSize));
     // Delay removing overlay until CSS has had time to paint
     setTimeout(() => {
       setEditorReady(true);
@@ -700,7 +705,7 @@ export default function NoteDetailScreen() {
       setTimeout(() => editorRef.current?.focus(), 100);
     } else {
       editor.setEditable(true);
-      editor.injectCSS(buildEditorCSS(colors, true));
+      editor.injectCSS(buildEditorCSS(colors, true, fontSize));
       setTimeout(() => editor.focus('end'), 100);
     }
   }, [editor, colors, gate]);
@@ -730,7 +735,7 @@ export default function NoteDetailScreen() {
     } else {
       editor.blur();
       editor.setEditable(false);
-      editor.injectCSS(buildEditorCSS(colors, false));
+      editor.injectCSS(buildEditorCSS(colors, false, fontSize));
     }
     setIsEditing(false);
 

@@ -62,6 +62,7 @@ import { buildInitialQuestionResponses, diffSoapWrites, resolveInitialJournalMod
 import { useCreationGate } from '@/hooks/useCreationGate';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
+import { getReflectionTypography } from '@/lib/reflection-typography';
 
 const SOAP_SECTIONS: { key: keyof SoapResponses; letter: string; label: string; placeholder: string; icon: 'BookOpen' | 'Eye' | 'PencilSimple' | 'HandsPraying' }[] = [
   {
@@ -159,6 +160,9 @@ export default function JournalScreen() {
   const dayNumber = parseInt(params.dayNumber ?? '1', 10);
   const focusQuestionIndex = params.focusQuestion != null ? parseInt(params.focusQuestion, 10) : null;
 
+  const user = useUnfoldStore((s) => s.user);
+  const fontSize = user?.fontSize ?? 'medium';
+  const typography = getReflectionTypography(fontSize);
   const getJournalEntry = useUnfoldStore((s) => s.getJournalEntry);
   const addJournalEntry = useUnfoldStore((s) => s.addJournalEntry);
   const updateJournalEntry = useUnfoldStore((s) => s.updateJournalEntry);
@@ -878,7 +882,7 @@ Their journal entry:
                     multiline
                     textAlignVertical="top"
                     accessibilityLabel="Journal entry"
-                    style={[jStyles.freewriteInput, { color: colors.text }]}
+                    style={[jStyles.freewriteInput, { color: colors.text, fontSize: typography.responseFontSize, lineHeight: typography.responseLineHeight }]}
                   />
                   <VoiceInputBar value={content} onChangeText={handleTextChange} />
                 </Animated.View>
@@ -995,7 +999,7 @@ Their journal entry:
                                   cursorColor={colors.accent}
                                   multiline
                                   textAlignVertical="top"
-                                  style={[jStyles.questionTextInput, { color: colors.text, paddingBottom: 40 }]}
+                                  style={[jStyles.questionTextInput, { color: colors.text, paddingBottom: 40, fontSize: typography.responseFontSize, lineHeight: typography.responseLineHeight }]}
                                 />
                                 <VoiceInputBar
                                   inline
@@ -1121,7 +1125,7 @@ Their journal entry:
                               multiline
                               textAlignVertical="top"
                               accessibilityLabel={`${section.label} journal entry`}
-                              style={[jStyles.soapTextInput, { color: colors.text, paddingBottom: 40 }]}
+                              style={[jStyles.soapTextInput, { color: colors.text, paddingBottom: 40, fontSize: typography.responseFontSize, lineHeight: typography.responseLineHeight }]}
                             />
                             <VoiceInputBar
                               inline
@@ -1228,7 +1232,7 @@ Their journal entry:
                       multiline
                       textAlignVertical="top"
                       autoFocus
-                      style={[jStyles.prayerTextInput, { color: colors.text, paddingBottom: 40 }]}
+                      style={[jStyles.prayerTextInput, { color: colors.text, paddingBottom: 40, fontSize: typography.responseFontSize, lineHeight: typography.responseLineHeight }]}
                       onSubmitEditing={handleAddPrayer}
                       blurOnSubmit
                     />

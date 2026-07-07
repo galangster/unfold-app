@@ -1,4 +1,4 @@
-import { getReflectionTypography } from '@/lib/reflection-typography';
+import { getReflectionTypography, reflectionBodyPx } from '@/lib/reflection-typography';
 
 describe('getReflectionTypography', () => {
   it('keeps reflection questions dynamic across reading font-size preferences', () => {
@@ -19,5 +19,13 @@ describe('getReflectionTypography', () => {
   it('keeps question text smaller than the previous oversized 1.1x treatment', () => {
     expect(getReflectionTypography('medium').questionFontSize).toBeLessThan(19);
     expect(getReflectionTypography('large').questionFontSize).toBeLessThan(22);
+  });
+});
+
+describe('reflectionBodyPx', () => {
+  it('maps reader font-size preferences to the shared writing body curve', () => {
+    expect(reflectionBodyPx('small')).toBe(15);
+    expect(reflectionBodyPx('medium')).toBe(17);
+    expect(reflectionBodyPx('large')).toBe(20);
   });
 });

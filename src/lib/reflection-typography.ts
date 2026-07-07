@@ -15,13 +15,17 @@ export type ReflectionTypography = {
   previewLineHeight: number;
 };
 
+export function reflectionBodyPx(fontSize: ReflectionFontSize): number {
+  return REFLECTION_BASE_BODY_SIZE[fontSize];
+}
+
 /**
  * Reflection prompts should follow the reader's Small/Medium/Large preference,
  * but stay a touch quieter than the main devotional body so stacked questions
  * do not dominate the screen.
  */
 export function getReflectionTypography(fontSize: ReflectionFontSize): ReflectionTypography {
-  const body = REFLECTION_BASE_BODY_SIZE[fontSize];
+  const body = reflectionBodyPx(fontSize);
   const preview = Math.max(12, body - 2);
 
   return {
