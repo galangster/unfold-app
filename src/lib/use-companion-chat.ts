@@ -7,6 +7,7 @@
  * Phase 5: Graceful fallback to non-streaming if SSE fails.
  */
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { AccessibilityInfo } from 'react-native';
 import { fetch as expoFetch } from 'expo/fetch';
 import {
   useCompanionChatStore,
@@ -18,6 +19,19 @@ import { useUnfoldStore } from '@/lib/store';
 import { logger } from '@/lib/logger';
 import { parseDeepLinks } from './parse-deep-links';
 import { generateConversationTitle } from './companion-service';
+import { companionReplyAnnouncement } from '@/lib/companion-announcements';
+
+/**
+ * WR-20: screen-reader users get no signal when a reply lands — the list
+ * doesn't move accessibility focus. Announce organic completions (and
+ * errors); user-initiated stops stay silent since the user caused them.
+ */
+function announceCompanionReply(content: string) {
+  const announcement = companionReplyAnnouncement(content);
+  if (announcement) {
+    AccessibilityInfo.announceForAccessibility(announcement);
+  }
+}
 
 /**
  * Outcome of a sendMessage call:
@@ -411,6 +425,7 @@ export function useCompanionChat() {
                   suggestions: finalSuggestions,
                 });
                 setSuggestions(finalSuggestions);
+                announceCompanionReply(cleanContent);
               },
               onError: (msg) => {
                 throw new Error(msg);
@@ -457,6 +472,7 @@ export function useCompanionChat() {
             suggestions: result.suggestions,
           });
           setSuggestions(result.suggestions);
+          announceCompanionReply(fallbackClean);
         }
 
         // Generate title after first exchange (user + companion)
@@ -502,6 +518,7 @@ export function useCompanionChat() {
             status: 'error',
             content: 'Something went wrong. Tap to retry.',
           });
+          AccessibilityInfo.announceForAccessibility('Companion reply failed. Something went wrong. Tap the message to retry.');
           return 'error';
         }
       } finally {
