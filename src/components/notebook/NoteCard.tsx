@@ -12,6 +12,7 @@ import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
 import { Duration, Ease } from '@/constants/animations';
 import * as Haptics from 'expo-haptics';
 import { FontFamily, FontSize } from '@/constants/fonts';
+import { alpha } from '@/components/ui';
 import { useTheme } from '@/lib/theme';
 import { Radius } from '@/constants/radius';
 import { Shadow } from '@/constants/shadows';
@@ -102,11 +103,9 @@ export const NoteCard = memo(function NoteCard({ note, onPress, onLongPress, ind
               backgroundColor: colors.backgroundElevated,
               borderColor: colors.border,
             },
-            // Favorite left accent bar
-            note.isFavorite && {
-              borderLeftWidth: 2.5,
-              borderLeftColor: colors.accent,
-            },
+            // Favorites stay quiet: the gold star carries the state; the
+            // card's hairline just warms so a scan can pick them out.
+            note.isFavorite && { borderColor: alpha(colors.accent, 0.28) },
           ]}
         >
           {/* Row 1: Category icon + title + star */}
