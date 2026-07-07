@@ -30,4 +30,15 @@ describe('writing autosave source contract', () => {
     expect(source).toContain('autoSaveAllowEmptyRef.current = true');
     expect(source).toContain('allowEmpty,');
   });
+
+  it('keeps inline reader reflections keyboard aware without stale ScrollView no-ops', () => {
+    const readerSource = readSource('src/app/(tabs)/(today)/reading.tsx');
+    const inlineReflectionSource = readSource('src/components/reading/InlineReflectionJournal.tsx');
+
+    expect(readerSource).toContain('automaticallyAdjustKeyboardInsets={true}');
+    expect(readerSource).toContain('keyboardShouldPersistTaps="handled"');
+    expect(readerSource).toContain('onReflectionInputFocus={handleReflectionInputFocus}');
+    expect(inlineReflectionSource).not.toContain('assureFocusedInputVisible');
+    expect(inlineReflectionSource).not.toContain('KeyboardAwareScrollView');
+  });
 });

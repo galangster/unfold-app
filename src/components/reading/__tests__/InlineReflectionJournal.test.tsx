@@ -411,4 +411,64 @@ describe('InlineReflectionJournal', () => {
 
     act(() => tree!.unmount());
   });
+
+  it('measures the focused input after expanding a collapsed question', () => {
+    let tree: any;
+    const onFocusInput = jest.fn();
+    const scrollView = {};
+    const textInputNode = {
+      focus: jest.fn(),
+      measureLayout: jest.fn((_relativeTo: unknown, onSuccess: (x: number, y: number) => void) => {
+        onSuccess(12, 640);
+      }),
+    };
+
+    act(() => {
+      tree = renderer.create(
+        <InlineReflectionJournal
+          questions={['What stood out?', 'How will you respond?']}
+          devotionalId="devotional"
+          dayNumber={1}
+          onOpenFullJournal={jest.fn()}
+          scrollViewRef={{ current: scrollView as any }}
+          onFocusInput={onFocusInput}
+        />,
+        {
+          createNodeMock: () => textInputNode,
+        }
+      );
+    });
+
+    act(() => {
+      tree!.root
+        .findByProps({ accessibilityLabel: 'Reflection question 2: How will you respond?' })
+        .props.onPress();
+    });
+
+    // The jest TextInput mock is a class component, so the component's ref map
+    // holds the class instance — spy on it directly before the focus timer fires.
+    const { TextInput: RNTextInput } = require('react-native');
+    const inputInstance = tree!.root.findByType(RNTextInput).instance;
+    inputInstance.focus = textInputNode.focus;
+    inputInstance.measureLayout = textInputNode.measureLayout;
+
+    act(() => {
+      jest.advanceTimersByTime(399);
+    });
+    expect(onFocusInput).not.toHaveBeenCalled();
+
+    act(() => {
+      jest.advanceTimersByTime(1);
+    });
+
+    expect(textInputNode.focus).toHaveBeenCalled();
+    expect(textInputNode.measureLayout).toHaveBeenCalledWith(
+      scrollView,
+      expect.any(Function),
+      expect.any(Function)
+    );
+    expect(onFocusInput).toHaveBeenCalledWith(640);
+
+    act(() => tree!.unmount());
+  });
 });

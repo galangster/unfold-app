@@ -44,6 +44,7 @@ interface DevotionalContentProps {
   onOpenJournal?: (focusQuestion?: number) => void;
   onStudyMethodPress?: (methodId: string) => void;
   scrollViewRef?: RefObject<ScrollView | null>;
+  onReflectionInputFocus?: (contentY: number) => void;
 }
 
 /**
@@ -94,6 +95,7 @@ export function DevotionalContent({
   onOpenJournal,
   onStudyMethodPress,
   scrollViewRef,
+  onReflectionInputFocus,
 }: DevotionalContentProps) {
   const { colors, isDark } = useTheme();
   const fontSizes = FONT_SIZE_VALUES[fontSize];
@@ -376,6 +378,7 @@ export function DevotionalContent({
               onOpenFullJournal={onOpenJournal}
               fontSize={fontSize}
               scrollViewRef={scrollViewRef}
+              onFocusInput={onReflectionInputFocus}
             />
           ) : (
             <View>

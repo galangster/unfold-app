@@ -436,6 +436,11 @@ export default function ReadingScreen() {
     });
   }, []);
 
+  const handleReflectionInputFocus = useCallback((contentY: number) => {
+    const y = Math.max(0, contentY - LIBRARY_TARGET_TOP_INSET);
+    scrollReaderToY(y);
+  }, [scrollReaderToY]);
+
   useEffect(() => {
     if (!targetScrollRequest) return;
 
@@ -1885,6 +1890,8 @@ export default function ReadingScreen() {
               }}
               showsVerticalScrollIndicator={false}
               bounces={true}
+              automaticallyAdjustKeyboardInsets={true}
+              keyboardShouldPersistTaps="handled"
               onLayout={handleReaderScrollViewLayout}
               onScroll={handleScroll}
               onContentSizeChange={() => setReaderLayoutVersion((version) => version + 1)}
@@ -1905,6 +1912,7 @@ export default function ReadingScreen() {
                 targetBookmark={targetBookmark}
                 onTargetBookmarkLocated={handleTargetHighlightLocated}
                 scrollViewRef={scrollViewRef}
+                onReflectionInputFocus={handleReflectionInputFocus}
                 onScriptureTap={(ref) => {
                   setScriptureSheetRef(ref);
                 }}

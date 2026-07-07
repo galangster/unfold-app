@@ -26,6 +26,14 @@ import {
   type AutosaveController,
 } from '@/lib/autosave-controller';
 
+type MeasurableTextInput = TextInput & {
+  measureLayout?: (
+    relativeToNativeNode: unknown,
+    onSuccess: (x: number, y: number, width: number, height: number) => void,
+    onFail: () => void
+  ) => void;
+};
+
 interface InlineReflectionJournalProps {
   questions: string[];
   devotionalId: string;
@@ -33,6 +41,7 @@ interface InlineReflectionJournalProps {
   onOpenFullJournal: (focusQuestion?: number) => void;
   fontSize?: FontSize;
   scrollViewRef?: RefObject<ScrollView | null>;
+  onFocusInput?: (contentY: number) => void;
 }
 
 /**
@@ -47,6 +56,7 @@ export function InlineReflectionJournal({
   onOpenFullJournal,
   fontSize = 'medium',
   scrollViewRef,
+  onFocusInput,
 }: InlineReflectionJournalProps) {
   const { colors } = useTheme();
   const reducedMotion = useReducedMotion();
@@ -209,6 +219,25 @@ export function InlineReflectionJournal({
     [devotionalId, dayNumber]
   );
 
+  const measureFocusedInput = useCallback(
+    (index: number) => {
+      const input = inputRefs.current.get(index) as MeasurableTextInput | null | undefined;
+      const scrollView = scrollViewRef?.current;
+      if (!input || !scrollView || typeof input.measureLayout !== 'function') return;
+
+      input.measureLayout(
+        scrollView,
+        (_x, y) => {
+          if (Number.isFinite(y)) {
+            onFocusInput?.(y);
+          }
+        },
+        () => {}
+      );
+    },
+    [onFocusInput, scrollViewRef]
+  );
+
   const handleQuestionTap = useCallback(
     (index: number) => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -219,15 +248,16 @@ export function InlineReflectionJournal({
         setExpandedIndex(null);
       } else {
         // Expand and focus — 400ms delay lets the expand animation finish
-        // and layout settle so KeyboardAwareScrollView can measure properly
+        // and layout settle before measuring against the reader scroll view.
         setExpandedIndex(index);
         if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
         focusTimerRef.current = setTimeout(() => {
           inputRefs.current.get(index)?.focus();
+          measureFocusedInput(index);
         }, 400);
       }
     },
-    [expandedIndex]
+    [expandedIndex, measureFocusedInput]
   );
 
   // Save any pending responses on unmount
@@ -343,7 +373,6 @@ export function InlineReflectionJournal({
             inputRefs={inputRefs}
             colors={colors}
             typography={typography}
-            scrollViewRef={scrollViewRef}
             editable={editable}
             reducedMotion={reducedMotion ?? false}
           />
@@ -404,7 +433,6 @@ function ReflectionQuestionCard({
   inputRefs,
   colors,
   typography,
-  scrollViewRef,
   editable = true,
   reducedMotion = false,
 }: {
@@ -418,7 +446,6 @@ function ReflectionQuestionCard({
   inputRefs: React.MutableRefObject<Map<number, TextInput | null>>;
   colors: any;
   typography: ReflectionTypography;
-  scrollViewRef?: RefObject<ScrollView | null>;
   editable?: boolean;
   reducedMotion?: boolean;
 }) {
@@ -485,13 +512,6 @@ function ReflectionQuestionCard({
               value={response}
               editable={editable}
               onChangeText={(text) => onResponseChange(index, question, text)}
-              onContentSizeChange={() => {
-                // Re-scroll to keep cursor visible as multiline text grows.
-                // The reader uses a plain ScrollView so library exact-target
-                // jumps can call its real imperative scrollTo API; keep this as
-                // an optional compatibility hook for any keyboard-aware wrapper.
-                (scrollViewRef?.current as { assureFocusedInputVisible?: () => void } | null)?.assureFocusedInputVisible?.();
-              }}
               placeholder={editable ? 'Write your thoughts...' : 'Unlock Premium to journal your reflections'}
               placeholderTextColor={colors.textHint}
               selectionColor={colors.accent}
