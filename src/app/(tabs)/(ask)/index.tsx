@@ -14,6 +14,7 @@ import {
   Platform,
   Pressable,
   TouchableOpacity,
+  useWindowDimensions,
 } from 'react-native';
 // react-native-gesture-handler not needed — scroll banner uses normal TouchableOpacity
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -57,6 +58,7 @@ import {
   getCompanionDailyUsage,
   FREE_COMPANION_DAILY_LIMIT,
 } from '@/lib/premium-gating';
+import { computeCompanionStatusSlotHeight } from '@/lib/companion-status-slot';
 
 // ── Message item ───────────────────────────────────────────────────────────
 
@@ -130,10 +132,16 @@ const TAB_BAR_CONTENT_HEIGHT = 56;
 export default function CompanionScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const { fontScale } = useWindowDimensions();
   const listRef = useRef<any>(null);
 
   // Full tab bar height including safe area (home indicator)
   const tabBarHeight = TAB_BAR_CONTENT_HEIGHT + insets.bottom;
+
+  // WR-17: fixed-height band between list and input that hosts the typing
+  // indicator OR the suggestion chips, so neither mounting nor unmounting
+  // ever shifts the conversation vertically.
+  const statusSlotHeight = computeCompanionStatusSlotHeight(fontScale);
 
   // Premium gating
   const premiumPolicy = usePremiumAccessPolicy();
@@ -382,23 +390,26 @@ export default function CompanionScreen() {
         </View>
       )}
 
-      {/* Typing indicator — pinned above input (was inside FlatList header; moved
-          out so horizontal chip drags don't interact with the list's pan gesture
-          recognizer, which was triggering keyboardDismissMode="interactive"). */}
-      {!isEmpty && showTyping && (
-        <View style={{ paddingVertical: 8, paddingHorizontal: Spacing['4'] }}>
-          <TypingIndicator />
+      {/* Status slot — reserved band above the input hosting the typing
+          indicator or the suggestion chips (WR-17). Kept outside the FlatList
+          so horizontal chip drags don't interact with the list's pan gesture
+          recognizer (keyboardDismissMode="interactive" conflict). The height
+          never changes while a conversation is open, so the message list
+          doesn't lurch when either child appears or disappears. */}
+      {!isEmpty && (
+        <View style={{ height: statusSlotHeight, justifyContent: 'center' }}>
+          {showTyping ? (
+            <View style={{ paddingHorizontal: Spacing['4'] }}>
+              <TypingIndicator />
+            </View>
+          ) : showSuggestions ? (
+            <SuggestionChips
+              suggestions={suggestions}
+              onSelect={handleChipSelect}
+              visible
+            />
+          ) : null}
         </View>
-      )}
-
-      {/* Suggestion chips — pinned above input, outside FlatList to keep their
-          horizontal scroll isolated from the parent list's pan recognizer. */}
-      {!isEmpty && showSuggestions && (
-        <SuggestionChips
-          suggestions={suggestions}
-          onSelect={handleChipSelect}
-          visible
-        />
       )}
 
       {/* Error banner */}

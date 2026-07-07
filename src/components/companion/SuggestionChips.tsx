@@ -30,6 +30,7 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
 import { smartQuotes } from '@/lib/smart-quotes';
+import { SUGGESTION_CHIP_TEXT_LINE_HEIGHT } from '@/lib/companion-status-slot';
 
 const EASE_OUT = Easing.out(Easing.cubic);
 
@@ -100,6 +101,9 @@ function AnimatedChip({
           style={{
             fontFamily: FontFamily.body,
             fontSize: FontSize.sm,
+            // Explicit so chip height stays in lockstep with the reserved
+            // status slot (WR-17) — see companion-status-slot.ts.
+            lineHeight: SUGGESTION_CHIP_TEXT_LINE_HEIGHT,
             color: colors.text,
           }}
           numberOfLines={1}
