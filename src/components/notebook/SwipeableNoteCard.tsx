@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -37,7 +37,10 @@ interface SwipeableNoteCardProps {
   onDelete: (note: Note) => void;
 }
 
-export function SwipeableNoteCard({
+// Memoized (WR-24): the notebook screen re-renders on scroll-direction
+// changes (FAB visibility) and while typing in search — without memo every
+// card re-rendered and rebuilt its pan gesture each time.
+export const SwipeableNoteCard = memo(function SwipeableNoteCard({
   note,
   index,
   onPress,
@@ -78,26 +81,30 @@ export function SwipeableNoteCard({
     [onPress],
   );
 
-  const panGesture = Gesture.Pan()
-    .activeOffsetX([-10, 10])
-    .failOffsetY([-5, 5])
-    .onStart(() => {
-      contextX.value = translateX.value;
-    })
-    .onUpdate((e) => {
-      const raw = contextX.value + e.translationX;
-      translateX.value = clamp(raw, -TOTAL_ACTIONS_WIDTH, 0);
-    })
-    .onEnd((e) => {
-      const isOpen = translateX.value < -SNAP_THRESHOLD;
-      const isFlick = e.velocityX < -500;
+  const panGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetX([-10, 10])
+        .failOffsetY([-5, 5])
+        .onStart(() => {
+          contextX.value = translateX.value;
+        })
+        .onUpdate((e) => {
+          const raw = contextX.value + e.translationX;
+          translateX.value = clamp(raw, -TOTAL_ACTIONS_WIDTH, 0);
+        })
+        .onEnd((e) => {
+          const isOpen = translateX.value < -SNAP_THRESHOLD;
+          const isFlick = e.velocityX < -500;
 
-      if (isOpen || isFlick) {
-        translateX.value = withTiming(-TOTAL_ACTIONS_WIDTH, TIMING_CONFIG);
-      } else {
-        translateX.value = withTiming(0, TIMING_CONFIG);
-      }
-    });
+          if (isOpen || isFlick) {
+            translateX.value = withTiming(-TOTAL_ACTIONS_WIDTH, TIMING_CONFIG);
+          } else {
+            translateX.value = withTiming(0, TIMING_CONFIG);
+          }
+        }),
+    [contextX, translateX],
+  );
 
   const contentStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }],
@@ -165,7 +172,7 @@ export function SwipeableNoteCard({
       </GestureDetector>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   outerContainer: {

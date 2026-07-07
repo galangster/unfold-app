@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { memo, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import {
   StarIcon,
@@ -44,8 +44,9 @@ interface NoteCardProps {
 /**
  * Card component for the notebook list view.
  * Variable height (~92-120px) depending on whether a scripture reference is present.
+ * Memoized (WR-24): parent screens re-render on scroll/search state changes.
  */
-export function NoteCard({ note, onPress, onLongPress, index = 0 }: NoteCardProps) {
+export const NoteCard = memo(function NoteCard({ note, onPress, onLongPress, index = 0 }: NoteCardProps) {
   const { colors } = useTheme();
   const reducedMotion = useReducedMotion();
   const categoryConfig = CATEGORY_CONFIG[note.category];
@@ -84,7 +85,9 @@ export function NoteCard({ note, onPress, onLongPress, index = 0 }: NoteCardProp
   const extraTagCount = note.tags.length - visibleTags.length;
 
   return (
-    <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(30 * index).easing(Ease.out)}>
+    // Stagger capped so rows mounting late (virtualized list, deep scroll)
+    // don't wait out a delay proportional to their index.
+    <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(30 * Math.min(index, 10)).easing(Ease.out)}>
       <TouchableOpacity
         onPress={handlePress}
         onLongPress={handleLongPress}
@@ -167,7 +170,7 @@ export function NoteCard({ note, onPress, onLongPress, index = 0 }: NoteCardProp
       </TouchableOpacity>
     </Animated.View>
   );
-}
+});
 
 function formatRelativeDate(dateStr: string): string {
   const date = new Date(dateStr);
