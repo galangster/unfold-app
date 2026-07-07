@@ -323,6 +323,7 @@ function QuestionStep({
             onSubmitEditing={handleSubmitTyped}
             maxLength={200}
             autoCorrect
+            keyboardAppearance={isDark ? 'dark' : 'light'}
           />
           <TouchableOpacity activeOpacity={0.7}
             onPress={handleSubmitTyped}
@@ -450,6 +451,7 @@ function NoteStep({
         maxLength={500}
         textAlignVertical="top"
         autoCorrect
+        keyboardAppearance={isDark ? 'dark' : 'light'}
       />
       <VoiceInputBar value={noteText} onChangeText={setNoteText} />
 

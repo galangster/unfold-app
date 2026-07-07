@@ -27,7 +27,7 @@ interface AdaptiveQuestionFlowProps {
 }
 
 export function AdaptiveQuestionFlow({ studyContext, onComplete, onBack }: AdaptiveQuestionFlowProps) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const reducedMotion = useReducedMotion();
   const [answer, setAnswer] = useState('');
   const [showInput, setShowInput] = useState(false);
@@ -152,6 +152,7 @@ export function AdaptiveQuestionFlow({ studyContext, onComplete, onBack }: Adapt
             onChangeText={setAnswer}
             autoFocus
             editable={!isLoading}
+            keyboardAppearance={isDark ? 'dark' : 'light'}
           />
 
           {/* Submit button */}

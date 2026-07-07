@@ -194,6 +194,7 @@ export function BibleNoteSheet({ highlight, onClose, onSave, onDelete }: BibleNo
                   multiline
                   autoFocus
                   maxLength={1000}
+                  keyboardAppearance={isDark ? 'dark' : 'light'}
                   style={[
                     styles.input,
                     {

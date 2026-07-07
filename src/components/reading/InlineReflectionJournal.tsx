@@ -58,7 +58,7 @@ export function InlineReflectionJournal({
   scrollViewRef,
   onFocusInput,
 }: InlineReflectionJournalProps) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const reducedMotion = useReducedMotion();
   const typography = getReflectionTypography(fontSize);
   const premiumPolicy = usePremiumAccessPolicy();
@@ -372,6 +372,7 @@ export function InlineReflectionJournal({
             onResponseChange={handleResponseChange}
             inputRefs={inputRefs}
             colors={colors}
+            isDark={isDark}
             typography={typography}
             editable={editable}
             reducedMotion={reducedMotion ?? false}
@@ -432,6 +433,7 @@ function ReflectionQuestionCard({
   onResponseChange,
   inputRefs,
   colors,
+  isDark,
   typography,
   editable = true,
   reducedMotion = false,
@@ -445,6 +447,7 @@ function ReflectionQuestionCard({
   onResponseChange: (index: number, question: string, text: string) => void;
   inputRefs: React.MutableRefObject<Map<number, TextInput | null>>;
   colors: any;
+  isDark: boolean;
   typography: ReflectionTypography;
   editable?: boolean;
   reducedMotion?: boolean;
@@ -518,6 +521,7 @@ function ReflectionQuestionCard({
               cursorColor={colors.accent}
               multiline
               textAlignVertical="top"
+              keyboardAppearance={isDark ? 'dark' : 'light'}
               accessibilityLabel={`Your response to: ${question}`}
               accessibilityHint={editable ? 'Write your reflection. Auto-saved.' : 'Unlock Premium to write reflections.'}
               style={{

@@ -152,7 +152,7 @@ function AnimatedPrayerCircle({ isAnswered, accentColor, hintColor }: {
 export default function JournalScreen() {
   const router = useRouter();
   const pathname = usePathname();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const reducedMotion = useReducedMotion();
   const params = useLocalSearchParams<{ devotionalId: string; dayNumber: string; focusQuestion?: string }>();
 
@@ -881,6 +881,7 @@ Their journal entry:
                     cursorColor={colors.accent}
                     multiline
                     textAlignVertical="top"
+                    keyboardAppearance={isDark ? 'dark' : 'light'}
                     accessibilityLabel="Journal entry"
                     style={[jStyles.freewriteInput, { color: colors.text, fontSize: typography.responseFontSize, lineHeight: typography.responseLineHeight }]}
                   />
@@ -999,6 +1000,7 @@ Their journal entry:
                                   cursorColor={colors.accent}
                                   multiline
                                   textAlignVertical="top"
+                                  keyboardAppearance={isDark ? 'dark' : 'light'}
                                   style={[jStyles.questionTextInput, { color: colors.text, paddingBottom: 40, fontSize: typography.responseFontSize, lineHeight: typography.responseLineHeight }]}
                                 />
                                 <VoiceInputBar
@@ -1124,6 +1126,7 @@ Their journal entry:
                               cursorColor={colors.accent}
                               multiline
                               textAlignVertical="top"
+                              keyboardAppearance={isDark ? 'dark' : 'light'}
                               accessibilityLabel={`${section.label} journal entry`}
                               style={[jStyles.soapTextInput, { color: colors.text, paddingBottom: 40, fontSize: typography.responseFontSize, lineHeight: typography.responseLineHeight }]}
                             />
@@ -1232,6 +1235,7 @@ Their journal entry:
                       multiline
                       textAlignVertical="top"
                       autoFocus
+                      keyboardAppearance={isDark ? 'dark' : 'light'}
                       style={[jStyles.prayerTextInput, { color: colors.text, paddingBottom: 40, fontSize: typography.responseFontSize, lineHeight: typography.responseLineHeight }]}
                       onSubmitEditing={handleAddPrayer}
                       blurOnSubmit

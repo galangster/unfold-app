@@ -74,7 +74,7 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
   },
   ref,
 ) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const inputRef = useRef<TextInput>(null);
   const [focused, setFocused] = useState(false);
 
@@ -172,6 +172,7 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
           onFocus={handleFocus}
           onBlur={handleBlur}
           textAlignVertical={multiline ? 'top' : 'center'}
+          keyboardAppearance={isDark ? 'dark' : 'light'}
           {...rest}
         />
 

@@ -150,6 +150,7 @@ export function CompanionInput({ onSend, onStop, isStreaming }: Props) {
           scrollEnabled
           maxLength={COMPANION_MESSAGE_MAX_CHARS}
           textAlignVertical="center"
+          keyboardAppearance={isDark ? 'dark' : 'light'}
           returnKeyType="default"
           blurOnSubmit={false}
           onSubmitEditing={handleSend}
