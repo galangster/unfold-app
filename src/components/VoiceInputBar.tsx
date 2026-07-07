@@ -48,6 +48,7 @@ import { alpha } from '@/components/ui';
 const BAR_COUNT = 5;
 const BAR_MIN_H = 4;
 const BAR_MAX_H = 26;
+const FINAL_RESULT_FLUSH_MS = 200;
 
 const BAR_DURATIONS = [700, 550, 800, 600, 720] as const;
 const BAR_DELAYS    = [0,   80,  160, 40,  240] as const;
@@ -56,6 +57,10 @@ function formatTimer(seconds: number): string {
   const m = Math.floor(seconds / 60).toString().padStart(2, '0');
   const s = (seconds % 60).toString().padStart(2, '0');
   return `${m}:${s}`;
+}
+
+function joinTranscriptParts(...parts: string[]): string {
+  return parts.map((part) => part.trim()).filter(Boolean).join(' ');
 }
 
 // ── Single animated bar ──────────────────────────────────
@@ -117,6 +122,7 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoSt
   // Use refs to avoid stale closures in event callbacks
   const isRecordingRef = useRef(false);
   const userStoppedRef = useRef(false); // distinguishes user-stop vs silence-stop
+  const committedSegmentsRef = useRef('');
   const finalTranscriptRef = useRef('');
   const interimTranscriptRef = useRef('');
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -127,6 +133,15 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoSt
   useEffect(() => { valueRef.current = value; }, [value]);
   useEffect(() => { onChangeRef.current = onChangeText; }, [onChangeText]);
 
+  const commitCurrentSegment = useCallback(() => {
+    const transcript = (finalTranscriptRef.current || interimTranscriptRef.current).trim();
+    if (!transcript) return;
+
+    committedSegmentsRef.current = joinTranscriptParts(committedSegmentsRef.current, transcript);
+    finalTranscriptRef.current = '';
+    interimTranscriptRef.current = '';
+  }, []);
+
   // ── STT events ───────────────────────────────────────────
   useSpeechRecognitionEvent('result', (e) => {
     if (!isRecordingRef.current) return; // Only the active recording instance processes results
@@ -134,6 +149,7 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoSt
     interimTranscriptRef.current = transcript;
     if (e.isFinal) {
       finalTranscriptRef.current = transcript;
+      commitCurrentSegment();
     }
   });
 
@@ -148,6 +164,7 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoSt
   useSpeechRecognitionEvent('end', () => {
     if (isRecordingRef.current && !userStoppedRef.current) {
       // STT ended on its own (silence) — restart so pauses don't kill the session
+      commitCurrentSegment();
       ExpoSpeechRecognitionModule.start({
         lang: 'en-US',
         interimResults: true,
@@ -168,6 +185,7 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoSt
   const resetRecordingState = useCallback(() => {
     isRecordingRef.current = false;
     userStoppedRef.current = false;
+    committedSegmentsRef.current = '';
     finalTranscriptRef.current = '';
     interimTranscriptRef.current = '';
     clearTimer();
@@ -176,7 +194,10 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoSt
   }, [clearTimer]);
 
   const doCommit = useCallback(() => {
-    const transcript = (finalTranscriptRef.current || interimTranscriptRef.current).trim();
+    const transcript = joinTranscriptParts(
+      committedSegmentsRef.current,
+      finalTranscriptRef.current || interimTranscriptRef.current,
+    );
     if (transcript) {
       const base = valueRef.current;
       const separator = base.trim() ? ' ' : '';
@@ -202,6 +223,7 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoSt
       return;
     }
 
+    committedSegmentsRef.current = '';
     finalTranscriptRef.current = '';
     interimTranscriptRef.current = '';
     isRecordingRef.current = true;
@@ -224,7 +246,7 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoSt
           userStoppedRef.current = true;
           ExpoSpeechRecognitionModule.stop();
           // Slight delay to let final result arrive before committing
-          setTimeout(() => doCommit(), 200);
+          setTimeout(() => doCommit(), FINAL_RESULT_FLUSH_MS);
         }
         return next;
       });
@@ -253,7 +275,7 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoSt
   const acceptRecording = useCallback(() => {
     userStoppedRef.current = true;
     ExpoSpeechRecognitionModule.stop();
-    doCommit();
+    setTimeout(() => doCommit(), FINAL_RESULT_FLUSH_MS);
   }, [doCommit]);
 
   // ── Idle state ───────────────────────────────────────────
