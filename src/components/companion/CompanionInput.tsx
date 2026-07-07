@@ -11,6 +11,7 @@
 import { useState, useRef, useCallback, useMemo } from 'react';
 import {
   View,
+  Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
@@ -29,6 +30,7 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
+import { COMPANION_MESSAGE_MAX_CHARS } from '@/lib/use-companion-chat';
 
 const PLACEHOLDERS = [
   'What’s on your mind?',
@@ -36,6 +38,8 @@ const PLACEHOLDERS = [
   'What are you thinking about?',
   'How can I help today?',
 ];
+
+const COMPANION_MESSAGE_COUNTER_THRESHOLD = 3500;
 
 interface Props {
   onSend: (text: string) => boolean | void;
@@ -57,6 +61,9 @@ export function CompanionInput({ onSend, onStop, isStreaming }: Props) {
 
   const canSend = text.trim().length > 0 && !isStreaming;
   const showMic = !canSend && !isStreaming;
+  const messageLength = text.trim().length;
+  const showCharacterCounter = messageLength > COMPANION_MESSAGE_COUNTER_THRESHOLD;
+  const isOverMessageLimit = messageLength > COMPANION_MESSAGE_MAX_CHARS;
 
   const handleSend = useCallback(() => {
     if (!canSend) return;
@@ -141,6 +148,7 @@ export function CompanionInput({ onSend, onStop, isStreaming }: Props) {
           cursorColor={colors.accent}
           multiline
           scrollEnabled
+          maxLength={COMPANION_MESSAGE_MAX_CHARS}
           textAlignVertical="center"
           returnKeyType="default"
           blurOnSubmit={false}
@@ -155,6 +163,22 @@ export function CompanionInput({ onSend, onStop, isStreaming }: Props) {
             maxHeight: 120,
           }}
         />
+
+        {showCharacterCounter && (
+          <Text
+            style={{
+              fontFamily: FontFamily.ui,
+              fontSize: FontSize.xs,
+              color: isOverMessageLimit ? colors.error : colors.textHint,
+              marginBottom: 9,
+              marginLeft: Spacing['1.5'],
+              minWidth: 74,
+              textAlign: 'right',
+            }}
+          >
+            {`${messageLength.toLocaleString()} / ${COMPANION_MESSAGE_MAX_CHARS.toLocaleString()}`}
+          </Text>
+        )}
 
         {/* Action button: mic / send / stop */}
         <Animated.View style={[{ marginBottom: 2 }, sendAnimStyle]}>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { TextInput } from 'react-native';
+import { Text, TextInput } from 'react-native';
 
 const renderer = require('react-test-renderer');
 const { act } = renderer;
@@ -66,6 +66,8 @@ jest.mock('react-native-reanimated', () => {
 
 import { CompanionInput } from '../CompanionInput';
 
+const COMPANION_MESSAGE_MAX_CHARS = 4000;
+
 function renderInput(onSend: (text: string) => boolean) {
   let tree: any;
 
@@ -115,5 +117,25 @@ describe('CompanionInput send clearing', () => {
 
     expect(onSend).toHaveBeenCalledWith('What does this verse mean?');
     expect(tree.root.findByType(TextInput).props.value).toBe('');
+  });
+
+  it('surfaces the length cap and preserves an over-limit draft when rejected', () => {
+    const onSend = jest.fn((message: string) => message.length <= COMPANION_MESSAGE_MAX_CHARS);
+    const tree = renderInput(onSend);
+    const message = 'a'.repeat(COMPANION_MESSAGE_MAX_CHARS + 1);
+
+    enterText(tree, message);
+
+    expect(tree.root.findByType(TextInput).props.maxLength).toBe(COMPANION_MESSAGE_MAX_CHARS);
+    expect(
+      tree.root
+        .findAllByType(Text)
+        .some((node: any) => node.props.children === '4,001 / 4,000')
+    ).toBe(true);
+
+    pressSend(tree);
+
+    expect(onSend).toHaveBeenCalledWith(message);
+    expect(tree.root.findByType(TextInput).props.value).toBe(message);
   });
 });

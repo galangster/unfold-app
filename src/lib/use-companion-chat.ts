@@ -27,6 +27,7 @@ import { generateConversationTitle } from './companion-service';
  */
 export type SendOutcome = 'sent' | 'noop' | 'error';
 
+export const COMPANION_MESSAGE_MAX_CHARS = 4000;
 const STREAMING_UPDATE_INTERVAL_MS = 32; // ~30fps, matching the SDK 56 chat-template cadence.
 
 // ── Phase 4: Context-aware system prompt ──────────────────────────────────────
@@ -264,7 +265,8 @@ export function useCompanionChat() {
 
   const sendMessage = useCallback(
     async (text: string): Promise<SendOutcome> => {
-      if (!text.trim() || isStreaming) return 'noop';
+      const trimmedText = text.trim();
+      if (!trimmedText || isStreaming) return 'noop';
 
       // Ensure an active conversation exists before sending
       if (!useCompanionChatStore.getState().activeConversationId) {
@@ -278,7 +280,7 @@ export function useCompanionChat() {
       const userMsg: CompanionMessage = {
         id: `${Date.now()}-user`,
         role: 'user',
-        content: text.trim(),
+        content: trimmedText,
         timestamp: Date.now(),
         status: 'sent',
       };
@@ -344,7 +346,7 @@ export function useCompanionChat() {
 
         const chatMessages = [
           ...recentMessages,
-          { role: 'user' as const, content: sanitizeForPrompt(text) },
+          { role: 'user' as const, content: sanitizeForPrompt(trimmedText, COMPANION_MESSAGE_MAX_CHARS) },
         ];
 
         const companionContext = buildCompanionContext(

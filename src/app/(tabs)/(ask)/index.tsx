@@ -31,7 +31,7 @@ import { useTheme } from '@/lib/theme';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { CompanionOrb } from '@/components/CompanionOrb';
-import { useCompanionChat } from '@/lib/use-companion-chat';
+import { COMPANION_MESSAGE_MAX_CHARS, useCompanionChat } from '@/lib/use-companion-chat';
 import type { CompanionMessage } from '@/lib/companion-chat-store';
 import {
   CompanionDrawer,
@@ -182,6 +182,12 @@ export default function CompanionScreen() {
 
   const handleSend = useCallback(
     (text: string) => {
+      const trimmed = text.trim();
+      if (trimmed.length > COMPANION_MESSAGE_MAX_CHARS) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        return false;
+      }
+
       // Pre-send guards run synchronously (gate check + limit check)
       if (!gate()) return false;
 
@@ -195,7 +201,7 @@ export default function CompanionScreen() {
       // a free message is consumed iff a companion response was received.
       // The isStreaming guard in sendMessage prevents concurrent over-spend.
       void (async () => {
-        const outcome = await sendMessage(text);
+        const outcome = await sendMessage(trimmed);
         if (!isPremium && outcome === 'sent') {
           incrementCompanionDailyCount();
           setDailyRemaining(getCompanionDailyUsage().remaining);

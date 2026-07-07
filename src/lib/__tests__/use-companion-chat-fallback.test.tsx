@@ -13,7 +13,7 @@ jest.mock('expo/fetch', () => ({
 jest.mock('@/lib/api-config', () => ({
   PRIMARY_BACKEND_URL: 'https://api.example.test',
   getAuthHeaders: jest.fn(async () => ({ 'Content-Type': 'application/json' })),
-  sanitizeForPrompt: (value: string) => value,
+  sanitizeForPrompt: (value: string, maxLength = 2000) => value.slice(0, maxLength),
 }));
 
 jest.mock('@/lib/logger', () => ({
@@ -100,6 +100,16 @@ function jsonResponse(payload: unknown) {
   return {
     ok: true,
     json: async () => payload,
+  };
+}
+
+function sentCompanionPayload() {
+  const body = mockFetch.mock.calls[0]?.[1]?.body;
+  if (typeof body !== 'string') {
+    throw new Error('Expected companion request body');
+  }
+  return JSON.parse(body) as {
+    messages: Array<{ role: 'user' | 'assistant'; content: string }>;
   };
 }
 
@@ -192,6 +202,68 @@ describe('sendMessage outcome', () => {
     });
 
     expect(outcome).toBe('sent');
+  });
+});
+
+describe('useCompanionChat prompt payload length', () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+    act(() => {
+      useCompanionChatStore.getState().clearAllConversations();
+    });
+  });
+
+  it('sends a 2001-4000 character current message without the default prompt clip', async () => {
+    const message = 'a'.repeat(3500);
+    mockFetch.mockResolvedValueOnce(streamingResponseFromChunks([
+      'data: {"t":"I hear you."}\n\n',
+      'data: {"d":true,"s":[]}\n\n',
+    ]));
+
+    let hook: ReturnType<typeof useCompanionChat> | null = null;
+    await act(async () => {
+      renderer.create(<HookHarness onReady={(next) => { hook = next; }} />);
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await hook!.sendMessage(message);
+    });
+
+    const payload = sentCompanionPayload();
+    const currentMessage = payload.messages[payload.messages.length - 1];
+    expect(currentMessage).toMatchObject({
+      role: 'user',
+      content: message,
+    });
+    expect(currentMessage.content).toHaveLength(3500);
+  });
+
+  it('caps the direct current-message payload at 4000 instead of the default prompt clip', async () => {
+    const maxLength = 4000;
+    const message = 'b'.repeat(maxLength + 1);
+    mockFetch.mockResolvedValueOnce(streamingResponseFromChunks([
+      'data: {"t":"I hear you."}\n\n',
+      'data: {"d":true,"s":[]}\n\n',
+    ]));
+
+    let hook: ReturnType<typeof useCompanionChat> | null = null;
+    await act(async () => {
+      renderer.create(<HookHarness onReady={(next) => { hook = next; }} />);
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await hook!.sendMessage(message);
+    });
+
+    const payload = sentCompanionPayload();
+    const currentMessage = payload.messages[payload.messages.length - 1];
+    expect(currentMessage).toMatchObject({
+      role: 'user',
+      content: message.slice(0, maxLength),
+    });
+    expect(currentMessage.content).toHaveLength(maxLength);
   });
 });
 
