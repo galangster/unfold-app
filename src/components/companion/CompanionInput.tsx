@@ -38,7 +38,7 @@ const PLACEHOLDERS = [
 ];
 
 interface Props {
-  onSend: (text: string) => void;
+  onSend: (text: string) => boolean | void;
   onStop: () => void;
   isStreaming: boolean;
 }
@@ -60,15 +60,17 @@ export function CompanionInput({ onSend, onStop, isStreaming }: Props) {
 
   const handleSend = useCallback(() => {
     if (!canSend) return;
+
+    const trimmed = text.trim();
+    if (onSend(trimmed) === false) return;
+
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     sendScale.value = withTiming(0.9, { duration: 50 }, () => {
       sendScale.value = withTiming(1, { duration: Duration.instant });
     });
 
-    const trimmed = text.trim();
     setText('');
-    onSend(trimmed);
   }, [canSend, text, onSend, sendScale]);
 
   const handleStop = useCallback(() => {

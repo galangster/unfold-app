@@ -183,12 +183,12 @@ export default function CompanionScreen() {
   const handleSend = useCallback(
     (text: string) => {
       // Pre-send guards run synchronously (gate check + limit check)
-      if (!gate()) return;
+      if (!gate()) return false;
 
       if (!isPremium && !canSendCompanionMessage()) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         setShowPremiumSheet(true);
-        return;
+        return false;
       }
 
       // Charge quota ONLY on a successful response (NET-2):
@@ -205,6 +205,8 @@ export default function CompanionScreen() {
       setTimeout(() => {
         listRef.current?.scrollToOffset({ offset: 0, animated: true });
       }, 100);
+
+      return true;
     },
     [sendMessage, isPremium, gate]
   );
