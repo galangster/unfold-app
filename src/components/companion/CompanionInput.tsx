@@ -30,7 +30,7 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
-import { COMPANION_MESSAGE_MAX_CHARS } from '@/lib/use-companion-chat';
+import { COMPANION_MESSAGE_MAX_CHARS } from '@/lib/companion-limits';
 
 const PLACEHOLDERS = [
   'What’s on your mind?',

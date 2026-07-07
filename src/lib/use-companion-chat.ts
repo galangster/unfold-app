@@ -27,7 +27,8 @@ import { generateConversationTitle } from './companion-service';
  */
 export type SendOutcome = 'sent' | 'noop' | 'error';
 
-export const COMPANION_MESSAGE_MAX_CHARS = 4000;
+export { COMPANION_MESSAGE_MAX_CHARS } from '@/lib/companion-limits';
+import { COMPANION_MESSAGE_MAX_CHARS } from '@/lib/companion-limits';
 const STREAMING_UPDATE_INTERVAL_MS = 32; // ~30fps, matching the SDK 56 chat-template cadence.
 
 // ── Phase 4: Context-aware system prompt ──────────────────────────────────────
