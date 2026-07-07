@@ -53,6 +53,9 @@ const FINAL_RESULT_FLUSH_MS = 200;
 const BAR_DURATIONS = [700, 550, 800, 600, 720] as const;
 const BAR_DELAYS    = [0,   80,  160, 40,  240] as const;
 
+let activeRecorder: symbol | null = null;
+let activeRecorderHandoff: (() => void) | null = null;
+
 function formatTimer(seconds: number): string {
   const m = Math.floor(seconds / 60).toString().padStart(2, '0');
   const s = (seconds % 60).toString().padStart(2, '0');
@@ -120,6 +123,7 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoSt
   const MAX_DURATION_SECONDS = 60;
 
   // Use refs to avoid stale closures in event callbacks
+  const instanceId = useRef<symbol>(Symbol('voiceInput'));
   const isRecordingRef = useRef(false);
   const userStoppedRef = useRef(false); // distinguishes user-stop vs silence-stop
   const committedSegmentsRef = useRef('');
@@ -144,7 +148,7 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoSt
 
   // ── STT events ───────────────────────────────────────────
   useSpeechRecognitionEvent('result', (e) => {
-    if (!isRecordingRef.current) return; // Only the active recording instance processes results
+    if (!isRecordingRef.current || activeRecorder !== instanceId.current) return; // Only the owning recording instance processes results
     const transcript = e.results?.[0]?.transcript ?? '';
     interimTranscriptRef.current = transcript;
     if (e.isFinal) {
@@ -154,7 +158,7 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoSt
   });
 
   useSpeechRecognitionEvent('error', (e) => {
-    if (!isRecordingRef.current) return; // Only the active recording instance handles errors
+    if (!isRecordingRef.current || activeRecorder !== instanceId.current) return; // Only the owning recording instance handles errors
     if (e.error !== 'no-speech') {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
@@ -162,7 +166,7 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoSt
   });
 
   useSpeechRecognitionEvent('end', () => {
-    if (isRecordingRef.current && !userStoppedRef.current) {
+    if (isRecordingRef.current && activeRecorder === instanceId.current && !userStoppedRef.current) {
       // STT ended on its own (silence) — restart so pauses don't kill the session
       commitCurrentSegment();
       ExpoSpeechRecognitionModule.start({
@@ -183,6 +187,10 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoSt
   }, []);
 
   const resetRecordingState = useCallback(() => {
+    if (activeRecorder === instanceId.current) {
+      activeRecorder = null;
+      activeRecorderHandoff = null;
+    }
     isRecordingRef.current = false;
     userStoppedRef.current = false;
     committedSegmentsRef.current = '';
@@ -211,7 +219,11 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoSt
   useEffect(() => {
     return () => {
       clearTimer();
-      if (isRecordingRef.current) ExpoSpeechRecognitionModule.stop();
+      if (activeRecorder === instanceId.current) {
+        activeRecorder = null;
+        activeRecorderHandoff = null;
+        if (isRecordingRef.current) ExpoSpeechRecognitionModule.stop();
+      }
     };
   }, [clearTimer]);
 
@@ -223,9 +235,22 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoSt
       return;
     }
 
+    if (activeRecorder && activeRecorder !== instanceId.current) {
+      // Hand off: commit the current owner's dictation to its own field
+      // (spoken words must never silently vanish), then take the recognizer.
+      activeRecorderHandoff?.();
+      if (activeRecorder && activeRecorder !== instanceId.current) {
+        activeRecorder = null;
+        activeRecorderHandoff = null;
+      }
+      ExpoSpeechRecognitionModule.stop();
+    }
+
     committedSegmentsRef.current = '';
     finalTranscriptRef.current = '';
     interimTranscriptRef.current = '';
+    activeRecorder = instanceId.current;
+    activeRecorderHandoff = doCommit;
     isRecordingRef.current = true;
     setIsRecording(true);
     setElapsedSeconds(0);
@@ -251,7 +276,7 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoSt
         return next;
       });
     }, 1000);
-  }, [doCommit]);
+  }, [doCommit, resetRecordingState]);
 
   // ── Auto-start on mount (when rendered from CompanionInput voice mode) ──
   const autoStartedRef = useRef(false);

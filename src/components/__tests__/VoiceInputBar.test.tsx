@@ -2,8 +2,9 @@ import React from 'react';
 
 const renderer = require('react-test-renderer');
 const { act } = renderer;
+const { TouchableOpacity } = require('react-native');
 
-const mockSpeechHandlers: Record<string, (event?: any) => void> = {};
+const mockSpeechHandlers: Record<string, Array<(event?: any) => void>> = {};
 const mockStart = jest.fn();
 const mockStop = jest.fn();
 const mockRequestPermissionsAsync = jest.fn(async () => ({ granted: true }));
@@ -15,7 +16,19 @@ jest.mock('expo-speech-recognition', () => ({
     stop: mockStop,
   },
   useSpeechRecognitionEvent: (eventName: string, handler: (event?: any) => void) => {
-    mockSpeechHandlers[eventName] = handler;
+    const React = require('react');
+
+    React.useEffect(() => {
+      mockSpeechHandlers[eventName] = mockSpeechHandlers[eventName] || [];
+      mockSpeechHandlers[eventName].push(handler);
+
+      return () => {
+        const handlers = mockSpeechHandlers[eventName];
+        if (!handlers) return;
+        const index = handlers.indexOf(handler);
+        if (index !== -1) handlers.splice(index, 1);
+      };
+    }, [eventName, handler]);
   },
 }));
 
@@ -85,6 +98,16 @@ jest.mock('react-native-reanimated', () => {
 
 const { VoiceInputBar } = require('../VoiceInputBar');
 
+function dispatchSpeechEvent(eventName: string, event?: any) {
+  [...(mockSpeechHandlers[eventName] ?? [])].forEach((handler) => handler(event));
+}
+
+function findPressablesByLabel(root: any, accessibilityLabel: string) {
+  return root
+    .findAll((node: any) => node.type === TouchableOpacity && node.props.accessibilityLabel === accessibilityLabel)
+    .filter((node: any) => typeof node.props.onPress === 'function');
+}
+
 describe('VoiceInputBar', () => {
   beforeEach(() => {
     jest.useFakeTimers();
@@ -114,20 +137,20 @@ describe('VoiceInputBar', () => {
     });
 
     act(() => {
-      mockSpeechHandlers.result({
+      dispatchSpeechEvent('result', {
         isFinal: true,
         results: [{ transcript: 'Sentence one.' }],
       });
     });
 
     act(() => {
-      mockSpeechHandlers.end();
+      dispatchSpeechEvent('end');
     });
 
     expect(mockStart).toHaveBeenCalledTimes(2);
 
     act(() => {
-      mockSpeechHandlers.result({
+      dispatchSpeechEvent('result', {
         isFinal: true,
         results: [{ transcript: 'Sentence two.' }],
       });
@@ -155,7 +178,7 @@ describe('VoiceInputBar', () => {
     });
 
     act(() => {
-      mockSpeechHandlers.result({
+      dispatchSpeechEvent('result', {
         isFinal: false,
         results: [{ transcript: 'Sentence one' }],
       });
@@ -166,7 +189,7 @@ describe('VoiceInputBar', () => {
     });
 
     act(() => {
-      mockSpeechHandlers.result({
+      dispatchSpeechEvent('result', {
         isFinal: true,
         results: [{ transcript: 'Sentence one trailing words.' }],
       });
@@ -177,5 +200,113 @@ describe('VoiceInputBar', () => {
     });
 
     expect(onChangeText).toHaveBeenCalledWith('Sentence one trailing words.');
+  });
+
+  it('routes speech only to the most recently started voice input', async () => {
+    const onChangeTextA = jest.fn();
+    const onChangeTextB = jest.fn();
+    let tree: any;
+
+    try {
+      await act(async () => {
+        tree = renderer.create(
+          <>
+            <VoiceInputBar value="" onChangeText={onChangeTextA} />
+            <VoiceInputBar value="" onChangeText={onChangeTextB} />
+          </>,
+        );
+      });
+
+      await act(async () => {
+        await findPressablesByLabel(tree.root, 'Tap to speak')[0].props.onPress();
+      });
+
+      act(() => {
+        dispatchSpeechEvent('result', {
+          isFinal: false,
+          results: [{ transcript: 'First field words' }],
+        });
+      });
+
+      await act(async () => {
+        await findPressablesByLabel(tree.root, 'Tap to speak')[0].props.onPress();
+      });
+
+      // Handoff commits the first field's in-progress dictation to its own
+      // field — spoken words never silently vanish on takeover.
+      expect(onChangeTextA).toHaveBeenCalledWith('First field words');
+
+      expect(mockStop).toHaveBeenCalledTimes(1);
+      expect(findPressablesByLabel(tree.root, 'Accept voice input')).toHaveLength(1);
+
+      act(() => {
+        dispatchSpeechEvent('result', {
+          isFinal: true,
+          results: [{ transcript: 'Second field only.' }],
+        });
+      });
+
+      act(() => {
+        findPressablesByLabel(tree.root, 'Accept voice input')[0].props.onPress();
+        jest.advanceTimersByTime(250);
+      });
+
+      expect(onChangeTextB).toHaveBeenCalledWith('Second field only.');
+
+      const remainingAcceptButtons = findPressablesByLabel(tree.root, 'Accept voice input');
+      if (remainingAcceptButtons.length > 0) {
+        act(() => {
+          remainingAcceptButtons[0].props.onPress();
+          jest.advanceTimersByTime(250);
+        });
+      }
+
+      expect(onChangeTextA).toHaveBeenCalledTimes(1);
+    } finally {
+      if (tree) {
+        act(() => {
+          tree.unmount();
+        });
+      }
+    }
+  });
+
+  it('restarts the shared recognizer at most once when a transferred session ends', async () => {
+    const onChangeTextA = jest.fn();
+    const onChangeTextB = jest.fn();
+    let tree: any;
+
+    try {
+      await act(async () => {
+        tree = renderer.create(
+          <>
+            <VoiceInputBar value="" onChangeText={onChangeTextA} />
+            <VoiceInputBar value="" onChangeText={onChangeTextB} />
+          </>,
+        );
+      });
+
+      await act(async () => {
+        await findPressablesByLabel(tree.root, 'Tap to speak')[0].props.onPress();
+      });
+
+      await act(async () => {
+        await findPressablesByLabel(tree.root, 'Tap to speak')[0].props.onPress();
+      });
+
+      const startsBeforeEnd = mockStart.mock.calls.length;
+
+      act(() => {
+        dispatchSpeechEvent('end');
+      });
+
+      expect(mockStart).toHaveBeenCalledTimes(startsBeforeEnd + 1);
+    } finally {
+      if (tree) {
+        act(() => {
+          tree.unmount();
+        });
+      }
+    }
   });
 });
