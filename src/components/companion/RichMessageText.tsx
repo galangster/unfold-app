@@ -8,7 +8,7 @@
  * Uses nested <Text> with onPress for inline tappable verses
  * (TouchableOpacity can't be nested inside Text in RN).
  */
-import { useMemo, useState, useRef, useCallback } from 'react';
+import { memo, useMemo, useState, useRef, useCallback } from 'react';
 import { View, Text } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/lib/theme';
@@ -286,7 +286,9 @@ function InlineText({
 
 // ── Main component ────────────────────────────────────────────────────────
 
-export function RichMessageText({ text, onVersePress }: Props) {
+// Memoized: during streaming the stable-paragraph prefix re-renders with an
+// unchanged `text` on every token (WR-18) — skip the parse + block rebuild.
+export const RichMessageText = memo(function RichMessageText({ text, onVersePress }: Props) {
   const { colors } = useTheme();
 
   const blocks = useMemo(() => {
@@ -368,4 +370,4 @@ export function RichMessageText({ text, onVersePress }: Props) {
       })}
     </View>
   );
-}
+});

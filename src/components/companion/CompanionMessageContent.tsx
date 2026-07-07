@@ -20,6 +20,11 @@ import { RichMessageText } from './RichMessageText';
 import { DevotionalCard } from './DevotionalCard';
 import type { CompanionMessage } from '@/lib/companion-chat-store';
 import { smartQuotes } from '@/lib/smart-quotes';
+import { splitStreamingParagraphs } from '@/lib/streaming-paragraphs';
+
+/** Verse taps land before a message completes; opening the sheet is fine
+ * mid-stream, but the handler is optional in props — fall back to a no-op. */
+const noopVersePress = () => {};
 
 /** Lightweight markdown strip for streaming text — removes syntax chars only */
 function stripMarkdownLight(text: string): string {
@@ -78,6 +83,16 @@ export function CompanionMessageContent({ message, showIcon, isStreaming, isSear
     if (!message.deepLinks?.length) return null;
     return message.deepLinks;
   }, [message.deepLinks]);
+
+  // WR-18: completed paragraphs render through the real block renderer while
+  // streaming, so the end-of-stream swap only reflows the trailing partial
+  // paragraph instead of the whole message. `stable` only changes when a new
+  // paragraph boundary arrives, so RichMessageText's parse memo stays warm
+  // between boundaries.
+  const { stable: stableStreamText, tail: streamTail } = useMemo(
+    () => splitStreamingParagraphs(message.content),
+    [message.content],
+  );
 
   return (
     <Animated.View entering={reducedMotion ? undefined : ENTERING} style={{ flexDirection: 'row', alignItems: 'flex-start', paddingLeft: Spacing['4'] }}>
@@ -145,14 +160,33 @@ export function CompanionMessageContent({ message, showIcon, isStreaming, isSear
             ))}
           </>
         ) : (
-          // Streaming or pending — lightly stripped text (typing dots handle indicator).
-          // A single Text in a flex-row won't wrap and clips off-screen at large font
-          // scales (FEEL-04); flexShrink lets it wrap within the content column.
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-            <View style={{ flexShrink: 1 }}>
-              <StreamingText content={message.content} color={colors.text} />
-            </View>
-          </View>
+          // Streaming or pending — completed paragraphs go through the block
+          // renderer (WR-18); only the trailing partial paragraph renders as
+          // lightly-stripped plain text.
+          <>
+            {stableStreamText.length > 0 && (
+              <RichMessageText
+                text={stableStreamText}
+                onVersePress={onVersePress ?? noopVersePress}
+              />
+            )}
+            {(streamTail.length > 0 || stableStreamText.length === 0) && (
+              // A single Text in a flex-row won't wrap and clips off-screen at
+              // large font scales (FEEL-04); flexShrink lets it wrap within
+              // the content column. marginTop matches the block renderer's
+              // paragraph spacing so the tail sits like the next block.
+              <View
+                style={[
+                  { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end' },
+                  stableStreamText.length > 0 && { marginTop: Spacing['3'] },
+                ]}
+              >
+                <View style={{ flexShrink: 1 }}>
+                  <StreamingText content={streamTail} color={colors.text} />
+                </View>
+              </View>
+            )}
+          </>
         )}
 
         {isSearching && (
