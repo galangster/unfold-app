@@ -47,11 +47,9 @@ import { SuggestionChips } from '@/components/companion/SuggestionChips';
 import { TypingIndicator } from '@/components/companion/TypingIndicator';
 import { ScriptureTapSheet } from '@/components/ScriptureTapSheet';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
-import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
 import { alpha } from '@/components/ui';
 import { Spacing } from '@/constants/spacing';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
-import { useCreationGate } from '@/hooks/useCreationGate';
 import {
   canSendCompanionMessage,
   incrementCompanionDailyCount,
@@ -149,8 +147,6 @@ export default function CompanionScreen() {
   const [showPremiumSheet, setShowPremiumSheet] = useState(false);
   const [dailyRemaining, setDailyRemaining] = useState(() => getCompanionDailyUsage().remaining);
 
-  const { gate, showExclusiveOffer, dismissOffer } = useCreationGate();
-
   const {
     messages,
     isStreaming,
@@ -196,9 +192,11 @@ export default function CompanionScreen() {
         return false;
       }
 
-      // Pre-send guards run synchronously (gate check + limit check)
-      if (!gate()) return false;
-
+      // Pre-send guard runs synchronously. Companion sends are governed by
+      // the free daily quota (paywall on exhaustion), NOT the creation gate —
+      // that gate paywalls every non-premium user, which contradicted the
+      // visible "N of 5 free messages" promise. Creation actions (devotional
+      // generation) keep the creation gate.
       if (!isPremium && !canSendCompanionMessage()) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         setShowPremiumSheet(true);
@@ -222,7 +220,7 @@ export default function CompanionScreen() {
 
       return true;
     },
-    [sendMessage, isPremium, gate]
+    [sendMessage, isPremium]
   );
 
   const handleChipSelect = useCallback(
@@ -344,7 +342,6 @@ export default function CompanionScreen() {
         {/* Right: new chat — fixed width to balance center */}
         <TouchableOpacity
           onPress={() => {
-            if (!gate()) return;
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             startNewConversation();
           }}
@@ -523,7 +520,6 @@ export default function CompanionScreen() {
         feature="companion"
       />
 
-      <ExclusiveOfferSheet visible={showExclusiveOffer} onDismiss={dismissOffer} context="churned" />
       {/* Removed: floating FAB approach failed due to FlatList gesture conflicts */}
     </KeyboardAvoidingView>
   );
