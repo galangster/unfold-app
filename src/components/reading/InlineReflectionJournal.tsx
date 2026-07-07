@@ -75,7 +75,13 @@ export function InlineReflectionJournal({
   const localResponsesRef = useRef<Map<number, string>>(localResponses);
   localResponsesRef.current = localResponses;
   const hasPendingSaveRef = useRef(false);
-  const pendingResponseRef = useRef<{ index: number; question: string; response: string } | null>(null);
+  const pendingResponseRef = useRef<{
+    index: number;
+    question: string;
+    response: string;
+    devotionalId: string;
+    dayNumber: number;
+  } | null>(null);
   const flushPendingResponseRef = useRef<() => void>(() => {});
   const autoSaveControllerRef = useRef<AutosaveController | null>(null);
   if (!autoSaveControllerRef.current) {
@@ -96,7 +102,7 @@ export function InlineReflectionJournal({
       clearTimeout(focusTimerRef.current);
       focusTimerRef.current = null;
     }
-    autoSaveControllerRef.current?.cancel();
+    autoSaveControllerRef.current?.flush();
     pendingResponseRef.current = null;
     hasPendingSaveRef.current = false;
 
@@ -117,37 +123,50 @@ export function InlineReflectionJournal({
     };
     localResponsesRef.current = initial;
     setLocalResponses(initial);
-  }, [devotionalId, dayNumber, existingEntry?.id, questionsKey, questions]);
+  }, [devotionalId, dayNumber, questionsKey, questions]);
 
   // Ensure a journal entry exists to attach responses to
-  const ensureEntry = useCallback((): string | null => {
-    const saved = savedEntryRef.current;
-    if (
-      saved.devotionalId === devotionalId &&
-      saved.dayNumber === dayNumber &&
-      saved.entryId
-    ) {
-      return saved.entryId;
-    }
+  const ensureEntry = useCallback(
+    (targetDevotionalId = devotionalId, targetDayNumber = dayNumber): string | null => {
+      const saved = savedEntryRef.current;
+      if (
+        saved.devotionalId === targetDevotionalId &&
+        saved.dayNumber === targetDayNumber &&
+        saved.entryId
+      ) {
+        return saved.entryId;
+      }
 
-    addJournalEntry({ devotionalId, dayNumber, content: '' });
-    const entry = getJournalEntry(devotionalId, dayNumber);
-    if (entry) {
-      savedEntryRef.current = { devotionalId, dayNumber, entryId: entry.id };
-      return entry.id;
-    }
-    return null;
-  }, [devotionalId, dayNumber, addJournalEntry, getJournalEntry]);
+      addJournalEntry({ devotionalId: targetDevotionalId, dayNumber: targetDayNumber, content: '' });
+      const entry = getJournalEntry(targetDevotionalId, targetDayNumber);
+      if (entry) {
+        savedEntryRef.current = {
+          devotionalId: targetDevotionalId,
+          dayNumber: targetDayNumber,
+          entryId: entry.id,
+        };
+        return entry.id;
+      }
+      return null;
+    },
+    [devotionalId, dayNumber, addJournalEntry, getJournalEntry]
+  );
 
   // Auto-save a response after 800ms of inactivity
   const saveResponse = useCallback(
-    (index: number, question: string, response: string) => {
-      const entryId = ensureEntry();
+    (
+      index: number,
+      question: string,
+      response: string,
+      targetDevotionalId = devotionalId,
+      targetDayNumber = dayNumber
+    ) => {
+      const entryId = ensureEntry(targetDevotionalId, targetDayNumber);
       if (entryId) {
         updateQuestionResponse(entryId, question, response);
       }
     },
-    [ensureEntry, updateQuestionResponse]
+    [devotionalId, dayNumber, ensureEntry, updateQuestionResponse]
   );
   const saveResponseRef = useRef(saveResponse);
   saveResponseRef.current = saveResponse;
@@ -156,7 +175,13 @@ export function InlineReflectionJournal({
     const pending = pendingResponseRef.current;
     if (!pending) return;
 
-    saveResponseRef.current(pending.index, pending.question, pending.response);
+    saveResponseRef.current(
+      pending.index,
+      pending.question,
+      pending.response,
+      pending.devotionalId,
+      pending.dayNumber
+    );
     pendingResponseRef.current = null;
     hasPendingSaveRef.current = false;
   }, []);
@@ -172,10 +197,16 @@ export function InlineReflectionJournal({
 
       // Debounced save
       hasPendingSaveRef.current = true;
-      pendingResponseRef.current = { index, question, response: text };
+      pendingResponseRef.current = {
+        index,
+        question,
+        response: text,
+        devotionalId,
+        dayNumber,
+      };
       autoSaveControllerRef.current?.schedule();
     },
-    []
+    [devotionalId, dayNumber]
   );
 
   const handleQuestionTap = useCallback(

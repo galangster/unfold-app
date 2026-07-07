@@ -236,6 +236,97 @@ describe('InlineReflectionJournal', () => {
     ]);
   });
 
+  it('keeps unsaved text after the first save creates the journal entry', () => {
+    let tree: any;
+
+    act(() => {
+      tree = renderer.create(
+        <InlineReflectionJournal
+          questions={['What stood out?']}
+          devotionalId="devotional"
+          dayNumber={2}
+          onOpenFullJournal={jest.fn()}
+        />
+      );
+    });
+
+    act(() => {
+      tree!.root.findByType(TextInput).props.onChangeText('hello');
+    });
+
+    act(() => {
+      jest.advanceTimersByTime(800);
+    });
+
+    expect(mockUpdateQuestionResponse).toHaveBeenLastCalledWith(
+      'entry-devotional-2',
+      'What stood out?',
+      'hello'
+    );
+
+    act(() => {
+      tree!.root.findByType(TextInput).props.onChangeText('hello world');
+    });
+
+    expect(tree!.root.findByType(TextInput).props.value).toBe('hello world');
+
+    act(() => {
+      jest.advanceTimersByTime(800);
+    });
+
+    expect(mockUpdateQuestionResponse).toHaveBeenLastCalledWith(
+      'entry-devotional-2',
+      'What stood out?',
+      'hello world'
+    );
+
+    act(() => tree!.unmount());
+  });
+
+  it('flushes a pending response to the outgoing day before loading the next day', () => {
+    let tree: any;
+    const questions = ['What stood out?'];
+
+    act(() => {
+      tree = renderer.create(
+        <InlineReflectionJournal
+          questions={questions}
+          devotionalId="devotional"
+          dayNumber={1}
+          onOpenFullJournal={jest.fn()}
+        />
+      );
+    });
+
+    act(() => {
+      tree!.root.findByType(TextInput).props.onChangeText('Day 1 pending edit');
+    });
+
+    expect(mockUpdateQuestionResponse).not.toHaveBeenCalled();
+
+    act(() => {
+      tree!.update(
+        <InlineReflectionJournal
+          questions={questions}
+          devotionalId="devotional"
+          dayNumber={2}
+          onOpenFullJournal={jest.fn()}
+        />
+      );
+    });
+
+    expect(mockUpdateQuestionResponse).toHaveBeenCalledWith(
+      'entry-devotional-1',
+      'What stood out?',
+      'Day 1 pending edit'
+    );
+    expect(mockEntries.find((entry) => entry.dayNumber === 1)?.questionResponses).toEqual([
+      { question: 'What stood out?', response: 'Day 1 pending edit' },
+    ]);
+
+    act(() => tree!.unmount());
+  });
+
   it('saves during a continuous typing burst instead of waiting for an idle gap', () => {
     let tree: any;
 
