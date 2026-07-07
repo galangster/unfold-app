@@ -681,10 +681,13 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
 
   func editor(_ editor: EditorView, didChangeTextAt range: NSRange) {
     normalizeTrailingNewlineAfterHeadingIfNeeded()
-    refreshScriptureChips()
     lineDecorationOverlay.invalidate()
     needsCaretVisibilityAfterLayout = true
-    refreshEditorAccessibility()
+    // WR-22: the scripture rescan and accessibility refresh both copy and
+    // walk the FULL document (attributedText.string + regex). Doing that on
+    // every keystroke on the main thread costs O(note length) per character.
+    // Both now ride the 200ms debounced html-emit (and its flush paths), so a
+    // typing burst pays for one pass instead of one per keystroke.
     scheduleHtmlEmit()
     refreshSelectionState()
   }
@@ -701,6 +704,13 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
   }
 
   func editor(_ editor: EditorView, didLoseFocusFrom range: NSRange) {
+    // Land a pending debounced scan/emit before editing ends so chips and
+    // the JS-side scripture refs are current at save time (WR-22). Gated so
+    // a focus/blur cycle with no edits doesn't emit unchanged HTML into the
+    // autosave path.
+    if changeDebounceTimer != nil {
+      flushPendingHtml()
+    }
     onBlur?()
   }
 
@@ -1252,6 +1262,7 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     changeDebounceTimer?.cancel()
     changeDebounceTimer = nil
     let html = getHtml()
+    refreshScriptureChips()
     refreshEditorAccessibility()
     onChangeHtml?(html)
   }
@@ -1265,7 +1276,11 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     timer.setEventHandler { [weak self] in
       DispatchQueue.main.async {
         guard let self = self else { return }
+        // Clear the reference so the blur-flush gate can tell a pending
+        // emit apart from an already-delivered one.
+        self.changeDebounceTimer = nil
         let html = self.getHtml()
+        self.refreshScriptureChips()
         self.refreshEditorAccessibility()
         self.onChangeHtml?(html)
       }
