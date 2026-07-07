@@ -18,7 +18,7 @@
 import { mmkvStorage, getDeviceId } from '@/lib/mmkv-storage';
 import { isEphemeralDeviceId } from '@/lib/device-id';
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from '@/lib/api-config';
-import type { SyncPushChange } from '@/lib/sync-types';
+import type { SyncPushChange, SyncTable } from '@/lib/sync-types';
 // RS13-1: single owner — the key is defined in mmkv-recovery-outbox.ts (pure, no native deps)
 // and re-exported here so all consumers import from one place via sync-outbox.
 import { RECOVERY_OUTBOX_KEY } from '@/lib/mmkv-recovery-outbox';
@@ -55,6 +55,14 @@ function writeOutbox(changes: SyncPushChange[]): void {
 
 export function peekSyncOutbox(): SyncPushChange[] {
   return readOutbox();
+}
+
+export function removeSyncChangesForRecords(records: Array<{ table: SyncTable; id: string }>): void {
+  if (records.length === 0) return;
+  const keys = new Set(records.map((record) => `${record.table}:${record.id}`));
+  const current = readOutbox();
+  const remaining = current.filter((change) => !keys.has(`${change.table}:${change.id}`));
+  if (remaining.length !== current.length) writeOutbox(remaining);
 }
 
 /**

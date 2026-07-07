@@ -1,3 +1,18 @@
+jest.mock('../api-config', () => ({
+  PRIMARY_BACKEND_URL: 'https://example.test',
+  getAuthHeaders: jest.fn(async () => ({ 'Content-Type': 'application/json' })),
+}));
+
+jest.mock('../mmkv-storage', () => ({
+  mmkvStorage: {
+    getItem: jest.fn(() => null),
+    setItem: jest.fn(),
+    removeItem: jest.fn(),
+  },
+  getDeviceId: jest.fn(() => 'test-device-id'),
+  getSharedEncryptionKey: jest.fn(() => 'test-key'),
+}));
+
 import { applyUndoActions } from '../journal-undo';
 import type { JournalFolderUndoAction } from '../journal-folder-delete';
 import type { Note, NoteFolder } from '@/lib/store';
