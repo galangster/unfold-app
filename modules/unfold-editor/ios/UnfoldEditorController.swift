@@ -342,6 +342,7 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
   func setPlaceholder(_ text: String?) {
     guard let text = text, !text.isEmpty else {
       editor.placeholderText = nil
+      refreshEditorAccessibility()
       return
     }
     editor.placeholderText = NSAttributedString(
@@ -350,6 +351,7 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
         .font: UnfoldFonts.body(),
         .foregroundColor: UnfoldColors.textMuted,
       ])
+    refreshEditorAccessibility()
   }
 
   /// Toggles whether the editor accepts edits. Mirrors `editor.isEditable`.
@@ -1319,7 +1321,16 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
   private func refreshEditorAccessibility() {
     let rawText = editor.attributedText.string
     let trimmed = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
-    let value = trimmed.isEmpty ? "Empty" : trimmed
+    // VoiceOver users hear the same prompt sighted users see in the empty
+    // editor, not just "Empty" (WR-21).
+    let placeholderPrompt = editor.placeholderText?.string
+      .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    let value: String
+    if trimmed.isEmpty {
+      value = placeholderPrompt.isEmpty ? "Empty" : "Empty. \(placeholderPrompt)"
+    } else {
+      value = trimmed
+    }
     let hint = editor.isEditable ? "Edits the note body" : "Shows the note body"
 
     editor.accessibilityLabel = "Note body"

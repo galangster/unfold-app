@@ -57,4 +57,19 @@ describe('notebook accessibility source contract', () => {
     expect(nativeEditorSource).toContain('textView.accessibilityLabel = "Note body"');
     expect(nativeEditorSource).toContain('textView.accessibilityValue = value');
   });
+
+  // WR-21: empty-editor prompt reaches VoiceOver; placeholder and save
+  // status use readable (muted, not hint-level) contrast.
+  it('surfaces the empty-editor prompt and readable placeholder/save-status colors', () => {
+    const noteDetailSource = readSource('src/app/(tabs)/(journal)/note-detail.tsx');
+    const nativeEditorSource = readSource('modules/unfold-editor/ios/UnfoldEditorController.swift');
+
+    expect(nativeEditorSource).toContain(
+      'value = placeholderPrompt.isEmpty ? "Empty" : "Empty. \\(placeholderPrompt)"',
+    );
+
+    expect(noteDetailSource).not.toContain('placeholderTextColor={colors.textHint}');
+    expect(noteDetailSource).toContain('textColor={colors.textMuted}');
+    expect(noteDetailSource).not.toContain('textColor={colors.textHint}');
+  });
 });

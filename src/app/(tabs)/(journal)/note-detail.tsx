@@ -1379,8 +1379,8 @@ export default function NoteDetailScreen() {
             isEditing={isEditing}
             saveState={saveState}
             reducedMotion={!!reducedMotion}
-            textColor={colors.textHint}
-            iconColor={colors.textSubtle}
+            textColor={colors.textMuted}
+            iconColor={colors.textMuted}
           />
         </View>
 
@@ -1414,7 +1414,7 @@ export default function NoteDetailScreen() {
             value={title}
             onChangeText={handleTitleChange}
             placeholder="Title"
-            placeholderTextColor={colors.textHint}
+            placeholderTextColor={colors.textMuted}
             editable
             autoFocus={isNewNote}
             selectionColor={colors.accent}
