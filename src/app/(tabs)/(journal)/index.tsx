@@ -3,7 +3,8 @@ import {
   View,
   Text,
   TouchableOpacity,
-  ScrollView,
+  FlatList,
+  ListRenderItemInfo,
   TextInput,
   StyleSheet,
   LayoutChangeEvent,
@@ -67,6 +68,10 @@ import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
 type Segment = 'reflections' | 'notebook';
 
 const JOURNAL_SWIPE_ACTIVE_OFFSET = 18;
+
+// Stable empty list for the reflections segment — the notebook rows are the
+// only virtualized data (WR-24).
+const EMPTY_NOTES: Note[] = [];
 const JOURNAL_SWIPE_FAIL_OFFSET_Y = 32;
 const JOURNAL_SWIPE_THRESHOLD = 72;
 const JOURNAL_SWIPE_VELOCITY = 520;
@@ -1296,6 +1301,27 @@ export default function JournalHubScreen() {
     transform: [{ translateX: notebookSwipeX.value }],
   }));
 
+  // WR-24: note rows are virtualized FlatList items. Each row carries the
+  // notebook swipe transform so rows track the segment-switch drag in
+  // lockstep with the header content (same shared value, UI thread only).
+  const renderNoteRow = useCallback(
+    ({ item, index }: ListRenderItemInfo<Note>) => (
+      <Animated.View style={[notebookSwipeStyle, mainStyles.notesListContainer]}>
+        <SwipeableNoteCard
+          note={item}
+          index={index}
+          onPress={handleNotePress}
+          onShare={handleNoteShare}
+          onMove={handleNoteMove}
+          onDelete={handleNoteDelete}
+        />
+      </Animated.View>
+    ),
+    [notebookSwipeStyle, handleNotePress, handleNoteShare, handleNoteMove, handleNoteDelete],
+  );
+
+  const noteKeyExtractor = useCallback((note: Note) => note.id, []);
+
   // Determine if search toggle should show
   const hasContent =
     journalEntries.length > 0 || notes.length > 0;
@@ -1303,12 +1329,26 @@ export default function JournalHubScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        <ScrollView
+        {/* WR-24: virtualized list — notebook notes are the rows, everything
+            else renders as the list header. One segment-aware GestureDetector
+            wraps the list so segment swipes work over rows and header alike
+            (never wrap a FlatList in a Pressable — this is a plain detector). */}
+        <GestureDetector
+          gesture={activeSegment === 'notebook' ? notebookSwipeGesture : reflectionsSwipeGesture}
+        >
+        <FlatList
+          data={activeSegment === 'notebook' ? filteredNotes : EMPTY_NOTES}
+          keyExtractor={noteKeyExtractor}
+          renderItem={renderNoteRow}
+          initialNumToRender={12}
+          maxToRenderPerBatch={10}
+          windowSize={11}
           contentContainerStyle={{ paddingBottom: 100 }}
           showsVerticalScrollIndicator={false}
           onScroll={handleScroll}
           scrollEventThrottle={16}
-        >
+          ListHeaderComponent={
+            <>
           {/* Header with search toggle */}
           <Animated.View
             entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
@@ -1395,7 +1435,6 @@ export default function JournalHubScreen() {
           {/* REFLECTIONS TAB (existing content — unchanged) */}
           {/* ================================================================ */}
           {activeSegment === 'reflections' && (
-            <GestureDetector gesture={reflectionsSwipeGesture}>
               <Animated.View
                 entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
                 style={reflectionsSwipeStyle}
@@ -1776,14 +1815,12 @@ export default function JournalHubScreen() {
                 </Animated.View>
               )}
               </Animated.View>
-            </GestureDetector>
           )}
 
           {/* ================================================================ */}
           {/* NOTEBOOK TAB (new content) */}
           {/* ================================================================ */}
           {activeSegment === 'notebook' && (
-            <GestureDetector gesture={notebookSwipeGesture}>
               <Animated.View
                 entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
                 style={notebookSwipeStyle}
@@ -1811,8 +1848,9 @@ export default function JournalHubScreen() {
                 />
               </View>
 
-              {/* Notes list or empty state */}
-              {filteredNotes.length === 0 ? (
+              {/* Empty states only — populated notes render as virtualized
+                  FlatList rows below this header (WR-24). */}
+              {filteredNotes.length === 0 && (
                     !searchQuery.trim() && activeFolderId === null && currentParentId === null ? (
                       <View style={{ paddingHorizontal: Spacing['6'] }}>
                         <NotebookEmptyState onCreateNote={handleCreateNote} />
@@ -1833,25 +1871,13 @@ export default function JournalHubScreen() {
                         </Text>
                       </View>
                     )
-                  ) : (
-                    <View style={mainStyles.notesListContainer}>
-                      {filteredNotes.map((note, index) => (
-                        <SwipeableNoteCard
-                          key={note.id}
-                          note={note}
-                          index={index}
-                          onPress={handleNotePress}
-                          onShare={handleNoteShare}
-                          onMove={handleNoteMove}
-                          onDelete={handleNoteDelete}
-                        />
-                      ))}
-                    </View>
                   )}
               </Animated.View>
-            </GestureDetector>
           )}
-        </ScrollView>
+            </>
+          }
+        />
+        </GestureDetector>
 
         {/* FAB — only visible when Notebook segment is active */}
         {activeSegment === 'notebook' && (
