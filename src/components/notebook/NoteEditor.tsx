@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import {
+  AppState,
   View,
   Text,
   TextInput,
@@ -48,6 +49,11 @@ import {
   NOTEBOOK_TOOLBAR_TOTAL_HEIGHT,
 } from '@/lib/notebook-editor-layout';
 import { buildTenTapScriptureInsertJS } from '@/lib/tentap-scripture-insert';
+import {
+  createAutosaveController,
+  shouldFlushAutosaveOnAppState,
+  type AutosaveController,
+} from '@/lib/autosave-controller';
 
 import { Note } from '@/lib/store';
 
@@ -116,8 +122,15 @@ export function NoteEditor({
   const [title, setTitle] = useState(initialNote?.title ?? '');
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
 
-  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const savedResetRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const autoSaveAllowEmptyRef = useRef(false);
+  const autoSaveSaveRef = useRef<() => void | Promise<void>>(() => undefined);
+  const autoSaveControllerRef = useRef<AutosaveController | null>(null);
+  if (!autoSaveControllerRef.current) {
+    autoSaveControllerRef.current = createAutosaveController({
+      save: () => autoSaveSaveRef.current(),
+    });
+  }
   // Always keep the latest title accessible to the async save callback
   const latestTitleRef = useRef(initialNote?.title ?? '');
 
@@ -210,7 +223,7 @@ export function NoteEditor({
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      autoSaveControllerRef.current?.cancel();
       if (savedResetRef.current) clearTimeout(savedResetRef.current);
     };
   }, []);
@@ -230,26 +243,43 @@ export function NoteEditor({
   }, [pendingScriptureInsert, editorState.isReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ───── Debounced auto-save ───── */
-  const scheduleAutoSave = useCallback(() => {
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    if (savedResetRef.current) clearTimeout(savedResetRef.current);
+  const persistAutoSaveSnapshot = useCallback(async () => {
+    const html = await editor.getHTML();
+    const titleVal = latestTitleRef.current;
+    const allowEmpty = autoSaveAllowEmptyRef.current;
+    autoSaveAllowEmptyRef.current = false;
 
-    saveTimeoutRef.current = setTimeout(async () => {
-      const html = await editor.getHTML();
-      const titleVal = latestTitleRef.current;
+    if (!allowEmpty && !titleVal.trim() && (!html || html === '<p></p>')) return;
 
-      if (!titleVal.trim() && (!html || html === '<p></p>')) return;
+    setSaveState('saving');
+    onAutoSave?.({ title: titleVal, content: html });
 
-      setSaveState('saving');
-      onAutoSave?.({ title: titleVal, content: html });
-
-      setTimeout(() => {
-        setSaveState('saved');
-        AccessibilityInfo.announceForAccessibility('Note saved');
-        savedResetRef.current = setTimeout(() => setSaveState('idle'), 2000);
-      }, 150);
-    }, 800);
+    setTimeout(() => {
+      setSaveState('saved');
+      AccessibilityInfo.announceForAccessibility('Note saved');
+      savedResetRef.current = setTimeout(() => setSaveState('idle'), 2000);
+    }, 150);
   }, [editor, onAutoSave]);
+  autoSaveSaveRef.current = persistAutoSaveSnapshot;
+
+  const scheduleAutoSave = useCallback(() => {
+    autoSaveAllowEmptyRef.current = false;
+    if (savedResetRef.current) clearTimeout(savedResetRef.current);
+    autoSaveControllerRef.current?.schedule();
+  }, []);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (shouldFlushAutosaveOnAppState(nextState)) {
+        autoSaveAllowEmptyRef.current = true;
+        if (!autoSaveControllerRef.current?.flush()) {
+          autoSaveAllowEmptyRef.current = false;
+        }
+      }
+    });
+
+    return () => subscription.remove();
+  }, []);
 
   const handleTitleChange = useCallback(
     (text: string) => {

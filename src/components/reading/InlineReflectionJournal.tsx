@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { RefObject } from 'react';
-import { View, Text, TextInput, Keyboard, TouchableOpacity, type ScrollView } from 'react-native';
+import { AppState, View, Text, TextInput, Keyboard, TouchableOpacity, type ScrollView } from 'react-native';
 import Animated, {
   FadeIn,
   FadeInDown,
@@ -20,6 +20,11 @@ import { Typography } from '@/constants/typography';
 
 import { preventOrphan } from '@/lib/cn';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
+import {
+  createAutosaveController,
+  shouldFlushAutosaveOnAppState,
+  type AutosaveController,
+} from '@/lib/autosave-controller';
 
 interface InlineReflectionJournalProps {
   questions: string[];
@@ -69,8 +74,15 @@ export function InlineReflectionJournal({
   const [localResponses, setLocalResponses] = useState<Map<number, string>>(new Map());
   const localResponsesRef = useRef<Map<number, string>>(localResponses);
   localResponsesRef.current = localResponses;
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasPendingSaveRef = useRef(false);
+  const pendingResponseRef = useRef<{ index: number; question: string; response: string } | null>(null);
+  const flushPendingResponseRef = useRef<() => void>(() => {});
+  const autoSaveControllerRef = useRef<AutosaveController | null>(null);
+  if (!autoSaveControllerRef.current) {
+    autoSaveControllerRef.current = createAutosaveController({
+      save: () => flushPendingResponseRef.current(),
+    });
+  }
   const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRefs = useRef<Map<number, TextInput | null>>(new Map());
 
@@ -84,10 +96,8 @@ export function InlineReflectionJournal({
       clearTimeout(focusTimerRef.current);
       focusTimerRef.current = null;
     }
-    if (saveTimerRef.current) {
-      clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = null;
-    }
+    autoSaveControllerRef.current?.cancel();
+    pendingResponseRef.current = null;
     hasPendingSaveRef.current = false;
 
     const initial = new Map<number, string>();
@@ -142,6 +152,16 @@ export function InlineReflectionJournal({
   const saveResponseRef = useRef(saveResponse);
   saveResponseRef.current = saveResponse;
 
+  const flushPendingResponse = useCallback(() => {
+    const pending = pendingResponseRef.current;
+    if (!pending) return;
+
+    saveResponseRef.current(pending.index, pending.question, pending.response);
+    pendingResponseRef.current = null;
+    hasPendingSaveRef.current = false;
+  }, []);
+  flushPendingResponseRef.current = flushPendingResponse;
+
   const handleResponseChange = useCallback(
     (index: number, question: string, text: string) => {
       setLocalResponses((prev) => {
@@ -152,13 +172,10 @@ export function InlineReflectionJournal({
 
       // Debounced save
       hasPendingSaveRef.current = true;
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = setTimeout(() => {
-        saveResponse(index, question, text);
-        hasPendingSaveRef.current = false;
-      }, 800);
+      pendingResponseRef.current = { index, question, response: text };
+      autoSaveControllerRef.current?.schedule();
     },
-    [saveResponse]
+    []
   );
 
   const handleQuestionTap = useCallback(
@@ -186,7 +203,7 @@ export function InlineReflectionJournal({
   useEffect(() => {
     return () => {
       if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      autoSaveControllerRef.current?.cancel();
       // Flush all local responses on unmount if there's a pending debounced save.
       // Uses refs to access the latest values (not stale closure from mount time).
       // Saves empty responses too so deletions persist.
@@ -199,6 +216,16 @@ export function InlineReflectionJournal({
       }
     };
   }, [questions]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (shouldFlushAutosaveOnAppState(nextState)) {
+        autoSaveControllerRef.current?.flush();
+      }
+    });
+
+    return () => subscription.remove();
+  }, []);
 
   const getResponse = useCallback(
     (index: number, question: string): string => {

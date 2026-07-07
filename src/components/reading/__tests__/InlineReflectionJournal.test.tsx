@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, TextInput } from 'react-native';
+import { AppState, type AppStateStatus, StyleSheet, Text, TextInput } from 'react-native';
 import { FontFamily } from '@/constants/fonts';
 
 // react-test-renderer types are not installed in this app; keep this test aligned
@@ -113,8 +113,18 @@ jest.mock('react-native-reanimated', () => {
 });
 
 describe('InlineReflectionJournal', () => {
+  let appStateListener: ((state: AppStateStatus) => void) | null = null;
+
   beforeEach(() => {
     jest.useFakeTimers();
+    jest.clearAllMocks();
+    appStateListener = null;
+    jest.spyOn(AppState, 'addEventListener').mockImplementation((event, listener) => {
+      if (event === 'change') {
+        appStateListener = listener;
+      }
+      return { remove: jest.fn() };
+    });
     mockEntries.splice(0, mockEntries.length);
     mockEntries.push({
       id: 'entry-devotional-1',
@@ -123,12 +133,12 @@ describe('InlineReflectionJournal', () => {
       content: '',
       questionResponses: [{ question: 'What stood out?', response: 'Day 1 answer' }],
     });
-    jest.clearAllMocks();
   });
 
   afterEach(() => {
     jest.runOnlyPendingTimers();
     jest.useRealTimers();
+    jest.restoreAllMocks();
   });
 
   it('clears inline responses when rerendered from an answered day to an unanswered day', () => {
@@ -224,5 +234,90 @@ describe('InlineReflectionJournal', () => {
     expect(mockEntries.find((entry) => entry.dayNumber === 2)?.questionResponses).toEqual([
       { question: 'What stood out?', response: 'Day 2 answer' },
     ]);
+  });
+
+  it('saves during a continuous typing burst instead of waiting for an idle gap', () => {
+    let tree: any;
+
+    act(() => {
+      tree = renderer.create(
+        <InlineReflectionJournal
+          questions={['What stood out?']}
+          devotionalId="devotional"
+          dayNumber={1}
+          onOpenFullJournal={jest.fn()}
+        />
+      );
+    });
+
+    const input = tree!.root.findByType(TextInput);
+
+    act(() => {
+      input.props.onChangeText('burst 0');
+    });
+
+    for (let i = 1; i <= 6; i++) {
+      act(() => {
+        jest.advanceTimersByTime(300);
+      });
+      act(() => {
+        input.props.onChangeText(`burst ${i}`);
+      });
+    }
+
+    expect(mockUpdateQuestionResponse).not.toHaveBeenCalled();
+
+    act(() => {
+      jest.advanceTimersByTime(200);
+    });
+
+    expect(mockUpdateQuestionResponse).toHaveBeenCalledWith(
+      'entry-devotional-1',
+      'What stood out?',
+      'burst 6'
+    );
+
+    act(() => tree!.unmount());
+  });
+
+  it('flushes a pending response synchronously when the app becomes inactive', () => {
+    let tree: any;
+
+    act(() => {
+      tree = renderer.create(
+        <InlineReflectionJournal
+          questions={['What stood out?']}
+          devotionalId="devotional"
+          dayNumber={1}
+          onOpenFullJournal={jest.fn()}
+        />
+      );
+    });
+
+    act(() => {
+      tree!.root.findByType(TextInput).props.onChangeText('Pending background answer');
+    });
+
+    expect(mockUpdateQuestionResponse).not.toHaveBeenCalled();
+    expect(appStateListener).toBeTruthy();
+
+    act(() => {
+      appStateListener?.('inactive');
+    });
+
+    expect(mockUpdateQuestionResponse).toHaveBeenCalledTimes(1);
+    expect(mockUpdateQuestionResponse).toHaveBeenCalledWith(
+      'entry-devotional-1',
+      'What stood out?',
+      'Pending background answer'
+    );
+
+    act(() => {
+      jest.advanceTimersByTime(800);
+    });
+
+    expect(mockUpdateQuestionResponse).toHaveBeenCalledTimes(1);
+
+    act(() => tree!.unmount());
   });
 });

@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import {
+  AppState,
   View,
   Text,
   TextInput,
@@ -87,6 +88,11 @@ import {
   persistNoteSnapshot,
 } from '@/lib/note-detail-editor';
 import { buildNoteDraftDockPreview, useNoteDraftDock } from '@/lib/note-draft-dock';
+import {
+  createAutosaveController,
+  shouldFlushAutosaveOnAppState,
+  type AutosaveController,
+} from '@/lib/autosave-controller';
 
 
 /* ─────────────────────────────────────────────────────────
@@ -315,8 +321,16 @@ export default function NoteDetailScreen() {
 
   // Auto-save indicator
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
-  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const savedResetRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const pendingAutoSaveHtmlRef = useRef<string | undefined>(undefined);
+  const autoSaveAllowEmptyRef = useRef(false);
+  const autoSaveSaveRef = useRef<() => void | Promise<void>>(() => undefined);
+  const autoSaveControllerRef = useRef<AutosaveController | null>(null);
+  if (!autoSaveControllerRef.current) {
+    autoSaveControllerRef.current = createAutosaveController({
+      save: () => autoSaveSaveRef.current(),
+    });
+  }
 
   // Menu state
   const [showMoreMenu, setShowMoreMenu] = useState(false);
@@ -482,7 +496,7 @@ export default function NoteDetailScreen() {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      autoSaveControllerRef.current?.cancel();
       if (savedResetRef.current) clearTimeout(savedResetRef.current);
       if (deleteTimeoutRef.current) clearTimeout(deleteTimeoutRef.current);
     };
@@ -565,47 +579,11 @@ export default function NoteDetailScreen() {
 
   const scheduleAutoSave = useCallback((htmlFromEvent?: string) => {
     if (!gate()) return;
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    pendingAutoSaveHtmlRef.current = htmlFromEvent;
+    autoSaveAllowEmptyRef.current = false;
     if (savedResetRef.current) clearTimeout(savedResetRef.current);
-
-    saveTimeoutRef.current = setTimeout(async () => {
-      // Native path: HTML pushed via onChangeHtml event. tentap: pull via bridge.
-      const html = htmlFromEvent ?? (IS_NATIVE_EDITOR ? latestHtmlRef.current : await editor.getHTML());
-      const titleVal = latestTitleRef.current;
-
-      if (!hasMeaningfulNoteContent({ title: titleVal, html })) return;
-
-      setSaveState('saving');
-
-      const id = persistNoteSnapshot({
-        noteId,
-        input: {
-          title: titleVal,
-          html,
-          category,
-          scriptureRefs,
-          devotionalId: params.devotionalId,
-          dayNumber: params.dayNumber,
-          bookId: params.bookId,
-          chapter: params.chapter,
-          folderId: initialFolderIdRef.current,
-        },
-        addNote,
-        updateNote,
-      });
-
-      if (id && !noteId) {
-        setNoteId(id);
-        logger.log('[NoteDetail] Auto-saved new note:', id);
-      }
-
-      setTimeout(() => {
-        setSaveState('saved');
-        AccessibilityInfo.announceForAccessibility('Note saved');
-        savedResetRef.current = setTimeout(() => setSaveState('idle'), 2000);
-      }, 150);
-    }, 800);
-  }, [editor, noteId, category, scriptureRefs, params, addNote, updateNote, gate]);
+    autoSaveControllerRef.current?.schedule();
+  }, [gate]);
 
   const getCurrentEditorHtml = useCallback(async () => {
     return IS_NATIVE_EDITOR
@@ -655,6 +633,51 @@ export default function NoteDetailScreen() {
 
     return id;
   }, [noteId, updateNote, category, scriptureRefs, addNote, params]);
+
+  const persistScheduledAutoSave = useCallback(async () => {
+    const htmlFromEvent = pendingAutoSaveHtmlRef.current;
+    pendingAutoSaveHtmlRef.current = undefined;
+    const allowEmpty = autoSaveAllowEmptyRef.current;
+    autoSaveAllowEmptyRef.current = false;
+
+    // Native path: HTML pushed via onChangeHtml event. tentap: pull via bridge.
+    const html = allowEmpty
+      ? await getCurrentEditorHtml()
+      : htmlFromEvent ?? (IS_NATIVE_EDITOR ? latestHtmlRef.current : await editor.getHTML());
+    const titleVal = latestTitleRef.current;
+
+    if (!allowEmpty && !hasMeaningfulNoteContent({ title: titleVal, html })) return;
+
+    setSaveState('saving');
+
+    persistCurrentSnapshot({
+      title: titleVal,
+      html,
+      allowEmpty,
+      newNoteLog: '[NoteDetail] Auto-saved new note:',
+    });
+
+    setTimeout(() => {
+      setSaveState('saved');
+      AccessibilityInfo.announceForAccessibility('Note saved');
+      savedResetRef.current = setTimeout(() => setSaveState('idle'), 2000);
+    }, 150);
+  }, [editor, getCurrentEditorHtml, persistCurrentSnapshot]);
+  autoSaveSaveRef.current = persistScheduledAutoSave;
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (!isEditingRef.current || !shouldFlushAutosaveOnAppState(nextState)) return;
+
+      pendingAutoSaveHtmlRef.current = undefined;
+      autoSaveAllowEmptyRef.current = true;
+      if (!autoSaveControllerRef.current?.flush()) {
+        autoSaveAllowEmptyRef.current = false;
+      }
+    });
+
+    return () => subscription.remove();
+  }, []);
 
   const handleTitleChange = useCallback(
     (text: string) => {
@@ -712,7 +735,8 @@ export default function NoteDetailScreen() {
     setIsEditing(false);
 
     // Clear any pending save timers
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    autoSaveControllerRef.current?.cancel();
+    pendingAutoSaveHtmlRef.current = undefined;
     setSaveState('idle');
   }, [editor, noteId, router, colors, getCurrentEditorHtml, persistCurrentSnapshot]);
 
@@ -765,7 +789,8 @@ export default function NoteDetailScreen() {
         updatedAt: new Date().toISOString(),
       });
 
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      autoSaveControllerRef.current?.cancel();
+      pendingAutoSaveHtmlRef.current = undefined;
       setSaveState('idle');
       IS_NATIVE_EDITOR ? editorRef.current?.blur() : editor.blur();
       router.replace('/(tabs)/(bible)');
