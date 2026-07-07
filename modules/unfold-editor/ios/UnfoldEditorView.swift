@@ -25,6 +25,12 @@ final class UnfoldEditorView: ExpoView {
   /// user edits.
   private var didApplyInitialHtml = false
 
+  /// Last scheme pushed from RN via `setColorScheme`, shared across editor
+  /// instances. New editors start from it so a light-theme user doesn't get a
+  /// dark first frame while their own `colorScheme` prop is still in flight
+  /// (WR-19). Falls back to dark only before any editor has ever mounted.
+  private static var lastKnownInterfaceStyle: UIUserInterfaceStyle = .dark
+
   /// `initialHtml` prop. Assigned exactly once on the first non-nil, non-empty
   /// push. Subsequent writes are ignored — to replace content after mount the
   /// caller must unmount and remount the component.
@@ -46,10 +52,11 @@ final class UnfoldEditorView: ExpoView {
     super.init(appContext: appContext)
 
     clipsToBounds = true
-    // Default to dark — the RN theme defaults to dark and will push the
-    // correct colorScheme prop on mount. Setting it here prevents a flash
-    // of light-mode colors before the prop arrives.
-    overrideUserInterfaceStyle = .dark
+    // Start from the last scheme RN pushed to any editor (dark before the
+    // first-ever mount). The instance's own colorScheme prop lands right
+    // after and corrects any mismatch; the JS-side mount mask covers the
+    // remaining first-frame gap (WR-19).
+    overrideUserInterfaceStyle = Self.lastKnownInterfaceStyle
     backgroundColor = UnfoldColors.background
 
     controller.rootView.translatesAutoresizingMaskIntoConstraints = false
@@ -100,6 +107,7 @@ final class UnfoldEditorView: ExpoView {
     case "light": overrideUserInterfaceStyle = .light
     default:      overrideUserInterfaceStyle = .unspecified
     }
+    Self.lastKnownInterfaceStyle = overrideUserInterfaceStyle
   }
 
   override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {

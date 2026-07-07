@@ -437,6 +437,17 @@ export default function NoteDetailScreen() {
   // Overlay covers the WebView until CSS is painted (not needed on native)
   const [editorReady, setEditorReady] = useState(IS_NATIVE_EDITOR);
 
+  // WR-19: the native editor's first frame can render with a stale interface
+  // style before its colorScheme prop lands (worst on the first open per
+  // launch for light-theme users — a dark flash). Mask it with the JS theme's
+  // background for the first frames, then fade out.
+  const [nativeEditorMasked, setNativeEditorMasked] = useState(IS_NATIVE_EDITOR);
+  useEffect(() => {
+    if (!IS_NATIVE_EDITOR) return;
+    const mask = setTimeout(() => setNativeEditorMasked(false), 120);
+    return () => clearTimeout(mask);
+  }, []);
+
   // Fallback: remove overlay after 1.5s (tentap only — native editor has no WebView flash)
   useEffect(() => {
     if (IS_NATIVE_EDITOR) return;
@@ -1459,6 +1470,7 @@ export default function NoteDetailScreen() {
         {/* ── Editor body ── */}
         <View style={[styles.editorContainer, { backgroundColor: colors.background }]}>
           {IS_NATIVE_EDITOR ? (
+            <>
             <UnfoldEditor
               ref={editorRef}
               initialHtml={nativeInitialContent}
@@ -1494,6 +1506,14 @@ export default function NoteDetailScreen() {
               accessibilityValue={{ text: stripHtml(latestHtmlRef.current) }}
               style={styles.richText}
             />
+            {nativeEditorMasked && (
+              <Animated.View
+                exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
+                pointerEvents="none"
+                style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]}
+              />
+            )}
+            </>
           ) : (
             <>
               <RichText
