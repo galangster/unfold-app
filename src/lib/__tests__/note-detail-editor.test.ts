@@ -176,6 +176,18 @@ describe('note detail editor persistence', () => {
       content: '<p>David ran toward the battle.</p>',
       category,
       scriptureRefs,
+    }, {
+      title: 'Fight for the Future',
+      content: '<p>David ran toward the battle.</p>',
+      category,
+      tags: [],
+      isFavorite: false,
+      scriptureRefs,
+      devotionalId: 'devotional-1',
+      dayNumber: 2,
+      bibleBookId: 9,
+      bibleChapter: 17,
+      folderId: 'folder-1',
     });
   });
 

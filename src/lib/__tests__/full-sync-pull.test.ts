@@ -30,7 +30,8 @@ jest.mock('../mmkv-storage', () => {
 });
 
 import { useUnfoldStore } from '../store';
-import { LAST_PULLED_AT_KEY, pullAllUserData } from '../full-sync-pull';
+import { applyPulledUserData, LAST_PULLED_AT_KEY, pullAllUserData } from '../full-sync-pull';
+import { persistNoteSnapshot } from '../note-detail-editor';
 import { drainSyncOutbox, peekSyncOutbox, resetDrainStateForTesting } from '../sync-outbox';
 import { mmkvStorage } from '../mmkv-storage';
 import type { SyncPushChange, SyncTable } from '../sync-types';
@@ -196,5 +197,73 @@ describe('full user-data sync', () => {
       body: JSON.stringify({ lastPulledAt: '2026-07-01T11:00:00.000Z' }),
     });
     expect(mmkvStorage.getItem(LAST_PULLED_AT_KEY)).toBe('2026-07-01T12:00:00.000Z');
+  });
+
+  it('resurrects an open note when a pulled tombstone lands before the next save', async () => {
+    const store = useUnfoldStore.getState();
+    const noteId = store.addNote({
+      title: 'Original note',
+      content: '<p>Original writing</p>',
+      category: 'study',
+      tags: [],
+      isFavorite: false,
+      scriptureRefs: [],
+    });
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ results: peekSyncOutbox().map(() => ({ status: 'accepted' })) }),
+    });
+    await drainSyncOutbox();
+    expect(peekSyncOutbox()).toHaveLength(0);
+
+    applyPulledUserData({
+      timestamp: '2026-07-01T12:05:00.000Z',
+      changes: {
+        notes: [{
+          id: noteId,
+          data: {},
+          updatedAt: '2026-07-01T12:05:00.000Z',
+          deleted: true,
+        }],
+      },
+    });
+    expect(useUnfoldStore.getState().notes.find((note) => note.id === noteId)).toBeUndefined();
+
+    const savedId = persistNoteSnapshot({
+      noteId,
+      input: {
+        title: 'Resurrected note',
+        html: '<p>New writing after tombstone</p>',
+        category: 'prayer',
+        scriptureRefs: [],
+      },
+      addNote: useUnfoldStore.getState().addNote,
+      updateNote: useUnfoldStore.getState().updateNote,
+    });
+
+    const resurrected = useUnfoldStore.getState().notes.find((note) => note.id === noteId);
+    expect(savedId).toBe(noteId);
+    expect(resurrected).toMatchObject({
+      id: noteId,
+      title: 'Resurrected note',
+      content: '<p>New writing after tombstone</p>',
+      category: 'prayer',
+      tags: [],
+      isFavorite: false,
+      scriptureRefs: [],
+    });
+
+    expect(peekSyncOutbox()).toContainEqual(expect.objectContaining({
+      table: 'notes',
+      id: noteId,
+      deleted: false,
+      clientUpdatedAt: resurrected?.updatedAt,
+      data: expect.objectContaining({
+        title: 'Resurrected note',
+        content: '<p>New writing after tombstone</p>',
+        category: 'prayer',
+      }),
+    }));
   });
 });

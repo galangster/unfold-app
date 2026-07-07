@@ -695,7 +695,11 @@ interface UnfoldState {
   // Notebook
   notes: Note[];
   addNote: (note: Omit<Note, 'id' | 'createdAt' | 'updatedAt'>) => string;
-  updateNote: (id: string, updates: Partial<Pick<Note, 'title' | 'content' | 'category' | 'tags' | 'isFavorite' | 'scriptureRefs' | 'folderId'>>) => void;
+  updateNote: (
+    id: string,
+    updates: Partial<Pick<Note, 'title' | 'content' | 'category' | 'tags' | 'isFavorite' | 'scriptureRefs' | 'folderId'>>,
+    resurrectOnMissing?: Omit<Note, 'id' | 'createdAt' | 'updatedAt'>,
+  ) => void;
   deleteNote: (id: string) => void;
   getNotesForScripture: (bookId: number, chapter: number) => Note[];
   getNotesForDevotional: (devotionalId: string, dayNumber?: number) => Note[];
@@ -1702,7 +1706,7 @@ export const useUnfoldStore = create<UnfoldState>()(
         return id;
       },
 
-      updateNote: (id, updates) =>
+      updateNote: (id, updates, resurrectOnMissing) =>
         set((state) => {
           const now = new Date().toISOString();
           let changed: Note | null = null;
@@ -1713,6 +1717,11 @@ export const useUnfoldStore = create<UnfoldState>()(
           });
           const changedNote = changed as Note | null;
           if (changedNote) enqueuePersonalDataSyncChange('notes', id, noteSyncData(changedNote), now);
+          if (!changedNote && resurrectOnMissing) {
+            const resurrectedNote: Note = { ...resurrectOnMissing, id, createdAt: now, updatedAt: now };
+            enqueuePersonalDataSyncChange('notes', id, noteSyncData(resurrectedNote), now);
+            return { notes: [resurrectedNote, ...notes] };
+          }
           return { notes };
         }),
 

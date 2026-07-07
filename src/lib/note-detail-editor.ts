@@ -74,6 +74,7 @@ export type PersistNoteSnapshotOptions = {
   updateNote: (
     noteId: string,
     updates: Pick<ReturnType<typeof buildNotePersistencePayload>, 'title' | 'content' | 'category' | 'scriptureRefs'>,
+    resurrectOnMissing?: ReturnType<typeof buildNotePersistencePayload>,
   ) => void;
 };
 
@@ -90,20 +91,22 @@ export function persistNoteSnapshot({
     return undefined;
   }
 
+  const payload = buildNotePersistencePayload({
+    ...input,
+    html,
+  });
+
   if (noteId) {
     updateNote(noteId, {
-      title: input.title,
-      content: html,
-      category: input.category,
-      scriptureRefs: input.scriptureRefs,
-    });
+      title: payload.title,
+      content: payload.content,
+      category: payload.category,
+      scriptureRefs: payload.scriptureRefs,
+    }, payload);
     return noteId;
   }
 
-  return addNote(buildNotePersistencePayload({
-    ...input,
-    html,
-  }));
+  return addNote(payload);
 }
 
 export function getNativeListCommand(
