@@ -46,7 +46,7 @@ beforeEach(() => {
 });
 
 describe('Recently Deleted notes (WR-15)', () => {
-  it('delete keeps the note recoverable and restore un-tombstones it', () => {
+  it('delete keeps the note recoverable and restore un-tombstones it', async () => {
     const id = useUnfoldStore.getState().addNote({
       title: 'Keep me',
       content: '<p>Precious writing</p>',
@@ -56,6 +56,11 @@ describe('Recently Deleted notes (WR-15)', () => {
       scriptureRefs: [],
     });
     (mmkvStorage as any).__clearMockStorage?.();
+
+    // Outbox dedup keeps the EXISTING entry on equal clientUpdatedAt, and a
+    // warm test worker can run add+delete in the same millisecond — cross a
+    // real ms boundary so the tombstone deterministically wins.
+    await new Promise((resolve) => setTimeout(resolve, 3));
 
     useUnfoldStore.getState().deleteNote(id);
     let state = useUnfoldStore.getState();
