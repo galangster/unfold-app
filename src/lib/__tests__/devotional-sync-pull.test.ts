@@ -44,6 +44,7 @@ describe('devotional sync pull recovery', () => {
               bodyText: 'A devotional body from the server.',
               quotableLine: 'God meets you by name in the fire.',
               isRead: false,
+              clientUpdatedAt: '2026-04-25T11:57:00.000Z',
               content: {
                 dayNumber: 2,
                 title: 'Older content title',
@@ -89,7 +90,7 @@ describe('devotional sync pull recovery', () => {
       reflectionQuestions: ['Where is God naming you today?'],
       closingPrayer: 'Lord, meet me here.',
       isRead: false,
-      updatedAt: '2026-04-25T11:58:00.000Z',
+      updatedAt: '2026-04-25T11:58:00.000Z', // WR-25: mapped rows store clientUpdatedAt as local updatedAt (same-clock LWW basis),
     });
   });
 

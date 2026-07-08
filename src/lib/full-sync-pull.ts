@@ -4,6 +4,7 @@ import { getAuthHeaders, PRIMARY_BACKEND_URL } from './api-config';
 import { mmkvStorage } from './mmkv-storage';
 import { logger } from './logger';
 import { useUnfoldStore } from './store';
+import { peekSyncOutbox } from './sync-outbox';
 import type {
   BibleHighlight,
   BibleReadingPosition,
@@ -21,7 +22,7 @@ import type {
 } from './store';
 import { useCompanionChatStore } from './companion-chat-store';
 import type { CompanionMessage, Conversation } from './companion-chat-store';
-import type { SyncPullResponse, SyncPulledRecord } from './sync-types';
+import type { SyncPullResponse, SyncPulledRecord, SyncTable } from './sync-types';
 
 export const LAST_PULLED_AT_KEY = 'unfold-last-pulled-at';
 
@@ -60,15 +61,47 @@ function asArray<T = unknown>(value: unknown): T[] {
   return Array.isArray(value) ? value as T[] : [];
 }
 
+type PendingClientUpdatedAtByRecord = Map<string, string>;
+
+function pendingKey(table: SyncTable, id: string): string {
+  return `${table}:${id}`;
+}
+
+function pendingClientUpdatedAtsByRecord(): PendingClientUpdatedAtByRecord {
+  const pending = new Map<string, string>();
+  for (const change of peekSyncOutbox()) {
+    const key = pendingKey(change.table, change.id);
+    const existing = pending.get(key);
+    if (!existing || change.clientUpdatedAt > existing) {
+      pending.set(key, change.clientUpdatedAt);
+    }
+  }
+  return pending;
+}
+
+function recordClientUpdatedAt(record: SyncPulledRecord): string | undefined {
+  return asString(asRecord(record.data).clientUpdatedAt);
+}
+
 function recordUpdatedAt(record: SyncPulledRecord): string {
-  return record.updatedAt;
+  return recordClientUpdatedAt(record) ?? record.updatedAt;
 }
 
 function localUpdatedAt(value: { updatedAt?: string; createdAt?: string } | undefined): string | undefined {
   return value?.updatedAt ?? value?.createdAt;
 }
 
-function shouldApply(record: SyncPulledRecord, current?: { updatedAt?: string; createdAt?: string }): boolean {
+function shouldApply(
+  record: SyncPulledRecord,
+  current: { updatedAt?: string; createdAt?: string } | undefined,
+  table: SyncTable,
+  pendingClientUpdatedAtByRecord: PendingClientUpdatedAtByRecord,
+): boolean {
+  const pendingClientUpdatedAt = pendingClientUpdatedAtByRecord.get(pendingKey(table, record.id));
+  const remoteClientUpdatedAt = recordClientUpdatedAt(record);
+  if (pendingClientUpdatedAt && (!remoteClientUpdatedAt || pendingClientUpdatedAt > remoteClientUpdatedAt)) {
+    return false;
+  }
   const currentUpdatedAt = localUpdatedAt(current);
   return !currentUpdatedAt || recordUpdatedAt(record) > currentUpdatedAt;
 }
@@ -76,15 +109,17 @@ function shouldApply(record: SyncPulledRecord, current?: { updatedAt?: string; c
 function upsertRecord<T extends { id?: string; updatedAt?: string; createdAt?: string }>(
   items: T[],
   record: SyncPulledRecord,
+  table: SyncTable,
+  pendingClientUpdatedAtByRecord: PendingClientUpdatedAtByRecord,
   mapper: (record: SyncPulledRecord) => T | null
 ): T[] {
+  const existing = items.find((item) => item.id === record.id);
+  if (!shouldApply(record, existing, table, pendingClientUpdatedAtByRecord)) return items;
   if (record.deleted) return items.filter((item) => item.id !== record.id);
   const mapped = mapper(record);
   if (!mapped) return items;
   const mappedId = mapped.id;
   if (!mappedId) return items;
-  const existing = items.find((item) => item.id === mappedId);
-  if (!shouldApply(record, existing)) return items;
   return existing
     ? items.map((item) => (item.id === mappedId ? mapped : item))
     : [mapped, ...items];
@@ -101,8 +136,8 @@ function mapJournalEntry(record: SyncPulledRecord): JournalEntry | null {
     devotionalId,
     dayNumber,
     content,
-    createdAt: asString(row.createdAt) ?? record.updatedAt,
-    updatedAt: record.updatedAt,
+    createdAt: asString(row.createdAt) ?? recordUpdatedAt(record),
+    updatedAt: recordUpdatedAt(record),
     journalMode: asString(row.journalMode) as JournalEntry['journalMode'],
     soapResponses: asRecord(row.soapResponses) as unknown as JournalEntry['soapResponses'],
     prayerRequests: asArray(row.prayerRequests) as JournalEntry['prayerRequests'],
@@ -124,8 +159,8 @@ function mapBookmark(record: SyncPulledRecord): Bookmark | null {
     dayTitle: asString(row.dayTitle) ?? '',
     scriptureReference: asString(row.scriptureReference) ?? '',
     scriptureText: asString(row.scriptureText) ?? '',
-    savedAt: asString(row.savedAt) ?? record.updatedAt,
-    updatedAt: record.updatedAt,
+    savedAt: asString(row.savedAt) ?? recordUpdatedAt(record),
+    updatedAt: recordUpdatedAt(record),
   };
 }
 
@@ -146,8 +181,8 @@ function mapHighlight(record: SyncPulledRecord): Highlight | null {
     color: asString(row.color) as Highlight['color'],
     contextBefore: asString(row.contextBefore),
     contextAfter: asString(row.contextAfter),
-    createdAt: asString(row.createdAt) ?? record.updatedAt,
-    updatedAt: record.updatedAt,
+    createdAt: asString(row.createdAt) ?? recordUpdatedAt(record),
+    updatedAt: recordUpdatedAt(record),
   };
 }
 
@@ -169,8 +204,8 @@ function mapBibleHighlight(record: SyncPulledRecord): BibleHighlight | null {
     color: (row.color === null ? null : asString(row.color) ?? null) as BibleHighlight['color'],
     note: asString(row.note),
     translation: asString(row.translation) ?? 'BSB',
-    createdAt: asString(row.createdAt) ?? record.updatedAt,
-    updatedAt: record.updatedAt,
+    createdAt: asString(row.createdAt) ?? recordUpdatedAt(record),
+    updatedAt: recordUpdatedAt(record),
   };
 }
 
@@ -185,8 +220,8 @@ function mapBibleReadingPosition(record: SyncPulledRecord): BibleReadingPosition
     bookName: asString(row.bookName) ?? '',
     chapter,
     translation: asString(row.translation) ?? 'BSB',
-    lastReadAt: asString(row.lastReadAt) ?? record.updatedAt,
-    updatedAt: record.updatedAt,
+    lastReadAt: asString(row.lastReadAt) ?? recordUpdatedAt(record),
+    updatedAt: recordUpdatedAt(record),
   };
 }
 
@@ -204,9 +239,9 @@ function mapCheckIn(record: SyncPulledRecord): CheckIn | null {
     moodLabel: asString(row.moodLabel) ?? '',
     chipAnswer: asString(row.chipAnswer),
     freeText: asString(row.freeText),
-    createdAt: asString(row.createdAt) ?? record.updatedAt,
+    createdAt: asString(row.createdAt) ?? recordUpdatedAt(record),
     timeOfDay: (asString(row.timeOfDay) ?? 'companion') as CheckIn['timeOfDay'],
-    updatedAt: record.updatedAt,
+    updatedAt: recordUpdatedAt(record),
   };
 }
 
@@ -216,8 +251,8 @@ function mapNote(record: SyncPulledRecord): Note | null {
     id: record.id,
     title: asString(row.title) ?? '',
     content: asString(row.content) ?? '',
-    createdAt: asString(row.createdAt) ?? record.updatedAt,
-    updatedAt: record.updatedAt,
+    createdAt: asString(row.createdAt) ?? recordUpdatedAt(record),
+    updatedAt: recordUpdatedAt(record),
     category: (asString(row.category) ?? 'general') as Note['category'],
     tags: asArray<string>(row.tags),
     isFavorite: asBoolean(row.isFavorite) ?? false,
@@ -238,8 +273,8 @@ function mapNoteFolder(record: SyncPulledRecord): NoteFolder | null {
     color: asString(row.color),
     parentId: asString(row.parentId),
     sortOrder: asNumber(row.sortOrder) ?? 0,
-    createdAt: asString(row.createdAt) ?? record.updatedAt,
-    updatedAt: record.updatedAt,
+    createdAt: asString(row.createdAt) ?? recordUpdatedAt(record),
+    updatedAt: recordUpdatedAt(record),
   };
 }
 
@@ -252,9 +287,9 @@ function mapUsedScripture(record: SyncPulledRecord): UsedScripture | null {
     id: record.id,
     reference,
     book: asString(row.book) ?? '',
-    usedAt: asString(row.usedAt) ?? record.updatedAt,
+    usedAt: asString(row.usedAt) ?? recordUpdatedAt(record),
     devotionalId,
-    updatedAt: record.updatedAt,
+    updatedAt: recordUpdatedAt(record),
   };
 }
 
@@ -268,8 +303,8 @@ function mapSeriesPersona(record: SyncPulledRecord): SeriesPersonaRecord | null 
     primaryTrait: asString(row.primaryTrait) ?? '',
     secondaryTrait: asString(row.secondaryTrait) ?? '',
     templateSeed: asNumber(row.templateSeed) ?? 0,
-    createdAt: asString(row.createdAt) ?? record.updatedAt,
-    updatedAt: record.updatedAt,
+    createdAt: asString(row.createdAt) ?? recordUpdatedAt(record),
+    updatedAt: recordUpdatedAt(record),
   };
 }
 
@@ -284,14 +319,14 @@ function mapMethodUsage(record: SyncPulledRecord): MethodUsageRecord | null {
     methodId,
     devotionalId,
     dayNumber,
-    usedAt: asString(row.usedAt) ?? record.updatedAt,
-    updatedAt: record.updatedAt,
+    usedAt: asString(row.usedAt) ?? recordUpdatedAt(record),
+    updatedAt: recordUpdatedAt(record),
   };
 }
 
 function mapDevotional(record: SyncPulledRecord, current?: Devotional): Devotional | null {
   const row = asRecord(record.data);
-  const now = record.updatedAt;
+  const now = recordUpdatedAt(record);
   if (current) {
     return {
       ...current,
@@ -342,23 +377,23 @@ function mapDevotionalDay(record: SyncPulledRecord): DevotionalDay | null {
     quotableLine,
     isRead: asBoolean(row.isRead) ?? asBoolean(content.isRead) ?? false,
     readAt: asString(row.readAt) ?? asString(content.readAt),
-    updatedAt: record.updatedAt,
+    updatedAt: recordUpdatedAt(record),
   } as DevotionalDay;
 }
 
 function mapConversation(record: SyncPulledRecord, current?: Conversation): Conversation | null {
   const row = asRecord(record.data);
-  const lastMessageAt = Date.parse(asString(row.lastMessageAt) ?? record.updatedAt);
+  const lastMessageAt = Date.parse(asString(row.lastMessageAt) ?? recordUpdatedAt(record));
   return {
     id: record.id,
     messages: current?.messages ?? [],
-    createdAt: Date.parse(asString(row.createdAt) ?? record.updatedAt),
+    createdAt: Date.parse(asString(row.createdAt) ?? recordUpdatedAt(record)),
     lastMessageAt: Number.isFinite(lastMessageAt) ? lastMessageAt : Date.now(),
     title: asString(row.summary) ?? current?.title ?? null,
     topicTags: asArray<string>(row.topicTags),
     archived: asBoolean(row.archived) ?? current?.archived ?? false,
     pinned: current?.pinned,
-    updatedAt: record.updatedAt,
+    updatedAt: recordUpdatedAt(record),
   };
 }
 
@@ -371,18 +406,19 @@ function mapMessage(record: SyncPulledRecord): (CompanionMessage & { conversatio
     conversationId,
     role: (asString(row.role) === 'user' ? 'user' : 'companion'),
     content: asString(row.content) ?? '',
-    timestamp: Date.parse(asString(row.timestamp) ?? record.updatedAt),
+    timestamp: Date.parse(asString(row.timestamp) ?? recordUpdatedAt(record)),
     status: (asString(row.status) ?? 'complete') as CompanionMessage['status'],
     citations: asArray(row.citations) as CompanionMessage['citations'],
     suggestions: asArray<string>(row.suggestions),
     feedback: (asString(row.feedback) as CompanionMessage['feedback']) ?? null,
     deepLinks: asArray(row.deepLinks) as CompanionMessage['deepLinks'],
-    updatedAt: record.updatedAt,
+    updatedAt: recordUpdatedAt(record),
   };
 }
 
 function applyMainStoreChanges(payload: SyncPullResponse): void {
   const changes = payload.changes;
+  const pendingByRecord = pendingClientUpdatedAtsByRecord();
   useUnfoldStore.setState((state) => {
     let devotionals = state.devotionals;
     for (const record of changes.devotionals ?? []) {
@@ -391,7 +427,7 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
         continue;
       }
       const current = devotionals.find((item) => item.id === record.id);
-      if (!shouldApply(record, current)) continue;
+      if (!shouldApply(record, current, 'devotionals', pendingByRecord)) continue;
       const mapped = mapDevotional(record, current);
       if (!mapped) continue;
       devotionals = current
@@ -408,7 +444,7 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
         if (record.deleted) return { ...devotional, days: devotional.days.filter((item) => item.id !== record.id) };
         if (!day) return devotional;
         const existing = devotional.days.find((item) => item.id === day.id || item.dayNumber === day.dayNumber);
-        if (!shouldApply(record, existing)) return devotional;
+        if (!shouldApply(record, existing, 'devotional_days', pendingByRecord)) return devotional;
         const days = existing
           ? devotional.days.map((item) => (item.id === existing.id || item.dayNumber === day.dayNumber ? day : item))
           : [...devotional.days, day];
@@ -419,47 +455,47 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
     return {
       devotionals,
       journalEntries: (changes.journal_entries ?? []).reduce(
-        (items, record) => upsertRecord(items, record, mapJournalEntry),
+        (items, record) => upsertRecord(items, record, 'journal_entries', pendingByRecord, mapJournalEntry),
         state.journalEntries
       ),
       bookmarks: (changes.bookmarks ?? []).reduce(
-        (items, record) => upsertRecord(items, record, mapBookmark),
+        (items, record) => upsertRecord(items, record, 'bookmarks', pendingByRecord, mapBookmark),
         state.bookmarks
       ),
       highlights: (changes.highlights ?? []).reduce(
-        (items, record) => upsertRecord(items, record, mapHighlight),
+        (items, record) => upsertRecord(items, record, 'highlights', pendingByRecord, mapHighlight),
         state.highlights
       ),
       bibleHighlights: (changes.bible_highlights ?? []).reduce(
-        (items, record) => upsertRecord(items, record, mapBibleHighlight),
+        (items, record) => upsertRecord(items, record, 'bible_highlights', pendingByRecord, mapBibleHighlight),
         state.bibleHighlights
       ),
       bibleReadingHistory: (changes.bible_reading_positions ?? []).reduce(
-        (items, record) => upsertRecord(items, record, mapBibleReadingPosition),
+        (items, record) => upsertRecord(items, record, 'bible_reading_positions', pendingByRecord, mapBibleReadingPosition),
         state.bibleReadingHistory
       ),
       checkIns: (changes.check_ins ?? []).reduce(
-        (items, record) => upsertRecord(items, record, mapCheckIn),
+        (items, record) => upsertRecord(items, record, 'check_ins', pendingByRecord, mapCheckIn),
         state.checkIns
       ),
       notes: (changes.notes ?? []).reduce(
-        (items, record) => upsertRecord(items, record, mapNote),
+        (items, record) => upsertRecord(items, record, 'notes', pendingByRecord, mapNote),
         state.notes
       ),
       folders: (changes.note_folders ?? []).reduce(
-        (items, record) => upsertRecord(items, record, mapNoteFolder),
+        (items, record) => upsertRecord(items, record, 'note_folders', pendingByRecord, mapNoteFolder),
         state.folders
       ),
       usedScriptures: (changes.used_scriptures ?? []).reduce(
-        (items, record) => upsertRecord(items, record, mapUsedScripture),
+        (items, record) => upsertRecord(items, record, 'used_scriptures', pendingByRecord, mapUsedScripture),
         state.usedScriptures
       ),
       seriesPersonaHistory: (changes.series_persona_history ?? []).reduce(
-        (items, record) => upsertRecord(items, record, mapSeriesPersona),
+        (items, record) => upsertRecord(items, record, 'series_persona_history', pendingByRecord, mapSeriesPersona),
         state.seriesPersonaHistory
       ),
       methodUsageHistory: (changes.method_usage_history ?? []).reduce(
-        (items, record) => upsertRecord(items, record, mapMethodUsage),
+        (items, record) => upsertRecord(items, record, 'method_usage_history', pendingByRecord, mapMethodUsage),
         state.methodUsageHistory
       ),
     };
@@ -469,6 +505,7 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
 function applyCompanionChanges(payload: SyncPullResponse): void {
   const { companion_conversations: conversationRecords = [], companion_messages: messageRecords = [] } = payload.changes;
   if (conversationRecords.length === 0 && messageRecords.length === 0) return;
+  const pendingByRecord = pendingClientUpdatedAtsByRecord();
 
   useCompanionChatStore.setState((state) => {
     let conversations = state.conversations;
@@ -479,7 +516,9 @@ function applyCompanionChanges(payload: SyncPullResponse): void {
         continue;
       }
       const current = conversations.find((item) => item.id === record.id);
-      if (current?.updatedAt && recordUpdatedAt(record) <= current.updatedAt) continue;
+      // Conversation.createdAt is a number timestamp — narrow to the string
+      // updatedAt the LWW compare understands (the old inline compare did too).
+      if (!shouldApply(record, current ? { updatedAt: current.updatedAt } : undefined, 'companion_conversations', pendingByRecord)) continue;
       const mapped = mapConversation(record, current);
       if (!mapped) continue;
       conversations = current
@@ -497,7 +536,7 @@ function applyCompanionChanges(payload: SyncPullResponse): void {
         if (!message) return conversation;
         const { conversationId: _conversationId, ...cleanMessage } = message;
         const existing = (conversation.messages ?? []).find((item) => item.id === message.id);
-        if (!shouldApply(record, existing)) return conversation;
+        if (!shouldApply(record, existing, 'companion_messages', pendingByRecord)) return conversation;
         const messages = existing
           ? (conversation.messages ?? []).map((item) => (item.id === message.id ? cleanMessage : item))
           : [...(conversation.messages ?? []), cleanMessage];
