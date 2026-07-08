@@ -17,6 +17,7 @@ import {
 import { PRIMARY_BACKEND_URL, getAuthHeaders, sanitizeForPrompt } from '@/lib/api-config';
 import { useUnfoldStore } from '@/lib/store';
 import { logger } from '@/lib/logger';
+import { analyzeNetworkError } from '@/lib/network-error-handler';
 import { parseDeepLinks } from './parse-deep-links';
 import { generateConversationTitle } from './companion-service';
 import { companionReplyAnnouncement } from '@/lib/companion-announcements';
@@ -517,13 +518,30 @@ export function useCompanionChat() {
           }, streamConversationId);
           return current?.content ? 'sent' : 'error';
         } else {
-          logger.warn('[CompanionChat] Error:', err);
-          setError('Something went wrong. Try again?');
+          const analyzed = analyzeNetworkError(err);
+          logger.warn('[CompanionChat] Error:', err, analyzed.type);
+          if (accumulatedText) {
+            // WR-11: a partial answer survived the drop — keep it as a normal
+            // message (renders through the rich block path, not the plain
+            // error box) and surface the interruption via banner + VO only.
+            updateMessage(companionId, {
+              content: accumulatedText,
+              status: 'complete',
+            }, streamConversationId);
+            setError(`${analyzed.userFriendlyMessage} Your reply may be incomplete.`);
+            AccessibilityInfo.announceForAccessibility(
+              `Connection interrupted. ${analyzed.userFriendlyMessage} Your reply may be incomplete.`,
+            );
+            return 'sent';
+          }
+          setError(analyzed.userFriendlyMessage);
           updateMessage(companionId, {
             status: 'error',
-            content: 'Something went wrong. Tap to retry.',
+            content: analyzed.userFriendlyMessage,
           }, streamConversationId);
-          AccessibilityInfo.announceForAccessibility('Companion reply failed. Something went wrong. Tap the message to retry.');
+          AccessibilityInfo.announceForAccessibility(
+            `Companion reply failed. ${analyzed.userFriendlyMessage}`,
+          );
           return 'error';
         }
       } finally {

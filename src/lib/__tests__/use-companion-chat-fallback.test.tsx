@@ -10,6 +10,10 @@ jest.mock('expo/fetch', () => ({
   fetch: (...args: Parameters<typeof fetch>) => mockFetch(...args),
 }));
 
+jest.mock('@react-native-community/netinfo', () => ({
+  addEventListener: jest.fn(() => jest.fn()),
+}));
+
 jest.mock('@/lib/api-config', () => ({
   PRIMARY_BACKEND_URL: 'https://api.example.test',
   getAuthHeaders: jest.fn(async () => ({ 'Content-Type': 'application/json' })),
@@ -499,5 +503,81 @@ describe('conversation-scoped streaming (WR-09)', () => {
     const reply = (original?.messages ?? []).find((m) => m.role === 'companion');
     expect(reply?.status).toBe('complete');
     expect(reply?.content).toBe('Background text');
+  });
+});
+
+
+describe('network-drop resilience (WR-11)', () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+    act(() => {
+      useCompanionChatStore.getState().clearAllConversations();
+    });
+  });
+
+  function streamThatDropsAfter(chunks: string[]) {
+    const encoder = new TextEncoder();
+    const queue = [...chunks];
+    const reader = {
+      read: jest.fn(async () => {
+        const chunk = queue.shift();
+        if (chunk === undefined) throw new Error('Network request failed');
+        return { done: false, value: encoder.encode(chunk) };
+      }),
+      releaseLock: jest.fn(),
+    };
+    return { ok: true, body: { getReader: () => reader } };
+  }
+
+  it('keeps the partial answer when the connection drops mid-stream', async () => {
+    mockFetch
+      .mockResolvedValueOnce(streamThatDropsAfter(['data: {"t":"Partial answer"}\n\n']) as any)
+      .mockRejectedValueOnce(new Error('Network request failed'));
+
+    let hook: ReturnType<typeof useCompanionChat> | null = null;
+    await act(async () => {
+      renderer.create(<HookHarness onReady={(next) => { hook = next; }} />);
+      await Promise.resolve();
+    });
+
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await hook!.sendMessage('question');
+      await wait(400);
+    });
+
+    const conv = useCompanionChatStore.getState().conversations[0];
+    const reply = (conv?.messages ?? []).find((m) => m.role === 'companion');
+    expect(reply?.status).toBe('complete');
+    expect(reply?.content).toBe('Partial answer');
+    expect(outcome).toBe('sent');
+    expect(hook!.error).toMatch(/incomplete/i);
+    expect(hook!.error).not.toMatch(/Something went wrong/);
+  });
+
+  it('shows a connectivity-aware error when nothing streamed', async () => {
+    mockFetch
+      .mockRejectedValueOnce(new Error('Network request failed'))
+      .mockRejectedValueOnce(new Error('Network request failed'));
+
+    let hook: ReturnType<typeof useCompanionChat> | null = null;
+    await act(async () => {
+      renderer.create(<HookHarness onReady={(next) => { hook = next; }} />);
+      await Promise.resolve();
+    });
+
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await hook!.sendMessage('question');
+      await wait(400);
+    });
+
+    const conv = useCompanionChatStore.getState().conversations[0];
+    const reply = (conv?.messages ?? []).find((m) => m.role === 'companion');
+    expect(reply?.status).toBe('error');
+    expect(outcome).toBe('error');
+    // Copy comes from analyzeNetworkError, not the old canned string.
+    expect(reply?.content).not.toBe('Something went wrong. Tap to retry.');
+    expect(reply?.content).toBeTruthy();
   });
 });
