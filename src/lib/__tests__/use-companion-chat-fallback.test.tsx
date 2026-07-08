@@ -361,3 +361,143 @@ describe('useCompanionChat fallback streaming', () => {
     });
   });
 });
+
+
+describe('conversation-scoped streaming (WR-09)', () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+    act(() => {
+      useCompanionChatStore.getState().clearAllConversations();
+    });
+  });
+
+  function deferredStream(chunks: string[]) {
+    let releaseNext!: () => void;
+    const gate = new Promise<void>((resolve) => { releaseNext = resolve; });
+    const encoder = new TextEncoder();
+    const queue = [...chunks];
+    const reader = {
+      read: jest.fn(async () => {
+        const chunk = queue.shift();
+        if (chunk === undefined) return { done: true, value: undefined };
+        if (queue.length === 0) {
+          // Hold the final chunk until the test releases it.
+          await gate;
+        }
+        return { done: false, value: encoder.encode(chunk) };
+      }),
+      releaseLock: jest.fn(),
+    };
+    return {
+      response: { ok: true, body: { getReader: () => reader } },
+      release: () => releaseNext(),
+    };
+  }
+
+  it('lands the reply in its own conversation after a mid-stream switch and unblocks the new one', async () => {
+    const stream = deferredStream([
+      'data: {"t":"The answer"}\n\n',
+      'data: {"d":true,"s":[]}\n\n',
+    ]);
+    mockFetch
+      .mockResolvedValueOnce(stream.response as any)
+      .mockResolvedValueOnce(streamingResponseFromChunks([
+        'data: {"t":"Second answer"}\n\n',
+        'data: {"d":true,"s":[]}\n\n',
+      ]) as any);
+
+    let hook: ReturnType<typeof useCompanionChat> | null = null;
+    let rerender: () => void = () => {};
+    await act(async () => {
+      const tree = renderer.create(<HookHarness onReady={(next) => { hook = next; }} />);
+      rerender = () => tree.update(<HookHarness onReady={(next) => { hook = next; }} />);
+      await Promise.resolve();
+    });
+
+    let firstSend!: Promise<unknown>;
+    await act(async () => {
+      firstSend = hook!.sendMessage('first question');
+      await wait(10);
+    });
+    const originalConversationId = useCompanionChatStore.getState().activeConversationId!;
+    expect(hook!.isStreaming).toBe(true);
+
+    // Switch to a new conversation mid-stream.
+    act(() => {
+      useCompanionChatStore.getState().startNewConversation();
+    });
+    act(() => { rerender(); });
+    // (c) the streaming indicator reflects the now-active conversation
+    expect(hook!.isStreaming).toBe(false);
+
+    // (d) sending in the new conversation is allowed while the old streams
+    let secondSend!: Promise<unknown>;
+    await act(async () => {
+      secondSend = hook!.sendMessage('second question');
+      await wait(10);
+    });
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+
+    // Release the first stream and let both settle.
+    await act(async () => {
+      stream.release();
+      await firstSend;
+      await secondSend;
+      await wait(10);
+    });
+
+    // (a) the original conversation received its full reply
+    const conversations = useCompanionChatStore.getState().conversations;
+    const original = conversations.find((c) => c.id === originalConversationId);
+    const originalReply = (original?.messages ?? []).find((m) => m.role === 'companion');
+    expect(originalReply?.status).toBe('complete');
+    expect(originalReply?.content).toBe('The answer');
+
+    // (b) the new conversation holds only its own exchange
+    const active = conversations.find((c) => c.id === useCompanionChatStore.getState().activeConversationId);
+    const activeReply = (active?.messages ?? []).find((m) => m.role === 'companion');
+    expect(activeReply?.content).toBe('Second answer');
+  });
+
+  it('stopGeneration aborts the visible conversation, not a background stream', async () => {
+    const stream = deferredStream([
+      'data: {"t":"Background text"}\n\n',
+      'data: {"d":true,"s":[]}\n\n',
+    ]);
+    mockFetch.mockResolvedValueOnce(stream.response as any);
+
+    let hook: ReturnType<typeof useCompanionChat> | null = null;
+    let rerender: () => void = () => {};
+    await act(async () => {
+      const tree = renderer.create(<HookHarness onReady={(next) => { hook = next; }} />);
+      rerender = () => tree.update(<HookHarness onReady={(next) => { hook = next; }} />);
+      await Promise.resolve();
+    });
+
+    let firstSend!: Promise<unknown>;
+    await act(async () => {
+      firstSend = hook!.sendMessage('background question');
+      await wait(10);
+    });
+    const originalConversationId = useCompanionChatStore.getState().activeConversationId!;
+
+    act(() => {
+      useCompanionChatStore.getState().startNewConversation();
+    });
+    act(() => { rerender(); });
+
+    // (e) Stop while viewing the new conversation must not abort the old stream.
+    act(() => { hook!.stopGeneration(); });
+    await act(async () => {
+      stream.release();
+      await firstSend;
+      await wait(10);
+    });
+
+    const original = useCompanionChatStore.getState().conversations
+      .find((c) => c.id === originalConversationId);
+    const reply = (original?.messages ?? []).find((m) => m.role === 'companion');
+    expect(reply?.status).toBe('complete');
+    expect(reply?.content).toBe('Background text');
+  });
+});

@@ -193,7 +193,7 @@ interface CompanionChatState {
 
   // Actions
   addMessage: (msg: CompanionMessage) => void;
-  updateMessage: (id: string, updates: Partial<CompanionMessage>) => void;
+  updateMessage: (id: string, updates: Partial<CompanionMessage>, conversationId?: string) => void;
   setFeedback: (id: string, feedback: 'positive' | 'negative') => void;
   startNewConversation: () => void;
   archiveActiveConversation: (title?: string, topicTags?: string[]) => void;
@@ -261,11 +261,13 @@ export const useCompanionChatStore = create<CompanionChatState>()(
           };
         }),
 
-      updateMessage: (id, updates) =>
+      updateMessage: (id, updates, conversationId) =>
         set((s) => {
           const now = new Date().toISOString();
-          // Scope to active conversation for performance
-          const activeId = s.activeConversationId;
+          // Scope to one conversation for performance. WR-09: streams pass
+          // their own conversationId so a mid-stream switch can't orphan
+          // tokens; UI callers omit it and keep active-conversation behavior.
+          const activeId = conversationId ?? s.activeConversationId;
           return {
             conversations: s.conversations.map(c => {
               if (c.id !== activeId) return c;

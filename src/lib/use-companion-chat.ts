@@ -252,13 +252,17 @@ export function useCompanionChat() {
   const updateMessage = useCompanionChatStore((s) => s.updateMessage);
   const startNewConversation = useCompanionChatStore((s) => s.startNewConversation);
   const checkAndArchiveStale = useCompanionChatStore((s) => s.checkAndArchiveStale);
-  const [isStreaming, setIsStreaming] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  const abortRef = useRef<AbortController | null>(null);
-  const streamingIdRef = useRef<string | null>(null);
+  // WR-09: streams are keyed by conversation so switching mid-stream neither
+  // orphans the reply nor blocks the newly-viewed conversation.
+  const activeConversationId = useCompanionChatStore((s) => s.activeConversationId);
+  const inFlightRef = useRef(new Map<string, { abort: AbortController; companionId: string }>());
+  const [, setStreamVersion] = useState(0);
+  const bumpStreamVersion = useCallback(() => setStreamVersion((v) => v + 1), []);
+  const isStreaming = activeConversationId != null && inFlightRef.current.has(activeConversationId);
 
   // Phase 4: Gather user context
   const userName = useUnfoldStore((s) => s.user?.name ?? null);
@@ -281,12 +285,14 @@ export function useCompanionChat() {
   const sendMessage = useCallback(
     async (text: string): Promise<SendOutcome> => {
       const trimmedText = text.trim();
-      if (!trimmedText || isStreaming) return 'noop';
+      if (!trimmedText) return 'noop';
 
       // Ensure an active conversation exists before sending
       if (!useCompanionChatStore.getState().activeConversationId) {
         useCompanionChatStore.getState().startNewConversation();
       }
+      const streamConversationId = useCompanionChatStore.getState().activeConversationId!;
+      if (inFlightRef.current.has(streamConversationId)) return 'noop';
 
       setError(null);
       setSuggestions([]);
@@ -311,11 +317,10 @@ export function useCompanionChat() {
         status: 'streaming',
       };
       addMessage(companionMsg);
-      streamingIdRef.current = companionId;
-
-      setIsStreaming(true);
 
       const abortController = new AbortController();
+      inFlightRef.current.set(streamConversationId, { abort: abortController, companionId });
+      bumpStreamVersion();
 
       // Throttled store updates — batch token updates to reduce re-renders while
       // always flushing the newest text, not the first token in the throttle window.
@@ -325,7 +330,7 @@ export function useCompanionChat() {
         if (!pendingUpdate) return;
         const { id, text: nextText } = pendingUpdate;
         pendingUpdate = null;
-        updateMessage(id, { content: nextText });
+        updateMessage(id, { content: nextText }, streamConversationId);
       };
       const throttledUpdate = (id: string, text: string) => {
         pendingUpdate = { id, text };
@@ -343,8 +348,6 @@ export function useCompanionChat() {
         }
         pendingUpdate = null;
       };
-      abortRef.current = abortController;
-
       let accumulatedText = '';
       let hasReceivedStreamingToken = false;
 
@@ -423,7 +426,7 @@ export function useCompanionChat() {
                   deepLinks: deepLinks.length > 0 ? deepLinks : undefined,
                   status: 'complete',
                   suggestions: finalSuggestions,
-                });
+                }, streamConversationId);
                 setSuggestions(finalSuggestions);
                 announceCompanionReply(cleanContent);
               },
@@ -470,13 +473,14 @@ export function useCompanionChat() {
             deepLinks: fallbackLinks.length > 0 ? fallbackLinks : undefined,
             status: 'complete',
             suggestions: result.suggestions,
-          });
+          }, streamConversationId);
           setSuggestions(result.suggestions);
           announceCompanionReply(fallbackClean);
         }
 
-        // Generate title after first exchange (user + companion)
-        const convId = useCompanionChatStore.getState().activeConversationId;
+        // Generate title after first exchange (user + companion) — scoped to
+        // the stream's conversation, not whatever is active at completion.
+        const convId = streamConversationId;
         const conv = useCompanionChatStore.getState().conversations.find(c => c.id === convId);
         const convMessages = conv?.messages ?? [];
         const userMessages = convMessages.filter(m => m.role === 'user' && (m.status === 'sent' || m.status === 'complete'));
@@ -503,13 +507,14 @@ export function useCompanionChat() {
         if (err.name === 'AbortError') {
           // User stopped — flush any buffered tokens before setting status
           if (accumulatedText) {
-            updateMessage(companionId, { content: accumulatedText });
+            updateMessage(companionId, { content: accumulatedText }, streamConversationId);
           }
-          const current = selectActiveMessages(useCompanionChatStore.getState())
-            .find((m) => m.id === companionId);
+          const streamConv = useCompanionChatStore.getState().conversations
+            .find((c) => c.id === streamConversationId);
+          const current = (streamConv?.messages ?? []).find((m) => m.id === companionId);
           updateMessage(companionId, {
             status: current?.content ? 'complete' : 'error',
-          });
+          }, streamConversationId);
           return current?.content ? 'sent' : 'error';
         } else {
           logger.warn('[CompanionChat] Error:', err);
@@ -517,14 +522,13 @@ export function useCompanionChat() {
           updateMessage(companionId, {
             status: 'error',
             content: 'Something went wrong. Tap to retry.',
-          });
+          }, streamConversationId);
           AccessibilityInfo.announceForAccessibility('Companion reply failed. Something went wrong. Tap the message to retry.');
           return 'error';
         }
       } finally {
-        setIsStreaming(false);
-        streamingIdRef.current = null;
-        abortRef.current = null;
+        inFlightRef.current.delete(streamConversationId);
+        bumpStreamVersion();
       }
     },
     [
@@ -541,7 +545,10 @@ export function useCompanionChat() {
   // ── Stop generation ────────────────────────────────────────────────────
 
   const stopGeneration = useCallback(() => {
-    abortRef.current?.abort();
+    // Stop targets the conversation the user is looking at — never an
+    // invisible background stream (WR-09).
+    const active = useCompanionChatStore.getState().activeConversationId;
+    if (active) inFlightRef.current.get(active)?.abort.abort();
   }, []);
 
   return {
