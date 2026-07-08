@@ -925,6 +925,10 @@ export default function JournalHubScreen() {
     });
   }, [journalEntries, searchQuery, devotionals]);
 
+  // WR-07: search on the Reflections segment renders filteredEntries in
+  // place of the browse sections (mirrors Notebook's search collapse).
+  const isSearchingReflections = activeSegment === 'reflections' && searchQuery.trim().length > 0;
+
   // ---- Series with journal entries (for YOUR DEVOTIONALS section) ----
   const seriesWithEntries = useMemo(() => {
     // Group entries by devotionalId and compute stats
@@ -1439,8 +1443,70 @@ export default function JournalHubScreen() {
                 entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
                 style={reflectionsSwipeStyle}
               >
+              {/* WR-07: reflections search results (non-virtualized — notebook
+                  rows are the only FlatList-virtualized data by design) */}
+              {isSearchingReflections && (
+                <View style={{ paddingHorizontal: Spacing['6'], marginTop: Spacing['5'] }}>
+                  {filteredEntries.length === 0 ? (
+                    <View style={mainStyles.noResultsContainer}>
+                      <Text style={[mainStyles.noResultsText, { color: colors.textMuted }]}>
+                        {`No entries match "${searchQuery}"`}
+                      </Text>
+                    </View>
+                  ) : (
+                    filteredEntries.map((entry) => {
+                      const entryDevotional = devotionals.find((d) => d.id === entry.devotionalId);
+                      const entryDay = entryDevotional?.days.find((d) => d.dayNumber === entry.dayNumber);
+                      const preview = (entry.content || entry.questionResponses?.[0]?.response || '').replace(/<[^>]+>/g, '').trim();
+                      return (
+                        <TouchableOpacity
+                          key={entry.id}
+                          activeOpacity={0.7}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Reflection, day ${entry.dayNumber}${entryDevotional ? `, ${entryDevotional.title}` : ''}`}
+                          onPress={() => router.push({ pathname: '/(tabs)/(today)/journal-detail', params: { entryId: entry.id } })}
+                        >
+                          <View
+                            style={{
+                              backgroundColor: colors.inputBackground,
+                              borderRadius: Radius.lg,
+                              borderWidth: 1,
+                              borderColor: colors.border,
+                              padding: Spacing['5'],
+                              marginBottom: Spacing['3'],
+                            }}
+                          >
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing['2'] }}>
+                              <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 11, letterSpacing: 0.4, textTransform: 'uppercase', color: colors.textHint }}>
+                                {`Day ${entry.dayNumber}`}
+                              </Text>
+                              <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 11, color: colors.textHint }}>
+                                {new Date(entry.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                              </Text>
+                            </View>
+                            {entryDay?.title || entryDevotional?.title ? (
+                              <Text
+                                numberOfLines={1}
+                                style={{ fontFamily: FontFamily.uiMedium, fontSize: 14, color: colors.text, marginBottom: Spacing['1.5'] }}
+                              >
+                                {entryDay?.title ?? entryDevotional?.title}
+                              </Text>
+                            ) : null}
+                            {preview ? (
+                              <Text numberOfLines={2} style={{ fontFamily: FontFamily.body, fontSize: 14, lineHeight: 21, color: colors.textMuted }}>
+                                {preview}
+                              </Text>
+                            ) : null}
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })
+                  )}
+                </View>
+              )}
+
               {/* Today's Reflection Card */}
-              {currentDevotional && (
+              {!isSearchingReflections && currentDevotional && (
                 <Animated.View
                   entering={reducedMotion ? undefined : FadeIn.duration(Duration.slow).delay(30).easing(Ease.out)}
                   style={{ paddingHorizontal: Spacing['6'], marginTop: Spacing['5'] }}
@@ -1573,7 +1639,7 @@ export default function JournalHubScreen() {
               )}
 
               {/* Go Deeper */}
-              {currentDevotional &&
+              {!isSearchingReflections && currentDevotional &&
                 firstUnansweredQuestion &&
                 reflectionQuestions.length > 1 && (
                   <Animated.View
@@ -1633,7 +1699,7 @@ export default function JournalHubScreen() {
                 )}
 
               {/* YOUR DEVOTIONALS — grouped by series */}
-              {(seriesWithEntries.length > 0 || !currentDevotional) && (
+              {!isSearchingReflections && (seriesWithEntries.length > 0 || !currentDevotional) && (
                 <Animated.View
                   entering={reducedMotion ? undefined : FadeIn.duration(Duration.slow).delay(90).easing(Ease.out)}
                   style={{ paddingHorizontal: Spacing['6'], marginTop: Spacing['7'] }}
