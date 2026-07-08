@@ -620,8 +620,10 @@ function DraggableFolderRow({
         >
           {folder.name}
         </Text>
-        {/* Drill-in chevron for folders with subfolders */}
-        {hasChildren && onDrillIn && !showDeleteButton && (
+        {/* Drill-in chevron for folders with subfolders. Independent of the
+            delete affordance — the swipe-move sheet always shows delete, and
+            gating the chevron on it made subfolders unreachable there (WR-08). */}
+        {hasChildren && onDrillIn && (
           <TouchableOpacity
             onPress={onDrillIn}
             hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
