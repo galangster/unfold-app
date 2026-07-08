@@ -713,6 +713,7 @@ export default function JournalHubScreen() {
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
   const notes = useUnfoldStore((s) => s.notes);
+  const deletedNotesCount = useUnfoldStore((s) => s.deletedNotes.length);
   const deleteNote = useUnfoldStore((s) => s.deleteNote);
 
   const { gate, showExclusiveOffer, dismissOffer } = useCreationGate();
@@ -1913,6 +1914,30 @@ export default function JournalHubScreen() {
                   }}
                 />
               </View>
+
+              {/* WR-15: Recently Deleted entry point — only when there is
+                  something to recover. */}
+              {deletedNotesCount > 0 && !searchQuery.trim() && (
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => router.push('/(tabs)/(journal)/recently-deleted')}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Recently deleted, ${deletedNotesCount} ${deletedNotesCount === 1 ? 'note' : 'notes'}`}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    alignSelf: 'flex-end',
+                    gap: 4,
+                    paddingHorizontal: Spacing['6'],
+                    marginTop: Spacing['2'],
+                  }}
+                >
+                  <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 12, color: colors.textHint }}>
+                    {`Recently Deleted (${deletedNotesCount})`}
+                  </Text>
+                  <CaretRightIcon size={12} color={colors.textHint} weight="bold" />
+                </TouchableOpacity>
+              )}
 
               {/* Empty states only — populated notes render as virtualized
                   FlatList rows below this header (WR-24). */}

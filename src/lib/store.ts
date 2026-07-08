@@ -5,6 +5,7 @@ import { persist } from 'zustand/middleware';
 import type { ThemeCategory, DevotionalType } from '../constants/devotional-types';
 import { logBugError } from './bug-logger';
 import { logger } from './logger';
+import { applyUndoActionsWithSync } from './journal-undo';
 import { mmkvStorage } from './mmkv-storage';
 import { createDebouncedJSONStorage } from './debounced-persist-storage';
 import { shouldFlushAutosaveOnAppState } from './autosave-controller';
@@ -697,6 +698,8 @@ interface UnfoldState {
 
   // Notebook
   notes: Note[];
+  /** Recently Deleted retention (WR-15): soft-kept locally for 30 days. */
+  deletedNotes: { note: Note; deletedAt: string }[];
   addNote: (note: Omit<Note, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateNote: (
     id: string,
@@ -704,6 +707,7 @@ interface UnfoldState {
     resurrectOnMissing?: Omit<Note, 'id' | 'createdAt' | 'updatedAt'>,
   ) => void;
   deleteNote: (id: string) => void;
+  restoreNote: (id: string) => void;
   getNotesForScripture: (bookId: number, chapter: number) => Note[];
   getNotesForDevotional: (devotionalId: string, dayNumber?: number) => Note[];
 
@@ -827,6 +831,7 @@ const initialState = {
   lastEveningCompletedDate: null as string | null,
   // Notebook
   notes: [] as Note[],
+  deletedNotes: [] as { note: Note; deletedAt: string }[],
   folders: [] as NoteFolder[],
   // Bible Reader
   bibleHighlights: [] as BibleHighlight[],
@@ -1740,8 +1745,33 @@ export const useUnfoldStore = create<UnfoldState>()(
       deleteNote: (id) =>
         set((state) => {
           const existing = state.notes.find((n) => n.id === id);
-          if (existing) enqueuePersonalDataSyncChange('notes', id, noteSyncData(existing), new Date().toISOString(), true);
-          return { notes: state.notes.filter((n) => n.id !== id) };
+          const now = new Date().toISOString();
+          if (existing) enqueuePersonalDataSyncChange('notes', id, noteSyncData(existing), now, true);
+          return {
+            notes: state.notes.filter((n) => n.id !== id),
+            // WR-15: keep the note recoverable locally for 30 days.
+            deletedNotes: existing
+              ? [{ note: existing, deletedAt: now }, ...state.deletedNotes]
+              : state.deletedNotes,
+          };
+        }),
+
+      restoreNote: (id) =>
+        set((state) => {
+          const entry = state.deletedNotes.find((d) => d.note.id === id);
+          if (!entry) return state;
+          // Reuse the WR-04 restore path: puts the note back AND re-enqueues a
+          // non-deleted sync change so the restore wins LWW server-side.
+          const restored = applyUndoActionsWithSync(
+            { notes: state.notes, folders: state.folders },
+            [{ type: 'note', note: entry.note }],
+            new Date().toISOString(),
+          );
+          return {
+            notes: restored.notes,
+            folders: restored.folders,
+            deletedNotes: state.deletedNotes.filter((d) => d.note.id !== id),
+          };
         }),
 
       getNotesForScripture: (bookId, chapter) => {
@@ -1910,7 +1940,7 @@ export const useUnfoldStore = create<UnfoldState>()(
     {
       name: 'unfold-storage',
       storage: unfoldPersistStorage,
-      version: 38, // v38: Add durable dailyReminderEnabled intent flag
+      version: 39, // v39: Recently Deleted notes retention (WR-15)
       // WR-23: drop session-scoped flags from the persisted blob.
       partialize: (state): PersistedUnfoldState => {
         const { nudgeShownThisSession, streakJustReset, ...persisted } = state;
@@ -1945,6 +1975,17 @@ export const useUnfoldStore = create<UnfoldState>()(
             // Reset session-scoped state on app launch (not persisted across sessions)
             state.nudgeShownThisSession = false;
             state.streakJustReset = false;
+
+            // WR-15: purge Recently Deleted entries older than 30 days.
+            if (Array.isArray(state.deletedNotes) && state.deletedNotes.length > 0) {
+              const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+              const kept = state.deletedNotes.filter(
+                (d) => new Date(d.deletedAt).getTime() > cutoff,
+              );
+              if (kept.length !== state.deletedNotes.length) {
+                state.deletedNotes = kept;
+              }
+            }
 
             // One-time cleanup: remove duplicate highlights introduced by an
             // earlier bug where deserialize was broken and users re-created

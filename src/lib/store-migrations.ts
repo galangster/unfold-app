@@ -541,5 +541,16 @@ if (version < 38) {
   }
 }
 
+if (version < 39) {
+  try {
+    if (!Array.isArray((state as any).deletedNotes)) {
+      (state as any).deletedNotes = [];
+    }
+    logger.log('[store] Migration v38→39: Added Recently Deleted retention');
+  } catch (err) {
+    console.error('[store] Migration v38→39 failed:', err);
+  }
+}
+
 return state;
 }
