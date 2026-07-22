@@ -263,6 +263,29 @@ describe('DevotionalWebView highlight interactions', () => {
     expect(html).toContain("-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif");
   });
 
+  it('renders and escapes the backend string word-study contract without crashing', () => {
+    const stringWordStudy = 'The <Greek> word & "burden\'s" meaning.';
+    const escapedWordStudy = 'The &lt;Greek&gt; word &amp; &quot;burden&#039;s&quot; meaning.';
+    let tree: any;
+
+    act(() => {
+      tree = renderer.create(
+        <DevotionalWebView
+          day={{
+            ...day,
+            wordStudy: stringWordStudy,
+          }}
+          fontSize="medium"
+        />,
+      );
+    });
+
+    const html = getWebViewProps(tree).source.html as string;
+    expect(html).toContain('<h3>Word Study</h3>');
+    expect(html).toContain(escapedWordStudy);
+    expect(html).not.toContain(stringWordStudy);
+  });
+
   it('locates a target bookmark by saved text and reports its document position', () => {
     let tree: any;
     act(() => {

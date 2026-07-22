@@ -1,4 +1,5 @@
 import * as Print from 'expo-print';
+import { isStructuredWordStudy, normalizeWordStudy } from './word-study';
 import * as Sharing from 'expo-sharing';
 import { File, Paths } from 'expo-file-system';
 import { Platform } from 'react-native';
@@ -85,7 +86,7 @@ function generateLinedSpace(lineCount: number, accent: string): string {
 }
 
 // Generate HTML content for the PDF
-function generateDevotionalHTML(devotional: Devotional, options?: PDFExportOptions): string {
+export function generateDevotionalHTML(devotional: Devotional, options?: PDFExportOptions): string {
   const accent = safeAccentColor(options?.accentColor);
   const accentBg = accentLight(accent);
   const accentBorder = accentRgba(accent, 0.22);
@@ -161,12 +162,20 @@ function generateDevotionalHTML(devotional: Devotional, options?: PDFExportOptio
       `
       : '';
 
-    const wordStudyHTML = day.wordStudy
+    const wordStudy = normalizeWordStudy(day.wordStudy);
+    const wordStudyHTML = typeof wordStudy === 'string'
       ? `
         <div class="section word-study">
           <h4>Word Study</h4>
-          <p class="word-study-term"><strong>${escapeHTML(day.wordStudy.term)}</strong> <em>(${escapeHTML(day.wordStudy.original)})</em></p>
-          <p>${escapeHTML(day.wordStudy.meaning)}</p>
+          <p>${escapeHTML(wordStudy)}</p>
+        </div>
+      `
+      : isStructuredWordStudy(wordStudy)
+      ? `
+        <div class="section word-study">
+          <h4>Word Study</h4>
+          <p class="word-study-term"><strong>${escapeHTML(wordStudy.term)}</strong> <em>(${escapeHTML(wordStudy.original)})</em></p>
+          <p>${escapeHTML(wordStudy.meaning)}</p>
         </div>
       `
       : '';

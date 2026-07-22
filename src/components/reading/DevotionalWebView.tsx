@@ -8,6 +8,7 @@ import { FONT_SIZE_VALUES, FontSize, DevotionalDay, Highlight, HighlightColor, B
 import { parseScriptureReferences } from '@/lib/scripture-parser';
 import { logger } from '@/lib/logger';
 import { stripOuterQuotes } from '@/lib/cn';
+import { isStructuredWordStudy, normalizeWordStudy } from '@/lib/word-study';
 
 interface Quote {
   text: string;
@@ -991,7 +992,20 @@ export function DevotionalWebView({
       `
       : '';
 
-    const wordStudyHtml = day.wordStudy
+    const wordStudy = normalizeWordStudy(day.wordStudy);
+    const wordStudyHtml = typeof wordStudy === 'string'
+      ? `
+        <div class="word-study-box">
+          <div class="bookmark-btn" data-type="wordstudy" data-index="0" onclick="handleBookmark(this)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+            </svg>
+          </div>
+          <h3>Word Study</h3>
+          <p>${escapeHtml(wordStudy)}</p>
+        </div>
+      `
+      : isStructuredWordStudy(wordStudy)
       ? `
         <div class="word-study-box">
           <div class="bookmark-btn" data-type="wordstudy" data-index="0" onclick="handleBookmark(this)">
@@ -1001,10 +1015,10 @@ export function DevotionalWebView({
           </div>
           <h3>Word Study</h3>
           <div class="word-term">
-            <span class="term">${escapeHtml(day.wordStudy.term)}</span>
-            <span class="original">(${escapeHtml(day.wordStudy.original)})</span>
+            <span class="term">${escapeHtml(wordStudy.term)}</span>
+            <span class="original">(${escapeHtml(wordStudy.original)})</span>
           </div>
-          <p>${escapeHtml(day.wordStudy.meaning)}</p>
+          <p>${escapeHtml(wordStudy.meaning)}</p>
         </div>
       `
       : '';

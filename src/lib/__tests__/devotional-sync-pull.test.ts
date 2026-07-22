@@ -51,6 +51,7 @@ describe('devotional sync pull recovery', () => {
                 devotionalId: 'devotional-1',
                 reflectionQuestions: ['Where is God naming you today?'],
                 closingPrayer: 'Lord, meet me here.',
+                wordStudy: 'The Hebrew name points to God meeting people personally.',
               },
             },
           },
@@ -89,6 +90,7 @@ describe('devotional sync pull recovery', () => {
       scriptureReference: 'Exodus 3:13–15',
       reflectionQuestions: ['Where is God naming you today?'],
       closingPrayer: 'Lord, meet me here.',
+      wordStudy: 'The Hebrew name points to God meeting people personally.',
       isRead: false,
       updatedAt: '2026-04-25T11:58:00.000Z', // WR-25: mapped rows store clientUpdatedAt as local updatedAt (same-clock LWW basis),
     });

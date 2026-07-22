@@ -23,6 +23,7 @@ import type { NudgeType, NudgeImpression } from './nudges';
 import { NUDGE_INITIAL_STATE } from './nudges';
 import { applyStreakRead, getWeekStart, reconcileStreakState } from './streak-helpers';
 import { repairRehydratedState } from './store-rehydrate-repair';
+import type { WordStudy } from './word-study';
 import {
   bibleHighlightSyncData,
   bibleReadingPositionSyncData,
@@ -215,7 +216,8 @@ export interface DevotionalDay {
   crossReferences?: CrossReference[];
   reflectionQuestions?: string[];
   contextNote?: string;
-  wordStudy?: { term: string; original: string; meaning: string };
+  /** Backend prose or the legacy structured mobile shape. */
+  wordStudy?: WordStudy;
   closingPrayer?: string;
   // Phase 2: Midday check-in question + chips (generated with devotional)
   checkInQuestion?: string;

@@ -1,6 +1,7 @@
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from './api-config';
 import type { Devotional, DevotionalDay } from './store';
 import type { SyncPullResponse, SyncPulledRecord } from './sync-types';
+import { normalizeWordStudy } from './word-study';
 
 type PulledDevotionalMetadata = {
   id: string;
@@ -66,8 +67,7 @@ function mapPulledDevotionalDay(record: SyncPulledRecord): DevotionalDay | null 
 
   const quotes = Array.isArray(content.quotes) ? content.quotes as DevotionalDay['quotes'] : undefined;
   const crossReferences = Array.isArray(content.crossReferences) ? content.crossReferences as DevotionalDay['crossReferences'] : undefined;
-  const wordStudy = asRecord(content.wordStudy);
-  const hasWordStudy = typeof wordStudy.term === 'string' && typeof wordStudy.original === 'string' && typeof wordStudy.meaning === 'string';
+  const wordStudy = normalizeWordStudy(content.wordStudy);
 
   return {
     ...content,
@@ -86,9 +86,7 @@ function mapPulledDevotionalDay(record: SyncPulledRecord): DevotionalDay | null 
     crossReferences,
     reflectionQuestions: asStringArray(content.reflectionQuestions),
     contextNote: asString(content.contextNote),
-    wordStudy: hasWordStudy
-      ? { term: wordStudy.term, original: wordStudy.original, meaning: wordStudy.meaning } as DevotionalDay['wordStudy']
-      : undefined,
+    wordStudy,
     closingPrayer: asString(content.closingPrayer),
     checkInQuestion: asString(content.checkInQuestion),
     checkInChips: asStringArray(content.checkInChips),
