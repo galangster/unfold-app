@@ -29,6 +29,14 @@ import {
   type OnboardingGenerationResult,
   type OnboardingSubmitResult,
 } from '@/lib/onboarding-generation-result';
+import {
+  decideOnboardingSeguePoll,
+  runOnboardingSampleFallback,
+} from '@/lib/onboarding-segue-poll';
+import {
+  getOnboardingSampleJob,
+  saveOnboardingSampleJob,
+} from '@/lib/onboarding-sample-job-store';
 import type { ColorTheme } from '@/constants/colors';
 
 /* ── Types ─────────────────────────────────────────────────────────── */
@@ -94,7 +102,10 @@ const DOT_SIZE = 5;
 const ORBIT_PERIOD_MS = 3000;
 
 const POLL_INTERVAL_MS = 3000;
-const POLL_TIMEOUT_MS = 90_000;
+// The onboarding sample can take a few minutes when the backend retries an LLM
+// call. 90s was too tight — a job completing at 3m10s was declared a timeout one
+// tick after it finished. Give generation real headroom.
+const POLL_TIMEOUT_MS = 240_000;
 const MAX_CONSECUTIVE_POLL_ERRORS = 4;
 
 function isExistingOnboardingSampleError(error: unknown): boolean {
@@ -441,6 +452,13 @@ export function DevotionalSegue({
 
     try {
       const result = normalizeOnboardingSubmitResult(await submitFallback());
+      // Persist so a force-quit before completion can resume THIS job instead
+      // of submitting a duplicate on relaunch.
+      saveOnboardingSampleJob({
+        jobId: result.jobId,
+        devotionalId: result.devotionalId,
+        deviceId: getDeviceId(),
+      });
       setActiveJobId(result.jobId);
       setActiveDevotionalId(result.devotionalId);
       setGenerationIssue(null);
@@ -458,11 +476,30 @@ export function DevotionalSegue({
     }
   }, [recoverCompletedOnboardingSample, submitFallback]);
 
+  /* ── Fallback startup: resume persisted job → recover completed → submit ── */
+  const runFallbackStartup = useCallback(async () => {
+    const persisted = getOnboardingSampleJob({ deviceId: getDeviceId() });
+    await runOnboardingSampleFallback({
+      persistedJobId: persisted?.jobId ?? null,
+      usePersistedJob: (jobId) => {
+        setActiveJobId(jobId);
+        if (persisted?.devotionalId) {
+          setActiveDevotionalId(persisted.devotionalId);
+        }
+        setGenerationIssue(null);
+        consecutivePollErrorsRef.current = 0;
+        setPollCycle((value) => value + 1);
+      },
+      recoverCompleted: recoverCompletedOnboardingSample,
+      submitFallback: startFallbackSubmission,
+    });
+  }, [recoverCompletedOnboardingSample, startFallbackSubmission]);
+
   /* ── Fallback: submit job if none provided ── */
   useEffect(() => {
     if (activeJobId || fallbackAttemptedRef.current || !submitFallback) return;
     fallbackAttemptedRef.current = true;
-    startFallbackSubmission().catch(() => {
+    runFallbackStartup().catch(() => {
       setGenerationIssue({
         kind: 'submit',
         title: 'We couldn’t start your devotional yet.',
@@ -471,7 +508,7 @@ export function DevotionalSegue({
         canRetry: true,
       });
     });
-  }, [activeJobId, startFallbackSubmission, submitFallback]);
+  }, [activeJobId, runFallbackStartup, submitFallback]);
 
   /* ── Polling ── */
   useEffect(() => {
@@ -506,31 +543,42 @@ export function DevotionalSegue({
 
     const poll = async () => {
       if (pollInFlightRef.current || readyCalledRef.current) return;
-      const startedAt = pollStartedAtRef.current ?? Date.now();
-      if (Date.now() - startedAt > POLL_TIMEOUT_MS) {
-        stopWithIssue({
-          kind: 'timeout',
-          title: 'This is taking longer than expected.',
-          message: 'Your devotional may still be finishing. Tap below and we’ll keep checking instead of leaving you on a spinner.',
-          actionLabel: 'Keep checking',
-          canRetry: true,
-        });
-        return;
-      }
 
+      // Fetch FIRST, then decide. The deadline is consulted only when the job
+      // is still non-terminal (see decideOnboardingSeguePoll) — so a job that
+      // completes at or after the deadline still lands as ready instead of
+      // being declared a timeout one tick too late.
       pollInFlightRef.current = true;
       try {
         const response = await pollJobStatus(activeJobId);
         if (cancelled) return;
         consecutivePollErrorsRef.current = 0;
 
-        if (response.status === 'complete') {
-          const normalizedResult = normalizeOnboardingGenerationJobResult(
-            response,
-            activeDevotionalId,
-          );
+        const normalizedResult =
+          response.status === 'complete'
+            ? normalizeOnboardingGenerationJobResult(response, activeDevotionalId)
+            : null;
 
-          if (!normalizedResult) {
+        const startedAt = pollStartedAtRef.current ?? Date.now();
+        const decision = decideOnboardingSeguePoll({
+          status: response.status,
+          hasNormalizedResult: Boolean(normalizedResult),
+          elapsedMs: Date.now() - startedAt,
+          timeoutMs: POLL_TIMEOUT_MS,
+          canRetry: response.canRetry,
+          hasFallback: Boolean(submitFallback),
+        });
+
+        switch (decision.kind) {
+          case 'ready':
+            if (normalizedResult && !readyCalledRef.current) {
+              readyCalledRef.current = true;
+              onDevotionalReady(normalizedResult);
+              setIsReady(true);
+            }
+            clearPolling();
+            return;
+          case 'invalid':
             stopWithIssue({
               kind: 'invalid',
               title: 'Your devotional finished, but we couldn’t open it.',
@@ -539,25 +587,27 @@ export function DevotionalSegue({
               canRetry: true,
             });
             return;
-          }
-
-          if (!readyCalledRef.current) {
-            readyCalledRef.current = true;
-            onDevotionalReady(normalizedResult);
-            setIsReady(true);
-          }
-          clearPolling();
-          return;
-        }
-
-        if (response.status === 'failed') {
-          stopWithIssue({
-            kind: 'failed',
-            title: 'We couldn’t finish that reading.',
-            message: 'Something interrupted generation. Try again and we’ll restart it safely.',
-            actionLabel: 'Try again',
-            canRetry: response.canRetry !== false || Boolean(submitFallback),
-          });
+          case 'failed':
+            stopWithIssue({
+              kind: 'failed',
+              title: 'We couldn’t finish that reading.',
+              message: 'Something interrupted generation. Try again and we’ll restart it safely.',
+              actionLabel: 'Try again',
+              canRetry: decision.canRetry,
+            });
+            return;
+          case 'timeout':
+            stopWithIssue({
+              kind: 'timeout',
+              title: 'This is taking longer than expected.',
+              message: 'Your devotional may still be finishing. Tap below and we’ll keep checking instead of leaving you on a spinner.',
+              actionLabel: 'Keep checking',
+              canRetry: true,
+            });
+            return;
+          case 'waiting':
+          default:
+            return;
         }
       } catch {
         if (cancelled) return;

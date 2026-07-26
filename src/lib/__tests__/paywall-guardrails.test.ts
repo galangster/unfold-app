@@ -3,6 +3,8 @@ import {
   resolvePaywallCompletionNavigation,
   resolvePurchaseOutcome,
   resolveRestoreOutcome,
+  runGuardedPaywallFlow,
+  PAYWALL_GENERIC_ERROR_MESSAGE,
 } from '../paywall-guardrails';
 
 describe('paywall guardrails', () => {
@@ -106,6 +108,54 @@ describe('paywall guardrails', () => {
           data: { entitlements: { active: { 'Unfold Premium': { identifier: 'Unfold Premium' } } } },
         }),
       ).toEqual({ kind: 'success' });
+    });
+  });
+
+  describe('runGuardedPaywallFlow (FIX 4: CTA spinner never sticks)', () => {
+    it('clears loading and surfaces an error when the flow rejects', async () => {
+      const setLoading = jest.fn();
+      const setError = jest.fn();
+      const onError = jest.fn();
+
+      await runGuardedPaywallFlow({
+        run: async () => {
+          throw new Error('purchasePackage rejected');
+        },
+        setLoading,
+        setError,
+        onError,
+      });
+
+      expect(setError).toHaveBeenCalledWith(PAYWALL_GENERIC_ERROR_MESSAGE);
+      expect(onError).toHaveBeenCalledTimes(1);
+      // Loading MUST be reset to false — the stuck-spinner bug.
+      expect(setLoading).toHaveBeenLastCalledWith(false);
+    });
+
+    it('uses a custom error message when provided', async () => {
+      const setError = jest.fn();
+      await runGuardedPaywallFlow({
+        run: async () => {
+          throw new Error('nope');
+        },
+        setLoading: jest.fn(),
+        setError,
+        errorMessage: 'Could not restore purchases. Please try again.',
+      });
+      expect(setError).toHaveBeenCalledWith('Could not restore purchases. Please try again.');
+    });
+
+    it('leaves the success path alone but still clears loading', async () => {
+      const setLoading = jest.fn();
+      const setError = jest.fn();
+      const run = jest.fn(async () => {});
+
+      await runGuardedPaywallFlow({ run, setLoading, setError });
+
+      expect(run).toHaveBeenCalledTimes(1);
+      // No error surfaced by the guard on success (run owns non-throwing branches).
+      expect(setError).not.toHaveBeenCalled();
+      expect(setLoading).toHaveBeenCalledWith(false);
     });
   });
 });

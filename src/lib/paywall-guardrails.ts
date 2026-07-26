@@ -91,3 +91,32 @@ export function resolveRestoreOutcome(
 
   return { kind: 'success' };
 }
+
+/** User-facing fallback when a purchase/restore rejects unexpectedly. */
+export const PAYWALL_GENERIC_ERROR_MESSAGE = 'Something went wrong. Please try again.';
+
+/**
+ * Run a paywall purchase/restore flow with guaranteed loading + error hygiene.
+ *
+ * Without this, a rejected purchasePackage / restorePurchases / fetchQuery left
+ * `isLoading` stuck at true forever, freezing the CTA on a permanent spinner.
+ * The guard ALWAYS clears loading (finally) and surfaces a user-facing error
+ * message on any thrown rejection, while leaving the success path untouched —
+ * `run` owns all the non-throwing branches (cancellation, outcome messages).
+ */
+export async function runGuardedPaywallFlow(params: {
+  run: () => Promise<void>;
+  setLoading: (value: boolean) => void;
+  setError: (message: string | null) => void;
+  onError?: (error: unknown) => void;
+  errorMessage?: string;
+}): Promise<void> {
+  try {
+    await params.run();
+  } catch (error) {
+    params.onError?.(error);
+    params.setError(params.errorMessage ?? PAYWALL_GENERIC_ERROR_MESSAGE);
+  } finally {
+    params.setLoading(false);
+  }
+}

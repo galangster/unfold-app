@@ -69,6 +69,12 @@ import { Current } from '@/components/Current';
 import { ScatterTitle } from '@/components/ScatterTitle';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { submitGenerationJob } from '@/lib/generation-api';
+import { getDeviceId } from '@/lib/mmkv-storage';
+import {
+  saveOnboardingSampleJob,
+  getOnboardingSampleJob,
+  clearOnboardingSampleJob,
+} from '@/lib/onboarding-sample-job-store';
 import {
   buildOnboardingSampleGenerationRequest,
   getContextualSituationChips,
@@ -685,8 +691,16 @@ export default function OnboardingScreen() {
   const [showListScrollHint, setShowListScrollHint] = useState(true);
   const inputOpacity = useSharedValue(0);
   const scrollViewRef = useRef<ScrollView>(null);
-  const onboardingJobIdRef = useRef<string | null>(null);
-  const onboardingSubmittedDevotionalIdRef = useRef<string | null>(null);
+  // Restore a persisted onboarding sample job (survives force-quit + relaunch):
+  // the segue then resumes the SAME job instead of submitting a duplicate. Read
+  // once via a lazy initializer so getDeviceId() isn't hit on every render.
+  const [restoredSampleJob] = useState(() =>
+    getOnboardingSampleJob({ deviceId: getDeviceId() }),
+  );
+  const onboardingJobIdRef = useRef<string | null>(restoredSampleJob?.jobId ?? null);
+  const onboardingSubmittedDevotionalIdRef = useRef<string | null>(
+    restoredSampleJob?.devotionalId ?? null,
+  );
   const onboardingDevotionalResultRef = useRef<any>(null);
   const [commitmentLevel, setCommitmentLevel] = useState<string>('');
   const [onboardingDevotionalDay, setOnboardingDevotionalDay] = useState<any>(null);
@@ -962,6 +976,9 @@ export default function OnboardingScreen() {
   // Complete onboarding: save data + navigate to generating screen
   const proceedToGeneration = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    // Onboarding is finishing — the sample job (if any) is done with; clear the
+    // persisted record so a future onboarding can't resume a stale job.
+    clearOnboardingSampleJob();
     saveOnboardingData();
     router.replace('/generating');
   }, [router, saveOnboardingData]);
@@ -1093,6 +1110,7 @@ export default function OnboardingScreen() {
       })).then(({ jobId, devotionalId }) => {
         onboardingJobIdRef.current = jobId;
         onboardingSubmittedDevotionalIdRef.current = devotionalId ?? null;
+        saveOnboardingSampleJob({ jobId, devotionalId: devotionalId ?? null, deviceId: getDeviceId() });
         console.log('[Onboarding] Sample generation triggered, jobId:', jobId);
       }).catch((err) => {
         console.warn('[Onboarding] Background sample generation failed:', err);
@@ -2503,6 +2521,7 @@ export default function OnboardingScreen() {
             }));
             onboardingJobIdRef.current = jobId;
             onboardingSubmittedDevotionalIdRef.current = devotionalId ?? null;
+            saveOnboardingSampleJob({ jobId, devotionalId: devotionalId ?? null, deviceId: getDeviceId() });
             return { jobId, devotionalId };
           }}
           onDevotionalReady={(result) => {
@@ -2512,6 +2531,8 @@ export default function OnboardingScreen() {
               setOnboardingDevotionalDay(result.devotionalDay);
               setOnboardingDevotionalId(result.devotionalId);
             }
+            // The sample is delivered — the persisted job is no longer needed.
+            clearOnboardingSampleJob();
           }}
           onContinue={advanceToNextStep}
         />
