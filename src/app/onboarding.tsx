@@ -83,6 +83,7 @@ import {
   getOnboardingStepLayoutMode,
   shouldShowOnboardingTopContinue,
   shouldStartOnboardingSampleGeneration,
+  type OnboardingSampleGenerationRequest,
 } from '@/lib/onboarding-step-helpers';
 import { ShockStat } from '@/components/onboarding/ShockStat';
 import { GrowthGraph } from '@/components/onboarding/GrowthGraph';
@@ -701,6 +702,7 @@ export default function OnboardingScreen() {
   const onboardingSubmittedDevotionalIdRef = useRef<string | null>(
     restoredSampleJob?.devotionalId ?? null,
   );
+  const onboardingSubmittedRequestRef = useRef<OnboardingSampleGenerationRequest | null>(null);
   const onboardingDevotionalResultRef = useRef<any>(null);
   const [commitmentLevel, setCommitmentLevel] = useState<string>('');
   const [onboardingDevotionalDay, setOnboardingDevotionalDay] = useState<any>(null);
@@ -1099,22 +1101,31 @@ export default function OnboardingScreen() {
 
     // Fire-and-forget: trigger the one-off onboarding sample devotional after aspiration
     // so content generates in the background while the user continues through buffer screens.
-    if (shouldStartOnboardingSampleGeneration({
-      currentStepId,
-      existingJobId: onboardingJobIdRef.current,
-      existingDevotionalDay: onboardingDevotionalDay,
-    })) {
-      submitGenerationJob(buildOnboardingSampleGenerationRequest({
+    if (currentStepId === 'aspiration') {
+      const nextSampleGenerationRequest = buildOnboardingSampleGenerationRequest({
         answers: data,
         existingUser,
-      })).then(({ jobId, devotionalId }) => {
-        onboardingJobIdRef.current = jobId;
-        onboardingSubmittedDevotionalIdRef.current = devotionalId ?? null;
-        saveOnboardingSampleJob({ jobId, devotionalId: devotionalId ?? null, deviceId: getDeviceId() });
-        console.log('[Onboarding] Sample generation triggered, jobId:', jobId);
-      }).catch((err) => {
-        console.warn('[Onboarding] Background sample generation failed:', err);
       });
+      if (shouldStartOnboardingSampleGeneration({
+        currentStepId,
+        existingJobId: onboardingJobIdRef.current,
+        existingDevotionalDay: onboardingDevotionalDay,
+        submittedRequest: onboardingSubmittedRequestRef.current,
+        nextRequest: nextSampleGenerationRequest,
+      })) {
+        // Accepted race (~30-45s): if a changed-context resubmit lands while the
+        // original is pending/processing, backend dedupe can return its old jobId,
+        // leaving this session on the stale sample.
+        submitGenerationJob(nextSampleGenerationRequest).then(({ jobId, devotionalId }) => {
+          onboardingJobIdRef.current = jobId;
+          onboardingSubmittedDevotionalIdRef.current = devotionalId ?? null;
+          onboardingSubmittedRequestRef.current = nextSampleGenerationRequest;
+          saveOnboardingSampleJob({ jobId, devotionalId: devotionalId ?? null, deviceId: getDeviceId() });
+          console.log('[Onboarding] Sample generation triggered, jobId:', jobId);
+        }).catch((err) => {
+          console.warn('[Onboarding] Background sample generation failed:', err);
+        });
+      }
     }
 
     // Save companion name when leaving the feature summary step (companion naming is inside the carousel)
@@ -2515,12 +2526,14 @@ export default function OnboardingScreen() {
           jobId={onboardingJobIdRef.current}
           devotionalId={onboardingSubmittedDevotionalIdRef.current}
           submitFallback={async () => {
-            const { jobId, devotionalId } = await submitGenerationJob(buildOnboardingSampleGenerationRequest({
+            const fallbackRequest = buildOnboardingSampleGenerationRequest({
               answers: data,
               existingUser,
-            }));
+            });
+            const { jobId, devotionalId } = await submitGenerationJob(fallbackRequest);
             onboardingJobIdRef.current = jobId;
             onboardingSubmittedDevotionalIdRef.current = devotionalId ?? null;
+            onboardingSubmittedRequestRef.current = fallbackRequest;
             saveOnboardingSampleJob({ jobId, devotionalId: devotionalId ?? null, deviceId: getDeviceId() });
             return { jobId, devotionalId };
           }}
