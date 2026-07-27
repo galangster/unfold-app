@@ -276,6 +276,18 @@ describe('onboarding step helpers', () => {
       ).toBe(true);
     });
 
+    it('resubmits when a job was restored from storage with no known submitted request', () => {
+      expect(
+        shouldStartOnboardingSampleGeneration({
+          currentStepId: 'aspiration',
+          existingJobId: 'job-restored',
+          existingDevotionalDay: null,
+          submittedRequest: null,
+          nextRequest: buildRequest(),
+        }),
+      ).toBe(true);
+    });
+
     it('does not resubmit an identical rebuilt request when a sample job exists', () => {
       expect(
         shouldStartOnboardingSampleGeneration({

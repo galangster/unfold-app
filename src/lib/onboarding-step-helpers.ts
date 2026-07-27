@@ -344,7 +344,11 @@ export function shouldStartOnboardingSampleGeneration({
 }): boolean {
   if (currentStepId !== 'aspiration' || existingDevotionalDay) return false;
   if (!existingJobId) return true;
-  if (!submittedRequest) return false;
+  // A job restored from MMKV after relaunch has no in-memory submitted request,
+  // so we can't tell whether this walk-through's answers match it. Resubmit and
+  // let the backend's payload-aware dedupe answer: identical answers return the
+  // same job, changed answers start a fresh one — no duplicate generation either way.
+  if (!submittedRequest) return true;
 
   return stableStringify(submittedRequest) !== stableStringify(nextRequest);
 }
