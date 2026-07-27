@@ -313,14 +313,38 @@ export function buildOnboardingSampleGenerationRequest({
   };
 }
 
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(',')}]`;
+  }
+  if (value !== null && typeof value === 'object') {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => {
+        if (left === right) return 0;
+        return left < right ? -1 : 1;
+      })
+      .map(([key, nestedValue]) => `${JSON.stringify(key)}:${stableStringify(nestedValue)}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value) ?? 'undefined';
+}
+
 export function shouldStartOnboardingSampleGeneration({
   currentStepId,
   existingJobId,
   existingDevotionalDay,
+  submittedRequest,
+  nextRequest,
 }: {
   currentStepId: string;
   existingJobId?: string | null;
   existingDevotionalDay?: unknown | null;
+  submittedRequest?: OnboardingSampleGenerationRequest | null;
+  nextRequest: OnboardingSampleGenerationRequest;
 }): boolean {
-  return currentStepId === 'aspiration' && !existingJobId && !existingDevotionalDay;
+  if (currentStepId !== 'aspiration' || existingDevotionalDay) return false;
+  if (!existingJobId) return true;
+  if (!submittedRequest) return false;
+
+  return stableStringify(submittedRequest) !== stableStringify(nextRequest);
 }

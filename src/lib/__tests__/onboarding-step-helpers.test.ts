@@ -198,6 +198,11 @@ describe('onboarding step helpers', () => {
       growthGoals: ['pray more honestly'],
       obstacles: ['anxiety'],
     };
+    const buildRequest = (overrides: Partial<typeof answers> = {}) =>
+      buildOnboardingSampleGenerationRequest({
+        answers: { ...answers, ...overrides },
+        existingUser: { name: 'Nicholas', aboutMe: 'Fallback', bibleTranslation: 'ESV' },
+      });
 
     it('lets the backend own onboarding sample devotional identity and uses onboarding job type', () => {
       const request = buildOnboardingSampleGenerationRequest({
@@ -259,28 +264,109 @@ describe('onboarding step helpers', () => {
       });
     });
 
-    it('dedupes repeated transitions out of aspiration once a sample job exists', () => {
+    it('submits on the first transition out of aspiration when no sample job exists', () => {
       expect(
         shouldStartOnboardingSampleGeneration({
           currentStepId: 'aspiration',
           existingJobId: null,
           existingDevotionalDay: null,
+          submittedRequest: null,
+          nextRequest: buildRequest(),
         }),
       ).toBe(true);
+    });
 
+    it('does not resubmit an identical rebuilt request when a sample job exists', () => {
       expect(
         shouldStartOnboardingSampleGeneration({
           currentStepId: 'aspiration',
           existingJobId: 'job-1',
           existingDevotionalDay: null,
+          submittedRequest: buildRequest(),
+          nextRequest: buildRequest(),
         }),
       ).toBe(false);
+    });
 
+    it('resubmits when relationshipWithGod changes', () => {
       expect(
         shouldStartOnboardingSampleGeneration({
           currentStepId: 'aspiration',
-          existingJobId: null,
+          existingJobId: 'job-1',
+          existingDevotionalDay: null,
+          submittedRequest: buildRequest(),
+          nextRequest: buildRequest({ relationshipWithGod: 'close' }),
+        }),
+      ).toBe(true);
+    });
+
+    it('resubmits when growthGoals are added, removed, or reordered', () => {
+      const submittedRequest = buildRequest({
+        growthGoals: ['pray more honestly', 'study scripture'],
+      });
+      const changedGrowthGoals = [
+        ['pray more honestly', 'study scripture', 'serve consistently'],
+        ['pray more honestly'],
+        ['study scripture', 'pray more honestly'],
+      ];
+
+      changedGrowthGoals.forEach((growthGoals) => {
+        expect(
+          shouldStartOnboardingSampleGeneration({
+            currentStepId: 'aspiration',
+            existingJobId: 'job-1',
+            existingDevotionalDay: null,
+            submittedRequest,
+            nextRequest: buildRequest({ growthGoals }),
+          }),
+        ).toBe(true);
+      });
+    });
+
+    it('resubmits when obstacles change', () => {
+      expect(
+        shouldStartOnboardingSampleGeneration({
+          currentStepId: 'aspiration',
+          existingJobId: 'job-1',
+          existingDevotionalDay: null,
+          submittedRequest: buildRequest(),
+          nextRequest: buildRequest({ obstacles: ['busyness'] }),
+        }),
+      ).toBe(true);
+    });
+
+    it('resubmits when aspiration text changes', () => {
+      expect(
+        shouldStartOnboardingSampleGeneration({
+          currentStepId: 'aspiration',
+          existingJobId: 'job-1',
+          existingDevotionalDay: null,
+          submittedRequest: buildRequest(),
+          nextRequest: buildRequest({ aspiration: 'I want to trust God in uncertainty' }),
+        }),
+      ).toBe(true);
+    });
+
+    it('does not resubmit changed answers after a devotional day exists', () => {
+      expect(
+        shouldStartOnboardingSampleGeneration({
+          currentStepId: 'aspiration',
+          existingJobId: 'job-1',
           existingDevotionalDay: { id: 'day-1' },
+          submittedRequest: buildRequest(),
+          nextRequest: buildRequest({ obstacles: ['busyness'] }),
+        }),
+      ).toBe(false);
+    });
+
+    it('does not submit changed answers from a non-aspiration step', () => {
+      expect(
+        shouldStartOnboardingSampleGeneration({
+          currentStepId: 'growthGoals',
+          existingJobId: 'job-1',
+          existingDevotionalDay: null,
+          submittedRequest: buildRequest(),
+          nextRequest: buildRequest({ growthGoals: ['study scripture'] }),
         }),
       ).toBe(false);
     });
