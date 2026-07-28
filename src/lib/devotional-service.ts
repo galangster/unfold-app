@@ -968,7 +968,10 @@ function buildUserPrompt(
 ${context.previousSeriesTitles.map(t => `   - "${t}"`).join('\n')}`
     : '';
 
-  const titleInstruction = isFirstBatch
+  // When a series title already exists (later batches, or batch 1 with an arc
+  // plan from generateSeriesArc), pin it instead of asking for a new one —
+  // this also drops the large title-creativity scaffolding from the prompt.
+  const titleInstruction = isFirstBatch && !seriesTitle
     ? `1. An evocative, poetic title for the whole series (3-6 words)
    TITLE REQUIREMENTS:
    - Vary structure across different devotionals: noun phrases ("The Quiet Work"), imperatives ("Hold Fast"), single evocative words with modifier ("Unshaken"), metaphorical images ("Salt & Light"), questions without question marks ("Where Mercy Lives"), fragments ("Before the Dawn"), or occasional "When" phrases ("When the Ground Shifts")
@@ -1114,6 +1117,173 @@ export function resolvePersonaForGeneration(context: GenerationContext): {
 }
 
 // Generate a single batch of days
+// ---------------------------------------------------------------------------
+// SERIES ARC PLANNING (Opus orchestration pass)
+//
+// One small high-capability call plans the whole series before any writing
+// happens: series title, through-line, and a per-day outline (title, scripture,
+// theme, movement). The outline is injected into every Sonnet writing batch so
+// later batches can see the plan instead of only the titles already used.
+// Strictly best-effort: any failure (network, backend model rejection, bad
+// JSON) returns null and generation proceeds exactly as before.
+// ---------------------------------------------------------------------------
+
+export interface SeriesArcDay {
+  dayNumber: number;
+  title: string;
+  scriptureReference: string;
+  theme: string;
+  movement: string;
+}
+
+export interface SeriesArc {
+  seriesTitle: string;
+  throughLine: string;
+  days: SeriesArcDay[];
+}
+
+export async function generateSeriesArc(
+  context: GenerationContext,
+  resolvedPersona: { primary: PersonaTrait; secondary: PersonaTrait; templateSeed: number }
+): Promise<SeriesArc | null> {
+  try {
+    const scriptureVariety = context.usedScriptureHistory && context.usedScriptureHistory.length > 0
+      ? analyzeScriptureVariety(context.usedScriptureHistory)
+      : null;
+
+    const previousSeriesTitlesBlock = context.previousSeriesTitles && context.previousSeriesTitles.length > 0
+      ? `\nPREVIOUSLY USED SERIES TITLES (do NOT reuse these titles or their central metaphors):
+${context.previousSeriesTitles.map(t => `- "${t}"`).join('\n')}`
+      : '';
+
+    const systemPrompt = `You are a master devotional series architect. You design the macro structure of personalized Christian devotional series: the emotional arc, the scriptural journey, and the naming. You do NOT write the devotional content itself — a writer will follow your plan. Respond with valid JSON only.`;
+
+    const userPrompt = `Plan a ${context.devotionalLength}-day devotional series arc for this reader.
+
+--- READER CONTEXT (inform theme/scripture selection; the plan itself stays universal) ---
+About them: ${sanitizeForPrompt(context.aboutMe, 300)}
+What they're walking through: ${sanitizeForPrompt(context.currentSituation, 300)}
+How they're feeling: ${sanitizeForPrompt(context.emotionalState, 200)}
+How this shows up in their faith: ${sanitizeForPrompt(context.faithImpact, 200)}
+What they're seeking: ${sanitizeForPrompt(context.spiritualSeeking, 200)}
+--- END READER CONTEXT ---
+${getThemeGuidance(context)}${getTypeGuidance(context)}
+WRITING VOICE (the writer will use this — factor it into pacing): primary=${resolvedPersona.primary}, secondary=${resolvedPersona.secondary}
+
+SERIES TITLE REQUIREMENTS:
+- Evocative, poetic, 3-6 words. Surprising, not generic — it should feel like a book worth picking up.
+- Vary structure: noun phrases, imperatives, single evocative words with modifier, metaphorical images, questions without question marks, fragments.
+- BANNED: "The [Weight/Burden] You [Carry/Hold]", "What You've Been [Carrying/Searching]", "[Bread/Water/Light] for the [Morning/Journey]", "Learning to [Trust/Let Go]", generic journey/path/road metaphors, clichés like "Finding Peace".${previousSeriesTitlesBlock}
+
+ARC REQUIREMENTS:
+- Design a real emotional/spiritual progression across the ${context.devotionalLength} days: opening (meet the reader where they are) → deepening → a turning point with honest challenge → resolution and sending. Assign each day a "movement" label from: opening, deepening, turning, resolution.
+- Day titles: never start consecutive titles with the same word; vary structures (imperatives, noun phrases, single words, questions, metaphors); no title may echo the series title's imagery more than once.
+- Scripture: one primary reference per day (e.g. "Habakkuk 3:17-19"). Range across the whole canon — avoid over-relying on Psalms, Romans, and John. Each day's scripture must genuinely fit that day's theme, not just be famous.${scriptureVariety ? `\n${scriptureVariety.varietyDirective}` : ''}
+- Themes: one short phrase per day naming what that day is actually about; days must build on each other, not repeat.
+
+Respond ONLY with valid JSON in exactly this format:
+{"seriesTitle": "...", "throughLine": "one sentence naming the journey this series takes the reader on", "days": [{"dayNumber": 1, "title": "...", "scriptureReference": "...", "theme": "...", "movement": "opening"}]}
+The "days" array must contain exactly ${context.devotionalLength} entries, numbered 1 through ${context.devotionalLength}.`;
+
+    logger.log(`[Devotional] generateSeriesArc: planning ${context.devotionalLength}-day arc (userPrompt=${userPrompt.length}chars)`);
+    void logBugEvent('devotional-service', 'arc-request-started', {
+      days: context.devotionalLength,
+    });
+
+    const backendResult = await postJsonWithBackendFallback(
+      '/api/generate/devotional',
+      {
+        model: 'claude-opus-5',
+        max_tokens: 3000,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }],
+      },
+      { timeoutMs: 60000 }
+    );
+
+    if (!backendResult.response.ok) {
+      const errorText = await backendResult.response.text();
+      logger.warn(`[Devotional] Arc request failed (${backendResult.response.status}); continuing without arc. ${errorText.slice(0, 200)}`);
+      void logBugEvent('devotional-service', 'arc-request-failed', {
+        status: backendResult.response.status,
+        snippet: errorText.slice(0, 200),
+      }, 'warn');
+      return null;
+    }
+
+    const data = JSON.parse(await backendResult.response.text()) as Record<string, unknown>;
+    if ('error' in data && data.error) {
+      logger.warn('[Devotional] Arc backend returned 200 with error field; continuing without arc.');
+      return null;
+    }
+    const content = (data as { content?: { text?: string }[] }).content?.[0]?.text;
+    if (typeof content !== 'string' || content.length === 0) return null;
+
+    let parsed: SeriesArc;
+    try {
+      parsed = JSON.parse(content) as SeriesArc;
+    } catch {
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) return null;
+      parsed = JSON.parse(jsonMatch[0].replace(/,\s*}/g, '}').replace(/,\s*]/g, ']')) as SeriesArc;
+    }
+
+    if (typeof parsed.seriesTitle !== 'string' || parsed.seriesTitle.trim().length === 0) {
+      return null;
+    }
+
+    // Validate the day outline; a bad outline degrades to a title-only arc
+    // (still pins the series title, just doesn't steer per-day content).
+    const validDays = Array.isArray(parsed.days)
+      && parsed.days.length === context.devotionalLength
+      && parsed.days.every((d, i) =>
+        d && typeof d.title === 'string' && d.title.length > 0
+        && typeof d.scriptureReference === 'string' && d.scriptureReference.length > 0
+        && typeof d.theme === 'string'
+        && (typeof d.dayNumber !== 'number' || d.dayNumber === i + 1));
+
+    const arc: SeriesArc = {
+      seriesTitle: parsed.seriesTitle.trim(),
+      throughLine: typeof parsed.throughLine === 'string' ? parsed.throughLine : '',
+      days: validDays
+        ? parsed.days.map((d, i) => ({
+            ...d,
+            dayNumber: i + 1,
+            movement: typeof d.movement === 'string' ? d.movement : '',
+          }))
+        : [],
+    };
+
+    logger.log(`[Devotional] Series arc ready: "${arc.seriesTitle}" (${arc.days.length} planned days)`);
+    void logBugEvent('devotional-service', 'arc-request-succeeded', {
+      titleOnly: arc.days.length === 0,
+    });
+    return arc;
+  } catch (error) {
+    logger.warn('[Devotional] generateSeriesArc failed (non-fatal):', error instanceof Error ? error.message : String(error));
+    void logBugEvent('devotional-service', 'arc-request-failed', {
+      snippet: error instanceof Error ? error.message.slice(0, 200) : 'unknown',
+    }, 'warn');
+    return null;
+  }
+}
+
+/** Render the arc outline as a prompt block for a writing batch. */
+function buildArcBlock(arc: SeriesArc, startDay: number, endDay: number): string {
+  if (arc.days.length === 0) return '';
+  const planLines = arc.days.map(d => {
+    const inBatch = d.dayNumber >= startDay && d.dayNumber <= endDay;
+    return `Day ${d.dayNumber}${inBatch ? ' (THIS BATCH)' : ''}: "${d.title}" — ${d.scriptureReference} — ${d.theme} [${d.movement}]`;
+  });
+  return `
+
+SERIES ARC (the planned outline for the whole series — follow it):
+Through-line: ${arc.throughLine}
+${planLines.join('\n')}
+
+For the days in this batch, use each day's planned title, primary scripture, and theme from the arc above. The arc supersedes generic variety directives if they conflict. Write the content itself with full freedom — the arc fixes the skeleton, not the prose.`;
+}
+
 async function generateBatch(
   context: GenerationContext,
   startDay: number,
@@ -1121,7 +1291,8 @@ async function generateBatch(
   seriesTitle: string | null,
   previousDayTitles: string[],
   retryLevel: number = 0,
-  resolvedPersona?: { primary: PersonaTrait; secondary: PersonaTrait; templateSeed: number }
+  resolvedPersona?: { primary: PersonaTrait; secondary: PersonaTrait; templateSeed: number },
+  arc: SeriesArc | null = null
 ): Promise<{ title: string; days: DevotionalDay[] }> {
   const baseSystemPrompt = getSystemPrompt(retryLevel);
   // V2: Use composable voice overlay instead of dead v1 persona system
@@ -1215,7 +1386,12 @@ Avoid the bad pattern. Follow the good pattern.`;
     }
   }
 
+  // Arc outline survives through retryLevel 1 (it's small and load-bearing);
+  // dropped at retryLevel 2 alongside the rest of the craft scaffolding.
+  const arcBlock = arc && retryLevel <= 1 ? buildArcBlock(arc, startDay, endDay) : '';
+
   const userPrompt = buildUserPrompt(context, startDay, endDay, seriesTitle, previousDayTitles, retryLevel, varietySchedule)
+    + arcBlock
     + (storiesBlock ? `\n\n${storiesBlock}` : '');
 
   // Sonnet 5 for core devotional generation — quality is the product.
@@ -1425,7 +1601,8 @@ async function generateBatchWithRetry(
   seriesTitle: string | null,
   previousDayTitles: string[],
   maxRetries: number = 3,
-  resolvedPersona?: { primary: PersonaTrait; secondary: PersonaTrait; templateSeed: number }
+  resolvedPersona?: { primary: PersonaTrait; secondary: PersonaTrait; templateSeed: number },
+  arc: SeriesArc | null = null
 ): Promise<{ title: string; days: DevotionalDay[] }> {
   let lastError: Error | null = null;
   const daysInBatch = endDay - startDay + 1;
@@ -1454,7 +1631,8 @@ async function generateBatchWithRetry(
         seriesTitle,
         previousDayTitles,
         retryLevel,
-        resolvedPersona
+        resolvedPersona,
+        arc
       );
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
@@ -1469,12 +1647,12 @@ async function generateBatchWithRetry(
 
         const midDay = startDay + Math.floor(daysInBatch / 2);
         const firstHalf = await generateBatchWithRetry(
-          context, startDay, midDay - 1, seriesTitle, previousDayTitles, maxRetries, resolvedPersona
+          context, startDay, midDay - 1, seriesTitle, previousDayTitles, maxRetries, resolvedPersona, arc
         );
         // Use the series title from the first half for the second half
         const updatedTitles = [...previousDayTitles, ...firstHalf.days.map(d => d.title)];
         const secondHalf = await generateBatchWithRetry(
-          context, midDay, endDay, firstHalf.title, updatedTitles, maxRetries, resolvedPersona
+          context, midDay, endDay, firstHalf.title, updatedTitles, maxRetries, resolvedPersona, arc
         );
 
         return {
@@ -1598,8 +1776,14 @@ export async function generateDevotional(
     const resolvedPersona = resolvePersonaForGeneration(context);
     logger.log(`[Devotional] Resolved persona: primary=${resolvedPersona.primary}, secondary=${resolvedPersona.secondary}, templateSeed=${resolvedPersona.templateSeed}`);
 
+    // Opus arc-planning pass: one small high-capability call that plans the
+    // whole series (title + per-day outline) before Sonnet writes anything.
+    // Best-effort — a null arc means generation runs exactly as before.
+    onProgress?.('Shaping your series');
+    const arc = await generateSeriesArc(context, resolvedPersona);
+
     try {
-      let seriesTitle: string | null = null;
+      let seriesTitle: string | null = arc?.seriesTitle ?? null;
       const allDays: DevotionalDay[] = [];
       const allDayTitles: string[] = [];
 
@@ -1622,11 +1806,13 @@ export async function generateDevotional(
           seriesTitle,
           allDayTitles,
           3,
-          resolvedPersona
+          resolvedPersona,
+          arc
         );
 
-        // Save the series title from first batch
-        if (batchIndex === 0) {
+        // Save the series title from first batch (the arc title, when present,
+        // was already pinned via seriesTitle and echoed back by the model)
+        if (batchIndex === 0 && !seriesTitle) {
           seriesTitle = result.title;
         }
 
