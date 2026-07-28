@@ -54,6 +54,7 @@ import {
   getThreeStepPaywallPrimaryAction,
   resolvePurchaseOutcome,
   resolveRestoreOutcome,
+  runGuardedPaywallFlow,
 } from '@/lib/paywall-guardrails';
 
 // ---------------------------------------------------------------------------
@@ -1264,70 +1265,82 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
   // Purchase / Restore
   // -----------------------------------------------------------------------
 
-  const handlePurchase = useCallback(async () => {
-    let pkg = selectedPlan === 'yearly' ? yearlyPackage : monthlyPackage;
-    if (!pkg) {
+  // Both handlers are wrapped in runGuardedPaywallFlow so a rejected
+  // purchasePackage / restorePurchases / fetchQuery can never leave isLoading
+  // stuck at true (a permanent CTA spinner): loading is ALWAYS cleared and a
+  // thrown error surfaces a message. Success/cancel branches are unchanged.
+  const handlePurchase = useCallback(() => runGuardedPaywallFlow({
+    setLoading: setIsLoading,
+    setError: setPurchaseError,
+    onError: () => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error),
+    run: async () => {
+      let pkg = selectedPlan === 'yearly' ? yearlyPackage : monthlyPackage;
+      if (!pkg) {
+        setIsLoading(true);
+        setPurchaseError(null);
+        const fresh = await queryClient.fetchQuery({ queryKey: ['revenuecat', 'offerings'], queryFn: getOfferings, staleTime: 0 });
+        const freshOfferings = fresh?.ok ? fresh.data : null;
+        pkg = freshOfferings?.current?.availablePackages.find(
+          (p) => p.identifier === (selectedPlan === 'yearly' ? '$rc_annual' : '$rc_monthly'),
+        );
+        if (!pkg) {
+          setPurchaseError(PURCHASE_PLANS_UNAVAILABLE_MESSAGE);
+          return;
+        }
+      }
       setIsLoading(true);
       setPurchaseError(null);
-      const fresh = await queryClient.fetchQuery({ queryKey: ['revenuecat', 'offerings'], queryFn: getOfferings, staleTime: 0 });
-      const freshOfferings = fresh?.ok ? fresh.data : null;
-      pkg = freshOfferings?.current?.availablePackages.find(
-        (p) => p.identifier === (selectedPlan === 'yearly' ? '$rc_annual' : '$rc_monthly'),
-      );
-      if (!pkg) {
-        setIsLoading(false);
-        setPurchaseError(PURCHASE_PLANS_UNAVAILABLE_MESSAGE);
+      const result = await purchasePackage(pkg);
+
+      if (!result.ok) {
+        if (result.reason === 'user_cancelled') {
+          const hasSeenOnboardingOffer = mmkvStorage.getItem('@unfold_onboarding_offer_seen') === 'true';
+          if (!hasSeenOnboardingOffer) {
+            setShowExclusiveOffer(true);
+          }
+        } else {
+          setPurchaseError('Something went wrong. Please try again.');
+        }
         return;
       }
-    }
-    setIsLoading(true);
-    setPurchaseError(null);
-    const result = await purchasePackage(pkg);
-    setIsLoading(false);
 
-    if (!result.ok) {
-      if (result.reason === 'user_cancelled') {
-        const hasSeenOnboardingOffer = mmkvStorage.getItem('@unfold_onboarding_offer_seen') === 'true';
-        if (!hasSeenOnboardingOffer) {
-          setShowExclusiveOffer(true);
-        }
-      } else {
-        setPurchaseError('Something went wrong. Please try again.');
+      const outcome = resolvePurchaseOutcome(result);
+      if (outcome.kind === 'success') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        await syncTrialEndingNotification();
+        onPurchaseSuccess();
+        return;
       }
-      return;
-    }
 
-    const outcome = resolvePurchaseOutcome(result);
-    if (outcome.kind === 'success') {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      await syncTrialEndingNotification();
-      onPurchaseSuccess();
-      return;
-    }
+      setPurchaseError(outcome.message);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    },
+  }), [selectedPlan, yearlyPackage, monthlyPackage, onPurchaseSuccess, queryClient]);
 
-    setPurchaseError(outcome.message);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-  }, [selectedPlan, yearlyPackage, monthlyPackage, onPurchaseSuccess, queryClient]);
+  const handleRestore = useCallback(() => runGuardedPaywallFlow({
+    setLoading: setIsLoading,
+    setError: setPurchaseError,
+    errorMessage: 'Could not restore purchases. Please try again.',
+    onError: () => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning),
+    run: async () => {
+      setIsLoading(true);
+      setPurchaseError(null);
+      const result = await restorePurchases();
 
-  const handleRestore = useCallback(async () => {
-    setIsLoading(true);
-    setPurchaseError(null);
-    const result = await restorePurchases();
-    setIsLoading(false);
+      const outcome = resolveRestoreOutcome(result);
+      if (outcome.kind === 'success') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        await syncTrialEndingNotification();
+        onPurchaseSuccess();
+        return;
+      }
 
-    const outcome = resolveRestoreOutcome(result);
-    if (outcome.kind === 'success') {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      await syncTrialEndingNotification();
-      onPurchaseSuccess();
-      return;
-    }
-
-    setPurchaseError(outcome.message);
-    Haptics.notificationAsync(
-      Haptics.NotificationFeedbackType.Warning,
-    );
-  }, [onPurchaseSuccess]);
+      setPurchaseError(outcome.message);
+      Haptics.notificationAsync(
+        Haptics.NotificationFeedbackType.Warning,
+      );
+    },
+  }), [onPurchaseSuccess]);
 
   // -----------------------------------------------------------------------
   // CTA press: navigate on screens 1-2, purchase on screen 3

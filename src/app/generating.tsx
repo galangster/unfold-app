@@ -24,7 +24,11 @@ import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, type Devotional, type DevotionalDay } from '@/lib/store';
-import { submitGenerationJob, pollJobStatus, retryJob, recoverCompletedGenerationResult, normalizeGenerationResult, ApiError } from '@/lib/generation-api';
+import { submitGenerationJob, pollJobStatus, retryJob, recoverCompletedGenerationResult } from '@/lib/generation-api';
+import {
+  evaluateGenerationPoll,
+  resolveGenerationSubmitFailure,
+} from '@/lib/generation-poll-outcome';
 import { toFriendlyOnboardingGenerationError } from '@/lib/generation-errors';
 
 import {
@@ -41,6 +45,12 @@ import { Typography } from '@/constants/typography';
 const INFLIGHT_KEY = 'inflight-generation-job';
 // Maximum time to poll before giving up (10 minutes)
 const MAX_POLL_DURATION_MS = 10 * 60 * 1000;
+// Terminal-error copy for a completed-but-unopenable / unrecognized job.
+const INVALID_RESULT_MESSAGE = 'Your devotional finished, but we couldn’t open it. Please try again.';
+const UNKNOWN_STATUS_MESSAGE = 'We hit an unexpected problem finishing your devotional. Please try again.';
+// Grace period to wait for the persisted user to hydrate before erroring out
+// instead of sitting on an infinite spinner.
+const NO_USER_GRACE_MS = 5000;
 
 // Sample devotional content shown as a preview while generating
 const SAMPLE_PREVIEW = {
@@ -121,6 +131,9 @@ export default function GeneratingScreen() {
   const pollingRef = useRef(false);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const jobSubmittedRef = useRef(false);
+  // Consecutive unrecognized job statuses — bounded so we don't poll forever
+  // against a status we don't understand.
+  const unknownStatusCountRef = useRef(0);
 
   // Track when polling started for max-duration timeout
   const pollStartTime = useRef(Date.now());
@@ -413,6 +426,22 @@ export default function GeneratingScreen() {
   const startPolling = useCallback((jobId: string) => {
     if (pollingRef.current) return;
     pollingRef.current = true;
+    unknownStatusCountRef.current = 0;
+
+    // Shared terminal-failure exit: stop polling, clear the inflight record and
+    // surface the error state with a retry path (instead of an infinite spinner).
+    const failTerminal = (message: string, phase: string, cause?: unknown) => {
+      pollingRef.current = false;
+      logger.error(`[generating] ${phase}:`, message);
+      mmkvStorage.removeItem(INFLIGHT_KEY);
+      failGenerationSession(message);
+      void logBugError('generation', cause instanceof Error ? cause : new Error(message), { jobId, phase });
+      setIsGenerating(false);
+      setIsReconnecting(false);
+      setError(message);
+      setCanRetry(true);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    };
 
     const poll = async () => {
       // Check max poll duration timeout
@@ -432,36 +461,55 @@ export default function GeneratingScreen() {
 
       try {
         const status = await pollJobStatus(jobId);
+        const { outcome, consecutiveUnknown } = evaluateGenerationPoll({
+          status: status.status,
+          result: status.result,
+          error: status.error,
+          canRetry: status.canRetry,
+          fallbackDevotionalId: useUnfoldStore.getState().generationSession.devotionalId,
+          dayNumber: 1,
+          priorConsecutiveUnknown: unknownStatusCountRef.current,
+        });
+        unknownStatusCountRef.current = consecutiveUnknown;
 
-        if (status.status === 'complete' && status.result) {
-          pollingRef.current = false;
-          handleGenerationComplete(
-            normalizeGenerationResult(
-              status.result,
-              useUnfoldStore.getState().generationSession.devotionalId,
-              1,
-            ),
-          );
-          return;
+        switch (outcome.kind) {
+          case 'complete':
+            pollingRef.current = false;
+            handleGenerationComplete(outcome.result);
+            return;
+
+          case 'invalid-result':
+            // Complete-without-result OR an unreconcilable result: terminal, not
+            // a re-poll loop.
+            failTerminal(INVALID_RESULT_MESSAGE, 'server-poll-invalid-result');
+            return;
+
+          case 'failed': {
+            pollingRef.current = false;
+            const errorMsg = outcome.error;
+            logger.error('[generating] Server job failed:', errorMsg);
+            mmkvStorage.removeItem(INFLIGHT_KEY);
+            failGenerationSession(errorMsg);
+            void logBugError('generation', new Error(errorMsg), { jobId, phase: 'server-poll' });
+            setIsGenerating(false);
+            setIsReconnecting(false);
+            setError(errorMsg);
+            setCanRetry(outcome.canRetry);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+            return;
+          }
+
+          case 'unknown-terminal':
+            failTerminal(UNKNOWN_STATUS_MESSAGE, 'server-poll-unknown-status');
+            return;
+
+          case 'waiting':
+          case 'unknown-retry':
+          default:
+            // Still pending / processing (or a tolerated unknown) -- poll again.
+            pollTimerRef.current = setTimeout(poll, POLL_INTERVAL_MS);
+            return;
         }
-
-        if (status.status === 'failed') {
-          pollingRef.current = false;
-          const errorMsg = status.error ?? 'Generation failed on server';
-          logger.error('[generating] Server job failed:', errorMsg);
-          mmkvStorage.removeItem(INFLIGHT_KEY);
-          failGenerationSession(errorMsg);
-          void logBugError('generation', new Error(errorMsg), { jobId, phase: 'server-poll' });
-          setIsGenerating(false);
-          setIsReconnecting(false);
-          setError(errorMsg);
-          setCanRetry(status.canRetry !== false);
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-          return;
-        }
-
-        // Still pending or processing -- poll again
-        pollTimerRef.current = setTimeout(poll, POLL_INTERVAL_MS);
       } catch (err) {
         // Network error during polling -- keep trying a few times
         const errorMsg = err instanceof Error ? err.message : String(err);
@@ -478,7 +526,23 @@ export default function GeneratingScreen() {
   // ========== JOB SUBMISSION ==========
 
   useEffect(() => {
-    if (!user || jobSubmittedRef.current) return;
+    if (!user) {
+      // The persisted user normally hydrates within a frame. If it never
+      // arrives, don't sit on an infinite spinner — the 10-min poll cap lives
+      // inside poll(), which never starts here. Surface the error state after a
+      // short grace so the user still gets a retry / go-home path.
+      const graceTimer = setTimeout(() => {
+        if (jobSubmittedRef.current) return;
+        logger.warn('[generating] No user after grace period — showing error state');
+        setIsGenerating(false);
+        setIsReconnecting(false);
+        setError('We couldn’t load your details. Please try again.');
+        setCanRetry(true);
+      }, NO_USER_GRACE_MS);
+      return () => clearTimeout(graceTimer);
+    }
+
+    if (jobSubmittedRef.current) return;
     jobSubmittedRef.current = true;
 
     // Check MMKV for an inflight job from a previous session (app-kill recovery)
@@ -550,7 +614,45 @@ export default function GeneratingScreen() {
         pollStartTime.current = Date.now();
         startPolling(jobId);
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : String(err);
+        const failure = resolveGenerationSubmitFailure(err);
+        if (failure.kind === 'adopt-existing') {
+          // The server already has a job for this user/day. Adopt it instead of
+          // dead-ending on an error that would resubmit from scratch on retry.
+          const existingJobId = failure.jobId;
+          logger.log('[generating] Submission reports an existing job; adopting it:', existingJobId);
+          void logBugEvent('generation', 'generation-adopt-existing-job', { existingJobId });
+          const sessionDevotionalId = useUnfoldStore.getState().generationSession.devotionalId;
+          try {
+            // The completed result may already be available — recover it directly.
+            const recovered = sessionDevotionalId
+              ? await recoverCompletedGenerationResult({
+                  devotionalId: sessionDevotionalId,
+                  dayNumber: 1,
+                  existingJobId,
+                })
+              : null;
+            if (recovered) {
+              mmkvStorage.removeItem(INFLIGHT_KEY);
+              handleGenerationComplete(recovered);
+              return;
+            }
+          } catch (recoverErr) {
+            logger.warn('[generating] Existing-job recovery failed; will poll instead:', recoverErr);
+          }
+          // Not ready yet (or no known devotionalId) — poll the existing job.
+          setPendingJobId(existingJobId);
+          setIsReconnecting(false);
+          mmkvStorage.setItem(INFLIGHT_KEY, JSON.stringify({
+            jobId: existingJobId,
+            devotionalId: sessionDevotionalId ?? undefined,
+            submittedAt: Date.now(),
+          }));
+          pollStartTime.current = Date.now();
+          startPolling(existingJobId);
+          return;
+        }
+
+        const errorMessage = failure.message;
         logger.error('[generating] Job submission failed:', errorMessage);
         mmkvStorage.removeItem(INFLIGHT_KEY);
         failGenerationSession(errorMessage);
