@@ -26,6 +26,7 @@ import {
 } from '@/lib/audio-player-state';
 import { Duration } from '@/constants/animations';
 import { logger } from '@/lib/logger';
+import { endReadingSession } from '@/lib/widget-bridge';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -82,6 +83,18 @@ function destroyPlayer(): void {
   }
 }
 
+/**
+ * Full playback teardown: end the reading-session Live Activity (NAT-5),
+ * release the native player, and reset the Zustand state. Every path that
+ * terminates a session (stop, completion, watchdog, errors) must go through
+ * this — a bare destroyPlayer() leaves the Live Activity on the lock screen.
+ */
+function teardownPlayback(): void {
+  endReadingSession();
+  destroyPlayer();
+  useAudioPlayerState.getState().stopAudio();
+}
+
 // ---------------------------------------------------------------------------
 // Completion cascade runner
 // ---------------------------------------------------------------------------
@@ -131,8 +144,7 @@ function runCompletionCascade(): void {
   delay += COMPLETED_DISPLAY_MS;
   cascadeTimers.push(
     setTimeout(() => {
-      useAudioPlayerState.getState().stopAudio();
-      destroyPlayer();
+      teardownPlayback();
     }, delay),
   );
 }
@@ -277,8 +289,7 @@ export function useGlobalAudioPlayer() {
               logger.log('[AudioPlayer] play() called');
             } catch (e) {
               logger.error('[AudioPlayer] play() failed:', e);
-              useAudioPlayerState.getState().stopAudio();
-              destroyPlayer();
+              teardownPlayback();
             }
           });
 
@@ -303,15 +314,13 @@ export function useGlobalAudioPlayer() {
             const store = useAudioPlayerState.getState();
             if (store.isLoading && !store.isPlaying) {
               logger.warn('[AudioPlayer] Watchdog: still loading after 10s — resetting');
-              useAudioPlayerState.getState().stopAudio();
-              destroyPlayer();
+              teardownPlayback();
             }
           }, 10_000);
 
         } catch (e) {
           logger.error('[AudioPlayer] startAudio FAILED:', e);
-          useAudioPlayerState.getState().stopAudio();
-          destroyPlayer();
+          teardownPlayback();
         }
       }, 0);
     },
@@ -329,8 +338,7 @@ export function useGlobalAudioPlayer() {
       }
     }
 
-    destroyPlayer();
-    useAudioPlayerState.getState().stopAudio();
+    teardownPlayback();
 
     logger.log('[AudioPlayer] stopAudio — player destroyed');
   }, []);
