@@ -224,6 +224,32 @@ export function endReadingSession(): void {
 }
 
 /**
+ * End any Live Activities left over from a previous app run (NAT-5).
+ *
+ * `activeReadingSession` is a JS-only ref: if the app is killed or crashes
+ * mid-session, the ref is lost but the system-side Live Activity keeps
+ * showing on the lock screen / Dynamic Island indefinitely. Call this once
+ * at cold start — before any new session starts — to sweep those orphans
+ * via the factory's getInstances().
+ */
+export function endOrphanedReadingSessions(): void {
+  if (liveActivityDisabled) return;
+  // Never sweep while a session started in this JS lifetime is live.
+  if (activeReadingSession) return;
+
+  try {
+    const orphans = UnfoldReadingSessionActivity.getInstances();
+    if (orphans.length === 0) return;
+    for (const activity of orphans) {
+      activity.end('immediate').catch(() => {});
+    }
+    logger.log(`[Widgets] Ended ${orphans.length} orphaned Live Activity(ies)`);
+  } catch (error) {
+    logger.log('[Widgets] endOrphanedReadingSessions error (non-fatal):', error);
+  }
+}
+
+/**
  * Check if a reading session Live Activity is currently active.
  */
 export function isReadingSessionActive(): boolean {

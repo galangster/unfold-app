@@ -24,6 +24,7 @@ import { useUnfoldStore } from '@/lib/store';
 import { registerPushToken, setNotificationNavigationReady, setupNotificationListeners, syncNotificationPreferences } from '@/lib/push-notifications';
 import { shouldMarkNotificationNavigationReady } from '@/lib/push-notification-helpers';
 import { migrateGenerationDataToServer } from '@/lib/generation-migration';
+import { endOrphanedReadingSessions } from '@/lib/widget-bridge';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { AudioPlayerOverlay } from '@/components/AudioPlayerOverlay';
 import { PrivacyShield } from '@/components/PrivacyShield';
@@ -147,6 +148,13 @@ function RootLayoutNav() {
   // One-time migration of local generation data to server
   useEffect(() => {
     migrateGenerationDataToServer().catch(() => {});
+  }, []);
+
+  // NAT-5: sweep reading-session Live Activities orphaned by a previous app
+  // run (app killed mid-session loses the JS ref, so the lock-screen activity
+  // otherwise lingers indefinitely).
+  useEffect(() => {
+    if (Platform.OS === 'ios') endOrphanedReadingSessions();
   }, []);
 
   return (
