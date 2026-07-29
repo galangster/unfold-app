@@ -7,7 +7,7 @@
 
 ## What already shipped (app side, in PR #41 — do not redo)
 
-1. `generateSeriesArc()` in `src/lib/devotional-service.ts`: before Sonnet writes anything, one `claude-opus-5` call to `POST /api/generate/devotional` plans the series (title, through-line, per-day outline: title/scripture/theme/movement). The outline is injected into every Sonnet writing batch. Strictly best-effort: any failure degrades to a title-only arc or to exactly today's behavior. Payload shape is identical to the existing Sonnet batch call (`model`, `max_tokens: 3000`, `system`, `messages`), 60s client timeout.
+1. `generateSeriesArc()` in `src/lib/devotional-service.ts`: before Sonnet writes anything, one `claude-opus-5` call to `POST /api/generate/devotional` plans the series (title, through-line, per-day outline: title/scripture/theme/movement). The outline is injected into every Sonnet writing batch. Strictly best-effort: any failure degrades to a title-only arc or to exactly today's behavior. Payload shape is identical to the existing Sonnet batch call (`model`, `max_tokens: 8000`, `system`, `messages`), 60s client timeout. (Raised from 3000: Opus 5 thinks by default and `max_tokens` caps thinking + visible text together, so 3000 risked truncating the outline mid-JSON.)
 2. The writing batches' system prompt is now byte-identical across all batches of a series (batch-dependent directives moved to the user prompt) — this was done so backend prompt caching can hit.
 
 ## What the backend needs (this is the actual task)

@@ -72,7 +72,7 @@ afterEach(() => {
 
 describe('generateSeriesArc', () => {
   it('returns a full arc from a well-formed response and sends claude-opus-5', async () => {
-    mockBackendResponse({ content: [{ text: arcJson(3) }] });
+    mockBackendResponse({ content: [{ type: 'text', text: arcJson(3) }] });
 
     const arc = await generateSeriesArc(CONTEXT, PERSONA);
 
@@ -85,11 +85,30 @@ describe('generateSeriesArc', () => {
       (global.fetch as jest.Mock).mock.calls[0][1].body as string
     );
     expect(payload.model).toBe('claude-opus-5');
-    expect(payload.max_tokens).toBeLessThanOrEqual(4000);
+    // Opus 5 thinks by default and max_tokens caps thinking + visible text
+    // together — the budget must leave thinking headroom or the outline
+    // truncates mid-JSON (stop_reason: max_tokens).
+    expect(payload.max_tokens).toBeGreaterThanOrEqual(8000);
+  });
+
+  it('extracts the arc when a thinking block precedes the text block (Opus 5 default)', async () => {
+    // Opus 5 runs adaptive thinking by default; with display omitted the
+    // response leads with a thinking block whose text field is absent/empty.
+    // Reading content[0].text would be undefined and kill the arc silently.
+    mockBackendResponse({
+      content: [
+        { type: 'thinking', thinking: '' },
+        { type: 'text', text: arcJson(3) },
+      ],
+    });
+
+    const arc = await generateSeriesArc(CONTEXT, PERSONA);
+    expect(arc?.seriesTitle).toBe('Roots Below the Frost');
+    expect(arc?.days).toHaveLength(3);
   });
 
   it('recovers JSON wrapped in prose/fences', async () => {
-    mockBackendResponse({ content: [{ text: `Here is the plan:\n\n${arcJson(3)}\n\nHope this helps!` }] });
+    mockBackendResponse({ content: [{ type: 'text', text: `Here is the plan:\n\n${arcJson(3)}\n\nHope this helps!` }] });
 
     const arc = await generateSeriesArc(CONTEXT, PERSONA);
     expect(arc?.seriesTitle).toBe('Roots Below the Frost');
@@ -97,7 +116,7 @@ describe('generateSeriesArc', () => {
   });
 
   it('degrades to a title-only arc when the day outline has the wrong length', async () => {
-    mockBackendResponse({ content: [{ text: arcJson(5) }] }); // context asks for 3
+    mockBackendResponse({ content: [{ type: 'text', text: arcJson(5) }] }); // context asks for 3
 
     const arc = await generateSeriesArc(CONTEXT, PERSONA);
     expect(arc).not.toBeNull();
@@ -116,7 +135,7 @@ describe('generateSeriesArc', () => {
   });
 
   it('returns null on unparseable content', async () => {
-    mockBackendResponse({ content: [{ text: 'sorry, I cannot produce JSON today' }] });
+    mockBackendResponse({ content: [{ type: 'text', text: 'sorry, I cannot produce JSON today' }] });
     await expect(generateSeriesArc(CONTEXT, PERSONA)).resolves.toBeNull();
   });
 
@@ -129,7 +148,7 @@ describe('generateSeriesArc', () => {
   });
 
   it('returns null when seriesTitle is missing or empty', async () => {
-    mockBackendResponse({ content: [{ text: JSON.stringify({ seriesTitle: '  ', throughLine: 'x', days: [] }) }] });
+    mockBackendResponse({ content: [{ type: 'text', text: JSON.stringify({ seriesTitle: '  ', throughLine: 'x', days: [] }) }] });
     await expect(generateSeriesArc(CONTEXT, PERSONA)).resolves.toBeNull();
   });
 
@@ -137,7 +156,7 @@ describe('generateSeriesArc', () => {
     const bad = JSON.parse(arcJson(3)) as SeriesArc;
     // dayNumber wrong type — validator tolerates it and renumbers
     (bad.days[1] as unknown as { dayNumber: unknown }).dayNumber = undefined;
-    mockBackendResponse({ content: [{ text: JSON.stringify(bad) }] });
+    mockBackendResponse({ content: [{ type: 'text', text: JSON.stringify(bad) }] });
 
     const arc = await generateSeriesArc(CONTEXT, PERSONA);
     expect(arc?.days.map(d => d.dayNumber)).toEqual([1, 2, 3]);

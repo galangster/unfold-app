@@ -1142,6 +1142,19 @@ export interface SeriesArc {
   days: SeriesArcDay[];
 }
 
+/**
+ * Join all text blocks from a raw Anthropic response body. Adaptive-thinking
+ * models (claude-opus-5, claude-sonnet-5) may lead with a thinking block, so
+ * content[0].text is not reliable — the answer lives in later text blocks.
+ */
+function extractAnthropicText(data: unknown): string {
+  const blocks = (data as { content?: { type?: string; text?: string }[] }).content ?? [];
+  return blocks
+    .filter((b) => b.type === 'text' && typeof b.text === 'string' && b.text.length > 0)
+    .map((b) => b.text as string)
+    .join('\n');
+}
+
 export async function generateSeriesArc(
   context: GenerationContext,
   resolvedPersona: { primary: PersonaTrait; secondary: PersonaTrait; templateSeed: number }
@@ -1194,7 +1207,10 @@ The "days" array must contain exactly ${context.devotionalLength} entries, numbe
       '/api/generate/devotional',
       {
         model: 'claude-opus-5',
-        max_tokens: 3000,
+        // Opus 5 thinks by default and max_tokens caps thinking + visible text
+        // together — 3000 risked truncating the outline mid-JSON on a long
+        // think. Only tokens actually generated are billed.
+        max_tokens: 8000,
         system: systemPrompt,
         messages: [{ role: 'user', content: userPrompt }],
       },
@@ -1216,8 +1232,11 @@ The "days" array must contain exactly ${context.devotionalLength} entries, numbe
       logger.warn('[Devotional] Arc backend returned 200 with error field; continuing without arc.');
       return null;
     }
-    const content = (data as { content?: { text?: string }[] }).content?.[0]?.text;
-    if (typeof content !== 'string' || content.length === 0) return null;
+    // Opus 5 runs adaptive thinking by default, so content[0] is usually a
+    // thinking block (empty text) with the answer in a later text block —
+    // content[0].text would be undefined and silently kill the arc every time.
+    const content = extractAnthropicText(data);
+    if (content.length === 0) return null;
 
     let parsed: SeriesArc;
     try {
@@ -1539,9 +1558,11 @@ Avoid the bad pattern. Follow the good pattern.`;
     throw new Error(`Backend error: ${typeof data.error === 'string' ? data.error : JSON.stringify(data.error)}`);
   }
 
-  const content = (data as { content?: { text?: string }[] }).content?.[0]?.text;
+  // Text-join extraction: sonnet-5 also runs adaptive thinking, so a leading
+  // thinking block would make content[0].text undefined and fail every batch.
+  const content = extractAnthropicText(data);
 
-  if (typeof content !== 'string' || content.length === 0) {
+  if (content.length === 0) {
     logger.error('[Devotional] No content in response. Data keys:', Object.keys(data));
     throw new Error('No content in response');
   }
