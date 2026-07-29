@@ -1354,7 +1354,13 @@ Avoid the bad pattern. Follow the good pattern.`;
     }
   }
 
-  const systemPrompt = baseSystemPrompt + PETER_ENNS_ADDITION + craftFoundation + antiSlop + rhetoricalQuestions + convictionDirective + parableGuardrails + dialogueGuardrails + patternBreaks + voiceOverlay + voiceAdaptation + STICKY_SENTENCE_INSTRUCTION + dynamicExampleDirective;
+  // System prompt contains ONLY series-stable content (same bytes for every
+  // batch of a series at a given retryLevel) so the backend can apply Anthropic
+  // prompt caching to it — batch-dependent directives (conviction, parable,
+  // dialogue) go in the user prompt below instead. Keep it that way: a single
+  // byte of per-batch variance here invalidates the cache prefix.
+  const systemPrompt = baseSystemPrompt + PETER_ENNS_ADDITION + craftFoundation + antiSlop + rhetoricalQuestions + patternBreaks + voiceOverlay + voiceAdaptation + STICKY_SENTENCE_INSTRUCTION + dynamicExampleDirective;
+  const batchDirectives = convictionDirective + parableGuardrails + dialogueGuardrails;
   // V2: Include per-day variety schedule (with craft directives + story system) in the user prompt
   const varietySchedule = retryLevel === 0
     ? buildVarietySchedule(startDay, endDay, context.devotionalLength, persona.primary, persona.secondary, persona.templateSeed, context.readingDuration, context.writingStyle?.faithBackground)
@@ -1391,6 +1397,7 @@ Avoid the bad pattern. Follow the good pattern.`;
   const arcBlock = arc && retryLevel <= 1 ? buildArcBlock(arc, startDay, endDay) : '';
 
   const userPrompt = buildUserPrompt(context, startDay, endDay, seriesTitle, previousDayTitles, retryLevel, varietySchedule)
+    + (batchDirectives ? `\n${batchDirectives}` : '')
     + arcBlock
     + (storiesBlock ? `\n\n${storiesBlock}` : '');
 
