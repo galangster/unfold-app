@@ -4,7 +4,8 @@
  * Skipped unless ARC_LIVE_SMOKE=1. Costs one real claude-opus-5 call
  * (~$0.03–0.06) and writes one ai_usage row under the QA device id.
  *
- *   ARC_LIVE_SMOKE=1 npx jest src/lib/__tests__/series-arc.live-smoke.test.ts --silent=false
+ *   ARC_LIVE_SMOKE=1 ARC_LIVE_SMOKE_DEVICE_ID=$(uuidgen | tr A-Z a-z) \
+ *     npx jest src/lib/__tests__/series-arc.live-smoke.test.ts --silent=false
  *
  * This exercises the real prompt, the real proxy (Cloudflare → Railway), and
  * the real thinking-block extraction — everything a dev-build generation
@@ -16,7 +17,9 @@ jest.mock('@/lib/api-config', () => ({
   getAuthHeaders: async () => ({
     'Content-Type': 'application/json',
     'User-Agent': 'Unfold/1.0.0 (ios; 18)',
-    'X-Device-ID': '175d40ac-be38-4630-a0f4-dcf0333a1d3a', // QA device
+    // The device id IS the auth credential — never commit one. Supply a
+    // throwaway QA UUID via env when running the live smoke.
+    'X-Device-ID': process.env.ARC_LIVE_SMOKE_DEVICE_ID ?? '',
   }),
   PRIMARY_BACKEND_URL: 'https://api.unfoldapp.co',
   sanitizeForPrompt: (s: string | undefined, max: number) => (s ?? '').slice(0, max),
@@ -42,7 +45,7 @@ jest.mock('@/lib/mmkv-storage', () => ({
 import { generateSeriesArc } from '@/lib/devotional-service';
 import type { GenerationContext } from '@/lib/devotional-service';
 
-const LIVE = process.env.ARC_LIVE_SMOKE === '1';
+const LIVE = process.env.ARC_LIVE_SMOKE === '1' && !!process.env.ARC_LIVE_SMOKE_DEVICE_ID;
 
 const CONTEXT: GenerationContext = {
   name: 'QA',
