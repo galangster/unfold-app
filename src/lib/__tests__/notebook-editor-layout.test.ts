@@ -9,10 +9,9 @@ describe('notebook editor layout helpers', () => {
     expect(NOTEBOOK_TOOLBAR_TOTAL_HEIGHT).toBe(48);
   });
 
-  it('only reserves native toolbar inset while editing with the keyboard up', () => {
-    expect(getNativeEditorToolbarInset({ isEditing: true, isKeyboardUp: true })).toBe(48);
-    expect(getNativeEditorToolbarInset({ isEditing: false, isKeyboardUp: true })).toBe(0);
-    expect(getNativeEditorToolbarInset({ isEditing: true, isKeyboardUp: false })).toBe(0);
+  it('only reserves native toolbar inset while the keyboard is up', () => {
+    expect(getNativeEditorToolbarInset({ isKeyboardUp: true })).toBe(48);
+    expect(getNativeEditorToolbarInset({ isKeyboardUp: false })).toBe(0);
   });
 
   it('reuses previous selection state when only the range changed', () => {
