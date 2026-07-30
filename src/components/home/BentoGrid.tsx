@@ -23,7 +23,7 @@ export function BentoGrid() {
 
   const items = [
     {
-      label: 'My Devotionals',
+      label: 'Past Devotionals',
       pathname: '/(tabs)/(today)/past-devotionals',
     },
     {

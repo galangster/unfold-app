@@ -11,16 +11,18 @@ export const FROM_TO_ROUTE: Record<string, string> = {
   home: '/(tabs)/(today)',
   journal: '/(tabs)/(journal)',
   bible: '/(tabs)/(bible)',
+  you: '/(tabs)/(you)',
 };
 
 export const FROM_TO_TAB: Record<string, string> = {
   home: '(today)',
   journal: '(journal)',
   bible: '(bible)',
+  you: '(you)',
 };
 
 export function getCurrentTabFromSegments(segments: readonly string[]): string | undefined {
-  const knownTabs = new Set([...Object.values(FROM_TO_TAB), '(you)']);
+  const knownTabs = new Set(Object.values(FROM_TO_TAB));
   return segments.find((segment) => knownTabs.has(segment));
 }
 

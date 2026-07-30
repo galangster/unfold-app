@@ -654,7 +654,7 @@ export default function PastDevotionalsScreen() {
                 marginLeft: Spacing['2'],
               }}
             >
-              My Devotionals
+              Past Devotionals
             </Text>
           </View>
 
@@ -708,7 +708,7 @@ export default function PastDevotionalsScreen() {
               marginLeft: Spacing['2'],
             }}
           >
-            My Devotionals
+            Past Devotionals
           </Text>
         </View>
 

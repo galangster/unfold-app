@@ -1544,7 +1544,14 @@ export default function ReadingScreen() {
             <TouchableOpacity activeOpacity={0.7}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push('/(tabs)/(today)');
+                // This "not ready yet" state can be entered directly via a deep
+                // link/notification for a specific day, so there may be no back
+                // stack to pop — fall back to replacing with the Today root.
+                if (router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.replace('/(tabs)/(today)');
+                }
               }}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               accessibilityRole="button"

@@ -40,4 +40,10 @@ describe('Today alias back routing helpers', () => {
   it('still treats hidden You stack screens opened from Today as cross-tab pushes', () => {
     expect(isCrossTabBackNavigation('home', ['(tabs)', '(you)', 'my-content'])).toBe(true);
   });
+
+  it('maps from=you back to the You tab root', () => {
+    expect(getCurrentTabFromSegments(['(tabs)', '(you)', 'settings'])).toBe('(you)');
+    expect(isCrossTabBackNavigation('you', ['(tabs)', '(today)', 'my-content'])).toBe(true);
+    expect(isCrossTabBackNavigation('you', ['(tabs)', '(you)', 'settings'])).toBe(false);
+  });
 });
