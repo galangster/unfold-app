@@ -8,9 +8,12 @@
  * v4: Rename summary to title, add updateConversation/setActiveConversation.
  * v5: Add deepLinks to CompanionMessage.
  */
+import { AppState } from 'react-native';
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
+import { persist } from 'zustand/middleware';
 import { mmkvStorage } from './mmkv-storage';
+import { createDebouncedJSONStorage } from './debounced-persist-storage';
+import { shouldFlushAutosaveOnAppState } from './autosave-controller';
 
 import { getAuthHeaders, PRIMARY_BACKEND_URL } from '@/lib/api-config';
 import type { DeepLinkData } from './parse-deep-links';
@@ -204,6 +207,12 @@ interface CompanionChatState {
   setActiveConversation: (id: string) => void;
 }
 
+// WR-23: coalesces persist writes so the ~30/sec token flushes during SSE
+// streaming serialize the store once per debounce window instead of running a
+// full partialize + JSON.stringify + sync MMKV write on every set(). Flushed
+// when the app backgrounds (listener below), matching store.ts.
+const companionPersistStorage = createDebouncedJSONStorage<CompanionChatState>(mmkvStorage);
+
 export const useCompanionChatStore = create<CompanionChatState>()(
   persist(
     (set, get) => ({
@@ -281,9 +290,15 @@ export const useCompanionChatStore = create<CompanionChatState>()(
                   return changedMessage;
                 }),
               };
-              enqueuePersonalDataSyncChange('companion_conversations', nextConv.id, companionConversationSyncData(nextConv), now);
               const changedSyncMessage = changedMessage as CompanionMessage | null;
-              if (changedSyncMessage) enqueuePersonalDataSyncChange('companion_messages', changedSyncMessage.id, companionMessageSyncData(changedSyncMessage, nextConv.id), now);
+              // Content-only streaming updates land ~30×/sec — skip the outbox
+              // round-trips while the message is still streaming; the full
+              // content is enqueued once when status flips to complete/error.
+              const isStreamingContentUpdate = changedSyncMessage?.status === 'streaming';
+              if (!isStreamingContentUpdate) {
+                enqueuePersonalDataSyncChange('companion_conversations', nextConv.id, companionConversationSyncData(nextConv), now);
+                if (changedSyncMessage) enqueuePersonalDataSyncChange('companion_messages', changedSyncMessage.id, companionMessageSyncData(changedSyncMessage, nextConv.id), now);
+              }
               return nextConv;
             }),
           };
@@ -498,7 +513,7 @@ export const useCompanionChatStore = create<CompanionChatState>()(
     }),
     {
       name: 'unfold-companion-chat',
-      storage: createJSONStorage(() => mmkvStorage),
+      storage: companionPersistStorage,
       version: 5, // v5: Add deepLinks to CompanionMessage
       // Skip persisting streaming message content to avoid expensive serialization during SSE
       partialize: (state) => ({
@@ -561,6 +576,41 @@ export const useCompanionChatStore = create<CompanionChatState>()(
 
         return state as CompanionChatState;
       },
+      merge: (persistedState, currentState) => {
+        const merged: CompanionChatState = {
+          ...currentState,
+          ...(persistedState as Partial<CompanionChatState>),
+        };
+        // Rehydrate sweep: partialize blanks streaming content, so a message
+        // persisted mid-stream comes back as a permanently blank 'streaming'
+        // row with no retry affordance. Reconcile to 'error' (retryable).
+        const conversations = merged.conversations ?? [];
+        if (conversations.some(c => (c.messages ?? []).some(m => m.status === 'streaming'))) {
+          merged.conversations = conversations.map(c => {
+            const messages = c.messages ?? [];
+            if (!messages.some(m => m.status === 'streaming')) return c;
+            return {
+              ...c,
+              messages: messages.map(m =>
+                m.status === 'streaming' ? { ...m, status: 'error' as const } : m
+              ),
+            };
+          });
+        }
+        return merged;
+      },
     }
   )
 );
+
+// WR-23: a coalesced persist write can be pending for up to its debounce
+// window — land it before iOS suspends the app. Covers the app switcher on
+// the way to a force-kill; only a hard crash can lose the window.
+AppState.addEventListener('change', (status) => {
+  if (shouldFlushAutosaveOnAppState(status)) {
+    companionPersistStorage.flushPendingWrites();
+  }
+});
+
+/** Test/maintenance hook: force any pending coalesced persist write to disk. */
+export const flushCompanionChatPersist = () => companionPersistStorage.flushPendingWrites();

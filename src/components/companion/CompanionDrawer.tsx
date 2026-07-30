@@ -9,7 +9,7 @@
  *   DRAWER_WIDTH       — constant for parent layout use
  */
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { memo, useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -31,7 +31,6 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Gesture } from 'react-native-gesture-handler';
 import { PlusCircle } from 'phosphor-react-native';
-import { useShallow } from 'zustand/react/shallow';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTheme } from '@/lib/theme';
@@ -71,6 +70,9 @@ interface CompanionDrawerProps {
   onOpen: () => void;
   onClose: () => void;
   onNewChat: () => void;
+  /** Called before switching to another conversation — lets the screen stop
+   * an in-flight stream in the conversation being left (P0-5). */
+  onWillSwitchConversation?: () => void;
 }
 
 type ListItem =
@@ -455,23 +457,42 @@ function ConversationActionPanel({
 
 // ── CompanionDrawer ───────────────────────────────────────────────────────
 
-export function CompanionDrawer({
+// Memoized: the companion screen re-renders on every streaming token flush —
+// the drawer's props (shared value + stable callbacks + isOpen) only change
+// when the drawer opens/closes.
+export const CompanionDrawer = memo(function CompanionDrawer({
   translateX,
   isOpen,
   onOpen: _onOpen,
   onClose,
   onNewChat,
+  onWillSwitchConversation,
 }: CompanionDrawerProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
 
   const activeId = useCompanionChatStore((s) => s.activeConversationId);
-  const allWithMessages = useCompanionChatStore(
-    useShallow((s) => (s.conversations ?? []).filter(c => (c.messages ?? []).length > 0))
+  // A streaming token flush replaces the active conversation object (content
+  // + updatedAt only) ~30×/sec; subscribing to the conversation array itself
+  // would rebuild and re-sort the whole drawer list per flush. Subscribe to a
+  // fingerprint of the fields the drawer actually displays instead, and only
+  // re-read the store when that changes.
+  const conversationsFingerprint = useCompanionChatStore((s) =>
+    (s.conversations ?? [])
+      .filter(c => (c.messages ?? []).length > 0)
+      .map(c => `${c.id}:${c.pinned ? 1 : 0}:${c.createdAt}:${c.lastMessageAt}:${c.title ?? ''}`)
+      .join('|')
   );
   const deleteConversation = useCompanionChatStore((s) => s.deleteConversation);
   const setActiveConversation = useCompanionChatStore((s) => s.setActiveConversation);
   const updateConversation = useCompanionChatStore((s) => s.updateConversation);
+
+  const allWithMessages = useMemo(() => {
+    void conversationsFingerprint; // recompute key — display fields only
+    return (useCompanionChatStore.getState().conversations ?? []).filter(
+      c => (c.messages ?? []).length > 0
+    );
+  }, [conversationsFingerprint]);
 
   const listItems = useMemo(() => buildListItems(allWithMessages), [allWithMessages]);
   const [actionConversation, setActionConversation] = useState<Conversation | null>(null);
@@ -500,12 +521,13 @@ export function CompanionDrawer({
       if (conv.id === activeId) {
         onClose();
       } else {
+        onWillSwitchConversation?.();
         setActiveConversation(conv.id);
         onClose();
       }
       closeActionPanel();
     },
-    [activeId, setActiveConversation, onClose, closeActionPanel],
+    [activeId, setActiveConversation, onClose, closeActionPanel, onWillSwitchConversation],
   );
 
   const handlePin = useCallback(
@@ -682,7 +704,7 @@ export function CompanionDrawer({
       </Animated.View>
     </>
   );
-}
+});
 
 // ── Styles ─────────────────────────────────────────────────────────────────
 
