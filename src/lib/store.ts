@@ -8,6 +8,7 @@ import { logger } from './logger';
 import { applyUndoActionsWithSync } from './journal-undo';
 import { mmkvStorage } from './mmkv-storage';
 import { createDebouncedJSONStorage } from './debounced-persist-storage';
+import { instrumentMigrate, instrumentPersistRead, logColdStartHydrationCost } from './store-hydration-metrics';
 import { shouldFlushAutosaveOnAppState } from './autosave-controller';
 import { migrateUnfoldStore } from './store-migrations';
 import { normalizeDevotionalIdentity, normalizeGeneratedDayIdentity, normalizeGeneratedDaysIdentity } from './generation-reconciliation';
@@ -855,7 +856,12 @@ type PersistedUnfoldState = Omit<UnfoldState, 'nudgeShownThisSession' | 'streakJ
 // WR-23: coalesces persist writes so a burst of store updates (autosave
 // while typing) serializes the full state once per window instead of on
 // every set(). Flushed when the app backgrounds (listener below).
-const unfoldPersistStorage = createDebouncedJSONStorage<PersistedUnfoldState>(mmkvStorage);
+// The `instrumentPersistRead` wrapper is DEV-only measurement (payload size +
+// read/parse/migrate cost on cold start) and is the identity function in
+// production — persistence structure is unchanged.
+const unfoldPersistStorage = createDebouncedJSONStorage<PersistedUnfoldState>(
+  instrumentPersistRead(mmkvStorage),
+);
 
 export const useUnfoldStore = create<UnfoldState>()(
   persist(
@@ -1951,11 +1957,17 @@ export const useUnfoldStore = create<UnfoldState>()(
       // Validate and migrate persisted state. Migrations work on the loose
       // legacy shape (Record<string, any>); the repaired result is merged
       // into the typed state on rehydrate.
-      migrate: migrateUnfoldStore as (persistedState: unknown, version: number) => PersistedUnfoldState,
+      migrate: instrumentMigrate(
+        migrateUnfoldStore as (persistedState: unknown, version: number) => PersistedUnfoldState,
+      ),
 
       // Validate state on rehydration
       onRehydrateStorage: () => {
         return (state, error) => {
+          // DEV-only: one-shot report of what reading + parsing + migrating the
+          // persisted blob cost on this cold start. No-op in production.
+          logColdStartHydrationCost();
+
           if (error) {
             logger.error('[store] Rehydration error:', error);
             // Log to bug tracking

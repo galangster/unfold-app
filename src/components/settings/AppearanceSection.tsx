@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Text } from 'react-native';
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
@@ -26,6 +26,7 @@ import {
   READING_FONTS,
 } from '@/lib/store';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
+import { loadAllReadingFonts, loadReadingFont } from '@/lib/reading-fonts-loader';
 import { SettingsSectionHeader, getSettingsCardStyle } from './SettingsSectionHeader';
 
 const FONT_SIZES: { value: FontSizePreference; label: string }[] = [
@@ -59,6 +60,14 @@ export function AppearanceSection({ onPremiumFeature }: AppearanceSectionProps) 
   const isPremium = usePremiumAccessPolicy() === 'granted';
 
   const [expandedPremium, setExpandedPremium] = useState<'colors' | 'fonts' | null>(null);
+
+  // PERF (cold start): only the default reading family ships in the
+  // splash-blocking font load. Pull the rest in as soon as this section
+  // mounts — the picker is the one screen that must render every family — so
+  // the previews below are in their real faces by the time the row is opened.
+  useEffect(() => {
+    void loadAllReadingFonts();
+  }, []);
 
   return (
     <>
@@ -304,6 +313,10 @@ export function AppearanceSection({ onPremiumFeature }: AppearanceSectionProps) 
                         return;
                       }
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      // Belt-and-braces with the mount-time preload: guarantees
+                      // the newly chosen family is requested even if the
+                      // preload failed or is still in flight.
+                      void loadReadingFont(font.id);
                       updateUser({ readingFont: font.id });
                     }}
                     style={{

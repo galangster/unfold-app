@@ -1,9 +1,9 @@
 /** @jsxImportSource react */
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView, TextInput, Platform, Keyboard, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, TextInput, Platform, Keyboard, Dimensions, type LayoutChangeEvent } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeOut, useSharedValue, useAnimatedStyle, withTiming, withDelay, withSpring, Easing, runOnJS, useReducedMotion } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut, useSharedValue, useAnimatedStyle, useAnimatedScrollHandler, withTiming, withDelay, withSpring, Easing, runOnJS, useReducedMotion } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
@@ -73,6 +73,12 @@ const HIGHLIGHT_COLORS: { key: BibleHighlightColor; color: string }[] = [
 
 const HEADER_HEIGHT = 52;
 
+// Header overlap: content has paddingTop for the header, but onLayout Y is relative
+// to the content container (after padding). scrollTo y=0 puts the first verse behind the header.
+// Subtract a small offset so the target verse sits visibly below the header, not behind it.
+// Module-scoped so the scroll-to-verse callbacks can keep empty dep arrays.
+const headerOverlap = 12; // slight breathing room below the fixed header
+
 /* ─────────────────────────────────────────────────────────
  * ANIMATION STORYBOARD — Bible Reader
  *
@@ -128,8 +134,15 @@ const SWIPE_SPRING_BACK = { damping: 22, stiffness: 260, mass: 0.9, overshootCla
 //   20px+  → Pan activates (chapter swipe)
 const VERSE_TAP_MAX_DISTANCE = 8;
 
+// PERF: every prop below must be referentially stable across parent renders or
+// React.memo is defeated and a single selection/toast/keyboard state change
+// re-renders the whole chapter (176 rows in Psalm 119). That is why `onPress`
+// and `onLayout` take the verse number instead of being pre-bound closures —
+// the parent passes ONE useCallback-stable function to every row, and the row
+// binds its own verse number inside.
 const VerseItem = React.memo(function VerseItem({
   verse,
+  sectionHeading,
   fontSize,
   lineHeight,
   fontFamily,
@@ -141,8 +154,11 @@ const VerseItem = React.memo(function VerseItem({
   isDark,
   textColor,
   onPress,
+  onLayout,
 }: {
   verse: { verse: number; text: string };
+  /** Section heading rendered above this verse, if the chapter has one here. */
+  sectionHeading?: string;
   fontSize: number;
   lineHeight: number;
   fontFamily: string;
@@ -153,9 +169,11 @@ const VerseItem = React.memo(function VerseItem({
   isRedLetter: boolean;
   isDark: boolean;
   textColor: string;
-  onPress: () => void;
+  onPress: (verseNum: number) => void;
+  onLayout: (verseNum: number, y: number) => void;
 }) {
   const [textLines, setTextLines] = useState<BibleTextLine[]>([]);
+  const verseNum = verse.verse;
 
   // Flash animation: quick fade in → hold → smooth fade out
   const flashOpacity = useSharedValue(0);
@@ -193,13 +211,20 @@ const VerseItem = React.memo(function VerseItem({
       })
       .onEnd(() => {
         'worklet';
-        runOnJS(onPress)();
+        runOnJS(onPress)(verseNum);
       })
       .onFinalize(() => {
         'worklet';
         pressOpacity.value = withTiming(1, { duration: 120 });
       }),
-    [onPress, pressOpacity],
+    [onPress, pressOpacity, verseNum],
+  );
+
+  // Row layout capture for scroll-to-verse. Bound here (not in the parent's
+  // map callback) so the parent can pass one stable `onLayout` to every row.
+  const handleLayout = useCallback(
+    (e: LayoutChangeEvent) => onLayout(verseNum, e.nativeEvent.layout.y),
+    [onLayout, verseNum],
   );
 
   const hasOverlay = isSelected || (!!highlightColor && !isDark);
@@ -234,7 +259,22 @@ const VerseItem = React.memo(function VerseItem({
   const verseNumSize = Math.max(9, Math.round(fontSize * 0.55));
 
   return (
-    <GestureDetector gesture={tapGesture}>
+    <View onLayout={handleLayout}>
+      {/* Section heading before this verse */}
+      {sectionHeading ? (
+        <Text style={[
+          styles.sectionHeading,
+          {
+            color: textColor,
+            fontFamily,
+            fontSize: fontSize + 1,
+            lineHeight: Math.round((fontSize + 1) * 1.4),
+          },
+        ]}>
+          {sectionHeading}
+        </Text>
+      ) : null}
+      <GestureDetector gesture={tapGesture}>
       <Animated.View
         style={[styles.verseRow, pressStyle]}
         accessible
@@ -296,7 +336,8 @@ const VerseItem = React.memo(function VerseItem({
           {verse.text}
         </Text>
       </Animated.View>
-    </GestureDetector>
+      </GestureDetector>
+    </View>
   );
 });
 
@@ -350,17 +391,28 @@ export default function BibleReaderScreen() {
   // shareModalData removed — share navigates to /share-card route
   const [showExplainSheet, setShowExplainSheet] = useState(false);
   const [selectedExplanationInput, setSelectedExplanationInput] = useState<ScriptureExplainRequest | null>(null);
-  const [pendingScrollVerse, setPendingScrollVerse] = useState<number | null>(null);
+  // PERF: a ref, not state — nothing renders off it, and keeping it out of
+  // render state is what lets `handleVerseLayout` stay referentially stable
+  // (see VerseItem's memo contract).
+  const pendingScrollVerseRef = useRef<number | null>(null);
   const [scrollToVerse, setScrollToVerse] = useState<number | null>(null);
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<Animated.ScrollView>(null);
   const verseLayoutsRef = useRef<Record<number, number>>({});
   const verseLayoutsChapterRef = useRef<string>('');
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastScrollYRef = useRef(0);
   const setTabBarHidden = useUIState((state) => state.setTabBarHidden);
   const tabBarHiddenRef = useRef(false);
   // Track if tab bar was scroll-hidden BEFORE verse selection began.
   const wasScrollHiddenRef = useRef(false);
+
+  // ─── Scroll-driven tab bar state (UI thread) ──────────────────────────────
+  // Shared-value mirrors of the JS-side scroll bookkeeping. The scroll handler
+  // runs as a worklet on the UI thread and only crosses back to JS on an actual
+  // show/hide threshold crossing (previously a JS callback ran every 16ms and
+  // read/wrote a global zustand store from the scroll path).
+  const lastScrollY = useSharedValue(0);
+  const tabBarHiddenSV = useSharedValue(false);
+  const showActionsSV = useSharedValue(false);
 
   // Invalidate cached verse Y positions when chapter changes. onLayout Ys are
   // specific to the rendered verses; carrying them across chapters would make
@@ -397,19 +449,21 @@ export default function BibleReaderScreen() {
     return () => { showSub.remove(); hideSub.remove(); };
   }, []);
 
-  // Header overlap: content has paddingTop for the header, but onLayout Y is relative
-  // to the content container (after padding). scrollTo y=0 puts the first verse behind the header.
-  // Subtract a small offset so the target verse sits visibly below the header, not behind it.
-  const headerOverlap = 12; // slight breathing room below the fixed header
+  // Single writer for tab bar visibility: keeps the global store, the JS ref
+  // (read by the selection effects) and the UI-thread mirror in lockstep.
+  const applyTabBarHidden = useCallback((hidden: boolean, mode?: 'slide' | 'instant') => {
+    setTabBarHidden(hidden, mode);
+    tabBarHiddenRef.current = hidden;
+    tabBarHiddenSV.value = hidden;
+  }, [setTabBarHidden, tabBarHiddenSV]);
 
   const restoreTabBarForClosedActions = useCallback(() => {
     const tabBarState = nextBibleTabBarStateAfterActions({
       showActions: false,
       wasScrollHiddenBeforeActions: wasScrollHiddenRef.current,
     });
-    setTabBarHidden(tabBarState.hidden, tabBarState.mode);
-    tabBarHiddenRef.current = tabBarState.hidden;
-  }, [setTabBarHidden]);
+    applyTabBarHidden(tabBarState.hidden, tabBarState.mode);
+  }, [applyTabBarHidden]);
 
   // State-driven scroll-to-verse (runs after render when refs are guaranteed set)
   useEffect(() => {
@@ -518,21 +572,23 @@ export default function BibleReaderScreen() {
         setTimeout(() => setFlashVerse(null), 2000);
       } else {
         // Position unknown (new chapter) — wait for onLayout
-        setPendingScrollVerse(targetVerse);
+        pendingScrollVerseRef.current = targetVerse;
       }
     }
   }, [targetVerse, verses, isLoading, router]);
 
-  // Called from onLayout — scrolls to verse once its position is known
+  // Called from onLayout — scrolls to verse once its position is known.
+  // Stable identity ([] deps): every verse row receives this same function, so
+  // it never invalidates VerseItem's memo.
   const handleVerseLayout = useCallback((verseNum: number, y: number) => {
     verseLayoutsRef.current[verseNum] = y;
-    if (pendingScrollVerse === verseNum) {
+    if (pendingScrollVerseRef.current === verseNum) {
+      pendingScrollVerseRef.current = null;
       scrollRef.current?.scrollTo({ y: Math.max(0, y - headerOverlap), animated: true });
       setFlashVerse(verseNum);
-      setPendingScrollVerse(null);
       setTimeout(() => setFlashVerse(null), 2000);
     }
-  }, [pendingScrollVerse]);
+  }, []);
 
   // ─── Verse selection ────────────────────────────────────────────────────────
 
@@ -888,20 +944,40 @@ export default function BibleReaderScreen() {
 
   // ─── Tab bar hide/show on scroll ──────────────────────────────────────────
 
-  const handleScroll = useCallback((event: any) => {
-    // Don't let scroll affect tab bar while context actions are visible
-    if (showActions) { lastScrollYRef.current = event.nativeEvent.contentOffset.y; return; }
-    const y = event.nativeEvent.contentOffset.y;
-    const diff = y - lastScrollYRef.current;
-    if (y <= 10) {
-      if (tabBarHiddenRef.current) { tabBarHiddenRef.current = false; setTabBarHidden(false); }
-    } else if (diff > 5 && !tabBarHiddenRef.current) {
-      tabBarHiddenRef.current = true; setTabBarHidden(true);
-    } else if (diff < -5 && tabBarHiddenRef.current) {
-      tabBarHiddenRef.current = false; setTabBarHidden(false);
-    }
-    lastScrollYRef.current = y;
-  }, [setTabBarHidden, showActions]);
+  // JS-side commit of a scroll-driven show/hide. Called via runOnJS ONLY on an
+  // actual threshold crossing (a few times per scroll gesture), never per frame.
+  // Mirrors the pre-Reanimated behavior: scroll-driven changes always animate
+  // ('slide' — the store's default mode).
+  const commitScrollTabBarHidden = useCallback((hidden: boolean) => {
+    setTabBarHidden(hidden);
+    tabBarHiddenRef.current = hidden;
+  }, [setTabBarHidden]);
+
+  // UI-thread scroll handler. Thresholds and direction logic are byte-for-byte
+  // the previous JS implementation: top-of-list (y <= 10) always reveals,
+  // >5px downward hides, >5px upward reveals, and while the context action bar
+  // is up the scroll position is tracked but the tab bar is left alone.
+  const handleScroll = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      'worklet';
+      const y = event.contentOffset.y;
+      if (showActionsSV.value) { lastScrollY.value = y; return; }
+      const diff = y - lastScrollY.value;
+      if (y <= 10) {
+        if (tabBarHiddenSV.value) {
+          tabBarHiddenSV.value = false;
+          runOnJS(commitScrollTabBarHidden)(false);
+        }
+      } else if (diff > 5 && !tabBarHiddenSV.value) {
+        tabBarHiddenSV.value = true;
+        runOnJS(commitScrollTabBarHidden)(true);
+      } else if (diff < -5 && tabBarHiddenSV.value) {
+        tabBarHiddenSV.value = false;
+        runOnJS(commitScrollTabBarHidden)(false);
+      }
+      lastScrollY.value = y;
+    },
+  });
 
   useEffect(() => {
     return () => setTabBarHidden(false);
@@ -909,6 +985,10 @@ export default function BibleReaderScreen() {
 
   // Hide tab bar when context actions show — instant snap, no animation (prevents flash)
   useEffect(() => {
+    // Mirror to the UI thread so the scroll worklet can skip tab bar work
+    // while the context action bar owns the bottom of the screen.
+    showActionsSV.value = showActions;
+
     const tabBarState = nextBibleTabBarStateAfterActions({
       showActions,
       wasScrollHiddenBeforeActions: wasScrollHiddenRef.current,
@@ -918,22 +998,19 @@ export default function BibleReaderScreen() {
       // Remember if tab bar was already hidden from scrolling
       wasScrollHiddenRef.current = tabBarHiddenRef.current;
       // Instantly hide tab bar (context bar covers its spot)
-      setTabBarHidden(tabBarState.hidden, tabBarState.mode);
-      tabBarHiddenRef.current = tabBarState.hidden;
+      applyTabBarHidden(tabBarState.hidden, tabBarState.mode);
     } else {
       if (wasScrollHiddenRef.current) {
         // Tab bar was already scroll-hidden — keep it hidden, but force instant
         // mode so the context bar cannot briefly reveal content underneath.
-        setTabBarHidden(tabBarState.hidden, tabBarState.mode);
-        tabBarHiddenRef.current = tabBarState.hidden;
+        applyTabBarHidden(tabBarState.hidden, tabBarState.mode);
       } else {
         // Instantly restore tab bar — it renders on top of context bar (higher z),
         // so context bar unmount happens invisibly behind it. Zero flash.
-        setTabBarHidden(tabBarState.hidden, tabBarState.mode);
-        tabBarHiddenRef.current = tabBarState.hidden;
+        applyTabBarHidden(tabBarState.hidden, tabBarState.mode);
       }
     }
-  }, [showActions, setTabBarHidden]);
+  }, [showActions, applyTabBarHidden, showActionsSV]);
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
@@ -993,9 +1070,13 @@ export default function BibleReaderScreen() {
       {/* Scroll content — wrapped in gesture detector for swipe chapter navigation */}
       <GestureDetector gesture={swipeGesture}>
       <Animated.View style={[styles.flex, contentTranslateStyle]}>
-      <ScrollView
+      <Animated.ScrollView
         ref={scrollRef}
         onScroll={handleScroll}
+        // Kept at 16 (Animated.ScrollView would otherwise default to 1) so the
+        // per-event 5px direction thresholds keep the exact sensitivity they
+        // had with the old JS handler — at throttle 1 a 120Hz display would
+        // halve the time window each threshold is measured over.
         scrollEventThrottle={16}
         style={styles.flex}
         contentContainerStyle={[styles.versesContent, { paddingTop: insets.top + HEADER_HEIGHT + 16, paddingBottom: tabBarHeight + 80 }]}
@@ -1020,40 +1101,29 @@ export default function BibleReaderScreen() {
           </View>
         ) : (
           <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(ANIM.verseFade).easing(Ease.out)}>
+            {/* PERF: no inline closures here — `handleVersePress` and
+                `handleVerseLayout` are useCallback-stable and every other prop
+                is a primitive, so React.memo on VerseItem actually holds and a
+                selection/toast/keyboard change re-renders only the affected
+                rows instead of the whole chapter. */}
             {verses?.map((v) => (
-              <View
+              <VerseItem
                 key={v.verse}
-                onLayout={(e) => handleVerseLayout(v.verse, e.nativeEvent.layout.y)}
-              >
-                {/* Section heading before this verse */}
-                {headingBeforeVerse[v.verse] && (
-                  <Text style={[
-                    styles.sectionHeading,
-                    {
-                      color: colors.text,
-                      fontFamily: readingFont.body,
-                      fontSize: fontSize + 1,
-                      lineHeight: Math.round((fontSize + 1) * 1.4),
-                    },
-                  ]}>
-                    {headingBeforeVerse[v.verse]}
-                  </Text>
-                )}
-                <VerseItem
-                  verse={v}
-                  fontSize={fontSize}
-                  lineHeight={lineHeight}
-                  fontFamily={readingFont.body}
-                  isSelected={selectedVerses.has(v.verse)}
-                  highlightColor={highlightMap[v.verse]}
-                  hasNote={!!noteMap[v.verse]}
-                  isFlashing={flashVerse === v.verse}
-                  isRedLetter={isRedLetterVerse(bookId, chapter, v.verse)}
-                  isDark={isDark}
-                  textColor={colors.text}
-                  onPress={() => handleVersePress(v.verse)}
-                />
-              </View>
+                verse={v}
+                sectionHeading={headingBeforeVerse[v.verse]}
+                fontSize={fontSize}
+                lineHeight={lineHeight}
+                fontFamily={readingFont.body}
+                isSelected={selectedVerses.has(v.verse)}
+                highlightColor={highlightMap[v.verse]}
+                hasNote={!!noteMap[v.verse]}
+                isFlashing={flashVerse === v.verse}
+                isRedLetter={isRedLetterVerse(bookId, chapter, v.verse)}
+                isDark={isDark}
+                textColor={colors.text}
+                onPress={handleVersePress}
+                onLayout={handleVerseLayout}
+              />
             ))}
 
             {/* End-of-chapter ornament */}
@@ -1092,7 +1162,7 @@ export default function BibleReaderScreen() {
             )}
           </Animated.View>
         )}
-      </ScrollView>
+      </Animated.ScrollView>
       </Animated.View>
       </GestureDetector>
 
