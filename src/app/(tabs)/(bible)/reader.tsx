@@ -7,7 +7,7 @@ import Animated, { FadeIn, FadeOut, useSharedValue, useAnimatedStyle, withTiming
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
-import { CaretRightIcon, CaretLeftIcon, TextAaIcon, XIcon, BookOpenIcon, HighlighterCircleIcon, NotePencilIcon, UploadSimpleIcon, LockSimpleIcon } from 'phosphor-react-native';
+import { CaretRightIcon, CaretLeftIcon, GearSixIcon, XIcon, BookOpenIcon, HighlighterCircleIcon, NotePencilIcon, UploadSimpleIcon, LockSimpleIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
@@ -916,16 +916,12 @@ export default function BibleReaderScreen() {
       }]}>
         <TouchableOpacity
           onPress={() => setShowSettings(true)}
-          style={styles.translationBadge}
-          accessibilityLabel={`Translation: ${bibleReaderSettings.translation}. Tap to change.`}
+          style={styles.headerButton}
+          accessibilityLabel="Reader settings"
+          accessibilityRole="button"
           hitSlop={8}
         >
-          <Text style={[styles.translationText, {
-            color: colors.textSubtle,
-            backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
-          }]}>
-            {bibleReaderSettings.translation}
-          </Text>
+          <GearSixIcon size={20} color={colors.text} weight="light" />
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -942,15 +938,7 @@ export default function BibleReaderScreen() {
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          onPress={() => setShowSettings(true)}
-          style={styles.headerButton}
-          accessibilityLabel="Reading settings"
-          accessibilityRole="button"
-          hitSlop={8}
-        >
-          <TextAaIcon size={20} color={colors.text} weight="light" />
-        </TouchableOpacity>
+        <View style={styles.headerButton} />
       </View>
 
       {/* Scroll content — wrapped in gesture detector for swipe chapter navigation */}
@@ -1286,11 +1274,6 @@ const styles = StyleSheet.create({
   headerCenter: { flex: 1, flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', gap: 6 },
   headerBook: { fontSize: 17 },
   headerChapter: { fontFamily: FontFamily.ui, fontSize: 15 },
-  translationBadge: { height: 44, justifyContent: 'center', alignItems: 'center' },
-  translationText: {
-    fontFamily: FontFamily.uiMedium, fontSize: 11, letterSpacing: 0.5,
-    paddingHorizontal: Spacing['2'], paddingVertical: Spacing['1'], borderRadius: 4, overflow: 'hidden',
-  },
 
   // Verses
   versesContent: { paddingHorizontal: Spacing['8'] },
