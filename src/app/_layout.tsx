@@ -207,13 +207,6 @@ function RootLayoutNav() {
           }}
         />
         <Stack.Screen
-          name="debug-light-mode"
-          options={{
-            animation: 'slide_from_right',
-            gestureEnabled: true,
-          }}
-        />
-        <Stack.Screen
           name="streak-settings"
           options={{
             animation: 'slide_from_right',

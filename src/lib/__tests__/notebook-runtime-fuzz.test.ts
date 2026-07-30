@@ -1,6 +1,3 @@
-import { readFileSync } from 'fs';
-import { join } from 'path';
-
 import {
   buildNotebookRuntimeFuzzCases,
   evaluateNotebookRuntimeFuzzCase,
@@ -8,24 +5,12 @@ import {
   type NotebookRuntimeFuzzCase,
 } from '@/lib/notebook-runtime-fuzz';
 
+// The dev-only harness route (`src/app/__dev__/unfold-editor-test.tsx`) that
+// exercised this module interactively was deleted as dead code — see "3b.
+// Dead code deletion" in the maximize-token-efficiency plan. The route-source
+// assertion that used to live here was removed along with it; the fuzz-case
+// generation/evaluation logic below is still exercised directly.
 describe('notebook runtime fuzz harness', () => {
-  it('keeps the dev editor route QA-gated and wired to structured runtime fuzz logs', () => {
-    const routeSource = readFileSync(
-      join(process.cwd(), 'src/app/__dev__/unfold-editor-test.tsx'),
-      'utf8',
-    );
-
-    expect(routeSource).toContain('isQaToolsEnabled');
-    expect(routeSource).toContain('Redirect');
-    expect(routeSource).toContain('useLocalSearchParams');
-    expect(routeSource).toContain('buildNotebookRuntimeFuzzCases');
-    expect(routeSource).toContain('evaluateNotebookRuntimeFuzzCase');
-    expect(routeSource).toContain('summarizeNotebookRuntimeFuzzResults');
-    expect(routeSource).toContain('NOTEBOOK_RUNTIME_FUZZ_SUMMARY');
-    expect(routeSource).toContain('no fuzz cases selected');
-    expect(routeSource).toContain('key={activeFuzzCase.id}');
-  });
-
   it('never seeds [object Object] as legitimate fuzz content', () => {
     const cases = buildNotebookRuntimeFuzzCases();
 

@@ -12,11 +12,7 @@ export default function YouLayout() {
     >
       <Stack.Screen name="index" options={{ animation: 'fade' }} />
       <Stack.Screen name="past-devotionals" options={{ animation: 'ios_from_right', gestureEnabled: true }} />
-      <Stack.Screen name="saved-passages" options={{ animation: 'ios_from_right', gestureEnabled: true }} />
       <Stack.Screen name="my-content" options={{ animation: 'ios_from_right', gestureEnabled: true }} />
-      <Stack.Screen name="stats" options={{ animation: 'ios_from_right', gestureEnabled: true }} />
-      <Stack.Screen name="your-journey" options={{ animation: 'ios_from_right', gestureEnabled: true }} />
-      <Stack.Screen name="component-catalog" options={{ animation: 'ios_from_right', gestureEnabled: true }} />
       <Stack.Screen name="checkin-schedule" options={{ animation: 'ios_from_right', gestureEnabled: true }} />
       <Stack.Screen name="series-detail" options={{ animation: 'ios_from_right', gestureEnabled: true }} />
     </Stack>

@@ -1972,22 +1972,6 @@ export default function YouScreen() {
                 {/* --- QA Tools --- Internal QA affordances for notification/reveal verification builds. */}
                 <SectionHeader label={__DEV__ ? "Dev Tools" : "QA Tools"} />
 
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  onPress={() => router.push('/debug-reset-beginning')}
-                  style={{
-                    padding: Spacing['4'],
-                    borderRadius: Radius.md,
-                    backgroundColor: 'rgba(200, 165, 92, 0.1)',
-                    alignItems: 'center',
-                    marginBottom: Spacing['3'],
-                  }}
-                >
-                  <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 14, color: colors.accent }}>
-                    Reset to Beginning (QA)
-                  </Text>
-                </TouchableOpacity>
-
             <TouchableOpacity
               activeOpacity={0.7}
               onPress={() => {
@@ -2107,29 +2091,6 @@ export default function YouScreen() {
             >
               <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 14, color: colors.accent }}>
                 Toggle Light/Dark Mode (Dev) — currently {user?.themeMode ?? 'dark'}
-              </Text>
-            </TouchableOpacity>
-
-            {/* Opens a single-screen gallery showing all 8 components that
-                received light-mode fixes (from commit 27d6775). Pair with the
-                theme toggle above (or the one inside the gallery screen) to
-                flip the theme and verify each component adapts correctly. */}
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={() => {
-                router.push('/debug-light-mode');
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              }}
-              style={{
-                padding: Spacing['4'],
-                borderRadius: Radius.md,
-                backgroundColor: 'rgba(200, 165, 92, 0.1)',
-                alignItems: 'center',
-                marginBottom: Spacing['3'],
-              }}
-            >
-              <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 14, color: colors.accent }}>
-                Light Mode Component Gallery (Dev)
               </Text>
             </TouchableOpacity>
 
