@@ -19,7 +19,6 @@ describe('writing font preference source contract', () => {
 
   it.each([
     'src/app/(tabs)/(journal)/note-detail.tsx',
-    'src/components/notebook/NoteEditor.tsx',
   ])('builds notebook TipTap body CSS from the reader font-size preference in %s', (relativePath) => {
     const source = readSource(relativePath);
 

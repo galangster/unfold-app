@@ -53,13 +53,13 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
-import { useUnfoldStore, type Note, type NoteCategory, type ScriptureRef } from '@/lib/store';
+import { useUnfoldStore, READING_FONTS, type Note, type NoteCategory, type ScriptureRef } from '@/lib/store';
 import { ScriptureRefPill } from '@/components/notebook/ScriptureRefPill';
 import { ScriptureSearchSheet } from '@/components/notebook/ScriptureSearchSheet';
 import { MoveFolderSheet } from '@/components/notebook/MoveFolderSheet';
 import { CreateFolderSheet } from '@/components/notebook/CreateFolderSheet';
 import { NoteDetailSaveIndicator } from '@/components/notebook/NoteDetailSaveIndicator';
-import { isHtmlContent, stripHtml } from '@/components/notebook/NoteEditor';
+import { isHtmlContent, stripHtml } from '@/lib/note-html';
 import { logger } from '@/lib/logger';
 import { alpha } from '@/components/ui';
 import { useCreationGate } from '@/hooks/useCreationGate';
@@ -132,11 +132,32 @@ function legacyMarkdownToHtml(content: string): string {
   return htmlLines.join('') || '<p></p>';
 }
 
+/**
+ * Reading-font preference → web font family for the tentap WebView editor.
+ * Mirrors the DevotionalWebView map. The default ('source-serif') is
+ * intentionally absent so it keeps the existing system UI stack — notes
+ * only opt into a serif body when the user actively picked one.
+ */
+const READING_FONT_WEB_FAMILY: Record<string, string> = {
+  EBGaramond_400Regular: 'EB Garamond',
+  Lora_400Regular: 'Lora',
+  Inter_400Regular: 'Inter',
+  CrimsonText_400Regular: 'Crimson Text',
+  Merriweather_400Regular: 'Merriweather',
+};
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function buildEditorCSS(colors: any, fontSize: ReflectionFontSize): string {
+function buildEditorCSS(colors: any, fontSize: ReflectionFontSize, webFontFamily?: string | null): string {
   const bodyFontSize = reflectionBodyPx(fontSize);
+  const fontImport = webFontFamily
+    ? `@import url('https://fonts.googleapis.com/css2?family=${encodeURIComponent(webFontFamily)}:ital,wght@0,400;0,600;0,700;1,400&display=swap');`
+    : '';
+  const bodyFontStack = webFontFamily
+    ? `'${webFontFamily}', Georgia, serif`
+    : "-apple-system, 'Helvetica Neue', sans-serif";
 
   return `
+    ${fontImport}
     *, *::before, *::after {
       box-sizing: border-box;
     }
@@ -145,7 +166,7 @@ function buildEditorCSS(colors: any, fontSize: ReflectionFontSize): string {
       height: 100%;
     }
     body {
-      font-family: -apple-system, 'Helvetica Neue', sans-serif;
+      font-family: ${bodyFontStack};
       font-size: ${bodyFontSize}px;
       line-height: 1.65;
       color: ${colors.text};
@@ -285,6 +306,19 @@ export default function NoteDetailScreen() {
   // Store selectors
   const user = useUnfoldStore((s) => s.user);
   const fontSize = user?.fontSize ?? 'medium';
+  // Reading-font preference (premium): notes honor the same body font the
+  // reader uses. Non-premium/default stays on the existing stacks.
+  const readingFontId = isPremium ? (user?.readingFont ?? 'source-serif') : 'source-serif';
+  const activeReadingFont = useMemo(
+    () => READING_FONTS.find((f) => f.id === readingFontId) ?? READING_FONTS[0],
+    [readingFontId],
+  );
+  const editorWebFontFamily: string | null =
+    READING_FONT_WEB_FAMILY[activeReadingFont.regular] ?? null;
+  // Title keeps the display face on the default font; a chosen reading font
+  // carries through at its semibold weight so title and body agree.
+  const titleFontFamily =
+    readingFontId === 'source-serif' ? FontFamily.display : activeReadingFont.medium;
   const notes = useUnfoldStore((s) => s.notes);
   const addNote = useUnfoldStore((s) => s.addNote);
   const updateNote = useUnfoldStore((s) => s.updateNote);
@@ -465,7 +499,7 @@ export default function NoteDetailScreen() {
     if (IS_NATIVE_EDITOR) return;
     const fallback = setTimeout(() => {
       setEditorReady(true);
-      editor.injectCSS(buildEditorCSS(colors, fontSize));
+      editor.injectCSS(buildEditorCSS(colors, fontSize, editorWebFontFamily));
     }, 1500);
     return () => clearTimeout(fallback);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -474,7 +508,7 @@ export default function NoteDetailScreen() {
   useEffect(() => {
     if (IS_NATIVE_EDITOR) return;
     if (!editorState.isReady) return;
-    editor.injectCSS(buildEditorCSS(colors, fontSize));
+    editor.injectCSS(buildEditorCSS(colors, fontSize, editorWebFontFamily));
     // Delay removing overlay until CSS has had time to paint
     setTimeout(() => {
       setEditorReady(true);
@@ -1396,7 +1430,7 @@ export default function NoteDetailScreen() {
           cursorColor={colors.accent}
           style={[
             styles.titleInput,
-            { color: colors.text },
+            { color: colors.text, fontFamily: titleFontFamily },
           ]}
           returnKeyType="next"
           onSubmitEditing={() => {

@@ -6,10 +6,9 @@ function readSource(relativePath: string): string {
 }
 
 describe('Phase 9 design source contracts', () => {
-  it('removes thick side-tab accent borders from note detail, NoteEditor, and PDF callouts', () => {
+  it('removes thick side-tab accent borders from note detail and PDF callouts', () => {
     const sources = [
       ['note-detail', readSource('src/app/(tabs)/(journal)/note-detail.tsx')],
-      ['NoteEditor', readSource('src/components/notebook/NoteEditor.tsx')],
       ['pdf-export', readSource('src/lib/pdf-export.ts')],
     ] as const;
 

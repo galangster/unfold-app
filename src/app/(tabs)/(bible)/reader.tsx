@@ -7,7 +7,7 @@ import Animated, { FadeIn, FadeOut, useSharedValue, useAnimatedStyle, withTiming
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
-import { CaretRightIcon, CaretLeftIcon, GearSixIcon, XIcon, BookOpenIcon, HighlighterCircleIcon, NotePencilIcon, UploadSimpleIcon, LockSimpleIcon } from 'phosphor-react-native';
+import { CaretRightIcon, CaretLeftIcon, GearSixIcon, XIcon, BookOpenIcon, HighlighterCircleIcon, NotePencilIcon, NotepadIcon, UploadSimpleIcon, LockSimpleIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
@@ -28,6 +28,8 @@ import { DownloadBibleSheet } from '@/components/bible/DownloadBibleSheet';
 import { BibleNoteSheet } from '@/components/bible/BibleNoteSheet';
 import type { BibleHighlightColor } from '@/lib/store';
 import { useUIState } from '@/lib/ui-state';
+import { Sheet } from '@/components/ui';
+import { stripHtml, isHtmlContent } from '@/lib/note-html';
 import { isRedLetterVerse } from '@/lib/red-letter-verses';
 import { getSectionHeadings } from '@/lib/bible-section-headings';
 import {
@@ -338,6 +340,8 @@ export default function BibleReaderScreen() {
   const noteInputRef = useRef<TextInput>(null);
   // Note viewer sheet — opened when tapping an inline note marker
   const [noteSheetHighlight, setNoteSheetHighlight] = useState<import('@/lib/store').BibleHighlight | null>(null);
+  // Notebook notes anchored to the visible chapter (subtle header indicator)
+  const [showChapterNotes, setShowChapterNotes] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   // Premium gating for highlight colors
   const premiumPolicy = usePremiumAccessPolicy();
@@ -460,6 +464,34 @@ export default function BibleReaderScreen() {
     }
     return map;
   }, [highlights]);
+
+  // ─── Notebook notes anchored to this chapter ────────────────────────────
+  // Read-side bridge between the Notebook and the Bible reader: the store's
+  // getNotesForScripture owns the anchoring rules (bibleBookId/bibleChapter
+  // or scriptureRefs). Memoized so it recomputes only when the chapter or
+  // the Notebook data changes — never per scroll frame.
+  const getNotesForScripture = useUnfoldStore((s) => s.getNotesForScripture);
+  const notebookNotes = useUnfoldStore((s) => s.notes);
+  const chapterNotebookNotes = useMemo(() => {
+    // `notebookNotes` is referenced so edits/deletes in the Notebook refresh
+    // the indicator; the getter reads the same slice from the store.
+    void notebookNotes;
+    return getNotesForScripture(bookId, chapter);
+  }, [notebookNotes, getNotesForScripture, bookId, chapter]);
+
+  const handleOpenChapterNotes = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setShowChapterNotes(true);
+  }, []);
+
+  const handleOpenNotebookNote = useCallback((noteId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setShowChapterNotes(false);
+    router.push({
+      pathname: '/(tabs)/(journal)/note-detail',
+      params: { noteId },
+    });
+  }, [router]);
 
   // Parse verse param
   const targetVerse = params.verse ? parseInt(params.verse, 10) : null;
@@ -938,7 +970,24 @@ export default function BibleReaderScreen() {
           </Text>
         </TouchableOpacity>
 
-        <View style={styles.headerButton} />
+        {chapterNotebookNotes.length > 0 ? (
+          <TouchableOpacity
+            onPress={handleOpenChapterNotes}
+            style={styles.headerButton}
+            accessibilityRole="button"
+            accessibilityLabel={`${chapterNotebookNotes.length} notebook ${chapterNotebookNotes.length === 1 ? 'note' : 'notes'} reference this chapter`}
+            hitSlop={8}
+          >
+            <NotepadIcon size={20} color={colors.text} weight="light" />
+            <View style={[styles.headerNoteBadge, { backgroundColor: colors.accent }]}>
+              <Text style={[styles.headerNoteBadgeText, { color: colors.background }]}>
+                {chapterNotebookNotes.length}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.headerButton} />
+        )}
       </View>
 
       {/* Scroll content — wrapped in gesture detector for swipe chapter navigation */}
@@ -1235,6 +1284,46 @@ export default function BibleReaderScreen() {
         onClose={() => setShowHighlightPremiumSheet(false)}
         feature="highlight"
       />
+      {/* Notebook notes anchored to this chapter — lightweight list linking
+          into note-detail (read-side bridge; same Sheet primitive as the
+          Notebook's own action sheets) */}
+      <Sheet
+        visible={showChapterNotes}
+        onClose={() => setShowChapterNotes(false)}
+        bottomPadding={24}
+      >
+        <Text style={[styles.chapterNotesTitle, { color: colors.text }]} numberOfLines={1}>
+          Notes on {book?.name ?? ''} {chapter}
+        </Text>
+        {chapterNotebookNotes.map((n) => {
+          const plain = isHtmlContent(n.content) ? stripHtml(n.content) : n.content;
+          const rowTitle = n.title.trim() || plain.split('\n')[0]?.slice(0, 60) || 'Untitled';
+          const preview = n.title.trim() ? plain.trim() : plain.split('\n').slice(1).join('\n').trim();
+          return (
+            <TouchableOpacity
+              key={n.id}
+              onPress={() => handleOpenNotebookNote(n.id)}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={`Open note: ${rowTitle}`}
+              style={styles.chapterNotesRow}
+            >
+              <NotePencilIcon size={18} color={colors.accent} weight="light" />
+              <View style={styles.chapterNotesRowBody}>
+                <Text style={[styles.chapterNotesRowTitle, { color: colors.text }]} numberOfLines={1}>
+                  {rowTitle}
+                </Text>
+                {preview ? (
+                  <Text style={[styles.chapterNotesRowPreview, { color: colors.textMuted }]} numberOfLines={1}>
+                    {preview}
+                  </Text>
+                ) : null}
+              </View>
+              <CaretRightIcon size={14} color={colors.textSubtle} weight="light" />
+            </TouchableOpacity>
+          );
+        })}
+      </Sheet>
       {/* Scripture note viewer — opened by tapping the inline note marker */}
       <BibleNoteSheet
         highlight={noteSheetHighlight}
@@ -1271,6 +1360,46 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   headerButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  headerNoteBadge: {
+    position: 'absolute',
+    top: 7,
+    right: 5,
+    minWidth: 14,
+    height: 14,
+    borderRadius: 7,
+    paddingHorizontal: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerNoteBadgeText: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 9,
+    lineHeight: 11,
+  },
+
+  // Chapter Notebook-notes sheet
+  chapterNotesTitle: {
+    fontFamily: FontFamily.uiSemiBold,
+    fontSize: FontSize.lg,
+    marginBottom: Spacing['3'],
+  },
+  chapterNotesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing['3'],
+    paddingVertical: Spacing['3.5'],
+  },
+  chapterNotesRowBody: { flex: 1 },
+  chapterNotesRowTitle: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: FontSize.sm,
+  },
+  chapterNotesRowPreview: {
+    fontFamily: FontFamily.body,
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 2,
+  },
   headerCenter: { flex: 1, flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', gap: 6 },
   headerBook: { fontSize: 17 },
   headerChapter: { fontFamily: FontFamily.ui, fontSize: 15 },

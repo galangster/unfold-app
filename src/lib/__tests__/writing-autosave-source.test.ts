@@ -8,7 +8,6 @@ function readSource(relativePath: string): string {
 describe('writing autosave source contract', () => {
   it.each([
     'src/app/(tabs)/(journal)/note-detail.tsx',
-    'src/components/notebook/NoteEditor.tsx',
     'src/components/reading/InlineReflectionJournal.tsx',
   ])('wires maxWait autosave and AppState flush in %s', (relativePath) => {
     const source = readSource(relativePath);

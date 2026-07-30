@@ -15,7 +15,7 @@ import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
-import { stripHtml, isHtmlContent } from '@/components/notebook/NoteEditor';
+import { stripHtml, isHtmlContent } from '@/lib/note-html';
 
 const RETENTION_DAYS = 30;
 
