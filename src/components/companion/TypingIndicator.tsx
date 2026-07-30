@@ -78,7 +78,13 @@ export function TypingIndicator() {
   }, []);
 
   return (
-    <Animated.View entering={reducedMotion ? undefined : ENTERING} style={{ flexDirection: 'row', alignItems: 'center', paddingLeft: Spacing['4'] }}>
+    <Animated.View
+      entering={reducedMotion ? undefined : ENTERING}
+      accessible
+      accessibilityLabel="Companion is thinking"
+      accessibilityLiveRegion="polite"
+      style={{ flexDirection: 'row', alignItems: 'center', paddingLeft: Spacing['4'] }}
+    >
       {/* Companion orb — same size as in CompanionMessageContent */}
       <CompanionOrb accentColor={colors.accent} size={28} />
       <View style={{ width: Spacing['3'] }} />

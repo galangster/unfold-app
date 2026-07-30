@@ -8,7 +8,7 @@
  *   - Multiline: grows up to 5 lines (~120px), then scrolls internally
  *   - Voice recording replaces the entire input bar with waveform UI
  */
-import { useState, useRef, useCallback, useMemo } from 'react';
+import { memo, useState, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -47,10 +47,14 @@ interface Props {
   isStreaming: boolean;
 }
 
-export function CompanionInput({ onSend, onStop, isStreaming }: Props) {
+// Memoized: the companion screen re-renders on every streaming token flush —
+// the input bar's props (stable callbacks + isStreaming) only change at
+// stream boundaries, so the memo skips ~30 re-renders/sec while streaming.
+export const CompanionInput = memo(function CompanionInput({ onSend, onStop, isStreaming }: Props) {
   const { colors, isDark } = useTheme();
   const [text, setText] = useState('');
   const [isVoiceMode, setIsVoiceMode] = useState(false);
+  const [micPermissionDenied, setMicPermissionDenied] = useState(false);
   const inputRef = useRef<TextInput>(null);
   const sendScale = useSharedValue(1);
 
@@ -87,7 +91,15 @@ export function CompanionInput({ onSend, onStop, isStreaming }: Props) {
 
   const handleMicPress = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    // Re-tapping the mic after a permission denial retries the request
+    // (iOS won't re-prompt, but the user may have flipped it in Settings).
+    setMicPermissionDenied(false);
     setIsVoiceMode(true);
+  }, []);
+
+  const handleMicPermissionDenied = useCallback(() => {
+    setIsVoiceMode(false);
+    setMicPermissionDenied(true);
   }, []);
 
   // When voice input changes text, auto-send or update field
@@ -121,8 +133,26 @@ export function CompanionInput({ onSend, onStop, isStreaming }: Props) {
             accentColor={colors.accent}
             autoStart
             onCancel={() => setIsVoiceMode(false)}
+            onPermissionDenied={handleMicPermissionDenied}
           />
         </View>
+      )}
+
+      {/* Mic permission denied — explain instead of silently doing nothing */}
+      {micPermissionDenied && !isVoiceMode && (
+        <Text
+          accessibilityRole="alert"
+          style={{
+            fontFamily: FontFamily.ui,
+            fontSize: FontSize.xs,
+            color: colors.textMuted,
+            textAlign: 'center',
+            marginBottom: Spacing['2'],
+            paddingHorizontal: Spacing['2'],
+          }}
+        >
+          Microphone access is off. Allow it in Settings, then tap the mic to try again.
+        </Text>
       )}
       <View
         style={{
@@ -148,7 +178,9 @@ export function CompanionInput({ onSend, onStop, isStreaming }: Props) {
           cursorColor={colors.accent}
           multiline
           scrollEnabled
-          maxLength={COMPANION_MESSAGE_MAX_CHARS}
+          // No maxLength: voice input appends programmatically and can pass
+          // the cap regardless — the counter + over-limit send guard (which
+          // preserves the draft) are the single enforcement path.
           textAlignVertical="center"
           keyboardAppearance={isDark ? 'dark' : 'light'}
           returnKeyType="default"
@@ -244,4 +276,4 @@ export function CompanionInput({ onSend, onStop, isStreaming }: Props) {
       </View>
     </View>
   );
-}
+});
