@@ -18,7 +18,9 @@ import {
   StyleSheet,
   Alert,
   Keyboard,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
 } from 'react-native';
 import Animated, {
@@ -73,10 +75,38 @@ export function BibleNoteSheet({ highlight, onClose, onSave, onDelete }: BibleNo
     }
   }, [highlight?.id, highlight?.note, translateY]);
 
+  /**
+   * Commit a non-empty, changed draft through the same path as the explicit
+   * Save button (Apple Notes behavior: never ask, just save). Returns true if
+   * a save happened. An empty draft is never committed here, so dismissing
+   * after clearing the text leaves the note untouched — deleting still goes
+   * through the explicit Delete flow (which removes note-only highlights).
+   */
+  const commitDraft = useCallback(() => {
+    if (!displayed) return false;
+    const trimmed = draft.trim();
+    if (!trimmed || trimmed === (displayed.note ?? '').trim()) return false;
+    onSave(displayed.id, trimmed);
+    return true;
+  }, [displayed, draft, onSave]);
+
+  // Swipe-down dismiss: always a light haptic (drag feedback), commit first.
   const dismiss = useCallback(() => {
+    commitDraft();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Keyboard.dismiss();
     onClose();
-  }, [onClose]);
+  }, [commitDraft, onClose]);
+
+  // Backdrop tap / hardware back: commit-then-close; light haptic on successful
+  // save only (matches the Notebook components' save haptic).
+  const handleDismiss = useCallback(() => {
+    if (commitDraft()) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    Keyboard.dismiss();
+    onClose();
+  }, [commitDraft, onClose]);
 
   const panGesture = Gesture.Pan()
     .onUpdate((event) => {
@@ -150,27 +180,32 @@ export function BibleNoteSheet({ highlight, onClose, onSave, onDelete }: BibleNo
       transparent
       animationType="none"
       statusBarTranslucent
-      onRequestClose={onClose}
+      onRequestClose={handleDismiss}
     >
       <GestureHandlerRootView style={styles.gestureRoot}>
         <Animated.View
           entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
           exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
           style={styles.backdrop}
-        >
-          <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        </Animated.View>
+        />
 
-        <GestureDetector gesture={panGesture}>
-          <Animated.View
-            entering={reducedMotion ? undefined : SlideInDown.duration(Duration.normal).easing(Ease.out)}
-            exiting={reducedMotion ? undefined : SlideOutDown.duration(Duration.fast).easing(Ease.out)}
-            style={[
-              styles.sheet,
-              { backgroundColor: colors.backgroundElevated },
-              sheetAnimatedStyle,
-            ]}
-          >
+        <KeyboardAvoidingView
+          style={styles.avoidingView}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          {/* Transparent dismiss area above the sheet */}
+          <Pressable style={styles.dismissArea} onPress={handleDismiss} />
+
+          <GestureDetector gesture={panGesture}>
+            <Animated.View
+              entering={reducedMotion ? undefined : SlideInDown.duration(Duration.normal).easing(Ease.out)}
+              exiting={reducedMotion ? undefined : SlideOutDown.duration(Duration.fast).easing(Ease.out)}
+              style={[
+                styles.sheet,
+                { backgroundColor: colors.backgroundElevated },
+                sheetAnimatedStyle,
+              ]}
+            >
             <View style={styles.handleRow}>
               <View style={[styles.handle, { backgroundColor: colors.borderStrong }]} />
             </View>
@@ -242,8 +277,9 @@ export function BibleNoteSheet({ highlight, onClose, onSave, onDelete }: BibleNo
                 )}
               </View>
             </View>
-          </Animated.View>
-        </GestureDetector>
+            </Animated.View>
+          </GestureDetector>
+        </KeyboardAvoidingView>
       </GestureHandlerRootView>
     </Modal>
   );
@@ -257,11 +293,14 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
+  avoidingView: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  dismissArea: {
+    flex: 1,
+  },
   sheet: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
     borderTopLeftRadius: Radius['2xl'],
     borderTopRightRadius: Radius['2xl'],
     paddingBottom: 34,
