@@ -7,9 +7,10 @@ import {
   FlatList,
   Alert,
   ActivityIndicator,
-  Image,
   StyleSheet,
+  type ListRenderItem,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInUp, useReducedMotion } from 'react-native-reanimated';
@@ -111,6 +112,8 @@ function getOutputFontSize(textLength: number): number {
 }
 
 const MAX_TEXT_LENGTH = 400;
+
+const themeKeyExtractor = (item: CardTheme) => item.id;
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -352,6 +355,52 @@ export default function ShareCardScreen() {
 
   const isBusy = isSharing || isSaving;
 
+  const renderTheme = useCallback<ListRenderItem<CardTheme>>(({ item }) => {
+    const isActive = selectedTheme === item.id;
+    const isLocked = Boolean(item.premium) && !isPremium;
+    return (
+      <TouchableOpacity
+        activeOpacity={0.7}
+        onPress={() => {
+          if (isLocked) {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            router.push('/paywall');
+            return;
+          }
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          setSelectedTheme(item.id);
+        }}
+        style={s.themeItem}
+      >
+        <View
+          style={[
+            s.themeSwatch,
+            {
+              backgroundColor: item.bg,
+              borderColor: isActive ? '#FFFFFF' : 'rgba(255,255,255,0.2)',
+              borderWidth: isActive ? 2.5 : 1,
+              opacity: isLocked ? 0.5 : 1,
+            },
+          ]}
+        >
+          {isLocked && (
+            <View style={s.lockBadge}>
+              <LockSimpleIcon size={12} color="#ffffff" weight="fill" />
+            </View>
+          )}
+        </View>
+        <Text
+          style={[
+            s.themeLabel,
+            { color: isActive ? '#FFFFFF' : isLocked ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.4)' },
+          ]}
+        >
+          {item.name}
+        </Text>
+      </TouchableOpacity>
+    );
+  }, [selectedTheme, isPremium, router]);
+
   return (
     <View pointerEvents={touchActive} style={[s.container, { backgroundColor: 'rgba(0, 0, 0, 0.94)' }]}>
       {/* Header */}
@@ -423,10 +472,12 @@ export default function ShareCardScreen() {
 
           {/* Unfold logo */}
           <View style={[s.brandRow, { alignItems: 'flex-start' }]}>
-            <Image
+            <ExpoImage
               source={require('@/app/icon-paywall-light.png')}
-              style={[s.brandIcon, { tintColor: subtleColor, width: 14, height: 14 }]}
-              resizeMode="contain"
+              style={[s.brandIcon, { width: 14, height: 14 }]}
+              contentFit="contain"
+              tintColor={subtleColor}
+              cachePolicy="memory-disk"
             />
           </View>
         </View>
@@ -439,52 +490,8 @@ export default function ShareCardScreen() {
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={s.carouselContent}
-          renderItem={({ item }) => {
-            const isActive = selectedTheme === item.id;
-            const isLocked = item.premium && !isPremium;
-            return (
-              <TouchableOpacity
-                activeOpacity={0.7}
-                onPress={() => {
-                  if (isLocked) {
-                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-                    router.push('/paywall');
-                    return;
-                  }
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setSelectedTheme(item.id);
-                }}
-                style={s.themeItem}
-              >
-                <View
-                  style={[
-                    s.themeSwatch,
-                    {
-                      backgroundColor: item.bg,
-                      borderColor: isActive ? '#FFFFFF' : 'rgba(255,255,255,0.2)',
-                      borderWidth: isActive ? 2.5 : 1,
-                      opacity: isLocked ? 0.5 : 1,
-                    },
-                  ]}
-                >
-                  {isLocked && (
-                    <View style={s.lockBadge}>
-                      <LockSimpleIcon size={12} color="#ffffff" weight="fill" />
-                    </View>
-                  )}
-                </View>
-                <Text
-                  style={[
-                    s.themeLabel,
-                    { color: isActive ? '#FFFFFF' : isLocked ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.4)' },
-                  ]}
-                >
-                  {item.name}
-                </Text>
-              </TouchableOpacity>
-            );
-          }}
-          keyExtractor={(item) => item.id}
+          renderItem={renderTheme}
+          keyExtractor={themeKeyExtractor}
         />
       </Animated.View>
 

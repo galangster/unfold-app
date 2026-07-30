@@ -58,6 +58,14 @@ const SINGLE_CHAPTER_BOOK_IDS = new Set([31, 57, 63, 64, 65]);
 const TAB_LABELS = ['Book', 'Chapter', 'Verse'] as const;
 const TAB_PADDING = 3;
 
+const EMPTY_NUMBERS: number[] = [];
+
+/** 1..length, or a shared empty array when there's nothing to render. */
+function buildNumberRange(length: number): number[] {
+  if (length <= 0) return EMPTY_NUMBERS;
+  return Array.from({ length }, (_, i) => i + 1);
+}
+
 // No animations — navigator appears instantly, content swaps instantly
 
 // ─── Animated Tab Indicator ─────────────────────────────────────────────────
@@ -182,6 +190,15 @@ export function BookChapterNavigator({
 
   // ── Tab index ─────────────────────────────────────────────────────────
   const tabIndex = mode === 'books' ? 0 : mode === 'chapters' ? 1 : 2;
+
+  // ── Number grids ──────────────────────────────────────────────────────
+  // Built once per count instead of re-allocating a 150-element array
+  // (Psalms) on every render of this sheet.
+  const chapterNumbers = useMemo(
+    () => buildNumberRange(selectedBook?.chapterCount ?? 0),
+    [selectedBook?.chapterCount],
+  );
+  const verseNumbers = useMemo(() => buildNumberRange(verseCount), [verseCount]);
 
   // ── Header title removed — step tabs indicate context ──────────────────
 
@@ -444,7 +461,7 @@ export function BookChapterNavigator({
         contentContainerStyle={styles.scrollContent}
       >
         <View style={styles.chipGrid}>
-          {Array.from({ length: selectedBook.chapterCount }, (_, i) => i + 1).map((ch) => {
+          {chapterNumbers.map((ch) => {
             const isCurrent = currentBookId === selectedBook.id && currentChapter === ch;
             return (
               <TouchableOpacity
@@ -492,7 +509,7 @@ export function BookChapterNavigator({
         contentContainerStyle={styles.scrollContent}
       >
         <View style={styles.chipGrid}>
-          {Array.from({ length: verseCount }, (_, i) => i + 1).map((v) => (
+          {verseNumbers.map((v) => (
             <TouchableOpacity
               key={v}
               onPress={() => handleVerseSelect(v)}

@@ -1,4 +1,5 @@
-import { View, Text, TouchableOpacity, Image } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { useRouter } from 'expo-router';
 import Animated, {
   useSharedValue,
@@ -373,10 +374,11 @@ export default function WelcomeScreen() {
           {phase !== 'features' && (
             <>
               <Animated.View style={[{ marginBottom: Spacing['7'] }, iconStyle]}>
-                <Image
+                <ExpoImage
                   source={require('../../assets/icon-paywall.png')}
                   style={{ width: 56, height: 56 }}
-                  resizeMode="contain"
+                  contentFit="contain"
+                  cachePolicy="memory-disk"
                 />
               </Animated.View>
 

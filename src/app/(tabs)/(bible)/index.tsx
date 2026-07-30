@@ -17,6 +17,8 @@ import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
 import { Typography } from '@/constants/typography';
 
+const EMPTY_CHAPTERS: number[] = [];
+
 export default function BibleHomeScreen() {
   const { colors, isDark } = useTheme();
   const reducedMotion = useReducedMotion();
@@ -26,6 +28,16 @@ export default function BibleHomeScreen() {
   const [selectedBook, setSelectedBook] = useState<BibleBookInfo | null>(null);
 
   const lastPosition = useMemo(() => getLastBiblePosition(), [getLastBiblePosition]);
+
+  // Chapter numbers for the grid modal — rebuilt only when the selected book's
+  // chapter count changes, not on every render of this screen.
+  const chapterNumbers = useMemo(
+    () =>
+      selectedBook
+        ? Array.from({ length: selectedBook.chapterCount }, (_, i) => i + 1)
+        : EMPTY_CHAPTERS,
+    [selectedBook],
+  );
 
   // Auto-navigate to reader on first mount
   const hasAutoNavigated = useRef(false);
@@ -257,7 +269,7 @@ export default function BibleHomeScreen() {
                 showsVerticalScrollIndicator={false}
               >
                 <View style={styles.chapterGrid}>
-                  {selectedBook && Array.from({ length: selectedBook.chapterCount }, (_, i) => i + 1).map((ch) => (
+                  {chapterNumbers.map((ch) => (
                     <TouchableOpacity
                       key={ch}
                       onPress={() => handleChapterPress(ch)}

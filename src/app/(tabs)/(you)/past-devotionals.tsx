@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, TextInput, StyleSheet, LayoutChangeEvent, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, TextInput, StyleSheet, LayoutChangeEvent, Alert, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useCrossTabBack } from '@/hooks/useCrossTabBack';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
@@ -17,7 +17,7 @@ import Animated, {
   useReducedMotion,
 } from 'react-native-reanimated';
 // Old Swipeable API removed — crashes on Fabric. Using Gesture.Pan() instead (see SwipeableStudyCard).
-import { FlashList } from '@shopify/flash-list';
+import { FlashList, type ListRenderItem } from '@shopify/flash-list';
 import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon, BookOpenIcon, CheckIcon, DownloadSimpleIcon, MagnifyingGlassIcon, XCircleIcon, TrashIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
@@ -470,6 +470,13 @@ function DevotionalCard({ item, colors, exportingId, exportSuccessId, onSelect, 
 // Main Screen
 // ============================================================================
 
+/** Static — hoisted so the FlashList doesn't see a new style object each render. */
+const LIST_CONTENT_STYLE = {
+  paddingHorizontal: Spacing['6'],
+  paddingTop: Spacing['1'],
+  paddingBottom: 100,
+} as const;
+
 export default function PastDevotionalsScreen() {
   const router = useRouter();
   const { handleBack, isFromHome } = useCrossTabBack();
@@ -524,7 +531,7 @@ export default function PastDevotionalsScreen() {
   }, [devotionals, activeTab, searchQuery]);
 
   // Pull-down to reveal search — detect overscroll
-  const handleScroll = useCallback((event: { nativeEvent: { contentOffset: { y: number } } }) => {
+  const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const y = event.nativeEvent.contentOffset.y;
     scrollY.value = y;
     if (y < -50 && !searchVisible) {
@@ -618,7 +625,7 @@ export default function PastDevotionalsScreen() {
     );
   }, [removeDevotional]);
 
-  const renderItem = useCallback(({ item }: { item: Devotional }) => (
+  const renderItem = useCallback<ListRenderItem<Devotional>>(({ item }) => (
     <SwipeableStudyCard onDelete={() => handleDeleteDevotional(item)}>
       <DevotionalCard
         item={item}
@@ -630,6 +637,8 @@ export default function PastDevotionalsScreen() {
       />
     </SwipeableStudyCard>
   ), [colors, exportingId, exportSuccessId, handleSelectDevotional, handleExportPDF, handleDeleteDevotional]);
+
+  const keyExtractor = useCallback((item: Devotional) => item.id, []);
 
   if (devotionals.length === 0) {
     return (
@@ -799,11 +808,11 @@ export default function PastDevotionalsScreen() {
           )}
           <FlashList
             data={filteredDevotionals}
-            renderItem={renderItem as any}
-            keyExtractor={(item: Devotional) => item.id}
-            contentContainerStyle={{ paddingHorizontal: Spacing['6'], paddingTop: Spacing['1'], paddingBottom: 100 } as any}
+            renderItem={renderItem}
+            keyExtractor={keyExtractor}
+            contentContainerStyle={LIST_CONTENT_STYLE}
             showsVerticalScrollIndicator={false}
-            onScroll={handleScroll as any}
+            onScroll={handleScroll}
             scrollEventThrottle={16}
           />
           </>

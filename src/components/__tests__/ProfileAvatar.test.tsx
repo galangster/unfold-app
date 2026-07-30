@@ -37,6 +37,13 @@ jest.mock('@/components/ui', () => ({
   alpha: (_color: string, opacity: number) => `rgba(0,0,0,${opacity})`,
 }));
 
+// expo-image ships untranspiled TS and pulls in expo-modules-core native
+// globals, so stub the component the same way the other Expo modules are
+// stubbed here.
+jest.mock('expo-image', () => ({
+  Image: 'ExpoImage',
+}));
+
 jest.mock('expo-image-picker', () => ({
   launchImageLibraryAsync: jest.fn(),
 }));

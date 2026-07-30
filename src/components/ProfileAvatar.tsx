@@ -1,4 +1,5 @@
-import { View, Text, Image, TouchableOpacity, ActionSheetIOS, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, ActionSheetIOS, Alert } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { documentDirectory, copyAsync, deleteAsync, getInfoAsync } from 'expo-file-system/legacy';
@@ -206,10 +207,11 @@ export function ProfileAvatar({ size = 36, editable = false, onPress }: ProfileA
         }}
       >
         {hasRenderableProfilePicture ? (
-          <Image
+          <ExpoImage
             source={{ uri: resolvedProfilePicture! }}
             style={{ width: size, height: size, borderRadius: size / 2 }}
-            resizeMode="cover"
+            contentFit="cover"
+            cachePolicy="memory-disk"
             onError={handleImageError}
           />
         ) : (
