@@ -1,4 +1,6 @@
 import { Text, TouchableOpacity, StyleSheet, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { GearSixIcon } from 'phosphor-react-native';
 import { ReaderBottomSheet } from '@/components/reader/ReaderBottomSheet';
 import { ReaderAppearanceControls } from '@/components/reader/ReaderAppearanceControls';
 import { ReaderLibraryRow } from '@/components/reader/ReaderLibraryRow';
@@ -36,6 +38,7 @@ export function ReadingSettingsSheet({
   isPremium = true,
   onLockedFontPress = () => {},
 }: ReadingSettingsSheetProps) {
+  const router = useRouter();
   const { colors, isDark } = useTheme();
   const settings = useUnfoldStore((state) => state.bibleReaderSettings);
   const themeMode = useUnfoldStore((state) => state.user?.themeMode ?? 'dark');
@@ -145,6 +148,19 @@ export function ReadingSettingsSheet({
             accessibilityLabel={`Open saved Bible highlights${savedVersesCount != null && savedVersesCount > 0 ? `, ${savedVersesCount} saved` : ''}`}
           />
         ) : null}
+
+        {/* Entry to the full Settings screen. `from: 'bible'` lets
+            useCrossTabBack return to the Bible tab on back. */}
+        <ReaderLibraryRow
+          label="All settings"
+          icon={<GearSixIcon size={18} color={colors.text} weight="regular" />}
+          testID="reader-all-settings-row"
+          onPress={() => {
+            onClose();
+            router.push({ pathname: '/(tabs)/(you)/settings', params: { from: 'bible' } });
+          }}
+          accessibilityLabel="Open all settings"
+        />
       </View>
     </ReaderBottomSheet>
   );

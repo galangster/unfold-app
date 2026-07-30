@@ -1,4 +1,6 @@
 import { View, StyleSheet } from 'react-native';
+import { useRouter } from 'expo-router';
+import { GearSixIcon } from 'phosphor-react-native';
 import { ReaderBottomSheet } from '@/components/reader/ReaderBottomSheet';
 import { ReaderAppearanceControls } from '@/components/reader/ReaderAppearanceControls';
 import { ReaderLibraryRow } from '@/components/reader/ReaderLibraryRow';
@@ -7,6 +9,7 @@ import { useSavedHighlights } from '@/hooks/useSavedHighlights';
 import { useUnfoldStore } from '@/lib/store';
 import type { FontSize, ReadingFontId, ThemeMode } from '@/lib/store';
 import { Spacing } from '@/constants/spacing';
+import { useTheme } from '@/lib/theme';
 
 interface DevotionalReaderPreferencesSheetProps {
   visible: boolean;
@@ -25,6 +28,8 @@ export function DevotionalReaderPreferencesSheet({
   onLockedFontPress,
   bottomInset = 84,
 }: DevotionalReaderPreferencesSheetProps) {
+  const router = useRouter();
+  const { colors } = useTheme();
   const themeMode = useUnfoldStore((state) => state.user?.themeMode ?? 'dark');
   const fontSize = useUnfoldStore((state) => state.user?.fontSize ?? 'medium');
   const readingFont = useUnfoldStore((state) => state.user?.readingFont ?? 'source-serif');
@@ -66,6 +71,19 @@ export function DevotionalReaderPreferencesSheet({
             onOpenSavedContent();
           }}
           accessibilityLabel={`Open saved devotional highlights and notes${savedHighlights.count.devotional > 0 ? `, ${savedHighlights.count.devotional} saved` : ''}`}
+        />
+
+        {/* Entry to the full Settings screen. `from: 'home'` lets
+            useCrossTabBack return to the Today tab on back. */}
+        <ReaderLibraryRow
+          label="All settings"
+          icon={<GearSixIcon size={18} color={colors.text} weight="regular" />}
+          testID="reader-all-settings-row"
+          onPress={() => {
+            onClose();
+            router.push({ pathname: '/(tabs)/(you)/settings', params: { from: 'home' } });
+          }}
+          accessibilityLabel="Open all settings"
         />
       </View>
     </ReaderBottomSheet>

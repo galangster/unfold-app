@@ -20,8 +20,10 @@ describe('debug seed routes', () => {
     path.join(__dirname, '../../app/(tabs)/(you)/past-devotionals.tsx'),
     'utf-8',
   );
-  const youTabSource = fs.readFileSync(
-    path.join(__dirname, '../../app/(tabs)/(you)/index.tsx'),
+  // The QA tools section moved out of (you)/index.tsx into the dedicated
+  // Settings screen's QaToolsSection component.
+  const qaToolsSectionSource = fs.readFileSync(
+    path.join(__dirname, '../../components/settings/QaToolsSection.tsx'),
     'utf-8',
   );
   const todayTabSource = fs.readFileSync(
@@ -55,9 +57,9 @@ describe('debug seed routes', () => {
   });
 
   it('does not route the QA tools section to deleted debug routes', () => {
-    expect(youTabSource).not.toContain("router.push('/debug-reset-beginning')");
-    expect(youTabSource).not.toContain("router.push('/debug-light-mode')");
-    expect(youTabSource).not.toContain("onPress={() => router.push('/onboarding')}");
+    expect(qaToolsSectionSource).not.toContain("router.push('/debug-reset-beginning')");
+    expect(qaToolsSectionSource).not.toContain("router.push('/debug-light-mode')");
+    expect(qaToolsSectionSource).not.toContain("onPress={() => router.push('/onboarding')}");
   });
 
   it('routes Today new-series CTAs to discovery selection instead of first-run onboarding', () => {
