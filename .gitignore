@@ -98,3 +98,6 @@ unfold-bible-v1.db
 APP_REVIEW_NOTES_DRAFT.md
 .artifacts/
 keys/
+
+# Agent worktrees — never commit as gitlinks (breaks clone/submodule ops)
+.claude/worktrees/
