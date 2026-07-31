@@ -1948,7 +1948,7 @@ export const useUnfoldStore = create<UnfoldState>()(
     {
       name: 'unfold-storage',
       storage: unfoldPersistStorage,
-      version: 39, // v39: Recently Deleted notes retention (WR-15)
+      version: 40, // v40: repair missing seriesStartDate (calendar anchor)
       // WR-23: drop session-scoped flags from the persisted blob.
       partialize: (state): PersistedUnfoldState => {
         const { nudgeShownThisSession, streakJustReset, ...persisted } = state;
