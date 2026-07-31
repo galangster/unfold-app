@@ -201,7 +201,21 @@ has no simulator and no access to this machine.
 automation and Maestro overlap deliberately:
 
 - **Maestro** — deterministic regression runs, checked into the repo, good for
-  "did this break?" Requires `brew install maestro openjdk`.
+  "did this break?" Install it with the vendor script, **not** Homebrew:
+
+  ```bash
+  brew install openjdk                              # /usr/bin/java is only Apple's stub
+  curl -Ls "https://get.maestro.mobile.dev" | bash  # installs into ~/.maestro
+  export PATH="/opt/homebrew/opt/openjdk/bin:$HOME/.maestro/bin:$PATH"
+  ```
+
+  `brew install maestro` installs the **wrong** product — that cask is an
+  unrelated "AI agent command center". The official tap
+  (`mobile-dev-inc/tap/maestro`) is correct but Homebrew may refuse to build it,
+  demanding a Command Line Tools version older than the installed Xcode. The
+  vendor script sidesteps both. Note `openjdk` is keg-only, so `java` stays off
+  your PATH until you export it, and the installer appends itself to `~/.zshrc`
+  and `~/.bash_profile`.
 - **FlowDeck UI automation** — exploratory and agent-driven, good for "what does
   this actually look like / why did it fail?"
 

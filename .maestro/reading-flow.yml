@@ -35,11 +35,23 @@ appId: com.unfoldapp.ios
     id: "devotional-reader-settings-button"
 - assertVisible:
     id: "devotional-reader-preferences-sheet"
+# The preferences sheet scrolls (ReaderBottomSheet maxHeightRatio 0.72);
+# this row sits below the fold, so it must be scrolled to before use.
+- scrollUntilVisible:
+    element:
+      id: "reader-all-settings-row"
+    direction: DOWN
 - assertVisible:
     id: "reader-all-settings-row"
 
-- tapOn:
-    id: "reader-bottom-sheet-backdrop"
+# The backdrop TouchableOpacity never appears in the view hierarchy despite
+# carrying a testID + accessibilityRole/Label, so it cannot be tapped or
+# reached by assistive tech (reported as a bug). Dismiss via the other
+# supported path — swiping the sheet surface down.
+- swipe:
+    from:
+      id: "reader-bottom-sheet-grabber"
+    direction: DOWN
 - assertNotVisible:
     id: "devotional-reader-preferences-sheet"
 

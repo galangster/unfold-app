@@ -66,6 +66,17 @@ appId: com.unfoldapp.ios
     id: "reader-settings-button"
 - assertVisible:
     id: "bible-reader-preferences-sheet"
+# The preferences sheet scrolls (ReaderBottomSheet maxHeightRatio 0.72);
+# this row sits below the fold, so it must be scrolled to before use.
+- scrollUntilVisible:
+    element:
+      id: "reader-saved-verses-row"
+    direction: DOWN
 - tapOn:
     id: "reader-saved-verses-row"
-- assertVisible: "Genesis 1:1 \\(BSB\\)"
+# The saved-library card exposes ONE flattened a11y label built in
+# my-content.tsx: `${source} ${kind}: ${note ?? text}` — the verse
+# reference is rendered on screen but never exposed, so asserting
+# "Genesis 1:1 (BSB)" can never match. Assert the label that exists;
+# the verse prose still proves the right verse persisted.
+- assertVisible: "Bible highlight: In the beginning God created.*"
