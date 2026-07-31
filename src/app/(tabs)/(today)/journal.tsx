@@ -275,8 +275,17 @@ export default function JournalScreen() {
 
   // Prayer state
   const [newPrayerText, setNewPrayerText] = useState('');
+  // Mirrors the draft so background/unmount flushes read the latest text
+  // instead of a stale closure — the same rule the freewrite/SOAP saves follow.
+  const newPrayerTextRef = useRef('');
+  const flushPrayerDraftRef = useRef<() => void>(() => {});
   const [showPrayerInput, setShowPrayerInput] = useState(false);
   const prayerInputRef = useRef<TextInput>(null);
+
+  const handlePrayerTextChange = useCallback((text: string) => {
+    newPrayerTextRef.current = text;
+    setNewPrayerText(text);
+  }, []);
 
   // Go Deeper state — restore from persisted entry if available
   const [deeperPrompts, setDeeperPrompts] = useState<string[]>(
@@ -404,6 +413,7 @@ export default function JournalScreen() {
       isMountedRef.current = false;
       soapAutosaveRef.current?.flush();
       freewriteAutosaveRef.current?.flush();
+      flushPrayerDraftRef.current();
     };
   }, []);
 
@@ -414,6 +424,7 @@ export default function JournalScreen() {
       if (!shouldFlushAutosaveOnAppState(nextState)) return;
       freewriteAutosaveRef.current?.flush();
       soapAutosaveRef.current?.flush();
+      flushPrayerDraftRef.current();
     });
 
     return () => subscription.remove();
@@ -536,9 +547,30 @@ export default function JournalScreen() {
     if (entryId) {
       addPrayerRequest(entryId, newPrayerText.trim());
     }
+    newPrayerTextRef.current = '';
     setNewPrayerText('');
     setShowPrayerInput(false);
   }, [newPrayerText, ensureEntry, addPrayerRequest, gate]);
+
+  // An uncommitted prayer draft used to die with the process: unlike freewrite
+  // and SOAP it had no autosave controller and no flush, so text typed but not
+  // submitted was lost on force-quit. Commit it on background/unmount.
+  //
+  // Deliberately does NOT call gate(): this runs while the app is backgrounding
+  // or the screen is unmounting, where surfacing a paywall/offer (gate's side
+  // effect) or calling setState would be wrong. It only writes to an entry that
+  // already exists, so it never creates content a blocked user couldn't — the
+  // freewrite/SOAP flushes run first and will have created the entry if the
+  // user wrote anything at all.
+  const flushPendingPrayerDraft = useCallback(() => {
+    const text = newPrayerTextRef.current.trim();
+    if (!text) return;
+    const entryId = savedEntryIdRef.current;
+    if (!entryId) return;
+    addPrayerRequest(entryId, text);
+    newPrayerTextRef.current = '';
+  }, [addPrayerRequest]);
+  flushPrayerDraftRef.current = flushPendingPrayerDraft;
 
   const handleTogglePrayer = useCallback((prayerId: string) => {
     if (!gate()) return;
@@ -1256,7 +1288,7 @@ Their journal entry:
                     <TextInput
                       ref={prayerInputRef}
                       value={newPrayerText}
-                      onChangeText={setNewPrayerText}
+                      onChangeText={handlePrayerTextChange}
                       placeholder="What would you like to pray for?"
                       placeholderTextColor={colors.textHint}
                       selectionColor={colors.accent}
@@ -1269,12 +1301,12 @@ Their journal entry:
                       onSubmitEditing={handleAddPrayer}
                       blurOnSubmit
                     />
-                    <VoiceInputBar inline value={newPrayerText} onChangeText={setNewPrayerText} />
+                    <VoiceInputBar inline value={newPrayerText} onChangeText={handlePrayerTextChange} />
                   </View>
                   {/* Action buttons below input */}
                   <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 16, marginTop: 10 }}>
                     <TouchableOpacity
-                      onPress={() => { setShowPrayerInput(false); setNewPrayerText(''); }}
+                      onPress={() => { setShowPrayerInput(false); newPrayerTextRef.current = ''; setNewPrayerText(''); }}
                       activeOpacity={0.6}
                       hitSlop={8}
                     >
