@@ -240,7 +240,33 @@ Two guards now exist:
 Run every surface you touched through **dark + light**, **Reduce Motion on +
 off**, and at least one **non-gold accent** (Ocean) to catch hardcoded gold.
 
-## 8. Reporting bugs
+## 8. Visual verification — required before any UI change is "done"
+
+**A UI change is not verified until a human has looked at it.** Passing
+assertions prove an element exists and responds; they do not prove it looks
+right. The settings-gear fix is the cautionary tale: an intermediate attempt
+made the gear vanish from the screen entirely while every automated check still
+reported the same thing it had before.
+
+So for any change that alters what the user sees, send the screenshots and wait
+for approval rather than declaring it fixed:
+
+1. Capture the surface **before** the change, and again after.
+   ```bash
+   flowdeck ui simulator screen --screenshot -S "iPhone 17 Pro"
+   ```
+2. Put them side by side, label them BEFORE/AFTER, and box the region that
+   changed — an unlabelled pair makes the reader hunt for the difference.
+3. Send them to the user for sign-off. Call out any **unintended** consequence
+   explicitly (a layout shift, a spacing change, anything a designer would care
+   about), even when the primary fix is correct.
+4. Treat the change as provisional until they approve. Do not fold it into a
+   "done" summary before then.
+
+Cover the cross-cutting matrix in §7 for anything visual: dark + light, Reduce
+Motion on + off, and a non-gold accent.
+
+## 9. Reporting bugs
 
 ```
 BUG #N
