@@ -177,4 +177,47 @@ describe('pulled devotional content application', () => {
 
     expect(result).toBe(devotionals);
   });
+
+  // A resume arriving from another device has to actually CLEAR the local
+  // archive, not just appear in the patch. Object spread keeps keys whose value
+  // is undefined, so this asserts the end state rather than the patch shape —
+  // the one-way latch used to make this impossible to express at all.
+  it('clears a local archive when the server reports the series resumed', () => {
+    const archived = {
+      ...baseDevotional,
+      archivedAt: '2026-04-25T00:00:00.000Z',
+    } as Devotional;
+
+    const result = applyPulledDevotionalMetadataToDevotionals(
+      [archived],
+      'devotional-1',
+      pulledContent({
+        days: [],
+        devotional: {
+          id: 'devotional-1',
+          archivedAt: null,
+          updatedAt: '2026-04-26T00:00:00.000Z',
+        },
+      }),
+    );
+
+    expect(result[0].archivedAt).toBeUndefined();
+  });
+
+  it('applies an archive arriving from another device', () => {
+    const result = applyPulledDevotionalMetadataToDevotionals(
+      [baseDevotional],
+      'devotional-1',
+      pulledContent({
+        days: [],
+        devotional: {
+          id: 'devotional-1',
+          archivedAt: '2026-04-26T00:00:00.000Z',
+          updatedAt: '2026-04-26T00:00:00.000Z',
+        },
+      }),
+    );
+
+    expect(result[0].archivedAt).toBe('2026-04-26T00:00:00.000Z');
+  });
 });

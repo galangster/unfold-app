@@ -68,7 +68,11 @@ export function buildDevotionalReadSyncChanges({
         seriesArc: devotional.seriesArc,
         progressiveMemory: devotional.progressiveMemory,
         seriesStartDate: devotional.seriesStartDate,
-        archivedAt: devotional.archivedAt,
+        // archivedAt is deliberately NOT sent here. Lifecycle is only ever
+        // written by archive/resume pushes, which carry the archivedStateAt
+        // intent clock. Including it on a content push would let a stale
+        // device silently reverse a decision made on another one, with no
+        // intent timestamp to arbitrate.
       },
       deleted: false,
     },
