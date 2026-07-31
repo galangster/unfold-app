@@ -1,4 +1,4 @@
-Build 241 fixes the bug where tapping the next day in a series opened the previous day's reading instead.
+Build 243 fixes the bug where tapping the next day in a series opened the previous day's reading instead.
 
 What changed:
 - Tapping Day 2 (or any next day) no longer silently opens the day before it. The app was losing track of the date a series started, which made it fall back to "you already read today's" and send you back a day, even when the next reading was ready and you were entitled to it.
