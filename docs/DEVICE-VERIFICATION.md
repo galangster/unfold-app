@@ -101,7 +101,34 @@ flowdeck stop --all
 git diff --name-only origin/main..HEAD | grep -E '^(ios|android|modules)/'
 ```
 
-No output means Metro alone is enough — `npx expo start`, then reload the app.
+No output means Metro alone is enough. **Start Metro in offline mode:**
+
+```bash
+EXPO_OFFLINE=1 bun run start --offline
+```
+
+The offline flags are not optional. A plain `expo start` calls Expo's GraphQL
+API to resolve the project (`owner` + `extra.eas.projectId` in `app.json`), and
+when that call fails the dev server's *manifest* endpoint returns HTTP 500
+(`UnexpectedServerData: No returned query result`). The dev client then reports
+`Failed to connect to http://localhost:8081` even though `/status` answers
+normally and the bundle builds fine — so it reads like a networking problem when
+it isn't. `expo whoami` failing with the same error is the tell.
+
+Check the endpoint the dev client actually fetches:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' -H 'expo-platform: ios' \
+  -H 'Accept: multipart/mixed,application/expo+json,application/json' \
+  http://localhost:8081/          # must be 200, not 500
+```
+
+Then reload the app, or reconnect it explicitly:
+
+```bash
+flowdeck ui simulator open-url \
+  "unfold://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081"
+```
 
 ## 4. Driving the UI
 
@@ -131,6 +158,28 @@ after every action.
 Prefer `--by-id` over label matching — copy changes far more often than testIDs.
 When you need a new hook, add a `testID` in the component rather than reaching
 for a text match.
+
+### Four things that will otherwise cost you an hour
+
+- **Taps above roughly `y=150` are swallowed by sticky headers.** A row reported
+  at `y=118` sits *under* the Settings header and the tap does nothing — but the
+  command still prints `✓ Tapped`, so it looks like the button is broken. Scroll
+  the target to mid-screen first. This is exactly what makes Dev Tools →
+  **Grant Premium (QA)** appear dead when it is fine.
+- **The dev-client floating Tools button overlays the app's top-right corner**
+  and eats taps meant for the app, opening the dev menu instead. Turn it off:
+  open the menu, then scroll *down* — the sheet extends past the 874pt viewport,
+  so the `Tools button` row is off-screen until you do — and toggle it off.
+- **`type` injects hardware keystrokes, so the software keyboard never appears.**
+  Anything that only exists while the keyboard is up — the note editor's
+  undo/redo/Minimize/Done toolbar, "does the keyboard cover Save?" — cannot be
+  checked this way. Use Maestro, or drive those by hand.
+- **`--by-id` only resolves what the accessibility tree exposes.** Plain
+  container `View`s carrying a `testID` (`bible-reader-screen`, `you-screen`) do
+  not appear, so `find`/`assert --by-id` fails on them. That is a FlowDeck
+  limitation, **not** a dead selector — Maestro reads the native view hierarchy
+  and sees them. Never "fix" a Maestro flow because FlowDeck can't find a
+  container; you would be breaking a working test.
 
 ## 5. Letting an agent drive it
 
