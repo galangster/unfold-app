@@ -24,6 +24,9 @@ export function QaToolsSection() {
   const setHasSeenHomeTooltips = useUnfoldStore((s) => s.setHasSeenHomeTooltips);
   const debugForceTrialExpired = useUIState((s) => s.debugForceTrialExpired);
   const setDebugForceTrialExpired = useUIState((s) => s.setDebugForceTrialExpired);
+  const qaPremiumOverride = useUIState((s) => s.qaPremiumOverride);
+  const setQaPremiumOverride = useUIState((s) => s.setQaPremiumOverride);
+  const setRevenueCatResolved = useUIState((s) => s.setRevenueCatResolved);
 
   if (!isQaToolsEnabled()) {
     return null;
@@ -33,6 +36,34 @@ export function QaToolsSection() {
     <>
       {/* --- QA Tools --- Internal QA affordances for notification/reveal verification builds. */}
       <SettingsSectionHeader label={__DEV__ ? "Dev Tools" : "QA Tools"} />
+
+      {/* Grants premium locally so gated surfaces (notes, journal, premium fonts)
+          can be exercised on a build with no RevenueCat keys. Session-only —
+          `qaPremiumOverride` is not persisted, and the policy ignores it unless
+          QA tools are enabled (src/lib/premium-access-policy.ts). */}
+      <TouchableOpacity
+        activeOpacity={0.7}
+        onPress={() => {
+          const next = !qaPremiumOverride;
+          setQaPremiumOverride(next);
+          if (next) {
+            setDebugForceTrialExpired(false);
+            setRevenueCatResolved();
+          }
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }}
+        style={{
+          padding: Spacing['4'],
+          borderRadius: Radius.md,
+          backgroundColor: 'rgba(200, 165, 92, 0.1)',
+          alignItems: 'center',
+          marginBottom: Spacing['3'],
+        }}
+      >
+        <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 14, color: colors.accent }}>
+          {qaPremiumOverride ? 'Premium Override: ON (tap to disable)' : 'Grant Premium (QA)'}
+        </Text>
+      </TouchableOpacity>
 
       <TouchableOpacity
         activeOpacity={0.7}

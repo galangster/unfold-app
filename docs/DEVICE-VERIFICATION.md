@@ -18,9 +18,40 @@ Reference simulator: **iPhone 17 Pro `E292C8E3-EF98-4FF4-A19F-AD4B91877AB6`**
 git fetch origin && git checkout <branch> && bun install
 ```
 
-Copy `.env` and `.env.production` from the machine that has them — both are
-gitignored, so a fresh clone cannot reach the backend without them. Anything that
-exercises the companion, streaming, or devotional generation needs them.
+### You do not need a `.env` to verify the app
+
+`.env` and `.env.production` are gitignored, so a fresh clone has neither. That
+is fine for verification:
+
+- **Backend works without one.** `PRIMARY_BACKEND_URL` falls back to
+  `https://api.unfoldapp.co` (`src/lib/api-config.ts`), so devotionals,
+  generation and companion streaming all reach production.
+- **Premium works without one.** RevenueCat keys come from env, so purchases
+  will not resolve — but a Debug build has `__DEV__ === true`, which turns on
+  `isQaToolsEnabled()` (`src/lib/qa-tools.ts`). Settings → **Dev Tools → Grant
+  Premium (QA)** flips the local override that
+  `src/lib/premium-access-policy.ts` honours, unlocking notes, journal and
+  premium fonts. It is session-only and never persisted.
+- **Firebase works without one.** `GoogleService-Info.plist` is committed.
+
+Only real purchase/paywall flows need the actual keys. Everything on the
+checklist below can be verified without them.
+
+### First-time machine setup
+
+A machine that has never built this app needs, in order:
+
+1. **Xcode** from the App Store, then `xcode-select --install` and open Xcode
+   once to accept the license and let it install an iOS simulator runtime.
+2. **CocoaPods** (`brew install cocoapods`), then `cd ios && pod install`
+   (`Podfile.lock` is committed, so this is deterministic).
+3. **Maestro + a JDK**, only if you want the scripted flows:
+   `brew install maestro openjdk`.
+4. **FlowDeck**, if you use the wrapper path below. Note the `flowdeck` package
+   on npm is an unrelated tool — do not install it.
+
+On such a machine there is no installed build yet, so the **full path** below
+applies, not the fast path.
 
 ## 2. Pick the loop
 
@@ -40,7 +71,17 @@ git diff --name-only origin/main..HEAD | grep -E '^(ios|android|modules)/'
 
 No output means no native rebuild is required.
 
-**Full path — native/editor files changed, or no usable build installed.**
+**Full path — native/editor files changed, or no usable build installed** (this
+is always the case on a machine that has not built the app before).
+
+The simplest option, which does not involve FlowDeck at all and creates its own
+simulator build:
+
+```bash
+npx expo run:ios --device "iPhone 17 Pro"
+```
+
+Or, on a machine set up with the FlowDeck wrapper:
 
 ```bash
 SIM=E292C8E3-EF98-4FF4-A19F-AD4B91877AB6
