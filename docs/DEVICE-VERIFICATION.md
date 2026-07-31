@@ -47,38 +47,53 @@ CocoaPods is still needed for the native build: `brew install cocoapods`.
 
 ## 2. Configure the project
 
-```bash
-cd ~/clawd/work/unfold/app/mobile     # wherever your clone lives
-flowdeck -i                            # interactive TUI: trial activation + project detection
-```
-
-`flowdeck -i` detects the workspace and asks for a scheme. To set it
-non-interactively instead:
+Discover the scheme and the simulators this machine actually has:
 
 ```bash
-flowdeck config set -w ios/Unfold.xcworkspace -s Unfold -S "iPhone 17 Pro"
-flowdeck config get
-flowdeck simulator list                # confirm the simulator name exists
+cd ~/clawd/work/unfold/app/mobile
+flowdeck context --json
+flowdeck simulator list --available-only
 ```
+
+**CLI 1.25.1 requires `-w`, `-s`, and `-S` on every build/run invocation.** It
+does not fall back to a saved config, whatever the online guides imply — the
+usage string the binary prints is authoritative. For this repo:
+
+```
+-w ios/Unfold.xcworkspace -s Unfold -S "<simulator from the list above>"
+```
+
+`flowdeck -i` opens the interactive TUI (trial activation, project detection) and
+is worth running once, but the non-interactive commands below stand alone.
 
 ## 3. Build and run
+
+CocoaPods is required and is not part of Xcode — `brew install cocoapods` (or
+`sudo gem install cocoapods` on a machine without Homebrew).
 
 ```bash
 git fetch origin && git checkout <branch> && bun install
 cd ios && pod install && cd ..
 
-flowdeck build                         # add --json for structured errors
-flowdeck run --log                     # build + install + launch, streaming logs
+flowdeck build -w ios/Unfold.xcworkspace -s Unfold -S "iPhone 17 Pro" --json
+flowdeck run   -w ios/Unfold.xcworkspace -s Unfold -S "iPhone 17 Pro" --log
 ```
+
+`run` builds, installs, and launches in one step; `--log` streams this app's
+logs. Add `--no-build` to relaunch without recompiling.
 
 Useful around this loop:
 
 ```bash
 flowdeck simulator boot "iPhone 17 Pro"
-flowdeck ui simulator clear-state com.unfoldapp.ios     # wipe app data
-flowdeck logs com.unfoldapp.ios                          # this app's logs only
+flowdeck ui simulator clear-state com.unfoldapp.ios
+flowdeck logs com.unfoldapp.ios
 flowdeck stop --all
 ```
+
+> Shell note: zsh does not honour `#` comments in interactive shells by default,
+> so pasting an annotated command line makes zsh treat the comment as arguments.
+> Keep pasted commands comment-free.
 
 **JS/TS-only changes don't need a rebuild.** Confirm with:
 
