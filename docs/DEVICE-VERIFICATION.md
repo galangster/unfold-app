@@ -68,12 +68,40 @@ sips -Z 1000 /tmp/<name>.png        # downscale before attaching
 
 Screenshot after each meaningful action rather than trusting recall.
 
-## 4. Cross-cutting matrix
+## 4. Scripted flows (Maestro)
+
+Some of the manual checklist below is automated in `.maestro/`. With a booted
+simulator and the app installed:
+
+```bash
+bun run test:e2e            # maestro test .maestro/
+maestro test .maestro/verse-note-autosave.yml   # single flow
+```
+
+Requires the Maestro CLI and a Java runtime; both are macOS-side. Flows drive the
+app by `testID`, so they are only as good as the selectors they reference.
+
+**A dead selector does not fail a flow — it makes the step a silent no-op.** That
+is exactly how this suite rotted before: it referenced five testIDs that never
+existed and wrapped nearly every assertion in `optional: true`, so it passed while
+testing nothing. Two guards now exist:
+
+- `node scripts/verify-maestro-selectors.mjs` cross-checks every `id:` in every
+  flow against the testIDs actually present in `src/`. It runs in CI on Linux with
+  no simulator, so dead selectors are caught the moment they appear.
+- `optional: true` is reserved for genuinely conditional UI (a premium sheet that
+  may or may not appear). Never put it on the assertion that is the point of the
+  test — an assertion that cannot fail is not a test.
+
+When you add a flow, add the testID to the component rather than reaching for a
+text match; copy changes far more often than testIDs do.
+
+## 5. Cross-cutting matrix
 
 Run the surfaces you touched through: **dark + light**, **Reduce Motion on + off**,
 and at least one **non-gold accent** (Ocean) to catch hardcoded gold.
 
-## 5. Reporting bugs
+## 6. Reporting bugs
 
 ```
 BUG #N
