@@ -7,10 +7,10 @@ import {
 
 type SyncedDevotionalMetadata = NonNullable<PulledDevotionalContent['devotional']>;
 
-export type DevotionalSyncMetadataPatch = Partial<Pick<Devotional, 'title' | 'totalDays' | 'currentDay' | 'seriesArc' | 'updatedAt'>>;
+export type DevotionalSyncMetadataPatch = Partial<Pick<Devotional, 'title' | 'totalDays' | 'currentDay' | 'seriesArc' | 'seriesStartDate' | 'updatedAt'>>;
 
 export function buildDevotionalSyncMetadataPatch(
-  local: Pick<Devotional, 'id' | 'title' | 'totalDays' | 'currentDay' | 'seriesArc'>,
+  local: Pick<Devotional, 'id' | 'title' | 'totalDays' | 'currentDay' | 'seriesArc' | 'seriesStartDate' | 'createdAt'>,
   synced?: SyncedDevotionalMetadata,
 ): DevotionalSyncMetadataPatch {
   if (!synced || synced.id !== local.id) return {};
@@ -31,6 +31,16 @@ export function buildDevotionalSyncMetadataPatch(
   if (synced.seriesArc && synced.seriesArc !== local.seriesArc) {
     patch.seriesArc = synced.seriesArc;
   }
+
+  // Never leave the calendar anchor undefined — getCalendarDayNumber() returns
+  // null without it and the tomorrow-lock then fails closed, pinning catch-up
+  // users to the day they read today.
+  const nextSeriesStartDate =
+    synced.seriesStartDate ?? local.seriesStartDate ?? local.createdAt;
+  if (nextSeriesStartDate && nextSeriesStartDate !== local.seriesStartDate) {
+    patch.seriesStartDate = nextSeriesStartDate;
+  }
+
 
   if (serverOwnedTotalDays > 0 && local.totalDays !== serverOwnedTotalDays) {
     patch.totalDays = serverOwnedTotalDays;

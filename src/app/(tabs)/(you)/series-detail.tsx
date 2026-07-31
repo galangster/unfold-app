@@ -30,6 +30,11 @@ import { Duration, Ease } from '@/constants/animations';
 import { Typography } from '@/constants/typography';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
+import {
+  getTodayReaderDayNumber,
+  isDevotionalDaySelectable,
+} from '@/lib/devotional-day-access';
+import { selectRenderableDevotionalDay } from '@/lib/devotional-canonical-days';
 import { alpha } from '@/components/ui';
 
 // ── Sealed letter tease lines for locked days ──────────────────
@@ -130,6 +135,22 @@ export default function SeriesDetailScreen() {
 
   const isComplete = devotional ? completedDays >= devotional.totalDays : false;
 
+  // One timestamp for every day-gating decision on this render. Deriving each
+  // row from its own `new Date()` lets the "Current" badge and the tap gate
+  // disagree if a re-render straddles midnight.
+  const now = useMemo(() => new Date(), [devotional]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The day the reader will actually open right now. `devotional.currentDay` is
+  // NOT this: it is bumped to N+1 the moment day N is completed (advanceDay in
+  // reading.tsx), but that day stays calendar-gated until tomorrow. Using
+  // currentDay here made the list advertise a "Current" day that the reader
+  // then silently swapped back to the previous one
+  // (resolveInitialReadingDayNumber).
+  const todayReaderDayNumber = useMemo(
+    () => (devotional ? getTodayReaderDayNumber(devotional, now) : 1),
+    [devotional, now],
+  );
+
   const handleDayPress = useCallback(
     (dayNumber: number) => {
       if (!devotional) return;
@@ -137,7 +158,9 @@ export default function SeriesDetailScreen() {
       setCurrentDevotional(devotional.id);
       router.push({
         pathname: '/(tabs)/(today)/reading',
-        params: { dayNumber: String(dayNumber) },
+        // Pass the id explicitly rather than relying on the store write above —
+        // the reader honours ?devotionalId and the user may hold several series.
+        params: { devotionalId: devotional.id, dayNumber: String(dayNumber) },
       });
     },
     [devotional, setCurrentDevotional, router],
@@ -224,11 +247,27 @@ export default function SeriesDetailScreen() {
               .sort((a, b) => a.dayNumber - b.dayNumber)
               .map((day) => {
                 const isRead = day.isRead;
+                const isOpenable =
+                  isRead || isDevotionalDaySelectable(devotional, day.dayNumber, now);
                 const isCurrent =
                   !isComplete &&
-                  day.dayNumber === devotional.currentDay &&
-                  !isRead;
-                const isLocked = !isRead && !isCurrent;
+                  !isRead &&
+                  isOpenable &&
+                  day.dayNumber === todayReaderDayNumber;
+                // "Tomorrow" is claimed ONLY when the content genuinely exists
+                // and the calendar is the sole thing withholding it. A day whose
+                // canonical content is missing or corrupt is NOT tomorrow's
+                // reading — calling it that would hide a real generation failure
+                // behind reassuring copy, so it falls through to the sealed
+                // "still being prepared" state instead.
+                const contentIsReady =
+                  selectRenderableDevotionalDay(devotional, day.dayNumber).status === 'ready';
+                const isTomorrow =
+                  !isComplete &&
+                  !isOpenable &&
+                  contentIsReady &&
+                  day.dayNumber === devotional.currentDay;
+                const isLocked = !isRead && !isCurrent && !isTomorrow;
 
                 return (
                   <Animated.View
@@ -236,9 +275,10 @@ export default function SeriesDetailScreen() {
                     entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(day.dayNumber * 40).easing(Ease.out)}
                   >
                     <TouchableOpacity
-                      activeOpacity={isLocked ? 1 : 0.7}
+                      activeOpacity={isOpenable ? 0.7 : 1}
+                      disabled={!isOpenable}
                       onPress={() => {
-                        if (!isLocked) handleDayPress(day.dayNumber);
+                        if (isOpenable) handleDayPress(day.dayNumber);
                       }}
                       style={[
                         styles.dayRow,
@@ -300,7 +340,7 @@ export default function SeriesDetailScreen() {
                           Day {day.dayNumber}
                         </Text>
 
-                        {isLocked ? (
+                        {isLocked || (isTomorrow && !day.title) ? (
                           <Text
                             style={[
                               styles.sealedText,
@@ -358,6 +398,22 @@ export default function SeriesDetailScreen() {
                               ]}
                             >
                               Current
+                            </Text>
+                          </View>
+                        ) : isTomorrow ? (
+                          <View
+                            style={[
+                              styles.currentBadge,
+                              { backgroundColor: alpha(colors.textHint, 0.12) },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.currentBadgeText,
+                                { color: colors.textMuted },
+                              ]}
+                            >
+                              Tomorrow
                             </Text>
                           </View>
                         ) : null}
