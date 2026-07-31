@@ -48,6 +48,12 @@ appId: com.unfoldapp.ios
 - assertVisible:
     id: "bible-reader-preferences-sheet"
 
+# The preferences sheet scrolls (ReaderBottomSheet maxHeightRatio 0.72);
+# this row sits below the fold, so it must be scrolled to before use.
+- scrollUntilVisible:
+    element:
+      id: "reader-all-settings-row"
+    direction: DOWN
 - tapOn:
     id: "reader-all-settings-row"
 - assertVisible:

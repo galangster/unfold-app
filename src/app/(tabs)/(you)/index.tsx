@@ -1,5 +1,8 @@
 import { useState, useCallback } from 'react';
-import { View, Text, ScrollView, TextInput } from 'react-native';
+import { View, Text, ScrollView, TextInput, TouchableOpacity as RNTouchableOpacity } from 'react-native';
+// react-native-gesture-handler's TouchableOpacity does not forward testID to the
+// native accessibility identifier, so `--by-id` / Maestro `id:` cannot resolve it.
+// The settings gear uses RN's so its testID is a real automation hook.
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -86,18 +89,23 @@ export default function YouScreen() {
           contentContainerStyle={{ paddingBottom: 100 }}
           showsVerticalScrollIndicator={false}
         >
-          {/* Header — avatar + name */}
-          <Animated.View
-            entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
+          {/* Header — avatar + name.
+              The gear is a sibling of the animated block, absolutely
+              positioned against this plain wrapper, NOT against the
+              Animated.View. As an absolute child of the centered
+              Animated.View it painted at the wrong x (left of the avatar
+              instead of top-right) and produced no native view at all —
+              so it was neither tappable nor visible to the accessibility
+              tree, leaving Settings unreachable from this screen. */}
+          <View
             style={{
+              flexDirection: 'row',
+              justifyContent: 'flex-end',
               paddingHorizontal: Spacing['6'],
               paddingTop: Spacing['4'],
-              paddingBottom: Spacing['6'],
-              alignItems: 'center',
             }}
           >
-            {/* Settings gear — top-right entry to the dedicated Settings screen */}
-            <TouchableOpacity
+            <RNTouchableOpacity
               activeOpacity={0.7}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -107,15 +115,19 @@ export default function YouScreen() {
               accessibilityRole="button"
               accessibilityLabel="Settings"
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              style={{
-                position: 'absolute',
-                top: Spacing['4'],
-                right: Spacing['6'],
-                padding: Spacing['2'],
-              }}
+              style={{ padding: Spacing['2'] }}
             >
               <GearSixIcon size={22} color={colors.text} weight="light" />
-            </TouchableOpacity>
+            </RNTouchableOpacity>
+          </View>
+          <Animated.View
+            entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
+            style={{
+              paddingHorizontal: Spacing['6'],
+              paddingBottom: Spacing['6'],
+              alignItems: 'center',
+            }}
+          >
             <ProfileAvatar size={80} editable />
             {isEditingName ? (
               <TextInput
