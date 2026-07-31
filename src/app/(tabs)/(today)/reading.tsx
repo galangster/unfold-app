@@ -1393,6 +1393,30 @@ export default function ReadingScreen() {
           }
           return true;
         } catch (err) {
+          // 409 is not one thing. ALREADY_GENERATED means the work exists and
+          // should be recovered; SERIES_ARCHIVED / SERIES_NOT_ACTIVE mean the
+          // server is refusing to generate for a series the user is not on.
+          // Treating those as "already generated" sent us hunting for a job
+          // that will never exist, then surfaced a generic failure.
+          if (
+            err instanceof ApiError &&
+            (err.code === 'SERIES_ARCHIVED' || err.code === 'SERIES_NOT_ACTIVE')
+          ) {
+            void logBugEvent('reading-sync-recovery', 'generation-refused-inactive-series', {
+              devotionalId: currentDevotional.id,
+              viewingDay,
+              code: err.code,
+              source,
+            });
+            if (source === 'manual') {
+              setRetryError(
+                'This isn’t the series you’re reading right now. Resume it from My Devotionals to keep going.',
+              );
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            }
+            return false;
+          }
+
           if (err instanceof ApiError && err.status === 409) {
             const recoveredFromExisting = await recoverCompletedGenerationResult({
               devotionalId: currentDevotional.id,
