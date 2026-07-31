@@ -540,6 +540,7 @@ interface UnfoldState {
   updateDevotionalDays: (devotionalId: string, days: DevotionalDay[], title?: string) => void;
   setCurrentDevotional: (id: string) => void;
   archiveCurrentDevotional: () => void;
+  resumeDevotional: (devotionalId: string) => void;
   hasEverCreatedDevotional: boolean;
   isReturningUser: () => boolean;
   markDayAsRead: (devotionalId: string, dayNumber: number) => void;
@@ -1020,6 +1021,42 @@ export const useUnfoldStore = create<UnfoldState>()(
         }),
 
       setCurrentDevotional: (id) => set({ currentDevotionalId: id }),
+
+      // Pick an ended series back up. Without this, archiving was a one-way
+      // door: setCurrentDevotional would point at an archived series, so it
+      // looked resumed while the cron ignored it and day generation refused —
+      // readable, but permanently frozen. Resuming is the inverse of ending,
+      // and it keeps the one-active-series invariant by ending whatever was
+      // active before.
+      resumeDevotional: (devotionalId) =>
+        set((state) => {
+          const target = state.devotionals.find((d) => d.id === devotionalId);
+          if (!target) return {};
+
+          const now = new Date().toISOString();
+          const devotionals = state.devotionals.map((d) => {
+            if (d.id === devotionalId) {
+              if (!d.archivedAt) return d;
+              enqueuePersonalDataSyncChange(
+                'devotionals',
+                d.id,
+                { schemaVersion: 1, archivedAt: null },
+                now,
+              );
+              return { ...d, archivedAt: undefined, updatedAt: now };
+            }
+            if (d.archivedAt) return d;
+            enqueuePersonalDataSyncChange(
+              'devotionals',
+              d.id,
+              { schemaVersion: 1, archivedAt: now },
+              now,
+            );
+            return { ...d, archivedAt: now, updatedAt: now };
+          });
+
+          return { devotionals, currentDevotionalId: devotionalId };
+        }),
 
       // Ending a series has to reach the server. When this only cleared the
       // local pointer, the backend kept treating the abandoned series as the

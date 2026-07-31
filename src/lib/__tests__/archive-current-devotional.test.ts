@@ -182,3 +182,45 @@ describe('onboarding sample must not end a real series', () => {
   });
 });
 
+describe('resumeDevotional', () => {
+  beforeEach(() => {
+    mockEnqueue.mockClear();
+    useUnfoldStore.setState({
+      devotionals: [
+        series('ended', { archivedAt: '2026-07-29T00:00:00.000Z' }),
+        series('active'),
+      ],
+      currentDevotionalId: 'active',
+    });
+  });
+
+  it('clears archivedAt and makes the series current', () => {
+    useUnfoldStore.getState().resumeDevotional('ended');
+    const { devotionals, currentDevotionalId } = useUnfoldStore.getState();
+    expect(currentDevotionalId).toBe('ended');
+    expect(devotionals.find((d) => d.id === 'ended')?.archivedAt).toBeUndefined();
+  });
+
+  it('ends whatever was active, keeping exactly one', () => {
+    useUnfoldStore.getState().resumeDevotional('ended');
+    const active = useUnfoldStore.getState().devotionals.filter((d) => !d.archivedAt);
+    expect(active).toHaveLength(1);
+    expect(active[0].id).toBe('ended');
+  });
+
+  it('pushes both sides of the swap', () => {
+    useUnfoldStore.getState().resumeDevotional('ended');
+    const byId = Object.fromEntries(
+      mockEnqueue.mock.calls.map(([, id, data]) => [id, data as { archivedAt: string | null }]),
+    );
+    expect(byId['ended'].archivedAt).toBeNull();
+    expect(byId['active'].archivedAt).toEqual(expect.any(String));
+  });
+
+  it('is a no-op for an unknown id', () => {
+    useUnfoldStore.getState().resumeDevotional('nope');
+    expect(mockEnqueue).not.toHaveBeenCalled();
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe('active');
+  });
+});
+
