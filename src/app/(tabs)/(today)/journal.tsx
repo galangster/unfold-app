@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { logger } from '@/lib/logger';
 import {
+  AppState,
   View,
   Text,
   TextInput,
@@ -60,6 +61,11 @@ import { alpha } from '@/components/ui';
 import { buildFreeWritePlaceholder } from '@/lib/journal-freewrite-placeholder';
 import { buildInitialQuestionResponses, diffSoapWrites, resolveInitialJournalMode } from '@/lib/journal-entry-state';
 import { useCreationGate } from '@/hooks/useCreationGate';
+import {
+  createAutosaveController,
+  shouldFlushAutosaveOnAppState,
+  type AutosaveController,
+} from '@/lib/autosave-controller';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
 import { getReflectionTypography } from '@/lib/reflection-typography';
@@ -195,7 +201,6 @@ export default function JournalScreen() {
 
   const [content, setContent] = useState(existingEntry?.content ?? '');
   const [hasChanges, setHasChanges] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
   const savedEntryIdRef = useRef<string | null>(existingEntry?.id ?? null);
   const isMountedRef = useRef(true);
@@ -214,13 +219,29 @@ export default function JournalScreen() {
     existingEntry?.soapResponses ? null : 'scripture'
   );
   const soapInputRefs = useRef<Map<string, TextInput | null>>(new Map());
-  const soapSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const soapValuesRef = useRef(soapValues);
   soapValuesRef.current = soapValues;
   const hasPendingSoapRef = useRef(false);
   const flushSoapSavesRef = useRef<() => void>(() => {});
   const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const justSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Shared debounced autosave (800 ms debounce / 2 s max-wait) — one controller
+  // per writing surface, both flushed on background/unmount so a force-quit
+  // never loses more than the debounce window.
+  const freewriteSaveRef = useRef<() => void>(() => {});
+  const freewriteAutosaveRef = useRef<AutosaveController | null>(null);
+  if (!freewriteAutosaveRef.current) {
+    freewriteAutosaveRef.current = createAutosaveController({
+      save: () => freewriteSaveRef.current(),
+    });
+  }
+  const soapAutosaveRef = useRef<AutosaveController | null>(null);
+  if (!soapAutosaveRef.current) {
+    soapAutosaveRef.current = createAutosaveController({
+      save: () => flushSoapSavesRef.current(),
+    });
+  }
 
   // Resync local state when the store entry changes (MMKV hydration, sync pull)
   // but only if no local edits are pending. This prevents the "disappear then reappear"
@@ -254,8 +275,17 @@ export default function JournalScreen() {
 
   // Prayer state
   const [newPrayerText, setNewPrayerText] = useState('');
+  // Mirrors the draft so background/unmount flushes read the latest text
+  // instead of a stale closure — the same rule the freewrite/SOAP saves follow.
+  const newPrayerTextRef = useRef('');
+  const flushPrayerDraftRef = useRef<() => void>(() => {});
   const [showPrayerInput, setShowPrayerInput] = useState(false);
   const prayerInputRef = useRef<TextInput>(null);
+
+  const handlePrayerTextChange = useCallback((text: string) => {
+    newPrayerTextRef.current = text;
+    setNewPrayerText(text);
+  }, []);
 
   // Go Deeper state — restore from persisted entry if available
   const [deeperPrompts, setDeeperPrompts] = useState<string[]>(
@@ -357,50 +387,56 @@ export default function JournalScreen() {
     }
   }, [devotionalId, dayNumber, addJournalEntry, updateJournalEntry, getJournalEntry, activeMode]);
 
+  // Debounced freewrite save — invoked by the shared autosave controller.
+  // Reads refs (not closures) so background/unmount flushes never save stale text.
+  const performFreewriteSave = useCallback(() => {
+    saveEntry(contentRef.current);
+    hasChangesRef.current = false;
+    if (!isMountedRef.current) return;
+    setHasChanges(false);
+    setJustSaved(true);
+    if (justSavedTimerRef.current) clearTimeout(justSavedTimerRef.current);
+    justSavedTimerRef.current = setTimeout(() => {
+      if (isMountedRef.current) setJustSaved(false);
+    }, 2000);
+  }, [saveEntry]);
+  freewriteSaveRef.current = performFreewriteSave;
+
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
       if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
       if (justSavedTimerRef.current) clearTimeout(justSavedTimerRef.current);
-      // Flush any pending SOAP saves before unmount — single owner:
-      // flushSoapSavesRef always points at the latest flushSoapSaves.
-      if (soapSaveTimerRef.current) clearTimeout(soapSaveTimerRef.current);
-      flushSoapSavesRef.current();
-      // Flush any pending freewrite changes on unmount
-      if (hasChangesRef.current) {
-        saveEntry(contentRef.current);
-      }
+      // Flush (never cancel) pending edits on unmount so nothing is lost.
+      // Controllers no-op when idle. isMountedRef is cleared first so the
+      // save callbacks skip setState on the unmounted screen.
       isMountedRef.current = false;
+      soapAutosaveRef.current?.flush();
+      freewriteAutosaveRef.current?.flush();
+      flushPrayerDraftRef.current();
     };
-  }, [saveEntry]);
+  }, []);
 
+  // Flush pending autosaves the moment the app is backgrounded (or goes
+  // inactive) so a force-quit inside the debounce window can't drop writing.
   useEffect(() => {
-    if (!hasChanges || isSaving) return;
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (!shouldFlushAutosaveOnAppState(nextState)) return;
+      freewriteAutosaveRef.current?.flush();
+      soapAutosaveRef.current?.flush();
+      flushPrayerDraftRef.current();
+    });
 
-    const timer = setTimeout(() => {
-      if (!isMountedRef.current) return;
-
-      setIsSaving(true);
-      saveEntry(content);
-
-      if (isMountedRef.current) {
-        setIsSaving(false);
-        setHasChanges(false);
-        setJustSaved(true);
-        if (justSavedTimerRef.current) clearTimeout(justSavedTimerRef.current);
-        justSavedTimerRef.current = setTimeout(() => {
-          if (isMountedRef.current) setJustSaved(false);
-        }, 2000);
-      }
-    }, 1000);
-
-    return () => clearTimeout(timer);
-  }, [content, hasChanges, isSaving, saveEntry]);
+    return () => subscription.remove();
+  }, []);
 
   const handleTextChange = (text: string) => {
     if (!gate()) return;
+    contentRef.current = text;
     setContent(text);
+    hasChangesRef.current = true;
     setHasChanges(true);
+    freewriteAutosaveRef.current?.schedule();
   };
 
   const closeJournal = useCallback(() => {
@@ -415,9 +451,15 @@ export default function JournalScreen() {
     if (!gate()) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (activeMode === 'freewrite') {
-      saveEntry(content);
+      // Flush any pending debounced save; fall back to an unconditional save
+      // (pre-existing behavior) when nothing is pending.
+      if (!freewriteAutosaveRef.current?.flush()) {
+        saveEntry(content);
+      }
     } else if (activeMode === 'soap') {
-      flushSoapSaves();
+      if (!soapAutosaveRef.current?.flush()) {
+        flushSoapSaves();
+      }
     }
     AccessibilityInfo.announceForAccessibility('Journal entry saved');
     closeJournal();
@@ -455,15 +497,14 @@ export default function JournalScreen() {
   // SOAP handlers
   const handleSoapChange = useCallback((field: keyof SoapResponses, text: string) => {
     if (!gate()) return;
-    setSoapValues((prev) => ({ ...prev, [field]: text }));
+    // Sync the ref immediately (not at next render) so a background/unmount
+    // flush inside the same tick persists this keystroke. flushSoapSaves reads
+    // soapValuesRef, so ALL pending fields are persisted (FAP-UI-1 / COR-6).
+    const next = { ...soapValuesRef.current, [field]: text };
+    soapValuesRef.current = next;
+    setSoapValues(next);
     hasPendingSoapRef.current = true;
-
-    if (soapSaveTimerRef.current) clearTimeout(soapSaveTimerRef.current);
-    soapSaveTimerRef.current = setTimeout(() => {
-      // Route through flushSoapSaves so ALL pending fields (not just the last
-      // one captured in this closure) are persisted (FAP-UI-1 / COR-6).
-      flushSoapSavesRef.current();
-    }, 800);
+    soapAutosaveRef.current?.schedule();
   }, [gate]);
 
   // Flush all pending SOAP values to the store immediately. Writes every
@@ -471,7 +512,6 @@ export default function JournalScreen() {
   // fields — so deletions made inside the debounce window stick (COR-6).
   const flushSoapSaves = useCallback(() => {
     if (!hasPendingSoapRef.current) return;
-    if (soapSaveTimerRef.current) clearTimeout(soapSaveTimerRef.current);
     const entryId = ensureEntry();
     if (entryId) {
       const persisted = getJournalEntry(devotionalId, dayNumber)?.soapResponses;
@@ -507,9 +547,30 @@ export default function JournalScreen() {
     if (entryId) {
       addPrayerRequest(entryId, newPrayerText.trim());
     }
+    newPrayerTextRef.current = '';
     setNewPrayerText('');
     setShowPrayerInput(false);
   }, [newPrayerText, ensureEntry, addPrayerRequest, gate]);
+
+  // An uncommitted prayer draft used to die with the process: unlike freewrite
+  // and SOAP it had no autosave controller and no flush, so text typed but not
+  // submitted was lost on force-quit. Commit it on background/unmount.
+  //
+  // Deliberately does NOT call gate(): this runs while the app is backgrounding
+  // or the screen is unmounting, where surfacing a paywall/offer (gate's side
+  // effect) or calling setState would be wrong. It only writes to an entry that
+  // already exists, so it never creates content a blocked user couldn't — the
+  // freewrite/SOAP flushes run first and will have created the entry if the
+  // user wrote anything at all.
+  const flushPendingPrayerDraft = useCallback(() => {
+    const text = newPrayerTextRef.current.trim();
+    if (!text) return;
+    const entryId = savedEntryIdRef.current;
+    if (!entryId) return;
+    addPrayerRequest(entryId, text);
+    newPrayerTextRef.current = '';
+  }, [addPrayerRequest]);
+  flushPrayerDraftRef.current = flushPendingPrayerDraft;
 
   const handleTogglePrayer = useCallback((prayerId: string) => {
     if (!gate()) return;
@@ -1227,7 +1288,7 @@ Their journal entry:
                     <TextInput
                       ref={prayerInputRef}
                       value={newPrayerText}
-                      onChangeText={setNewPrayerText}
+                      onChangeText={handlePrayerTextChange}
                       placeholder="What would you like to pray for?"
                       placeholderTextColor={colors.textHint}
                       selectionColor={colors.accent}
@@ -1240,12 +1301,12 @@ Their journal entry:
                       onSubmitEditing={handleAddPrayer}
                       blurOnSubmit
                     />
-                    <VoiceInputBar inline value={newPrayerText} onChangeText={setNewPrayerText} />
+                    <VoiceInputBar inline value={newPrayerText} onChangeText={handlePrayerTextChange} />
                   </View>
                   {/* Action buttons below input */}
                   <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 16, marginTop: 10 }}>
                     <TouchableOpacity
-                      onPress={() => { setShowPrayerInput(false); setNewPrayerText(''); }}
+                      onPress={() => { setShowPrayerInput(false); newPrayerTextRef.current = ''; setNewPrayerText(''); }}
                       activeOpacity={0.6}
                       hitSlop={8}
                     >

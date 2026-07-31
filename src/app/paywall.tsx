@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
-import { View, Text, ActivityIndicator, Linking, ScrollView, Image, Platform, Pressable } from 'react-native';
+import { View, Text, ActivityIndicator, Linking, ScrollView, Platform, Pressable } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { LEGAL_LINKS } from '@/lib/push-notification-helpers';
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -651,10 +652,12 @@ export default function PaywallScreen() {
         <View style={{ paddingHorizontal: Spacing['7'], paddingTop: Spacing['6'] }}>
           {/* Unfold icon row (close button is now sticky at the sheet corner) */}
           <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing['6'] }}>
-            <Image
+            <ExpoImage
               source={require('@/app/icon-paywall-light.png')}
-              style={{ width: 28, height: 28, tintColor: colors.accent, opacity: 0.8 }}
-              resizeMode="contain"
+              style={{ width: 28, height: 28, opacity: 0.8 }}
+              contentFit="contain"
+              tintColor={colors.accent}
+              cachePolicy="memory-disk"
             />
           </Animated.View>
 

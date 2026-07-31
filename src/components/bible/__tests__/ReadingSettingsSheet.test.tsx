@@ -6,6 +6,7 @@ const { act } = renderer;
 
 const mockUpdateBibleReaderSettings = jest.fn();
 const mockUpdateUser = jest.fn();
+const mockRouterPush = jest.fn();
 const mockOnClose = jest.fn();
 const mockOnOpenSavedVerses = jest.fn();
 const mockOnLockedFontPress = jest.fn();
@@ -34,6 +35,10 @@ jest.mock('@/lib/store', () => ({
     { id: 'source-serif', name: 'Source Serif', preview: 'Classic & warm' },
     { id: 'garamond', name: 'Garamond', preview: 'Elegant & timeless' },
   ],
+}));
+
+jest.mock('expo-router', () => ({
+  useRouter: () => ({ push: mockRouterPush }),
 }));
 
 jest.mock('@/hooks/useReaderBrightness', () => ({
@@ -121,6 +126,7 @@ jest.mock('react-native-gesture-handler', () => {
 jest.mock('phosphor-react-native', () => ({
   BookmarkSimpleIcon: () => null,
   CaretRightIcon: () => null,
+  GearSixIcon: () => null,
   LockSimpleIcon: () => null,
   MinusIcon: () => null,
   PlusIcon: () => null,
@@ -210,10 +216,24 @@ describe('ReadingSettingsSheet', () => {
 
     act(() => {
       tree.root.findByProps({ accessibilityLabel: 'Garamond reading font, Premium locked' }).props.onPress();
-      tree.root.findByProps({ testID: 'reader-library-row' }).props.onPress();
+      tree.root.findByProps({ testID: 'reader-saved-verses-row' }).props.onPress();
     });
 
     expect(mockOnLockedFontPress).toHaveBeenCalledTimes(1);
     expect(mockOnOpenSavedVerses).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes the sheet and cross-tab pushes to Settings from the All settings row', () => {
+    const tree = renderSheet();
+
+    act(() => {
+      tree.root.findByProps({ testID: 'reader-all-settings-row' }).props.onPress();
+    });
+
+    expect(mockOnClose).toHaveBeenCalledTimes(1);
+    expect(mockRouterPush).toHaveBeenCalledWith({
+      pathname: '/(tabs)/(you)/settings',
+      params: { from: 'bible' },
+    });
   });
 });

@@ -49,7 +49,8 @@ import { Spacing } from '@/constants/spacing';
 import { Shadow } from '@/constants/shadows';
 import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
-import { useUnfoldStore, type Note, type NoteFolder } from '@/lib/store';
+import { useUnfoldStore, type BibleHighlight, type Note, type NoteFolder } from '@/lib/store';
+import { formatScriptureReference } from '@/lib/bible-constants';
 import { useUIState } from '@/lib/ui-state';
 import { NoteCard } from '@/components/notebook/NoteCard';
 import { SwipeableNoteCard } from '@/components/notebook/SwipeableNoteCard';
@@ -58,7 +59,7 @@ import { FolderChips } from '@/components/notebook/FolderChips';
 import { CreateFolderSheet } from '@/components/notebook/CreateFolderSheet';
 import { MoveFolderSheet } from '@/components/notebook/MoveFolderSheet';
 import { UndoToast } from '@/components/UndoToast';
-import { stripHtml, isHtmlContent } from '@/components/notebook/NoteEditor';
+import { stripHtml, isHtmlContent } from '@/lib/note-html';
 import { alpha, Sheet } from '@/components/ui';
 import { useCreationGate } from '@/hooks/useCreationGate';
 import { prepareJournalFolderDelete } from '@/lib/journal-folder-delete';
@@ -398,6 +399,119 @@ const emptyStyles = StyleSheet.create({
 });
 
 // ============================================================================
+// Verse Note Search Result (read-only bridge row)
+// ============================================================================
+
+interface VerseNoteResultCardProps {
+  highlight: BibleHighlight;
+  onPress: (highlight: BibleHighlight) => void;
+}
+
+/**
+ * Read-only search result for a Bible verse note (`bibleHighlights[].note`).
+ * Verse notes live in the Bible reader, not the Notebook, so the row carries
+ * a distinct affordance — book icon + verse reference — and tapping deep-links
+ * to the chapter instead of opening a Notebook editor.
+ */
+function VerseNoteResultCard({ highlight, onPress }: VerseNoteResultCardProps) {
+  const { colors } = useTheme();
+  const reference = formatScriptureReference(
+    highlight.bookName,
+    highlight.chapter,
+    highlight.verseStart,
+    highlight.verseEnd,
+  );
+
+  const handlePress = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onPress(highlight);
+  }, [highlight, onPress]);
+
+  return (
+    <TouchableOpacity
+      onPress={handlePress}
+      activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityLabel={`Verse note on ${reference}: ${highlight.note ?? ''}`}
+      accessibilityHint="Opens this chapter in the Bible reader"
+    >
+      <View
+        style={[
+          verseNoteStyles.card,
+          {
+            backgroundColor: colors.backgroundElevated,
+            borderColor: colors.border,
+          },
+        ]}
+      >
+        <View style={verseNoteStyles.referenceRow}>
+          <BookOpenIcon size={14} color={colors.accent} weight="light" />
+          <Text
+            style={[verseNoteStyles.reference, { color: colors.accent }]}
+            numberOfLines={1}
+          >
+            {reference}
+          </Text>
+        </View>
+        <Text
+          style={[verseNoteStyles.note, { color: colors.text }]}
+          numberOfLines={2}
+        >
+          {highlight.note}
+        </Text>
+        {highlight.text ? (
+          <Text
+            style={[verseNoteStyles.verseText, { color: colors.textSubtle }]}
+            numberOfLines={1}
+          >
+            {highlight.text}
+          </Text>
+        ) : null}
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+const verseNoteStyles = StyleSheet.create({
+  sectionHeader: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 11,
+    letterSpacing: 1,
+    marginTop: Spacing['4'],
+    marginBottom: Spacing['3'],
+  },
+  card: {
+    borderRadius: Radius.card,
+    padding: Spacing['4'],
+    marginBottom: 10,
+    borderWidth: 1,
+    ...Shadow.sm,
+  },
+  referenceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing['2'],
+    marginBottom: 6,
+  },
+  reference: {
+    flex: 1,
+    fontFamily: FontFamily.uiMedium,
+    fontSize: FontSize.xs,
+  },
+  note: {
+    fontFamily: FontFamily.body,
+    fontSize: 13,
+    lineHeight: 19,
+    marginBottom: Spacing['2'],
+  },
+  verseText: {
+    fontFamily: FontFamily.bodyItalic,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+});
+
+// ============================================================================
 // Floating Action Button
 // ============================================================================
 
@@ -713,6 +827,7 @@ export default function JournalHubScreen() {
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
   const notes = useUnfoldStore((s) => s.notes);
+  const bibleHighlights = useUnfoldStore((s) => s.bibleHighlights);
   const deletedNotesCount = useUnfoldStore((s) => s.deletedNotes.length);
   const deleteNote = useUnfoldStore((s) => s.deleteNote);
 
@@ -898,6 +1013,36 @@ export default function JournalHubScreen() {
     return filtered;
   }, [notes, activeFolderId, searchQuery]);
 
+  // ---- Verse notes matching Notebook search (read-only bridge rows) ----
+  // Bible verse notes live in `bibleHighlights[].note` — a separate system
+  // from Notebook notes. Search surfaces them read-only; tapping deep-links
+  // to the chapter in the Bible reader.
+  const verseNoteMatches = useMemo(() => {
+    const query = searchQuery.toLowerCase().trim();
+    if (!query) return [];
+    return bibleHighlights
+      .filter((h) => {
+        const note = h.note?.trim();
+        if (!note) return false;
+        const reference = formatScriptureReference(
+          h.bookName,
+          h.chapter,
+          h.verseStart,
+          h.verseEnd,
+        );
+        return [note, h.text, reference]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+          .includes(query);
+      })
+      .sort(
+        (a, b) =>
+          new Date(b.updatedAt ?? b.createdAt).getTime() -
+          new Date(a.updatedAt ?? a.createdAt).getTime(),
+      );
+  }, [bibleHighlights, searchQuery]);
+
   // ---- Reflections filtered entries ----
   const filteredEntries = useMemo(() => {
     const sorted = [...journalEntries].sort(
@@ -1036,6 +1181,20 @@ export default function JournalHubScreen() {
       router.push({
         pathname: '/(tabs)/(journal)/note-detail',
         params: { noteId: note.id },
+      });
+    },
+    [router],
+  );
+
+  const handleVerseNotePress = useCallback(
+    (highlight: BibleHighlight) => {
+      router.push({
+        pathname: '/(tabs)/(bible)/reader',
+        params: {
+          bookId: String(highlight.bookId),
+          chapter: String(highlight.chapter),
+          verse: String(highlight.verseStart),
+        },
       });
     },
     [router],
@@ -1352,6 +1511,28 @@ export default function JournalHubScreen() {
           showsVerticalScrollIndicator={false}
           onScroll={handleScroll}
           scrollEventThrottle={16}
+          ListFooterComponent={
+            activeSegment === 'notebook' &&
+            searchQuery.trim().length > 0 &&
+            verseNoteMatches.length > 0 ? (
+              <Animated.View
+                style={[notebookSwipeStyle, mainStyles.notesListContainer]}
+              >
+                <Text
+                  style={[verseNoteStyles.sectionHeader, { color: colors.textSubtle }]}
+                >
+                  FROM YOUR BIBLE
+                </Text>
+                {verseNoteMatches.map((h) => (
+                  <VerseNoteResultCard
+                    key={h.id}
+                    highlight={h}
+                    onPress={handleVerseNotePress}
+                  />
+                ))}
+              </Animated.View>
+            ) : null
+          }
           ListHeaderComponent={
             <>
           {/* Header with search toggle */}
@@ -1940,8 +2121,10 @@ export default function JournalHubScreen() {
               )}
 
               {/* Empty states only — populated notes render as virtualized
-                  FlatList rows below this header (WR-24). */}
-              {filteredNotes.length === 0 && (
+                  FlatList rows below this header (WR-24). Suppressed while a
+                  search still has verse-note matches (rendered in the list
+                  footer) so "no notes match" never contradicts visible rows. */}
+              {filteredNotes.length === 0 && !(searchQuery.trim() && verseNoteMatches.length > 0) && (
                     !searchQuery.trim() && activeFolderId === null && currentParentId === null ? (
                       <View style={{ paddingHorizontal: Spacing['6'] }}>
                         <NotebookEmptyState onCreateNote={handleCreateNote} />

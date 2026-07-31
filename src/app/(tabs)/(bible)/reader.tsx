@@ -1,13 +1,13 @@
 /** @jsxImportSource react */
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView, TextInput, Platform, Keyboard, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, TextInput, Platform, Keyboard, Dimensions, type LayoutChangeEvent } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeOut, useSharedValue, useAnimatedStyle, withTiming, withDelay, withSpring, Easing, runOnJS, useReducedMotion } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut, useSharedValue, useAnimatedStyle, useAnimatedScrollHandler, withTiming, withDelay, withSpring, Easing, runOnJS, useReducedMotion } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
-import { CaretRightIcon, CaretLeftIcon, TextAaIcon, XIcon, BookOpenIcon, HighlighterCircleIcon, NotePencilIcon, UploadSimpleIcon, LockSimpleIcon } from 'phosphor-react-native';
+import { CaretRightIcon, CaretLeftIcon, GearSixIcon, XIcon, BookOpenIcon, HighlighterCircleIcon, NotePencilIcon, NotepadIcon, UploadSimpleIcon, LockSimpleIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
@@ -28,6 +28,8 @@ import { DownloadBibleSheet } from '@/components/bible/DownloadBibleSheet';
 import { BibleNoteSheet } from '@/components/bible/BibleNoteSheet';
 import type { BibleHighlightColor } from '@/lib/store';
 import { useUIState } from '@/lib/ui-state';
+import { Sheet } from '@/components/ui';
+import { stripHtml, isHtmlContent } from '@/lib/note-html';
 import { isRedLetterVerse } from '@/lib/red-letter-verses';
 import { getSectionHeadings } from '@/lib/bible-section-headings';
 import {
@@ -70,6 +72,12 @@ const HIGHLIGHT_COLORS: { key: BibleHighlightColor; color: string }[] = [
 ];
 
 const HEADER_HEIGHT = 52;
+
+// Header overlap: content has paddingTop for the header, but onLayout Y is relative
+// to the content container (after padding). scrollTo y=0 puts the first verse behind the header.
+// Subtract a small offset so the target verse sits visibly below the header, not behind it.
+// Module-scoped so the scroll-to-verse callbacks can keep empty dep arrays.
+const headerOverlap = 12; // slight breathing room below the fixed header
 
 /* ─────────────────────────────────────────────────────────
  * ANIMATION STORYBOARD — Bible Reader
@@ -126,8 +134,15 @@ const SWIPE_SPRING_BACK = { damping: 22, stiffness: 260, mass: 0.9, overshootCla
 //   20px+  → Pan activates (chapter swipe)
 const VERSE_TAP_MAX_DISTANCE = 8;
 
+// PERF: every prop below must be referentially stable across parent renders or
+// React.memo is defeated and a single selection/toast/keyboard state change
+// re-renders the whole chapter (176 rows in Psalm 119). That is why `onPress`
+// and `onLayout` take the verse number instead of being pre-bound closures —
+// the parent passes ONE useCallback-stable function to every row, and the row
+// binds its own verse number inside.
 const VerseItem = React.memo(function VerseItem({
   verse,
+  sectionHeading,
   fontSize,
   lineHeight,
   fontFamily,
@@ -139,8 +154,11 @@ const VerseItem = React.memo(function VerseItem({
   isDark,
   textColor,
   onPress,
+  onLayout,
 }: {
   verse: { verse: number; text: string };
+  /** Section heading rendered above this verse, if the chapter has one here. */
+  sectionHeading?: string;
   fontSize: number;
   lineHeight: number;
   fontFamily: string;
@@ -151,9 +169,11 @@ const VerseItem = React.memo(function VerseItem({
   isRedLetter: boolean;
   isDark: boolean;
   textColor: string;
-  onPress: () => void;
+  onPress: (verseNum: number) => void;
+  onLayout: (verseNum: number, y: number) => void;
 }) {
   const [textLines, setTextLines] = useState<BibleTextLine[]>([]);
+  const verseNum = verse.verse;
 
   // Flash animation: quick fade in → hold → smooth fade out
   const flashOpacity = useSharedValue(0);
@@ -191,13 +211,20 @@ const VerseItem = React.memo(function VerseItem({
       })
       .onEnd(() => {
         'worklet';
-        runOnJS(onPress)();
+        runOnJS(onPress)(verseNum);
       })
       .onFinalize(() => {
         'worklet';
         pressOpacity.value = withTiming(1, { duration: 120 });
       }),
-    [onPress, pressOpacity],
+    [onPress, pressOpacity, verseNum],
+  );
+
+  // Row layout capture for scroll-to-verse. Bound here (not in the parent's
+  // map callback) so the parent can pass one stable `onLayout` to every row.
+  const handleLayout = useCallback(
+    (e: LayoutChangeEvent) => onLayout(verseNum, e.nativeEvent.layout.y),
+    [onLayout, verseNum],
   );
 
   const hasOverlay = isSelected || (!!highlightColor && !isDark);
@@ -232,10 +259,26 @@ const VerseItem = React.memo(function VerseItem({
   const verseNumSize = Math.max(9, Math.round(fontSize * 0.55));
 
   return (
-    <GestureDetector gesture={tapGesture}>
+    <View onLayout={handleLayout}>
+      {/* Section heading before this verse */}
+      {sectionHeading ? (
+        <Text style={[
+          styles.sectionHeading,
+          {
+            color: textColor,
+            fontFamily,
+            fontSize: fontSize + 1,
+            lineHeight: Math.round((fontSize + 1) * 1.4),
+          },
+        ]}>
+          {sectionHeading}
+        </Text>
+      ) : null}
+      <GestureDetector gesture={tapGesture}>
       <Animated.View
         style={[styles.verseRow, pressStyle]}
         accessible
+        testID={`bible-verse-${verse.verse}`}
         accessibilityLabel={`Verse ${verse.verse}: ${verse.text}`}
       >
         {/* Flash highlight overlay (full row, fades in then out) — always mounted so animation plays */}
@@ -294,7 +337,8 @@ const VerseItem = React.memo(function VerseItem({
           {verse.text}
         </Text>
       </Animated.View>
-    </GestureDetector>
+      </GestureDetector>
+    </View>
   );
 });
 
@@ -338,6 +382,8 @@ export default function BibleReaderScreen() {
   const noteInputRef = useRef<TextInput>(null);
   // Note viewer sheet — opened when tapping an inline note marker
   const [noteSheetHighlight, setNoteSheetHighlight] = useState<import('@/lib/store').BibleHighlight | null>(null);
+  // Notebook notes anchored to the visible chapter (subtle header indicator)
+  const [showChapterNotes, setShowChapterNotes] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   // Premium gating for highlight colors
   const premiumPolicy = usePremiumAccessPolicy();
@@ -346,17 +392,28 @@ export default function BibleReaderScreen() {
   // shareModalData removed — share navigates to /share-card route
   const [showExplainSheet, setShowExplainSheet] = useState(false);
   const [selectedExplanationInput, setSelectedExplanationInput] = useState<ScriptureExplainRequest | null>(null);
-  const [pendingScrollVerse, setPendingScrollVerse] = useState<number | null>(null);
+  // PERF: a ref, not state — nothing renders off it, and keeping it out of
+  // render state is what lets `handleVerseLayout` stay referentially stable
+  // (see VerseItem's memo contract).
+  const pendingScrollVerseRef = useRef<number | null>(null);
   const [scrollToVerse, setScrollToVerse] = useState<number | null>(null);
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<Animated.ScrollView>(null);
   const verseLayoutsRef = useRef<Record<number, number>>({});
   const verseLayoutsChapterRef = useRef<string>('');
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastScrollYRef = useRef(0);
   const setTabBarHidden = useUIState((state) => state.setTabBarHidden);
   const tabBarHiddenRef = useRef(false);
   // Track if tab bar was scroll-hidden BEFORE verse selection began.
   const wasScrollHiddenRef = useRef(false);
+
+  // ─── Scroll-driven tab bar state (UI thread) ──────────────────────────────
+  // Shared-value mirrors of the JS-side scroll bookkeeping. The scroll handler
+  // runs as a worklet on the UI thread and only crosses back to JS on an actual
+  // show/hide threshold crossing (previously a JS callback ran every 16ms and
+  // read/wrote a global zustand store from the scroll path).
+  const lastScrollY = useSharedValue(0);
+  const tabBarHiddenSV = useSharedValue(false);
+  const showActionsSV = useSharedValue(false);
 
   // Invalidate cached verse Y positions when chapter changes. onLayout Ys are
   // specific to the rendered verses; carrying them across chapters would make
@@ -393,19 +450,21 @@ export default function BibleReaderScreen() {
     return () => { showSub.remove(); hideSub.remove(); };
   }, []);
 
-  // Header overlap: content has paddingTop for the header, but onLayout Y is relative
-  // to the content container (after padding). scrollTo y=0 puts the first verse behind the header.
-  // Subtract a small offset so the target verse sits visibly below the header, not behind it.
-  const headerOverlap = 12; // slight breathing room below the fixed header
+  // Single writer for tab bar visibility: keeps the global store, the JS ref
+  // (read by the selection effects) and the UI-thread mirror in lockstep.
+  const applyTabBarHidden = useCallback((hidden: boolean, mode?: 'slide' | 'instant') => {
+    setTabBarHidden(hidden, mode);
+    tabBarHiddenRef.current = hidden;
+    tabBarHiddenSV.value = hidden;
+  }, [setTabBarHidden, tabBarHiddenSV]);
 
   const restoreTabBarForClosedActions = useCallback(() => {
     const tabBarState = nextBibleTabBarStateAfterActions({
       showActions: false,
       wasScrollHiddenBeforeActions: wasScrollHiddenRef.current,
     });
-    setTabBarHidden(tabBarState.hidden, tabBarState.mode);
-    tabBarHiddenRef.current = tabBarState.hidden;
-  }, [setTabBarHidden]);
+    applyTabBarHidden(tabBarState.hidden, tabBarState.mode);
+  }, [applyTabBarHidden]);
 
   // State-driven scroll-to-verse (runs after render when refs are guaranteed set)
   useEffect(() => {
@@ -461,6 +520,34 @@ export default function BibleReaderScreen() {
     return map;
   }, [highlights]);
 
+  // ─── Notebook notes anchored to this chapter ────────────────────────────
+  // Read-side bridge between the Notebook and the Bible reader: the store's
+  // getNotesForScripture owns the anchoring rules (bibleBookId/bibleChapter
+  // or scriptureRefs). Memoized so it recomputes only when the chapter or
+  // the Notebook data changes — never per scroll frame.
+  const getNotesForScripture = useUnfoldStore((s) => s.getNotesForScripture);
+  const notebookNotes = useUnfoldStore((s) => s.notes);
+  const chapterNotebookNotes = useMemo(() => {
+    // `notebookNotes` is referenced so edits/deletes in the Notebook refresh
+    // the indicator; the getter reads the same slice from the store.
+    void notebookNotes;
+    return getNotesForScripture(bookId, chapter);
+  }, [notebookNotes, getNotesForScripture, bookId, chapter]);
+
+  const handleOpenChapterNotes = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setShowChapterNotes(true);
+  }, []);
+
+  const handleOpenNotebookNote = useCallback((noteId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setShowChapterNotes(false);
+    router.push({
+      pathname: '/(tabs)/(journal)/note-detail',
+      params: { noteId },
+    });
+  }, [router]);
+
   // Parse verse param
   const targetVerse = params.verse ? parseInt(params.verse, 10) : null;
 
@@ -486,21 +573,23 @@ export default function BibleReaderScreen() {
         setTimeout(() => setFlashVerse(null), 2000);
       } else {
         // Position unknown (new chapter) — wait for onLayout
-        setPendingScrollVerse(targetVerse);
+        pendingScrollVerseRef.current = targetVerse;
       }
     }
   }, [targetVerse, verses, isLoading, router]);
 
-  // Called from onLayout — scrolls to verse once its position is known
+  // Called from onLayout — scrolls to verse once its position is known.
+  // Stable identity ([] deps): every verse row receives this same function, so
+  // it never invalidates VerseItem's memo.
   const handleVerseLayout = useCallback((verseNum: number, y: number) => {
     verseLayoutsRef.current[verseNum] = y;
-    if (pendingScrollVerse === verseNum) {
+    if (pendingScrollVerseRef.current === verseNum) {
+      pendingScrollVerseRef.current = null;
       scrollRef.current?.scrollTo({ y: Math.max(0, y - headerOverlap), animated: true });
       setFlashVerse(verseNum);
-      setPendingScrollVerse(null);
       setTimeout(() => setFlashVerse(null), 2000);
     }
-  }, [pendingScrollVerse]);
+  }, []);
 
   // ─── Verse selection ────────────────────────────────────────────────────────
 
@@ -856,20 +945,40 @@ export default function BibleReaderScreen() {
 
   // ─── Tab bar hide/show on scroll ──────────────────────────────────────────
 
-  const handleScroll = useCallback((event: any) => {
-    // Don't let scroll affect tab bar while context actions are visible
-    if (showActions) { lastScrollYRef.current = event.nativeEvent.contentOffset.y; return; }
-    const y = event.nativeEvent.contentOffset.y;
-    const diff = y - lastScrollYRef.current;
-    if (y <= 10) {
-      if (tabBarHiddenRef.current) { tabBarHiddenRef.current = false; setTabBarHidden(false); }
-    } else if (diff > 5 && !tabBarHiddenRef.current) {
-      tabBarHiddenRef.current = true; setTabBarHidden(true);
-    } else if (diff < -5 && tabBarHiddenRef.current) {
-      tabBarHiddenRef.current = false; setTabBarHidden(false);
-    }
-    lastScrollYRef.current = y;
-  }, [setTabBarHidden, showActions]);
+  // JS-side commit of a scroll-driven show/hide. Called via runOnJS ONLY on an
+  // actual threshold crossing (a few times per scroll gesture), never per frame.
+  // Mirrors the pre-Reanimated behavior: scroll-driven changes always animate
+  // ('slide' — the store's default mode).
+  const commitScrollTabBarHidden = useCallback((hidden: boolean) => {
+    setTabBarHidden(hidden);
+    tabBarHiddenRef.current = hidden;
+  }, [setTabBarHidden]);
+
+  // UI-thread scroll handler. Thresholds and direction logic are byte-for-byte
+  // the previous JS implementation: top-of-list (y <= 10) always reveals,
+  // >5px downward hides, >5px upward reveals, and while the context action bar
+  // is up the scroll position is tracked but the tab bar is left alone.
+  const handleScroll = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      'worklet';
+      const y = event.contentOffset.y;
+      if (showActionsSV.value) { lastScrollY.value = y; return; }
+      const diff = y - lastScrollY.value;
+      if (y <= 10) {
+        if (tabBarHiddenSV.value) {
+          tabBarHiddenSV.value = false;
+          runOnJS(commitScrollTabBarHidden)(false);
+        }
+      } else if (diff > 5 && !tabBarHiddenSV.value) {
+        tabBarHiddenSV.value = true;
+        runOnJS(commitScrollTabBarHidden)(true);
+      } else if (diff < -5 && tabBarHiddenSV.value) {
+        tabBarHiddenSV.value = false;
+        runOnJS(commitScrollTabBarHidden)(false);
+      }
+      lastScrollY.value = y;
+    },
+  });
 
   useEffect(() => {
     return () => setTabBarHidden(false);
@@ -877,6 +986,10 @@ export default function BibleReaderScreen() {
 
   // Hide tab bar when context actions show — instant snap, no animation (prevents flash)
   useEffect(() => {
+    // Mirror to the UI thread so the scroll worklet can skip tab bar work
+    // while the context action bar owns the bottom of the screen.
+    showActionsSV.value = showActions;
+
     const tabBarState = nextBibleTabBarStateAfterActions({
       showActions,
       wasScrollHiddenBeforeActions: wasScrollHiddenRef.current,
@@ -886,27 +999,24 @@ export default function BibleReaderScreen() {
       // Remember if tab bar was already hidden from scrolling
       wasScrollHiddenRef.current = tabBarHiddenRef.current;
       // Instantly hide tab bar (context bar covers its spot)
-      setTabBarHidden(tabBarState.hidden, tabBarState.mode);
-      tabBarHiddenRef.current = tabBarState.hidden;
+      applyTabBarHidden(tabBarState.hidden, tabBarState.mode);
     } else {
       if (wasScrollHiddenRef.current) {
         // Tab bar was already scroll-hidden — keep it hidden, but force instant
         // mode so the context bar cannot briefly reveal content underneath.
-        setTabBarHidden(tabBarState.hidden, tabBarState.mode);
-        tabBarHiddenRef.current = tabBarState.hidden;
+        applyTabBarHidden(tabBarState.hidden, tabBarState.mode);
       } else {
         // Instantly restore tab bar — it renders on top of context bar (higher z),
         // so context bar unmount happens invisibly behind it. Zero flash.
-        setTabBarHidden(tabBarState.hidden, tabBarState.mode);
-        tabBarHiddenRef.current = tabBarState.hidden;
+        applyTabBarHidden(tabBarState.hidden, tabBarState.mode);
       }
     }
-  }, [showActions, setTabBarHidden]);
+  }, [showActions, applyTabBarHidden, showActionsSV]);
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: colors.background }]} testID="bible-reader-screen">
       {/* Header — hidden when navigator is open to prevent double-header jitter */}
       <View style={[styles.header, {
         paddingTop: insets.top + 4,
@@ -916,22 +1026,20 @@ export default function BibleReaderScreen() {
       }]}>
         <TouchableOpacity
           onPress={() => setShowSettings(true)}
-          style={styles.translationBadge}
-          accessibilityLabel={`Translation: ${bibleReaderSettings.translation}. Tap to change.`}
+          style={styles.headerButton}
+          testID="reader-settings-button"
+          accessibilityLabel="Reader settings"
+          accessibilityRole="button"
           hitSlop={8}
         >
-          <Text style={[styles.translationText, {
-            color: colors.textSubtle,
-            backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
-          }]}>
-            {bibleReaderSettings.translation}
-          </Text>
+          <GearSixIcon size={20} color={colors.text} weight="light" />
         </TouchableOpacity>
 
         <TouchableOpacity
           onPress={() => setShowNavigator(true)}
           style={styles.headerCenter}
           activeOpacity={0.6}
+          testID="reader-chapter-title"
           accessibilityLabel={`${book?.name ?? ''} chapter ${chapter}. Tap to navigate.`}
         >
           <Text style={[styles.headerBook, { color: colors.text, fontFamily: FontFamily.uiMedium }]} numberOfLines={1}>
@@ -942,23 +1050,37 @@ export default function BibleReaderScreen() {
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          onPress={() => setShowSettings(true)}
-          style={styles.headerButton}
-          accessibilityLabel="Reading settings"
-          accessibilityRole="button"
-          hitSlop={8}
-        >
-          <TextAaIcon size={20} color={colors.text} weight="light" />
-        </TouchableOpacity>
+        {chapterNotebookNotes.length > 0 ? (
+          <TouchableOpacity
+            onPress={handleOpenChapterNotes}
+            style={styles.headerButton}
+            testID="reader-chapter-notes-badge"
+            accessibilityRole="button"
+            accessibilityLabel={`${chapterNotebookNotes.length} notebook ${chapterNotebookNotes.length === 1 ? 'note' : 'notes'} reference this chapter`}
+            hitSlop={8}
+          >
+            <NotepadIcon size={20} color={colors.text} weight="light" />
+            <View style={[styles.headerNoteBadge, { backgroundColor: colors.accent }]}>
+              <Text style={[styles.headerNoteBadgeText, { color: colors.background }]}>
+                {chapterNotebookNotes.length}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.headerButton} />
+        )}
       </View>
 
       {/* Scroll content — wrapped in gesture detector for swipe chapter navigation */}
       <GestureDetector gesture={swipeGesture}>
       <Animated.View style={[styles.flex, contentTranslateStyle]}>
-      <ScrollView
+      <Animated.ScrollView
         ref={scrollRef}
         onScroll={handleScroll}
+        // Kept at 16 (Animated.ScrollView would otherwise default to 1) so the
+        // per-event 5px direction thresholds keep the exact sensitivity they
+        // had with the old JS handler — at throttle 1 a 120Hz display would
+        // halve the time window each threshold is measured over.
         scrollEventThrottle={16}
         style={styles.flex}
         contentContainerStyle={[styles.versesContent, { paddingTop: insets.top + HEADER_HEIGHT + 16, paddingBottom: tabBarHeight + 80 }]}
@@ -983,40 +1105,29 @@ export default function BibleReaderScreen() {
           </View>
         ) : (
           <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(ANIM.verseFade).easing(Ease.out)}>
+            {/* PERF: no inline closures here — `handleVersePress` and
+                `handleVerseLayout` are useCallback-stable and every other prop
+                is a primitive, so React.memo on VerseItem actually holds and a
+                selection/toast/keyboard change re-renders only the affected
+                rows instead of the whole chapter. */}
             {verses?.map((v) => (
-              <View
+              <VerseItem
                 key={v.verse}
-                onLayout={(e) => handleVerseLayout(v.verse, e.nativeEvent.layout.y)}
-              >
-                {/* Section heading before this verse */}
-                {headingBeforeVerse[v.verse] && (
-                  <Text style={[
-                    styles.sectionHeading,
-                    {
-                      color: colors.text,
-                      fontFamily: readingFont.body,
-                      fontSize: fontSize + 1,
-                      lineHeight: Math.round((fontSize + 1) * 1.4),
-                    },
-                  ]}>
-                    {headingBeforeVerse[v.verse]}
-                  </Text>
-                )}
-                <VerseItem
-                  verse={v}
-                  fontSize={fontSize}
-                  lineHeight={lineHeight}
-                  fontFamily={readingFont.body}
-                  isSelected={selectedVerses.has(v.verse)}
-                  highlightColor={highlightMap[v.verse]}
-                  hasNote={!!noteMap[v.verse]}
-                  isFlashing={flashVerse === v.verse}
-                  isRedLetter={isRedLetterVerse(bookId, chapter, v.verse)}
-                  isDark={isDark}
-                  textColor={colors.text}
-                  onPress={() => handleVersePress(v.verse)}
-                />
-              </View>
+                verse={v}
+                sectionHeading={headingBeforeVerse[v.verse]}
+                fontSize={fontSize}
+                lineHeight={lineHeight}
+                fontFamily={readingFont.body}
+                isSelected={selectedVerses.has(v.verse)}
+                highlightColor={highlightMap[v.verse]}
+                hasNote={!!noteMap[v.verse]}
+                isFlashing={flashVerse === v.verse}
+                isRedLetter={isRedLetterVerse(bookId, chapter, v.verse)}
+                isDark={isDark}
+                textColor={colors.text}
+                onPress={handleVersePress}
+                onLayout={handleVerseLayout}
+              />
             ))}
 
             {/* End-of-chapter ornament */}
@@ -1055,7 +1166,7 @@ export default function BibleReaderScreen() {
             )}
           </Animated.View>
         )}
-      </ScrollView>
+      </Animated.ScrollView>
       </Animated.View>
       </GestureDetector>
 
@@ -1092,7 +1203,7 @@ export default function BibleReaderScreen() {
             /* Color picker mode */
             <View style={styles.contextRow}>
               {existingHighlightColor && (
-                <TouchableOpacity onPress={handleRemoveHighlight} style={styles.contextColorButton} accessibilityLabel="Remove highlight">
+                <TouchableOpacity onPress={handleRemoveHighlight} style={styles.contextColorButton} testID="bible-highlight-remove" accessibilityLabel="Remove highlight">
                   <View style={[styles.contextRemoveCircle, {
                     backgroundColor: HIGHLIGHT_COLORS.find((c) => c.key === existingHighlightColor)?.color ?? '#888',
                   }]}>
@@ -1115,6 +1226,7 @@ export default function BibleReaderScreen() {
                     }}
                     style={styles.contextColorButton}
                     activeOpacity={0.7}
+                    testID={`bible-highlight-color-${c.key}`}
                     accessibilityLabel={isLocked ? `${c.key} highlight color, premium only` : `${c.key} highlight color`}
                   >
                     <View style={[styles.contextColorDot, { backgroundColor: c.color, opacity: isLocked ? 0.4 : 1 }]}>
@@ -1131,6 +1243,7 @@ export default function BibleReaderScreen() {
             <View style={styles.noteInputRow}>
               <TextInput
                 ref={noteInputRef}
+                testID="bible-verse-note-input"
                 style={[styles.noteInput, {
                   color: colors.text,
                   backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
@@ -1153,6 +1266,7 @@ export default function BibleReaderScreen() {
                   onPress={() => { setShowNoteInput(false); setNoteText(''); }}
                   style={styles.noteCancelButton}
                   activeOpacity={0.7}
+                  testID="bible-verse-note-cancel"
                 >
                   <Text style={[styles.noteButtonText, { color: colors.textMuted }]}>Cancel</Text>
                 </TouchableOpacity>
@@ -1160,6 +1274,7 @@ export default function BibleReaderScreen() {
                   onPress={handleSaveNote}
                   style={[styles.noteSaveButton, { backgroundColor: colors.accent }]}
                   activeOpacity={0.7}
+                  testID="bible-verse-note-save"
                 >
                   <Text style={[styles.noteButtonText, { color: '#FFF' }]}>Save</Text>
                 </TouchableOpacity>
@@ -1172,11 +1287,11 @@ export default function BibleReaderScreen() {
                 <BookOpenIcon size={22} color={colors.text} weight="light" />
                 <Text style={[styles.contextIconLabel, { color: colors.textMuted }]}>Explain</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => setShowColorPicker(true)} style={styles.contextIconButton} activeOpacity={0.6}>
+              <TouchableOpacity onPress={() => setShowColorPicker(true)} style={styles.contextIconButton} activeOpacity={0.6} testID="bible-verse-action-highlight">
                 <HighlighterCircleIcon size={22} color={colors.text} weight="light" />
                 <Text style={[styles.contextIconLabel, { color: colors.textMuted }]}>Highlight</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={handleNote} style={styles.contextIconButton} activeOpacity={0.6}>
+              <TouchableOpacity onPress={handleNote} style={styles.contextIconButton} activeOpacity={0.6} testID="bible-verse-action-note">
                 <NotePencilIcon size={22} color={colors.text} weight="light" />
                 <Text style={[styles.contextIconLabel, { color: colors.textMuted }]}>Note</Text>
               </TouchableOpacity>
@@ -1247,6 +1362,46 @@ export default function BibleReaderScreen() {
         onClose={() => setShowHighlightPremiumSheet(false)}
         feature="highlight"
       />
+      {/* Notebook notes anchored to this chapter — lightweight list linking
+          into note-detail (read-side bridge; same Sheet primitive as the
+          Notebook's own action sheets) */}
+      <Sheet
+        visible={showChapterNotes}
+        onClose={() => setShowChapterNotes(false)}
+        bottomPadding={24}
+      >
+        <Text style={[styles.chapterNotesTitle, { color: colors.text }]} numberOfLines={1}>
+          Notes on {book?.name ?? ''} {chapter}
+        </Text>
+        {chapterNotebookNotes.map((n) => {
+          const plain = isHtmlContent(n.content) ? stripHtml(n.content) : n.content;
+          const rowTitle = n.title.trim() || plain.split('\n')[0]?.slice(0, 60) || 'Untitled';
+          const preview = n.title.trim() ? plain.trim() : plain.split('\n').slice(1).join('\n').trim();
+          return (
+            <TouchableOpacity
+              key={n.id}
+              onPress={() => handleOpenNotebookNote(n.id)}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={`Open note: ${rowTitle}`}
+              style={styles.chapterNotesRow}
+            >
+              <NotePencilIcon size={18} color={colors.accent} weight="light" />
+              <View style={styles.chapterNotesRowBody}>
+                <Text style={[styles.chapterNotesRowTitle, { color: colors.text }]} numberOfLines={1}>
+                  {rowTitle}
+                </Text>
+                {preview ? (
+                  <Text style={[styles.chapterNotesRowPreview, { color: colors.textMuted }]} numberOfLines={1}>
+                    {preview}
+                  </Text>
+                ) : null}
+              </View>
+              <CaretRightIcon size={14} color={colors.textSubtle} weight="light" />
+            </TouchableOpacity>
+          );
+        })}
+      </Sheet>
       {/* Scripture note viewer — opened by tapping the inline note marker */}
       <BibleNoteSheet
         highlight={noteSheetHighlight}
@@ -1283,14 +1438,49 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   headerButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  headerNoteBadge: {
+    position: 'absolute',
+    top: 7,
+    right: 5,
+    minWidth: 14,
+    height: 14,
+    borderRadius: 7,
+    paddingHorizontal: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerNoteBadgeText: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 9,
+    lineHeight: 11,
+  },
+
+  // Chapter Notebook-notes sheet
+  chapterNotesTitle: {
+    fontFamily: FontFamily.uiSemiBold,
+    fontSize: FontSize.lg,
+    marginBottom: Spacing['3'],
+  },
+  chapterNotesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing['3'],
+    paddingVertical: Spacing['3.5'],
+  },
+  chapterNotesRowBody: { flex: 1 },
+  chapterNotesRowTitle: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: FontSize.sm,
+  },
+  chapterNotesRowPreview: {
+    fontFamily: FontFamily.body,
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 2,
+  },
   headerCenter: { flex: 1, flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', gap: 6 },
   headerBook: { fontSize: 17 },
   headerChapter: { fontFamily: FontFamily.ui, fontSize: 15 },
-  translationBadge: { height: 44, justifyContent: 'center', alignItems: 'center' },
-  translationText: {
-    fontFamily: FontFamily.uiMedium, fontSize: 11, letterSpacing: 0.5,
-    paddingHorizontal: Spacing['2'], paddingVertical: Spacing['1'], borderRadius: 4, overflow: 'hidden',
-  },
 
   // Verses
   versesContent: { paddingHorizontal: Spacing['8'] },

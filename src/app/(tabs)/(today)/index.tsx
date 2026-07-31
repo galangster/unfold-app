@@ -1208,6 +1208,7 @@ export default function HomeScreen() {
           {/* Zone 1: Greeting */}
           <GreetingRow
             userName={user?.name}
+            avatarTestID="home-avatar-button"
             onAvatarPress={() => router.push('/(tabs)/(you)')}
           />
 

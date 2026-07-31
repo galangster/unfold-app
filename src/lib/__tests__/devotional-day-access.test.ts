@@ -158,3 +158,47 @@ describe('devotional day access', () => {
     expect(resolveInitialReadingDayNumber(catchUpThenToday, 7, now)).toBe(7);
   });
 });
+
+// ── Regression: the missing-anchor fail-closed default ──────────────────────
+// `mapDevotional` (full-sync-pull.ts) and `buildDevotionalSyncMetadataPatch`
+// never carry `seriesStartDate`, so any devotional restored from server sync
+// has no calendar anchor. getCalendarDayNumber then returns null and
+// isCurrentDayAfterCalendarDay fails CLOSED — locking a legitimately behind
+// (catch-up) user out of the day they are entitled to.
+describe('missing seriesStartDate anchor', () => {
+  // 3 days before `now` (2026-05-10), built in local time like the rest of this file.
+  const threeDaysAgoIso = new Date(2026, 4, 7, 9, 0, 0).toISOString();
+
+  const anchorless = devotional({
+    currentDay: 2,
+    seriesStartDate: undefined,
+    createdAt: threeDaysAgoIso,
+    days: [
+      day({ dayNumber: 1, isRead: true, readAt: todayIso }),
+      day({ dayNumber: 2 }),
+    ],
+  });
+
+  it('has no calendar day at all', () => {
+    expect(getCalendarDayNumber(anchorless, now)).toBeNull();
+  });
+
+  it('locks the user to today despite being days behind the calendar', () => {
+    // Series began 2026-05-07; `now` is 2026-05-10, so the calendar says this
+    // user is on day 4 and Day 2 should be freely available.
+    expect(getLockedTodayDayNumber(anchorless, now)).toBe(1);
+    expect(isDevotionalDaySelectable(anchorless, 2, now)).toBe(false);
+    expect(resolveInitialReadingDayNumber(anchorless, 2, now)).toBe(1);
+  });
+
+  it('behaves correctly once the anchor is present', () => {
+    const anchored = devotional({
+      ...anchorless,
+      seriesStartDate: threeDaysAgoIso,
+    });
+    expect(getCalendarDayNumber(anchored, now)).toBe(4);
+    expect(getLockedTodayDayNumber(anchored, now)).toBeNull();
+    expect(isDevotionalDaySelectable(anchored, 2, now)).toBe(true);
+    expect(resolveInitialReadingDayNumber(anchored, 2, now)).toBe(2);
+  });
+});

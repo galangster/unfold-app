@@ -41,7 +41,7 @@ describe('notebook accessibility source contract', () => {
     const nativeEditorSource = readSource('modules/unfold-editor/ios/UnfoldEditorController.swift');
 
     expect(noteDetailSource).toContain('accessibilityValue={{ text: title }}');
-    expect(noteDetailSource).toContain('accessibilityLabel={`${displayTitle}. Tap to edit note title`}');
+    expect(noteDetailSource).toContain('accessibilityLabel="Note title"');
     expect(noteDetailSource).toContain('accessibilityLabel="Note body"');
     expect(noteDetailSource).toContain('accessibilityValue={{ text: stripHtml(latestHtmlRef.current) }}');
 

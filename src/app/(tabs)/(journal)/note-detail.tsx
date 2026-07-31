@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import {
   AppState,
+  Keyboard,
   View,
   Text,
   TextInput,
@@ -21,7 +22,6 @@ import {
   TrashIcon,
   StarIcon,
   FolderSimpleIcon,
-  CheckIcon,
   BookBookmarkIcon,
   ListBulletsIcon,
   ListNumbersIcon,
@@ -53,13 +53,13 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
-import { useUnfoldStore, type Note, type NoteCategory, type ScriptureRef } from '@/lib/store';
+import { useUnfoldStore, READING_FONTS, type Note, type NoteCategory, type ScriptureRef } from '@/lib/store';
 import { ScriptureRefPill } from '@/components/notebook/ScriptureRefPill';
 import { ScriptureSearchSheet } from '@/components/notebook/ScriptureSearchSheet';
 import { MoveFolderSheet } from '@/components/notebook/MoveFolderSheet';
 import { CreateFolderSheet } from '@/components/notebook/CreateFolderSheet';
 import { NoteDetailSaveIndicator } from '@/components/notebook/NoteDetailSaveIndicator';
-import { isHtmlContent, stripHtml } from '@/components/notebook/NoteEditor';
+import { isHtmlContent, stripHtml } from '@/lib/note-html';
 import { logger } from '@/lib/logger';
 import { alpha } from '@/components/ui';
 import { useCreationGate } from '@/hooks/useCreationGate';
@@ -132,11 +132,32 @@ function legacyMarkdownToHtml(content: string): string {
   return htmlLines.join('') || '<p></p>';
 }
 
+/**
+ * Reading-font preference → web font family for the tentap WebView editor.
+ * Mirrors the DevotionalWebView map. The default ('source-serif') is
+ * intentionally absent so it keeps the existing system UI stack — notes
+ * only opt into a serif body when the user actively picked one.
+ */
+const READING_FONT_WEB_FAMILY: Record<string, string> = {
+  EBGaramond_400Regular: 'EB Garamond',
+  Lora_400Regular: 'Lora',
+  Inter_400Regular: 'Inter',
+  CrimsonText_400Regular: 'Crimson Text',
+  Merriweather_400Regular: 'Merriweather',
+};
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function buildEditorCSS(colors: any, isEditing: boolean, fontSize: ReflectionFontSize): string {
+function buildEditorCSS(colors: any, fontSize: ReflectionFontSize, webFontFamily?: string | null): string {
   const bodyFontSize = reflectionBodyPx(fontSize);
+  const fontImport = webFontFamily
+    ? `@import url('https://fonts.googleapis.com/css2?family=${encodeURIComponent(webFontFamily)}:ital,wght@0,400;0,600;0,700;1,400&display=swap');`
+    : '';
+  const bodyFontStack = webFontFamily
+    ? `'${webFontFamily}', Georgia, serif`
+    : "-apple-system, 'Helvetica Neue', sans-serif";
 
   return `
+    ${fontImport}
     *, *::before, *::after {
       box-sizing: border-box;
     }
@@ -145,7 +166,7 @@ function buildEditorCSS(colors: any, isEditing: boolean, fontSize: ReflectionFon
       height: 100%;
     }
     body {
-      font-family: -apple-system, 'Helvetica Neue', sans-serif;
+      font-family: ${bodyFontStack};
       font-size: ${bodyFontSize}px;
       line-height: 1.65;
       color: ${colors.text};
@@ -189,7 +210,7 @@ function buildEditorCSS(colors: any, isEditing: boolean, fontSize: ReflectionFon
     ul[data-type="taskList"] li > label input[type="checkbox"] {
       width: 18px; height: 18px;
       accent-color: ${colors.accent};
-      cursor: ${isEditing ? 'pointer' : 'default'};
+      cursor: pointer;
       margin: 0;
     }
     ul[data-type="taskList"] li > div { flex: 1; min-width: 0; }
@@ -249,11 +270,14 @@ const JOURNAL_TAB_BAR_CONTENT_HEIGHT = 56;
 const JOURNAL_EDITOR_BOTTOM_BREATHING_ROOM = 24;
 
 /* ─────────────────────────────────────────────────────────
- * Unified Note Screen — reads AND edits in one view
+ * Unified Note Screen — always editable (premium users)
  *
- * Existing notes open in READ mode (editable: false).
- * New notes (no noteId) open in EDIT mode (editable: true).
- * Toggle between modes with Edit/Done header button.
+ * There is no read/edit mode split: the editor is editable
+ * whenever the user is premium, and editing chrome (toolbar,
+ * undo/redo, Done) is driven purely by keyboard visibility.
+ * The keyboard appears only on tap (or via `startEditing=true`,
+ * which now means "focus on open"). Non-premium users get a
+ * read-only view (`editable={false}` everywhere).
  * iOS: unfold-editor native module. Android: tentap WebView.
  * ───────────────────────────────────────────────────────── */
 
@@ -282,6 +306,19 @@ export default function NoteDetailScreen() {
   // Store selectors
   const user = useUnfoldStore((s) => s.user);
   const fontSize = user?.fontSize ?? 'medium';
+  // Reading-font preference (premium): notes honor the same body font the
+  // reader uses. Non-premium/default stays on the existing stacks.
+  const readingFontId = isPremium ? (user?.readingFont ?? 'source-serif') : 'source-serif';
+  const activeReadingFont = useMemo(
+    () => READING_FONTS.find((f) => f.id === readingFontId) ?? READING_FONTS[0],
+    [readingFontId],
+  );
+  const editorWebFontFamily: string | null =
+    READING_FONT_WEB_FAMILY[activeReadingFont.regular] ?? null;
+  // Title keeps the display face on the default font; a chosen reading font
+  // carries through at its semibold weight so title and body agree.
+  const titleFontFamily =
+    readingFontId === 'source-serif' ? FontFamily.display : activeReadingFont.medium;
   const notes = useUnfoldStore((s) => s.notes);
   const addNote = useUnfoldStore((s) => s.addNote);
   const updateNote = useUnfoldStore((s) => s.updateNote);
@@ -314,11 +351,11 @@ export default function NoteDetailScreen() {
     typeof params.folderId === 'string' && params.folderId.length > 0 ? params.folderId : undefined,
   );
 
-  // Editing state — new notes start in edit mode, existing in read mode
-  // Non-premium users cannot create or edit notes (defense-in-depth behind navigation gate)
+  // Always-editable model: no read/edit mode state. Non-premium users cannot
+  // create or edit notes (defense-in-depth behind the navigation gate).
+  // `startEditing=true` means "focus on open" (new-note flow, dock restore).
   const isNewNote = !params.noteId;
-  const shouldStartEditing = isPremium && (isNewNote || params.startEditing === 'true');
-  const [isEditing, setIsEditing] = useState(shouldStartEditing);
+  const shouldAutoFocus = isPremium && (isNewNote || params.startEditing === 'true');
 
   // Title state
   const [title, setTitle] = useState(existingNote?.title ?? '');
@@ -380,7 +417,7 @@ export default function NoteDetailScreen() {
   const editor = useEditorBridge({
     avoidIosKeyboard: false,
     autofocus: false,
-    editable: shouldStartEditing,
+    editable: isPremium,
     initialContent,
     theme: {
       webview: { backgroundColor: colors.background },
@@ -397,27 +434,32 @@ export default function NoteDetailScreen() {
       }),
     ],
     onChange: () => {
-      if (isEditingRef.current) {
-        scheduleAutoSave();
+      // Mirror the latest HTML into latestHtmlRef so flush paths (unmount
+      // cleanup in particular) can read refs synchronously instead of
+      // awaiting the bridge. Checkbox taps also land here and persist —
+      // intended: checking a task is an edit.
+      if (!IS_NATIVE_EDITOR) {
+        editor
+          .getHTML()
+          .then((html) => {
+            latestHtmlRef.current = html;
+          })
+          .catch(() => undefined);
       }
+      scheduleAutoSave();
     },
   });
 
   const editorState = useBridgeState(editor);
+  // RN Keyboard-listener based (tentap's hook wraps Keyboard events), so it
+  // works for both the native (iOS) and tentap (Android) editor paths.
   const { keyboardHeight, isKeyboardUp } = useKeyboard();
   const nativeEditorToolbarInset = getNativeEditorToolbarInset({
-    isEditing,
     isKeyboardUp,
   });
   const nativeEditorBottomOverlayInset = isKeyboardUp
     ? 0
     : JOURNAL_TAB_BAR_CONTENT_HEIGHT + insets.bottom + JOURNAL_EDITOR_BOTTOM_BREATHING_ROOM;
-
-  // Keep a ref for isEditing so the onChange callback always has the latest value
-  const isEditingRef = useRef(isEditing);
-  useEffect(() => {
-    isEditingRef.current = isEditing;
-  }, [isEditing]);
 
   useFocusEffect(
     useCallback(() => {
@@ -429,9 +471,13 @@ export default function NoteDetailScreen() {
         appliedStartEditingKeyRef.current !== startEditingKey
       ) {
         appliedStartEditingKeyRef.current = startEditingKey;
-        setIsEditing(true);
+        // "startEditing" now means "focus on open": request editor focus so
+        // the keyboard comes up (chrome follows keyboard visibility).
+        setTimeout(() => {
+          IS_NATIVE_EDITOR ? editorRef.current?.focus() : editor.focus('end');
+        }, 100);
       }
-    }, [isPremium, params.noteId, params.startEditing]),
+    }, [isPremium, params.noteId, params.startEditing, editor]),
   );
 
   // Overlay covers the WebView until CSS is painted (not needed on native)
@@ -453,7 +499,7 @@ export default function NoteDetailScreen() {
     if (IS_NATIVE_EDITOR) return;
     const fallback = setTimeout(() => {
       setEditorReady(true);
-      editor.injectCSS(buildEditorCSS(colors, isEditingRef.current, fontSize));
+      editor.injectCSS(buildEditorCSS(colors, fontSize, editorWebFontFamily));
     }, 1500);
     return () => clearTimeout(fallback);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -462,14 +508,14 @@ export default function NoteDetailScreen() {
   useEffect(() => {
     if (IS_NATIVE_EDITOR) return;
     if (!editorState.isReady) return;
-    editor.injectCSS(buildEditorCSS(colors, isEditing, fontSize));
+    editor.injectCSS(buildEditorCSS(colors, fontSize, editorWebFontFamily));
     // Delay removing overlay until CSS has had time to paint
     setTimeout(() => {
       setEditorReady(true);
     }, 120);
 
     // If new note, auto-focus the editor after it's ready
-    if (shouldStartEditing && isNewNote) {
+    if (shouldAutoFocus && isNewNote) {
       setTimeout(() => {
         editor.focus('end');
       }, 300);
@@ -480,7 +526,8 @@ export default function NoteDetailScreen() {
   useEffect(() => {
     if (IS_NATIVE_EDITOR) return;
     if (!editorState.isReady) return;
-    if (isEditing && isKeyboardUp && keyboardHeight > 0) {
+    if (isKeyboardUp && keyboardHeight > 0) {
+      // Toolbar is anchored above the keyboard whenever it's up
       const totalPadding = keyboardHeight + NOTEBOOK_TOOLBAR_TOTAL_HEIGHT + 20;
       editor.injectJS(`
         (function() {
@@ -489,15 +536,6 @@ export default function NoteDetailScreen() {
         })();
       `);
       editor.updateScrollThresholdAndMargin(totalPadding);
-    } else if (isKeyboardUp && keyboardHeight > 0) {
-      const padding = keyboardHeight + 10;
-      editor.injectJS(`
-        (function() {
-          var doc = document.querySelector('.ProseMirror');
-          if (doc) doc.style.paddingBottom = '${padding}px';
-        })();
-      `);
-      editor.updateScrollThresholdAndMargin(padding);
     } else {
       editor.injectJS(`
         (function() {
@@ -507,12 +545,16 @@ export default function NoteDetailScreen() {
       `);
       editor.updateScrollThresholdAndMargin(0);
     }
-  }, [isEditing, isKeyboardUp, keyboardHeight, editorState.isReady]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isKeyboardUp, keyboardHeight, editorState.isReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Cleanup on unmount
+  // Cleanup on unmount — flush (not cancel) any pending autosave so edits
+  // survive navigation that bypasses handleBack. The save path reads
+  // latestHtmlRef/latestTitleRef synchronously (never awaits the editor
+  // bridge) so it is safe to run during teardown. Deliberate exits
+  // (back/minimize/delete) cancel first, so this is a no-op for them.
   useEffect(() => {
     return () => {
-      autoSaveControllerRef.current?.cancel();
+      autoSaveControllerRef.current?.flush();
       if (savedResetRef.current) clearTimeout(savedResetRef.current);
       if (deleteTimeoutRef.current) clearTimeout(deleteTimeoutRef.current);
     };
@@ -656,10 +698,12 @@ export default function NoteDetailScreen() {
     const allowEmpty = autoSaveAllowEmptyRef.current;
     autoSaveAllowEmptyRef.current = false;
 
-    // Native path: HTML pushed via onChangeHtml event. tentap: pull via bridge.
+    // Native path: HTML pushed via onChangeHtml event. tentap: mirrored into
+    // latestHtmlRef from onChange. Reading refs (not the editor bridge) keeps
+    // the normal debounced path safe to run from unmount cleanup.
     const html = allowEmpty
       ? await getCurrentEditorHtml()
-      : htmlFromEvent ?? (IS_NATIVE_EDITOR ? latestHtmlRef.current : await editor.getHTML());
+      : htmlFromEvent ?? latestHtmlRef.current;
     const titleVal = latestTitleRef.current;
 
     if (!allowEmpty && !hasMeaningfulNoteContent({ title: titleVal, html })) return;
@@ -678,12 +722,14 @@ export default function NoteDetailScreen() {
       AccessibilityInfo.announceForAccessibility('Note saved');
       savedResetRef.current = setTimeout(() => setSaveState('idle'), 2000);
     }, 150);
-  }, [editor, getCurrentEditorHtml, persistCurrentSnapshot]);
+  }, [getCurrentEditorHtml, persistCurrentSnapshot]);
   autoSaveSaveRef.current = persistScheduledAutoSave;
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
-      if (!isEditingRef.current || !shouldFlushAutosaveOnAppState(nextState)) return;
+      // Ungated flush: the controller no-ops when idle, so backgrounding
+      // without pending edits costs nothing.
+      if (!shouldFlushAutosaveOnAppState(nextState)) return;
 
       pendingAutoSaveHtmlRef.current = undefined;
       autoSaveAllowEmptyRef.current = true;
@@ -705,77 +751,44 @@ export default function NoteDetailScreen() {
   );
 
 
-  /* ───── Mode switching ───── */
+  /* ───── Keyboard dismissal ───── */
 
-  const handleEdit = useCallback(() => {
-    if (!gate()) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setIsEditing(true);
-    if (IS_NATIVE_EDITOR) {
-      // editable prop updates via re-render; focus after a tick
-      setTimeout(() => editorRef.current?.focus(), 100);
-    } else {
-      editor.setEditable(true);
-      editor.injectCSS(buildEditorCSS(colors, true, fontSize));
-      setTimeout(() => editor.focus('end'), 100);
-    }
-  }, [editor, colors, gate]);
-
-
-  const handleDone = useCallback(async () => {
+  const handleDismissKeyboard = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    // Get the final content from the editor
-    const html = await getCurrentEditorHtml();
-    const titleVal = latestTitleRef.current;
-
-    // Persist
-    if (!persistCurrentSnapshot({
-      title: titleVal,
-      html,
-      newNoteLog: '[NoteDetail] Created new note on Done:',
-    }) && !noteId) {
-      // Empty new note — just go back
-      router.back();
-      return;
-    }
-
-    // Switch to read mode
-    if (IS_NATIVE_EDITOR) {
-      editorRef.current?.blur();
-    } else {
-      editor.blur();
-      editor.setEditable(false);
-      editor.injectCSS(buildEditorCSS(colors, false, fontSize));
-    }
-    setIsEditing(false);
-
-    // Clear any pending save timers
-    autoSaveControllerRef.current?.cancel();
-    pendingAutoSaveHtmlRef.current = undefined;
-    setSaveState('idle');
-  }, [editor, noteId, router, colors, getCurrentEditorHtml, persistCurrentSnapshot]);
+    // Blur the editor and drop the keyboard; editing chrome follows keyboard
+    // visibility. Flush (don't cancel) any pending autosave so the latest
+    // keystrokes are persisted immediately.
+    IS_NATIVE_EDITOR ? editorRef.current?.blur() : editor.blur();
+    Keyboard.dismiss();
+    autoSaveControllerRef.current?.flush();
+  }, [editor]);
 
 
   /* ───── Navigation ───── */
 
   const handleBack = useCallback(async () => {
-    // If editing, save before going back
-    if (isEditingRef.current) {
-      const html = await getCurrentEditorHtml();
-      const titleVal = latestTitleRef.current;
+    // Cancel the pending debounce first: the explicit snapshot below is
+    // fresher, and a stale-closure flush firing from unmount cleanup could
+    // otherwise double-create a brand-new note.
+    autoSaveControllerRef.current?.cancel();
+    pendingAutoSaveHtmlRef.current = undefined;
 
-      persistCurrentSnapshot({
-        title: titleVal,
-        html,
-        newNoteLog: '[NoteDetail] Saved new note on back:',
-      });
-    }
+    // Save unconditionally. Empty new notes fall through persistCurrentSnapshot
+    // unsaved, so backing out of an untouched new note leaves no ghost note.
+    const html = await getCurrentEditorHtml();
+    const titleVal = latestTitleRef.current;
+
+    persistCurrentSnapshot({
+      title: titleVal,
+      html,
+      newNoteLog: '[NoteDetail] Saved new note on back:',
+    });
 
     router.back();
   }, [router, getCurrentEditorHtml, persistCurrentSnapshot]);
 
-  const handleMinimizeToBible = useCallback(async () => {
+  const handleMinimize = useCallback(async () => {
     if (!gate() || isMinimizingRef.current) return;
     isMinimizingRef.current = true;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -787,7 +800,7 @@ export default function NoteDetailScreen() {
         title: titleVal,
         html,
         allowEmpty: true,
-        newNoteLog: '[NoteDetail] Saved note before Bible dock:',
+        newNoteLog: '[NoteDetail] Saved note before minimizing to dock:',
       });
       if (!id) {
         isMinimizingRef.current = false;
@@ -805,14 +818,18 @@ export default function NoteDetailScreen() {
         updatedAt: new Date().toISOString(),
       });
 
+      // Cancel — NOT flush — the pending autosave: the allowEmpty snapshot
+      // above already captured the freshest state; a flush would double-write.
       autoSaveControllerRef.current?.cancel();
       pendingAutoSaveHtmlRef.current = undefined;
       setSaveState('idle');
       IS_NATIVE_EDITOR ? editorRef.current?.blur() : editor.blur();
-      router.replace('/(tabs)/(bible)');
+      // Return to wherever the user came from — the draft dock floats above
+      // every tab (rendered in (tabs)/_layout), so no tab switch is needed.
+      router.back();
     } catch (error) {
       isMinimizingRef.current = false;
-      logger.error('[NoteDetail] Failed to minimize note for Bible:', error);
+      logger.error('[NoteDetail] Failed to minimize note:', error);
     }
   }, [editor, gate, getCurrentEditorHtml, persistCurrentSnapshot, router, setDraftDock]);
 
@@ -854,6 +871,10 @@ export default function NoteDetailScreen() {
 
   const handleDelete = useCallback(() => {
     if (!noteId) {
+      // Discarding an unsaved note — cancel any pending autosave so the
+      // unmount flush can't recreate what the user just threw away.
+      autoSaveControllerRef.current?.cancel();
+      pendingAutoSaveHtmlRef.current = undefined;
       setShowMoreMenu(false);
       router.back();
       return;
@@ -869,6 +890,10 @@ export default function NoteDetailScreen() {
     }
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    // Cancel any pending autosave BEFORE deleting — the unmount flush would
+    // otherwise resurrect the note via updateNote's resurrect-on-missing path.
+    autoSaveControllerRef.current?.cancel();
+    pendingAutoSaveHtmlRef.current = undefined;
     deleteNote(noteId);
     setShowMoreMenu(false);
     router.back();
@@ -1098,7 +1123,6 @@ export default function NoteDetailScreen() {
     [notes, noteId],
   );
 
-  const displayTitle = title.trim() || 'Untitled';
   const currentDate = formatDate(
     liveNote?.createdAt ?? existingNote?.createdAt ?? new Date().toISOString(),
   );
@@ -1160,7 +1184,7 @@ export default function NoteDetailScreen() {
           </TouchableOpacity>
 
           <View style={styles.headerRight}>
-            {isEditing && (
+            {isKeyboardUp && (
               <>
                 <TouchableOpacity
                   onPress={handleUndo}
@@ -1197,43 +1221,29 @@ export default function NoteDetailScreen() {
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  onPress={handleMinimizeToBible}
+                  onPress={handleMinimize}
                   style={styles.headerButton}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   activeOpacity={1}
                   accessibilityRole="button"
-                  accessibilityLabel="Minimize note and open Bible"
+                  accessibilityLabel="Minimize note"
                 >
                   <ArrowsInSimpleIcon size={22} color={colors.textMuted} weight="light" />
                 </TouchableOpacity>
-              </>
-            )}
 
-            {/* Edit / Done toggle */}
-            {isEditing ? (
-              <TouchableOpacity
-                onPress={handleDone}
-                style={styles.actionButton}
-                activeOpacity={1}
-                accessibilityRole="button"
-                accessibilityLabel="Done editing"
-              >
-                <Text style={[styles.actionText, { color: colors.accent }]}>
-                  Done
-                </Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                onPress={handleEdit}
-                style={styles.actionButton}
-                activeOpacity={1}
-                accessibilityRole="button"
-                accessibilityLabel="Edit note"
-              >
-                <Text style={[styles.actionText, { color: colors.accent }]}>
-                  Edit
-                </Text>
-              </TouchableOpacity>
+                {/* Done — dismisses the keyboard and flushes the pending save */}
+                <TouchableOpacity
+                  onPress={handleDismissKeyboard}
+                  style={styles.actionButton}
+                  activeOpacity={1}
+                  accessibilityRole="button"
+                  accessibilityLabel="Done editing"
+                >
+                  <Text style={[styles.actionText, { color: colors.accent }]}>
+                    Done
+                  </Text>
+                </TouchableOpacity>
+              </>
             )}
 
             {/* More menu button */}
@@ -1246,6 +1256,7 @@ export default function NoteDetailScreen() {
               style={styles.headerButton}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               activeOpacity={0.6}
+              testID="note-more-button"
               accessibilityRole="button"
               accessibilityLabel="More options"
             >
@@ -1376,7 +1387,7 @@ export default function NoteDetailScreen() {
           )}
 
           <NoteDetailSaveIndicator
-            isEditing={isEditing}
+            isKeyboardUp={isKeyboardUp}
             saveState={saveState}
             reducedMotion={!!reducedMotion}
             textColor={colors.textMuted}
@@ -1384,8 +1395,8 @@ export default function NoteDetailScreen() {
           />
         </View>
 
-        {/* ── Scripture references (read mode only, non-native — native uses chip strip) ── */}
-        {!isEditing && !IS_NATIVE_EDITOR && liveScriptureRefs.length > 0 && (
+        {/* ── Scripture references (keyboard down only, non-native — native uses chip strip) ── */}
+        {!isKeyboardUp && !IS_NATIVE_EDITOR && liveScriptureRefs.length > 0 && (
           <Animated.View
             entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
             exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
@@ -1408,59 +1419,39 @@ export default function NoteDetailScreen() {
           </Animated.View>
         )}
 
-        {/* ── Title ── */}
-        {isEditing ? (
-          <TextInput
-            value={title}
-            onChangeText={handleTitleChange}
-            placeholder="Title"
-            placeholderTextColor={colors.textMuted}
-            editable
-            autoFocus={isNewNote}
-            selectionColor={colors.accent}
-            cursorColor={colors.accent}
-            style={[
-              styles.titleInput,
-              { color: colors.text },
-            ]}
-            returnKeyType="next"
-            onSubmitEditing={() => {
-              IS_NATIVE_EDITOR ? editorRef.current?.focus() : editor.focus('end');
-            }}
-            blurOnSubmit={false}
-            maxLength={200}
-            keyboardAppearance={isDark ? 'dark' : 'light'}
-            accessibilityLabel="Note title"
-            accessibilityHint="Edits the note title"
-            accessibilityValue={{ text: title }}
-          />
-        ) : (
-          <TouchableOpacity
-            onPress={handleEdit}
-            activeOpacity={0.7}
-            accessibilityRole="button"
-            accessibilityLabel={`${displayTitle}. Tap to edit note title`}
-            accessibilityValue={{ text: displayTitle }}
-          >
-            <Text
-              style={[
-                styles.titleInput,
-                styles.titleInputReadOnly,
-                { color: title ? colors.text : colors.textHint },
-              ]}
-              numberOfLines={3}
-            >
-              {title || 'Title'}
-            </Text>
-          </TouchableOpacity>
-        )}
+        {/* ── Title — always a TextInput (read-only for non-premium) ── */}
+        <TextInput
+          testID="note-title-input"
+          value={title}
+          onChangeText={handleTitleChange}
+          placeholder="Title"
+          placeholderTextColor={colors.textMuted}
+          editable={isPremium}
+          autoFocus={isNewNote && isPremium}
+          selectionColor={colors.accent}
+          cursorColor={colors.accent}
+          style={[
+            styles.titleInput,
+            { color: colors.text, fontFamily: titleFontFamily },
+          ]}
+          returnKeyType="next"
+          onSubmitEditing={() => {
+            IS_NATIVE_EDITOR ? editorRef.current?.focus() : editor.focus('end');
+          }}
+          blurOnSubmit={false}
+          maxLength={200}
+          keyboardAppearance={isDark ? 'dark' : 'light'}
+          accessibilityLabel="Note title"
+          accessibilityHint={isPremium ? 'Edits the note title' : 'Shows the note title'}
+          accessibilityValue={{ text: title }}
+        />
 
         {/* ── Accent divider ── */}
         <View
           style={[
             styles.titleDivider,
             getTitleDividerPresentation({
-              isEditing,
+              isKeyboardUp,
               accentColor: colors.accent,
               borderColor: colors.border,
             }),
@@ -1495,14 +1486,14 @@ export default function NoteDetailScreen() {
                 );
               }}
               placeholder={'Start writing\u2026'}
-              editable={isEditing}
-              autoFocus={shouldStartEditing && !isNewNote}
+              editable={isPremium}
+              autoFocus={shouldAutoFocus && !isNewNote}
               keyboardAppearance={isDark ? 'dark' : 'light'}
               colorScheme={isDark ? 'dark' : 'light'}
               keyboardToolbarHeight={nativeEditorToolbarInset}
               bottomOverlayInset={nativeEditorBottomOverlayInset}
               accessibilityLabel="Note body"
-              accessibilityHint={isEditing ? 'Edits the note body' : 'Shows the note body'}
+              accessibilityHint={isPremium ? 'Edits the note body' : 'Shows the note body'}
               accessibilityValue={{ text: stripHtml(latestHtmlRef.current) }}
               style={styles.richText}
             />
@@ -1530,22 +1521,10 @@ export default function NoteDetailScreen() {
               )}
             </>
           )}
-          {/* Tap-to-edit overlay — captures taps in read mode.
-              Only for WebView (swallows touches). Native UITextView scrolls
-              fine when non-editable; tap-to-edit via title or header Edit button. */}
-          {!isEditing && editorReady && !IS_NATIVE_EDITOR && (
-            <TouchableOpacity
-              style={StyleSheet.absoluteFill}
-              activeOpacity={1}
-              onPress={handleEdit}
-              accessibilityRole="button"
-              accessibilityLabel="Tap to edit note"
-            />
-          )}
         </View>
 
-        {/* ── Tags section (read mode only) ── */}
-        {!isEditing && liveNote && liveNote.tags.length > 0 && (
+        {/* ── Tags section (keyboard down only) ── */}
+        {!isKeyboardUp && liveNote && liveNote.tags.length > 0 && (
           <Animated.View
             entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
             exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
@@ -1575,8 +1554,8 @@ export default function NoteDetailScreen() {
           </Animated.View>
         )}
 
-        {/* ── Toolbar (edit mode only, when keyboard is up) ── */}
-        {isEditing && (IS_NATIVE_EDITOR || editorState.isReady) && isKeyboardUp && (
+        {/* ── Toolbar (whenever the keyboard is up) ── */}
+        {isPremium && (IS_NATIVE_EDITOR || editorState.isReady) && isKeyboardUp && (
           <View
             style={[
               styles.toolbar,
@@ -1933,10 +1912,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing['6'],
     paddingTop: Spacing['4'],
     paddingBottom: Spacing['3'],
-  },
-  titleInputReadOnly: {
-    // Make the disabled TextInput look like a regular Text
-    opacity: 1,
   },
   titleDivider: {
     width: 40,

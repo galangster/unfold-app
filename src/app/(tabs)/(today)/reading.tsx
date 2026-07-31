@@ -1544,7 +1544,14 @@ export default function ReadingScreen() {
             <TouchableOpacity activeOpacity={0.7}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push('/(tabs)/(today)');
+                // This "not ready yet" state can be entered directly via a deep
+                // link/notification for a specific day, so there may be no back
+                // stack to pop — fall back to replacing with the Today root.
+                if (router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.replace('/(tabs)/(today)');
+                }
               }}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               accessibilityRole="button"
@@ -1746,7 +1753,7 @@ export default function ReadingScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }} testID="devotional-reader-screen">
       <GestureDetector gesture={panGesture}>
         <Animated.View style={[{ flex: 1 }, contentStyle]}>
           <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
@@ -1861,6 +1868,7 @@ export default function ReadingScreen() {
                     setShowReadingSettings(true);
                   }}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  testID="devotional-reader-settings-button"
                   accessibilityRole="button"
                   accessibilityLabel="Reading settings"
                   accessibilityHint="Adjust font size and reading font"

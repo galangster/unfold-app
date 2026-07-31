@@ -26,6 +26,7 @@ const baseDevotional: Devotional = {
   currentDay: 1,
   days: [],
   createdAt: '2026-04-24T00:00:00.000Z',
+  seriesStartDate: '2026-04-24T00:00:00.000Z',
   updatedAt: '2026-04-25T00:00:00.000Z',
   userContext: {
     name: 'Nick',

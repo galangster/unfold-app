@@ -12,9 +12,7 @@ export default function JournalLayout() {
     >
       <Stack.Screen name="index" options={{ animation: 'fade' }} />
       <Stack.Screen name="entry" options={{ animation: 'ios_from_right', gestureEnabled: true, fullScreenGestureEnabled: true }} />
-      <Stack.Screen name="note" options={{ animation: 'ios_from_right', gestureEnabled: true, fullScreenGestureEnabled: true }} />
       <Stack.Screen name="note-detail" options={{ animation: 'ios_from_right', gestureEnabled: true, fullScreenGestureEnabled: true }} />
-      <Stack.Screen name="my-responses" options={{ animation: 'ios_from_right', gestureEnabled: true, fullScreenGestureEnabled: true }} />
       <Stack.Screen name="recently-deleted" options={{ animation: 'ios_from_right', gestureEnabled: true, fullScreenGestureEnabled: true }} />
     </Stack>
   );

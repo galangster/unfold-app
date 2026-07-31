@@ -24,7 +24,6 @@ Checkbox = covered by a completed walkthrough pass (all unchecked at synthesis t
 | 9 | `/streak-settings` | streak-ui | Tier card Spark 0-6/Glow 7-29/Shine 30-89/Radiance 90+ (progress bar min 2% / "Legendary" at top); 4-tier roadmap row; 3-stat grid w/ exclusive tap-tooltips (Best / Freezes-vs-"Premium" label / Till Freeze = 7-(s%7)); Weekend Amnesty switch (default ON, un-gated, retroactive at next reconcile); freeze info copy contradicts engine (streak-ui#4/9); inbound only via StreakBox + StreakDisplay pills | [ ] |
 | 10 | `/welcome-celebration` | onboarding | Celebration → `replace('/generating')`; only inbound edge today = debug-light-mode | [ ] |
 | 11 | `/sample-devotional` | routes | **Orphan route** (no inbound edges); template picked by aboutMe keywords | [ ] |
-| 12 | `/showcase` (web) | routes | Component showcase at `http://localhost:8081/showcase`; `e2e/showcase.spec.ts` | [ ] |
 | 13 | `/+html` (web only) | routes | Web root HTML shell | [ ] |
 | 14 | `/__dev__/unfold-editor-test` (`?autoFuzz&caseId&limit`) | notebook | QA-gated native-editor parity + fuzz harness | [ ] |
 | 15 | `/debug-light-mode` | QA | Theme preview gallery + link to welcome-celebration; QA-gated | [ ] |
@@ -245,7 +244,6 @@ Master gate: `isQaToolsEnabled()` (`src/lib/qa-tools.ts`) = `__DEV__ || EXPO_PUB
 | `unfold://debug-light-mode` | Theme preview gallery; links to `/welcome-celebration` |
 | `unfold://__dev__/unfold-editor-test?autoFuzz=1&limit=20` (also `caseId=`) | Native-editor fuzz harness (HtmlEncoder/Decoder round-trip target) |
 | `unfold://onboarding?startAt=<stepId>` | Deep-link into any surviving onboarding step (e.g. `startAt=themeType`) |
-| `http://localhost:8081/showcase` (web) | Component showcase; `e2e/showcase.spec.ts` |
 | `/(tabs)/(you)/component-catalog` | Orphan design-system gallery (no QA gate of its own) |
 
 ### You-tab "QA Tools / Dev Tools" block (visible only when gate on)

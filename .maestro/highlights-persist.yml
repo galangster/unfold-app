@@ -1,49 +1,72 @@
-# Highlights Persistence E2E Test
-# Tests: Highlights created in reading persist after app restart
+# Highlight persistence across an app restart.
+#
+# VERIFIES: a Bible highlight created in the reader is still there after the
+# app is fully relaunched — i.e. it was written to the persisted store, not
+# just held in memory. Uses Genesis 1:2 so it does not collide with the verse
+# used by bible-reader-flow / verse-note-autosave.
+#
+# PRECONDITION: the Bible database is already downloaded.
 
 appId: com.unfoldapp.ios
 ---
-# Step 1: Create a highlight
+# ── Phase 1: create the highlight ───────────────────────────────────────────
 - launchApp
-- assertVisible: "Today"
 
-# Navigate to reading
 - tapOn:
-    text: ".*Day.*"
-    index: 0
-
-# Wait for content to load
+    id: "bottom-tab-bible"
 - extendedWaitUntil:
     visible:
-      text: ".*\\d+:\\d+.*"
-    timeout: 10000
+      id: "bible-reader-screen"
+    timeout: 20000
 
-# Long press to highlight
-- longPressOn:
-    text: ".*"
-    index: 3
-
-# Confirm highlight (if highlight sheet appears)
 - tapOn:
-    text: ".*Highlight.*"
-    optional: true
-
-# Go back
+    id: "reader-chapter-title"
+- assertVisible:
+    id: "bible-navigator"
 - tapOn:
-    id: "back-button"
-    optional: true
+    id: "bible-navigator-search"
+- inputText: "Genesis 1"
+- tapOn:
+    id: "bible-navigator-goto"
+- assertVisible:
+    id: "bible-verse-2"
 
-# Step 2: Restart and verify highlight persists
+- tapOn:
+    id: "bible-verse-2"
+- tapOn:
+    id: "bible-verse-action-highlight"
+- assertVisible:
+    id: "bible-highlight-color-yellow"
+- tapOn:
+    id: "bible-highlight-color-yellow"
+- assertNotVisible:
+    id: "bible-highlight-color-yellow"
+- assertNotVisible:
+    id: "bible-verse-action-highlight"
+
+# ── Phase 2: relaunch and check it survived ─────────────────────────────────
 - launchApp:
     clearState: false
 
-- assertVisible: "Today"
+- tapOn:
+    id: "bottom-tab-bible"
+- extendedWaitUntil:
+    visible:
+      id: "bible-reader-screen"
+    timeout: 20000
 
-# Navigate to Bible > Saved
-- tapOn: "Bible"
-- tapOn: "Saved"
-
-# Verify highlight appears in saved list
+- tapOn:
+    id: "reader-settings-button"
 - assertVisible:
-    text: ".*Highlight.*"
-    optional: true
+    id: "bible-reader-preferences-sheet"
+# The preferences sheet scrolls (ReaderBottomSheet maxHeightRatio 0.72);
+# this row sits below the fold, so it must be scrolled to before use.
+- scrollUntilVisible:
+    element:
+      id: "reader-saved-verses-row"
+    direction: DOWN
+- tapOn:
+    id: "reader-saved-verses-row"
+# See bible-reader-flow: the card exposes only
+# "Bible <kind>: <text>" — the verse reference is not in the hierarchy.
+- assertVisible: "Bible highlight: Now the earth was formless.*"

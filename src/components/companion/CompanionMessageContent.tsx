@@ -6,10 +6,12 @@
  *
  * ANIMATION: Fade in on mount (200ms, ease-out).
  */
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import { View, Text, Pressable } from 'react-native';
 import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
 import { Duration, Ease } from '@/constants/animations';
+import { useSmoothTextReveal } from '@/lib/use-smooth-text-reveal';
+import { StreamingCursor } from './StreamingCursor';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { Radius } from '@/constants/radius';
@@ -55,9 +57,18 @@ interface Props {
 
 const ENTERING = FadeIn.duration(Duration.normal).easing(Ease.out);
 
-/** Memoized streaming text that strips markdown on the fly */
+/**
+ * Streaming text leaf: strips markdown on the fly and reveals it word by word
+ * (useSmoothTextReveal) instead of popping whole chunks every 32ms. Width
+ * reservation trick (TypewriterText precedent): the not-yet-revealed suffix
+ * renders transparently so the paragraph lays out at its full size and words
+ * never reflow mid-line as they appear. The StreamingCursor sits inline at
+ * the tail of the revealed prefix.
+ */
 function StreamingText({ content, color }: { content: string; color: string }) {
   const stripped = useMemo(() => smartQuotes(stripMarkdownLight(content)), [content]);
+  const revealed = useSmoothTextReveal(stripped);
+  const hidden = stripped.slice(revealed.length);
   return (
     <Text
       style={{
@@ -67,7 +78,9 @@ function StreamingText({ content, color }: { content: string; color: string }) {
         color,
       }}
     >
-      {stripped}
+      {revealed}
+      <StreamingCursor />
+      {hidden.length > 0 && <Text style={{ color: 'transparent' }}>{hidden}</Text>}
     </Text>
   );
 }
@@ -93,6 +106,13 @@ export function CompanionMessageContent({ message, showIcon, isStreaming, isSear
     () => splitStreamingParagraphs(message.content),
     [message.content],
   );
+
+  // WR-18 soften: when THIS mount streamed the message, keep rendering the
+  // completed text through the same stable/tail split so the end-of-stream
+  // swap reuses the warm stable block list and only the trailing paragraph
+  // reflows. History mounts (never streamed here) render in one block.
+  const wasStreamingRef = useRef(isStreaming);
+  if (isStreaming) wasStreamingRef.current = true;
 
   return (
     <Animated.View entering={reducedMotion ? undefined : ENTERING} style={{ flexDirection: 'row', alignItems: 'flex-start', paddingLeft: Spacing['4'] }}>
@@ -151,10 +171,29 @@ export function CompanionMessageContent({ message, showIcon, isStreaming, isSear
         ) : isComplete && onVersePress ? (
           // Complete message — rich text with verse pills + blockquotes
           <>
-            <RichMessageText
-              text={message.content}
-              onVersePress={onVersePress}
-            />
+            {wasStreamingRef.current ? (
+              <>
+                {stableStreamText.length > 0 && (
+                  <RichMessageText
+                    text={stableStreamText}
+                    onVersePress={onVersePress}
+                  />
+                )}
+                {streamTail.length > 0 && (
+                  <View style={stableStreamText.length > 0 ? { marginTop: Spacing['3'] } : undefined}>
+                    <RichMessageText
+                      text={streamTail}
+                      onVersePress={onVersePress}
+                    />
+                  </View>
+                )}
+              </>
+            ) : (
+              <RichMessageText
+                text={message.content}
+                onVersePress={onVersePress}
+              />
+            )}
             {deepLinkCards?.map((dl, i) => (
               <DevotionalCard key={`dl-${i}`} data={dl} />
             ))}

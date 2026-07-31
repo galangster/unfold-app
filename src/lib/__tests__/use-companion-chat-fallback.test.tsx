@@ -507,6 +507,127 @@ describe('conversation-scoped streaming (WR-09)', () => {
 });
 
 
+describe('server error events never trigger the non-streaming fallback (P0-3)', () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+    act(() => {
+      useCompanionChatStore.getState().clearAllConversations();
+    });
+  });
+
+  it('surfaces a server {error} event with no partial text as a retryable error without a second request', async () => {
+    mockFetch
+      .mockResolvedValueOnce(streamingResponseFromChunks([
+        'data: {"error":"The companion is over capacity right now."}\n\n',
+      ]))
+      // A fallback would consume this; it must never be requested.
+      .mockResolvedValueOnce(jsonResponse({ content: 'Billed twice!', suggestions: [] }));
+
+    let hook: ReturnType<typeof useCompanionChat> | null = null;
+    await act(async () => {
+      renderer.create(<HookHarness onReady={(next) => { hook = next; }} />);
+      await Promise.resolve();
+    });
+
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await hook!.sendMessage('question');
+      await wait(100);
+    });
+
+    expect(outcome).toBe('error');
+    expect(mockFetch).toHaveBeenCalledTimes(1); // no duplicate billed request
+    const reply = useCompanionChatStore.getState().conversations[0]
+      ?.messages.find((m) => m.role === 'companion');
+    expect(reply?.status).toBe('error');
+    expect(reply?.content).toBe('The companion is over capacity right now.');
+    expect(hook!.error).toBe('The companion is over capacity right now.');
+  });
+
+  it('keeps partial text when a server {error} event arrives mid-stream', async () => {
+    mockFetch
+      .mockResolvedValueOnce(streamingResponseFromChunks([
+        'data: {"t":"Partial thought"}\n\n',
+        'data: {"error":"Model overloaded"}\n\n',
+      ]))
+      .mockResolvedValueOnce(jsonResponse({ content: 'Rewound answer', suggestions: [] }));
+
+    let hook: ReturnType<typeof useCompanionChat> | null = null;
+    await act(async () => {
+      renderer.create(<HookHarness onReady={(next) => { hook = next; }} />);
+      await Promise.resolve();
+    });
+
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await hook!.sendMessage('question');
+      await wait(100);
+    });
+
+    expect(outcome).toBe('sent');
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const reply = useCompanionChatStore.getState().conversations[0]
+      ?.messages.find((m) => m.role === 'companion');
+    expect(reply?.status).toBe('complete');
+    expect(reply?.content).toBe('Partial thought'); // never rewound
+    expect(hook!.error).toMatch(/incomplete/i);
+  });
+
+  it('keeps partial text as complete-with-warning when the stream ends without done', async () => {
+    mockFetch
+      .mockResolvedValueOnce(streamingResponseFromChunks([
+        'data: {"t":"Half an answer"}\n\n',
+        // stream closes cleanly with no `d` event
+      ]))
+      .mockResolvedValueOnce(jsonResponse({ content: 'Full rewound answer', suggestions: [] }));
+
+    let hook: ReturnType<typeof useCompanionChat> | null = null;
+    await act(async () => {
+      renderer.create(<HookHarness onReady={(next) => { hook = next; }} />);
+      await Promise.resolve();
+    });
+
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await hook!.sendMessage('question');
+      await wait(100);
+    });
+
+    expect(outcome).toBe('sent');
+    expect(mockFetch).toHaveBeenCalledTimes(1); // no fallback re-request
+    const reply = useCompanionChatStore.getState().conversations[0]
+      ?.messages.find((m) => m.role === 'companion');
+    expect(reply?.status).toBe('complete');
+    expect(reply?.content).toBe('Half an answer');
+    expect(hook!.error).toMatch(/incomplete/i);
+  });
+
+  it('still falls back when streaming is unavailable (no reader)', async () => {
+    mockFetch
+      .mockResolvedValueOnce({ ok: true, body: undefined })
+      .mockResolvedValueOnce(jsonResponse({ content: 'Fallback answer', suggestions: [] }));
+
+    let hook: ReturnType<typeof useCompanionChat> | null = null;
+    await act(async () => {
+      renderer.create(<HookHarness onReady={(next) => { hook = next; }} />);
+      await Promise.resolve();
+    });
+
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await hook!.sendMessage('question');
+      await wait(200);
+    });
+
+    expect(outcome).toBe('sent');
+    expect(mockFetch).toHaveBeenCalledTimes(2); // legitimate fallback path
+    const reply = useCompanionChatStore.getState().conversations[0]
+      ?.messages.find((m) => m.role === 'companion');
+    expect(reply?.status).toBe('complete');
+    expect(reply?.content).toBe('Fallback answer');
+  });
+});
+
 describe('network-drop resilience (WR-11)', () => {
   beforeEach(() => {
     mockFetch.mockReset();

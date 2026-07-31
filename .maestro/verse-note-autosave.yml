@@ -1,0 +1,86 @@
+# Verse note autosave — regression guard for the scripture-note data-loss bug.
+#
+# VERIFIES: text typed into an existing verse note is committed when the note
+# sheet is dismissed by swiping it down — i.e. BibleNoteSheet.commitDraft runs
+# on the swipe path. Before the fix the draft was dropped and the edit was
+# silently lost. The flow reopens the note and asserts the typed text is still
+# there, so a regression fails here rather than in production.
+#
+# PRECONDITION: the Bible database is already downloaded.
+
+appId: com.unfoldapp.ios
+---
+- launchApp
+
+- tapOn:
+    id: "bottom-tab-bible"
+- extendedWaitUntil:
+    visible:
+      id: "bible-reader-screen"
+    timeout: 20000
+
+# Jump to a known chapter so the target verse is always the same one.
+- tapOn:
+    id: "reader-chapter-title"
+- assertVisible:
+    id: "bible-navigator"
+- tapOn:
+    id: "bible-navigator-search"
+- inputText: "Genesis 1"
+- tapOn:
+    id: "bible-navigator-goto"
+- assertVisible:
+    id: "bible-verse-1"
+
+# Open the Note action on the target verse.
+- tapOn:
+    id: "bible-verse-1"
+- assertVisible:
+    id: "bible-verse-action-note"
+- tapOn:
+    id: "bible-verse-action-note"
+
+# SETUP ONLY (conditional, not an assertion): Genesis 1:1 may or may not
+# already carry a note from an earlier run. If it does not, the reader opens
+# the inline composer instead of the note sheet — seed a note and reopen so the
+# assertions below always start from the note sheet.
+- runFlow:
+    when:
+      visible:
+        id: "bible-verse-note-input"
+    commands:
+      - inputText: "seed"
+      - tapOn:
+          id: "bible-verse-note-save"
+      - tapOn:
+          id: "bible-verse-1"
+      - tapOn:
+          id: "bible-verse-action-note"
+
+# From here everything is load-bearing.
+- assertVisible:
+    id: "bible-note-sheet"
+
+- tapOn:
+    id: "bible-note-edit"
+- assertVisible:
+    id: "bible-note-input"
+- eraseText: 120
+- inputText: "Autosave survives swipe dismiss"
+
+# Dismiss by swiping the sheet down — the path that used to lose the draft.
+- swipe:
+    from:
+      id: "bible-note-sheet"
+    direction: DOWN
+- assertNotVisible:
+    id: "bible-note-sheet"
+
+# Reopen the same verse's note — the edit must have been committed.
+- tapOn:
+    id: "bible-verse-1"
+- tapOn:
+    id: "bible-verse-action-note"
+- assertVisible:
+    id: "bible-note-sheet"
+- assertVisible: "Autosave survives swipe dismiss"

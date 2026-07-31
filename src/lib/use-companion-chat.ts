@@ -7,8 +7,9 @@
  * Phase 5: Graceful fallback to non-streaming if SSE fails.
  */
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { AccessibilityInfo } from 'react-native';
+import { AccessibilityInfo, AppState } from 'react-native';
 import { fetch as expoFetch } from 'expo/fetch';
+import { v4 as uuidv4 } from 'uuid';
 import {
   useCompanionChatStore,
   selectActiveMessages,
@@ -45,6 +46,19 @@ export type SendOutcome = 'sent' | 'noop' | 'error';
 export { COMPANION_MESSAGE_MAX_CHARS } from '@/lib/companion-limits';
 import { COMPANION_MESSAGE_MAX_CHARS } from '@/lib/companion-limits';
 const STREAMING_UPDATE_INTERVAL_MS = 32; // ~30fps, matching the SDK 56 chat-template cadence.
+// Inter-chunk idle timeout: a stream that goes silent this long is dead —
+// abort it instead of hanging the send forever (companion-service.ts 10s
+// request-timeout precedent; streams get longer grace between chunks).
+const SSE_STALL_TIMEOUT_MS = 30000;
+
+/** The stream went silent mid-response. Never falls back to the non-streaming
+ * endpoint — the server already accepted the request (double-billing risk). */
+class SSEStallError extends Error {
+  constructor() {
+    super('Companion stream stalled');
+    this.name = 'SSEStallError';
+  }
+}
 
 // ── Phase 4: Context-aware system prompt ──────────────────────────────────────
 
@@ -163,9 +177,27 @@ async function consumeSSE(
     }
   };
 
+  // P0-2: race each read against an inter-chunk stall timer so a silently
+  // dropped connection can't leave the message in 'streaming' forever.
+  const readWithStallTimeout = async () => {
+    let stallTimer: ReturnType<typeof setTimeout> | undefined;
+    const stall = new Promise<never>((_, reject) => {
+      stallTimer = setTimeout(() => reject(new SSEStallError()), SSE_STALL_TIMEOUT_MS);
+    });
+    const read = reader.read();
+    // If the stall wins the race, the losing read settles later with no
+    // listener — attach a no-op handler so its rejection isn't unhandled.
+    read.catch(() => {});
+    try {
+      return await Promise.race([read, stall]);
+    } finally {
+      clearTimeout(stallTimer);
+    }
+  };
+
   try {
     while (true) {
-      const { done, value } = await reader.read();
+      const { done, value } = await readWithStallTimeout();
       if (done) {
         sseBuffer += decoder.decode();
         const flushed = extractSSEPayloads(sseBuffer, { flush: true });
@@ -184,6 +216,16 @@ async function consumeSSE(
         processPayload(payload);
       }
     }
+  } catch (err) {
+    if (err instanceof SSEStallError) {
+      // Tear the dead connection down before surfacing the stall.
+      try {
+        await (reader as { cancel?: () => Promise<void> }).cancel?.();
+      } catch {
+        // Already broken — nothing to release.
+      }
+    }
+    throw err;
   } finally {
     reader.releaseLock();
   }
@@ -229,7 +271,13 @@ async function fallbackNonStreaming(
   const words = rawText.split(/(\s+)/);
   let revealed = '';
   for (let i = 0; i < words.length; i++) {
-    if (signal.aborted) break;
+    if (signal.aborted) {
+      // User stopped mid-reveal — surface as an abort so the caller keeps
+      // the revealed prefix instead of committing the full hidden answer.
+      const abortErr = new Error('Aborted');
+      abortErr.name = 'AbortError';
+      throw abortErr;
+    }
     revealed += words[i];
     onWord(revealed);
     if (i % 2 === 0) {
@@ -281,6 +329,42 @@ export function useCompanionChat() {
     checkAndArchiveStale();
   }, [checkAndArchiveStale]);
 
+  // P0-4: transient chrome (suggestions, error banner, searching indicator)
+  // belongs to the conversation it came from — clear it on switch.
+  //
+  // Only a switch *between* conversations counts. The first send of a session
+  // creates the conversation (null → id) while its own reply is already
+  // streaming, so treating that as a switch would wipe the very chrome that
+  // send just produced.
+  const previousConversationIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    const previous = previousConversationIdRef.current;
+    previousConversationIdRef.current = activeConversationId ?? null;
+    if (previous === null || previous === activeConversationId) return;
+    setIsSearching(false);
+    setSuggestions([]);
+    setError(null);
+  }, [activeConversationId]);
+
+  // P1: on foreground resume, reconcile messages stuck in 'streaming' whose
+  // conversation has no in-flight request (iOS suspended the JS runtime and
+  // the stream died without its error path running) — mark them retryable.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (status) => {
+      if (status !== 'active') return;
+      const { conversations, updateMessage: update } = useCompanionChatStore.getState();
+      for (const conv of conversations ?? []) {
+        if (inFlightRef.current.has(conv.id)) continue;
+        for (const m of conv.messages ?? []) {
+          if (m.status === 'streaming') {
+            update(m.id, { status: 'error' }, conv.id);
+          }
+        }
+      }
+    });
+    return () => subscription.remove();
+  }, []);
+
   // ── Send message ───────────────────────────────────────────────────────
 
   const sendMessage = useCallback(
@@ -298,9 +382,10 @@ export function useCompanionChat() {
       setError(null);
       setSuggestions([]);
 
-      // User message
+      // User message — uuid ids: Date.now() collides when two messages land
+      // in the same millisecond (retry taps, chip + send race).
       const userMsg: CompanionMessage = {
-        id: `${Date.now()}-user`,
+        id: uuidv4(),
         role: 'user',
         content: trimmedText,
         timestamp: Date.now(),
@@ -309,7 +394,7 @@ export function useCompanionChat() {
       addMessage(userMsg);
 
       // Companion placeholder
-      const companionId = `${Date.now() + 1}-companion`;
+      const companionId = uuidv4();
       const companionMsg: CompanionMessage = {
         id: companionId,
         role: 'companion',
@@ -352,6 +437,12 @@ export function useCompanionChat() {
       let accumulatedText = '';
       let hasReceivedStreamingToken = false;
 
+      // P0-4: transient UI state (suggestions banner, error banner, searching
+      // indicator) belongs to the visible conversation — a background stream
+      // finishing must not repaint chrome over whatever the user switched to.
+      const isStreamConversationVisible = () =>
+        useCompanionChatStore.getState().activeConversationId === streamConversationId;
+
       try {
         // Build conversation context (last 10 messages)
         const currentMessages = selectActiveMessages(useCompanionChatStore.getState());
@@ -379,6 +470,11 @@ export function useCompanionChat() {
         // ── Try SSE streaming (Phase 3) ──────────────────────────────────
 
         let streamSucceeded = false;
+        // P0-3: a server-sent {error} event means the backend answered — it
+        // must surface as an error (keeping any partial text), never as a
+        // silent retry through the non-streaming endpoint (double-billed
+        // request + visible answer rewind).
+        let serverErrorMessage: string | null = null;
 
         try {
           streamSucceeded = await consumeSSE(
@@ -398,17 +494,17 @@ export function useCompanionChat() {
                 // after this callback has already closed over the initial value.
                 if (!hasReceivedStreamingToken) {
                   hasReceivedStreamingToken = true;
-                  setIsSearching(false);
+                  if (isStreamConversationVisible()) setIsSearching(false);
                 }
                 accumulatedText += token;
                 throttledUpdate(companionId, accumulatedText);
               },
               onThinking: () => {
-                setIsSearching(true);
+                if (isStreamConversationVisible()) setIsSearching(true);
               },
               onDone: (sug, cleanText) => {
                 cancelThrottle();
-                setIsSearching(false);
+                if (isStreamConversationVisible()) setIsSearching(false);
                 const rawText = cleanText || accumulatedText;
                 const finalSuggestions =
                   sug.length > 0
@@ -428,20 +524,78 @@ export function useCompanionChat() {
                   status: 'complete',
                   suggestions: finalSuggestions,
                 }, streamConversationId);
-                setSuggestions(finalSuggestions);
+                if (isStreamConversationVisible()) setSuggestions(finalSuggestions);
                 announceCompanionReply(cleanContent);
               },
               onError: (msg) => {
-                throw new Error(msg);
+                serverErrorMessage = msg || 'The companion ran into a problem answering.';
               },
             }
           );
         } catch (sseErr: any) {
           if (sseErr.name === 'AbortError') throw sseErr;
 
-          // SSE failed — fall back to non-streaming (Phase 5: graceful degradation)
+          // P0-3: once tokens streamed (or the stream stalled after being
+          // accepted), a retry through the non-streaming endpoint would
+          // double-bill and rewind visible text — surface via the outer
+          // catch instead (partial text survives there, WR-11).
+          if (hasReceivedStreamingToken || sseErr instanceof SSEStallError) {
+            throw sseErr;
+          }
+
+          // Transport failure before anything streamed — fall back to
+          // non-streaming (Phase 5: graceful degradation).
           logger.warn('[CompanionChat] SSE failed, falling back:', sseErr.message);
           streamSucceeded = false;
+        }
+
+        // ── Server {error} event: surface, never fall back (P0-3) ────────
+
+        if (!streamSucceeded && serverErrorMessage !== null) {
+          cancelThrottle();
+          if (isStreamConversationVisible()) setIsSearching(false);
+          if (accumulatedText) {
+            // Keep the partial answer as a normal message (rich block path)
+            // and surface the failure via banner + VO only.
+            updateMessage(companionId, {
+              content: accumulatedText,
+              status: 'complete',
+            }, streamConversationId);
+            if (isStreamConversationVisible()) {
+              setError(`${serverErrorMessage} Your reply may be incomplete.`);
+            }
+            AccessibilityInfo.announceForAccessibility(
+              `Companion reply interrupted. ${serverErrorMessage}`,
+            );
+            return 'sent';
+          }
+          updateMessage(companionId, {
+            status: 'error',
+            content: serverErrorMessage,
+          }, streamConversationId);
+          if (isStreamConversationVisible()) setError(serverErrorMessage);
+          AccessibilityInfo.announceForAccessibility(
+            `Companion reply failed. ${serverErrorMessage}`,
+          );
+          return 'error';
+        }
+
+        // ── Stream ended without `d` after partial content (P0-3) ────────
+
+        if (!streamSucceeded && hasReceivedStreamingToken) {
+          // Keep the partial and mark complete-with-warning instead of
+          // rewinding it with a second full request.
+          cancelThrottle();
+          if (isStreamConversationVisible()) setIsSearching(false);
+          updateMessage(companionId, {
+            content: accumulatedText,
+            status: 'complete',
+          }, streamConversationId);
+          if (isStreamConversationVisible()) {
+            setError('The connection dropped mid-reply. Your reply may be incomplete.');
+          }
+          announceCompanionReply(accumulatedText);
+          streamSucceeded = true; // partial kept — skip the fallback below
         }
 
         // ── Fallback: non-streaming ──────────────────────────────────────
@@ -475,7 +629,7 @@ export function useCompanionChat() {
             status: 'complete',
             suggestions: result.suggestions,
           }, streamConversationId);
-          setSuggestions(result.suggestions);
+          if (isStreamConversationVisible()) setSuggestions(result.suggestions);
           announceCompanionReply(fallbackClean);
         }
 
@@ -528,13 +682,15 @@ export function useCompanionChat() {
               content: accumulatedText,
               status: 'complete',
             }, streamConversationId);
-            setError(`${analyzed.userFriendlyMessage} Your reply may be incomplete.`);
+            if (isStreamConversationVisible()) {
+              setError(`${analyzed.userFriendlyMessage} Your reply may be incomplete.`);
+            }
             AccessibilityInfo.announceForAccessibility(
               `Connection interrupted. ${analyzed.userFriendlyMessage} Your reply may be incomplete.`,
             );
             return 'sent';
           }
-          setError(analyzed.userFriendlyMessage);
+          if (isStreamConversationVisible()) setError(analyzed.userFriendlyMessage);
           updateMessage(companionId, {
             status: 'error',
             content: analyzed.userFriendlyMessage,
@@ -545,6 +701,9 @@ export function useCompanionChat() {
           return 'error';
         }
       } finally {
+        // The stream is over one way or another — never leave the searching
+        // indicator on for the conversation the user is looking at.
+        if (isStreamConversationVisible()) setIsSearching(false);
         inFlightRef.current.delete(streamConversationId);
         bumpStreamVersion();
       }

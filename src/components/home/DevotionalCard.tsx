@@ -743,6 +743,7 @@ function MainCard({ state }: MainCardProps) {
               onPressOut={() => {
                 scale.value = withTiming(1, { duration: Duration.fast });
               }}
+              testID="home-devotional-cta"
               accessibilityRole="button"
               accessibilityLabel={accessibilityLabel}
               accessibilityHint={hasCompletedToday ? "Opens the completed reading again" : isTomorrowLocked ? "Opens today's completed reading instead of the locked tomorrow reading" : undefined}

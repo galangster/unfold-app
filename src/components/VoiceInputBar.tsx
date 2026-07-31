@@ -112,10 +112,13 @@ interface VoiceInputBarProps {
   autoStart?: boolean;
   /** Called when recording is cancelled — lets parent exit voice mode */
   onCancel?: () => void;
+  /** Called when the mic permission is denied — lets parent exit voice mode
+   * and explain, instead of silently doing nothing */
+  onPermissionDenied?: () => void;
 }
 
 // ── Component ────────────────────────────────────────────
-export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoStart, onCancel }: VoiceInputBarProps) {
+export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoStart, onCancel, onPermissionDenied }: VoiceInputBarProps) {
   const { colors } = useTheme();
   const reducedMotion = useReducedMotion();
   const accent = accentColor ?? colors.accent;
@@ -245,6 +248,7 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoSt
     const { granted } = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
     if (!granted) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      onPermissionDenied?.();
       return;
     }
 
@@ -294,7 +298,7 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoSt
         return next;
       });
     }, 1000);
-  }, [doCommit, resetRecordingState]);
+  }, [doCommit, resetRecordingState, onPermissionDenied]);
 
   // ── Auto-start on mount (when rendered from CompanionInput voice mode) ──
   const autoStartedRef = useRef(false);

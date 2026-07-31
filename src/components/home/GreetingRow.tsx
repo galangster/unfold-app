@@ -21,9 +21,11 @@ export function getGreeting(): string {
 interface Props {
   userName?: string;
   onAvatarPress: () => void;
+  /** Test selector forwarded to the avatar button for e2e flows */
+  avatarTestID?: string;
 }
 
-export function GreetingRow({ userName, onAvatarPress }: Props) {
+export function GreetingRow({ userName, onAvatarPress, avatarTestID }: Props) {
   const { colors } = useTheme();
   const { entering } = useAccessibleAnimation();
 
@@ -70,7 +72,7 @@ export function GreetingRow({ userName, onAvatarPress }: Props) {
         entering={entering(FadeIn.duration(Duration.normal).delay(80).easing(Ease.out))}
         style={{ marginTop: Spacing['1'] }}
       >
-        <ProfileAvatar size={38} onPress={onAvatarPress} />
+        <ProfileAvatar size={38} onPress={onAvatarPress} testID={avatarTestID} />
       </Animated.View>
     </View>
   );

@@ -1,51 +1,43 @@
-# Companion Chat E2E Test
-# Tests: companion chat access, message sending, response display
+# Companion chat — send path.
+#
+# VERIFIES:
+#   1. Companion is a top-level tab and its screen mounts.
+#   2. Typing swaps the input bar's mic button for the send button.
+#   3. Sending renders the user's own message in the transcript and clears the
+#      composer (the send button disappears again).
+#
+# Deliberately stops at the user message: the companion's reply comes from a
+# live streaming backend, so asserting on reply content would not be
+# deterministic. The user bubble is written locally and always is.
+#
+# PRECONDITION: the account is not out of free companion messages for the day
+# (a spent free quota opens the premium sheet instead of sending).
 
 appId: com.unfoldapp.ios
 ---
-# Launch app
 - launchApp
-- assertVisible: "Today"
 
-# Navigate to companion (hamburger menu or direct access)
 - tapOn:
-    text: ".*companion.*"
-    optional: true
-
-# If companion is accessed via reading screen
-- tapOn:
-    text: ".*Day.*"
-    index: 0
-    optional: true
-
-# Look for companion access point
-- tapOn:
-    id: "companion-button"
-    optional: true
-
-# Verify companion chat loads
+    id: "bottom-tab-companion"
 - assertVisible:
-    text: ".*Grace.*"
-    optional: true
+    id: "companion-screen"
 
-# Type a message
 - tapOn:
-    id: "chat-input"
-    optional: true
-- inputText: "What does today's devotional mean?"
+    id: "companion-input"
+- inputText: "Maestro end to end check"
 
-# Send message
+# Non-empty draft turns the mic into the send button.
+- assertVisible:
+    id: "companion-send"
+
 - tapOn:
-    id: "send-button"
-    optional: true
+    id: "companion-send"
 
-# Wait for response
+# The user's message is appended to the transcript immediately.
 - extendedWaitUntil:
-    visible:
-      text: ".*"
-    timeout: 15000
+    visible: "Maestro end to end check"
+    timeout: 10000
 
-# Navigate back
-- tapOn:
-    id: "back-button"
-    optional: true
+# Composer cleared — no send button while the field is empty.
+- assertNotVisible:
+    id: "companion-send"

@@ -1,43 +1,40 @@
-# Onboarding Flow E2E Test
-# Run: maestro test .maestro/onboarding.yml
-# Requires: Java runtime, Maestro CLI, iOS Simulator running the app
+# First-run entry into onboarding.
+#
+# VERIFIES: a cleared install lands on the welcome screen and its CTA takes the
+# user into the onboarding flow's first intro screen.
+#
+# SCOPE — READ BEFORE EXTENDING. The rest of onboarding cannot be driven
+# deterministically today:
+#   * Several steps are gated on animation completion (`disabled={!screenReady}`
+#     behind ScatterTitle / TypewriterText), so a tap that arrives early is
+#     silently swallowed.
+#   * The discovery steps call the adaptive-question backend, so their on-screen
+#     copy is generated at runtime and cannot be asserted.
+#   * The flow contains a StoreKit paywall step (`threeStepPaywall`) that cannot
+#     be completed on a plain simulator.
+# Rather than pad this file with non-failing `optional: true` steps, it stops at
+# the last assertion that is genuinely deterministic. Extending it requires a
+# test hook that seeds a completed profile or skips the adaptive/paywall steps.
+#
+# TAGGED `reset`: this flow wipes the app container (clearState), including the
+# downloaded Bible database and any generated devotional, so `bun run test:e2e`
+# excludes it (see .maestro/config.yaml). Run it on its own:
+#   maestro test .maestro/onboarding.yml
 
 appId: com.unfoldapp.ios
+tags:
+  - reset
 ---
-# Step 1: App launches to onboarding
 - launchApp:
     clearState: true
-- assertVisible: "What should we call you?"
 
-# Step 2: Enter name
-- tapOn:
-    id: "name-input"
-- inputText: "Test User"
-- tapOn: "Next"
+# Welcome screen CTA.
+- extendedWaitUntil:
+    visible: "Let's get started."
+    timeout: 30000
+- tapOn: "Let's get started."
 
-# Step 3: Faith background selection
-- assertVisible: "faith"
-- tapOn: "Growing"
-- tapOn: "Next"
-
-# Step 4: Life stage selection
-- assertVisible: "season"
-- tapOn: "Building"
-- tapOn: "Next"
-
-# Step 5: Writing style preferences
-- assertVisible: "tone"
-- tapOn: "Warm"
-- tapOn: "Next"
-
-# Step 6: Reading duration
-- assertVisible: "reading"
-- tapOn: "15 min"
-- tapOn: "Next"
-
-# Step 7: Devotional type selection
-- assertVisible: "study"
-- tapOn: "Start"
-
-# Step 8: Verify we land on home screen
-- assertVisible: "Today"
+# We are now inside the onboarding flow's tap-through intro screens.
+- extendedWaitUntil:
+    visible: "Tap anywhere to continue"
+    timeout: 30000

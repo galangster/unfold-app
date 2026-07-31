@@ -136,15 +136,15 @@ export function normalizeNativeInitialHtml(html: string): string {
 }
 
 export function getTitleDividerPresentation({
-  isEditing,
+  isKeyboardUp,
   accentColor,
   borderColor,
 }: {
-  isEditing: boolean;
+  isKeyboardUp: boolean;
   accentColor: string;
   borderColor: string;
 }): { backgroundColor: string; height?: number; marginHorizontal?: number } {
-  if (!isEditing) {
+  if (!isKeyboardUp) {
     return { backgroundColor: accentColor };
   }
 

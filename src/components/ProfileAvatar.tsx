@@ -1,4 +1,5 @@
-import { View, Text, Image, TouchableOpacity, ActionSheetIOS, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, ActionSheetIOS, Alert } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { documentDirectory, copyAsync, deleteAsync, getInfoAsync } from 'expo-file-system/legacy';
@@ -17,6 +18,8 @@ interface ProfileAvatarProps {
   editable?: boolean;
   /** Called on tap (if not editable, used for navigation) */
   onPress?: () => void;
+  /** Test selector for e2e flows */
+  testID?: string;
 }
 
 function getProfileAvatarFileName(value: string | null | undefined): string | null {
@@ -36,7 +39,7 @@ function toDocumentAvatarUri(fileName: string | null): string | null {
  * Profile avatar component — shows user photo or initial letter fallback.
  * When `editable`, tapping shows an action sheet to pick a photo.
  */
-export function ProfileAvatar({ size = 36, editable = false, onPress }: ProfileAvatarProps) {
+export function ProfileAvatar({ size = 36, editable = false, onPress, testID }: ProfileAvatarProps) {
   const { colors } = useTheme();
   const userName = useUnfoldStore((s) => s.user?.name);
   const profilePicture = useUnfoldStore((s) => s.user?.profilePicture);
@@ -191,6 +194,7 @@ export function ProfileAvatar({ size = 36, editable = false, onPress }: ProfileA
       activeOpacity={0.7}
       onPress={handlePress}
       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      testID={testID}
       accessibilityLabel={editable ? 'Change profile picture' : 'Open profile'}
       accessibilityRole="button"
     >
@@ -206,10 +210,11 @@ export function ProfileAvatar({ size = 36, editable = false, onPress }: ProfileA
         }}
       >
         {hasRenderableProfilePicture ? (
-          <Image
+          <ExpoImage
             source={{ uri: resolvedProfilePicture! }}
             style={{ width: size, height: size, borderRadius: size / 2 }}
-            resizeMode="cover"
+            contentFit="cover"
+            cachePolicy="memory-disk"
             onError={handleImageError}
           />
         ) : (

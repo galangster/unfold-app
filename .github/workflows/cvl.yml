@@ -7,7 +7,7 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v4
@@ -20,6 +20,24 @@ jobs:
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Lint
+        run: bun run lint
+
+      # `bun run test` runs the npm script, which invokes the jest binary.
+      # Do NOT use `bun test` — that is bun's own runner and it cannot parse
+      # React Native's Flow-typed sources, so it fails on every file.
+      - name: Unit tests
+        run: bun run test
+
+      # Running the Maestro flows needs a simulator, but a dead `id:` selector
+      # makes a step a silent no-op — which is how the suite rotted last time.
+      # This catches that on Linux, with no simulator.
+      - name: Maestro selector check
+        run: node scripts/verify-maestro-selectors.mjs
 
       - name: Run CVL report
         env:

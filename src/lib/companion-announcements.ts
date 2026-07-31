@@ -7,6 +7,11 @@
  * chat hook but unit-testable without dragging expo/fetch into the module
  * graph.
  */
+/** VoiceOver reads announcements in full and they can't be paused — cap long
+ * replies so a multi-paragraph answer doesn't hold the screen reader hostage.
+ * The full text remains readable in the message list itself. */
+export const ANNOUNCEMENT_MAX_CHARS = 280;
+
 export function companionReplyAnnouncement(content: string): string | null {
   const text = content
     .replace(/^#{1,6}\s+/gm, '')       // headers
@@ -20,5 +25,11 @@ export function companionReplyAnnouncement(content: string): string | null {
     .replace(/\s+/g, ' ')
     .trim();
 
-  return text.length > 0 ? text : null;
+  if (text.length === 0) return null;
+  if (text.length <= ANNOUNCEMENT_MAX_CHARS) return text;
+
+  // Truncate on a word boundary so the announcement doesn't end mid-word.
+  const clipped = text.slice(0, ANNOUNCEMENT_MAX_CHARS);
+  const lastSpace = clipped.lastIndexOf(' ');
+  return `${(lastSpace > 0 ? clipped.slice(0, lastSpace) : clipped).trimEnd()}…`;
 }

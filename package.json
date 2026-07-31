@@ -21,7 +21,8 @@
     "verify:release": "node scripts/verify-release.mjs",
     "verify:report": "node scripts/verify-report.mjs",
     "prepare:bible-db": "node scripts/prepare-bible-db.mjs",
-    "test": "jest --passWithNoTests"
+    "test": "jest --passWithNoTests",
+    "test:e2e": "maestro test .maestro/"
   },
   "dependencies": {
     "@10play/tentap-editor": "^1.0.1",

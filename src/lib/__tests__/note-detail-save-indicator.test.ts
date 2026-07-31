@@ -3,8 +3,8 @@ import {
 } from '../note-detail-save-indicator';
 
 describe('note-detail save indicator layout', () => {
-  it('reserves a stable slot in edit mode even when autosave is idle', () => {
-    expect(getNoteDetailSaveIndicatorLayout({ isEditing: true, saveState: 'idle' })).toEqual({
+  it('reserves a stable slot while the keyboard is up even when autosave is idle', () => {
+    expect(getNoteDetailSaveIndicatorLayout({ isKeyboardUp: true, saveState: 'idle' })).toEqual({
       showSlot: true,
       showLabel: false,
       slotWidth: 56,
@@ -13,7 +13,7 @@ describe('note-detail save indicator layout', () => {
   });
 
   it('shows the label inside the same reserved slot when autosave completes', () => {
-    expect(getNoteDetailSaveIndicatorLayout({ isEditing: true, saveState: 'saved' })).toEqual({
+    expect(getNoteDetailSaveIndicatorLayout({ isKeyboardUp: true, saveState: 'saved' })).toEqual({
       showSlot: true,
       showLabel: true,
       slotWidth: 56,
@@ -21,8 +21,8 @@ describe('note-detail save indicator layout', () => {
     });
   });
 
-  it('renders no slot outside edit mode', () => {
-    expect(getNoteDetailSaveIndicatorLayout({ isEditing: false, saveState: 'saved' })).toEqual({
+  it('renders no slot while the keyboard is down', () => {
+    expect(getNoteDetailSaveIndicatorLayout({ isKeyboardUp: false, saveState: 'saved' })).toEqual({
       showSlot: false,
       showLabel: false,
       slotWidth: 56,

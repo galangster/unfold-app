@@ -126,7 +126,9 @@ describe('CompanionInput send clearing', () => {
 
     enterText(tree, message);
 
-    expect(tree.root.findByType(TextInput).props.maxLength).toBe(COMPANION_MESSAGE_MAX_CHARS);
+    // No hard maxLength: voice dictation appends programmatically and can push
+    // the draft past the cap, so the limit is surfaced rather than enforced.
+    expect(tree.root.findByType(TextInput).props.maxLength).toBeUndefined();
     expect(
       tree.root
         .findAllByType(Text)

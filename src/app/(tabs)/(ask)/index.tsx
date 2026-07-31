@@ -18,10 +18,12 @@ import {
 } from 'react-native';
 // react-native-gesture-handler not needed — scroll banner uses normal TouchableOpacity
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from 'expo-router';
 import {
   CrownIcon,
   List,
   NotePencil,
+  XIcon,
 } from 'phosphor-react-native';
 import * as Haptics from 'expo-haptics';
 import {
@@ -65,6 +67,7 @@ const MessageItem = React.memo(function MessageItem({
   isFirstInGroup,
   isLastMessage,
   isStreaming,
+  isSearching,
   onVersePress,
   onRetry,
 }: {
@@ -72,6 +75,7 @@ const MessageItem = React.memo(function MessageItem({
   isFirstInGroup: boolean;
   isLastMessage: boolean;
   isStreaming: boolean;
+  isSearching?: boolean;
   onVersePress: (reference: string) => void;
   onRetry?: () => void;
 }) {
@@ -98,6 +102,7 @@ const MessageItem = React.memo(function MessageItem({
         message={item}
         showIcon={isFirstInGroup}
         isStreaming={isThisStreaming}
+        isSearching={isThisStreaming && isSearching}
         onVersePress={onVersePress}
         onRetry={onRetry}
       />
@@ -117,10 +122,16 @@ const MessageItem = React.memo(function MessageItem({
   prev.item.status === next.item.status &&
   prev.item.feedback === next.item.feedback &&
   prev.isStreaming === next.isStreaming &&
+  prev.isSearching === next.isSearching &&
   prev.isFirstInGroup === next.isFirstInGroup &&
   prev.isLastMessage === next.isLastMessage &&
   prev.onRetry === next.onRetry
 );
+
+// Memoized mounts: the screen re-renders on every streaming token flush —
+// these subtrees' props are stable between stream boundaries (5a).
+const MemoScriptureTapSheet = React.memo(ScriptureTapSheet);
+const MemoPremiumFeatureSheet = React.memo(PremiumFeatureSheet);
 
 // Height of the custom absolutely-positioned tab bar (content + padding)
 const TAB_BAR_CONTENT_HEIGHT = 56;
@@ -145,17 +156,43 @@ export default function CompanionScreen() {
   const premiumPolicy = usePremiumAccessPolicy();
   const isPremium = premiumPolicy === 'granted';
   const [showPremiumSheet, setShowPremiumSheet] = useState(false);
+  const handlePremiumSheetClose = useCallback(() => setShowPremiumSheet(false), []);
   const [dailyRemaining, setDailyRemaining] = useState(() => getCompanionDailyUsage().remaining);
 
   const {
     messages,
     isStreaming,
+    isSearching,
     suggestions,
     error,
     sendMessage,
     stopGeneration,
     startNewConversation,
   } = useCompanionChat();
+
+  // P1: dismissible error banner. Dismissal is per-error-message; a new
+  // stream clears it so the next failure surfaces again.
+  const [dismissedError, setDismissedError] = useState<string | null>(null);
+  const visibleError = error && error !== dismissedError ? error : null;
+  React.useEffect(() => {
+    if (isStreaming) setDismissedError(null);
+  }, [isStreaming]);
+
+  // P1: the free-quota counter resets at midnight and can be spent from other
+  // surfaces — re-read it whenever the screen regains focus.
+  useFocusEffect(
+    useCallback(() => {
+      setDailyRemaining(getCompanionDailyUsage().remaining);
+    }, [])
+  );
+
+  // P0-5: leaving the current conversation (new chat or drawer switch) stops
+  // its in-flight stream — a reply to a conversation the user abandoned
+  // shouldn't keep billing tokens in the background.
+  const handleNewChat = useCallback(() => {
+    stopGeneration();
+    startNewConversation();
+  }, [stopGeneration, startNewConversation]);
 
   // Drawer state
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -192,6 +229,12 @@ export default function CompanionScreen() {
         return false;
       }
 
+      // Concurrent send would 'noop' inside sendMessage — return false so the
+      // input keeps the user's text instead of clearing it into the void.
+      if (isStreaming) {
+        return false;
+      }
+
       // Pre-send guard runs synchronously. Companion sends are governed by
       // the free daily quota (paywall on exhaustion), NOT the creation gate —
       // that gate paywalls every non-premium user, which contradicted the
@@ -220,8 +263,14 @@ export default function CompanionScreen() {
 
       return true;
     },
-    [sendMessage, isPremium]
+    [sendMessage, isPremium, isStreaming]
   );
+
+  // Retry handlers must be identity-stable per (message, text) or the
+  // MessageItem memo comparator re-renders every error row on each list pass.
+  const handleSendRef = useRef(handleSend);
+  handleSendRef.current = handleSend;
+  const retryHandlersRef = useRef(new Map<string, () => void>());
 
   const handleChipSelect = useCallback(
     (text: string) => {
@@ -265,7 +314,12 @@ export default function CompanionScreen() {
         for (let i = index + 1; i < msgs.length; i++) {
           if (msgs[i].role === 'user') {
             const userText = msgs[i].content;
-            onRetry = () => handleSend(userText);
+            const retryKey = `${item.id}::${userText}`;
+            onRetry = retryHandlersRef.current.get(retryKey);
+            if (!onRetry) {
+              onRetry = () => handleSendRef.current(userText);
+              retryHandlersRef.current.set(retryKey, onRetry);
+            }
             break;
           }
         }
@@ -277,12 +331,15 @@ export default function CompanionScreen() {
           isFirstInGroup={isFirstInGroup}
           isLastMessage={isLastMessage}
           isStreaming={isStreaming}
+          // Scope to the newest row so a searching flip doesn't invalidate
+          // the memo of every message in the list.
+          isSearching={isSearching && isLastMessage}
           onVersePress={handleVersePress}
           onRetry={onRetry}
         />
       );
     },
-    [isStreaming, handleVersePress, handleSend]
+    [isStreaming, isSearching, handleVersePress]
   );
 
   const keyExtractor = useCallback((item: CompanionMessage) => item.id, []);
@@ -294,6 +351,7 @@ export default function CompanionScreen() {
       style={{ flex: 1, backgroundColor: colors.background }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? -tabBarHeight : 0}
+      testID="companion-screen"
     >
       {/* Header — drawer / orb + name / new chat */}
       <View
@@ -343,7 +401,7 @@ export default function CompanionScreen() {
         <TouchableOpacity
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            startNewConversation();
+            handleNewChat();
           }}
           hitSlop={8}
           activeOpacity={0.7}
@@ -357,9 +415,10 @@ export default function CompanionScreen() {
 
       {/* Messages or empty state.
           Empty state: Pressable wrapper dismisses keyboard on tap.
-          List state: FlatList's keyboardShouldPersistTaps="handled" dismisses keyboard
-          on unhandled taps; wrapping the list in a Pressable breaks the scroll
-          responder after keyboard dismissal and swallows FAB taps. */}
+          List state: FlatList uses keyboardShouldPersistTaps="always" +
+          keyboardDismissMode="on-drag"; wrapping the list in a Pressable
+          breaks the scroll responder after keyboard dismissal and swallows
+          taps inside messages. */}
       {isEmpty ? (
         <Pressable onPress={Keyboard.dismiss} style={{ flex: 1 }}>
           <CompanionEmptyState onSelectStarter={handleSend} />
@@ -409,34 +468,49 @@ export default function CompanionScreen() {
         </View>
       )}
 
-      {/* Error banner */}
-      {!isEmpty && error && (
+      {/* Error banner — announced as an alert, dismissible (P1) */}
+      {!isEmpty && visibleError && (
         <View
+          accessibilityRole="alert"
           style={{
+            flexDirection: 'row',
+            alignItems: 'center',
             marginHorizontal: Spacing['4'],
             marginBottom: Spacing['2'],
             backgroundColor: alpha(colors.error, 0.10),
             borderRadius: Radius.md,
             padding: Spacing['3'],
+            gap: Spacing['2'],
           }}
         >
           <Text
             style={{
+              flex: 1,
               fontFamily: FontFamily.body,
               fontSize: FontSize.sm,
               color: colors.error,
               textAlign: 'center',
             }}
           >
-            {error}
+            {visibleError}
           </Text>
+          <TouchableOpacity
+            onPress={() => setDismissedError(visibleError)}
+            hitSlop={8}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss error"
+          >
+            <XIcon size={16} color={colors.error} weight="bold" />
+          </TouchableOpacity>
         </View>
       )}
 
-      {/* Daily limit indicator for free users */}
-      {!isPremium && dailyRemaining <= FREE_COMPANION_DAILY_LIMIT && (
+      {/* Daily limit indicator for free users — shown once quota is spent */}
+      {!isPremium && dailyRemaining < FREE_COMPANION_DAILY_LIMIT && (
         <TouchableOpacity
           activeOpacity={0.7}
+          accessibilityRole="button"
           onPress={() => {
             if (dailyRemaining === 0) {
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
@@ -498,7 +572,7 @@ export default function CompanionScreen() {
       <View style={{ height: tabBarHeight }} />
 
       {/* Scripture tap sheet */}
-      <ScriptureTapSheet
+      <MemoScriptureTapSheet
         visible={verseSheetRef !== null}
         onClose={handleVerseClose}
         reference={verseSheetRef ?? ''}
@@ -510,13 +584,14 @@ export default function CompanionScreen() {
         isOpen={drawerOpen}
         onOpen={handleDrawerOpen}
         onClose={handleDrawerClose}
-        onNewChat={startNewConversation}
+        onNewChat={handleNewChat}
+        onWillSwitchConversation={stopGeneration}
       />
 
       {/* Premium upsell sheet for companion daily limit */}
-      <PremiumFeatureSheet
+      <MemoPremiumFeatureSheet
         visible={showPremiumSheet}
-        onClose={() => setShowPremiumSheet(false)}
+        onClose={handlePremiumSheetClose}
         feature="companion"
       />
 

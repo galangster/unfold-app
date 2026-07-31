@@ -1,47 +1,66 @@
-# Settings Flow E2E Test
-# Tests: settings navigation, preference changes, profile editing
+# Settings information architecture — both entry points into Settings.
+#
+# VERIFIES:
+#   1. Home → profile avatar → You screen → gear → Settings screen, and the
+#      Settings back button returns to You (You is NOT a labelled tab; it is
+#      reached only through the home avatar).
+#   2. Bible reader → gear → reader preferences sheet → "All settings" row →
+#      the same Settings screen, and back from there returns to the Bible
+#      reader (the cross-tab back behaviour, `from: 'bible'`).
 
 appId: com.unfoldapp.ios
 ---
-# Launch and navigate to settings
 - launchApp
-- assertVisible: "Today"
 
-# Navigate to You tab
-- tapOn: "You"
-- assertVisible: "Settings"
-
-# Open settings
-- tapOn: "Settings"
-
-# Verify settings sections are visible
-- assertVisible: "Writing Style"
-- assertVisible: "Reading Duration"
-
-# Verify Bible Translation picker is NOT visible (removed)
-- assertNotVisible:
-    text: "Bible Translation"
-    optional: true
-
-# Test writing tone change
-- tapOn: "Tone"
-- tapOn: "Direct"
-
-# Test depth change
-- tapOn: "Depth"
-- tapOn: "Balanced"
-
-# Scroll to see more settings
-- scroll:
-    direction: "DOWN"
-    speed: 40
-
-# Verify theme settings
-- assertVisible:
-    text: ".*Theme.*"
-    optional: true
-
-# Navigate back
+# ── Path 1: Home → You → Settings ───────────────────────────────────────────
 - tapOn:
-    id: "back-button"
-    optional: true
+    id: "bottom-tab-today"
+- assertVisible:
+    id: "home-avatar-button"
+
+- tapOn:
+    id: "home-avatar-button"
+- assertVisible:
+    id: "you-screen"
+
+- tapOn:
+    id: "you-settings-button"
+- assertVisible:
+    id: "settings-screen"
+
+- tapOn:
+    id: "settings-back-button"
+- assertVisible:
+    id: "you-screen"
+- assertNotVisible:
+    id: "settings-screen"
+
+# ── Path 2: Bible reader → preferences sheet → All settings ─────────────────
+- tapOn:
+    id: "bottom-tab-bible"
+- extendedWaitUntil:
+    visible:
+      id: "bible-reader-screen"
+    timeout: 20000
+
+- tapOn:
+    id: "reader-settings-button"
+- assertVisible:
+    id: "bible-reader-preferences-sheet"
+
+# The preferences sheet scrolls (ReaderBottomSheet maxHeightRatio 0.72);
+# this row sits below the fold, so it must be scrolled to before use.
+- scrollUntilVisible:
+    element:
+      id: "reader-all-settings-row"
+    direction: DOWN
+- tapOn:
+    id: "reader-all-settings-row"
+- assertVisible:
+    id: "settings-screen"
+
+# `from: 'bible'` means back lands on the Bible reader, not on You.
+- tapOn:
+    id: "settings-back-button"
+- assertVisible:
+    id: "bible-reader-screen"

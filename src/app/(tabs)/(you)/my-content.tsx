@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView } from 'react-native';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { View, Text, TextInput, TouchableOpacity } from 'react-native';
+import { FlashList, type ListRenderItem } from '@shopify/flash-list';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
@@ -22,8 +23,10 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
-import { useUnfoldStore, BibleHighlight, Highlight, HighlightColor, BibleHighlightColor } from '@/lib/store';
+import { useUnfoldStore, BibleHighlight, Bookmark, Devotional, Highlight, HighlightColor, BibleHighlightColor, JournalEntry } from '@/lib/store';
 import { stripOuterQuotes } from '@/lib/cn';
+
+type ThemeColors = ReturnType<typeof useTheme>['colors'];
 
 type HighlightKey = HighlightColor | BibleHighlightColor;
 
@@ -47,6 +50,258 @@ const VALID_SOURCES: HighlightSourceFilter[] = ['all', 'devotional', 'bible'];
 function getInitialTab(tab?: string): Tab {
   return tab && (VALID_TABS as string[]).includes(tab) ? (tab as Tab) : 'journal';
 }
+
+// ============================================================================
+// Virtualized rows
+//
+// All three tabs feed a single FlashList — user journals / saved items /
+// bookmarks are unbounded, and the old `.map`-inside-a-ScrollView mounted every
+// row on every render. Rows are discriminated by `kind`, pre-resolved in the
+// data memo (no store lookups inside a row), and each row component is
+// `memo`'d so recycling actually skips work.
+// ============================================================================
+
+type LibraryRow =
+  | { kind: 'journal'; key: string; entry: JournalEntry; seriesTitle: string }
+  | { kind: 'saved'; key: string; item: SavedItem }
+  | {
+      kind: 'bookmark';
+      key: string;
+      bookmark: Bookmark;
+      label: string;
+      reference: string;
+      quote: string;
+    };
+
+const LIST_CONTENT_STYLE = { padding: Spacing['5'] } as const;
+
+const JournalRow = memo(function JournalRow({
+  row,
+  colors,
+  onPress,
+}: {
+  row: Extract<LibraryRow, { kind: 'journal' }>;
+  colors: ThemeColors;
+  onPress: (entryId: string) => void;
+}) {
+  const { entry, seriesTitle } = row;
+  return (
+    <TouchableOpacity activeOpacity={0.7}
+      onPress={() => onPress(entry.id)}
+      style={{
+        backgroundColor: colors.inputBackground,
+        borderRadius: Radius.lg,
+        padding: Spacing['5'],
+        marginBottom: Spacing['3'],
+        opacity: 1,
+      }}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing['2'], gap: Spacing['2'] }}>
+        <BookOpenIcon size={14} color={colors.accent} weight="light" />
+        <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.text }}>
+          {seriesTitle}
+        </Text>
+        <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textMuted }}>
+          · Day {entry.dayNumber}
+        </Text>
+      </View>
+      <Text
+        style={{
+          fontFamily: FontFamily.body,
+          fontSize: 15,
+          color: colors.textMuted,
+          lineHeight: 22,
+        }}
+        numberOfLines={3}
+      >
+        {entry.content}
+      </Text>
+    </TouchableOpacity>
+  );
+});
+
+const SavedRow = memo(function SavedRow({
+  row,
+  colors,
+  isDark,
+  onPress,
+}: {
+  row: Extract<LibraryRow, { kind: 'saved' }>;
+  colors: ThemeColors;
+  isDark: boolean;
+  onPress: (item: SavedItem) => void;
+}) {
+  const { item } = row;
+  const colorKey: HighlightKey = item.color ?? 'yellow';
+  const accent = HIGHLIGHT_COLORS[colorKey][isDark ? 'dark' : 'light'];
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.7}
+      onPress={() => onPress(item)}
+      style={{
+        backgroundColor: colors.inputBackground,
+        borderRadius: Radius.lg,
+        padding: 20,
+        marginBottom: 12,
+      }}
+      accessibilityRole="button"
+      accessibilityLabel={`${item.source === 'bible' ? 'Bible' : 'Devotional'} ${item.kind}: ${item.note ?? item.text}`}
+    >
+      {item.kind === 'note' ? (
+        <>
+          <Text
+            style={{
+              fontFamily: FontFamily.body,
+              fontSize: FontSize.base,
+              color: colors.text,
+              lineHeight: 24,
+              marginBottom: Spacing['3'],
+            }}
+            numberOfLines={4}
+          >
+            {item.note}
+          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: Spacing['2'], marginBottom: Spacing['2'] }}>
+            <PencilLineIcon size={13} color={colors.accent} weight="light" />
+            <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.xs, color: colors.accent }}>
+              Note · {item.contextLabel}
+            </Text>
+            {item.color !== null && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                <View
+                  style={{
+                    width: 7,
+                    height: 7,
+                    borderRadius: 3.5,
+                    backgroundColor: accent,
+                  }}
+                />
+                <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textSubtle }}>
+                  Highlighted verse
+                </Text>
+              </View>
+            )}
+          </View>
+          <Text
+            style={{
+              fontFamily: FontFamily.body,
+              fontSize: 14,
+              color: colors.textMuted,
+              lineHeight: 21,
+            }}
+            numberOfLines={2}
+          >
+            {item.text}
+          </Text>
+        </>
+      ) : (
+        <>
+          {/* Quoted text with inline highlight tint */}
+          <View
+            style={{
+              backgroundColor: `${accent}14`,
+              borderRadius: 6,
+              paddingHorizontal: 10,
+              paddingVertical: 8,
+              marginBottom: Spacing['3'],
+            }}
+          >
+            <Text
+              style={{
+                fontFamily: FontFamily.bodyItalic,
+                fontSize: FontSize.base,
+                color: colors.text,
+                lineHeight: 24,
+              }}
+            >
+              "{stripOuterQuotes(item.text)}"
+            </Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing['2'] }}>
+            <View
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: 4,
+                backgroundColor: accent,
+              }}
+            />
+            <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textMuted }}>
+              {item.contextLabel}
+            </Text>
+          </View>
+        </>
+      )}
+    </TouchableOpacity>
+  );
+});
+
+const BookmarkRow = memo(function BookmarkRow({
+  row,
+  colors,
+  onPress,
+}: {
+  row: Extract<LibraryRow, { kind: 'bookmark' }>;
+  colors: ThemeColors;
+  onPress: (bookmark: Bookmark) => void;
+}) {
+  const { bookmark, label, reference, quote } = row;
+  return (
+    <TouchableOpacity activeOpacity={0.7}
+      onPress={() => onPress(bookmark)}
+      style={{
+        backgroundColor: colors.inputBackground,
+        borderRadius: Radius.lg,
+        padding: Spacing['5'],
+        marginBottom: Spacing['3'],
+        opacity: 1,
+      }}
+    >
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          marginBottom: Spacing['2'],
+          gap: Spacing['2'],
+        }}
+      >
+        <BookmarkSimpleIcon size={14} color={colors.accent} weight="fill" />
+        <Text
+          style={{
+            fontFamily: FontFamily.uiMedium,
+            fontSize: FontSize.xs,
+            color: colors.accent,
+            letterSpacing: 0.5,
+          }}
+        >
+          {label}
+        </Text>
+        <Text
+          style={{
+            fontFamily: FontFamily.uiMedium,
+            fontSize: FontSize.xs,
+            color: colors.textSubtle,
+            letterSpacing: 0.5,
+          }}
+        >
+          · {reference}
+        </Text>
+      </View>
+      <Text
+        style={{
+          fontFamily: FontFamily.bodyItalic,
+          fontSize: 15,
+          color: colors.text,
+          lineHeight: 22,
+        }}
+        numberOfLines={3}
+      >
+        "{quote}"
+      </Text>
+    </TouchableOpacity>
+  );
+});
 
 export default function MyContentScreen() {
   const router = useRouter();
@@ -136,12 +391,12 @@ export default function MyContentScreen() {
     );
   }, [bookmarks, searchQuery]);
 
-  const handleTabPress = (tab: Tab) => {
+  const handleTabPress = useCallback((tab: Tab) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setActiveTab(tab);
-  };
+  }, []);
 
-  const handleFilterPress = (filter: HighlightChip) => {
+  const handleFilterPress = useCallback((filter: HighlightChip) => {
     Haptics.selectionAsync();
     if (filter === 'all') {
       setHighlightTypeFilter('all');
@@ -153,9 +408,9 @@ export default function MyContentScreen() {
       setHighlightTypeFilter('all');
       setHighlightSourceFilter(filter);
     }
-  };
+  }, []);
 
-  const handleHighlightPress = (item: SavedItem) => {
+  const handleHighlightPress = useCallback((item: SavedItem) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (item.source === 'devotional') {
       const h = item.raw as Highlight;
@@ -179,7 +434,104 @@ export default function MyContentScreen() {
         ...(item.kind === 'note' ? { openNote: 'true', noteId: b.id } : {}),
       },
     });
-  };
+  }, [router]);
+
+  const handleJournalPress = useCallback((entryId: string) => {
+    router.push({
+      pathname: '/(tabs)/(today)/journal-detail',
+      params: { entryId },
+    });
+  }, [router]);
+
+  const handleBookmarkPress = useCallback((bookmark: Bookmark) => {
+    router.push({
+      pathname: '/(tabs)/(today)/reading',
+      params: {
+        devotionalId: bookmark.devotionalId,
+        dayNumber: bookmark.dayNumber.toString(),
+        bookmarkId: bookmark.id,
+      },
+    });
+  }, [router]);
+
+  const handleStartFirstEntry = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    // Navigate to the current reading day to open journal
+    const currentDevotional = devotionals.find(d => d.id === currentDevotionalId);
+    if (currentDevotional) {
+      router.push({
+        pathname: '/(tabs)/(today)/journal',
+        params: {
+          devotionalId: currentDevotionalId,
+          dayNumber: (currentDevotional.days.filter(d => d.isRead).sort((a, b) => b.dayNumber - a.dayNumber)[0]?.dayNumber ?? currentDevotional.currentDay).toString(),
+        },
+      });
+    }
+  }, [devotionals, currentDevotionalId, router]);
+
+  const journalCta = useMemo(() => ({
+    label: 'Start your first entry',
+    accessibilityLabel: 'Start your first journal entry',
+    onPress: handleStartFirstEntry,
+  }), [handleStartFirstEntry]);
+
+  const devotionalById = useMemo(() => {
+    const map = new Map<string, Devotional>();
+    for (const d of devotionals) map.set(d.id, d);
+    return map;
+  }, [devotionals]);
+
+  // Single virtualized data source for whichever tab is active. All per-row
+  // store lookups (series title, day metadata, quote fallbacks) are resolved
+  // here so row components stay pure and memo-friendly.
+  const rows = useMemo<LibraryRow[]>(() => {
+    if (activeTab === 'journal') {
+      return filteredJournal.map((entry) => ({
+        kind: 'journal' as const,
+        key: entry.id,
+        entry,
+        seriesTitle: devotionalById.get(entry.devotionalId)?.title || 'Untitled Series',
+      }));
+    }
+    if (activeTab === 'highlights') {
+      return filteredHighlights.map((item) => ({
+        kind: 'saved' as const,
+        key: `${item.source}:${item.id}`,
+        item,
+      }));
+    }
+    return filteredBookmarks.map((bookmark) => {
+      const devotional = devotionalById.get(bookmark.devotionalId);
+      const day = devotional?.days.find(d => d.dayNumber === bookmark.dayNumber);
+      return {
+        kind: 'bookmark' as const,
+        key: bookmark.id,
+        bookmark,
+        label: bookmark.dayTitle || day?.title || 'Saved Passage',
+        reference: day?.scriptureReference || bookmark.scriptureReference,
+        quote: stripOuterQuotes(bookmark.quotedText || (['Quote', 'Historical Context', 'Word Study'].includes(bookmark.scriptureReference) ? bookmark.scriptureText : null) || day?.quotableLine || day?.scriptureText || bookmark.scriptureText),
+      };
+    });
+  }, [activeTab, filteredJournal, filteredHighlights, filteredBookmarks, devotionalById]);
+
+  const renderRow = useCallback<ListRenderItem<LibraryRow>>(({ item }) => {
+    switch (item.kind) {
+      case 'journal':
+        return <JournalRow row={item} colors={colors} onPress={handleJournalPress} />;
+      case 'saved':
+        return <SavedRow row={item} colors={colors} isDark={isDark} onPress={handleHighlightPress} />;
+      case 'bookmark':
+        return <BookmarkRow row={item} colors={colors} onPress={handleBookmarkPress} />;
+    }
+  }, [colors, isDark, handleJournalPress, handleHighlightPress, handleBookmarkPress]);
+
+  const keyExtractor = useCallback((item: LibraryRow) => item.key, []);
+
+  // Notes and highlights have very different heights — separate recycle pools.
+  const getItemType = useCallback(
+    (item: LibraryRow) => (item.kind === 'saved' ? `saved:${item.item.kind}` : item.kind),
+    [],
+  );
 
   // The 'highlights' tab holds BOTH saved highlights and notes (saved.count.all),
   // so labeling it "Highlights" both mislabels the mixed collection and collides
@@ -207,6 +559,95 @@ export default function MyContentScreen() {
       : highlightTypeFilter === 'notes' || highlightTypeFilter === 'highlights'
         ? highlightTypeFilter
         : 'all';
+
+  // Filter chips ride above the rows as the list header so they scroll with the
+  // Saved tab exactly like they did inside the old ScrollView.
+  const listHeader = activeTab === 'highlights' ? (
+    <View
+      style={{
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: Spacing['2'],
+        marginBottom: Spacing['4'],
+      }}
+    >
+      {highlightFilters.map((f) => {
+        const isActive = activeHighlightChip === f.id;
+        return (
+          <TouchableOpacity
+            key={f.id}
+            activeOpacity={0.7}
+            onPress={() => handleFilterPress(f.id)}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 6,
+              paddingHorizontal: Spacing['3'],
+              paddingVertical: Spacing['2'],
+              borderRadius: Radius.xl,
+              borderWidth: 1,
+              borderColor: isActive ? colors.accent : colors.border,
+              backgroundColor: isActive ? colors.accent : 'transparent',
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={`Filter highlights: ${f.label}`}
+            accessibilityState={{ selected: isActive }}
+          >
+            <Text
+              style={{
+                fontFamily: isActive ? FontFamily.uiSemiBold : FontFamily.ui,
+                fontSize: 12,
+                color: isActive ? colors.background : colors.textMuted,
+              }}
+            >
+              {f.label}
+            </Text>
+            <Text
+              style={{
+                fontFamily: FontFamily.uiMedium,
+                fontSize: 11,
+                color: isActive ? colors.background : colors.textSubtle,
+              }}
+            >
+              {f.count}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  ) : null;
+
+  const listEmpty =
+    activeTab === 'journal' ? (
+      <EmptyState
+        icon={PencilLineIcon}
+        title="No journal entries yet."
+        subtitle="Reflect on your readings to capture your thoughts."
+        cta={journalCta}
+      />
+    ) : activeTab === 'highlights' ? (
+      <EmptyState
+        icon={HighlighterIcon}
+        title="No highlights yet."
+        subtitle={
+          activeHighlightChip === 'bible'
+            ? 'Tap a verse in the Bible reader to save it here.'
+            : activeHighlightChip === 'devotional'
+              ? 'Select text while reading a devotional to save it here.'
+              : activeHighlightChip === 'notes'
+                ? 'Add a note to a Bible verse to save it here.'
+                : activeHighlightChip === 'highlights'
+                  ? 'Highlight a devotional or Bible verse to save it here.'
+                  : 'Select text in a devotional or Bible verse to save it here.'
+        }
+      />
+    ) : (
+      <EmptyState
+        icon={BookmarkSimpleIcon}
+        title="No bookmarks yet."
+        subtitle="Tap the bookmark icon while reading to save scriptures."
+      />
+    );
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'bottom']}>
@@ -358,340 +799,21 @@ export default function MyContentScreen() {
         })}
       </View>
 
-      {/* Tab Content */}
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: Spacing['5'] }}>
-        {activeTab === 'journal' && (
-          <Animated.View entering={libraryContentEntering}>
-            {filteredJournal.length === 0 ? (
-              <EmptyState
-                icon={PencilLineIcon}
-                title="No journal entries yet."
-                subtitle="Reflect on your readings to capture your thoughts."
-                cta={{
-                  label: 'Start your first entry',
-                  accessibilityLabel: 'Start your first journal entry',
-                  onPress: () => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    // Navigate to the current reading day to open journal
-                    const currentDevotional = devotionals.find(d => d.id === currentDevotionalId);
-                    if (currentDevotional) {
-                      router.push({
-                        pathname: '/(tabs)/(today)/journal',
-                        params: {
-                          devotionalId: currentDevotionalId,
-                          dayNumber: (currentDevotional.days.filter(d => d.isRead).sort((a, b) => b.dayNumber - a.dayNumber)[0]?.dayNumber ?? currentDevotional.currentDay).toString(),
-                        },
-                      });
-                    }
-                  },
-                }}
-              />
-            ) : (
-              filteredJournal.map((entry, index) => {
-                const devotional = devotionals.find(d => d.id === entry.devotionalId);
-                return (
-                  <TouchableOpacity activeOpacity={0.7}
-                    key={entry.id}
-                    onPress={() => router.push({
-                      pathname: '/(tabs)/(today)/journal-detail',
-                      params: { entryId: entry.id }
-                    })}
-                    style={{
-                      backgroundColor: colors.inputBackground,
-                      borderRadius: Radius.lg,
-                      padding: Spacing['5'],
-                      marginBottom: Spacing['3'],
-                      opacity: 1,
-                    }}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing['2'], gap: Spacing['2'] }}>
-                      <BookOpenIcon size={14} color={colors.accent} weight="light" />
-                      <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.text }}>
-                        {devotional?.title || 'Untitled Series'}
-                      </Text>
-                      <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textMuted }}>
-                        · Day {entry.dayNumber}
-                      </Text>
-                    </View>
-                    <Text
-                      style={{
-                        fontFamily: FontFamily.body,
-                        fontSize: 15,
-                        color: colors.textMuted,
-                        lineHeight: 22,
-                      }}
-                      numberOfLines={3}
-                    >
-                      {entry.content}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })
-            )}
-          </Animated.View>
-        )}
-
-        {activeTab === 'highlights' && (
-          <Animated.View entering={libraryContentEntering}>
-            {/* Source filter chips */}
-            <View
-              style={{
-                flexDirection: 'row',
-                flexWrap: 'wrap',
-                gap: Spacing['2'],
-                marginBottom: Spacing['4'],
-              }}
-            >
-              {highlightFilters.map((f) => {
-                const isActive = activeHighlightChip === f.id;
-                return (
-                  <TouchableOpacity
-                    key={f.id}
-                    activeOpacity={0.7}
-                    onPress={() => handleFilterPress(f.id)}
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 6,
-                      paddingHorizontal: Spacing['3'],
-                      paddingVertical: Spacing['2'],
-                      borderRadius: Radius.xl,
-                      borderWidth: 1,
-                      borderColor: isActive ? colors.accent : colors.border,
-                      backgroundColor: isActive ? colors.accent : 'transparent',
-                    }}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Filter highlights: ${f.label}`}
-                    accessibilityState={{ selected: isActive }}
-                  >
-                    <Text
-                      style={{
-                        fontFamily: isActive ? FontFamily.uiSemiBold : FontFamily.ui,
-                        fontSize: 12,
-                        color: isActive ? colors.background : colors.textMuted,
-                      }}
-                    >
-                      {f.label}
-                    </Text>
-                    <Text
-                      style={{
-                        fontFamily: FontFamily.uiMedium,
-                        fontSize: 11,
-                        color: isActive ? colors.background : colors.textSubtle,
-                      }}
-                    >
-                      {f.count}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            {filteredHighlights.length === 0 ? (
-              <EmptyState
-                icon={HighlighterIcon}
-                title="No highlights yet."
-                subtitle={
-                  activeHighlightChip === 'bible'
-                    ? 'Tap a verse in the Bible reader to save it here.'
-                    : activeHighlightChip === 'devotional'
-                      ? 'Select text while reading a devotional to save it here.'
-                      : activeHighlightChip === 'notes'
-                        ? 'Add a note to a Bible verse to save it here.'
-                        : activeHighlightChip === 'highlights'
-                          ? 'Highlight a devotional or Bible verse to save it here.'
-                          : 'Select text in a devotional or Bible verse to save it here.'
-                }
-              />
-            ) : (
-              filteredHighlights.map((item) => {
-                const colorKey: HighlightKey = item.color ?? 'yellow';
-                const accent = HIGHLIGHT_COLORS[colorKey][isDark ? 'dark' : 'light'];
-                return (
-                  <TouchableOpacity
-                    activeOpacity={0.7}
-                    key={`${item.source}:${item.id}`}
-                    onPress={() => handleHighlightPress(item)}
-                    style={{
-                      backgroundColor: colors.inputBackground,
-                      borderRadius: Radius.lg,
-                      padding: 20,
-                      marginBottom: 12,
-                    }}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${item.source === 'bible' ? 'Bible' : 'Devotional'} ${item.kind}: ${item.note ?? item.text}`}
-                  >
-                    {item.kind === 'note' ? (
-                      <>
-                        <Text
-                          style={{
-                            fontFamily: FontFamily.body,
-                            fontSize: FontSize.base,
-                            color: colors.text,
-                            lineHeight: 24,
-                            marginBottom: Spacing['3'],
-                          }}
-                          numberOfLines={4}
-                        >
-                          {item.note}
-                        </Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: Spacing['2'], marginBottom: Spacing['2'] }}>
-                          <PencilLineIcon size={13} color={colors.accent} weight="light" />
-                          <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.xs, color: colors.accent }}>
-                            Note · {item.contextLabel}
-                          </Text>
-                          {item.color !== null && (
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                              <View
-                                style={{
-                                  width: 7,
-                                  height: 7,
-                                  borderRadius: 3.5,
-                                  backgroundColor: accent,
-                                }}
-                              />
-                              <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textSubtle }}>
-                                Highlighted verse
-                              </Text>
-                            </View>
-                          )}
-                        </View>
-                        <Text
-                          style={{
-                            fontFamily: FontFamily.body,
-                            fontSize: 14,
-                            color: colors.textMuted,
-                            lineHeight: 21,
-                          }}
-                          numberOfLines={2}
-                        >
-                          {item.text}
-                        </Text>
-                      </>
-                    ) : (
-                      <>
-                        {/* Quoted text with inline highlight tint */}
-                        <View
-                          style={{
-                            backgroundColor: `${accent}14`,
-                            borderRadius: 6,
-                            paddingHorizontal: 10,
-                            paddingVertical: 8,
-                            marginBottom: Spacing['3'],
-                          }}
-                        >
-                          <Text
-                            style={{
-                              fontFamily: FontFamily.bodyItalic,
-                              fontSize: FontSize.base,
-                              color: colors.text,
-                              lineHeight: 24,
-                            }}
-                          >
-                            "{stripOuterQuotes(item.text)}"
-                          </Text>
-                        </View>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing['2'] }}>
-                          <View
-                            style={{
-                              width: 8,
-                              height: 8,
-                              borderRadius: 4,
-                              backgroundColor: accent,
-                            }}
-                          />
-                          <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textMuted }}>
-                            {item.contextLabel}
-                          </Text>
-                        </View>
-                      </>
-                    )}
-                  </TouchableOpacity>
-                );
-              })
-            )}
-          </Animated.View>
-        )}
-
-        {activeTab === 'bookmarks' && (
-          <Animated.View entering={libraryContentEntering}>
-            {filteredBookmarks.length === 0 ? (
-              <EmptyState
-                icon={BookmarkSimpleIcon}
-                title="No bookmarks yet."
-                subtitle="Tap the bookmark icon while reading to save scriptures."
-              />
-            ) : (
-              filteredBookmarks.map((bookmark) => {
-                const devotional = devotionals.find(d => d.id === bookmark.devotionalId);
-                const day = devotional?.days.find(d => d.dayNumber === bookmark.dayNumber);
-                return (
-                  <TouchableOpacity activeOpacity={0.7}
-                    key={bookmark.id}
-                    onPress={() => router.push({
-                      pathname: '/(tabs)/(today)/reading',
-                      params: { 
-                        devotionalId: bookmark.devotionalId,
-                        dayNumber: bookmark.dayNumber.toString(),
-                        bookmarkId: bookmark.id,
-                      },
-                    })}
-                    style={{
-                      backgroundColor: colors.inputBackground,
-                      borderRadius: Radius.lg,
-                      padding: Spacing['5'],
-                      marginBottom: Spacing['3'],
-                      opacity: 1,
-                    }}
-                  >
-                    <View
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        marginBottom: Spacing['2'],
-                        gap: Spacing['2'],
-                      }}
-                    >
-                      <BookmarkSimpleIcon size={14} color={colors.accent} weight="fill" />
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.uiMedium,
-                          fontSize: FontSize.xs,
-                          color: colors.accent,
-                          letterSpacing: 0.5,
-                        }}
-                      >
-                        {bookmark.dayTitle || day?.title || 'Saved Passage'}
-                      </Text>
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.uiMedium,
-                          fontSize: FontSize.xs,
-                          color: colors.textSubtle,
-                          letterSpacing: 0.5,
-                        }}
-                      >
-                        · {day?.scriptureReference || bookmark.scriptureReference}
-                      </Text>
-                    </View>
-                    <Text
-                      style={{
-                        fontFamily: FontFamily.bodyItalic,
-                        fontSize: 15,
-                        color: colors.text,
-                        lineHeight: 22,
-                      }}
-                      numberOfLines={3}
-                    >
-                      "{stripOuterQuotes(bookmark.quotedText || (['Quote', 'Historical Context', 'Word Study'].includes(bookmark.scriptureReference) ? bookmark.scriptureText : null) || day?.quotableLine || day?.scriptureText || bookmark.scriptureText)}"
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })
-            )}
-          </Animated.View>
-        )}
-      </ScrollView>
+      {/* Tab Content — one FlashList over the active tab's rows. */}
+      <Animated.View key={activeTab} entering={libraryContentEntering} style={{ flex: 1 }}>
+        <FlashList
+          data={rows}
+          renderItem={renderRow}
+          keyExtractor={keyExtractor}
+          getItemType={getItemType}
+          extraData={colors}
+          ListHeaderComponent={listHeader}
+          ListEmptyComponent={listEmpty}
+          contentContainerStyle={LIST_CONTENT_STYLE}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        />
+      </Animated.View>
     </SafeAreaView>
   );
 }

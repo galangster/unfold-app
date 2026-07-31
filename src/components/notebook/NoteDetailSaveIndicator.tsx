@@ -9,19 +9,19 @@ import { Spacing } from '@/constants/spacing';
 import { getNoteDetailSaveIndicatorLayout, type NoteDetailSaveState } from '@/lib/note-detail-save-indicator';
 
 export function NoteDetailSaveIndicator({
-  isEditing,
+  isKeyboardUp,
   saveState,
   reducedMotion,
   textColor,
   iconColor,
 }: {
-  isEditing: boolean;
+  isKeyboardUp: boolean;
   saveState: NoteDetailSaveState;
   reducedMotion: boolean;
   textColor: string;
   iconColor: string;
 }) {
-  const layout = getNoteDetailSaveIndicatorLayout({ isEditing, saveState });
+  const layout = getNoteDetailSaveIndicatorLayout({ isKeyboardUp, saveState });
 
   if (!layout.showSlot) return null;
 

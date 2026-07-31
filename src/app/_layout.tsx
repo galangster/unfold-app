@@ -21,6 +21,7 @@ import { useFullSyncPull } from '@/hooks/useFullSyncPull';
 import { useSyncOutboxDrain } from '@/hooks/useSyncOutboxDrain';
 import { logger } from '@/lib/logger';
 import { useUnfoldStore } from '@/lib/store';
+import { loadReadingFont } from '@/lib/reading-fonts-loader';
 import { registerPushToken, setNotificationNavigationReady, setupNotificationListeners, syncNotificationPreferences } from '@/lib/push-notifications';
 import { shouldMarkNotificationNavigationReady } from '@/lib/push-notification-helpers';
 import { migrateGenerationDataToServer } from '@/lib/generation-migration';
@@ -77,6 +78,18 @@ function RootLayoutNav() {
   const pathname = usePathname();
   const rootNavigationState = useRootNavigationState();
   const reminderTime = useUnfoldStore((s) => s.user?.reminderTime ?? '');
+  const readingFontId = useUnfoldStore((s) => s.user?.readingFont);
+
+  // PERF (cold start): non-default reading families are not in the
+  // splash-blocking useFonts call. The persisted store hydrates synchronously
+  // (MMKV reads are sync), so the user's choice is already known on the first
+  // render here — but this effect also covers async rehydration and every
+  // in-app switch site (Settings picker, reader's ReadingSettingsSheet),
+  // because it keys off the store value rather than the switching component.
+  // Non-blocking: text renders in Source Serif until the family arrives.
+  useEffect(() => {
+    void loadReadingFont(readingFontId);
+  }, [readingFontId]);
 
   // Sync RevenueCat subscription status with Zustand store
   useRevenueCatSync();
@@ -207,13 +220,6 @@ function RootLayoutNav() {
           }}
         />
         <Stack.Screen
-          name="debug-light-mode"
-          options={{
-            animation: 'slide_from_right',
-            gestureEnabled: true,
-          }}
-        />
-        <Stack.Screen
           name="streak-settings"
           options={{
             animation: 'slide_from_right',
@@ -243,23 +249,16 @@ function RootLayout() {
     'Inter_500Medium': require('../../assets/fonts/Inter_500Medium.ttf'),
     'Inter_600SemiBold': require('../../assets/fonts/Inter_600SemiBold.ttf'),
     'Inter_700Bold': require('../../assets/fonts/Inter_700Bold.ttf'),
-    // Reading fonts (premium)
-    'EBGaramond_400Regular': require('../../assets/fonts/EBGaramond_400Regular.ttf'),
-    'EBGaramond_400Regular_Italic': require('../../assets/fonts/EBGaramond_400Regular_Italic.ttf'),
-    'EBGaramond_600SemiBold': require('../../assets/fonts/EBGaramond_600SemiBold.ttf'),
-    'EBGaramond_700Bold': require('../../assets/fonts/EBGaramond_700Bold.ttf'),
-    'Lora_400Regular': require('../../assets/fonts/Lora_400Regular.ttf'),
-    'Lora_400Regular_Italic': require('../../assets/fonts/Lora_400Regular_Italic.ttf'),
-    'Lora_600SemiBold': require('../../assets/fonts/Lora_600SemiBold.ttf'),
-    'Lora_700Bold': require('../../assets/fonts/Lora_700Bold.ttf'),
-    'CrimsonText_400Regular': require('../../assets/fonts/CrimsonText_400Regular.ttf'),
-    'CrimsonText_400Regular_Italic': require('../../assets/fonts/CrimsonText_400Regular_Italic.ttf'),
-    'CrimsonText_600SemiBold': require('../../assets/fonts/CrimsonText_600SemiBold.ttf'),
-    'CrimsonText_700Bold': require('../../assets/fonts/CrimsonText_700Bold.ttf'),
-    'Merriweather_400Regular': require('../../assets/fonts/Merriweather_400Regular.ttf'),
-    'Merriweather_400Regular_Italic': require('../../assets/fonts/Merriweather_400Regular_Italic.ttf'),
-    'Merriweather_700Bold': require('../../assets/fonts/Merriweather_700Bold.ttf'),
-    'Merriweather_900Black': require('../../assets/fonts/Merriweather_900Black.ttf'),
+    // NOTE (PERF, cold start): the eager set is UI/display faces (Gupter,
+    // Inter) plus the DEFAULT reading family (Source Serif) only — 2.6 MB
+    // instead of the 9.7 MB that blocked the splash when all six reading
+    // families were listed here. Garamond / Lora / Crimson / Merriweather
+    // (7.1 MB) load on demand via `@/lib/reading-fonts-loader`: from the
+    // reading-font effect in RootLayoutNav and when the Settings font
+    // picker opens. An unloaded family renders in the system fallback rather
+    // than crashing, and `useReadingFont()` keeps serving Source Serif until
+    // the requested family is registered, so there is no fallback-face flash
+    // that never resolves.
   });
 
   useEffect(() => {

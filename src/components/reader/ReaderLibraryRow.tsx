@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Text, TouchableOpacity, StyleSheet, View } from 'react-native';
 import { BookmarkSimpleIcon, CaretRightIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
@@ -11,6 +12,8 @@ interface ReaderLibraryRowProps {
   onPress: () => void;
   accessibilityLabel?: string;
   testID?: string;
+  /** Leading icon override — defaults to the bookmark icon. */
+  icon?: ReactNode;
 }
 
 export function ReaderLibraryRow({
@@ -19,6 +22,7 @@ export function ReaderLibraryRow({
   onPress,
   accessibilityLabel,
   testID = 'reader-library-row',
+  icon,
 }: ReaderLibraryRowProps) {
   const { colors, isDark } = useTheme();
   const backgroundColor = isDark ? 'rgba(245, 240, 235, 0.06)' : 'rgba(28, 23, 16, 0.05)';
@@ -33,7 +37,7 @@ export function ReaderLibraryRow({
       accessibilityLabel={accessibilityLabel ?? `${label}${count != null ? `, ${count} saved` : ''}`}
       accessibilityState={{ disabled: false }}
     >
-      <BookmarkSimpleIcon size={18} color={colors.text} weight="regular" />
+      {icon ?? <BookmarkSimpleIcon size={18} color={colors.text} weight="regular" />}
       <Text style={[styles.label, { color: colors.text }]}>{label}</Text>
       {count != null && count > 0 ? (
         <View style={[styles.countPill, { borderColor: colors.borderStrong }]}>

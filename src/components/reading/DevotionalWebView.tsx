@@ -44,6 +44,11 @@ interface DevotionalWebViewProps {
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CONTENT_PADDING = 24;
 
+/** Stable empty default for `existingHighlights` — an inline `= []` default
+ *  mints a new array identity on every render, invalidating the injected-JS
+ *  memo below and re-injecting script into the WebView for free. */
+const NO_HIGHLIGHTS: Highlight[] = [];
+
 // Color definitions for saved highlights. Match the Bible reader semantics:
 // light mode uses a marker-style background; dark mode uses vibrant text color.
 const HIGHLIGHT_COLORS = {
@@ -59,7 +64,7 @@ export function DevotionalWebView({
   fontSize,
   onQuoteSelected,
   onHighlightRemoved,
-  existingHighlights = [],
+  existingHighlights = NO_HIGHLIGHTS,
   targetHighlight,
   onTargetHighlightLocated,
   targetBookmark,
@@ -888,8 +893,11 @@ export function DevotionalWebView({
     `;
   }, [existingHighlights, isDark, targetHighlight, targetBookmark]);
 
-  // Generate HTML with exact typography matching
-  const htmlContent = useMemo(() => {
+  // Generate HTML with exact typography matching.
+  // NOTE: this memo returns the WebView `source` object itself (not just the
+  // HTML string) so an unrelated parent re-render can't hand the WebView a
+  // fresh `{ html }` identity and force a full document reload.
+  const webViewSource = useMemo(() => {
     const fontSizes = FONT_SIZE_VALUES[fontSize];
     const bodyFontSize = fontSizes.body;
     const lineHeight = bodyFontSize * 1.75;
@@ -1023,7 +1031,7 @@ export function DevotionalWebView({
       `
       : '';
 
-    return `
+    return { html: `
 <!DOCTYPE html>
 <html>
 <head>
@@ -1400,7 +1408,7 @@ export function DevotionalWebView({
   </div>
 </body>
 </html>
-    `;
+    ` };
   }, [day, fontSize, colors, isDark, readingFont]);
 
   const webViewTargetKey = useMemo(() => [
@@ -1491,7 +1499,7 @@ export function DevotionalWebView({
         key={webViewTargetKey}
         testID={webViewTargetKey}
         ref={webViewRef}
-        source={{ html: htmlContent }}
+        source={webViewSource}
         style={[styles.webview, { height: webViewHeight }]}
         scrollEnabled={false}
         showsVerticalScrollIndicator={false}
