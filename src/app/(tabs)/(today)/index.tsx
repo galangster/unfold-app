@@ -119,7 +119,6 @@ export default function HomeScreen() {
   const setHasSeenDay1Review = useUnfoldStore((s) => s.setHasSeenDay1Review);
   const hasSeenHomeTooltips = useUnfoldStore((s) => s.hasSeenHomeTooltips);
   const addGeneratedDay = useUnfoldStore((s) => s.addGeneratedDay);
-  const archiveCurrentDevotional = useUnfoldStore((s) => s.archiveCurrentDevotional);
   const markDayAsRevealed = useUnfoldStore((s) => s.markDayAsRevealed);
   const isReturningUser = useUnfoldStore((s) => s.isReturningUser());
   const dismissedMiddayCardDate = useUnfoldStore((s) => s.dismissedMiddayCardDate);
@@ -609,10 +608,12 @@ export default function HomeScreen() {
           { text: 'Cancel', style: 'cancel' },
           {
             text: 'Continue',
-            onPress: () => {
-              archiveCurrentDevotional();
-              openNewSeriesDiscovery();
-            },
+            // The current series is deliberately NOT ended here. addDevotional
+            // archives it once a replacement actually exists, so a user who
+            // backs out of onboarding still has their series — intact, current,
+            // and still generating — instead of one that silently stopped with
+            // nothing to replace it.
+            onPress: openNewSeriesDiscovery,
           },
         ],
       );

@@ -7,10 +7,10 @@ import {
 
 type SyncedDevotionalMetadata = NonNullable<PulledDevotionalContent['devotional']>;
 
-export type DevotionalSyncMetadataPatch = Partial<Pick<Devotional, 'title' | 'totalDays' | 'currentDay' | 'seriesArc' | 'seriesStartDate' | 'updatedAt'>>;
+export type DevotionalSyncMetadataPatch = Partial<Pick<Devotional, 'title' | 'totalDays' | 'currentDay' | 'seriesArc' | 'seriesStartDate' | 'archivedAt' | 'updatedAt'>>;
 
 export function buildDevotionalSyncMetadataPatch(
-  local: Pick<Devotional, 'id' | 'title' | 'totalDays' | 'currentDay' | 'seriesArc' | 'seriesStartDate' | 'createdAt'>,
+  local: Pick<Devotional, 'id' | 'title' | 'totalDays' | 'currentDay' | 'seriesArc' | 'seriesStartDate' | 'archivedAt' | 'createdAt'>,
   synced?: SyncedDevotionalMetadata,
 ): DevotionalSyncMetadataPatch {
   if (!synced || synced.id !== local.id) return {};
@@ -41,6 +41,12 @@ export function buildDevotionalSyncMetadataPatch(
     patch.seriesStartDate = nextSeriesStartDate;
   }
 
+  // Targeted pulls parsed archivedAt but never applied it, so a series ended on
+  // another device stayed "active" on this one. Archiving is a one-way latch —
+  // only ever set, never cleared from a pull.
+  if (synced.archivedAt && !local.archivedAt) {
+    patch.archivedAt = synced.archivedAt;
+  }
 
   if (serverOwnedTotalDays > 0 && local.totalDays !== serverOwnedTotalDays) {
     patch.totalDays = serverOwnedTotalDays;

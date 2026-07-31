@@ -8,7 +8,7 @@
  *   - Multiline: grows up to 5 lines (~120px), then scrolls internally
  *   - Voice recording replaces the entire input bar with waveform UI
  */
-import { memo, useState, useRef, useCallback, useMemo } from 'react';
+import { memo, useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -42,6 +42,15 @@ const PLACEHOLDERS = [
 const COMPANION_MESSAGE_COUNTER_THRESHOLD = 3500;
 
 interface Props {
+  /**
+   * Text to drop into the composer from elsewhere (e.g. the completion screen
+   * handing off "walk me through today's reading"). Deliberately seeds the
+   * input rather than sending: the free tier is 5 messages a day, so spending
+   * one without the user pressing send would be taking the choice from them.
+   *
+   * The nonce makes repeat handoffs of identical text still apply.
+   */
+  seed?: { text: string; nonce: number };
   onSend: (text: string) => boolean | void;
   onStop: () => void;
   isStreaming: boolean;
@@ -50,9 +59,18 @@ interface Props {
 // Memoized: the companion screen re-renders on every streaming token flush —
 // the input bar's props (stable callbacks + isStreaming) only change at
 // stream boundaries, so the memo skips ~30 re-renders/sec while streaming.
-export const CompanionInput = memo(function CompanionInput({ onSend, onStop, isStreaming }: Props) {
+export const CompanionInput = memo(function CompanionInput({ onSend, onStop, isStreaming, seed }: Props) {
   const { colors, isDark } = useTheme();
   const [text, setText] = useState('');
+
+  // Seeds arrive after mount (this screen is a tab and stays mounted), so this
+  // has to be an effect rather than a useState initialiser. Never overwrite
+  // something the user has already typed — losing a half-written message to a
+  // handoff is worse than not seeding at all.
+  useEffect(() => {
+    if (!seed?.text) return;
+    setText((current) => (current.trim().length > 0 ? current : seed.text));
+  }, [seed?.nonce, seed?.text]);
   const [isVoiceMode, setIsVoiceMode] = useState(false);
   const [micPermissionDenied, setMicPermissionDenied] = useState(false);
   const inputRef = useRef<TextInput>(null);

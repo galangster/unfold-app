@@ -266,6 +266,9 @@ export interface Devotional {
   usedStoryIds?: string[];
   // Calendar-based day progression anchor
   seriesStartDate?: string; // ISO timestamp — set when day 1 is generated
+  // Set when the user starts a different series. The series stays readable;
+  // it just stops being the one the server advances and generates for.
+  archivedAt?: string; // ISO timestamp
   // Sync fields
   updatedAt?: string; // ISO timestamp
 }
@@ -887,14 +890,41 @@ export const useUnfoldStore = create<UnfoldState>()(
       // Devotional actions
       addDevotional: (devotional) =>
         set((state) => {
+          const now = new Date().toISOString();
+
+          // Creating a series is what ends the previous one — not tapping
+          // "Continue" on the confirmation alert. Archiving at the alert bricked
+          // the old series if the user then abandoned onboarding: it stopped
+          // being a generation target with nothing created to replace it.
+          // Doing it here means the invariant holds exactly when a replacement
+          // actually exists.
+          const archiveOthers = (items: Devotional[]) =>
+            items.map((d) => {
+              if (d.id === devotional.id || d.archivedAt) return d;
+              enqueuePersonalDataSyncChange(
+                'devotionals',
+                d.id,
+                { schemaVersion: 1, archivedAt: now },
+                now,
+              );
+              return { ...d, archivedAt: now, updatedAt: now };
+            });
+
           // Prevent duplicate entries with the same ID
           if (state.devotionals.some((d) => d.id === devotional.id)) {
-            return { currentDevotionalId: devotional.id, hasEverCreatedDevotional: true };
+            return {
+              devotionals: archiveOthers(state.devotionals),
+              currentDevotionalId: devotional.id,
+              hasEverCreatedDevotional: true,
+            };
           }
 
           const normalizedDevotional = normalizeDevotionalIdentity(devotional);
           return {
-            devotionals: [{ ...normalizedDevotional, updatedAt: new Date().toISOString() }, ...state.devotionals],
+            devotionals: [
+              { ...normalizedDevotional, updatedAt: now },
+              ...archiveOthers(state.devotionals),
+            ],
             currentDevotionalId: devotional.id,
             hasEverCreatedDevotional: true,
           };
@@ -986,7 +1016,36 @@ export const useUnfoldStore = create<UnfoldState>()(
         }),
 
       setCurrentDevotional: (id) => set({ currentDevotionalId: id }),
-      archiveCurrentDevotional: () => set({ currentDevotionalId: null }),
+
+      // Ending a series has to reach the server. When this only cleared the
+      // local pointer, the backend kept treating the abandoned series as the
+      // user's active one — still advancing it, still generating days for it,
+      // and still offering it as "In Progress" forever.
+      archiveCurrentDevotional: () =>
+        set((state) => {
+          const targetId = state.currentDevotionalId;
+          if (!targetId) return { currentDevotionalId: null };
+
+          const now = new Date().toISOString();
+          const target = state.devotionals.find((d) => d.id === targetId);
+          if (target && !target.archivedAt) {
+            enqueuePersonalDataSyncChange(
+              'devotionals',
+              targetId,
+              { schemaVersion: 1, archivedAt: now },
+              now,
+            );
+          }
+
+          return {
+            currentDevotionalId: null,
+            devotionals: state.devotionals.map((d) =>
+              d.id === targetId && !d.archivedAt
+                ? { ...d, archivedAt: now, updatedAt: now }
+                : d,
+            ),
+          };
+        }),
       isReturningUser: () => get().hasEverCreatedDevotional || get().devotionals.length > 0,
 
       markDayAsRead: (devotionalId, dayNumber) =>

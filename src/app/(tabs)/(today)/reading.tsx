@@ -35,7 +35,7 @@ import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, FONT_SIZE_VALUES } from '@/lib/store';
 import type { Highlight, Bookmark } from '@/lib/store';
-import { refreshDailyReminder } from '@/lib/notifications';
+import { refreshDailyReminder, areNotificationsEnabled } from '@/lib/notifications';
 import { continueGeneratingDays, isFullGenerationActive } from '@/lib/devotional-service';
 import { submitGenerationJob, recoverCompletedGenerationResult, ApiError } from '@/lib/generation-api';
 import { syncDevotionalDayRead } from '@/lib/devotional-read-sync';
@@ -57,7 +57,8 @@ import { getServerOwnedSeriesTotalDays } from '@/lib/devotional-series-boundary'
 import { isTransientGenerationError, toFriendlyRemainingDaysGenerationError } from '@/lib/generation-errors';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
-import { CompletionCelebration } from '@/components/CompletionCelebration';
+import { CompletionCelebration, type CompletionAction } from '@/components/CompletionCelebration';
+import { NotificationPrimer } from '@/components/NotificationPrimer';
 // ShareDevotionalModal removed — pull quote share now uses /share-card route
 import { DevotionalContent } from '@/components/reading/DevotionalContent';
 import { StudyMethodSheet } from '@/components/reading/StudyMethodSheet';
@@ -293,6 +294,8 @@ export default function ReadingScreen() {
   const [isOnline, setIsOnline] = useState(true);
   const [isWaitingForConnection, setIsWaitingForConnection] = useState(false);
   const [isPreparingNextDay, setIsPreparingNextDay] = useState(false);
+  const [showNotificationPrimer, setShowNotificationPrimer] = useState(false);
+  const [shouldAskForNotifications, setShouldAskForNotifications] = useState(false);
   const [bookmarkToast, setBookmarkToast] = useState(false);
   const [selectedStudyMethod, setSelectedStudyMethod] = useState<string | undefined>(undefined);
   const [targetScrollRequest, setTargetScrollRequest] = useState<{ id: number; y: number } | null>(null);
@@ -300,6 +303,8 @@ export default function ReadingScreen() {
   const [readerLayoutVersion, setReaderLayoutVersion] = useState(0);
   const [studyMethodVisible, setStudyMethodVisible] = useState(false);
   const pendingReviewRef = useRef<{ manager: ReviewPromptManager; totalDaysCompleted: number } | null>(null);
+  // Navigation deferred until the notification primer resolves.
+  const pendingCelebrationNavRef = useRef<(() => void) | null>(null);
   const autoBackgroundKickoffRef = useRef<Record<string, number>>({});
   const autoRetryAttemptsRef = useRef<Record<string, number>>({});
   const autoRetryTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -976,9 +981,89 @@ export default function ReadingScreen() {
           // consumed in CompletionCelebration's onDismiss below.
           pendingReviewRef.current = { manager: reviewManager, totalDaysCompleted };
         }
+
+        // First completed day: this is the moment to ask for notifications.
+        // The user cannot read further today (calendar-gated), so the only
+        // thing that matters now is whether they hear about tomorrow. The
+        // ask is resolved after the celebration, and only if the OS has not
+        // already granted permission.
+        if (totalDaysCompleted === 1 && !completingLastDay) {
+          void areNotificationsEnabled()
+            .then((enabled) => setShouldAskForNotifications(!enabled))
+            .catch(() => setShouldAskForNotifications(false));
+        }
       }
     }
   }, [currentDevotionalId, viewingDay, totalDays, user?.devotionalLength, currentDevotional, currentDayData, markDayAsRead, advanceDay, clearResumeContext, recordStreakRead, syncWidgets, journalEntries.length, reviewPromptLastDate, reviewPromptCount, hasReviewed, reviewPromptDaysAtLast, recordReviewPrompt]);
+
+  // Single exit from the celebration. Every close — tap-to-dismiss AND every
+  // CTA — goes through here. When the CTAs bypassed this they skipped the
+  // notification primer entirely (so it never fired on the most likely path)
+  // and left pendingReviewRef holding a stale manager.
+  const closeCelebration = useCallback((next?: () => void) => {
+    setShowCelebration(false);
+
+    if (shouldAskForNotifications) {
+      // Ask first, then go where they asked to go. Clearing the flag here is
+      // what stops a late-resolving permission check leaking into a later day.
+      setShouldAskForNotifications(false);
+      pendingCelebrationNavRef.current = next ?? null;
+      pendingReviewRef.current = null;
+      setShowNotificationPrimer(true);
+      return;
+    }
+
+    const pending = pendingReviewRef.current;
+    pendingReviewRef.current = null;
+
+    // Never throw the App Store sheet up while navigating away — drop it
+    // without recording, so it stays eligible at the next completion.
+    if (pending && !next) {
+      void (async () => {
+        const shown = await pending.manager.showPrompt();
+        if (shown) recordReviewPrompt(pending.totalDaysCompleted);
+      })();
+    }
+
+    next?.();
+  }, [shouldAskForNotifications, recordReviewPrompt]);
+
+  // Next steps offered from the completion screen. Free users must never be
+  // handed a gated action here — the Companion has a real free tier, the
+  // journal does not, and a paywall at "Day Complete" is the wrong trade.
+  const completionActions = useMemo<CompletionAction[]>(() => {
+    if (celebrationType === 'series') return [];
+
+    // Hand off warm: seed the composer with a question about the reading they
+    // just finished, naming it, so the Companion opens on something specific
+    // rather than a blank greeting. The user still presses send — a free-tier
+    // message is never spent on their behalf.
+    const dayTitle = currentDayData?.title;
+    const goCompanion: CompletionAction = {
+      label: 'Ask about today’s reading',
+      onPress: () =>
+        closeCelebration(() =>
+          router.push({
+            pathname: '/(tabs)/(ask)',
+            params: {
+              starter: dayTitle
+                ? `Walk me through today’s reading, “${dayTitle}.”`
+                : 'Walk me through today’s reading.',
+            },
+          }),
+        ),
+    };
+
+    if (!isPremium) return [goCompanion];
+
+    return [
+      {
+        label: 'Reflect on today',
+        onPress: () => closeCelebration(() => handleJournal()),
+      },
+      goCompanion,
+    ];
+  }, [celebrationType, isPremium, router, handleJournal, currentDayData?.title, closeCelebration]);
 
   const generateRemainingDays = useCallback(async (
     options?: { navigateToNextDay?: boolean; withHaptics?: boolean }
@@ -1271,6 +1356,24 @@ export default function ReadingScreen() {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           }
           return true;
+        }
+
+        // Never queue generation for a series the user has ended. Merely
+        // opening an old series used to fire this ladder and burn a full day
+        // of generation on it. The server rejects these too (SERIES_ARCHIVED),
+        // but there is no reason to make the round trip or to leave the user
+        // staring at a spinner for content that will never come.
+        if (currentDevotional.archivedAt) {
+          void logBugEvent('reading-sync-recovery', 'skipped-generation-archived-series', {
+            devotionalId: currentDevotional.id,
+            viewingDay,
+            source,
+          });
+          if (source === 'manual') {
+            setRetryError('This series has ended. Start it again to keep reading.');
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          }
+          return false;
         }
 
         try {
@@ -2289,25 +2392,25 @@ export default function ReadingScreen() {
       {/* Completion Celebration */}
       <CompletionCelebration
         visible={showCelebration}
-        onDismiss={() => {
-          setShowCelebration(false);
-          const pending = pendingReviewRef.current;
-          pendingReviewRef.current = null;
-          if (pending) {
-            void (async () => {
-              const shown = await pending.manager.showPrompt();
-              if (shown) {
-                recordReviewPrompt(pending.totalDaysCompleted);
-              }
-            })();
-          }
-        }}
+        actions={completionActions}
+        onDismiss={() => closeCelebration()}
         type={celebrationType}
         seriesReflectionSummary={
           celebrationType === 'series'
             ? currentDevotional?.days.find((d) => d.dayNumber === viewingDay)?.seriesReflectionSummary
             : undefined
         }
+      />
+
+      <NotificationPrimer
+        visible={showNotificationPrimer}
+        onResolved={() => {
+          setShowNotificationPrimer(false);
+          // Run whatever CTA the user picked, now that the ask is answered.
+          const next = pendingCelebrationNavRef.current;
+          pendingCelebrationNavRef.current = null;
+          next?.();
+        }}
       />
 
       {/* Share: now navigates to /share-card route */}

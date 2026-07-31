@@ -68,6 +68,7 @@ export function buildDevotionalReadSyncChanges({
         seriesArc: devotional.seriesArc,
         progressiveMemory: devotional.progressiveMemory,
         seriesStartDate: devotional.seriesStartDate,
+        archivedAt: devotional.archivedAt,
       },
       deleted: false,
     },
