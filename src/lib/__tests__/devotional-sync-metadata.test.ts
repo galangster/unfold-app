@@ -137,4 +137,39 @@ describe('buildDevotionalSyncMetadataPatch', () => {
       }),
     ).toEqual({ updatedAt: '2026-04-25T13:29:48.574Z' });
   });
+
+  // The one-way archivedAt latch could not represent a resume, so a pull would
+  // silently re-archive a series the user had just picked back up. Convergence
+  // is now decided server-side by the archivedStateAt intent clock.
+  it('applies an archive from another device', () => {
+    expect(
+      buildDevotionalSyncMetadataPatch(baseDevotional, {
+        id: 'devotional-1',
+        archivedAt: '2026-04-26T00:00:00.000Z',
+        updatedAt: '2026-04-26T00:00:00.000Z',
+      }).archivedAt,
+    ).toBe('2026-04-26T00:00:00.000Z');
+  });
+
+  it('applies a RESUME from another device', () => {
+    const archived = { ...baseDevotional, archivedAt: '2026-04-25T00:00:00.000Z' };
+    expect(
+      buildDevotionalSyncMetadataPatch(archived, {
+        id: 'devotional-1',
+        archivedAt: null,
+        updatedAt: '2026-04-26T00:00:00.000Z',
+      }).archivedAt,
+    ).toBeUndefined();
+  });
+
+  it('leaves archivedAt alone when the server does not mention it', () => {
+    const archived = { ...baseDevotional, archivedAt: '2026-04-25T00:00:00.000Z' };
+    expect(
+      'archivedAt' in
+        buildDevotionalSyncMetadataPatch(archived, {
+          id: 'devotional-1',
+          updatedAt: '2026-04-26T00:00:00.000Z',
+        }),
+    ).toBe(false);
+  });
 });

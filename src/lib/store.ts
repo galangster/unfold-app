@@ -909,7 +909,7 @@ export const useUnfoldStore = create<UnfoldState>()(
               enqueuePersonalDataSyncChange(
                 'devotionals',
                 d.id,
-                { schemaVersion: 1, archivedAt: now },
+                { schemaVersion: 1, archivedAt: now, archivedStateAt: now },
                 now,
               );
               return { ...d, archivedAt: now, updatedAt: now };
@@ -1040,7 +1040,7 @@ export const useUnfoldStore = create<UnfoldState>()(
               enqueuePersonalDataSyncChange(
                 'devotionals',
                 d.id,
-                { schemaVersion: 1, archivedAt: null },
+                { schemaVersion: 1, archivedAt: null, archivedStateAt: now },
                 now,
               );
               return { ...d, archivedAt: undefined, updatedAt: now };
@@ -1049,7 +1049,7 @@ export const useUnfoldStore = create<UnfoldState>()(
             enqueuePersonalDataSyncChange(
               'devotionals',
               d.id,
-              { schemaVersion: 1, archivedAt: now },
+              { schemaVersion: 1, archivedAt: now, archivedStateAt: now },
               now,
             );
             return { ...d, archivedAt: now, updatedAt: now };
@@ -1073,7 +1073,7 @@ export const useUnfoldStore = create<UnfoldState>()(
             enqueuePersonalDataSyncChange(
               'devotionals',
               targetId,
-              { schemaVersion: 1, archivedAt: now },
+              { schemaVersion: 1, archivedAt: now, archivedStateAt: now },
               now,
             );
           }

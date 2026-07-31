@@ -41,11 +41,12 @@ export function buildDevotionalSyncMetadataPatch(
     patch.seriesStartDate = nextSeriesStartDate;
   }
 
-  // Targeted pulls parsed archivedAt but never applied it, so a series ended on
-  // another device stayed "active" on this one. Archiving is a one-way latch —
-  // only ever set, never cleared from a pull.
-  if (synced.archivedAt && !local.archivedAt) {
-    patch.archivedAt = synced.archivedAt;
+  // archivedAt is ordinary synced state now, not a latch. The one-way version
+  // could not represent a resume, so a pull would silently re-archive a series
+  // the user had just picked back up. Convergence is handled server-side by
+  // comparing archivedStateAt (intent clock) rather than the row's updatedAt.
+  if (synced.archivedAt !== undefined && synced.archivedAt !== local.archivedAt) {
+    patch.archivedAt = synced.archivedAt ?? undefined;
   }
 
   if (serverOwnedTotalDays > 0 && local.totalDays !== serverOwnedTotalDays) {

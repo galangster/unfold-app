@@ -12,7 +12,7 @@ type PulledDevotionalMetadata = {
   // Calendar anchor for day gating; a missing value makes the reader's
   // tomorrow-lock fail closed. See devotional-day-access.getCalendarDayNumber.
   seriesStartDate?: string;
-  archivedAt?: string;
+  archivedAt?: string | null;
   updatedAt?: string;
 };
 
@@ -116,7 +116,8 @@ function mapPulledDevotionalMetadata(record: SyncPulledRecord): PulledDevotional
     currentDay: asNumber(data.currentDay),
     seriesArc: seriesArc as unknown as Devotional['seriesArc'] | undefined,
     seriesStartDate: asString(data.seriesStartDate),
-    archivedAt: asString(data.archivedAt),
+    // null is meaningful (resumed) — distinct from absent.
+    archivedAt: data.archivedAt === null ? null : asString(data.archivedAt),
     updatedAt: record.updatedAt,
   };
 }

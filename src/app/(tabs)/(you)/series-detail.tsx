@@ -30,6 +30,7 @@ import { Duration, Ease } from '@/constants/animations';
 import { Typography } from '@/constants/typography';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
+import { drainSyncOutbox } from '@/lib/sync-outbox';
 import {
   getTodayReaderDayNumber,
   isDevotionalDaySelectable,
@@ -171,6 +172,11 @@ export default function SeriesDetailScreen() {
     if (!devotional) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     resumeDevotional(devotional.id);
+    // Push it now rather than waiting for the next reconnect/focus drain. The
+    // server still holds the series as ended until this lands, so opening a
+    // missing day first would be refused and the next pull would re-archive
+    // the local row — resume would appear to undo itself.
+    void drainSyncOutbox();
   }, [devotional, resumeDevotional]);
 
   if (!devotional) {

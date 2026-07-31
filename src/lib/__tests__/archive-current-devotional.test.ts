@@ -224,3 +224,49 @@ describe('resumeDevotional', () => {
   });
 });
 
+/**
+ * The intent clock is what makes archive/resume converge. Every lifecycle push
+ * must carry archivedStateAt, or the server falls back to comparing against the
+ * row's updatedAt — which the cron writes on its own schedule, silently
+ * discarding the user's decision.
+ */
+describe('lifecycle pushes carry the intent clock', () => {
+  it('stamps archivedStateAt when ending a series', () => {
+    useUnfoldStore.setState({ devotionals: [series('a')], currentDevotionalId: 'a' });
+    useUnfoldStore.getState().archiveCurrentDevotional();
+
+    const [, , data] = mockEnqueue.mock.calls[0];
+    expect((data as { archivedAt?: string }).archivedAt).toEqual(expect.any(String));
+    expect((data as { archivedStateAt?: string }).archivedStateAt).toEqual(expect.any(String));
+  });
+
+  it('stamps archivedStateAt on BOTH sides of a resume', () => {
+    useUnfoldStore.setState({
+      devotionals: [series('ended', { archivedAt: '2026-07-29T00:00:00.000Z' }), series('active')],
+      currentDevotionalId: 'active',
+    });
+    useUnfoldStore.getState().resumeDevotional('ended');
+
+    const byId = Object.fromEntries(
+      mockEnqueue.mock.calls.map(([, id, data]) => [
+        id,
+        data as { archivedAt: string | null; archivedStateAt?: string },
+      ]),
+    );
+    // Resuming must be expressible as null — a one-way latch could not represent
+    // it, which is why resume used to be undone by the next pull.
+    expect(byId['ended'].archivedAt).toBeNull();
+    expect(byId['ended'].archivedStateAt).toEqual(expect.any(String));
+    expect(byId['active'].archivedAt).toEqual(expect.any(String));
+    expect(byId['active'].archivedStateAt).toEqual(expect.any(String));
+  });
+
+  it('stamps archivedStateAt when a new series ends the previous one', () => {
+    useUnfoldStore.setState({ devotionals: [series('old')], currentDevotionalId: 'old' });
+    useUnfoldStore.getState().addDevotional(series('new'));
+
+    const [, , data] = mockEnqueue.mock.calls[0];
+    expect((data as { archivedStateAt?: string }).archivedStateAt).toEqual(expect.any(String));
+  });
+});
+

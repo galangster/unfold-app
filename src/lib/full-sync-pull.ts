@@ -343,7 +343,7 @@ function mapDevotional(record: SyncPulledRecord, current?: Devotional): Devotion
       seriesArc: row.seriesArc ? asRecord(row.seriesArc) as unknown as Devotional['seriesArc'] : current.seriesArc,
       seriesStartDate:
         syncedSeriesStartDate ?? current.seriesStartDate ?? current.createdAt,
-      archivedAt: asString(row.archivedAt) ?? current.archivedAt,
+      archivedAt: 'archivedAt' in row ? asString(row.archivedAt) : current.archivedAt,
       updatedAt: now,
     };
   }
