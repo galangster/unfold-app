@@ -535,7 +535,7 @@ interface UnfoldState {
   // Devotionals
   devotionals: Devotional[];
   currentDevotionalId: string | null;
-  addDevotional: (devotional: Devotional) => void;
+  addDevotional: (devotional: Devotional, options?: { archiveOthers?: boolean }) => void;
   removeDevotional: (devotionalId: string) => void;
   updateDevotionalDays: (devotionalId: string, days: DevotionalDay[], title?: string) => void;
   setCurrentDevotional: (id: string) => void;
@@ -888,9 +888,13 @@ export const useUnfoldStore = create<UnfoldState>()(
       },
 
       // Devotional actions
-      addDevotional: (devotional) =>
+      addDevotional: (devotional, options) =>
         set((state) => {
           const now = new Date().toISOString();
+          // The onboarding sample is a preview, not a series the user is on.
+          // Letting it archive their real series meant a returning user who
+          // re-ran onboarding silently lost the series they were reading.
+          const archiveOthers_ = options?.archiveOthers ?? true;
 
           // Creating a series is what ends the previous one — not tapping
           // "Continue" on the confirmation alert. Archiving at the alert bricked
@@ -899,7 +903,7 @@ export const useUnfoldStore = create<UnfoldState>()(
           // Doing it here means the invariant holds exactly when a replacement
           // actually exists.
           const archiveOthers = (items: Devotional[]) =>
-            items.map((d) => {
+            !archiveOthers_ ? items : items.map((d) => {
               if (d.id === devotional.id || d.archivedAt) return d;
               enqueuePersonalDataSyncChange(
                 'devotionals',

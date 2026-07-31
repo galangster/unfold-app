@@ -161,3 +161,24 @@ describe('addDevotional enforces one active series', () => {
   });
 });
 
+describe('onboarding sample must not end a real series', () => {
+  it('leaves the active series alone when archiveOthers is false', () => {
+    // ReadDevotionalStep adds a one-day "Your First Devotional" preview on every
+    // onboarding run. Production has users with up to 7 of these. Letting the
+    // preview archive their real series would silently end the thing they were
+    // actually reading.
+    useUnfoldStore.setState({
+      devotionals: [series('real')],
+      currentDevotionalId: 'real',
+    });
+
+    useUnfoldStore
+      .getState()
+      .addDevotional(series('onboarding-sample'), { archiveOthers: false });
+
+    const real = useUnfoldStore.getState().devotionals.find((d) => d.id === 'real');
+    expect(real?.archivedAt).toBeUndefined();
+    expect(mockEnqueue).not.toHaveBeenCalled();
+  });
+});
+
