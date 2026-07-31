@@ -170,6 +170,7 @@ export const CompanionInput = memo(function CompanionInput({ onSend, onStop, isS
       >
         <TextInput
           ref={inputRef}
+          testID="companion-input"
           value={text}
           onChangeText={setText}
           placeholder={placeholder}
@@ -254,6 +255,7 @@ export const CompanionInput = memo(function CompanionInput({ onSend, onStop, isS
               activeOpacity={0.7}
               onPress={handleSend}
               disabled={!canSend}
+              testID="companion-send"
               accessibilityLabel="Send message"
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               style={{

@@ -144,6 +144,7 @@ export function ReadingSettingsSheet({
           <ReaderLibraryRow
             label="Saved Bible highlights"
             count={savedVersesCount}
+            testID="reader-saved-verses-row"
             onPress={onOpenSavedVerses}
             accessibilityLabel={`Open saved Bible highlights${savedVersesCount != null && savedVersesCount > 0 ? `, ${savedVersesCount} saved` : ''}`}
           />

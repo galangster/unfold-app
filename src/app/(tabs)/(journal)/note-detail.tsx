@@ -1256,6 +1256,7 @@ export default function NoteDetailScreen() {
               style={styles.headerButton}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               activeOpacity={0.6}
+              testID="note-more-button"
               accessibilityRole="button"
               accessibilityLabel="More options"
             >
@@ -1420,6 +1421,7 @@ export default function NoteDetailScreen() {
 
         {/* ── Title — always a TextInput (read-only for non-premium) ── */}
         <TextInput
+          testID="note-title-input"
           value={title}
           onChangeText={handleTitleChange}
           placeholder="Title"

@@ -1,52 +1,49 @@
-# Reading Flow E2E Test
-# Tests: devotional reading, highlighting, bookmarking, journaling
-# Prereq: User has completed onboarding and has an active devotional
+# Devotional reading — open the reader and its preferences sheet.
+#
+# VERIFIES:
+#   1. The home hero devotional CTA opens the devotional reader.
+#   2. The reader's "Aa" button opens the devotional reader preferences sheet.
+#   3. That sheet exposes the shared "All settings" row (same row the Bible
+#      reader sheet uses), and the backdrop closes the sheet.
+#   4. The Today tab returns to the home screen.
+#
+# PRECONDITION: the account has an active devotional series, so the home hero
+# renders its CTA (states `unread` / `complete-today` / `tomorrow-locked`).
+# Generating a series requires the live devotional backend, so this flow does
+# not create one — it reads whatever the device already has. On a device with
+# no series the home card shows the empty state instead and this flow fails at
+# the CTA tap, which is the correct signal that the precondition is unmet.
 
 appId: com.unfoldapp.ios
 ---
-# Launch and navigate to reading
 - launchApp
-- assertVisible: "Today"
 
-# Tap the devotional card to start reading
 - tapOn:
-    text: ".*Day.*"
-    index: 0
-
-# Verify reading screen loads
-- assertVisible: "Day"
+    id: "bottom-tab-today"
 - assertVisible:
-    text: ".*\\d+:\\d+.*"  # Scripture reference (e.g., "Mark 4:35-41")
+    id: "home-avatar-button"
 
-# Scroll through content
-- scroll:
-    direction: "DOWN"
-    speed: 40
-
-# Test highlighting — long press on scripture text
-- longPressOn:
-    text: ".*scripture.*"
-    index: 0
-
-# Verify highlight UI appears
-- assertVisible:
-    text: ".*Highlight.*"
-    optional: true
-
-# Scroll to reflection questions
-- scroll:
-    direction: "DOWN"
-    speed: 40
-
-# Verify reflection questions exist
-- assertVisible:
-    text: ".*\\?$"  # Questions end with ?
-    optional: true
-
-# Navigate back to home
 - tapOn:
-    id: "back-button"
-    optional: true
+    id: "home-devotional-cta"
 
-# Verify back on home screen
-- assertVisible: "Today"
+- extendedWaitUntil:
+    visible:
+      id: "devotional-reader-screen"
+    timeout: 30000
+
+- tapOn:
+    id: "devotional-reader-settings-button"
+- assertVisible:
+    id: "devotional-reader-preferences-sheet"
+- assertVisible:
+    id: "reader-all-settings-row"
+
+- tapOn:
+    id: "reader-bottom-sheet-backdrop"
+- assertNotVisible:
+    id: "devotional-reader-preferences-sheet"
+
+- tapOn:
+    id: "bottom-tab-today"
+- assertVisible:
+    id: "home-avatar-button"

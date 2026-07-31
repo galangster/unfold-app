@@ -351,6 +351,7 @@ export default function CompanionScreen() {
       style={{ flex: 1, backgroundColor: colors.background }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? -tabBarHeight : 0}
+      testID="companion-screen"
     >
       {/* Header — drawer / orb + name / new chat */}
       <View

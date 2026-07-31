@@ -216,7 +216,7 @@ describe('ReadingSettingsSheet', () => {
 
     act(() => {
       tree.root.findByProps({ accessibilityLabel: 'Garamond reading font, Premium locked' }).props.onPress();
-      tree.root.findByProps({ testID: 'reader-library-row' }).props.onPress();
+      tree.root.findByProps({ testID: 'reader-saved-verses-row' }).props.onPress();
     });
 
     expect(mockOnLockedFontPress).toHaveBeenCalledTimes(1);

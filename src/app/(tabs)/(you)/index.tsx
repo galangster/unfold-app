@@ -80,7 +80,7 @@ export default function YouScreen() {
   ];
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }} testID="you-screen">
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <ScrollView
           contentContainerStyle={{ paddingBottom: 100 }}
@@ -103,6 +103,7 @@ export default function YouScreen() {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 router.push('/(tabs)/(you)/settings');
               }}
+              testID="you-settings-button"
               accessibilityRole="button"
               accessibilityLabel="Settings"
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}

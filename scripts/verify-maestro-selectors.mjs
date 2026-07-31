@@ -35,18 +35,19 @@ function collectTestIds() {
   const prefixes = [];
   for (const file of walk(SRC)) {
     const text = readFileSync(file, 'utf8');
-    // testID="foo" / testID='foo'
-    for (const m of text.matchAll(/testID=["']([^"']+)["']/g)) exact.add(m[1]);
+    // testID="foo", and pass-through props like avatarTestID="foo" that are
+    // forwarded onto a child's testID (a normal RN pattern).
+    for (const m of text.matchAll(/[A-Za-z]*[Tt]estID=["']([^"']+)["']/g)) exact.add(m[1]);
     // testID={`foo-${...}`} → treat "foo-" as a valid prefix
-    for (const m of text.matchAll(/testID=\{`([^`]*)`\}/g)) {
+    for (const m of text.matchAll(/[A-Za-z]*[Tt]estID=\{`([^`]*)`\}/g)) {
       const literal = m[1];
       if (literal.includes('${')) prefixes.push(literal.slice(0, literal.indexOf('${')));
       else exact.add(literal);
     }
     // testID={'foo'} / testID={"foo"}
-    for (const m of text.matchAll(/testID=\{\s*["']([^"']+)["']\s*\}/g)) exact.add(m[1]);
+    for (const m of text.matchAll(/[A-Za-z]*[Tt]estID=\{\s*["']([^"']+)["']\s*\}/g)) exact.add(m[1]);
     // props.testID ?? 'foo'  — default testIDs on shared primitives
-    for (const m of text.matchAll(/testID\s*(?:\?\?|\|\|)\s*["']([^"']+)["']/g)) exact.add(m[1]);
+    for (const m of text.matchAll(/[Tt]estID\s*(?:\?\?|\|\|)\s*["']([^"']+)["']/g)) exact.add(m[1]);
   }
   return { exact, prefixes };
 }

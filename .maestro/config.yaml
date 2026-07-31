@@ -1,0 +1,17 @@
+# Maestro workspace config.
+#
+# `bun run test:e2e` (== `maestro test .maestro/`) runs every flow in this
+# directory except the ones tagged `reset`.
+#
+# The `reset` tag marks flows that call `launchApp: clearState: true`. Those
+# wipe the app container — including the downloaded Bible database and the
+# user's generated devotional — so they must not run interleaved with the
+# flows that depend on that state. Run them deliberately, on their own:
+#
+#   maestro test .maestro/onboarding.yml
+
+flows:
+  - "*.yml"
+
+excludeTags:
+  - reset

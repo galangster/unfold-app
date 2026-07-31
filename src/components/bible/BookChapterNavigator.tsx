@@ -314,6 +314,7 @@ export function BookChapterNavigator({
     >
       <MagnifyingGlassIcon size={16} color={colors.textSubtle} weight="light" />
       <TextInput
+        testID="bible-navigator-search"
         style={[styles.searchInput, { color: colors.text }]}
         placeholder="Search books or verses..."
         placeholderTextColor={colors.textHint}
@@ -346,6 +347,7 @@ export function BookChapterNavigator({
           <TouchableOpacity
             onPress={handleGoToRef}
             style={[styles.suggestionRow, { backgroundColor: isDark ? 'rgba(245, 240, 235, 0.05)' : 'rgba(28, 23, 16, 0.04)' }]}
+            testID="bible-navigator-goto"
             accessibilityLabel={`Go to ${BIBLE_BOOKS.find((b) => b.id === parsedRef.bookId)?.name} ${parsedRef.chapter}`}
           >
             <ArrowBendUpRightIcon size={18} color={colors.accent} weight="light" style={styles.suggestionIcon} />
@@ -528,6 +530,7 @@ export function BookChapterNavigator({
 
   return (
     <View
+      testID="bible-navigator"
       style={[
         styles.container,
         {

@@ -200,6 +200,7 @@ export function BibleNoteSheet({ highlight, onClose, onSave, onDelete }: BibleNo
             <Animated.View
               entering={reducedMotion ? undefined : SlideInDown.duration(Duration.normal).easing(Ease.out)}
               exiting={reducedMotion ? undefined : SlideOutDown.duration(Duration.fast).easing(Ease.out)}
+              testID="bible-note-sheet"
               style={[
                 styles.sheet,
                 { backgroundColor: colors.backgroundElevated },
@@ -220,6 +221,7 @@ export function BibleNoteSheet({ highlight, onClose, onSave, onDelete }: BibleNo
 
               {isEditing ? (
                 <TextInput
+                  testID="bible-note-input"
                   value={draft}
                   onChangeText={setDraft}
                   placeholder="Write a note..."
@@ -261,6 +263,7 @@ export function BibleNoteSheet({ highlight, onClose, onSave, onDelete }: BibleNo
                     onPress={handleSave}
                     style={[styles.saveButton, { backgroundColor: colors.accent }]}
                     activeOpacity={0.7}
+                    testID="bible-note-save"
                   >
                     <Text style={[styles.saveText, { color: '#FFFFFF' }]}>Save</Text>
                   </TouchableOpacity>
@@ -269,6 +272,7 @@ export function BibleNoteSheet({ highlight, onClose, onSave, onDelete }: BibleNo
                     onPress={() => setIsEditing(true)}
                     style={[styles.actionButton, { borderColor: colors.border }]}
                     activeOpacity={0.7}
+                    testID="bible-note-edit"
                     accessibilityLabel="Edit note"
                   >
                     <PencilSimpleIcon size={18} color={colors.text} weight="regular" />

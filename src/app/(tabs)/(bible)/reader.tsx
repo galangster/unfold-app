@@ -278,6 +278,7 @@ const VerseItem = React.memo(function VerseItem({
       <Animated.View
         style={[styles.verseRow, pressStyle]}
         accessible
+        testID={`bible-verse-${verse.verse}`}
         accessibilityLabel={`Verse ${verse.verse}: ${verse.text}`}
       >
         {/* Flash highlight overlay (full row, fades in then out) — always mounted so animation plays */}
@@ -1015,7 +1016,7 @@ export default function BibleReaderScreen() {
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: colors.background }]} testID="bible-reader-screen">
       {/* Header — hidden when navigator is open to prevent double-header jitter */}
       <View style={[styles.header, {
         paddingTop: insets.top + 4,
@@ -1026,6 +1027,7 @@ export default function BibleReaderScreen() {
         <TouchableOpacity
           onPress={() => setShowSettings(true)}
           style={styles.headerButton}
+          testID="reader-settings-button"
           accessibilityLabel="Reader settings"
           accessibilityRole="button"
           hitSlop={8}
@@ -1037,6 +1039,7 @@ export default function BibleReaderScreen() {
           onPress={() => setShowNavigator(true)}
           style={styles.headerCenter}
           activeOpacity={0.6}
+          testID="reader-chapter-title"
           accessibilityLabel={`${book?.name ?? ''} chapter ${chapter}. Tap to navigate.`}
         >
           <Text style={[styles.headerBook, { color: colors.text, fontFamily: FontFamily.uiMedium }]} numberOfLines={1}>
@@ -1051,6 +1054,7 @@ export default function BibleReaderScreen() {
           <TouchableOpacity
             onPress={handleOpenChapterNotes}
             style={styles.headerButton}
+            testID="reader-chapter-notes-badge"
             accessibilityRole="button"
             accessibilityLabel={`${chapterNotebookNotes.length} notebook ${chapterNotebookNotes.length === 1 ? 'note' : 'notes'} reference this chapter`}
             hitSlop={8}
@@ -1199,7 +1203,7 @@ export default function BibleReaderScreen() {
             /* Color picker mode */
             <View style={styles.contextRow}>
               {existingHighlightColor && (
-                <TouchableOpacity onPress={handleRemoveHighlight} style={styles.contextColorButton} accessibilityLabel="Remove highlight">
+                <TouchableOpacity onPress={handleRemoveHighlight} style={styles.contextColorButton} testID="bible-highlight-remove" accessibilityLabel="Remove highlight">
                   <View style={[styles.contextRemoveCircle, {
                     backgroundColor: HIGHLIGHT_COLORS.find((c) => c.key === existingHighlightColor)?.color ?? '#888',
                   }]}>
@@ -1222,6 +1226,7 @@ export default function BibleReaderScreen() {
                     }}
                     style={styles.contextColorButton}
                     activeOpacity={0.7}
+                    testID={`bible-highlight-color-${c.key}`}
                     accessibilityLabel={isLocked ? `${c.key} highlight color, premium only` : `${c.key} highlight color`}
                   >
                     <View style={[styles.contextColorDot, { backgroundColor: c.color, opacity: isLocked ? 0.4 : 1 }]}>
@@ -1238,6 +1243,7 @@ export default function BibleReaderScreen() {
             <View style={styles.noteInputRow}>
               <TextInput
                 ref={noteInputRef}
+                testID="bible-verse-note-input"
                 style={[styles.noteInput, {
                   color: colors.text,
                   backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
@@ -1260,6 +1266,7 @@ export default function BibleReaderScreen() {
                   onPress={() => { setShowNoteInput(false); setNoteText(''); }}
                   style={styles.noteCancelButton}
                   activeOpacity={0.7}
+                  testID="bible-verse-note-cancel"
                 >
                   <Text style={[styles.noteButtonText, { color: colors.textMuted }]}>Cancel</Text>
                 </TouchableOpacity>
@@ -1267,6 +1274,7 @@ export default function BibleReaderScreen() {
                   onPress={handleSaveNote}
                   style={[styles.noteSaveButton, { backgroundColor: colors.accent }]}
                   activeOpacity={0.7}
+                  testID="bible-verse-note-save"
                 >
                   <Text style={[styles.noteButtonText, { color: '#FFF' }]}>Save</Text>
                 </TouchableOpacity>
@@ -1279,11 +1287,11 @@ export default function BibleReaderScreen() {
                 <BookOpenIcon size={22} color={colors.text} weight="light" />
                 <Text style={[styles.contextIconLabel, { color: colors.textMuted }]}>Explain</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => setShowColorPicker(true)} style={styles.contextIconButton} activeOpacity={0.6}>
+              <TouchableOpacity onPress={() => setShowColorPicker(true)} style={styles.contextIconButton} activeOpacity={0.6} testID="bible-verse-action-highlight">
                 <HighlighterCircleIcon size={22} color={colors.text} weight="light" />
                 <Text style={[styles.contextIconLabel, { color: colors.textMuted }]}>Highlight</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={handleNote} style={styles.contextIconButton} activeOpacity={0.6}>
+              <TouchableOpacity onPress={handleNote} style={styles.contextIconButton} activeOpacity={0.6} testID="bible-verse-action-note">
                 <NotePencilIcon size={22} color={colors.text} weight="light" />
                 <Text style={[styles.contextIconLabel, { color: colors.textMuted }]}>Note</Text>
               </TouchableOpacity>

@@ -33,6 +33,12 @@ jobs:
       - name: Unit tests
         run: bun run test
 
+      # Running the Maestro flows needs a simulator, but a dead `id:` selector
+      # makes a step a silent no-op — which is how the suite rotted last time.
+      # This catches that on Linux, with no simulator.
+      - name: Maestro selector check
+        run: node scripts/verify-maestro-selectors.mjs
+
       - name: Run CVL report
         env:
           BASE_REF: origin/${{ github.base_ref }}

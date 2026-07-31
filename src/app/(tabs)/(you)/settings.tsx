@@ -73,11 +73,11 @@ export default function SettingsScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }} testID="settings-screen">
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         {/* Header — back chevron pattern from streak-settings.tsx */}
         <View style={styles.header}>
-          <TouchableOpacity activeOpacity={0.7} onPress={handleBack} style={styles.backButton} accessibilityLabel="Go back" accessibilityRole="button">
+          <TouchableOpacity activeOpacity={0.7} onPress={handleBack} style={styles.backButton} testID="settings-back-button" accessibilityLabel="Go back" accessibilityRole="button">
             <CaretLeftIcon size={24} color={colors.text} weight="light" />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.text }]}>
