@@ -13,6 +13,7 @@ import { Typography } from '@/constants/typography';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import {
+  getDayMenuPresentation,
   isDevotionalDaySelectable,
   resolveInitialReadingDayNumber,
 } from '@/lib/devotional-day-access';
@@ -99,7 +100,8 @@ export default function DayMenuScreen() {
           const isActive = dayNumber === activeViewingDay;
           const isDayRead = day?.isRead ?? false;
           const isLocked = !isDevotionalDaySelectable(devotional, dayNumber);
-          const dayTitle = isLocked ? 'Being prepared…' : day?.title ?? 'Being prepared…';
+          const presentation = getDayMenuPresentation(devotional, dayNumber);
+          const dayTitle = presentation.title;
 
           return (
             <Animated.View
@@ -176,6 +178,18 @@ export default function DayMenuScreen() {
                 >
                   {dayTitle}
                 </Text>
+                {presentation.kind === 'locked-titled' && presentation.unlockLabel ? (
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.body,
+                      fontSize: FontSize.xs,
+                      color: colors.textSubtle,
+                      marginTop: 2,
+                    }}
+                  >
+                    {presentation.unlockLabel}
+                  </Text>
+                ) : null}
               </View>
 
               {isActive && !isLocked && (

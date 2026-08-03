@@ -354,6 +354,7 @@ export default function NoteDetailScreen() {
   // Always-editable model: no read/edit mode state. Non-premium users cannot
   // create or edit notes (defense-in-depth behind the navigation gate).
   // `startEditing=true` means "focus on open" (new-note flow, dock restore).
+  const titleInputRef = useRef<TextInput>(null);
   const isNewNote = !params.noteId;
   const shouldAutoFocus = isPremium && (isNewNote || params.startEditing === 'true');
 
@@ -468,16 +469,32 @@ export default function NoteDetailScreen() {
       if (
         isPremium &&
         params.startEditing === 'true' &&
+        !isNewNote &&
         appliedStartEditingKeyRef.current !== startEditingKey
       ) {
         appliedStartEditingKeyRef.current = startEditingKey;
-        // "startEditing" now means "focus on open": request editor focus so
-        // the keyboard comes up (chrome follows keyboard visibility).
+        // "startEditing" means "focus on open": request editor focus so the
+        // keyboard comes up (chrome follows keyboard visibility).
+        //
+        // Existing notes only. The new-note FAB also passes startEditing,
+        // and grabbing the body here raced the title's autoFocus — the body
+        // stole focus ~100ms in, the native becomeFirstResponder did not
+        // take, and the note opened with nothing focused and no keyboard.
+        // A new note focuses its title (see note-title-input autoFocus).
         setTimeout(() => {
           IS_NATIVE_EDITOR ? editorRef.current?.focus() : editor.focus('end');
         }, 100);
+      } else if (isPremium && isNewNote && appliedStartEditingKeyRef.current !== startEditingKey) {
+        appliedStartEditingKeyRef.current = startEditingKey;
+        // A new note focuses its title. The TextInput's own autoFocus does not
+        // survive the navigation push — the screen mounts mid-transition and
+        // the focus is dropped — so claim it once the screen is actually
+        // focused. Without this the note opens with nothing focused at all.
+        setTimeout(() => {
+          titleInputRef.current?.focus();
+        }, 100);
       }
-    }, [isPremium, params.noteId, params.startEditing, editor]),
+    }, [isPremium, params.noteId, params.startEditing, isNewNote, editor]),
   );
 
   // Overlay covers the WebView until CSS is painted (not needed on native)
@@ -1421,6 +1438,7 @@ export default function NoteDetailScreen() {
 
         {/* ── Title — always a TextInput (read-only for non-premium) ── */}
         <TextInput
+          ref={titleInputRef}
           testID="note-title-input"
           value={title}
           onChangeText={handleTitleChange}

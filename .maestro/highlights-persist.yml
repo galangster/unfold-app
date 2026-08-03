@@ -67,6 +67,6 @@ appId: com.unfoldapp.ios
     direction: DOWN
 - tapOn:
     id: "reader-saved-verses-row"
-# See bible-reader-flow: the card exposes only
-# "Bible <kind>: <text>" — the verse reference is not in the hierarchy.
-- assertVisible: "Bible highlight: Now the earth was formless.*"
+# See bible-reader-flow: the card's flattened a11y label now carries the
+# verse reference.
+- assertVisible: "Bible highlight, Genesis 1:2 \\(BSB\\).*"

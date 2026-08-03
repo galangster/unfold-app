@@ -42,14 +42,20 @@ describe('review prompt call-site contract', () => {
     expect(onboardingCelebrationSource).not.toContain("expo-store-review");
   });
 
-  it('routes first-day and onboarding prompts through the shared helper', () => {
+  it('routes the Today prompt through the shared helper', () => {
     expect(todaySource).toContain(
       "import { requestReviewOncePerVersion } from '@/lib/review-prompt';",
     );
     expect(todaySource).toContain('await requestReviewOncePerVersion()');
-    expect(onboardingCelebrationSource).toContain(
-      "import { requestReviewOncePerVersion } from '@/lib/review-prompt';",
-    );
-    expect(onboardingCelebrationSource).toContain('requestReviewOncePerVersion()');
+  });
+
+  it('never asks for a review during onboarding', () => {
+    // The celebration used to fire the native rating sheet as it was dismissed,
+    // landing it over the next onboarding step minutes into a first session.
+    // Apple's HIG advises against prompting during onboarding or mid-task, and
+    // it spends one of three yearly requests on the least-invested users.
+    // Today remains the only call site.
+    expect(onboardingCelebrationSource).not.toContain('requestReviewOncePerVersion');
+    expect(onboardingCelebrationSource).not.toContain('@/lib/review-prompt');
   });
 });

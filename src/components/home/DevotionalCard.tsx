@@ -35,6 +35,7 @@ import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { RecommendedSeriesCard } from './RecommendedSeriesCard';
+import { InlineReflectComposer } from './InlineReflectComposer';
 import type { DevotionalCardState } from './compute-devotional-state';
 import { smartQuotes } from '@/lib/smart-quotes';
 import { stripOuterQuotes } from '@/lib/cn';
@@ -630,6 +631,12 @@ function MainCard({ state }: MainCardProps) {
   const onPress = 'onContinue' in state ? () => state.onContinue(continueDayNumber) : undefined;
   const onCreateNew = 'onCreateNew' in state ? state.onCreateNew : undefined;
 
+  // Post-read, reflection not yet complete: the inline composer IS the primary
+  // action — writing beats re-reading (see Dino feedback 2026-08-02). "Read
+  // Again" demotes to a quiet link inside the composer block.
+  const completedState = state.type === 'complete-today' ? state : null;
+  const showInlineComposer = completedState !== null && completedState.reflectionStatus !== 'complete';
+
   const accessibilityLabel = hasCompletedToday
     ? `Read ${seriesTitle}, day ${dayData.dayNumber} of ${totalDays} again`
     : isTomorrowLocked
@@ -734,6 +741,18 @@ function MainCard({ state }: MainCardProps) {
               </View>
             )}
 
+            {showInlineComposer && completedState ? (
+              <View style={styles.heroComposerBlock}>
+                <InlineReflectComposer
+                  key={`reflect-${dayData.dayNumber}`}
+                  initialDraft={completedState.freeWriteDraft}
+                  reflectionStatus={completedState.reflectionStatus}
+                  onSaveDraft={(text) => completedState.onSaveFreeWrite(dayData.dayNumber, text)}
+                  onOpenFull={() => completedState.onReflect(dayData.dayNumber)}
+                  onReadAgain={onPress}
+                />
+              </View>
+            ) : (
             <TouchableOpacity
               activeOpacity={0.74}
               onPress={onPress}
@@ -772,6 +791,22 @@ function MainCard({ state }: MainCardProps) {
                 <Text style={[styles.heroActionArrow, { color: colors.accent }]}>→</Text>
               </View>
             </TouchableOpacity>
+            )}
+
+            {isTomorrowLocked && state.type === 'tomorrow-locked' && (
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => state.onReflect(continueDayNumber)}
+                accessibilityRole="button"
+                accessibilityLabel="Reflect on today's reading"
+                accessibilityHint="Opens the journal for the day you completed"
+                style={styles.heroReflectLink}
+              >
+                <Text style={[styles.heroReflectLinkText, { color: colors.accent }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
+                  Reflect on today →
+                </Text>
+              </TouchableOpacity>
+            )}
 
             {onCreateNew && (
               <TouchableOpacity
@@ -1016,6 +1051,20 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 20,
     letterSpacing: 0.35,
+  },
+  heroComposerBlock: {
+    alignSelf: 'stretch',
+    marginTop: Spacing['1'],
+  },
+  heroReflectLink: {
+    alignSelf: 'flex-start',
+    marginTop: Spacing['3'],
+    minHeight: 40,
+    justifyContent: 'center',
+  },
+  heroReflectLinkText: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: FontSize.sm,
   },
   heroNewSeriesButton: {
     alignSelf: 'flex-start',

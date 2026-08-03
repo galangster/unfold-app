@@ -74,9 +74,6 @@ appId: com.unfoldapp.ios
     direction: DOWN
 - tapOn:
     id: "reader-saved-verses-row"
-# The saved-library card exposes ONE flattened a11y label built in
-# my-content.tsx: `${source} ${kind}: ${note ?? text}` — the verse
-# reference is rendered on screen but never exposed, so asserting
-# "Genesis 1:1 (BSB)" can never match. Assert the label that exists;
-# the verse prose still proves the right verse persisted.
-- assertVisible: "Bible highlight: In the beginning God created.*"
+# The card exposes one flattened a11y label; it now includes the verse
+# reference (my-content.tsx), so assert the reference itself.
+- assertVisible: "Bible highlight, Genesis 1:1 \\(BSB\\).*"

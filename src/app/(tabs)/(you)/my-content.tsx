@@ -146,7 +146,11 @@ const SavedRow = memo(function SavedRow({
         marginBottom: 12,
       }}
       accessibilityRole="button"
-      accessibilityLabel={`${item.source === 'bible' ? 'Bible' : 'Devotional'} ${item.kind}: ${item.note ?? item.text}`}
+      // contextLabel carries the location — "Genesis 1:1 (BSB)" for a verse,
+      // the devotional title otherwise. It is drawn on the card but was left
+      // out of the label, so a screen reader announced the text with no way to
+      // tell which verse or devotional it came from.
+      accessibilityLabel={`${item.source === 'bible' ? 'Bible' : 'Devotional'} ${item.kind}, ${item.contextLabel}: ${item.note ?? item.text}`}
     >
       {item.kind === 'note' ? (
         <>

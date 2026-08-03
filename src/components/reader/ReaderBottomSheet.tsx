@@ -126,6 +126,15 @@ export function ReaderBottomSheet({
       onRequestClose={closeSheet}
     >
       <GestureHandlerRootView style={styles.root}>
+        {/* Tap-to-dismiss backdrop.
+            NOTE FOR UI AUTOMATION: this testID cannot be targeted on iOS. The
+            surface below sets accessibilityViewIsModal, which by design hides
+            every sibling — including this backdrop — from the accessibility
+            tree, so neither FlowDeck's --by-id nor Maestro's `id:` can resolve
+            it. That is correct modal behaviour, not a defect: VoiceOver users
+            dismiss via onAccessibilityEscape (two-finger scrub). Flows should
+            dismiss by swiping reader-bottom-sheet-grabber down — swiping the
+            surface itself just scrolls the sheet's ScrollView. */}
         <TouchableOpacity
           testID="reader-bottom-sheet-backdrop"
           style={styles.backdrop}
