@@ -17,6 +17,10 @@ import {
   CrownIcon,
   SparkleIcon,
   GearSixIcon,
+  BellIcon,
+  SunHorizonIcon,
+  MoonIcon,
+  PaletteIcon,
 } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
@@ -30,6 +34,8 @@ import { ProfileAvatar } from '@/components/ProfileAvatar';
 import { alpha } from '@/components/ui';
 import { Spacing } from '@/constants/spacing';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
+import { formatReminderTime } from '@/lib/format-reminder-time';
+import { SettingsSectionHeader } from '@/components/settings/SettingsSectionHeader';
 
 // --- Menu items ---
 
@@ -39,6 +45,24 @@ interface MenuItem {
   subtitle?: string;
   route: string;
 }
+
+// --- Habit settings (promoted from the settings screen behind the gear) ---
+// Only the habit-adjacent entries live here — check-in schedule, daily
+// reminders, appearance. Account/legal/data-export/delete stay behind the
+// gear icon (settings.tsx) so this card doesn't turn into a second full
+// settings list.
+interface HabitItem {
+  icon: typeof BookOpenIcon;
+  label: string;
+  subtitle?: string;
+  onPress: () => void;
+}
+
+const THEME_MODE_LABELS: Record<'dark' | 'light' | 'system', string> = {
+  dark: 'Dark',
+  light: 'Light',
+  system: 'System',
+};
 
 export default function YouScreen() {
   const router = useRouter();
@@ -66,6 +90,60 @@ export default function YouScreen() {
   // UI so we never flash a churn upsell at cold start before RevenueCat has
   // reported.
   const isPremium = usePremiumAccessPolicy() === 'granted';
+
+  // --- Habit card state — same store fields RemindersSection /
+  // AppearanceSection read in settings.tsx, no duplicated logic.
+  const middayCheckInEnabled = useUnfoldStore((s) => s.middayCheckInEnabled);
+  const middayCheckInTime = useUnfoldStore((s) => s.middayCheckInTime);
+  const eveningWindDownEnabled = useUnfoldStore((s) => s.eveningWindDownEnabled);
+  const eveningWindDownTime = useUnfoldStore((s) => s.eveningWindDownTime);
+
+  const openCheckInSchedule = useCallback((type: 'midday' | 'evening') => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    // Same gate as RemindersSection's row handlers — non-premium taps route
+    // to the paywall instead of the schedule picker.
+    if (!isPremium) {
+      router.push('/paywall');
+      return;
+    }
+    router.push({ pathname: '/(tabs)/(you)/checkin-schedule', params: { type } });
+  }, [isPremium, router]);
+
+  const openSettings = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push('/(tabs)/(you)/settings');
+  }, [router]);
+
+  const habitItems: HabitItem[] = [
+    {
+      icon: SunHorizonIcon,
+      label: 'Midday Check-In',
+      subtitle: isPremium
+        ? `${formatReminderTime(middayCheckInTime)}${middayCheckInEnabled ? '' : ' · Off'}`
+        : 'Premium',
+      onPress: () => openCheckInSchedule('midday'),
+    },
+    {
+      icon: MoonIcon,
+      label: 'Evening Wind-Down',
+      subtitle: isPremium
+        ? `${formatReminderTime(eveningWindDownTime)}${eveningWindDownEnabled ? '' : ' · Off'}`
+        : 'Premium',
+      onPress: () => openCheckInSchedule('evening'),
+    },
+    {
+      icon: BellIcon,
+      label: 'Daily Reminders',
+      subtitle: user?.dailyReminderEnabled ? formatReminderTime(user.reminderTime ?? '8:00 AM') : 'Off',
+      onPress: openSettings,
+    },
+    {
+      icon: PaletteIcon,
+      label: 'Appearance',
+      subtitle: THEME_MODE_LABELS[user?.themeMode ?? 'dark'],
+      onPress: openSettings,
+    },
+  ];
 
   const menuItems: MenuItem[] = [
     {
@@ -380,6 +458,84 @@ export default function YouScreen() {
                       paddingVertical: 14,
                       paddingHorizontal: Spacing['4'],
                       borderBottomWidth: index < menuItems.length - 1 ? 1 : 0,
+                      borderBottomColor: colors.border,
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: 10,
+                        backgroundColor: alpha(colors.accent, 0.06),
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginRight: 14,
+                      }}
+                    >
+                      <item.icon size={18} color={colors.accent} weight="light" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={{
+                          fontFamily: FontFamily.uiMedium,
+                          fontSize: 15,
+                          color: colors.text,
+                        }}
+                      >
+                        {item.label}
+                      </Text>
+                      {item.subtitle && (
+                        <Text
+                          style={{
+                            fontFamily: FontFamily.ui,
+                            fontSize: 13,
+                            color: colors.textSubtle,
+                            marginTop: 2,
+                          }}
+                        >
+                          {item.subtitle}
+                        </Text>
+                      )}
+                    </View>
+                    <CaretRightIcon size={16} color={colors.textSubtle} weight="light" />
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {/* Habits — promoted subset of settings.tsx: check-in schedule,
+              daily reminders, appearance. Rows reuse the same store fields
+              and paywall gate as RemindersSection/AppearanceSection; the
+              rest of settings (account, legal, data export/delete) stays
+              behind the gear. Visible for free users too, below the
+              upgrade card. */}
+          <View
+            style={{ paddingHorizontal: Spacing['6'], marginBottom: Spacing['6'] }}
+          >
+            <SettingsSectionHeader label="Habits" />
+            <View
+              style={{
+                backgroundColor: colors.backgroundElevated,
+                borderRadius: Radius.lg,
+                borderWidth: 1,
+                borderColor: colors.border,
+                ...Shadow.sm,
+                overflow: 'hidden',
+              }}
+            >
+              {habitItems.map((item, index) => (
+                <TouchableOpacity activeOpacity={0.7}
+                  key={item.label}
+                  onPress={item.onPress}
+                >
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingVertical: 14,
+                      paddingHorizontal: Spacing['4'],
+                      borderBottomWidth: index < habitItems.length - 1 ? 1 : 0,
                       borderBottomColor: colors.border,
                     }}
                   >

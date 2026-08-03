@@ -90,8 +90,16 @@ export default function SettingsScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={{ paddingHorizontal: Spacing['6'] }}>
+            {/* Theme (light/dark/system) from AppearanceSection is also
+                surfaced as an "Appearance" row on the You profile's Habits
+                card — both read/write the same user.themeMode field. Accent
+                colors, reading font, and font size stay settings-only. */}
             <AppearanceSection onPremiumFeature={setPremiumFeature} />
 
+            {/* Midday check-in, evening wind-down, and daily reminders from
+                RemindersSection are also surfaced on the You profile's
+                Habits card (src/app/(tabs)/(you)/index.tsx) — same store
+                fields and paywall gate, no duplicated logic. */}
             <RemindersSection />
 
             <WritingStyleSection />
