@@ -894,8 +894,21 @@ export default function BibleReaderScreen() {
     };
   });
 
+  // The scroll view's native gesture, made explicit so the chapter-swipe pan
+  // can declare a relation against it. Without this the native scroll wins
+  // the arbitration for any swipe with a real vertical component — a casual
+  // arced thumb flick scrolled a few px instead of turning the chapter, which
+  // read as "swipe does nothing" (tester report, 2026-08-02). A ref to a plain
+  // RN/Reanimated ScrollView silently no-ops in gesture relations; Gesture.Native
+  // wrapping the scroll view is the composition RNGH actually honors.
+  const nativeScrollGesture = useMemo(() => Gesture.Native(), []);
+
   const swipeGesture = useMemo(() =>
     Gesture.Pan()
+      // Make the vertical scroll wait until this pan has failed. Cost: vertical
+      // scrolls begin after ~SWIPE_FAIL_Y px instead of immediately; gain: an
+      // arced flick turns the chapter instead of being stolen by the scroll.
+      .blocksExternalGesture(nativeScrollGesture)
       .activeOffsetX([-SWIPE_ACTIVATE_X, SWIPE_ACTIVATE_X])
       .failOffsetY([-SWIPE_FAIL_Y, SWIPE_FAIL_Y])
       .onUpdate((e) => {
@@ -940,7 +953,7 @@ export default function BibleReaderScreen() {
           dragX.value = withSpring(0, SWIPE_SPRING_BACK);
         }
       }),
-    [prevChapter, nextChapter, navigateChapter, dragX],
+    [prevChapter, nextChapter, navigateChapter, dragX, nativeScrollGesture],
   );
 
   // ─── Tab bar hide/show on scroll ──────────────────────────────────────────
@@ -1074,6 +1087,7 @@ export default function BibleReaderScreen() {
       {/* Scroll content — wrapped in gesture detector for swipe chapter navigation */}
       <GestureDetector gesture={swipeGesture}>
       <Animated.View style={[styles.flex, contentTranslateStyle]}>
+      <GestureDetector gesture={nativeScrollGesture}>
       <Animated.ScrollView
         ref={scrollRef}
         onScroll={handleScroll}
@@ -1173,6 +1187,7 @@ export default function BibleReaderScreen() {
           </Animated.View>
         )}
       </Animated.ScrollView>
+      </GestureDetector>
       </Animated.View>
       </GestureDetector>
 
