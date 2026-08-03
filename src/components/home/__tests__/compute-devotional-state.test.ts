@@ -202,6 +202,41 @@ describe('computeDevotionalState', () => {
     }
   });
 
+  it('carries onReflect through on tomorrow-locked', () => {
+    const onReflect = jest.fn();
+    const state = computeDevotionalState({
+      ...baseInput,
+      hasReadToday: true,
+      dayLabel: 'Tomorrow',
+      daysCompleted: 1,
+      progress: 14.3,
+      currentDayData: makeDayData({ dayNumber: 2, isRead: false }),
+      onReflect,
+    });
+    expect(state.type).toBe('tomorrow-locked');
+    if (state.type === 'tomorrow-locked') {
+      expect(state.onReflect).toBe(onReflect);
+    }
+  });
+
+  it('defaults onReflect to onContinue on tomorrow-locked when omitted', () => {
+    const onContinue = jest.fn();
+    const state = computeDevotionalState({
+      ...baseInput,
+      hasReadToday: true,
+      dayLabel: 'Tomorrow',
+      daysCompleted: 1,
+      progress: 14.3,
+      currentDayData: makeDayData({ dayNumber: 2, isRead: false }),
+      onContinue,
+      onReflect: undefined,
+    });
+    expect(state.type).toBe('tomorrow-locked');
+    if (state.type === 'tomorrow-locked') {
+      expect(state.onReflect).toBe(onContinue);
+    }
+  });
+
   it('returns complete-today when current day is marked as read', () => {
     const state = computeDevotionalState({
       ...baseInput,
@@ -216,6 +251,42 @@ describe('computeDevotionalState', () => {
       expect(typeof state.onReflect).toBe('function');
       expect(typeof state.onCreateNew).toBe('function');
       expect(state.reflectionStatus).toBe('empty');
+    }
+  });
+
+  it('carries freeWriteDraft and onSaveFreeWrite through on complete-today', () => {
+    const onSaveFreeWrite = jest.fn();
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDayData: makeDayData({ isRead: true, readAt: '2026-03-25T10:00:00Z' }),
+      daysCompleted: 1,
+      progress: 14.3,
+      reflectionStatus: 'started',
+      freeWriteDraft: 'A work in progress reflection.',
+      onSaveFreeWrite,
+    });
+    expect(state.type).toBe('complete-today');
+    if (state.type === 'complete-today') {
+      expect(state.freeWriteDraft).toBe('A work in progress reflection.');
+      expect(state.onSaveFreeWrite).toBe(onSaveFreeWrite);
+      expect(state.reflectionStatus).toBe('started');
+    }
+  });
+
+  it('defaults freeWriteDraft to empty string and onSaveFreeWrite to a noop when omitted', () => {
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDayData: makeDayData({ isRead: true, readAt: '2026-03-25T10:00:00Z' }),
+      daysCompleted: 1,
+      progress: 14.3,
+      freeWriteDraft: undefined,
+      onSaveFreeWrite: undefined,
+    });
+    expect(state.type).toBe('complete-today');
+    if (state.type === 'complete-today') {
+      expect(state.freeWriteDraft).toBe('');
+      expect(typeof state.onSaveFreeWrite).toBe('function');
+      expect(() => state.onSaveFreeWrite(1, 'text')).not.toThrow();
     }
   });
 

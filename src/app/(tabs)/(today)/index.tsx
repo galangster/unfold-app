@@ -742,6 +742,28 @@ export default function HomeScreen() {
     });
   }, [currentDevotional, currentDayData?.dayNumber, router]);
 
+  // Free-write draft + save for the inline composer on the completed card.
+  // Mirrors journal.tsx's saveEntry: update the existing entry (including to
+  // empty — the user deleted their text), only create one for real content.
+  const currentDayFreeWriteDraft = useMemo(() => {
+    if (!currentDevotional || !currentDayData) return '';
+    const entry = journalEntries.find(
+      (journalEntry) => journalEntry.devotionalId === currentDevotional.id && journalEntry.dayNumber === currentDayData.dayNumber,
+    );
+    return entry?.content ?? '';
+  }, [currentDevotional, currentDayData, journalEntries]);
+
+  const handleSaveFreeWrite = useCallback((dayNumber: number, text: string) => {
+    if (!currentDevotional) return;
+    const store = useUnfoldStore.getState();
+    const entry = store.getJournalEntry(currentDevotional.id, dayNumber);
+    if (entry) {
+      store.updateJournalEntry(entry.id, text);
+    } else if (text.trim()) {
+      store.addJournalEntry({ devotionalId: currentDevotional.id, dayNumber, content: text });
+    }
+  }, [currentDevotional]);
+
   const currentDayReflectionStatus = useMemo<ReflectionStatus>(() => {
     if (!currentDevotional || !currentDayData) return 'empty';
 
@@ -1165,6 +1187,8 @@ export default function HomeScreen() {
     onReveal: handleReveal,
     ctaText: getCtaText(),
     reflectionStatus: currentDayReflectionStatus,
+    freeWriteDraft: currentDayFreeWriteDraft,
+    onSaveFreeWrite: handleSaveFreeWrite,
   });
 
   // During reveal → reading transition, render a centered ripple loader to

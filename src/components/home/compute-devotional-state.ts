@@ -49,6 +49,10 @@ export type DevotionalCardState =
       onReflect: (dayNumber?: number) => void;
       onCreateNew: () => void;
       reflectionStatus: ReflectionStatus;
+      /** Existing free-write text for the completed day (prefills the inline composer). */
+      freeWriteDraft: string;
+      /** Persist inline free-write for the completed day. */
+      onSaveFreeWrite: (dayNumber: number, text: string) => void;
     }
   | {
       type: 'tomorrow-locked';
@@ -60,6 +64,7 @@ export type DevotionalCardState =
       totalDays: number;
       tomorrowTeaser: string | null;
       onContinue: (dayNumber?: number) => void;
+      onReflect: (dayNumber?: number) => void;
       onCreateNew: () => void;
     }
   | {
@@ -95,6 +100,8 @@ export interface ComputeInput {
   onReveal: () => void;
   ctaText: string;
   reflectionStatus?: ReflectionStatus;
+  freeWriteDraft?: string;
+  onSaveFreeWrite?: (dayNumber: number, text: string) => void;
 }
 
 // ─── State machine ──────────────────────────────────────────────
@@ -133,6 +140,8 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
     onReveal,
     ctaText,
     reflectionStatus = 'empty',
+    freeWriteDraft = '',
+    onSaveFreeWrite = () => {},
   } = input;
 
   // 1. No devotional at all
@@ -200,6 +209,7 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
       totalDays,
       tomorrowTeaser,
       onContinue,
+      onReflect,
       onCreateNew,
     };
   }
@@ -218,6 +228,8 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
       onReflect,
       onCreateNew,
       reflectionStatus,
+      freeWriteDraft,
+      onSaveFreeWrite,
     };
   }
 
