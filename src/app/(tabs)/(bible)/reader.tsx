@@ -971,10 +971,48 @@ export default function BibleReaderScreen() {
   // the previous JS implementation: top-of-list (y <= 10) always reveals,
   // >5px downward hides, >5px upward reveals, and while the context action bar
   // is up the scroll position is tracked but the tab bar is left alone.
+  // ─── PROTOTYPE: overscroll-past-end-to-continue (THROWAWAY — branch prototype/overscroll-continue) ───
+  // Question: does scrolling past the chapter end to advance feel right?
+  // (Dino: "more intuitive if it's scrolling up to next page")
+  // Variants, cycled by the floating dev pill:
+  //   off     — control: shipped behavior (horizontal swipe + Continue pill)
+  //   release — overscroll shows a "pull to continue" affordance; releasing
+  //             past 80px commits (inverted pull-to-refresh)
+  //   instant — dragging 48px past the end advances immediately (reels model)
+  const [protoVariant, setProtoVariant] = useState<'off' | 'release' | 'instant'>('off');
+  const protoVariantSV = useSharedValue<'off' | 'release' | 'instant'>('off');
+  useEffect(() => { protoVariantSV.value = protoVariant; }, [protoVariant, protoVariantSV]);
+  const overscrollSV = useSharedValue(0);
+  const protoFiredSV = useSharedValue(false);
+  const canGoNextSV = useSharedValue(false);
+  useEffect(() => { canGoNextSV.value = canGoNext; protoFiredSV.value = false; overscrollSV.value = 0; }, [canGoNext, bookId, chapter, canGoNextSV, protoFiredSV, overscrollSV]);
+  const protoCommitNext = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    navigateChapter(1);
+  }, [navigateChapter]);
+  const protoLog = useCallback((msg: string) => { console.log('[proto]', msg); }, []);
+  // ─── END PROTOTYPE state ───
+
   const handleScroll = useAnimatedScrollHandler({
     onScroll: (event) => {
       'worklet';
       const y = event.contentOffset.y;
+
+      // PROTOTYPE: track pixels dragged past the end of content
+      const maxY = Math.max(0, event.contentSize.height - event.layoutMeasurement.height);
+      overscrollSV.value = Math.max(0, y - maxY);
+      if (overscrollSV.value > 2) runOnJS(protoLog)(`over=${Math.round(overscrollSV.value)} y=${Math.round(y)} maxY=${Math.round(maxY)}`);
+      if (
+        protoVariantSV.value === 'instant' &&
+        canGoNextSV.value &&
+        !protoFiredSV.value &&
+        overscrollSV.value > 48
+      ) {
+        protoFiredSV.value = true;
+        runOnJS(protoCommitNext)();
+      }
+      // END PROTOTYPE
+
       if (showActionsSV.value) { lastScrollY.value = y; return; }
       const diff = y - lastScrollY.value;
       if (y <= 10) {
@@ -991,7 +1029,35 @@ export default function BibleReaderScreen() {
       }
       lastScrollY.value = y;
     },
+    // PROTOTYPE: release variant commits on drag end (momentum bounce never
+    // triggers this — the offset is read at the moment the finger lifts)
+    onEndDrag: (event) => {
+      'worklet';
+      const maxY = Math.max(0, event.contentSize.height - event.layoutMeasurement.height);
+      const over = Math.max(0, event.contentOffset.y - maxY);
+      runOnJS(protoLog)(`endDrag over=${Math.round(over)} variant=${protoVariantSV.value} canNext=${canGoNextSV.value}`);
+      if (
+        protoVariantSV.value === 'release' &&
+        canGoNextSV.value &&
+        !protoFiredSV.value &&
+        over > 80
+      ) {
+        protoFiredSV.value = true;
+        runOnJS(protoCommitNext)();
+      }
+    },
+    // END PROTOTYPE
   });
+
+  // PROTOTYPE: affordance that grows as you pull past the end
+  const protoAffordanceStyle = useAnimatedStyle(() => {
+    const progress = Math.min(1, overscrollSV.value / 80);
+    return {
+      opacity: protoVariantSV.value === 'off' ? 0 : progress,
+      transform: [{ translateY: 24 - progress * 24 }],
+    };
+  });
+  // END PROTOTYPE
 
   useEffect(() => {
     return () => setTabBarHidden(false);
@@ -1204,6 +1270,53 @@ export default function BibleReaderScreen() {
       >
         <CaretRightIcon size={20} color={colors.textMuted} weight="bold" />
       </Animated.View>
+
+      {/* ─── PROTOTYPE (throwaway): overscroll-continue affordance + variant switcher ── */}
+      {__DEV__ && (
+        <>
+          {canGoNext && protoVariant !== 'off' && (
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                {
+                  position: 'absolute',
+                  bottom: tabBarHeight + 18,
+                  left: 0,
+                  right: 0,
+                  alignItems: 'center',
+                },
+                protoAffordanceStyle,
+              ]}
+            >
+              <View style={{ alignItems: 'center', gap: 4 }}>
+                <CaretRightIcon size={16} color={colors.accent} weight="bold" style={{ transform: [{ rotate: '90deg' }] }} />
+                <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.accent }}>
+                  {protoVariant === 'release' ? 'Keep pulling to continue' : 'Continuing…'}
+                  {isCrossBook ? ` — ${nextBookName}` : ` — Chapter ${nextChapter?.chapter}`}
+                </Text>
+              </View>
+            </Animated.View>
+          )}
+          <TouchableOpacity
+            onPress={() => setProtoVariant((v) => (v === 'off' ? 'release' : v === 'release' ? 'instant' : 'off'))}
+            activeOpacity={0.8}
+            style={{
+              position: 'absolute',
+              bottom: tabBarHeight + 64,
+              alignSelf: 'center',
+              backgroundColor: '#c4372e',
+              paddingVertical: 8,
+              paddingHorizontal: 16,
+              borderRadius: 999,
+            }}
+          >
+            <Text style={{ fontFamily: FontFamily.uiSemiBold, fontSize: 12, color: '#fff' }}>
+              PROTO: {protoVariant === 'off' ? 'off (control)' : protoVariant === 'release' ? 'release-to-continue' : 'instant-continue'}
+            </Text>
+          </TouchableOpacity>
+        </>
+      )}
+      {/* ─── END PROTOTYPE ── */}
 
       {/* ─── Context Bar — replaces bottom tab bar when verses selected ──── */}
       {/* No opacity enter/exit: the bar must cover the bottom immediately so content never flashes through. */}
