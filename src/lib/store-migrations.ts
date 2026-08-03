@@ -552,5 +552,40 @@ if (version < 39) {
   }
 }
 
+// Migration from version 39 to 40: repair a missing seriesStartDate.
+//
+// Devotionals restored from server sync were built without the calendar
+// anchor. getCalendarDayNumber returns null without it and
+// isCurrentDayAfterCalendarDay then fails CLOSED, which pins the reader to
+// whatever day was read today — that is the "tap Day 2, get Day 1" report.
+//
+// The sync paths now carry the field, but only repair a devotional that a pull
+// actually delivers. An affected user whose series has not changed server-side
+// since their last sync would never receive that row, so upgrading alone would
+// not fix them. This closes it locally on first launch.
+//
+// createdAt is the right proxy: both client creation paths set createdAt and
+// seriesStartDate to the same instant, and the pulled shell derives both from
+// day 1's generatedAt.
+if (version < 40) {
+  try {
+    const devotionals = (state as any).devotionals;
+    if (Array.isArray(devotionals)) {
+      let repaired = 0;
+      for (const devotional of devotionals) {
+        if (devotional && !devotional.seriesStartDate && devotional.createdAt) {
+          devotional.seriesStartDate = devotional.createdAt;
+          repaired += 1;
+        }
+      }
+      if (repaired > 0) {
+        logger.log(`[store] Migration v39→40: repaired seriesStartDate on ${repaired} devotional(s)`);
+      }
+    }
+  } catch (err) {
+    console.error('[store] Migration v39→40 failed:', err);
+  }
+}
+
 return state;
 }

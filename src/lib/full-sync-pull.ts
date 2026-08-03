@@ -327,6 +327,13 @@ function mapMethodUsage(record: SyncPulledRecord): MethodUsageRecord | null {
 function mapDevotional(record: SyncPulledRecord, current?: Devotional): Devotional | null {
   const row = asRecord(record.data);
   const now = recordUpdatedAt(record);
+  // Calendar anchor for day gating. If this is ever undefined,
+  // getCalendarDayNumber() returns null and isCurrentDayAfterCalendarDay()
+  // fails CLOSED — pinning the reader to whatever day was read today and
+  // locking catch-up users out of days they are entitled to. Prefer the
+  // server's value, then whatever we already had, then the creation date.
+  const syncedSeriesStartDate = asString(row.seriesStartDate);
+
   if (current) {
     return {
       ...current,
@@ -334,9 +341,13 @@ function mapDevotional(record: SyncPulledRecord, current?: Devotional): Devotion
       totalDays: asNumber(row.totalDays) ?? current.totalDays,
       currentDay: asNumber(row.currentDay) ?? current.currentDay,
       seriesArc: row.seriesArc ? asRecord(row.seriesArc) as unknown as Devotional['seriesArc'] : current.seriesArc,
+      seriesStartDate:
+        syncedSeriesStartDate ?? current.seriesStartDate ?? current.createdAt,
       updatedAt: now,
     };
   }
+
+  const createdAt = asString(row.createdAt) ?? now;
 
   return {
     id: record.id,
@@ -344,7 +355,8 @@ function mapDevotional(record: SyncPulledRecord, current?: Devotional): Devotion
     totalDays: asNumber(row.totalDays) ?? 1,
     currentDay: asNumber(row.currentDay) ?? 1,
     days: [],
-    createdAt: asString(row.createdAt) ?? now,
+    createdAt,
+    seriesStartDate: syncedSeriesStartDate ?? createdAt,
     userContext: { name: '', aboutMe: '', currentSituation: '', emotionalState: '' },
     seriesArc: asRecord(row.seriesArc) as unknown as Devotional['seriesArc'],
     progressiveMemory: asRecord(row.progressiveMemory) as unknown as Devotional['progressiveMemory'],
