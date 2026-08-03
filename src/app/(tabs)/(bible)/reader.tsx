@@ -28,7 +28,7 @@ import { DownloadBibleSheet } from '@/components/bible/DownloadBibleSheet';
 import { BibleNoteSheet } from '@/components/bible/BibleNoteSheet';
 import type { BibleHighlightColor } from '@/lib/store';
 import { useUIState } from '@/lib/ui-state';
-import { Sheet } from '@/components/ui';
+import { Sheet, alpha } from '@/components/ui';
 import { stripHtml, isHtmlContent } from '@/lib/note-html';
 import { isRedLetterVerse } from '@/lib/red-letter-verses';
 import { getSectionHeadings } from '@/lib/bible-section-headings';
@@ -1147,21 +1147,27 @@ export default function BibleReaderScreen() {
             ) : canGoNext && (
               <TouchableOpacity
                 onPress={() => navigateChapter(1)}
-                style={styles.nextChapterPrompt}
+                style={[
+                  styles.nextChapterPrompt,
+                  {
+                    borderColor: alpha(colors.accent, 0.24),
+                    backgroundColor: alpha(colors.backgroundElevated, isDark ? 0.56 : 0.8),
+                  },
+                ]}
                 activeOpacity={0.6}
                 accessibilityLabel={isCrossBook ? `Continue to ${nextBookName}` : `Continue to chapter ${nextChapter?.chapter}`}
               >
                 {isCrossBook ? (
                   <View style={styles.crossBookPrompt}>
-                    <Text style={[styles.nextChapterText, { color: colors.textSubtle }]}>Continue to {nextBookName}</Text>
+                    <Text style={[styles.nextChapterText, { color: colors.text }]}>Continue to {nextBookName}</Text>
                     <Text style={[styles.crossBookSubtitle, { color: colors.textHint }]}>Chapter 1</Text>
                   </View>
                 ) : (
-                  <Text style={[styles.nextChapterText, { color: colors.textSubtle }]}>
+                  <Text style={[styles.nextChapterText, { color: colors.text }]}>
                     Continue to Chapter {nextChapter?.chapter}
                   </Text>
                 )}
-                <CaretRightIcon size={14} color={colors.textSubtle} weight="light" />
+                <CaretRightIcon size={14} color={colors.accent} weight="bold" />
               </TouchableOpacity>
             )}
           </Animated.View>
@@ -1498,8 +1504,19 @@ const styles = StyleSheet.create({
   // End of chapter
   endMarker: { alignItems: 'center', marginTop: 40, marginBottom: 20 },
   endOrnament: { fontFamily: FontFamily.ui, fontSize: FontSize.xl, letterSpacing: 6 },
-  nextChapterPrompt: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing['1'], paddingVertical: Spacing['4'] },
-  nextChapterText: { fontFamily: FontFamily.ui, fontSize: 14 },
+  nextChapterPrompt: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    gap: Spacing['2'],
+    minHeight: 44,
+    paddingVertical: 14,
+    paddingHorizontal: 22,
+    borderWidth: 1,
+    borderRadius: Radius.card,
+  },
+  nextChapterText: { fontFamily: FontFamily.uiMedium, fontSize: 14 },
   crossBookPrompt: { alignItems: 'center' },
   crossBookSubtitle: { fontFamily: FontFamily.ui, fontSize: FontSize.xs, marginTop: 2 },
   endOfBibleContainer: { alignItems: 'center', paddingVertical: Spacing['4'] },
