@@ -9,12 +9,13 @@
  * (TouchableOpacity can't be nested inside Text in RN).
  */
 import { memo, useMemo, useState, useRef, useCallback } from 'react';
-import { View, Text } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
+import { Radius } from '@/constants/radius';
 import { parseScriptureReferences, type ScriptureRef } from '@/lib/scripture-parser';
 import { smartQuotes } from '@/lib/smart-quotes';
 
@@ -346,11 +347,15 @@ export const RichMessageText = memo(function RichMessageText({ text, onVersePres
             <View
               key={i}
               style={{
-                borderLeftWidth: 2,
-                borderLeftColor: alpha(colors.accent, 0.40),
-                paddingLeft: Spacing['3'],
-                paddingVertical: 4,
+                paddingHorizontal: Spacing['3'],
+                paddingVertical: Spacing['2'],
                 marginVertical: 4,
+                borderRadius: Radius.sm,
+                backgroundColor: alpha(colors.accent, 0.05),
+                borderTopWidth: StyleSheet.hairlineWidth,
+                borderBottomWidth: StyleSheet.hairlineWidth,
+                borderTopColor: alpha(colors.accent, 0.24),
+                borderBottomColor: alpha(colors.accent, 0.14),
               }}
             >
               <InlineText

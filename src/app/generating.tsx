@@ -1340,14 +1340,16 @@ export default function GeneratingScreen() {
                   </Text>
                 ))}
 
-                {/* Reflection question */}
+                {/* Reflection question — hairline-framed wash, matching the
+                    reader's blockquote treatment (no left sliver) */}
                 <View
                   style={{
                     backgroundColor: 'rgba(200, 165, 92, 0.06)',
                     borderRadius: Radius.md,
-                    padding: Spacing['4'],
-                    borderLeftWidth: 3,
-                    borderLeftColor: colors.accent,
+                    paddingVertical: Spacing['4'],
+                    paddingHorizontal: Spacing['5'],
+                    borderWidth: StyleSheet.hairlineWidth,
+                    borderColor: 'rgba(200, 165, 92, 0.22)',
                   }}
                 >
                   <Text
