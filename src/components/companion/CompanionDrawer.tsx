@@ -27,6 +27,7 @@ import Animated, {
   interpolate,
   runOnJS,
   useSharedValue,
+  useReducedMotion,
   type SharedValue,
 } from 'react-native-reanimated';
 import { Gesture } from 'react-native-gesture-handler';
@@ -470,6 +471,7 @@ export const CompanionDrawer = memo(function CompanionDrawer({
 }: CompanionDrawerProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const reducedMotion = useReducedMotion();
 
   const activeId = useCompanionChatStore((s) => s.activeConversationId);
   // A streaming token flush replaces the active conversation object (content
@@ -535,14 +537,16 @@ export const CompanionDrawer = memo(function CompanionDrawer({
       const conv = allWithMessages.find(c => c.id === id);
       const isPinned = conv?.pinned ?? false;
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      LayoutAnimation.configureNext({
-        duration: 250,
-        update: { type: LayoutAnimation.Types.easeOut },
-        create: { type: LayoutAnimation.Types.easeOut, property: LayoutAnimation.Properties.opacity },
-      });
+      if (!reducedMotion) {
+        LayoutAnimation.configureNext({
+          duration: 250,
+          update: { type: LayoutAnimation.Types.easeOut },
+          create: { type: LayoutAnimation.Types.easeOut, property: LayoutAnimation.Properties.opacity },
+        });
+      }
       updateConversation(id, { pinned: !isPinned });
     },
-    [allWithMessages, updateConversation],
+    [allWithMessages, updateConversation, reducedMotion],
   );
 
   const handleActionPin = useCallback(() => {
@@ -574,14 +578,16 @@ export const CompanionDrawer = memo(function CompanionDrawer({
   const handleConfirmDelete = useCallback(() => {
     if (!activeActionConversation) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    LayoutAnimation.configureNext({
-      duration: 250,
-      update: { type: LayoutAnimation.Types.easeOut },
-      delete: { type: LayoutAnimation.Types.easeOut, property: LayoutAnimation.Properties.opacity },
-    });
+    if (!reducedMotion) {
+      LayoutAnimation.configureNext({
+        duration: 250,
+        update: { type: LayoutAnimation.Types.easeOut },
+        delete: { type: LayoutAnimation.Types.easeOut, property: LayoutAnimation.Properties.opacity },
+      });
+    }
     deleteConversation(activeActionConversation.id);
     closeActionPanel();
-  }, [activeActionConversation, deleteConversation, closeActionPanel]);
+  }, [activeActionConversation, deleteConversation, closeActionPanel, reducedMotion]);
 
   // Scrim animated style — opacity only. pointerEvents controlled by isOpen prop.
   // IMPORTANT: Do NOT set pointerEvents in animated style — it conflicts with
@@ -791,8 +797,8 @@ const styles = StyleSheet.create({
   },
   actionHeading: {
     fontFamily: FontFamily.display,
-    fontSize: FontSize.xl,
-    lineHeight: 25,
+    fontSize: 18,
+    lineHeight: 23,
   },
   actionConversationTitle: {
     fontFamily: FontFamily.body,

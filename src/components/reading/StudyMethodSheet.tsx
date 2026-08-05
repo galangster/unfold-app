@@ -509,8 +509,7 @@ const smStyles = StyleSheet.create({
   },
   methodTitle: {
     fontFamily: FontFamily.display,
-    fontSize: FontSize['2xl'],
-    letterSpacing: -0.5,
+    fontSize: 21,
     marginBottom: 10,
     paddingRight: Spacing['8'],
   },

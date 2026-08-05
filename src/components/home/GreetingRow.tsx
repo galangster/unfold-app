@@ -56,9 +56,9 @@ export function GreetingRow({ userName, onAvatarPress, avatarTestID }: Props) {
           <Text
             style={{
               fontFamily: FontFamily.display,
-              fontSize: 34,
+              fontSize: 30,
               color: colors.text,
-              letterSpacing: -0.5,
+              letterSpacing: -0.15,
             }}
           >
             {userName}

@@ -1265,7 +1265,8 @@ export default function HomeScreen() {
 
           {/* Zone 3: Hero Devotional — Today's primary act */}
           <View collapsable={false} onLayout={handleReadingLayout}>
-            <Animated.View entering={entering(FadeIn.duration(280).delay(160).easing(Ease.out))}>
+            {/* No entering here — DevotionalCard runs its own FadeIn; two nested fades compounded (audit #5) */}
+            <Animated.View>
               <DevotionalCard
                 state={devotionalState}
                 scrollY={scrollY}

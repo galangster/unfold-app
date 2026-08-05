@@ -1487,9 +1487,9 @@ const s = StyleSheet.create({
   },
   hookTitle: {
     fontFamily: FontFamily.displayItalic,
-    fontSize: 90,
+    fontSize: 80,
     color: PALETTE.cream,
-    letterSpacing: -3,
+    letterSpacing: -1.2,
     textAlign: 'center',
   },
   hookLine: {
@@ -1500,7 +1500,8 @@ const s = StyleSheet.create({
   },
   hookName: {
     fontFamily: FontFamily.display,
-    fontSize: 28,
+    fontSize: 25,
+    letterSpacing: -0.15,
     color: PALETTE.gold,
     textAlign: 'center',
     marginBottom: Spacing['2'],
@@ -1539,10 +1540,10 @@ const s = StyleSheet.create({
   },
   heroNumber: {
     fontFamily: FontFamily.display,
-    fontSize: 120,
+    fontSize: 107,
     color: PALETTE.cream,
-    letterSpacing: -5,
-    lineHeight: 150,
+    letterSpacing: -1.6,
+    lineHeight: 134,
     textAlign: 'center',
   },
   heroUnit: {
@@ -1569,8 +1570,8 @@ const s = StyleSheet.create({
   },
   statNumber: {
     fontFamily: FontFamily.display,
-    fontSize: 28,
-    letterSpacing: -1,
+    fontSize: 25,
+    letterSpacing: -0.15,
   },
   statLabel: {
     fontFamily: FontFamily.ui,
@@ -1621,9 +1622,9 @@ const s = StyleSheet.create({
   },
   archetypeName: {
     fontFamily: FontFamily.displayItalic,
-    fontSize: 64,
+    fontSize: 57,
     color: PALETTE.gold,
-    letterSpacing: -2,
+    letterSpacing: -0.55,
     textAlign: 'center',
     marginTop: Spacing['2'],
     marginBottom: Spacing['3'],
@@ -1677,8 +1678,8 @@ const s = StyleSheet.create({
   },
   featureName: {
     fontFamily: FontFamily.display,
-    fontSize: 44,
-    letterSpacing: -1.5,
+    fontSize: 39,
+    letterSpacing: -0.4,
   },
   featureCount: {
     fontFamily: FontFamily.ui,
@@ -1815,17 +1816,17 @@ const s = StyleSheet.create({
   },
   closingTitle: {
     fontFamily: FontFamily.display,
-    fontSize: FontSize['6xl'],
+    fontSize: 53,
     color: PALETTE.cream,
-    letterSpacing: -2,
+    letterSpacing: -0.55,
     marginTop: Spacing['5'],
     marginBottom: Spacing['1'],
     textAlign: 'center',
-    lineHeight: 64,
+    lineHeight: 57,
   },
   closingName: {
     fontFamily: FontFamily.displayItalic,
-    fontSize: FontSize['2xl'],
+    fontSize: 21,
     color: PALETTE.gold,
     marginBottom: Spacing['1'],
     textAlign: 'center',
@@ -1890,9 +1891,9 @@ const s = StyleSheet.create({
   },
   shareCardTitle: {
     fontFamily: FontFamily.displayItalic,
-    fontSize: 64,
+    fontSize: 57,
     color: PALETTE.cream,
-    letterSpacing: -2,
+    letterSpacing: -0.55,
     textAlign: 'center',
   },
   shareCardDivider: {
@@ -1904,7 +1905,7 @@ const s = StyleSheet.create({
   },
   shareCardName: {
     fontFamily: FontFamily.display,
-    fontSize: 22,
+    fontSize: 20,
     color: PALETTE.gold,
     textAlign: 'center',
     marginBottom: Spacing['6'],
@@ -1919,9 +1920,9 @@ const s = StyleSheet.create({
   },
   shareCardStatNum: {
     fontFamily: FontFamily.display,
-    fontSize: FontSize['4xl'],
+    fontSize: 32,
     color: PALETTE.cream,
-    letterSpacing: -1,
+    letterSpacing: -0.15,
   },
   shareCardStatLabel: {
     fontFamily: FontFamily.ui,

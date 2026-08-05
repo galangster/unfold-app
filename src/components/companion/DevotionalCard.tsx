@@ -45,6 +45,8 @@ export function DevotionalCard({ data }: Props) {
   return (
     <Pressable
       onPress={handlePress}
+      accessibilityRole="button"
+      accessibilityLabel={`Open Day ${data.dayNumber} devotional`}
       style={({ pressed }) => ({
         backgroundColor: alpha(colors.accent, pressed ? 0.12 : 0.06),
         borderRadius: Radius.md,

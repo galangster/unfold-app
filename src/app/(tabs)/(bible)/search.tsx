@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
 import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
 import { CaretLeftIcon, MagnifyingGlassIcon, XCircleIcon, BookOpenTextIcon } from 'phosphor-react-native';
-import { FontFamily, FontSize } from '@/constants/fonts';
+import { FontFamily } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
@@ -220,7 +220,7 @@ const styles = StyleSheet.create({
   },
   emptyHeadline: {
     fontFamily: FontFamily.display,
-    fontSize: FontSize['2xl'],
+    fontSize: 21,
     textAlign: 'center',
     marginBottom: Spacing['2'],
   },

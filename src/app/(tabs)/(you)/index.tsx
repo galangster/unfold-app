@@ -223,9 +223,9 @@ export default function YouScreen() {
                 cursorColor={colors.accent}
                 style={{
                   fontFamily: FontFamily.display,
-                  fontSize: 28,
+                  fontSize: 25,
                   color: colors.text,
-                  letterSpacing: -0.5,
+                  letterSpacing: -0.15,
                   marginTop: 14,
                   textAlign: 'center',
                   minWidth: 120,
@@ -250,9 +250,9 @@ export default function YouScreen() {
                 <Text
                   style={{
                     fontFamily: FontFamily.display,
-                    fontSize: 28,
+                    fontSize: 25,
                     color: colors.text,
-                    letterSpacing: -0.5,
+                    letterSpacing: -0.15,
                     marginTop: 14,
                   }}
                 >
@@ -303,7 +303,7 @@ export default function YouScreen() {
               >
                 <View
                   style={{
-                    borderRadius: 18,
+                    borderRadius: Radius.xl, // 18 -> 20; imperceptible at this card size
                     overflow: 'hidden',
                     shadowColor: colors.accent,
                     shadowOffset: { width: 0, height: 4 },
@@ -318,7 +318,7 @@ export default function YouScreen() {
                     end={{ x: 1, y: 1 }}
                     style={{
                       padding: 22,
-                      borderRadius: 18,
+                      borderRadius: Radius.xl, // 18 -> 20; imperceptible at this card size
                     }}
                   >
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -368,7 +368,7 @@ export default function YouScreen() {
               >
                 <View
                   style={{
-                    borderRadius: 18,
+                    borderRadius: Radius.xl, // 18 -> 20; imperceptible at this card size
                     overflow: 'hidden',
                     borderWidth: 1,
                     borderColor: 'rgba(200, 165, 92, 0.2)',
@@ -402,9 +402,8 @@ export default function YouScreen() {
                       <Text
                         style={{
                           fontFamily: FontFamily.display,
-                          fontSize: 26,
+                          fontSize: 23,
                           color: colors.text,
-                          letterSpacing: -0.5,
                           marginBottom: 4,
                         }}
                       >
@@ -465,7 +464,7 @@ export default function YouScreen() {
                       style={{
                         width: 36,
                         height: 36,
-                        borderRadius: 10,
+                        borderRadius: Radius.chip,
                         backgroundColor: alpha(colors.accent, 0.06),
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -543,7 +542,7 @@ export default function YouScreen() {
                       style={{
                         width: 36,
                         height: 36,
-                        borderRadius: 10,
+                        borderRadius: Radius.chip,
                         backgroundColor: alpha(colors.accent, 0.06),
                         alignItems: 'center',
                         justifyContent: 'center',

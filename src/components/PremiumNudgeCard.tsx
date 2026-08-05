@@ -279,9 +279,8 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: FontFamily.display,
-    fontSize: 22,
-    lineHeight: 27,
-    letterSpacing: -0.25,
+    fontSize: 20,
+    lineHeight: 25,
   },
   dismissButton: {
     position: 'absolute',

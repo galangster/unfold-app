@@ -980,7 +980,7 @@ function GlowingCTA({
   });
 
   return (
-    <TouchableOpacity activeOpacity={0.85} onPress={onPress} disabled={isLoading}>
+    <TouchableOpacity activeOpacity={0.7} onPress={onPress} disabled={isLoading}>
       <Animated.View
         style={[
           styles.ctaButton,
@@ -1612,8 +1612,9 @@ const styles = StyleSheet.create({
   // ------- Shared Headlines -------
   headline: {
     fontFamily: FontFamily.display,
-    fontSize: 28,
-    lineHeight: Math.round(28 * 1.25),
+    fontSize: 25,
+    lineHeight: Math.round(25 * 1.25),
+    letterSpacing: -0.15,
   },
 
   // ------- Device bezel (Screen 1) -------
@@ -1659,8 +1660,9 @@ const styles = StyleSheet.create({
   },
   screen3Headline: {
     fontFamily: FontFamily.display,
-    fontSize: 36,
-    lineHeight: Math.round(36 * 1.1),
+    fontSize: 32,
+    lineHeight: Math.round(32 * 1.1),
+    letterSpacing: -0.15,
     textAlign: 'center',
     marginTop: Spacing['2'],
   },

@@ -252,9 +252,10 @@ function TypewriterText({
     <Text
       style={{
         fontFamily: FontFamily.display,
-        fontSize: 32,
+        fontSize: 28,
         color: colors.text,
-        lineHeight: 42,
+        lineHeight: 37,
+        letterSpacing: -0.15,
       }}
     >
       {chars.slice(0, visibleCount).join('')}
@@ -727,9 +728,10 @@ export function DevotionalSegue({
           <Text
             style={{
               fontFamily: FontFamily.display,
-              fontSize: 32,
+              fontSize: 28,
               color: colors.text,
-              lineHeight: 42,
+              lineHeight: 37,
+              letterSpacing: -0.15,
             }}
           >
             {generationIssue.title}
@@ -771,9 +773,10 @@ export function DevotionalSegue({
           <Text
             style={{
               fontFamily: FontFamily.display,
-              fontSize: 34,
+              fontSize: 30,
               color: colors.text,
-              lineHeight: Math.round(34 * 1.25),
+              lineHeight: Math.round(30 * 1.25),
+              letterSpacing: -0.15,
             }}
           >
             Your first devotional is ready.

@@ -25,6 +25,7 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
 import { Typography } from '@/constants/typography';
+import { alpha } from '@/components/ui';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, Devotional } from '@/lib/store';
 import { format } from 'date-fns';
@@ -397,7 +398,7 @@ function DevotionalCard({ item, colors, exportingId, exportSuccessId, onSelect, 
             width: 44,
             height: 44,
             borderRadius: 22,
-            backgroundColor: `${colors.accent}15`,
+            backgroundColor: alpha(colors.accent, 0.08),
             justifyContent: 'center',
             alignItems: 'center',
             opacity: exportingId !== null && exportingId !== item.id ? 0.3 : 1,
@@ -421,9 +422,9 @@ function DevotionalCard({ item, colors, exportingId, exportSuccessId, onSelect, 
         <Text
           style={{
             fontFamily: FontFamily.display,
-            fontSize: 22,
+            fontSize: 20,
             color: colors.text,
-            lineHeight: 28,
+            lineHeight: 25,
             marginBottom: isComplete ? 0 : Spacing['3'],
           }}
         >

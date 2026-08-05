@@ -57,6 +57,7 @@ import {
 } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
+import { Radius } from '@/constants/radius';
 import { Shadow } from '@/constants/shadows';
 import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
@@ -668,8 +669,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   sheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: Radius['2xl'],
+    borderTopRightRadius: Radius['2xl'],
     maxHeight: '70%',
     ...Shadow.sheet,
   },

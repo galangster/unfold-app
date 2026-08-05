@@ -185,8 +185,8 @@ const styles = StyleSheet.create({
   },
   seriesTitle: {
     fontFamily: FontFamily.display,
-    fontSize: 17,
-    lineHeight: 22,
+    fontSize: 15,
+    lineHeight: 19,
     marginBottom: 4,
   },
   seriesDayLabel: {

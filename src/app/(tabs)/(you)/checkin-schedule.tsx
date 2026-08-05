@@ -39,7 +39,7 @@ type CheckInType = 'midday' | 'evening';
 export default function CheckInScheduleScreen() {
   const router = useRouter();
   const { type } = useLocalSearchParams<{ type: CheckInType }>();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
 
   // Tri-state premium gate. `unknown` during boot/RC-unresolved, `denied` for
   // churned/never-subscribed users, `granted` for active subscribers. We
@@ -167,7 +167,7 @@ export default function CheckInScheduleScreen() {
           </TouchableOpacity>
         </View>
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['8'] }}>
-          <Text style={{ fontFamily: FontFamily.display, fontSize: 24, color: colors.text, textAlign: 'center', marginBottom: Spacing['3'] }}>
+          <Text style={{ fontFamily: FontFamily.display, fontSize: 21, color: colors.text, textAlign: 'center', marginBottom: Spacing['3'] }}>
             Custom Schedules
           </Text>
           <Text style={{ fontFamily: FontFamily.body, fontSize: 15, color: colors.textMuted, textAlign: 'center', lineHeight: 22, marginBottom: Spacing['6'] }}>
@@ -313,7 +313,7 @@ export default function CheckInScheduleScreen() {
                     });
                   }
                 }}
-                themeVariant="dark"
+                themeVariant={isDark ? 'dark' : 'light'}
                 style={{ marginTop: Spacing['2'] }}
               />
             </Animated.View>
@@ -442,6 +442,7 @@ export default function CheckInScheduleScreen() {
                           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                           setActivePicker(activePicker === day ? null : day);
                         }}
+                        hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
                         style={{
                           flex: 1,
                           alignItems: 'center',
@@ -486,7 +487,7 @@ export default function CheckInScheduleScreen() {
                         onChange={(_, date) => {
                           if (date) handleDayTimeChange(day, date);
                         }}
-                        themeVariant="dark"
+                        themeVariant={isDark ? 'dark' : 'light'}
                       />
                     </Animated.View>
                   )}

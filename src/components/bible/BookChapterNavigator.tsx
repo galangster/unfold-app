@@ -534,7 +534,8 @@ export function BookChapterNavigator({
       style={[
         styles.container,
         {
-          backgroundColor: isDark ? '#0A0A0A' : '#FFFFFF',
+          // Dark matches colors.background exactly; light matches colors.backgroundPure.
+          backgroundColor: isDark ? colors.background : colors.backgroundPure,
           paddingTop: insets.top + 4,
           paddingBottom: insets.bottom,
         },
@@ -701,7 +702,9 @@ const styles = StyleSheet.create({
   bookChip: {
     minWidth: '18%',
     flexGrow: 1,
-    paddingVertical: 10,
+    // Raised from 10 -> 12 for a >=40pt effective tap target in this dense
+    // grid (hitSlop isn't viable here — adjacent chips sit edge to edge).
+    paddingVertical: 12,
     paddingHorizontal: 6,
     borderRadius: Radius.sm,
     alignItems: 'center',

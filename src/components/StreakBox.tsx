@@ -190,8 +190,9 @@ const styles = StyleSheet.create({
   },
   streakNumber: {
     fontFamily: FontFamily.display,
-    fontSize: 34,
-    lineHeight: 38,
+    fontSize: 30,
+    lineHeight: 34,
+    letterSpacing: -0.15,
   },
   streakUnit: {
     fontFamily: FontFamily.ui,
@@ -216,6 +217,6 @@ const styles = StyleSheet.create({
   },
   dayLabel: {
     fontFamily: FontFamily.ui,
-    fontSize: 10,
+    fontSize: FontSize.xs,
   },
 });

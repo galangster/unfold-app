@@ -158,8 +158,9 @@ const styles = StyleSheet.create({
   },
   recoveryTitle: {
     fontFamily: FontFamily.display,
-    fontSize: 30,
-    lineHeight: 38,
+    fontSize: 27,
+    lineHeight: 34,
+    letterSpacing: -0.15,
     textAlign: 'center',
   },
   recoveryText: {

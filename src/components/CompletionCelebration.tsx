@@ -156,7 +156,7 @@ export function CompletionCelebration({
       subtitleTranslateY.value = withDelay(800, withSpring(0, { damping: 20, stiffness: 100 }));
 
       // Dismiss hint appears last
-      hintOpacity.value = withDelay(2000, withTiming(1, { duration: 800 }));
+      hintOpacity.value = withDelay(1200, withTiming(1, { duration: 800 }));
     } else {
       overlayOpacity.value = withTiming(0, { duration: Duration.slow });
       titleOpacity.value = withTiming(0, { duration: Duration.normal });
@@ -214,11 +214,11 @@ export function CompletionCelebration({
               <Text
                 style={{
                   fontFamily: FontFamily.display,
-                  fontSize: type === 'series' ? 52 : 48,
+                  fontSize: type === 'series' ? 46 : 43,
                   color: colors.text,
                   textAlign: 'left',
-                  lineHeight: type === 'series' ? 56 : 52,
-                  letterSpacing: -1,
+                  lineHeight: type === 'series' ? 50 : 47,
+                  letterSpacing: -0.45,
                 }}
               >
                 {title}

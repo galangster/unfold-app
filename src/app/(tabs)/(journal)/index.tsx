@@ -60,6 +60,7 @@ import { CreateFolderSheet } from '@/components/notebook/CreateFolderSheet';
 import { MoveFolderSheet } from '@/components/notebook/MoveFolderSheet';
 import { UndoToast } from '@/components/UndoToast';
 import { stripHtml, isHtmlContent } from '@/lib/note-html';
+import { formatRelativeDate } from '@/lib/format-relative-date';
 import { alpha, Sheet } from '@/components/ui';
 import { useCreationGate } from '@/hooks/useCreationGate';
 import { prepareJournalFolderDelete } from '@/lib/journal-folder-delete';
@@ -242,10 +243,7 @@ const segStyles = StyleSheet.create({
     height: 30,
     borderRadius: Radius.lg,
     borderWidth: 1,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
-    elevation: 2,
+    ...Shadow.sm,
   },
   segment: {
     flex: 1,
@@ -352,7 +350,7 @@ const emptyStyles = StyleSheet.create({
   },
   headline: {
     fontFamily: FontFamily.display,
-    fontSize: FontSize['2xl'],
+    fontSize: 21,
     textAlign: 'center',
     marginTop: Spacing['4'],
     marginBottom: Spacing['2'],
@@ -370,10 +368,7 @@ const emptyStyles = StyleSheet.create({
     padding: 18,
     opacity: 0.4,
     borderWidth: 1,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 1,
+    ...Shadow.sm,
   },
   ghostLine: {
     height: 10,
@@ -386,10 +381,8 @@ const emptyStyles = StyleSheet.create({
     paddingHorizontal: Spacing['6'],
     alignSelf: 'center',
     marginTop: Spacing['6'],
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    elevation: 4,
+    // Tier's offsets/opacity; shadowColor: colors.accent overrides inline at the usage site.
+    ...Shadow.lg,
   },
   ctaText: {
     fontFamily: FontFamily.uiMedium,
@@ -539,7 +532,7 @@ function FloatingActionButton({ onPress, visible, tabBarHeight }: FABProps) {
   }));
 
   const handlePressIn = useCallback(() => {
-    scale.value = withTiming(0.9, { duration: 120 });
+    scale.value = withTiming(0.96, { duration: 120 });
   }, [scale]);
 
   const handlePressOut = useCallback(() => {
@@ -589,10 +582,8 @@ const fabStyles = StyleSheet.create({
     borderRadius: 26,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 8,
+    // Tier's offsets/opacity; shadowColor: colors.accent overrides inline at the usage site.
+    ...Shadow.lg,
     zIndex: 100,
   },
   touchable: {
@@ -1110,21 +1101,6 @@ export default function JournalHubScreen() {
     return Array.from(seriesMap.values())
       .sort((a, b) => new Date(b.latestEntry).getTime() - new Date(a.latestEntry).getTime());
   }, [journalEntries, devotionals]);
-
-  // ---- Relative date formatting ----
-  const formatRelativeDate = useCallback((dateStr: string) => {
-    const date = new Date(dateStr);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    if (diffDays === 0) return 'Today';
-    if (diffDays === 1) return 'Yesterday';
-    if (diffDays < 7) return `${diffDays} days ago`;
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-    });
-  }, []);
 
   // ---- Handlers ----
   const handleWriteToday = useCallback(() => {
@@ -1663,7 +1639,7 @@ export default function JournalHubScreen() {
                                 {`Day ${entry.dayNumber}`}
                               </Text>
                               <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 11, color: colors.textHint }}>
-                                {new Date(entry.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                {formatRelativeDate(entry.updatedAt)}
                               </Text>
                             </View>
                             {entryDay?.title || entryDevotional?.title ? (
@@ -1776,15 +1752,15 @@ export default function JournalHubScreen() {
                       <Text
                         style={{
                           fontFamily: FontFamily.display,
-                          fontSize: FontSize['2xl'],
+                          fontSize: 21,
                           color: colors.text,
-                          letterSpacing: -0.3,
                           marginBottom: Spacing['1.5'],
                         }}
                         numberOfLines={2}
                       >
-                        {currentDayData?.title ??
-                          `Day ${currentDevotional.currentDay}`}
+                        {currentDayData?.title
+                          ? currentDayData.title
+                          : `Day ${currentDevotional.currentDay}`}
                       </Text>
 
                       {currentDayData?.scriptureReference && (
@@ -1960,9 +1936,9 @@ export default function JournalHubScreen() {
                           <Text
                             style={{
                               fontFamily: FontFamily.display,
-                              fontSize: 22,
+                              fontSize: 20,
                               color: colors.text,
-                              lineHeight: 28,
+                              lineHeight: 25,
                               marginBottom: 2,
                             }}
                             numberOfLines={2}
@@ -1998,7 +1974,7 @@ export default function JournalHubScreen() {
                       <Text
                         style={{
                           fontFamily: FontFamily.display,
-                          fontSize: FontSize['2xl'],
+                          fontSize: 21,
                           color: colors.text,
                           textAlign: 'center',
                           marginBottom: Spacing['2'],
@@ -2266,8 +2242,8 @@ const mainStyles = StyleSheet.create({
   },
   headerTitle: {
     fontFamily: FontFamily.display,
-    fontSize: 34,
-    letterSpacing: -0.5,
+    fontSize: 30,
+    letterSpacing: -0.15,
   },
   searchContainer: {
     paddingHorizontal: Spacing['6'],
@@ -2281,10 +2257,7 @@ const mainStyles = StyleSheet.create({
     paddingVertical: Spacing['2.5'],
     gap: Spacing['2.5'],
     borderWidth: 1,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
+    ...Shadow.sm,
   },
   searchInput: {
     flex: 1,

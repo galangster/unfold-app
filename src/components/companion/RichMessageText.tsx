@@ -14,6 +14,7 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { FontFamily, FontSize } from '@/constants/fonts';
+import { Typography } from '@/constants/typography';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { parseScriptureReferences, type ScriptureRef } from '@/lib/scripture-parser';
@@ -93,9 +94,10 @@ function preprocessMarkdown(text: string): string {
       continue;
     }
 
-    // Numbered lists: 1. item
-    if (/^\d+\.\s+/.test(trimmed)) {
-      currentLines.push('\u2022 ' + trimmed.replace(/^\d+\.\s+/, ''));
+    // Numbered lists: 1. item -- preserve the ordinal marker instead of flattening to a bullet
+    const numberedMatch = trimmed.match(/^(\d+)\.\s+(.*)$/);
+    if (numberedMatch) {
+      currentLines.push(`${numberedMatch[1]}. ${numberedMatch[2]}`);
       continue;
     }
 
@@ -230,9 +232,8 @@ function InlineText({
   return (
     <Text
       style={{
+        ...Typography.bodyRelaxed,
         fontFamily: isBlockquote ? FontFamily.bodyItalic : FontFamily.body,
-        fontSize: FontSize.base,
-        lineHeight: isBlockquote ? 26 : 27.2,
         color: colors.text,
         fontStyle: isBlockquote ? 'italic' : 'normal',
       }}
@@ -252,7 +253,6 @@ function InlineText({
                 backgroundColor: alpha(colors.accent, flashIndex === i ? 0.30 : 0.10),
                 borderRadius: 6,
                 paddingHorizontal: 2,
-                lineHeight: 22,
               }}
             >
               {' '}{seg.reference}{' '}
@@ -332,7 +332,7 @@ export const RichMessageText = memo(function RichMessageText({ text, onVersePres
             <View key={i} style={{ marginTop: i > 0 ? Spacing['5'] : 0, marginBottom: Spacing['2'] }}>
               <Text style={{
                 fontFamily: FontFamily.bodyBold ?? FontFamily.uiSemiBold,
-                fontSize: FontSize.base,
+                fontSize: FontSize.lg,
                 lineHeight: 24,
                 color: colors.text,
               }}>

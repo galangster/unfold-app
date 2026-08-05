@@ -261,7 +261,7 @@ export function CreateFolderSheet({ visible, onClose, onSubmit, parentFolderId, 
                           key={color}
                           onPress={() => handleColorSelect(color)}
                           activeOpacity={0.7}
-                          hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                          hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
                           accessibilityRole="button"
                           accessibilityLabel={`Select folder color ${color}`}
                           accessibilityState={{ selected: isSelected }}

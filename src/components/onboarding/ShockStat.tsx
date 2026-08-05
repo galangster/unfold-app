@@ -7,7 +7,6 @@ import Animated, {
   withTiming,
   withDelay,
   Easing,
-  interpolateColor,
   cancelAnimation,
   useReducedMotion,
 } from 'react-native-reanimated';
@@ -25,27 +24,24 @@ function StatChar({ char, delay, fontSize, colors }: {
   colors: ColorTheme;
 }) {
   const opacity = useSharedValue(0);
-  const colorProgress = useSharedValue(0);
 
   useEffect(() => {
     opacity.value = withDelay(delay, withTiming(1, { duration: 300, easing: Easing.out(Easing.cubic) }));
-    colorProgress.value = withDelay(delay + 50, withTiming(1, { duration: 800, easing: Easing.out(Easing.cubic) }));
     return () => {
       cancelAnimation(opacity);
-      cancelAnimation(colorProgress);
     };
   }, []);
 
   const style = useAnimatedStyle(() => ({
     opacity: opacity.value,
-    color: interpolateColor(colorProgress.value, [0, 1], [colors.accent, colors.accent]),
+    color: colors.accent,
   }));
 
   return (
     <Animated.Text style={[{
       fontFamily: FontFamily.display,
       fontSize,
-      letterSpacing: -2,
+      letterSpacing: -1.1,
       lineHeight: fontSize * 1.05,
     }, style]}>
       {char}
@@ -99,12 +95,12 @@ export function ShockStat({ colors, onReady }: ShockStatProps) {
   }, []);
 
   // Sequence:
-  // t=0      Screen fades in (600ms)
+  // t=0      Screen fades in (340ms)
   // t=200    93% typewriter starts (3 chars + % = ~400ms)
-  // t=700    "of Christians..." fades in
-  // t=2600   11% typewriter starts (+1s extra pause after first stat)
-  // t=3200   "read the Bible daily." fades in
-  // t=3800   haptic + onReady
+  // t=900    "of Christians..." fades in
+  // t=3000   11% typewriter starts (+1s extra pause after first stat)
+  // t=3600   "read the Bible daily." fades in
+  // t=4800   haptic + onReady
 
   return (
     <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.slow).easing(Ease.out)} style={{ flex: 1 }}>

@@ -57,7 +57,7 @@ export default function RecentlyDeletedScreen() {
           >
             <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
           </TouchableOpacity>
-          <Text style={{ fontFamily: FontFamily.display, fontSize: 22, color: colors.text, marginLeft: Spacing['2'] }}>
+          <Text style={{ fontFamily: FontFamily.display, fontSize: 20, color: colors.text, marginLeft: Spacing['2'] }}>
             Recently Deleted
           </Text>
         </View>

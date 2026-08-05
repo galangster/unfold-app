@@ -80,8 +80,32 @@ export default function JournalDetailScreen() {
 
   if (!entry) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
-        <Text style={{ fontFamily: FontFamily.body, color: colors.textMuted }}>Entry not found</Text>
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing['4'], paddingVertical: Spacing['3'] }}>
+            <TouchableOpacity
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.back();
+              }}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              activeOpacity={0.6}
+              style={{ padding: Spacing['2'] }}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+            >
+              <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
+            </TouchableOpacity>
+          </View>
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['6'] }}>
+            <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.base, color: colors.textMuted, marginBottom: Spacing['1'] }}>
+              Entry not found
+            </Text>
+            <Text style={{ fontFamily: FontFamily.body, fontSize: FontSize.sm, color: colors.textHint, textAlign: 'center' }}>
+              This entry may have been removed.
+            </Text>
+          </View>
+        </SafeAreaView>
       </View>
     );
   }
@@ -109,6 +133,8 @@ export default function JournalDetailScreen() {
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             activeOpacity={0.6}
             style={{ padding: Spacing['2'] }}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
           >
             <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
           </TouchableOpacity>
@@ -128,8 +154,8 @@ export default function JournalDetailScreen() {
             <View
               style={{
                 marginLeft: Spacing['2'],
-                paddingHorizontal: Spacing['2'],
-                paddingVertical: 2,
+                paddingHorizontal: Spacing['1.5'],
+                paddingVertical: 1,
                 borderRadius: 4,
                 backgroundColor: alpha(colors.accent, 0.08),
               }}
@@ -137,7 +163,7 @@ export default function JournalDetailScreen() {
               <Text
                 style={{
                   fontFamily: FontFamily.uiMedium,
-                  fontSize: 10,
+                  fontSize: FontSize.xs,
                   color: colors.accent,
                 }}
               >
@@ -167,7 +193,7 @@ export default function JournalDetailScreen() {
               <Text
                 style={{
                   fontFamily: FontFamily.display,
-                  fontSize: FontSize['2xl'],
+                  fontSize: 21,
                   color: colors.text,
                   marginBottom: Spacing['1'],
                 }}

@@ -867,10 +867,11 @@ export default function GeneratingScreen() {
               <Text
                 style={{
                   fontFamily: FontFamily.display,
-                  fontSize: 44,
+                  fontSize: 39,
                   color: colors.text,
                   textAlign: 'left',
-                  lineHeight: 54,
+                  lineHeight: 48,
+                  letterSpacing: -0.4,
                 }}
               >
                 {devotionalTitle}
@@ -1014,10 +1015,11 @@ export default function GeneratingScreen() {
               <Text
                 style={{
                   fontFamily: FontFamily.display,
-                  fontSize: FontSize['3xl'],
+                  fontSize: 27,
                   color: colors.text,
                   textAlign: 'center',
-                  lineHeight: 40,
+                  lineHeight: 36,
+                  letterSpacing: -0.15,
                 }}
               >
                 {currentSeriesTitle}
@@ -1305,10 +1307,10 @@ export default function GeneratingScreen() {
                 <Text
                   style={{
                     fontFamily: FontFamily.display,
-                    fontSize: 22,
+                    fontSize: 20,
                     color: colors.text,
                     marginBottom: Spacing['4'],
-                    lineHeight: 30,
+                    lineHeight: 27,
                   }}
                 >
                   {SAMPLE_PREVIEW.themeTitle}
@@ -1424,7 +1426,8 @@ const genStyles = StyleSheet.create({
   },
   errorTitle: {
     fontFamily: FontFamily.display,
-    fontSize: 28,
+    fontSize: 25,
+    letterSpacing: -0.15,
     textAlign: 'center',
     marginBottom: Spacing['3'],
   },

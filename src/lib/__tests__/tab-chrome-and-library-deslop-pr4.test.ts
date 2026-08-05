@@ -42,8 +42,10 @@ describe('PR4 chrome de-slop', () => {
 
     it('keeps a hairline top border so the glow has a hard edge to stop at', () => {
       expect(tabBar).toContain('height: StyleSheet.hairlineWidth,');
-      expect(tabBar).toContain("'rgba(245, 240, 235, 0.10)'");
-      expect(tabBar).toContain("'rgba(28, 23, 16, 0.10)'");
+      // Routed through the text-tint token (alpha(colors.text, 0.10)) instead
+      // of hardcoded white/black rgba — same 0.10 opacity in both themes,
+      // since colors.text already resolves to warm off-white/off-black.
+      expect(tabBar).toContain('backgroundColor: alpha(colors.text, 0.10),');
     });
 
     it('derives the scrim from the accent-aware theme token, not a hardcoded gold hex', () => {

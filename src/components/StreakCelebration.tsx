@@ -250,7 +250,7 @@ export function StreakCelebration({ streak, onComplete }: StreakCelebrationProps
                 entering={entering(FadeIn.duration(Duration.normal).easing(Ease.out).delay(200))}
                 style={{
                   fontFamily: FontFamily.display,
-                  fontSize: 32 + (milestoneScale - 1) * 20,
+                  fontSize: 28 + (milestoneScale - 1) * 18,
                   color: colors.accent,
                   marginTop: Spacing['4'],
                   textAlign: 'center',
@@ -278,7 +278,8 @@ export function StreakCelebration({ streak, onComplete }: StreakCelebrationProps
               entering={entering(FadeIn.duration(Duration.normal).easing(Ease.out).delay(200))}
               style={{
                 fontFamily: FontFamily.display,
-                fontSize: 28,
+                fontSize: 25,
+                letterSpacing: -0.15,
                 color: colors.accent,
                 marginTop: Spacing['3'],
               }}

@@ -37,7 +37,7 @@ function Pill({ option, isSelected, onPress, disabled, colors, isDark }: {
         onPress();
       }}
       style={{
-        paddingVertical: Spacing['2.5'],
+        paddingVertical: Spacing['3'],
         paddingHorizontal: Spacing['4'],
         borderRadius: Radius['2xl'],
         borderWidth: 1.5,

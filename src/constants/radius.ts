@@ -11,5 +11,7 @@ export const Radius = {
   lg: 16,
   xl: 20,
   '2xl': 24,
+  /** Small interactive chips/icon wells — formalizes the de facto 10 used across settings rows. */
+  chip: 10,
   full: 999,
 } as const;

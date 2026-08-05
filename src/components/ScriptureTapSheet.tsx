@@ -461,8 +461,8 @@ const s = StyleSheet.create({
   },
   verseText: {
     fontFamily: FontFamily.display,
-    fontSize: 20,
-    lineHeight: 33,
+    fontSize: 18,
+    lineHeight: 30,
   },
 
   // ─── Explain CTA ─────────────────────────────────

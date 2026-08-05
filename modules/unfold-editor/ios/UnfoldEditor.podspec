@@ -25,6 +25,6 @@ Pod::Spec.new do |s|
   s.exclude_files = 'vendor/**/*'
 
   s.resource_bundles = {
-    'UnfoldEditorFonts' => ['Resources/Fonts/*.ttf']
+    'UnfoldEditorFonts' => ['Resources/Fonts/*.ttf', 'Resources/Fonts/*.otf']
   }
 end

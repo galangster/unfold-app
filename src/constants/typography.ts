@@ -7,21 +7,22 @@
 import { FontFamily, FontSize, LineHeight } from './fonts';
 
 export const Typography = {
-  // Display — Gupter for headings
+  // Display — PP Editorial New for headings
   displayLg: {
     fontFamily: FontFamily.display,
-    fontSize: FontSize['4xl'], // 36
-    lineHeight: Math.round(FontSize['4xl'] * LineHeight.tight), // 43
+    fontSize: 32,
+    lineHeight: 38,
+    letterSpacing: -0.15,
   },
   displayMd: {
     fontFamily: FontFamily.display,
-    fontSize: FontSize['2xl'], // 24
-    lineHeight: Math.round(FontSize['2xl'] * LineHeight.tight), // 29
+    fontSize: 21,
+    lineHeight: 25,
   },
   displaySm: {
     fontFamily: FontFamily.display,
-    fontSize: FontSize.xl, // 20
-    lineHeight: Math.round(FontSize.xl * LineHeight.tight), // 24
+    fontSize: 18,
+    lineHeight: 22,
   },
 
   // Body — Inter for reading content
@@ -77,6 +78,25 @@ export const Typography = {
     fontFamily: FontFamily.ui, // Inter_400Regular
     fontSize: FontSize.xs, // 12
     lineHeight: Math.round(FontSize.xs * LineHeight.normal), // 18
+    letterSpacing: 0,
+  },
+
+  // Onboarding question headline — the single scale for every step question.
+  // (Audit 2026-08-05: three ad hoc scales — 32/42, 32/40, 28/36 — drifted
+  // against each other across ~30 steps.)
+  onboardingHeadline: {
+    fontFamily: FontFamily.display,
+    fontSize: 28,
+    lineHeight: 37,
+    letterSpacing: -0.15,
+  },
+
+  // Relaxed reading body for conversational surfaces (companion thread).
+  // One vertical rhythm for user AND assistant bubbles.
+  bodyRelaxed: {
+    fontFamily: FontFamily.body,
+    fontSize: FontSize.base, // 16
+    lineHeight: 26,
     letterSpacing: 0,
   },
 

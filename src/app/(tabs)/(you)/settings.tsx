@@ -6,7 +6,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon, TrashIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
-import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { performFullLocalReset } from '@/lib/full-reset';
@@ -17,7 +16,7 @@ import { RemindersSection } from '@/components/settings/RemindersSection';
 import { WritingStyleSection } from '@/components/settings/WritingStyleSection';
 import { SupportSection } from '@/components/settings/SupportSection';
 import { QaToolsSection } from '@/components/settings/QaToolsSection';
-import { SettingsSectionHeader } from '@/components/settings/SettingsSectionHeader';
+import { SettingsSectionHeader, getSettingsCardStyle } from '@/components/settings/SettingsSectionHeader';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -77,7 +76,7 @@ export default function SettingsScreen() {
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         {/* Header — back chevron pattern from streak-settings.tsx */}
         <View style={styles.header}>
-          <TouchableOpacity activeOpacity={0.7} onPress={handleBack} style={styles.backButton} testID="settings-back-button" accessibilityLabel="Go back" accessibilityRole="button">
+          <TouchableOpacity activeOpacity={0.7} onPress={handleBack} style={styles.backButton} testID="settings-back-button" accessibilityLabel="Go back" accessibilityRole="button" hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <CaretLeftIcon size={24} color={colors.text} weight="light" />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.text }]}>
@@ -111,41 +110,42 @@ export default function SettingsScreen() {
             {/* --- Data / Danger zone --- */}
             <SettingsSectionHeader label="Data" />
 
-            <TouchableOpacity activeOpacity={0.7} onPress={handleResetData} disabled={isDeletingAccount} accessibilityState={{ disabled: isDeletingAccount }}>
-              <View
-                style={{
-                  borderRadius: Radius.md,
-                  paddingVertical: Spacing['3.5'],
-                  paddingHorizontal: Spacing['4'],
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  opacity: isDeletingAccount ? 0.6 : 1,
-                }}
-              >
-                {isDeletingAccount ? (
-                  <ActivityIndicator size="small" color={colors.error} />
-                ) : (
-                  <TrashIcon size={20} color={colors.error} weight="light" />
-                )}
-                <Text
+            <View style={getSettingsCardStyle(colors)}>
+              <TouchableOpacity activeOpacity={0.7} onPress={handleResetData} disabled={isDeletingAccount} accessibilityState={{ disabled: isDeletingAccount }}>
+                <View
                   style={{
-                    fontFamily: FontFamily.ui,
-                    fontSize: 15,
-                    color: colors.error,
-                    marginLeft: Spacing['3'],
+                    paddingVertical: Spacing['3.5'],
+                    paddingHorizontal: Spacing['4'],
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    opacity: isDeletingAccount ? 0.6 : 1,
                   }}
                 >
-                  {isDeletingAccount ? 'Resetting...' : 'Reset all data'}
-                </Text>
-              </View>
-            </TouchableOpacity>
+                  {isDeletingAccount ? (
+                    <ActivityIndicator size="small" color={colors.error} />
+                  ) : (
+                    <TrashIcon size={20} color={colors.error} weight="light" />
+                  )}
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.ui,
+                      fontSize: 15,
+                      color: colors.error,
+                      marginLeft: Spacing['3'],
+                    }}
+                  >
+                    {isDeletingAccount ? 'Resetting...' : 'Reset all data'}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            </View>
 
             {/* App info */}
             <View style={{ marginTop: Spacing['12'], alignItems: 'center', marginBottom: Spacing['6'] }}>
               <Text
                 style={{
                   fontFamily: FontFamily.display,
-                  fontSize: FontSize['2xl'],
+                  fontSize: 21,
                   color: colors.textHint,
                 }}
               >
@@ -189,8 +189,8 @@ const styles = StyleSheet.create({
     padding: Spacing['2'],
   },
   headerTitle: {
-    fontFamily: FontFamily.uiSemiBold,
-    fontSize: 17,
+    fontFamily: FontFamily.uiMedium,
+    fontSize: FontSize.base,
     marginLeft: Spacing['3'],
   },
 });

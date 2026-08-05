@@ -370,9 +370,9 @@ const styles = StyleSheet.create({
   },
   headline: {
     fontFamily: FontFamily.display,
-    fontSize: FontSize['4xl'],
+    fontSize: 32,
     textAlign: 'center',
-    letterSpacing: -0.5,
+    letterSpacing: -0.15,
     marginBottom: Spacing['3'],
   },
   body: {

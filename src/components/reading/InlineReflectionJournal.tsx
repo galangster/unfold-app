@@ -7,7 +7,7 @@ import Animated, {
   useReducedMotion,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { ArrowRightIcon, NotePencilIcon } from 'phosphor-react-native';
+import { ArrowRightIcon, CaretDownIcon, CaretUpIcon, NotePencilIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize as FontSizeTokens } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
@@ -471,9 +471,10 @@ function ReflectionQuestionCard({
             {
               flexDirection: 'row',
               alignItems: 'flex-start',
+              gap: 10,
               paddingLeft: 18,
               paddingRight: 8,
-              paddingVertical: 4,
+              paddingVertical: Spacing['3'],
             },
           ]}
         >
@@ -489,6 +490,15 @@ function ReflectionQuestionCard({
           >
             {preventOrphan(question)}
           </Text>
+
+          {/* Expand affordance — matches journal.tsx's Go Deeper prompts */}
+          <View style={{ marginTop: 3 }}>
+            {isExpanded ? (
+              <CaretUpIcon size={14} color={colors.textSubtle} weight="light" />
+            ) : (
+              <CaretDownIcon size={14} color={colors.textSubtle} weight="light" />
+            )}
+          </View>
         </Animated.View>
       </TouchableOpacity>
 
@@ -506,8 +516,9 @@ function ReflectionQuestionCard({
               backgroundColor: colors.inputBackground,
               borderRadius: Radius.md,
               borderWidth: 1,
-              borderColor: colors.borderFocused ?? colors.border,
+              borderColor: editable ? colors.borderFocused ?? colors.border : colors.textHint,
               padding: 14,
+              opacity: editable ? 1 : 0.5,
             }}
           >
             <TextInput
