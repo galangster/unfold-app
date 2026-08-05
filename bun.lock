@@ -8,13 +8,6 @@
         "@10play/tentap-editor": "^1.0.1",
         "@babel/plugin-proposal-export-namespace-from": "^7.18.9",
         "@codeherence/react-native-header": "^1.0.0",
-        "@expo-google-fonts/crimson-text": "^0.4.0",
-        "@expo-google-fonts/eb-garamond": "^0.4.2",
-        "@expo-google-fonts/inter": "^0.4.2",
-        "@expo-google-fonts/jetbrains-mono": "^0.4.1",
-        "@expo-google-fonts/lora": "^0.4.2",
-        "@expo-google-fonts/merriweather": "^0.4.2",
-        "@expo-google-fonts/source-serif-pro": "^0.2.3",
         "@expo/html-elements": "^0.13.7",
         "@expo/metro-runtime": "~56.0.16",
         "@expo/react-native-action-sheet": "^4.1.1",
@@ -389,21 +382,7 @@
 
     "@eslint/plugin-kit": ["@eslint/plugin-kit@0.4.1", "", { "dependencies": { "@eslint/core": "^0.17.0", "levn": "^0.4.1" } }, "sha512-43/qtrDUokr7LJqoF2c3+RInu/t4zfrpYdoSDfYyhg52rwLV6TnOvdG4fXm7IkSB3wErkcmJS9iEhjVtOSEjjA=="],
 
-    "@expo-google-fonts/crimson-text": ["@expo-google-fonts/crimson-text@0.4.0", "", {}, "sha512-KTurGCs3QubCY33dE5WqCGFAawqPCEsA/sqdkiuQ0536pNxf7nlGwg/0rxDXK39LH0hheBEuvqnPZLWPotbITg=="],
-
-    "@expo-google-fonts/eb-garamond": ["@expo-google-fonts/eb-garamond@0.4.2", "", {}, "sha512-tkw/RNj3sLpOfasAYF1wrh8XnKspHXmoNf6StJ4LDvFlRpDCXXtG8sxkyjab1ncnlgK8iRUC8FugmYMr55YCHw=="],
-
-    "@expo-google-fonts/inter": ["@expo-google-fonts/inter@0.4.2", "", {}, "sha512-syfiImMaDmq7cFi0of+waE2M4uSCyd16zgyWxdPOY7fN2VBmSLKEzkfbZgeOjJq61kSqPBNNtXjggiQiSD6gMQ=="],
-
-    "@expo-google-fonts/jetbrains-mono": ["@expo-google-fonts/jetbrains-mono@0.4.1", "", {}, "sha512-CslACrtMOcRwoWXCO7OMEI+9w3fukWSoBtvNz46OqPoogEuuoY0tkDY1O8sFumk8t0pC6Cx0Xr95O0TOQhpkug=="],
-
-    "@expo-google-fonts/lora": ["@expo-google-fonts/lora@0.4.2", "", {}, "sha512-Bnofh2mIOUKp4KUS48VjaBgug4lQOcw/ftU0NFv5OPtiutL422//G1v63xDZEMUEL6ft4fi5q94/uKcpDjbPag=="],
-
     "@expo-google-fonts/material-symbols": ["@expo-google-fonts/material-symbols@0.4.21", "", {}, "sha512-nsbtsdihVp8AxFfkv0po3z59iSmeKt33cv/wgPxiFdOx2HI5xRgAi63f/4dW6bYbC2PF5Jv6rF7afqbqTrdUhg=="],
-
-    "@expo-google-fonts/merriweather": ["@expo-google-fonts/merriweather@0.4.2", "", {}, "sha512-jUlmDzo5hQ36fPDXZvdt2VIZGCFkdg2Gfx+oWnbzvfygdCvx3AIe8O74IdsN1IZ65mxSSgsajM1c2XV2L/eYkw=="],
-
-    "@expo-google-fonts/source-serif-pro": ["@expo-google-fonts/source-serif-pro@0.2.3", "", {}, "sha512-nVxz2QDeRBAwxETOKatKnfD67O3rdw3HxeUq8alsP9Z+GtmsO2CIyZIB3ipC75E+M/0+zaKDO4VhoBm8tNIyQA=="],
 
     "@expo/cli": ["@expo/cli@56.1.17", "", { "dependencies": { "@expo/code-signing-certificates": "^0.0.6", "@expo/config": "~56.0.10", "@expo/config-plugins": "~56.0.10", "@expo/devcert": "^1.2.1", "@expo/env": "~2.3.0", "@expo/image-utils": "^0.10.1", "@expo/inline-modules": "^0.0.12", "@expo/json-file": "^10.2.0", "@expo/log-box": "^56.0.14", "@expo/metro": "~56.0.0", "@expo/metro-config": "~56.0.15", "@expo/metro-file-map": "^56.0.3", "@expo/osascript": "^2.6.0", "@expo/package-manager": "^1.12.1", "@expo/plist": "^0.7.0", "@expo/prebuild-config": "^56.0.17", "@expo/require-utils": "^56.1.3", "@expo/router-server": "^56.0.15", "@expo/schema-utils": "^56.0.0", "@expo/spawn-async": "^1.8.0", "@expo/ws-tunnel": "^2.0.0", "@expo/xcpretty": "^4.4.4", "@react-native/dev-middleware": "0.85.3", "accepts": "^1.3.8", "arg": "^5.0.2", "bplist-creator": "0.1.0", "bplist-parser": "^0.3.1", "chalk": "^4.0.0", "ci-info": "^3.3.0", "compression": "^1.7.4", "connect": "^3.7.0", "debug": "^4.3.4", "dnssd-advertise": "^1.1.6", "expo-server": "^56.0.5", "fetch-nodeshim": "^0.4.10", "getenv": "^2.0.0", "glob": "^13.0.0", "lan-network": "^0.2.1", "multitars": "^1.0.0", "node-forge": "^1.3.3", "npm-package-arg": "^11.0.0", "ora": "^3.4.0", "picomatch": "^4.0.4", "pretty-format": "^29.7.0", "progress": "^2.0.3", "prompts": "^2.3.2", "resolve-from": "^5.0.0", "semver": "^7.6.0", "send": "^0.19.0", "slugify": "^1.3.4", "stacktrace-parser": "^0.1.10", "structured-headers": "^0.4.1", "terminal-link": "^2.1.1", "toqr": "^0.1.1", "wrap-ansi": "^7.0.0", "ws": "^8.12.1", "zod": "^3.25.76" }, "peerDependencies": { "expo": "*", "expo-router": "*", "react-native": "*" }, "optionalPeers": ["expo-router", "react-native"], "bin": { "expo-internal": "main.js" } }, "sha512-gwqOLBmR0xMg6cXeH9Qog9KvUgdZs4Ot7QcS2HlH5FmnH6xaqWI45HK13Mruyu9cuqgrVezomCFKB32ylsTY3g=="],
 
