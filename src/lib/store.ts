@@ -220,6 +220,10 @@ export interface DevotionalDay {
   /** Backend prose or the legacy structured mobile shape. */
   wordStudy?: WordStudy;
   closingPrayer?: string;
+  /** One concrete same-day act of obedience (named time window, observable). */
+  act?: string;
+  /** 6-12 word recall line for the afternoon; also used by the midday check-in notification. */
+  carryLine?: string;
   // Phase 2: Midday check-in question + chips (generated with devotional)
   checkInQuestion?: string;
   checkInChips?: string[];
@@ -386,6 +390,10 @@ export interface SeriesArc {
   isOpenEnded: boolean;
   createdAt: string;
   lastExtendedAt?: string;
+  /** Server-derived root diagnosis (never displayed; synced wholesale). */
+  rootThesis?: string;
+  thesisRationale?: string;
+  thesisRevisedAt?: string;
 }
 
 /** Full context snapshot for a recently completed day (Layer 1) */

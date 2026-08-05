@@ -199,3 +199,45 @@ describe('home devotional state helpers', () => {
     expect(shouldAutoPrepareCurrentDevotionalDay(missingEligibleDay, 'unknown', today)).toBe(false);
   });
 });
+
+describe('getTodayCarryLine', () => {
+  const { getTodayCarryLine } = require('../home-devotional-state');
+
+  it('returns the carry line of the day read today', () => {
+    const dev = devotional({
+      days: [
+        day({ dayNumber: 1, isRead: true, readAt: new Date(2026, 3, 24, 8, 0).toISOString(), carryLine: 'Yesterday line' }),
+        day({ dayNumber: 2, isRead: true, readAt: new Date(2026, 3, 25, 8, 0).toISOString(), carryLine: 'The hunger was never wrong.' }),
+      ],
+    });
+    expect(getTodayCarryLine([dev], 'dev-1', today)).toBe('The hunger was never wrong.');
+  });
+
+  it('returns null when nothing was read today (never a stale line)', () => {
+    const dev = devotional({
+      days: [
+        day({ dayNumber: 1, isRead: true, readAt: new Date(2026, 3, 23, 8, 0).toISOString(), carryLine: 'Old line' }),
+      ],
+    });
+    expect(getTodayCarryLine([dev], 'dev-1', today)).toBeNull();
+  });
+
+  it('returns null for missing devotional, unread days, or blank lines', () => {
+    expect(getTodayCarryLine([], 'dev-1', today)).toBeNull();
+    expect(getTodayCarryLine([devotional({ days: [day({ carryLine: 'Line' })] })], null, today)).toBeNull();
+    const blank = devotional({
+      days: [day({ isRead: true, readAt: today.toISOString(), carryLine: '   ' })],
+    });
+    expect(getTodayCarryLine([blank], 'dev-1', today)).toBeNull();
+  });
+
+  it('prefers the highest read day when two were read today', () => {
+    const dev = devotional({
+      days: [
+        day({ dayNumber: 3, isRead: true, readAt: today.toISOString(), carryLine: 'Day three line' }),
+        day({ dayNumber: 4, isRead: true, readAt: today.toISOString(), carryLine: 'Day four line' }),
+      ],
+    });
+    expect(getTodayCarryLine([dev], 'dev-1', today)).toBe('Day four line');
+  });
+});

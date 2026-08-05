@@ -91,6 +91,8 @@ function mapPulledDevotionalDay(record: SyncPulledRecord): DevotionalDay | null 
     contextNote: asString(content.contextNote),
     wordStudy,
     closingPrayer: asString(content.closingPrayer),
+    act: asString(content.act),
+    carryLine: asString(content.carryLine),
     checkInQuestion: asString(content.checkInQuestion),
     checkInChips: asStringArray(content.checkInChips),
     eveningScriptureRef: asString(content.eveningScriptureRef),
