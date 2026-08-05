@@ -1185,6 +1185,63 @@ export default function GeneratingScreen() {
             </Animated.View>
           )}
 
+          {/* ========== GO HOME \u2014 the waiting state must never be a dead end ========== */}
+          {/* Dino (build 245): after "I'll wait" there was no way back. Leaving is
+              fully safe \u2014 the job is persisted to MMKV and continues server-side;
+              Today shows the preparing card and the recovery ladder picks the
+              content up when it lands. */}
+          {isGenerating && !isComplete && !showNotificationPrompt && (
+            <Animated.View
+              entering={entering(FadeIn.duration(600).delay(1200))}
+              style={{ marginTop: Spacing['8'], alignItems: 'center', gap: Spacing['3'] }}
+            >
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  router.replace('/(tabs)/(today)');
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Go home while your devotional is prepared"
+                hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}
+              >
+                <Text
+                  style={{
+                    fontFamily: FontFamily.ui,
+                    fontSize: FontSize.sm,
+                    color: colors.textMuted,
+                    textDecorationLine: 'underline',
+                  }}
+                >
+                  {'Go home \u2014 we\u2019ll keep\u00A0writing'}
+                </Text>
+              </TouchableOpacity>
+
+              {/* Second chance at the ready-notification for "I'll wait" users */}
+              {notificationPermission !== 'granted' && (
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={handleRequestNotifications}
+                  accessibilityRole="button"
+                  accessibilityLabel="Notify me when ready"
+                  hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+                >
+                  <BellIcon size={13} color={colors.textSubtle} weight="light" />
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.ui,
+                      fontSize: 13,
+                      color: colors.textSubtle,
+                    }}
+                  >
+                    Notify me when it&apos;s ready
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </Animated.View>
+          )}
+
           {/* ========== SAMPLE DEVOTIONAL PREVIEW ========== */}
           {/* Shows after a delay to give users a taste of the devotional format */}
           {showSamplePreview && !isComplete && isGenerating && (
