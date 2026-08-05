@@ -679,6 +679,15 @@ export default function OnboardingScreen() {
   // Track pending auth data to merge into completeOnboarding's setUser/updateUser call.
   const pendingAuthDataRef = useRef<Partial<UserProfile> | null>(null);
 
+  // Always-fresh mirror of `data` for callbacks that fire from setTimeout
+  // chains. The choice-step onPress schedules advanceToNextStep 350ms out,
+  // which on the LAST step runs completeOnboarding -> saveOnboardingData from
+  // that render's STALE closure — silently dropping the final selection
+  // (live bug: "3 days" tapped, 7-day series generated; first-run reminder
+  // times were dropped the same way).
+  const dataRef = useRef(data);
+  dataRef.current = data;
+
   // Track if user is in theme sub-selection mode
   const [themeSelectionMode, setThemeSelectionMode] = useState<'none' | 'theme' | 'type'>('none');
   
@@ -1027,6 +1036,8 @@ export default function OnboardingScreen() {
   const saveOnboardingData = useCallback((premiumOverride?: boolean) => {
     const isPrem = premiumOverride ?? purchasedDuringOnboarding;
     const pendingAuth = pendingAuthDataRef.current ?? {};
+    // Read through the ref, never the closure — see dataRef above.
+    const data = dataRef.current;
 
     if (existingUser) {
       updateUser({
