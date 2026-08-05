@@ -3,7 +3,7 @@
  * Shows day number, date, title, and scripture.
  * Tapping navigates to the referenced devotional day or journal.
  */
-import { Pressable, Text, View } from "react-native";
+import { Pressable, Text, View, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { useTheme } from "@/lib/theme";
 import { alpha } from "@/components/ui";
@@ -51,8 +51,8 @@ export function DevotionalCard({ data }: Props) {
         paddingHorizontal: Spacing['3'],
         paddingVertical: Spacing['2'],
         marginVertical: Spacing['1'],
-        borderLeftWidth: 3,
-        borderLeftColor: alpha(colors.accent, 0.4),
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: alpha(colors.accent, pressed ? 0.35 : 0.22),
       })}
     >
       <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>

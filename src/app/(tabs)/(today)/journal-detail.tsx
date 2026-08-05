@@ -271,9 +271,6 @@ export default function JournalDetailScreen() {
                       key={qr.question}
                       style={{
                         marginBottom: Spacing['6'],
-                        paddingLeft: Spacing['4'],
-                        borderLeftWidth: 2,
-                        borderLeftColor: alpha(colors.accent, 0.31),
                       }}
                     >
                       <Text

@@ -109,9 +109,6 @@ function MovementCard({
       entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).delay(200 + index * 150).easing(Ease.out)}
       style={{
         marginBottom: Spacing['8'],
-        paddingLeft: Spacing['5'],
-        borderLeftWidth: 1.5,
-        borderLeftColor: accentColor + '30',
       }}
     >
       <Text

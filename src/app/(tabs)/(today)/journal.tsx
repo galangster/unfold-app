@@ -906,7 +906,7 @@ Their journal entry:
                       params: { dayNumber: String(dayNumber) },
                     });
                   }}
-                  style={[jStyles.scriptureAnchor, { borderLeftColor: alpha(colors.accent, 0.25) }]}
+                  style={jStyles.scriptureAnchor}
                   accessibilityLabel={`Return to reading: ${currentDay.title}`}
                   accessibilityRole="link"
                 >
@@ -1027,7 +1027,7 @@ Their journal entry:
                             accessibilityRole="button"
                             accessibilityLabel={`Reflection prompt ${index + 1}: ${prompt}`}
                             accessibilityState={{ expanded: isExpanded }}
-                            style={[jStyles.questionRow, { borderLeftColor: isAnswered ? colors.accent : colors.border }]}
+                            style={jStyles.questionRow}
                           >
                             <View style={jStyles.questionIconWrapper}>
                               {isAnswered ? (
@@ -1423,9 +1423,6 @@ const jStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: Spacing['6'],
-    paddingLeft: Spacing['3'],
-    borderLeftWidth: 2,
-    borderRadius: 1,
   },
   scriptureAnchorText: {
     flex: 1,
@@ -1502,8 +1499,6 @@ const jStyles = StyleSheet.create({
   questionRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    paddingLeft: 14,
-    borderLeftWidth: 2,
     gap: 10,
   },
   questionIconWrapper: {
@@ -1516,11 +1511,8 @@ const jStyles = StyleSheet.create({
     lineHeight: 24,
   },
   questionInputWrapper: {
-    marginLeft: 14,
+    marginLeft: 26,
     marginTop: 10,
-    paddingLeft: 14,
-    borderLeftWidth: 2,
-    borderLeftColor: 'transparent',
   },
   questionInputCard: {
     borderRadius: Radius.md,

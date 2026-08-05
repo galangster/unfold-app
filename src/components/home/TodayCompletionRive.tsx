@@ -157,32 +157,45 @@ export function TodayCompletionRive({
 
     let cancelled = false;
     const syncRive = async () => {
-      try {
-        await riveViewRef.awaitViewReady();
-        if (cancelled) return;
+      // Cold-start dim bug: on a fresh launch the JS thread is saturated and
+      // this one-shot play attempt could fail (or the view could report ready
+      // before the scene was actually playable). The scene then sat frozen on
+      // its dark frame 0 behind the whole home screen until a tab roundtrip
+      // re-ran this effect — "the app is dim until I switch tabs". Play is
+      // now retried with backoff so a busy launch converges on its own.
+      const PLAY_ATTEMPTS = 4;
+      for (let attempt = 1; attempt <= PLAY_ATTEMPTS && !cancelled; attempt++) {
+        try {
+          await riveViewRef.awaitViewReady();
+          if (cancelled) return;
 
-        const boundInstance = instance ?? riveViewRef.getViewModelInstance();
-        applyViewModelTheme(boundInstance, values);
+          const boundInstance = instance ?? riveViewRef.getViewModelInstance();
+          applyViewModelTheme(boundInstance, values);
 
-        // Some scenes consume the accent via state-machine number inputs (the
-        // particle systems) rather than ViewModel properties. Push the 0-255
-        // channels there too; harmlessly ignored when the input doesn't exist.
-        for (const propertyName of RIVE_ACCENT_NUMBER_PROPERTIES) {
-          try {
-            riveViewRef.setNumberInputValue(propertyName, values.numberValues[propertyName]);
-          } catch {
-            // Input not present on this scene's state machine — fine.
+          // Some scenes consume the accent via state-machine number inputs (the
+          // particle systems) rather than ViewModel properties. Push the 0-255
+          // channels there too; harmlessly ignored when the input doesn't exist.
+          for (const propertyName of RIVE_ACCENT_NUMBER_PROPERTIES) {
+            try {
+              riveViewRef.setNumberInputValue(propertyName, values.numberValues[propertyName]);
+            } catch {
+              // Input not present on this scene's state machine — fine.
+            }
           }
-        }
 
-        riveViewRef.playIfNeeded();
-        await riveViewRef.play();
-      } catch (error) {
-        if (!cancelled) {
+          riveViewRef.playIfNeeded();
+          await riveViewRef.play();
+          return;
+        } catch (error) {
+          if (cancelled) return;
           console.warn(
-            `[${LOG_PREFIX}] Failed to sync Rive playback:`,
+            `[${LOG_PREFIX}] Play attempt ${attempt}/${PLAY_ATTEMPTS} failed:`,
             error instanceof Error ? error.message : error,
           );
+          if (attempt < PLAY_ATTEMPTS) {
+            // 300/600/900ms — enough for cold-start contention to clear.
+            await new Promise((resolve) => setTimeout(resolve, 300 * attempt));
+          }
         }
       }
     };

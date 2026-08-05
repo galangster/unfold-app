@@ -412,7 +412,7 @@ export function ScriptureSearchSheet({
                       sheetStyles.previewCard,
                       {
                         backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)',
-                        borderLeftColor: colors.accent,
+                        borderColor: isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.07)',
                       },
                     ]}
                   >
@@ -547,8 +547,8 @@ const sheetStyles = StyleSheet.create({
     fontSize: FontSize.sm,
   },
   previewCard: {
-    borderLeftWidth: 3,
-    borderRadius: Radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radius.md,
     padding: Spacing['4'],
     marginBottom: Spacing['4'],
   },

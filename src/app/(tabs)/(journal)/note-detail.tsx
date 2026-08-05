@@ -773,11 +773,26 @@ export default function NoteDetailScreen() {
   const handleDismissKeyboard = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    // Blur the editor and drop the keyboard; editing chrome follows keyboard
-    // visibility. Flush (don't cancel) any pending autosave so the latest
-    // keystrokes are persisted immediately.
-    IS_NATIVE_EDITOR ? editorRef.current?.blur() : editor.blur();
+    // Blur EVERY possible first responder, not just the rich-text editor.
+    // Dino (build 245) reported Done doing nothing; the old handler never
+    // blurred the TITLE input, so with the title focused it relied entirely
+    // on Keyboard.dismiss() — which can no-op (keyboard-controller installed,
+    // and it can never resign the native editor's UITextView, which RN does
+    // not track). Blur each responder explicitly; Keyboard.dismiss() stays as
+    // belt-and-braces. The native blur is async — swallow rejections so a
+    // bridge hiccup can't surface as an unhandled rejection with the keyboard
+    // stuck up.
+    titleInputRef.current?.blur();
+    if (IS_NATIVE_EDITOR) {
+      Promise.resolve(editorRef.current?.blur()).catch(() => {
+        // Native blur failed — Keyboard.dismiss below is the only fallback.
+      });
+    } else {
+      editor.blur();
+    }
     Keyboard.dismiss();
+    // Flush (don't cancel) any pending autosave so the latest keystrokes are
+    // persisted immediately; editing chrome follows keyboard visibility.
     autoSaveControllerRef.current?.flush();
   }, [editor]);
 

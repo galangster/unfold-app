@@ -2886,13 +2886,18 @@ export default function OnboardingScreen() {
               </Text>
             </Animated.View>
 
-            {/* Scripture verse */}
+            {/* Scripture verse — framed by accent hairlines above/below with a
+                faint wash, matching the reader's blockquote (no left sliver) */}
             <Animated.View
               entering={FadeIn.duration(800).delay(700)}
               style={{
-                paddingLeft: Spacing['4'],
-                borderLeftWidth: 2,
-                borderLeftColor: alpha(colors.accent, 0.3),
+                paddingVertical: Spacing['4'],
+                paddingHorizontal: Spacing['4'],
+                borderTopWidth: StyleSheet.hairlineWidth,
+                borderBottomWidth: StyleSheet.hairlineWidth,
+                borderTopColor: alpha(colors.accent, 0.28),
+                borderBottomColor: alpha(colors.accent, 0.16),
+                backgroundColor: alpha(colors.accent, 0.04),
               }}
             >
               <Text style={{
