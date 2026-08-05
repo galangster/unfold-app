@@ -190,6 +190,14 @@ export interface UserProfile {
   growthGoals?: string[];
   obstacles?: string[];
   companionName?: string;
+  // Onboarding personalization inputs (mirror-back v2, diagnostic round, key people, upcoming event)
+  keyPeople?: { name: string; relationship: string }[];
+  upcomingEvent?: { label: string; date: string };
+  diagnosticAnswers?: { question: string; answer: string }[];
+  /** The mirror-back "working read" shown to the user (for ratify/correct), stored whenever displayed. */
+  mirrorWorkingRead?: string;
+  /** What the user said the mirror-back working read got wrong, if they corrected it. */
+  mirrorCorrection?: string;
 }
 
 export interface Quote {

@@ -67,28 +67,87 @@ export function normalizeGenerationResult(
   ) as CanonicalGenerationResultPayload;
 }
 
+export interface InitialArcUserContext {
+  name: string;
+  aboutMe: string;
+  situation: string;
+  emotion: string;
+  faith: string;
+  seeking: string;
+  themeCategory: string;
+  devotionalType: string;
+  studySubject?: string;
+  readingDuration?: number;
+  devotionalLength?: number;
+  bibleTranslation?: string;
+  writingStyle?: Record<string, string>;
+  relationshipWithGod?: string;
+  growthGoals?: string[];
+  obstacles?: string[];
+  keyPeople?: { name: string; relationship: string }[];
+  upcomingEvent?: { label: string; date: string };
+  diagnosticAnswers?: { question: string; answer: string }[];
+  workingRead?: string;
+  userCorrection?: string;
+}
+
+/** Duck-typed source for buildInitialArcUserContext — kept independent of UserProfile to avoid a store.ts import. */
+export interface InitialArcUserSource {
+  name: string;
+  aboutMe: string;
+  currentSituation: string;
+  emotionalState: string;
+  faithImpact?: string;
+  spiritualSeeking: string;
+  selectedTheme?: string;
+  selectedType?: string;
+  selectedStudySubject?: string;
+  readingDuration?: number;
+  devotionalLength?: number;
+  bibleTranslation?: string;
+  writingStyle?: unknown;
+  relationshipWithGod?: string;
+  growthGoals?: string[];
+  obstacles?: string[];
+  keyPeople?: { name: string; relationship: string }[];
+  upcomingEvent?: { label: string; date: string };
+  diagnosticAnswers?: { question: string; answer: string }[];
+  mirrorWorkingRead?: string;
+  mirrorCorrection?: string;
+}
+
+/** Builds the initial_arc submission's userContext from a user profile. Pure — safe to unit test. */
+export function buildInitialArcUserContext(user: InitialArcUserSource): InitialArcUserContext {
+  return {
+    name: user.name,
+    aboutMe: user.aboutMe,
+    situation: user.currentSituation,
+    emotion: user.emotionalState,
+    faith: user.faithImpact ?? '',
+    seeking: user.spiritualSeeking,
+    themeCategory: user.selectedTheme ?? '',
+    devotionalType: user.selectedType ?? 'personal',
+    studySubject: user.selectedStudySubject,
+    readingDuration: user.readingDuration,
+    devotionalLength: user.devotionalLength,
+    bibleTranslation: user.bibleTranslation ?? 'BSB',
+    writingStyle: user.writingStyle as Record<string, string> | undefined,
+    relationshipWithGod: user.relationshipWithGod,
+    growthGoals: user.growthGoals,
+    obstacles: user.obstacles,
+    keyPeople: user.keyPeople,
+    upcomingEvent: user.upcomingEvent,
+    diagnosticAnswers: user.diagnosticAnswers,
+    workingRead: user.mirrorWorkingRead,
+    userCorrection: user.mirrorCorrection,
+  };
+}
+
 export async function submitGenerationJob(params: {
   devotionalId?: string;
   dayNumber: number;
   jobType: "initial_arc" | "day" | "onboarding";
-  userContext?: {
-    name: string;
-    aboutMe: string;
-    situation: string;
-    emotion: string;
-    faith: string;
-    seeking: string;
-    themeCategory: string;
-    devotionalType: string;
-    studySubject?: string;
-    readingDuration?: number;
-    devotionalLength?: number;
-    bibleTranslation?: string;
-    writingStyle?: Record<string, string>;
-    relationshipWithGod?: string;
-    growthGoals?: string[];
-    obstacles?: string[];
-  };
+  userContext?: InitialArcUserContext;
 }): Promise<Pick<GenerationJobResponse, 'jobId' | 'status' | 'devotionalId'>> {
   // Read cached dynamic prompt example (if any) for self-improving generation quality
   let dynamicExample: { rule: string; badText: string; goodText: string } | undefined;

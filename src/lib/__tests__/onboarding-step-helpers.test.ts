@@ -1,10 +1,15 @@
 import {
   buildOnboardingSampleGenerationRequest,
+  formatDateOnly,
+  formatDateOnlyForDisplay,
   getContextualSituationChips,
   getFilteredOnboardingSteps,
   getInitialOnboardingStepId,
   getOnboardingStepLayoutMode,
   isFullScreenOnboardingStepType,
+  resolveQuickDateChip,
+  shapeKeyPeople,
+  shapeUpcomingEvent,
   shouldShowOnboardingTopContinue,
   shouldStartOnboardingSampleGeneration,
 } from '../onboarding-step-helpers';
@@ -381,6 +386,99 @@ describe('onboarding step helpers', () => {
           nextRequest: buildRequest({ growthGoals: ['study scripture'] }),
         }),
       ).toBe(false);
+    });
+  });
+
+  describe('shapeKeyPeople', () => {
+    it('drops entries with an empty or missing name', () => {
+      expect(
+        shapeKeyPeople([
+          { name: '', relationship: 'Spouse' },
+          { name: '   ', relationship: 'Friend' },
+          { relationship: 'Mentor' },
+          { name: 'Sam', relationship: 'Parent' },
+        ]),
+      ).toEqual([{ name: 'Sam', relationship: 'Parent' }]);
+    });
+
+    it('caps the result at 5 people', () => {
+      const people = Array.from({ length: 8 }, (_, i) => ({ name: `Person ${i}`, relationship: `Rel ${i}` }));
+      expect(shapeKeyPeople(people)).toHaveLength(5);
+    });
+
+    it('trims names to the max length', () => {
+      const longName = 'x'.repeat(80);
+      expect(shapeKeyPeople([{ name: longName, relationship: 'Friend' }])[0].name).toHaveLength(50);
+    });
+
+    it('returns an empty array for null or undefined input', () => {
+      expect(shapeKeyPeople(null)).toEqual([]);
+      expect(shapeKeyPeople(undefined)).toEqual([]);
+    });
+  });
+
+  describe('shapeUpcomingEvent', () => {
+    it('returns undefined unless both label and date are set', () => {
+      expect(shapeUpcomingEvent(null)).toBeUndefined();
+      expect(shapeUpcomingEvent({ label: '', date: '2026-08-15' })).toBeUndefined();
+      expect(shapeUpcomingEvent({ label: 'A court date', date: '' })).toBeUndefined();
+      expect(shapeUpcomingEvent({ label: '  ', date: '2026-08-15' })).toBeUndefined();
+    });
+
+    it('trims the label when both fields are present', () => {
+      expect(shapeUpcomingEvent({ label: '  A move  ', date: '2026-08-15' })).toEqual({
+        label: 'A move',
+        date: '2026-08-15',
+      });
+    });
+  });
+
+  describe('resolveQuickDateChip', () => {
+    // Wednesday, August 5, 2026
+    const reference = new Date(2026, 7, 5);
+
+    it('maps tomorrow to a single day ahead', () => {
+      expect(resolveQuickDateChip('tomorrow', reference)).toBe('2026-08-06');
+    });
+
+    it('maps this-weekend to the upcoming Saturday', () => {
+      expect(resolveQuickDateChip('this-weekend', reference)).toBe('2026-08-08');
+    });
+
+    it('maps next-week to 7 days ahead', () => {
+      expect(resolveQuickDateChip('next-week', reference)).toBe('2026-08-12');
+    });
+
+    it('maps in-two-weeks to 14 days ahead', () => {
+      expect(resolveQuickDateChip('in-two-weeks', reference)).toBe('2026-08-19');
+    });
+
+    it('maps in-a-month to the same day next month', () => {
+      expect(resolveQuickDateChip('in-a-month', reference)).toBe('2026-09-05');
+    });
+
+    it('treats a Saturday reference as this weekend itself', () => {
+      const saturday = new Date(2026, 7, 8);
+      expect(resolveQuickDateChip('this-weekend', saturday)).toBe('2026-08-08');
+    });
+
+    it('rolls in-a-month over a year boundary', () => {
+      const december = new Date(2026, 11, 20);
+      expect(resolveQuickDateChip('in-a-month', december)).toBe('2027-01-20');
+    });
+  });
+
+  describe('formatDateOnly / formatDateOnlyForDisplay', () => {
+    it('formats a Date as a local yyyy-mm-dd string', () => {
+      expect(formatDateOnly(new Date(2026, 0, 5))).toBe('2026-01-05');
+    });
+
+    it('formats a yyyy-mm-dd string for display', () => {
+      expect(formatDateOnlyForDisplay('2026-08-15')).toBe('Aug 15');
+    });
+
+    it('returns the input unchanged when malformed', () => {
+      expect(formatDateOnlyForDisplay('not-a-date')).toBe('not-a-date');
     });
   });
 });

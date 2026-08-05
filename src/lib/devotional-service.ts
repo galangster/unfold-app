@@ -2362,6 +2362,66 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
   }
 }
 
+// Helper function to generate the diagnostic-round follow-up questions (3
+// targeted questions asked one at a time right after currentSituation).
+// Server-owned prompts only — no legacy client-built-prompt fallback, so any
+// failure (rate limit, network, malformed response) returns null and callers
+// skip the step gracefully instead of showing a degraded experience.
+export async function generateDiagnosticQuestions(data: {
+  aboutMe?: string;
+  currentSituation?: string;
+  growthGoals?: string[];
+  obstacles?: string[];
+  relationshipWithGod?: string;
+  selectedThemes?: string[];
+  selectedType?: string;
+}): Promise<{ questions: { question: string; subtext: string; chips: string[] }[] } | null> {
+  const rateLimit = await checkRateLimit('adaptive-question');
+  if (!rateLimit.allowed) {
+    logger.warn('[Diagnostic] Rate limit exceeded:', rateLimit);
+    return null;
+  }
+
+  try {
+    const insightResult = await postJsonWithBackendFallback(
+      '/api/generate/onboarding-insight',
+      { kind: 'diagnostic-round', data },
+      { timeoutMs: 20000 },
+    );
+
+    if (!insightResult.response.ok) {
+      logger.log('[Diagnostic] onboarding-insight unavailable:', insightResult.response.status);
+      return null;
+    }
+
+    const responseData = await insightResult.response.json();
+    if (!Array.isArray(responseData?.questions)) {
+      logger.warn('[Diagnostic] Backend returned no questions array');
+      return null;
+    }
+
+    const questions = (responseData.questions as unknown[])
+      .filter((q): q is Record<string, unknown> => !!q && typeof q === 'object')
+      .map((q) => ({
+        question: typeof q.question === 'string' ? q.question.trim() : '',
+        subtext: typeof q.subtext === 'string' ? q.subtext.trim() : '',
+        chips: Array.isArray(q.chips) ? q.chips.filter((c: unknown): c is string => typeof c === 'string' && c.trim().length > 0) : [],
+      }))
+      .filter((q) => q.question.length > 0);
+
+    if (questions.length === 0) {
+      logger.warn('[Diagnostic] Backend returned no usable questions');
+      return null;
+    }
+
+    await incrementRateLimit('adaptive-question');
+    return { questions };
+  } catch (err) {
+    logger.warn('[Diagnostic] Generation failed:', err);
+    return null;
+  }
+}
+
 // Generate AI mirror-back text for onboarding — acts as a teaser for the devotional
 export interface MirrorBackContent {
   reflection: string;
