@@ -2091,6 +2091,40 @@ export async function generateAdaptiveQuestion(
       else currentStep = 'longing';
     }
 
+    // Preferred path: server-owned prompts. The client sends data only.
+    // Falls through to the legacy client-built-prompt passthrough below when
+    // the backend predates /api/generate/onboarding-insight (deploy skew).
+    try {
+      const insightResult = await postJsonWithBackendFallback(
+        '/api/generate/onboarding-insight',
+        {
+          kind: 'adaptive-question',
+          data: {
+            previousAnswers,
+            stage: currentStep,
+            userContext,
+          },
+        },
+        { timeoutMs: 15000 },
+      );
+      if (insightResult.response.ok) {
+        const data = await insightResult.response.json();
+        if (typeof data?.question === 'string' && data.question.trim()) {
+          return {
+            question: data.question,
+            subtext: typeof data.subtext === 'string' && data.subtext ? data.subtext : nextQuestionBase.subtext,
+            chips: Array.isArray(data.chips) ? data.chips.filter((c: unknown) => typeof c === 'string') : undefined,
+            source: 'backend',
+            backendUrl: insightResult.backendUrl,
+          };
+        }
+      } else {
+        logger.log('[Adaptive] onboarding-insight unavailable, using legacy path:', insightResult.response.status);
+      }
+    } catch (insightErr) {
+      logger.log('[Adaptive] onboarding-insight failed, using legacy path:', insightErr);
+    }
+
     const stepInstructions: Record<string, string> = {
       opening: `THIS IS THE OPENING QUESTION. The person is just starting to share.
 
@@ -2334,6 +2368,8 @@ export interface MirrorBackContent {
   verse: string;
   verseRef: string;
   anticipation: string;
+  /** Plain-language read of what seems underneath — shown for ratification. */
+  workingRead?: string;
 }
 
 export async function generateMirrorBackText(
@@ -2358,6 +2394,36 @@ export async function generateMirrorBackText(
   }
 
   try {
+    // Preferred path: server-owned prompts (adds workingRead for the
+    // ratification beat). Falls through to the legacy client-built-prompt
+    // passthrough when the backend predates onboarding-insight.
+    try {
+      const insightResult = await postJsonWithBackendFallback(
+        '/api/generate/onboarding-insight',
+        { kind: 'mirror-back', data: onboardingData },
+        { timeoutMs: 15000 },
+      );
+      if (insightResult.response.ok) {
+        const data = await insightResult.response.json();
+        if (typeof data?.reflection === 'string' && data.reflection.trim()) {
+          return {
+            content: {
+              reflection: data.reflection,
+              verse: typeof data.verse === 'string' ? data.verse : '',
+              verseRef: typeof data.verseRef === 'string' ? data.verseRef : '',
+              anticipation: typeof data.anticipation === 'string' ? data.anticipation : '',
+              workingRead: typeof data.workingRead === 'string' && data.workingRead.trim() ? data.workingRead : undefined,
+            },
+            source: 'backend',
+          };
+        }
+      } else {
+        logger.log('[MirrorBack] onboarding-insight unavailable, using legacy path:', insightResult.response.status);
+      }
+    } catch (insightErr) {
+      logger.log('[MirrorBack] onboarding-insight failed, using legacy path:', insightErr);
+    }
+
     const contextParts: string[] = [];
     if (onboardingData.selectedThemes?.length) {
       contextParts.push(`Selected themes: ${onboardingData.selectedThemes.join(', ')}`);
