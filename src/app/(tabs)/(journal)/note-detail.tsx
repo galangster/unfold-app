@@ -814,6 +814,7 @@ export default function NoteDetailScreen() {
     // fresher, and a stale-closure flush firing from unmount cleanup could
     // otherwise double-create a brand-new note.
     autoSaveControllerRef.current?.cancel();
+    setPendingSave(false);
     pendingAutoSaveHtmlRef.current = undefined;
 
     // Save unconditionally. Empty new notes fall through persistCurrentSnapshot

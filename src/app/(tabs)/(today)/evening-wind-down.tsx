@@ -425,7 +425,7 @@ export default function EveningWindDownScreen() {
                 ))}
                 {/* Closing ornament */}
                 <Animated.View
-                  entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(320 + examen.movements.length * 150).easing(Ease.out)}
+                  entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(420 + examen.movements.length * 150).easing(Ease.out)}
                   style={{
                     alignItems: 'center',
                     paddingTop: Spacing['2'],
@@ -518,7 +518,7 @@ export default function EveningWindDownScreen() {
 
             {/* === DONE BUTTON === */}
             {(examen || scriptureText) && (
-              <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(500 + (examen?.movements.length ?? 5) * 150).easing(Ease.out)} style={{ marginTop: Spacing['4'], marginBottom: Spacing['2'] }}>
+              <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(600 + (examen?.movements.length ?? 5) * 150).easing(Ease.out)} style={{ marginTop: Spacing['4'], marginBottom: Spacing['2'] }}>
                 <TouchableOpacity activeOpacity={0.7}
                   onPress={handleShowCelebration}
                 >

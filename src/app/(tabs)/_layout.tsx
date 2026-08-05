@@ -100,11 +100,11 @@ function NoteDraftDock() {
         accessibilityHint="Opens the minimized note in edit mode"
         style={[
           styles.draftDock,
-          elevated('lg', isDark),
-          {
+            {
             backgroundColor: isDark ? 'rgba(28, 24, 20, 0.96)' : 'rgba(255, 252, 247, 0.98)',
-            borderColor: colors.border,
           },
+            // elevated() last: its dark ring must win the style merge (review #1)
+            elevated('lg', isDark),
         ]}
       >
         <View style={[styles.draftDockIcon, { backgroundColor: alpha(colors.accent, 0.1) }]}>

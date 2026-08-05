@@ -9,7 +9,7 @@ import { parseScriptureReferences } from '@/lib/scripture-parser';
 import { logger } from '@/lib/logger';
 import { stripOuterQuotes } from '@/lib/cn';
 import { isStructuredWordStudy, normalizeWordStudy } from '@/lib/word-study';
-import { LTREMARK_WOFF2_BASE64 } from '@/lib/ltremark-font-base64';
+import { DISPLAY_SERIF_WOFF2_BASE64 } from '@/lib/display-font-base64';
 
 interface Quote {
   text: string;
@@ -921,7 +921,7 @@ export function DevotionalWebView({
     const accentColor = colors.accent;
     const inputBg = isDark ? '#1F1F1F' : '#EDE8E0';     // warmer, visible surface separation
     const uiFontStack = "-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif";
-    const displayFontStack = "'LT Remark', Georgia, serif";
+    const displayFontStack = "'PP Editorial New', Georgia, serif";
 
     const bodyText = day.bodyText || '';
 
@@ -1064,8 +1064,8 @@ export function DevotionalWebView({
   
   <style>
     @font-face {
-      font-family: 'LT Remark';
-      src: url(data:font/woff2;base64,${LTREMARK_WOFF2_BASE64}) format('woff2');
+      font-family: 'PP Editorial New';
+      src: url(data:font/woff2;base64,${DISPLAY_SERIF_WOFF2_BASE64}) format('woff2');
       font-weight: 400;
       font-style: normal;
       font-display: swap;
@@ -1116,14 +1116,17 @@ export function DevotionalWebView({
        deliberate sequence; everything below the fold enters together so the
        tail never sits invisible past ~560ms (audit #9 — the old ladder ran
        to 1860ms on long devotionals). */
-    p:nth-child(1)  { animation-delay:   60ms; }
-    p:nth-child(2)  { animation-delay:  150ms; }
-    p:nth-child(3)  { animation-delay:  240ms; }
-    p:nth-child(4)  { animation-delay:  330ms; }
-    p:nth-child(5)  { animation-delay:  420ms; }
-    p:nth-child(6)  { animation-delay:  510ms; }
-    p:nth-child(n+7) { animation-delay:  560ms; }
+    /* nth-of-type, not nth-child: the pull-quote <aside> and <hr> dividers
+       are interleaved siblings and would shift every later paragraph's slot */
+    p:nth-of-type(1)  { animation-delay:   60ms; }
+    p:nth-of-type(2)  { animation-delay:  150ms; }
+    p:nth-of-type(3)  { animation-delay:  240ms; }
+    p:nth-of-type(4)  { animation-delay:  330ms; }
+    p:nth-of-type(5)  { animation-delay:  420ms; }
+    p:nth-of-type(6)  { animation-delay:  510ms; }
+    p:nth-of-type(n+7) { animation-delay:  560ms; }
 
+    aside.pull-quote { animation-delay: 240ms; }
     blockquote     { animation-delay: 560ms; }
     .context-box   { animation-delay: 560ms; }
     .word-study-box { animation-delay: 560ms; }
