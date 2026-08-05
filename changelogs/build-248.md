@@ -1,4 +1,4 @@
-Build 247 — Dino's fixes, a full design polish pass, and a new display typeface
+Build 248 — Dino's fixes, a full design polish pass, and a new display typeface
 
 • New display typeface: PP Editorial New Light replaces Gupter across the app, the note editor, and PDF exports.
 • Dino round 3: Notes "Done" now reliably dismisses the keyboard and saves; the generating screen has a "Go home — we'll keep writing" exit and a second chance to enable ready-notifications (tap it — that's why you never got notified, Dino!).
