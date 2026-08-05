@@ -797,8 +797,8 @@ const styles = StyleSheet.create({
   },
   actionHeading: {
     fontFamily: FontFamily.display,
-    fontSize: FontSize.xl,
-    lineHeight: 25,
+    fontSize: 18,
+    lineHeight: 23,
   },
   actionConversationTitle: {
     fontFamily: FontFamily.body,

@@ -167,7 +167,7 @@ export default function CheckInScheduleScreen() {
           </TouchableOpacity>
         </View>
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['8'] }}>
-          <Text style={{ fontFamily: FontFamily.display, fontSize: 21, letterSpacing: -0.2, color: colors.text, textAlign: 'center', marginBottom: Spacing['3'] }}>
+          <Text style={{ fontFamily: FontFamily.display, fontSize: 21, color: colors.text, textAlign: 'center', marginBottom: Spacing['3'] }}>
             Custom Schedules
           </Text>
           <Text style={{ fontFamily: FontFamily.body, fontSize: 15, color: colors.textMuted, textAlign: 'center', lineHeight: 22, marginBottom: Spacing['6'] }}>

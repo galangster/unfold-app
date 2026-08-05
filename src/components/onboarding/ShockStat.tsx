@@ -41,7 +41,7 @@ function StatChar({ char, delay, fontSize, colors }: {
     <Animated.Text style={[{
       fontFamily: FontFamily.display,
       fontSize,
-      letterSpacing: -2,
+      letterSpacing: -1.1,
       lineHeight: fontSize * 1.05,
     }, style]}>
       {char}

@@ -11,7 +11,7 @@ enum UnfoldEditorFontLoader {
 
   private static var didRegister = false
 
-  /// Registers every .ttf in the module's resource bundle. Idempotent —
+  /// Registers every .ttf/.otf in the module's resource bundle. Idempotent —
   /// subsequent calls are no-ops.
   static func registerIfNeeded() {
     guard !didRegister else { return }
@@ -22,10 +22,11 @@ enum UnfoldEditorFontLoader {
       return
     }
 
-    guard let urls = bundle.urls(forResourcesWithExtension: "ttf", subdirectory: nil),
-          !urls.isEmpty
-    else {
-      NSLog("[UnfoldEditor] FONT_LOADER: no .ttf files in resource bundle at \(bundle.bundleURL.path)")
+    let ttfs = bundle.urls(forResourcesWithExtension: "ttf", subdirectory: nil) ?? []
+    let otfs = bundle.urls(forResourcesWithExtension: "otf", subdirectory: nil) ?? []
+    let urls = ttfs + otfs
+    guard !urls.isEmpty else {
+      NSLog("[UnfoldEditor] FONT_LOADER: no font files in resource bundle at \(bundle.bundleURL.path)")
       return
     }
 

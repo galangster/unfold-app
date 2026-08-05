@@ -478,7 +478,7 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.display,
     fontSize: 28,
     lineHeight: 33,
-    letterSpacing: -0.4,
+    letterSpacing: -0.15,
     marginBottom: Spacing['4'],
   },
   progressRow: {

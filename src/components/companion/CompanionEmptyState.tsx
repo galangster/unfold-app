@@ -204,7 +204,7 @@ export function CompanionEmptyState({ onSelectStarter, todayTheme }: Props) {
         <Text
           style={{
             fontFamily: FontFamily.display,
-            fontSize: FontSize['2xl'],
+            fontSize: 21,
             color: colors.text,
             textAlign: 'center',
             maxWidth: 280,

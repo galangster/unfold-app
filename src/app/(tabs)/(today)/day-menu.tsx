@@ -78,7 +78,7 @@ export default function DayMenuScreen() {
         <Text
           style={{
             fontFamily: FontFamily.display,
-            fontSize: FontSize['2xl'],
+            fontSize: 21,
             color: colors.text,
             textAlign: 'left',
             marginTop: Spacing['3'],

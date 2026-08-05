@@ -274,9 +274,9 @@ const styles = StyleSheet.create({
   loadingTitle: {
     width: '100%',
     fontFamily: FontFamily.display,
-    fontSize: 28,
-    lineHeight: 34,
-    letterSpacing: -0.4,
+    fontSize: 25,
+    lineHeight: 30,
+    letterSpacing: -0.15,
     marginBottom: Spacing['2'],
   },
   loadingCopy: {
@@ -304,9 +304,9 @@ const styles = StyleSheet.create({
   themeName: {
     width: '100%',
     fontFamily: FontFamily.display,
-    fontSize: 32,
-    lineHeight: 38,
-    letterSpacing: -0.5,
+    fontSize: 28,
+    lineHeight: 33,
+    letterSpacing: -0.15,
     marginBottom: Spacing['3'],
   },
   reason: {

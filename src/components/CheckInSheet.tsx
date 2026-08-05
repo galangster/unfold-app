@@ -875,8 +875,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   stepTitle: {
-    fontSize: FontSize['2xl'],
-    letterSpacing: -0.3,
+    fontSize: 21,
     marginBottom: 4,
   },
   stepSubtitle: {

@@ -100,7 +100,7 @@ const styles = StyleSheet.create({
   },
   logo: {
     fontFamily: FontFamily.display,
-    fontSize: FontSize['2xl'],
+    fontSize: 21,
     color: Colors.accent,
     marginBottom: Spacing['8'],
     letterSpacing: 2,

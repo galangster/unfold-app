@@ -214,11 +214,11 @@ export function CompletionCelebration({
               <Text
                 style={{
                   fontFamily: FontFamily.display,
-                  fontSize: type === 'series' ? 52 : 48,
+                  fontSize: type === 'series' ? 46 : 43,
                   color: colors.text,
                   textAlign: 'left',
-                  lineHeight: type === 'series' ? 56 : 52,
-                  letterSpacing: -1,
+                  lineHeight: type === 'series' ? 50 : 47,
+                  letterSpacing: -0.45,
                 }}
               >
                 {title}

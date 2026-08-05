@@ -5,6 +5,7 @@ import { File, Paths } from 'expo-file-system';
 import { Platform } from 'react-native';
 import { logger } from '@/lib/logger';
 import type { Devotional } from './store';
+import { DISPLAY_SERIF_WOFF2_BASE64 } from './display-font-base64';
 
 const DEFAULT_ACCENT = '#5B8DEF';
 const BODY_COLOR = '#2A2A2E';
@@ -381,7 +382,13 @@ export function generateDevotionalHTML(devotional: Devotional, options?: PDFExpo
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>${escapeHTML(devotional.title)} - Unfold</title>
       <style>
-        @import url('https://fonts.googleapis.com/css2?family=Gupter:wght@400;500;700&display=swap');
+        @font-face {
+          font-family: 'PP Editorial New';
+          src: url(data:font/woff2;base64,${DISPLAY_SERIF_WOFF2_BASE64}) format('woff2');
+          font-weight: 400;
+          font-style: normal;
+          font-display: swap;
+        }
 
         @page {
           margin: 0.75in;
@@ -446,8 +453,8 @@ export function generateDevotionalHTML(devotional: Devotional, options?: PDFExpo
         }
 
         .cover h1 {
-          font-family: 'Gupter', Georgia, serif;
-          font-size: 34pt;
+          font-family: 'PP Editorial New', Georgia, serif;
+          font-size: 30pt;
           font-weight: normal;
           color: ${HEADING_COLOR};
           letter-spacing: 0.01em;
@@ -484,8 +491,8 @@ export function generateDevotionalHTML(devotional: Devotional, options?: PDFExpo
         }
 
         .cover .prepared-name {
-          font-family: 'Gupter', Georgia, serif;
-          font-size: 15pt;
+          font-family: 'PP Editorial New', Georgia, serif;
+          font-size: 13pt;
           color: ${BODY_COLOR};
           font-weight: normal;
           margin-bottom: 0.8in;
@@ -531,8 +538,8 @@ export function generateDevotionalHTML(devotional: Devotional, options?: PDFExpo
         }
 
         .day-title {
-          font-family: 'Gupter', Georgia, serif;
-          font-size: 24pt;
+          font-family: 'PP Editorial New', Georgia, serif;
+          font-size: 21pt;
           font-weight: normal;
           line-height: 1.25;
           color: ${HEADING_COLOR};
@@ -609,8 +616,8 @@ export function generateDevotionalHTML(devotional: Devotional, options?: PDFExpo
         }
 
         .quotable p {
-          font-family: 'Gupter', Georgia, serif;
-          font-size: 14pt;
+          font-family: 'PP Editorial New', Georgia, serif;
+          font-size: 12pt;
           line-height: 1.5;
           color: ${accent};
         }
@@ -919,8 +926,8 @@ export function generateDevotionalHTML(devotional: Devotional, options?: PDFExpo
         }
 
         .stat-value {
-          font-family: 'Gupter', Georgia, serif;
-          font-size: 36pt;
+          font-family: 'PP Editorial New', Georgia, serif;
+          font-size: 32pt;
           font-weight: normal;
           color: ${accent};
           display: block;
@@ -987,8 +994,8 @@ export function generateDevotionalHTML(devotional: Devotional, options?: PDFExpo
         }
 
         .final-reflection .reflection-prompt {
-          font-family: 'Gupter', Georgia, serif;
-          font-size: 11pt;
+          font-family: 'PP Editorial New', Georgia, serif;
+          font-size: 10pt;
           color: #555;
           margin-bottom: 0.2in;
           line-height: 1.6;

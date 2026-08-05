@@ -1653,7 +1653,7 @@ export default function OnboardingScreen() {
 
             <TypewriterText
               text="Welcome to Unfold Premium. Now let's shape a devotional journey around where you are right now."
-              style={{ fontSize: 28, lineHeight: 37, letterSpacing: -0.4, color: colors.text, textAlign: 'center', fontFamily: FontFamily.display }}
+              style={{ fontSize: 28, lineHeight: 37, letterSpacing: -0.15, color: colors.text, textAlign: 'center', fontFamily: FontFamily.display }}
               charDelay={34}
               delay={350}
               highlightWord="Unfold"
@@ -3284,7 +3284,7 @@ export default function OnboardingScreen() {
                 style={{
                   fontFamily: FontFamily.displayItalic,
                   fontSize: 27,
-                  letterSpacing: -0.4,
+                  letterSpacing: -0.15,
                   color: colors.text,
                 }}
               >

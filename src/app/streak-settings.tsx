@@ -492,7 +492,6 @@ const ssStyles = StyleSheet.create({
   tierName: {
     fontFamily: FontFamily.display,
     fontSize: 21,
-    letterSpacing: -0.2,
     marginTop: 1,
   },
   streakCountRight: {

@@ -964,7 +964,7 @@ export const AnimatedHeadline = memo(function AnimatedHeadline({ text, color, pa
           style={{
             fontFamily: FontFamily.display,
             fontSize: 28,
-            letterSpacing: -0.45,
+            letterSpacing: -0.15,
             lineHeight: 35,
           }}
         />

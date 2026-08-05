@@ -384,8 +384,8 @@ const styles = StyleSheet.create({
   reference: {
     flexShrink: 1,
     fontFamily: FontFamily.display,
-    fontSize: 22,
-    lineHeight: 28,
+    fontSize: 20,
+    lineHeight: 25,
   },
   translationPill: {
     paddingHorizontal: 7,
@@ -428,8 +428,8 @@ const styles = StyleSheet.create({
   },
   scriptureText: {
     fontFamily: FontFamily.display,
-    fontSize: 20,
-    lineHeight: 33,
+    fontSize: 18,
+    lineHeight: 30,
   },
   loadingWrap: {
     alignItems: 'center',
@@ -464,8 +464,8 @@ const styles = StyleSheet.create({
   },
   promptText: {
     fontFamily: FontFamily.display,
-    fontSize: FontSize.lg,
-    lineHeight: 27,
+    fontSize: 16,
+    lineHeight: 24,
   },
   errorWrap: {
     alignItems: 'center',

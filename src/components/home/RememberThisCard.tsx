@@ -208,9 +208,8 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: FontFamily.display,
-    fontSize: 22,
-    lineHeight: 27,
-    letterSpacing: -0.2,
+    fontSize: 20,
+    lineHeight: 25,
     marginTop: Spacing['0.5'],
   },
   quoteBlock: {
@@ -223,8 +222,9 @@ const styles = StyleSheet.create({
   },
   quoteMark: {
     fontFamily: FontFamily.display,
-    fontSize: 28,
-    lineHeight: 26,
+    fontSize: 25,
+    lineHeight: 23,
+    letterSpacing: -0.15,
     marginBottom: -4,
   },
   quoteText: {

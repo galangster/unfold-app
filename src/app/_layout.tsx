@@ -237,7 +237,7 @@ function RootLayoutNav() {
 
 function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
-    'LTRemark-Regular': require('../../assets/fonts/LTRemark-Regular.otf'),
+    'PPEditorialNew-Light': require('../../assets/fonts/PPEditorialNew-Light.otf'),
     'SourceSerifPro_400Regular': require('../../assets/fonts/SourceSerifPro_400Regular.ttf'),
     'SourceSerifPro_400Regular_Italic': require('../../assets/fonts/SourceSerifPro_400Regular_Italic.ttf'),
     'SourceSerifPro_600SemiBold': require('../../assets/fonts/SourceSerifPro_600SemiBold.ttf'),
@@ -247,7 +247,7 @@ function RootLayout() {
     'Inter_500Medium': require('../../assets/fonts/Inter_500Medium.ttf'),
     'Inter_600SemiBold': require('../../assets/fonts/Inter_600SemiBold.ttf'),
     'Inter_700Bold': require('../../assets/fonts/Inter_700Bold.ttf'),
-    // NOTE (PERF, cold start): the eager set is UI/display faces (Gupter,
+    // NOTE (PERF, cold start): the eager set is UI/display faces (PP Editorial New,
     // Inter) plus the DEFAULT reading family (Source Serif) only — 2.6 MB
     // instead of the 9.7 MB that blocked the splash when all six reading
     // families were listed here. Garamond / Lora / Crimson / Merriweather

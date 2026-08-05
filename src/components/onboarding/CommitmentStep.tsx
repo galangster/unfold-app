@@ -117,9 +117,9 @@ export function CommitmentStep({ step, commitmentLevel, onSelect, onContinue, co
         entering={reducedMotion ? undefined : FadeIn.duration(Duration.slow).delay(200).easing(Ease.out)}
         style={{
           fontFamily: FontFamily.display,
-          fontSize: 24,
+          fontSize: 21,
           color: colors.text,
-          lineHeight: Math.round(24 * 1.4),
+          lineHeight: Math.round(21 * 1.4),
           textAlign: 'left',
         }}
       >

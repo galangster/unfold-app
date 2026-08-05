@@ -508,7 +508,7 @@ const dcStyles = StyleSheet.create({
   dayTitle: {
     fontFamily: FontFamily.display,
     marginBottom: Spacing['5'],
-    letterSpacing: -0.5,
+    letterSpacing: -0.15,
   },
   accentLine: {
     height: 1.5,

@@ -125,7 +125,8 @@ const MagicalChar = React.memo(function MagicalChar({
       style={[
         {
           fontFamily: FontFamily.display,
-          fontSize: 28,
+          fontSize: 25,
+          letterSpacing: -0.15,
         },
         style,
         animatedStyle,
@@ -233,7 +234,7 @@ export function TypewriterText({
       {/* Text wrapper handles line-breaking and space collapsing natively.
           Unrevealed chars are invisible placeholders that reserve width,
           preventing words from reflowing as characters appear. */}
-      <Animated.Text style={[{ fontFamily: FontFamily.display, fontSize: 28 }, style]}>
+      <Animated.Text style={[{ fontFamily: FontFamily.display, fontSize: 25, letterSpacing: -0.15 }, style]}>
       {segments.map((segment, segIndex) => {
         if (!segment) return null;
 

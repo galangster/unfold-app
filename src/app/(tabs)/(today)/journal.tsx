@@ -1435,10 +1435,10 @@ const jStyles = StyleSheet.create({
   },
   freewriteTitle: {
     fontFamily: FontFamily.display,
-    // 28 wasn't a token; picked 30 (FontSize['3xl'], closer to 28 than 24)
-    // — "What's stirring?" is short enough not to wrap at common widths.
+    // Rescaled from 30 (ex-FontSize['3xl']) for the display serif's larger optical size.
+    // "What's stirring?" is short enough not to wrap at common widths.
     fontSize: 27,
-    letterSpacing: -0.4,
+    letterSpacing: -0.15,
     marginBottom: Spacing['2'],
   },
   freewriteSubtitle: {
@@ -1549,10 +1549,10 @@ const jStyles = StyleSheet.create({
   },
   soapTitle: {
     fontFamily: FontFamily.display,
-    // 28 wasn't a token; picked 30 (FontSize['3xl']) — "SOAP Journal" is
-    // short enough not to wrap at common widths.
+    // Rescaled from 30 (ex-FontSize['3xl']) for the display serif's larger optical size.
+    // "SOAP Journal" is short enough not to wrap at common widths.
     fontSize: 27,
-    letterSpacing: -0.4,
+    letterSpacing: -0.15,
     marginBottom: 4,
   },
   soapSubtitle: {

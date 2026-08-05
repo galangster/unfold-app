@@ -225,7 +225,7 @@ export default function YouScreen() {
                   fontFamily: FontFamily.display,
                   fontSize: 25,
                   color: colors.text,
-                  letterSpacing: -0.45,
+                  letterSpacing: -0.15,
                   marginTop: 14,
                   textAlign: 'center',
                   minWidth: 120,
@@ -252,7 +252,7 @@ export default function YouScreen() {
                     fontFamily: FontFamily.display,
                     fontSize: 25,
                     color: colors.text,
-                    letterSpacing: -0.45,
+                    letterSpacing: -0.15,
                     marginTop: 14,
                   }}
                 >
@@ -404,7 +404,6 @@ export default function YouScreen() {
                           fontFamily: FontFamily.display,
                           fontSize: 23,
                           color: colors.text,
-                          letterSpacing: -0.45,
                           marginBottom: 4,
                         }}
                       >

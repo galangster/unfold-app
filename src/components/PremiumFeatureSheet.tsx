@@ -369,9 +369,8 @@ const pfStyles = StyleSheet.create({
   },
   headline: {
     fontFamily: FontFamily.display,
-    fontSize: FontSize['2xl'],
+    fontSize: 21,
     textAlign: 'center',
-    letterSpacing: -0.5,
     marginBottom: Spacing['2'],
   },
   description: {

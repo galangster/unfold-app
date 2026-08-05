@@ -38,6 +38,7 @@ import { RecommendedSeriesCard } from './RecommendedSeriesCard';
 import { InlineReflectComposer } from './InlineReflectComposer';
 import type { DevotionalCardState } from './compute-devotional-state';
 import { smartQuotes } from '@/lib/smart-quotes';
+import { titleWithPeriod } from '@/lib/display-title';
 import { stripOuterQuotes } from '@/lib/cn';
 import { Typography } from '@/constants/typography';
 
@@ -106,7 +107,7 @@ const RevealChar = React.memo(function RevealChar({ char, animDelay }: { char: s
   return (
     <Animated.View style={containerStyle}>
       <Animated.Text
-        style={[{ fontFamily: FontFamily.display, fontSize: 56, letterSpacing: -1.5 }, textColorStyle]}
+        style={[{ fontFamily: FontFamily.display, fontSize: 50, letterSpacing: -0.5 }, textColorStyle]}
       >
         {char}
       </Animated.Text>
@@ -324,7 +325,7 @@ function RevealReadyState({ state }: { state: Extract<DevotionalCardState, { typ
             numberOfLines={3}
             maxFontSizeMultiplier={DISPLAY_TEXT_MAX_SCALE}
           >
-            {smartQuotes(state.dayData.title)}
+            {titleWithPeriod(smartQuotes(state.dayData.title))}
           </Text>
 
           <View style={styles.heroQuoteBlock}>
@@ -702,7 +703,7 @@ function MainCard({ state }: MainCardProps) {
               numberOfLines={3}
               maxFontSizeMultiplier={DISPLAY_TEXT_MAX_SCALE}
             >
-              {smartQuotes(dayData.title)}
+              {titleWithPeriod(smartQuotes(dayData.title))}
             </Text>
 
             <View style={styles.heroQuoteBlock}>
@@ -953,20 +954,21 @@ const styles = StyleSheet.create({
   },
   heroDayTitle: {
     fontFamily: FontFamily.display,
-    fontSize: 42,
-    lineHeight: 48,
-    letterSpacing: -0.8,
+    fontSize: 37,
+    lineHeight: 42,
+    letterSpacing: -0.35,
     marginBottom: Spacing['5'],
   },
   heroDayTitleCompact: {
-    fontSize: 36,
-    lineHeight: 41,
-    letterSpacing: -0.6,
+    fontSize: 32,
+    lineHeight: 36,
+    letterSpacing: -0.15,
     marginBottom: Spacing['4'],
   },
   heroDayTitleVeryCompact: {
-    fontSize: 32,
-    lineHeight: 38,
+    fontSize: 28,
+    lineHeight: 33,
+    letterSpacing: -0.15,
   },
   heroQuoteBlock: {
     position: 'relative',
@@ -978,22 +980,22 @@ const styles = StyleSheet.create({
     left: 0,
     top: -2,
     fontFamily: FontFamily.display,
-    fontSize: 28,
-    lineHeight: 28,
+    fontSize: 25,
+    lineHeight: 25,
+    letterSpacing: -0.15,
   },
   heroQuoteText: {
     fontFamily: FontFamily.displayItalic,
-    fontSize: 20,
-    lineHeight: 30,
-    letterSpacing: -0.1,
-  },
-  heroQuoteTextCompact: {
     fontSize: 18,
     lineHeight: 27,
   },
+  heroQuoteTextCompact: {
+    fontSize: 16,
+    lineHeight: 24,
+  },
   heroQuoteTextVeryCompact: {
-    fontSize: 17,
-    lineHeight: 26,
+    fontSize: 15,
+    lineHeight: 23,
   },
   heroTomorrowTeaser: {
     fontFamily: FontFamily.body,
@@ -1149,9 +1151,9 @@ const styles = StyleSheet.create({
   },
   returningTitle: {
     fontFamily: FontFamily.display,
-    fontSize: 32,
-    lineHeight: 40,
-    letterSpacing: -0.5,
+    fontSize: 28,
+    lineHeight: 35,
+    letterSpacing: -0.15,
     textAlign: 'left',
     marginBottom: Spacing['3'],
   },
@@ -1243,9 +1245,8 @@ const styles = StyleSheet.create({
   },
   preparingTitle: {
     fontFamily: FontFamily.display,
-    fontSize: 24,
-    lineHeight: 31,
-    letterSpacing: -0.35,
+    fontSize: 21,
+    lineHeight: 27,
     textAlign: 'center',
     marginBottom: Spacing['2'],
   },
@@ -1336,7 +1337,8 @@ const styles = StyleSheet.create({
   },
   journeyCompleteTitle: {
     fontFamily: FontFamily.display,
-    fontSize: 28,
+    fontSize: 25,
+    letterSpacing: -0.15,
     textAlign: 'center',
     marginBottom: Spacing['2'],
   },
@@ -1498,10 +1500,10 @@ const styles = StyleSheet.create({
   },
   mainCardDayTitle: {
     fontFamily: FontFamily.display,
-    fontSize: FontSize['3xl'],
-    lineHeight: 38,
+    fontSize: 27,
+    lineHeight: 34,
     marginBottom: Spacing['2'],
-    letterSpacing: -0.3,
+    letterSpacing: -0.15,
   },
   mainCardScripture: {
     fontFamily: FontFamily.bodyItalic,
@@ -1540,8 +1542,8 @@ const styles = StyleSheet.create({
   // Completed state (complete-today / tomorrow-locked)
   completedQuoteLine: {
     fontFamily: FontFamily.displayItalic,
-    fontSize: FontSize.xl,
-    lineHeight: 30,
+    fontSize: 18,
+    lineHeight: 27,
     textAlign: 'left',
     marginBottom: Spacing['4'],
     paddingHorizontal: Spacing['2'],

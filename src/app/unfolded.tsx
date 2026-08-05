@@ -1489,7 +1489,7 @@ const s = StyleSheet.create({
     fontFamily: FontFamily.displayItalic,
     fontSize: 80,
     color: PALETTE.cream,
-    letterSpacing: -2.65,
+    letterSpacing: -1.2,
     textAlign: 'center',
   },
   hookLine: {
@@ -1501,7 +1501,7 @@ const s = StyleSheet.create({
   hookName: {
     fontFamily: FontFamily.display,
     fontSize: 25,
-    letterSpacing: -0.4,
+    letterSpacing: -0.15,
     color: PALETTE.gold,
     textAlign: 'center',
     marginBottom: Spacing['2'],
@@ -1542,7 +1542,7 @@ const s = StyleSheet.create({
     fontFamily: FontFamily.display,
     fontSize: 107,
     color: PALETTE.cream,
-    letterSpacing: -4.45,
+    letterSpacing: -1.6,
     lineHeight: 134,
     textAlign: 'center',
   },
@@ -1571,7 +1571,7 @@ const s = StyleSheet.create({
   statNumber: {
     fontFamily: FontFamily.display,
     fontSize: 25,
-    letterSpacing: -0.9,
+    letterSpacing: -0.15,
   },
   statLabel: {
     fontFamily: FontFamily.ui,
@@ -1624,7 +1624,7 @@ const s = StyleSheet.create({
     fontFamily: FontFamily.displayItalic,
     fontSize: 57,
     color: PALETTE.gold,
-    letterSpacing: -1.8,
+    letterSpacing: -0.55,
     textAlign: 'center',
     marginTop: Spacing['2'],
     marginBottom: Spacing['3'],
@@ -1679,7 +1679,7 @@ const s = StyleSheet.create({
   featureName: {
     fontFamily: FontFamily.display,
     fontSize: 39,
-    letterSpacing: -1.35,
+    letterSpacing: -0.4,
   },
   featureCount: {
     fontFamily: FontFamily.ui,
@@ -1818,7 +1818,7 @@ const s = StyleSheet.create({
     fontFamily: FontFamily.display,
     fontSize: 53,
     color: PALETTE.cream,
-    letterSpacing: -1.75,
+    letterSpacing: -0.55,
     marginTop: Spacing['5'],
     marginBottom: Spacing['1'],
     textAlign: 'center',
@@ -1827,7 +1827,6 @@ const s = StyleSheet.create({
   closingName: {
     fontFamily: FontFamily.displayItalic,
     fontSize: 21,
-    letterSpacing: -0.2,
     color: PALETTE.gold,
     marginBottom: Spacing['1'],
     textAlign: 'center',
@@ -1894,7 +1893,7 @@ const s = StyleSheet.create({
     fontFamily: FontFamily.displayItalic,
     fontSize: 57,
     color: PALETTE.cream,
-    letterSpacing: -1.8,
+    letterSpacing: -0.55,
     textAlign: 'center',
   },
   shareCardDivider: {
@@ -1907,7 +1906,6 @@ const s = StyleSheet.create({
   shareCardName: {
     fontFamily: FontFamily.display,
     fontSize: 20,
-    letterSpacing: -0.2,
     color: PALETTE.gold,
     textAlign: 'center',
     marginBottom: Spacing['6'],
@@ -1924,7 +1922,7 @@ const s = StyleSheet.create({
     fontFamily: FontFamily.display,
     fontSize: 32,
     color: PALETTE.cream,
-    letterSpacing: -0.9,
+    letterSpacing: -0.15,
   },
   shareCardStatLabel: {
     fontFamily: FontFamily.ui,

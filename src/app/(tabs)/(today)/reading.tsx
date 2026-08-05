@@ -158,7 +158,7 @@ function ReaderLoadingSkeleton({ colors }: { colors: any }) {
       accessibilityLabel="Loading reading"
       style={{ paddingHorizontal: Spacing['6'], paddingTop: Spacing['10'] }}
     >
-      {/* Display title — two lines, matches Gupter title rhythm */}
+      {/* Display title — two lines, matches display-serif title rhythm */}
       <ReaderSkeletonBlock width="86%" height={30} color={block} pulse={pulse} marginBottom={12} />
       <ReaderSkeletonBlock width="58%" height={30} color={block} pulse={pulse} marginBottom={28} />
 
@@ -1574,7 +1574,7 @@ export default function ReadingScreen() {
               style={{
                 fontFamily: FontFamily.display,
                 fontSize: 25,
-                letterSpacing: -0.4,
+                letterSpacing: -0.15,
                 color: colors.text,
                 textAlign: 'center',
                 marginBottom: 14,
@@ -2225,7 +2225,6 @@ export default function ReadingScreen() {
                           fontSize: 18,
                           color: colors.text,
                           lineHeight: 23,
-                          letterSpacing: -0.2,
                           marginBottom: Spacing['2'],
                         }}
                         numberOfLines={2}

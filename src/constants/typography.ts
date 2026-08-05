@@ -7,24 +7,22 @@
 import { FontFamily, FontSize, LineHeight } from './fonts';
 
 export const Typography = {
-  // Display — Gupter for headings
+  // Display — PP Editorial New for headings
   displayLg: {
     fontFamily: FontFamily.display,
     fontSize: 32,
     lineHeight: 38,
-    letterSpacing: -0.5,
+    letterSpacing: -0.15,
   },
   displayMd: {
     fontFamily: FontFamily.display,
     fontSize: 21,
     lineHeight: 25,
-    letterSpacing: -0.2,
   },
   displaySm: {
     fontFamily: FontFamily.display,
     fontSize: 18,
     lineHeight: 22,
-    letterSpacing: -0.2,
   },
 
   // Body — Inter for reading content
@@ -90,7 +88,7 @@ export const Typography = {
     fontFamily: FontFamily.display,
     fontSize: 28,
     lineHeight: 37,
-    letterSpacing: -0.4,
+    letterSpacing: -0.15,
   },
 
   // Relaxed reading body for conversational surfaces (companion thread).

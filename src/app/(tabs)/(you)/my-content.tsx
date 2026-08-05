@@ -892,7 +892,6 @@ function EmptyState({
         style={{
           fontFamily: FontFamily.display,
           fontSize: 20,
-          letterSpacing: -0.2,
           color: colors.text,
           marginBottom: Spacing['2'],
           textAlign: 'center',

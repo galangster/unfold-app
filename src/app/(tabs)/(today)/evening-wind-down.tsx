@@ -312,7 +312,7 @@ export default function EveningWindDownScreen() {
                 fontFamily: FontFamily.display,
                 fontSize: 28,
                 color: colors.text,
-                letterSpacing: -0.45,
+                letterSpacing: -0.15,
                 marginBottom: Spacing['2'],
               }}
             >

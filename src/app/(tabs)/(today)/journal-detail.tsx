@@ -194,7 +194,6 @@ export default function JournalDetailScreen() {
                 style={{
                   fontFamily: FontFamily.display,
                   fontSize: 21,
-                  letterSpacing: -0.2,
                   color: colors.text,
                   marginBottom: Spacing['1'],
                 }}

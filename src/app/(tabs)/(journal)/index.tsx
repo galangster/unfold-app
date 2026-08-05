@@ -351,7 +351,6 @@ const emptyStyles = StyleSheet.create({
   headline: {
     fontFamily: FontFamily.display,
     fontSize: 21,
-    letterSpacing: -0.2,
     textAlign: 'center',
     marginTop: Spacing['4'],
     marginBottom: Spacing['2'],
@@ -1755,13 +1754,13 @@ export default function JournalHubScreen() {
                           fontFamily: FontFamily.display,
                           fontSize: 21,
                           color: colors.text,
-                          letterSpacing: -0.25,
                           marginBottom: Spacing['1.5'],
                         }}
                         numberOfLines={2}
                       >
-                        {currentDayData?.title ??
-                          `Day ${currentDevotional.currentDay}`}
+                        {currentDayData?.title
+                          ? currentDayData.title
+                          : `Day ${currentDevotional.currentDay}`}
                       </Text>
 
                       {currentDayData?.scriptureReference && (
@@ -1940,7 +1939,6 @@ export default function JournalHubScreen() {
                               fontSize: 20,
                               color: colors.text,
                               lineHeight: 25,
-                              letterSpacing: -0.2,
                               marginBottom: 2,
                             }}
                             numberOfLines={2}
@@ -1978,7 +1976,6 @@ export default function JournalHubScreen() {
                           fontFamily: FontFamily.display,
                           fontSize: 21,
                           color: colors.text,
-                          letterSpacing: -0.2,
                           textAlign: 'center',
                           marginBottom: Spacing['2'],
                         }}
@@ -2246,7 +2243,7 @@ const mainStyles = StyleSheet.create({
   headerTitle: {
     fontFamily: FontFamily.display,
     fontSize: 30,
-    letterSpacing: -0.45,
+    letterSpacing: -0.15,
   },
   searchContainer: {
     paddingHorizontal: Spacing['6'],

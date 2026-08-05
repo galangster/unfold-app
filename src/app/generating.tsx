@@ -871,7 +871,7 @@ export default function GeneratingScreen() {
                   color: colors.text,
                   textAlign: 'left',
                   lineHeight: 48,
-                  letterSpacing: -0.8,
+                  letterSpacing: -0.4,
                 }}
               >
                 {devotionalTitle}
@@ -1019,7 +1019,7 @@ export default function GeneratingScreen() {
                   color: colors.text,
                   textAlign: 'center',
                   lineHeight: 36,
-                  letterSpacing: -0.4,
+                  letterSpacing: -0.15,
                 }}
               >
                 {currentSeriesTitle}
@@ -1311,7 +1311,6 @@ export default function GeneratingScreen() {
                     color: colors.text,
                     marginBottom: Spacing['4'],
                     lineHeight: 27,
-                    letterSpacing: -0.2,
                   }}
                 >
                   {SAMPLE_PREVIEW.themeTitle}
@@ -1428,7 +1427,7 @@ const genStyles = StyleSheet.create({
   errorTitle: {
     fontFamily: FontFamily.display,
     fontSize: 25,
-    letterSpacing: -0.4,
+    letterSpacing: -0.15,
     textAlign: 'center',
     marginBottom: Spacing['3'],
   },

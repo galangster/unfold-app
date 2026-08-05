@@ -1950,7 +1950,6 @@ const styles = StyleSheet.create({
   },
   titleInput: {
     ...Typography.displayLg,
-    letterSpacing: -0.3,
     paddingHorizontal: Spacing['6'],
     paddingTop: Spacing['4'],
     paddingBottom: Spacing['3'],

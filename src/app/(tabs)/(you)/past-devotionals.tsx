@@ -425,7 +425,6 @@ function DevotionalCard({ item, colors, exportingId, exportSuccessId, onSelect, 
             fontSize: 20,
             color: colors.text,
             lineHeight: 25,
-            letterSpacing: -0.2,
             marginBottom: isComplete ? 0 : Spacing['3'],
           }}
         >

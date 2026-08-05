@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { MagnifyingGlassIcon, ClockIcon, CaretRightIcon, XIcon } from 'phosphor-react-native';
-import { FontFamily, FontSize } from '@/constants/fonts';
+import { FontFamily } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { elevated } from '@/constants/shadows';
 import { useTheme } from '@/lib/theme';
@@ -313,7 +313,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 27,
-    letterSpacing: -0.45,
+    letterSpacing: -0.15,
   },
   searchBar: {
     flexDirection: 'row',
@@ -413,7 +413,6 @@ const styles = StyleSheet.create({
   },
   chapterModalTitle: {
     fontSize: 20,
-    letterSpacing: -0.2,
   },
   closeButton: {
     width: 36,

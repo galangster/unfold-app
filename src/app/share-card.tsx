@@ -96,19 +96,20 @@ const CARD_THEMES: CardTheme[] = [
 
 function getPreviewFontSize(textLength: number): { fontSize: number; lineHeight: number } {
   if (textLength > 300) return { fontSize: 15, lineHeight: 24 };
-  if (textLength > 200) return { fontSize: 17, lineHeight: 27 };
-  if (textLength > 120) return { fontSize: 19, lineHeight: 30 };
-  if (textLength > 60) return { fontSize: 22, lineHeight: 34 };
-  return { fontSize: 26, lineHeight: 40 };
+  if (textLength > 200) return { fontSize: 15, lineHeight: 24 };
+  if (textLength > 120) return { fontSize: 17, lineHeight: 27 };
+  if (textLength > 60) return { fontSize: 20, lineHeight: 31 };
+  return { fontSize: 23, lineHeight: 35 };
 }
 
-// Skia output font sizes (scaled for 1080px canvas)
+// Skia output font sizes (scaled for 1080px canvas; 0.89x of the Gupter-era
+// values so the display serif keeps the same optical size in exports)
 function getOutputFontSize(textLength: number): number {
-  if (textLength > 300) return 42;
-  if (textLength > 200) return 48;
-  if (textLength > 120) return 56;
-  if (textLength > 60) return 64;
-  return 72;
+  if (textLength > 300) return 37;
+  if (textLength > 200) return 43;
+  if (textLength > 120) return 50;
+  if (textLength > 60) return 57;
+  return 64;
 }
 
 const MAX_TEXT_LENGTH = 400;
@@ -155,7 +156,7 @@ export default function ShareCardScreen() {
 
   // Load fonts for Skia paragraph rendering
   const skiaFonts = useSkiaFonts({
-    'LT Remark': [require('../../assets/fonts/LTRemark-Regular.otf')],
+    'PP Editorial New': [require('../../assets/fonts/PPEditorialNew-Light.otf')],
     'Inter': [
       require('../../assets/fonts/Inter_400Regular.ttf'),
       require('../../assets/fonts/Inter_500Medium.ttf'),
@@ -195,7 +196,7 @@ export default function ShareCardScreen() {
         textAlign: TextAlign.Left,
         textStyle: {
           color: mainColor,
-          fontFamilies: ['LT Remark'],
+          fontFamilies: ['PP Editorial New'],
           fontSize: outFontSize,
           heightMultiplier: 1.55,
         },

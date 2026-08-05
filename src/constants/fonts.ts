@@ -4,10 +4,10 @@
  */
 
 export const FontFamily = {
-  // Primary serif (Gupter) for display/headings. Nick prefers no serif italics,
-  // so displayItalic intentionally aliases the regular face.
-  display: 'Gupter_400Regular',
-  displayItalic: 'Gupter_400Regular',
+  // Primary serif (PP Editorial New Light) for display/headings. Nick prefers no
+  // serif italics, so displayItalic intentionally aliases the regular face.
+  display: 'PPEditorialNew-Light',
+  displayItalic: 'PPEditorialNew-Light',
 
   // Secondary sans (Inter) for body + UI. Variety comes from weights/italics, not more families.
   body: 'Inter_400Regular',

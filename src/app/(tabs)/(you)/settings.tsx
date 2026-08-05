@@ -146,7 +146,6 @@ export default function SettingsScreen() {
                 style={{
                   fontFamily: FontFamily.display,
                   fontSize: 21,
-                  letterSpacing: -0.2,
                   color: colors.textHint,
                 }}
               >

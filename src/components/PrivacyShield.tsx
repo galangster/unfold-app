@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AppState, StyleSheet, Text, View, type AppStateStatus } from 'react-native';
 
-import { FontFamily, FontSize } from '@/constants/fonts';
+import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 
 export function shouldShowPrivacyShield(status: AppStateStatus): boolean {
@@ -42,6 +42,6 @@ const styles = StyleSheet.create({
   },
   wordmark: {
     fontFamily: FontFamily.display,
-    fontSize: FontSize['2xl'],
+    fontSize: 21,
   },
 });

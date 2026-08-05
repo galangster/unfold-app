@@ -456,8 +456,8 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: FontFamily.display,
-    fontSize: FontSize.xl,
-    lineHeight: 27,
+    fontSize: 18,
+    lineHeight: 24,
   },
   body: {
     fontFamily: FontFamily.body,

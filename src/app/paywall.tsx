@@ -668,7 +668,7 @@ export default function PaywallScreen() {
                 fontFamily: FontFamily.display,
                 fontSize: 30,
                 color: colors.text,
-                letterSpacing: -0.45,
+                letterSpacing: -0.15,
                 lineHeight: 35,
               }}
             >
