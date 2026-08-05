@@ -402,6 +402,8 @@ export interface SeriesArc {
   rootThesis?: string;
   thesisRationale?: string;
   thesisRevisedAt?: string;
+  /** Named movements for series >= 14 days; groups the series-detail day list. */
+  acts?: { name: string; fromDay: number; toDay: number; function: string }[];
 }
 
 /** Full context snapshot for a recently completed day (Layer 1) */
