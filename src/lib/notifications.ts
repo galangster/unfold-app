@@ -4,6 +4,7 @@ import { useUnfoldStore, type Devotional } from './store';
 import { getEffectivePremiumAccessPolicy } from './premium-state';
 import { logger } from '@/lib/logger';
 import { getMessageForToday, MIDDAY_MESSAGES, EVENING_MESSAGES } from '@/constants/check-in-messages';
+import { getTodayCarryLine } from '@/lib/home-devotional-state';
 import { buildDevotionalReadyNotificationData } from '@/lib/push-notification-helpers';
 import { getDailyReminderContent } from '@/lib/daily-reminder-content';
 
@@ -505,10 +506,26 @@ export async function scheduleMiddayCheckIn(): Promise<string[]> {
     return [];
   }
 
+  // Prefer the carry line from the day the reader completed today — the
+  // devotional following them into their afternoon. Falls back to rotating
+  // generic copy when they haven't read today. Weekly ops only use it for
+  // today's weekday; a line scheduled onto another weekday would be stale
+  // by the time it fired. (expo WEEKLY weekday: 1=Sunday … 7=Saturday.)
+  const todayCarryLine = getTodayCarryLine(
+    store.devotionals,
+    store.currentDevotionalId,
+  );
+  const expoWeekdayToday = new Date().getDay() + 1;
+
   const scheduled: string[] = [];
   for (const op of ops) {
     try {
-      const body = getMessageForToday(MIDDAY_MESSAGES);
+      const carryLineApplies =
+        op.kind === 'daily' || op.weekday === expoWeekdayToday;
+      const body =
+        carryLineApplies && todayCarryLine
+          ? todayCarryLine
+          : getMessageForToday(MIDDAY_MESSAGES);
       if (op.kind === 'daily') {
         const id = await Notifications.scheduleNotificationAsync({
           identifier: op.id,

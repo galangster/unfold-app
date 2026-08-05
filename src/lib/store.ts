@@ -190,6 +190,14 @@ export interface UserProfile {
   growthGoals?: string[];
   obstacles?: string[];
   companionName?: string;
+  // Onboarding personalization inputs (mirror-back v2, diagnostic round, key people, upcoming event)
+  keyPeople?: { name: string; relationship: string }[];
+  upcomingEvent?: { label: string; date: string };
+  diagnosticAnswers?: { question: string; answer: string }[];
+  /** The mirror-back "working read" shown to the user (for ratify/correct), stored whenever displayed. */
+  mirrorWorkingRead?: string;
+  /** What the user said the mirror-back working read got wrong, if they corrected it. */
+  mirrorCorrection?: string;
 }
 
 export interface Quote {
@@ -220,6 +228,10 @@ export interface DevotionalDay {
   /** Backend prose or the legacy structured mobile shape. */
   wordStudy?: WordStudy;
   closingPrayer?: string;
+  /** One concrete same-day act of obedience (named time window, observable). */
+  act?: string;
+  /** 6-12 word recall line for the afternoon; also used by the midday check-in notification. */
+  carryLine?: string;
   // Phase 2: Midday check-in question + chips (generated with devotional)
   checkInQuestion?: string;
   checkInChips?: string[];
@@ -386,6 +398,12 @@ export interface SeriesArc {
   isOpenEnded: boolean;
   createdAt: string;
   lastExtendedAt?: string;
+  /** Server-derived root diagnosis (never displayed; synced wholesale). */
+  rootThesis?: string;
+  thesisRationale?: string;
+  thesisRevisedAt?: string;
+  /** Named movements for series >= 14 days; groups the series-detail day list. */
+  acts?: { name: string; fromDay: number; toDay: number; function: string }[];
 }
 
 /** Full context snapshot for a recently completed day (Layer 1) */

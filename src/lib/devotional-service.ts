@@ -2091,6 +2091,40 @@ export async function generateAdaptiveQuestion(
       else currentStep = 'longing';
     }
 
+    // Preferred path: server-owned prompts. The client sends data only.
+    // Falls through to the legacy client-built-prompt passthrough below when
+    // the backend predates /api/generate/onboarding-insight (deploy skew).
+    try {
+      const insightResult = await postJsonWithBackendFallback(
+        '/api/generate/onboarding-insight',
+        {
+          kind: 'adaptive-question',
+          data: {
+            previousAnswers,
+            stage: currentStep,
+            userContext,
+          },
+        },
+        { timeoutMs: 15000 },
+      );
+      if (insightResult.response.ok) {
+        const data = await insightResult.response.json();
+        if (typeof data?.question === 'string' && data.question.trim()) {
+          return {
+            question: data.question,
+            subtext: typeof data.subtext === 'string' && data.subtext ? data.subtext : nextQuestionBase.subtext,
+            chips: Array.isArray(data.chips) ? data.chips.filter((c: unknown) => typeof c === 'string') : undefined,
+            source: 'backend',
+            backendUrl: insightResult.backendUrl,
+          };
+        }
+      } else {
+        logger.log('[Adaptive] onboarding-insight unavailable, using legacy path:', insightResult.response.status);
+      }
+    } catch (insightErr) {
+      logger.log('[Adaptive] onboarding-insight failed, using legacy path:', insightErr);
+    }
+
     const stepInstructions: Record<string, string> = {
       opening: `THIS IS THE OPENING QUESTION. The person is just starting to share.
 
@@ -2328,12 +2362,74 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
   }
 }
 
+// Helper function to generate the diagnostic-round follow-up questions (3
+// targeted questions asked one at a time right after currentSituation).
+// Server-owned prompts only — no legacy client-built-prompt fallback, so any
+// failure (rate limit, network, malformed response) returns null and callers
+// skip the step gracefully instead of showing a degraded experience.
+export async function generateDiagnosticQuestions(data: {
+  aboutMe?: string;
+  currentSituation?: string;
+  growthGoals?: string[];
+  obstacles?: string[];
+  relationshipWithGod?: string;
+  selectedThemes?: string[];
+  selectedType?: string;
+}): Promise<{ questions: { question: string; subtext: string; chips: string[] }[] } | null> {
+  const rateLimit = await checkRateLimit('adaptive-question');
+  if (!rateLimit.allowed) {
+    logger.warn('[Diagnostic] Rate limit exceeded:', rateLimit);
+    return null;
+  }
+
+  try {
+    const insightResult = await postJsonWithBackendFallback(
+      '/api/generate/onboarding-insight',
+      { kind: 'diagnostic-round', data },
+      { timeoutMs: 20000 },
+    );
+
+    if (!insightResult.response.ok) {
+      logger.log('[Diagnostic] onboarding-insight unavailable:', insightResult.response.status);
+      return null;
+    }
+
+    const responseData = await insightResult.response.json();
+    if (!Array.isArray(responseData?.questions)) {
+      logger.warn('[Diagnostic] Backend returned no questions array');
+      return null;
+    }
+
+    const questions = (responseData.questions as unknown[])
+      .filter((q): q is Record<string, unknown> => !!q && typeof q === 'object')
+      .map((q) => ({
+        question: typeof q.question === 'string' ? q.question.trim() : '',
+        subtext: typeof q.subtext === 'string' ? q.subtext.trim() : '',
+        chips: Array.isArray(q.chips) ? q.chips.filter((c: unknown): c is string => typeof c === 'string' && c.trim().length > 0) : [],
+      }))
+      .filter((q) => q.question.length > 0);
+
+    if (questions.length === 0) {
+      logger.warn('[Diagnostic] Backend returned no usable questions');
+      return null;
+    }
+
+    await incrementRateLimit('adaptive-question');
+    return { questions };
+  } catch (err) {
+    logger.warn('[Diagnostic] Generation failed:', err);
+    return null;
+  }
+}
+
 // Generate AI mirror-back text for onboarding — acts as a teaser for the devotional
 export interface MirrorBackContent {
   reflection: string;
   verse: string;
   verseRef: string;
   anticipation: string;
+  /** Plain-language read of what seems underneath — shown for ratification. */
+  workingRead?: string;
 }
 
 export async function generateMirrorBackText(
@@ -2358,6 +2454,36 @@ export async function generateMirrorBackText(
   }
 
   try {
+    // Preferred path: server-owned prompts (adds workingRead for the
+    // ratification beat). Falls through to the legacy client-built-prompt
+    // passthrough when the backend predates onboarding-insight.
+    try {
+      const insightResult = await postJsonWithBackendFallback(
+        '/api/generate/onboarding-insight',
+        { kind: 'mirror-back', data: onboardingData },
+        { timeoutMs: 15000 },
+      );
+      if (insightResult.response.ok) {
+        const data = await insightResult.response.json();
+        if (typeof data?.reflection === 'string' && data.reflection.trim()) {
+          return {
+            content: {
+              reflection: data.reflection,
+              verse: typeof data.verse === 'string' ? data.verse : '',
+              verseRef: typeof data.verseRef === 'string' ? data.verseRef : '',
+              anticipation: typeof data.anticipation === 'string' ? data.anticipation : '',
+              workingRead: typeof data.workingRead === 'string' && data.workingRead.trim() ? data.workingRead : undefined,
+            },
+            source: 'backend',
+          };
+        }
+      } else {
+        logger.log('[MirrorBack] onboarding-insight unavailable, using legacy path:', insightResult.response.status);
+      }
+    } catch (insightErr) {
+      logger.log('[MirrorBack] onboarding-insight failed, using legacy path:', insightErr);
+    }
+
     const contextParts: string[] = [];
     if (onboardingData.selectedThemes?.length) {
       contextParts.push(`Selected themes: ${onboardingData.selectedThemes.join(', ')}`);

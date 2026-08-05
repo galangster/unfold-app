@@ -241,11 +241,15 @@ export default function SeriesDetailScreen() {
             </View>
           </Animated.View>
 
-          {/* Day list */}
+          {/* Day list — grouped under named movements when the arc has them */}
           <View style={styles.dayList}>
             {(devotional.days ?? [])
               .sort((a, b) => a.dayNumber - b.dayNumber)
               .map((day) => {
+                // A movement header renders above the first day of each act.
+                const act = devotional.seriesArc?.acts?.find(
+                  (a) => day.dayNumber === a.fromDay,
+                );
                 const isRead = day.isRead;
                 const isOpenable =
                   isRead || isDevotionalDaySelectable(devotional, day.dayNumber, now);
@@ -274,6 +278,21 @@ export default function SeriesDetailScreen() {
                     key={day.dayNumber}
                     entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(day.dayNumber * 40).easing(Ease.out)}
                   >
+                    {act && (
+                      <View style={styles.movementHeader}>
+                        <Text
+                          style={[styles.movementName, { color: colors.accent }]}
+                        >
+                          {act.name}
+                        </Text>
+                        <Text
+                          style={[styles.movementFunction, { color: colors.textMuted }]}
+                          numberOfLines={2}
+                        >
+                          {act.function}
+                        </Text>
+                      </View>
+                    )}
                     <TouchableOpacity
                       activeOpacity={isOpenable ? 0.7 : 1}
                       disabled={!isOpenable}
@@ -479,6 +498,23 @@ const styles = StyleSheet.create({
   },
   dayList: {
     gap: Spacing['2'],
+  },
+  movementHeader: {
+    paddingTop: Spacing['5'],
+    paddingBottom: Spacing['2'],
+    paddingHorizontal: Spacing['1'],
+    gap: 2,
+  },
+  movementName: {
+    fontFamily: FontFamily.bodyMedium,
+    fontSize: FontSize.xs,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+  },
+  movementFunction: {
+    fontFamily: FontFamily.bodyItalic,
+    fontSize: FontSize.sm,
+    lineHeight: FontSize.sm * 1.5,
   },
   dayRow: {
     flexDirection: 'row',

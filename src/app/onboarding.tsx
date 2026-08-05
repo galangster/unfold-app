@@ -15,6 +15,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -47,7 +48,7 @@ import { TypewriterText } from '@/components/TypewriterText';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
 import { useUnfoldStore, UserProfile, BibleTranslation, ThemeCategory, DevotionalType, ACCENT_THEMES, WritingTone, ContentDepth, FaithBackground, LifeStage, RelationshipWithGod, BibleFrequency } from '@/lib/store';
-import { generateAdaptiveQuestion, generateMirrorBackText, type MirrorBackContent } from '@/lib/devotional-service';
+import { generateAdaptiveQuestion, generateDiagnosticQuestions, generateMirrorBackText, type MirrorBackContent } from '@/lib/devotional-service';
 import { THEME_CATEGORIES, DEVOTIONAL_TYPES, BIBLICAL_CHARACTERS, BIBLE_BOOKS_FOR_STUDY, ThemeCategoryInfo, DevotionalTypeInfo, getThemeById, getDevotionalTypeById } from '@/constants/devotional-types';
 import {
   pickRandomVariation,
@@ -77,10 +78,16 @@ import {
 } from '@/lib/onboarding-sample-job-store';
 import {
   buildOnboardingSampleGenerationRequest,
+  formatDateOnly,
+  formatDateOnlyForDisplay,
   getContextualSituationChips,
   getFilteredOnboardingSteps,
   getInitialOnboardingStepId,
   getOnboardingStepLayoutMode,
+  QUICK_DATE_CHIPS,
+  resolveQuickDateChip,
+  shapeKeyPeople,
+  shapeUpcomingEvent,
   shouldShowOnboardingTopContinue,
   shouldStartOnboardingSampleGeneration,
   type OnboardingSampleGenerationRequest,
@@ -350,6 +357,8 @@ const ALL_STEPS = [
     { value: 'understanding', label: "Don't know where to start" },
     { value: 'motivation', label: 'Lack of motivation' },
   ] },
+  // KEY PEOPLE: Who's walking through this with you? (optional, first-run only \u2014 sits before themeType)
+  { id: 'keyPeople', question: "Who's walking through this with\u00A0you?", subtext: 'Real names help your devotionals get concrete. Just for you \u2014 never shared.', type: 'keyPeople' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // ASPIRATION: What would breakthrough look like? (text + pill starters)
   { id: 'aspiration', question: "When you imagine your faith 6\u00A0months from now, what\u2019s\u00A0different?", subtext: "If something could shift, what would you hope it would\u00A0be?", type: 'multiline' as const, placeholder: "I think what I really need is...", adaptive: true, skipIfHasValue: false, hasVariations: true },
   // VULNERABILITY VALIDATION: The exhale — acknowledge their courage before mirror-back
@@ -381,14 +390,19 @@ const ALL_STEPS = [
   { id: 'studySubject', question: 'Which would you like to study?', subtext: 'Pick one to walk through together.', type: 'studySubject' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false, conditionalOn: 'selectedType' },
   // DISCOVERY STEP 1: Opening - Where are you right now?
   { id: 'currentSituation', question: "What's been on your\u00A0heart\u00A0lately?", subtext: "The thing that's there when the noise\u00A0quiets\u00A0down.", type: 'multiline' as const, placeholder: "Lately, I've been thinking about...", adaptive: true, skipIfHasValue: false, hasVariations: true },
+  // DIAGNOSTIC ROUND: 3 targeted AI follow-up questions, asked one at a time. Auto-skips
+  // if generation fails or the user left currentSituation empty entirely.
+  { id: 'diagnosticRound', question: '', subtext: '', type: 'diagnosticRound' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // DISCOVERY STEP 2: The longing - What would breakthrough look like?
   { id: 'spiritualSeeking', question: "When you imagine your faith 6 months from now, what's\u00A0different?", subtext: "If something could shift, what would you hope it\u00A0would\u00A0be?", type: 'multiline' as const, placeholder: "I think what I really need is...", adaptive: true, skipIfHasValue: false, hasVariations: true },
+  // UPCOMING EVENT: optional \u2014 reachable from both first-run and new-series flows
+  { id: 'upcomingEvent', question: "Anything coming up that's weighing on you, or that you're counting down to?", subtext: "A move, a birth, an anniversary, a court date. We'll walk toward it with you.", type: 'upcomingEvent' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   { id: 'readingDuration', question: 'How long should each devotional be?', subtext: 'Each day is crafted to fit your rhythm.', type: 'choice' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false, hasDynamicOptions: true, options: [{ value: 5, label: '5 minutes', description: 'A quick breath' }, { value: 15, label: '15 minutes', description: 'A thoughtful pause' }, { value: 30, label: '30 minutes', description: 'A deep dive' }] },
   { id: 'devotionalLength', question: 'How long should this devotional series\u00A0be?', subtext: 'You can always create another when this\u00A0one\u00A0ends.', type: 'choice' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false, hasDynamicOptions: true, options: [{ value: 3, label: '3 days', description: 'Just a taste' }, { value: 7, label: '7 days', description: 'Enough to build a rhythm' }, { value: 14, label: '14 days', description: 'Room to go deep' }, { value: 30, label: '30 days', description: 'A real transformation' }] },
   { id: 'reminderTime', question: 'When should the\u00A0reminder\u00A0come?', subtext: 'A gentle nudge to pause and reflect. You can change\u00A0this\u00A0anytime.', type: 'timeChoice' as const, placeholder: '', adaptive: false, skipIfHasValue: true, hasVariations: false, options: [{ value: '6:00 AM', label: 'Early morning', time: '6:00 AM' }, { value: '8:00 AM', label: 'Morning', time: '8:00 AM' }, { value: '12:00 PM', label: 'Midday', time: '12:00 PM' }, { value: '6:00 PM', label: 'Evening', time: '6:00 PM' }, { value: '9:00 PM', label: 'Night', time: '9:00 PM' }] },
 ];
 
-type StepId = 'hook' | 'solution' | 'unfoldIntro' | 'name' | 'aboutMe' | 'stylePreferences1' | 'stylePreferences2' | 'relationshipWithGod' | 'bibleFrequency' | 'shockStat' | 'growthGraph' | 'growthGoals' | 'obstacles' | 'aspiration' | 'vulnerabilityValidation' | 'mirrorBack' | 'featureSummary' | 'founderNote' | 'devotionalSegue' | 'readDevotional' | 'celebration' | 'commitment1' | 'commitment2' | 'threeStepPaywall' | 'purchaseConfirmation' | 'themeType' | 'studySubject' | 'currentSituation' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime';
+type StepId = 'hook' | 'solution' | 'unfoldIntro' | 'name' | 'aboutMe' | 'stylePreferences1' | 'stylePreferences2' | 'relationshipWithGod' | 'bibleFrequency' | 'shockStat' | 'growthGraph' | 'growthGoals' | 'obstacles' | 'keyPeople' | 'aspiration' | 'vulnerabilityValidation' | 'mirrorBack' | 'featureSummary' | 'founderNote' | 'devotionalSegue' | 'readDevotional' | 'celebration' | 'commitment1' | 'commitment2' | 'threeStepPaywall' | 'purchaseConfirmation' | 'themeType' | 'studySubject' | 'currentSituation' | 'diagnosticRound' | 'spiritualSeeking' | 'upcomingEvent' | 'readingDuration' | 'devotionalLength' | 'reminderTime';
 
 // Discovery chips — tappable quick-select options for the 3 discovery questions
 // Each chip is a feeling/situation that seeds context without requiring typing
@@ -406,6 +420,9 @@ const DISCOVERY_CHIPS: Record<string, string[]> = {
   ],
 };
 
+// Key people relationship chips — tapping one reveals a name field for it (max 5 people)
+const KEY_PEOPLE_RELATIONSHIP_CHIPS = ['Spouse', 'Friend', 'Mentor', 'Parent', 'Sibling', 'Small group'];
+
 interface OnboardingData {
   name: string;
   bibleTranslation: BibleTranslation;
@@ -419,16 +436,23 @@ interface OnboardingData {
   selectedType?: DevotionalType;
   selectedStudySubject?: string;
   currentSituation: string;
+  diagnosticAnswers: { question: string; answer: string }[];
   spiritualSeeking: string;
+  upcomingEvent: { label: string; date: string };
   aspiration: string;
   growthGoals: string[];
   obstacles: string[];
+  keyPeople: { name: string; relationship: string }[];
   relationshipWithGod?: RelationshipWithGod;
   bibleFrequency?: BibleFrequency;
   readingDuration: 5 | 15 | 30;
   devotionalLength: 3 | 7 | 14 | 30;
   reminderTime: string;
   mirrorBackCommitted: boolean;
+  /** The mirror-back "working read" shown for ratification, stored whenever displayed. */
+  mirrorWorkingRead?: string;
+  /** What the user said the mirror-back working read got wrong, if they corrected it. */
+  mirrorCorrection?: string;
 }
 
 // Progress indicator component
@@ -492,10 +516,13 @@ export default function OnboardingScreen() {
     selectedType: undefined,
     selectedStudySubject: undefined,
     currentSituation: '',
+    diagnosticAnswers: [],
     spiritualSeeking: '',
+    upcomingEvent: { label: '', date: '' },
     aspiration: '',
     growthGoals: [],
     obstacles: [],
+    keyPeople: [],
     relationshipWithGod: undefined,
     bibleFrequency: undefined,
     readingDuration: 15,
@@ -662,6 +689,27 @@ export default function OnboardingScreen() {
   // AI-generated mirror-back content
   const [aiMirrorBack, setAiMirrorBack] = useState<MirrorBackContent | null>(null);
   const [isLoadingMirrorBack, setIsLoadingMirrorBack] = useState(false);
+  // Mirror-back v2: inline correction UI shown instead of immediately going back
+  const [showMirrorCorrection, setShowMirrorCorrection] = useState(false);
+
+  // Re-entering mirrorBack must always offer ratification afresh — without
+  // this, one tap of "Let me adjust something" locks the step into
+  // correction mode forever (setShowMirrorCorrection(true) had no undo).
+  useEffect(() => {
+    if (currentStepId === 'mirrorBack') {
+      setShowMirrorCorrection(false);
+    }
+  }, [currentStepId]);
+  const [mirrorCorrectionDraft, setMirrorCorrectionDraft] = useState('');
+
+  // Diagnostic round: 3 targeted follow-up questions asked one at a time
+  const [diagnosticQuestions, setDiagnosticQuestions] = useState<{ question: string; subtext: string; chips: string[] }[] | null>(null);
+  const [isLoadingDiagnostic, setIsLoadingDiagnostic] = useState(false);
+  const [diagnosticIndex, setDiagnosticIndex] = useState(0);
+  const [diagnosticDraft, setDiagnosticDraft] = useState('');
+
+  // Upcoming event: inline date picker reveal
+  const [showUpcomingDatePicker, setShowUpcomingDatePicker] = useState(false);
 
   // Adaptive question states
   const [adaptedSteps, setAdaptedSteps] = useState<Record<string, { question: string; subtext: string; chips?: string[] }>>({});
@@ -771,6 +819,11 @@ export default function OnboardingScreen() {
       })
         .then(({ content }) => {
           setAiMirrorBack(content);
+          // Stored whenever a working read is shown, regardless of whether the
+          // user later ratifies or corrects it.
+          if (content.workingRead) {
+            setData((prev) => ({ ...prev, mirrorWorkingRead: content.workingRead }));
+          }
         })
         .catch((err) => {
           logger.warn('[MirrorBack] Generation failed, using fallback:', err);
@@ -780,6 +833,58 @@ export default function OnboardingScreen() {
           setIsLoadingMirrorBack(false);
         });
     }
+  }, [currentStepId]);
+
+  // Diagnostic round: fetch the 3 targeted follow-up questions when entering the
+  // step. Auto-skips silently (no error UI) if the user left currentSituation
+  // empty, or if generation fails for any reason — generateDiagnosticQuestions
+  // returns null on any failure, with no legacy fallback.
+  useEffect(() => {
+    if (currentStepId !== 'diagnosticRound') return;
+    if (diagnosticQuestions !== null || isLoadingDiagnostic) return;
+
+    const situation = data.currentSituation.trim();
+    if (!situation) {
+      advanceToNextStep();
+      return;
+    }
+
+    // If the user backs out while the fetch is in flight, the resolution must
+    // become a no-op — the stale closure's advanceToNextStep would otherwise
+    // yank them forward from wherever they navigated to.
+    let cancelled = false;
+
+    setIsLoadingDiagnostic(true);
+    generateDiagnosticQuestions({
+      aboutMe: data.aboutMe,
+      currentSituation: data.currentSituation,
+      growthGoals: data.growthGoals,
+      obstacles: data.obstacles,
+      relationshipWithGod: data.relationshipWithGod,
+      selectedThemes: data.selectedThemes,
+      selectedType: data.selectedType,
+    })
+      .then((result) => {
+        if (cancelled) return;
+        if (result && result.questions.length > 0) {
+          setDiagnosticIndex(0);
+          setDiagnosticDraft('');
+          setDiagnosticQuestions(result.questions);
+        } else {
+          advanceToNextStep();
+        }
+      })
+      .catch(() => {
+        if (cancelled) return;
+        advanceToNextStep();
+      })
+      .finally(() => {
+        setIsLoadingDiagnostic(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [currentStepId]);
 
   // Keyboard height tracking for scroll adjustment
@@ -840,12 +945,19 @@ export default function OnboardingScreen() {
     if (step.id === 'studySubject' && data.selectedType === 'character_study') {
       return 'Who would you like to study?';
     }
+    // Diagnostic round rotates through 3 server-generated questions, one at a time
+    if (step.id === 'diagnosticRound') {
+      return diagnosticQuestions?.[diagnosticIndex]?.question ?? '';
+    }
     const adapted = adaptedSteps[step.id];
     return adapted?.question ?? step.question;
   };
 
   const getStepSubtext = () => {
     if (!step) return '';
+    if (step.id === 'diagnosticRound') {
+      return diagnosticQuestions?.[diagnosticIndex]?.subtext ?? '';
+    }
     const adapted = adaptedSteps[step.id];
     return adapted?.subtext ?? step.subtext;
   };
@@ -937,6 +1049,13 @@ export default function OnboardingScreen() {
         ...(data.selectedThemes.length > 0 ? { selectedTheme: data.selectedThemes[0] } : {}),
         ...(data.selectedType ? { selectedType: data.selectedType } : {}),
         ...(data.selectedStudySubject ? { selectedStudySubject: data.selectedStudySubject } : {}),
+        ...(shapeKeyPeople(data.keyPeople).length > 0 ? { keyPeople: shapeKeyPeople(data.keyPeople) } : {}),
+        // Per-series fields overwrite unconditionally: a new series must never
+        // inherit a previous pass's event/answers/read (review finding).
+        upcomingEvent: shapeUpcomingEvent(data.upcomingEvent),
+        diagnosticAnswers: data.diagnosticAnswers.length > 0 ? data.diagnosticAnswers : undefined,
+        mirrorWorkingRead: data.mirrorWorkingRead || undefined,
+        mirrorCorrection: data.mirrorCorrection || undefined,
         ...pendingAuth,
         ...(isPrem ? { isPremium: true } : {}),
       });
@@ -970,6 +1089,13 @@ export default function OnboardingScreen() {
         ...(data.selectedThemes.length > 0 ? { selectedTheme: data.selectedThemes[0] } : {}),
         ...(data.selectedType ? { selectedType: data.selectedType } : {}),
         ...(data.selectedStudySubject ? { selectedStudySubject: data.selectedStudySubject } : {}),
+        ...(shapeKeyPeople(data.keyPeople).length > 0 ? { keyPeople: shapeKeyPeople(data.keyPeople) } : {}),
+        // Per-series fields overwrite unconditionally: a new series must never
+        // inherit a previous pass's event/answers/read (review finding).
+        upcomingEvent: shapeUpcomingEvent(data.upcomingEvent),
+        diagnosticAnswers: data.diagnosticAnswers.length > 0 ? data.diagnosticAnswers : undefined,
+        mirrorWorkingRead: data.mirrorWorkingRead || undefined,
+        mirrorCorrection: data.mirrorCorrection || undefined,
         ...pendingAuth,
       });
     }
@@ -2225,6 +2351,147 @@ export default function OnboardingScreen() {
       );
     }
 
+    // Diagnostic round — 3 server-generated follow-up questions, answered one at a
+    // time. Each question reuses the discovery chip + multiline input pattern, with
+    // its own Continue button (the header's top continue is hidden for this type).
+    if (step.type === 'diagnosticRound') {
+      const currentQuestion = diagnosticQuestions?.[diagnosticIndex];
+      if (!currentQuestion) return null;
+
+      const isLastDiagnosticQuestion = diagnosticIndex >= diagnosticQuestions!.length - 1;
+
+      const submitDiagnosticAnswer = () => {
+        const answer = diagnosticDraft.trim();
+        if (!answer) return;
+
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        Keyboard.dismiss();
+        setData((prev) => {
+          // Replace-by-question: backing into a completed round and re-submitting
+          // must never produce duplicate entries in the generation context.
+          const existing = prev.diagnosticAnswers.findIndex(
+            (qa) => qa.question === currentQuestion.question,
+          );
+          const diagnosticAnswers =
+            existing >= 0
+              ? prev.diagnosticAnswers.map((qa, i) =>
+                  i === existing ? { question: currentQuestion.question, answer } : qa,
+                )
+              : [...prev.diagnosticAnswers, { question: currentQuestion.question, answer }];
+          return { ...prev, diagnosticAnswers };
+        });
+        setShowInput(false);
+        inputOpacity.value = 0;
+
+        if (isLastDiagnosticQuestion) {
+          setTimeout(() => advanceToNextStep(), 50);
+        } else {
+          setTimeout(() => {
+            setDiagnosticDraft('');
+            setDiagnosticIndex((idx) => idx + 1);
+          }, 50);
+        }
+      };
+
+      return (
+        <View style={{ flex: 1 }}>
+          {currentQuestion.chips.length > 0 && (
+            <View style={{
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              gap: Spacing['2'],
+              marginBottom: Spacing['4'],
+            }}>
+              {currentQuestion.chips.map((chip) => {
+                const isChipSelected = diagnosticDraft === chip;
+                return (
+                  <TouchableOpacity activeOpacity={1}
+                    key={chip}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setDiagnosticDraft(chip);
+                    }}
+                    style={{
+                      paddingHorizontal: Spacing['3.5'],
+                      paddingVertical: Spacing['2'],
+                      borderRadius: Radius.xl,
+                      backgroundColor: isChipSelected ? selectedAccentSurface(colors.accent, 0.18) : colors.inputBackground,
+                      borderWidth: 1,
+                      borderColor: isChipSelected ? colors.accent : colors.border,
+                    }}
+                  >
+                    <Text style={{
+                      fontFamily: isChipSelected ? FontFamily.uiMedium : FontFamily.ui,
+                      fontSize: FontSize.sm,
+                      color: isChipSelected ? colors.accent : colors.textMuted,
+                    }}>
+                      {chip}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+
+          <View style={{
+            backgroundColor: colors.inputBackground,
+            borderRadius: Radius.xl,
+            borderWidth: 1,
+            borderColor: colors.border,
+            padding: Spacing['5'],
+            minHeight: 100,
+          }}>
+            <TextInput
+              value={diagnosticDraft}
+              onChangeText={setDiagnosticDraft}
+              placeholder="Type your answer..."
+              placeholderTextColor={colors.textMuted}
+              selectionColor={colors.accent}
+              cursorColor={colors.accent}
+              style={{
+                fontFamily: FontFamily.body,
+                fontSize: 17,
+                color: colors.text,
+                textAlignVertical: 'top',
+                paddingTop: 0,
+                minHeight: 60,
+              }}
+              multiline
+              maxLength={INPUT_LIMITS.LONG_TEXT.max}
+              scrollEnabled
+            />
+          </View>
+          <VoiceInputBar
+            value={diagnosticDraft}
+            onChangeText={setDiagnosticDraft}
+          />
+
+          <TouchableOpacity activeOpacity={1}
+            onPress={submitDiagnosticAnswer}
+            disabled={!diagnosticDraft.trim()}
+            style={{ marginTop: Spacing['5'] }}
+          >
+            <View style={{
+              backgroundColor: colors.accent,
+              paddingVertical: 18,
+              paddingHorizontal: Spacing['6'],
+              borderRadius: Radius.lg,
+              alignItems: 'center',
+              opacity: diagnosticDraft.trim() ? 1 : 0.5,
+            }}>
+              <Text style={{
+                fontFamily: FontFamily.uiSemiBold,
+                fontSize: FontSize.base,
+                color: colors.background,
+              }}>
+                Continue
+              </Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
     // Multi-select pill steps (growthGoals, obstacles)
     if (step.type === 'multiSelect') {
       const pillOptions: { value: string; label: string }[] = (step as any).options ?? [];
@@ -2252,6 +2519,239 @@ export default function OnboardingScreen() {
             colors={colors}
             isDark={isDark}
           />
+        </View>
+      );
+    }
+
+    // Key people — fully optional. Tapping a relationship chip reveals a name
+    // field for it; the header Continue is always enabled, plus an explicit
+    // Skip link since there's nothing to require here.
+    if (step.type === 'keyPeople') {
+      const people = data.keyPeople;
+      const maxPeopleReached = people.length >= 5;
+
+      const toggleRelationship = (relationship: string) => {
+        const alreadyActive = people.some((p) => p.relationship === relationship);
+        if (alreadyActive) {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          setData((prev) => ({ ...prev, keyPeople: prev.keyPeople.filter((p) => p.relationship !== relationship) }));
+          return;
+        }
+        if (maxPeopleReached) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          return;
+        }
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        setData((prev) => ({ ...prev, keyPeople: [...prev.keyPeople, { name: '', relationship }] }));
+      };
+
+      const updatePersonName = (relationship: string, name: string) => {
+        setData((prev) => ({
+          ...prev,
+          keyPeople: prev.keyPeople.map((p) =>
+            p.relationship === relationship ? { ...p, name: name.slice(0, INPUT_LIMITS.NAME.max) } : p
+          ),
+        }));
+      };
+
+      return (
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing['2'] }}>
+            {KEY_PEOPLE_RELATIONSHIP_CHIPS.map((relationship) => {
+              const isActive = people.some((p) => p.relationship === relationship);
+              return (
+                <TouchableOpacity activeOpacity={1}
+                  key={relationship}
+                  onPress={() => toggleRelationship(relationship)}
+                  style={{
+                    paddingHorizontal: Spacing['3.5'],
+                    paddingVertical: Spacing['2'],
+                    borderRadius: Radius.xl,
+                    backgroundColor: isActive ? selectedAccentSurface(colors.accent, 0.18) : colors.inputBackground,
+                    borderWidth: 1,
+                    borderColor: isActive ? colors.accent : colors.border,
+                  }}
+                >
+                  <Text style={{
+                    fontFamily: isActive ? FontFamily.uiMedium : FontFamily.ui,
+                    fontSize: FontSize.sm,
+                    color: isActive ? colors.accent : colors.textMuted,
+                  }}>
+                    {relationship}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {people.length > 0 && (
+            <View style={{ gap: Spacing['3'], marginTop: Spacing['4'] }}>
+              {people.map((person) => (
+                <View key={person.relationship}>
+                  <Text style={{
+                    fontFamily: FontFamily.ui,
+                    fontSize: FontSize.sm,
+                    color: colors.textMuted,
+                    marginBottom: Spacing['1'],
+                  }}>
+                    {person.relationship}
+                  </Text>
+                  <TextInput
+                    value={person.name}
+                    onChangeText={(text) => updatePersonName(person.relationship, text)}
+                    placeholder="Their name"
+                    placeholderTextColor={colors.textMuted}
+                    selectionColor={colors.accent}
+                    cursorColor={colors.accent}
+                    style={{
+                      fontFamily: FontFamily.body,
+                      fontSize: FontSize.lg,
+                      color: colors.text,
+                      paddingVertical: Spacing['3.5'],
+                      paddingHorizontal: Spacing['5'],
+                      backgroundColor: colors.inputBackground,
+                      borderRadius: Radius.lg,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                    }}
+                    maxLength={INPUT_LIMITS.NAME.max}
+                    returnKeyType="done"
+                  />
+                </View>
+              ))}
+            </View>
+          )}
+
+          <TouchableOpacity activeOpacity={1}
+            onPress={handleNext}
+            style={{ marginTop: Spacing['6'], alignSelf: 'center' }}
+            accessibilityRole="button"
+            accessibilityLabel="Skip"
+          >
+            <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.sm, color: colors.textMuted }}>
+              Skip
+            </Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    // Upcoming event — fully optional. A single-line label plus quick date chips
+    // or an inline date picker (date-only, min today). Only persisted when both
+    // the label and a date are set.
+    if (step.type === 'upcomingEvent') {
+      const event = data.upcomingEvent;
+      const selectedDate = event.date ? new Date(`${event.date}T00:00:00`) : null;
+
+      const setEventDate = (dateStr: string) => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        setData((prev) => ({ ...prev, upcomingEvent: { ...prev.upcomingEvent, date: dateStr } }));
+        setShowUpcomingDatePicker(false);
+      };
+
+      return (
+        <View style={{ flex: 1 }}>
+          <TextInput
+            value={event.label}
+            onChangeText={(text) => setData((prev) => ({ ...prev, upcomingEvent: { ...prev.upcomingEvent, label: text } }))}
+            placeholder="A move, a due date, a court date..."
+            placeholderTextColor={colors.textMuted}
+            selectionColor={colors.accent}
+            cursorColor={colors.accent}
+            style={{
+              fontFamily: FontFamily.body,
+              fontSize: FontSize.lg,
+              color: colors.text,
+              paddingVertical: Spacing['4'],
+              paddingHorizontal: Spacing['5'],
+              backgroundColor: colors.inputBackground,
+              borderRadius: Radius.lg,
+              borderWidth: 1,
+              borderColor: colors.border,
+            }}
+            maxLength={INPUT_LIMITS.SHORT_TEXT.max}
+            returnKeyType="done"
+          />
+
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing['2'], marginTop: Spacing['4'] }}>
+            {QUICK_DATE_CHIPS.map((chip) => {
+              const chipDate = resolveQuickDateChip(chip.id);
+              const isSelected = event.date === chipDate;
+              return (
+                <TouchableOpacity activeOpacity={1}
+                  key={chip.id}
+                  onPress={() => setEventDate(chipDate)}
+                  style={{
+                    paddingHorizontal: Spacing['3.5'],
+                    paddingVertical: Spacing['2'],
+                    borderRadius: Radius.xl,
+                    backgroundColor: isSelected ? selectedAccentSurface(colors.accent, 0.18) : colors.inputBackground,
+                    borderWidth: 1,
+                    borderColor: isSelected ? colors.accent : colors.border,
+                  }}
+                >
+                  <Text style={{
+                    fontFamily: isSelected ? FontFamily.uiMedium : FontFamily.ui,
+                    fontSize: FontSize.sm,
+                    color: isSelected ? colors.accent : colors.textMuted,
+                  }}>
+                    {chip.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <TouchableOpacity activeOpacity={1}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setShowUpcomingDatePicker((prev) => !prev);
+            }}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              backgroundColor: colors.inputBackground,
+              borderRadius: Radius.lg,
+              borderWidth: 1,
+              borderColor: colors.border,
+              paddingVertical: Spacing['3.5'],
+              paddingHorizontal: Spacing['5'],
+              marginTop: Spacing['3'],
+            }}
+          >
+            <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.sm, color: colors.textMuted }}>
+              Pick another date
+            </Text>
+            <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.sm, color: colors.accent }}>
+              {event.date ? formatDateOnlyForDisplay(event.date) : 'Choose'}
+            </Text>
+          </TouchableOpacity>
+
+          {showUpcomingDatePicker && (
+            <DateTimePicker
+              value={selectedDate ?? new Date()}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              minimumDate={new Date()}
+              themeVariant="dark"
+              onChange={(_, date) => {
+                if (date) setEventDate(formatDateOnly(date));
+              }}
+              style={{ marginTop: Spacing['2'] }}
+            />
+          )}
+
+          <TouchableOpacity activeOpacity={1}
+            onPress={handleNext}
+            style={{ marginTop: Spacing['6'], alignSelf: 'center' }}
+            accessibilityRole="button"
+            accessibilityLabel="Skip"
+          >
+            <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.sm, color: colors.textMuted }}>
+              Skip
+            </Text>
+          </TouchableOpacity>
         </View>
       );
     }
@@ -2413,10 +2913,26 @@ export default function OnboardingScreen() {
                 {displayContent.anticipation}
               </Text>
             </Animated.View>
+
+            {/* Working read — the plain-language read of what's underneath, shown
+                for ratification. Visually distinct from the reflection above it:
+                italic, quieter — not another poetic beat. */}
+            {displayContent.workingRead && (
+              <Animated.View entering={FadeIn.duration(800).delay(1450)}>
+                <Text style={{
+                  fontFamily: FontFamily.bodyItalic,
+                  fontSize: FontSize.base,
+                  color: alpha(colors.text, 0.65),
+                  lineHeight: 24,
+                }}>
+                  {displayContent.workingRead}
+                </Text>
+              </Animated.View>
+            )}
           </View>
 
           {/* Confirmation prompt */}
-          <Animated.View entering={FadeIn.duration(600).delay(1400)}>
+          <Animated.View entering={FadeIn.duration(600).delay(1650)}>
             <Text style={{
               fontFamily: FontFamily.bodyItalic,
               fontSize: FontSize.sm,
@@ -2429,59 +2945,142 @@ export default function OnboardingScreen() {
           </Animated.View>
 
           {/* CTA buttons */}
-          <Animated.View entering={FadeIn.duration(600).delay(1600)} style={{ marginTop: Spacing['4'], gap: Spacing['3'] }}>
-            <TouchableOpacity activeOpacity={1}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                setData((prev) => ({ ...prev, mirrorBackCommitted: true }));
-                // Advance immediately — the feature summary is a full-screen step
-                // that replaces the entire view, so no need for input fade-out
-                advanceToNextStep();
-              }}
-            >
-              <View style={{
-                backgroundColor: colors.accent,
-                paddingVertical: 18,
-                paddingHorizontal: Spacing['6'],
-                borderRadius: Radius.lg,
-                alignItems: 'center',
-                shadowColor: colors.accent,
-                shadowOffset: { width: 0, height: 0 },
-                shadowOpacity: 0.4,
-                shadowRadius: 16,
-                elevation: 8,
-              }}>
-                <Text style={{
-                  fontFamily: FontFamily.uiSemiBold,
-                  fontSize: FontSize.base,
-                  color: '#FFFFFF',
-                }}>
-                  Yes, this feels right
-                </Text>
-              </View>
-            </TouchableOpacity>
+          <Animated.View entering={FadeIn.duration(600).delay(1850)} style={{ marginTop: Spacing['4'], gap: Spacing['3'] }}>
+            {!showMirrorCorrection ? (
+              <>
+                <TouchableOpacity activeOpacity={1}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    setData((prev) => ({ ...prev, mirrorBackCommitted: true }));
+                    // Advance immediately — the feature summary is a full-screen step
+                    // that replaces the entire view, so no need for input fade-out
+                    advanceToNextStep();
+                  }}
+                >
+                  <View style={{
+                    backgroundColor: colors.accent,
+                    paddingVertical: 18,
+                    paddingHorizontal: Spacing['6'],
+                    borderRadius: Radius.lg,
+                    alignItems: 'center',
+                    shadowColor: colors.accent,
+                    shadowOffset: { width: 0, height: 0 },
+                    shadowOpacity: 0.4,
+                    shadowRadius: 16,
+                    elevation: 8,
+                  }}>
+                    <Text style={{
+                      fontFamily: FontFamily.uiSemiBold,
+                      fontSize: FontSize.base,
+                      color: '#FFFFFF',
+                    }}>
+                      Yes, this feels right
+                    </Text>
+                  </View>
+                </TouchableOpacity>
 
-            <TouchableOpacity activeOpacity={1}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                handleBack();
-              }}
-            >
-              <View style={{
-                paddingVertical: 14,
-                paddingHorizontal: Spacing['6'],
-                borderRadius: Radius.lg,
-                alignItems: 'center',
-              }}>
-                <Text style={{
-                  fontFamily: FontFamily.ui,
-                  fontSize: FontSize.sm,
-                  color: colors.textMuted,
+                <TouchableOpacity activeOpacity={1}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setShowMirrorCorrection(true);
+                  }}
+                >
+                  <View style={{
+                    paddingVertical: 14,
+                    paddingHorizontal: Spacing['6'],
+                    borderRadius: Radius.lg,
+                    alignItems: 'center',
+                  }}>
+                    <Text style={{
+                      fontFamily: FontFamily.ui,
+                      fontSize: FontSize.sm,
+                      color: colors.textMuted,
+                    }}>
+                      Let me adjust something
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <Animated.View entering={FadeIn.duration(300)} style={{ gap: Spacing['3'] }}>
+                <View style={{
+                  backgroundColor: colors.inputBackground,
+                  borderRadius: Radius.xl,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  padding: Spacing['5'],
+                  minHeight: 100,
                 }}>
-                  Let me adjust something
-                </Text>
-              </View>
-            </TouchableOpacity>
+                  <TextInput
+                    value={mirrorCorrectionDraft}
+                    onChangeText={setMirrorCorrectionDraft}
+                    placeholder="What did we get wrong?"
+                    placeholderTextColor={colors.textMuted}
+                    selectionColor={colors.accent}
+                    cursorColor={colors.accent}
+                    style={{
+                      fontFamily: FontFamily.body,
+                      fontSize: 17,
+                      color: colors.text,
+                      textAlignVertical: 'top',
+                      paddingTop: 0,
+                      minHeight: 60,
+                    }}
+                    multiline
+                    maxLength={500}
+                    autoFocus
+                  />
+                </View>
+
+                <TouchableOpacity activeOpacity={1}
+                  disabled={!mirrorCorrectionDraft.trim()}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    setData((prev) => ({ ...prev, mirrorCorrection: mirrorCorrectionDraft.trim() }));
+                    advanceToNextStep();
+                  }}
+                >
+                  <View style={{
+                    backgroundColor: colors.accent,
+                    paddingVertical: 18,
+                    paddingHorizontal: Spacing['6'],
+                    borderRadius: Radius.lg,
+                    alignItems: 'center',
+                    opacity: mirrorCorrectionDraft.trim() ? 1 : 0.5,
+                  }}>
+                    <Text style={{
+                      fontFamily: FontFamily.uiSemiBold,
+                      fontSize: FontSize.base,
+                      color: '#FFFFFF',
+                    }}>
+                      Continue
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity activeOpacity={1}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    handleBack();
+                  }}
+                >
+                  <View style={{
+                    paddingVertical: 14,
+                    paddingHorizontal: Spacing['6'],
+                    borderRadius: Radius.lg,
+                    alignItems: 'center',
+                  }}>
+                    <Text style={{
+                      fontFamily: FontFamily.ui,
+                      fontSize: FontSize.sm,
+                      color: colors.textMuted,
+                    }}>
+                      Take me back to my answers instead
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              </Animated.View>
+            )}
           </Animated.View>
         </View>
       );
@@ -3071,7 +3670,7 @@ export default function OnboardingScreen() {
           />
 
           <Animated.View
-            key={`${currentStepId}-${JSON.stringify(adaptedSteps[currentStepId] || {})}`}
+            key={`${currentStepId}-${currentStepId === 'diagnosticRound' ? diagnosticIndex : JSON.stringify(adaptedSteps[currentStepId] || {})}`}
             entering={FadeIn.duration(180)}
             exiting={FadeOut.duration(120)}
             style={{ flex: 1 }}
@@ -3115,7 +3714,7 @@ export default function OnboardingScreen() {
               <KeyboardAwareScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} bottomOffset={100}>
                 <View style={{ flex: 1, paddingHorizontal: Spacing['6'], paddingTop: Spacing['10'], paddingBottom: 120 }}>
                   <View>
-                    {isLoadingAdaptive && step?.adaptive ? (
+                    {(isLoadingAdaptive && step?.adaptive) || (isLoadingDiagnostic && step?.id === 'diagnosticRound') ? (
                       <>
                         <View style={{
                           flex: 1,

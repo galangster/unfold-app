@@ -50,6 +50,7 @@
 import { useEffect, useRef } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import { useUnfoldStore, useHasHydrated } from '@/lib/store';
+import { getTodayCarryLine } from '@/lib/home-devotional-state';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { getEffectivePremiumAccessPolicy } from '@/lib/premium-state';
 import {
@@ -96,6 +97,14 @@ function useCheckInFingerprint(): string {
   const middayByDay = useUnfoldStore((s) => s.middayCheckInByDay);
   const eveningByDay = useUnfoldStore((s) => s.eveningWindDownByDay);
   const hasCompletedOnboarding = useUnfoldStore((s) => !!s.user?.hasCompletedOnboarding);
+  // INCLUDED: today's carry line. scheduleMiddayCheckIn writes it into the
+  // notification body, so when the reader finishes today's day (isRead flips
+  // and the carry line becomes available) the schedule must be rewritten —
+  // otherwise the generic copy scheduled at app start fires instead. The
+  // wall-clock-day check in runSync clears yesterday's line on a new day.
+  const todayCarryLine = useUnfoldStore(
+    (s) => getTodayCarryLine(s.devotionals, s.currentDevotionalId) ?? '',
+  );
 
   return JSON.stringify([
     policy,
@@ -106,6 +115,7 @@ function useCheckInFingerprint(): string {
     middayByDay,
     eveningByDay,
     hasCompletedOnboarding ? '1' : '0',
+    todayCarryLine,
   ]);
 }
 

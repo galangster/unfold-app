@@ -24,7 +24,7 @@ import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, type Devotional, type DevotionalDay } from '@/lib/store';
-import { submitGenerationJob, pollJobStatus, retryJob, recoverCompletedGenerationResult } from '@/lib/generation-api';
+import { submitGenerationJob, pollJobStatus, retryJob, recoverCompletedGenerationResult, buildInitialArcUserContext } from '@/lib/generation-api';
 import {
   evaluateGenerationPoll,
   resolveGenerationSubmitFailure,
@@ -575,24 +575,7 @@ export default function GeneratingScreen() {
         const { jobId, devotionalId: submittedDevotionalId } = await submitGenerationJob({
           dayNumber: 1,
           jobType: 'initial_arc',
-          userContext: {
-            name: user.name,
-            aboutMe: user.aboutMe,
-            situation: user.currentSituation,
-            emotion: user.emotionalState,
-            faith: user.faithImpact ?? '',
-            seeking: user.spiritualSeeking,
-            themeCategory: user.selectedTheme ?? '',
-            devotionalType: user.selectedType ?? 'personal',
-            studySubject: user.selectedStudySubject,
-            readingDuration: user.readingDuration,
-            devotionalLength: user.devotionalLength,
-            bibleTranslation: user.bibleTranslation ?? 'BSB',
-            writingStyle: user.writingStyle as unknown as Record<string, string> | undefined,
-            relationshipWithGod: user.relationshipWithGod,
-            growthGoals: user.growthGoals,
-            obstacles: user.obstacles,
-          },
+          userContext: buildInitialArcUserContext(user),
         });
 
         const devotionalId = requireCanonicalDevotionalId(submittedDevotionalId, 'initial devotional job submission');
@@ -730,27 +713,13 @@ export default function GeneratingScreen() {
         setIsGenerating(true);
         // Re-trigger submission
         if (user) {
+          // Same builder as the primary path — a retried generation must not
+          // silently lose the personalization fields (review finding: this
+          // branch was missed in the buildInitialArcUserContext refactor).
           const { jobId, devotionalId: submittedDevotionalId } = await submitGenerationJob({
             dayNumber: 1,
             jobType: 'initial_arc',
-            userContext: {
-              name: user.name,
-              aboutMe: user.aboutMe,
-              situation: user.currentSituation,
-              emotion: user.emotionalState,
-              faith: user.faithImpact ?? '',
-              seeking: user.spiritualSeeking,
-              themeCategory: user.selectedTheme ?? '',
-              devotionalType: user.selectedType ?? 'personal',
-              studySubject: user.selectedStudySubject,
-              readingDuration: user.readingDuration,
-              devotionalLength: user.devotionalLength,
-              bibleTranslation: user.bibleTranslation ?? 'BSB',
-              writingStyle: user.writingStyle as unknown as Record<string, string> | undefined,
-              relationshipWithGod: user.relationshipWithGod,
-              growthGoals: user.growthGoals,
-              obstacles: user.obstacles,
-            },
+            userContext: buildInitialArcUserContext(user),
           });
 
           const devotionalId = requireCanonicalDevotionalId(submittedDevotionalId, 'retry initial devotional job submission');

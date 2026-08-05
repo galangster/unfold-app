@@ -416,6 +416,26 @@ export function DevotionalContent({
         </>
       )}
 
+      {/* Act Section — the day's one concrete same-day act */}
+      {day.act && (
+        <View>
+          <SectionDivider color={colors.textMuted} style={{ marginTop: 48, marginBottom: 32 }} />
+          <ReaderSectionHeader label="Today" textColor={colors.text} />
+          <Text
+            style={{
+              fontFamily: FontFamily.body,
+              fontSize: fontSizes.body,
+              color: colors.text,
+              lineHeight: fontSizes.body * 1.8,
+              textAlign: 'left',
+              paddingHorizontal: 16,
+            }}
+          >
+            {preventOrphan(day.act)}
+          </Text>
+        </View>
+      )}
+
       {/* Closing Prayer Section */}
       {day.closingPrayer && (
         <View style={dcStyles.prayerSection}>
@@ -434,6 +454,23 @@ export function DevotionalContent({
             {preventOrphan(day.closingPrayer)}
           </Text>
         </View>
+      )}
+
+      {/* Carry line — what leaves the page with the reader */}
+      {day.carryLine && (
+        <Text
+          style={{
+            fontFamily: readingFont.bodyItalic,
+            fontSize: fontSizes.body,
+            color: colors.textMuted,
+            lineHeight: fontSizes.body * 1.8,
+            textAlign: 'center',
+            paddingHorizontal: 32,
+            marginTop: 40,
+          }}
+        >
+          {preventOrphan(day.carryLine)}
+        </Text>
       )}
     </>
   );

@@ -964,7 +964,24 @@ export function DevotionalWebView({
       return isFirst ? `<p class="first-paragraph">${inner}</p>` : `<p>${inner}</p>`;
     };
 
-    const bodyHtml = paragraphs.map((p, i) => renderParagraph(p, i === 0)).join('');
+    // Pull quote: surface the day's quotableLine inside the teaching, after
+    // the second paragraph — deep enough to land on a reader already inside
+    // the text, early enough to carry the rest of the reading. Only rendered
+    // when the body is long enough to hold it (4+ paragraphs), and skipped
+    // for method-structured days whose second paragraph is a section header.
+    const pullQuoteLine = (day.quotableLine || '').trim();
+    const pullQuoteIndex =
+      pullQuoteLine.length > 0 &&
+      paragraphs.length >= 4 &&
+      !/^\*\*([^*]+)\*\*$/.test(paragraphs[1]) &&
+      !/^-{3,}$/.test(paragraphs[1])
+        ? 1
+        : -1;
+    const pullQuoteHtml = `<aside class="pull-quote" aria-hidden="true">${escapeHtml(pullQuoteLine)}</aside>`;
+
+    const bodyHtml = paragraphs
+      .map((p, i) => renderParagraph(p, i === 0) + (i === pullQuoteIndex ? pullQuoteHtml : ''))
+      .join('');
 
     // Divider between body paragraphs and quotes
     const bodyToQuoteDivider = (day.quotes?.length)
@@ -1168,6 +1185,18 @@ export function DevotionalWebView({
       border-top: 1px solid ${mutedColor};
       opacity: 0.25;
       margin: 28px 0;
+    }
+
+    /* Pull quote — the day's quotable line, set inside the teaching */
+    aside.pull-quote {
+      font-family: ${displayFontStack};
+      font-size: ${bodyFontSize * 1.18}px;
+      line-height: 1.5;
+      font-style: italic;
+      color: ${accentColor};
+      text-align: center;
+      margin: ${lineHeight * 1.4}px 8px;
+      padding: 0 8px;
     }
 
     /* Study method headers — standalone **BOLD** paragraphs */

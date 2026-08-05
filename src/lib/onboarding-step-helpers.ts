@@ -82,6 +82,7 @@ const TOP_CONTINUE_HIDDEN_STEP_TYPES = new Set([
   'celebration',
   'commitment1',
   'commitment2',
+  'diagnosticRound',
 ]);
 
 const FULL_SCREEN_STEP_TYPES = new Set([
@@ -311,6 +312,104 @@ export function buildOnboardingSampleGenerationRequest({
       obstacles: answers.obstacles ?? [],
     },
   };
+}
+
+// ---------------------------------------------------------------------------
+// Key people (onboarding "who's walking through this with you?" step)
+// ---------------------------------------------------------------------------
+
+/**
+ * Shapes raw keyPeople editing state (which may include chip-revealed rows
+ * with no name typed yet) into the payload persisted to the user profile:
+ * drop anyone without both a name and a relationship, cap at 5, trim names.
+ */
+export function shapeKeyPeople(
+  people: readonly { name?: string | null; relationship?: string | null }[] | null | undefined,
+  maxCount = 5,
+  maxNameLength = 50,
+): { name: string; relationship: string }[] {
+  if (!people) return [];
+  const shaped: { name: string; relationship: string }[] = [];
+  for (const person of people) {
+    const name = typeof person?.name === 'string' ? person.name.trim().slice(0, maxNameLength) : '';
+    const relationship = typeof person?.relationship === 'string' ? person.relationship.trim() : '';
+    if (!name || !relationship) continue;
+    shaped.push({ name, relationship });
+    if (shaped.length >= maxCount) break;
+  }
+  return shaped;
+}
+
+// ---------------------------------------------------------------------------
+// Upcoming event (onboarding "what's coming up" step)
+// ---------------------------------------------------------------------------
+
+/** Shapes upcoming-event editing state into the payload — only counts when both fields are set. */
+export function shapeUpcomingEvent(
+  event: { label?: string | null; date?: string | null } | null | undefined,
+): { label: string; date: string } | undefined {
+  const label = typeof event?.label === 'string' ? event.label.trim() : '';
+  const date = typeof event?.date === 'string' ? event.date.trim() : '';
+  if (!label || !date) return undefined;
+  return { label, date };
+}
+
+export type QuickDateChipId = 'tomorrow' | 'this-weekend' | 'next-week' | 'in-two-weeks' | 'in-a-month';
+
+export const QUICK_DATE_CHIPS: { id: QuickDateChipId; label: string }[] = [
+  { id: 'tomorrow', label: 'Tomorrow' },
+  { id: 'this-weekend', label: 'This weekend' },
+  { id: 'next-week', label: 'Next week' },
+  { id: 'in-two-weeks', label: 'In two weeks' },
+  { id: 'in-a-month', label: 'In a month' },
+];
+
+/** Formats a Date as a local (not UTC) yyyy-mm-dd string. */
+export function formatDateOnly(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/** Maps a quick-select date chip to a concrete yyyy-mm-dd date, relative to referenceDate (defaults to now). */
+export function resolveQuickDateChip(chipId: QuickDateChipId, referenceDate: Date = new Date()): string {
+  const base = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate());
+
+  switch (chipId) {
+    case 'tomorrow':
+      base.setDate(base.getDate() + 1);
+      return formatDateOnly(base);
+    case 'this-weekend': {
+      const daysUntilSaturday = (6 - base.getDay() + 7) % 7;
+      base.setDate(base.getDate() + daysUntilSaturday);
+      return formatDateOnly(base);
+    }
+    case 'next-week':
+      base.setDate(base.getDate() + 7);
+      return formatDateOnly(base);
+    case 'in-two-weeks':
+      base.setDate(base.getDate() + 14);
+      return formatDateOnly(base);
+    case 'in-a-month':
+      base.setMonth(base.getMonth() + 1);
+      return formatDateOnly(base);
+    default:
+      return formatDateOnly(base);
+  }
+}
+
+const MONTH_ABBREVIATIONS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** Formats a yyyy-mm-dd string for display (e.g. "Aug 15"). Returns the input unchanged if malformed. */
+export function formatDateOnlyForDisplay(dateStr: string): string {
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return dateStr;
+  const [, monthStr, dayStr] = parts;
+  const monthIndex = Number(monthStr) - 1;
+  const day = Number(dayStr);
+  if (Number.isNaN(monthIndex) || Number.isNaN(day) || !MONTH_ABBREVIATIONS[monthIndex]) return dateStr;
+  return `${MONTH_ABBREVIATIONS[monthIndex]} ${day}`;
 }
 
 function stableStringify(value: unknown): string {

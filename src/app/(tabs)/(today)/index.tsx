@@ -708,10 +708,34 @@ export default function HomeScreen() {
   const handleDay1ReviewOption = useCallback(async (option: 'love' | 'okay' | 'not-for-me') => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setHasSeenDay1Review();
+    // The card promises "one quiet response helps Unfold shape the next few
+    // days" — make that true: persist the answer as a day-1 check-in so it
+    // syncs to the backend and reaches the generation memory for day 2.
+    // timeOfDay 'morning' = right-after-reading; a later real midday/evening
+    // check-in wins the backend's latest-row-per-day query, so this never
+    // masks a genuine mood entry.
+    const pulseDevotional = useUnfoldStore.getState().devotionals.find(
+      (d) => d.id === useUnfoldStore.getState().currentDevotionalId,
+    );
+    if (pulseDevotional) {
+      const pulse = {
+        love: { mood: 4 as const, moodLabel: 'This helped me' },
+        okay: { mood: 3 as const, moodLabel: 'Still settling' },
+        'not-for-me': { mood: 2 as const, moodLabel: 'Not for me' },
+      }[option];
+      addCheckIn({
+        devotionalId: pulseDevotional.id,
+        dayNumber: 1,
+        mood: pulse.mood,
+        moodLabel: pulse.moodLabel,
+        chipAnswer: `day1-pulse:${option}`,
+        timeOfDay: 'morning',
+      });
+    }
     if (option === 'love') {
       await requestReviewOncePerVersion();
     }
-  }, [setHasSeenDay1Review]);
+  }, [setHasSeenDay1Review, addCheckIn]);
 
   const daysCompleted = currentDevotional ? (currentDevotional.days ?? []).filter(d => d.isRead).length : 0;
   const progressPercent = currentDevotional ? (daysCompleted / currentDevotional.totalDays) * 100 : 0;

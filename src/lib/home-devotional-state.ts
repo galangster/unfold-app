@@ -34,6 +34,34 @@ export function getCurrentDevotional(
   return devotionals.find((devotional) => devotional.id === currentDevotionalId);
 }
 
+/**
+ * The carry line for today's midday check-in notification: the recall line
+ * from the day the reader completed TODAY (the line they met this morning,
+ * surfacing again at 3pm). Null when the reader hasn't read today or the day
+ * carries no line — callers fall back to the rotating generic copy, so a
+ * stale line is never shown on a day the reader didn't actually read.
+ */
+export function getTodayCarryLine(
+  devotionals: readonly Devotional[],
+  currentDevotionalId: string | null | undefined,
+  now = new Date(),
+): string | null {
+  const devotional = getCurrentDevotional(devotionals, currentDevotionalId);
+  if (!devotional) return null;
+  const todayKey = localDayKey(now);
+  const readToday = devotional.days
+    .filter(
+      (day) =>
+        day.isRead &&
+        typeof day.carryLine === 'string' &&
+        day.carryLine.trim().length > 0 &&
+        localDayKeyFromIso(day.readAt) === todayKey,
+    )
+    .sort((a, b) => b.dayNumber - a.dayNumber);
+  const line = readToday[0]?.carryLine?.trim();
+  return line || null;
+}
+
 export function getHomeDevotionalDayData(
   devotional: Devotional | null | undefined,
   now = new Date(),
