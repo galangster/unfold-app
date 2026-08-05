@@ -691,6 +691,15 @@ export default function OnboardingScreen() {
   const [isLoadingMirrorBack, setIsLoadingMirrorBack] = useState(false);
   // Mirror-back v2: inline correction UI shown instead of immediately going back
   const [showMirrorCorrection, setShowMirrorCorrection] = useState(false);
+
+  // Re-entering mirrorBack must always offer ratification afresh — without
+  // this, one tap of "Let me adjust something" locks the step into
+  // correction mode forever (setShowMirrorCorrection(true) had no undo).
+  useEffect(() => {
+    if (currentStepId === 'mirrorBack') {
+      setShowMirrorCorrection(false);
+    }
+  }, [currentStepId]);
   const [mirrorCorrectionDraft, setMirrorCorrectionDraft] = useState('');
 
   // Diagnostic round: 3 targeted follow-up questions asked one at a time
@@ -840,6 +849,11 @@ export default function OnboardingScreen() {
       return;
     }
 
+    // If the user backs out while the fetch is in flight, the resolution must
+    // become a no-op — the stale closure's advanceToNextStep would otherwise
+    // yank them forward from wherever they navigated to.
+    let cancelled = false;
+
     setIsLoadingDiagnostic(true);
     generateDiagnosticQuestions({
       aboutMe: data.aboutMe,
@@ -851,6 +865,7 @@ export default function OnboardingScreen() {
       selectedType: data.selectedType,
     })
       .then((result) => {
+        if (cancelled) return;
         if (result && result.questions.length > 0) {
           setDiagnosticIndex(0);
           setDiagnosticDraft('');
@@ -860,11 +875,16 @@ export default function OnboardingScreen() {
         }
       })
       .catch(() => {
+        if (cancelled) return;
         advanceToNextStep();
       })
       .finally(() => {
         setIsLoadingDiagnostic(false);
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, [currentStepId]);
 
   // Keyboard height tracking for scroll adjustment
@@ -1030,10 +1050,12 @@ export default function OnboardingScreen() {
         ...(data.selectedType ? { selectedType: data.selectedType } : {}),
         ...(data.selectedStudySubject ? { selectedStudySubject: data.selectedStudySubject } : {}),
         ...(shapeKeyPeople(data.keyPeople).length > 0 ? { keyPeople: shapeKeyPeople(data.keyPeople) } : {}),
-        ...(shapeUpcomingEvent(data.upcomingEvent) ? { upcomingEvent: shapeUpcomingEvent(data.upcomingEvent) } : {}),
-        ...(data.diagnosticAnswers.length > 0 ? { diagnosticAnswers: data.diagnosticAnswers } : {}),
-        ...(data.mirrorWorkingRead ? { mirrorWorkingRead: data.mirrorWorkingRead } : {}),
-        ...(data.mirrorCorrection ? { mirrorCorrection: data.mirrorCorrection } : {}),
+        // Per-series fields overwrite unconditionally: a new series must never
+        // inherit a previous pass's event/answers/read (review finding).
+        upcomingEvent: shapeUpcomingEvent(data.upcomingEvent),
+        diagnosticAnswers: data.diagnosticAnswers.length > 0 ? data.diagnosticAnswers : undefined,
+        mirrorWorkingRead: data.mirrorWorkingRead || undefined,
+        mirrorCorrection: data.mirrorCorrection || undefined,
         ...pendingAuth,
         ...(isPrem ? { isPremium: true } : {}),
       });
@@ -1068,10 +1090,12 @@ export default function OnboardingScreen() {
         ...(data.selectedType ? { selectedType: data.selectedType } : {}),
         ...(data.selectedStudySubject ? { selectedStudySubject: data.selectedStudySubject } : {}),
         ...(shapeKeyPeople(data.keyPeople).length > 0 ? { keyPeople: shapeKeyPeople(data.keyPeople) } : {}),
-        ...(shapeUpcomingEvent(data.upcomingEvent) ? { upcomingEvent: shapeUpcomingEvent(data.upcomingEvent) } : {}),
-        ...(data.diagnosticAnswers.length > 0 ? { diagnosticAnswers: data.diagnosticAnswers } : {}),
-        ...(data.mirrorWorkingRead ? { mirrorWorkingRead: data.mirrorWorkingRead } : {}),
-        ...(data.mirrorCorrection ? { mirrorCorrection: data.mirrorCorrection } : {}),
+        // Per-series fields overwrite unconditionally: a new series must never
+        // inherit a previous pass's event/answers/read (review finding).
+        upcomingEvent: shapeUpcomingEvent(data.upcomingEvent),
+        diagnosticAnswers: data.diagnosticAnswers.length > 0 ? data.diagnosticAnswers : undefined,
+        mirrorWorkingRead: data.mirrorWorkingRead || undefined,
+        mirrorCorrection: data.mirrorCorrection || undefined,
         ...pendingAuth,
       });
     }
@@ -2342,10 +2366,20 @@ export default function OnboardingScreen() {
 
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         Keyboard.dismiss();
-        setData((prev) => ({
-          ...prev,
-          diagnosticAnswers: [...prev.diagnosticAnswers, { question: currentQuestion.question, answer }],
-        }));
+        setData((prev) => {
+          // Replace-by-question: backing into a completed round and re-submitting
+          // must never produce duplicate entries in the generation context.
+          const existing = prev.diagnosticAnswers.findIndex(
+            (qa) => qa.question === currentQuestion.question,
+          );
+          const diagnosticAnswers =
+            existing >= 0
+              ? prev.diagnosticAnswers.map((qa, i) =>
+                  i === existing ? { question: currentQuestion.question, answer } : qa,
+                )
+              : [...prev.diagnosticAnswers, { question: currentQuestion.question, answer }];
+          return { ...prev, diagnosticAnswers };
+        });
         setShowInput(false);
         inputOpacity.value = 0;
 
