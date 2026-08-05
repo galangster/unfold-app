@@ -157,6 +157,7 @@ const styles = StyleSheet.create({
   progressText: {
     fontFamily: FontFamily.mono,
     fontSize: 13,
+    fontVariant: ['tabular-nums'],
   },
   downloadButton: {
     paddingHorizontal: Spacing['8'],

@@ -19,6 +19,7 @@ import Animated, {
   withDelay,
   withSpring,
   Easing,
+  useReducedMotion,
 } from 'react-native-reanimated';
 import MaskedView from '@react-native-masked-view/masked-view';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -31,6 +32,7 @@ import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
 import { smartQuotes } from '@/lib/smart-quotes';
 import { SUGGESTION_CHIP_TEXT_LINE_HEIGHT } from '@/lib/companion-status-slot';
+import { COMPANION_TEXT_INDENT } from './CompanionMessageContent';
 
 const EASE_OUT = Easing.out(Easing.cubic);
 
@@ -60,14 +62,20 @@ function AnimatedChip({
   accentColor: string;
   colors: any;
 }) {
-  const opacity = useSharedValue(0);
-  const translateY = useSharedValue(16);
+  const reducedMotion = useReducedMotion();
+  const opacity = useSharedValue(reducedMotion ? 1 : 0);
+  const translateY = useSharedValue(reducedMotion ? 0 : 16);
   const scale = useSharedValue(1);
 
   useEffect(() => {
+    if (reducedMotion) {
+      opacity.value = 1;
+      translateY.value = 0;
+      return;
+    }
     opacity.value = withDelay(delay, withTiming(1, { duration: Duration.normal, easing: EASE_OUT }));
     translateY.value = withDelay(delay, withTiming(0, { duration: Duration.normal, easing: EASE_OUT }));
-  }, [delay, opacity, translateY]);
+  }, [delay, opacity, translateY, reducedMotion]);
 
   const style = useAnimatedStyle(() => ({
     opacity: opacity.value,
@@ -75,7 +83,7 @@ function AnimatedChip({
   }));
 
   return (
-    <Animated.View style={style} exiting={FadeOut.duration(Duration.fast)}>
+    <Animated.View style={style} exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast)}>
       <TouchableOpacity
         activeOpacity={0.7}
         onPressIn={() => {
@@ -143,7 +151,7 @@ export function SuggestionChips({ suggestions, onSelect, visible }: Props) {
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={{
-            paddingLeft: 56, // aligned with companion text (16 + 28 + 12)
+            paddingLeft: COMPANION_TEXT_INDENT, // aligned with companion text
             paddingRight: Spacing['6'],
             gap: Spacing['2'],
           }}

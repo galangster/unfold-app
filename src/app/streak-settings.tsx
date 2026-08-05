@@ -19,6 +19,7 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Typography } from '@/constants/typography';
+import { alpha } from '@/components/ui';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
@@ -182,12 +183,12 @@ export default function StreakSettingsScreen() {
         {/* Streak Society Tier Card */}
         <Animated.View
           entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).easing(Ease.out)}
-          style={[ssStyles.tierCard, { backgroundColor: colors.inputBackground, borderColor: isDark ? `${colors.accent}30` : `${colors.accent}20` }]}
+          style={[ssStyles.tierCard, { backgroundColor: colors.inputBackground, borderColor: isDark ? alpha(colors.accent, 0.2) : alpha(colors.accent, 0.12) }]}
         >
           {/* Top section: tier icon + name + streak count */}
           <View style={ssStyles.tierTopRow}>
             <View style={ssStyles.tierLeftGroup}>
-              <View style={[ssStyles.tierIconCircle, { backgroundColor: isDark ? `${colors.accent}1A` : `${colors.accent}15` }]}>
+              <View style={[ssStyles.tierIconCircle, { backgroundColor: isDark ? alpha(colors.accent, 0.1) : alpha(colors.accent, 0.08) }]}>
                 <TierIcon
                   tier={currentTier}
                   size={26}
@@ -219,7 +220,7 @@ export default function StreakSettingsScreen() {
           {/* Progress bar to next tier */}
           {nextTier ? (
             <View style={ssStyles.progressSection}>
-              <View style={[ssStyles.progressTrack, { backgroundColor: isDark ? 'rgba(245, 240, 235, 0.08)' : 'rgba(28, 23, 16, 0.06)' }]}>
+              <View style={[ssStyles.progressTrack, { backgroundColor: isDark ? alpha(colors.text, 0.08) : alpha(colors.text, 0.06) }]}>
                 <View
                   style={[ssStyles.progressFill, { width: `${Math.max(tierProgress * 100, 2)}%`, backgroundColor: tierColor }]}
                 />
@@ -263,11 +264,11 @@ export default function StreakSettingsScreen() {
                   ssStyles.tierRoadmapItem,
                   {
                     backgroundColor: isActive
-                      ? (isDark ? `${colors.accent}10` : `${colors.accent}08`)
+                      ? (isDark ? alpha(colors.accent, 0.06) : alpha(colors.accent, 0.03))
                       : 'transparent',
                     borderWidth: isActive ? 1 : 0,
                     borderColor: isActive
-                      ? (isDark ? `${colors.accent}30` : `${colors.accent}20`)
+                      ? (isDark ? alpha(colors.accent, 0.2) : alpha(colors.accent, 0.12))
                       : 'transparent',
                   },
                 ]}
@@ -490,7 +491,8 @@ const ssStyles = StyleSheet.create({
   },
   tierName: {
     fontFamily: FontFamily.display,
-    fontSize: FontSize['2xl'],
+    fontSize: 21,
+    letterSpacing: -0.2,
     marginTop: 1,
   },
   streakCountRight: {
@@ -500,6 +502,7 @@ const ssStyles = StyleSheet.create({
     fontFamily: FontFamily.uiSemiBold,
     fontSize: 32,
     letterSpacing: -1,
+    fontVariant: ['tabular-nums'],
   },
   streakCountUnit: {
     fontFamily: FontFamily.ui,
@@ -575,6 +578,7 @@ const ssStyles = StyleSheet.create({
     fontFamily: FontFamily.uiSemiBold,
     fontSize: FontSize['2xl'],
     marginTop: Spacing['2'],
+    fontVariant: ['tabular-nums'],
   },
   statLabel: {
     fontFamily: FontFamily.ui,

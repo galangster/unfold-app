@@ -175,10 +175,10 @@ export function RemindersSection() {
             style={{
               fontFamily: FontFamily.uiMedium,
               fontSize: FontSize.sm,
-              color: (isPremium ? notificationsEnabled : false) ? colors.text : colors.textMuted,
+              color: notificationsEnabled ? colors.text : colors.textMuted,
             }}
           >
-            {(isPremium ? notificationsEnabled : false) ? 'On' : 'Off'}
+            {notificationsEnabled ? 'On' : 'Off'}
           </Text>
         </TouchableOpacity>
 

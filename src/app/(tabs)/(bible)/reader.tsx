@@ -12,7 +12,7 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
-import { Shadow } from '@/constants/shadows';
+import { Shadow, elevated } from '@/constants/shadows';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { planHighlightApplication, planHighlightRemoval } from '@/lib/bible-highlight-overlap';
@@ -174,11 +174,18 @@ const VerseItem = React.memo(function VerseItem({
 }) {
   const [textLines, setTextLines] = useState<BibleTextLine[]>([]);
   const verseNum = verse.verse;
+  const reducedMotion = useReducedMotion();
 
   // Flash animation: quick fade in → hold → smooth fade out
   const flashOpacity = useSharedValue(0);
   useEffect(() => {
     if (isFlashing) {
+      if (reducedMotion) {
+        // Skip the fade choreography — jump to the flash color, then clear after the hold.
+        flashOpacity.value = 1;
+        flashOpacity.value = withDelay(ANIM.flashHold, withTiming(0, { duration: 0 }));
+        return;
+      }
       // Fast fade in (200ms), then after holding, fade out over 600ms
       flashOpacity.value = withTiming(1, { duration: Duration.normal, easing: EASE_OUT_QUART }, () => {
         // After reaching full opacity, hold then fade out
@@ -189,7 +196,7 @@ const VerseItem = React.memo(function VerseItem({
     } else {
       flashOpacity.value = 0;
     }
-  }, [flashOpacity, isFlashing]);
+  }, [flashOpacity, isFlashing, reducedMotion]);
 
   const flashStyle = useAnimatedStyle(() => ({
     opacity: flashOpacity.value,
@@ -256,7 +263,7 @@ const VerseItem = React.memo(function VerseItem({
     }
   }, []);
 
-  const verseNumSize = Math.max(9, Math.round(fontSize * 0.55));
+  const verseNumSize = Math.max(11, Math.round(fontSize * 0.55));
 
   return (
     <View onLayout={handleLayout}>
@@ -318,7 +325,7 @@ const VerseItem = React.memo(function VerseItem({
             lineHeight,
             fontFamily: FontFamily.uiMedium,
             color: displayText,
-            opacity: isSelected ? 0.6 : 0.4,
+            opacity: isSelected ? 0.6 : 0.5,
           }}>
             {verse.verse}{' '}
           </Text>
@@ -428,11 +435,13 @@ export default function BibleReaderScreen() {
   const contextBarSlideY = useSharedValue(8);
   useEffect(() => {
     if (showActions) {
-      contextBarSlideY.value = withTiming(0, { duration: ANIM.contextEnter, easing: EASE_OUT_QUART });
+      contextBarSlideY.value = reducedMotion
+        ? 0
+        : withTiming(0, { duration: ANIM.contextEnter, easing: EASE_OUT_QUART });
     } else {
       contextBarSlideY.value = 8;
     }
-  }, [contextBarSlideY, showActions]);
+  }, [contextBarSlideY, showActions, reducedMotion]);
   const contextBarSlideStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: contextBarSlideY.value }],
   }));
@@ -935,25 +944,40 @@ export default function BibleReaderScreen() {
         const goNext = !!nextChapter && (tx < -SWIPE_DISTANCE_THRESHOLD || vx < -SWIPE_VELOCITY_THRESHOLD);
 
         if (goPrev && tx > 0) {
-          // Quick settle to max drag distance, then navigate
-          dragX.value = withTiming(
-            DRAG_MAX,
-            { duration: NAV_EXIT_DURATION, easing: EASE_OUT_QUART },
-            () => { runOnJS(navigateChapter)(-1); },
-          );
+          if (reducedMotion) {
+            // Skip the decorative settle-to-edge, jump straight to the next chapter.
+            dragX.value = 0;
+            runOnJS(navigateChapter)(-1);
+          } else {
+            // Quick settle to max drag distance, then navigate
+            dragX.value = withTiming(
+              DRAG_MAX,
+              { duration: NAV_EXIT_DURATION, easing: EASE_OUT_QUART },
+              () => { runOnJS(navigateChapter)(-1); },
+            );
+          }
         } else if (goNext && tx < 0) {
-          // Quick settle to max drag distance, then navigate
-          dragX.value = withTiming(
-            -DRAG_MAX,
-            { duration: NAV_EXIT_DURATION, easing: EASE_OUT_QUART },
-            () => { runOnJS(navigateChapter)(1); },
-          );
+          if (reducedMotion) {
+            // Skip the decorative settle-to-edge, jump straight to the next chapter.
+            dragX.value = 0;
+            runOnJS(navigateChapter)(1);
+          } else {
+            // Quick settle to max drag distance, then navigate
+            dragX.value = withTiming(
+              -DRAG_MAX,
+              { duration: NAV_EXIT_DURATION, easing: EASE_OUT_QUART },
+              () => { runOnJS(navigateChapter)(1); },
+            );
+          }
+        } else if (reducedMotion) {
+          // No commit — snap back to center instantly instead of springing
+          dragX.value = 0;
         } else {
           // No commit — spring back to center (critically damped)
           dragX.value = withSpring(0, SWIPE_SPRING_BACK);
         }
       }),
-    [prevChapter, nextChapter, navigateChapter, dragX, nativeScrollGesture],
+    [prevChapter, nextChapter, navigateChapter, dragX, nativeScrollGesture, reducedMotion],
   );
 
   // ─── Tab bar hide/show on scroll ──────────────────────────────────────────
@@ -1033,7 +1057,7 @@ export default function BibleReaderScreen() {
       {/* Header — hidden when navigator is open to prevent double-header jitter */}
       <View style={[styles.header, {
         paddingTop: insets.top + 4,
-        borderBottomColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)',
+        borderBottomColor: alpha(colors.text, 0.04),
         backgroundColor: colors.background,
         opacity: showNavigator ? 0 : 1,
       }]}>
@@ -1054,6 +1078,8 @@ export default function BibleReaderScreen() {
           activeOpacity={0.6}
           testID="reader-chapter-title"
           accessibilityLabel={`${book?.name ?? ''} chapter ${chapter}. Tap to navigate.`}
+          accessibilityRole="button"
+          hitSlop={8}
         >
           <Text style={[styles.headerBook, { color: colors.text, fontFamily: FontFamily.uiMedium }]} numberOfLines={1}>
             {book?.name ?? ''}
@@ -1212,10 +1238,13 @@ export default function BibleReaderScreen() {
           style={[
             styles.contextBarFull,
             {
+              // Near-opaque iOS system surface tone (not the app's warm text/border
+              // palette) — chosen for max legibility under the action bar's
+              // controls; alpha(colors.text, …) would tint it visibly warmer.
               backgroundColor: isDark ? 'rgba(28, 28, 30, 0.98)' : 'rgba(255, 255, 255, 0.98)',
               paddingBottom: showNoteInput && keyboardHeight > 0 ? 8 : Math.max(insets.bottom, 8),
               bottom: showNoteInput && keyboardHeight > 0 ? keyboardHeight - insets.bottom + 12 : 0,
-              borderTopColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
+              borderTopColor: alpha(colors.text, 0.08),
             },
             contextBarSlideStyle,
           ]}
@@ -1224,7 +1253,7 @@ export default function BibleReaderScreen() {
             /* Color picker mode */
             <View style={styles.contextRow}>
               {existingHighlightColor && (
-                <TouchableOpacity onPress={handleRemoveHighlight} style={styles.contextColorButton} testID="bible-highlight-remove" accessibilityLabel="Remove highlight">
+                <TouchableOpacity onPress={handleRemoveHighlight} style={styles.contextColorButton} testID="bible-highlight-remove" accessibilityLabel="Remove highlight" accessibilityRole="button" hitSlop={8}>
                   <View style={[styles.contextRemoveCircle, {
                     backgroundColor: HIGHLIGHT_COLORS.find((c) => c.key === existingHighlightColor)?.color ?? '#888',
                   }]}>
@@ -1249,6 +1278,8 @@ export default function BibleReaderScreen() {
                     activeOpacity={0.7}
                     testID={`bible-highlight-color-${c.key}`}
                     accessibilityLabel={isLocked ? `${c.key} highlight color, premium only` : `${c.key} highlight color`}
+                    accessibilityRole="button"
+                    hitSlop={8}
                   >
                     <View style={[styles.contextColorDot, { backgroundColor: c.color, opacity: isLocked ? 0.4 : 1 }]}>
                       {isLocked && (
@@ -1267,8 +1298,8 @@ export default function BibleReaderScreen() {
                 testID="bible-verse-note-input"
                 style={[styles.noteInput, {
                   color: colors.text,
-                  backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
-                  borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
+                  backgroundColor: isDark ? alpha(colors.text, 0.06) : alpha(colors.text, 0.04),
+                  borderColor: alpha(colors.text, 0.1),
                 }]}
                 placeholder="Add a note..."
                 placeholderTextColor={colors.textHint}
@@ -1304,19 +1335,19 @@ export default function BibleReaderScreen() {
           ) : (
             /* Main options — 4 icon buttons */
             <View style={styles.contextIconRow}>
-              <TouchableOpacity onPress={handleExplain} style={styles.contextIconButton} activeOpacity={0.6}>
+              <TouchableOpacity onPress={handleExplain} style={styles.contextIconButton} activeOpacity={0.6} hitSlop={6}>
                 <BookOpenIcon size={22} color={colors.text} weight="light" />
                 <Text style={[styles.contextIconLabel, { color: colors.textMuted }]}>Explain</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => setShowColorPicker(true)} style={styles.contextIconButton} activeOpacity={0.6} testID="bible-verse-action-highlight">
+              <TouchableOpacity onPress={() => setShowColorPicker(true)} style={styles.contextIconButton} activeOpacity={0.6} testID="bible-verse-action-highlight" hitSlop={6}>
                 <HighlighterCircleIcon size={22} color={colors.text} weight="light" />
                 <Text style={[styles.contextIconLabel, { color: colors.textMuted }]}>Highlight</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={handleNote} style={styles.contextIconButton} activeOpacity={0.6} testID="bible-verse-action-note">
+              <TouchableOpacity onPress={handleNote} style={styles.contextIconButton} activeOpacity={0.6} testID="bible-verse-action-note" hitSlop={6}>
                 <NotePencilIcon size={22} color={colors.text} weight="light" />
                 <Text style={[styles.contextIconLabel, { color: colors.textMuted }]}>Note</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={handleShare} style={styles.contextIconButton} activeOpacity={0.6}>
+              <TouchableOpacity onPress={handleShare} style={styles.contextIconButton} activeOpacity={0.6} hitSlop={6}>
                 <UploadSimpleIcon size={22} color={colors.text} weight="light" />
                 <Text style={[styles.contextIconLabel, { color: colors.textMuted }]}>Share</Text>
               </TouchableOpacity>
@@ -1371,7 +1402,10 @@ export default function BibleReaderScreen() {
           <Animated.View
             entering={reducedMotion ? undefined : FadeIn.duration(ANIM.toastEnter).easing(Ease.out)}
             exiting={reducedMotion ? undefined : FadeOut.duration(ANIM.toastExit).easing(Ease.out)}
-            style={[styles.toastPill, { backgroundColor: isDark ? '#3A3A3C' : 'rgba(30, 30, 30, 0.92)' }]}
+            // Neutral near-black gray for contrast in both themes, not a tint
+            // of the warm text/border palette — alpha(colors.text, …) reads
+            // visibly warmer here, so this stays a raw token.
+            style={[styles.toastPill, elevated('lg', isDark), { backgroundColor: isDark ? '#3A3A3C' : 'rgba(30, 30, 30, 0.92)' }]}
           >
             <Text style={styles.toastText}>{toast}</Text>
           </Animated.View>
@@ -1653,8 +1687,8 @@ const styles = StyleSheet.create({
   },
   toastPill: {
     paddingHorizontal: Spacing['5'], paddingVertical: 10, borderRadius: Radius.xl,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25, shadowRadius: 8, elevation: 4,
+    // Shadow comes from elevated('lg', isDark) at the call site — the
+    // strongest tier, matching this pill's original hand-tuned strength.
   },
   toastText: {
     color: '#FFFFFF', fontFamily: FontFamily.uiMedium,

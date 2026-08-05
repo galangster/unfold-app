@@ -1555,7 +1555,7 @@ export default function OnboardingScreen() {
           <View style={{ flex: 1, justifyContent: 'center' }}>
             <TypewriterText
               text="All that noise. The searching. The not knowing. You just want to be... still."
-              style={{ fontSize: 32, lineHeight: 42, color: colors.text }}
+              style={{ ...Typography.onboardingHeadline, color: colors.text }}
               charDelay={40}
               delay={300}
               lastWordColor={colors.accent}
@@ -1603,7 +1603,7 @@ export default function OnboardingScreen() {
           <View style={{ flex: 1, justifyContent: 'center' }}>
             <TypewriterText
               text="That's why we built Unfold. God's word, written into your story — so every time you open it, you're already home."
-              style={{ fontSize: 32, lineHeight: 42, color: colors.text }}
+              style={{ ...Typography.onboardingHeadline, color: colors.text }}
               charDelay={35}
               delay={400}
               highlightWord="Unfold"
@@ -1653,7 +1653,7 @@ export default function OnboardingScreen() {
 
             <TypewriterText
               text="Welcome to Unfold Premium. Now let's shape a devotional journey around where you are right now."
-              style={{ fontSize: 32, lineHeight: 42, color: colors.text, textAlign: 'center', fontFamily: FontFamily.display }}
+              style={{ fontSize: 28, lineHeight: 37, letterSpacing: -0.4, color: colors.text, textAlign: 'center', fontFamily: FontFamily.display }}
               charDelay={34}
               delay={350}
               highlightWord="Unfold"
@@ -1716,10 +1716,8 @@ export default function OnboardingScreen() {
           <Animated.Text
             entering={FadeIn.duration(800)}
             style={{
-              fontFamily: FontFamily.display,
-              fontSize: 28,
+              ...Typography.onboardingHeadline,
               color: colors.text,
-              lineHeight: 36,
               marginBottom: Spacing['2'],
             }}
           >
@@ -1818,7 +1816,7 @@ export default function OnboardingScreen() {
                 <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 16 }}>
                   <View style={{
                     width: 56, height: 56, borderRadius: Radius.lg,
-                    backgroundColor: isDark ? 'rgba(200, 165, 92, 0.15)' : 'rgba(154, 123, 60, 0.1)',
+                    backgroundColor: isDark ? alpha(colors.accent, 0.15) : alpha(colors.accent, 0.1),
                     justifyContent: 'center', alignItems: 'center',
                   }}>
                     <HeartIcon size={26} color={colors.accent} weight="light" />
@@ -1858,7 +1856,7 @@ export default function OnboardingScreen() {
                 <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 16 }}>
                   <View style={{
                     width: 56, height: 56, borderRadius: Radius.lg,
-                    backgroundColor: isDark ? 'rgba(200, 165, 92, 0.15)' : 'rgba(154, 123, 60, 0.1)',
+                    backgroundColor: isDark ? alpha(colors.accent, 0.15) : alpha(colors.accent, 0.1),
                     justifyContent: 'center', alignItems: 'center',
                   }}>
                     <BookOpenIcon size={26} color={colors.accent} weight="light" />
@@ -1895,7 +1893,7 @@ export default function OnboardingScreen() {
                 <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 16 }}>
                   <View style={{
                     width: 56, height: 56, borderRadius: Radius.lg,
-                    backgroundColor: isDark ? 'rgba(200, 165, 92, 0.15)' : 'rgba(154, 123, 60, 0.1)',
+                    backgroundColor: isDark ? alpha(colors.accent, 0.15) : alpha(colors.accent, 0.1),
                     justifyContent: 'center', alignItems: 'center',
                   }}>
                     <MagicWandIcon size={26} color={colors.accent} weight="light" />
@@ -2077,7 +2075,7 @@ export default function OnboardingScreen() {
                             alignItems: 'center',
                             gap: Spacing['3'],
                           }}>
-                            <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: isDark ? 'rgba(200, 165, 92, 0.12)' : 'rgba(154, 123, 60, 0.08)', justifyContent: 'center', alignItems: 'center' }}>
+                            <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: isDark ? alpha(colors.accent, 0.12) : alpha(colors.accent, 0.08), justifyContent: 'center', alignItems: 'center' }}>
                               {Icon}
                             </View>
                             <View style={{ flex: 1 }}>
@@ -2122,7 +2120,7 @@ export default function OnboardingScreen() {
         const ntCharacters = BIBLICAL_CHARACTERS.filter(c => c.testament === 'nt');
 
         const renderCharacterGrid = (characters: typeof BIBLICAL_CHARACTERS) => (
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing['2.5'] }}>
             {characters.map((char) => {
               const isSelected = data.selectedStudySubject === char.name;
               return (
@@ -2288,7 +2286,7 @@ export default function OnboardingScreen() {
                     }}
                     style={{
                       paddingHorizontal: Spacing['3.5'],
-                      paddingVertical: Spacing['2'],
+                      paddingVertical: Spacing['3'],
                       borderRadius: Radius.xl,
                       backgroundColor: isChipSelected ? selectedAccentSurface(colors.accent, 0.18) : colors.inputBackground,
                       borderWidth: 1,
@@ -2424,7 +2422,7 @@ export default function OnboardingScreen() {
                     }}
                     style={{
                       paddingHorizontal: Spacing['3.5'],
-                      paddingVertical: Spacing['2'],
+                      paddingVertical: Spacing['3'],
                       borderRadius: Radius.xl,
                       backgroundColor: isChipSelected ? selectedAccentSurface(colors.accent, 0.18) : colors.inputBackground,
                       borderWidth: 1,
@@ -2483,17 +2481,16 @@ export default function OnboardingScreen() {
             style={{ marginTop: Spacing['5'] }}
           >
             <View style={{
-              backgroundColor: colors.accent,
+              backgroundColor: diagnosticDraft.trim() ? colors.accent : alpha(colors.accent, 0.35),
               paddingVertical: 18,
               paddingHorizontal: Spacing['6'],
               borderRadius: Radius.lg,
               alignItems: 'center',
-              opacity: diagnosticDraft.trim() ? 1 : 0.5,
             }}>
               <Text style={{
                 fontFamily: FontFamily.uiSemiBold,
                 fontSize: FontSize.base,
-                color: colors.background,
+                color: diagnosticDraft.trim() ? colors.background : alpha(colors.background, 0.8),
               }}>
                 Continue
               </Text>
@@ -2576,7 +2573,7 @@ export default function OnboardingScreen() {
                   onPress={() => toggleRelationship(relationship)}
                   style={{
                     paddingHorizontal: Spacing['3.5'],
-                    paddingVertical: Spacing['2'],
+                    paddingVertical: Spacing['3'],
                     borderRadius: Radius.xl,
                     backgroundColor: isActive ? selectedAccentSurface(colors.accent, 0.18) : colors.inputBackground,
                     borderWidth: 1,
@@ -2638,6 +2635,7 @@ export default function OnboardingScreen() {
             style={{ marginTop: Spacing['6'], alignSelf: 'center' }}
             accessibilityRole="button"
             accessibilityLabel="Skip"
+            hitSlop={{ top: 10, bottom: 10, left: 16, right: 16 }}
           >
             <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.sm, color: colors.textMuted }}>
               Skip
@@ -2694,7 +2692,7 @@ export default function OnboardingScreen() {
                   onPress={() => setEventDate(chipDate)}
                   style={{
                     paddingHorizontal: Spacing['3.5'],
-                    paddingVertical: Spacing['2'],
+                    paddingVertical: Spacing['3'],
                     borderRadius: Radius.xl,
                     backgroundColor: isSelected ? selectedAccentSurface(colors.accent, 0.18) : colors.inputBackground,
                     borderWidth: 1,
@@ -2758,6 +2756,7 @@ export default function OnboardingScreen() {
             style={{ marginTop: Spacing['6'], alignSelf: 'center' }}
             accessibilityRole="button"
             accessibilityLabel="Skip"
+            hitSlop={{ top: 10, bottom: 10, left: 16, right: 16 }}
           >
             <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.sm, color: colors.textMuted }}>
               Skip
@@ -2988,7 +2987,7 @@ export default function OnboardingScreen() {
                     <Text style={{
                       fontFamily: FontFamily.uiSemiBold,
                       fontSize: FontSize.base,
-                      color: '#FFFFFF',
+                      color: colors.background,
                     }}>
                       Yes, this feels right
                     </Text>
@@ -3057,17 +3056,16 @@ export default function OnboardingScreen() {
                   }}
                 >
                   <View style={{
-                    backgroundColor: colors.accent,
+                    backgroundColor: mirrorCorrectionDraft.trim() ? colors.accent : alpha(colors.accent, 0.35),
                     paddingVertical: 18,
                     paddingHorizontal: Spacing['6'],
                     borderRadius: Radius.lg,
                     alignItems: 'center',
-                    opacity: mirrorCorrectionDraft.trim() ? 1 : 0.5,
                   }}>
                     <Text style={{
                       fontFamily: FontFamily.uiSemiBold,
                       fontSize: FontSize.base,
-                      color: '#FFFFFF',
+                      color: mirrorCorrectionDraft.trim() ? colors.background : alpha(colors.background, 0.8),
                     }}>
                       Continue
                     </Text>
@@ -3285,7 +3283,8 @@ export default function OnboardingScreen() {
               <Text
                 style={{
                   fontFamily: FontFamily.displayItalic,
-                  fontSize: 30,
+                  fontSize: 27,
+                  letterSpacing: -0.4,
                   color: colors.text,
                 }}
               >
@@ -3709,7 +3708,7 @@ export default function OnboardingScreen() {
                           : getStepQuestion()
                       }
                       onComplete={handleTypewriterComplete}
-                      style={{ fontSize: 32, lineHeight: 40, color: colors.text }}
+                      style={{ ...Typography.onboardingHeadline, color: colors.text }}
                     />
                   </View>
                   {showInput && (
@@ -3797,7 +3796,7 @@ export default function OnboardingScreen() {
                         <TypewriterText
                           text={getStepQuestion()}
                           onComplete={handleTypewriterComplete}
-                          style={{ fontSize: 32, lineHeight: 40, color: colors.text }}
+                          style={{ ...Typography.onboardingHeadline, color: colors.text }}
                         />
                         {showInput && (
                           <Animated.View entering={FadeIn.duration(Duration.slow)} style={{ marginTop: Spacing['3'], marginBottom: Spacing['6'] }}>

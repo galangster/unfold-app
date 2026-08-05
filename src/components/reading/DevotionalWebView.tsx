@@ -9,6 +9,7 @@ import { parseScriptureReferences } from '@/lib/scripture-parser';
 import { logger } from '@/lib/logger';
 import { stripOuterQuotes } from '@/lib/cn';
 import { isStructuredWordStudy, normalizeWordStudy } from '@/lib/word-study';
+import { LTREMARK_WOFF2_BASE64 } from '@/lib/ltremark-font-base64';
 
 interface Quote {
   text: string;
@@ -920,7 +921,7 @@ export function DevotionalWebView({
     const accentColor = colors.accent;
     const inputBg = isDark ? '#1F1F1F' : '#EDE8E0';     // warmer, visible surface separation
     const uiFontStack = "-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif";
-    const displayFontStack = "'Gupter', Georgia, serif";
+    const displayFontStack = "'LT Remark', Georgia, serif";
 
     const bodyText = day.bodyText || '';
 
@@ -1055,13 +1056,21 @@ export function DevotionalWebView({
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Gupter:wght@400;500;700&family=${encodeURIComponent(webFont)}:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=${encodeURIComponent(webFont)}:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
   <!-- Rangy for robust text highlighting — load from CDN. Inlined fallback was overwriting the CDN-loaded global every run, breaking deserialize. -->
   <script src="https://cdn.jsdelivr.net/npm/rangy@1.3.0/lib/rangy-core.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/rangy@1.3.0/lib/rangy-classapplier.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/rangy@1.3.0/lib/rangy-highlighter.min.js"></script>
   
   <style>
+    @font-face {
+      font-family: 'LT Remark';
+      src: url(data:font/woff2;base64,${LTREMARK_WOFF2_BASE64}) format('woff2');
+      font-weight: 400;
+      font-style: normal;
+      font-display: swap;
+    }
+
     * {
       margin: 0;
       padding: 0;
@@ -1103,33 +1112,21 @@ export function DevotionalWebView({
       will-change: opacity, transform;
     }
 
-    /* 90ms stagger — slow enough to read as a deliberate sequence without
-       dragging the last paragraph too far past the first. */
+    /* 90ms stagger, capped: only what's plausibly on the first screen gets a
+       deliberate sequence; everything below the fold enters together so the
+       tail never sits invisible past ~560ms (audit #9 — the old ladder ran
+       to 1860ms on long devotionals). */
     p:nth-child(1)  { animation-delay:   60ms; }
     p:nth-child(2)  { animation-delay:  150ms; }
     p:nth-child(3)  { animation-delay:  240ms; }
     p:nth-child(4)  { animation-delay:  330ms; }
     p:nth-child(5)  { animation-delay:  420ms; }
     p:nth-child(6)  { animation-delay:  510ms; }
-    p:nth-child(7)  { animation-delay:  600ms; }
-    p:nth-child(8)  { animation-delay:  690ms; }
-    p:nth-child(9)  { animation-delay:  780ms; }
-    p:nth-child(10) { animation-delay:  870ms; }
-    p:nth-child(11) { animation-delay:  960ms; }
-    p:nth-child(12) { animation-delay: 1050ms; }
-    p:nth-child(13) { animation-delay: 1140ms; }
-    p:nth-child(14) { animation-delay: 1230ms; }
-    p:nth-child(15) { animation-delay: 1320ms; }
-    p:nth-child(16) { animation-delay: 1410ms; }
-    p:nth-child(17) { animation-delay: 1500ms; }
-    p:nth-child(18) { animation-delay: 1590ms; }
-    p:nth-child(19) { animation-delay: 1680ms; }
-    p:nth-child(20) { animation-delay: 1770ms; }
-    p:nth-child(n+21) { animation-delay: 1860ms; }
+    p:nth-child(n+7) { animation-delay:  560ms; }
 
-    blockquote     { animation-delay: 600ms; }
-    .context-box   { animation-delay: 690ms; }
-    .word-study-box { animation-delay: 690ms; }
+    blockquote     { animation-delay: 560ms; }
+    .context-box   { animation-delay: 560ms; }
+    .word-study-box { animation-delay: 560ms; }
     
     /* Selection styling. Keep iOS text callout available so WKWebView still
        creates a real text selection; the custom highlight picker is positioned
@@ -1190,7 +1187,7 @@ export function DevotionalWebView({
     /* Pull quote — the day's quotable line, set inside the teaching */
     aside.pull-quote {
       font-family: ${displayFontStack};
-      font-size: ${bodyFontSize * 1.18}px;
+      font-size: ${bodyFontSize * 1.05}px;
       line-height: 1.5;
       font-style: italic;
       color: ${accentColor};
@@ -1241,7 +1238,7 @@ export function DevotionalWebView({
     .deco-quote {
       display: block;
       font-family: ${displayFontStack};
-      font-size: 64px;
+      font-size: 57px;
       line-height: 28px;
       color: ${accentColor};
       opacity: 0.12;
@@ -1272,6 +1269,7 @@ export function DevotionalWebView({
     .context-box, .word-study-box {
       margin-top: 44px;
       background: ${inputBg};
+      border: 1px solid ${isDark ? 'rgba(245,240,235,0.07)' : 'rgba(0,0,0,0.06)'};
       border-radius: 16px;
       padding: 22px;
       position: relative;
@@ -1280,7 +1278,7 @@ export function DevotionalWebView({
     h3 {
       font-family: ${uiFontStack};
       font-size: 11px;
-      color: ${accentColor};
+      color: ${mutedColor};
       letter-spacing: 1.2px;
       text-transform: uppercase;
       margin-bottom: 14px;
@@ -1378,7 +1376,7 @@ export function DevotionalWebView({
     }
 
     .color-btn:active {
-      transform: scale(0.9);
+      transform: scale(0.96);
       border-color: rgba(255,255,255,0.9);
       box-shadow: 0 0 0 2px rgba(255,255,255,0.3);
     }

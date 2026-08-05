@@ -18,6 +18,7 @@ import {
 import { FontFamily } from '@/constants/fonts';
 import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
+import { alpha } from '@/components/ui';
 import { NoteCard } from './NoteCard';
 import type { Note } from '@/lib/store';
 
@@ -143,8 +144,8 @@ export const SwipeableNoteCard = memo(function SwipeableNoteCard({
             accessibilityRole="button"
             accessibilityLabel={`Move note ${note.title} to folder`}
           >
-            <View style={[styles.actionCircle, { backgroundColor: '#8B5CF6' }]}>
-              <FolderSimpleIcon size={17} color={isDark ? '#FFFFFF' : colors.backgroundPure} weight="regular" />
+            <View style={[styles.actionCircle, { backgroundColor: alpha(colors.text, 0.18) }]}>
+              <FolderSimpleIcon size={17} color={colors.text} weight="regular" />
             </View>
             <Text style={[styles.actionLabel, { color: colors.textSubtle }]}>Move</Text>
           </TouchableOpacity>

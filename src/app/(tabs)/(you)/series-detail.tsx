@@ -276,7 +276,7 @@ export default function SeriesDetailScreen() {
                 return (
                   <Animated.View
                     key={day.dayNumber}
-                    entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(day.dayNumber * 40).easing(Ease.out)}
+                    entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(Math.min(day.dayNumber * 40, 400)).easing(Ease.out)}
                   >
                     {act && (
                       <View style={styles.movementHeader}>
@@ -315,7 +315,7 @@ export default function SeriesDetailScreen() {
                       {isLocked && (
                         <BottomGlow
                           accentColor={colors.accent}
-                          stagger={day.dayNumber * 800}
+                          stagger={Math.min(day.dayNumber * 800, 4000)}
                         />
                       )}
 
@@ -476,8 +476,9 @@ const styles = StyleSheet.create({
   },
   seriesTitle: {
     fontFamily: FontFamily.display,
-    fontSize: 32,
-    lineHeight: 38,
+    fontSize: 28,
+    lineHeight: 33,
+    letterSpacing: -0.4,
     marginBottom: Spacing['4'],
   },
   progressRow: {
@@ -506,15 +507,15 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   movementName: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: FontSize.xs,
+    fontFamily: FontFamily.uiSemiBold,
+    fontSize: 13,
     letterSpacing: 1.4,
     textTransform: 'uppercase',
   },
   movementFunction: {
     fontFamily: FontFamily.bodyItalic,
-    fontSize: FontSize.sm,
-    lineHeight: FontSize.sm * 1.5,
+    fontSize: FontSize.xs,
+    lineHeight: FontSize.xs * 1.5,
   },
   dayRow: {
     flexDirection: 'row',
@@ -539,8 +540,8 @@ const styles = StyleSheet.create({
   },
   dayTitle: {
     fontFamily: FontFamily.display,
-    fontSize: 17,
-    lineHeight: 22,
+    fontSize: 15,
+    lineHeight: 19,
   },
   dayScripture: {
     fontFamily: FontFamily.bodyItalic,

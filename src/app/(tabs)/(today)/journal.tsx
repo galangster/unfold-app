@@ -906,7 +906,7 @@ Their journal entry:
                       params: { dayNumber: String(dayNumber) },
                     });
                   }}
-                  style={jStyles.scriptureAnchor}
+                  style={[jStyles.scriptureAnchor, { backgroundColor: colors.inputBackground }]}
                   accessibilityLabel={`Return to reading: ${currentDay.title}`}
                   accessibilityRole="link"
                 >
@@ -1423,6 +1423,9 @@ const jStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: Spacing['6'],
+    borderRadius: Radius.md,
+    paddingVertical: Spacing['2.5'],
+    paddingHorizontal: Spacing['3'],
   },
   scriptureAnchorText: {
     flex: 1,
@@ -1432,7 +1435,10 @@ const jStyles = StyleSheet.create({
   },
   freewriteTitle: {
     fontFamily: FontFamily.display,
-    fontSize: 28,
+    // 28 wasn't a token; picked 30 (FontSize['3xl'], closer to 28 than 24)
+    // — "What's stirring?" is short enough not to wrap at common widths.
+    fontSize: 27,
+    letterSpacing: -0.4,
     marginBottom: Spacing['2'],
   },
   freewriteSubtitle: {
@@ -1543,7 +1549,10 @@ const jStyles = StyleSheet.create({
   },
   soapTitle: {
     fontFamily: FontFamily.display,
-    fontSize: 28,
+    // 28 wasn't a token; picked 30 (FontSize['3xl']) — "SOAP Journal" is
+    // short enough not to wrap at common widths.
+    fontSize: 27,
+    letterSpacing: -0.4,
     marginBottom: 4,
   },
   soapSubtitle: {

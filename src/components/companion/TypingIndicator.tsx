@@ -28,9 +28,15 @@ const STAGGER = 150;
 const HALF_CYCLE = 400;
 
 function Dot({ delay, color }: { delay: number; color: string }) {
-  const opacity = useSharedValue(0.3);
+  const reducedMotion = useReducedMotion();
+  // Static, fully-visible dots when motion is reduced — no endless pulse loop.
+  const opacity = useSharedValue(reducedMotion ? 1 : 0.3);
 
   useEffect(() => {
+    if (reducedMotion) {
+      opacity.value = 1;
+      return;
+    }
     opacity.value = withDelay(
       delay,
       withRepeat(
@@ -41,7 +47,7 @@ function Dot({ delay, color }: { delay: number; color: string }) {
         -1
       )
     );
-  }, [delay, opacity]);
+  }, [delay, opacity, reducedMotion]);
 
   const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
 

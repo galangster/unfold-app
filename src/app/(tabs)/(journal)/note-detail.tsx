@@ -52,6 +52,7 @@ import {
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
+import { Typography } from '@/constants/typography';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, READING_FONTS, type Note, type NoteCategory, type ScriptureRef } from '@/lib/store';
 import { ScriptureRefPill } from '@/components/notebook/ScriptureRefPill';
@@ -199,9 +200,9 @@ function buildEditorCSS(colors: any, fontSize: ReflectionFontSize, webFontFamily
     }
     .tiptap { scroll-padding-bottom: 60vh; }
     p { margin: 0 0 4px 0; }
-    h1 { font-size: 22px; font-weight: 700; margin: 14px 0 4px; }
-    h2 { font-size: 19px; font-weight: 600; margin: 10px 0 4px; }
-    h3 { font-size: 17px; font-weight: 600; margin: 8px 0 4px; }
+    h1 { font-size: ${Math.round(bodyFontSize * 1.45)}px; font-weight: 700; margin: 14px 0 4px; }
+    h2 { font-size: ${Math.round(bodyFontSize * 1.25)}px; font-weight: 600; margin: 10px 0 4px; }
+    h3 { font-size: ${Math.round(bodyFontSize * 1.1)}px; font-weight: 600; margin: 8px 0 4px; }
     ul, ol { padding-left: 22px; margin: 4px 0; }
     li { margin: 2px 0; }
     ul[data-type="taskList"] { padding-left: 0; list-style: none; }
@@ -364,6 +365,10 @@ export default function NoteDetailScreen() {
 
   // Auto-save indicator
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  // True from the moment an edit schedules the debounced autosave until the
+  // save flushes/completes — keeps the save-indicator slot from going blank
+  // during the debounce window.
+  const [pendingSave, setPendingSave] = useState(false);
   const savedResetRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const pendingAutoSaveHtmlRef = useRef<string | undefined>(undefined);
   const autoSaveAllowEmptyRef = useRef(false);
@@ -657,6 +662,7 @@ export default function NoteDetailScreen() {
     pendingAutoSaveHtmlRef.current = htmlFromEvent;
     autoSaveAllowEmptyRef.current = false;
     if (savedResetRef.current) clearTimeout(savedResetRef.current);
+    setPendingSave(true);
     autoSaveControllerRef.current?.schedule();
   }, [gate]);
 
@@ -723,7 +729,10 @@ export default function NoteDetailScreen() {
       : htmlFromEvent ?? latestHtmlRef.current;
     const titleVal = latestTitleRef.current;
 
-    if (!allowEmpty && !hasMeaningfulNoteContent({ title: titleVal, html })) return;
+    if (!allowEmpty && !hasMeaningfulNoteContent({ title: titleVal, html })) {
+      setPendingSave(false);
+      return;
+    }
 
     setSaveState('saving');
 
@@ -736,6 +745,7 @@ export default function NoteDetailScreen() {
 
     setTimeout(() => {
       setSaveState('saved');
+      setPendingSave(false);
       AccessibilityInfo.announceForAccessibility('Note saved');
       savedResetRef.current = setTimeout(() => setSaveState('idle'), 2000);
     }, 150);
@@ -855,6 +865,7 @@ export default function NoteDetailScreen() {
       autoSaveControllerRef.current?.cancel();
       pendingAutoSaveHtmlRef.current = undefined;
       setSaveState('idle');
+      setPendingSave(false);
       IS_NATIVE_EDITOR ? editorRef.current?.blur() : editor.blur();
       // Return to wherever the user came from — the draft dock floats above
       // every tab (rendered in (tabs)/_layout), so no tab switch is needed.
@@ -1421,6 +1432,7 @@ export default function NoteDetailScreen() {
           <NoteDetailSaveIndicator
             isKeyboardUp={isKeyboardUp}
             saveState={saveState}
+            pendingSave={pendingSave}
             reducedMotion={!!reducedMotion}
             textColor={colors.textMuted}
             iconColor={colors.textMuted}
@@ -1598,9 +1610,7 @@ export default function NoteDetailScreen() {
                 left: 0,
                 right: 0,
                 borderTopColor: colors.border,
-                backgroundColor: isDark
-                  ? 'rgba(20, 18, 16, 0.97)'
-                  : 'rgba(252, 250, 247, 0.97)',
+                backgroundColor: alpha(colors.background, 0.97),
               },
             ]}
           >
@@ -1810,7 +1820,7 @@ function ToolbarButton({
       disabled={!!disabled}
       style={[
         styles.toolbarButton,
-        active && { backgroundColor: colors.accent + '33' },
+        active && { backgroundColor: alpha(colors.accent, 0.2) },
         disabled && styles.toolbarButtonDisabled,
       ]}
       activeOpacity={disabled ? 1 : 0.6}
@@ -1938,9 +1948,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   titleInput: {
-    fontFamily: FontFamily.display,
-    fontSize: 36,
-    lineHeight: 42,
+    ...Typography.displayLg,
     letterSpacing: -0.3,
     paddingHorizontal: Spacing['6'],
     paddingTop: Spacing['4'],

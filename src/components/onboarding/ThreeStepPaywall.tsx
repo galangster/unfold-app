@@ -980,7 +980,7 @@ function GlowingCTA({
   });
 
   return (
-    <TouchableOpacity activeOpacity={0.85} onPress={onPress} disabled={isLoading}>
+    <TouchableOpacity activeOpacity={0.7} onPress={onPress} disabled={isLoading}>
       <Animated.View
         style={[
           styles.ctaButton,

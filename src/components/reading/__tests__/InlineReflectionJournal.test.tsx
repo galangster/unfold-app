@@ -90,6 +90,8 @@ jest.mock('expo-haptics', () => ({
 jest.mock('phosphor-react-native', () => ({
   ArrowRightIcon: 'ArrowRightIcon',
   NotePencilIcon: 'NotePencilIcon',
+  CaretDownIcon: 'CaretDownIcon',
+  CaretUpIcon: 'CaretUpIcon',
 }));
 
 jest.mock('react-native-reanimated', () => {

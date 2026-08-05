@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Tabs, useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { StyleSheet, Platform, View, TouchableOpacity, Text } from 'react-native';
-import { HouseIcon, BookBookmarkIcon, BookOpenIcon, UserIcon, CircleNotchIcon } from 'phosphor-react-native';
+import { HouseIcon, BookBookmarkIcon, BookOpenIcon, UserIcon, ChatCircleIcon } from 'phosphor-react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { FontFamily } from '@/constants/fonts';
+import { elevated } from '@/constants/shadows';
 import { Duration, Spring } from '@/constants/animations';
 import { Spacing } from '@/constants/spacing';
 import { useUIState } from '@/lib/ui-state';
@@ -99,14 +100,14 @@ function NoteDraftDock() {
         accessibilityHint="Opens the minimized note in edit mode"
         style={[
           styles.draftDock,
+          elevated('lg', isDark),
           {
             backgroundColor: isDark ? 'rgba(28, 24, 20, 0.96)' : 'rgba(255, 252, 247, 0.98)',
             borderColor: colors.border,
-            shadowColor: '#000',
           },
         ]}
       >
-        <View style={[styles.draftDockIcon, { backgroundColor: colors.accent + '1A' }]}>
+        <View style={[styles.draftDockIcon, { backgroundColor: alpha(colors.accent, 0.1) }]}>
           <BookOpenIcon size={18} color={colors.accent} weight="light" />
         </View>
         <View style={styles.draftDockCopy}>
@@ -131,16 +132,22 @@ function AnimatedTabIcon({
   focused: boolean;
   children: React.ReactNode;
 }) {
+  const reducedMotion = useReducedMotion();
   const scale = useSharedValue(focused ? 1 : 1);
 
   useEffect(() => {
+    if (reducedMotion) {
+      // Jump cut — no spring pop when motion is reduced.
+      scale.value = focused ? 1.12 : 1;
+      return;
+    }
     if (focused) {
       // Spring pop on select
       scale.value = withSpring(1.12, SPRING_CONFIG);
     } else {
       scale.value = withSpring(1, SPRING_CONFIG);
     }
-  }, [focused, scale]);
+  }, [focused, scale, reducedMotion]);
 
   const iconAnimStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
@@ -159,6 +166,7 @@ function AnimatedTabIcon({
 function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const reducedMotion = useReducedMotion();
   const tabBarHidden = useUIState((s) => s.tabBarHidden);
   const tabBarHideMode = useUIState((s) => s.tabBarHideMode);
 
@@ -176,6 +184,10 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
       // Instant — no transition, no flash. Just snap.
       translateY.value = 0;
       opacity.value = tabBarHidden ? 0 : 1;
+    } else if (reducedMotion) {
+      // Scroll-driven slide, reduced-motion fallback — jump cut instead of a tween.
+      opacity.value = 1;
+      translateY.value = tabBarHidden ? 100 : 0;
     } else {
       // Slide for scroll-based hide/show
       // If transitioning from instant-hidden → slide, fix positioning first
@@ -195,7 +207,7 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
       }
     }
     lastModeRef.current = tabBarHideMode;
-  }, [tabBarHidden, tabBarHideMode, translateY, opacity]);
+  }, [tabBarHidden, tabBarHideMode, translateY, opacity, reducedMotion]);
 
   const tabBarAnimStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],
@@ -246,9 +258,7 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
           left: 0,
           right: 0,
           height: StyleSheet.hairlineWidth,
-          backgroundColor: isDark
-            ? 'rgba(245, 240, 235, 0.10)'
-            : 'rgba(28, 23, 16, 0.10)',
+          backgroundColor: alpha(colors.text, 0.10),
         }}
       />
 
@@ -259,11 +269,12 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
           paddingTop: Spacing['2'],
           paddingBottom: Math.max(insets.bottom, 8),
           paddingHorizontal: Spacing['6'],
+          // Dark matches colors.background exactly; light matches colors.backgroundPure.
           backgroundColor: Platform.OS === 'ios'
             ? 'transparent'
             : isDark
-              ? 'rgba(10, 10, 10, 0.95)'
-              : 'rgba(255, 255, 255, 0.95)',
+              ? alpha(colors.background, 0.95)
+              : alpha(colors.backgroundPure, 0.95),
         }}
       >
         {state.routes.map((route, index) => {
@@ -331,7 +342,7 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
               case '(bible)':
                 return <BookBookmarkIcon {...iconProps} />;
               case '(ask)':
-                return <CircleNotchIcon {...iconProps} />;
+                return <ChatCircleIcon {...iconProps} />;
               case '(journal)':
                 return <BookOpenIcon {...iconProps} />;
               case '(you)':
@@ -458,10 +469,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing['3'],
-    shadowOpacity: 0.16,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 8,
+    // Shadow comes from elevated('lg', isDark) at the call site.
   },
   draftDockIcon: {
     width: 36,

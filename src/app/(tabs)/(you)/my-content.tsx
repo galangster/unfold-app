@@ -22,6 +22,7 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
+import { alpha } from '@/components/ui';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, BibleHighlight, Bookmark, Devotional, Highlight, HighlightColor, BibleHighlightColor, JournalEntry } from '@/lib/store';
 import { stripOuterQuotes } from '@/lib/cn';
@@ -204,7 +205,7 @@ const SavedRow = memo(function SavedRow({
           {/* Quoted text with inline highlight tint */}
           <View
             style={{
-              backgroundColor: `${accent}14`,
+              backgroundColor: alpha(accent, 0.08),
               borderRadius: 6,
               paddingHorizontal: 10,
               paddingVertical: 8,
@@ -890,7 +891,8 @@ function EmptyState({
       <Text
         style={{
           fontFamily: FontFamily.display,
-          fontSize: 22,
+          fontSize: 20,
+          letterSpacing: -0.2,
           color: colors.text,
           marginBottom: Spacing['2'],
           textAlign: 'center',

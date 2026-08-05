@@ -7,6 +7,7 @@ import * as Haptics from 'expo-haptics';
 import { MagnifyingGlassIcon, ClockIcon, CaretRightIcon, XIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { elevated } from '@/constants/shadows';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { useBibleDb } from '@/hooks/useBibleDb';
@@ -242,8 +243,11 @@ export default function BibleHomeScreen() {
         >
           <Animated.View
             entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
-            style={[styles.chapterModal, {
-              backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF',
+            style={[styles.chapterModal, elevated('lg', isDark), {
+              // Light matches colors.backgroundElevated exactly; dark stays a
+              // raw iOS system gray — colors.backgroundElevated ('#141210')
+              // reads visibly darker/warmer for this modal surface.
+              backgroundColor: isDark ? '#1C1C1E' : colors.backgroundElevated,
             }]}
           >
             <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
@@ -308,8 +312,8 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing['3'],
   },
   title: {
-    fontSize: FontSize['3xl'],
-    letterSpacing: -0.5,
+    fontSize: 27,
+    letterSpacing: -0.45,
   },
   searchBar: {
     flexDirection: 'row',
@@ -397,11 +401,9 @@ const styles = StyleSheet.create({
     padding: Spacing['5'],
     width: '100%',
     maxHeight: '70%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.3,
-    shadowRadius: 24,
-    elevation: 12,
+    // Shadow comes from elevated('lg', isDark) at the call site — 'lg' is
+    // the strongest positive-offset tier, matching this modal's original
+    // downward-cast shadow direction.
   },
   chapterModalHeader: {
     flexDirection: 'row',
@@ -410,7 +412,8 @@ const styles = StyleSheet.create({
     marginBottom: Spacing['5'],
   },
   chapterModalTitle: {
-    fontSize: 22,
+    fontSize: 20,
+    letterSpacing: -0.2,
   },
   closeButton: {
     width: 36,

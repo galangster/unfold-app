@@ -25,6 +25,7 @@ import { useTheme } from '@/lib/theme';
 import { Duration } from '@/constants/animations';
 import { Spacing } from '@/constants/spacing';
 import { useCompanionChatStore } from '@/lib/companion-chat-store';
+import { COMPANION_TEXT_INDENT } from './CompanionMessageContent';
 
 const EASE_OUT = Easing.out(Easing.cubic);
 const STAGGER = 80;
@@ -77,6 +78,7 @@ function ActionButton({
         }}
         accessibilityLabel={accessibilityLabel}
         accessibilityRole="button"
+        hitSlop={4}
         style={{
           width: 36,
           height: 36,
@@ -115,7 +117,7 @@ export function CompanionActions({ messageId, content, feedback, visible }: Prop
     <View
       style={{
         flexDirection: 'row',
-        paddingLeft: 56, // 16 + 28 + 12 = companion text indent
+        paddingLeft: COMPANION_TEXT_INDENT,
         gap: Spacing['4'],
         marginTop: Spacing['2'],
       }}

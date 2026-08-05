@@ -6,6 +6,7 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { Duration, Ease } from '@/constants/animations';
+import { Typography } from '@/constants/typography';
 import type { ColorTheme } from '@/constants/colors';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -56,10 +57,8 @@ export function CommitmentStep({ step, commitmentLevel, onSelect, onContinue, co
         {/* Question */}
         <Text
           style={{
-            fontFamily: FontFamily.display,
-            fontSize: 28,
+            ...Typography.onboardingHeadline,
             color: colors.text,
-            lineHeight: Math.round(28 * 1.3),
             marginBottom: Spacing['6'],
           }}
         >

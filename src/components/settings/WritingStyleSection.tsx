@@ -12,6 +12,7 @@ import {
 } from 'phosphor-react-native';
 import { Duration, Ease } from '@/constants/animations';
 import { FontFamily, FontSize } from '@/constants/fonts';
+import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import {
@@ -79,7 +80,7 @@ export function WritingStyleSection() {
             style={{
               width: 36,
               height: 36,
-              borderRadius: 10,
+              borderRadius: Radius.chip,
               backgroundColor: colors.buttonBackground,
               justifyContent: 'center',
               alignItems: 'center',
@@ -174,7 +175,7 @@ export function WritingStyleSection() {
         >
           <View
             style={{
-              width: 36, height: 36, borderRadius: 10,
+              width: 36, height: 36, borderRadius: Radius.chip,
               backgroundColor: colors.buttonBackground,
               justifyContent: 'center', alignItems: 'center',
             }}
@@ -268,7 +269,7 @@ export function WritingStyleSection() {
         >
           <View
             style={{
-              width: 36, height: 36, borderRadius: 10,
+              width: 36, height: 36, borderRadius: Radius.chip,
               backgroundColor: colors.buttonBackground,
               justifyContent: 'center', alignItems: 'center',
             }}
@@ -360,7 +361,7 @@ export function WritingStyleSection() {
         >
           <View
             style={{
-              width: 36, height: 36, borderRadius: 10,
+              width: 36, height: 36, borderRadius: Radius.chip,
               backgroundColor: colors.buttonBackground,
               justifyContent: 'center', alignItems: 'center',
             }}

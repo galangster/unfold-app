@@ -11,17 +11,23 @@ import { getNoteDetailSaveIndicatorLayout, type NoteDetailSaveState } from '@/li
 export function NoteDetailSaveIndicator({
   isKeyboardUp,
   saveState,
+  pendingSave = false,
   reducedMotion,
   textColor,
   iconColor,
 }: {
   isKeyboardUp: boolean;
   saveState: NoteDetailSaveState;
+  /** True from the moment an edit schedules an autosave until it flushes/completes — keeps the slot from going blank mid-debounce. */
+  pendingSave?: boolean;
   reducedMotion: boolean;
   textColor: string;
   iconColor: string;
 }) {
   const layout = getNoteDetailSaveIndicatorLayout({ isKeyboardUp, saveState });
+  // "Saved" wins once it lands; otherwise show "Saving…" for the whole
+  // debounce+persist window so the slot is never blank while an edit is pending.
+  const showSavingLabel = isKeyboardUp && !layout.showLabel && pendingSave;
 
   if (!layout.showSlot) return null;
 
@@ -38,6 +44,17 @@ export function NoteDetailSaveIndicator({
         >
           <CheckIcon size={14} color={iconColor} weight="bold" />
           <Text testID="note-detail-save-indicator-label" style={[styles.text, { color: textColor }]}>Saved</Text>
+        </Animated.View>
+      )}
+      {showSavingLabel && (
+        <Animated.View
+          entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
+          exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
+          style={styles.indicator}
+        >
+          <Text testID="note-detail-save-indicator-saving-label" style={[styles.text, { color: textColor, opacity: 0.6 }]}>
+            Saving…
+          </Text>
         </Animated.View>
       )}
     </View>

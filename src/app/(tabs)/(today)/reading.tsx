@@ -496,8 +496,13 @@ export default function ReadingScreen() {
   //   prefetchDevotionalAudio(fullText, voiceId);
   // }, [isPremium, currentDayData, user?.preferredVoice]);
 
-  // Start the chevron bounce animation
+  // Start the chevron bounce animation (static under reduced motion — the
+  // only animation in this file that skipped the gate; audit #14)
   useEffect(() => {
+    if (reducedMotion) {
+      chevronBounce.value = 0;
+      return;
+    }
     chevronBounce.value = withRepeat(
       withSequence(
         withTiming(-6, { duration: 600 }),
@@ -506,7 +511,7 @@ export default function ReadingScreen() {
       -1, // Infinite repeat
       true
     );
-  }, []);
+  }, [reducedMotion]);
 
   // Network state for offline-aware retry behavior.
   useEffect(() => {
@@ -621,10 +626,10 @@ export default function ReadingScreen() {
       // Quick fade out → change day → fade in. Start fade-in only after the
       // fade-out callback runs; assigning a second animation immediately can
       // cancel the callback before setViewingDay fires.
-      contentOpacity.value = withTiming(0, { duration: 120, easing: Easing.out(Easing.ease) }, (finished) => {
+      contentOpacity.value = withTiming(0, { duration: 120, easing: Easing.in(Easing.ease) }, (finished) => {
         if (!finished) return;
         runOnJS(setViewingDay)(day);
-        contentOpacity.value = withTiming(1, { duration: Duration.normal, easing: Easing.in(Easing.ease) });
+        contentOpacity.value = withTiming(1, { duration: Duration.normal, easing: Easing.out(Easing.ease) });
       });
     }
   }, [availableDays, contentOpacity]);
@@ -1568,7 +1573,8 @@ export default function ReadingScreen() {
             <Text
               style={{
                 fontFamily: FontFamily.display,
-                fontSize: 28,
+                fontSize: 25,
+                letterSpacing: -0.4,
                 color: colors.text,
                 textAlign: 'center',
                 marginBottom: 14,
@@ -1976,11 +1982,11 @@ export default function ReadingScreen() {
                   paddingHorizontal: 40,
                 }}
               >
-                <View style={{ flex: 1, height: 0.5, backgroundColor: colors.textMuted, opacity: 0.15 }} />
+                <View style={{ flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.textMuted, opacity: 0.15 }} />
                 <Text style={{ fontSize: FontSize.xs, color: colors.textMuted, opacity: 0.25, letterSpacing: 6, marginHorizontal: Spacing['4'] }}>
                   {'···'}
                 </Text>
-                <View style={{ flex: 1, height: 0.5, backgroundColor: colors.textMuted, opacity: 0.15 }} />
+                <View style={{ flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.textMuted, opacity: 0.15 }} />
               </View>
 
               {/* Complete button + Share button row */}
@@ -2033,8 +2039,8 @@ export default function ReadingScreen() {
                       <Text
                         style={{
                           fontFamily: FontFamily.uiSemiBold,
-                          fontSize: 17,
-                          color: isCompleted ? colors.accent : '#ffffff',
+                          fontSize: FontSize.base,
+                          color: isCompleted ? colors.accent : colors.background,
                           textAlign: 'center',
                           letterSpacing: 0.5,
                         }}
@@ -2199,7 +2205,7 @@ export default function ReadingScreen() {
                         borderRadius: Radius.card,
                         backgroundColor: colors.inputBackground,
                         borderWidth: 1,
-                        borderColor: alpha(colors.accent, 0.33),
+                        borderColor: colors.border,
                       }}
                     >
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing['2'], marginBottom: 10 }}>
@@ -2216,9 +2222,10 @@ export default function ReadingScreen() {
                       <Text
                         style={{
                           fontFamily: FontFamily.display,
-                          fontSize: FontSize.xl,
+                          fontSize: 18,
                           color: colors.text,
-                          lineHeight: 26,
+                          lineHeight: 23,
+                          letterSpacing: -0.2,
                           marginBottom: Spacing['2'],
                         }}
                         numberOfLines={2}

@@ -666,10 +666,10 @@ export default function PaywallScreen() {
             <Text
               style={{
                 fontFamily: FontFamily.display,
-                fontSize: 34,
+                fontSize: 30,
                 color: colors.text,
-                letterSpacing: -0.5,
-                lineHeight: 40,
+                letterSpacing: -0.45,
+                lineHeight: 35,
               }}
             >
               {heroTitle}
@@ -702,7 +702,7 @@ export default function PaywallScreen() {
                       width: 36,
                       height: 36,
                       borderRadius: 10,
-                      backgroundColor: `${colors.accent}12`,
+                      backgroundColor: alpha(colors.accent, 0.07),
                       borderWidth: 1,
                       borderColor: `${colors.accent}18`,
                       justifyContent: 'center',
@@ -1075,7 +1075,7 @@ export default function PaywallScreen() {
         {/* Error */}
         {subscribeError ? (
           <View style={{ alignItems: 'center', marginTop: 6, gap: 4 }}>
-            <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, color: '#E85C5C', textAlign: 'center' }}>
+            <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, color: colors.error, textAlign: 'center' }}>
               {subscribeError}
             </Text>
             <TouchableOpacity

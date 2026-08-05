@@ -111,13 +111,19 @@ function FadeSlideIn({
   translateY?: number;
   children: React.ReactNode;
 }) {
-  const opacity = useSharedValue(0);
-  const y = useSharedValue(translateY);
+  const reducedMotion = useReducedMotion();
+  const opacity = useSharedValue(reducedMotion ? 1 : 0);
+  const y = useSharedValue(reducedMotion ? 0 : translateY);
 
   useEffect(() => {
+    if (reducedMotion) {
+      opacity.value = 1;
+      y.value = 0;
+      return;
+    }
     opacity.value = withDelay(delay, withTiming(1, { duration: Duration.normal, easing: EASE_OUT }));
     y.value = withDelay(delay, withTiming(0, { duration: Duration.normal, easing: EASE_OUT }));
-  }, [delay, opacity, y, translateY]);
+  }, [delay, opacity, y, translateY, reducedMotion]);
 
   const style = useAnimatedStyle(() => ({
     opacity: opacity.value,

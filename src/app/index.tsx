@@ -91,8 +91,8 @@ const RevealChar = React.memo(function RevealChar({
         style={[
           {
             fontFamily: fontFamily ?? FontFamily.display,
-            fontSize: fontSize ?? 56,
-            letterSpacing: letterSpacing ?? -1.5,
+            fontSize: fontSize ?? 50,
+            letterSpacing: letterSpacing ?? -1.35,
           },
           textColorStyle,
         ]}
@@ -159,8 +159,8 @@ const RevealWord = React.memo(function RevealWord({
         style={[
           {
             fontFamily: FontFamily.display,
-            fontSize: FontSize['2xl'],
-            letterSpacing: -0.3,
+            fontSize: 21,
+            letterSpacing: -0.25,
           },
           textColorStyle,
         ]}
@@ -404,11 +404,11 @@ export default function WelcomeScreen() {
                     <Text
                       style={{
                         fontFamily: FontFamily.display,
-                        fontSize: 30,
+                        fontSize: 27,
                         color: colors.text,
                         textAlign: 'left',
-                        lineHeight: 40,
-                        letterSpacing: -0.3,
+                        lineHeight: 36,
+                        letterSpacing: -0.25,
                       }}
                     >
                       Every spiritual journey{'\n'}is unique.

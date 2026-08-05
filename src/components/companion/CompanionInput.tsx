@@ -208,6 +208,7 @@ export const CompanionInput = memo(function CompanionInput({ onSend, onStop, isS
               marginLeft: Spacing['1.5'],
               minWidth: 74,
               textAlign: 'right',
+              fontVariant: ['tabular-nums'],
             }}
           >
             {`${messageLength.toLocaleString()} / ${COMPANION_MESSAGE_MAX_CHARS.toLocaleString()}`}

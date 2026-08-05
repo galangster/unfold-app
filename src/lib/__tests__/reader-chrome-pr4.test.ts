@@ -69,7 +69,8 @@ describe('Companion suggestion-chip edge fade (#13)', () => {
   });
 
   it('keeps the leading band tight to preserve the 56pt companion-text alignment', () => {
-    expect(source).toContain('paddingLeft: 56');
+    // Shared COMPANION_TEXT_INDENT constant (== 56) replaces the repeated magic number.
+    expect(source).toContain('paddingLeft: COMPANION_TEXT_INDENT');
     expect(source).toContain('const CHIP_LEADING_FADE = 0.02;');
     expect(source).toContain('const CHIP_TRAILING_FADE = 0.09;');
     expect(source).toContain('locations={[0, CHIP_LEADING_FADE, 1 - CHIP_TRAILING_FADE, 1]}');

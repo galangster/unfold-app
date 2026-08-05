@@ -155,7 +155,7 @@ export default function ShareCardScreen() {
 
   // Load fonts for Skia paragraph rendering
   const skiaFonts = useSkiaFonts({
-    'Gupter': [require('../../assets/fonts/Gupter_400Regular.ttf')],
+    'LT Remark': [require('../../assets/fonts/LTRemark-Regular.otf')],
     'Inter': [
       require('../../assets/fonts/Inter_400Regular.ttf'),
       require('../../assets/fonts/Inter_500Medium.ttf'),
@@ -195,7 +195,7 @@ export default function ShareCardScreen() {
         textAlign: TextAlign.Left,
         textStyle: {
           color: mainColor,
-          fontFamilies: ['Gupter'],
+          fontFamilies: ['LT Remark'],
           fontSize: outFontSize,
           heightMultiplier: 1.55,
         },
@@ -371,6 +371,9 @@ export default function ShareCardScreen() {
           setSelectedTheme(item.id);
         }}
         style={s.themeItem}
+        accessibilityRole="button"
+        accessibilityLabel={isLocked ? `${item.name} theme, premium only` : `${item.name} theme`}
+        accessibilityState={{ selected: isActive, disabled: isLocked }}
       >
         <View
           style={[
@@ -457,7 +460,7 @@ export default function ShareCardScreen() {
               <Text
                 style={{
                   fontFamily: FontFamily.ui,
-                  fontSize: 9,
+                  fontSize: 11,
                   color: subtleColor,
                   letterSpacing: 0.8,
                   marginTop: 4,

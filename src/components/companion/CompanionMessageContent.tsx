@@ -18,6 +18,7 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import { FontFamily, FontSize } from '@/constants/fonts';
+import { Typography } from '@/constants/typography';
 import { RichMessageText } from './RichMessageText';
 import { DevotionalCard } from './DevotionalCard';
 import type { CompanionMessage } from '@/lib/companion-chat-store';
@@ -35,7 +36,7 @@ function stripMarkdownLight(text: string): string {
     .replace(/\*\*(.+?)\*\*/g, '$1')   // bold
     .replace(/\*(.+?)\*/g, '$1')       // italic
     .replace(/^[-*]\s+/gm, '\u2022 ')  // bullet lists
-    .replace(/^\d+\.\s+/gm, '\u2022 ') // numbered lists
+    .replace(/^(\d+)\.\s+/gm, '$1. ')  // numbered lists, preserve ordering
     .replace(/^[-*_]{3,}\s*$/gm, '');   // horizontal rules
 }
 
@@ -57,6 +58,15 @@ interface Props {
 
 const ENTERING = FadeIn.duration(Duration.normal).easing(Ease.out);
 
+// Companion gutter: row paddingLeft (Spacing['4']) + icon column width +
+// icon-to-text gap = the left edge every message's text lines up on.
+// Exported so sibling surfaces below the message (CompanionActions,
+// SuggestionChips) can align to the same edge instead of repeating the
+// magic number.
+const ICON_COLUMN_WIDTH = 28;
+const ICON_COLUMN_GAP = Spacing['3'];
+export const COMPANION_TEXT_INDENT = Spacing['4'] + ICON_COLUMN_WIDTH + ICON_COLUMN_GAP;
+
 /**
  * Streaming text leaf: strips markdown on the fly and reveals it word by word
  * (useSmoothTextReveal) instead of popping whole chunks every 32ms. Width
@@ -72,9 +82,7 @@ function StreamingText({ content, color }: { content: string; color: string }) {
   return (
     <Text
       style={{
-        fontFamily: FontFamily.body,
-        fontSize: FontSize.base,
-        lineHeight: 27.2,
+        ...Typography.bodyRelaxed,
         color,
       }}
     >
@@ -117,7 +125,7 @@ export function CompanionMessageContent({ message, showIcon, isStreaming, isSear
   return (
     <Animated.View entering={reducedMotion ? undefined : ENTERING} style={{ flexDirection: 'row', alignItems: 'flex-start', paddingLeft: Spacing['4'] }}>
       {/* Icon column — 28px wide + 12px gap = 40px indent */}
-      <View style={{ width: 28, marginRight: Spacing['3'] }}>
+      <View style={{ width: ICON_COLUMN_WIDTH, marginRight: ICON_COLUMN_GAP }}>
         {showIcon && (
           <CompanionOrb accentColor={colors.accent} size={28} animated={false} />
         )}
@@ -236,7 +244,7 @@ export function CompanionMessageContent({ message, showIcon, isStreaming, isSear
             fontStyle: 'italic',
             marginTop: Spacing['1'],
           }}>
-            Looking something up...
+            Looking something up…
           </Text>
         )}
       </View>

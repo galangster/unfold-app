@@ -9,7 +9,7 @@
  *   1. Sheet opens with auto-focused text input
  *   2. User types a reference (e.g. "John 3:16")
  *   3. 500ms debounce, then parse + fetch verse text
- *   4. Preview card shows the verse with accent left border
+ *   4. Preview card shows the verse in a subtly tinted, hairline-bordered card
  *   5. "Insert" button inserts blockquote into the TipTap editor
  *
  * Existing scripture refs show as quick-tap pills for fast re-insertion.
@@ -412,7 +412,7 @@ export function ScriptureSearchSheet({
                       sheetStyles.previewCard,
                       {
                         backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)',
-                        borderColor: isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.07)',
+                        borderColor: colors.border,
                       },
                     ]}
                   >

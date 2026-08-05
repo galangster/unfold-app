@@ -42,6 +42,7 @@ import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
 import { CHECKIN_CELEBRATION_MESSAGES } from '@/constants/check-in-messages';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
+import { alpha } from '@/components/ui';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SHEET_HEIGHT = SCREEN_HEIGHT * 0.5;
@@ -122,6 +123,10 @@ function MoodStep({
   isDark: boolean;
 }) {
   const [hoveredMood, setHoveredMood] = useState<MoodValue | null>(null);
+  // Persists the tapped mood so it stays visually selected through the
+  // 300ms auto-advance delay, instead of only highlighting during the
+  // press (onPressIn/onPressOut) window.
+  const [selectedMood, setSelectedMood] = useState<MoodValue | null>(null);
   const reducedMotion = useReducedMotion();
 
   return (
@@ -144,7 +149,7 @@ function MoodStep({
       </Text>
       <View style={styles.moodRow}>
         {MOOD_OPTIONS.map(({ value, label, Icon }) => {
-          const isHovered = hoveredMood === value;
+          const isSelected = selectedMood === value || hoveredMood === value;
           return (
             <TouchableOpacity activeOpacity={0.7}
               key={value}
@@ -152,31 +157,31 @@ function MoodStep({
               onPressOut={() => setHoveredMood(null)}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setSelectedMood(value);
                 onSelect(value);
               }}
               style={[
                 styles.moodItem,
                 {
-                  backgroundColor: isHovered
-                    ? isDark
-                      ? 'rgba(255,255,255,0.08)'
-                      : 'rgba(0,0,0,0.04)'
+                  backgroundColor: isSelected
+                    ? alpha(colors.text, isDark ? 0.08 : 0.04)
                     : 'transparent',
                 },
               ]}
               accessibilityRole="button"
               accessibilityLabel={label}
+              accessibilityState={{ selected: isSelected }}
             >
               <Icon
                 size={32}
-                color={isHovered ? colors.accent : colors.textMuted}
-                weight={isHovered ? 'fill' : 'light'}
+                color={isSelected ? colors.accent : colors.textMuted}
+                weight={isSelected ? 'fill' : 'light'}
               />
               <Text
                 style={[
                   styles.moodLabel,
                   {
-                    color: isHovered ? colors.text : colors.textMuted,
+                    color: isSelected ? colors.text : colors.textMuted,
                     fontFamily: FontFamily.ui,
                   },
                 ]}
@@ -268,9 +273,7 @@ function QuestionStep({
                 {
                   backgroundColor: isSelected
                     ? colors.accent
-                    : isDark
-                      ? 'rgba(255,255,255,0.06)'
-                      : 'rgba(0,0,0,0.04)',
+                    : alpha(colors.text, isDark ? 0.06 : 0.04),
                   borderColor: isSelected
                     ? colors.accent
                     : colors.border,
@@ -285,7 +288,7 @@ function QuestionStep({
                   styles.chipText,
                   {
                     color: isSelected
-                      ? isDark ? '#FFFFFF' : colors.backgroundPure
+                      ? colors.background
                       : colors.text,
                     fontFamily: isSelected
                       ? FontFamily.uiMedium
@@ -348,7 +351,7 @@ function QuestionStep({
                 {
                   color:
                     typedAnswer.trim().length > 0
-                      ? isDark ? '#FFFFFF' : colors.backgroundPure
+                      ? colors.background
                       : colors.textMuted,
                   fontFamily: FontFamily.uiMedium,
                 },
@@ -495,7 +498,7 @@ function NoteStep({
               {
                 color:
                   noteText.trim().length > 0
-                    ? isDark ? '#FFFFFF' : colors.backgroundPure
+                    ? colors.background
                     : colors.textMuted,
                 fontFamily: FontFamily.uiSemiBold,
               },
@@ -543,6 +546,7 @@ function MagicChar({ char, delay, colors }: { char: string; delay: number; color
 
 /** Gentle celebration shown within the sheet after completing check-in */
 function CheckInCelebration({ colors, onDismiss }: { colors: ReturnType<typeof useTheme>['colors']; onDismiss: () => void }) {
+  const reducedMotion = useReducedMotion();
   const message = useMemo(
     () => CHECKIN_CELEBRATION_MESSAGES[Math.floor(Math.random() * CHECKIN_CELEBRATION_MESSAGES.length)],
     []
@@ -563,9 +567,23 @@ function CheckInCelebration({ colors, onDismiss }: { colors: ReturnType<typeof u
   return (
     <TouchableOpacity activeOpacity={1} onPress={onDismiss} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 }}>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' }}>
-        {message.split('').map((char, i) => (
-          <MagicChar key={`${char}-${i}`} char={char} delay={charDelays[i]} colors={colors} />
-        ))}
+        {reducedMotion ? (
+          <Text
+            style={{
+              fontFamily: FontFamily.body,
+              fontSize: FontSize.xl,
+              color: colors.text,
+              lineHeight: 30,
+              textAlign: 'center',
+            }}
+          >
+            {message}
+          </Text>
+        ) : (
+          message.split('').map((char, i) => (
+            <MagicChar key={`${char}-${i}`} char={char} delay={charDelays[i]} colors={colors} />
+          ))
+        )}
       </View>
       <Text
         style={{
@@ -703,7 +721,7 @@ export function CheckInSheet({
           <Animated.View
             style={[
               StyleSheet.absoluteFill,
-              { backgroundColor: 'rgba(0,0,0,0.5)' },
+              { backgroundColor: alpha('#000000', 0.5) },
               backdropStyle,
             ]}
           />
@@ -741,13 +759,12 @@ export function CheckInSheet({
                 currentStep={currentStep}
                 totalSteps={TOTAL_STEPS}
                 accentColor={colors.accent}
-                mutedColor={
-                  isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)'
-                }
+                mutedColor={alpha(colors.text, isDark ? 0.12 : 0.08)}
               />
               <TouchableOpacity activeOpacity={0.7}
                 onPress={handleClose}
                 style={styles.closeButton}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 accessibilityRole="button"
                 accessibilityLabel="Close check-in"
               >

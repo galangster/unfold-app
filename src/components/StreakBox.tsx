@@ -216,6 +216,6 @@ const styles = StyleSheet.create({
   },
   dayLabel: {
     fontFamily: FontFamily.ui,
-    fontSize: 10,
+    fontSize: FontSize.xs,
   },
 });

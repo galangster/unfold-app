@@ -141,6 +141,7 @@ export function StreakDisplay({ size = 'medium', compact, showFreeze = true, hid
             fontFamily: FontFamily.uiSemiBold,
             fontSize: config.number,
             color: colors.text,
+            fontVariant: ['tabular-nums'],
           }}
         >
           {streak}

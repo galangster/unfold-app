@@ -29,6 +29,7 @@ import * as Haptics from 'expo-haptics';
 import {
   useSharedValue,
   withSpring,
+  useReducedMotion,
 } from 'react-native-reanimated';
 import { useTheme } from '@/lib/theme';
 import { FontFamily, FontSize } from '@/constants/fonts';
@@ -140,6 +141,7 @@ const TAB_BAR_CONTENT_HEIGHT = 56;
 
 export default function CompanionScreen() {
   const { colors } = useTheme();
+  const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
   const { fontScale } = useWindowDimensions();
   const listRef = useRef<any>(null);
@@ -200,13 +202,17 @@ export default function CompanionScreen() {
 
   const handleDrawerOpen = useCallback(() => {
     setDrawerOpen(true);
-    drawerTranslateX.value = withSpring(0, { duration: 300, dampingRatio: 1 });
-  }, [drawerTranslateX]);
+    drawerTranslateX.value = reducedMotion
+      ? 0
+      : withSpring(0, { duration: 300, dampingRatio: 1 });
+  }, [drawerTranslateX, reducedMotion]);
 
   const handleDrawerClose = useCallback(() => {
     setDrawerOpen(false);
-    drawerTranslateX.value = withSpring(-DRAWER_WIDTH, { duration: 300, dampingRatio: 1 });
-  }, [drawerTranslateX]);
+    drawerTranslateX.value = reducedMotion
+      ? -DRAWER_WIDTH
+      : withSpring(-DRAWER_WIDTH, { duration: 300, dampingRatio: 1 });
+  }, [drawerTranslateX, reducedMotion]);
 
   // Gesture-based drawer open deferred — hamburger button + scrim tap for now
 
@@ -374,9 +380,9 @@ export default function CompanionScreen() {
           activeOpacity={0.7}
           accessibilityLabel="Open conversation history"
           accessibilityRole="button"
-          style={{ width: 40 }}
+          style={{ width: 40, height: 44, alignItems: 'center', justifyContent: 'center' }}
         >
-          <List size={24} color={colors.textMuted} weight="light" />
+          <List size={22} color={colors.textMuted} weight="light" />
         </TouchableOpacity>
 
         {/* Center: orb + name */}
@@ -407,7 +413,7 @@ export default function CompanionScreen() {
           activeOpacity={0.7}
           accessibilityLabel="New conversation"
           accessibilityRole="button"
-          style={{ width: 40, alignItems: 'flex-end' }}
+          style={{ width: 40, height: 44, alignItems: 'flex-end', justifyContent: 'center' }}
         >
           <NotePencil size={22} color={colors.textMuted} weight="light" />
         </TouchableOpacity>
@@ -551,6 +557,7 @@ export default function CompanionScreen() {
                 fontFamily: FontFamily.ui,
                 fontSize: 11,
                 color: colors.textSubtle,
+                fontVariant: ['tabular-nums'],
               }}
             >
               {dailyRemaining} of {FREE_COMPANION_DAILY_LIMIT} free messages left today

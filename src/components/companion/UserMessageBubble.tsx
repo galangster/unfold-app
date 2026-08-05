@@ -13,7 +13,7 @@ import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { Spacing } from '@/constants/spacing';
 import { alpha } from '@/components/ui';
-import { FontFamily, FontSize } from '@/constants/fonts';
+import { Typography } from '@/constants/typography';
 import { buildBubblePath } from '@/lib/bubble-path';
 import type { CompanionMessage } from '@/lib/companion-chat-store';
 
@@ -75,7 +75,11 @@ export function UserMessageBubble({ message }: Props) {
           paddingHorizontal: 14,
           paddingVertical: 10,
           overflow: 'visible',
-          opacity: bubbleSize ? 1 : 0,
+          // Plain-color fallback so the text always sits on a bubble, even
+          // during the one frame before onLayout reports a size and the
+          // exact tailed SVG shape can be drawn on top of this same fill.
+          backgroundColor: bubbleFill,
+          borderRadius: USER_BUBBLE_RADIUS.topLeft,
         }}
       >
         {bubbleSize && bubblePath && (
@@ -91,9 +95,7 @@ export function UserMessageBubble({ message }: Props) {
         )}
         <Text
           style={{
-            fontFamily: FontFamily.body,
-            fontSize: FontSize.base,
-            lineHeight: 24,
+            ...Typography.bodyRelaxed,
             color: colors.text,
           }}
         >

@@ -429,9 +429,11 @@ function PreparingState({
       shimmerOpacity.value = 0.78;
       return;
     }
+    // Six gentle cycles (~26s) then settle — decorative motion shouldn't run
+    // forever on a static value (audit #11).
     shimmerOpacity.value = withRepeat(
       withTiming(0.92, { duration: 2200, easing: Easing.inOut(Easing.ease) }),
-      -1,
+      6,
       true,
     );
     return () => cancelAnimation(shimmerOpacity);
@@ -757,7 +759,7 @@ function MainCard({ state }: MainCardProps) {
               activeOpacity={0.74}
               onPress={onPress}
               onPressIn={() => {
-                scale.value = withTiming(0.99, { duration: 120 });
+                scale.value = withTiming(0.96, { duration: 120 });
               }}
               onPressOut={() => {
                 scale.value = withTiming(1, { duration: Duration.fast });
@@ -1025,7 +1027,7 @@ const styles = StyleSheet.create({
     minHeight: 48,
     paddingVertical: Spacing['3'],
     paddingHorizontal: Spacing['5'],
-    borderRadius: 999,
+    borderRadius: Radius.full,
     borderWidth: 1,
     marginTop: Spacing['1'],
     overflow: 'hidden',
@@ -1168,7 +1170,7 @@ const styles = StyleSheet.create({
     gap: Spacing['2'],
     paddingVertical: 13,
     paddingHorizontal: 24,
-    borderRadius: 999,
+    borderRadius: Radius.full,
     borderWidth: 1,
   },
   returningCtaText: {
@@ -1265,7 +1267,7 @@ const styles = StyleSheet.create({
   },
   preparingStatusPill: {
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: Radius.full,
     paddingVertical: Spacing['1.5'],
     paddingHorizontal: Spacing['3'],
   },
@@ -1353,7 +1355,7 @@ const styles = StyleSheet.create({
     gap: Spacing['2'],
     paddingVertical: 13,
     paddingHorizontal: 28,
-    borderRadius: 999,
+    borderRadius: Radius.full,
     borderWidth: 1,
   },
   journeyCompleteCtaText: {
