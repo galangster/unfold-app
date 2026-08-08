@@ -12,9 +12,11 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
+import { Radius } from '@/constants/radius';
 import { Duration } from '@/constants/animations';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { EmberSystem } from '@/components/EmberSystem';
+import { alpha } from '@/components/ui';
 import { formatSeriesCompletionSummary } from '@/lib/series-completion-summary';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -96,12 +98,27 @@ function pickRandom(arr: string[]): string {
 }
 
 // ─── Main component ─────────────────────────────────────────────────────────
+
+/** A next step offered from the completion screen. */
+export interface CompletionAction {
+  label: string;
+  onPress: () => void;
+}
+
 interface CompletionCelebrationProps {
   visible: boolean;
   onDismiss: () => void;
   type: 'day' | 'series';
   message?: string;
   seriesReflectionSummary?: string;
+  /**
+   * Where to go next. Without these the screen was a dead end: the day's
+   * content is calendar-gated so there is nothing further to read, and the
+   * only affordance was "tap anywhere" back to a home screen that also had
+   * nothing to do. Callers decide the set — free users must not be handed a
+   * gated action here, which would turn the moment into a paywall.
+   */
+  actions?: CompletionAction[];
 }
 
 export function CompletionCelebration({
@@ -110,6 +127,7 @@ export function CompletionCelebration({
   type,
   message,
   seriesReflectionSummary,
+  actions,
 }: CompletionCelebrationProps) {
   const { colors } = useTheme();
   const { reducedMotion } = useAccessibleAnimation();
@@ -257,6 +275,49 @@ export function CompletionCelebration({
                 </Text>
               </Animated.View>
             )}
+
+            {/* Where to go next */}
+            {actions && actions.length > 0 && (
+              <Animated.View
+                style={[
+                  { marginTop: Spacing['8'], width: '100%', gap: Spacing['3'] },
+                  subtitleStyle,
+                ]}
+              >
+                {actions.map((action, index) => (
+                  <TouchableOpacity
+                    key={action.label}
+                    activeOpacity={0.7}
+                    // Stop the parent's tap-anywhere-to-dismiss from firing too.
+                    onPress={(event) => {
+                      event.stopPropagation();
+                      action.onPress();
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={action.label}
+                    style={{
+                      paddingVertical: Spacing['4'],
+                      paddingHorizontal: Spacing['5'],
+                      borderRadius: Radius.lg,
+                      borderWidth: 1,
+                      borderColor: index === 0 ? alpha(colors.accent, 0.35) : colors.border,
+                      backgroundColor:
+                        index === 0 ? alpha(colors.accent, 0.08) : 'transparent',
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontFamily: FontFamily.uiMedium,
+                        fontSize: 15,
+                        color: index === 0 ? colors.accent : colors.textMuted,
+                      }}
+                    >
+                      {action.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </Animated.View>
+            )}
           </View>
 
           {/* Dismiss hint */}
@@ -277,7 +338,9 @@ export function CompletionCelebration({
                 color: colors.textHint,
               }}
             >
-              Tap anywhere to continue
+              {actions && actions.length > 0
+                ? 'Or tap anywhere to close'
+                : 'Tap anywhere to continue'}
             </Text>
           </Animated.View>
         </Animated.View>

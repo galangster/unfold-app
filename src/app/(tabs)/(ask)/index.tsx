@@ -3,7 +3,7 @@
  * Pi-style single continuous conversation.
  * Phase 2: rich text with verse pills, blockquotes, scripture tap sheet.
  */
-import React, { useCallback, useRef, useMemo, useState } from 'react';
+import React, { useCallback, useRef, useMemo, useState, useEffect } from 'react';
 import {
   FlatList,
   ListRenderItemInfo,
@@ -18,7 +18,7 @@ import {
 } from 'react-native';
 // react-native-gesture-handler not needed — scroll banner uses normal TouchableOpacity
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import {
   CrownIcon,
   List,
@@ -37,6 +37,7 @@ import { Radius } from '@/constants/radius';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import { COMPANION_MESSAGE_MAX_CHARS, useCompanionChat } from '@/lib/use-companion-chat';
 import type { CompanionMessage } from '@/lib/companion-chat-store';
+import { useUnfoldStore } from '@/lib/store';
 import {
   CompanionDrawer,
   DRAWER_WIDTH,
@@ -226,6 +227,35 @@ export default function CompanionScreen() {
   const handleVerseClose = useCallback(() => {
     setVerseSheetRef(null);
   }, []);
+
+  // Warm handoff from the completion screen. `starter` seeds the composer; the
+  // user still presses send, so a free-tier message is never spent for them.
+  const router = useRouter();
+  const routeParams = useLocalSearchParams<{ starter?: string }>();
+  // Carries a nonce so finishing the SAME reading twice still re-seeds — a bare
+  // string would be reference-equal and the input effect would never re-run.
+  const [seed, setSeed] = useState<{ text: string; nonce: number } | undefined>(undefined);
+  const seedNonceRef = useRef(0);
+
+  useEffect(() => {
+    const starter = routeParams.starter;
+    if (!starter) return;
+    seedNonceRef.current += 1;
+    setSeed({ text: starter, nonce: seedNonceRef.current });
+    // Consume it, or returning to this tab later would re-seed the composer.
+    router.setParams({ starter: '' });
+  }, [routeParams.starter, router]);
+
+  // Title of the reading the user is on, used to unlock the devotional-aware
+  // starter cards in CompanionEmptyState. Those cards existed but nothing ever
+  // passed this, so every reader saw the generic set — including the one who
+  // had just finished today's reading and tapped through from it.
+  const todayTheme = useUnfoldStore((s) => {
+    const devotional = s.devotionals.find((d) => d.id === s.currentDevotionalId);
+    if (!devotional || devotional.archivedAt) return null;
+    const day = devotional.days?.find((d) => d.dayNumber === devotional.currentDay);
+    return day?.title ?? devotional.title ?? null;
+  });
 
   const handleSend = useCallback(
     (text: string) => {
@@ -427,7 +457,7 @@ export default function CompanionScreen() {
           taps inside messages. */}
       {isEmpty ? (
         <Pressable onPress={Keyboard.dismiss} style={{ flex: 1 }}>
-          <CompanionEmptyState onSelectStarter={handleSend} />
+          <CompanionEmptyState onSelectStarter={handleSend} todayTheme={todayTheme} />
         </Pressable>
       ) : (
         <View style={{ flex: 1 }}>
@@ -571,6 +601,7 @@ export default function CompanionScreen() {
         onSend={handleSend}
         onStop={stopGeneration}
         isStreaming={isStreaming}
+        seed={seed}
       />
 
       {/* Bottom spacer: clears the absolutely-positioned custom tab bar.

@@ -30,6 +30,7 @@ import { Duration, Ease } from '@/constants/animations';
 import { Typography } from '@/constants/typography';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
+import { drainSyncOutbox } from '@/lib/sync-outbox';
 import {
   getTodayReaderDayNumber,
   isDevotionalDaySelectable,
@@ -117,6 +118,7 @@ export default function SeriesDetailScreen() {
   const { handleBack } = useCrossTabBack();
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const setCurrentDevotional = useUnfoldStore((s) => s.setCurrentDevotional);
+  const resumeDevotional = useUnfoldStore((s) => s.resumeDevotional);
 
   const devotional = useMemo(
     () => devotionals.find((d) => d.id === id) ?? null,
@@ -165,6 +167,17 @@ export default function SeriesDetailScreen() {
     },
     [devotional, setCurrentDevotional, router],
   );
+
+  const handleResume = useCallback(() => {
+    if (!devotional) return;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    resumeDevotional(devotional.id);
+    // Push it now rather than waiting for the next reconnect/focus drain. The
+    // server still holds the series as ended until this lands, so opening a
+    // missing day first would be refused and the next pull would re-archive
+    // the local row — resume would appear to undo itself.
+    void drainSyncOutbox();
+  }, [devotional, resumeDevotional]);
 
   if (!devotional) {
     return (
@@ -220,6 +233,34 @@ export default function SeriesDetailScreen() {
             <Text style={[styles.seriesTitle, { color: colors.text }]}>
               {devotional.title}
             </Text>
+
+            {/* Ended series: the only way back to an active series. Without
+                this, archiving was a one-way door — tapping in from history set
+                the pointer but the cron still ignored it and generation still
+                refused, so it looked resumed while staying frozen. */}
+            {devotional.archivedAt && !isComplete ? (
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={handleResume}
+                accessibilityRole="button"
+                accessibilityLabel="Resume this series"
+                style={[
+                  styles.resumeBanner,
+                  {
+                    backgroundColor: alpha(colors.accent, 0.08),
+                    borderColor: alpha(colors.accent, 0.25),
+                  },
+                ]}
+              >
+                <Text style={[styles.resumeTitle, { color: colors.accent }]}>
+                  Resume this series
+                </Text>
+                <Text style={[styles.resumeBody, { color: colors.textMuted }]}>
+                  This series ended. Picking it back up will end the one you’re
+                  reading now.
+                </Text>
+              </TouchableOpacity>
+            ) : null}
 
             {/* Progress summary */}
             <View style={styles.progressRow}>
@@ -483,6 +524,23 @@ const styles = StyleSheet.create({
   },
   progressRow: {
     marginBottom: Spacing['6'],
+  },
+  resumeBanner: {
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    paddingVertical: Spacing['4'],
+    paddingHorizontal: Spacing['4'],
+    marginBottom: Spacing['5'],
+  },
+  resumeTitle: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: FontSize.base,
+    marginBottom: 4,
+  },
+  resumeBody: {
+    fontFamily: FontFamily.body,
+    fontSize: 13,
+    lineHeight: 19,
   },
   progressTrack: {
     height: 3,

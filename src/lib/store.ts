@@ -278,6 +278,9 @@ export interface Devotional {
   usedStoryIds?: string[];
   // Calendar-based day progression anchor
   seriesStartDate?: string; // ISO timestamp — set when day 1 is generated
+  // Set when the user starts a different series. The series stays readable;
+  // it just stops being the one the server advances and generates for.
+  archivedAt?: string; // ISO timestamp
   // Sync fields
   updatedAt?: string; // ISO timestamp
 }
@@ -550,11 +553,12 @@ interface UnfoldState {
   // Devotionals
   devotionals: Devotional[];
   currentDevotionalId: string | null;
-  addDevotional: (devotional: Devotional) => void;
+  addDevotional: (devotional: Devotional, options?: { archiveOthers?: boolean }) => void;
   removeDevotional: (devotionalId: string) => void;
   updateDevotionalDays: (devotionalId: string, days: DevotionalDay[], title?: string) => void;
   setCurrentDevotional: (id: string) => void;
   archiveCurrentDevotional: () => void;
+  resumeDevotional: (devotionalId: string) => void;
   hasEverCreatedDevotional: boolean;
   isReturningUser: () => boolean;
   markDayAsRead: (devotionalId: string, dayNumber: number) => void;
@@ -903,16 +907,47 @@ export const useUnfoldStore = create<UnfoldState>()(
       },
 
       // Devotional actions
-      addDevotional: (devotional) =>
+      addDevotional: (devotional, options) =>
         set((state) => {
+          const now = new Date().toISOString();
+          // The onboarding sample is a preview, not a series the user is on.
+          // Letting it archive their real series meant a returning user who
+          // re-ran onboarding silently lost the series they were reading.
+          const archiveOthers_ = options?.archiveOthers ?? true;
+
+          // Creating a series is what ends the previous one — not tapping
+          // "Continue" on the confirmation alert. Archiving at the alert bricked
+          // the old series if the user then abandoned onboarding: it stopped
+          // being a generation target with nothing created to replace it.
+          // Doing it here means the invariant holds exactly when a replacement
+          // actually exists.
+          const archiveOthers = (items: Devotional[]) =>
+            !archiveOthers_ ? items : items.map((d) => {
+              if (d.id === devotional.id || d.archivedAt) return d;
+              enqueuePersonalDataSyncChange(
+                'devotionals',
+                d.id,
+                { schemaVersion: 1, archivedAt: now, archivedStateAt: now },
+                now,
+              );
+              return { ...d, archivedAt: now, updatedAt: now };
+            });
+
           // Prevent duplicate entries with the same ID
           if (state.devotionals.some((d) => d.id === devotional.id)) {
-            return { currentDevotionalId: devotional.id, hasEverCreatedDevotional: true };
+            return {
+              devotionals: archiveOthers(state.devotionals),
+              currentDevotionalId: devotional.id,
+              hasEverCreatedDevotional: true,
+            };
           }
 
           const normalizedDevotional = normalizeDevotionalIdentity(devotional);
           return {
-            devotionals: [{ ...normalizedDevotional, updatedAt: new Date().toISOString() }, ...state.devotionals],
+            devotionals: [
+              { ...normalizedDevotional, updatedAt: now },
+              ...archiveOthers(state.devotionals),
+            ],
             currentDevotionalId: devotional.id,
             hasEverCreatedDevotional: true,
           };
@@ -1004,7 +1039,72 @@ export const useUnfoldStore = create<UnfoldState>()(
         }),
 
       setCurrentDevotional: (id) => set({ currentDevotionalId: id }),
-      archiveCurrentDevotional: () => set({ currentDevotionalId: null }),
+
+      // Pick an ended series back up. Without this, archiving was a one-way
+      // door: setCurrentDevotional would point at an archived series, so it
+      // looked resumed while the cron ignored it and day generation refused —
+      // readable, but permanently frozen. Resuming is the inverse of ending,
+      // and it keeps the one-active-series invariant by ending whatever was
+      // active before.
+      resumeDevotional: (devotionalId) =>
+        set((state) => {
+          const target = state.devotionals.find((d) => d.id === devotionalId);
+          if (!target) return {};
+
+          const now = new Date().toISOString();
+          const devotionals = state.devotionals.map((d) => {
+            if (d.id === devotionalId) {
+              if (!d.archivedAt) return d;
+              enqueuePersonalDataSyncChange(
+                'devotionals',
+                d.id,
+                { schemaVersion: 1, archivedAt: null, archivedStateAt: now },
+                now,
+              );
+              return { ...d, archivedAt: undefined, updatedAt: now };
+            }
+            if (d.archivedAt) return d;
+            enqueuePersonalDataSyncChange(
+              'devotionals',
+              d.id,
+              { schemaVersion: 1, archivedAt: now, archivedStateAt: now },
+              now,
+            );
+            return { ...d, archivedAt: now, updatedAt: now };
+          });
+
+          return { devotionals, currentDevotionalId: devotionalId };
+        }),
+
+      // Ending a series has to reach the server. When this only cleared the
+      // local pointer, the backend kept treating the abandoned series as the
+      // user's active one — still advancing it, still generating days for it,
+      // and still offering it as "In Progress" forever.
+      archiveCurrentDevotional: () =>
+        set((state) => {
+          const targetId = state.currentDevotionalId;
+          if (!targetId) return { currentDevotionalId: null };
+
+          const now = new Date().toISOString();
+          const target = state.devotionals.find((d) => d.id === targetId);
+          if (target && !target.archivedAt) {
+            enqueuePersonalDataSyncChange(
+              'devotionals',
+              targetId,
+              { schemaVersion: 1, archivedAt: now, archivedStateAt: now },
+              now,
+            );
+          }
+
+          return {
+            currentDevotionalId: null,
+            devotionals: state.devotionals.map((d) =>
+              d.id === targetId && !d.archivedAt
+                ? { ...d, archivedAt: now, updatedAt: now }
+                : d,
+            ),
+          };
+        }),
       isReturningUser: () => get().hasEverCreatedDevotional || get().devotionals.length > 0,
 
       markDayAsRead: (devotionalId, dayNumber) =>

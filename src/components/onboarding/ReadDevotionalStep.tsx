@@ -52,7 +52,7 @@ export function ReadDevotionalStep({
       days: [{ ...devotionalDay, dayNumber: 1, isRead: false }],
       createdAt: new Date().toISOString(),
       generationMode: 'progressive',
-    } as Devotional);
+    } as Devotional, { archiveOthers: false });
   }, [devotionalDay, devotionalId]);
 
   useEffect(() => {

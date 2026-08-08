@@ -35,7 +35,9 @@ import { exportDevotionalToPDF, isPDFExportSupported } from '@/lib/pdf-export';
 // Segmented Control
 // ============================================================================
 
-type PastSeriesTab = 'progress' | 'completed';
+// 'past' = finished OR ended. It is deliberately not called 'completed':
+// an abandoned series lands here too, and calling that completed would be a lie.
+type PastSeriesTab = 'active' | 'past';
 
 interface SegmentedControlProps {
   activeTab: PastSeriesTab;
@@ -46,7 +48,7 @@ function SegmentedControl({ activeTab, onTabChange }: SegmentedControlProps) {
   const { colors } = useTheme();
   const [containerWidth, setContainerWidth] = useState(0);
 
-  const activeIndex = activeTab === 'progress' ? 0 : 1;
+  const activeIndex = activeTab === 'active' ? 0 : 1;
   const segmentWidth = containerWidth > 0 ? (containerWidth - 4) / 2 : 0;
 
   const indicatorTranslateX = useSharedValue(activeIndex * segmentWidth);
@@ -125,11 +127,11 @@ function SegmentedControl({ activeTab, onTabChange }: SegmentedControlProps) {
 
       {/* Segments */}
       <TouchableOpacity
-        onPress={() => handlePress('progress')}
+        onPress={() => handlePress('active')}
         style={segStyles.segment}
         activeOpacity={0.7}
         accessibilityRole="tab"
-        accessibilityState={{ selected: activeTab === 'progress' }}
+        accessibilityState={{ selected: activeTab === 'active' }}
         accessibilityLabel="In Progress tab, 1 of 2"
       >
         <Text
@@ -137,11 +139,11 @@ function SegmentedControl({ activeTab, onTabChange }: SegmentedControlProps) {
             segStyles.segmentText,
             {
               fontFamily:
-                activeTab === 'progress'
+                activeTab === 'active'
                   ? FontFamily.uiMedium
                   : FontFamily.ui,
               color:
-                activeTab === 'progress'
+                activeTab === 'active'
                   ? colors.text
                   : colors.textSubtle,
             },
@@ -152,29 +154,29 @@ function SegmentedControl({ activeTab, onTabChange }: SegmentedControlProps) {
       </TouchableOpacity>
 
       <TouchableOpacity
-        onPress={() => handlePress('completed')}
+        onPress={() => handlePress('past')}
         style={segStyles.segment}
         activeOpacity={0.7}
         accessibilityRole="tab"
-        accessibilityState={{ selected: activeTab === 'completed' }}
-        accessibilityLabel="Completed tab, 2 of 2"
+        accessibilityState={{ selected: activeTab === 'past' }}
+        accessibilityLabel="Past tab, 2 of 2"
       >
         <Text
           style={[
             segStyles.segmentText,
             {
               fontFamily:
-                activeTab === 'completed'
+                activeTab === 'past'
                   ? FontFamily.uiMedium
                   : FontFamily.ui,
               color:
-                activeTab === 'completed'
+                activeTab === 'past'
                   ? colors.text
                   : colors.textSubtle,
             },
           ]}
         >
-          Completed
+          Past
         </Text>
       </TouchableOpacity>
     </View>
@@ -365,6 +367,10 @@ function DevotionalCard({ item, colors, exportingId, exportSuccessId, onSelect, 
   const isComplete = completedDays >= item.totalDays;
   const progress = (completedDays / item.totalDays) * 100;
   const createdDate = format(new Date(item.createdAt), 'MMM d, yyyy');
+  // Ended early. Without this, a series you finished and one you walked away
+  // from look identical in the Past tab — and the progress line below would
+  // read "Day 2 of 30" as if it were still moving.
+  const isEnded = !isComplete && Boolean(item.archivedAt);
 
   return (
     <TouchableOpacity
@@ -458,7 +464,9 @@ function DevotionalCard({ item, colors, exportingId, exportSuccessId, onSelect, 
                 color: colors.textSubtle,
               }}
             >
-              Day {item.currentDay} of {item.totalDays}
+              {isEnded
+                ? `Ended · ${completedDays} of ${item.totalDays} days read`
+                : `Day ${item.currentDay} of ${item.totalDays}`}
             </Text>
           </>
         )}
@@ -489,7 +497,7 @@ export default function PastDevotionalsScreen() {
   const journalEntries = useUnfoldStore((s) => s.journalEntries);
   const checkIns = useUnfoldStore((s) => s.checkIns);
 
-  const [activeTab, setActiveTab] = useState<PastSeriesTab>('progress');
+  const [activeTab, setActiveTab] = useState<PastSeriesTab>('active');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchVisible, setSearchVisible] = useState(false);
   const [exportingId, setExportingId] = useState<string | null>(null);
@@ -512,7 +520,12 @@ export default function PastDevotionalsScreen() {
         const days = d.days ?? [];
         const completedDays = days.filter((day) => day.isRead).length;
         const isComplete = completedDays >= d.totalDays;
-        const matchesTab = activeTab === 'completed' ? isComplete : !isComplete;
+        // A series the user ended is no longer "In Progress" — nothing will
+        // advance it. It stays readable in the other tab rather than sitting
+        // alongside the active series looking equally live, which is what made
+        // two series appear to be running at once.
+        const isActive = !isComplete && !d.archivedAt;
+        const matchesTab = activeTab === 'past' ? !isActive : isActive;
         if (!matchesTab) return false;
         // Search filter
         if (query) {
@@ -692,8 +705,8 @@ export default function PastDevotionalsScreen() {
 
   const emptyLabel = searchQuery.trim()
     ? `No devotionals match "${searchQuery}"`
-    : activeTab === 'completed'
-      ? 'No completed devotionals yet'
+    : activeTab === 'past'
+      ? 'Nothing here yet'
       : 'No devotionals in progress';
 
   return (

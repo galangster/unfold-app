@@ -53,7 +53,7 @@ interface ReviewPromptConfig {
 }
 
 const DEFAULT_CONFIG: ReviewPromptConfig = {
-  minDaysCompleted: 1,   // First day completion — capture excitement early
+  minDaysCompleted: 3,   // Day 1 is reserved for the notification ask
   minJournalEntries: 0,  // Don't require journaling
   cooldownDays: 60,
   maxPromptsPerYear: 3,
@@ -125,25 +125,27 @@ export class ReviewPromptManager {
 
     // ── High-dopamine trigger moments (ordered by impact) ──
 
-    // 1. First day completion — user just read their personalized devotional
-    //    for the first time. Peak "wow, this was made for me" moment.
-    //    This is the 3-5 minute mark. Capture the excitement.
-    if (options.totalDaysCompleted === 1) {
-      return true;
-    }
+    // Day 1 deliberately does NOT trigger a review prompt. That beat is spent
+    // asking for notification permission instead: day progression is calendar-
+    // gated, so the user physically cannot continue today, and whether they
+    // come back tomorrow is the whole product. A rating is worth less than a
+    // retained reader, and both asks on one screen is two modals deep.
+    // Day 3 (below) is the replacement trigger — by then they have a habit and
+    // a better reason to rate.
 
-    // 2. Series completion — just finished an entire journey
+    // 1. Series completion — just finished an entire journey
     if (options.justCompletedSeries) {
       return true;
     }
 
-    // 3. Streak milestones — 7, 14, 30 day streaks
+    // 2. Streak milestones — 7, 14, 30 day streaks
     const streak = options.currentStreak ?? 0;
     if (streak === 7 || streak === 14 || streak === 30) {
       return true;
     }
 
-    // 4. Day 3 — commitment signal (if first-day prompt was dismissed/cooldown)
+    // 3. Day 3 — the earliest ask. By now the user has returned twice, which
+    //    is a far stronger signal than a single first session.
     if (options.totalDaysCompleted === 3) {
       return true;
     }

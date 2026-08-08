@@ -343,6 +343,7 @@ function mapDevotional(record: SyncPulledRecord, current?: Devotional): Devotion
       seriesArc: row.seriesArc ? asRecord(row.seriesArc) as unknown as Devotional['seriesArc'] : current.seriesArc,
       seriesStartDate:
         syncedSeriesStartDate ?? current.seriesStartDate ?? current.createdAt,
+      archivedAt: 'archivedAt' in row ? asString(row.archivedAt) : current.archivedAt,
       updatedAt: now,
     };
   }
@@ -357,6 +358,7 @@ function mapDevotional(record: SyncPulledRecord, current?: Devotional): Devotion
     days: [],
     createdAt,
     seriesStartDate: syncedSeriesStartDate ?? createdAt,
+    archivedAt: asString(row.archivedAt),
     userContext: { name: '', aboutMe: '', currentSituation: '', emotionalState: '' },
     seriesArc: asRecord(row.seriesArc) as unknown as Devotional['seriesArc'],
     progressiveMemory: asRecord(row.progressiveMemory) as unknown as Devotional['progressiveMemory'],

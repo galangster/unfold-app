@@ -7,10 +7,10 @@ import {
 
 type SyncedDevotionalMetadata = NonNullable<PulledDevotionalContent['devotional']>;
 
-export type DevotionalSyncMetadataPatch = Partial<Pick<Devotional, 'title' | 'totalDays' | 'currentDay' | 'seriesArc' | 'seriesStartDate' | 'updatedAt'>>;
+export type DevotionalSyncMetadataPatch = Partial<Pick<Devotional, 'title' | 'totalDays' | 'currentDay' | 'seriesArc' | 'seriesStartDate' | 'archivedAt' | 'updatedAt'>>;
 
 export function buildDevotionalSyncMetadataPatch(
-  local: Pick<Devotional, 'id' | 'title' | 'totalDays' | 'currentDay' | 'seriesArc' | 'seriesStartDate' | 'createdAt'>,
+  local: Pick<Devotional, 'id' | 'title' | 'totalDays' | 'currentDay' | 'seriesArc' | 'seriesStartDate' | 'archivedAt' | 'createdAt'>,
   synced?: SyncedDevotionalMetadata,
 ): DevotionalSyncMetadataPatch {
   if (!synced || synced.id !== local.id) return {};
@@ -41,6 +41,13 @@ export function buildDevotionalSyncMetadataPatch(
     patch.seriesStartDate = nextSeriesStartDate;
   }
 
+  // archivedAt is ordinary synced state now, not a latch. The one-way version
+  // could not represent a resume, so a pull would silently re-archive a series
+  // the user had just picked back up. Convergence is handled server-side by
+  // comparing archivedStateAt (intent clock) rather than the row's updatedAt.
+  if (synced.archivedAt !== undefined && synced.archivedAt !== local.archivedAt) {
+    patch.archivedAt = synced.archivedAt ?? undefined;
+  }
 
   if (serverOwnedTotalDays > 0 && local.totalDays !== serverOwnedTotalDays) {
     patch.totalDays = serverOwnedTotalDays;
