@@ -135,7 +135,8 @@
         {
           "image": "./assets/images/splash.png",
           "resizeMode": "contain",
-          "backgroundColor": "#0A0A0A"
+          "backgroundColor": "#0A0A0A",
+          "enableFullScreenImage_legacy": true
         }
       ],
       "expo-sqlite",

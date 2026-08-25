@@ -6,8 +6,8 @@ internal import ExpoWidgets
 struct ExportWidgets0: WidgetBundle {
   var body: some Widget {
     UnfoldStreak()
-	UnfoldToday()
-	UnfoldDashboard()
+    UnfoldToday()
+    UnfoldDashboard()
     WidgetLiveActivity()
   }
 }
