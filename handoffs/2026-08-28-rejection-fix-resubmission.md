@@ -21,7 +21,7 @@
   (1.0.0 / 251), auto-submitted, processed by Apple (`VALID`), and **attached
   to App Store version 1.0** (`215fd90c-9f3a-407a-934d-27a687c12222`), whose
   state moved REJECTED → PREPARE_FOR_SUBMISSION.
-- **Resubmission: BLOCKED (only remaining step).** `PATCH
+- **Resubmission: DONE (2026-08-28 8:32 AM).** Resolved via the ASC UI: the "Update Review" button on the version page flipped the rejected item to Ready for Review (the step the public API could not perform), then "Resubmit to App Review" succeeded. All 5 items now Waiting for Review on build 251. The reply box closed on resubmission, so no Resolution Center reply was sent. Original blocker notes below for the record: `PATCH
   /v1/reviewSubmissions/3298c2f4-…` with `submitted: true` returns **409
   "Version is not ready to be submitted yet, please try again later"** — for
   4+ hours. Ruled out: encryption declaration (set, false), age rating
