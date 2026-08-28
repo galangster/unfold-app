@@ -94,42 +94,63 @@ describe('#19 SAVE badge dim behavior is identical across both paywall surfaces'
   });
 });
 
-describe('#27 social-proof rating is honest (4.8 must not paint five full stars)', () => {
-  it('drives the rating number and star fill from one constant', () => {
-    expect(threeStep).toContain('const APP_STORE_RATING = 4.8;');
-    expect(threeStep).toContain('{APP_STORE_RATING.toFixed(1)}');
-    expect(threeStep).toContain('rating={APP_STORE_RATING}');
+describe('#27 social proof is honest (no invented store rating on an unreleased app)', () => {
+  // App Review rejection 2026-08-28 (Guideline 2.3.1 exposure): the app has no
+  // App Store rating, so no aggregate rating, star fill, or "Trusted by
+  // thousands" claim may appear on any paywall surface. Testimonials are framed
+  // as early-reader quotes, without star rows.
+  it('renders no hardcoded aggregate rating or fabricated trust claims', () => {
+    expect(threeStep).not.toContain('APP_STORE_RATING');
+    expect(threeStep).not.toContain('Trusted by thousands');
+    expect(paywall).not.toContain('Trusted by thousands');
+    // The star-rating construct (not the icon itself) is what fabricates a
+    // rating; FiveStars was its only carrier on this surface.
+    expect(threeStep).not.toContain('FiveStars');
+    expect(threeStep).not.toContain('rating=');
   });
 
-  it('FiveStars renders a proportional partial fill when given a rating', () => {
-    // Outline track + width-clipped filled overlay = honest partial fill.
-    const fiveStars = threeStep.slice(
-      threeStep.indexOf('function FiveStars'),
-      threeStep.indexOf('function StackDots'),
-    );
-    expect(fiveStars).toContain('weight="regular"'); // empty track
-    expect(fiveStars).toContain('weight="fill"'); // filled overlay
-    expect(fiveStars).toContain('const fillWidth = (clamped / 5) * fullWidth;');
-    expect(fiveStars).toContain('styles.starsFillOverlay'); // clipped overlay
-    // a11y: the partial-fill row announces the real rating, not 5 stars.
-    expect(fiveStars).toContain('Rated ${clamped} out of 5 stars');
+  it('frames the testimonial carousel as early-reader quotes', () => {
+    expect(threeStep).toContain('What early readers are saying');
+  });
+});
+
+describe('3.1.2(c) billed amount is the most conspicuous price (App Review rejection 2026-08-28)', () => {
+  // The rejected build marketed the yearly plan by its calculated per-month
+  // price ($5.83/mo) while the billed amount ($69.99/yr) sat only in fine
+  // print. The billed amount must render as the primary price everywhere;
+  // per-month equivalents are subordinate (smaller, muted) or absent.
+  it('ThreeStep yearly card leads with the billed yearly price', () => {
+    // The per-month equivalent may only appear in the subordinate xs style:
+    // inspect the <Text> element that actually renders it.
+    const equivalentAt = threeStep.indexOf('{yearlyMonthlyEquivalent} equivalent');
+    expect(equivalentAt).toBeGreaterThan(-1);
+    const textOpenAt = threeStep.lastIndexOf('<Text', equivalentAt);
+    expect(textOpenAt).toBeGreaterThan(-1);
+    const equivalentText = threeStep.slice(textOpenAt, equivalentAt);
+    expect(equivalentText).toContain('FontSize.xs');
+    expect(equivalentText).not.toContain('FontSize.lg');
+    // And the billed yearly price renders at the primary size on this card.
+    const billedAt = threeStep.indexOf('{yearlyPrice}\n');
+    expect(billedAt).toBeGreaterThan(-1);
+    const billedText = threeStep.slice(threeStep.lastIndexOf('<Text', billedAt), billedAt);
+    expect(billedText).toContain('FontSize.lg');
   });
 
-  it('clips the filled-star overlay (overflow hidden) so it never paints past the rating', () => {
-    const overlayStyle = threeStep.slice(
-      threeStep.indexOf('starsFillOverlay:'),
-      threeStep.indexOf('starsFillOverlay:') + 200,
-    );
-    expect(overlayStyle).toContain("overflow: 'hidden'");
+  it('ThreeStep CTA never renders a dollar figure like "Try for $0.00"', () => {
+    expect(threeStep).not.toContain('Try for $0.00');
+    expect(threeStep).toContain("return 'Start My Free Trial';");
   });
 
-  it('reproduces the partial-fill proportion for 4.8 (96% of the bar, not 100%)', () => {
-    // Mirror the component math: fullWidth = 5*size + 4*gap; fill = rating/5.
-    const STAR_SIZE = 14;
-    const STAR_GAP = 2;
-    const fullWidth = 5 * STAR_SIZE + 4 * STAR_GAP;
-    const fillWidth = (4.8 / 5) * fullWidth;
-    expect(fillWidth).toBeCloseTo(fullWidth * 0.96, 5);
-    expect(fillWidth).toBeLessThan(fullWidth); // never overstates as 5/5
+  it('paywall route yearly row and CTA lead with the billed yearly price', () => {
+    expect(paywall).toContain('{yearlyPrice}/yr');
+    expect(paywall).toContain('`Unlock Premium \\u2014 ${yearlyPrice}/yr`');
+    expect(paywall).not.toContain('${perMonthFromYearly}/mo`');
+    // The per-month equivalent in the yearly row renders subordinate (12pt),
+    // never at the primary row size.
+    const equivalentAt = paywall.indexOf('{perMonthFromYearly}/mo');
+    expect(equivalentAt).toBeGreaterThan(-1);
+    const equivalentText = paywall.slice(paywall.lastIndexOf('<Text', equivalentAt), equivalentAt);
+    expect(equivalentText).toContain('fontSize: 12');
+    expect(equivalentText).not.toContain('fontSize: 15');
   });
 });

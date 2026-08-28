@@ -31,7 +31,7 @@ import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import LottieView from 'lottie-react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { CheckIcon, StarIcon } from 'phosphor-react-native';
+import { CheckIcon } from 'phosphor-react-native';
 import { alpha } from '@/components/ui';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
@@ -93,11 +93,10 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const TOTAL_PAGES_WITH_TRIAL = 3;
 const TOTAL_PAGES_NO_TRIAL = 2;
 
-// Aggregate App Store rating shown in the social-proof row. The stars beside it
-// render a partial fill matching this value so the visual never overstates the
-// number (e.g. 4.8 must not paint five full stars). Update when the real
-// store rating changes.
-const APP_STORE_RATING = 4.8;
+// No aggregate store rating is shown anywhere on this surface: the app has no
+// App Store rating yet (first release), and inventing one is a Guideline
+// 2.3.1 misrepresentation. If a real store rating exists later, reintroduce it
+// from live App Store data, never a hardcoded constant.
 
 // Shared SAVE-badge dim level — the badge is full strength while the yearly
 // plan is selected and dims to this opacity when the user focuses monthly.
@@ -156,62 +155,14 @@ function ctaLabel(page: number, totalPages: number, hasFreeTrial: boolean): stri
   }
   if (page === 0) return 'Start Free Trial';
   if (page === 1) return 'See your free trial';
-  return 'Try for $0.00';
+  // No dollar figure in the CTA: a zero-dollar price there was the most
+  // conspicuous price on the screen, competing with the billed amount (3.1.2c).
+  return 'Start My Free Trial';
 }
 
 // ---------------------------------------------------------------------------
 // Sub-components (inline, single file)
 // ---------------------------------------------------------------------------
-
-const STAR_SIZE = 14;
-const STAR_GAP = 2;
-
-/**
- * Five inline stars. With no `rating`, renders five fully-filled stars (used by
- * individual five-star testimonials). With a `rating` (e.g. 4.8), renders an
- * honest partial fill: outline stars beneath, a width-clipped filled row on top
- * so the visual fill matches the number instead of overstating it as 5/5.
- */
-function FiveStars({ color, rating }: { color: string; rating?: number }) {
-  if (rating == null) {
-    return (
-      <View style={styles.starsRow}>
-        {Array.from({ length: 5 }).map((_, i) => (
-          <StarIcon key={i} size={STAR_SIZE} color={color} weight="fill" />
-        ))}
-      </View>
-    );
-  }
-
-  // One row of N stars spans N*size + (N-1)*gap. Clip the filled overlay to the
-  // proportion of the rating so 4.8/5 paints 96% of the bar — honest, not 5/5.
-  const clamped = Math.max(0, Math.min(rating, 5));
-  const fullWidth = 5 * STAR_SIZE + 4 * STAR_GAP;
-  const fillWidth = (clamped / 5) * fullWidth;
-
-  return (
-    <View
-      style={[styles.starsRow, { width: fullWidth }]}
-      accessibilityRole="image"
-      accessibilityLabel={`Rated ${clamped} out of 5 stars`}
-    >
-      {/* Base: outline stars (the empty track) */}
-      <View style={styles.starsRow}>
-        {Array.from({ length: 5 }).map((_, i) => (
-          <StarIcon key={i} size={STAR_SIZE} color={color} weight="regular" />
-        ))}
-      </View>
-      {/* Overlay: filled stars clipped to the rating proportion */}
-      <View style={[styles.starsFillOverlay, { width: fillWidth }]} pointerEvents="none">
-        <View style={[styles.starsRow, { width: fullWidth }]}>
-          {Array.from({ length: 5 }).map((_, i) => (
-            <StarIcon key={i} size={STAR_SIZE} color={color} weight="fill" />
-          ))}
-        </View>
-      </View>
-    </View>
-  );
-}
 
 /** Small dot indicators for the stacked card carousel. */
 function StackDots({
@@ -331,29 +282,26 @@ function StackCard({
         animStyle,
       ]}
     >
-      <View style={styles.reviewCardHeader}>
-        <View>
-          <Text
-            style={{
-              fontFamily: FontFamily.uiSemiBold,
-              fontSize: FontSize.sm,
-              color: colors.text,
-            }}
-          >
-            {review.name}
-          </Text>
-          <Text
-            style={{
-              fontFamily: FontFamily.ui,
-              fontSize: FontSize.xs,
-              color: colors.textSubtle,
-              marginTop: 2,
-            }}
-          >
-            {review.location}
-          </Text>
-        </View>
-        <FiveStars color={colors.accent} />
+      <View>
+        <Text
+          style={{
+            fontFamily: FontFamily.uiSemiBold,
+            fontSize: FontSize.sm,
+            color: colors.text,
+          }}
+        >
+          {review.name}
+        </Text>
+        <Text
+          style={{
+            fontFamily: FontFamily.ui,
+            fontSize: FontSize.xs,
+            color: colors.textSubtle,
+            marginTop: 2,
+          }}
+        >
+          {review.location}
+        </Text>
       </View>
       <Text
         style={{
@@ -668,13 +616,13 @@ function ScreenPricing({
   onSelectPlan: (plan: 'yearly' | 'monthly') => void;
 }) {
   const savings = monthlyRaw > 0 ? Math.round((1 - yearlyRaw / 12 / monthlyRaw) * 100) : 0;
+  // Guideline 3.1.2(c): the billed amount ({yearlyPrice}/yr) must be the most
+  // conspicuous pricing element on the card. The per-month equivalent may only
+  // appear subordinate to it — smaller, muted, beneath the billed price.
   // Shared trunc-to-cent formatter — both paywalls must show the same $/mo.
-  // yearlyPrice truthiness mirrors the old currencySymbol gate (it was ''
-  // exactly when yearlyPrice was '').
-  const yearlyMonthlyEquivalent =
-    monthlyRaw > 0 && yearlyPrice
-      ? `${getPerMonthEquivalent(yearlyRaw, yearlyPrice)}/mo`
-      : yearlyPrice;
+  const yearlyMonthlyEquivalent = yearlyPrice
+    ? `${getPerMonthEquivalent(yearlyRaw, yearlyPrice)}/mo`
+    : '';
 
   // --- Stacked card carousel state ---
   const [activeReviewIndex, setActiveReviewIndex] = useState(0);
@@ -734,32 +682,19 @@ function ScreenPricing({
           The most personal{'\n'}Bible experience{'\n'}in the world
         </Text>
 
-        {/* Social proof — simple row, no wreath. Sits close to the
-            testimonial cards below so it reads as a trust badge for them. */}
-        <View style={styles.socialProofRow}>
+        {/* Social proof — honest framing only: these are quotes from early
+            testers, not App Store reviews, and there is no store rating yet
+            to cite (2.3.1). */}
+        <View style={styles.socialProofCaption}>
           <Text
             style={{
               fontFamily: FontFamily.ui,
               fontSize: FontSize.xs,
               color: colors.textMuted,
-              marginRight: Spacing['2'],
             }}
           >
-            Trusted by thousands
+            What early readers are saying
           </Text>
-          <Text
-            style={{
-              fontFamily: FontFamily.uiSemiBold,
-              fontSize: FontSize.sm,
-              color: colors.text,
-              marginRight: Spacing['1'],
-            }}
-          >
-            {APP_STORE_RATING.toFixed(1)}
-          </Text>
-          {/* Partial fill so the stars match the 4.8 number instead of
-              overstating it as a perfect 5/5 (trust, payment surface). */}
-          <FiveStars color={colors.accent} rating={APP_STORE_RATING} />
         </View>
       </View>
 
@@ -824,26 +759,38 @@ function ScreenPricing({
             Monthly
           </Text>
           {monthlyPrice ? (
-            <Text
-              style={{
-                fontFamily: FontFamily.uiSemiBold,
-                fontSize: FontSize.lg,
-                color:
-                  selectedPlan === 'monthly' ? colors.accent : colors.text,
-                marginTop: Spacing['1.5'],
-              }}
-            >
-              {monthlyPrice}
+            <>
+              <Text
+                style={{
+                  fontFamily: FontFamily.uiSemiBold,
+                  fontSize: FontSize.lg,
+                  color:
+                    selectedPlan === 'monthly' ? colors.accent : colors.text,
+                  marginTop: Spacing['1.5'],
+                }}
+              >
+                {monthlyPrice}
+                <Text
+                  style={{
+                    fontFamily: FontFamily.ui,
+                    fontSize: FontSize.sm,
+                    color: colors.textMuted,
+                  }}
+                >
+                  /mo
+                </Text>
+              </Text>
               <Text
                 style={{
                   fontFamily: FontFamily.ui,
-                  fontSize: FontSize.sm,
+                  fontSize: FontSize.xs,
                   color: colors.textMuted,
+                  marginTop: 2,
                 }}
               >
-                /mo
+                billed monthly
               </Text>
-            </Text>
+            </>
           ) : (
             <ActivityIndicator size="small" color={colors.accent} style={{ marginTop: Spacing['1.5'] }} />
           )}
@@ -904,18 +851,40 @@ function ScreenPricing({
             >
               Yearly
             </Text>
-            {yearlyMonthlyEquivalent ? (
-              <Text
-                style={{
-                  fontFamily: FontFamily.uiSemiBold,
-                  fontSize: FontSize.lg,
-                  color:
-                    selectedPlan === 'yearly' ? colors.accent : colors.text,
-                  marginTop: Spacing['1.5'],
-                }}
-              >
-                {yearlyMonthlyEquivalent}
-              </Text>
+            {yearlyPrice ? (
+              <>
+                {/* Billed amount is the primary price (3.1.2c) */}
+                <Text
+                  style={{
+                    fontFamily: FontFamily.uiSemiBold,
+                    fontSize: FontSize.lg,
+                    color:
+                      selectedPlan === 'yearly' ? colors.accent : colors.text,
+                    marginTop: Spacing['1.5'],
+                  }}
+                >
+                  {yearlyPrice}
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.ui,
+                      fontSize: FontSize.sm,
+                      color: colors.textMuted,
+                    }}
+                  >
+                    /yr
+                  </Text>
+                </Text>
+                <Text
+                  style={{
+                    fontFamily: FontFamily.ui,
+                    fontSize: FontSize.xs,
+                    color: colors.textMuted,
+                    marginTop: 2,
+                  }}
+                >
+                  {yearlyMonthlyEquivalent} equivalent
+                </Text>
+              </>
             ) : (
               <ActivityIndicator size="small" color={colors.accent} style={{ marginTop: Spacing['1.5'] }} />
             )}
@@ -1666,30 +1635,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: Spacing['2'],
   },
-  // Social proof row — sits just above the testimonial card carousel
-  // so the "Trusted by thousands · 4.8 ★★★★★" line reads as a trust
-  // badge directly attached to the reviews below.
-  socialProofRow: {
-    flexDirection: 'row',
+  // Social proof caption — sits just above the testimonial card carousel so
+  // the early-reader framing reads as a caption attached to the quotes.
+  socialProofCaption: {
     alignItems: 'center',
-    justifyContent: 'center',
     marginTop: Spacing['4'],
-  },
-  ratingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  starsRow: {
-    flexDirection: 'row',
-    gap: STAR_GAP,
-  },
-  // Clips the filled-star overlay to the rating proportion (left-anchored).
-  starsFillOverlay: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    overflow: 'hidden',
   },
 
   // ------- Stacked card carousel -------
@@ -1708,11 +1658,6 @@ const styles = StyleSheet.create({
     right: 0,
     borderRadius: Radius.card,
     padding: Spacing['4'],
-  },
-  reviewCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
   },
   stackDotsRow: {
     flexDirection: 'row',

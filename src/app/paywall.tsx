@@ -915,15 +915,29 @@ export default function PaywallScreen() {
                 </View>
               )}
             </View>
-            <Text
-              style={{
-                fontFamily: selectedPlan === 'yearly' ? FontFamily.uiSemiBold : FontFamily.ui,
-                fontSize: 15,
-                color: selectedPlan === 'yearly' ? colors.accent : colors.textMuted,
-              }}
-            >
-              {perMonthFromYearly}/mo
-            </Text>
+            {/* Billed amount is the primary price (3.1.2c); the per-month
+                equivalent sits subordinate — smaller and muted — beneath it. */}
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text
+                style={{
+                  fontFamily: selectedPlan === 'yearly' ? FontFamily.uiSemiBold : FontFamily.ui,
+                  fontSize: 15,
+                  color: selectedPlan === 'yearly' ? colors.accent : colors.textMuted,
+                }}
+              >
+                {yearlyPrice}/yr
+              </Text>
+              <Text
+                style={{
+                  fontFamily: FontFamily.ui,
+                  fontSize: 12,
+                  color: colors.textMuted,
+                  marginTop: 1,
+                }}
+              >
+                {perMonthFromYearly}/mo
+              </Text>
+            </View>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -1035,12 +1049,14 @@ export default function PaywallScreen() {
                 letterSpacing: 0.3,
               }}
             >
+              {/* CTA carries the billed amount, never the calculated per-month
+                  equivalent (3.1.2c). */}
               {!offeringsReady
                 ? 'Unlock Premium'
                 : isTrialEligible
                   ? `Start My Free Trial`
                   : selectedPlan === 'yearly'
-                    ? `Unlock Premium \u2014 ${perMonthFromYearly}/mo`
+                    ? `Unlock Premium \u2014 ${yearlyPrice}/yr`
                     : `Unlock Premium \u2014 ${monthlyPrice}/mo`}
             </Text>
           )}
