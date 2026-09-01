@@ -265,6 +265,10 @@ function InlineText({
     >
       {segments.map((seg, i) => {
         if (seg.type === 'verse') {
+          // The pill's breathing room is its own padding, not literal spaces
+          // around the reference: spaces doubled the gap before the pill and
+          // let following punctuation float ("1 Kings 19:11-12 ?") or wrap
+          // onto its own line.
           return (
             <Text
               key={i}
@@ -277,10 +281,10 @@ function InlineText({
                 color: colors.accent,
                 backgroundColor: alpha(colors.accent, flashIndex === i ? 0.30 : 0.10),
                 borderRadius: 6,
-                paddingHorizontal: 2,
+                paddingHorizontal: Spacing['1'],
               }}
             >
-              {' '}{seg.reference}{' '}
+              {seg.reference}
             </Text>
           );
         }
