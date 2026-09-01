@@ -62,6 +62,41 @@ export function getHighestContiguousRenderableDayNumber(
   return highest;
 }
 
+export interface RenderableDevotionalDaySummary {
+  /** Distinct day numbers that pass the reader's renderable predicate. */
+  readyDayCount: number;
+  /** Highest renderable day number strictly below the target, or null when none exists. */
+  fallbackDayNumber: number | null;
+}
+
+/**
+ * Summarizes the days the reader can actually render, using the same
+ * predicate the reader uses to decide whether a day is ready
+ * (`selectRenderableDevotionalDay`). Raw `days.length` overcounts for
+ * canonical progressive series, whose local-only placeholder days are
+ * stored but never rendered, so the "isn't ready yet" screen uses this
+ * for its "N days ready" count and its "Go back to Day N" target.
+ */
+export function summarizeRenderableDevotionalDays(
+  devotional: Devotional | null | undefined,
+  targetDayNumber: number,
+): RenderableDevotionalDaySummary {
+  if (!devotional) return { readyDayCount: 0, fallbackDayNumber: null };
+
+  let readyDayCount = 0;
+  let fallbackDayNumber: number | null = null;
+
+  for (const dayNumber of [...new Set(devotional.days.map((day) => day.dayNumber))]) {
+    if (selectRenderableDevotionalDay(devotional, dayNumber).status !== 'ready') continue;
+    readyDayCount += 1;
+    if (dayNumber < targetDayNumber && (fallbackDayNumber === null || dayNumber > fallbackDayNumber)) {
+      fallbackDayNumber = dayNumber;
+    }
+  }
+
+  return { readyDayCount, fallbackDayNumber };
+}
+
 export function buildReadOnlyCanonicalDayData(
   devotionalId: string,
   day: DevotionalDay,

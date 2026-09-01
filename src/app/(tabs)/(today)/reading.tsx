@@ -47,6 +47,7 @@ import {
   getHighestContiguousRenderableDayNumber,
   selectNextRenderableDevotionalDay,
   selectRenderableDevotionalDay,
+  summarizeRenderableDevotionalDays,
 } from '@/lib/devotional-canonical-days';
 import {
   getLockedTodayDayNumber,
@@ -1387,8 +1388,13 @@ export default function ReadingScreen() {
   }
 
   if (!currentDayData) {
-    // Day hasn't been generated yet
-    const daysReady = currentDevotional.days.length;
+    // Day hasn't been generated yet. Count only days that this screen can
+    // actually render (same predicate as `renderableDay` above) rather than
+    // raw stored records, so the copy and the "Go back" target stay truthful.
+    const { readyDayCount: daysReady, fallbackDayNumber } = summarizeRenderableDevotionalDays(
+      currentDevotional,
+      viewingDay,
+    );
 
     const handleRetryGeneration = async () => {
       if (!user || isRetrying || isCheckingForSyncedDay) return;
@@ -1685,15 +1691,15 @@ export default function ReadingScreen() {
                 </Text>
               </TouchableOpacity>
 
-              {/* Go back to last available day - same solid button style */}
-              {daysReady > 0 && (
+              {/* Go back to last renderable day before this one - same solid button style */}
+              {fallbackDayNumber !== null && (
                 <TouchableOpacity activeOpacity={0.7}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setViewingDay(daysReady);
+                    setViewingDay(fallbackDayNumber);
                   }}
                   accessibilityRole="button"
-                  accessibilityLabel={`Go back to day ${daysReady}`}
+                  accessibilityLabel={`Go back to day ${fallbackDayNumber}`}
                   accessibilityHint="Return to the last available day"
                   style={{
                     backgroundColor: retryCtaButtonBg,
@@ -1712,7 +1718,7 @@ export default function ReadingScreen() {
                       color: btnText,
                     }}
                   >
-                    Go back to Day {daysReady}
+                    Go back to Day {fallbackDayNumber}
                   </Text>
                 </TouchableOpacity>
               )}
