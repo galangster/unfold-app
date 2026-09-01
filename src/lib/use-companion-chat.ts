@@ -439,6 +439,10 @@ export function useCompanionChat() {
       };
       let accumulatedText = '';
       let hasReceivedStreamingToken = false;
+      // True while the "Looking something up…" indicator is on. Cleared by the
+      // next token — including the first token of a post-tool-call round, which
+      // used to leave the indicator on until the stream finished.
+      let searchingIndicatorOn = false;
 
       // P0-4: transient UI state (suggestions banner, error banner, searching
       // indicator) belongs to the visible conversation — a background stream
@@ -492,17 +496,20 @@ export function useCompanionChat() {
             abortController.signal,
             {
               onToken: (token) => {
-                // Clear searching state on first real token. This must use a local
-                // flag, not captured React state, because `onThinking` can run
-                // after this callback has already closed over the initial value.
-                if (!hasReceivedStreamingToken) {
+                // Clear the searching indicator on the first real token and on the
+                // first token after any `onThinking`. Local flags, not captured
+                // React state: `onThinking` can run after this callback has
+                // already closed over the initial value.
+                if (!hasReceivedStreamingToken || searchingIndicatorOn) {
                   hasReceivedStreamingToken = true;
+                  searchingIndicatorOn = false;
                   if (isStreamConversationVisible()) setIsSearching(false);
                 }
                 accumulatedText += token;
                 throttledUpdate(companionId, accumulatedText);
               },
               onThinking: () => {
+                searchingIndicatorOn = true;
                 if (isStreamConversationVisible()) setIsSearching(true);
               },
               onDone: (sug, cleanText) => {
