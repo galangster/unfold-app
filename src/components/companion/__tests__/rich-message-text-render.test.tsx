@@ -1,7 +1,7 @@
 import React from 'react';
 import { Text } from 'react-native';
 import renderer, { act } from 'react-test-renderer';
-import { RichMessageText } from '../RichMessageText';
+import { RichMessageText, VERSE_PILL_PAD } from '../RichMessageText';
 
 jest.mock('expo-haptics', () => ({ impactAsync: jest.fn(), ImpactFeedbackStyle: { Light: 'light' } }));
 jest.mock('@/components/ui', () => ({ alpha: (color: string) => color }));
@@ -26,25 +26,26 @@ function render(text: string) {
 }
 
 describe('RichMessageText verse pills', () => {
-  it('renders the bare reference inside the pill so surrounding punctuation stays attached', () => {
+  it('pads the reference with narrow no-break spaces so punctuation stays attached', () => {
     const source = 'Elijah heard it in 1 Kings 19:11-12? Then read Psalm 46:10, and rest.';
     const tree = render(source);
 
     const pills = tree.root
       .findAllByType(Text)
       .filter((node: any) => node.props.accessibilityRole === 'button');
-    expect(pills.map((node: any) => node.props.children)).toEqual(['1 Kings 19:11-12', 'Psalm 46:10']);
+    expect(pills.map((node: any) => node.props.children.join(''))).toEqual([
+      `${VERSE_PILL_PAD}1 Kings 19:11-12${VERSE_PILL_PAD}`,
+      `${VERSE_PILL_PAD}Psalm 46:10${VERSE_PILL_PAD}`,
+    ]);
 
-    // No spacing characters are inserted around the pills: the rendered
-    // text is exactly the source text.
-    expect(visibleText(tree.toJSON())).toBe(source);
+    // The glue is the only thing added: with it stripped, the rendered text
+    // is exactly the source text — no ordinary spaces sneak in around pills.
+    expect(visibleText(tree.toJSON()).split(VERSE_PILL_PAD).join('')).toBe(source);
   });
 
-  it('gives the pill its own horizontal padding instead', () => {
-    const tree = render('Romans 5:8 stands on its own.');
-    const [pill] = tree.root
-      .findAllByType(Text)
-      .filter((node: any) => node.props.accessibilityRole === 'button');
-    expect(pill.props.style.paddingHorizontal).toBeGreaterThan(0);
+  it('uses a non-breaking glue character, never a word space', () => {
+    expect(VERSE_PILL_PAD).toBe('\u202F');
+    expect(/\s/.test(VERSE_PILL_PAD)).toBe(true); // still whitespace for layout
+    expect(VERSE_PILL_PAD).not.toBe(' ');
   });
 });

@@ -33,6 +33,14 @@ type TextSegment =
   | { type: 'italic'; content: string }
   | { type: 'verse'; reference: string };
 
+/**
+ * U+202F NARROW NO-BREAK SPACE — the glue on each side of a verse pill's
+ * reference. Non-breaking, so punctuation after the pill never wraps away
+ * from it; narrower than a word space, so the pill does not read as double
+ * spaced next to the surrounding text's own spaces.
+ */
+export const VERSE_PILL_PAD = '\u202F';
+
 // ── Pre-process full text: strip markdown line-level syntax ──────────────
 
 export function preprocessMarkdown(text: string): string {
@@ -265,10 +273,13 @@ function InlineText({
     >
       {segments.map((seg, i) => {
         if (seg.type === 'verse') {
-          // The pill's breathing room is its own padding, not literal spaces
-          // around the reference: spaces doubled the gap before the pill and
-          // let following punctuation float ("1 Kings 19:11-12 ?") or wrap
-          // onto its own line.
+          // The pill's breathing room is a narrow no-break space on each side
+          // of the reference, not ordinary spaces: ordinary spaces doubled the
+          // gap before the pill and gave following punctuation a break
+          // opportunity, so it floated ("1 Kings 19:11-12 ?") or wrapped onto
+          // its own line. Nested Text ignores padding on iOS/Android, so the
+          // glue characters are what keeps the tinted background from hugging
+          // the glyphs there; the small web-only padding rounds it out.
           return (
             <Text
               key={i}
@@ -281,10 +292,10 @@ function InlineText({
                 color: colors.accent,
                 backgroundColor: alpha(colors.accent, flashIndex === i ? 0.30 : 0.10),
                 borderRadius: 6,
-                paddingHorizontal: Spacing['1'],
+                paddingHorizontal: 2,
               }}
             >
-              {seg.reference}
+              {VERSE_PILL_PAD}{seg.reference}{VERSE_PILL_PAD}
             </Text>
           );
         }
