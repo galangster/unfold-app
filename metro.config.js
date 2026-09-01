@@ -40,11 +40,12 @@ config.transformer = {
 };
 
 // Configure resolver with SVG support, shared folder resolution, and web platform mocking
-const riveAssetExts = assetExts.includes("riv") ? assetExts : [...assetExts, "riv"];
+// "wasm" is required by expo-sqlite's web worker (wa-sqlite.wasm); native platforms never import .wasm
+const extraAssetExts = ["riv", "wasm"].filter((ext) => !assetExts.includes(ext));
 
 config.resolver = {
   ...config.resolver,
-  assetExts: riveAssetExts.filter((ext) => ext !== "svg"),
+  assetExts: [...assetExts, ...extraAssetExts].filter((ext) => ext !== "svg"),
   sourceExts: [...sourceExts, "svg"],
   useWatchman: false,
   // Only add shared folder resolution if it exists
@@ -117,6 +118,23 @@ config.resolver = {
       if (nativeOnlyModules.some((mod) => moduleName.includes(mod))) {
         return {
           type: "empty",
+        };
+      }
+
+      // Modules with no web implementation: resolve to a Proxy stub so the app
+      // boots in a browser for dev/testing. Web-only; native resolution untouched.
+      const nativeStubModules = [
+        "expo-media-library",
+        "expo-widgets",
+        "expo-speech-recognition",
+        "@rive-app/react-native",
+        "@shopify/react-native-skia",
+      ];
+
+      if (nativeStubModules.some((mod) => moduleName === mod || moduleName.startsWith(`${mod}/`))) {
+        return {
+          type: "sourceFile",
+          filePath: path.resolve(__dirname, "web/native-stub.js"),
         };
       }
     }
