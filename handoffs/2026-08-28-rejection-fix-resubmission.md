@@ -1,5 +1,7 @@
 # Handoff — App Review rejection fix + resubmission (2026-08-28, overnight session)
 
+> **Outcome (2026-09-01): approved and live.** See `2026-09-01-approved-live.md`.
+
 ## State
 
 - **Rejection (2026-08-28, submission `3298c2f4-27ff-48cc-aeab-796ce4cafdae`, build 250):**
