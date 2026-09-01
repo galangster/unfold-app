@@ -101,3 +101,6 @@ keys/
 
 # Agent worktrees — never commit as gitlinks (breaks clone/submodule ops)
 .claude/worktrees/
+
+# /break harness scratch pages — session-local stress-test routes, never shipped
+src/app/__break-*
