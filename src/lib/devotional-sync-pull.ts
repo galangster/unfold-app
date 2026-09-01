@@ -1,4 +1,19 @@
+import * as Application from 'expo-application';
+
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from './api-config';
+import {
+  DEVOTIONAL_PULL_CURSOR_KEY,
+  DEVOTIONAL_PULL_CURSOR_SCHEMA,
+  buildNextDevotionalPullCursor,
+  isValidTimestamp,
+  parseDevotionalPullCursor,
+  resolvePullCursor,
+  serializeDevotionalPullCursor,
+} from './devotional-pull-cursor';
+import type { CommittedDevotionalPull, DevotionalPullCursor, DevotionalPullScope } from './devotional-pull-cursor';
+import { logger } from './logger';
+import { getDeviceId, mmkvStorage } from './mmkv-storage';
+import { useUnfoldStore } from './store';
 import type { Devotional, DevotionalDay } from './store';
 import type { SyncPullResponse, SyncPulledRecord } from './sync-types';
 import { normalizeWordStudy } from './word-study';
@@ -141,12 +156,86 @@ export function extractPulledDevotionalContent(
   };
 }
 
-export async function pullDevotionalContent(devotionalId: string): Promise<PulledDevotionalContent> {
+export type PullDevotionalContentOptions = {
+  /**
+   * Request the whole dataset regardless of the stored cursor. Used by the
+   * reader's missing-day recovery, where the cheapest correct answer is to
+   * distrust the cursor.
+   */
+  forceFull?: boolean;
+};
+
+/**
+ * Cursor waiting for the caller to apply the content it belongs to. Keyed by
+ * the returned object so a cursor can only ever be committed for content
+ * that was actually produced by a pull — and only after the caller applied it
+ * (a cancelled or failed apply never advances the cursor).
+ */
+const pendingCursors = new WeakMap<PulledDevotionalContent, CommittedDevotionalPull>();
+
+function readStoredDevotionalPullCursor(): DevotionalPullCursor | null {
+  const raw = mmkvStorage.getItem(DEVOTIONAL_PULL_CURSOR_KEY);
+  return parseDevotionalPullCursor(raw instanceof Promise ? null : raw);
+}
+
+/**
+ * Fingerprint of everything that could change how pulled rows are mapped or
+ * stored. A change invalidates the cursor so the next pull is full.
+ */
+export function getDevotionalPullVersionMarker(): string {
+  const appVersion = Application.nativeApplicationVersion ?? 'unknown';
+  const buildVersion = Application.nativeBuildVersion ?? 'unknown';
+  const persistVersion = useUnfoldStore.persist?.getOptions?.().version ?? 0;
+  return `app:${appVersion}+${buildVersion}|store:v${persistVersion}|cursor:v${DEVOTIONAL_PULL_CURSOR_SCHEMA}`;
+}
+
+function currentDevotionalPullScope(devotionalId: string): DevotionalPullScope {
+  return {
+    deviceId: getDeviceId(),
+    devotionalId,
+    versionMarker: getDevotionalPullVersionMarker(),
+  };
+}
+
+function hasLocalDevotionalContent(devotionalId: string): boolean {
+  const local = useUnfoldStore.getState().devotionals.find((devotional) => devotional.id === devotionalId);
+  return !!local && local.days.length > 0;
+}
+
+/**
+ * Pull the devotional's rows from `/api/sync/pull`.
+ *
+ * Incremental by default: sends the server timestamp persisted by the last
+ * committed pull, falling back to a full pull whenever the cursor cannot be
+ * trusted (see `resolvePullCursor`). The returned content must be applied by
+ * the caller and then handed to `commitDevotionalPullCursor` — the cursor
+ * only advances once the content is actually in the store.
+ */
+export async function pullDevotionalContent(
+  devotionalId: string,
+  options: PullDevotionalContentOptions = {},
+): Promise<PulledDevotionalContent> {
+  const scope = currentDevotionalPullScope(devotionalId);
+  const startedAt = Date.now();
+  const decision = resolvePullCursor({
+    cursor: readStoredDevotionalPullCursor(),
+    scope,
+    now: startedAt,
+    forceFull: options.forceFull,
+    hasLocalContent: hasLocalDevotionalContent(devotionalId),
+  });
+
+  logger.log(
+    decision.mode === 'incremental'
+      ? `[sync/devotional-pull] pull: incremental since ${decision.lastPulledAt}`
+      : `[sync/devotional-pull] pull: full (${decision.reason})`,
+  );
+
   const headers = await getAuthHeaders();
   const response = await fetch(`${PRIMARY_BACKEND_URL}/api/sync/pull`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ lastPulledAt: null }),
+    body: JSON.stringify({ lastPulledAt: decision.lastPulledAt }),
   });
 
   if (!response.ok) {
@@ -155,5 +244,31 @@ export async function pullDevotionalContent(devotionalId: string): Promise<Pulle
   }
 
   const payload = await response.json() as SyncPullResponse;
-  return extractPulledDevotionalContent(payload, devotionalId);
+  const pulled = extractPulledDevotionalContent(payload, devotionalId);
+
+  if (isValidTimestamp(payload.timestamp)) {
+    pendingCursors.set(pulled, { scope, mode: decision.mode, timestamp: payload.timestamp, startedAt });
+  } else {
+    logger.warn('[sync/devotional-pull] response has no server timestamp; cursor will not advance');
+  }
+
+  return pulled;
+}
+
+/**
+ * Persist the cursor for content returned by `pullDevotionalContent` — call
+ * only after the content has been applied. No-op (returns false) for content
+ * that did not come from a pull, for a response without a server timestamp,
+ * or for a delta whose baseline record disappeared mid-flight.
+ */
+export function commitDevotionalPullCursor(pulled: PulledDevotionalContent): boolean {
+  const committed = pendingCursors.get(pulled);
+  if (!committed) return false;
+  pendingCursors.delete(pulled);
+
+  const next = buildNextDevotionalPullCursor(readStoredDevotionalPullCursor(), committed);
+  if (!next) return false;
+
+  mmkvStorage.setItem(DEVOTIONAL_PULL_CURSOR_KEY, serializeDevotionalPullCursor(next));
+  return true;
 }

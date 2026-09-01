@@ -104,6 +104,8 @@ describe('performFullLocalReset', () => {
       '@unfold_onboarding_offer_seen',
       'inflight-generation-job',
       'unfold-sync-outbox-v1',
+      // A wiped store must never keep a delta cursor for the Today-tab pull.
+      'unfold-devotional-pull-cursor',
     ];
     for (const key of required) {
       expect(FULL_RESET_MMKV_KEYS).toContain(key);

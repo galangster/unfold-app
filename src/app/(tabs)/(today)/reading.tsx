@@ -40,7 +40,7 @@ import { refreshDailyReminder } from '@/lib/notifications';
 import { continueGeneratingDays, isFullGenerationActive } from '@/lib/devotional-service';
 import { submitGenerationJob, recoverCompletedGenerationResult, ApiError } from '@/lib/generation-api';
 import { syncDevotionalDayRead } from '@/lib/devotional-read-sync';
-import { pullDevotionalContent } from '@/lib/devotional-sync-pull';
+import { commitDevotionalPullCursor, pullDevotionalContent } from '@/lib/devotional-sync-pull';
 import { applyPulledDevotionalContent } from '@/lib/devotional-pulled-content';
 import { isCanonicalProgressiveDevotional, shouldUseLegacyDirectContinuation } from '@/lib/reading-generation-policy';
 import {
@@ -1194,7 +1194,9 @@ export default function ReadingScreen() {
     }
 
     try {
-      const pulled = await pullDevotionalContent(currentDevotional.id);
+      // A day we expected is missing locally: the cursor cannot be trusted
+      // to have covered it, so distrust it and pull the whole devotional.
+      const pulled = await pullDevotionalContent(currentDevotional.id, { forceFull: true });
       applyPulledDevotionalContent({
         devotionalId: currentDevotional.id,
         pulled,
@@ -1205,6 +1207,7 @@ export default function ReadingScreen() {
           }));
         },
       });
+      commitDevotionalPullCursor(pulled);
 
       const targetDay = pulled.days.find((day) => day.dayNumber === viewingDay);
       if (targetDay) {
@@ -1329,6 +1332,7 @@ export default function ReadingScreen() {
             }));
           },
         });
+        commitDevotionalPullCursor(pulled);
         setCurrentDevotional(devotionalId);
 
         void logBugEvent('reading-sync-recovery', 'hydrated-missing-devotional-from-sync-pull', {
