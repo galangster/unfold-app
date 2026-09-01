@@ -298,6 +298,21 @@ describe('buildNextDevotionalPullCursor', () => {
     });
   });
 
+  it('restarts the reconcile clock from a committed full pull even when the stored one is in the future', () => {
+    // A device whose clock once ran ahead stored a future full-pull stamp; once
+    // the clock is corrected every focus resolves `clock-backwards`. The full
+    // pull that follows must move the stamp back to real time or the fallback
+    // never self-heals.
+    const future = FULL_PULL_AT + 365 * 24 * HOUR_MS;
+    const stored = cursor({ lastFullPullAt: future });
+    expect(resolvePullCursor({ cursor: stored, scope, now: FULL_PULL_AT + HOUR_MS }).reason).toBe('clock-backwards');
+
+    const next = buildNextDevotionalPullCursor(stored, committed({ mode: 'full' }));
+
+    expect(next?.lastFullPullAt).toBe(FULL_PULL_AT + HOUR_MS);
+    expect(resolvePullCursor({ cursor: next, scope, now: FULL_PULL_AT + 2 * HOUR_MS }).mode).toBe('incremental');
+  });
+
   it('extends a matching record on a committed incremental pull and keeps its full-pull clock', () => {
     const next = buildNextDevotionalPullCursor(cursor(), committed());
 
@@ -335,11 +350,14 @@ describe('buildNextDevotionalPullCursor', () => {
     expect(afterFull?.lastPulledAt).toBe('2026-04-25T14:00:00.000Z');
   });
 
-  it('never moves the full-pull clock backwards when an older full pull commits last', () => {
+  it('restarts the full-pull clock from the committing full pull, even when an older one commits last', () => {
+    // Two full pulls overlapped and the older one committed last: its content
+    // was applied too, so reconciling a little early is harmless — whereas
+    // preferring the larger stamp is what pinned a future-dated one forever.
     const stored = cursor({ lastFullPullAt: FULL_PULL_AT + 3 * HOUR_MS });
     const next = buildNextDevotionalPullCursor(stored, committed({ mode: 'full', startedAt: FULL_PULL_AT + HOUR_MS }));
 
-    expect(next?.lastFullPullAt).toBe(FULL_PULL_AT + 3 * HOUR_MS);
+    expect(next?.lastFullPullAt).toBe(FULL_PULL_AT + HOUR_MS);
   });
 
   it('produces a record the resolver accepts as incremental', () => {

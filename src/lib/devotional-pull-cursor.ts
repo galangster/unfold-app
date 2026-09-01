@@ -245,7 +245,12 @@ export function buildNextDevotionalPullCursor(
   };
 
   if (committed.mode === 'full') {
-    return { ...base, lastFullPullAt: Math.max(committed.startedAt, matching?.lastFullPullAt ?? 0) };
+    // A full pull just completed, so the reconcile interval restarts from the
+    // device time it was started at — even if that is earlier than the stored
+    // value. Keeping the larger of the two would pin a future-dated stamp
+    // (device clock once ran ahead) forever: every focus would resolve
+    // `clock-backwards` and pull in full until real time caught up.
+    return { ...base, lastFullPullAt: committed.startedAt };
   }
 
   if (!matching) return null;
