@@ -17,7 +17,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
-import { CaretUp } from 'phosphor-react-native';
+import { CaretUp } from '@/components/icons';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';

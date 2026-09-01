@@ -55,7 +55,7 @@ import {
   MagnifyingGlassIcon,
   ArrowRightIcon,
   WarningCircleIcon,
-} from 'phosphor-react-native';
+} from '@/components/icons';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Duration, Ease } from '@/constants/animations';
 import { Radius } from '@/constants/radius';

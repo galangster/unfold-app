@@ -14,7 +14,7 @@ import {
   SnowflakeIcon,
   CalendarIcon,
   InfoIcon,
-} from 'phosphor-react-native';
+} from '@/components/icons';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';

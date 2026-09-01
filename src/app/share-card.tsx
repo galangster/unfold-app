@@ -29,7 +29,7 @@ import {
   ImageFormat,
   TextAlign,
 } from '@shopify/react-native-skia';
-import { XIcon, UploadSimpleIcon, DownloadSimpleIcon, LockSimpleIcon } from 'phosphor-react-native';
+import { XIcon, UploadSimpleIcon, DownloadSimpleIcon, LockSimpleIcon } from '@/components/icons';
 import { FontFamily } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Duration, Ease } from '@/constants/animations';

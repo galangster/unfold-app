@@ -20,7 +20,7 @@ import {
   ThumbsUpIcon,
   ThumbsDownIcon,
   CheckIcon,
-} from 'phosphor-react-native';
+} from '@/components/icons';
 import { useTheme } from '@/lib/theme';
 import { Duration } from '@/constants/animations';
 import { Spacing } from '@/constants/spacing';

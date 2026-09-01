@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { BlurView } from 'expo-blur';
 import Animated, { FadeIn } from 'react-native-reanimated';
-import { SunIcon, SnowflakeIcon } from 'phosphor-react-native';
+import { SunIcon, SnowflakeIcon } from '@/components/icons';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';

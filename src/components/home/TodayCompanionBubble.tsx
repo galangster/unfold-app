@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import Svg, { Path } from 'react-native-svg';
-import { ArrowRightIcon, XIcon } from 'phosphor-react-native';
+import { ArrowRightIcon, XIcon } from '@/components/icons';
 import * as Haptics from 'expo-haptics';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';

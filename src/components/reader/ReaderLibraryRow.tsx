@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Text, TouchableOpacity, StyleSheet, View } from 'react-native';
-import { BookmarkSimpleIcon, CaretRightIcon } from 'phosphor-react-native';
+import { BookmarkSimpleIcon, CaretRightIcon } from '@/components/icons';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';

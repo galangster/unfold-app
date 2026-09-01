@@ -12,6 +12,12 @@ componentNoop.displayName = 'SkiaStubComponent';
 const chainable = new Proxy(function () {}, {
   get(_t, prop) {
     if (prop === Symbol.toPrimitive) return () => 0;
+    if (prop === Symbol.iterator)
+      return function* () {
+        yield chainable;
+        yield chainable;
+        yield chainable;
+      };
     if (prop === 'toString') return () => '[skia-stub-value]';
     return chainable;
   },
@@ -33,16 +39,19 @@ const skiaNamespace = new Proxy(
   },
 );
 
-const hookNames = new Set(['useFont', 'useFonts', 'useImage', 'useSVG', 'useTypeface', 'useData', 'useRawData']);
-
 module.exports = new Proxy(
   { __esModule: true, Skia: skiaNamespace },
   {
     get(target, prop) {
       if (prop in target) return target[prop];
       if (prop === 'default') return componentNoop;
-      if (typeof prop === 'string' && hookNames.has(prop)) return () => null;
-      // Everything else is treated as a component (Canvas, Path, Group, ...).
+      // Hooks (useClock, useFont, useImage, ...) return an inert chainable so
+      // worklets reading `.value` or destructuring don't crash.
+      if (typeof prop === 'string' && /^use[A-Z]/.test(prop)) return () => chainable;
+      // Non-component helpers (rect, vec, rrect, TileMode, ...) are lowercase
+      // or enum-like; give them chainable too. Capitalized names render as
+      // components (Canvas, Path, Group, ...).
+      if (typeof prop === 'string' && /^[a-z]/.test(prop)) return chainable;
       return componentNoop;
     },
   },

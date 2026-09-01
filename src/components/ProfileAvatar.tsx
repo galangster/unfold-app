@@ -4,7 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { documentDirectory, copyAsync, deleteAsync, getInfoAsync } from 'expo-file-system/legacy';
 import * as Haptics from 'expo-haptics';
-import { CameraIcon } from 'phosphor-react-native';
+import { CameraIcon } from '@/components/icons';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';

@@ -21,7 +21,7 @@ import {
   TouchableOpacity,
   StyleSheet,
 } from 'react-native';
-import { XCircleIcon } from 'phosphor-react-native';
+import { XCircleIcon } from '@/components/icons';
 import { useTheme } from '@/lib/theme';
 import { alpha, renderIcon } from './utils';
 import { FontFamily, FontSize } from '@/constants/fonts';

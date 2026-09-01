@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { BlurView } from 'expo-blur';
-import { SunIcon } from 'phosphor-react-native';
+import { SunIcon } from '@/components/icons';
 import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';

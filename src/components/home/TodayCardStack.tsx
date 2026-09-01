@@ -14,7 +14,7 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
-import { ArrowRightIcon, XIcon } from 'phosphor-react-native';
+import { ArrowRightIcon, XIcon } from '@/components/icons';
 import { Duration, Ease } from '@/constants/animations';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';

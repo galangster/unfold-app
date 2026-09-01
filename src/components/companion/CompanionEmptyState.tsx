@@ -23,7 +23,7 @@ import {
   CrossIcon,
   ClockCounterClockwiseIcon,
   HandsPrayingIcon,
-} from 'phosphor-react-native';
+} from '@/components/icons';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { FontFamily, FontSize } from '@/constants/fonts';

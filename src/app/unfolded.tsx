@@ -36,7 +36,7 @@ import {
   TrendUpIcon,
   TrendDownIcon,
   EqualsIcon,
-} from 'phosphor-react-native';
+} from '@/components/icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { format } from 'date-fns';

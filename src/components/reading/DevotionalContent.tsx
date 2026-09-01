@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, type LayoutChangeEvent, type ScrollView } from 'react-native';
-import { BookOpenIcon, BookmarkSimpleIcon, CaretRightIcon } from 'phosphor-react-native';
+import { BookOpenIcon, BookmarkSimpleIcon, CaretRightIcon } from '@/components/icons';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,

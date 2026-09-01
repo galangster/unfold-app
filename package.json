@@ -176,7 +176,8 @@
     "lodash": "4.18.1"
   },
   "patchedDependencies": {
-    "@nandorojo/galeria@2.0.0-rc.4": "patches/@nandorojo%2Fgaleria@2.0.0-rc.4.patch"
+    "@nandorojo/galeria@2.0.0-rc.4": "patches/@nandorojo%2Fgaleria@2.0.0-rc.4.patch",
+    "phosphor-react-native@3.0.3": "patches/phosphor-react-native@3.0.3.patch"
   },
   "expo": {
     "autolinking": {

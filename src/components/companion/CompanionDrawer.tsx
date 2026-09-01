@@ -31,7 +31,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { Gesture } from 'react-native-gesture-handler';
-import { PlusCircle } from 'phosphor-react-native';
+import { PlusCircle } from '@/components/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTheme } from '@/lib/theme';

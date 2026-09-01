@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
 import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
-import { CaretLeftIcon, MagnifyingGlassIcon, XCircleIcon, BookOpenTextIcon } from 'phosphor-react-native';
+import { CaretLeftIcon, MagnifyingGlassIcon, XCircleIcon, BookOpenTextIcon } from '@/components/icons';
 import { FontFamily } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';

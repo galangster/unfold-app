@@ -21,7 +21,7 @@ import {
   SunHorizonIcon,
   MoonIcon,
   PaletteIcon,
-} from 'phosphor-react-native';
+} from '@/components/icons';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Shadow } from '@/constants/shadows';

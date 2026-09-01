@@ -16,7 +16,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { BellIcon, BookOpenTextIcon } from 'phosphor-react-native';
+import { BellIcon, BookOpenTextIcon } from '@/components/icons';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';

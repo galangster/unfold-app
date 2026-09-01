@@ -14,7 +14,7 @@ import { Duration, Ease } from '@/constants/animations';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
-import { XIcon, BookmarkSimpleIcon, CopyIcon, CheckIcon, BookOpenIcon, ArrowRightIcon } from 'phosphor-react-native';
+import { XIcon, BookmarkSimpleIcon, CopyIcon, CheckIcon, BookOpenIcon, ArrowRightIcon } from '@/components/icons';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';

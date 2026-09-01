@@ -14,7 +14,7 @@ import {
   ArrowUpRightIcon,
   FolderSimpleIcon,
   TrashIcon,
-} from 'phosphor-react-native';
+} from '@/components/icons';
 import { FontFamily } from '@/constants/fonts';
 import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';

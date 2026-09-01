@@ -16,7 +16,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useQuery } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
-import { CaretLeftIcon, MoonIcon, ArrowClockwiseIcon } from 'phosphor-react-native';
+import { CaretLeftIcon, MoonIcon, ArrowClockwiseIcon } from '@/components/icons';
 import { Duration, Ease } from '@/constants/animations';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';

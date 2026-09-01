@@ -7,7 +7,7 @@ import {
   BookOpenIcon,
   HandsPrayingIcon,
   NoteIcon,
-} from 'phosphor-react-native';
+} from '@/components/icons';
 import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
 import { Duration, Ease } from '@/constants/animations';
 import * as Haptics from 'expo-haptics';

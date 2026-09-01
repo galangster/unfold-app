@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import Animated, { FadeIn, FadeInDown, FadeOut, useReducedMotion } from 'react-native-reanimated';
-import { WarningCircleIcon, XIcon } from 'phosphor-react-native';
+import { WarningCircleIcon, XIcon } from '@/components/icons';
 
 import { Duration, Ease } from '@/constants/animations';
 import { FontFamily, FontSize } from '@/constants/fonts';

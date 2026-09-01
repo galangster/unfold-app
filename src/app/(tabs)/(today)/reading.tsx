@@ -22,7 +22,7 @@ import Animated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import NetInfo from '@react-native-community/netinfo';
 import * as Haptics from 'expo-haptics';
-import { BookmarkSimpleIcon, ArrowsClockwiseIcon, CaretDownIcon, BookOpenIcon, CaretLeftIcon, PlayIcon, CheckIcon, UploadSimpleIcon, SunHorizonIcon, TextAaIcon } from 'phosphor-react-native';
+import { BookmarkSimpleIcon, ArrowsClockwiseIcon, CaretDownIcon, BookOpenIcon, CaretLeftIcon, PlayIcon, CheckIcon, UploadSimpleIcon, SunHorizonIcon, TextAaIcon } from '@/components/icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { FontFamily, FontSize } from '@/constants/fonts';

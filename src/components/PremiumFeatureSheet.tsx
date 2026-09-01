@@ -37,7 +37,7 @@ import {
   HighlighterCircleIcon,
   CalendarIcon,
   HourglassIcon,
-} from 'phosphor-react-native';
+} from '@/components/icons';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { Radius } from '@/constants/radius';

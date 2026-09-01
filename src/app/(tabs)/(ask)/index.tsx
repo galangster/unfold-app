@@ -24,7 +24,7 @@ import {
   List,
   NotePencil,
   XIcon,
-} from 'phosphor-react-native';
+} from '@/components/icons';
 import * as Haptics from 'expo-haptics';
 import {
   useSharedValue,

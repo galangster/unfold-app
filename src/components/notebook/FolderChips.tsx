@@ -9,7 +9,7 @@
 import { useCallback, useMemo } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { PlusIcon, CaretRightIcon } from 'phosphor-react-native';
+import { PlusIcon, CaretRightIcon } from '@/components/icons';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';

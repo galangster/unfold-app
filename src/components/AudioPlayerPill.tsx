@@ -28,7 +28,7 @@ import Animated, {
   useReducedMotion,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { PlayIcon, PauseIcon } from 'phosphor-react-native';
+import { PlayIcon, PauseIcon } from '@/components/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 

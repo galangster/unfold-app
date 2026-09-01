@@ -9,7 +9,7 @@ import Animated, { FadeIn, FadeInDown, useReducedMotion } from 'react-native-rea
 import * as Haptics from 'expo-haptics';
 import * as Application from 'expo-application';
 import Constants from 'expo-constants';
-import { XIcon, PaletteIcon, BookOpenTextIcon, InfinityIcon, PencilLineIcon, CircleNotchIcon, CheckIcon, XCircleIcon, BellIcon, CreditCardIcon, SunHorizonIcon, BooksIcon, ChatCircleDotsIcon } from 'phosphor-react-native';
+import { XIcon, PaletteIcon, BookOpenTextIcon, InfinityIcon, PencilLineIcon, CircleNotchIcon, CheckIcon, XCircleIcon, BellIcon, CreditCardIcon, SunHorizonIcon, BooksIcon, ChatCircleDotsIcon } from '@/components/icons';
 import MaskedView from '@react-native-masked-view/masked-view';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/lib/theme';

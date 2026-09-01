@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
-import { SunIcon, SnowflakeIcon } from 'phosphor-react-native';
+import { SunIcon, SnowflakeIcon } from '@/components/icons';
 import * as Haptics from 'expo-haptics';
 import Animated, {
   FadeIn,

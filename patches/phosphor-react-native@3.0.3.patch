@@ -1,0 +1,15 @@
+diff --git a/src/lib/icon-base.tsx b/src/lib/icon-base.tsx
+index 7c033db63b4c8a18bf248e16213f3489f75dc568..9c8a371d2197b9733149f1bec873f0b01e081452 100644
+--- a/src/lib/icon-base.tsx
++++ b/src/lib/icon-base.tsx
+@@ -37,8 +37,8 @@ function IconBase({
+   return (
+     <Svg
+       style={[
+-        contextStyle,
+-        style,
++        contextStyle as import('react-native').StyleProp<import('react-native').ViewStyle>,
++        style as import('react-native').StyleProp<import('react-native').ViewStyle>,
+         {
+           ...((mirrored ?? contextMirrored) && {
+             transform: [{ scaleX: -1 }],

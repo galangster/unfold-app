@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Application from 'expo-application';
 import * as Haptics from 'expo-haptics';
-import { CaretLeftIcon, TrashIcon } from 'phosphor-react-native';
+import { CaretLeftIcon, TrashIcon } from '@/components/icons';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';

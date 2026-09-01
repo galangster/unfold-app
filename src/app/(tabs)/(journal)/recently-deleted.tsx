@@ -8,7 +8,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { CaretLeftIcon, ArrowCounterClockwiseIcon } from 'phosphor-react-native';
+import { CaretLeftIcon, ArrowCounterClockwiseIcon } from '@/components/icons';
 import { FontFamily } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';

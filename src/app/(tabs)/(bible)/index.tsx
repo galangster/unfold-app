@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { MagnifyingGlassIcon, ClockIcon, CaretRightIcon, XIcon } from 'phosphor-react-native';
+import { MagnifyingGlassIcon, ClockIcon, CaretRightIcon, XIcon } from '@/components/icons';
 import { FontFamily } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { elevated } from '@/constants/shadows';
