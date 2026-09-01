@@ -564,6 +564,22 @@ describe('DevotionalWebView Aa / theme updates without remounting', () => {
     expect(mockInjectJavaScript).toHaveBeenCalledTimes(1);
   });
 
+  it('ignores a height report that belongs to a previous document', () => {
+    let tree: any;
+    act(() => {
+      tree = renderer.create(<DevotionalWebView day={day} fontSize="medium" />);
+    });
+    const docId = getDocId(tree);
+    // A report from a document that is no longer mounted (same-key source
+    // swap with one still in flight) must not size the current one.
+    reportHeight(tree, 1500, String(Number(docId) - 1));
+    expect(getWebViewProps(tree).style).toEqual(expect.arrayContaining([{ height: 200 }]));
+    expect(mockInjectJavaScript).not.toHaveBeenCalled();
+
+    reportHeight(tree, 900);
+    expect(getWebViewProps(tree).style).toEqual(expect.arrayContaining([{ height: 900 }]));
+  });
+
   it('inlines rangy in the document head instead of loading it from the CDN', () => {
     let tree: any;
     act(() => {

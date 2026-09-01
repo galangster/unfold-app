@@ -1614,11 +1614,14 @@ export function DevotionalWebView({
       } else if (data.type === 'SCRIPTURE_TAP' && onScriptureTap) {
         onScriptureTap(data.reference);
       } else if (data.type === 'HEIGHT_CHANGE') {
+        // A report still in flight from the previous document (same-key
+        // source swap) must not size the new one, even for a frame.
+        if (data.docId !== webViewDocument.docId) return;
         setWebViewHeight(Math.max(data.height, 200));
         // First report from the current document ⇒ it is ready for
         // injectJavaScript. It rendered with the baked values; catch it up
         // with anything that changed while it was loading (usually nothing).
-        if (data.docId === webViewDocument.docId && liveDocRef.current?.token !== liveDocToken) {
+        if (liveDocRef.current?.token !== liveDocToken) {
           liveDocRef.current = { token: liveDocToken, appliedJson: webViewDocument.bakedThemeJson };
           pushThemeVars(themeVars);
         }
