@@ -128,6 +128,10 @@ export default function GeneratingScreen() {
   const [pendingJobId, setPendingJobId] = useState<string | null>(null);
   const pollingRef = useRef(false);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Incremented by every startPolling; a poll whose request was in flight when
+  // polling stopped (background, unmount, retry) sees a newer run and exits
+  // instead of re-arming a second timer chain next to the current one.
+  const pollRunRef = useRef(0);
   const jobSubmittedRef = useRef(false);
   // Consecutive unrecognized job statuses — bounded so we don't poll forever
   // against a status we don't understand.
@@ -424,6 +428,7 @@ export default function GeneratingScreen() {
   const startPolling = useCallback((jobId: string) => {
     if (pollingRef.current) return;
     pollingRef.current = true;
+    const run = ++pollRunRef.current;
     unknownStatusCountRef.current = 0;
 
     // Shared terminal-failure exit: stop polling, clear the inflight record and
@@ -459,6 +464,9 @@ export default function GeneratingScreen() {
 
       try {
         const status = await pollJobStatus(jobId);
+        // Polling stopped (or restarted) while this request was in flight:
+        // the response belongs to a chain that no longer exists.
+        if (!pollingRef.current || pollRunRef.current !== run) return;
         const { outcome, consecutiveUnknown } = evaluateGenerationPoll({
           status: status.status,
           result: status.result,
@@ -511,6 +519,7 @@ export default function GeneratingScreen() {
             return;
         }
       } catch (err) {
+        if (!pollingRef.current || pollRunRef.current !== run) return;
         // Network error during polling -- keep trying a few times
         const errorMsg = err instanceof Error ? err.message : String(err);
         logger.warn('[generating] Poll error (will retry):', errorMsg);
