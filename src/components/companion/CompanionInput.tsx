@@ -22,7 +22,7 @@ import Animated, {
   withTiming,
   useSharedValue,
 } from 'react-native-reanimated';
-import { ArrowUpIcon, StopCircleIcon, MicrophoneIcon } from 'phosphor-react-native';
+import { ArrowUpIcon, StopCircleIcon, MicrophoneIcon } from '@/components/icons';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { Radius } from '@/constants/radius';

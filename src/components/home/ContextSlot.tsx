@@ -6,7 +6,7 @@ import Animated, {
   FadeIn,
   FadeOut,
 } from 'react-native-reanimated';
-import { ArrowRightIcon, BookOpenTextIcon, FeatherIcon } from 'phosphor-react-native';
+import { ArrowRightIcon, BookOpenTextIcon, FeatherIcon } from '@/components/icons';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';

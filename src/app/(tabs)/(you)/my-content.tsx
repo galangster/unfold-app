@@ -15,7 +15,7 @@ import Animated, {
   useReducedMotion,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { CaretLeftIcon, BookOpenIcon, HighlighterIcon, BookmarkSimpleIcon, PencilLineIcon, MagnifyingGlassIcon, XIcon } from 'phosphor-react-native';
+import { CaretLeftIcon, BookOpenIcon, HighlighterIcon, BookmarkSimpleIcon, PencilLineIcon, MagnifyingGlassIcon, XIcon } from '@/components/icons';
 import { useCrossTabBack } from '@/hooks/useCrossTabBack';
 import { useSavedHighlights, SavedItem, SavedItemSource } from '@/hooks/useSavedHighlights';
 import { FontFamily, FontSize } from '@/constants/fonts';

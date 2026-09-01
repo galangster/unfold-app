@@ -10,6 +10,11 @@
  * never hardcode '$' around a raw number (FAP-UI-2).
  */
 export function getPerMonthEquivalent(yearlyRaw: number, yearlyPriceString: string): string {
+  // No real package price yet (offerings loading or failed) — return empty so
+  // callers render nothing instead of a fabricated "$0.00/mo" (3.1.2c risk).
+  if (yearlyRaw <= 0 || !yearlyPriceString.trim()) {
+    return '';
+  }
   const currencySymbol = yearlyPriceString.replace(/[\d.,\s]/g, '').trim() || '$';
   const yearlyCents = Math.round(yearlyRaw * 100);
   const perMonthCents = Math.floor(yearlyCents / 12);

@@ -229,13 +229,18 @@ export default function HomeScreen() {
   const [stackPremiumFeature, setStackPremiumFeature] = useState<TodayPremiumFeature | null>(null);
   const { gate, showExclusiveOffer, dismissOffer } = useCreationGate();
 
-  // Update clock-driven Today card visibility every minute.
+  // Update clock-driven Today card visibility every minute — but only while
+  // this screen is focused. Home stays mounted behind other tabs and the
+  // reading stack, and an unfocused tick re-renders the whole screen for
+  // nothing. Refreshing on refocus covers time that passed while away.
   useEffect(() => {
+    if (!isTodayFocused) return;
+    setClockNow(new Date());
     const interval = setInterval(() => {
       setClockNow(new Date());
     }, 60000);
     return () => clearInterval(interval);
-  }, []);
+  }, [isTodayFocused]);
 
   // Silently download Bible DB in background if not yet ready
   const bibleDbTriggered = useRef(false);
@@ -486,7 +491,11 @@ export default function HomeScreen() {
   }, [currentDevotional, user?.name, user?.currentSituation, checkIns, qaContextSlot, hasReadToday]);
 
   const { data: bridgeText, isLoading: bridgeLoading } = useQuery({
-    queryKey: ['bridge', bridgeInput?.devotionalId, bridgeInput?.dayNumber, bridgeInput?.input],
+    // Keyed to match generateBridge's own MMKV cache identity (devotional +
+    // day + calendar date). Embedding the whole input object here forked a new
+    // cache entry on every free-text profile edit for the same day's bridge.
+    // eslint-disable-next-line @tanstack/query/exhaustive-deps -- input is deliberately not part of the bridge's cache identity
+    queryKey: ['bridge', bridgeInput?.devotionalId, bridgeInput?.dayNumber, clockNow.toISOString().slice(0, 10)],
     queryFn: () => generateBridge(bridgeInput!.input, bridgeInput!.devotionalId, bridgeInput!.dayNumber),
     enabled: isPremium && !!bridgeInput,
     staleTime: 1000 * 60 * 60, // 1 hour — bridge is cached in MMKV anyway

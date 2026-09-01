@@ -16,7 +16,7 @@ import Animated, {
   runOnJS,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
-import { XIcon } from 'phosphor-react-native';
+import { XIcon } from '@/components/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Duration } from '@/constants/animations';

@@ -1,1 +1,0 @@
-export { DevotionalContent } from './DevotionalContent';

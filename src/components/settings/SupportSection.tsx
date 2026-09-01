@@ -9,7 +9,7 @@ import {
   LockIcon,
   BookIcon,
   CaretRightIcon,
-} from 'phosphor-react-native';
+} from '@/components/icons';
 import * as Sharing from 'expo-sharing';
 import * as Clipboard from 'expo-clipboard';
 import Constants from 'expo-constants';

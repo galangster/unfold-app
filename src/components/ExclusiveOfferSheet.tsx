@@ -31,7 +31,7 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { Duration, Ease } from '@/constants/animations';
-import { Gift } from 'phosphor-react-native';
+import { Gift } from '@/components/icons';
 import { logger } from '@/lib/logger';
 
 // ---------------------------------------------------------------------------

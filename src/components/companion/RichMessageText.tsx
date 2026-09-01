@@ -35,15 +35,22 @@ type TextSegment =
 
 // ── Pre-process full text: strip markdown line-level syntax ──────────────
 
-function preprocessMarkdown(text: string): string {
+export function preprocessMarkdown(text: string): string {
   // Process line by line, building paragraphs. Headers and blank lines create paragraph breaks.
   const lines = text.split('\n');
   const paragraphs: string[] = [];
   let currentLines: string[] = [];
 
+  const isListLine = (line: string) => /^(• |\d+\. )/.test(line);
+
   const flushCurrent = () => {
     if (currentLines.length > 0) {
-      paragraphs.push(currentLines.join(' '));
+      // Prose lines reflow into one line; list items keep their own line so
+      // consecutive bullets don't collapse into a single run-on sentence.
+      const joined = currentLines
+        .map((line, i) => (i === 0 ? line : isListLine(line) ? `\n${line}` : ` ${line}`))
+        .join('');
+      paragraphs.push(joined);
       currentLines = [];
     }
   };
@@ -111,7 +118,7 @@ function preprocessMarkdown(text: string): string {
 
 // ── Parse text into segments with bold, italic, and verse refs ───────────
 
-function parseSegments(text: string): TextSegment[] {
+export function parseSegments(text: string): TextSegment[] {
   // First, find scripture references (bracket and bare)
   const bracketRefs: ScriptureRef[] = [];
   const bracketRegex = /\[([^\]]+)\]/g;
@@ -142,6 +149,24 @@ function parseSegments(text: string): TextSegment[] {
   }
 
   allRefs.sort((a, b) => a.startIndex - b.startIndex);
+
+  // AI responses routinely bold or italicize verse references (**Psalm 46:10**).
+  // The refs are cut out before inline markdown runs, so a marker pair that
+  // directly wraps a reference would be split across two chunks and render as
+  // literal asterisks. The pill already carries the emphasis — swallow the
+  // wrapping markers into the reference bounds instead.
+  for (const ref of allRefs) {
+    for (const marker of ['**', '*']) {
+      if (
+        ref.startIndex >= marker.length &&
+        text.slice(ref.startIndex - marker.length, ref.startIndex) === marker &&
+        text.startsWith(marker, ref.endIndex)
+      ) {
+        ref.startIndex -= marker.length;
+        ref.endIndex += marker.length;
+      }
+    }
+  }
 
   // Split text around verse refs first, then parse inline markdown in each text chunk
   const chunks: TextSegment[] = [];

@@ -27,7 +27,7 @@ import {
   ExpoSpeechRecognitionModule,
   useSpeechRecognitionEvent,
 } from 'expo-speech-recognition';
-import { MicrophoneIcon, XIcon, CheckIcon } from 'phosphor-react-native';
+import { MicrophoneIcon, XIcon, CheckIcon } from '@/components/icons';
 import { FontFamily } from '@/constants/fonts';
 import { Duration, Ease } from '@/constants/animations';
 import { Radius } from '@/constants/radius';

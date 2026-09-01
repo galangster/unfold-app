@@ -24,7 +24,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { useFocusEffect } from 'expo-router';
-import { CheckIcon, PlusIcon } from 'phosphor-react-native';
+import { CheckIcon, PlusIcon } from '@/components/icons';
 
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';

@@ -12,7 +12,7 @@ import {
   TextAaIcon,
   CaretDownIcon,
   LockIcon,
-} from 'phosphor-react-native';
+} from '@/components/icons';
 import { Duration, Ease } from '@/constants/animations';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';

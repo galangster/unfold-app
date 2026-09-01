@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleProp, StyleSheet, TouchableOpacity, ViewStyle } from 'react-native';
-import { XIcon } from 'phosphor-react-native';
+import { XIcon } from '@/components/icons';
 import type { ColorTheme } from '@/constants/colors';
 
 interface Props {

@@ -11,7 +11,7 @@ import {
   PencilSimpleIcon,
   HandsPrayingIcon,
   CheckCircleIcon,
-} from 'phosphor-react-native';
+} from '@/components/icons';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Duration, Ease } from '@/constants/animations';

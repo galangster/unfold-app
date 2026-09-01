@@ -36,7 +36,7 @@ import {
   ArrowsInSimpleIcon,
   ArrowCounterClockwiseIcon,
   ArrowClockwiseIcon,
-} from 'phosphor-react-native';
+} from '@/components/icons';
 import {
   useEditorBridge,
   RichText,

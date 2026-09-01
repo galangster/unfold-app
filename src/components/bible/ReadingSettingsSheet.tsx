@@ -1,6 +1,6 @@
 import { Text, TouchableOpacity, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { GearSixIcon } from 'phosphor-react-native';
+import { GearSixIcon } from '@/components/icons';
 import { ReaderBottomSheet } from '@/components/reader/ReaderBottomSheet';
 import { ReaderAppearanceControls } from '@/components/reader/ReaderAppearanceControls';
 import { ReaderLibraryRow } from '@/components/reader/ReaderLibraryRow';

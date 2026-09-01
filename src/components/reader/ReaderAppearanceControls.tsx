@@ -6,7 +6,7 @@ import {
   PlusIcon,
   SunDimIcon,
   TextAaIcon,
-} from 'phosphor-react-native';
+} from '@/components/icons';
 import { FontFamily, FontSize as TypeSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';

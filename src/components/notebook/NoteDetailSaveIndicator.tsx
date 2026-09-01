@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
-import { CheckIcon } from 'phosphor-react-native';
+import { CheckIcon } from '@/components/icons';
 
 import { Duration, Ease } from '@/constants/animations';
 import { FontFamily } from '@/constants/fonts';

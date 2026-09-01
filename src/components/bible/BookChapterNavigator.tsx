@@ -19,7 +19,7 @@ import {
   CaretLeftIcon,
   XCircleIcon,
   XIcon,
-} from 'phosphor-react-native';
+} from '@/components/icons';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { Typography } from '@/constants/typography';

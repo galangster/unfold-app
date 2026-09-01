@@ -4,7 +4,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { Duration, Ease, Stagger } from '@/constants/animations';
-import { CheckIcon, LockSimpleIcon } from 'phosphor-react-native';
+import { CheckIcon, LockSimpleIcon } from '@/components/icons';
 import * as Haptics from 'expo-haptics';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';

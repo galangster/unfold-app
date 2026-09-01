@@ -1,10 +1,65 @@
 {
   "version": 1,
   "skills": {
+    "better-accessibility": {
+      "source": "jakubkrehel/skills",
+      "sourceType": "github",
+      "computedHash": "77d3a1ef96ffb88fcf1b46a81fed7065ef67042a4afbc7e1d19ea4ca4d9f8553"
+    },
+    "better-colors": {
+      "source": "jakubkrehel/skills",
+      "sourceType": "github",
+      "computedHash": "757f469b024eef58f944733067250caa15cdaf4303caf4ef970be67e3eaa08be"
+    },
+    "better-interface": {
+      "source": "jakubkrehel/skills",
+      "sourceType": "github",
+      "computedHash": "3c0f2010e6e024c461028e46fc0f9661a47e3665bb26d15512f3fe98e34a7ead"
+    },
+    "better-layout": {
+      "source": "jakubkrehel/skills",
+      "sourceType": "github",
+      "computedHash": "1357c6f415529d6962d52213416d287f1fb6eb64b19e94b7981a2b18a82cec18"
+    },
+    "better-typography": {
+      "source": "jakubkrehel/skills",
+      "sourceType": "github",
+      "computedHash": "04630028f789199de2ce595ea1444192d2cb335e36e5f07a48846fabddeafb10"
+    },
+    "better-ui": {
+      "source": "jakubkrehel/skills",
+      "sourceType": "github",
+      "computedHash": "0ff51d865f7ce2d2a10cde45a0aab9b69d897f670cfc64b040b618c3139449cf"
+    },
+    "better-writing": {
+      "source": "jakubkrehel/skills",
+      "sourceType": "github",
+      "computedHash": "4d05e6d9d609a9e3e3c90240a7d8f30106fec7e117fe9703cd72dcebdaed4b65"
+    },
+    "break": {
+      "source": "jakubkrehel/skills",
+      "sourceType": "github",
+      "computedHash": "7c3a5934cd42b9cd7c771b960591274b06458bd1ba56e8cc0c86d4c3bc82da8d"
+    },
+    "explain-interface": {
+      "source": "jakubkrehel/skills",
+      "sourceType": "github",
+      "computedHash": "a2c1c0473760d2da4d280e763cd58e0fb73c6133ca6d6f5f0a82caa047d2df52"
+    },
     "grill-me": {
       "source": "mattpocock/skills",
       "sourceType": "github",
       "computedHash": "f343ef02aa0ada0f8b13a77b6db7fb6a11f88d8067128215585500ef4fd3b5e0"
+    },
+    "interface-review": {
+      "source": "jakubkrehel/skills",
+      "sourceType": "github",
+      "computedHash": "a38675b1dfddd059b1ef3bce726dbc9910408a2fa294f1e1fe88111ffaa5ca86"
+    },
+    "variant": {
+      "source": "jakubkrehel/skills",
+      "sourceType": "github",
+      "computedHash": "bb2c2bb3cb1d8e35e4f06b966252ae5bbe4aab03d84fe73ac6428dcf3aeb2752"
     }
   }
 }

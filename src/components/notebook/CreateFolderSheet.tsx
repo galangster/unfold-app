@@ -37,7 +37,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import { FolderSimplePlusIcon } from 'phosphor-react-native';
+import { FolderSimplePlusIcon } from '@/components/icons';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Shadow } from '@/constants/shadows';
 import { Duration } from '@/constants/animations';

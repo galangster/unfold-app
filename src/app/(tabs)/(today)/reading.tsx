@@ -6,6 +6,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
+  useAnimatedScrollHandler,
   withTiming,
   withRepeat,
   withSequence,
@@ -22,7 +23,7 @@ import Animated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import NetInfo from '@react-native-community/netinfo';
 import * as Haptics from 'expo-haptics';
-import { BookmarkSimpleIcon, ArrowsClockwiseIcon, CaretDownIcon, BookOpenIcon, CaretLeftIcon, PlayIcon, CheckIcon, UploadSimpleIcon, SunHorizonIcon, TextAaIcon } from 'phosphor-react-native';
+import { BookmarkSimpleIcon, ArrowsClockwiseIcon, CaretDownIcon, BookOpenIcon, CaretLeftIcon, PlayIcon, CheckIcon, UploadSimpleIcon, SunHorizonIcon, TextAaIcon } from '@/components/icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { FontFamily, FontSize } from '@/constants/fonts';
@@ -292,7 +293,6 @@ export default function ReadingScreen() {
   const [autoRetrySecondsLeft, setAutoRetrySecondsLeft] = useState<number | null>(null);
   const [isOnline, setIsOnline] = useState(true);
   const [isWaitingForConnection, setIsWaitingForConnection] = useState(false);
-  const [isPreparingNextDay, setIsPreparingNextDay] = useState(false);
   const [bookmarkToast, setBookmarkToast] = useState(false);
   const [selectedStudyMethod, setSelectedStudyMethod] = useState<string | undefined>(undefined);
   const [targetScrollRequest, setTargetScrollRequest] = useState<{ id: number; y: number } | null>(null);
@@ -838,69 +838,30 @@ export default function ReadingScreen() {
       params: {
         text: quoteText,
         reference: dayLabel,
-        type: 'quote',
       },
     });
   }, [currentDayData, currentDevotional, viewingDay, router]);
 
-  const handleJournal = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-    // If viewing an unread day, journal for the last completed day instead
-    const journalDay = currentDayData?.isRead
-      ? viewingDay
-      : currentDevotional?.days
-          .filter((d) => d.isRead)
-          .sort((a, b) => b.dayNumber - a.dayNumber)[0]?.dayNumber ?? viewingDay;
-    const journalDayData = currentDevotional?.days.find((d) => d.dayNumber === journalDay);
-
-    if (currentDevotionalId && currentDevotional) {
-      setResumeContext({
-        route: 'journal',
-        devotionalId: currentDevotionalId,
-        dayNumber: journalDay,
-        devotionalTitle: currentDevotional.title,
-        dayTitle: journalDayData?.title ?? currentDayData?.title,
-      });
-    }
-
-    router.push({
-      pathname: '/(tabs)/(journal)/entry',
-      params: {
-        devotionalId: currentDevotionalId ?? '',
-        dayNumber: journalDay.toString(),
-      },
-    });
-  }, [currentDevotionalId, currentDevotional, currentDayData, viewingDay, router, setResumeContext]);
-
-  // Memoized scroll handler — tracks progress bar + scroll hint visibility
-  const handleScroll = useCallback((e: {
-    nativeEvent: {
-      contentOffset: { y: number };
-      contentSize: { height: number };
-      layoutMeasurement: { height: number };
-      target?: number;
-    }
-  }) => {
-    if (typeof e.nativeEvent.target === 'number') {
-      readerScrollNativeTargetRef.current = e.nativeEvent.target;
-    }
-    const offsetY = e.nativeEvent.contentOffset.y;
-    const totalHeight = e.nativeEvent.contentSize.height;
-    const viewHeight = e.nativeEvent.layoutMeasurement.height;
-    const scrollable = totalHeight - viewHeight;
+  // UI-thread scroll handler — tracks progress bar + scroll hint visibility.
+  // The old JS handler spawned a withTiming per event at 60Hz and set state on
+  // every frame; progress now writes directly on the UI thread and the hint
+  // flips via runOnJS only when its hysteresis threshold is actually crossed.
+  // (The native scroll target for scrollTo fallbacks comes from onLayout.)
+  const scrollHintHiddenOnUI = useSharedValue(false);
+  const handleScroll = useAnimatedScrollHandler((event) => {
+    const offsetY = event.contentOffset.y;
+    const scrollable = event.contentSize.height - event.layoutMeasurement.height;
     if (scrollable > 0) {
-      scrollProgress.value = withTiming(
-        Math.min(1, Math.max(0, offsetY / scrollable)),
-        { duration: 80 }
-      );
+      scrollProgress.value = Math.min(1, Math.max(0, offsetY / scrollable));
     }
-    setShowScrollHint((current) => {
-      if (offsetY > 100 && current) return false;
-      if (offsetY <= 50 && !current) return true;
-      return current;
-    });
-  }, [scrollProgress]);
+    if (offsetY > 100 && !scrollHintHiddenOnUI.value) {
+      scrollHintHiddenOnUI.value = true;
+      runOnJS(setShowScrollHint)(false);
+    } else if (offsetY <= 50 && scrollHintHiddenOnUI.value) {
+      scrollHintHiddenOnUI.value = false;
+      runOnJS(setShowScrollHint)(true);
+    }
+  });
 
   const handleComplete = useCallback(() => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -1894,7 +1855,7 @@ export default function ReadingScreen() {
             {/* Premium nudge banner — audio teaser */}
             {/* Content - scrollable with day-transition fade */}
             <Animated.View style={[{ flex: 1 }, scrollContentStyle]}>
-            <ScrollView
+            <Animated.ScrollView
               ref={setReaderScrollViewRef}
               style={{ flex: 1 }}
               contentContainerStyle={{
@@ -2245,48 +2206,8 @@ export default function ReadingScreen() {
                     </Animated.View>
                   )}
 
-                  {/* Preparing Tomorrow — progressive mode, next day being generated */}
-                  {isCompleted && !showCelebration && !tomorrowDayData && isPreparingNextDay && (
-                    <Animated.View
-                      entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(300).easing(Ease.out)}
-                      style={{
-                        marginTop: Spacing['8'],
-                        paddingVertical: 18,
-                        paddingHorizontal: Spacing['5'],
-                        borderRadius: Radius.card,
-                        backgroundColor: colors.inputBackground,
-                        borderWidth: 1,
-                        borderColor: colors.border,
-                        alignItems: 'center',
-                      }}
-                    >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing['2'], marginBottom: Spacing['3'] }}>
-                        <SunHorizonIcon size={18} color={colors.accent} weight="light" />
-                        <Text
-                          style={{
-                            ...Typography.sectionHeader,
-                            color: colors.text,
-                          }}
-                        >
-                          Tomorrow
-                        </Text>
-                      </View>
-                      <ActivityIndicator color={colors.accent} size="small" style={{ marginBottom: 10 }} />
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.bodyItalic,
-                          fontSize: FontSize.sm,
-                          color: colors.textMuted,
-                          textAlign: 'center',
-                          lineHeight: 21,
-                        }}
-                      >
-                        {'Preparing your next reading\u2026'}
-                      </Text>
-                    </Animated.View>
-                  )}
               </Animated.View>
-            </ScrollView>
+            </Animated.ScrollView>
             </Animated.View>
           </SafeAreaView>
         </Animated.View>

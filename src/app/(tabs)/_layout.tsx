@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Tabs, useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { StyleSheet, Platform, View, TouchableOpacity, Text } from 'react-native';
-import { HouseIcon, BookBookmarkIcon, BookOpenIcon, UserIcon, ChatCircleIcon } from 'phosphor-react-native';
+import { HouseIcon, BookBookmarkIcon, BookOpenIcon, UserIcon, ChatCircleIcon } from '@/components/icons';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,

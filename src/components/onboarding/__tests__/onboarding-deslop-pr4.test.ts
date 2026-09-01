@@ -62,9 +62,7 @@ describe('PR4 onboarding de-slop', () => {
 
     it('keeps chip controls on accent text + accent border when selected', () => {
       const multiSelect = readSource('src/components/onboarding/MultiSelectPills.tsx');
-      const identityChips = readSource('src/components/onboarding/IdentityChips.tsx');
       expect(multiSelect).toContain('color: isSelected ? colors.accent : colors.text');
-      expect(identityChips).toContain('color: isSelected ? colors.accent : colors.textMuted');
     });
   });
 

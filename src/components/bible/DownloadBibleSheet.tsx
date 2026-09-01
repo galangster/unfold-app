@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
-import { BookBookmarkIcon, WifiHighIcon, WarningCircleIcon } from 'phosphor-react-native';
+import { BookBookmarkIcon, WifiHighIcon, WarningCircleIcon } from '@/components/icons';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import type { ColorTheme } from '@/constants/colors';
 import { Radius } from '@/constants/radius';

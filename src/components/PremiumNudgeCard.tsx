@@ -18,7 +18,7 @@ import {
   FireIcon,
   SpeakerHighIcon,
   SparkleIcon,
-} from 'phosphor-react-native';
+} from '@/components/icons';
 import { FontFamily } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Duration, Ease } from '@/constants/animations';

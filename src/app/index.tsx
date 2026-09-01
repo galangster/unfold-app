@@ -1,6 +1,6 @@
 import { View, Text, TouchableOpacity } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
-import { useRouter } from 'expo-router';
+import { useRouter, useSegments } from 'expo-router';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -17,7 +17,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import * as Haptics from 'expo-haptics';
-import { CaretLeftIcon } from 'phosphor-react-native';
+import { CaretLeftIcon } from '@/components/icons';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
@@ -172,6 +172,11 @@ const RevealWord = React.memo(function RevealWord({
 
 export default function WelcomeScreen() {
   const router = useRouter();
+  // Segments of the focused route, NOT usePathname(): pathname strips route
+  // groups, so a deep link into a tab (e.g. /(tabs)/(ask)) also reads as '/'
+  // and would still get eaten by the completed-user redirect.
+  const segments = useSegments();
+  const focusedPath = segments.length ? `/${segments.join('/')}` : '/';
   const user = useUnfoldStore((s) => s.user);
   const { colors } = useTheme();
 
@@ -271,6 +276,7 @@ export default function WelcomeScreen() {
           hasSettledInitialNotificationHydration: hasSettledInitialNotificationHydration(),
           startedAtMs: startedAt,
           nowMs: Date.now(),
+          activePathname: focusedPath,
         });
 
         if (disposition === 'skip') {
@@ -298,7 +304,10 @@ export default function WelcomeScreen() {
     iconScale.value = withDelay(100, withTiming(1, { duration: 800, easing: EASE }));
     buttonOpacity.value = withDelay(subtitleEndTime + 300, withTiming(1, { duration: 600, easing: EASE }));
     buttonTranslateY.value = withDelay(subtitleEndTime + 300, withTiming(0, { duration: 600, easing: EASE }));
-  }, [user, titleEndTime, subtitleEndTime]);
+    // pathname is a dependency so that when a completed user backs out of a
+    // cold-start deep link onto this anchor screen, the redirect re-evaluates
+    // and sends them home instead of leaving them on the quiet surface.
+  }, [user, titleEndTime, subtitleEndTime, focusedPath]);
 
   // ─── Animated styles ────────────────────────────────────────────
   const iconStyle = useAnimatedStyle(() => ({

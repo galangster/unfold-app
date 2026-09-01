@@ -24,7 +24,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
-import { PencilSimpleIcon, HeartIcon, CheckIcon, BookOpenIcon, CaretLeftIcon } from 'phosphor-react-native';
+import { PencilSimpleIcon, HeartIcon, CheckIcon, BookOpenIcon, CaretLeftIcon } from '@/components/icons';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';

@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { Text, TouchableOpacity, StyleSheet, ViewStyle } from 'react-native';
-import { BookOpenIcon } from 'phosphor-react-native';
+import { BookOpenIcon } from '@/components/icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { FontFamily } from '@/constants/fonts';

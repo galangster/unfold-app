@@ -7,7 +7,7 @@ import Animated, {
   useReducedMotion,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { ArrowRightIcon, CaretDownIcon, CaretUpIcon, NotePencilIcon } from 'phosphor-react-native';
+import { ArrowRightIcon, CaretDownIcon, CaretUpIcon, NotePencilIcon } from '@/components/icons';
 import { FontFamily, FontSize as FontSizeTokens } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';

@@ -54,7 +54,7 @@ import {
   TrashIcon,
   CaretRightIcon,
   CaretLeftIcon,
-} from 'phosphor-react-native';
+} from '@/components/icons';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';

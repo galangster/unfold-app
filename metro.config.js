@@ -31,6 +31,15 @@ const { assetExts, sourceExts } = config.resolver;
 config.transformer = {
   ...config.transformer,
   babelTransformerPath: require.resolve("react-native-svg-transformer/expo"),
+  // Strip console.* from minified (release) bundles; dev builds are unminified
+  // and keep full logging. See expo-rn-performance-2026.md §9 quick wins.
+  minifierConfig: {
+    ...config.transformer.minifierConfig,
+    compress: {
+      ...config.transformer.minifierConfig?.compress,
+      drop_console: true,
+    },
+  },
   getTransformOptions: async () => ({
     transform: {
       experimentalImportSupport: false,
@@ -40,11 +49,12 @@ config.transformer = {
 };
 
 // Configure resolver with SVG support, shared folder resolution, and web platform mocking
-const riveAssetExts = assetExts.includes("riv") ? assetExts : [...assetExts, "riv"];
+// "wasm" is required by expo-sqlite's web worker (wa-sqlite.wasm); native platforms never import .wasm
+const extraAssetExts = ["riv", "wasm"].filter((ext) => !assetExts.includes(ext));
 
 config.resolver = {
   ...config.resolver,
-  assetExts: riveAssetExts.filter((ext) => ext !== "svg"),
+  assetExts: [...assetExts, ...extraAssetExts].filter((ext) => ext !== "svg"),
   sourceExts: [...sourceExts, "svg"],
   useWatchman: false,
   // Only add shared folder resolution if it exists
@@ -117,6 +127,31 @@ config.resolver = {
       if (nativeOnlyModules.some((mod) => moduleName.includes(mod))) {
         return {
           type: "empty",
+        };
+      }
+
+      // Modules with no web implementation: resolve to a Proxy stub so the app
+      // boots in a browser for dev/testing. Web-only; native resolution untouched.
+      // Skia gets a dedicated stub whose Skia.* factory results stay chainable.
+      if (moduleName === "@shopify/react-native-skia" || moduleName.startsWith("@shopify/react-native-skia/")) {
+        return {
+          type: "sourceFile",
+          filePath: path.resolve(__dirname, "web/skia-web-stub.js"),
+        };
+      }
+
+      const nativeStubModules = [
+        "expo-media-library",
+        "expo-widgets",
+        "expo-speech-recognition",
+        "@rive-app/react-native",
+        "@expo/ui",
+      ];
+
+      if (nativeStubModules.some((mod) => moduleName === mod || moduleName.startsWith(`${mod}/`))) {
+        return {
+          type: "sourceFile",
+          filePath: path.resolve(__dirname, "web/native-stub.js"),
         };
       }
     }

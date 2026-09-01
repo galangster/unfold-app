@@ -28,7 +28,7 @@ import Animated, {
   runOnJS,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { PlayIcon, PauseIcon, ArrowCounterClockwiseIcon, ArrowClockwiseIcon } from 'phosphor-react-native';
+import { PlayIcon, PauseIcon, ArrowCounterClockwiseIcon, ArrowClockwiseIcon } from '@/components/icons';
 
 import { useTheme } from '@/lib/theme';
 import { useAudioPlayerState } from '@/lib/audio-player-state';

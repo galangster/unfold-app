@@ -31,7 +31,7 @@ import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import LottieView from 'lottie-react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { CheckIcon } from 'phosphor-react-native';
+import { CheckIcon } from '@/components/icons';
 import { alpha } from '@/components/ui';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';

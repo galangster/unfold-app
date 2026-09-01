@@ -34,7 +34,7 @@ import {
   SunIcon,
   XIcon,
   PencilSimpleIcon,
-} from 'phosphor-react-native';
+} from '@/components/icons';
 import { useTheme } from '@/lib/theme';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';

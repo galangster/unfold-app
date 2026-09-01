@@ -21,7 +21,7 @@ import {
   CheckCircleIcon,
   LockSimpleIcon,
   CircleIcon,
-} from 'phosphor-react-native';
+} from '@/components/icons';
 import { format } from 'date-fns';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';

@@ -1,1 +1,0 @@
-Archived persona research files. These contain detailed voice profiles for John Mark Comer and Peter Enns writing styles. Not currently used in the generation pipeline but preserved for potential future use.
