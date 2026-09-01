@@ -1007,8 +1007,10 @@ export default function GeneratingScreen() {
             )}
           </View>
 
-          {/* Series title reveal -- shows when server returns title from arc */}
-          {currentSeriesTitle && (
+          {/* Series title reveal -- shows when server returns title from arc.
+              Ternary, not `&&`: the empty-string default would otherwise be
+              emitted as a bare text node inside this View. */}
+          {currentSeriesTitle ? (
             <Animated.View
               entering={entering(FadeIn.duration(800))}
               style={{ alignItems: 'center', marginBottom: Spacing['3'] }}
@@ -1026,7 +1028,7 @@ export default function GeneratingScreen() {
                 {currentSeriesTitle}
               </Text>
             </Animated.View>
-          )}
+          ) : null}
 
           {/* Notification prompt -- appears after a delay */}
           {showNotificationPrompt && notificationPermission !== 'granted' && !hasAskedPermission && !isComplete && (
