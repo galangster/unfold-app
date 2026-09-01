@@ -1,4 +1,5 @@
 import React from 'react';
+import { AppState } from 'react-native';
 
 const renderer = require('react-test-renderer');
 const { act } = renderer;
@@ -700,5 +701,53 @@ describe('network-drop resilience (WR-11)', () => {
     // Copy comes from analyzeNetworkError, not the old canned string.
     expect(reply?.content).not.toBe('Something went wrong. Tap to retry.');
     expect(reply?.content).toBeTruthy();
+  });
+});
+
+describe('foreground resume reconciliation', () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+    act(() => {
+      useCompanionChatStore.getState().clearAllConversations();
+    });
+  });
+
+  it('marks a reply stuck in streaming as an interrupted error and keeps its partial text', async () => {
+    // The jest preset mocks AppState.addEventListener as a jest.fn.
+    const addEventListener = AppState.addEventListener as unknown as jest.Mock;
+    const listenerCallsBefore = addEventListener.mock.calls.length;
+
+    await act(async () => {
+      renderer.create(<HookHarness onReady={() => {}} />);
+      await Promise.resolve();
+    });
+
+    // The hook registers exactly one AppState 'change' listener on mount.
+    const changeListeners = addEventListener.mock.calls
+      .slice(listenerCallsBefore)
+      .filter(([event]: [string]) => event === 'change')
+      .map(([, listener]: [string, (status: string) => void]) => listener);
+    expect(changeListeners).toHaveLength(1);
+
+    // A reply that died mid-stream while the app was suspended.
+    act(() => {
+      const store = useCompanionChatStore.getState();
+      store.addMessage({ id: 'user-1', role: 'user', content: 'Tell me about Elijah', timestamp: 1, status: 'sent' });
+      store.addMessage({ id: 'companion-1', role: 'companion', content: 'Elijah heard a gentle whisper', timestamp: 2, status: 'streaming' });
+    });
+
+    act(() => {
+      changeListeners[0]('active');
+    });
+
+    const reply = useCompanionChatStore
+      .getState()
+      .conversations[0]
+      ?.messages.find((m) => m.id === 'companion-1');
+    expect(reply).toMatchObject({
+      status: 'error',
+      interrupted: true,
+      content: 'Elijah heard a gentle whisper',
+    });
   });
 });

@@ -357,7 +357,10 @@ export function useCompanionChat() {
         if (inFlightRef.current.has(conv.id)) continue;
         for (const m of conv.messages ?? []) {
           if (m.status === 'streaming') {
-            update(m.id, { status: 'error' }, conv.id);
+            // `interrupted` keeps whatever partial text arrived rendering as
+            // reply text; the other error paths store an error string in
+            // `content` instead.
+            update(m.id, { status: 'error', interrupted: true }, conv.id);
           }
         }
       }

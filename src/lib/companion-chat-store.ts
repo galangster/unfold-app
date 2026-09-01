@@ -48,6 +48,14 @@ export interface CompanionMessage {
   feedback?: 'positive' | 'negative' | null;
   deepLinks?: DeepLinkData[];
   updatedAt?: string; // ISO timestamp for sync
+  /**
+   * A reply that was cut off mid-stream and reconciled to `status: 'error'`
+   * with its partial text left in `content`. Every other error row stores an
+   * app-authored error string in `content`, so the renderer needs this flag
+   * to show the partial as reply text instead of as the error message.
+   * Local-only (not part of the sync record).
+   */
+  interrupted?: boolean;
 }
 
 export interface Conversation {
