@@ -567,8 +567,9 @@ function HookCard({ data, userName }: { data: RecapData; userName: string }) {
       {/* Teaser */}
       <Animated.View style={teaserStyle}>
         <Text style={s.hookTeaser}>
-          {data.totalDaysRead} {data.totalDaysRead === 1 ? 'day' : 'days'}.{' '}
-          Here is what unfolded.
+          {data.totalDaysRead === 0
+            ? 'Your story starts today.'
+            : `${data.totalDaysRead} ${data.totalDaysRead === 1 ? 'day' : 'days'}. Here is what unfolded.`}
         </Text>
       </Animated.View>
     </View>
