@@ -27,6 +27,7 @@ import { useUnfoldStore, type Devotional, type DevotionalDay } from '@/lib/store
 import { submitGenerationJob, pollJobStatus, retryJob, recoverCompletedGenerationResult, buildInitialArcUserContext } from '@/lib/generation-api';
 import {
   evaluateGenerationPoll,
+  getNextPollDelayMs,
   resolveGenerationSubmitFailure,
 } from '@/lib/generation-poll-outcome';
 import { toFriendlyOnboardingGenerationError } from '@/lib/generation-errors';
@@ -74,9 +75,6 @@ const WAITING_MESSAGES = [
   'Weaving your\u00A0narrative',
   'Crafting something\u00A0personal',
 ];
-
-// Polling interval for server job status (ms)
-const POLL_INTERVAL_MS = 3000;
 
 function requireCanonicalDevotionalId(devotionalId?: string | null, context = 'generation completion'): string {
   if (!devotionalId) {
@@ -507,7 +505,9 @@ export default function GeneratingScreen() {
           case 'unknown-retry':
           default:
             // Still pending / processing (or a tolerated unknown) -- poll again.
-            pollTimerRef.current = setTimeout(poll, POLL_INTERVAL_MS);
+            // Cadence escalates with the job's age (3s -> 5s -> 8s, jittered
+            // after the first minute); pollStartTime resets per job.
+            pollTimerRef.current = setTimeout(poll, getNextPollDelayMs(Date.now() - pollStartTime.current));
             return;
         }
       } catch (err) {
@@ -516,7 +516,8 @@ export default function GeneratingScreen() {
         logger.warn('[generating] Poll error (will retry):', errorMsg);
 
         // Keep polling on transient errors -- the server job is still running
-        pollTimerRef.current = setTimeout(poll, POLL_INTERVAL_MS * 2);
+        // (doubled cadence, as before)
+        pollTimerRef.current = setTimeout(poll, getNextPollDelayMs(Date.now() - pollStartTime.current) * 2);
       }
     };
 

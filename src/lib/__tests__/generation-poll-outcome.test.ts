@@ -12,8 +12,12 @@ jest.mock('../mmkv-storage', () => ({
 
 import {
   evaluateGenerationPoll,
+  getNextPollDelayMs,
   resolveGenerationSubmitFailure,
   MAX_UNKNOWN_GENERATION_STATUS,
+  POLL_DELAY_AFTER_1_MIN_MS,
+  POLL_DELAY_AFTER_3_MIN_MS,
+  POLL_DELAY_INITIAL_MS,
 } from '../generation-poll-outcome';
 import { ApiError } from '../generation-api';
 
@@ -105,5 +109,63 @@ describe('resolveGenerationSubmitFailure', () => {
     });
     const apiErr = new ApiError('bad', 500, 'SERVER_ERROR');
     expect(resolveGenerationSubmitFailure(apiErr)).toEqual({ kind: 'fail', message: 'bad' });
+  });
+});
+
+describe('getNextPollDelayMs', () => {
+  const rngValues = [0, 0.25, 0.5, 0.999, 1];
+
+  it('holds a fixed 3s cadence for the whole first minute, whatever the rng says', () => {
+    for (const elapsed of [0, 1, 2_999, 30_000, 59_000, 59_999]) {
+      for (const r of rngValues) {
+        expect(getNextPollDelayMs(elapsed, () => r)).toBe(3_000);
+      }
+    }
+    expect(POLL_DELAY_INITIAL_MS).toBe(3_000);
+  });
+
+  it('steps to the 5s tier at exactly 60s with ±20% jitter', () => {
+    expect(POLL_DELAY_AFTER_1_MIN_MS).toBe(5_000);
+    expect(getNextPollDelayMs(60_000, () => 0.5)).toBe(5_000);
+    expect(getNextPollDelayMs(60_000, () => 0)).toBe(4_000);
+    expect(getNextPollDelayMs(60_000, () => 1)).toBe(6_000);
+    // Still the middle tier just before three minutes.
+    expect(getNextPollDelayMs(179_999, () => 0.5)).toBe(5_000);
+  });
+
+  it('caps at the 8s tier from exactly 3 minutes onward', () => {
+    expect(POLL_DELAY_AFTER_3_MIN_MS).toBe(8_000);
+    for (const elapsed of [180_000, 240_000, 9 * 60_000, 10 * 60_000, 60 * 60_000]) {
+      expect(getNextPollDelayMs(elapsed, () => 0.5)).toBe(8_000);
+      expect(getNextPollDelayMs(elapsed, () => 0)).toBe(6_400);
+      expect(getNextPollDelayMs(elapsed, () => 1)).toBe(9_600);
+    }
+  });
+
+  it('never leaves the jitter band of the active tier', () => {
+    for (let i = 0; i < 500; i++) {
+      const r = Math.random();
+      const mid = getNextPollDelayMs(60_000 + i * 100, () => r);
+      expect(mid).toBeGreaterThanOrEqual(4_000);
+      expect(mid).toBeLessThanOrEqual(6_000);
+      const top = getNextPollDelayMs(180_000 + i * 1_000, () => r);
+      expect(top).toBeGreaterThanOrEqual(6_400);
+      expect(top).toBeLessThanOrEqual(9_600);
+    }
+    // An out-of-range rng is clamped rather than trusted.
+    expect(getNextPollDelayMs(180_000, () => -3)).toBe(6_400);
+    expect(getNextPollDelayMs(180_000, () => 7)).toBe(9_600);
+  });
+
+  it('uses Math.random by default and returns whole milliseconds', () => {
+    const delay = getNextPollDelayMs(200_000);
+    expect(Number.isInteger(delay)).toBe(true);
+    expect(delay).toBeGreaterThanOrEqual(6_400);
+    expect(delay).toBeLessThanOrEqual(9_600);
+  });
+
+  it('treats a non-finite or negative elapsed time as the start of the job', () => {
+    expect(getNextPollDelayMs(Number.NaN, () => 1)).toBe(3_000);
+    expect(getNextPollDelayMs(-5_000, () => 1)).toBe(3_000);
   });
 });
