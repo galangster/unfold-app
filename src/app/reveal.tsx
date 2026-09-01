@@ -313,10 +313,12 @@ export default function RevealScreen() {
           </Animated.Text>
         </View>
 
-        {/* Swipe-up prompt — bottom of screen */}
+        {/* Swipe-up prompt — bottom of screen. textMuted (not textSubtle):
+            the prompt rests at this colour once its one-shot fade finishes,
+            and textSubtle sits at only ~3.5:1 over the dark ground. */}
         <Animated.View style={[styles.swipePrompt, promptStyle]}>
           <Animated.View style={chevronStyle}>
-            <CaretUp size={24} color={colors.textSubtle} weight="light" />
+            <CaretUp size={24} color={colors.textMuted} weight="light" />
           </Animated.View>
 
           <ShimmerText
@@ -327,7 +329,7 @@ export default function RevealScreen() {
               textAlign: 'center',
               lineHeight: 20,
               marginTop: 8,
-              color: colors.textSubtle,
+              color: colors.textMuted,
             }}
             shimmerWidth={60}
             sweepDuration={800}
