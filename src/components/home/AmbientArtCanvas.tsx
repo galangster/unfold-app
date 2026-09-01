@@ -4,7 +4,7 @@ import {
   type AppStateStatus,
   useWindowDimensions,
 } from 'react-native';
-import { useLowPowerMode } from 'expo-battery';
+import { useLowPowerMode } from '@/hooks/useLowPowerMode';
 import type { RiveFileInput } from '@rive-app/react-native';
 import { EmberSystem } from '@/components/EmberSystem';
 import { TodayCompletionRive } from '@/components/home/TodayCompletionRive';
