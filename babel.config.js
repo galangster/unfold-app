@@ -6,8 +6,10 @@ module.exports = function (api) {
       "nativewind/babel",
     ],
     plugins: [
-      // React Compiler - auto-memoizes components
-      ["babel-plugin-react-compiler", { target: "19" }],
+      // React Compiler runs via babel-preset-expo (app.json experiments.reactCompiler).
+      // Do not also register babel-plugin-react-compiler here: the preset's instance
+      // excludes node_modules, sets the production panicThreshold, and carries the
+      // 'widget' opt-out directive; a second unguarded pass has none of that.
       [
         "module-resolver",
         {

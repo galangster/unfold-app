@@ -20,12 +20,9 @@ describe('onboarding selection styling', () => {
 
   it('keeps onboarding chips on full-bright accent styling when selected', () => {
     const multiSelectSource = readSource('src/components/onboarding/MultiSelectPills.tsx');
-    const identityChipSource = readSource('src/components/onboarding/IdentityChips.tsx');
 
     expect(multiSelectSource).toContain('backgroundColor: isSelected ? alpha(colors.accent, 0.18)');
     expect(multiSelectSource).toContain('borderColor: isSelected ? colors.accent : colors.border');
-    expect(identityChipSource).toContain('backgroundColor: isSelected\n                    ? alpha(colors.accent, 0.18)');
-    expect(identityChipSource).toContain('color: isSelected ? colors.accent : colors.textMuted');
   });
 
   it('keeps paywall plan selection from dimming and exposes only a QA-gated onboarding bypass', () => {

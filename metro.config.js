@@ -129,6 +129,7 @@ config.resolver = {
         "expo-speech-recognition",
         "@rive-app/react-native",
         "@shopify/react-native-skia",
+        "@expo/ui",
       ];
 
       if (nativeStubModules.some((mod) => moduleName === mod || moduleName.startsWith(`${mod}/`))) {

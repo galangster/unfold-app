@@ -18,7 +18,6 @@ describe('writing surfaces keyboard appearance source contract', () => {
     ['src/components/ui/Input.tsx', 1],
     ['src/components/companion/CompanionInput.tsx', 1],
     ['src/components/bible/BibleNoteSheet.tsx', 1],
-    ['src/components/AdaptiveQuestionFlow.tsx', 1],
     ['src/components/reading/InlineReflectionJournal.tsx', 1],
     ['src/components/CheckInSheet.tsx', 2],
     ['src/app/(tabs)/(today)/journal.tsx', 4],

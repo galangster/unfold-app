@@ -108,11 +108,9 @@
     "expo-web-browser": "~57.0.2",
     "expo-widgets": "~57.0.12",
     "lottie-react-native": "~7.3.8",
-    "memoize-one": "^6.0.0",
     "nativewind": "~4.1.23",
     "patch-package": "^8.0.0",
     "phosphor-react-native": "^3.0.3",
-    "pretty-format": "^29.7.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.2",
@@ -124,7 +122,6 @@
     "react-native-get-random-values": "~1.11.0",
     "react-native-image-colors": "^2.5.0",
     "react-native-keyboard-controller": "1.21.9",
-    "react-native-markdown-display": "^7.0.2",
     "react-native-mask-text": "^0.15.0",
     "react-native-mmkv": "^3.2.0",
     "react-native-nitro-modules": "0.35.6",
@@ -176,8 +173,6 @@
   "overrides": {
     "react-dom": "19.2.3",
     "react-native-css-interop": "0.1.22",
-    "markdown-it": "14.2.0",
-    "linkify-it": "5.0.2",
     "lodash": "4.18.1"
   },
   "patchedDependencies": {
@@ -185,7 +180,9 @@
   },
   "expo": {
     "autolinking": {
-      "exclude": ["expo-location"]
+      "exclude": [
+        "expo-location"
+      ]
     }
   }
 }

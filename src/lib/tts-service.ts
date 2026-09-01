@@ -9,7 +9,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { logger } from '@/lib/logger';
 import { reportError } from '@/lib/report-error';
 import { getAuthHeaders, PRIMARY_BACKEND_URL } from '@/lib/api-config';
-// Debug instrumentation available at '@/lib/tts-debug' if needed
+
 import { checkRateLimit, incrementRateLimit } from '@/lib/rate-limit';
 import { recordCachedFile, touchCachedFile, saveMetadata } from '@/lib/audio-cache';
 

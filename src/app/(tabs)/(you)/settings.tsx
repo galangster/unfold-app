@@ -3,6 +3,7 @@ import { View, Text, ScrollView, Alert, ActivityIndicator, StyleSheet } from 're
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Application from 'expo-application';
 import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon, TrashIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
@@ -159,7 +160,7 @@ export default function SettingsScreen() {
                   marginTop: Spacing['1'],
                 }}
               >
-                Version 1.0.0
+                Version {Application.nativeApplicationVersion ?? '1.0.0'}
               </Text>
             </View>
           </View>

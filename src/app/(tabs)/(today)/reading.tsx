@@ -292,7 +292,6 @@ export default function ReadingScreen() {
   const [autoRetrySecondsLeft, setAutoRetrySecondsLeft] = useState<number | null>(null);
   const [isOnline, setIsOnline] = useState(true);
   const [isWaitingForConnection, setIsWaitingForConnection] = useState(false);
-  const [isPreparingNextDay, setIsPreparingNextDay] = useState(false);
   const [bookmarkToast, setBookmarkToast] = useState(false);
   const [selectedStudyMethod, setSelectedStudyMethod] = useState<string | undefined>(undefined);
   const [targetScrollRequest, setTargetScrollRequest] = useState<{ id: number; y: number } | null>(null);
@@ -838,40 +837,9 @@ export default function ReadingScreen() {
       params: {
         text: quoteText,
         reference: dayLabel,
-        type: 'quote',
       },
     });
   }, [currentDayData, currentDevotional, viewingDay, router]);
-
-  const handleJournal = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-    // If viewing an unread day, journal for the last completed day instead
-    const journalDay = currentDayData?.isRead
-      ? viewingDay
-      : currentDevotional?.days
-          .filter((d) => d.isRead)
-          .sort((a, b) => b.dayNumber - a.dayNumber)[0]?.dayNumber ?? viewingDay;
-    const journalDayData = currentDevotional?.days.find((d) => d.dayNumber === journalDay);
-
-    if (currentDevotionalId && currentDevotional) {
-      setResumeContext({
-        route: 'journal',
-        devotionalId: currentDevotionalId,
-        dayNumber: journalDay,
-        devotionalTitle: currentDevotional.title,
-        dayTitle: journalDayData?.title ?? currentDayData?.title,
-      });
-    }
-
-    router.push({
-      pathname: '/(tabs)/(journal)/entry',
-      params: {
-        devotionalId: currentDevotionalId ?? '',
-        dayNumber: journalDay.toString(),
-      },
-    });
-  }, [currentDevotionalId, currentDevotional, currentDayData, viewingDay, router, setResumeContext]);
 
   // Memoized scroll handler — tracks progress bar + scroll hint visibility
   const handleScroll = useCallback((e: {
@@ -2245,46 +2213,6 @@ export default function ReadingScreen() {
                     </Animated.View>
                   )}
 
-                  {/* Preparing Tomorrow — progressive mode, next day being generated */}
-                  {isCompleted && !showCelebration && !tomorrowDayData && isPreparingNextDay && (
-                    <Animated.View
-                      entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(300).easing(Ease.out)}
-                      style={{
-                        marginTop: Spacing['8'],
-                        paddingVertical: 18,
-                        paddingHorizontal: Spacing['5'],
-                        borderRadius: Radius.card,
-                        backgroundColor: colors.inputBackground,
-                        borderWidth: 1,
-                        borderColor: colors.border,
-                        alignItems: 'center',
-                      }}
-                    >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing['2'], marginBottom: Spacing['3'] }}>
-                        <SunHorizonIcon size={18} color={colors.accent} weight="light" />
-                        <Text
-                          style={{
-                            ...Typography.sectionHeader,
-                            color: colors.text,
-                          }}
-                        >
-                          Tomorrow
-                        </Text>
-                      </View>
-                      <ActivityIndicator color={colors.accent} size="small" style={{ marginBottom: 10 }} />
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.bodyItalic,
-                          fontSize: FontSize.sm,
-                          color: colors.textMuted,
-                          textAlign: 'center',
-                          lineHeight: 21,
-                        }}
-                      >
-                        {'Preparing your next reading\u2026'}
-                      </Text>
-                    </Animated.View>
-                  )}
               </Animated.View>
             </ScrollView>
             </Animated.View>

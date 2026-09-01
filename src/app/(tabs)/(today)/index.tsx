@@ -229,13 +229,18 @@ export default function HomeScreen() {
   const [stackPremiumFeature, setStackPremiumFeature] = useState<TodayPremiumFeature | null>(null);
   const { gate, showExclusiveOffer, dismissOffer } = useCreationGate();
 
-  // Update clock-driven Today card visibility every minute.
+  // Update clock-driven Today card visibility every minute — but only while
+  // this screen is focused. Home stays mounted behind other tabs and the
+  // reading stack, and an unfocused tick re-renders the whole screen for
+  // nothing. Refreshing on refocus covers time that passed while away.
   useEffect(() => {
+    if (!isTodayFocused) return;
+    setClockNow(new Date());
     const interval = setInterval(() => {
       setClockNow(new Date());
     }, 60000);
     return () => clearInterval(interval);
-  }, []);
+  }, [isTodayFocused]);
 
   // Silently download Bible DB in background if not yet ready
   const bibleDbTriggered = useRef(false);

@@ -127,7 +127,6 @@ export default function ShareCardScreen() {
     text: string;
     reference: string;
     translation?: string;
-    type?: string;
   }>();
 
   const premiumPolicy = usePremiumAccessPolicy();
