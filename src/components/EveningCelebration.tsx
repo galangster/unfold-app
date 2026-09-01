@@ -13,6 +13,10 @@
  *   300ms      stars begin twinkling (continuous, randomized cycles)
  *   2400ms     message text fades in (800ms)
  *   3600ms     dismiss hint appears (600ms)
+ *
+ * The star field runs on two shared clocks (one-shot intro + repeating phase)
+ * rather than one infinite loop per star; each star derives its own fade-in
+ * and twinkle from them in its style worklet (see lib/evening-twinkle.ts).
  */
 
 import { useEffect, useMemo } from 'react';
@@ -25,20 +29,28 @@ import {
   Modal,
 } from 'react-native';
 import Animated, {
+  cancelAnimation,
   useSharedValue,
   useAnimatedStyle,
   withTiming,
   withDelay,
   withRepeat,
-  withSequence,
   Easing,
-  interpolate,
+  type SharedValue,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
+import {
+  SKY_INTRO_MS,
+  SKY_PHASE_PERIOD_MS,
+  STAR_APPEAR_DELAY_MAX_MS,
+  STAR_APPEAR_DELAY_MIN_MS,
+  snapTwinklePeriod,
+  starFrame,
+} from '@/lib/evening-twinkle';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const DIAGONAL = Math.sqrt(SCREEN_WIDTH ** 2 + SCREEN_HEIGHT ** 2);
@@ -97,58 +109,42 @@ function pickRandom(arr: string[]): string {
 }
 
 // ─── Single twinkling star ───────────────────────────────────────────────────
+// A star owns no animation: it reads the shared sky clocks and derives its
+// fade-in and twinkle from them with its own stable random parameters.
 function Star({
   x,
   y,
   size,
   appearDelay,
-  twinkleDuration,
+  twinklePeriod,
   brightness,
   color,
+  intro,
+  phase,
 }: {
   x: number;
   y: number;
   size: number;
   appearDelay: number;
-  twinkleDuration: number;
+  twinklePeriod: number;
   brightness: number;
   color: string;
+  intro: SharedValue<number>;
+  phase: SharedValue<number>;
 }) {
-  const appear = useSharedValue(0);
-  const twinkle = useSharedValue(brightness);
-
-  useEffect(() => {
-    // Fade in
-    appear.value = withDelay(
+  const style = useAnimatedStyle(() => {
+    const frame = starFrame(
+      intro.value * SKY_INTRO_MS,
+      phase.value * SKY_PHASE_PERIOD_MS,
       appearDelay,
-      withTiming(1, { duration: 600, easing: Easing.out(Easing.cubic) })
+      twinklePeriod,
+      brightness,
     );
-    // Continuous twinkle after appearing
-    twinkle.value = withDelay(
-      appearDelay + 400,
-      withRepeat(
-        withSequence(
-          withTiming(brightness * 0.25, {
-            duration: twinkleDuration * 0.4,
-            easing: Easing.inOut(Easing.sin),
-          }),
-          withTiming(brightness, {
-            duration: twinkleDuration * 0.6,
-            easing: Easing.inOut(Easing.sin),
-          }),
-        ),
-        -1,
-        true,
-      )
-    );
-  }, [appear, twinkle, appearDelay, twinkleDuration, brightness]);
-
-  const style = useAnimatedStyle(() => ({
-    opacity: appear.value * twinkle.value,
-    transform: [
-      { scale: interpolate(twinkle.value, [brightness * 0.25, brightness], [0.7, 1.0]) },
-    ],
-  }));
+    return {
+      opacity: frame.opacity,
+      transform: [{ scale: frame.scale }],
+    };
+  });
 
   return (
     <Animated.View
@@ -232,13 +228,40 @@ export function EveningCelebration({
       y: Math.random() * (SCREEN_HEIGHT - 4),
       size: Math.random() * 2.5 + 1.2,
       // Stagger appearance: first stars appear at 200ms, last at ~2000ms
-      appearDelay: 200 + Math.random() * 1800,
-      // Each star twinkles at its own pace (2-5 seconds per cycle)
-      twinkleDuration: 2000 + Math.random() * 3000,
+      appearDelay:
+        STAR_APPEAR_DELAY_MIN_MS +
+        Math.random() * (STAR_APPEAR_DELAY_MAX_MS - STAR_APPEAR_DELAY_MIN_MS),
+      // Each star twinkles at its own pace (2-5 seconds per cycle), snapped to
+      // a divisor of the shared phase clock so its wrap is invisible
+      twinklePeriod: snapTwinklePeriod(2000 + Math.random() * 3000),
       // Brightness varies per star (dimmer ones feel farther away)
       brightness: 0.4 + Math.random() * 0.6,
     }));
   }, [visible]);
+
+  // Shared star-field clocks (see lib/evening-twinkle.ts): `intro` counts the
+  // first SKY_INTRO_MS once, `phase` cycles forever. Every star derives its
+  // own fade-in and twinkle from these two values instead of running a loop.
+  const skyIntro = useSharedValue(0);
+  const skyPhase = useSharedValue(0);
+
+  useEffect(() => {
+    if (!visible || reducedMotion) return;
+
+    skyIntro.value = withTiming(1, { duration: SKY_INTRO_MS, easing: Easing.linear });
+    skyPhase.value = withRepeat(
+      withTiming(1, { duration: SKY_PHASE_PERIOD_MS, easing: Easing.linear }),
+      -1,
+      false,
+    );
+
+    return () => {
+      cancelAnimation(skyIntro);
+      cancelAnimation(skyPhase);
+      skyIntro.value = 0;
+      skyPhase.value = 0;
+    };
+  }, [visible, reducedMotion, skyIntro, skyPhase]);
 
   // Text animation values
   const overlayOpacity = useSharedValue(0);
@@ -321,9 +344,11 @@ export function EveningCelebration({
               y={s.y}
               size={s.size}
               appearDelay={s.appearDelay}
-              twinkleDuration={s.twinkleDuration}
+              twinklePeriod={s.twinklePeriod}
               brightness={s.brightness}
               color={starColor}
+              intro={skyIntro}
+              phase={skyPhase}
             />
           ))}
           {reducedMotion && stars.slice(0, 30).map((s) => (

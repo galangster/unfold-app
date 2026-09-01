@@ -1,5 +1,5 @@
-import { useEffect, useMemo } from 'react';
-import { TouchableOpacity, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { AppState, AppStateStatus, TouchableOpacity, View } from 'react-native';
 import {
   Canvas,
   Path,
@@ -10,6 +10,7 @@ import {
   vec,
 } from '@shopify/react-native-skia';
 import Animated, {
+  cancelAnimation,
   useSharedValue,
   useAnimatedStyle,
   useDerivedValue,
@@ -30,6 +31,24 @@ interface CompanionOrbProps {
   isActive?: boolean;
   showBadge?: boolean;
   animated?: boolean;
+  /**
+   * Whether the orb is on screen. When false (e.g. its tab is not focused)
+   * the three infinite loops are cancelled and the orb rests at its base
+   * pose so a hidden orb costs no UI-thread work. Restarts when true again.
+   */
+  active?: boolean;
+}
+
+/** Mirrors EmberSystem: treat the orb as hidden while the app is not in the foreground. */
+function useIsAppActive(): boolean {
+  const [appState, setAppState] = useState<AppStateStatus>(AppState.currentState);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', setAppState);
+    return () => subscription.remove();
+  }, []);
+
+  return appState === 'active';
 }
 
 function hexToRgba(hex: string, alpha: number): string {
@@ -138,36 +157,57 @@ export function CompanionOrb({
   isActive = false,
   showBadge = false,
   animated = true,
+  active = true,
 }: CompanionOrbProps) {
   const { reducedMotion } = useAccessibleAnimation();
+  const isAppActive = useIsAppActive();
   const morphTime = useSharedValue(0);
   const breathe = useSharedValue(0);
   const tapPulse = useSharedValue(0);
   const gradientRotation = useSharedValue(0);
 
-  useEffect(() => {
-    // Skip all looping animations when reduced motion is on or animated is false
-    if (reducedMotion || !animated) return;
+  // Skip all looping animations when reduced motion is on, animated is false,
+  // or the orb is not on screen (tab blurred / app backgrounded).
+  const loopsActive = active && isAppActive && animated && !reducedMotion;
 
-    // Morph animation — continuous, slow cycle
-    morphTime.value = withRepeat(
-      withTiming(Math.PI * 20, { duration: 30000, easing: Easing.linear }),
-      -1,
-      false,
-    );
-    // Gradient rotation
-    gradientRotation.value = withRepeat(
-      withTiming(2 * Math.PI, { duration: 6000, easing: Easing.linear }),
-      -1,
-      false,
-    );
-    // Breathing cycle
-    breathe.value = withRepeat(
-      withTiming(1, { duration: 3000, easing: Easing.inOut(Easing.ease) }),
-      -1,
-      true,
-    );
-  }, [reducedMotion, animated]);
+  useEffect(() => {
+    if (loopsActive) {
+      // Morph animation — continuous, slow cycle
+      morphTime.value = withRepeat(
+        withTiming(Math.PI * 20, { duration: 30000, easing: Easing.linear }),
+        -1,
+        false,
+      );
+      // Gradient rotation
+      gradientRotation.value = withRepeat(
+        withTiming(2 * Math.PI, { duration: 6000, easing: Easing.linear }),
+        -1,
+        false,
+      );
+      // Breathing cycle
+      breathe.value = withRepeat(
+        withTiming(1, { duration: 3000, easing: Easing.inOut(Easing.ease) }),
+        -1,
+        true,
+      );
+    } else {
+      // Stop the loops and rest at the base pose. Resetting to 0 matters: a
+      // restarted withTiming(target) from a mid-cycle value would run at a
+      // different rate and jump back to 0 at the end of every repeat.
+      cancelAnimation(morphTime);
+      cancelAnimation(gradientRotation);
+      cancelAnimation(breathe);
+      morphTime.value = 0;
+      gradientRotation.value = 0;
+      breathe.value = 0;
+    }
+
+    return () => {
+      cancelAnimation(morphTime);
+      cancelAnimation(gradientRotation);
+      cancelAnimation(breathe);
+    };
+  }, [loopsActive, morphTime, gradientRotation, breathe]);
 
   // Canvas padding so glow doesn't clip
   const padding = Math.ceil(size * 0.45);

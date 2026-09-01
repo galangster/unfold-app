@@ -1,5 +1,5 @@
 /** @jsxImportSource react */
-import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useRef, useEffect, useLayoutEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, TextInput, Platform, Keyboard, Dimensions, type LayoutChangeEvent } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -134,6 +134,9 @@ const SWIPE_SPRING_BACK = { damping: 22, stiffness: 260, mass: 0.9, overshootCla
 //   20px+  → Pan activates (chapter swipe)
 const VERSE_TAP_MAX_DISTANCE = 8;
 
+// Shared "no measurement" value so setting it again is a no-op for React.
+const EMPTY_LINES: BibleTextLine[] = [];
+
 // PERF: every prop below must be referentially stable across parent renders or
 // React.memo is defeated and a single selection/toast/keyboard state change
 // re-renders the whole chapter (176 rows in Psalm 119). That is why `onPress`
@@ -172,7 +175,13 @@ const VerseItem = React.memo(function VerseItem({
   onPress: (verseNum: number) => void;
   onLayout: (verseNum: number, y: number) => void;
 }) {
-  const [textLines, setTextLines] = useState<BibleTextLine[]>([]);
+  // PERF: onTextLayout fires for every verse when the chapter mounts (176
+  // times in Psalm 119) and again whenever a row's text re-lays out, but a row
+  // only draws from it while it shows a selection/highlight overlay. The
+  // measurement is parked in a ref and promoted to render state only while an
+  // overlay is visible, so mounting a chapter no longer re-renders every row.
+  const measuredLinesRef = useRef<BibleTextLine[]>(EMPTY_LINES);
+  const [textLines, setTextLines] = useState<BibleTextLine[]>(EMPTY_LINES);
   const verseNum = verse.verse;
   const reducedMotion = useReducedMotion();
 
@@ -257,11 +266,23 @@ const VerseItem = React.memo(function VerseItem({
   const handleTextLayout = useCallback((e: any) => {
     const lines = e.nativeEvent.lines;
     if (lines?.length > 0) {
-      setTextLines(lines.map((l: any) => ({
+      const measured: BibleTextLine[] = lines.map((l: any) => ({
         x: l.x, y: l.y, width: l.width, height: l.height,
-      })));
+      }));
+      measuredLinesRef.current = measured;
+      // Only a visible overlay renders from the lines; hidden rows keep the
+      // measurement in the ref without a state write (and a re-render).
+      if (hasOverlay) setTextLines(measured);
     }
-  }, []);
+  }, [hasOverlay]);
+
+  // Promote the parked measurement the moment an overlay is needed — a layout
+  // effect so the rects land in the synchronous follow-up render — and drop it
+  // when the overlay goes away so a stale measurement is never drawn. On mount
+  // (no overlay) this sets the initial EMPTY_LINES again, which React skips.
+  useLayoutEffect(() => {
+    setTextLines(hasOverlay ? measuredLinesRef.current : EMPTY_LINES);
+  }, [hasOverlay]);
 
   const verseNumSize = Math.max(11, Math.round(fontSize * 0.55));
 
