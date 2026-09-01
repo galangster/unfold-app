@@ -6,6 +6,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
+  useAnimatedScrollHandler,
   withTiming,
   withRepeat,
   withSequence,
@@ -841,34 +842,26 @@ export default function ReadingScreen() {
     });
   }, [currentDayData, currentDevotional, viewingDay, router]);
 
-  // Memoized scroll handler — tracks progress bar + scroll hint visibility
-  const handleScroll = useCallback((e: {
-    nativeEvent: {
-      contentOffset: { y: number };
-      contentSize: { height: number };
-      layoutMeasurement: { height: number };
-      target?: number;
-    }
-  }) => {
-    if (typeof e.nativeEvent.target === 'number') {
-      readerScrollNativeTargetRef.current = e.nativeEvent.target;
-    }
-    const offsetY = e.nativeEvent.contentOffset.y;
-    const totalHeight = e.nativeEvent.contentSize.height;
-    const viewHeight = e.nativeEvent.layoutMeasurement.height;
-    const scrollable = totalHeight - viewHeight;
+  // UI-thread scroll handler — tracks progress bar + scroll hint visibility.
+  // The old JS handler spawned a withTiming per event at 60Hz and set state on
+  // every frame; progress now writes directly on the UI thread and the hint
+  // flips via runOnJS only when its hysteresis threshold is actually crossed.
+  // (The native scroll target for scrollTo fallbacks comes from onLayout.)
+  const scrollHintHiddenOnUI = useSharedValue(false);
+  const handleScroll = useAnimatedScrollHandler((event) => {
+    const offsetY = event.contentOffset.y;
+    const scrollable = event.contentSize.height - event.layoutMeasurement.height;
     if (scrollable > 0) {
-      scrollProgress.value = withTiming(
-        Math.min(1, Math.max(0, offsetY / scrollable)),
-        { duration: 80 }
-      );
+      scrollProgress.value = Math.min(1, Math.max(0, offsetY / scrollable));
     }
-    setShowScrollHint((current) => {
-      if (offsetY > 100 && current) return false;
-      if (offsetY <= 50 && !current) return true;
-      return current;
-    });
-  }, [scrollProgress]);
+    if (offsetY > 100 && !scrollHintHiddenOnUI.value) {
+      scrollHintHiddenOnUI.value = true;
+      runOnJS(setShowScrollHint)(false);
+    } else if (offsetY <= 50 && scrollHintHiddenOnUI.value) {
+      scrollHintHiddenOnUI.value = false;
+      runOnJS(setShowScrollHint)(true);
+    }
+  });
 
   const handleComplete = useCallback(() => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -1862,7 +1855,7 @@ export default function ReadingScreen() {
             {/* Premium nudge banner — audio teaser */}
             {/* Content - scrollable with day-transition fade */}
             <Animated.View style={[{ flex: 1 }, scrollContentStyle]}>
-            <ScrollView
+            <Animated.ScrollView
               ref={setReaderScrollViewRef}
               style={{ flex: 1 }}
               contentContainerStyle={{
@@ -2214,7 +2207,7 @@ export default function ReadingScreen() {
                   )}
 
               </Animated.View>
-            </ScrollView>
+            </Animated.ScrollView>
             </Animated.View>
           </SafeAreaView>
         </Animated.View>

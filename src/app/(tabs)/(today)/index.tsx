@@ -491,7 +491,11 @@ export default function HomeScreen() {
   }, [currentDevotional, user?.name, user?.currentSituation, checkIns, qaContextSlot, hasReadToday]);
 
   const { data: bridgeText, isLoading: bridgeLoading } = useQuery({
-    queryKey: ['bridge', bridgeInput?.devotionalId, bridgeInput?.dayNumber, bridgeInput?.input],
+    // Keyed to match generateBridge's own MMKV cache identity (devotional +
+    // day + calendar date). Embedding the whole input object here forked a new
+    // cache entry on every free-text profile edit for the same day's bridge.
+    // eslint-disable-next-line @tanstack/query/exhaustive-deps -- input is deliberately not part of the bridge's cache identity
+    queryKey: ['bridge', bridgeInput?.devotionalId, bridgeInput?.dayNumber, clockNow.toISOString().slice(0, 10)],
     queryFn: () => generateBridge(bridgeInput!.input, bridgeInput!.devotionalId, bridgeInput!.dayNumber),
     enabled: isPremium && !!bridgeInput,
     staleTime: 1000 * 60 * 60, // 1 hour — bridge is cached in MMKV anyway

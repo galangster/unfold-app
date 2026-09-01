@@ -31,6 +31,15 @@ const { assetExts, sourceExts } = config.resolver;
 config.transformer = {
   ...config.transformer,
   babelTransformerPath: require.resolve("react-native-svg-transformer/expo"),
+  // Strip console.* from minified (release) bundles; dev builds are unminified
+  // and keep full logging. See expo-rn-performance-2026.md §9 quick wins.
+  minifierConfig: {
+    ...config.transformer.minifierConfig,
+    compress: {
+      ...config.transformer.minifierConfig?.compress,
+      drop_console: true,
+    },
+  },
   getTransformOptions: async () => ({
     transform: {
       experimentalImportSupport: false,
