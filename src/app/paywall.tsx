@@ -918,25 +918,31 @@ export default function PaywallScreen() {
             {/* Billed amount is the primary price (3.1.2c); the per-month
                 equivalent sits subordinate — smaller and muted — beneath it. */}
             <View style={{ alignItems: 'flex-end' }}>
-              <Text
-                style={{
-                  fontFamily: selectedPlan === 'yearly' ? FontFamily.uiSemiBold : FontFamily.ui,
-                  fontSize: 15,
-                  color: selectedPlan === 'yearly' ? colors.accent : colors.textMuted,
-                }}
-              >
-                {yearlyPrice}/yr
-              </Text>
-              <Text
-                style={{
-                  fontFamily: FontFamily.ui,
-                  fontSize: 12,
-                  color: colors.textMuted,
-                  marginTop: 1,
-                }}
-              >
-                {perMonthFromYearly}/mo
-              </Text>
+              {/* No price fragments before offerings resolve: a bare "/yr" or a
+                  derived "$0.00/mo" must never appear on a payment screen. */}
+              {yearlyPrice ? (
+                <Text
+                  style={{
+                    fontFamily: selectedPlan === 'yearly' ? FontFamily.uiSemiBold : FontFamily.ui,
+                    fontSize: 15,
+                    color: selectedPlan === 'yearly' ? colors.accent : colors.textMuted,
+                  }}
+                >
+                  {yearlyPrice}/yr
+                </Text>
+              ) : null}
+              {perMonthFromYearly ? (
+                <Text
+                  style={{
+                    fontFamily: FontFamily.ui,
+                    fontSize: 12,
+                    color: colors.textMuted,
+                    marginTop: 1,
+                  }}
+                >
+                  {perMonthFromYearly}/mo
+                </Text>
+              ) : null}
             </View>
           </TouchableOpacity>
 
@@ -970,15 +976,17 @@ export default function PaywallScreen() {
             >
               Monthly
             </Text>
-            <Text
-              style={{
-                fontFamily: selectedPlan === 'monthly' ? FontFamily.uiSemiBold : FontFamily.ui,
-                fontSize: 15,
-                color: selectedPlan === 'monthly' ? colors.accent : colors.textMuted,
-              }}
-            >
-              {monthlyPrice}/mo
-            </Text>
+            {monthlyPrice ? (
+              <Text
+                style={{
+                  fontFamily: selectedPlan === 'monthly' ? FontFamily.uiSemiBold : FontFamily.ui,
+                  fontSize: 15,
+                  color: selectedPlan === 'monthly' ? colors.accent : colors.textMuted,
+                }}
+              >
+                {monthlyPrice}/mo
+              </Text>
+            ) : null}
           </TouchableOpacity>
         </View>
 

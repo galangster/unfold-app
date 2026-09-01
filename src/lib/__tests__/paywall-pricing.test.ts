@@ -24,4 +24,12 @@ describe('getPerMonthEquivalent', () => {
   it('falls back to $ when the price string carries no symbol', () => {
     expect(getPerMonthEquivalent(59.99, '59.99')).toBe('$4.99');
   });
+
+  it('returns empty when offerings are missing instead of fabricating $0.00/mo', () => {
+    // Offerings failed/loading: paywall.tsx passes raw 0 and an empty price
+    // string. Rendering must show nothing, never a derived "$0.00/mo" (3.1.2c).
+    expect(getPerMonthEquivalent(0, '')).toBe('');
+    expect(getPerMonthEquivalent(0, '$59.99')).toBe('');
+    expect(getPerMonthEquivalent(59.99, '   ')).toBe('');
+  });
 });
