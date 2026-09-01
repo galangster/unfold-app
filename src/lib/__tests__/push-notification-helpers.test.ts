@@ -267,6 +267,30 @@ describe('push notification helpers', () => {
         }),
       ).toBe('redirect');
     });
+
+    it('skips the home redirect while a cold-start deep link has another route focused', () => {
+      expect(
+        getCompletedUserRedirectDisposition({
+          hasPendingNotificationNavigation: false,
+          hasSettledInitialNotificationHydration: true,
+          startedAtMs: 1_000,
+          nowMs: 1_050,
+          activePathname: '/paywall',
+        }),
+      ).toBe('skip');
+    });
+
+    it('still redirects when index itself is the focused route', () => {
+      expect(
+        getCompletedUserRedirectDisposition({
+          hasPendingNotificationNavigation: false,
+          hasSettledInitialNotificationHydration: true,
+          startedAtMs: 1_000,
+          nowMs: 1_050,
+          activePathname: '/',
+        }),
+      ).toBe('redirect');
+    });
   });
 
   describe('createNotificationNavigationCoordinator', () => {

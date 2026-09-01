@@ -1,6 +1,6 @@
 import { View, Text, TouchableOpacity } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
-import { useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -172,6 +172,7 @@ const RevealWord = React.memo(function RevealWord({
 
 export default function WelcomeScreen() {
   const router = useRouter();
+  const pathname = usePathname();
   const user = useUnfoldStore((s) => s.user);
   const { colors } = useTheme();
 
@@ -271,6 +272,7 @@ export default function WelcomeScreen() {
           hasSettledInitialNotificationHydration: hasSettledInitialNotificationHydration(),
           startedAtMs: startedAt,
           nowMs: Date.now(),
+          activePathname: pathname,
         });
 
         if (disposition === 'skip') {
@@ -298,7 +300,10 @@ export default function WelcomeScreen() {
     iconScale.value = withDelay(100, withTiming(1, { duration: 800, easing: EASE }));
     buttonOpacity.value = withDelay(subtitleEndTime + 300, withTiming(1, { duration: 600, easing: EASE }));
     buttonTranslateY.value = withDelay(subtitleEndTime + 300, withTiming(0, { duration: 600, easing: EASE }));
-  }, [user, titleEndTime, subtitleEndTime]);
+    // pathname is a dependency so that when a completed user backs out of a
+    // cold-start deep link onto this anchor screen, the redirect re-evaluates
+    // and sends them home instead of leaving them on the quiet surface.
+  }, [user, titleEndTime, subtitleEndTime, pathname]);
 
   // ─── Animated styles ────────────────────────────────────────────
   const iconStyle = useAnimatedStyle(() => ({

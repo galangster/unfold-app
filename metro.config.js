@@ -123,12 +123,19 @@ config.resolver = {
 
       // Modules with no web implementation: resolve to a Proxy stub so the app
       // boots in a browser for dev/testing. Web-only; native resolution untouched.
+      // Skia gets a dedicated stub whose Skia.* factory results stay chainable.
+      if (moduleName === "@shopify/react-native-skia" || moduleName.startsWith("@shopify/react-native-skia/")) {
+        return {
+          type: "sourceFile",
+          filePath: path.resolve(__dirname, "web/skia-web-stub.js"),
+        };
+      }
+
       const nativeStubModules = [
         "expo-media-library",
         "expo-widgets",
         "expo-speech-recognition",
         "@rive-app/react-native",
-        "@shopify/react-native-skia",
         "@expo/ui",
       ];
 

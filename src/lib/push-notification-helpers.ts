@@ -128,13 +128,27 @@ export function getCompletedUserRedirectDisposition({
   startedAtMs,
   nowMs,
   hydrationWaitWindowMs = 4_000,
+  activePathname,
 }: {
   hasPendingNotificationNavigation: boolean;
   hasSettledInitialNotificationHydration: boolean;
   startedAtMs: number;
   nowMs: number;
   hydrationWaitWindowMs?: number;
+  /**
+   * The currently focused route. The welcome screen is the root stack's anchor
+   * (initialRouteName: 'index'), so it also mounts UNDER any cold-start deep
+   * link (unfold://paywall, a web URL, a universal link). Redirecting home in
+   * that situation replaces the deep-linked route the user asked for — the
+   * same failure mode the pending-notification suppression exists for, but
+   * for every other deep link. Only redirect while index itself is focused.
+   */
+  activePathname?: string | null;
 }): 'skip' | 'wait' | 'redirect' {
+  if (activePathname != null && activePathname !== '/') {
+    return 'skip';
+  }
+
   if (hasPendingNotificationNavigation) {
     return 'skip';
   }
