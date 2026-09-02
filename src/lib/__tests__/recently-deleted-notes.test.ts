@@ -57,11 +57,8 @@ describe('Recently Deleted notes (WR-15)', () => {
     });
     (mmkvStorage as any).__clearMockStorage?.();
 
-    // Outbox dedup keeps the EXISTING entry on equal clientUpdatedAt, and a
-    // warm test worker can run add+delete in the same millisecond — cross a
-    // real ms boundary so the tombstone deterministically wins.
-    await new Promise((resolve) => setTimeout(resolve, 3));
-
+    // add+delete may land in the same millisecond on a warm worker; the
+    // outbox keeps the later enqueue on an equal clientUpdatedAt.
     useUnfoldStore.getState().deleteNote(id);
     let state = useUnfoldStore.getState();
     expect(state.notes).toHaveLength(0);

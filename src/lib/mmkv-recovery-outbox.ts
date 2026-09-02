@@ -4,7 +4,8 @@
  * On a normal (non-recovery) MMKV boot, drain any sync-outbox entries written
  * during a previous recovery session (when the Keychain was down and the app
  * ran on the throwaway 'unfold-store-v2-recovery' namespace) into the real
- * store. Entries are deduplicated by table:id@clientUpdatedAt (newer wins).
+ * store. Entries are deduplicated by table:id@clientUpdatedAt (newer wins;
+ * on an equal timestamp the recovery entry wins — it was written later).
  * The recovery namespace key is cleared afterwards so it stays EMPTY (REVM-4).
  *
  * Separated from mmkv-storage.ts so the pure merge logic can be unit-tested
@@ -65,7 +66,7 @@ export function mergeRecoveryOutbox(
   for (const c of recoveryEntries) {
     const key = `${c.table}:${c.id}`;
     const existing = map.get(key);
-    if (!existing || c.clientUpdatedAt > existing.clientUpdatedAt) {
+    if (!existing || c.clientUpdatedAt >= existing.clientUpdatedAt) {
       map.set(key, c);
     }
   }

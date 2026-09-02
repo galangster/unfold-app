@@ -8,7 +8,9 @@
  *
  * Invariants:
  *  - Single-flight drain: concurrent drainSyncOutbox() calls collapse into one.
- *  - Dedup: table+id keyed; later clientUpdatedAt wins.
+ *  - Dedup: table+id keyed; later clientUpdatedAt wins, and on an equal
+ *    timestamp the later enqueue wins (writes are ms-resolution; a flush
+ *    can put several writes to one record in the same millisecond).
  *  - Cap: 200 entries; oldest dropped when exceeded.
  *  - Never throws: drain resolves (not rejects) on network failure.
  *  - Server is authoritative on rejected/conflict — those are dropped, not
@@ -102,7 +104,8 @@ export function enqueueSyncChanges(changes: SyncPushChange[]): void {
   for (const c of changes) {
     const key = `${c.table}:${c.id}`;
     const existing = map.get(key);
-    if (!existing || c.clientUpdatedAt > existing.clientUpdatedAt) {
+    // `>=`: a later write in the same millisecond is the newer snapshot.
+    if (!existing || c.clientUpdatedAt >= existing.clientUpdatedAt) {
       map.set(key, c);
     }
   }
