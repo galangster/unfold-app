@@ -22,7 +22,9 @@ const { act } = renderer;
 jest.mock('expo-router', () => ({
   useRouter: () => ({ back: jest.fn(), replace: jest.fn(), push: jest.fn() }),
   useLocalSearchParams: () => ({ devotionalId: 'dev-1', dayNumber: '1' }),
-  usePathname: () => '/(tabs)/(today)/journal',
+  // Today-flow mount: closeJournal reads segments + the enclosing stack state.
+  useSegments: () => ['(tabs)', '(today)', 'journal'],
+  useNavigation: () => ({ getState: () => ({ index: 1, routes: [] }) }),
 }));
 
 jest.mock('react-native-safe-area-context', () => {
