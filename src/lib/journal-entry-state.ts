@@ -16,16 +16,17 @@ export function resolveInitialJournalMode(
   return 'freewrite';
 }
 
+/**
+ * Persisted answers keyed by question text — the store's own key. The editor
+ * renders either the day's reflection questions or the AI prompts, so an
+ * index into one list says nothing about the other.
+ */
 export function buildInitialQuestionResponses(
   existingEntry: Pick<JournalEntry, 'questionResponses'> | undefined,
-  currentDay: Pick<DevotionalDay, 'reflectionQuestions'> | undefined,
-): Map<number, string> {
-  const initial = new Map<number, string>();
-  if (!existingEntry?.questionResponses) return initial;
-  const allQuestions = currentDay?.reflectionQuestions ?? [];
-  for (const qr of existingEntry.questionResponses) {
-    const idx = allQuestions.findIndex((q) => q === qr.question);
-    if (idx >= 0) initial.set(idx, qr.response);
+): Map<string, string> {
+  const initial = new Map<string, string>();
+  for (const qr of existingEntry?.questionResponses ?? []) {
+    initial.set(qr.question, qr.response);
   }
   return initial;
 }

@@ -306,10 +306,13 @@ export default function JournalScreen() {
 
   const [showPremiumSheet, setShowPremiumSheet] = useState(false);
 
-  // Expandable question response state
+  // Expandable question response state. Local answers are keyed by QUESTION
+  // TEXT — the store's key — never by index: the rendered list is either the
+  // day's reflection questions (focusQuestion flow) or the AI prompts, and an
+  // index into one is meaningless in the other.
   const [expandedQuestionIndex, setExpandedQuestionIndex] = useState<number | null>(null);
-  const [questionResponses, setQuestionResponses] = useState<Map<number, string>>(() =>
-    buildInitialQuestionResponses(existingEntry, currentDay)
+  const [questionResponses, setQuestionResponses] = useState<Map<string, string>>(() =>
+    buildInitialQuestionResponses(existingEntry)
   );
   const questionInputRefs = useRef<Map<number, TextInput | null>>(new Map());
 
@@ -322,13 +325,11 @@ export default function JournalScreen() {
   const hasChangesRef = useRef(hasChanges);
   hasChangesRef.current = hasChanges;
 
-  // Handle focusQuestion param from journal hub navigation
+  // Handle focusQuestion param from the hub / reader: expand that reflection
+  // question (allQuestions renders the reflection list in this flow).
   useEffect(() => {
     if (focusQuestionIndex != null && currentDay?.reflectionQuestions?.length) {
       setExpandedQuestionIndex(focusQuestionIndex);
-      if (deeperPrompts.length === 0 && currentDay.reflectionQuestions.length > 0) {
-        setDeeperPrompts(currentDay.reflectionQuestions);
-      }
       if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
       focusTimerRef.current = setTimeout(() => {
         if (!isMountedRef.current) return;
@@ -610,11 +611,11 @@ export default function JournalScreen() {
 
   // Save a question response to the store
   const handleQuestionResponseChange = useCallback(
-    (index: number, question: string, response: string) => {
+    (question: string, response: string) => {
       if (!gate()) return;
       setQuestionResponses((prev) => {
         const next = new Map(prev);
-        next.set(index, response);
+        next.set(question, response);
         return next;
       });
 
@@ -658,38 +659,27 @@ export default function JournalScreen() {
     [expandedQuestionIndex]
   );
 
+  // The list the prompts section renders: the day's reflection questions when
+  // the hub/reader deep-linked to one of them, otherwise the AI prompts.
+  const reflectionQuestions = currentDay?.reflectionQuestions;
   const allQuestions = useMemo(() => {
-    if (deeperPrompts.length > 0) return deeperPrompts;
-    return [];
-  }, [deeperPrompts]);
-
-  const answeredCount = useMemo(() => {
-    let count = 0;
-    for (const [, response] of questionResponses) {
-      if (response.trim().length > 0) count++;
-    }
-    if (existingEntry?.questionResponses) {
-      for (const qr of existingEntry.questionResponses) {
-        const idx = allQuestions.findIndex((q) => q === qr.question);
-        if (idx >= 0 && !questionResponses.has(idx) && qr.response.trim().length > 0) {
-          count++;
-        }
-      }
-    }
-    return count;
-  }, [questionResponses, existingEntry, allQuestions]);
+    if (focusQuestionIndex != null && reflectionQuestions?.length) return reflectionQuestions;
+    return deeperPrompts;
+  }, [focusQuestionIndex, reflectionQuestions, deeperPrompts]);
 
   const getResponseForQuestion = useCallback(
-    (index: number, question: string): string => {
-      const local = questionResponses.get(index);
+    (question: string): string => {
+      const local = questionResponses.get(question);
       if (local != null) return local;
-      if (existingEntry?.questionResponses) {
-        const persisted = existingEntry.questionResponses.find((qr) => qr.question === question);
-        if (persisted) return persisted.response;
-      }
-      return '';
+      const persisted = existingEntry?.questionResponses?.find((qr) => qr.question === question);
+      return persisted?.response ?? '';
     },
     [questionResponses, existingEntry]
+  );
+
+  const answeredCount = useMemo(
+    () => allQuestions.filter((question) => getResponseForQuestion(question).trim().length > 0).length,
+    [allQuestions, getResponseForQuestion]
   );
 
   const handleGoDeeper = async () => {
@@ -1028,7 +1018,7 @@ Their journal entry:
 
                     {allQuestions.map((prompt, index) => {
                       const isExpanded = expandedQuestionIndex === index;
-                      const responseText = getResponseForQuestion(index, prompt);
+                      const responseText = getResponseForQuestion(prompt);
                       const isAnswered = responseText.trim().length > 0;
 
                       return (
@@ -1070,7 +1060,7 @@ Their journal entry:
                                     questionInputRefs.current.set(index, ref);
                                   }}
                                   value={responseText}
-                                  onChangeText={(text) => handleQuestionResponseChange(index, prompt, text)}
+                                  onChangeText={(text) => handleQuestionResponseChange(prompt, text)}
                                   placeholder="Write your response..."
                                   placeholderTextColor={colors.textHint}
                                   selectionColor={colors.accent}
@@ -1083,7 +1073,7 @@ Their journal entry:
                                 <VoiceInputBar
                                   inline
                                   value={responseText}
-                                  onChangeText={(text) => handleQuestionResponseChange(index, prompt, text)}
+                                  onChangeText={(text) => handleQuestionResponseChange(prompt, text)}
                                 />
                               </View>
                             </Animated.View>

@@ -23,23 +23,21 @@ describe('resolveInitialJournalMode', () => {
 });
 
 describe('buildInitialQuestionResponses', () => {
-  it('hydrates responses onto the indices of matching question text', () => {
-    const map = buildInitialQuestionResponses(
-      { questionResponses: [{ question: 'Q2', response: 'my answer' }] },
-      { reflectionQuestions: ['Q1', 'Q2'] },
-    );
-    expect(map.get(1)).toBe('my answer');
-    expect(map.size).toBe(1);
+  it('keys persisted responses by their question text (the store key)', () => {
+    const map = buildInitialQuestionResponses({
+      questionResponses: [
+        { question: 'Q2', response: 'my answer' },
+        { question: 'AI prompt', response: 'deeper' },
+      ],
+    });
+    expect(map.get('Q2')).toBe('my answer');
+    expect(map.get('AI prompt')).toBe('deeper');
+    expect(map.size).toBe(2);
   });
 
-  it('returns an empty map when nothing is persisted or no questions match', () => {
-    expect(buildInitialQuestionResponses(undefined, { reflectionQuestions: ['Q1'] }).size).toBe(0);
-    expect(
-      buildInitialQuestionResponses(
-        { questionResponses: [{ question: 'gone', response: 'x' }] },
-        { reflectionQuestions: ['Q1'] },
-      ).size,
-    ).toBe(0);
+  it('returns an empty map when nothing is persisted', () => {
+    expect(buildInitialQuestionResponses(undefined).size).toBe(0);
+    expect(buildInitialQuestionResponses({ questionResponses: undefined }).size).toBe(0);
   });
 });
 
