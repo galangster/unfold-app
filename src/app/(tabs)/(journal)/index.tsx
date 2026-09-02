@@ -940,14 +940,19 @@ export default function JournalHubScreen() {
     return answeredReflectionCount >= reflectionQuestions.length;
   }, [reflectionQuestions, answeredReflectionCount]);
 
+  // Same day as todayEntry and the questions above: the badge describes the
+  // entry for the day being reflected on. currentDay has already advanced to
+  // the next day, whose entry never exists yet, so COMPLETED/CONTINUE could
+  // never show.
   const hasExistingEntry = useMemo(() => {
     if (!currentDevotional) return false;
+    const reflectionDay = currentDayData?.dayNumber ?? currentDevotional.currentDay;
     return journalEntries.some(
       (e) =>
         e.devotionalId === currentDevotional.id &&
-        e.dayNumber === currentDevotional.currentDay,
+        e.dayNumber === reflectionDay,
     );
-  }, [currentDevotional, journalEntries]);
+  }, [currentDevotional, currentDayData, journalEntries]);
 
   const firstUnansweredQuestion = useMemo(() => {
     if (!reflectionQuestions.length) return null;
@@ -1129,16 +1134,19 @@ export default function JournalHubScreen() {
     (questionIndex: number) => {
       if (!currentDevotional) return;
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      // The index belongs to currentDayData's questions (the day being
+      // reflected on), not to currentDay, which has already advanced.
+      const reflectionDay = currentDayData?.dayNumber ?? currentDevotional.currentDay;
       router.push({
         pathname: '/(tabs)/(journal)/entry',
         params: {
           devotionalId: currentDevotional.id,
-          dayNumber: String(currentDevotional.currentDay),
+          dayNumber: String(reflectionDay),
           focusQuestion: String(questionIndex),
         },
       });
     },
-    [currentDevotional, router],
+    [currentDevotional, currentDayData, router],
   );
 
   const handleCreateNote = useCallback(() => {
