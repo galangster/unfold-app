@@ -23,6 +23,7 @@ import { newId } from './sync-ids';
 import type { NudgeType, NudgeImpression } from './nudges';
 import { NUDGE_INITIAL_STATE } from './nudges';
 import { applyStreakRead, getWeekStart, reconcileStreakState } from './streak-helpers';
+import { getEffectivePremiumAccessPolicy } from './premium-state';
 import { repairRehydratedState } from './store-rehydrate-repair';
 import type { WordStudy } from './word-study';
 import {
@@ -1416,7 +1417,10 @@ export const useUnfoldStore = create<UnfoldState>()(
               streakWeekStart: state.streakWeekStart,
               streakWeekendAmnesty: state.streakWeekendAmnesty,
               streakFreezes: state.streakFreezes,
-              isPremium: Boolean(state.user?.isPremium),
+              // Freeze earning follows the premium policy the UI shows (RevenueCat
+              // confirmed, dev/QA overrides included), not the persisted mirror;
+              // 'unknown' stays conservative and earns nothing.
+              isPremium: getEffectivePremiumAccessPolicy() === 'granted',
               streakLongest: state.streakLongest,
             },
             new Date()
@@ -1433,7 +1437,7 @@ export const useUnfoldStore = create<UnfoldState>()(
             streakWeekStart: state.streakWeekStart,
             streakWeekendAmnesty: state.streakWeekendAmnesty,
             streakFreezes: state.streakFreezes,
-            isPremium: Boolean(state.user?.isPremium),
+            isPremium: getEffectivePremiumAccessPolicy() === 'granted',
             streakJustReset: state.streakJustReset,
           })
         ),
