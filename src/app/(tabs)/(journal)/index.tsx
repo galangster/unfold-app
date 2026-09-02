@@ -64,7 +64,7 @@ import { formatRelativeDate } from '@/lib/format-relative-date';
 import { alpha, Sheet } from '@/components/ui';
 import { useCreationGate } from '@/hooks/useCreationGate';
 import { prepareJournalFolderDelete } from '@/lib/journal-folder-delete';
-import { applyUndoActionsWithSync, type JournalUndoAction } from '@/lib/journal-undo';
+import { undoJournalDeletions, type JournalUndoAction } from '@/lib/journal-undo';
 import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
 
 type Segment = 'reflections' | 'notebook';
@@ -1309,13 +1309,9 @@ export default function JournalHubScreen() {
     if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
 
     const clientUpdatedAt = new Date().toISOString();
-    useUnfoldStore.setState((state) =>
-      applyUndoActionsWithSync(
-        { notes: state.notes, folders: state.folders },
-        undoActions,
-        clientUpdatedAt,
-      ),
-    );
+    // Also clears the restored notes from Recently Deleted (deleteNote parks
+    // a copy there), so a later Restore cannot duplicate them.
+    useUnfoldStore.setState((state) => undoJournalDeletions(state, undoActions, clientUpdatedAt));
     setUndoActions([]);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }, [undoActions]);

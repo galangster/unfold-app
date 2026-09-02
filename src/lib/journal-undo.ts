@@ -38,7 +38,11 @@ export function applyUndoActions(
 
   for (const action of reversed) {
     if (action.type === 'note') {
-      notes = [action.note, ...notes];
+      // Never insert an id that is already live (Undo, then "Restore" from
+      // Recently Deleted for the same note): the live copy is the newer one.
+      if (!notes.some((note) => note.id === action.note.id)) {
+        notes = [action.note, ...notes];
+      }
     } else if (action.type === 'folder') {
       // Restore deleted folder tree, deduplicating by id
       folders = [
@@ -143,4 +147,28 @@ export function applyUndoActionsWithSync(
     );
   }
   return restored;
+}
+
+type RecentlyDeletedNote = { note: Note; deletedAt: string };
+
+/**
+ * The hub's Undo: restores the deleted notes/folders and clears the restored
+ * notes from Recently Deleted — deleteNote parks a copy there (WR-15), and a
+ * copy left behind let "Restore" insert the same id a second time.
+ */
+export function undoJournalDeletions(
+  state: { notes: Note[]; folders: NoteFolder[]; deletedNotes: RecentlyDeletedNote[] },
+  actions: JournalUndoAction[],
+  clientUpdatedAt = new Date().toISOString(),
+): { notes: Note[]; folders: NoteFolder[]; deletedNotes: RecentlyDeletedNote[] } {
+  const restored = applyUndoActionsWithSync(
+    { notes: state.notes, folders: state.folders },
+    actions,
+    clientUpdatedAt,
+  );
+  const { noteIds } = restoredUndoIds(actions);
+  return {
+    ...restored,
+    deletedNotes: state.deletedNotes.filter((entry) => !noteIds.has(entry.note.id)),
+  };
 }
