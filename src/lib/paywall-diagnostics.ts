@@ -6,6 +6,7 @@ import type {
   PurchasesPackage,
 } from 'react-native-purchases';
 import { logger } from '@/lib/logger';
+import { getBuildProfile, resolvePaywallDiagnosticsEnabled } from '@/lib/build-profile';
 
 const DIAGNOSTIC_FILE_NAME = 'unfold-paywall-diagnostics.jsonl';
 const MAX_DIAGNOSTIC_LINES = 500;
@@ -26,8 +27,17 @@ export interface PaywallDiagnosticEntry {
   data?: unknown;
 }
 
+/**
+ * Diagnostics are a QA-build affordance: the explicit flag is required and a
+ * production build (stamped `extra.buildProfile`) is always OFF — see
+ * build-profile.ts for the decision table.
+ */
 export function isPaywallDiagnosticsEnabled(): boolean {
-  return process.env.EXPO_PUBLIC_ENABLE_QA_TOOLS === '1';
+  return resolvePaywallDiagnosticsEnabled({
+    buildProfile: getBuildProfile(),
+    isDev: __DEV__,
+    qaFlag: process.env.EXPO_PUBLIC_ENABLE_QA_TOOLS,
+  });
 }
 
 function getDiagnosticsBaseDirectory(): string | null {

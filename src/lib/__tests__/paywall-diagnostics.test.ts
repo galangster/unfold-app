@@ -13,11 +13,16 @@ jest.mock('react-native', () => ({
   Platform: { OS: 'ios' },
 }));
 
+// P3-4 item 1: the gate consults the stamped EAS build profile via expo-constants.
+const mockConstants: { expoConfig: { extra?: unknown } | null } = { expoConfig: { extra: {} } };
+jest.mock('expo-constants', () => ({ __esModule: true, default: mockConstants }));
+
 jest.mock('@/lib/logger', () => ({
   logger: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
 
 import {
+  isPaywallDiagnosticsEnabled,
   recordPaywallDiagnostic,
   recordPaywallDiagnosticLazy,
   sanitizeDiagnosticText,
@@ -28,9 +33,57 @@ import {
 } from '../paywall-diagnostics';
 
 describe('paywall diagnostics', () => {
+  const devGlobal = globalThis as typeof globalThis & { __DEV__: boolean };
+  const originalDev = devGlobal.__DEV__;
+
   beforeEach(() => {
     delete process.env.EXPO_PUBLIC_ENABLE_QA_TOOLS;
+    mockConstants.expoConfig = { extra: {} };
+    devGlobal.__DEV__ = originalDev;
     jest.clearAllMocks();
+  });
+
+  afterAll(() => {
+    devGlobal.__DEV__ = originalDev;
+  });
+
+  it('is hard-blocked in a production build even when the QA flag was inlined', async () => {
+    process.env.EXPO_PUBLIC_ENABLE_QA_TOOLS = '1';
+    mockConstants.expoConfig = { extra: { buildProfile: 'production' } };
+    const fileSystem = jest.requireMock('expo-file-system/legacy');
+    const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => undefined);
+    const getData = jest.fn(() => ({ secret: 'never' }));
+
+    expect(isPaywallDiagnosticsEnabled()).toBe(false);
+    await recordPaywallDiagnostic('test.production', { token: 'do-not-keep' });
+    await recordPaywallDiagnosticLazy('test.production_lazy', getData);
+
+    expect(fileSystem.writeAsStringAsync).not.toHaveBeenCalled();
+    expect(consoleSpy).not.toHaveBeenCalled();
+    expect(getData).not.toHaveBeenCalled();
+    consoleSpy.mockRestore();
+  });
+
+  it.each<[string | null, boolean, string | undefined, boolean]>([
+    ['production', false, '1', false],
+    ['production', true, '1', false],
+    ['production-hotfix', false, '1', false],
+    [null, true, undefined, false],
+    [null, true, '1', true],
+    [null, false, '1', false],
+    ['qa-testflight', false, undefined, false],
+    ['qa-testflight', false, 'true', false],
+    ['qa-testflight', false, '1', true],
+    ['preview', false, '1', true],
+  ])('gate: profile=%s __DEV__=%s flag=%s → %s', (buildProfile, isDev, flag, expected) => {
+    mockConstants.expoConfig = { extra: buildProfile === null ? {} : { buildProfile } };
+    devGlobal.__DEV__ = isDev;
+    if (flag === undefined) {
+      delete process.env.EXPO_PUBLIC_ENABLE_QA_TOOLS;
+    } else {
+      process.env.EXPO_PUBLIC_ENABLE_QA_TOOLS = flag;
+    }
+    expect(isPaywallDiagnosticsEnabled()).toBe(expected);
   });
 
   it('is a no-op when QA diagnostics are disabled', async () => {

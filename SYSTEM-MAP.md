@@ -3,7 +3,7 @@
 Build under audit: TestFlight **218** (ASC `53320626`) · Worktree: `/Users/galangster/clawd/work/unfold-audit` (branch `audit/e2e-build218-2026-06`) · Backend reference (read-only): `/Users/galangster/clawd/work/unfold/backend`
 Synthesized 2026-06-09 from 13 round-1 mapper fragments in `/tmp/unfold-e2e-audit-2026-06/map/` (routes, today-tab, bible-tab, notebook-tab, you-tab, onboarding, devotional-engine, companion, paywall, notifications, widgets, storage, api-clients). **Amended same day with 9 gap-fill fragments** (reading-screen, audio-tts, guided-reflection, share-export, streak-ui, theming, evening-wind-down, analytics-error, android-parity-map): rows 84–95 added, §2–§4 extended, §5 buckets now carry 350 risk notes, §6 gained phases 3b + 12–16. Round-1 coverage gaps on rows 25 (journal editor) and 76 (audio overlay) are now CLOSED; round-1 claim that reading pushes `/wallpaper` was STALE (wallpaper is an orphan route — share-export).
 
-Conventions: routes live under `src/app/` (not `app/`). Deep-link scheme `unfold://` maps every file route (no allowlist). QA gate everywhere = `isQaToolsEnabled()` = `__DEV__ || EXPO_PUBLIC_ENABLE_QA_TOOLS === '1'` (set by eas profile `qa-testflight`, NOT by `production`). Risk-note references below use `fragment#N` = numbered risk note in that fragment file.
+Conventions: routes live under `src/app/` (not `app/`). Deep-link scheme `unfold://` maps every file route (no allowlist). QA gate everywhere = `isQaToolsEnabled()` = NOT a production build AND (`__DEV__` || stamped non-production profile with `EXPO_PUBLIC_ENABLE_QA_TOOLS === '1'`); `app.config.js` stamps `EAS_BUILD_PROFILE` into `extra.buildProfile` and `src/lib/build-profile.ts` is the single decision module (production profile → always off, flag/.env ignored; unstamped release bundle → off). Risk-note references below use `fragment#N` = numbered risk note in that fragment file.
 
 ---
 
@@ -229,7 +229,7 @@ Shared invariants: single origin `PRIMARY_BACKEND_URL` (`EXPO_PUBLIC_BACKEND_URL
 
 ## 4. QA hooks
 
-Master gate: `isQaToolsEnabled()` (`src/lib/qa-tools.ts`) = `__DEV__ || EXPO_PUBLIC_ENABLE_QA_TOOLS === '1'`. The env flag is **build-time** — eas.json profile `qa-testflight` sets it `"1"` with `distribution: store`; `production` does not. **Determine which profile cut build 218 before anything else** (governs whether every hook below is live in the TF binary, reachable externally via `unfold://`). Disabled state: debug routes render `<Redirect href="/(tabs)/(you)" />`.
+Master gate: `isQaToolsEnabled()` (`src/lib/qa-tools.ts`) → `resolveQaToolsEnabled` in `src/lib/build-profile.ts` = NOT a production build AND (`__DEV__` || stamped non-production `extra.buildProfile` with `EXPO_PUBLIC_ENABLE_QA_TOOLS === '1'`). `app.config.js` stamps `EAS_BUILD_PROFILE` into `extra.buildProfile` for every EAS build, so a `production` binary can never enable QA tools or paywall diagnostics (same module gates `isPaywallDiagnosticsEnabled()`), whatever flags or `.env` were present; an unstamped release bundle is also off. The env flag is **build-time** — eas.json profile `qa-testflight` sets it `"1"` with `distribution: store`; `production` does not. **Determine which profile cut build 218 before anything else** (governs whether every hook below is live in the TF binary, reachable externally via `unfold://`). Disabled state: debug routes render `<Redirect href="/(tabs)/(you)" />`.
 
 ### Seed routes (exact invocations — usable as `unfold://<path>` deep links or in-app router pushes)
 | Invocation | Effect |
