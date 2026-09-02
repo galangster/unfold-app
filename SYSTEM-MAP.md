@@ -190,7 +190,7 @@ Checkbox = covered by a completed walkthrough pass (all unchecked at synthesis t
 - **None mapped** — no `widgetURL`/Link/AppIntent in any widget or Live Activity; all taps = plain `unfold://` app open → launch gate (`/`)
 
 ### URL scheme (deep links)
-- `unfold://<any-file-route>` resolves via expo-router default mapping — every route above (incl. all `debug-*` seeds, `/paywall`, `/reveal` with arbitrary params, `/generating`) is externally reachable; no allowlist or param validation layer
+- External URLs (cold-start initial URL + warm `Linking` events; native only) pass through `src/app/+native-intent.tsx` → `resolveExternalDeepLink` (`src/lib/deep-link-allowlist.ts`): explicit route allowlist with per-param schemas (ids, bounded ints, enums, bounded text); route groups accepted for known groups only; unknown routes, blocked routes (`/unfolded`, `/generating`, `/day-menu`), unknown/invalid/duplicate params → rewritten to `/` (index handles both onboarded and fresh users). Accepted URLs pass through untouched (widgets' `unfold://(tabs)/(today)` included). Web has no native-intent hook — the per-route guards (`reveal.tsx` resolves params against local devotionals before any store write; `reader.tsx` clamps book/chapter/verse to the canon) are the only protection there.
 - Companion in-chat `[[deep_link:{json}]]` (types reading/journal/prayer) → in-app cards, not OS links
 
 ---
