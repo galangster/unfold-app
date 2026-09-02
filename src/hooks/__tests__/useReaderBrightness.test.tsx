@@ -53,6 +53,38 @@ async function renderHookProbe() {
   return latest as HookResult;
 }
 
+async function renderHookProbeTree() {
+  let latestValue: HookResult | null = null;
+  const onValue = (value: HookResult) => {
+    latestValue = value;
+  };
+  let tree: { update: (element: React.ReactElement) => void; unmount: () => void } | null = null;
+  await act(async () => {
+    tree = renderer.create(<HookProbe onValue={onValue} />);
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  if (!tree) throw new Error('Hook did not render');
+  const rerender = async () => {
+    await act(async () => {
+      tree!.update(<HookProbe onValue={onValue} />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  };
+  const unmount = async () => {
+    await act(async () => {
+      tree!.unmount();
+      await Promise.resolve();
+    });
+  };
+  const latest = () => {
+    if (!latestValue) throw new Error('Hook did not render');
+    return latestValue as HookResult;
+  };
+  return { rerender, unmount, latest };
+}
+
 describe('useReaderBrightness', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -81,6 +113,64 @@ describe('useReaderBrightness', () => {
 
     expect(mockGetBrightnessAsync).toHaveBeenCalledTimes(1);
     expect(mockSetBrightnessAsync).toHaveBeenCalledWith(0.42);
+  });
+
+  it('applies a reader brightness that hydrates after mount exactly once, and still restores on unmount', async () => {
+    const { rerender, unmount } = await renderHookProbeTree();
+    expect(mockSetBrightnessAsync).not.toHaveBeenCalled();
+
+    mockStoreState = { ...mockStoreState, readerBrightness: 0.5 };
+    await rerender();
+
+    expect(mockSetBrightnessAsync).toHaveBeenCalledTimes(1);
+    expect(mockSetBrightnessAsync).toHaveBeenCalledWith(0.5);
+
+    // Re-renders with the same value never re-apply it.
+    await rerender();
+    await rerender();
+    expect(mockSetBrightnessAsync).toHaveBeenCalledTimes(1);
+
+    await unmount();
+    expect(mockSetBrightnessAsync).toHaveBeenCalledTimes(2);
+    expect(mockSetBrightnessAsync).toHaveBeenLastCalledWith(0.8);
+  });
+
+  it('applies a value that hydrates while the original level is still being captured, once', async () => {
+    let resolveOriginal: (value: number) => void = () => {};
+    mockGetBrightnessAsync.mockReturnValueOnce(
+      new Promise<number>((resolve) => {
+        resolveOriginal = resolve;
+      }),
+    );
+    const { rerender } = await renderHookProbeTree();
+
+    mockStoreState = { ...mockStoreState, readerBrightness: 0.6 };
+    await rerender();
+    expect(mockSetBrightnessAsync).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveOriginal(0.8);
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await rerender();
+
+    expect(mockSetBrightnessAsync).toHaveBeenCalledTimes(1);
+    expect(mockSetBrightnessAsync).toHaveBeenCalledWith(0.6);
+  });
+
+  it('does not re-apply a value the hook itself just set', async () => {
+    const { rerender, latest } = await renderHookProbeTree();
+    mockSetBrightnessAsync.mockClear();
+
+    await act(async () => {
+      await latest().setBrightness(0.7);
+    });
+    await rerender();
+
+    expect(mockSetBrightnessAsync).toHaveBeenCalledTimes(1);
+    expect(mockSetBrightnessAsync).toHaveBeenCalledWith(0.7);
   });
 
   it('clamps, persists, and applies explicit brightness changes', async () => {

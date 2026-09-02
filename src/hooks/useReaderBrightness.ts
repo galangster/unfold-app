@@ -15,8 +15,23 @@ export function useReaderBrightness() {
   const storedBrightness = useUnfoldStore((state) => state.readerBrightness ?? null);
   const setStoredBrightness = useUnfoldStore((state) => state.setReaderBrightness);
   const [brightnessAvailable, setBrightnessAvailable] = useState(true);
+  const [prepared, setPrepared] = useState(false);
   const originalBrightnessRef = useRef<number | null>(null);
   const changedReaderBrightnessRef = useRef(false);
+  // Latest persisted value, so the async prepare step can read what hydrated
+  // during its awaits without re-running; and the last value this hook applied,
+  // so a value it just set (or already applied) is never applied twice.
+  const storedBrightnessRef = useRef(storedBrightness);
+  storedBrightnessRef.current = storedBrightness;
+  const appliedBrightnessRef = useRef<number | null>(null);
+
+  const applyStoredBrightness = useCallback(async (value: number) => {
+    const clamped = clampReaderBrightness(value);
+    if (appliedBrightnessRef.current === clamped) return;
+    appliedBrightnessRef.current = clamped;
+    changedReaderBrightnessRef.current = true;
+    await Brightness.setBrightnessAsync(clamped);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -33,11 +48,11 @@ export function useReaderBrightness() {
         if (cancelled) return;
         originalBrightnessRef.current = originalBrightness;
 
-        if (storedBrightness != null) {
-          const clamped = clampReaderBrightness(storedBrightness);
-          changedReaderBrightnessRef.current = true;
-          await Brightness.setBrightnessAsync(clamped);
+        const stored = storedBrightnessRef.current;
+        if (stored != null) {
+          await applyStoredBrightness(stored);
         }
+        if (!cancelled) setPrepared(true);
       } catch (error) {
         if (!cancelled) {
           setBrightnessAvailable(false);
@@ -56,7 +71,17 @@ export function useReaderBrightness() {
         });
       }
     };
-  }, []);
+  }, [applyStoredBrightness]);
+
+  // A value that hydrates after prepare finished (async rehydration, a sync
+  // pull) is applied once; values this hook set itself are already recorded
+  // as applied, so re-renders never re-apply.
+  useEffect(() => {
+    if (!prepared || !brightnessAvailable || storedBrightness == null) return;
+    applyStoredBrightness(storedBrightness).catch((error) => {
+      logger.warn('[reader-brightness] Unable to apply stored reader brightness', error);
+    });
+  }, [prepared, brightnessAvailable, storedBrightness, applyStoredBrightness]);
 
   const setBrightness = useCallback(
     async (value: number) => {
@@ -66,6 +91,7 @@ export function useReaderBrightness() {
       if (!brightnessAvailable) return;
 
       try {
+        appliedBrightnessRef.current = clamped;
         changedReaderBrightnessRef.current = true;
         await Brightness.setBrightnessAsync(clamped);
       } catch (error) {
@@ -77,6 +103,7 @@ export function useReaderBrightness() {
 
   const resetBrightness = useCallback(async () => {
     setStoredBrightness(null);
+    appliedBrightnessRef.current = null;
 
     if (!brightnessAvailable || originalBrightnessRef.current == null) return;
 

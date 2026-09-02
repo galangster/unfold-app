@@ -10,6 +10,8 @@ import {
   createThemedColors,
 } from '@/constants/colors';
 import { useUnfoldStore, ThemeMode, ACCENT_THEMES } from '@/lib/store';
+import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
+import { resolveEffectiveAccentThemeId } from '@/lib/accent-theme-policy';
 
 interface ThemeContextType {
   colors: ColorTheme;
@@ -41,7 +43,11 @@ interface ThemeProviderProps {
 export function ThemeProvider({ children }: ThemeProviderProps) {
   const systemColorScheme = useColorScheme();
   const themeMode = useUnfoldStore((s) => s.user?.themeMode ?? 'dark');
-  const accentThemeId = useUnfoldStore((s) => s.user?.accentTheme ?? 'gold');
+  const persistedAccentThemeId = useUnfoldStore((s) => s.user?.accentTheme);
+  const premiumPolicy = usePremiumAccessPolicy();
+  // Premium accents revert for a lapsed subscriber, mirroring the reading
+  // font; 'unknown' keeps the persisted accent so hydration never flashes gold.
+  const accentThemeId = resolveEffectiveAccentThemeId(persistedAccentThemeId, premiumPolicy);
 
   const value = useMemo(() => {
     // Determine if we should use dark mode
