@@ -2,6 +2,7 @@ import {
   buildInitialQuestionResponses,
   diffSoapWrites,
   resolveInitialJournalMode,
+  resolveJournalCloseAction,
 } from '../journal-entry-state';
 
 describe('resolveInitialJournalMode', () => {
@@ -65,5 +66,31 @@ describe('diffSoapWrites', () => {
     expect(diffSoapWrites(soap({ scripture: 'John 3:16' }), undefined)).toEqual([
       { field: 'scripture', value: 'John 3:16' },
     ]);
+  });
+});
+
+describe('resolveJournalCloseAction', () => {
+  const journalTabEntry = ['(tabs)', '(journal)', 'entry'];
+
+  it('pops back to the hub when the Journal tab pushed the entry on top of it', () => {
+    expect(resolveJournalCloseAction({ segments: journalTabEntry, stackIndex: 1 })).toBe('back');
+  });
+
+  it('replaces the entry with the hub when it is the first route of the Journal stack', () => {
+    expect(resolveJournalCloseAction({ segments: journalTabEntry, stackIndex: 0 })).toBe(
+      'replace-journal-hub',
+    );
+  });
+
+  it('always pops in the Today flow, whatever the stack depth', () => {
+    const todayFlow = ['(tabs)', '(today)', 'journal'];
+    expect(resolveJournalCloseAction({ segments: todayFlow, stackIndex: 0 })).toBe('back');
+    expect(resolveJournalCloseAction({ segments: todayFlow, stackIndex: 2 })).toBe('back');
+  });
+
+  it('needs the route group to recognise the Journal-tab mount (pathname strips it)', () => {
+    // usePathname() reports '/entry' for (journal)/entry — without the group
+    // segment the screen is indistinguishable from any other entry route.
+    expect(resolveJournalCloseAction({ segments: ['entry'], stackIndex: 0 })).toBe('back');
   });
 });

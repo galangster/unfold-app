@@ -50,3 +50,34 @@ export function diffSoapWrites(
   }
   return writes;
 }
+
+export type JournalCloseAction = 'back' | 'replace-journal-hub';
+
+/**
+ * Where Done/Skip should take the user.
+ *
+ * The same screen is mounted twice: under (today)/journal for the Today flow
+ * (close pops back to wherever it was opened from) and, via re-export, under
+ * (journal)/entry for the Journal tab. The hub pushes the entry on top of
+ * itself, so popping is the right close there too — it keeps the hub's
+ * state and never stacks a second hub. Only when the entry is the first
+ * route of the Journal stack (cold-start deep link) would a pop bubble up to
+ * the tab navigator and land on the Today tab; that case replaces the entry
+ * with the hub instead.
+ *
+ * Decide from `useSegments()` (keeps route groups), never `usePathname()`
+ * (strips them: the Journal-tab mount reports '/entry').
+ */
+export function resolveJournalCloseAction({
+  segments,
+  stackIndex,
+}: {
+  segments: readonly string[];
+  /** Index of the focused route in the enclosing stack; 0 = first route. */
+  stackIndex: number;
+}): JournalCloseAction {
+  const isJournalTabEntry =
+    segments.includes('(journal)') && segments[segments.length - 1] === 'entry';
+  if (isJournalTabEntry && stackIndex <= 0) return 'replace-journal-hub';
+  return 'back';
+}

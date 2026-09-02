@@ -13,7 +13,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
-import { useRouter, useLocalSearchParams, usePathname } from 'expo-router';
+import { useRouter, useLocalSearchParams, useNavigation, useSegments } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
   FadeIn,
@@ -59,7 +59,12 @@ import { checkRateLimit, incrementRateLimit } from '@/lib/rate-limit';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
 import { alpha } from '@/components/ui';
 import { buildFreeWritePlaceholder } from '@/lib/journal-freewrite-placeholder';
-import { buildInitialQuestionResponses, diffSoapWrites, resolveInitialJournalMode } from '@/lib/journal-entry-state';
+import {
+  buildInitialQuestionResponses,
+  diffSoapWrites,
+  resolveInitialJournalMode,
+  resolveJournalCloseAction,
+} from '@/lib/journal-entry-state';
 import { useCreationGate } from '@/hooks/useCreationGate';
 import {
   createAutosaveController,
@@ -157,7 +162,8 @@ function AnimatedPrayerCircle({ isAnswered, accentColor, hintColor }: {
 
 export default function JournalScreen() {
   const router = useRouter();
-  const pathname = usePathname();
+  const segments = useSegments();
+  const navigation = useNavigation();
   const { colors, isDark } = useTheme();
   const reducedMotion = useReducedMotion();
   const params = useLocalSearchParams<{ devotionalId: string; dayNumber: string; focusQuestion?: string }>();
@@ -440,12 +446,18 @@ export default function JournalScreen() {
   };
 
   const closeJournal = useCallback(() => {
-    if (pathname === '/(tabs)/(journal)/entry') {
+    // Segments keep route groups (usePathname() reports '/entry' for the
+    // Journal-tab mount, so a group-qualified pathname compare never matched).
+    const action = resolveJournalCloseAction({
+      segments,
+      stackIndex: navigation.getState()?.index ?? 0,
+    });
+    if (action === 'replace-journal-hub') {
       router.replace('/(tabs)/(journal)');
       return;
     }
     router.back();
-  }, [pathname, router]);
+  }, [segments, navigation, router]);
 
   const handleDone = () => {
     if (!gate()) return;
