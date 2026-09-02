@@ -3,6 +3,7 @@ import {
   toFriendlyOnboardingGenerationError,
   toFriendlyRemainingDaysGenerationError,
 } from '@/lib/generation-errors';
+import { dailyAiBudgetMessage } from '@/lib/ai-budget-error';
 
 describe('generation error helpers', () => {
   describe('isTransientGenerationError', () => {
@@ -83,5 +84,22 @@ describe('generation error helpers', () => {
         'Could not finish writing the remaining days right now. Please try again.',
       );
     });
+
+    it('passes the daily AI budget copy through untouched', () => {
+      const budget = dailyAiBudgetMessage(5400);
+      expect(toFriendlyRemainingDaysGenerationError(budget)).toBe(budget);
+      expect(toFriendlyRemainingDaysGenerationError(dailyAiBudgetMessage(null))).toBe(
+        dailyAiBudgetMessage(null),
+      );
+    });
+  });
+
+  describe('daily AI budget is never treated as transient', () => {
+    it.each([[dailyAiBudgetMessage(600)], [dailyAiBudgetMessage(null)]])(
+      'does not retry %s',
+      (message) => {
+        expect(isTransientGenerationError(message)).toBe(false);
+      },
+    );
   });
 });

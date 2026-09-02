@@ -1,3 +1,5 @@
+import { isDailyAiBudgetMessage } from './ai-budget-error';
+
 export function isTransientGenerationError(message: string): boolean {
   const normalized = message.toLowerCase();
 
@@ -45,6 +47,11 @@ export function toFriendlyOnboardingGenerationError(errorMessage: string): strin
 }
 
 export function toFriendlyRemainingDaysGenerationError(message: string): string {
+  // The daily AI budget copy already says what happened and when it frees up.
+  if (isDailyAiBudgetMessage(message)) {
+    return message;
+  }
+
   if (isTransientGenerationError(message)) {
     return 'Connection was interrupted while writing. Please try again in a moment.';
   }

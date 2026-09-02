@@ -751,3 +751,90 @@ describe('foreground resume reconciliation', () => {
     });
   });
 });
+
+describe('daily AI budget (429 SPEND_CAP_REACHED)', () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+    act(() => {
+      useCompanionChatStore.getState().clearAllConversations();
+    });
+  });
+
+  function rateLimited(code: 'SPEND_CAP_REACHED' | 'RATE_LIMITED', retryAfter: number) {
+    return {
+      ok: false,
+      status: 429,
+      headers: {
+        get: (name: string) => (name.toLowerCase() === 'retry-after' ? String(retryAfter) : null),
+      },
+      text: async () =>
+        JSON.stringify({
+          error: {
+            code,
+            message: `Try again in ${retryAfter} seconds.`,
+            retryAfter,
+          },
+        }),
+    };
+  }
+
+  async function sendOnce(text: string) {
+    let hook: ReturnType<typeof useCompanionChat> | null = null;
+    await act(async () => {
+      renderer.create(<HookHarness onReady={(next) => { hook = next; }} />);
+      await Promise.resolve();
+    });
+
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await hook!.sendMessage(text);
+      await wait(150);
+    });
+
+    const reply = useCompanionChatStore.getState().conversations[0]
+      ?.messages.find((m) => m.role === 'companion');
+    return { hook: hook!, outcome, reply };
+  }
+
+  it('shows the budget copy with the reset estimate and never retries through the non-streaming endpoint', async () => {
+    mockFetch
+      .mockResolvedValueOnce(rateLimited('SPEND_CAP_REACHED', 5400))
+      // A fallback would consume this; a budget response must never request it.
+      .mockResolvedValueOnce(jsonResponse({ content: 'Billed anyway', suggestions: [] }));
+
+    const { hook, outcome, reply } = await sendOnce('question');
+
+    expect(outcome).toBe('error');
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(reply?.status).toBe('error');
+    expect(reply?.content).toBe("You've used up your daily AI budget. It resets in about 2 hours.");
+    expect(hook.error).toBe("You've used up your daily AI budget. It resets in about 2 hours.");
+  });
+
+  it('keeps the existing non-streaming fallback for an ordinary 429', async () => {
+    mockFetch
+      .mockResolvedValueOnce(rateLimited('RATE_LIMITED', 30))
+      .mockResolvedValueOnce(jsonResponse({ content: 'Fallback answer', suggestions: [] }));
+
+    const { outcome, reply } = await sendOnce('question');
+
+    expect(outcome).toBe('sent');
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(reply?.status).toBe('complete');
+    expect(reply?.content).toBe('Fallback answer');
+  });
+
+  it('shows the budget copy when the non-streaming fallback is the request that hits the budget', async () => {
+    mockFetch
+      .mockResolvedValueOnce({ ok: true, body: undefined }) // no reader → legitimate fallback
+      .mockResolvedValueOnce(rateLimited('SPEND_CAP_REACHED', 600));
+
+    const { hook, outcome, reply } = await sendOnce('question');
+
+    expect(outcome).toBe('error');
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(reply?.status).toBe('error');
+    expect(reply?.content).toBe("You've used up your daily AI budget. It resets in about 10 minutes.");
+    expect(hook.error).toBe("You've used up your daily AI budget. It resets in about 10 minutes.");
+  });
+});
