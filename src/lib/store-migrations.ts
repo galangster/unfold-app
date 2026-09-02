@@ -1,6 +1,7 @@
 import { logger } from './logger';
 import { canonicalGeneratedDayId } from './devotional-canonical-days';
 import { compositeId } from './sync-ids';
+import { normalizeSoapResponses } from './journal-entry-state';
 
 type PersistedUnfoldState = Record<string, any>;
 
@@ -584,6 +585,37 @@ if (version < 40) {
     }
   } catch (err) {
     console.error('[store] Migration v39→40 failed:', err);
+  }
+}
+
+// Migration from version 40 to 41: repair journal soapResponses restored by
+// sync. The pull mapper turned a NULL soap_responses column (every freewrite
+// entry) into `{}`, and journal.tsx / journal-detail.tsx read the four
+// fields unguarded — every synced reflection opened into the error boundary.
+// The mapper now yields four strings or nothing; this repairs what an
+// upgraded install already has on disk so it never hits the crash.
+if (version < 41) {
+  try {
+    const journalEntries = (state as any).journalEntries;
+    if (Array.isArray(journalEntries)) {
+      let repaired = 0;
+      for (const entry of journalEntries) {
+        if (!entry || typeof entry !== 'object' || !('soapResponses' in entry)) continue;
+        const normalized = normalizeSoapResponses(entry.soapResponses);
+        const unchanged =
+          normalized !== undefined &&
+          JSON.stringify(normalized) === JSON.stringify(entry.soapResponses);
+        if (unchanged) continue;
+        if (normalized) entry.soapResponses = normalized;
+        else delete entry.soapResponses;
+        repaired += 1;
+      }
+      if (repaired > 0) {
+        logger.log(`[store] Migration v40→41: repaired soapResponses on ${repaired} journal entr${repaired === 1 ? 'y' : 'ies'}`);
+      }
+    }
+  } catch (err) {
+    console.error('[store] Migration v40→41 failed:', err);
   }
 }
 

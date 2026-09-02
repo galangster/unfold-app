@@ -51,6 +51,34 @@ export function diffSoapWrites(
   return writes;
 }
 
+export const EMPTY_SOAP_RESPONSES: SoapResponses = {
+  scripture: '',
+  observation: '',
+  application: '',
+  prayer: '',
+};
+
+/**
+ * The shape the screens read without guards: every SOAP field a string.
+ * Anything that carries no string field at all — undefined, the `{}` a sync
+ * pull produced for a NULL soap_responses column, arrays, primitives —
+ * normalises to undefined; a partial object is filled out to four fields.
+ */
+export function normalizeSoapResponses(value: unknown): SoapResponses | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const record = value as Record<string, unknown>;
+  const normalized: SoapResponses = { ...EMPTY_SOAP_RESPONSES };
+  let hasField = false;
+  for (const field of SOAP_FIELDS) {
+    const fieldValue = record[field];
+    if (typeof fieldValue === 'string') {
+      normalized[field] = fieldValue;
+      hasField = true;
+    }
+  }
+  return hasField ? normalized : undefined;
+}
+
 export type JournalCloseAction = 'back' | 'replace-journal-hub';
 
 /**

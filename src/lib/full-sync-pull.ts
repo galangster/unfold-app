@@ -5,6 +5,7 @@ import { mmkvStorage } from './mmkv-storage';
 import { logger } from './logger';
 import { useUnfoldStore } from './store';
 import { peekSyncOutbox } from './sync-outbox';
+import { normalizeSoapResponses } from './journal-entry-state';
 import type {
   BibleHighlight,
   BibleReadingPosition,
@@ -139,7 +140,9 @@ function mapJournalEntry(record: SyncPulledRecord): JournalEntry | null {
     createdAt: asString(row.createdAt) ?? recordUpdatedAt(record),
     updatedAt: recordUpdatedAt(record),
     journalMode: asString(row.journalMode) as JournalEntry['journalMode'],
-    soapResponses: asRecord(row.soapResponses) as unknown as JournalEntry['soapResponses'],
+    // NULL column (every freewrite entry) → no object; the journal screens
+    // read the four fields unguarded, so never hand them `{}` or a partial.
+    soapResponses: normalizeSoapResponses(row.soapResponses),
     prayerRequests: asArray(row.prayerRequests) as JournalEntry['prayerRequests'],
     questionResponses: asArray(row.questionResponses) as JournalEntry['questionResponses'],
     deeperQuestions: asArray<string>(row.deeperQuestions),

@@ -60,8 +60,10 @@ import { VoiceInputBar } from '@/components/VoiceInputBar';
 import { alpha } from '@/components/ui';
 import { buildFreeWritePlaceholder } from '@/lib/journal-freewrite-placeholder';
 import {
+  EMPTY_SOAP_RESPONSES,
   buildInitialQuestionResponses,
   diffSoapWrites,
+  normalizeSoapResponses,
   resolveInitialJournalMode,
   resolveJournalCloseAction,
 } from '@/lib/journal-entry-state';
@@ -217,12 +219,14 @@ export default function JournalScreen() {
     resolveInitialJournalMode(existingEntry, currentDay)
   );
 
-  // SOAP state
+  // SOAP state. Read the persisted object through normalizeSoapResponses: an
+  // entry restored by sync can carry `{}` (NULL column) or a partial object,
+  // and the SOAP UI indexes the four fields unguarded.
   const [soapValues, setSoapValues] = useState<SoapResponses>(
-    existingEntry?.soapResponses ?? { scripture: '', observation: '', application: '', prayer: '' }
+    () => normalizeSoapResponses(existingEntry?.soapResponses) ?? EMPTY_SOAP_RESPONSES
   );
   const [expandedSoapSection, setExpandedSoapSection] = useState<keyof SoapResponses | null>(
-    existingEntry?.soapResponses ? null : 'scripture'
+    () => (normalizeSoapResponses(existingEntry?.soapResponses) ? null : 'scripture')
   );
   const soapInputRefs = useRef<Map<string, TextInput | null>>(new Map());
   const soapValuesRef = useRef(soapValues);
@@ -258,9 +262,9 @@ export default function JournalScreen() {
     if (existingEntry.content && existingEntry.content !== content) {
       setContent(existingEntry.content);
     }
-    // Resync SOAP values
-    if (existingEntry.soapResponses) {
-      const storeVals = existingEntry.soapResponses;
+    // Resync SOAP values (normalised: a pulled entry may hold `{}` or a partial object)
+    const storeVals = normalizeSoapResponses(existingEntry.soapResponses);
+    if (storeVals) {
       const localVals = soapValuesRef.current;
       const hasStoreDiff = (['scripture', 'observation', 'application', 'prayer'] as const).some(
         (k) => (storeVals[k] ?? '') !== (localVals[k] ?? '')
