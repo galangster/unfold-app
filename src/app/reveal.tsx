@@ -21,6 +21,7 @@ import { CaretUp } from '@/components/icons';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
+import { logger } from '@/lib/logger';
 import { useUIState } from '@/lib/ui-state';
 import { alpha } from '@/components/ui';
 import { ScatterTitle } from '@/components/ScatterTitle';
@@ -156,19 +157,17 @@ export default function RevealScreen() {
     if (revealTarget || hasNavigated.current) return;
     if (!useUnfoldStore.persist.hasHydrated()) return;
     hasNavigated.current = true;
-    console.log('[Reveal] params do not resolve to a local devotional day — redirecting to Today');
+    logger.warn('[Reveal] params do not resolve to a local devotional day — redirecting to Today');
     router.replace('/(tabs)/(today)');
   }, [revealTarget, devotionals, router]);
 
   const navigateToReading = useCallback(() => {
-    console.log('[Reveal] navigateToReading START', { devotionalId, dayNumber, hasNavigated: hasNavigated.current });
     if (hasNavigated.current) {
-      console.log('[Reveal] already navigated, bailing');
       return;
     }
     if (!revealTarget) {
       // Guard (P3-4): no store writes for params that don't resolve locally.
-      console.log('[Reveal] refusing store writes for unresolved params — redirecting to Today');
+      logger.warn('[Reveal] refusing store writes for unresolved params — redirecting to Today');
       hasNavigated.current = true;
       router.replace('/(tabs)/(today)');
       return;
@@ -176,11 +175,8 @@ export default function RevealScreen() {
     hasNavigated.current = true;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     // Mark this day as revealed — teaser card won't show again
-    console.log('[Reveal] markDayAsRevealed', { devotionalId: revealTarget.devotionalId, dayNumber: revealTarget.dayNumber });
     markDayAsRevealed(revealTarget.devotionalId, revealTarget.dayNumber);
-    console.log('[Reveal] setCurrentDevotional', revealTarget.devotionalId);
     setCurrentDevotional(revealTarget.devotionalId);
-    console.log('[Reveal] setResumeContext for reading handoff', { devotionalId: revealTarget.devotionalId, dayNumber: revealTarget.dayNumber });
     setResumeContext({
       route: 'reading',
       devotionalId: revealTarget.devotionalId,
@@ -196,14 +192,13 @@ export default function RevealScreen() {
     });
     // Flag the transition so the home screen renders blank during the brief
     // moment React Navigation renders the tab index before the reading screen.
-    console.log('[Reveal] setRevealTransitioning(true)');
     useUIState.getState().setRevealTransitioning(true);
     // Safety valve: if the transition is interrupted before Reading mounts,
     // don't leave Home permanently blank.
     transitionResetTimerRef.current = setTimeout(() => {
       const { revealTransitioning, setRevealTransitioning } = useUIState.getState();
       if (revealTransitioning) {
-        console.log('[Reveal] fallback clear revealTransitioning after interrupted navigation');
+        logger.warn('[Reveal] fallback clear revealTransitioning after interrupted navigation');
         setRevealTransitioning(false);
       }
     }, 2000);
@@ -211,18 +206,13 @@ export default function RevealScreen() {
     // `dismissTo` can briefly pop through the tab index on this root-stack →
     // nested-tab handoff, which is exactly the blank/stranded path the reveal
     // transition guard is trying to avoid.
-    console.log('[Reveal] replace → /(tabs)/(today)/reading', {
-      devotionalId: revealTarget.devotionalId,
-      dayNumber: String(revealTarget.dayNumber),
-    });
     router.replace(
       buildReadingRouteFromRevealParams({
         devotionalId: revealTarget.devotionalId,
         dayNumber: String(revealTarget.dayNumber),
       }),
     );
-    console.log('[Reveal] navigateToReading DONE');
-  }, [devotionalId, dayNumber, revealTarget, router, markDayAsRevealed, setCurrentDevotional, setResumeContext]);
+  }, [revealTarget, router, markDayAsRevealed, setCurrentDevotional, setResumeContext]);
 
   const fireApproachHaptic = useCallback(() => {
     Haptics.selectionAsync();

@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/lib/theme';
+import { logger } from '@/lib/logger';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { Typography } from '@/constants/typography';
@@ -91,7 +92,7 @@ export function Button({
 
   // Dev warning for icon variant without accessibility
   if (__DEV__ && variant === 'icon' && !label && !rest.accessibilityLabel) {
-    console.warn(
+    logger.warn(
       '[Button] Icon variant without label or accessibilityLabel is inaccessible.'
     );
   }

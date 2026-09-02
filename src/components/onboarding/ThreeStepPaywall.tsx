@@ -42,6 +42,7 @@ import { purchasePackage, restorePurchases, getOfferings } from '@/lib/revenueca
 import { PURCHASE_PLANS_UNAVAILABLE_MESSAGE } from '@/lib/paywall-purchase-readiness';
 import { getPaywallRenewalDisclosure } from '@/lib/paywall-disclosure';
 import { syncTrialEndingNotification } from '@/lib/trial-notification';
+import { logger } from '@/lib/logger';
 import type { PurchasesPackage } from 'react-native-purchases';
 import type { ColorTheme } from '@/constants/colors';
 import { EmberSystem } from '@/components/EmberSystem';
@@ -1189,8 +1190,7 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
         if (status === 'readyToPlay' && !p.playing) {
           p.play();
         } else if (status === 'error') {
-          // eslint-disable-next-line no-console
-          console.warn('[ThreeStepPaywall] video player error:', error);
+          logger.warn('[ThreeStepPaywall] video player error:', error);
         }
       });
       p.play();

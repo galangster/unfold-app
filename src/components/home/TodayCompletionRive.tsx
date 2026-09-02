@@ -22,6 +22,7 @@ import {
   type ViewModelInstance,
 } from '@rive-app/react-native';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
+import { logger } from '@/lib/logger';
 import {
   buildRiveThemeValues,
   RIVE_ACCENT_COLOR_PROPERTIES,
@@ -112,13 +113,13 @@ export function TodayCompletionRive({
 
   useEffect(() => {
     if (riveFileError) {
-      console.warn(`[${LOG_PREFIX}] Failed to load Rive file:`, riveFileError.message);
+      logger.warn(`[${LOG_PREFIX}] Failed to load Rive file:`, riveFileError.message);
     }
   }, [riveFileError]);
 
   useEffect(() => {
     if (viewModelError) {
-      console.warn(`[${LOG_PREFIX}] Failed to create ${VIEW_MODEL_NAME}:`, viewModelError.message);
+      logger.warn(`[${LOG_PREFIX}] Failed to create ${VIEW_MODEL_NAME}:`, viewModelError.message);
     }
   }, [viewModelError]);
 
@@ -188,7 +189,7 @@ export function TodayCompletionRive({
           return;
         } catch (error) {
           if (cancelled) return;
-          console.warn(
+          logger.warn(
             `[${LOG_PREFIX}] Play attempt ${attempt}/${PLAY_ATTEMPTS} failed:`,
             error instanceof Error ? error.message : error,
           );
@@ -229,7 +230,7 @@ export function TodayCompletionRive({
           dataBind={instance ?? DataBindMode.Auto}
           hybridRef={setHybridRef}
           onError={(error) => {
-            console.warn(`[${LOG_PREFIX}] Rive render error:`, error.message);
+            logger.warn(`[${LOG_PREFIX}] Rive render error:`, error.message);
           }}
           style={StyleSheet.absoluteFill}
         />

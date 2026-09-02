@@ -1,3 +1,4 @@
+/* eslint-disable no-console -- live smoke: printing the real arc and timing to the terminal is the point */
 /**
  * LIVE smoke for the Opus 5 arc pass — hits the PRODUCTION backend.
  *

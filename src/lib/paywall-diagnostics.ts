@@ -286,6 +286,7 @@ export function recordPaywallDiagnostic(
 
   // Keep this as a real console line even in production QA/TestFlight builds so
   // Xcode/Console captures the same breadcrumb if file extraction fails.
+  // eslint-disable-next-line no-console -- deliberate: the __DEV__-gated logger would drop it in those builds
   console.log('[PaywallDiagnostics]', JSON.stringify(entry));
 
   writeQueue = writeQueue.then(() => appendDiagnosticEntry(entry)).catch((error) => {
