@@ -53,8 +53,8 @@ SplashScreen.preventAutoHideAsync();
 
 // Fatal JS errors never reach the error boundary. Record them (bug log + boot
 // crash-loop marker) before RN's own handler runs; no-op on web/jest where
-// ErrorUtils is absent. A launch that stays up for the healthy window clears
-// the boot crash count.
+// ErrorUtils is absent. A launch that stays up for the healthy window without
+// crashing clears the boot crash count.
 installGlobalErrorHandler();
 armHealthyBootTimer();
 
