@@ -36,6 +36,7 @@ import { clearBugLogEntries } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
 // RS13-1: import the canonical key — don't repeat the string literal here.
 import { OUTBOX_KEY } from '@/lib/sync-outbox';
+import { DEVOTIONAL_PULL_CURSOR_KEY } from '@/lib/devotional-pull-cursor';
 
 /**
  * All MMKV keys that hold user-specific data and must be cleared on reset.
@@ -50,6 +51,9 @@ export const FULL_RESET_MMKV_KEYS: readonly string[] = [
   '@unfold_onboarding_offer_seen',
   'inflight-generation-job',
   OUTBOX_KEY,
+  // Devotional pull cursor is scoped to the device id; rotation below would
+  // already invalidate it, but a wiped store must never carry a delta cursor.
+  DEVOTIONAL_PULL_CURSOR_KEY,
   // NOTE: 'unfold-trial-notification' is an MMKV INSTANCE id, not a key here — cleared via clearTrialNotificationMirror() in step 5 (REVM-8).
 ] as const;
 

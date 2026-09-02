@@ -1,4 +1,4 @@
-import React, { useRef, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useMemo, useState } from 'react';
 import { View, StyleSheet, Dimensions } from 'react-native';
 import { WebView } from 'react-native-webview';
 import * as Haptics from 'expo-haptics';
@@ -10,6 +10,7 @@ import { logger } from '@/lib/logger';
 import { stripOuterQuotes } from '@/lib/cn';
 import { isStructuredWordStudy, normalizeWordStudy } from '@/lib/word-study';
 import { DISPLAY_SERIF_WOFF2_BASE64 } from '@/lib/display-font-base64';
+import { RANGY_BUNDLE } from './rangy-bundle';
 
 interface Quote {
   text: string;
@@ -60,6 +61,89 @@ const HIGHLIGHT_COLORS = {
   red: { light: 'rgba(255, 190, 190, 0.46)', textDark: '#FF7A7A' },
 };
 
+const HIGHLIGHT_COLOR_NAMES = Object.keys(HIGHLIGHT_COLORS) as (keyof typeof HIGHLIGHT_COLORS)[];
+
+/** Everything the document derives from the Aa font size and the theme,
+ *  expressed as CSS custom properties on the root element. They are baked
+ *  into the document as `<html style="…">` when it is built; afterwards an Aa
+ *  or theme change only pushes new values into the live document (see
+ *  pushThemeVars), so the WebView is never remounted or reloaded for either. */
+interface ThemeVars {
+  /** `name: value;` declarations for the baked `<html style="…">` attribute. */
+  declarations: string;
+  /** JSON object literal of the same name → value map, for the runtime script
+   *  and for equality checks (identical values ⇒ nothing to push). */
+  json: string;
+}
+
+function buildThemeVars(fontSize: FontSize, accentColor: string, isDark: boolean): ThemeVars {
+  const bodyFontSize = FONT_SIZE_VALUES[fontSize].body;
+  const lineHeight = bodyFontSize * 1.75;
+  const vars: Record<string, string> = {
+    '--body-font-size': `${bodyFontSize}px`,
+    '--body-line-height': `${lineHeight}px`,
+    '--text': isDark ? '#E8E4DC' : '#1A1A1A',
+    '--muted': isDark ? '#E8E4DC' : '#5A534E',
+    '--accent': accentColor,
+    '--selection-bg': `${accentColor}40`,
+    '--flash-ring': `${accentColor}66`,
+    '--flash-0': `${accentColor}99`,
+    '--flash-55': `${accentColor}33`,
+    '--flash-100': `${accentColor}00`,
+    '--quote-border-top': isDark ? `${accentColor}24` : `${accentColor}2E`,
+    '--quote-border-bottom': isDark ? `${accentColor}14` : `${accentColor}1F`,
+    '--quote-bg': isDark ? `${accentColor}08` : `${accentColor}0F`,
+    '--box-bg': isDark ? '#1F1F1F' : '#EDE8E0', // warmer, visible surface separation
+    '--box-border': isDark ? 'rgba(245,240,235,0.07)' : 'rgba(0,0,0,0.06)',
+    '--toolbar-bg': isDark ? '#2a2a2a' : '#ffffff',
+    '--scripture-underline': `${accentColor}60`,
+  };
+  // Saved highlights keep the Bible reader semantics: marker background in
+  // light mode, vibrant text in dark mode. `currentColor` rather than
+  // `inherit` — CSS-wide keywords are not valid custom-property values, and
+  // `color: currentColor` is defined to behave exactly like `color: inherit`.
+  HIGHLIGHT_COLOR_NAMES.forEach((color) => {
+    vars[`--hl-${color}-bg`] = isDark ? 'transparent' : HIGHLIGHT_COLORS[color].light;
+    vars[`--hl-${color}-color`] = isDark ? HIGHLIGHT_COLORS[color].textDark : 'currentColor';
+  });
+  return {
+    declarations: Object.entries(vars).map(([name, value]) => `${name}: ${value};`).join(' '),
+    json: JSON.stringify(vars),
+  };
+}
+
+/** Runtime counterpart of the baked `<html style="…">`: overwrites the same
+ *  inline custom properties on the root element, then re-reports the document
+ *  height — a font-size change reflows the page and the RN-side height must
+ *  follow. */
+function buildThemeVarsScript(themeVars: ThemeVars): string {
+  return `
+    (function() {
+      var root = document.documentElement;
+      var vars = ${themeVars.json};
+      Object.keys(vars).forEach(function(name) { root.style.setProperty(name, vars[name]); });
+      function reportHeight() {
+        if (!window.ReactNativeWebView || !document.body) return;
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'HEIGHT_CHANGE',
+          height: document.body.scrollHeight,
+          docId: root.getAttribute('data-doc-id')
+        }));
+      }
+      reportHeight();
+      setTimeout(reportHeight, 300);
+    })();
+    true;
+  `;
+}
+
+/** Sequence for `data-doc-id`: every built document gets a fresh id so a
+ *  height report can be attributed to the document that sent it. The id is
+ *  part of the html string, so a document is only rebuilt when its memo deps
+ *  change (dev-only exception: Fast Refresh ignores memo deps, so an edit
+ *  reloads the open reader document once — harmless). */
+let nextDocumentId = 0;
+
 export function DevotionalWebView({
   day,
   fontSize,
@@ -81,6 +165,11 @@ export function DevotionalWebView({
   const webViewRef = useRef<WebView>(null);
 
   const [webViewHeight, setWebViewHeight] = useState(200);
+
+  const themeVars = useMemo(
+    () => buildThemeVars(fontSize, colors.accent, isDark),
+    [fontSize, colors, isDark],
+  );
 
   // Inject JS to report content height and apply highlights using rangy
   const injectedJavaScript = useMemo(() => {
@@ -114,7 +203,10 @@ export function DevotionalWebView({
       const targetHighlight = ${JSON.stringify(targetHighlightPayload)};
       const targetBookmark = ${JSON.stringify(targetBookmarkPayload)};
 
-      // Wait for rangy to load (loaded from CDN in HTML head)
+      // Wait for rangy to load. It is inlined in the document <head> (see
+      // rangy-bundle.ts) and this script runs at document end, so the global
+      // is normally already there; the poll only covers an unexpectedly slow
+      // parse and keeps the old tolerant behaviour.
       function initRangy() {
         if (typeof rangy === 'undefined') {
           setTimeout(initRangy, 100);
@@ -126,17 +218,17 @@ export function DevotionalWebView({
         // Create highlighter instance
         const highlighter = rangy.createHighlighter(document, 'textContent');
         
-        // Add class appliers for each highlight color
-        const colorConfigs = ${JSON.stringify(HIGHLIGHT_COLORS)};
-        const isDark = ${isDark};
+        // Add class appliers for each highlight color. Mark colors come from
+        // the mark.highlight-<color> rules, which read the --hl-<color>-bg /
+        // --hl-<color>-color custom properties — theme changes never touch
+        // this script.
+        const highlightColors = ${JSON.stringify(HIGHLIGHT_COLOR_NAMES)};
 
-        Object.keys(colorConfigs).forEach(color => {
-          const highlightBackground = isDark ? 'transparent' : colorConfigs[color].light;
-          const highlightTextColor = isDark ? colorConfigs[color].textDark : 'inherit';
+        highlightColors.forEach(color => {
           const applier = rangy.createClassApplier('rangy-highlight-' + color, {
             elementTagName: 'mark',
             elementProperties: {
-              style: 'background: ' + highlightBackground + '; color: ' + highlightTextColor + '; padding: 0; border-radius: 2px;',
+              style: 'background: var(--hl-' + color + '-bg); color: var(--hl-' + color + '-color); padding: 0; border-radius: 2px;',
               className: 'highlight-' + color
             }
           });
@@ -200,7 +292,10 @@ export function DevotionalWebView({
         const height = document.body.scrollHeight;
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'HEIGHT_CHANGE',
-          height: height
+          height: height,
+          // Lets the RN side attribute this report to the document that sent
+          // it (its first report is the "ready for injectJavaScript" signal).
+          docId: document.documentElement.getAttribute('data-doc-id')
         }));
       }
 
@@ -892,17 +987,13 @@ export function DevotionalWebView({
 
       true;
     `;
-  }, [existingHighlights, isDark, targetHighlight, targetBookmark]);
+  }, [existingHighlights, targetHighlight, targetBookmark]);
 
-  // Generate HTML with exact typography matching.
-  // NOTE: this memo returns the WebView `source` object itself (not just the
-  // HTML string) so an unrelated parent re-render can't hand the WebView a
-  // fresh `{ html }` identity and force a full document reload.
-  const webViewSource = useMemo(() => {
-    const fontSizes = FONT_SIZE_VALUES[fontSize];
-    const bodyFontSize = fontSizes.body;
-    const lineHeight = bodyFontSize * 1.75;
-
+  // Generate HTML with exact typography matching: everything from <head> to
+  // </html>. Deliberately free of Aa / theme values (those are custom
+  // properties on the <html> start tag, added by webViewDocument below) so
+  // this markup only changes with the content or the reading font family.
+  const documentMarkup = useMemo(() => {
     const getWebFontName = (nativeFont: string) => {
       const fontMap: Record<string, string> = {
         'SourceSerifPro_400Regular': 'Source Serif 4',
@@ -916,10 +1007,6 @@ export function DevotionalWebView({
     };
 
     const webFont = getWebFontName(readingFont.body);
-    const bodyColor = isDark ? '#E8E4DC' : '#1A1A1A';
-    const mutedColor = isDark ? '#E8E4DC' : '#5A534E';
-    const accentColor = colors.accent;
-    const inputBg = isDark ? '#1F1F1F' : '#EDE8E0';     // warmer, visible surface separation
     const uiFontStack = "-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif";
     const displayFontStack = "'PP Editorial New', Georgia, serif";
 
@@ -1049,20 +1136,24 @@ export function DevotionalWebView({
       `
       : '';
 
-    return { html: `
-<!DOCTYPE html>
-<html>
+    return `
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <!-- Rangy 1.3.0 (core + classapplier + highlighter) for robust text highlighting, inlined from
+       rangy-bundle.ts so saved highlights restore offline. It sits ahead of the Google Fonts
+       stylesheet on purpose: a script after a pending stylesheet waits for it, and that request
+       may hang when the device is offline. -->
+  <script>${RANGY_BUNDLE}</script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=${encodeURIComponent(webFont)}:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
-  <!-- Rangy for robust text highlighting — load from CDN. Inlined fallback was overwriting the CDN-loaded global every run, breaking deserialize. -->
-  <script src="https://cdn.jsdelivr.net/npm/rangy@1.3.0/lib/rangy-core.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/rangy@1.3.0/lib/rangy-classapplier.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/rangy@1.3.0/lib/rangy-highlighter.min.js"></script>
   
   <style>
+    /* Aa font size + theme live in custom properties on the <html> element
+       (baked into its style attribute, updated in place by pushThemeVars() —
+       changing either never reloads the document). Every size or color below
+       that depends on the font size or theme must go through one of them. */
+
     @font-face {
       font-family: 'PP Editorial New';
       src: url(data:font/woff2;base64,${DISPLAY_SERIF_WOFF2_BASE64}) format('woff2');
@@ -1080,9 +1171,9 @@ export function DevotionalWebView({
 
     body {
       font-family: '${webFont}', Georgia, serif;
-      font-size: ${bodyFontSize}px;
-      line-height: ${lineHeight}px;
-      color: ${bodyColor};
+      font-size: var(--body-font-size);
+      line-height: var(--body-line-height);
+      color: var(--text);
       background: transparent;
       padding: 0 ${CONTENT_PADDING}px 60px;
       max-width: 100%;
@@ -1135,7 +1226,7 @@ export function DevotionalWebView({
        creates a real text selection; the custom highlight picker is positioned
        away from the native menu instead of disabling selection globally. */
     ::selection {
-      background: ${accentColor}40;
+      background: var(--selection-bg);
     }
     
     /* Selectable devotional text */
@@ -1151,26 +1242,26 @@ export function DevotionalWebView({
       border-radius: 2px;
     }
     
-    mark.highlight-yellow { background: ${isDark ? 'transparent' : HIGHLIGHT_COLORS.yellow.light}; color: ${isDark ? HIGHLIGHT_COLORS.yellow.textDark : 'inherit'}; }
-    mark.highlight-green { background: ${isDark ? 'transparent' : HIGHLIGHT_COLORS.green.light}; color: ${isDark ? HIGHLIGHT_COLORS.green.textDark : 'inherit'}; }
-    mark.highlight-blue { background: ${isDark ? 'transparent' : HIGHLIGHT_COLORS.blue.light}; color: ${isDark ? HIGHLIGHT_COLORS.blue.textDark : 'inherit'}; }
-    mark.highlight-purple { background: ${isDark ? 'transparent' : HIGHLIGHT_COLORS.purple.light}; color: ${isDark ? HIGHLIGHT_COLORS.purple.textDark : 'inherit'}; }
-    mark.highlight-red { background: ${isDark ? 'transparent' : HIGHLIGHT_COLORS.red.light}; color: ${isDark ? HIGHLIGHT_COLORS.red.textDark : 'inherit'}; }
+    mark.highlight-yellow { background: var(--hl-yellow-bg); color: var(--hl-yellow-color); }
+    mark.highlight-green { background: var(--hl-green-bg); color: var(--hl-green-color); }
+    mark.highlight-blue { background: var(--hl-blue-bg); color: var(--hl-blue-color); }
+    mark.highlight-purple { background: var(--hl-purple-bg); color: var(--hl-purple-color); }
+    mark.highlight-red { background: var(--hl-red-bg); color: var(--hl-red-color); }
 
     .target-highlight-flash {
       animation: targetHighlightFlash 1.8s ease-out;
-      box-shadow: 0 0 0 3px ${accentColor}66;
+      box-shadow: 0 0 0 3px var(--flash-ring);
     }
 
     @keyframes targetHighlightFlash {
-      0% { box-shadow: 0 0 0 4px ${accentColor}99; }
-      55% { box-shadow: 0 0 0 8px ${accentColor}33; }
-      100% { box-shadow: 0 0 0 0 ${accentColor}00; }
+      0% { box-shadow: 0 0 0 4px var(--flash-0); }
+      55% { box-shadow: 0 0 0 8px var(--flash-55); }
+      100% { box-shadow: 0 0 0 0 var(--flash-100); }
     }
     
     /* Body text -- generous paragraph spacing */
     p {
-      margin-bottom: ${lineHeight * 0.95}px;
+      margin-bottom: calc(var(--body-line-height) * 0.95);
       font-family: '${webFont}', Georgia, serif;
     }
 
@@ -1182,7 +1273,7 @@ export function DevotionalWebView({
     /* Horizontal rule from --- markdown */
     hr {
       border: none;
-      border-top: 1px solid ${mutedColor};
+      border-top: 1px solid var(--muted);
       opacity: 0.25;
       margin: 28px 0;
     }
@@ -1190,25 +1281,25 @@ export function DevotionalWebView({
     /* Pull quote — the day's quotable line, set inside the teaching */
     aside.pull-quote {
       font-family: ${displayFontStack};
-      font-size: ${bodyFontSize * 1.05}px;
+      font-size: calc(var(--body-font-size) * 1.05);
       line-height: 1.5;
       font-style: italic;
-      color: ${accentColor};
+      color: var(--accent);
       text-align: center;
-      margin: ${lineHeight * 1.4}px 8px;
+      margin: calc(var(--body-line-height) * 1.4) 8px;
       padding: 0 8px;
     }
 
     /* Study method headers — standalone **BOLD** paragraphs */
     p.section-header {
       font-family: ${uiFontStack};
-      font-size: ${bodyFontSize * 0.72}px;
+      font-size: calc(var(--body-font-size) * 0.72);
       font-weight: 600;
       letter-spacing: 1.2px;
       text-transform: uppercase;
-      color: ${accentColor};
-      margin-top: ${lineHeight * 1.2}px;
-      margin-bottom: ${lineHeight * 0.4}px;
+      color: var(--accent);
+      margin-top: calc(var(--body-line-height) * 1.2);
+      margin-bottom: calc(var(--body-line-height) * 0.4);
     }
 
     /* Section divider -- centered dots */
@@ -1222,7 +1313,7 @@ export function DevotionalWebView({
 
     .divider-dots {
       font-size: 14px;
-      color: ${mutedColor};
+      color: var(--muted);
       opacity: 0.35;
       letter-spacing: 4px;
     }
@@ -1231,10 +1322,10 @@ export function DevotionalWebView({
     blockquote {
       margin: 32px 0 28px;
       padding: 24px 8px 20px;
-      border-top: 1px solid ${isDark ? `${accentColor}24` : `${accentColor}2E`};
-      border-bottom: 1px solid ${isDark ? `${accentColor}14` : `${accentColor}1F`};
+      border-top: 1px solid var(--quote-border-top);
+      border-bottom: 1px solid var(--quote-border-bottom);
       position: relative;
-      background: ${isDark ? `${accentColor}08` : `${accentColor}0F`};
+      background: var(--quote-bg);
     }
 
     /* Large decorative opening quote mark */
@@ -1243,7 +1334,7 @@ export function DevotionalWebView({
       font-family: ${displayFontStack};
       font-size: 57px;
       line-height: 28px;
-      color: ${accentColor};
+      color: var(--accent);
       opacity: 0.12;
       margin-bottom: 8px;
       margin-left: -4px;
@@ -1253,14 +1344,14 @@ export function DevotionalWebView({
     blockquote p {
       font-style: italic;
       margin-bottom: 14px;
-      line-height: ${lineHeight * 1.05}px;
+      line-height: calc(var(--body-line-height) * 1.05);
       padding-left: 2px;
     }
 
     blockquote cite {
       font-family: ${uiFontStack};
       font-size: 12px;
-      color: ${mutedColor};
+      color: var(--muted);
       font-style: normal;
       letter-spacing: 0.8px;
       text-transform: uppercase;
@@ -1271,8 +1362,8 @@ export function DevotionalWebView({
     /* Context box */
     .context-box, .word-study-box {
       margin-top: 44px;
-      background: ${inputBg};
-      border: 1px solid ${isDark ? 'rgba(245,240,235,0.07)' : 'rgba(0,0,0,0.06)'};
+      background: var(--box-bg);
+      border: 1px solid var(--box-border);
       border-radius: 16px;
       padding: 22px;
       position: relative;
@@ -1281,7 +1372,7 @@ export function DevotionalWebView({
     h3 {
       font-family: ${uiFontStack};
       font-size: 11px;
-      color: ${mutedColor};
+      color: var(--muted);
       letter-spacing: 1.2px;
       text-transform: uppercase;
       margin-bottom: 14px;
@@ -1289,9 +1380,9 @@ export function DevotionalWebView({
     }
     
     .context-box p, .word-study-box p {
-      font-size: ${bodyFontSize - 1}px;
-      line-height: ${lineHeight * 0.97}px;
-      color: ${mutedColor};
+      font-size: calc(var(--body-font-size) - 1px);
+      line-height: calc(var(--body-line-height) * 0.97);
+      color: var(--muted);
       margin: 0;
     }
     
@@ -1301,15 +1392,15 @@ export function DevotionalWebView({
     
     .term {
       font-family: Georgia, serif;
-      font-size: ${bodyFontSize + 4}px;
-      color: ${bodyColor};
+      font-size: calc(var(--body-font-size) + 4px);
+      color: var(--text);
       font-weight: 400;
     }
     
     .original {
       font-style: italic;
-      font-size: ${bodyFontSize - 2}px;
-      color: ${accentColor};
+      font-size: calc(var(--body-font-size) - 2px);
+      color: var(--accent);
       margin-left: 12px;
     }
 
@@ -1333,14 +1424,14 @@ export function DevotionalWebView({
     .bookmark-btn.bookmarked { opacity: 1; }
     .bookmark-btn svg { width: 18px; height: 18px; }
     .bookmark-btn.bookmarked svg {
-      fill: ${accentColor};
-      stroke: ${accentColor};
+      fill: var(--accent);
+      stroke: var(--accent);
     }
 
     /* Highlight toolbar */
     #highlight-toolbar {
       position: absolute;
-      background: ${isDark ? '#2a2a2a' : '#ffffff'};
+      background: var(--toolbar-bg);
       border-radius: 24px;
       padding: 8px 12px;
       display: flex;
@@ -1411,9 +1502,9 @@ export function DevotionalWebView({
 
     /* Scripture reference links */
     .scripture-ref {
-      color: ${accentColor};
+      color: var(--accent);
       text-decoration: underline;
-      text-decoration-color: ${accentColor}60;
+      text-decoration-color: var(--scripture-underline);
       text-underline-offset: 3px;
       cursor: pointer;
       -webkit-user-select: none;
@@ -1438,17 +1529,70 @@ export function DevotionalWebView({
   </div>
 </body>
 </html>
-    ` };
-  }, [day, fontSize, colors, isDark, readingFont]);
+    `;
+  }, [day, readingFont.body]);
 
+  // Remount only for a different day or a new My Library landing target.
+  // Aa font size and theme are deliberately NOT part of the key: they are
+  // pushed into the live document (pushThemeVars) so the reader keeps its
+  // scroll position, restored highlights and any open selection. The target
+  // ids stay because the injected locators close over their baked payloads
+  // and only ever post a `y` — there is no scroll-to-target function in the
+  // page to call with a new id, so a new target still needs a fresh document.
   const webViewTargetKey = useMemo(() => [
     'devotional-webview',
     day.dayNumber,
-    fontSize,
-    isDark ? 'dark' : 'light',
     targetHighlight?.id ?? 'no-highlight',
     targetBookmark?.id ?? 'no-bookmark',
-  ].join(':'), [day.dayNumber, fontSize, isDark, targetHighlight?.id, targetBookmark?.id]);
+  ].join(':'), [day.dayNumber, targetHighlight?.id, targetBookmark?.id]);
+
+  // The WebView `source`: the markup above with a per-document id and the
+  // Aa / theme custom properties baked onto the <html> start tag.
+  // NOTE: this memo returns the `source` object itself (not just the HTML
+  // string) so an unrelated parent re-render can't hand the WebView a fresh
+  // `{ html }` identity and force a full document reload. Both deps are
+  // strings, so a same-content `day` replacement (e.g. Complete Day marking
+  // it read) rebuilds identical markup and keeps this exact source.
+  // themeVars is read here only to bake the initial values and is
+  // deliberately NOT a dependency: an Aa or theme change must leave this
+  // source (and the loaded document) untouched — the new values are pushed
+  // into the live document by pushThemeVars below. webViewTargetKey IS one:
+  // a remount loads the document from scratch, so it bakes the current values
+  // instead of replaying stale ones and catching up with an inject.
+  const webViewDocument = useMemo(() => {
+    const docId = String(++nextDocumentId);
+    const html = `
+<!DOCTYPE html>
+<html data-doc-id="${docId}" style="${escapeHtml(themeVars.declarations)}">${documentMarkup}`;
+    return { docId, bakedThemeJson: themeVars.json, source: { html } };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- see the note above: themeVars excluded on purpose, webViewTargetKey included on purpose
+  }, [documentMarkup, webViewTargetKey]);
+
+  // "Live document" = the document currently loaded in the mounted WebView,
+  // identified by mount key + docId. Its first HEIGHT_CHANGE (echoing the
+  // docId baked into <html data-doc-id>) is the ready signal for
+  // injectJavaScript; until then the baked <html style> is the source of
+  // truth. appliedJson tracks the values the document is showing so that an
+  // unchanged theme is never pushed twice.
+  const liveDocToken = `${webViewTargetKey}|${webViewDocument.docId}`;
+  const liveDocRef = useRef<{ token: string; appliedJson: string } | null>(null);
+
+  const pushThemeVars = useCallback((vars: ThemeVars) => {
+    const live = liveDocRef.current;
+    if (!live || live.token !== liveDocToken) return; // document not ready yet
+    if (live.appliedJson === vars.json) return; // already showing these values
+    const webView = webViewRef.current;
+    if (!webView) return;
+    webView.injectJavaScript(buildThemeVarsScript(vars));
+    live.appliedJson = vars.json;
+  }, [liveDocToken]);
+
+  // Aa / theme change while mounted: update the live document in place.
+  // Before the document is ready this is a no-op; the ready handler below
+  // applies the then-current values once.
+  useEffect(() => {
+    pushThemeVars(themeVars);
+  }, [themeVars, pushThemeVars]);
 
   const handleMessage = (event: any) => {
     try {
@@ -1470,7 +1614,17 @@ export function DevotionalWebView({
       } else if (data.type === 'SCRIPTURE_TAP' && onScriptureTap) {
         onScriptureTap(data.reference);
       } else if (data.type === 'HEIGHT_CHANGE') {
+        // A report still in flight from the previous document (same-key
+        // source swap) must not size the new one, even for a frame.
+        if (data.docId !== webViewDocument.docId) return;
         setWebViewHeight(Math.max(data.height, 200));
+        // First report from the current document ⇒ it is ready for
+        // injectJavaScript. It rendered with the baked values; catch it up
+        // with anything that changed while it was loading (usually nothing).
+        if (liveDocRef.current?.token !== liveDocToken) {
+          liveDocRef.current = { token: liveDocToken, appliedJson: webViewDocument.bakedThemeJson };
+          pushThemeVars(themeVars);
+        }
       } else if (data.type === 'TARGET_HIGHLIGHT_LOCATED' && onTargetHighlightLocated) {
         onTargetHighlightLocated(Math.max(0, Number(data.y) || 0));
       } else if (data.type === 'TARGET_BOOKMARK_LOCATED' && onTargetBookmarkLocated) {
@@ -1529,7 +1683,7 @@ export function DevotionalWebView({
         key={webViewTargetKey}
         testID={webViewTargetKey}
         ref={webViewRef}
-        source={webViewSource}
+        source={webViewDocument.source}
         style={[styles.webview, { height: webViewHeight }]}
         scrollEnabled={false}
         showsVerticalScrollIndicator={false}

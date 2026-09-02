@@ -103,3 +103,37 @@ export function resolveGenerationSubmitFailure(
     message: err instanceof Error ? err.message : String(err),
   };
 }
+
+// ── Poll cadence ──────────────────────────────────────────────────────────
+
+/** Fixed cadence for the first minute of a job, when completion is likeliest. */
+export const POLL_DELAY_INITIAL_MS = 3_000;
+/** Cadence once a job has been running for a minute. */
+export const POLL_DELAY_AFTER_1_MIN_MS = 5_000;
+/** Cadence cap, reached once a job has been running for three minutes. */
+export const POLL_DELAY_AFTER_3_MIN_MS = 8_000;
+/** Escalation boundaries, measured from the job's poll start. */
+export const POLL_ESCALATE_AT_1_MIN_MS = 60_000;
+export const POLL_ESCALATE_AT_3_MIN_MS = 180_000;
+/** Jitter applied to the escalated tiers: ±20% of the tier's base delay. */
+export const POLL_JITTER_RATIO = 0.2;
+
+/**
+ * Delay before the next job-status poll, given how long this job has been
+ * polled so far. Escalates 3s → 5s → 8s at the one- and three-minute marks;
+ * the escalated tiers carry ±20% jitter (never more than 9.6s) so many clients
+ * that started together don't keep hitting the server in lockstep. The first
+ * minute stays a fixed 3s. Callers reset their elapsed clock whenever the job
+ * changes, so each job starts back at the fast tier.
+ *
+ * @param rng - Uniform source in [0, 1); injectable for tests.
+ */
+export function getNextPollDelayMs(elapsedMs: number, rng: () => number = Math.random): number {
+  // Written as a negated `>=` so a non-finite elapsed value (NaN) also lands
+  // on the fast, fixed tier rather than the slow one.
+  if (!(elapsedMs >= POLL_ESCALATE_AT_1_MIN_MS)) return POLL_DELAY_INITIAL_MS;
+  const base = elapsedMs >= POLL_ESCALATE_AT_3_MIN_MS ? POLL_DELAY_AFTER_3_MIN_MS : POLL_DELAY_AFTER_1_MIN_MS;
+  const unit = Math.min(Math.max(rng(), 0), 1); // clamp so the bounds hold for any rng
+  const jitter = (unit * 2 - 1) * POLL_JITTER_RATIO; // [-0.2, +0.2]
+  return Math.round(base * (1 + jitter));
+}

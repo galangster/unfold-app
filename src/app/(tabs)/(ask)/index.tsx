@@ -18,7 +18,7 @@ import {
 } from 'react-native';
 // react-native-gesture-handler not needed — scroll banner uses normal TouchableOpacity
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useIsFocused } from 'expo-router';
 import {
   CrownIcon,
   List,
@@ -187,6 +187,10 @@ export default function CompanionScreen() {
       setDailyRemaining(getCompanionDailyUsage().remaining);
     }, [])
   );
+
+  // Hidden tabs stay mounted: pause the header orb's Skia loops while another
+  // tab is focused so they don't keep the UI thread busy off screen.
+  const isFocused = useIsFocused();
 
   // P0-5: leaving the current conversation (new chat or drawer switch) stops
   // its in-flight stream — a reply to a conversation the user abandoned
@@ -391,6 +395,7 @@ export default function CompanionScreen() {
             accentColor={colors.accent}
             size={32}
             isActive={isStreaming}
+            active={isFocused}
           />
           <Text
             style={{

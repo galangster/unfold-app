@@ -8,6 +8,7 @@
  */
 import { useMemo, useRef } from 'react';
 import { View, Text, Pressable } from 'react-native';
+import type { TextStyle, ViewStyle } from 'react-native';
 import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
 import { Duration, Ease } from '@/constants/animations';
 import { useSmoothTextReveal } from '@/lib/use-smooth-text-reveal';
@@ -122,6 +123,26 @@ export function CompanionMessageContent({ message, showIcon, isStreaming, isSear
   const wasStreamingRef = useRef(isStreaming);
   if (isStreaming) wasStreamingRef.current = true;
 
+  // Error rows: an interrupted reply keeps its partial text in `content`
+  // (rendered below as normal reply text, with a short error line beneath);
+  // every other error row stores the error string itself in `content`.
+  const interruptedReply = message.status === 'error' && message.interrupted ? message.content : '';
+  const errorText = interruptedReply
+    ? `Something interrupted this reply. ${onRetry ? 'Tap to retry.' : 'Try again?'}`
+    : message.content || (onRetry ? 'Something went wrong. Tap to retry.' : 'Something went wrong. Try again?');
+  const errorBoxStyle: ViewStyle = {
+    backgroundColor: alpha(colors.error, 0.10),
+    borderRadius: Radius.md,
+    padding: Spacing['3'],
+    marginTop: interruptedReply ? Spacing['3'] : undefined,
+  };
+  const errorTextStyle: TextStyle = {
+    fontFamily: FontFamily.body,
+    fontSize: FontSize.sm,
+    color: colors.error,
+    lineHeight: 20,
+  };
+
   return (
     <Animated.View entering={reducedMotion ? undefined : ENTERING} style={{ flexDirection: 'row', alignItems: 'flex-start', paddingLeft: Spacing['4'] }}>
       {/* Icon column — 28px wide + 12px gap = 40px indent */}
@@ -134,48 +155,28 @@ export function CompanionMessageContent({ message, showIcon, isStreaming, isSear
       {/* Content */}
       <View style={{ flex: 1, paddingRight: Spacing['6'] }}>
         {message.status === 'error' ? (
-          onRetry ? (
-            <Pressable
-              onPress={onRetry}
-              accessibilityRole="button"
-              accessibilityLabel="Retry sending your message"
-              style={{
-                backgroundColor: alpha(colors.error, 0.10),
-                borderRadius: Radius.md,
-                padding: Spacing['3'],
-              }}
-            >
-              <Text
-                style={{
-                  fontFamily: FontFamily.body,
-                  fontSize: FontSize.sm,
-                  color: colors.error,
-                  lineHeight: 20,
-                }}
+          <>
+            {interruptedReply.length > 0 && (
+              <RichMessageText
+                text={interruptedReply}
+                onVersePress={onVersePress ?? noopVersePress}
+              />
+            )}
+            {onRetry ? (
+              <Pressable
+                onPress={onRetry}
+                accessibilityRole="button"
+                accessibilityLabel="Retry sending your message"
+                style={errorBoxStyle}
               >
-                {message.content || 'Something went wrong. Tap to retry.'}
-              </Text>
-            </Pressable>
-          ) : (
-            <View
-              style={{
-                backgroundColor: alpha(colors.error, 0.10),
-                borderRadius: Radius.md,
-                padding: Spacing['3'],
-              }}
-            >
-              <Text
-                style={{
-                  fontFamily: FontFamily.body,
-                  fontSize: FontSize.sm,
-                  color: colors.error,
-                  lineHeight: 20,
-                }}
-              >
-                {message.content || 'Something went wrong. Try again?'}
-              </Text>
-            </View>
-          )
+                <Text style={errorTextStyle}>{errorText}</Text>
+              </Pressable>
+            ) : (
+              <View style={errorBoxStyle}>
+                <Text style={errorTextStyle}>{errorText}</Text>
+              </View>
+            )}
+          </>
         ) : isComplete && onVersePress ? (
           // Complete message — rich text with verse pills + blockquotes
           <>

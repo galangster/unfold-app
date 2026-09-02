@@ -1007,68 +1007,73 @@ export default function PaywallScreen() {
           {disclosureText}
         </Text>
 
-        {/* CTA button */}
-        <TouchableOpacity
-          activeOpacity={0.8}
-          onPress={handleSubscribe}
-          disabled={isSubscribeDisabled}
-          accessibilityLabel={
-            isLoadingOfferings || !offeringsReady
-              ? 'Loading subscription plans'
-              : isTrialEligible
-                ? `Start your ${selectedTrialDuration} free trial`
-                : 'Unlock Unfold Premium'
-          }
-          accessibilityRole="button"
-          accessibilityState={{ disabled: isSubscribeDisabled }}
-          style={{
-            backgroundColor: colors.accent,
-            paddingVertical: 17,
-            paddingHorizontal: Spacing['8'],
-            borderRadius: 28,
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: 4,
-            opacity: isSubscribeDisabled ? 0.7 : 1,
-          }}
-        >
-          {(isPurchasing || isLoadingOfferings) ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing['2'] }}>
-              <ActivityIndicator color={colors.background} size="small" />
-              {isLoadingOfferings && !isPurchasing && (
-                <Text
-                  style={{
-                    fontFamily: FontFamily.ui,
-                    fontSize: 15,
-                    color: colors.background,
-                  }}
-                >
-                  Loading plans...
-                </Text>
-              )}
-            </View>
-          ) : (
-            <Text
-              style={{
-                fontFamily: FontFamily.uiSemiBold,
-                fontSize: 17,
-                color: colors.background,
-                textAlign: 'center',
-                letterSpacing: 0.3,
-              }}
-            >
-              {/* CTA carries the billed amount, never the calculated per-month
-                  equivalent (3.1.2c). */}
-              {!offeringsReady
-                ? 'Unlock Premium'
+        {/* CTA button. The disabled dim lives on a plain wrapper View: the
+            gesture-handler TouchableOpacity seeds its own Animated opacity
+            from `style` once at mount and only re-syncs on touch, so an
+            `opacity` in its style never tracks `isSubscribeDisabled`. Same
+            0.5 as this screen's other disabled affordances (Close, Restore). */}
+        <View style={{ opacity: isSubscribeDisabled ? 0.5 : 1 }}>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={handleSubscribe}
+            disabled={isSubscribeDisabled}
+            accessibilityLabel={
+              isLoadingOfferings || !offeringsReady
+                ? 'Loading subscription plans'
                 : isTrialEligible
-                  ? `Start My Free Trial`
-                  : selectedPlan === 'yearly'
-                    ? `Unlock Premium \u2014 ${yearlyPrice}/yr`
-                    : `Unlock Premium \u2014 ${monthlyPrice}/mo`}
-            </Text>
-          )}
-        </TouchableOpacity>
+                  ? `Start your ${selectedTrialDuration} free trial`
+                  : 'Unlock Unfold Premium'
+            }
+            accessibilityRole="button"
+            accessibilityState={{ disabled: isSubscribeDisabled }}
+            style={{
+              backgroundColor: colors.accent,
+              paddingVertical: 17,
+              paddingHorizontal: Spacing['8'],
+              borderRadius: 28,
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: 4,
+            }}
+          >
+            {(isPurchasing || isLoadingOfferings) ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing['2'] }}>
+                <ActivityIndicator color={colors.background} size="small" />
+                {isLoadingOfferings && !isPurchasing && (
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.ui,
+                      fontSize: 15,
+                      color: colors.background,
+                    }}
+                  >
+                    Loading plans...
+                  </Text>
+                )}
+              </View>
+            ) : (
+              <Text
+                style={{
+                  fontFamily: FontFamily.uiSemiBold,
+                  fontSize: 17,
+                  color: colors.background,
+                  textAlign: 'center',
+                  letterSpacing: 0.3,
+                }}
+              >
+                {/* CTA carries the billed amount, never the calculated per-month
+                    equivalent (3.1.2c). */}
+                {!offeringsReady
+                  ? 'Unlock Premium'
+                  : isTrialEligible
+                    ? `Start My Free Trial`
+                    : selectedPlan === 'yearly'
+                      ? `Unlock Premium \u2014 ${yearlyPrice}/yr`
+                      : `Unlock Premium \u2014 ${monthlyPrice}/mo`}
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
 
         {/* Offerings failed to load \u2014 disabled CTA above, explicit retry here.
             Shown only when offerings are not loading and still not ready, so the

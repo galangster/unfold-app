@@ -419,6 +419,8 @@ export default function StreakSettingsScreen() {
               onValueChange={handleToggleAmnesty}
               trackColor={{ false: colors.border, true: colors.accent }}
               thumbColor="#fff"
+              // Web only: the ON thumb otherwise falls back to RN-web's teal.
+              activeThumbColor="#fff"
               accessibilityRole="switch"
               accessibilityLabel="Weekend amnesty"
               accessibilityState={{ checked: weekendAmnesty }}

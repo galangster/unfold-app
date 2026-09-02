@@ -27,6 +27,7 @@ import { useUnfoldStore, type Devotional, type DevotionalDay } from '@/lib/store
 import { submitGenerationJob, pollJobStatus, retryJob, recoverCompletedGenerationResult, buildInitialArcUserContext } from '@/lib/generation-api';
 import {
   evaluateGenerationPoll,
+  getNextPollDelayMs,
   resolveGenerationSubmitFailure,
 } from '@/lib/generation-poll-outcome';
 import { toFriendlyOnboardingGenerationError } from '@/lib/generation-errors';
@@ -74,9 +75,6 @@ const WAITING_MESSAGES = [
   'Weaving your\u00A0narrative',
   'Crafting something\u00A0personal',
 ];
-
-// Polling interval for server job status (ms)
-const POLL_INTERVAL_MS = 3000;
 
 function requireCanonicalDevotionalId(devotionalId?: string | null, context = 'generation completion'): string {
   if (!devotionalId) {
@@ -130,6 +128,10 @@ export default function GeneratingScreen() {
   const [pendingJobId, setPendingJobId] = useState<string | null>(null);
   const pollingRef = useRef(false);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Incremented by every startPolling; a poll whose request was in flight when
+  // polling stopped (background, unmount, retry) sees a newer run and exits
+  // instead of re-arming a second timer chain next to the current one.
+  const pollRunRef = useRef(0);
   const jobSubmittedRef = useRef(false);
   // Consecutive unrecognized job statuses — bounded so we don't poll forever
   // against a status we don't understand.
@@ -426,6 +428,7 @@ export default function GeneratingScreen() {
   const startPolling = useCallback((jobId: string) => {
     if (pollingRef.current) return;
     pollingRef.current = true;
+    const run = ++pollRunRef.current;
     unknownStatusCountRef.current = 0;
 
     // Shared terminal-failure exit: stop polling, clear the inflight record and
@@ -461,6 +464,9 @@ export default function GeneratingScreen() {
 
       try {
         const status = await pollJobStatus(jobId);
+        // Polling stopped (or restarted) while this request was in flight:
+        // the response belongs to a chain that no longer exists.
+        if (!pollingRef.current || pollRunRef.current !== run) return;
         const { outcome, consecutiveUnknown } = evaluateGenerationPoll({
           status: status.status,
           result: status.result,
@@ -507,16 +513,20 @@ export default function GeneratingScreen() {
           case 'unknown-retry':
           default:
             // Still pending / processing (or a tolerated unknown) -- poll again.
-            pollTimerRef.current = setTimeout(poll, POLL_INTERVAL_MS);
+            // Cadence escalates with the job's age (3s -> 5s -> 8s, jittered
+            // after the first minute); pollStartTime resets per job.
+            pollTimerRef.current = setTimeout(poll, getNextPollDelayMs(Date.now() - pollStartTime.current));
             return;
         }
       } catch (err) {
+        if (!pollingRef.current || pollRunRef.current !== run) return;
         // Network error during polling -- keep trying a few times
         const errorMsg = err instanceof Error ? err.message : String(err);
         logger.warn('[generating] Poll error (will retry):', errorMsg);
 
         // Keep polling on transient errors -- the server job is still running
-        pollTimerRef.current = setTimeout(poll, POLL_INTERVAL_MS * 2);
+        // (doubled cadence, as before)
+        pollTimerRef.current = setTimeout(poll, getNextPollDelayMs(Date.now() - pollStartTime.current) * 2);
       }
     };
 
@@ -1006,8 +1016,10 @@ export default function GeneratingScreen() {
             )}
           </View>
 
-          {/* Series title reveal -- shows when server returns title from arc */}
-          {currentSeriesTitle && (
+          {/* Series title reveal -- shows when server returns title from arc.
+              Ternary, not `&&`: the empty-string default would otherwise be
+              emitted as a bare text node inside this View. */}
+          {currentSeriesTitle ? (
             <Animated.View
               entering={entering(FadeIn.duration(800))}
               style={{ alignItems: 'center', marginBottom: Spacing['3'] }}
@@ -1025,7 +1037,7 @@ export default function GeneratingScreen() {
                 {currentSeriesTitle}
               </Text>
             </Animated.View>
-          )}
+          ) : null}
 
           {/* Notification prompt -- appears after a delay */}
           {showNotificationPrompt && notificationPermission !== 'granted' && !hasAskedPermission && !isComplete && (

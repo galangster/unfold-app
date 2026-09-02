@@ -35,7 +35,7 @@ import { mmkvStorage } from '@/lib/mmkv-storage';
 import { TodayCardStack, type TodayCardStackCard } from '@/components/home/TodayCardStack';
 import { animateCardDismiss } from '@/lib/card-dismiss-animation';
 import { getBibleDbStatus, downloadBibleDb } from '@/lib/bible-db';
-import { pullDevotionalContent } from '@/lib/devotional-sync-pull';
+import { commitDevotionalPullCursor, pullDevotionalContent } from '@/lib/devotional-sync-pull';
 import { applyPulledDevotionalContent } from '@/lib/devotional-pulled-content';
 import {
   getCurrentDevotional,
@@ -328,6 +328,9 @@ export default function HomeScreen() {
               }));
             },
           });
+          // Only after the content is in the store — a cancelled focus above
+          // discards the response, and must not advance the cursor.
+          commitDevotionalPullCursor(pulled);
         } catch (err) {
           console.warn('[home] Devotional sync refresh failed:', err instanceof Error ? err.message : err);
         }

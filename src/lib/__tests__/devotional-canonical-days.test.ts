@@ -4,6 +4,7 @@ import {
   selectRenderableDevotionalDay,
   selectNextRenderableDevotionalDay,
   getHighestContiguousRenderableDayNumber,
+  summarizeRenderableDevotionalDays,
   buildReadOnlyCanonicalDayData,
 } from '../devotional-canonical-days';
 import type { Devotional, DevotionalDay } from '../store';
@@ -150,6 +151,98 @@ describe('canonical devotional day selection', () => {
       dayNumber: 5,
       isRead: true,
       readAt,
+    });
+  });
+});
+
+describe('summarizeRenderableDevotionalDays', () => {
+  const canonicalDay = (dayNumber: number) =>
+    day({ id: canonicalGeneratedDayId('devotional-1', dayNumber), dayNumber });
+  const localOnlyDay = (dayNumber: number) =>
+    day({ id: `local-only-day-${dayNumber}`, dayNumber });
+
+  it('returns nothing ready for a missing devotional', () => {
+    expect(summarizeRenderableDevotionalDays(null, 3)).toEqual({
+      readyDayCount: 0,
+      fallbackDayNumber: null,
+    });
+  });
+
+  it('counts zero ready days when a progressive series only holds local-only days', () => {
+    const series = devotional({ days: [localOnlyDay(1), localOnlyDay(2), localOnlyDay(3)] });
+
+    // Raw days.length would report 3 here; none of them can render.
+    expect(series.days).toHaveLength(3);
+    expect(summarizeRenderableDevotionalDays(series, 4)).toEqual({
+      readyDayCount: 0,
+      fallbackDayNumber: null,
+    });
+  });
+
+  it('counts every day and falls back to the day before the target when all are ready', () => {
+    const series = devotional({ days: [canonicalDay(1), canonicalDay(2), canonicalDay(3)] });
+
+    expect(summarizeRenderableDevotionalDays(series, 4)).toEqual({
+      readyDayCount: 3,
+      fallbackDayNumber: 3,
+    });
+  });
+
+  it('skips a non-renderable gap in the middle and falls back to the nearest earlier ready day', () => {
+    const series = devotional({
+      days: [canonicalDay(1), canonicalDay(2), localOnlyDay(3), canonicalDay(4)],
+    });
+
+    expect(summarizeRenderableDevotionalDays(series, 5)).toEqual({
+      readyDayCount: 3,
+      fallbackDayNumber: 4,
+    });
+    // Viewing the gap itself: the fallback must not jump forward to day 4.
+    expect(summarizeRenderableDevotionalDays(series, 3)).toEqual({
+      readyDayCount: 3,
+      fallbackDayNumber: 2,
+    });
+  });
+
+  it('falls back to the last ready day when the target is far beyond what is ready', () => {
+    const series = devotional({ days: [canonicalDay(1), canonicalDay(2), canonicalDay(3)] });
+
+    expect(summarizeRenderableDevotionalDays(series, 7)).toEqual({
+      readyDayCount: 3,
+      fallbackDayNumber: 3,
+    });
+  });
+
+  it('offers no fallback when no ready day precedes the target', () => {
+    const series = devotional({ days: [localOnlyDay(1), canonicalDay(2), canonicalDay(3)] });
+
+    expect(summarizeRenderableDevotionalDays(series, 1)).toEqual({
+      readyDayCount: 2,
+      fallbackDayNumber: null,
+    });
+  });
+
+  it('counts a day number once even when it is stored twice', () => {
+    const series = devotional({ days: [canonicalDay(1), canonicalDay(1), canonicalDay(2)] });
+
+    expect(summarizeRenderableDevotionalDays(series, 3)).toEqual({
+      readyDayCount: 2,
+      fallbackDayNumber: 2,
+    });
+  });
+
+  it('treats every stored day as ready for legacy batch devotionals', () => {
+    const series = devotional({
+      days: [localOnlyDay(1), localOnlyDay(2)],
+      generationMode: 'batch',
+      seriesStartDate: undefined,
+      seriesArc: undefined,
+      progressiveMemory: undefined,
+    });
+
+    expect(summarizeRenderableDevotionalDays(series, 3)).toEqual({
+      readyDayCount: 2,
+      fallbackDayNumber: 2,
     });
   });
 });
