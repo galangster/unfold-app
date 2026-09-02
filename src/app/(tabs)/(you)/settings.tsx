@@ -19,6 +19,13 @@ import { SupportSection } from '@/components/settings/SupportSection';
 import { QaToolsSection } from '@/components/settings/QaToolsSection';
 import { SettingsSectionHeader, getSettingsCardStyle } from '@/components/settings/SettingsSectionHeader';
 
+// Shown when the best-effort server erase inside performFullLocalReset did
+// not confirm deletion (offline, timeout, server error). The device identity
+// has already been rotated, so the user cannot simply retry from this install.
+const SERVER_ERASE_NOT_CONFIRMED_TITLE = 'Server data not confirmed deleted';
+const SERVER_ERASE_NOT_CONFIRMED_MESSAGE =
+  "Your data was deleted from this device, but we couldn't confirm that your synced data was deleted from Unfold's servers. This device is no longer linked to it. If you'd like it removed, contact us from the Support section in Settings.";
+
 export default function SettingsScreen() {
   const router = useRouter();
   const { colors } = useTheme();
@@ -46,7 +53,7 @@ export default function SettingsScreen() {
           onPress: () => {
             Alert.alert(
               'Are you absolutely sure?',
-              'This will permanently delete your data from this device and disconnect this install from your synced data. This cannot be undone.',
+              "This will permanently delete your data from this device and ask Unfold's servers to delete your synced data. This cannot be undone.",
               [
                 { text: 'Go Back', style: 'cancel' },
                 {
@@ -56,9 +63,16 @@ export default function SettingsScreen() {
                     setIsDeletingAccount(true);
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                     try {
-                      await performFullLocalReset();
+                      const { serverErase } = await performFullLocalReset();
                       router.dismissAll();
                       setTimeout(() => router.replace('/'), 50);
+                      if (!serverErase.ok) {
+                        // The local wipe is done either way; say so once the
+                        // welcome screen has replaced this stack.
+                        setTimeout(() => {
+                          Alert.alert(SERVER_ERASE_NOT_CONFIRMED_TITLE, SERVER_ERASE_NOT_CONFIRMED_MESSAGE);
+                        }, 600);
+                      }
                     } finally {
                       setIsDeletingAccount(false);
                     }

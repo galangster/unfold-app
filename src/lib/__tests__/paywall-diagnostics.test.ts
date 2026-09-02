@@ -7,6 +7,7 @@ jest.mock('expo-file-system/legacy', () => ({
   getInfoAsync: jest.fn(async () => ({ exists: false })),
   readAsStringAsync: jest.fn(async () => ''),
   writeAsStringAsync: jest.fn(async () => undefined),
+  deleteAsync: jest.fn(async () => undefined),
 }));
 
 jest.mock('react-native', () => ({
@@ -22,6 +23,7 @@ jest.mock('@/lib/logger', () => ({
 }));
 
 import {
+  clearPaywallDiagnosticsFile,
   isPaywallDiagnosticsEnabled,
   recordPaywallDiagnostic,
   recordPaywallDiagnosticLazy,
@@ -124,6 +126,37 @@ describe('paywall diagnostics', () => {
     expect(content).not.toContain('appl_secret123');
     expect(content).not.toContain('anon_8489bcfc-a86a-44e1-bbb1-6a6fa13d4e97');
     expect(consoleSpy).toHaveBeenCalledTimes(1);
+    consoleSpy.mockRestore();
+  });
+
+  it('deletes the diagnostics file on request even when the gate is off (full reset)', async () => {
+    const fileSystem = jest.requireMock('expo-file-system/legacy');
+
+    await clearPaywallDiagnosticsFile();
+
+    expect(fileSystem.deleteAsync).toHaveBeenCalledWith('file:///documents/unfold-paywall-diagnostics.jsonl', {
+      idempotent: true,
+    });
+  });
+
+  it('queues the delete behind an in-flight append and swallows delete failures', async () => {
+    process.env.EXPO_PUBLIC_ENABLE_QA_TOOLS = '1';
+    const fileSystem = jest.requireMock('expo-file-system/legacy');
+    const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => undefined);
+    const order: string[] = [];
+    fileSystem.writeAsStringAsync.mockImplementationOnce(async () => {
+      order.push('write');
+    });
+    fileSystem.deleteAsync.mockImplementationOnce(async () => {
+      order.push('delete');
+      throw new Error('locked');
+    });
+
+    const append = recordPaywallDiagnostic('test.before_delete', { ok: true });
+    await expect(clearPaywallDiagnosticsFile()).resolves.toBeUndefined();
+    await append;
+
+    expect(order).toEqual(['write', 'delete']);
     consoleSpy.mockRestore();
   });
 

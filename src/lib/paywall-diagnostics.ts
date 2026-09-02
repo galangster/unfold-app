@@ -312,3 +312,21 @@ export function recordPaywallDiagnosticLazy(
     }, 'error');
   }
 }
+
+/**
+ * Delete the diagnostics JSONL (full reset). Runs regardless of the gate so a
+ * file left behind by a QA build is still removed, and is queued behind any
+ * in-flight append so a late write cannot resurrect it. Best-effort.
+ */
+export function clearPaywallDiagnosticsFile(): Promise<void> {
+  const path = getPaywallDiagnosticsFilePath();
+  if (!path) return Promise.resolve();
+
+  writeQueue = writeQueue
+    .then(() => FileSystem.deleteAsync(path, { idempotent: true }))
+    .catch((error) => {
+      logger.warn('[PaywallDiagnostics] failed to delete diagnostics file', error);
+    });
+
+  return writeQueue;
+}

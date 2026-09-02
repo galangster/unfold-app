@@ -80,7 +80,7 @@ jest.mock('@/lib/store', () => ({
 }));
 
 // ── Imports AFTER all mocks ───────────────────────────────────────────────────
-import { syncWidgets, resetWidgetSyncFingerprintForTesting } from '@/lib/widget-bridge';
+import { syncWidgets, clearWidgets, resetWidgetSyncFingerprintForTesting } from '@/lib/widget-bridge';
 import UnfoldStreakDefault from '@/widgets/ios/UnfoldStreak';
 import UnfoldTodayDefault from '@/widgets/ios/UnfoldToday';
 import UnfoldDashboardDefault from '@/widgets/ios/UnfoldDashboard';
@@ -108,6 +108,42 @@ beforeEach(() => {
   mockStoreState.user = null;
   mockStoreState.devotionals = [];
   mockStoreState.getCurrentDevotional = () => null;
+});
+
+describe('clearWidgets (P3-4 full reset)', () => {
+  it('pushes an empty timeline to every widget regardless of store state and resets the fingerprint', () => {
+    mockStoreState.streakCurrent = 5;
+    mockStoreState.getCurrentDevotional = () => ({ id: 'd1', currentDay: 2, days: [{ dayNumber: 2, title: 'Day 2' }] });
+    syncWidgets();
+    expect(totalUpdateTimelineCalls()).toBe(3);
+
+    clearWidgets();
+    expect(totalUpdateTimelineCalls()).toBe(6);
+
+    const { buildWidgetTimelineEntries } = jest.requireMock('@/lib/widget-timeline') as {
+      buildWidgetTimelineEntries: jest.Mock;
+    };
+    const calls = buildWidgetTimelineEntries.mock.calls;
+    expect(calls[calls.length - 1][0]).toEqual({
+      streakCurrent: 0,
+      streakLongest: 0,
+      streakLastReadDate: null,
+      readingDuration: 5,
+      currentDevotional: null,
+      allDevotionals: [],
+    });
+
+    // Fingerprint was reset: an unchanged store still re-syncs afterwards.
+    syncWidgets();
+    expect(totalUpdateTimelineCalls()).toBe(9);
+  });
+
+  it('is non-fatal when a widget module throws', () => {
+    updateTimelineMocks()[0].mockImplementationOnce(() => {
+      throw new Error('no widget extension');
+    });
+    expect(() => clearWidgets()).not.toThrow();
+  });
 });
 
 describe('syncWidgets fingerprint guard (RS10-1)', () => {

@@ -267,6 +267,21 @@ export async function cancelAllReminders(): Promise<void> {
   logger.log('[Notifications] All Unfold reminders cancelled');
 }
 
+/**
+ * Cancel EVERY pending local notification for this app — daily reminder,
+ * uniform + per-day check-ins, the trial-ending notification, test / tap-test
+ * notifications, and any family added later. Used by the full reset so a
+ * frozen payload can never outlive the data it points at.
+ */
+export async function cancelAllScheduledNotifications(): Promise<void> {
+  if (Platform.OS === 'web') {
+    return;
+  }
+
+  await Notifications.cancelAllScheduledNotificationsAsync();
+  logger.log('[Notifications] All scheduled notifications cancelled');
+}
+
 // Send a test notification immediately
 export async function sendTestNotification(): Promise<boolean> {
   if (Platform.OS === 'web') {

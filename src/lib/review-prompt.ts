@@ -8,7 +8,7 @@ import {
 } from '@/lib/review-prompt-policy';
 
 /** AsyncStorage key holding the version/build we last fired a native prompt for. */
-const REVIEW_PROMPT_VERSION_STORAGE_KEY = '@unfold_review_prompt_version';
+export const REVIEW_PROMPT_VERSION_STORAGE_KEY = '@unfold_review_prompt_version';
 
 /**
  * Fire the native App Store review sheet at most once per shipped binary.
@@ -261,3 +261,15 @@ export function createReviewPromptManager(storeState: {
 }
 
 export type { ReviewPromptConfig, ReviewPromptState };
+
+/**
+ * Forget which binary last showed the review prompt (full reset). Best-effort:
+ * the marker is a UX convenience, never a reason to fail a data wipe.
+ */
+export async function clearReviewPromptState(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(REVIEW_PROMPT_VERSION_STORAGE_KEY);
+  } catch (error) {
+    logger.warn('[ReviewPrompt] clearReviewPromptState failed:', error);
+  }
+}

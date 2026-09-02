@@ -528,3 +528,12 @@ export const mmkvStorage: StateStorage = {
     mmkv.delete(name);
   },
 };
+
+/**
+ * Every key currently stored in the active mmkvStorage instance. Used by the
+ * full reset to sweep prefixed key families (e.g. `@unfold_rate_limits_<endpoint>`)
+ * without hand-enumerating each member.
+ */
+export function getMmkvKeys(): string[] {
+  return mmkv.getAllKeys();
+}

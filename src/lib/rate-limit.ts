@@ -52,7 +52,8 @@ const RATE_LIMITS: Record<string, RateLimitConfig> = {
   'tts': { maxRequests: 10, windowMs: 60 * 60 * 1000 },
 };
 
-const RATE_LIMIT_STORAGE_KEY = '@unfold_rate_limits';
+/** Per-endpoint keys are `${RATE_LIMIT_STORAGE_KEY}_${endpoint}`; full-reset sweeps them by this prefix. */
+export const RATE_LIMIT_STORAGE_KEY = '@unfold_rate_limits';
 
 /**
  * Read the current rate-limit state from MMKV (synchronous).
