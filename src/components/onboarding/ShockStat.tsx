@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { View, Text } from 'react-native';
+import { useEffect } from 'react';
+import { View } from 'react-native';
 import Animated, {
   FadeIn,
   useSharedValue,
@@ -42,7 +42,11 @@ function StatChar({ char, delay, fontSize, colors }: {
       fontFamily: FontFamily.display,
       fontSize,
       letterSpacing: -1.1,
-      lineHeight: fontSize * 1.05,
+      // PP Editorial New digits reach 0.82em above the baseline. iOS keeps the
+      // descender and cuts from the top when lineHeight is below the font's own
+      // (~1.4em), so 1.05 clipped the tops of "93%" / "11%". 1.25 matches the
+      // display hero in unfolded.tsx.
+      lineHeight: fontSize * 1.25,
     }, style]}>
       {char}
     </Animated.Text>
