@@ -153,22 +153,25 @@ person who declines still cannot use the app. What changes is that they keep
 their answers and their devotional, and they re-enter on a warm screen rather
 than a wall.
 
-One question remains open, and it is the last hostile edge left in the flow.
-The paywall is the only screen in the app a person cannot leave. Force-quit
-is currently the exit, which is exactly how this bug reached a user. Once
-the draft lands, force-quitting is safe, so the trap is no longer destructive.
-It is still a trap.
+**Decided by Nick, 2026-09-03: add the exit.** The paywall was the only screen
+in the app a person could not leave. Force-quitting was the exit, which is
+exactly how this bug reached a user. The final paywall page now carries a
+low-emphasis "I'll decide later".
 
-**Recommendation: add a low-emphasis "I'll decide later" to the final paywall
-page that returns the person to their sample devotional.** They keep reading
-what they already have. Series creation stays gated. This is one small
-component change on top of Lane 1, it removes the last dead end, and a person
-who feels free to leave is more likely to come back and convert. It is a
-funnel change, so it is Nick's call, not mine. The alternative is to keep the
-paywall closed and accept that the only way out is to quit the app.
+What it does: completes onboarding with `isPremium` false, seeds the sample
+devotional into the store so Today has content immediately, clears the draft,
+and lands the person on Today. It never routes to `/generating`, because an
+unpaid person must not trigger a paid generation.
 
-A full free tier, with the Today tab and gated creation, is a larger product
-decision and is not in this plan.
+Why it is safe. The app already gates creation for non-premium people through
+`useCreationGate`, so a create action from Today reaches the paywall through
+machinery that exists today. Someone who later wants a series re-enters
+onboarding, where `getFilteredOnboardingSteps` already skips the marketing
+steps and the paywall for a completed user and asks only the remaining
+personalisation questions. The trial offer is one tap away from Today rather
+than one force-quit away from nothing.
+
+A fuller free tier is a larger product decision and is not in this plan.
 
 ## 3. Fix plan
 
@@ -244,6 +247,10 @@ Owner files: `src/components/onboarding/ThreeStepPaywall.tsx`,
    and dropped.
 2. `updateUser` must log when it drops a write because the user is null.
    Keys only, never values.
+3. The final paywall page gains a low-emphasis "I'll decide later" that calls
+   a new `onDecideLater` prop, shown in every build and kept separate from
+   the QA skip. It appears even when offerings fail to load, since a person
+   who cannot see a price is the most stuck of all. Lane 1 owns the handler.
 
 ### Lane 3 — Keychain hardening and honest recovery
 
@@ -281,6 +288,9 @@ only visible because the backend happened to log a sync uid.
   relaunch. Must resume past the paywall and never ask for Restore.
 - Buy through `ExclusiveOfferSheet`. Must advance to `purchaseConfirmation`.
 - Full reset returns a person to `hook` with nothing carried over.
+- "I'll decide later" on the paywall lands on Today with the sample
+  devotional readable, leaves `isPremium` false, and never starts a
+  generation. A create action from there reaches the paywall.
 - `bun run lint`, `bun run typecheck`, `bun test` green. `/simplify` run on
   the merged diff before the build.
 
