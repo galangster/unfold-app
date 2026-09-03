@@ -294,6 +294,43 @@ only visible because the backend happened to log a sync uid.
 - `bun run lint`, `bun run typecheck`, `bun test` green. `/simplify` run on
   the merged diff before the build.
 
+### Follow-ups from the simplify pass
+
+Recorded, not done. None blocks the hotfix; all were judged too structural to
+land in a P0 that must ship.
+
+1. **One device-scoped record store.** `onboarding-draft-store.ts` and
+   `onboarding-sample-job-store.ts` share their TTL check, device scoping,
+   swallowed writes and error handling almost line for line. Those are the
+   safety invariants least tolerable to drift. Extract
+   `createDeviceScopedRecordStore`, and fold the sample-job record into the
+   draft so there is one record per walk-through instead of two describing the
+   same devotional.
+2. **A shared full-screen layout.** `RecoveryScreen` copies nine style rules
+   verbatim from `ErrorBoundary`. A spacing or font change currently lands in
+   one screen only.
+3. **Never-replay belongs on the step definition.** `onboarding-step-helpers.ts`
+   now carries five parallel id sets, and adding a step means remembering all
+   of them. Move the properties onto the `ALL_STEPS` entries beside
+   `skipIfHasValue`, as one sweep rather than only for the new set.
+4. **Freeze the step filter at mount.** `STEPS` derives from a live store
+   subscription, so a write to the user record mid-flow can make a step vanish
+   under the person walking it. Snapshotting `existingUser` into a ref closes
+   that, and unblocks creating the user record early later on.
+5. **`ensureRevenueCatConfigured`.** The SDK configures itself at module scope,
+   so the storage-locked guard had to be added to that conditional. An
+   idempotent function called from app start removes the import-order coupling,
+   and lets `hasRevenueCatConfigurationAttemptFailed` stop reporting a
+   deliberate skip as a failure.
+6. **One `finishOnboarding({ outcome })`.** Three paths now hand-assemble save,
+   clear draft, clear sample job and navigate, and only one adopts the sample
+   devotional.
+7. **Behavioural tests for the onboarding screen.** `onboarding-draft-lifecycle`
+   asserts against the screen's source text because the component is too large
+   to render in a test. It breaks on any refactor and would pass on wrong
+   behaviour. Splitting the flow's logic out of the 3800-line component is the
+   real fix.
+
 ## 4. Release
 
 - 1.1.0 (253) finished on EAS at 03:57 UTC today and an iOS submission
