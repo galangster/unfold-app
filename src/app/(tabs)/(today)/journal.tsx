@@ -50,7 +50,7 @@ import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
 import { Typography } from '@/constants/typography';
 import { useTheme } from '@/lib/theme';
-import { useUnfoldStore, JournalMode, SoapResponses } from '@/lib/store';
+import { flushUnfoldStorePersist, useUnfoldStore, JournalMode, SoapResponses } from '@/lib/store';
 import { isOnline } from '@/lib/network-error-handler';
 import { PERSONA_BRIEF } from '@/constants/persona';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
@@ -436,6 +436,10 @@ export default function JournalScreen() {
       freewriteAutosaveRef.current?.flush();
       soapAutosaveRef.current?.flush();
       flushPrayerDraftRef.current();
+      // The store registered its own persist flush at module load, so it ran
+      // BEFORE this one; the writes just made above would otherwise sit in the
+      // 1000 ms coalescing window (WR-23) and die with a force-kill.
+      flushUnfoldStorePersist();
     });
 
     return () => subscription.remove();

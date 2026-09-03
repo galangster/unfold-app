@@ -54,7 +54,7 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Typography } from '@/constants/typography';
 import { useTheme } from '@/lib/theme';
-import { useUnfoldStore, READING_FONTS, type Note, type NoteCategory, type ScriptureRef } from '@/lib/store';
+import { flushUnfoldStorePersist, useUnfoldStore, READING_FONTS, type Note, type NoteCategory, type ScriptureRef } from '@/lib/store';
 import { ScriptureRefPill } from '@/components/notebook/ScriptureRefPill';
 import { ScriptureSearchSheet } from '@/components/notebook/ScriptureSearchSheet';
 import { MoveFolderSheet } from '@/components/notebook/MoveFolderSheet';
@@ -801,6 +801,10 @@ export default function NoteDetailScreen() {
       if (!autoSaveControllerRef.current?.flush()) {
         autoSaveAllowEmptyRef.current = false;
       }
+      // The store's own persist flush (registered at module load) already ran,
+      // so land the write this flush just made instead of leaving it in the
+      // 1000 ms coalescing window (WR-23).
+      flushUnfoldStorePersist();
     });
 
     return () => subscription.remove();

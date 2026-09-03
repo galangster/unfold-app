@@ -14,7 +14,7 @@ import { alpha } from '@/components/ui';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
-import { useUnfoldStore, FontSize } from '@/lib/store';
+import { flushUnfoldStorePersist, useUnfoldStore, FontSize } from '@/lib/store';
 import { getReflectionTypography, type ReflectionTypography } from '@/lib/reflection-typography';
 import { Typography } from '@/constants/typography';
 
@@ -282,6 +282,9 @@ export function InlineReflectionJournal({
     const subscription = AppState.addEventListener('change', (nextState) => {
       if (shouldFlushAutosaveOnAppState(nextState)) {
         autoSaveControllerRef.current?.flush();
+        // The store's persist flush (registered at module load) ran before
+        // this one, so land the response just written (WR-23 debounce).
+        flushUnfoldStorePersist();
       }
     });
 
