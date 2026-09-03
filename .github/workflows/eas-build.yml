@@ -1,0 +1,82 @@
+# Start an EAS build from GitHub, so a release does not depend on one laptop
+# having the Expo session.
+#
+# Setup, once: create an access token at https://expo.dev → account settings →
+# Access tokens (a robot token scoped to this project is enough), then add it
+# as the repository secret EXPO_TOKEN. Nothing else is stored here.
+#
+# Running it: Actions → EAS Build → Run workflow, pick a profile. The job
+# queues the build on Expo's builders and prints its URL; it does not wait, so
+# it costs about a minute of Actions time rather than the length of the build.
+# Watch progress at https://expo.dev, or `eas build:list`.
+#
+# Submitting is deliberately not here: `eas submit` reads the App Store Connect
+# key from ./keys/AuthKey_*.p8, which is not in the repository, so it stays a
+# local step.
+name: EAS Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: Build profile from eas.json
+        type: choice
+        default: qa-testflight
+        options:
+          - qa-testflight
+          - production
+          - preview
+      platform:
+        description: Target platform
+        type: choice
+        default: ios
+        options:
+          - ios
+          - android
+          - all
+
+jobs:
+  build:
+    name: ${{ inputs.platform }} · ${{ inputs.profile }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the token is configured
+        # `secrets` is not available in a step-level `if`, so read it as env.
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::error::EXPO_TOKEN is not set. Add it under Settings → Secrets and variables → Actions, then run this workflow again."
+            exit 1
+          fi
+
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      # eas-cli runs on Node, not Bun.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      # The CLI resolves app.config.js locally before uploading the project.
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Queue the build
+        run: |
+          eas build \
+            --platform "${{ inputs.platform }}" \
+            --profile "${{ inputs.profile }}" \
+            --non-interactive \
+            --no-wait
