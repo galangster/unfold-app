@@ -24,6 +24,49 @@ function reportMigrationFailure(step: string, err: unknown): void {
   }
 }
 
+/**
+ * Pending journal writes live in the sync outbox (its own MMKV key), not in
+ * the persisted store blob this file migrates. Re-keying entries by day
+ * without re-keying the queue would push the queued writes under their old
+ * random ids on the next drain, and the next pull would bring those rows back
+ * as duplicates of the day just merged. Rewrite them to the same canonical id,
+ * keeping the newest queued write per day.
+ *
+ * The require is deferred for the same reason reportMigrationFailure defers
+ * its own: sync-outbox → mmkv-storage → store, and store imports this module.
+ */
+function remapQueuedJournalWrites(): void {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const outbox = require('./sync-outbox') as typeof import('./sync-outbox');
+    const changes = outbox.peekSyncOutbox();
+    if (changes.length === 0) return;
+    let rewritten = 0;
+    const remapped = changes.map((change) => {
+      if (change.table !== 'journal_entries') return change;
+      const data = (change.data ?? {}) as { devotionalId?: unknown; dayNumber?: unknown };
+      if (typeof data.devotionalId !== 'string' || typeof data.dayNumber !== 'number') return change;
+      const canonical = compositeId(data.devotionalId, data.dayNumber);
+      if (change.id === canonical) return change;
+      rewritten += 1;
+      return { ...change, id: canonical };
+    });
+    if (rewritten === 0) return;
+    // Two queued writes for one day collapse to the newest, matching the
+    // outbox's own last-write-wins dedup.
+    const byRecord = new Map<string, (typeof remapped)[number]>();
+    for (const change of remapped) {
+      const key = `${change.table}:${change.id}`;
+      const existing = byRecord.get(key);
+      if (!existing || (change.clientUpdatedAt ?? '') >= (existing.clientUpdatedAt ?? '')) byRecord.set(key, change);
+    }
+    outbox.replaceSyncOutbox([...byRecord.values()]);
+    logger.log(`[store] Migration v41→42: re-keyed ${rewritten} queued journal write(s) to their day`);
+  } catch (err) {
+    reportMigrationFailure('v41→42 outbox', err);
+  }
+}
+
 export function migrateUnfoldStore(persistedState: unknown, version: number): PersistedUnfoldState {
 const state = persistedState as PersistedUnfoldState;
 
@@ -664,6 +707,7 @@ if (version < 42) {
       } else {
         (state as any).journalEntries = merged;
       }
+      remapQueuedJournalWrites();
     }
   } catch (err) {
     reportMigrationFailure('v41→42', err);

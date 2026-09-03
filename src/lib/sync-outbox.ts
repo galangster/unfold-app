@@ -60,6 +60,15 @@ export function peekSyncOutbox(): SyncPushChange[] {
   return readOutbox();
 }
 
+/**
+ * Replace the whole queue. Only the store migration uses this, to re-key
+ * queued journal writes when entry ids became day-derived; ordinary writers
+ * go through enqueueSyncChanges so the cap and the dedup apply.
+ */
+export function replaceSyncOutbox(changes: SyncPushChange[]): void {
+  writeOutbox(changes.slice(-OUTBOX_CAP));
+}
+
 export function removeSyncChangesForRecords(records: Array<{ table: SyncTable; id: string }>): void {
   if (records.length === 0) return;
   const keys = new Set(records.map((record) => `${record.table}:${record.id}`));
