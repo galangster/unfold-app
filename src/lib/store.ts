@@ -20,6 +20,7 @@ import {
   getServerOwnedSeriesTotalDays,
 } from './devotional-series-boundary';
 import { newId } from './sync-ids';
+import { canonicalJournalEntryId } from './journal-entry-merge';
 import type { NudgeType, NudgeImpression } from './nudges';
 import { NUDGE_INITIAL_STATE } from './nudges';
 import { applyStreakRead, getWeekStart, reconcileStreakState } from './streak-helpers';
@@ -566,7 +567,8 @@ interface UnfoldState {
 
   // Journal entries
   journalEntries: JournalEntry[];
-  addJournalEntry: (entry: Omit<JournalEntry, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  /** Returns the entry's id — the existing one when this day already has an entry. */
+  addJournalEntry: (entry: Omit<JournalEntry, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateJournalEntry: (id: string, content: string) => void;
   updateJournalMode: (id: string, mode: JournalMode) => void;
   updateSoapResponse: (id: string, field: keyof SoapResponses, value: string) => void;
@@ -1062,18 +1064,33 @@ export const useUnfoldStore = create<UnfoldState>()(
         })),
 
       // Journal actions
-      addJournalEntry: (entry) =>
+      // One entry per (devotionalId, dayNumber): the id is derived from the
+      // day, so two devices writing the same day converge on one row instead
+      // of creating two that only ever resolve to the first match. An entry
+      // that already exists for the day (including one pulled from another
+      // device under its own id) is returned untouched.
+      addJournalEntry: (entry) => {
+        let resolvedId = canonicalJournalEntryId(entry.devotionalId, entry.dayNumber);
         set((state) => {
+          const existing = state.journalEntries.find(
+            (e) => e.devotionalId === entry.devotionalId && e.dayNumber === entry.dayNumber,
+          );
+          if (existing) {
+            resolvedId = existing.id;
+            return {};
+          }
           const now = new Date().toISOString();
           const newEntry: JournalEntry = {
             ...entry,
-            id: `journal-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            id: resolvedId,
             createdAt: now,
             updatedAt: now,
           };
           enqueuePersonalDataSyncChange('journal_entries', newEntry.id, journalEntrySyncData(newEntry), now);
           return { journalEntries: [...state.journalEntries, newEntry] };
-        }),
+        });
+        return resolvedId;
+      },
 
       updateJournalEntry: (id, content) =>
         set((state) => {
@@ -1978,7 +1995,7 @@ export const useUnfoldStore = create<UnfoldState>()(
     {
       name: 'unfold-storage',
       storage: unfoldPersistStorage,
-      version: 41, // v41: normalise journal soapResponses (four strings or absent)
+      version: 42, // v42: one journal entry per day, under a deterministic id
       // WR-23: drop session-scoped flags from the persisted blob.
       partialize: (state): PersistedUnfoldState => {
         const { nudgeShownThisSession, streakJustReset, ...persisted } = state;

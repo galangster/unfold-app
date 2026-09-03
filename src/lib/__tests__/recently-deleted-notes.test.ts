@@ -17,6 +17,7 @@ jest.mock('../bug-logger', () => ({
 
 jest.mock('../sync-ids', () => ({
   newId: jest.fn(() => `test-id-${Math.random().toString(36).slice(2, 8)}`),
+  compositeId: jest.fn((...parts: unknown[]) => parts.join(':')),
 }));
 
 jest.mock('../mmkv-storage', () => {

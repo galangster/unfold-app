@@ -172,19 +172,20 @@ describe('migration v40→41: repair persisted journal soapResponses', () => {
       40,
     ) as { journalEntries: Array<Record<string, unknown> | null> };
 
-    const byId = new Map(
-      migrated.journalEntries.filter(Boolean).map((entry) => [entry!.id as string, entry!]),
+    // v42 (same chain) re-keys entries by day, so look them up that way.
+    const byDay = new Map(
+      migrated.journalEntries.filter(Boolean).map((entry) => [entry!.dayNumber as number, entry!]),
     );
-    expect('soapResponses' in byId.get('empty')!).toBe(false);
-    expect(byId.get('partial')!.soapResponses).toEqual({
+    expect(byDay.get(1)!.soapResponses).toBeUndefined();
+    expect(byDay.get(2)!.soapResponses).toEqual({
       scripture: '',
       observation: 'o',
       application: '',
       prayer: '',
     });
-    expect(byId.get('full')!.soapResponses).toEqual(FULL_SOAP);
-    expect('soapResponses' in byId.get('absent')!).toBe(false);
-    expect(byId.get('absent')!.content).toBe('y');
+    expect(byDay.get(3)!.soapResponses).toEqual(FULL_SOAP);
+    expect(byDay.get(4)!.soapResponses).toBeUndefined();
+    expect(byDay.get(4)!.content).toBe('y');
   });
 
   it('tolerates a missing journalEntries slice', () => {

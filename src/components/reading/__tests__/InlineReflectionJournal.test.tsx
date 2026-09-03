@@ -17,14 +17,13 @@ const mockEntries: Array<{
   questionResponses?: Array<{ question: string; response: string }>;
 }> = [];
 
+// Mirrors the store: one entry per (devotionalId, dayNumber), id returned.
 const mockAddJournalEntry = jest.fn(({ devotionalId, dayNumber, content }) => {
-  mockEntries.push({
-    id: `entry-${devotionalId}-${dayNumber}`,
-    devotionalId,
-    dayNumber,
-    content,
-    questionResponses: [],
-  });
+  const id = `entry-${devotionalId}-${dayNumber}`;
+  if (!mockEntries.some((entry) => entry.id === id)) {
+    mockEntries.push({ id, devotionalId, dayNumber, content, questionResponses: [] });
+  }
+  return id;
 });
 
 const mockUpdateQuestionResponse = jest.fn((entryId: string, question: string, response: string) => {

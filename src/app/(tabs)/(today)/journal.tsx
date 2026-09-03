@@ -366,18 +366,15 @@ export default function JournalScreen() {
     }
   }, [focusQuestionIndex, activeMode]);
 
-  // Ensure an entry exists (for SOAP/prayer saves)
+  // Ensure an entry exists (for SOAP/prayer saves). addJournalEntry returns
+  // the day's entry id — the existing one when the day already has an entry.
   const ensureEntry = useCallback((): string | null => {
     if (savedEntryIdRef.current) return savedEntryIdRef.current;
 
-    addJournalEntry({ devotionalId, dayNumber, content: '', journalMode: activeMode });
-    const entry = getJournalEntry(devotionalId, dayNumber);
-    if (entry) {
-      savedEntryIdRef.current = entry.id;
-      return entry.id;
-    }
-    return null;
-  }, [devotionalId, dayNumber, addJournalEntry, getJournalEntry, activeMode]);
+    const id = addJournalEntry({ devotionalId, dayNumber, content: '', journalMode: activeMode });
+    savedEntryIdRef.current = id;
+    return id;
+  }, [devotionalId, dayNumber, addJournalEntry, activeMode]);
 
   const saveEntry = useCallback((text: string) => {
     if (savedEntryIdRef.current) {
@@ -385,18 +382,14 @@ export default function JournalScreen() {
       updateJournalEntry(savedEntryIdRef.current, text);
     } else if (text.trim()) {
       // Only create a brand-new entry if there's actual content
-      addJournalEntry({
+      savedEntryIdRef.current = addJournalEntry({
         devotionalId,
         dayNumber,
         content: text,
         journalMode: activeMode,
       });
-      const newEntry = getJournalEntry(devotionalId, dayNumber);
-      if (newEntry) {
-        savedEntryIdRef.current = newEntry.id;
-      }
     }
-  }, [devotionalId, dayNumber, addJournalEntry, updateJournalEntry, getJournalEntry, activeMode]);
+  }, [devotionalId, dayNumber, addJournalEntry, updateJournalEntry, activeMode]);
 
   // Debounced freewrite save — invoked by the shared autosave controller.
   // Reads refs (not closures) so background/unmount flushes never save stale text.
@@ -625,11 +618,7 @@ export default function JournalScreen() {
 
       if (!savedEntryIdRef.current) {
         if (!content.trim()) {
-          addJournalEntry({ devotionalId, dayNumber, content: '', journalMode: activeMode });
-          const newEntry = getJournalEntry(devotionalId, dayNumber);
-          if (newEntry) {
-            savedEntryIdRef.current = newEntry.id;
-          }
+          savedEntryIdRef.current = addJournalEntry({ devotionalId, dayNumber, content: '', journalMode: activeMode });
         } else {
           saveEntry(content);
         }
@@ -639,7 +628,7 @@ export default function JournalScreen() {
         updateQuestionResponse(savedEntryIdRef.current, question, response);
       }
     },
-    [content, devotionalId, dayNumber, addJournalEntry, getJournalEntry, saveEntry, updateQuestionResponse, activeMode, gate]
+    [content, devotionalId, dayNumber, addJournalEntry, saveEntry, updateQuestionResponse, activeMode, gate]
   );
 
   const handleToggleQuestion = useCallback(
@@ -809,9 +798,7 @@ Their journal entry:
 
         // Persist to store so questions survive navigation
         if (!savedEntryIdRef.current) {
-          addJournalEntry({ devotionalId, dayNumber, content: content || '', journalMode: activeMode });
-          const newEntry = getJournalEntry(devotionalId, dayNumber);
-          if (newEntry) savedEntryIdRef.current = newEntry.id;
+          savedEntryIdRef.current = addJournalEntry({ devotionalId, dayNumber, content: content || '', journalMode: activeMode });
         }
         if (savedEntryIdRef.current) {
           setDeeperQuestions(savedEntryIdRef.current, prompts);

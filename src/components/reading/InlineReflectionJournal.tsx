@@ -147,19 +147,20 @@ export function InlineReflectionJournal({
         return saved.entryId;
       }
 
-      addJournalEntry({ devotionalId: targetDevotionalId, dayNumber: targetDayNumber, content: '' });
-      const entry = getJournalEntry(targetDevotionalId, targetDayNumber);
-      if (entry) {
-        savedEntryRef.current = {
-          devotionalId: targetDevotionalId,
-          dayNumber: targetDayNumber,
-          entryId: entry.id,
-        };
-        return entry.id;
-      }
-      return null;
+      // Returns the day's entry id — the existing one when it already exists.
+      const entryId = addJournalEntry({
+        devotionalId: targetDevotionalId,
+        dayNumber: targetDayNumber,
+        content: '',
+      });
+      savedEntryRef.current = {
+        devotionalId: targetDevotionalId,
+        dayNumber: targetDayNumber,
+        entryId,
+      };
+      return entryId;
     },
-    [devotionalId, dayNumber, addJournalEntry, getJournalEntry]
+    [devotionalId, dayNumber, addJournalEntry]
   );
 
   // Auto-save a response after 800ms of inactivity

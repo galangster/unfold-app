@@ -2,6 +2,7 @@ import { logger } from './logger';
 import { canonicalGeneratedDayId } from './devotional-canonical-days';
 import { compositeId } from './sync-ids';
 import { normalizeSoapResponses } from './journal-entry-state';
+import { mergeJournalEntryDuplicates } from './journal-entry-merge';
 
 type PersistedUnfoldState = Record<string, any>;
 
@@ -616,6 +617,38 @@ if (version < 41) {
     }
   } catch (err) {
     console.error('[store] Migration v40→41 failed:', err);
+  }
+}
+
+// Migration from version 41 to 42: one journal entry per (devotionalId,
+// dayNumber), under a deterministic id.
+//
+// Entry ids were random per device, so the same day written on a second
+// device (or restored from a server row minted elsewhere) produced a second
+// entry. Every day-keyed lookup is a first-match `find`, so that entry was
+// invisible in the app while still syncing — the second device's writing
+// looked lost. Merge the duplicates, keeping every piece of text.
+if (version < 42) {
+  try {
+    const journalEntries = (state as any).journalEntries;
+    if (Array.isArray(journalEntries) && journalEntries.length > 0) {
+      const usable = journalEntries.filter(
+        (entry: any) => entry && typeof entry.devotionalId === 'string' && typeof entry.dayNumber === 'number',
+      );
+      const merged = mergeJournalEntryDuplicates(usable);
+      // Anything too malformed to key by day is kept as-is rather than dropped.
+      const unusable = journalEntries.filter((entry: any) => entry && !usable.includes(entry));
+      if (merged.length !== journalEntries.length || unusable.length > 0) {
+        (state as any).journalEntries = [...merged, ...unusable];
+        logger.log(
+          `[store] Migration v41→42: merged ${journalEntries.length} journal entries into ${merged.length + unusable.length}`,
+        );
+      } else {
+        (state as any).journalEntries = merged;
+      }
+    }
+  } catch (err) {
+    console.error('[store] Migration v41→42 failed:', err);
   }
 }
 
