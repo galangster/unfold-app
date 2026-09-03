@@ -6,6 +6,7 @@ import { logger } from './logger';
 import { useUnfoldStore } from './store';
 import { peekSyncOutbox } from './sync-outbox';
 import { normalizeSoapResponses } from './journal-entry-state';
+import { mergeJournalEntryDuplicates } from './journal-entry-merge';
 import type {
   BibleHighlight,
   BibleReadingPosition,
@@ -124,6 +125,28 @@ function upsertRecord<T extends { id?: string; updatedAt?: string; createdAt?: s
   return existing
     ? items.map((item) => (item.id === mappedId ? mapped : item))
     : [mapped, ...items];
+}
+
+/**
+ * One entry per (devotionalId, dayNumber), without touching a store that is
+ * already canonical. Only days that actually gained a second entry are
+ * rewritten, so an ordinary pull returns the same array it was given.
+ */
+function collapseJournalEntryDays(entries: JournalEntry[]): JournalEntry[] {
+  const seen = new Set<string>();
+  let duplicated = false;
+  for (const entry of entries) {
+    if (!entry || typeof entry.devotionalId !== 'string' || typeof entry.dayNumber !== 'number') continue;
+    const key = `${entry.devotionalId}|${entry.dayNumber}`;
+    if (seen.has(key)) { duplicated = true; break; }
+    seen.add(key);
+  }
+  if (!duplicated) return entries;
+  const keyable = entries.filter(
+    (entry) => entry && typeof entry.devotionalId === 'string' && typeof entry.dayNumber === 'number'
+  );
+  const rest = entries.filter((entry) => entry && !keyable.includes(entry));
+  return [...mergeJournalEntryDuplicates(keyable), ...rest];
 }
 
 function mapJournalEntry(record: SyncPulledRecord): JournalEntry | null {
@@ -470,9 +493,15 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
 
     return {
       devotionals,
-      journalEntries: (changes.journal_entries ?? []).reduce(
-        (items, record) => upsertRecord(items, record, 'journal_entries', pendingByRecord, mapJournalEntry),
-        state.journalEntries
+      // Journal rows the server minted before entry ids were day-derived still
+      // carry random ids, so upserting them by id alone re-creates exactly the
+      // per-day duplicates the v41→42 migration merged. Collapse the day again
+      // after applying: the merge is idempotent and keeps every piece of text.
+      journalEntries: collapseJournalEntryDays(
+        (changes.journal_entries ?? []).reduce(
+          (items, record) => upsertRecord(items, record, 'journal_entries', pendingByRecord, mapJournalEntry),
+          state.journalEntries
+        )
       ),
       bookmarks: (changes.bookmarks ?? []).reduce(
         (items, record) => upsertRecord(items, record, 'bookmarks', pendingByRecord, mapBookmark),
