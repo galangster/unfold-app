@@ -53,6 +53,12 @@ describe('requestServerAccountErase', () => {
     expect(SERVER_ERASE_TIMEOUT_MS).toBeLessThanOrEqual(10_000);
   });
 
+  it('confirms a 204 No Content, which carries no body to inspect', async () => {
+    mockFetch.mockResolvedValue(response(null, 204, false));
+
+    await expect(requestServerAccountErase()).resolves.toEqual({ ok: true });
+  });
+
   it('reports HTTP errors with their status', async () => {
     mockFetch.mockResolvedValue(response({ error: 'nope' }, 503));
     await expect(requestServerAccountErase()).resolves.toEqual({ ok: false, reason: 'http-error', status: 503 });
@@ -61,15 +67,29 @@ describe('requestServerAccountErase', () => {
     await expect(requestServerAccountErase()).resolves.toEqual({ ok: false, reason: 'http-error', status: 404 });
   });
 
-  it('treats a 200 without { deleted: true } as not confirmed', async () => {
-    mockFetch.mockResolvedValue(response({ deleted: false }));
-    await expect(requestServerAccountErase()).resolves.toEqual({ ok: false, reason: 'unexpected-response', status: 200 });
-
+  it('confirms a 200 whatever the body says', async () => {
+    // The status line is the contract: the alert this drives tells the user
+    // to contact support about data the server has in fact deleted, so an
+    // empty or unparseable body must not report a successful erase as
+    // unconfirmed. The documented { deleted: true } reply keeps working.
     mockFetch.mockResolvedValue(response({}));
-    await expect(requestServerAccountErase()).resolves.toEqual({ ok: false, reason: 'unexpected-response', status: 200 });
+    await expect(requestServerAccountErase()).resolves.toEqual({ ok: true });
 
     mockFetch.mockResolvedValue(response(null, 200, false));
-    await expect(requestServerAccountErase()).resolves.toEqual({ ok: false, reason: 'unexpected-response', status: 200 });
+    await expect(requestServerAccountErase()).resolves.toEqual({ ok: true });
+
+    mockFetch.mockResolvedValue(response({ deleted: false }));
+    await expect(requestServerAccountErase()).resolves.toEqual({ ok: true });
+  });
+
+  it('does not confirm a 2xx the contract does not define', async () => {
+    // 202 Accepted means queued, not done.
+    mockFetch.mockResolvedValue(response({}, 202));
+    await expect(requestServerAccountErase()).resolves.toEqual({
+      ok: false,
+      reason: 'unexpected-response',
+      status: 202,
+    });
   });
 
   it('reports network failures without throwing', async () => {

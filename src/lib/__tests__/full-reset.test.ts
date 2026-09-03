@@ -281,17 +281,25 @@ describe('performFullLocalReset', () => {
     expect(rotateDeviceId).toHaveBeenCalledTimes(1);
   });
 
-  it('reports a non-200 or unexpected server reply as not confirmed', async () => {
+  it('reports a failed or undefined server reply as not confirmed', async () => {
     mockFetch.mockResolvedValueOnce(okResponse({ error: 'nope' }, 500));
     expect((await performFullLocalReset()).serverErase).toEqual({ ok: false, reason: 'http-error', status: 500 });
 
-    mockFetch.mockResolvedValueOnce(okResponse({ deleted: false }));
+    // 202 Accepted: queued, not deleted.
+    mockFetch.mockResolvedValueOnce(okResponse({}, 202));
     expect((await performFullLocalReset()).serverErase).toEqual({
       ok: false,
       reason: 'unexpected-response',
-      status: 200,
+      status: 202,
     });
     expect(rotateDeviceId).toHaveBeenCalledTimes(2);
+  });
+
+  it('accepts a 204 No Content erase as confirmed', async () => {
+    mockFetch.mockResolvedValueOnce(okResponse(null, 204));
+
+    expect((await performFullLocalReset()).serverErase).toEqual({ ok: true });
+    expect(rotateDeviceId).toHaveBeenCalledTimes(1);
   });
 
   it('a slow server erase times out and the local reset still completes', async () => {

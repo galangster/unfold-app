@@ -8,6 +8,14 @@
  * failure or timeout never blocks the local wipe, but the outcome is
  * returned so Settings can tell the user when server deletion was not
  * confirmed. Never throws.
+ *
+ * Deletion is confirmed by the STATUS LINE: 200 (with or without the
+ * documented body) or 204 No Content. The body is documented, not load-
+ * bearing — a DELETE endpoint answering 204, or 200 with an empty body,
+ * has still deleted the data, and the alert this result drives tells the
+ * user their synced data could not be confirmed deleted and to contact
+ * support. Reporting a successful deletion as unconfirmed is the worse
+ * error of the two, so only the status decides.
  */
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from '@/lib/api-config';
 import { getDeviceId } from '@/lib/mmkv-storage';
@@ -55,21 +63,15 @@ export async function requestServerAccountErase({
       return { ok: false, reason: 'http-error', status: response.status };
     }
 
-    let body: unknown = null;
-    try {
-      body = await response.json();
-    } catch {
-      body = null;
-    }
-    const deleted =
-      typeof body === 'object' && body !== null && (body as { deleted?: unknown }).deleted === true;
-    if (!deleted) {
-      logger.warn('[reset] Server erase returned an unexpected body');
-      return { ok: false, reason: 'unexpected-response', status: response.status };
+    if (response.status === 200 || response.status === 204) {
+      logger.log(`[reset] Server data erased (HTTP ${response.status})`);
+      return { ok: true };
     }
 
-    logger.log('[reset] Server data erased');
-    return { ok: true };
+    // A 2xx this contract does not define — 202 Accepted, say, which means the
+    // deletion is queued, not done. Stay on the not-confirmed path.
+    logger.warn(`[reset] Server erase returned an undefined success status: HTTP ${response.status}`);
+    return { ok: false, reason: 'unexpected-response', status: response.status };
   } catch (error) {
     const timedOut = controller.signal.aborted;
     logger.warn(`[reset] Server erase ${timedOut ? 'timed out' : 'failed'}`, error);
