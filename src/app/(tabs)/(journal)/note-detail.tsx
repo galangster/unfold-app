@@ -698,14 +698,19 @@ export default function NoteDetailScreen() {
 
   /* ───── Debounced auto-save ───── */
 
+  // Deliberately NOT gated. The creation gate belongs on the actions that
+  // create or open a note (the hub's FAB, Minimize, folder creation); running
+  // it per keystroke dropped the save whenever it answered no — which it does
+  // for the whole time the premium policy is still 'unknown' — and on a
+  // churned account each keystroke also tried to raise a paywall. Words
+  // already typed into an open editor are always persisted.
   const scheduleAutoSave = useCallback((htmlFromEvent?: string) => {
-    if (!gate()) return;
     pendingAutoSaveHtmlRef.current = htmlFromEvent;
     autoSaveAllowEmptyRef.current = false;
     if (savedResetRef.current) clearTimeout(savedResetRef.current);
     setPendingSave(true);
     autoSaveControllerRef.current?.schedule();
-  }, [gate]);
+  }, []);
 
   const getCurrentEditorHtml = useCallback(async () => {
     return IS_NATIVE_EDITOR
