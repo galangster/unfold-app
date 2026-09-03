@@ -23,25 +23,23 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 
-/**
- * Pure: whether this session must show the screen instead of the app.
- *
- * Takes the flag rather than reading it so the decision stays testable without
- * the native storage module. Callers pass `isRecoverySession()` from
- * mmkv-storage.ts.
- */
-export function shouldShowRecoveryScreen(isRecoverySession: boolean): boolean {
-  return isRecoverySession;
-}
 
 export interface RecoveryScreenProps {
   /** Theme colours, same shape the rest of the app renders against. */
   colors: ColorTheme;
+  /**
+   * 'locked' is the state the session actually booted in. 'ready' is shown
+   * after the retry proves the Keychain reads again: the open plan is fixed at
+   * module init, so this session still cannot recover and the only honest
+   * instruction is to relaunch.
+   */
+  variant?: 'locked' | 'ready';
   /** Re-run the boot path. The caller decides how (reload, remount, exit). */
   onRetry: () => void;
 }
 
-export function RecoveryScreen({ colors, onRetry }: RecoveryScreenProps) {
+export function RecoveryScreen({ colors, variant = 'locked', onRetry }: RecoveryScreenProps) {
+  const isReady = variant === 'ready';
   return (
     <View
       style={[styles.container, { backgroundColor: colors.background }]}
@@ -52,14 +50,20 @@ export function RecoveryScreen({ colors, onRetry }: RecoveryScreenProps) {
         <View style={[styles.iconContainer, { backgroundColor: colors.inputBackground }]}>
           <Text style={[styles.icon, { color: colors.textMuted }]}>✦</Text>
         </View>
-        <Text style={[styles.title, { color: colors.text }]}>Your reading is safe</Text>
-        <Text style={[styles.message, { color: colors.textMuted }]}>
-          Everything you have read, written and saved is still on this device. Unfold could not
-          open it just now, because your phone was locked when the app started.
+        <Text style={[styles.title, { color: colors.text }]}>
+          {isReady ? 'Your phone is unlocked' : 'Your reading is safe'}
         </Text>
         <Text style={[styles.message, { color: colors.textMuted }]}>
-          Unlock your phone, then open Unfold again.
+          {isReady
+            ? 'Close Unfold completely and open it again. Everything will be where you left it.'
+            : 'Everything you have read, written and saved is still on this device. Unfold could not open it just now, because your phone was locked when the app started.'}
         </Text>
+        {!isReady && (
+          <Text style={[styles.message, { color: colors.textMuted }]}>
+            Unlock your phone, then open Unfold again.
+          </Text>
+        )}
+        {!isReady && (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Try again"
@@ -76,6 +80,7 @@ export function RecoveryScreen({ colors, onRetry }: RecoveryScreenProps) {
         >
           <Text style={[styles.buttonText, { color: colors.accent }]}>Try again</Text>
         </Pressable>
+        )}
       </View>
     </View>
   );

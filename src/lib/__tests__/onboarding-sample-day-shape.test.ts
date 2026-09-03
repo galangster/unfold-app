@@ -1,7 +1,4 @@
-import {
-  isUsableSampleDevotionalDay,
-  readSampleDevotionalDay,
-} from '@/lib/onboarding-sample-day-shape';
+import { isUsableSampleDevotionalDay } from '@/lib/onboarding-sample-day-shape';
 
 const validDay = {
   dayNumber: 1,
@@ -38,12 +35,3 @@ describe('isUsableSampleDevotionalDay', () => {
   });
 });
 
-describe('readSampleDevotionalDay', () => {
-  it('returns the day when it is usable', () => {
-    expect(readSampleDevotionalDay(validDay)).toEqual(validDay);
-  });
-
-  it('returns null for anything unusable, so the segue re-polls', () => {
-    expect(readSampleDevotionalDay({ dayNumber: 1 })).toBeNull();
-  });
-});

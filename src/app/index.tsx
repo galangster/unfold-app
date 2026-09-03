@@ -187,9 +187,13 @@ export default function WelcomeScreen() {
   // typed again, answers gone. A saved draft means they are returning, not
   // arriving: send them straight back into the flow. Read once via a lazy
   // initializer so getDeviceId() isn't hit on every render.
-  const [hasOnboardingDraft] = useState(
-    () => !!getOnboardingDraft({ deviceId: getDeviceId() }),
-  );
+  const [hasOnboardingDraft] = useState(() => {
+    // Only someone mid-onboarding can have a draft. Skipping the read for a
+    // completed user keeps a Keychain read, an MMKV read and a JSON.parse off
+    // the blocking path of every ordinary cold start.
+    if (user?.hasCompletedOnboarding) return false;
+    return !!getOnboardingDraft({ deviceId: getDeviceId() });
+  });
 
   // Three phases: welcome → cutscene → features (all on same background)
   const [phase, setPhase] = useState<'welcome' | 'cutscene' | 'features'>('welcome');

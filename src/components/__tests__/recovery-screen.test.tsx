@@ -9,7 +9,7 @@
  */
 import { act, create } from 'react-test-renderer';
 import { DarkColors } from '@/constants/colors';
-import { RecoveryScreen, shouldShowRecoveryScreen } from '@/components/RecoveryScreen';
+import { RecoveryScreen } from '@/components/RecoveryScreen';
 
 /** Internals a person must never be shown, and the loss this must never imply. */
 const FORBIDDEN_WORDS = ['keychain', 'mmkv', 'encryption', 'recovery', 'namespace'];
@@ -32,15 +32,6 @@ function renderScreen(onRetry: () => void = () => {}) {
   return { tree, text: collectText(tree.toJSON()).join(' ') };
 }
 
-describe('shouldShowRecoveryScreen', () => {
-  it('shows the screen for a session running on the throwaway store', () => {
-    expect(shouldShowRecoveryScreen(true)).toBe(true);
-  });
-
-  it('stays out of the way on a normal session', () => {
-    expect(shouldShowRecoveryScreen(false)).toBe(false);
-  });
-});
 
 describe('RecoveryScreen', () => {
   it('tells the person their reading is safe and asks them to unlock the phone', () => {

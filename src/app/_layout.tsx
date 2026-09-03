@@ -7,12 +7,12 @@ import NetInfo from '@react-native-community/netinfo';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { useCallback, useEffect, useState } from 'react';
-import { AppState, Platform, StyleSheet, Text as RNText, TextInput as RNTextInput, View } from 'react-native';
+import { AppState, Platform, Text as RNText, TextInput as RNTextInput, View } from 'react-native';
 import { useFonts } from 'expo-font';
 
 import { Colors } from '@/constants/colors';
 import * as SecureStore from 'expo-secure-store';
-import { RecoveryScreen, shouldShowRecoveryScreen } from '@/components/RecoveryScreen';
+import { RecoveryScreen } from '@/components/RecoveryScreen';
 import { isRecoverySession } from '@/lib/mmkv-storage';
 import { ThemeProvider, useTheme } from '@/lib/theme';
 import { useRevenueCatSync } from '@/hooks/useRevenueCatSync';
@@ -294,18 +294,13 @@ function StorageLockedGate() {
     }
   }, []);
 
-  if (keychainReadable) {
-    return (
-      <View style={styles.storageLockedConfirm}>
-        <RNText style={styles.storageLockedConfirmTitle}>Your phone is unlocked</RNText>
-        <RNText style={styles.storageLockedConfirmBody}>
-          Close Unfold completely and open it again. Everything will be where you left it.
-        </RNText>
-      </View>
-    );
-  }
-
-  return <RecoveryScreen colors={Colors} onRetry={probeKeychain} />;
+  return (
+    <RecoveryScreen
+      colors={Colors}
+      variant={keychainReadable ? 'ready' : 'locked'}
+      onRetry={probeKeychain}
+    />
+  );
 }
 
 function RootLayout() {
@@ -349,7 +344,7 @@ function RootLayout() {
   }
 
   // Nothing that reads user state may mount in a storage-locked session.
-  if (shouldShowRecoveryScreen(isRecoverySession())) {
+  if (isRecoverySession()) {
     return <StorageLockedGate />;
   }
 
@@ -369,25 +364,3 @@ function RootLayout() {
 }
 
 export default RootLayout;
-
-const styles = StyleSheet.create({
-  storageLockedConfirm: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 32,
-    backgroundColor: Colors.background,
-  },
-  storageLockedConfirmTitle: {
-    fontSize: 20,
-    color: Colors.text,
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  storageLockedConfirmBody: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: Colors.textMuted,
-    textAlign: 'center',
-  },
-});

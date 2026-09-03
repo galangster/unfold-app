@@ -14,6 +14,7 @@ jest.mock('../mmkv-storage', () => {
 
 import {
   saveOnboardingDraft,
+  saveOnboardingSampleDay,
   getOnboardingDraft,
   clearOnboardingDraft,
   ONBOARDING_DRAFT_TTL_MS,
@@ -45,8 +46,9 @@ describe('onboarding-draft-store', () => {
       data: answers,
       purchasedDuringOnboarding: true,
       sampleDevotionalId: 'dev-1',
-      sampleDevotionalDay: { dayNumber: 1, title: 'Begin here' },
     });
+    // The day is written once under its own key, not carried in the hot record.
+    saveOnboardingSampleDay({ dayNumber: 1, title: 'Begin here' });
 
     const restored = getOnboardingDraft({ deviceId: 'device-A' });
     expect(restored).not.toBeNull();

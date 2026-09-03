@@ -20,26 +20,44 @@ function sliceBody(marker: string, endMarker: string): string {
   return src.slice(start, end);
 }
 
+/** Step ids in authoring order, read from the screen's own ALL_STEPS block. */
+const ALL_STEP_IDS: string[] = Array.from(src.matchAll(/\{\s*id: '([a-zA-Z0-9]+)'/g)).map(
+  (match) => match[1],
+);
+
 describe('onboarding answer draft lifecycle (ONB-RESUME-1)', () => {
   it('writes the draft on a debounce and again when the app backgrounds', () => {
     expect(src).toContain('ONBOARDING_DRAFT_DEBOUNCE_MS = 300');
-    expect(src).toContain('setTimeout(writeOnboardingDraft, ONBOARDING_DRAFT_DEBOUNCE_MS)');
+    // The shared controller, not a bare timer: its max-wait ceiling is what
+    // makes a draft land while someone types steadily through the debounce.
+    expect(src).toContain('createAutosaveController({');
+    expect(src).toContain('maxWaitMs: ONBOARDING_DRAFT_MAX_WAIT_MS');
     expect(src).toContain("AppState.addEventListener('change'");
     expect(src).toContain('shouldFlushAutosaveOnAppState(nextState)');
+    expect(src).toContain('draftAutosave.flush()');
   });
 
   it('never persists a draft on the opening cutscenes', () => {
-    expect(src).toContain(
-      "const DRAFT_NEVER_SAVED_STEP_IDS = new Set(['hook', 'solution', 'unfoldIntro']);",
-    );
+    // The rule is positional: nothing before the name step is worth keeping,
+    // which covers every opening cutscene without naming them.
     expect(src).toContain("DRAFT_FIRST_SAVED_STEP_INDEX = ALL_STEP_IDS.indexOf('name')");
+    expect(src).toContain('index >= DRAFT_FIRST_SAVED_STEP_INDEX');
+    const openingCutscenes = ['hook', 'solution', 'unfoldIntro'];
+    const nameIndex = ALL_STEP_IDS.indexOf('name');
+    for (const id of openingCutscenes) {
+      expect(ALL_STEP_IDS.indexOf(id)).toBeLessThan(nameIndex);
+    }
   });
 
   it('carries the purchase flag and the sample devotional in every write', () => {
-    const write = sliceBody('const writeOnboardingDraft = useCallback', '// Coalesced write');
+    const write = sliceBody('const writeOnboardingDraft = useCallback', '// The generated day');
     expect(write).toContain('purchasedDuringOnboarding,');
     expect(write).toContain('sampleDevotionalId: onboardingDevotionalId || null');
-    expect(write).toContain('sampleDevotionalDay: onboardingDevotionalDay ?? null');
+    // The day itself is deliberately NOT in this record — it is hundreds of
+    // words that never change, written once under its own key instead of being
+    // re-serialized on every keystroke burst.
+    expect(write).not.toContain('sampleDevotionalDay');
+    expect(src).toContain('saveOnboardingSampleDay(onboardingDevotionalDay)');
   });
 
   it('keeps the persisted sample job until onboarding actually finishes', () => {
@@ -65,7 +83,11 @@ describe('onboarding answer draft lifecycle (ONB-RESUME-1)', () => {
     const init = sliceBody('const [currentStepId, setCurrentStepId]', '// Warm re-entry');
     expect(init).toContain('resolveOnboardingResumeStep({');
     expect(init).toContain('savedStepId: restoredDraft?.stepId ?? null');
-    expect(init).toContain('requestedStartStepId || resumeStepId');
+    // startAt short-circuits before the draft is consulted at all.
+    expect(init).toContain('if (requestedStartStepId && filteredStepIds.includes(requestedStartStepId))');
+    expect(init.indexOf('requestedStartStepId')).toBeLessThan(
+      init.indexOf('resolveOnboardingResumeStep({'),
+    );
   });
 
   it('shows the warm re-entry only after a real absence', () => {
@@ -74,7 +96,9 @@ describe('onboarding answer draft lifecycle (ONB-RESUME-1)', () => {
       'Date.now() - restoredDraft.savedAt > ONBOARDING_WELCOME_BACK_MIN_AGE_MS',
     );
     expect(src).toContain('<WelcomeBackStep');
-    // An overlay, not a step: ALL_STEPS indices must be untouched.
+    // Rendered instead of the step, so the paywall video behind it never starts.
+    expect(src).toContain('if (showWelcomeBack) {');
+    // Still not a step: ALL_STEPS indices must be untouched.
     expect(src).not.toContain("id: 'welcomeBack'");
   });
 

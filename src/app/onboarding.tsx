@@ -79,17 +79,17 @@ import {
 } from '@/lib/onboarding-sample-job-store';
 import {
   saveOnboardingDraft,
+  saveOnboardingSampleDay,
   getOnboardingDraft,
   clearOnboardingDraft,
 } from '@/lib/onboarding-draft-store';
-import { shouldFlushAutosaveOnAppState } from '@/lib/autosave-controller';
+import { createAutosaveController, shouldFlushAutosaveOnAppState } from '@/lib/autosave-controller';
 import {
   buildOnboardingSampleGenerationRequest,
   formatDateOnly,
   formatDateOnlyForDisplay,
   getContextualSituationChips,
   getFilteredOnboardingSteps,
-  getInitialOnboardingStepId,
   getOnboardingStepLayoutMode,
   QUICK_DATE_CHIPS,
   resolveOnboardingResumeStep,
@@ -111,7 +111,7 @@ import { OnboardingCelebration } from '@/components/onboarding/OnboardingCelebra
 import { CommitmentStep } from '@/components/onboarding/CommitmentStep';
 import { ThreeStepPaywall } from '@/components/onboarding/ThreeStepPaywall';
 import { WelcomeBackStep } from '@/components/onboarding/WelcomeBackStep';
-import { readSampleDevotionalDay } from '@/lib/onboarding-sample-day-shape';
+import { isUsableSampleDevotionalDay } from '@/lib/onboarding-sample-day-shape';
 import { stripOuterQuotes } from '@/lib/cn';
 import { Typography } from '@/constants/typography';
 
@@ -426,15 +426,20 @@ const ALL_STEP_IDS: readonly string[] = ALL_STEPS.map((step) => step.id);
 const ONBOARDING_DRAFT_DEBOUNCE_MS = 300;
 
 /**
- * Nothing worth keeping exists before the name step, and the three opening
- * cutscenes carry no answer at all — a draft written there would only route a
- * returning person back into onboarding with an empty record.
+ * Ceiling on that coalescing. Someone typing steadily into a long free-text
+ * answer never lets a plain debounce fire, so a force-quit mid-sentence would
+ * still lose everything since the last step change.
  */
-const DRAFT_NEVER_SAVED_STEP_IDS = new Set(['hook', 'solution', 'unfoldIntro']);
+const ONBOARDING_DRAFT_MAX_WAIT_MS = 1_500;
+
+/**
+ * Nothing worth keeping exists before the name step: the opening cutscenes
+ * carry no answer, and a draft written there would only route a returning
+ * person back into onboarding with an empty record.
+ */
 const DRAFT_FIRST_SAVED_STEP_INDEX = ALL_STEP_IDS.indexOf('name');
 
 function shouldPersistOnboardingDraft(stepId: string): boolean {
-  if (DRAFT_NEVER_SAVED_STEP_IDS.has(stepId)) return false;
   const index = ALL_STEP_IDS.indexOf(stepId);
   return index !== -1 && index >= DRAFT_FIRST_SAVED_STEP_INDEX;
 }
@@ -680,22 +685,26 @@ export default function OnboardingScreen() {
   // where they stopped — never on a cutscene, a payoff, or a paywall they have
   // already bought past. An explicit ?startAt= still wins (dev + deep links).
   const [currentStepId, setCurrentStepId] = useState<StepId>(() => {
-    const resumeStepId = resolveOnboardingResumeStep({
+    // One filter pass for both decisions below — it was being computed here and
+    // again inside getInitialOnboardingStepId.
+    const filteredStepIds = getFilteredOnboardingSteps(ALL_STEPS, existingUser, undefined).map(
+      (step) => step.id,
+    );
+    // An explicit ?startAt= wins over a draft, for dev tools and deep links.
+    if (requestedStartStepId && filteredStepIds.includes(requestedStartStepId)) {
+      return requestedStartStepId as StepId;
+    }
+    return resolveOnboardingResumeStep({
       savedStepId: restoredDraft?.stepId ?? null,
       allStepIds: ALL_STEP_IDS,
-      filteredStepIds: getFilteredOnboardingSteps(ALL_STEPS, existingUser, undefined).map((step) => step.id),
+      filteredStepIds,
       // Same guard as the state above: an unusable day must not send them to
       // the reading step with nothing to read.
-      hasSampleDevotionalDay: !!readSampleDevotionalDay(restoredDraft?.sampleDevotionalDay),
+      hasSampleDevotionalDay: isUsableSampleDevotionalDay(restoredDraft?.sampleDevotionalDay),
       purchasedDuringOnboarding: restoredDraft?.purchasedDuringOnboarding ?? false,
-    });
-    return getInitialOnboardingStepId(
-      ALL_STEPS,
-      existingUser,
-      undefined,
-      requestedStartStepId || resumeStepId,
-    ) as StepId;
+    }) as StepId;
   });
+
 
   // Warm re-entry: only for someone who has actually been away a while.
   const [showWelcomeBack, setShowWelcomeBack] = useState(
@@ -847,15 +856,18 @@ export default function OnboardingScreen() {
     // A persisted day can outlive the shape that wrote it. An unusable one is
     // treated as absent so the segue re-polls rather than rendering a broken
     // reading screen or storing a broken devotional.
-    readSampleDevotionalDay(restoredDraft?.sampleDevotionalDay) ?? null,
+    isUsableSampleDevotionalDay(restoredDraft?.sampleDevotionalDay)
+      ? restoredDraft?.sampleDevotionalDay
+      : null,
   );
   const [onboardingDevotionalId, setOnboardingDevotionalId] = useState<string>(
     restoredDraft?.sampleDevotionalId ?? '',
   );
 
   // ─── Answer draft autosave (ONB-RESUME-1) ─────────────────────────────────
-  // Everything the draft needs is read through refs at write time, so a write
-  // scheduled before a keystroke still persists the latest answers.
+  // Answers are read from dataRef at write time, so a write scheduled before a
+  // keystroke still persists the latest ones. The step and purchase flags come
+  // from the closure and are dependencies below.
   const writeOnboardingDraft = useCallback(() => {
     if (!shouldPersistOnboardingDraft(currentStepId)) return;
     if (onboardingDeviceIdRef.current === null) {
@@ -867,26 +879,50 @@ export default function OnboardingScreen() {
       data: dataRef.current,
       purchasedDuringOnboarding,
       sampleDevotionalId: onboardingDevotionalId || null,
-      sampleDevotionalDay: onboardingDevotionalDay ?? null,
     });
-  }, [currentStepId, purchasedDuringOnboarding, onboardingDevotionalId, onboardingDevotionalDay]);
+  }, [currentStepId, purchasedDuringOnboarding, onboardingDevotionalId]);
 
-  // Coalesced write while they answer — one persist shortly after typing settles.
+  // The generated day is written once under its own key — see the comment on
+  // SAMPLE_DAY_KEY for why it is kept out of the record above.
+  useEffect(() => {
+    if (!onboardingDevotionalDay) return;
+    saveOnboardingSampleDay(onboardingDevotionalDay);
+  }, [onboardingDevotionalDay]);
+
+  // The save closure changes on every answer; the controller must not. Keep the
+  // newest one in a ref so the controller and the AppState listener are built
+  // exactly once.
+  const writeOnboardingDraftRef = useRef(writeOnboardingDraft);
+  writeOnboardingDraftRef.current = writeOnboardingDraft;
+
+  // Coalesced write while they answer. The shared controller is used rather
+  // than a bare timer for its max-wait ceiling: a plain debounce never fires
+  // while someone types steadily under the window, which is exactly the long
+  // free-text answers this flow asks for.
+  const draftAutosave = useMemo(
+    () =>
+      createAutosaveController({
+        save: () => writeOnboardingDraftRef.current(),
+        debounceMs: ONBOARDING_DRAFT_DEBOUNCE_MS,
+        maxWaitMs: ONBOARDING_DRAFT_MAX_WAIT_MS,
+      }),
+    [],
+  );
+
   useEffect(() => {
     if (!shouldPersistOnboardingDraft(currentStepId)) return;
-    const timer = setTimeout(writeOnboardingDraft, ONBOARDING_DRAFT_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [data, currentStepId, writeOnboardingDraft]);
+    draftAutosave.schedule();
+  }, [data, currentStepId, draftAutosave]);
 
   // Land the pending write before iOS suspends the app — the debounce window is
   // exactly the gap that used to lose the last answer on a force-quit.
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
       if (!shouldFlushAutosaveOnAppState(nextState)) return;
-      writeOnboardingDraft();
+      draftAutosave.flush();
     });
     return () => subscription.remove();
-  }, [writeOnboardingDraft]);
+  }, [draftAutosave]);
   const [featureSummaryPage, setFeatureSummaryPage] = useState(0);
   
   // Animated styles
@@ -1259,7 +1295,7 @@ export default function OnboardingScreen() {
    * for a completed user and asks only what is still missing.
    */
   const handleDecideLater = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    // The paywall control fires its own haptic before calling this.
     // No purchase override — the record lands with hasCompletedOnboarding true
     // and isPremium false. readingDuration, devotionalLength and reminderTime
     // all carry defaults in `data`, so no profile field is left missing.
@@ -3770,6 +3806,29 @@ export default function OnboardingScreen() {
     );
   }
 
+  // Warm re-entry. Rendered instead of the step rather than over it: the
+  // resolved step can be the paywall, whose looping video would otherwise start
+  // decoding behind an opaque overlay while the copy is being read. It is still
+  // not a step — ALL_STEPS indices are untouched and currentStepId already
+  // holds the resume target.
+  if (showWelcomeBack) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+          <WelcomeBackStep
+            name={data.name}
+            hasDevotional={!!onboardingDevotionalDay}
+            // Honest copy: someone resuming onto the subscription pitch must
+            // not be told their devotional opens on the next tap.
+            resumesOnDecision={currentStepId === 'threeStepPaywall'}
+            colors={colors}
+            onContinue={() => setShowWelcomeBack(false)}
+          />
+        </SafeAreaView>
+      </View>
+    );
+  }
+
   if (!step) {
     return (
       <View style={{ flex: 1, backgroundColor: 'transparent', justifyContent: 'center', alignItems: 'center' }}>
@@ -3780,23 +3839,6 @@ export default function OnboardingScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: 'transparent' }}>
-      {/* Warm re-entry — an overlay, not a step, so ALL_STEPS indices are
-          untouched and the resolved resume step is already mounted behind it. */}
-      {showWelcomeBack && (
-        <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 20 }}>
-          <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
-            <WelcomeBackStep
-              name={data.name}
-              hasDevotional={!!onboardingDevotionalDay}
-              // Honest copy: someone resuming onto the subscription pitch must
-              // not be told their devotional opens on the next tap.
-              resumesOnDecision={currentStepId === 'threeStepPaywall'}
-              colors={colors}
-              onContinue={() => setShowWelcomeBack(false)}
-            />
-          </SafeAreaView>
-        </View>
-      )}
 
       {/* Currents — one continuous particle layer across intro screens */}
       {(currentStepId === 'hook' || currentStepId === 'solution' || currentStepId === 'unfoldIntro' || currentStepId === 'purchaseConfirmation' || currentStepId === 'shockStat' || currentStepId === 'growthGraph') && (

@@ -20,6 +20,16 @@ import type { OnboardingData } from '@/app/onboarding';
 /** Exported so full-reset can clear an abandoned draft. */
 export const STORE_KEY = 'onboarding-draft-v1';
 
+/**
+ * The generated sample day lives under its own key, not in the hot record.
+ *
+ * The draft record is rewritten every time typing settles. The day is several
+ * hundred words of prose that never changes once it arrives, so folding it into
+ * that record would re-serialize the whole devotional on every keystroke burst
+ * — JSON work on the JS thread while someone is typing into a text field.
+ */
+export const SAMPLE_DAY_KEY = 'onboarding-draft-sample-day-v1';
+
 /** Records older than this are ignored (and treated as absent). */
 export const ONBOARDING_DRAFT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -67,12 +77,37 @@ export function saveOnboardingDraft(record: SaveOnboardingDraftInput): void {
     data: record.data,
     purchasedDuringOnboarding: record.purchasedDuringOnboarding ?? false,
     sampleDevotionalId: record.sampleDevotionalId ?? null,
-    sampleDevotionalDay: record.sampleDevotionalDay ?? null,
+    sampleDevotionalDay: null,
   };
   try {
     mmkvStorage.setItem(STORE_KEY, JSON.stringify(payload));
   } catch {
     // Best-effort persistence.
+  }
+}
+
+/**
+ * Persist the generated sample day once, under its own key. Idempotent: a
+ * repeat call with the same day is a no-op, so the caller can fire it from an
+ * effect without thinking about it.
+ */
+export function saveOnboardingSampleDay(day: unknown): void {
+  if (day === null || day === undefined) return;
+  try {
+    const serialized = JSON.stringify(day);
+    if (mmkvStorage.getItem(SAMPLE_DAY_KEY) === serialized) return;
+    mmkvStorage.setItem(SAMPLE_DAY_KEY, serialized);
+  } catch {
+    // Best-effort persistence.
+  }
+}
+
+function readSampleDay(): unknown | null {
+  try {
+    const raw = mmkvStorage.getItem(SAMPLE_DAY_KEY) as string | null;
+    return raw ? (JSON.parse(raw) as unknown) : null;
+  } catch {
+    return null;
   }
 }
 
@@ -131,7 +166,9 @@ export function getOnboardingDraft(options?: {
     data: parsed.data,
     purchasedDuringOnboarding: parsed.purchasedDuringOnboarding === true,
     sampleDevotionalId: parsed.sampleDevotionalId ?? null,
-    sampleDevotionalDay: parsed.sampleDevotionalDay ?? null,
+    // Written under its own key; a record from before that split may still
+    // carry it inline, so prefer whichever is present.
+    sampleDevotionalDay: readSampleDay() ?? parsed.sampleDevotionalDay ?? null,
   };
 }
 
@@ -139,6 +176,7 @@ export function getOnboardingDraft(options?: {
 export function clearOnboardingDraft(): void {
   try {
     mmkvStorage.removeItem(STORE_KEY);
+    mmkvStorage.removeItem(SAMPLE_DAY_KEY);
   } catch {
     // Best-effort.
   }

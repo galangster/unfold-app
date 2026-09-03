@@ -27,7 +27,3 @@ export function isUsableSampleDevotionalDay(value: unknown): value is Devotional
   );
 }
 
-/** The day when it is usable, otherwise null. */
-export function readSampleDevotionalDay(value: unknown): DevotionalDay | null {
-  return isUsableSampleDevotionalDay(value) ? value : null;
-}
