@@ -538,7 +538,8 @@ export interface ResumeContext {
   devotionalId: string;
   dayNumber: number;
   devotionalTitle?: string;
-  dayTitle?: string;
+  /** null when the day exists but has no locally generated title yet. */
+  dayTitle?: string | null;
   /** Only set by reveal.tsx to trigger auto-navigate in index.tsx. Do NOT set from reading/journal screens. */
   touchedAt?: string;
 }

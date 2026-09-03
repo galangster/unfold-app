@@ -20,6 +20,16 @@
  *     identity from the new device id
  *   - Rotate device identity LAST
  *
+ * NOTE (RevenueCat identity, pre-existing): `configuredAppUserID` in
+ * revenuecatClient.ts is module scope, set once when the SDK is configured at
+ * launch, and rotateDeviceId() does not update it — it keeps the OLD
+ * device-scoped id for the rest of the session. logoutUser() above only drops
+ * the SDK's current user, so if the identity sync had failed this session,
+ * `retryRevenueCatIdentitySync()` (fired by useRevenueCatSync on foreground
+ * while `revenueCatResolved` is still false) can log the OLD identity back in
+ * AFTER the reset. The next cold start establishes the new id. Entitlement
+ * recovery for the user is Apple/Google restore-purchases either way.
+ *
  * Unifies the previously split user path ((you)/index.tsx) and QA path
  * (debug-reset-beginning.tsx) — vault rule deterministic-twin-paths-must-
  * share-one-helper.

@@ -186,7 +186,12 @@ export default function RevealScreen() {
       devotionalId: revealTarget.devotionalId,
       dayNumber: revealTarget.dayNumber,
       devotionalTitle: revealTarget.seriesTitle,
-      dayTitle: revealTarget.dayTitle ?? dayTitle,
+      // Only what resolved against the local devotional: the raw param is
+      // attacker-controlled (bounded to 200 chars by the native allowlist,
+      // unbounded on web, which has no native-intent hook) and this value is
+      // persisted and rendered on the Today resume card. null when the day
+      // has no locally generated title yet — the card omits it.
+      dayTitle: revealTarget.dayTitle,
       touchedAt: new Date().toISOString(),
     });
     // Flag the transition so the home screen renders blank during the brief
@@ -217,7 +222,7 @@ export default function RevealScreen() {
       }),
     );
     console.log('[Reveal] navigateToReading DONE');
-  }, [devotionalId, dayNumber, revealTarget, router, markDayAsRevealed, setCurrentDevotional, setResumeContext, dayTitle]);
+  }, [devotionalId, dayNumber, revealTarget, router, markDayAsRevealed, setCurrentDevotional, setResumeContext]);
 
   const fireApproachHaptic = useCallback(() => {
     Haptics.selectionAsync();
