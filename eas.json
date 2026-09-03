@@ -17,7 +17,8 @@
     "preview": {
       "distribution": "internal",
       "env": {
-        "EAS_USE_CACHE": "1"
+        "EAS_USE_CACHE": "1",
+        "EXPO_PUBLIC_SENTRY_DSN": "https://d7dd319bd4190a884d48917fcad1e663@o4511044263673856.ingest.us.sentry.io/4512024787419136"
       }
     },
     "qa-testflight": {
@@ -27,7 +28,8 @@
         "EXPO_PUBLIC_REVENUECAT_APPLE_KEY": "appl_oQNnQifEgzWidhmeJGtsJSjjwJx",
         "EXPO_PUBLIC_REVENUECAT_GOOGLE_KEY": "goog_DtIZxBBvJukFOxkUPJNEjZXZUAs",
         "EXPO_PUBLIC_ENABLE_QA_TOOLS": "1",
-        "EAS_USE_CACHE": "1"
+        "EAS_USE_CACHE": "1",
+        "EXPO_PUBLIC_SENTRY_DSN": "https://d7dd319bd4190a884d48917fcad1e663@o4511044263673856.ingest.us.sentry.io/4512024787419136"
       },
       "ios": {
         "distribution": "store"
@@ -39,7 +41,8 @@
         "EXPO_PUBLIC_BACKEND_URL": "https://api.unfoldapp.co",
         "EXPO_PUBLIC_REVENUECAT_APPLE_KEY": "appl_oQNnQifEgzWidhmeJGtsJSjjwJx",
         "EXPO_PUBLIC_REVENUECAT_GOOGLE_KEY": "goog_DtIZxBBvJukFOxkUPJNEjZXZUAs",
-        "EAS_USE_CACHE": "1"
+        "EAS_USE_CACHE": "1",
+        "EXPO_PUBLIC_SENTRY_DSN": "https://d7dd319bd4190a884d48917fcad1e663@o4511044263673856.ingest.us.sentry.io/4512024787419136"
       },
       "ios": {
         "distribution": "store"
