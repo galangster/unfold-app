@@ -6,11 +6,14 @@ import { QueryClient, QueryClientProvider, onlineManager, focusManager } from '@
 import NetInfo from '@react-native-community/netinfo';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
-import { useEffect } from 'react';
-import { AppState, Platform, Text as RNText, TextInput as RNTextInput, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { AppState, Platform, StyleSheet, Text as RNText, TextInput as RNTextInput, View } from 'react-native';
 import { useFonts } from 'expo-font';
 
 import { Colors } from '@/constants/colors';
+import * as SecureStore from 'expo-secure-store';
+import { RecoveryScreen, shouldShowRecoveryScreen } from '@/components/RecoveryScreen';
+import { isRecoverySession } from '@/lib/mmkv-storage';
 import { ThemeProvider, useTheme } from '@/lib/theme';
 import { useRevenueCatSync } from '@/hooks/useRevenueCatSync';
 import { useCheckInNotifications } from '@/hooks/useCheckInNotifications';
@@ -260,6 +263,51 @@ function recoverToHome(): void {
   useUnfoldStore.getState().clearResumeContext();
 }
 
+/**
+ * STORAGE-LOCKED-1. When the Keychain was unreadable at launch (the phone was
+ * locked while iOS started the process), the store opens on a throwaway
+ * namespace and hydrates EMPTY. Every hook below RootLayoutNav would then read
+ * a blank store and act on it: check-in and reminder schedules get cancelled,
+ * a profile sync pushes nothing, and RevenueCat would alias the real customer
+ * to a one-session identity. Worst of all, a fully onboarded person is shown
+ * the first-run welcome and asked to set themselves up again.
+ *
+ * So the gate sits ABOVE the whole tree rather than in each hook. Nothing that
+ * touches user state ever mounts in such a session.
+ *
+ * The open plan is resolved once at module init, so no in-process retry can
+ * repair this session and the app carries no reload API (expo-updates is not a
+ * dependency). Relaunching is the only real fix, which is what the screen asks
+ * for. "Try again" therefore re-probes the Keychain and, once it reads clean,
+ * confirms that reopening will work rather than pretending to recover here.
+ */
+function StorageLockedGate() {
+  const [keychainReadable, setKeychainReadable] = useState(false);
+
+  const probeKeychain = useCallback(() => {
+    try {
+      // The value is irrelevant; a throw is what marks the Keychain unreadable.
+      SecureStore.getItem('unfold-mmkv-encryption-key');
+      setKeychainReadable(true);
+    } catch {
+      setKeychainReadable(false);
+    }
+  }, []);
+
+  if (keychainReadable) {
+    return (
+      <View style={styles.storageLockedConfirm}>
+        <RNText style={styles.storageLockedConfirmTitle}>Your phone is unlocked</RNText>
+        <RNText style={styles.storageLockedConfirmBody}>
+          Close Unfold completely and open it again. Everything will be where you left it.
+        </RNText>
+      </View>
+    );
+  }
+
+  return <RecoveryScreen colors={Colors} onRetry={probeKeychain} />;
+}
+
 function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
     'PPEditorialNew-Light': require('../../assets/fonts/PPEditorialNew-Light.otf'),
@@ -300,6 +348,11 @@ function RootLayout() {
     );
   }
 
+  // Nothing that reads user state may mount in a storage-locked session.
+  if (shouldShowRecoveryScreen(isRecoverySession())) {
+    return <StorageLockedGate />;
+  }
+
   return (
     <ErrorBoundary onNavigateHome={recoverToHome}>
       <QueryClientProvider client={queryClient}>
@@ -316,3 +369,25 @@ function RootLayout() {
 }
 
 export default RootLayout;
+
+const styles = StyleSheet.create({
+  storageLockedConfirm: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+    backgroundColor: Colors.background,
+  },
+  storageLockedConfirmTitle: {
+    fontSize: 20,
+    color: Colors.text,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  storageLockedConfirmBody: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: Colors.textMuted,
+    textAlign: 'center',
+  },
+});

@@ -84,6 +84,11 @@ interface ThreeStepPaywallProps {
   onRetryOfferings: () => void;
   onPurchaseSuccess: () => void;
   onSkip: () => void;
+  // Every-build exit from the paywall. The stack disables the back gesture and
+  // there is no close control, so before this the only ways out were a
+  // purchase, a restore that found a subscription, or force-quitting the app.
+  // Distinct from onSkip, which stays QA-only.
+  onDecideLater: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -1116,6 +1121,7 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
   onRetryOfferings,
   onPurchaseSuccess,
   onSkip,
+  onDecideLater,
 }: ThreeStepPaywallProps) {
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
@@ -1286,6 +1292,26 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
     },
   }), [selectedPlan, yearlyPackage, monthlyPackage, onPurchaseSuccess, queryClient]);
 
+  // The exclusive offer is a real purchase surface, so it needs the same two
+  // exits the main CTA has: a dismissal only marks the offer seen, while a
+  // completed purchase or restore must advance the onboarding flow. Without
+  // the second exit a person who paid inside the sheet stayed on the paywall.
+  const dismissExclusiveOffer = useCallback(() => {
+    mmkvStorage.setItem('@unfold_onboarding_offer_seen', 'true');
+    setShowExclusiveOffer(false);
+  }, []);
+
+  const handleDecideLater = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onDecideLater();
+  }, [onDecideLater]);
+
+  const handleExclusiveOfferPurchaseSuccess = useCallback(() => {
+    dismissExclusiveOffer();
+    void syncTrialEndingNotification();
+    onPurchaseSuccess();
+  }, [dismissExclusiveOffer, onPurchaseSuccess]);
+
   const handleRestore = useCallback(() => runGuardedPaywallFlow({
     setLoading: setIsLoading,
     setError: setPurchaseError,
@@ -1438,6 +1464,25 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
             <Text style={[styles.qaSkipText, { color: colors.accent }]}>Continue for QA</Text>
           </TouchableOpacity>
         )}
+        {/* Dignified exit. Ships in EVERY build — this is not QA-gated and must
+            not be folded into the isQaToolsEnabled() block above. It renders on
+            the final page whether or not offerings loaded: a person who cannot
+            even see a price is the most trapped of all. Quiet text link only —
+            no background, no border — so it never competes with the CTA. */}
+        {currentPage === totalPages - 1 && (
+          <TouchableOpacity
+            activeOpacity={0.6}
+            onPress={handleDecideLater}
+            hitSlop={12}
+            accessibilityRole="button"
+            accessibilityLabel="I'll decide later"
+            style={styles.decideLaterButton}
+          >
+            <Text style={[styles.decideLaterText, { color: colors.textMuted }]}>
+              I'll decide later
+            </Text>
+          </TouchableOpacity>
+        )}
         <View
           style={{
             alignSelf: 'center',
@@ -1507,10 +1552,8 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
       </View>
       <ExclusiveOfferSheet
         visible={showExclusiveOffer}
-        onDismiss={() => {
-          mmkvStorage.setItem('@unfold_onboarding_offer_seen', 'true');
-          setShowExclusiveOffer(false);
-        }}
+        onDismiss={dismissExclusiveOffer}
+        onPurchaseSuccess={handleExclusiveOfferPurchaseSuccess}
         context="onboarding"
       />
     </View>
@@ -1745,6 +1788,19 @@ const styles = StyleSheet.create({
   qaSkipText: {
     fontFamily: FontFamily.uiMedium,
     fontSize: FontSize.xs,
+    letterSpacing: 0.2,
+  },
+  // Quiet text link: no background, no border, no accent. Colour is applied
+  // inline from colors.textMuted so it never reads as a second CTA.
+  decideLaterButton: {
+    alignSelf: 'center',
+    marginTop: Spacing['2.5'],
+    paddingHorizontal: Spacing['3'],
+    paddingVertical: Spacing['1.5'],
+  },
+  decideLaterText: {
+    fontFamily: FontFamily.ui,
+    fontSize: FontSize.sm,
     letterSpacing: 0.2,
   },
 });

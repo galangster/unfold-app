@@ -63,7 +63,12 @@ describe('RevenueCat entitlement refresh after store actions', () => {
 
     jest.doMock('react-native', () => ({ Platform: { OS: 'ios' } }));
     jest.doMock('@/lib/logger', () => ({ logger: { log: jest.fn(), warn: jest.fn(), error: jest.fn() } }));
-    jest.doMock('@/lib/mmkv-storage', () => ({ getDeviceId: () => '11111111-1111-4111-8111-111111111111' }));
+    jest.doMock('@/lib/mmkv-storage', () => ({
+    getDeviceId: () => '11111111-1111-4111-8111-111111111111',
+    // The module-scope RevenueCat init refuses to configure in a
+    // storage-locked session; these suites exercise a normal one.
+    isRecoverySession: () => false,
+  }));
     jest.doMock('@/lib/paywall-diagnostics', () => ({
       isPaywallDiagnosticsEnabled: () => false,
       recordPaywallDiagnosticLazy: jest.fn(),

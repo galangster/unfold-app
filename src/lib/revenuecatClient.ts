@@ -21,7 +21,7 @@
 
 import { Platform } from "react-native";
 import { logger } from '@/lib/logger';
-import { getDeviceId } from '@/lib/mmkv-storage';
+import { getDeviceId, isRecoverySession } from '@/lib/mmkv-storage';
 import {
   isPaywallDiagnosticsEnabled,
   recordPaywallDiagnosticLazy,
@@ -280,8 +280,17 @@ const synchronizeRevenueCatAppUserID = async (appUserID: string): Promise<void> 
   }));
 };
 
-// Initialize RevenueCat if key exists
-if (hasRevenueCatApiKey) {
+// Initialize RevenueCat if key exists.
+//
+// STORAGE-LOCKED-2: never configure during a storage-locked session. getDeviceId()
+// returns a one-session 'ephemeral-' identity there, and Purchases.logIn would
+// ALIAS the SDK's real cached anonymous customer to that throwaway id — a
+// permanent entitlement corruption caused by a transient Keychain failure.
+// The gate is isRecoverySession(), NOT isEphemeralDeviceId(): if the device-id
+// item migrated to AFTER_FIRST_UNLOCK but the encryption key has not yet, the
+// session resolves the REAL device id while still running on the throwaway
+// store, and an ephemeral-id check would wave it through.
+if (hasRevenueCatApiKey && !isRecoverySession()) {
   try {
     const keyType = __DEV__
       ? (testKey ? 'test' : (Platform.OS === 'ios' ? 'apple (dev fallback)' : 'google (dev fallback)'))
