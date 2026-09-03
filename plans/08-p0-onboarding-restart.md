@@ -148,152 +148,148 @@ narrower trigger surface for the Keychain defect.
 
 ## 2. Product decision needed from Nick (blocks nothing below, changes copy)
 
-The paywall is hard. With the fix below, a user who declines the trial still
-cannot use the app, but they return to the paywall with their answers and
-their sample devotional intact instead of a blank form. Options, cheapest
-first:
+The fix below is monetization-neutral and assumes the hard paywall stays. A
+person who declines still cannot use the app. What changes is that they keep
+their answers and their devotional, and they re-enter on a warm screen rather
+than a wall.
 
-1. Keep the hard paywall. Resume lands on `threeStepPaywall`. (Default; the
-   plan assumes this.)
-2. Add a "Not now" on the last paywall page that completes onboarding into a
-   free tier (Today tab with the sample series only, series creation gated).
-   Needs product copy and the creation-gate policy; not a hotfix.
+One question remains open, and it is the last hostile edge left in the flow.
+The paywall is the only screen in the app a person cannot leave. Force-quit
+is currently the exit, which is exactly how this bug reached a user. Once
+the draft lands, force-quitting is safe, so the trap is no longer destructive.
+It is still a trap.
+
+**Recommendation: add a low-emphasis "I'll decide later" to the final paywall
+page that returns the person to their sample devotional.** They keep reading
+what they already have. Series creation stays gated. This is one small
+component change on top of Lane 1, it removes the last dead end, and a person
+who feels free to leave is more likely to come back and convert. It is a
+funnel change, so it is Nick's call, not mine. The alternative is to keep the
+paywall closed and accept that the only way out is to quit the app.
+
+A full free tier, with the Today tab and gated creation, is a larger product
+decision and is not in this plan.
 
 ## 3. Fix plan
 
-Three lanes. Lane 1 is the hotfix and ships as **1.1.1 (build 254)**. Lanes 2
-and 3 ride the same release if they land in time; otherwise 1.1.2.
-Implementation executor: Codex `gpt-5.6-sol`, reasoning `high`, one lane per
-worktree. Fable orchestrates, reviews, runs `/simplify`, and seals.
+Optimised for the returning person, not for the smallest diff. Four
+principles, in priority order:
 
-### Lane 1 — Persist onboarding progress and resume (hotfix)
+1. **Nothing a person gives us is ever lost.** Every answer is durable from
+   the moment it is typed.
+2. **Coming back feels like coming back.** A returning person never sees the
+   first-run welcome animation or a cold form.
+3. **No moment is replayed.** Cutscenes, the shock stat, the growth graph,
+   the founder note and the celebration happen once in a lifetime.
+4. **Re-entry lands on their own content, never on a wall.** The first thing
+   a returning person sees is their devotional and their progress.
 
-Files: `src/app/onboarding.tsx`, `src/app/index.tsx`,
-`src/lib/onboarding-step-helpers.ts`, new `src/lib/onboarding-draft-store.ts`,
-`src/lib/full-reset.ts`, `src/lib/store.ts` (one optional field).
+### The resume map
 
-1. **Draft store** (`onboarding-draft-store.ts`, mirror the shape and tests of
-   `onboarding-sample-job-store.ts`): MMKV key `onboarding-draft-v1`, record
-   `{ deviceId, savedAt, stepId, data, purchasedDuringOnboarding }`. Scope by
-   device id, TTL 30 days, swallow storage errors, ignore malformed JSON.
-   Persist only the serializable answer fields of `OnboardingData` (no
-   refs, no AI text that can be regenerated). Add the key to
-   `FULL_RESET_MMKV_KEYS`.
-2. **Save on every change** from the `name` step onward: debounce 300 ms on
-   `data` and `currentStepId`. Flush synchronously on `AppState` background
-   (same pattern as `shouldFlushAutosaveOnAppState`). Clear the draft inside
-   `proceedToGeneration()` right after `saveOnboardingData()`.
-3. **Resume**: on mount, if a valid draft exists and there is no completed
-   user, hydrate `data` from it and pass `draft.stepId` as
-   `requestedStepId` to `getInitialOnboardingStepId`. Rules:
-   - Resume target is never earlier than the draft step and never a step the
-     filter removes; fall back to the nearest surviving earlier step.
-   - `devotionalSegue` / `readDevotional`: reuse the persisted sample job
-     (24 h TTL) or resubmit; the backend dedups on the deterministic
-     `onboarding-sample-<deviceId>` id and the rows are also in the sync pull.
-   - If RevenueCat resolves premium on resume (trial started, then quit),
-     skip `threeStepPaywall` and `purchaseConfirmation`; land on `themeType`.
-   - Resume must not replay `hook`, `solution`, `unfoldIntro`, `shockStat`,
-     `growthGraph`, `vulnerabilityValidation`, or the founder note.
-4. **Create the user record early.** When the sample is revealed
-   (`readDevotional` mount), call `setUser` with the answers so far and
-   `hasCompletedOnboarding: false`. This makes `useUserProfileSync` push a
-   `sync_users` row (support can see the person), makes the paywall's
-   `updateUser({ isPremium: true })` actually persist, and keeps
-   `skipIfHasValue` skipping name / aboutMe / reminderTime. Audit every
-   `user?.hasCompletedOnboarding` reader for the new "user exists, not
-   complete" state: `index.tsx` (must route to onboarding at the draft step,
-   not the welcome animation), `useCheckInNotifications`,
-   `check-in-notification-sync-policy`, `onboarding-step-helpers`,
-   `user-profile-sync`, `bug-logger`, the Today tab creation gate.
-5. **index.tsx**: when a draft exists (or a user exists with
-   `hasCompletedOnboarding: false`), replace to
-   `/onboarding?startAt=<stepId>` without showing the welcome screen.
-   `startAt` is honored only at mount today (see
-   `getInitialOnboardingStepId`); keep it that way.
-6. **Sample devotional hygiene**: after a real series is generated, the store
-   may hold both the pulled `onboarding-sample-<deviceId>` devotional and the
-   new series. Verify My Content and Today hide or merge the sample; fix if
-   they do not.
-7. **`ExclusiveOfferSheet` purchase must advance.** Wire its success outcome
-   to the same `onPurchaseSuccess` path the main CTA uses
-   (`ThreeStepPaywall.tsx:1510-1513`). Today a purchase there charges the
-   card and leaves the user on the paywall. Add a contract test.
-8. **Make a lost `updateUser` loud.** `src/lib/store.ts:896-898` silently
-   returns when `user` is null. Keep the early return, but log through
-   `logger.warn` (or `logBugEvent`) so a dropped write shows up in a bug
-   report instead of vanishing.
+Where a person left, and where they come back to:
 
-Acceptance (all must pass before the build):
+| Left at | Comes back to | Why |
+|---|---|---|
+| before `name` | `hook` | Nothing given yet, and the opening is the pitch |
+| `name` … `mirrorBack` | the same step, answers filled | Their words are still there |
+| `featureSummary`, `founderNote`, `devotionalSegue` | `devotionalSegue` | Reuses the sample job rather than paying for a second one |
+| `readDevotional` and later | the same step, same devotional | They have already read it; show that exact one |
+| any step, purchase made | first step after `purchaseConfirmation` | Never ask a paying person to buy twice |
 
-- Unit: draft store TTL, device scoping, corrupt JSON, clear on completion,
-  clear on full reset; `getInitialOnboardingStepId` resume rules including
-  the premium skip and the filtered-step fallback.
-- Contract test (`src/lib/__tests__/`): `proceedToGeneration` clears the
-  draft and writes `hasCompletedOnboarding: true`; the paywall's
-  `onPurchaseSuccess` persists `isPremium` when the early user exists.
-- Simulator walkthrough on the dev client (recipe in memory
-  `unfold-simulator-verification-recipe`): name → … → sample → celebration
-  → paywall → force-quit → relaunch → lands on the paywall, name and
-  answers intact, no welcome animation; then purchase (sandbox) → completes
-  to `/generating`; then a full reset returns to `hook`.
-- Repeat the walkthrough quitting at `aboutMe`, `readDevotional`, and
-  `themeType`.
-- Purchaser path: start the sandbox trial on the paywall, force-quit before
-  `reminderTime`, relaunch. Must resume past the paywall with premium intact
-  and never ask for Restore.
-- Buy through the `ExclusiveOfferSheet` (cancel the main purchase first).
-  Must advance to `purchaseConfirmation`.
-- Backend after the walkthrough: `sync_users` row exists for the device
-  before the paywall.
-- `bun run lint`, `bun run typecheck`, `bun test` green; `/simplify` run on
-  the diff.
+A resumed session that is more than thirty minutes old opens on a short
+**welcome-back** beat: their name, one line saying their answers are saved
+and their first devotional is ready, one button reading "Pick up where I
+left off". Under thirty minutes there is no ceremony at all, because that is
+a person who glanced at a text message.
 
-### Lane 2 — Keychain-locked launches must not look like a fresh install
+The re-entry beat is an overlay, not a step. Step indices stay untouched, so
+none of the existing navigation arithmetic moves.
 
-Files: `src/lib/mmkv-storage.ts`, `src/lib/device-id.ts`,
-`src/app/index.tsx`, `src/app/_layout.tsx`, `src/hooks/useCheckInNotifications.ts`,
-`src/hooks/useDailyReminderSync.ts`.
+### Lane 1 — Draft persistence and resume (the fix)
 
-1. Store both Keychain items with
-   `keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK`. expo-secure-store's
-   `set` only updates `kSecValueData` on an existing item, so accessibility
-   cannot be changed in place. Migrate by writing new key names
-   (`…-encryption-key-v2`, `…-device-id-v2`) with the option, read v2 first
-   and fall back to v1, and never delete v1 until a v2 read has succeeded on
-   a later launch.
-2. Distinguish "Keychain temporarily unavailable" from "key absent":
-   `SecureStore.getItem` throws for the former and returns null for the
-   latter (`SecureStoreModule.swift:146-168`). Only null may ever mint a new
-   key. Keep the existing retry.
-3. Recovery-session UX: when `isRecoverySession()` is true, `index.tsx` and
-   the root layout render a "Restoring your data — unlock your phone and
-   reopen Unfold" screen and never route to onboarding or Today. No
-   notification cancellation, no RevenueCat login, no profile sync in that
-   session.
-4. Tests: `resolveMmkvOpenPlan` rows unchanged; new pure helper for the
-   v1→v2 read order; index routing test for the recovery state.
+Owner files: new `src/lib/onboarding-draft-store.ts`, `src/app/onboarding.tsx`,
+`src/app/index.tsx`, `src/lib/onboarding-step-helpers.ts`,
+`src/lib/full-reset.ts`, new `src/components/onboarding/WelcomeBackStep.tsx`.
 
-### Lane 3 — See the next one coming
+1. **Draft store**, modelled on `onboarding-sample-job-store.ts`. MMKV key
+   `onboarding-draft-v1`, scoped by device id, thirty-day TTL, every storage
+   error swallowed. It holds the step id, the whole `OnboardingData` object,
+   `purchasedDuringOnboarding`, and the sample devotional id and day.
+2. **Write it** 300 ms after any change to the answers or the step, from the
+   `name` step onward, plus an immediate synchronous write when the app
+   backgrounds. Clear it in `proceedToGeneration` right after the real save.
+3. **Keep the sample recoverable.** `onDevotionalReady` currently calls
+   `clearOnboardingSampleJob()` the instant the devotional arrives, which
+   destroys the only pointer to it. Move that clear to `proceedToGeneration`.
+   The draft also carries the rendered day, so a resumed session shows the
+   same devotional with no network round trip.
+4. **Resolve the resume step** in a new pure function
+   `resolveOnboardingResumeStep`, unit tested against every row of the map
+   above. No early user record is created: `getFilteredOnboardingSteps` keys
+   its `skipIfHasValue` rules off the persisted user, so writing one
+   mid-flow would silently drop steps out from under the index arithmetic.
+   The draft is the single source of truth until completion.
+5. **Route correctly.** `src/app/index.tsx` renders the decorated welcome
+   screen whenever the user is null, which is exactly the returning person.
+   Read the draft there and replace straight into onboarding behind the same
+   quiet placeholder a completed user already gets.
 
-1. Replace `mockFirebaseAnalytics` with a real sink, or add a minimal
-   backend endpoint `/api/telemetry/event` (uid, event, step, appVersion,
-   ts) and post `onboarding_started`, `onboarding_step_completed`,
-   `onboarding_completed`, `devotional_generation_*` to it. Backend: one
-   table, one insert, same auth as sync.
-2. Add `@sentry/react-native` to the mobile app (native change; the 1.1.1
-   build already requires a new binary). DSN already exists on the backend
-   side; create a mobile project.
-3. Backend: log `[jobs] Created onboarding job` already exists; also log a
-   line when a `users` row is first created, so "sample without profile"
-   becomes greppable.
+### Lane 2 — Purchase correctness
+
+Owner files: `src/components/onboarding/ThreeStepPaywall.tsx`,
+`src/components/onboarding/ExclusiveOfferSheet.tsx`, `src/lib/store.ts`.
+
+1. A purchase inside `ExclusiveOfferSheet` must call the same
+   `onPurchaseSuccess` path the main call-to-action uses. Today it is charged
+   and dropped.
+2. `updateUser` must log when it drops a write because the user is null.
+   Keys only, never values.
+
+### Lane 3 — Keychain hardening and honest recovery
+
+Owner files: `src/lib/mmkv-storage.ts`, `src/lib/device-id.ts`,
+`src/lib/mmkv-open-mode.ts`, new `src/components/RecoveryScreen.tsx`.
+
+1. Both Keychain items move to `AFTER_FIRST_UNLOCK`, migrated by writing new
+   `-v2` key names, reading v2 first and falling back to v1. Accessibility
+   cannot be changed in place.
+2. Only a null read may mint a new key or device id. A throw means the
+   Keychain was busy and must never create a new identity.
+3. A recovery session shows a screen that says the data is safe and asks the
+   person to unlock the phone and reopen. It never routes to onboarding, and
+   it cancels no notifications.
+
+### Lane 4 — See the next one coming
+
+`src/lib/analytics.ts` imports `mockFirebaseAnalytics`, so no funnel data
+exists anywhere, and the app carries no crash reporter. Add a real sink for
+`onboarding_started`, `onboarding_step_completed` and `onboarding_completed`,
+and add Sentry to the mobile app. Not a hotfix blocker, but this incident was
+only visible because the backend happened to log a sync uid.
+
+### Acceptance
+
+- Unit: draft store round trip, TTL, wrong device, malformed JSON, clear on
+  completion, clear on full reset; every row of the resume map.
+- Contract: `proceedToGeneration` clears the draft and writes
+  `hasCompletedOnboarding: true`; a sheet purchase advances the flow.
+- Simulator walkthrough, per the recipe in memory
+  `unfold-simulator-verification-recipe`. Quit and relaunch at `aboutMe`,
+  at `readDevotional`, at `threeStepPaywall`, and at `themeType`. Each must
+  return to the mapped step with answers intact and no welcome animation.
+- Purchaser path: start the sandbox trial, force-quit before the last step,
+  relaunch. Must resume past the paywall and never ask for Restore.
+- Buy through `ExclusiveOfferSheet`. Must advance to `purchaseConfirmation`.
+- Full reset returns a person to `hook` with nothing carried over.
+- `bun run lint`, `bun run typecheck`, `bun test` green. `/simplify` run on
+  the merged diff before the build.
 
 ## 4. Release
 
 - 1.1.0 (253) finished on EAS at 03:57 UTC today and an iOS submission
   finished at 04:22 UTC. Review state was not verified here. It carries this
   bug. Recommended: do not release 253 to the store; ship 1.1.1 (254) with
-  Lane 1 (and Lane 2 if ready) and replace the submission. The ASC
+  Lanes 1 to 3 and replace the submission. The ASC
   "Update Review" step from `handoffs/2026-08-28-rejection-fix-resubmission.md`
   applies if 253 is already in review.
 - Build: `eas build --platform ios --profile production` then `eas submit`
@@ -321,21 +317,9 @@ the same bug. Tell him to use **Restore Purchases** on the subscription
 screen, which will pick the subscription back up, and check RevenueCat for
 his transaction before replying.
 
-## 6. Codex brief — Lane 1 (STE, ready to paste)
+## 6. Execution
 
-```
-codex exec -m gpt-5.6-sol -c model_reasoning_effort=high --sandbox workspace-write "$(cat <<'EOF'
-Repository: app/mobile (Expo SDK 57, expo-router, zustand persist on MMKV, Bun, Jest).
-Read plans/08-p0-onboarding-restart.md section 3, Lane 1, before you change code.
-Task: persist onboarding progress and resume it after a relaunch.
-1. Create src/lib/onboarding-draft-store.ts. Copy the structure of src/lib/onboarding-sample-job-store.ts. Key: onboarding-draft-v1. Record: deviceId, savedAt, stepId, data, purchasedDuringOnboarding. TTL: 30 days. Ignore records for another deviceId. Ignore malformed JSON. Add the key to FULL_RESET_MMKV_KEYS in src/lib/full-reset.ts.
-2. In src/app/onboarding.tsx, save the draft 300 ms after each change to data or currentStepId, starting at the name step. Flush on AppState background. Clear the draft in proceedToGeneration after saveOnboardingData.
-3. On mount, read the draft. If a draft exists and store.user is not completed, hydrate data from it and pass draft.stepId to getInitialOnboardingStepId as requestedStepId. Never resume to hook, solution, unfoldIntro, shockStat, growthGraph, vulnerabilityValidation, or founderNote. If the target step is filtered out, resume at the nearest earlier surviving step. If RevenueCat reports premium, skip threeStepPaywall and purchaseConfirmation.
-4. At readDevotional mount, call setUser with the answers so far and hasCompletedOnboarding: false. Audit every reader of user.hasCompletedOnboarding listed in the plan. index.tsx must route a user with a draft or an incomplete user record to /onboarding?startAt=<stepId> without the welcome animation.
-5. Write Jest tests for the draft store, the resume rules in src/lib/onboarding-step-helpers.ts, and a contract test that proceedToGeneration clears the draft.
-6. Run: bun run lint, bun run typecheck, bun test. All must pass.
-Do not change ThreeStepPaywall behavior. Do not change the backend. Do not touch native code.
-Report: files changed, test names added, and the exact commands you ran with their exit codes.
-EOF
-)" < /dev/null
-```
+Three agents ran in parallel with disjoint file ownership, one per lane, with
+Lane 4 deferred. Fable orchestrates, reviews each diff, resolves anything an
+agent flagged as owned by another lane, runs `/simplify` on the merged
+result, and seals. No agent commits or builds.
