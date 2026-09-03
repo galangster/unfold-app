@@ -23,8 +23,10 @@ never shipped. It was released rather than discarded: it carries ~90 fixes,
 and the onboarding bug only affects people mid-signup, who were hitting it on
 1.0 anyway. 1.1.1 follows with the fix.
 
-Release type is MANUAL, matching 1.0 and 1.1.0, so **1.1.1 will need the
-Release button once approved.**
+Release type for 1.1.1 was switched from MANUAL to **AFTER_APPROVAL** on
+2026-09-03, so it ships by itself the moment Apple approves. No Release button
+to press. This was a deliberate change from how 1.0 and 1.1.0 were configured:
+manual release is exactly what left 1.1.0 approved and unshipped for a day.
 
 ## What shipped in 1.1.1
 
@@ -56,7 +58,8 @@ screen. Details in the plan.
 
 ## Open items
 
-1. **Release 1.1.1 when approved** (manual release type).
+1. ~~Release 1.1.1 when approved~~ — not needed, it releases itself on
+   approval. Just confirm it went live.
 2. Anthony's original answers are unrecoverable; they were never sent to the
    server. His sample devotional is on the server under his device id and
    returns through sync. Suggested reply is in the plan, section 5.
