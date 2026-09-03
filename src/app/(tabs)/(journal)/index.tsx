@@ -975,6 +975,24 @@ export default function JournalHubScreen() {
   }, [reflectionQuestions, answeredReflectionCount, todayEntry]);
 
   // ---- Notebook data ----
+  // Plain-text haystack per note, rebuilt only when the notes change. Note
+  // content is stored as editor HTML, so searching it raw matched the markup
+  // ("div", "h2", "br") on every note instead of what the user wrote.
+  const noteSearchText = useMemo(() => {
+    const byId = new Map<string, string>();
+    for (const n of notes) {
+      const plainContent = isHtmlContent(n.content) ? stripHtml(n.content) : n.content;
+      byId.set(
+        n.id,
+        [n.title, plainContent, ...n.tags, ...n.scriptureRefs.map((r) => r.reference)]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase(),
+      );
+    }
+    return byId;
+  }, [notes]);
+
   const filteredNotes = useMemo(() => {
     let filtered = [...notes];
 
@@ -986,18 +1004,7 @@ export default function JournalHubScreen() {
     // Search filter (applies to both segments when active)
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
-      filtered = filtered.filter((n) => {
-        const searchText = [
-          n.title,
-          n.content,
-          ...n.tags,
-          ...n.scriptureRefs.map((r) => r.reference),
-        ]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase();
-        return searchText.includes(query);
-      });
+      filtered = filtered.filter((n) => noteSearchText.get(n.id)?.includes(query) ?? false);
     }
 
     // Sort by updatedAt descending
@@ -1007,7 +1014,7 @@ export default function JournalHubScreen() {
     );
 
     return filtered;
-  }, [notes, activeFolderId, searchQuery]);
+  }, [notes, activeFolderId, searchQuery, noteSearchText]);
 
   // ---- Verse notes matching Notebook search (read-only bridge rows) ----
   // Bible verse notes live in `bibleHighlights[].note` — a separate system
