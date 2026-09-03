@@ -2,6 +2,7 @@ import type { CheckIn, Devotional, DevotionalDay } from '@/lib/store';
 import {
   decideEveningWindDownEntry,
   findTodayMiddayCheckIn,
+  resolveEveningLoadingCaption,
   resolveEveningWindDownDayNumber,
 } from '../evening-wind-down-state';
 
@@ -124,5 +125,18 @@ describe('decideEveningWindDownEntry', () => {
     expect(decideEveningWindDownEntry('granted')).toBe('allow');
     expect(decideEveningWindDownEntry('unknown')).toBe('wait');
     expect(decideEveningWindDownEntry('denied')).toBe('gate');
+  });
+});
+
+describe('resolveEveningLoadingCaption', () => {
+  it("says what is happening while the entitlement is still resolving", () => {
+    // The examen query is disabled in 'wait', so the spinner is not waiting on
+    // a prayer — and it can sit there all session when the identity sync fails.
+    expect(resolveEveningLoadingCaption('wait')).toBe('Checking your subscription…');
+  });
+
+  it('keeps the prayer copy while the examen is actually loading', () => {
+    expect(resolveEveningLoadingCaption('allow')).toBe('Preparing your evening prayer...');
+    expect(resolveEveningLoadingCaption('gate')).toBe('Preparing your evening prayer...');
   });
 });

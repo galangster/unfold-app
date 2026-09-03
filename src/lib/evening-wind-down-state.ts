@@ -76,3 +76,15 @@ export function decideEveningWindDownEntry(policy: PremiumAccessPolicy): Evening
   if (policy === 'unknown') return 'wait';
   return 'gate';
 }
+
+/**
+ * Caption under the spinner. The two states look identical but are not: while
+ * the entry decision is 'wait' the examen query is disabled, so nothing is
+ * being prepared and the spinner can sit there for the whole session if the
+ * RevenueCat identity sync failed (offline first launch). Say what is actually
+ * happening, the way the Today card's gate() does, instead of promising a
+ * prayer that is not being fetched.
+ */
+export function resolveEveningLoadingCaption(decision: EveningWindDownEntryDecision): string {
+  return decision === 'wait' ? 'Checking your subscription…' : 'Preparing your evening prayer...';
+}

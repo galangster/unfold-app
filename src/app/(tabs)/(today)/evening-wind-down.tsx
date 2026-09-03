@@ -33,6 +33,7 @@ import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
 import {
   decideEveningWindDownEntry,
   findTodayMiddayCheckIn,
+  resolveEveningLoadingCaption,
   resolveEveningWindDownDayNumber,
 } from '@/lib/evening-wind-down-state';
 
@@ -366,7 +367,7 @@ export default function EveningWindDownScreen() {
                     opacity: 0.7,
                   }}
                 >
-                  Preparing your evening prayer...
+                  {resolveEveningLoadingCaption(entryDecision)}
                 </Text>
               </Animated.View>
             ) : error ? (
