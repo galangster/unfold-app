@@ -87,6 +87,7 @@ import {
   hasMeaningfulNoteContent,
   normalizeNativeInitialHtml,
   persistNoteSnapshot,
+  resolveExternalNoteReload,
 } from '@/lib/note-detail-editor';
 import { buildNoteDraftDockPreview, useNoteDraftDock } from '@/lib/note-draft-dock';
 import {
@@ -411,6 +412,10 @@ export default function NoteDetailScreen() {
   const [selectionState, setSelectionState] = useState(DEFAULT_SELECTION_STATE);
   // Tracks latest HTML from onChangeHtml for explicit save (Done/Back)
   const latestHtmlRef = useRef(initialContent);
+  // The native editor applies initialHtml once per mount, so reloading an
+  // external version of the note is a remount (see the effect below).
+  const [nativeEditorInstance, setNativeEditorInstance] = useState(0);
+  const loadedUpdatedAtRef = useRef(existingNote?.updatedAt);
   const isMinimizingRef = useRef(false);
   const appliedStartEditingKeyRef = useRef<string | null>(null);
 
@@ -581,6 +586,39 @@ export default function NoteDetailScreen() {
       if (deleteTimeoutRef.current) clearTimeout(deleteTimeoutRef.current);
     };
   }, []);
+
+
+  // A version of this note from another device can land while it is open
+  // (a push conflict resolved to the server's row, or a pull). The editor
+  // read the note once at mount, so it kept showing the stale text and the
+  // next autosave wrote it back over the server's. Reload from the store
+  // when updatedAt moves and nothing local is pending; our own saves move
+  // updatedAt too, but then the store already matches the editor.
+  useEffect(() => {
+    if (!existingNote || existingNote.updatedAt === loadedUpdatedAtRef.current) return;
+    loadedUpdatedAtRef.current = existingNote.updatedAt;
+    const reload = resolveExternalNoteReload({
+      storeTitle: existingNote.title,
+      storeHtml: initialContent,
+      editorTitle: latestTitleRef.current,
+      editorHtml: latestHtmlRef.current,
+      hasPendingEdit: autoSaveControllerRef.current?.hasPending() ?? false,
+    });
+    if (!reload) return;
+    setScriptureRefs(existingNote.scriptureRefs);
+    if (reload.title !== undefined) {
+      latestTitleRef.current = reload.title;
+      setTitle(reload.title);
+    }
+    if (reload.html !== undefined) {
+      latestHtmlRef.current = reload.html;
+      if (IS_NATIVE_EDITOR) {
+        setNativeEditorInstance((instance) => instance + 1);
+      } else {
+        editor.setContent(reload.html);
+      }
+    }
+  }, [existingNote, initialContent, editor]);
 
 
   /* ───── Scripture insertion via pending prop ───── */
@@ -1509,6 +1547,7 @@ export default function NoteDetailScreen() {
           {IS_NATIVE_EDITOR ? (
             <>
             <UnfoldEditor
+              key={nativeEditorInstance}
               ref={editorRef}
               initialHtml={nativeInitialContent}
               onChangeHtml={(e: UnfoldEditorChangeHtmlEvent) => {

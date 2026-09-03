@@ -135,6 +135,37 @@ export function normalizeNativeInitialHtml(html: string): string {
   return html;
 }
 
+export type ExternalNoteReload = { title?: string; html?: string };
+
+/**
+ * What to reload into the editor when the store's copy of the open note
+ * changed underneath it (a push conflict resolved to the server's row, or a
+ * pull). Nothing while a local edit is pending — the autosave is about to
+ * overwrite the store anyway — and nothing the editor already shows (our own
+ * save moves updatedAt too). Visually-empty HTML is empty on both sides.
+ */
+export function resolveExternalNoteReload({
+  storeTitle,
+  storeHtml,
+  editorTitle,
+  editorHtml,
+  hasPendingEdit,
+}: {
+  storeTitle: string;
+  storeHtml: string;
+  editorTitle: string;
+  editorHtml: string;
+  hasPendingEdit: boolean;
+}): ExternalNoteReload | null {
+  if (hasPendingEdit) return null;
+  const reload: ExternalNoteReload = {};
+  if (storeTitle !== editorTitle) reload.title = storeTitle;
+  if (normalizeNativeInitialHtml(storeHtml) !== normalizeNativeInitialHtml(editorHtml)) {
+    reload.html = storeHtml;
+  }
+  return reload.title === undefined && reload.html === undefined ? null : reload;
+}
+
 export function getTitleDividerPresentation({
   isKeyboardUp,
   accentColor,

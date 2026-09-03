@@ -14,13 +14,14 @@
  *  - Cap: 200 entries; oldest dropped when exceeded.
  *  - Never throws: drain resolves (not rejects) on network failure.
  *  - Server is authoritative on rejected/conflict — those are dropped, not
- *    retried forever.
+ *    retried forever. A conflict carries the server's row, which is applied
+ *    locally (see applyConflictResults) so the two sides converge.
  */
 
 import { mmkvStorage, getDeviceId } from '@/lib/mmkv-storage';
 import { isEphemeralDeviceId } from '@/lib/device-id';
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from '@/lib/api-config';
-import type { SyncPushChange, SyncTable } from '@/lib/sync-types';
+import type { SyncPushChange, SyncPushResult, SyncTable } from '@/lib/sync-types';
 // RS13-1: single owner — the key is defined in mmkv-recovery-outbox.ts (pure, no native deps)
 // and re-exported here so all consumers import from one place via sync-outbox.
 import { RECOVERY_OUTBOX_KEY } from '@/lib/mmkv-recovery-outbox';
@@ -133,6 +134,35 @@ export function resetDrainStateForTesting(): void {
   lastEnqueueAt = 0;
 }
 
+/**
+ * A `conflict` result means the server kept its (newer) row and dropped
+ * ours; `serverData` is that row. Its updated_at did not move, so the
+ * incremental pull would never bring it down and the two devices would
+ * diverge for good. Feed it through the pull mappers — same LWW guard, so a
+ * newer local change still pending in the outbox is left alone.
+ */
+function applyConflictResults(results: Partial<SyncPushResult>[]): void {
+  const conflicts = results.filter(
+    (result): result is SyncPushResult =>
+      result.status === 'conflict' &&
+      typeof result.table === 'string' &&
+      typeof result.id === 'string' &&
+      typeof result.serverUpdatedAt === 'string' &&
+      !!result.serverData,
+  );
+  if (conflicts.length === 0) return;
+  try {
+    // full-sync-pull imports the store, and the store reaches this module
+    // through personal-data-sync-records: a static import here would be a
+    // cycle. The mappers are only needed once a conflict actually arrives.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const pull = require('./full-sync-pull') as typeof import('./full-sync-pull');
+    pull.applyServerConflictRecords(conflicts);
+  } catch {
+    // Best effort: the outbox entry is already resolved either way.
+  }
+}
+
 // Single-flight guard — concurrent drains collapse into one POST
 let inflight: Promise<void> | null = null;
 
@@ -178,7 +208,7 @@ export function drainSyncOutbox(): Promise<void> {
       }
 
       const payload = (await response.json().catch(() => null)) as {
-        results?: Array<{ status?: string }>;
+        results?: Partial<SyncPushResult>[];
       } | null;
 
       // Server is authoritative: accepted | conflict | rejected all clear from
@@ -199,6 +229,8 @@ export function drainSyncOutbox(): Promise<void> {
       writeOutbox(remaining);
       // Mark successful completion for the interval guard (RS10-4).
       lastDrainCompletedAt = Date.now();
+      // After the outbox is settled: the LWW guard reads what is still pending.
+      applyConflictResults(payload?.results ?? []);
     } catch {
       // Network error / timeout / abort — keep the outbox intact for retry
     } finally {

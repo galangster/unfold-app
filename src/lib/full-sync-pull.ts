@@ -23,7 +23,7 @@ import type {
 } from './store';
 import { useCompanionChatStore } from './companion-chat-store';
 import type { CompanionMessage, Conversation } from './companion-chat-store';
-import type { SyncPullResponse, SyncPulledRecord, SyncTable } from './sync-types';
+import type { SyncPullResponse, SyncPulledRecord, SyncPushResult, SyncTable } from './sync-types';
 
 export const LAST_PULLED_AT_KEY = 'unfold-last-pulled-at';
 
@@ -567,6 +567,33 @@ function applyCompanionChanges(payload: SyncPullResponse): void {
 export function applyPulledUserData(payload: SyncPullResponse): void {
   applyMainStoreChanges(payload);
   applyCompanionChanges(payload);
+}
+
+/**
+ * Push conflicts: the server kept its (newer) row and returned it as
+ * serverData. Apply it exactly like a pulled record — the same mappers and
+ * the same LWW guard (a newer local change still pending in the outbox
+ * wins) — so this device converges on the server's version instead of
+ * keeping one the server has already rejected. The conflicted row's
+ * updated_at did not move, so no later incremental pull would bring it.
+ */
+export function applyServerConflictRecords(results: SyncPushResult[]): void {
+  const changes: SyncPullResponse['changes'] = {};
+  let timestamp = '';
+  for (const result of results) {
+    if (result.status !== 'conflict' || !result.serverData) continue;
+    const data = asRecord(result.serverData);
+    const records = changes[result.table] ?? (changes[result.table] = []);
+    records.push({
+      id: result.id,
+      data,
+      updatedAt: result.serverUpdatedAt,
+      deleted: Boolean(data.deletedAt),
+    });
+    if (result.serverUpdatedAt > timestamp) timestamp = result.serverUpdatedAt;
+  }
+  if (Object.keys(changes).length === 0) return;
+  applyPulledUserData({ changes, timestamp: timestamp || new Date().toISOString() });
 }
 
 export async function pullAllUserData(options: PullAllUserDataOptions = {}): Promise<SyncPullResponse> {
