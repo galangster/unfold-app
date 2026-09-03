@@ -373,6 +373,9 @@ export default function NoteDetailScreen() {
   const savedResetRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const pendingAutoSaveHtmlRef = useRef<string | undefined>(undefined);
   const autoSaveAllowEmptyRef = useRef(false);
+  // Set by the AppState flush: read the body from refs instead of awaiting a
+  // round trip to the editor while the app is being suspended.
+  const autoSaveReadFromRefsRef = useRef(false);
   const autoSaveSaveRef = useRef<() => void | Promise<void>>(() => undefined);
   const autoSaveControllerRef = useRef<AutosaveController | null>(null);
   if (!autoSaveControllerRef.current) {
@@ -758,11 +761,15 @@ export default function NoteDetailScreen() {
     pendingAutoSaveHtmlRef.current = undefined;
     const allowEmpty = autoSaveAllowEmptyRef.current;
     autoSaveAllowEmptyRef.current = false;
+    const readFromRefs = autoSaveReadFromRefsRef.current;
+    autoSaveReadFromRefsRef.current = false;
 
     // Native path: HTML pushed via onChangeHtml event. tentap: mirrored into
     // latestHtmlRef from onChange. Reading refs (not the editor bridge) keeps
-    // the normal debounced path safe to run from unmount cleanup.
-    const html = allowEmpty
+    // the normal debounced path safe to run from unmount cleanup — and on a
+    // background flush it is the only safe read: awaiting the bridge as iOS
+    // suspends the app can simply never come back, losing the edit.
+    const html = allowEmpty && !readFromRefs
       ? await getCurrentEditorHtml()
       : htmlFromEvent ?? latestHtmlRef.current;
     const titleVal = latestTitleRef.current;
@@ -798,8 +805,10 @@ export default function NoteDetailScreen() {
 
       pendingAutoSaveHtmlRef.current = undefined;
       autoSaveAllowEmptyRef.current = true;
+      autoSaveReadFromRefsRef.current = true;
       if (!autoSaveControllerRef.current?.flush()) {
         autoSaveAllowEmptyRef.current = false;
+        autoSaveReadFromRefsRef.current = false;
       }
       // The store's own persist flush (registered at module load) already ran,
       // so land the write this flush just made instead of leaving it in the
