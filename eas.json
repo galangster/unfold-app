@@ -53,17 +53,17 @@
     "production": {
       "ios": {
         "ascAppId": "6760814444",
-        "ascApiKeyId": "NW2SL2F4ZN",
+        "ascApiKeyId": "38BW73P7M5",
         "ascApiKeyIssuerId": "52f4e617-a4b3-4cee-bcd0-23f8e653d7b5",
-        "ascApiKeyPath": "./keys/AuthKey_NW2SL2F4ZN.p8"
+        "ascApiKeyPath": "./keys/AuthKey_38BW73P7M5.p8"
       }
     },
     "qa-testflight": {
       "ios": {
         "ascAppId": "6760814444",
-        "ascApiKeyId": "NW2SL2F4ZN",
+        "ascApiKeyId": "38BW73P7M5",
         "ascApiKeyIssuerId": "52f4e617-a4b3-4cee-bcd0-23f8e653d7b5",
-        "ascApiKeyPath": "./keys/AuthKey_NW2SL2F4ZN.p8"
+        "ascApiKeyPath": "./keys/AuthKey_38BW73P7M5.p8"
       }
     }
   }
