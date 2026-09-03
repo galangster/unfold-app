@@ -31,12 +31,15 @@ import {
   __resetCrashMarkerSessionForTests,
   armHealthyBootTimer,
   bootCrashCountAfterUptime,
+  buildFatalBreadcrumb,
   clearBootCrashCount,
   getConsecutiveBootCrashCount,
   isBootCrash,
   isCrashLoop,
   nextBootCrashCount,
   recordCrash,
+  recordFatalBreadcrumb,
+  takeLastFatalBreadcrumb,
 } from '../crash-marker';
 
 const COUNT_KEY = 'consecutive-boot-crashes';
@@ -168,5 +171,67 @@ describe('crash marker storage', () => {
     jest.advanceTimersByTime(27_000);
     expect(getConsecutiveBootCrashCount()).toBe(CRASH_LOOP_THRESHOLD);
     expect(isCrashLoop(recordCrash())).toBe(true);
+  });
+});
+
+describe('fatal breadcrumb', () => {
+  beforeEach(() => {
+    getMockMmkvStore().clear();
+    __resetCrashMarkerSessionForTests();
+  });
+
+  it('bounds the message and keeps only the head of the stack', () => {
+    const error = new Error('x'.repeat(500));
+    error.stack = ['Error: boom', ...Array.from({ length: 40 }, (_, i) => `    at frame${i} (app.js:${i})`)].join('\n');
+
+    const crumb = buildFatalBreadcrumb(error, Date.parse('2026-09-03T10:00:00.000Z'));
+
+    expect(crumb.message.length).toBeLessThanOrEqual(300);
+    expect(crumb.message.startsWith('Error: xxx')).toBe(true);
+    expect(crumb.stack?.split('\n')).toHaveLength(6);
+    expect(crumb.stack).toContain('at frame0');
+    expect(crumb.stack).not.toContain('at frame39');
+    expect(crumb.ts).toBe('2026-09-03T10:00:00.000Z');
+  });
+
+  it('describes a non-Error throw and a missing stack', () => {
+    expect(buildFatalBreadcrumb('plain string').message).toBe('plain string');
+    expect(buildFatalBreadcrumb('plain string').stack).toBeNull();
+    expect(buildFatalBreadcrumb({ nope: 1 }).message).toBe('[object Object]');
+  });
+
+  it('writes the breadcrumb synchronously and hands it back exactly once', () => {
+    // Synchronous by construction: MMKV holds it the moment recordCrash's
+    // sibling call returns, because the process may die on the next line.
+    recordFatalBreadcrumb(new Error('fatal boom'), Date.parse('2026-09-03T10:00:00.000Z'));
+    expect(getMockMmkvStore().get('last-fatal')).toBeDefined();
+
+    expect(takeLastFatalBreadcrumb()).toEqual({
+      message: 'Error: fatal boom',
+      stack: expect.stringContaining('Error: fatal boom'),
+      ts: '2026-09-03T10:00:00.000Z',
+    });
+    // Cleared, so the next launch does not report the same crash again.
+    expect(takeLastFatalBreadcrumb()).toBeNull();
+    expect(getMockMmkvStore().has('last-fatal')).toBe(false);
+  });
+
+  it('returns null with nothing stored, and clears an unreadable breadcrumb', () => {
+    expect(takeLastFatalBreadcrumb()).toBeNull();
+
+    getMockMmkvStore().set('last-fatal', '{not json');
+    expect(takeLastFatalBreadcrumb()).toBeNull();
+    expect(getMockMmkvStore().has('last-fatal')).toBe(false);
+
+    getMockMmkvStore().set('last-fatal', JSON.stringify({ message: 42 }));
+    expect(takeLastFatalBreadcrumb()).toBeNull();
+  });
+
+  it('keeps the crash count separate from the breadcrumb', () => {
+    recordCrash();
+    recordFatalBreadcrumb(new Error('fatal'));
+    expect(getConsecutiveBootCrashCount()).toBe(1);
+    takeLastFatalBreadcrumb();
+    expect(getConsecutiveBootCrashCount()).toBe(1);
   });
 });

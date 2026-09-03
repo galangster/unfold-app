@@ -27,7 +27,7 @@ import { shouldMarkNotificationNavigationReady } from '@/lib/push-notification-h
 import { migrateGenerationDataToServer } from '@/lib/generation-migration';
 import { endOrphanedReadingSessions } from '@/lib/widget-bridge';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { installGlobalErrorHandler } from '@/lib/global-error-handler';
+import { flushLastFatalBreadcrumb, installGlobalErrorHandler } from '@/lib/global-error-handler';
 import { armHealthyBootTimer } from '@/lib/crash-marker';
 import { AudioPlayerOverlay } from '@/components/AudioPlayerOverlay';
 import { PrivacyShield } from '@/components/PrivacyShield';
@@ -56,6 +56,9 @@ SplashScreen.preventAutoHideAsync();
 // ErrorUtils is absent. A launch that stays up for the healthy window without
 // crashing clears the boot crash count.
 installGlobalErrorHandler();
+// A fatal from the previous launch left a synchronous breadcrumb behind (its
+// own bug-log write died with the process); turn it into a bug-log entry now.
+flushLastFatalBreadcrumb();
 armHealthyBootTimer();
 
 const queryClient = new QueryClient({

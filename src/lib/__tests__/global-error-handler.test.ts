@@ -2,6 +2,11 @@ import type { ErrorUtils } from 'react-native';
 
 const mockLogBugError = jest.fn((..._args: unknown[]) => Promise.resolve());
 const mockRecordCrash = jest.fn(() => 1);
+const mockRecordFatalBreadcrumb = jest.fn((..._args: unknown[]) => undefined);
+const mockTakeLastFatalBreadcrumb = jest.fn<
+  { message: string; stack: string | null; ts: string } | null,
+  []
+>(() => null);
 
 jest.mock('@/lib/bug-logger', () => ({
   logBugError: (...args: unknown[]) => mockLogBugError(...args),
@@ -9,10 +14,16 @@ jest.mock('@/lib/bug-logger', () => ({
 
 jest.mock('@/lib/crash-marker', () => ({
   recordCrash: () => mockRecordCrash(),
+  recordFatalBreadcrumb: (...args: unknown[]) => mockRecordFatalBreadcrumb(...args),
+  takeLastFatalBreadcrumb: () => mockTakeLastFatalBreadcrumb(),
 }));
 
 // eslint-disable-next-line import/first -- module import must run after Jest module mocks are registered.
-import { installGlobalErrorHandler, resolveErrorUtils } from '../global-error-handler';
+import {
+  flushLastFatalBreadcrumb,
+  installGlobalErrorHandler,
+  resolveErrorUtils,
+} from '../global-error-handler';
 
 type Handler = (error: unknown, isFatal?: boolean) => void;
 
@@ -51,6 +62,37 @@ describe('installGlobalErrorHandler', () => {
     expect(fake.previous).toHaveBeenCalledWith(error, true);
   });
 
+  it('writes the synchronous fatal breadcrumb before the async bug-log write', () => {
+    // The previous handler kills the process on a production fatal, so the
+    // await inside logBugError never resolves; only a sync write survives.
+    const fake = fakeErrorUtils();
+    const error = new Error('fatal');
+    const order: string[] = [];
+    mockRecordFatalBreadcrumb.mockImplementationOnce(() => {
+      order.push('breadcrumb');
+      return undefined;
+    });
+    mockLogBugError.mockImplementationOnce(() => {
+      order.push('bug-log');
+      return Promise.resolve();
+    });
+
+    installGlobalErrorHandler(fake.utils);
+    fake.invoke(error, true);
+
+    expect(mockRecordFatalBreadcrumb).toHaveBeenCalledWith(error);
+    expect(order).toEqual(['breadcrumb', 'bug-log']);
+  });
+
+  it('leaves no breadcrumb for a non-fatal error', () => {
+    const fake = fakeErrorUtils();
+
+    installGlobalErrorHandler(fake.utils);
+    fake.invoke(new Error('soft'), false);
+
+    expect(mockRecordFatalBreadcrumb).not.toHaveBeenCalled();
+  });
+
   it('logs a non-fatal error without touching the crash marker', () => {
     const fake = fakeErrorUtils();
     const error = new Error('soft');
@@ -87,6 +129,45 @@ describe('installGlobalErrorHandler', () => {
     expect(() => fake.invoke(error, true)).not.toThrow();
 
     expect(fake.previous).toHaveBeenCalledWith(error, true);
+  });
+});
+
+describe('flushLastFatalBreadcrumb', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockTakeLastFatalBreadcrumb.mockReturnValue(null);
+  });
+
+  it("writes the previous launch's fatal into the bug log", () => {
+    mockTakeLastFatalBreadcrumb.mockReturnValueOnce({
+      message: 'Error: fatal boom',
+      stack: 'Error: fatal boom\n    at boot (app.js:1)',
+      ts: '2026-09-03T10:00:00.000Z',
+    });
+
+    expect(flushLastFatalBreadcrumb()).toBe(true);
+    expect(mockLogBugError).toHaveBeenCalledWith(
+      'global-error-fatal-previous-launch',
+      'Error: fatal boom',
+      {
+        isFatal: true,
+        crashedAt: '2026-09-03T10:00:00.000Z',
+        stack: 'Error: fatal boom\n    at boot (app.js:1)',
+      },
+    );
+  });
+
+  it('is a no-op on a launch that follows no fatal', () => {
+    expect(flushLastFatalBreadcrumb()).toBe(false);
+    expect(mockLogBugError).not.toHaveBeenCalled();
+  });
+
+  it('never throws when the marker store is unusable', () => {
+    mockTakeLastFatalBreadcrumb.mockImplementationOnce(() => {
+      throw new Error('mmkv gone');
+    });
+
+    expect(flushLastFatalBreadcrumb()).toBe(false);
   });
 });
 
