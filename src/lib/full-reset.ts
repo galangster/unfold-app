@@ -69,6 +69,8 @@ import { LAST_PULLED_AT_KEY } from '@/lib/full-sync-pull';
 import { MIGRATION_KEY as GENERATION_MIGRATION_KEY } from '@/lib/generation-migration';
 import { STORE_KEY as ONBOARDING_SAMPLE_JOB_KEY } from '@/lib/onboarding-sample-job-store';
 import { STORE_KEY as ONBOARDING_DRAFT_KEY } from '@/lib/onboarding-draft-store';
+// A stale marker would silence the next abandonment report on this device.
+import { ABANDONED_MARKER_KEY as ONBOARDING_ABANDON_MARKER_KEY } from '@/lib/onboarding-telemetry';
 import { DYNAMIC_EXAMPLE_KEY } from '@/lib/generation-api';
 import { RATE_LIMIT_STORAGE_KEY } from '@/lib/rate-limit';
 
@@ -97,6 +99,7 @@ export const FULL_RESET_MMKV_KEYS: readonly string[] = [
   // A wiped install must start onboarding cold — never resume the erased
   // user's saved answers.
   ONBOARDING_DRAFT_KEY,
+  ONBOARDING_ABANDON_MARKER_KEY,
   DYNAMIC_EXAMPLE_KEY,
   // NOTE: 'unfold-trial-notification' is an MMKV INSTANCE id, not a key here — cleared via clearTrialNotificationMirror() below (REVM-8).
 ] as const;

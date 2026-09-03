@@ -8,6 +8,7 @@ import {
   recordCrash,
 } from '@/lib/crash-marker';
 import { performFullLocalReset } from '@/lib/full-reset';
+import { addAppBreadcrumb, captureAppError } from '@/lib/sentry';
 import { DarkColors, LightColors, type ColorTheme } from '@/constants/colors';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
@@ -149,6 +150,10 @@ export class ErrorBoundary extends Component<Props, State> {
       componentStack: errorInfo.componentStack,
       timestamp: new Date().toISOString(),
     });
+    // The component stack is code, not content — safe to send.
+    captureAppError('error-boundary', error, {
+      componentStack: errorInfo.componentStack,
+    });
     if (isCrashLoop(recordCrash())) {
       this.setState({ mode: 'recovery' });
     }
@@ -167,6 +172,12 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   handleRetry = () => {
+    // Someone tapping Try Again is the signal that the crash is in their way,
+    // not just in a log.
+    addAppBreadcrumb('error-boundary', 'try-again-pressed', {
+      retryCount: this.state.retryCount,
+      mode: 'error',
+    });
     this.remountSubtree({ retryCount: this.state.retryCount + 1 });
   };
 
@@ -180,6 +191,10 @@ export class ErrorBoundary extends Component<Props, State> {
   };
 
   handleContinue = () => {
+    addAppBreadcrumb('error-boundary', 'try-again-pressed', {
+      retryCount: this.state.retryCount,
+      mode: 'recovery',
+    });
     this.remountSubtree();
   };
 
@@ -197,6 +212,11 @@ export class ErrorBoundary extends Component<Props, State> {
 
   handleConfirmReset = () => {
     if (this.state.resetting) return;
+    // Someone wiping their device data to escape a crash loop is the loudest
+    // signal this app can produce.
+    addAppBreadcrumb('error-boundary', 'local-reset-confirmed', {
+      retryCount: this.state.retryCount,
+    });
     this.setState({ resetting: true, resetFailed: false });
     performFullLocalReset()
       .then(() => {

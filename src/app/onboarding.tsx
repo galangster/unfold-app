@@ -83,6 +83,13 @@ import {
   getOnboardingDraft,
   clearOnboardingDraft,
 } from '@/lib/onboarding-draft-store';
+import {
+  trackOnboardingStarted,
+  trackOnboardingStep,
+  trackOnboardingResumed,
+  trackOnboardingCompleted,
+  clearAbandonedOnboardingMarker,
+} from '@/lib/onboarding-telemetry';
 import { createAutosaveController, shouldFlushAutosaveOnAppState } from '@/lib/autosave-controller';
 import {
   buildOnboardingSampleGenerationRequest,
@@ -711,6 +718,29 @@ export default function OnboardingScreen() {
     () => !!restoredDraft && Date.now() - restoredDraft.savedAt > ONBOARDING_WELCOME_BACK_MIN_AGE_MS,
   );
 
+  // ─── Funnel telemetry (ONB-TELEMETRY-1) ───────────────────────────────────
+  // The P0 this instruments threw nothing: people were stranded at the paywall
+  // and the app had no way to know anyone had started. Step ids and bucketed
+  // ages only — never an answer, a name, a devotional, or the device id.
+  //
+  // A resumed session is not a fresh start, so its guard opens already closed
+  // and it reports `resumed` instead of a second `started`.
+  const onboardingStartedRef = useRef(!!restoredDraft);
+
+  useEffect(() => {
+    if (!restoredDraft) return;
+    trackOnboardingResumed(restoredDraft.stepId, Date.now() - restoredDraft.savedAt);
+  }, [restoredDraft]);
+
+  useEffect(() => {
+    trackOnboardingStep(currentStepId);
+    // `name` is the first step that asks for anything, and the first one the
+    // draft persists from — before it there is no funnel to be in.
+    if (currentStepId !== 'name' || onboardingStartedRef.current) return;
+    onboardingStartedRef.current = true;
+    trackOnboardingStarted(currentStepId);
+  }, [currentStepId, restoredDraft]);
+
   // Dev: step picker visibility + show-all toggle
   const [devStepPickerVisible, setDevStepPickerVisible] = useState(false);
   const [devShowAllSteps, setDevShowAllSteps] = useState(false);
@@ -1281,6 +1311,10 @@ export default function OnboardingScreen() {
     // The answers now live on the user profile — the draft has nothing left to
     // protect, and a stale one would route the next launch back into onboarding.
     clearOnboardingDraft();
+    // The draft is gone, so the abandonment marker must go with it or it would
+    // silence the signal for whoever onboards on this device next.
+    clearAbandonedOnboardingMarker();
+    trackOnboardingCompleted('generated');
     router.replace('/generating');
   }, [router, saveOnboardingData]);
 
@@ -1326,6 +1360,10 @@ export default function OnboardingScreen() {
 
     clearOnboardingDraft();
     clearOnboardingSampleJob();
+    clearAbandonedOnboardingMarker();
+    // Completed, but deliberately unpaid. The split between the two outcomes is
+    // the point of recording one at all.
+    trackOnboardingCompleted('deferred');
 
     // Never '/generating': that would start a paid series for someone who has
     // deliberately not paid.

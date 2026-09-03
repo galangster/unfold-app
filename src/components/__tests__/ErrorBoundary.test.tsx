@@ -14,9 +14,18 @@ const mockGetCount = jest.fn(() => 0);
 const mockRecordCrash = jest.fn(() => 1);
 const mockClearCount = jest.fn();
 const mockReset = jest.fn(() => Promise.resolve());
+const mockCaptureAppError = jest.fn((..._args: unknown[]) => undefined);
+const mockAddAppBreadcrumb = jest.fn((..._args: unknown[]) => undefined);
 
 jest.mock('@/lib/bug-logger', () => ({
   logBugError: (...args: unknown[]) => mockLogBugError(...args),
+}));
+
+jest.mock('@/lib/sentry', () => ({
+  captureAppError: (...args: unknown[]) => mockCaptureAppError(...args),
+  addAppBreadcrumb: (...args: unknown[]) => mockAddAppBreadcrumb(...args),
+  captureAppEvent: jest.fn(),
+  isSentryEnabled: () => false,
 }));
 
 jest.mock('@/lib/crash-marker', () => ({
@@ -106,6 +115,73 @@ describe('ErrorBoundary', () => {
 
     expect(visibleText(tree.root)).toContain('recovered');
     expect(has(tree.root, 'error-boundary-retry')).toBe(false);
+  });
+
+  it('reports the caught error with its component stack, and still writes the local bug log', () => {
+    renderBoundary();
+
+    expect(mockCaptureAppError).toHaveBeenCalledTimes(1);
+    const [source, reported, extra] = mockCaptureAppError.mock.calls[0] as [
+      string,
+      Error,
+      Record<string, unknown>,
+    ];
+    expect(source).toBe('error-boundary');
+    expect(reported).toBeInstanceOf(Error);
+    expect(reported.message).toBe('boom');
+    expect(Object.keys(extra)).toEqual(['componentStack']);
+    // The local trail has to survive alongside the report.
+    expect(mockLogBugError).toHaveBeenCalledTimes(1);
+  });
+
+  it('breadcrumbs a Try Again press in the error fallback', () => {
+    const tree = renderBoundary();
+    explode = false;
+
+    press(tree.root, 'error-boundary-retry');
+
+    expect(mockAddAppBreadcrumb).toHaveBeenCalledWith('error-boundary', 'try-again-pressed', {
+      retryCount: 0,
+      mode: 'error',
+    });
+  });
+
+  it('breadcrumbs a Try Again press on the recovery screen', () => {
+    mockRecordCrash.mockReturnValue(3);
+    const tree = renderBoundary();
+    explode = false;
+
+    press(tree.root, 'error-boundary-recovery-retry');
+
+    expect(mockAddAppBreadcrumb).toHaveBeenCalledWith('error-boundary', 'try-again-pressed', {
+      retryCount: 0,
+      mode: 'recovery',
+    });
+  });
+
+  it('breadcrumbs a confirmed local data reset, once per confirmation', async () => {
+    mockRecordCrash.mockReturnValue(3);
+    const tree = renderBoundary();
+
+    press(tree.root, 'error-boundary-reset');
+    expect(mockAddAppBreadcrumb).not.toHaveBeenCalledWith(
+      'error-boundary',
+      'local-reset-confirmed',
+      expect.anything(),
+    );
+
+    explode = false;
+    const [confirm] = pressables(tree.root, 'error-boundary-reset-confirm');
+    await act(async () => {
+      confirm.props.onPress();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockAddAppBreadcrumb).toHaveBeenCalledWith('error-boundary', 'local-reset-confirmed', {
+      retryCount: 0,
+    });
+    expect(mockReset).toHaveBeenCalledTimes(1);
   });
 
   it('offers Go to Today only after two resets ended in another catch, and calls onNavigateHome', () => {

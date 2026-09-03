@@ -22,13 +22,20 @@ Fill in: **App Store Connect → [Unfold] → App Privacy → Edit.**
 | **Identifiers** | **Device ID** | persistent auth token |
 | **Purchases** | **Purchase History** | RevenueCat subscription state |
 | **Diagnostics** | **Other Diagnostic Data** | error/diagnostic payloads |
+| **Diagnostics** | **Crash Data** | Sentry crash and fatal-error reports (added 2026-09-03) |
 
 **Do NOT check anything else** — specifically:
 - **Location** → NOT declared. The synced `deviceTimezone` is an IANA timezone string for reminder scheduling, not device location. No CoreLocation/expo-location, no location entitlement. Over-declaring Location on a binary with none of it is its own review risk.
-- **Usage Data** → NOT declared. Analytics are mocked / no-op; nothing is transmitted.
+- **Usage Data** → NOT declared. The onboarding funnel signal sends step ids,
+  bucketed ages and outcomes to Sentry for App Functionality (finding bugs that
+  silently strand people mid-setup), never product analytics, and it carries no
+  user-authored content. Sentry's user id is a truncated SHA-256 of the device
+  id, never the raw credential.
+- **Performance Data** → NOT declared. Sentry tracing must stay off. If anyone
+  turns on `tracesSampleRate`, this has to be declared and the manifest updated.
 - Also leave unchecked: Contact Info, Health & Fitness, Financial Info (beyond Purchases), Contacts, Browsing History, Search History, Sensitive Info, Other Data.
 
-## Step 3 — For EACH of the 4 data types, answer identically
+## Step 3 — For EACH of the 5 data types, answer identically
 - **Is this data used to track you?** → **No**
 - **Is this data linked to the user's identity?** → **Yes, linked to identity**
 - **What is it used for?** → **App Functionality** only
@@ -36,11 +43,19 @@ Fill in: **App Store Connect → [Unfold] → App Privacy → Edit.**
 
 ## Result
 - **Tracking:** the whole app declares **No tracking** → no ATT prompt, no "Data Used to Track You" section.
-- **Data Linked to You:** Other User Content, Device ID, Purchase History, Other Diagnostic Data — all for App Functionality.
+- **Data Linked to You:** Other User Content, Device ID, Purchase History, Other Diagnostic Data, Crash Data — all for App Functionality.
 
 ## Final cross-check before saving
 Confirm these match `ios/Unfold/PrivacyInfo.xcprivacy`:
-`NSPrivacyCollectedDataTypeOtherUserContent` · `…DeviceID` · `…PurchaseHistory` · `…OtherDiagnosticData` — each `Linked = true`, `Tracking = false`, purpose `AppFunctionality`. ✓ (verified 2026-06-14)
+`NSPrivacyCollectedDataTypeOtherUserContent` · `…DeviceID` · `…PurchaseHistory` ·
+`…OtherDiagnosticData` · `…CrashData` — each `Linked = true`, `Tracking = false`,
+purpose `AppFunctionality`. ✓ (verified 2026-06-14; Crash Data added 2026-09-03
+with Sentry, manifest updated in the same commit)
+
+**Why Crash Data is Linked.** Sentry only ever receives a truncated SHA-256 of
+the device id, never the raw value, because that id is the app's sole auth
+credential. A device-derived identifier is still "linked" under Apple's
+definition, so it is declared as linked rather than argued down.
 
 ---
 

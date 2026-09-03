@@ -1,6 +1,7 @@
 import type { ErrorUtils as ErrorUtilsShape } from 'react-native';
 import { logBugError } from '@/lib/bug-logger';
 import { recordCrash, recordFatalBreadcrumb, takeLastFatalBreadcrumb } from '@/lib/crash-marker';
+import { captureAppError } from '@/lib/sentry';
 
 let installedOn: ErrorUtilsShape | null = null;
 
@@ -19,9 +20,14 @@ export function resolveErrorUtils(): ErrorUtilsShape | null {
 
 /**
  * Wraps the global JS error handler so fatal errors — which never reach a
- * React error boundary — are written to the bug log and counted by the boot
- * crash-loop marker before the previous handler (RN's red box, native crash
- * reporting) runs. Idempotent. Returns false when there is no ErrorUtils.
+ * React error boundary — are written to the bug log, sent to the crash
+ * reporter and counted by the boot crash-loop marker before the previous
+ * handler (RN's red box, native crash reporting) runs. Idempotent. Returns
+ * false when there is no ErrorUtils.
+ *
+ * `flushLastFatalBreadcrumb` deliberately does NOT capture: it replays a
+ * breadcrumb from a previous launch that this handler already reported, so
+ * capturing there would file the same crash twice.
  *
  * The bug-log write is asynchronous (AsyncStorage behind an await) and the
  * previous handler kills the process on a production fatal, so it normally
@@ -44,6 +50,11 @@ export function installGlobalErrorHandler(
         recordFatalBreadcrumb(error);
         recordCrash();
       }
+      // The reporter gets the error message and the fatal flag only — never
+      // anything the person wrote.
+      captureAppError('fatal', error instanceof Error ? error : new Error(String(error)), {
+        isFatal: Boolean(isFatal),
+      });
       void logBugError('global-error', error, { isFatal: Boolean(isFatal) });
     } catch {
       // Recording must never mask the original error.

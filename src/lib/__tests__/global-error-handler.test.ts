@@ -1,6 +1,7 @@
 import type { ErrorUtils } from 'react-native';
 
 const mockLogBugError = jest.fn((..._args: unknown[]) => Promise.resolve());
+const mockCaptureAppError = jest.fn((..._args: unknown[]) => undefined);
 const mockRecordCrash = jest.fn(() => 1);
 const mockRecordFatalBreadcrumb = jest.fn((..._args: unknown[]) => undefined);
 const mockTakeLastFatalBreadcrumb = jest.fn<
@@ -10,6 +11,13 @@ const mockTakeLastFatalBreadcrumb = jest.fn<
 
 jest.mock('@/lib/bug-logger', () => ({
   logBugError: (...args: unknown[]) => mockLogBugError(...args),
+}));
+
+jest.mock('@/lib/sentry', () => ({
+  captureAppError: (...args: unknown[]) => mockCaptureAppError(...args),
+  addAppBreadcrumb: jest.fn(),
+  captureAppEvent: jest.fn(),
+  isSentryEnabled: () => false,
 }));
 
 jest.mock('@/lib/crash-marker', () => ({
@@ -105,6 +113,50 @@ describe('installGlobalErrorHandler', () => {
     expect(fake.previous).toHaveBeenCalledWith(error, false);
   });
 
+  it('sends a fatal to the crash reporter with the fatal flag, and still counts the boot-crash streak', () => {
+    const fake = fakeErrorUtils();
+    const error = new Error('fatal');
+
+    installGlobalErrorHandler(fake.utils);
+    fake.invoke(error, true);
+
+    expect(mockCaptureAppError).toHaveBeenCalledTimes(1);
+    expect(mockCaptureAppError).toHaveBeenCalledWith('fatal', error, { isFatal: true });
+    // The streak is what flips the boundary into recovery mode. Reporting
+    // must not cost the app that, and must not double-count it either.
+    expect(mockRecordFatalBreadcrumb).toHaveBeenCalledWith(error);
+    expect(mockRecordCrash).toHaveBeenCalledTimes(1);
+    expect(fake.previous).toHaveBeenCalledWith(error, true);
+  });
+
+  it('reports a non-fatal with the flag cleared and no crash-marker write', () => {
+    const fake = fakeErrorUtils();
+    const error = new Error('soft');
+
+    installGlobalErrorHandler(fake.utils);
+    fake.invoke(error, false);
+
+    expect(mockCaptureAppError).toHaveBeenCalledWith('fatal', error, { isFatal: false });
+    expect(mockRecordCrash).not.toHaveBeenCalled();
+  });
+
+  it('wraps a thrown non-Error before reporting it', () => {
+    const fake = fakeErrorUtils();
+
+    installGlobalErrorHandler(fake.utils);
+    fake.invoke('string boom', true);
+
+    const [source, reported, extra] = mockCaptureAppError.mock.calls[0] as [
+      string,
+      Error,
+      Record<string, unknown>,
+    ];
+    expect(source).toBe('fatal');
+    expect(reported).toBeInstanceOf(Error);
+    expect(reported.message).toBe('string boom');
+    expect(extra).toEqual({ isFatal: true });
+  });
+
   it('installs once per ErrorUtils', () => {
     const fake = fakeErrorUtils();
 
@@ -155,6 +207,17 @@ describe('flushLastFatalBreadcrumb', () => {
         stack: 'Error: fatal boom\n    at boot (app.js:1)',
       },
     );
+  });
+
+  it('replays into the bug log only, because the reporter already had that crash', () => {
+    mockTakeLastFatalBreadcrumb.mockReturnValueOnce({
+      message: 'Error: fatal boom',
+      stack: 'Error: fatal boom\n    at boot (app.js:1)',
+      ts: '2026-09-03T10:00:00.000Z',
+    });
+
+    expect(flushLastFatalBreadcrumb()).toBe(true);
+    expect(mockCaptureAppError).not.toHaveBeenCalled();
   });
 
   it('is a no-op on a launch that follows no fatal', () => {
