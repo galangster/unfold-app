@@ -634,7 +634,7 @@ if (version < 41) {
       }
     }
   } catch (err) {
-    console.error('[store] Migration v40→41 failed:', err);
+    reportMigrationFailure('v40→41', err);
   }
 }
 
@@ -666,7 +666,7 @@ if (version < 42) {
       }
     }
   } catch (err) {
-    console.error('[store] Migration v41→42 failed:', err);
+    reportMigrationFailure('v41→42', err);
   }
 }
 
