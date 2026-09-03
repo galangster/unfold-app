@@ -1,6 +1,15 @@
 /* eslint-disable import/first */
 const mockStore = new Map<string, string>();
 let mockDeviceId = 'old-device-id';
+/** Top-level entries of the cache directory as readDirectoryAsync reports them. */
+const mockCacheEntries: string[] = [];
+
+jest.mock('expo-file-system/legacy', () => ({
+  documentDirectory: 'file:///documents/',
+  cacheDirectory: 'file:///cache/',
+  deleteAsync: jest.fn(async () => undefined),
+  readDirectoryAsync: jest.fn(async () => [...mockCacheEntries]),
+}));
 
 jest.mock('../mmkv-storage', () => ({
   mmkvStorage: {
@@ -112,6 +121,7 @@ import { clearAudioCache } from '../tts-service';
 import { clearWidgets } from '../widget-bridge';
 import { logoutUser } from '../revenuecatClient';
 import { PRIMARY_BACKEND_URL } from '../api-config';
+import { deleteAsync, readDirectoryAsync } from 'expo-file-system/legacy';
 
 const mockFetch = jest.fn();
 
@@ -119,8 +129,13 @@ function okResponse(body: unknown = { deleted: true }, status = 200) {
   return { ok: status >= 200 && status < 300, status, json: async () => body };
 }
 
+function deletedPaths(): string[] {
+  return (deleteAsync as jest.Mock).mock.calls.map(([path]: [string]) => path);
+}
+
 beforeEach(() => {
   mockStore.clear();
+  mockCacheEntries.length = 0;
   mockDeviceId = 'old-device-id';
   jest.clearAllMocks();
   mockFetch.mockReset();
@@ -313,6 +328,100 @@ describe('performFullLocalReset', () => {
     await performFullLocalReset({ revenueCatLogoutTimeoutMs: 20 });
 
     expect(logoutUser).toHaveBeenCalledTimes(1);
+    expect(rotateDeviceId).toHaveBeenCalledTimes(1);
+  });
+
+  it('deletes the profile photo, reading its file name before the store reset wipes it', async () => {
+    // A mutable state object: reset() nulls the user the way the real reset
+    // does, so a capture that ran after it would find nothing to delete.
+    const state = {
+      user: { profilePicture: 'profile-avatar-1700000000000.jpg' } as { profilePicture: string | null } | null,
+      reset: jest.fn(() => {
+        state.user = null;
+      }),
+    };
+    (useUnfoldStore.getState as jest.Mock).mockImplementationOnce(() => state);
+
+    await performFullLocalReset();
+
+    expect(state.reset).toHaveBeenCalledTimes(1);
+    expect(deleteAsync).toHaveBeenCalledWith('file:///documents/profile-avatar-1700000000000.jpg', {
+      idempotent: true,
+    });
+  });
+
+  it('resolves a legacy full-URI profile picture to the current document directory', async () => {
+    (useUnfoldStore.getState as jest.Mock).mockImplementationOnce(() => ({
+      user: { profilePicture: 'file:///var/mobile/old-container/Documents/profile-avatar-5.jpg' },
+      reset: jest.fn(),
+    }));
+
+    await performFullLocalReset();
+
+    expect(deleteAsync).toHaveBeenCalledWith('file:///documents/profile-avatar-5.jpg', { idempotent: true });
+  });
+
+  it('deletes nothing from the document directory when there is no profile photo', async () => {
+    (useUnfoldStore.getState as jest.Mock).mockImplementationOnce(() => ({
+      user: { profilePicture: null },
+      reset: jest.fn(),
+    }));
+
+    await performFullLocalReset();
+
+    expect(deletedPaths().some((path) => path.startsWith('file:///documents/'))).toBe(false);
+  });
+
+  it('sweeps share cards and exported workbook PDFs from the cache directory and leaves everything else', async () => {
+    mockCacheEntries.push(
+      'share-card-1700000000000.png',
+      'My Devotional.pdf',
+      'Devotional.PDF',
+      // Survivors: TTS cache (owned by clearAudioCache), bug-report export,
+      // expo-print's scratch directory, unrelated files.
+      'tts_abc123.mp3',
+      'unfold-bug-report-2026-09-02.json',
+      'Print',
+      'some-image.jpg',
+      'SQLite',
+    );
+
+    await performFullLocalReset();
+
+    expect(readDirectoryAsync).toHaveBeenCalledWith('file:///cache/');
+    const deleted = deletedPaths();
+    expect(deleted).toContain('file:///cache/share-card-1700000000000.png');
+    expect(deleted).toContain('file:///cache/My Devotional.pdf');
+    expect(deleted).toContain('file:///cache/Devotional.PDF');
+    for (const survivor of ['tts_abc123.mp3', 'unfold-bug-report-2026-09-02.json', 'Print', 'some-image.jpg', 'SQLite']) {
+      expect(deleted).not.toContain(`file:///cache/${survivor}`);
+    }
+    expect(deleteAsync).toHaveBeenCalledWith(expect.any(String), { idempotent: true });
+  });
+
+  it('never touches the Bible SQLite directory', async () => {
+    (useUnfoldStore.getState as jest.Mock).mockImplementationOnce(() => ({
+      user: { profilePicture: 'profile-avatar-1.jpg' },
+      reset: jest.fn(),
+    }));
+    mockCacheEntries.push('share-card-1.png', 'Series.pdf');
+
+    await performFullLocalReset();
+
+    expect(deletedPaths().length).toBeGreaterThan(0);
+    expect(deletedPaths().some((path) => path.includes('SQLite'))).toBe(false);
+  });
+
+  it('a failing profile-photo delete or cache listing never aborts the reset', async () => {
+    (useUnfoldStore.getState as jest.Mock).mockImplementationOnce(() => ({
+      user: { profilePicture: 'profile-avatar-1.jpg' },
+      reset: jest.fn(),
+    }));
+    (deleteAsync as jest.Mock).mockRejectedValueOnce(new Error('EACCES'));
+    (readDirectoryAsync as jest.Mock).mockRejectedValueOnce(new Error('no cache dir'));
+
+    await expect(performFullLocalReset()).resolves.toMatchObject({ serverErase: { ok: true } });
+    expect(mmkvStorage.removeItem).toHaveBeenCalledWith('unfold-storage');
     expect(rotateDeviceId).toHaveBeenCalledTimes(1);
   });
 

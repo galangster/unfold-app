@@ -13,6 +13,8 @@
  *   - Clear AI caches derived from personal context
  *   - Clear the bug log (plaintext AsyncStorage), the review-prompt marker,
  *     the paywall-diagnostics JSONL, and the TTS audio cache
+ *   - Delete the profile photo (document directory) and the exported share
+ *     cards / devotional workbook PDFs (cache directory)
  *   - Push an empty timeline to the iOS widgets (App Group data)
  *   - Log RevenueCat out best-effort so the next launch re-establishes the
  *     identity from the new device id
@@ -49,6 +51,7 @@ import {
   type ServerEraseResult,
 } from '@/lib/account-erase';
 import { logger } from '@/lib/logger';
+import { cacheDirectory, deleteAsync, documentDirectory, readDirectoryAsync } from 'expo-file-system/legacy';
 // RS13-1: import the canonical keys — don't repeat the string literals here.
 import { OUTBOX_KEY } from '@/lib/sync-outbox';
 import { DEVOTIONAL_PULL_CURSOR_KEY } from '@/lib/devotional-pull-cursor';
@@ -132,6 +135,49 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   });
 }
 
+/**
+ * ProfileAvatar saves the photo as `documentDirectory/profile-avatar-<ts>.jpg`
+ * and stores only the file name in `user.profilePicture` (older builds stored
+ * the full URI); only the PREVIOUS photo was ever deleted, on replacement.
+ * Mirrors ProfileAvatar's own file-name resolution: the last path segment,
+ * joined onto the current document directory — never an arbitrary URI.
+ */
+function profileAvatarFileName(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const segments = value.trim().split('/').filter(Boolean);
+  const fileName = segments.length ? segments[segments.length - 1] : null;
+  return fileName && fileName !== '.' && fileName !== '..' ? fileName : null;
+}
+
+async function deleteProfilePhoto(profilePicture: string | null | undefined): Promise<void> {
+  const fileName = profileAvatarFileName(profilePicture);
+  if (!fileName || !documentDirectory) return;
+  await deleteAsync(`${documentDirectory}${fileName}`, { idempotent: true });
+}
+
+/**
+ * Files other flows leave in the cache directory that embed personal content:
+ * share-card.tsx writes `share-card-<ts>.png`; pdf-export.ts moves the
+ * workbook (journal entries, check-ins) to `<Devotional title>.pdf`. Top level
+ * only, and never the Bible DB (documentDirectory/SQLite — non-personal
+ * downloaded content).
+ */
+function isExportedPersonalFile(name: string): boolean {
+  return /^share-card-.*\.png$/i.test(name) || /\.pdf$/i.test(name);
+}
+
+async function sweepExportedPersonalFiles(): Promise<void> {
+  if (!cacheDirectory) return;
+  const names = await readDirectoryAsync(cacheDirectory);
+  for (const name of names.filter(isExportedPersonalFile)) {
+    try {
+      await deleteAsync(`${cacheDirectory}${name}`, { idempotent: true });
+    } catch (error) {
+      logger.warn(`[reset] could not delete exported file ${name} (continuing)`, error);
+    }
+  }
+}
+
 export async function performFullLocalReset(options: FullResetOptions = {}): Promise<FullResetResult> {
   // 0. Server erase under the OLD identity — MUST run before rotateDeviceId()
   //    (step 12): the current X-Device-ID is the only thing the server can
@@ -150,8 +196,14 @@ export async function performFullLocalReset(options: FullResetOptions = {}): Pro
   //    added later, without enumerating ids.
   await bestEffort('cancel scheduled notifications', cancelAllScheduledNotifications);
 
+  // 1b. Profile photo — its file name lives only in `user.profilePicture`,
+  //     which the store reset below wipes, so read the store first (one
+  //     snapshot serves both steps). Idempotent: a missing file is fine.
+  const store = useUnfoldStore.getState();
+  await bestEffort('delete profile photo', () => deleteProfilePhoto(store.user?.profilePicture));
+
   // 2. Zustand store reset
-  useUnfoldStore.getState().reset();
+  store.reset();
   useCompanionChatStore.getState().clearAllConversations();
 
   // 3. MMKV key wipe — enumerated keys, then prefixed families from the live key list
@@ -196,6 +248,10 @@ export async function performFullLocalReset(options: FullResetOptions = {}): Pro
 
   // 9. TTS audio cache (cache directory) + LRU metadata
   await bestEffort('clear TTS audio cache', clearAudioCache);
+
+  // 9b. Exported personal files left in the cache directory: share cards and
+  //     devotional workbook PDFs that embed journal entries.
+  await bestEffort('sweep exported personal files', sweepExportedPersonalFiles);
 
   // 10. iOS widgets — App Group data keeps showing the old devotional until
   //     the next syncWidgets(); push an empty timeline now.
