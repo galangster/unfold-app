@@ -23,6 +23,8 @@ import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { Duration } from '@/constants/animations';
 import { useUnfoldStore } from '@/lib/store';
+import { getOnboardingDraft } from '@/lib/onboarding-draft-store';
+import { getDeviceId } from '@/lib/mmkv-storage';
 import { useTheme } from '@/lib/theme';
 import { logger } from '@/lib/logger';
 import { EmberSystem } from '@/components/EmberSystem';
@@ -180,6 +182,18 @@ export default function WelcomeScreen() {
   const focusedPath = segments.length ? `/${segments.join('/')}` : '/';
   const user = useUnfoldStore((s) => s.user);
   const { colors } = useTheme();
+  // ONB-RESUME-1: someone mid-onboarding has a null user until the very last
+  // step, which used to land them right back on this first-run welcome — name
+  // typed again, answers gone. A saved draft means they are returning, not
+  // arriving: send them straight back into the flow. Read once via a lazy
+  // initializer so getDeviceId() isn't hit on every render.
+  const [hasOnboardingDraft] = useState(() => {
+    // Only someone mid-onboarding can have a draft. Skipping the read for a
+    // completed user keeps a Keychain read, an MMKV read and a JSON.parse off
+    // the blocking path of every ordinary cold start.
+    if (user?.hasCompletedOnboarding) return false;
+    return !!getOnboardingDraft({ deviceId: getDeviceId() });
+  });
 
   // Three phases: welcome → cutscene → features (all on same background)
   const [phase, setPhase] = useState<'welcome' | 'cutscene' | 'features'>('welcome');
@@ -310,6 +324,11 @@ export default function WelcomeScreen() {
     // and sends them home instead of leaving them on the quiet surface.
   }, [user, titleEndTime, subtitleEndTime, focusedPath]);
 
+  useEffect(() => {
+    if (user?.hasCompletedOnboarding || !hasOnboardingDraft) return;
+    router.replace('/onboarding');
+  }, [user?.hasCompletedOnboarding, hasOnboardingDraft, router]);
+
   // ─── Animated styles ────────────────────────────────────────────
   const iconStyle = useAnimatedStyle(() => ({
     opacity: iconOpacity.value,
@@ -343,7 +362,9 @@ export default function WelcomeScreen() {
   // Completed users should not briefly render the decorated welcome screen on
   // ordinary cold launch. Keep the surface opaque/quiet while the redirect
   // decision resolves so no ember/gradient frame leaks through.
-  if (user?.hasCompletedOnboarding) {
+  // Same quiet surface for someone being sent back into onboarding: no ember,
+  // no gradient, and never a frame of the welcome animation they already saw.
+  if (user?.hasCompletedOnboarding || hasOnboardingDraft) {
     return <View style={{ flex: 1, backgroundColor: colors.background }} />;
   }
 

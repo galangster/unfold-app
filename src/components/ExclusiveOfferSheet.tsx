@@ -41,6 +41,14 @@ import { logger } from '@/lib/logger';
 interface ExclusiveOfferSheetProps {
   visible: boolean;
   onDismiss: () => void;
+  /**
+   * Called instead of onDismiss when a purchase or restore INSIDE this sheet
+   * grants premium. Onboarding passes the same callback its main CTA uses so a
+   * purchase made here advances the flow rather than dropping the person back
+   * on the paywall. Optional: callers that only need to close fall back to
+   * onDismiss, which is the pre-existing behaviour.
+   */
+  onPurchaseSuccess?: () => void;
   context: 'onboarding' | 'churned';
 }
 
@@ -48,7 +56,12 @@ interface ExclusiveOfferSheetProps {
 // Component
 // ---------------------------------------------------------------------------
 
-export function ExclusiveOfferSheet({ visible, onDismiss, context }: ExclusiveOfferSheetProps) {
+export function ExclusiveOfferSheet({
+  visible,
+  onDismiss,
+  onPurchaseSuccess,
+  context,
+}: ExclusiveOfferSheetProps) {
   const { colors, isDark } = useTheme();
   const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
@@ -86,6 +99,21 @@ export function ExclusiveOfferSheet({ visible, onDismiss, context }: ExclusiveOf
   // Detect offering failure — loaded but target package missing
   const offeringFailed = !isLoadingOfferings && offeringsResult && !targetPackage;
 
+  // Single exit for "premium is now active", shared by purchase and restore.
+  // Hands off to onPurchaseSuccess when the caller supplied one so the host
+  // flow can advance; otherwise it just closes, as it always did.
+  const handleEntitlementGranted = () => {
+    updateUser({ isPremium: true });
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    queryClient.invalidateQueries({ queryKey: ['revenuecat'] });
+    setErrorMessage(null);
+    if (onPurchaseSuccess) {
+      onPurchaseSuccess();
+      return;
+    }
+    onDismiss();
+  };
+
   // Purchase mutation
   const purchaseMutation = useMutation({
     mutationFn: (pkg: PurchasesPackage) => purchasePackage(pkg),
@@ -102,11 +130,7 @@ export function ExclusiveOfferSheet({ visible, onDismiss, context }: ExclusiveOf
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
           return;
         }
-        updateUser({ isPremium: true });
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        queryClient.invalidateQueries({ queryKey: ['revenuecat'] });
-        setErrorMessage(null);
-        onDismiss();
+        handleEntitlementGranted();
       } else if (result.reason === 'user_cancelled') {
         return;
       } else {
@@ -129,11 +153,7 @@ export function ExclusiveOfferSheet({ visible, onDismiss, context }: ExclusiveOf
       if (result.ok) {
         const hasPremium = Boolean(result.data.entitlements.active?.['Unfold Premium']);
         if (hasPremium) {
-          updateUser({ isPremium: true });
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          queryClient.invalidateQueries({ queryKey: ['revenuecat'] });
-          setErrorMessage(null);
-          onDismiss();
+          handleEntitlementGranted();
         } else {
           setErrorMessage('No active subscription found.');
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
+  AppState,
   View,
   Text,
   TextInput,
@@ -47,7 +48,7 @@ import { INPUT_LIMITS } from '@/lib/validation';
 import { TypewriterText } from '@/components/TypewriterText';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
-import { useUnfoldStore, UserProfile, BibleTranslation, ThemeCategory, DevotionalType, ACCENT_THEMES, WritingTone, ContentDepth, FaithBackground, LifeStage, RelationshipWithGod, BibleFrequency } from '@/lib/store';
+import { useUnfoldStore, type Devotional, UserProfile, BibleTranslation, ThemeCategory, DevotionalType, ACCENT_THEMES, WritingTone, ContentDepth, FaithBackground, LifeStage, RelationshipWithGod, BibleFrequency } from '@/lib/store';
 import { generateAdaptiveQuestion, generateDiagnosticQuestions, generateMirrorBackText, type MirrorBackContent } from '@/lib/devotional-service';
 import { THEME_CATEGORIES, DEVOTIONAL_TYPES, BIBLICAL_CHARACTERS, BIBLE_BOOKS_FOR_STUDY, ThemeCategoryInfo, DevotionalTypeInfo, getThemeById, getDevotionalTypeById } from '@/constants/devotional-types';
 import {
@@ -77,14 +78,21 @@ import {
   clearOnboardingSampleJob,
 } from '@/lib/onboarding-sample-job-store';
 import {
+  saveOnboardingDraft,
+  saveOnboardingSampleDay,
+  getOnboardingDraft,
+  clearOnboardingDraft,
+} from '@/lib/onboarding-draft-store';
+import { createAutosaveController, shouldFlushAutosaveOnAppState } from '@/lib/autosave-controller';
+import {
   buildOnboardingSampleGenerationRequest,
   formatDateOnly,
   formatDateOnlyForDisplay,
   getContextualSituationChips,
   getFilteredOnboardingSteps,
-  getInitialOnboardingStepId,
   getOnboardingStepLayoutMode,
   QUICK_DATE_CHIPS,
+  resolveOnboardingResumeStep,
   resolveQuickDateChip,
   shapeKeyPeople,
   shapeUpcomingEvent,
@@ -102,6 +110,8 @@ import { ReadDevotionalStep } from '@/components/onboarding/ReadDevotionalStep';
 import { OnboardingCelebration } from '@/components/onboarding/OnboardingCelebration';
 import { CommitmentStep } from '@/components/onboarding/CommitmentStep';
 import { ThreeStepPaywall } from '@/components/onboarding/ThreeStepPaywall';
+import { WelcomeBackStep } from '@/components/onboarding/WelcomeBackStep';
+import { isUsableSampleDevotionalDay } from '@/lib/onboarding-sample-day-shape';
 import { stripOuterQuotes } from '@/lib/cn';
 import { Typography } from '@/constants/typography';
 
@@ -404,6 +414,42 @@ const ALL_STEPS = [
 
 type StepId = 'hook' | 'solution' | 'unfoldIntro' | 'name' | 'aboutMe' | 'stylePreferences1' | 'stylePreferences2' | 'relationshipWithGod' | 'bibleFrequency' | 'shockStat' | 'growthGraph' | 'growthGoals' | 'obstacles' | 'keyPeople' | 'aspiration' | 'vulnerabilityValidation' | 'mirrorBack' | 'featureSummary' | 'founderNote' | 'devotionalSegue' | 'readDevotional' | 'celebration' | 'commitment1' | 'commitment2' | 'threeStepPaywall' | 'purchaseConfirmation' | 'themeType' | 'studySubject' | 'currentSituation' | 'diagnosticRound' | 'spiritualSeeking' | 'upcomingEvent' | 'readingDuration' | 'devotionalLength' | 'reminderTime';
 
+const ALL_STEP_IDS: readonly string[] = ALL_STEPS.map((step) => step.id);
+
+// ─── Answer draft (ONB-RESUME-1) ─────────────────────────────────────────────
+// Onboarding wrote to the store exactly once, on the last step, so anyone who
+// quit at the paywall relaunched with a null user and started over from "What's
+// your name?". The draft below is written as they answer, so leaving and coming
+// back never costs an answer, a step, or a cutscene.
+
+/** Coalesce keystrokes — one write shortly after typing settles, not per character. */
+const ONBOARDING_DRAFT_DEBOUNCE_MS = 300;
+
+/**
+ * Ceiling on that coalescing. Someone typing steadily into a long free-text
+ * answer never lets a plain debounce fire, so a force-quit mid-sentence would
+ * still lose everything since the last step change.
+ */
+const ONBOARDING_DRAFT_MAX_WAIT_MS = 1_500;
+
+/**
+ * Nothing worth keeping exists before the name step: the opening cutscenes
+ * carry no answer, and a draft written there would only route a returning
+ * person back into onboarding with an empty record.
+ */
+const DRAFT_FIRST_SAVED_STEP_INDEX = ALL_STEP_IDS.indexOf('name');
+
+function shouldPersistOnboardingDraft(stepId: string): boolean {
+  const index = ALL_STEP_IDS.indexOf(stepId);
+  return index !== -1 && index >= DRAFT_FIRST_SAVED_STEP_INDEX;
+}
+
+/**
+ * How long someone must have been away before the return is worth marking.
+ * Backgrounding the app for a moment must come back with no ceremony at all.
+ */
+const ONBOARDING_WELCOME_BACK_MIN_AGE_MS = 30 * 60 * 1000;
+
 // Discovery chips — tappable quick-select options for the 3 discovery questions
 // Each chip is a feeling/situation that seeds context without requiring typing
 // Default discovery chips — used as fallback when AI chips aren't available
@@ -423,7 +469,7 @@ const DISCOVERY_CHIPS: Record<string, string[]> = {
 // Key people relationship chips — tapping one reveals a name field for it (max 5 people)
 const KEY_PEOPLE_RELATIONSHIP_CHIPS = ['Spouse', 'Friend', 'Mentor', 'Parent', 'Sibling', 'Small group'];
 
-interface OnboardingData {
+export interface OnboardingData {
   name: string;
   bibleTranslation: BibleTranslation;
   aboutMe: string;
@@ -489,6 +535,17 @@ export default function OnboardingScreen() {
   const setUser = useUnfoldStore((s) => s.setUser);
   const updateUser = useUnfoldStore((s) => s.updateUser);
   const setCompanionName = useUnfoldStore((s) => s.setCompanionName);
+  const addDevotional = useUnfoldStore((s) => s.addDevotional);
+
+  // ONB-RESUME-1: the answers this person already gave, from a walk-through
+  // they left. Read once via a lazy initializer so getDeviceId() isn't hit on
+  // every render. A user who has finished onboarding is doing something else
+  // here (a new series), so their old first-run draft must not hydrate.
+  const [restoredDraft] = useState(() => {
+    if (existingUser?.hasCompletedOnboarding) return null;
+    return getOnboardingDraft({ deviceId: getDeviceId() });
+  });
+  const onboardingDeviceIdRef = useRef<string | null>(null);
 
   // Companion naming state (saved to store on continue)
   const [companionNameInput, setCompanionNameInput] = useState('');
@@ -502,8 +559,9 @@ export default function OnboardingScreen() {
     setData((prev) => (prev.name === text ? prev : { ...prev, name: text }));
   }, []);
 
-  // Form data (declared early — mirrorBackText useMemo depends on it)
-  const [data, setData] = useState<OnboardingData>({
+  // Form data (declared early — mirrorBackText useMemo depends on it).
+  // Draft answers win over the defaults: they are what this person actually said.
+  const [data, setData] = useState<OnboardingData>(() => ({
     name: existingUser?.name || '',
     bibleTranslation: existingUser?.bibleTranslation || 'BSB',
     aboutMe: existingUser?.aboutMe || '',
@@ -529,7 +587,8 @@ export default function OnboardingScreen() {
     devotionalLength: 7,
     reminderTime: '8:00 AM',
     mirrorBackCommitted: false,
-  });
+    ...(restoredDraft?.data ?? {}),
+  }));
 
   // RevenueCat — fetch offerings for direct purchase from threeStepPaywall
   const { data: offeringsResult, isLoading: isLoadingOfferings } = useQuery({
@@ -622,9 +681,34 @@ export default function OnboardingScreen() {
     return { reflection, verse: scripture.text, verseRef: scripture.ref, anticipation };
   }, [data?.selectedThemes, data?.currentSituation, data?.spiritualSeeking, data?.name]);
 
-  // Track which step we're on (from filtered list)
-  const [currentStepId, setCurrentStepId] = useState<StepId>(() =>
-    getInitialOnboardingStepId(ALL_STEPS, existingUser, undefined, requestedStartStepId) as StepId,
+  // Track which step we're on (from filtered list). A returning person resumes
+  // where they stopped — never on a cutscene, a payoff, or a paywall they have
+  // already bought past. An explicit ?startAt= still wins (dev + deep links).
+  const [currentStepId, setCurrentStepId] = useState<StepId>(() => {
+    // One filter pass for both decisions below — it was being computed here and
+    // again inside getInitialOnboardingStepId.
+    const filteredStepIds = getFilteredOnboardingSteps(ALL_STEPS, existingUser, undefined).map(
+      (step) => step.id,
+    );
+    // An explicit ?startAt= wins over a draft, for dev tools and deep links.
+    if (requestedStartStepId && filteredStepIds.includes(requestedStartStepId)) {
+      return requestedStartStepId as StepId;
+    }
+    return resolveOnboardingResumeStep({
+      savedStepId: restoredDraft?.stepId ?? null,
+      allStepIds: ALL_STEP_IDS,
+      filteredStepIds,
+      // Same guard as the state above: an unusable day must not send them to
+      // the reading step with nothing to read.
+      hasSampleDevotionalDay: isUsableSampleDevotionalDay(restoredDraft?.sampleDevotionalDay),
+      purchasedDuringOnboarding: restoredDraft?.purchasedDuringOnboarding ?? false,
+    }) as StepId;
+  });
+
+
+  // Warm re-entry: only for someone who has actually been away a while.
+  const [showWelcomeBack, setShowWelcomeBack] = useState(
+    () => !!restoredDraft && Date.now() - restoredDraft.savedAt > ONBOARDING_WELCOME_BACK_MIN_AGE_MS,
   );
 
   // Dev: step picker visibility + show-all toggle
@@ -737,7 +821,11 @@ export default function OnboardingScreen() {
   // Track whether the user has already seen the paywall during onboarding
   const hasSeenPaywallRef = useRef(false);
   const isPremium = existingUser?.isPremium ?? false;
-  const [purchasedDuringOnboarding, setPurchasedDuringOnboarding] = useState(false);
+  // Restored from the draft too: dropping it would re-run saveOnboardingData
+  // with isPremium false for someone who already paid this walk-through.
+  const [purchasedDuringOnboarding, setPurchasedDuringOnboarding] = useState(
+    restoredDraft?.purchasedDuringOnboarding ?? false,
+  );
 
   // Transition state for animations
   const isTransitioningRef = useRef(false);
@@ -762,8 +850,79 @@ export default function OnboardingScreen() {
   const onboardingSubmittedRequestRef = useRef<OnboardingSampleGenerationRequest | null>(null);
   const onboardingDevotionalResultRef = useRef<any>(null);
   const [commitmentLevel, setCommitmentLevel] = useState<string>('');
-  const [onboardingDevotionalDay, setOnboardingDevotionalDay] = useState<any>(null);
-  const [onboardingDevotionalId, setOnboardingDevotionalId] = useState<string>('');
+  // The generated sample survives a relaunch with the draft, so a returning
+  // person opens the SAME first devotional instead of waiting on a new one.
+  const [onboardingDevotionalDay, setOnboardingDevotionalDay] = useState<any>(
+    // A persisted day can outlive the shape that wrote it. An unusable one is
+    // treated as absent so the segue re-polls rather than rendering a broken
+    // reading screen or storing a broken devotional.
+    isUsableSampleDevotionalDay(restoredDraft?.sampleDevotionalDay)
+      ? restoredDraft?.sampleDevotionalDay
+      : null,
+  );
+  const [onboardingDevotionalId, setOnboardingDevotionalId] = useState<string>(
+    restoredDraft?.sampleDevotionalId ?? '',
+  );
+
+  // ─── Answer draft autosave (ONB-RESUME-1) ─────────────────────────────────
+  // Answers are read from dataRef at write time, so a write scheduled before a
+  // keystroke still persists the latest ones. The step and purchase flags come
+  // from the closure and are dependencies below.
+  const writeOnboardingDraft = useCallback(() => {
+    if (!shouldPersistOnboardingDraft(currentStepId)) return;
+    if (onboardingDeviceIdRef.current === null) {
+      onboardingDeviceIdRef.current = getDeviceId();
+    }
+    saveOnboardingDraft({
+      deviceId: onboardingDeviceIdRef.current,
+      stepId: currentStepId,
+      data: dataRef.current,
+      purchasedDuringOnboarding,
+      sampleDevotionalId: onboardingDevotionalId || null,
+    });
+  }, [currentStepId, purchasedDuringOnboarding, onboardingDevotionalId]);
+
+  // The generated day is written once under its own key — see the comment on
+  // SAMPLE_DAY_KEY for why it is kept out of the record above.
+  useEffect(() => {
+    if (!onboardingDevotionalDay) return;
+    saveOnboardingSampleDay(onboardingDevotionalDay);
+  }, [onboardingDevotionalDay]);
+
+  // The save closure changes on every answer; the controller must not. Keep the
+  // newest one in a ref so the controller and the AppState listener are built
+  // exactly once.
+  const writeOnboardingDraftRef = useRef(writeOnboardingDraft);
+  writeOnboardingDraftRef.current = writeOnboardingDraft;
+
+  // Coalesced write while they answer. The shared controller is used rather
+  // than a bare timer for its max-wait ceiling: a plain debounce never fires
+  // while someone types steadily under the window, which is exactly the long
+  // free-text answers this flow asks for.
+  const draftAutosave = useMemo(
+    () =>
+      createAutosaveController({
+        save: () => writeOnboardingDraftRef.current(),
+        debounceMs: ONBOARDING_DRAFT_DEBOUNCE_MS,
+        maxWaitMs: ONBOARDING_DRAFT_MAX_WAIT_MS,
+      }),
+    [],
+  );
+
+  useEffect(() => {
+    if (!shouldPersistOnboardingDraft(currentStepId)) return;
+    draftAutosave.schedule();
+  }, [data, currentStepId, draftAutosave]);
+
+  // Land the pending write before iOS suspends the app — the debounce window is
+  // exactly the gap that used to lose the last answer on a force-quit.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (!shouldFlushAutosaveOnAppState(nextState)) return;
+      draftAutosave.flush();
+    });
+    return () => subscription.remove();
+  }, [draftAutosave]);
   const [featureSummaryPage, setFeatureSummaryPage] = useState(0);
   
   // Animated styles
@@ -1119,8 +1278,59 @@ export default function OnboardingScreen() {
     // persisted record so a future onboarding can't resume a stale job.
     clearOnboardingSampleJob();
     saveOnboardingData();
+    // The answers now live on the user profile — the draft has nothing left to
+    // protect, and a stale one would route the next launch back into onboarding.
+    clearOnboardingDraft();
     router.replace('/generating');
   }, [router, saveOnboardingData]);
+
+  /**
+   * "I'll decide later" on the three-step paywall.
+   *
+   * The paywall used to have no exit but a purchase, so anyone who wanted time
+   * to think had to force-quit — and lost every answer with it. This lands them
+   * in the app instead: profile saved, sample devotional in hand, nothing
+   * generated. Creation from Today still meets the paywall through
+   * useCreationGate, and re-entering onboarding later skips the marketing steps
+   * for a completed user and asks only what is still missing.
+   */
+  const handleDecideLater = useCallback(() => {
+    // The paywall control fires its own haptic before calling this.
+    // No purchase override — the record lands with hasCompletedOnboarding true
+    // and isPremium false. readingDuration, devotionalLength and reminderTime
+    // all carry defaults in `data`, so no profile field is left missing.
+    saveOnboardingData();
+
+    // Today must not open empty: the sample they already read is real content.
+    if (onboardingDevotionalDay && onboardingDevotionalId) {
+      const createdAt = new Date().toISOString();
+      const answers = dataRef.current;
+      addDevotional({
+        id: onboardingDevotionalId,
+        title: 'Your First Devotional',
+        totalDays: 1,
+        currentDay: 1,
+        days: [{ ...onboardingDevotionalDay, dayNumber: 1, isRead: false }],
+        createdAt,
+        // Same instant as createdAt — a missing seriesStartDate mis-numbers days.
+        seriesStartDate: createdAt,
+        userContext: {
+          name: answers.name,
+          aboutMe: answers.aboutMe,
+          currentSituation: answers.currentSituation,
+          emotionalState: '',
+        },
+        generationMode: 'progressive',
+      } as Devotional);
+    }
+
+    clearOnboardingDraft();
+    clearOnboardingSampleJob();
+
+    // Never '/generating': that would start a paid series for someone who has
+    // deliberately not paid.
+    router.replace('/(tabs)/(today)');
+  }, [saveOnboardingData, onboardingDevotionalDay, onboardingDevotionalId, addDevotional, router]);
 
   const completeOnboarding = useCallback(() => {
     proceedToGeneration();
@@ -3157,8 +3367,10 @@ export default function OnboardingScreen() {
               setOnboardingDevotionalDay(result.devotionalDay);
               setOnboardingDevotionalId(result.devotionalId);
             }
-            // The sample is delivered — the persisted job is no longer needed.
-            clearOnboardingSampleJob();
+            // The persisted job is deliberately KEPT here. Clearing it on
+            // delivery meant a relaunch before the end of onboarding had no way
+            // back to the devotional it had already generated. proceedToGeneration
+            // clears it once onboarding actually finishes.
           }}
           onContinue={advanceToNextStep}
         />
@@ -3556,6 +3768,7 @@ export default function OnboardingScreen() {
             updateUser({ isPremium: true });
             advanceToNextStep();
           }}
+          onDecideLater={handleDecideLater}
           onSkip={() => {
             setCurrentStepId('themeType');
             setScreenReady(false);
@@ -3593,6 +3806,29 @@ export default function OnboardingScreen() {
     );
   }
 
+  // Warm re-entry. Rendered instead of the step rather than over it: the
+  // resolved step can be the paywall, whose looping video would otherwise start
+  // decoding behind an opaque overlay while the copy is being read. It is still
+  // not a step — ALL_STEPS indices are untouched and currentStepId already
+  // holds the resume target.
+  if (showWelcomeBack) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+          <WelcomeBackStep
+            name={data.name}
+            hasDevotional={!!onboardingDevotionalDay}
+            // Honest copy: someone resuming onto the subscription pitch must
+            // not be told their devotional opens on the next tap.
+            resumesOnDecision={currentStepId === 'threeStepPaywall'}
+            colors={colors}
+            onContinue={() => setShowWelcomeBack(false)}
+          />
+        </SafeAreaView>
+      </View>
+    );
+  }
+
   if (!step) {
     return (
       <View style={{ flex: 1, backgroundColor: 'transparent', justifyContent: 'center', alignItems: 'center' }}>
@@ -3603,6 +3839,7 @@ export default function OnboardingScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: 'transparent' }}>
+
       {/* Currents — one continuous particle layer across intro screens */}
       {(currentStepId === 'hook' || currentStepId === 'solution' || currentStepId === 'unfoldIntro' || currentStepId === 'purchaseConfirmation' || currentStepId === 'shockStat' || currentStepId === 'growthGraph') && (
         <Current type="chaos" color={colors.accent} speed={chaosSpeed} drift={chaosDrift} />

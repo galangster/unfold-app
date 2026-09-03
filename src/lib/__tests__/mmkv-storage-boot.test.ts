@@ -32,6 +32,16 @@ const OUTBOX_KEY = 'unfold-sync-outbox-v1';
 const STORAGE_KEY = 'unfold-storage';
 const DOC_DIR = '/docs';
 
+// Keychain items, both key names. expo-secure-store cannot change an existing
+// item's accessibility (its set path updates only kSecValueData), so the
+// after-first-unlock migration is a SECOND key name that is read first.
+const ENC_KEY_V1 = 'unfold-mmkv-encryption-key';
+const ENC_KEY_V2 = 'unfold-mmkv-encryption-key-v2';
+const DEVICE_KEY_V1 = 'unfold-device-id';
+const DEVICE_KEY_V2 = 'unfold-device-id-v2';
+/** Stand-in for SecureStore.AFTER_FIRST_UNLOCK (a native numeric constant). */
+const AFTER_FIRST_UNLOCK = 'after-first-unlock';
+
 // Formula-computed fixtures: the store payload a real user accumulated on 218
 // (zustand persist blob) and the production-shaped 32-hex encryption key.
 const PAYLOAD = JSON.stringify({ state: { streakCount: 7, entries: ['e1', 'e2'] }, version: 36 });
@@ -48,8 +58,21 @@ interface FakeStoreFile {
 interface WorldOptions {
   /** Value SecureStore holds for any key id (null = nothing stored yet). */
   secureKey?: string | null;
+  /**
+   * Per-key Keychain contents. When present it REPLACES the `secureKey`
+   * shorthand entirely (an unlisted key reads as absent), which is what the
+   * v1→v2 migration cases need: the two key names must hold different things.
+   */
+  secureItems?: Record<string, string | null>;
   /** SecureStore.getItem/setItem throw (Keychain down). */
   secureThrows?: boolean;
+  /**
+   * Key names whose getItem throws while every other key still answers. Models
+   * a LOCKED device holding a kSecAttrAccessibleWhenUnlocked item: iOS returns
+   * errSecInteractionNotAllowed and expo-secure-store throws, while an absent
+   * key still returns null.
+   */
+  secureThrowsForKeys?: string[];
   /** File.copySync throws (probe copy fails). */
   fsCopyThrows?: boolean;
   /** File.copySync throws ONLY for the .crc sibling copy (main copy succeeds). */
@@ -75,7 +98,9 @@ class FakeWorld {
   crcs = new Set<string>(); // base ids that have a .crc sibling on disk
   copyCalls: { from: string; to: string }[] = [];
   /** Every SecureStore.setItem ATTEMPT (recorded even when secureThrows). */
-  secureSetCalls: { key: string; value: string }[] = [];
+  secureSetCalls: { key: string; value: string; keychainAccessible?: unknown }[] = [];
+  /** SecureStore item deletions — production code must never delete a v1 key. */
+  secureDeleteCalls: string[] = [];
   /** Monotonic uuid counter so successive v4() calls are distinguishable. */
   uuidSeq = 0;
   opts: WorldOptions;
@@ -233,14 +258,29 @@ function bootWith(world: FakeWorld): typeof import('@/lib/mmkv-storage') {
     jest.doMock('expo-file-system', () => makeFileSystemMock(world));
   }
   jest.doMock('expo-secure-store', () => ({
-    getItem: jest.fn((): string | null => {
+    AFTER_FIRST_UNLOCK,
+    getItem: jest.fn((k: string): string | null => {
       if (world.opts.secureThrows) throw new Error('Keychain unavailable');
+      // errSecInteractionNotAllowed: the item exists but is unreadable while
+      // the device is locked. expo-secure-store THROWS — it never returns null.
+      if (world.opts.secureThrowsForKeys?.includes(k)) {
+        throw new Error(`Keychain item unreadable while locked: ${k}`);
+      }
+      const items = world.opts.secureItems;
+      if (items) return items[k] ?? null;
       return world.opts.secureKey ?? null;
     }),
-    setItem: jest.fn((k: string, v: string): void => {
-      world.secureSetCalls.push({ key: k, value: v });
+    setItem: jest.fn((k: string, v: string, options?: { keychainAccessible?: unknown }): void => {
+      world.secureSetCalls.push({ key: k, value: v, keychainAccessible: options?.keychainAccessible });
       if (world.opts.secureThrows) throw new Error('Keychain unavailable');
+      if (world.opts.secureItems) {
+        world.opts.secureItems[k] = v;
+        return;
+      }
       world.opts.secureKey = v;
+    }),
+    deleteItemAsync: jest.fn(async (k: string): Promise<void> => {
+      world.secureDeleteCalls.push(k);
     }),
   }));
   jest.doMock('@/lib/logger', () => ({
@@ -648,5 +688,160 @@ describe('mmkv-storage boot (218→219 upgrade populations)', () => {
     expect(world.files.get(META_ID)!.data.get(MARKER_KEY)).toBe('encrypted');
     // The probe copy should have been cleaned up by the finally block.
     expectNoProbeLeftovers(world);
+  });
+});
+
+/**
+ * Locked-device boot (P0).
+ *
+ * expo-secure-store writes items as kSecAttrAccessibleWhenUnlocked
+ * (SecureStoreOptions.swift line 8), which iOS refuses to read while the
+ * device is locked: errSecInteractionNotAllowed, on which expo-secure-store
+ * THROWS (SecureStoreModule.swift). A launch that starts locked therefore read
+ * the encryption key as missing, opened the throwaway namespace and showed a
+ * fully onboarded person a brand-new install.
+ *
+ * Two rules are under test here:
+ *   1. Both Keychain items migrate to a second key name written
+ *      after-first-unlock. Accessibility cannot be changed in place (the set
+ *      path falls through to update(), which writes only kSecValueData), so the
+ *      new key name IS the migration. The original key name is never deleted.
+ *   2. getItem returns null ONLY for a genuinely absent item and THROWS when
+ *      the Keychain cannot answer. A throw must never mint a new value; only a
+ *      proven null may.
+ */
+describe('mmkv-storage boot — locked-device Keychain hardening', () => {
+  it('(k1) encryption key stored under the original name is copied forward, not re-minted', () => {
+    const world = new FakeWorld({ secureItems: { [ENC_KEY_V1]: KEY } });
+    world.seedStore(STORE_ID, 'encrypted', KEY, { [STORAGE_KEY]: PAYLOAD });
+    world.seedStore(META_ID, 'plain', undefined, { [MARKER_KEY]: 'encrypted' });
+
+    const storage = bootWith(world);
+
+    // The v1 fallback found the REAL key: the store opened encrypted with it
+    // (a minted key would have been a LOUD MOCK mode/key mismatch).
+    expect(storage.mmkvStorage.getItem(STORAGE_KEY)).toBe(PAYLOAD);
+    expect(world.secureSetCalls).toEqual([
+      { key: ENC_KEY_V2, value: KEY, keychainAccessible: AFTER_FIRST_UNLOCK },
+    ]);
+    // The original item is left in place for older builds; a later release
+    // removes it once every install has read it forward.
+    expect(world.opts.secureItems![ENC_KEY_V1]).toBe(KEY);
+    expect(world.secureDeleteCalls).toHaveLength(0);
+  });
+
+  it('(k2) the migrated key wins over a stale value under the original name, and is not re-copied', () => {
+    const world = new FakeWorld({
+      secureItems: { [ENC_KEY_V2]: KEY, [ENC_KEY_V1]: 'stale-superseded-key' },
+    });
+    world.seedStore(STORE_ID, 'encrypted', KEY, { [STORAGE_KEY]: PAYLOAD });
+    world.seedStore(META_ID, 'plain', undefined, { [MARKER_KEY]: 'encrypted' });
+
+    const storage = bootWith(world);
+
+    expect(storage.mmkvStorage.getItem(STORAGE_KEY)).toBe(PAYLOAD);
+    // Read order stops at v2: no second read, no copy, no write of any kind.
+    expect(world.secureSetCalls).toHaveLength(0);
+  });
+
+  it('(k3) locked device: an unreadable Keychain item must NOT mint a replacement key', () => {
+    // v2 is absent (errSecItemNotFound → null) while v1 exists but is
+    // unreadable (errSecInteractionNotAllowed → throw). Treating that throw as
+    // "absent" would mint a new key, write it under the after-first-unlock name
+    // — a write CAN succeed while the locked read fails — and every later boot
+    // would open a brand-new empty store with the user's real one stranded
+    // behind the key that was overwritten.
+    const world = new FakeWorld({
+      secureItems: {},
+      secureThrowsForKeys: [ENC_KEY_V1],
+    });
+    world.seedStore(STORE_ID, 'encrypted', KEY, { [STORAGE_KEY]: PAYLOAD });
+    world.seedStore(META_ID, 'plain', undefined, { [MARKER_KEY]: 'encrypted' });
+
+    const storage = bootWith(world);
+
+    // No key this session → the marker-authoritative recovery sandbox, which
+    // leaves the real file intact for the next unlocked boot.
+    expect(storage.isRecoverySession()).toBe(true);
+    expect(world.secureSetCalls).toHaveLength(0);
+    expect(world.opts.secureItems![ENC_KEY_V2]).toBeUndefined();
+    expect(world.files.get(STORE_ID)!.mode).toBe('encrypted');
+    expect(world.files.get(STORE_ID)!.key).toBe(KEY);
+    expect(world.files.get(STORE_ID)!.data.get(STORAGE_KEY)).toBe(PAYLOAD);
+  });
+
+  it('(k4) proven absence still mints exactly one key, written after-first-unlock', () => {
+    // The null case is the ONLY one allowed to create a key, and a fresh
+    // install must land on the new accessibility from its very first launch.
+    const world = new FakeWorld({ secureItems: {} });
+
+    const storage = bootWith(world);
+
+    expect(world.secureSetCalls).toHaveLength(1);
+    const [minted] = world.secureSetCalls;
+    expect(minted.key).toBe(ENC_KEY_V2);
+    expect(minted.value).toMatch(/^[0-9a-f]{32}$/);
+    expect(minted.keychainAccessible).toBe(AFTER_FIRST_UNLOCK);
+    expect(world.files.get(STORE_ID)!.mode).toBe('encrypted');
+    expect(world.files.get(STORE_ID)!.key).toBe(minted.value);
+    storage.mmkvStorage.setItem(STORAGE_KEY, PAYLOAD);
+    expect(storage.mmkvStorage.getItem(STORAGE_KEY)).toBe(PAYLOAD);
+  });
+
+  it('(k5) device id stored under the original name is copied forward, not re-minted', () => {
+    const world = new FakeWorld({
+      secureItems: { [ENC_KEY_V2]: KEY, [DEVICE_KEY_V1]: 'real-device-id' },
+    });
+    world.seedStore(STORE_ID, 'encrypted', KEY, { [STORAGE_KEY]: PAYLOAD });
+    world.seedStore(META_ID, 'plain', undefined, { [MARKER_KEY]: 'encrypted' });
+
+    const storage = bootWith(world);
+
+    expect(storage.getDeviceId()).toBe('real-device-id');
+    expect(world.uuidSeq).toBe(0); // nothing minted
+    expect(world.secureSetCalls).toEqual([
+      { key: DEVICE_KEY_V2, value: 'real-device-id', keychainAccessible: AFTER_FIRST_UNLOCK },
+    ]);
+    expect(world.secureDeleteCalls).toHaveLength(0);
+  });
+
+  it('(k6) NORMAL session, unreadable Keychain + empty mirror → ephemeral id, nothing persisted', () => {
+    // Not a recovery session: the store file is plain, so it opens normally
+    // even with no key. Minting an identity here would be permanent — the new
+    // id lands under the after-first-unlock name that every later boot reads
+    // FIRST, so the user's real identity (unreadable only right now) would be
+    // shadowed for good and their server rows orphaned.
+    const world = new FakeWorld({
+      secureThrowsForKeys: [ENC_KEY_V1, ENC_KEY_V2, DEVICE_KEY_V1, DEVICE_KEY_V2],
+    });
+    world.seedStore(STORE_ID, 'plain', undefined, { [STORAGE_KEY]: PAYLOAD });
+    world.seedStore(META_ID, 'plain', undefined, { [MARKER_KEY]: 'plain' });
+
+    const storage = bootWith(world);
+    expect(storage.isRecoverySession()).toBe(false);
+    expect(storage.mmkvStorage.getItem(STORAGE_KEY)).toBe(PAYLOAD);
+
+    const id = storage.getDeviceId();
+    expect(id.startsWith('ephemeral-')).toBe(true);
+    expect(storage.getDeviceId()).toBe(id); // stable for the session
+    // Never persisted, on either side.
+    expect(world.secureSetCalls).toHaveLength(0);
+    expect(world.files.get(STORE_ID)!.data.has(DEVICE_KEY_V1)).toBe(false);
+  });
+
+  it('(k7) proven absence still mints one device id, written after-first-unlock + mirrored', () => {
+    const world = new FakeWorld({ secureItems: {} });
+
+    const storage = bootWith(world);
+    const id = storage.getDeviceId();
+
+    expect(id).toBe('test-uuid-1');
+    expect(world.secureSetCalls).toContainEqual({
+      key: DEVICE_KEY_V2,
+      value: id,
+      keychainAccessible: AFTER_FIRST_UNLOCK,
+    });
+    expect(world.secureSetCalls.some((c) => c.key === DEVICE_KEY_V1)).toBe(false);
+    expect(world.files.get(STORE_ID)!.data.get(DEVICE_KEY_V1)).toBe(id);
   });
 });

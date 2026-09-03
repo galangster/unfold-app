@@ -3,7 +3,7 @@ import { AppState } from 'react-native';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { ThemeCategory, DevotionalType } from '../constants/devotional-types';
-import { logBugError } from './bug-logger';
+import { logBugError, logBugEvent } from './bug-logger';
 import { logger } from './logger';
 import { applyUndoActionsWithSync } from './journal-undo';
 import { mmkvStorage } from './mmkv-storage';
@@ -895,7 +895,24 @@ export const useUnfoldStore = create<UnfoldState>()(
       setUser: (user) => set({ user, userUpdatedAt: new Date().toISOString() }),
       updateUser: (updates) => {
         const current = get().user;
-        if (!current) return;
+        if (!current) {
+          // The guard is correct — there is nothing to merge into. But the
+          // write is genuinely lost, and onboarding callers (the paywall
+          // writing isPremium after a purchase) run before the record exists.
+          // Log KEYS ONLY: values carry personal data.
+          const droppedKeys = Object.keys(updates);
+          logger.warn(
+            '[store] updateUser dropped a write: no user record. Keys:',
+            droppedKeys.join(', '),
+          );
+          void logBugEvent(
+            'store-update-user-dropped',
+            'updateUser called with no user record; update discarded',
+            { keys: droppedKeys },
+            'warn',
+          );
+          return;
+        }
         // Skip update if all values are already identical (prevents infinite re-render loops)
         const hasChange = Object.entries(updates).some(
           ([key, val]) => current[key as keyof typeof current] !== val

@@ -451,3 +451,109 @@ export function shouldStartOnboardingSampleGeneration({
 
   return stableStringify(submittedRequest) !== stableStringify(nextRequest);
 }
+
+// ---------------------------------------------------------------------------
+// Resuming an abandoned onboarding walk-through
+// ---------------------------------------------------------------------------
+
+/**
+ * Steps a returning person must NEVER be dropped back onto: cutscenes, emotional
+ * payoffs and marketing beats. Watching the hook a second time, or the
+ * celebration for a devotional already read, reads as the app forgetting them.
+ * A saved step in this set resolves forward to the next step that is not.
+ */
+const NEVER_RESUME_STEP_IDS = new Set([
+  'hook',
+  'solution',
+  'unfoldIntro',
+  'shockStat',
+  'growthGraph',
+  'vulnerabilityValidation',
+  'featureSummary',
+  'founderNote',
+  'celebration',
+  'commitment2',
+  'purchaseConfirmation',
+]);
+
+/** Steps a person who already bought during onboarding must not be shown again. */
+const POST_PURCHASE_SKIP_STEP_IDS = new Set(['threeStepPaywall', 'purchaseConfirmation']);
+
+function isResumableOnboardingStep(stepId: string, purchasedDuringOnboarding: boolean): boolean {
+  if (NEVER_RESUME_STEP_IDS.has(stepId)) return false;
+  if (purchasedDuringOnboarding && POST_PURCHASE_SKIP_STEP_IDS.has(stepId)) return false;
+  return true;
+}
+
+/**
+ * Where a returning person picks the flow back up.
+ *
+ * `allStepIds` is the authoring order (ALL_STEPS); `filteredStepIds` is what
+ * this person will actually be shown. The result is always a step that exists
+ * in `filteredStepIds`, so the caller can set it as the current step directly.
+ */
+export function resolveOnboardingResumeStep({
+  savedStepId,
+  allStepIds,
+  filteredStepIds,
+  hasSampleDevotionalDay = false,
+  purchasedDuringOnboarding = false,
+}: {
+  savedStepId?: string | null;
+  allStepIds: readonly string[];
+  filteredStepIds: readonly string[];
+  hasSampleDevotionalDay?: boolean;
+  purchasedDuringOnboarding?: boolean;
+}): string {
+  const firstFiltered = filteredStepIds[0] ?? allStepIds[0] ?? 'hook';
+  if (!savedStepId) return firstFiltered;
+
+  const savedIndex = allStepIds.indexOf(savedStepId);
+  if (savedIndex === -1) return firstFiltered;
+
+  // Walk forward off any step this person must not see again.
+  let index = savedIndex;
+  while (index < allStepIds.length && !isResumableOnboardingStep(allStepIds[index], purchasedDuringOnboarding)) {
+    index += 1;
+  }
+  if (index >= allStepIds.length) {
+    return filteredStepIds[filteredStepIds.length - 1] ?? firstFiltered;
+  }
+
+  // The reader is only warm when the sample devotional came back with the
+  // draft. Without it, the segue re-polls the SAME persisted job rather than
+  // opening an empty reading screen.
+  let resolved = allStepIds[index];
+  if (resolved === 'readDevotional' && !hasSampleDevotionalDay && allStepIds.includes('devotionalSegue')) {
+    resolved = 'devotionalSegue';
+  }
+  const resolvedIndex = allStepIds.indexOf(resolved);
+
+  // Someone holding a generated devotional has already watched the segue and
+  // read the devotional — clamping back past the reader would replay both.
+  const readDevotionalIndex = allStepIds.indexOf('readDevotional');
+  const floorIndex =
+    hasSampleDevotionalDay && readDevotionalIndex !== -1 && savedIndex >= readDevotionalIndex
+      ? readDevotionalIndex
+      : 0;
+
+  // The resolved step may not survive this person's step filter (e.g. a name
+  // they already gave). Take the nearest earlier step that does.
+  for (let i = resolvedIndex; i >= floorIndex; i -= 1) {
+    const candidate = allStepIds[i];
+    if (filteredStepIds.includes(candidate) && isResumableOnboardingStep(candidate, purchasedDuringOnboarding)) {
+      return candidate;
+    }
+  }
+
+  // Nothing earlier survived — the first later step that did is the next best
+  // place to land.
+  for (let i = resolvedIndex + 1; i < allStepIds.length; i += 1) {
+    const candidate = allStepIds[i];
+    if (filteredStepIds.includes(candidate) && isResumableOnboardingStep(candidate, purchasedDuringOnboarding)) {
+      return candidate;
+    }
+  }
+
+  return firstFiltered;
+}

@@ -21,7 +21,13 @@ import { v4 as uuidv4 } from 'uuid';
 import type { File as FsFile } from 'expo-file-system';
 import { logger } from '@/lib/logger';
 import { resolveMmkvOpenPlan, type MmkvStoreProbeResult } from '@/lib/mmkv-open-mode';
-import { resolveDeviceId, EPHEMERAL_DEVICE_ID_PREFIX } from '@/lib/device-id';
+import {
+  resolveDeviceId,
+  resolveKeychainRead,
+  keychainV2KeyFor,
+  EPHEMERAL_DEVICE_ID_PREFIX,
+  type ResolveKeychainReadResult,
+} from '@/lib/device-id';
 import { mergeRecoveryOutbox, RECOVERY_OUTBOX_KEY } from '@/lib/mmkv-recovery-outbox';
 
 // Re-export so consumers only need one import location (backward compat).
@@ -33,41 +39,120 @@ export { mergeRecoveryOutbox, RECOVERY_OUTBOX_KEY };
 // ---------------------------------------------------------------------------
 
 const ENCRYPTION_KEY_ID = 'unfold-mmkv-encryption-key';
+const ENCRYPTION_KEY_ID_V2 = keychainV2KeyFor(ENCRYPTION_KEY_ID);
+
+/**
+ * Accessibility for every Keychain item this module WRITES.
+ *
+ * expo-secure-store defaults to `kSecAttrAccessibleWhenUnlocked`
+ * (SecureStoreOptions.swift), which iOS refuses to read while the device is
+ * locked — `errSecInteractionNotAllowed`, on which expo-secure-store THROWS
+ * (SecureStoreModule.swift). A launch that starts locked (background launch,
+ * push-triggered launch, opening Unfold from the lock screen) therefore lost
+ * the encryption key, opened the throwaway recovery namespace, and made a
+ * fully onboarded person look like a brand-new install.
+ *
+ * AFTER_FIRST_UNLOCK stays readable from the first unlock after a reboot until
+ * power off, which covers every launch the app can actually service, and still
+ * leaves the item unreadable on a device that has not been unlocked at all.
+ */
+const KEYCHAIN_WRITE_OPTIONS: SecureStore.SecureStoreOptions = {
+  keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK,
+};
+
+/**
+ * Outcome of a Keychain read. `read` carries a PROVEN result (a value, or null
+ * for a genuinely absent item); `unavailable` means the Keychain could not
+ * answer at all.
+ */
+type KeychainReadOutcome =
+  | { status: 'read'; value: string | null }
+  | { status: 'unavailable'; error: unknown };
+
+/**
+ * THE RULE: SecureStore.getItem returns null ONLY when the item is genuinely
+ * absent and THROWS when the Keychain is unavailable, so only a null may mint
+ * a new value — a throw must never be read as absence.
+ *
+ * Reads the migrated (after-first-unlock) key name first and falls back to the
+ * original key name, copying a value found there forward under the new
+ * accessibility. Accessibility cannot be changed in place, so the copy is the
+ * migration; the original item is never deleted.
+ */
+function readMigratingKeychainItem(v1Key: string): KeychainReadOutcome {
+  const v2Key = keychainV2KeyFor(v1Key);
+  let plan: ResolveKeychainReadResult;
+  try {
+    // Reads pass no options: `keychainAccessible` shapes the WRITE attributes
+    // only — the lookup query is built from the key and service alone.
+    const v2Value = SecureStore.getItem(v2Key);
+    plan = resolveKeychainRead({
+      v2Value,
+      // Only pay the second read when the migrated item is absent. A throw
+      // here (the locked-device case for a not-yet-migrated item) leaves the
+      // whole read unproven, which is exactly what must not mint.
+      v1Value: v2Value === null ? SecureStore.getItem(v1Key) : null,
+    });
+  } catch (error) {
+    return { status: 'unavailable', error };
+  }
+
+  if (plan.migrate && plan.value !== null) {
+    try {
+      SecureStore.setItem(v2Key, plan.value, KEYCHAIN_WRITE_OPTIONS);
+      logger.log('[MMKV] Keychain item migrated to the after-first-unlock alias');
+    } catch (error) {
+      // Best effort: the original item still holds the value, so the next
+      // launch simply retries the copy.
+      logger.warn('[MMKV] Keychain accessibility migration failed; original item kept', error);
+    }
+  }
+
+  return { status: 'read', value: plan.value };
+}
 
 /**
  * Get or create an encryption key for MMKV.
  * The key is stored in the device Keychain (iOS) / Keystore (Android)
  * via expo-secure-store — protected by hardware-level security.
  *
- * Returns undefined if SecureStore fails (e.g., in some simulator configs),
- * so MMKV will fall back to unencrypted storage rather than crashing.
+ * Returns undefined when the Keychain cannot be read (locked device, some
+ * simulator configs). Callers must treat that as "unknown", never as "no key
+ * exists": resolveMmkvOpenPlan answers a missing key with the throwaway
+ * recovery namespace so the real encrypted file is left intact on disk.
  */
 function getOrCreateEncryptionKey(): string | undefined {
-  const tryOnce = (): string | undefined => {
-    let key = SecureStore.getItem(ENCRYPTION_KEY_ID);
-    if (key) return key;
+  let lastError: unknown;
 
-    // Generate a cryptographically secure 32-char hex key
-    const bytes = new Uint8Array(16);
-    crypto.getRandomValues(bytes);
-    key = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
-
-    SecureStore.setItem(ENCRYPTION_KEY_ID, key);
-    logger.log('[MMKV] Created new encryption key in SecureStore');
-    return key;
-  };
-
-  try {
-    return tryOnce();
-  } catch {
-    // Transient Keychain error — retry once before giving up
+  // Two attempts: the original single retry for a transient Keychain error.
+  for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      return tryOnce();
+      const outcome = readMigratingKeychainItem(ENCRYPTION_KEY_ID);
+      if (outcome.status === 'unavailable') {
+        // Unproven absence. Minting here would write a brand-new key under the
+        // after-first-unlock name (a write CAN succeed while a read of the old
+        // item fails), permanently shadowing the real key and stranding the
+        // user's encrypted store behind it.
+        lastError = outcome.error;
+        continue;
+      }
+      if (outcome.value !== null) return outcome.value;
+
+      // Proven absence — the only case allowed to create a key.
+      const bytes = new Uint8Array(16);
+      crypto.getRandomValues(bytes);
+      const key = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+
+      SecureStore.setItem(ENCRYPTION_KEY_ID_V2, key, KEYCHAIN_WRITE_OPTIONS);
+      logger.log('[MMKV] Created new encryption key in SecureStore');
+      return key;
     } catch (error) {
-      logger.warn('[MMKV] SecureStore unavailable after retry, MMKV will not be encrypted', error);
-      return undefined;
+      lastError = error; // The setItem failed — retry once, then give up.
     }
   }
+
+  logger.warn('[MMKV] SecureStore unavailable after retry, MMKV will not be encrypted', lastError);
+  return undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -425,6 +510,7 @@ export function purgeRealStoreForRecoveryReset(): void {
 
 const DEVICE_ID_KEY = 'unfold-device-id';
 const SECURE_DEVICE_ID_KEY = 'unfold-device-id'; // SecureStore namespace is separate from MMKV
+const SECURE_DEVICE_ID_KEY_V2 = keychainV2KeyFor(SECURE_DEVICE_ID_KEY);
 
 // FAP-LIB-1/FAP-X-4: one-session identity for recovery sessions with no
 // readable Keychain value. In-memory ONLY — never persisted (see getDeviceId).
@@ -441,13 +527,11 @@ let ephemeralDeviceId: string | null = null;
  * app-user-id seed). Both are module-scope synchronous — this must stay sync.
  */
 export function getDeviceId(): string {
-  let secureValue: string | null = null;
-  let secureAvailable = true;
-  try {
-    secureValue = SecureStore.getItem(SECURE_DEVICE_ID_KEY);
-  } catch {
-    secureAvailable = false; // Keychain down — MMKV mirror keeps us working
-  }
+  // Same rule as the encryption key: a THROW is "unavailable", never "absent".
+  const outcome = readMigratingKeychainItem(SECURE_DEVICE_ID_KEY);
+  const secureAvailable = outcome.status === 'read';
+  const secureValue = outcome.status === 'read' ? outcome.value : null;
+  const mmkvValue = mmkv.getString(DEVICE_ID_KEY) ?? null;
 
   // FAP-LIB-1/FAP-X-4: during a recovery session the MMKV mirror lives in the
   // just-wiped throwaway namespace, so with no Keychain value resolveDeviceId
@@ -458,20 +542,30 @@ export function getDeviceId(): string {
   // real mirror id (unreachable this session) on the next normal boot. Use a
   // session-scoped EPHEMERAL id instead: in-memory only, never persisted,
   // prefixed so sync-outbox refuses to queue/push under it.
-  if (openPlan.mode === 'recovery' && secureValue === null) {
+  //
+  // The second guard covers a NORMAL session on a locked device: the Keychain
+  // THREW, so absence is unproven, and the mirror is empty too. Minting there
+  // would write a new identity under the after-first-unlock key name — a write
+  // that succeeds while the read of the old item fails — and every later boot
+  // would resolve that new id in preference to the user's real one, orphaning
+  // their server rows for good.
+  const mustNotMint =
+    (openPlan.mode === 'recovery' && secureValue === null) ||
+    (!secureAvailable && mmkvValue === null);
+  if (mustNotMint) {
     ephemeralDeviceId ??= EPHEMERAL_DEVICE_ID_PREFIX + uuidv4();
     return ephemeralDeviceId;
   }
 
   const plan = resolveDeviceId({
     secureValue,
-    mmkvValue: mmkv.getString(DEVICE_ID_KEY) ?? null,
+    mmkvValue,
     generate: () => uuidv4(),
   });
 
   if (plan.writeSecure && secureAvailable) {
     try {
-      SecureStore.setItem(SECURE_DEVICE_ID_KEY, plan.id);
+      SecureStore.setItem(SECURE_DEVICE_ID_KEY_V2, plan.id, KEYCHAIN_WRITE_OPTIONS);
     } catch {
       // Best-effort; MMKV mirror provides fallback
     }
@@ -499,7 +593,9 @@ export function getDeviceId(): string {
 export function rotateDeviceId(): string {
   const id = uuidv4();
   try {
-    SecureStore.setItem(SECURE_DEVICE_ID_KEY, id);
+    // Written under the migrated key name, which getDeviceId reads FIRST, so
+    // the stale value left under the original name can never win.
+    SecureStore.setItem(SECURE_DEVICE_ID_KEY_V2, id, KEYCHAIN_WRITE_OPTIONS);
   } catch (error) {
     logger.warn(
       '[MMKV] Device ID rotation aborted — Keychain write failed; keeping current identity',
