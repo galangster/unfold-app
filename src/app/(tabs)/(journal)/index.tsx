@@ -520,12 +520,16 @@ function FloatingActionButton({ onPress, visible, tabBarHeight }: FABProps) {
   const scale = useSharedValue(1);
   const translateY = useSharedValue(visible ? 0 : 200);
 
-  // Animate visibility
+  // Animate visibility. Keep shared-value writes out of render (same rule the
+  // sibling SegmentedControl follows): a write from the render body is a side
+  // effect React may run twice or discard, and Reanimated warns about it.
   const prevVisible = useRef(visible);
-  if (prevVisible.current !== visible) {
-    translateY.value = withTiming(visible ? 0 : 200, { duration: Duration.normal });
-    prevVisible.current = visible;
-  }
+  useEffect(() => {
+    if (prevVisible.current !== visible) {
+      translateY.value = withTiming(visible ? 0 : 200, { duration: Duration.normal });
+      prevVisible.current = visible;
+    }
+  }, [visible, translateY]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }, { translateY: translateY.value }],
