@@ -1258,9 +1258,9 @@ export default function OnboardingScreen() {
           onboardingSubmittedDevotionalIdRef.current = devotionalId ?? null;
           onboardingSubmittedRequestRef.current = nextSampleGenerationRequest;
           saveOnboardingSampleJob({ jobId, devotionalId: devotionalId ?? null, deviceId: getDeviceId() });
-          console.log('[Onboarding] Sample generation triggered, jobId:', jobId);
+          logger.log('[Onboarding] Sample generation triggered, jobId:', jobId);
         }).catch((err) => {
-          console.warn('[Onboarding] Background sample generation failed:', err);
+          logger.warn('[Onboarding] Background sample generation failed:', err);
         });
       }
     }

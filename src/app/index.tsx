@@ -24,6 +24,7 @@ import { Radius } from '@/constants/radius';
 import { Duration } from '@/constants/animations';
 import { useUnfoldStore } from '@/lib/store';
 import { useTheme } from '@/lib/theme';
+import { logger } from '@/lib/logger';
 import { EmberSystem } from '@/components/EmberSystem';
 import { hasPendingNotificationNavigation, hasSettledInitialNotificationHydration } from '@/lib/push-notifications';
 import { getCompletedUserRedirectDisposition } from '@/lib/push-notification-helpers';
@@ -280,7 +281,7 @@ export default function WelcomeScreen() {
         });
 
         if (disposition === 'skip') {
-          console.log('[Welcome] pending notification navigation detected after hydration check, skipping completed-user home redirect');
+          logger.log('[Welcome] pending notification navigation detected after hydration check, skipping completed-user home redirect');
           return;
         }
 

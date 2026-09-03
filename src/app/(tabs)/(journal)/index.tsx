@@ -64,8 +64,9 @@ import { formatRelativeDate } from '@/lib/format-relative-date';
 import { alpha, Sheet } from '@/components/ui';
 import { useCreationGate } from '@/hooks/useCreationGate';
 import { prepareJournalFolderDelete } from '@/lib/journal-folder-delete';
-import { applyUndoActionsWithSync, type JournalUndoAction } from '@/lib/journal-undo';
+import { undoJournalDeletions, type JournalUndoAction } from '@/lib/journal-undo';
 import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
+import { logger } from '@/lib/logger';
 
 type Segment = 'reflections' | 'notebook';
 
@@ -520,12 +521,16 @@ function FloatingActionButton({ onPress, visible, tabBarHeight }: FABProps) {
   const scale = useSharedValue(1);
   const translateY = useSharedValue(visible ? 0 : 200);
 
-  // Animate visibility
+  // Animate visibility. Keep shared-value writes out of render (same rule the
+  // sibling SegmentedControl follows): a write from the render body is a side
+  // effect React may run twice or discard, and Reanimated warns about it.
   const prevVisible = useRef(visible);
-  if (prevVisible.current !== visible) {
-    translateY.value = withTiming(visible ? 0 : 200, { duration: Duration.normal });
-    prevVisible.current = visible;
-  }
+  useEffect(() => {
+    if (prevVisible.current !== visible) {
+      translateY.value = withTiming(visible ? 0 : 200, { duration: Duration.normal });
+      prevVisible.current = visible;
+    }
+  }, [visible, translateY]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }, { translateY: translateY.value }],
@@ -940,14 +945,19 @@ export default function JournalHubScreen() {
     return answeredReflectionCount >= reflectionQuestions.length;
   }, [reflectionQuestions, answeredReflectionCount]);
 
+  // Same day as todayEntry and the questions above: the badge describes the
+  // entry for the day being reflected on. currentDay has already advanced to
+  // the next day, whose entry never exists yet, so COMPLETED/CONTINUE could
+  // never show.
   const hasExistingEntry = useMemo(() => {
     if (!currentDevotional) return false;
+    const reflectionDay = currentDayData?.dayNumber ?? currentDevotional.currentDay;
     return journalEntries.some(
       (e) =>
         e.devotionalId === currentDevotional.id &&
-        e.dayNumber === currentDevotional.currentDay,
+        e.dayNumber === reflectionDay,
     );
-  }, [currentDevotional, journalEntries]);
+  }, [currentDevotional, currentDayData, journalEntries]);
 
   const firstUnansweredQuestion = useMemo(() => {
     if (!reflectionQuestions.length) return null;
@@ -970,6 +980,24 @@ export default function JournalHubScreen() {
   }, [reflectionQuestions, answeredReflectionCount, todayEntry]);
 
   // ---- Notebook data ----
+  // Plain-text haystack per note, rebuilt only when the notes change. Note
+  // content is stored as editor HTML, so searching it raw matched the markup
+  // ("div", "h2", "br") on every note instead of what the user wrote.
+  const noteSearchText = useMemo(() => {
+    const byId = new Map<string, string>();
+    for (const n of notes) {
+      const plainContent = isHtmlContent(n.content) ? stripHtml(n.content) : n.content;
+      byId.set(
+        n.id,
+        [n.title, plainContent, ...n.tags, ...n.scriptureRefs.map((r) => r.reference)]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase(),
+      );
+    }
+    return byId;
+  }, [notes]);
+
   const filteredNotes = useMemo(() => {
     let filtered = [...notes];
 
@@ -981,18 +1009,7 @@ export default function JournalHubScreen() {
     // Search filter (applies to both segments when active)
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
-      filtered = filtered.filter((n) => {
-        const searchText = [
-          n.title,
-          n.content,
-          ...n.tags,
-          ...n.scriptureRefs.map((r) => r.reference),
-        ]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase();
-        return searchText.includes(query);
-      });
+      filtered = filtered.filter((n) => noteSearchText.get(n.id)?.includes(query) ?? false);
     }
 
     // Sort by updatedAt descending
@@ -1002,7 +1019,7 @@ export default function JournalHubScreen() {
     );
 
     return filtered;
-  }, [notes, activeFolderId, searchQuery]);
+  }, [notes, activeFolderId, searchQuery, noteSearchText]);
 
   // ---- Verse notes matching Notebook search (read-only bridge rows) ----
   // Bible verse notes live in `bibleHighlights[].note` — a separate system
@@ -1105,17 +1122,12 @@ export default function JournalHubScreen() {
   // ---- Handlers ----
   const handleWriteToday = useCallback(() => {
     if (!currentDevotional) {
-      console.log('[Journal] handleWriteToday: no currentDevotional, returning');
+      logger.warn('[Journal] handleWriteToday with no current devotional');
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     // Navigate to the day being reflected on (last completed), not the next day
     const reflectionDay = currentDayData?.dayNumber ?? currentDevotional.currentDay;
-    console.log('[Journal] handleWriteToday → pushing /(tabs)/(journal)/entry', {
-      devotionalId: currentDevotional.id,
-      dayNumber: reflectionDay,
-      currentDevTitle: currentDevotional.title,
-    });
     router.push({
       pathname: '/(tabs)/(journal)/entry',
       params: {
@@ -1129,16 +1141,19 @@ export default function JournalHubScreen() {
     (questionIndex: number) => {
       if (!currentDevotional) return;
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      // The index belongs to currentDayData's questions (the day being
+      // reflected on), not to currentDay, which has already advanced.
+      const reflectionDay = currentDayData?.dayNumber ?? currentDevotional.currentDay;
       router.push({
         pathname: '/(tabs)/(journal)/entry',
         params: {
           devotionalId: currentDevotional.id,
-          dayNumber: String(currentDevotional.currentDay),
+          dayNumber: String(reflectionDay),
           focusQuestion: String(questionIndex),
         },
       });
     },
-    [currentDevotional, router],
+    [currentDevotional, currentDayData, router],
   );
 
   const handleCreateNote = useCallback(() => {
@@ -1301,13 +1316,9 @@ export default function JournalHubScreen() {
     if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
 
     const clientUpdatedAt = new Date().toISOString();
-    useUnfoldStore.setState((state) =>
-      applyUndoActionsWithSync(
-        { notes: state.notes, folders: state.folders },
-        undoActions,
-        clientUpdatedAt,
-      ),
-    );
+    // Also clears the restored notes from Recently Deleted (deleteNote parks
+    // a copy there), so a later Restore cannot duplicate them.
+    useUnfoldStore.setState((state) => undoJournalDeletions(state, undoActions, clientUpdatedAt));
     setUndoActions([]);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }, [undoActions]);

@@ -64,6 +64,28 @@ module.exports = defineConfig([
       "react-hooks/use-memo": "off",
 
       "react/no-unescaped-entities": "off",
+
+      // Raw console calls bypass the __DEV__ gate in src/lib/logger.ts and
+      // spam dev output (37 of them ran on every hydration). Go through
+      // `logger` (dev-only) or `reportError` (production-worthy failures).
+      "no-console": "error",
+    },
+  },
+  {
+    // The only places a raw console call is allowed. Every entry needs a
+    // reason; src/lib/__tests__/eslint-no-console-rule.test.ts pins the list.
+    files: [
+      // The __DEV__ gate itself.
+      "src/lib/logger.ts",
+      // Vendored, generated rangy bundle — never hand-edited.
+      "src/components/reading/rangy-bundle.ts",
+      // Node-side tooling: CLI scripts and the Metro build config. Both are
+      // linted by `bun run lint` and print to the terminal on purpose.
+      "scripts/**",
+      "metro.config.js",
+    ],
+    rules: {
+      "no-console": "off",
     },
   },
   ...pluginQuery.configs["flat/recommended"],

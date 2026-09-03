@@ -4,6 +4,7 @@ jest.mock('react-native', () => ({
 
 const mockScheduleNotificationAsync = jest.fn(async () => 'notif-id');
 const mockCancelScheduledNotificationAsync = jest.fn(async (_identifier: string) => {});
+const mockCancelAllScheduledNotificationsAsync = jest.fn(async () => {});
 const mockGetPermissionsAsync = jest.fn(async () => ({ status: 'granted' }));
 const mockRequestPermissionsAsync = jest.fn(async () => ({ status: 'granted' }));
 const mockSetNotificationHandler = jest.fn();
@@ -15,6 +16,7 @@ jest.mock('expo-notifications', () => ({
   requestPermissionsAsync: mockRequestPermissionsAsync,
   scheduleNotificationAsync: mockScheduleNotificationAsync,
   cancelScheduledNotificationAsync: mockCancelScheduledNotificationAsync,
+  cancelAllScheduledNotificationsAsync: mockCancelAllScheduledNotificationsAsync,
   SchedulableTriggerInputTypes: {
     DAILY: 'daily',
     TIME_INTERVAL: 'time_interval',
@@ -64,6 +66,7 @@ describe('notifications routing + cancellation', () => {
   beforeEach(() => {
     mockScheduleNotificationAsync.mockClear();
     mockCancelScheduledNotificationAsync.mockClear();
+    mockCancelAllScheduledNotificationsAsync.mockClear();
     mockGetPermissionsAsync.mockClear();
     mockRequestPermissionsAsync.mockClear();
   });
@@ -89,6 +92,15 @@ describe('notifications routing + cancellation', () => {
         }),
       }),
     );
+  });
+
+  it('cancelAllScheduledNotifications uses the OS-wide cancel instead of named families (full reset)', async () => {
+    const { cancelAllScheduledNotifications } = require('../notifications');
+
+    await cancelAllScheduledNotifications();
+
+    expect(mockCancelAllScheduledNotificationsAsync).toHaveBeenCalledTimes(1);
+    expect(mockCancelScheduledNotificationAsync).not.toHaveBeenCalled();
   });
 
   it('cancelAllReminders clears daily plus all weekday check-in identifiers', async () => {

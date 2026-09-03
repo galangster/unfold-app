@@ -18,6 +18,7 @@ import { Duration, Ease } from '@/constants/animations';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
+import { normalizeSoapResponses } from '@/lib/journal-entry-state';
 import { format } from 'date-fns';
 import { alpha } from '@/components/ui';
 import { Typography } from '@/constants/typography';
@@ -113,11 +114,14 @@ export default function JournalDetailScreen() {
   const entryDate = format(new Date(entry.createdAt), 'MMMM d, yyyy');
   const dayTitle = devotional?.days.find((d) => d.dayNumber === entry.dayNumber)?.title ?? '';
   const isSoap = entry.journalMode === 'soap';
-  const hasSoapContent = entry.soapResponses && (
-    entry.soapResponses.scripture.trim() ||
-    entry.soapResponses.observation.trim() ||
-    entry.soapResponses.application.trim() ||
-    entry.soapResponses.prayer.trim()
+  // A sync-restored entry can carry `{}` or a partial object; normalise before
+  // reading the four fields.
+  const soapResponses = normalizeSoapResponses(entry.soapResponses);
+  const hasSoapContent = soapResponses && (
+    soapResponses.scripture.trim() ||
+    soapResponses.observation.trim() ||
+    soapResponses.application.trim() ||
+    soapResponses.prayer.trim()
   );
 
   return (
@@ -239,33 +243,33 @@ export default function JournalDetailScreen() {
             )}
 
             {/* SOAP Responses */}
-            {hasSoapContent && entry.soapResponses && (
+            {hasSoapContent && soapResponses && (
               <View style={{ marginTop: entry.content.trim().length > 0 ? Spacing['8'] : 0 }}>
                 <SoapSectionDisplay
                   soapKey="scripture"
                   label="Scripture"
-                  value={entry.soapResponses.scripture}
+                  value={soapResponses.scripture}
                   colors={colors}
                   icon={<BookOpenIcon size={14} color={colors.accent} weight="light" />}
                 />
                 <SoapSectionDisplay
                   soapKey="observation"
                   label="Observation"
-                  value={entry.soapResponses.observation}
+                  value={soapResponses.observation}
                   colors={colors}
                   icon={<EyeIcon size={14} color={colors.accent} weight="light" />}
                 />
                 <SoapSectionDisplay
                   soapKey="application"
                   label="Application"
-                  value={entry.soapResponses.application}
+                  value={soapResponses.application}
                   colors={colors}
                   icon={<PencilSimpleIcon size={14} color={colors.accent} weight="light" />}
                 />
                 <SoapSectionDisplay
                   soapKey="prayer"
                   label="Prayer"
-                  value={entry.soapResponses.prayer}
+                  value={soapResponses.prayer}
                   colors={colors}
                   icon={<HandsPrayingIcon size={14} color={colors.accent} weight="light" />}
                 />

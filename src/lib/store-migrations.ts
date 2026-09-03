@@ -1,8 +1,71 @@
 import { logger } from './logger';
 import { canonicalGeneratedDayId } from './devotional-canonical-days';
 import { compositeId } from './sync-ids';
+import { normalizeSoapResponses } from './journal-entry-state';
+import { mergeJournalEntryDuplicates } from './journal-entry-merge';
 
 type PersistedUnfoldState = Record<string, any>;
+
+/**
+ * A migration step that throws leaves the persisted blob half-migrated — a
+ * production bug the bug log should capture, not just a dev console line.
+ * report-error → bug-logger → store, and store imports this module, so the
+ * import is deferred to the failure path: a static one would add a require
+ * cycle and pull the whole store graph into every migration unit test.
+ */
+function reportMigrationFailure(step: string, err: unknown): void {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { reportError } = require('./report-error') as typeof import('./report-error');
+    reportError('store-migration', err, { step });
+  } catch (reportErr) {
+    // Reporting must never break hydration — fall back to the dev logger.
+    logger.error(`[store] Migration ${step} failed:`, err, reportErr);
+  }
+}
+
+/**
+ * Pending journal writes live in the sync outbox (its own MMKV key), not in
+ * the persisted store blob this file migrates. Re-keying entries by day
+ * without re-keying the queue would push the queued writes under their old
+ * random ids on the next drain, and the next pull would bring those rows back
+ * as duplicates of the day just merged. Rewrite them to the same canonical id,
+ * keeping the newest queued write per day.
+ *
+ * The require is deferred for the same reason reportMigrationFailure defers
+ * its own: sync-outbox → mmkv-storage → store, and store imports this module.
+ */
+function remapQueuedJournalWrites(): void {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const outbox = require('./sync-outbox') as typeof import('./sync-outbox');
+    const changes = outbox.peekSyncOutbox();
+    if (changes.length === 0) return;
+    let rewritten = 0;
+    const remapped = changes.map((change) => {
+      if (change.table !== 'journal_entries') return change;
+      const data = (change.data ?? {}) as { devotionalId?: unknown; dayNumber?: unknown };
+      if (typeof data.devotionalId !== 'string' || typeof data.dayNumber !== 'number') return change;
+      const canonical = compositeId(data.devotionalId, data.dayNumber);
+      if (change.id === canonical) return change;
+      rewritten += 1;
+      return { ...change, id: canonical };
+    });
+    if (rewritten === 0) return;
+    // Two queued writes for one day collapse to the newest, matching the
+    // outbox's own last-write-wins dedup.
+    const byRecord = new Map<string, (typeof remapped)[number]>();
+    for (const change of remapped) {
+      const key = `${change.table}:${change.id}`;
+      const existing = byRecord.get(key);
+      if (!existing || (change.clientUpdatedAt ?? '') >= (existing.clientUpdatedAt ?? '')) byRecord.set(key, change);
+    }
+    outbox.replaceSyncOutbox([...byRecord.values()]);
+    logger.log(`[store] Migration v41→42: re-keyed ${rewritten} queued journal write(s) to their day`);
+  } catch (err) {
+    reportMigrationFailure('v41→42 outbox', err);
+  }
+}
 
 export function migrateUnfoldStore(persistedState: unknown, version: number): PersistedUnfoldState {
 const state = persistedState as PersistedUnfoldState;
@@ -20,7 +83,7 @@ if (version < 2) {
     (state as any).streakGraceDaysUsedThisWeek = (state as any).streakGraceDaysUsedThisWeek ?? 0;
     (state as any).streakWeekStart = (state as any).streakWeekStart ?? null;
   } catch (err) {
-    console.error('[store] Migration v1→2 failed:', err);
+    reportMigrationFailure('v1→2', err);
   }
 }
 
@@ -33,7 +96,7 @@ if (version < 3) {
     (state as any).streakGraceDaysUsedThisWeek = (state as any).streakGraceDaysUsedThisWeek ?? 0;
     (state as any).streakWeekStart = (state as any).streakWeekStart ?? null;
   } catch (err) {
-    console.error('[store] Migration v2→3 failed:', err);
+    reportMigrationFailure('v2→3', err);
   }
 }
 
@@ -43,7 +106,7 @@ if (version < 4) {
     (state as any).streakWeekendAmnesty = (state as any).streakWeekendAmnesty ?? true;
     (state as any).streakFreezes = (state as any).streakFreezes ?? 0;
   } catch (err) {
-    console.error('[store] Migration v3→4 failed:', err);
+    reportMigrationFailure('v3→4', err);
   }
 }
 
@@ -54,7 +117,7 @@ if (version < 5) {
       state.user.preferredVoice = 'arman';
     }
   } catch (err) {
-    console.error('[store] Migration v4→5 failed:', err);
+    reportMigrationFailure('v4→5', err);
   }
 }
 
@@ -63,7 +126,7 @@ if (version < 6) {
   try {
     (state as any).seriesPersonaHistory = (state as any).seriesPersonaHistory ?? [];
   } catch (err) {
-    console.error('[store] Migration v5→6 failed:', err);
+    reportMigrationFailure('v5→6', err);
   }
 }
 
@@ -72,7 +135,7 @@ if (version < 7) {
   try {
     (state as any).hasSeenHomeTooltips = (state as any).hasSeenHomeTooltips ?? false;
   } catch (err) {
-    console.error('[store] Migration v6→7 failed:', err);
+    reportMigrationFailure('v6→7', err);
   }
 }
 
@@ -81,7 +144,7 @@ if (version < 8) {
   try {
     (state as any).hasSeenFeatureOnboarding = (state as any).hasSeenFeatureOnboarding ?? false;
   } catch (err) {
-    console.error('[store] Migration v7→8 failed:', err);
+    reportMigrationFailure('v7→8', err);
   }
 }
 
@@ -90,7 +153,7 @@ if (version < 9) {
   try {
     (state as any).checkIns = (state as any).checkIns ?? [];
   } catch (err) {
-    console.error('[store] Migration v8→9 failed:', err);
+    reportMigrationFailure('v8→9', err);
   }
 }
 
@@ -98,7 +161,7 @@ if (version < 10) {
   try {
     (state as any).hasSeenDay1Review = (state as any).hasSeenDay1Review ?? false;
   } catch (err) {
-    console.error('[store] Migration v9→10 failed:', err);
+    reportMigrationFailure('v9→10', err);
   }
 }
 
@@ -108,7 +171,7 @@ if (version < 12) {
     (state as any).hasSeenCompanionIntro = (state as any).hasSeenCompanionIntro ?? false;
     (state as any).lastCompanionCheckInDate = (state as any).lastCompanionCheckInDate ?? null;
   } catch (err) {
-    console.error('[store] Migration v10→12 failed:', err);
+    reportMigrationFailure('v10→12', err);
   }
 }
 
@@ -117,7 +180,7 @@ if (version < 13) {
     (state as any).dismissedMiddayCardDate = (state as any).dismissedMiddayCardDate ?? null;
     (state as any).dismissedEveningCardDate = (state as any).dismissedEveningCardDate ?? null;
   } catch (err) {
-    console.error('[store] Migration v12→13 failed:', err);
+    reportMigrationFailure('v12→13', err);
   }
 }
 
@@ -131,7 +194,7 @@ if (version < 14) {
     (state as any).justCompletedSeriesTitle = (state as any).justCompletedSeriesTitle ?? null;
     (state as any).hasUsedAudio = (state as any).hasUsedAudio ?? false;
   } catch (err) {
-    console.error('[store] Migration v13→14 failed:', err);
+    reportMigrationFailure('v13→14', err);
   }
 }
 
@@ -141,7 +204,7 @@ if (version < 15) {
     (state as any).companionName = (state as any).companionName ?? null;
     (state as any).recentCompanionCheckIns = (state as any).recentCompanionCheckIns ?? [];
   } catch (err) {
-    console.error('[store] Migration v14→15 failed:', err);
+    reportMigrationFailure('v14→15', err);
   }
 }
 
@@ -161,7 +224,7 @@ if (version < 16) {
       isArcGenerated: false,
     };
   } catch (err) {
-    console.error('[store] Migration v15→16 failed:', err);
+    reportMigrationFailure('v15→16', err);
   }
 }
 
@@ -178,7 +241,7 @@ if (version < 17) {
       translation: 'BSB',
     };
   } catch (err) {
-    console.error('[store] Migration v16→17 failed:', err);
+    reportMigrationFailure('v16→17', err);
   }
 }
 
@@ -192,7 +255,7 @@ if (version < 18) {
       lineHeightMultiplier: 1.8,
     };
   } catch (err) {
-    console.error('[store] Migration v17→18 failed:', err);
+    reportMigrationFailure('v17→18', err);
   }
 }
 
@@ -208,7 +271,7 @@ if (version < 20) {
   try {
     (state as any).notes = (state as any).notes ?? [];
   } catch (err) {
-    console.error('[store] Migration v19→20 failed:', err);
+    reportMigrationFailure('v19→20', err);
   }
 }
 
@@ -217,7 +280,7 @@ if (version < 21) {
   try {
     (state as any).folders = (state as any).folders ?? [];
   } catch (err) {
-    console.error('[store] Migration v20→21 failed:', err);
+    reportMigrationFailure('v20→21', err);
   }
 }
 
@@ -226,7 +289,7 @@ if (version < 22) {
   try {
     // Existing folders get parentId: undefined (top-level) — no data change needed
   } catch (err) {
-    console.error('[store] Migration v21→22 failed:', err);
+    reportMigrationFailure('v21→22', err);
   }
 }
 
@@ -236,7 +299,7 @@ if (version < 23) {
     (state as any).middayCheckInEnabled = (state as any).middayCheckInEnabled ?? true;
     (state as any).eveningWindDownEnabled = (state as any).eveningWindDownEnabled ?? true;
   } catch (err) {
-    console.error('[store] Migration v22→23 failed:', err);
+    reportMigrationFailure('v22→23', err);
   }
 }
 
@@ -248,7 +311,7 @@ if (version < 24) {
       user.authProvider = null;
     }
   } catch (err) {
-    console.error('[store] Migration v23→24 failed:', err);
+    reportMigrationFailure('v23→24', err);
   }
 }
 
@@ -278,7 +341,7 @@ if (version < 25) {
       (state as any)._needsTtsCacheCleanup = true;
     }
   } catch (err) {
-    console.error('[store] Migration v24→25 failed:', err);
+    reportMigrationFailure('v24→25', err);
   }
 }
 
@@ -290,7 +353,7 @@ if (version < 26) {
     (state as any).middayCheckInByDay = (state as any).middayCheckInByDay ?? null;
     (state as any).eveningWindDownByDay = (state as any).eveningWindDownByDay ?? null;
   } catch (err) {
-    console.error('[store] Migration v25→26 failed:', err);
+    reportMigrationFailure('v25→26', err);
   }
 }
 
@@ -299,7 +362,7 @@ if (version < 27) {
   try {
     (state as any).lastGenerationCutoffDate = (state as any).lastGenerationCutoffDate ?? '';
   } catch (err) {
-    console.error('[store] Migration v26→27 failed:', err);
+    reportMigrationFailure('v26→27', err);
   }
 }
 
@@ -308,7 +371,7 @@ if (version < 28) {
   try {
     (state as any).lastEveningGenerationDate = (state as any).lastEveningGenerationDate ?? '';
   } catch (err) {
-    console.error('[store] Migration v27→28 failed:', err);
+    reportMigrationFailure('v27→28', err);
   }
 }
 
@@ -406,7 +469,7 @@ if (version < 29) {
 
     logger.log('[store] Migration v28→29: Backfilled updatedAt + id for sync');
   } catch (err) {
-    console.error('[store] Migration v28→29 failed:', err);
+    reportMigrationFailure('v28→29', err);
   }
 }
 
@@ -424,7 +487,7 @@ if (version < 30) {
 
     logger.log('[store] Migration v29→30: Removed client-side generation state');
   } catch (err) {
-    console.error('[store] Migration v29→30 failed:', err);
+    reportMigrationFailure('v29→30', err);
   }
 }
 
@@ -437,7 +500,7 @@ if (version < 31) {
     }
     logger.log('[store] Migration v30→31: Migrated WEB bible translation to BSB');
   } catch (err) {
-    console.error('[store] Migration v30→31 failed:', err);
+    reportMigrationFailure('v30→31', err);
   }
 }
 
@@ -454,7 +517,7 @@ if (version < 32) {
     delete (state as any).lastRevealShownDate;
     logger.log('[store] Migration v31→32: Added isRevealed, removed lastRevealShownDate');
   } catch (err) {
-    console.error('[store] Migration v31→32 failed:', err);
+    reportMigrationFailure('v31→32', err);
   }
 }
 
@@ -473,7 +536,7 @@ if (version < 33) {
     }
     logger.log('[store] Migration v32→33: Backfilled sync IDs on usedScriptures + bibleReadingHistory');
   } catch (err) {
-    console.error('[store] Migration v32→33 failed:', err);
+    reportMigrationFailure('v32→33', err);
   }
 }
 
@@ -486,7 +549,7 @@ if (version < 34) {
     }
     logger.log('[store] Migration v33→34: Added faithImpact field');
   } catch (err) {
-    console.error('[store] Migration v33→34 failed:', err);
+    reportMigrationFailure('v33→34', err);
   }
 }
 
@@ -497,7 +560,7 @@ if (version < 35) {
     (state as any).hasEverCreatedDevotional = devos.length > 0;
     logger.log('[store] Migration v34→35: Added hasEverCreatedDevotional flag');
   } catch (err) {
-    console.error('[store] Migration v34→35 failed:', err);
+    reportMigrationFailure('v34→35', err);
   }
 }
 
@@ -511,7 +574,7 @@ if (version < 36) {
     (state as any).lastEveningCompletedDate = (state as any).lastEveningCompletedDate ?? null;
     logger.log('[store] Migration v35→36: Added check-in completion date fields');
   } catch (err) {
-    console.error('[store] Migration v35→36 failed:', err);
+    reportMigrationFailure('v35→36', err);
   }
 }
 
@@ -522,7 +585,7 @@ if (version < 37) {
     (state as any).dismissedRememberThisCardDate = (state as any).dismissedRememberThisCardDate ?? null;
     logger.log('[store] Migration v36→37: Added Today optional card dismiss fields');
   } catch (err) {
-    console.error('[store] Migration v36→37 failed:', err);
+    reportMigrationFailure('v36→37', err);
   }
 }
 
@@ -537,7 +600,7 @@ if (version < 38) {
     }
     logger.log('[store] Migration v37→38: Added daily reminder enabled flag');
   } catch (err) {
-    console.error('[store] Migration v37→38 failed:', err);
+    reportMigrationFailure('v37→38', err);
   }
 }
 
@@ -548,7 +611,7 @@ if (version < 39) {
     }
     logger.log('[store] Migration v38→39: Added Recently Deleted retention');
   } catch (err) {
-    console.error('[store] Migration v38→39 failed:', err);
+    reportMigrationFailure('v38→39', err);
   }
 }
 
@@ -583,7 +646,71 @@ if (version < 40) {
       }
     }
   } catch (err) {
-    console.error('[store] Migration v39→40 failed:', err);
+    reportMigrationFailure('v39→40', err);
+  }
+}
+
+// Migration from version 40 to 41: repair journal soapResponses restored by
+// sync. The pull mapper turned a NULL soap_responses column (every freewrite
+// entry) into `{}`, and journal.tsx / journal-detail.tsx read the four
+// fields unguarded — every synced reflection opened into the error boundary.
+// The mapper now yields four strings or nothing; this repairs what an
+// upgraded install already has on disk so it never hits the crash.
+if (version < 41) {
+  try {
+    const journalEntries = (state as any).journalEntries;
+    if (Array.isArray(journalEntries)) {
+      let repaired = 0;
+      for (const entry of journalEntries) {
+        if (!entry || typeof entry !== 'object' || !('soapResponses' in entry)) continue;
+        const normalized = normalizeSoapResponses(entry.soapResponses);
+        const unchanged =
+          normalized !== undefined &&
+          JSON.stringify(normalized) === JSON.stringify(entry.soapResponses);
+        if (unchanged) continue;
+        if (normalized) entry.soapResponses = normalized;
+        else delete entry.soapResponses;
+        repaired += 1;
+      }
+      if (repaired > 0) {
+        logger.log(`[store] Migration v40→41: repaired soapResponses on ${repaired} journal entr${repaired === 1 ? 'y' : 'ies'}`);
+      }
+    }
+  } catch (err) {
+    reportMigrationFailure('v40→41', err);
+  }
+}
+
+// Migration from version 41 to 42: one journal entry per (devotionalId,
+// dayNumber), under a deterministic id.
+//
+// Entry ids were random per device, so the same day written on a second
+// device (or restored from a server row minted elsewhere) produced a second
+// entry. Every day-keyed lookup is a first-match `find`, so that entry was
+// invisible in the app while still syncing — the second device's writing
+// looked lost. Merge the duplicates, keeping every piece of text.
+if (version < 42) {
+  try {
+    const journalEntries = (state as any).journalEntries;
+    if (Array.isArray(journalEntries) && journalEntries.length > 0) {
+      const usable = journalEntries.filter(
+        (entry: any) => entry && typeof entry.devotionalId === 'string' && typeof entry.dayNumber === 'number',
+      );
+      const merged = mergeJournalEntryDuplicates(usable);
+      // Anything too malformed to key by day is kept as-is rather than dropped.
+      const unusable = journalEntries.filter((entry: any) => entry && !usable.includes(entry));
+      if (merged.length !== journalEntries.length || unusable.length > 0) {
+        (state as any).journalEntries = [...merged, ...unusable];
+        logger.log(
+          `[store] Migration v41→42: merged ${journalEntries.length} journal entries into ${merged.length + unusable.length}`,
+        );
+      } else {
+        (state as any).journalEntries = merged;
+      }
+      remapQueuedJournalWrites();
+    }
+  } catch (err) {
+    reportMigrationFailure('v41→42', err);
   }
 }
 

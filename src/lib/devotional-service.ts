@@ -2,6 +2,7 @@ import { DevotionalDay, Devotional, Quote, CrossReference, BibleTranslation, Use
 import { logBugEvent, logBugError } from './bug-logger';
 import { logger } from '@/lib/logger';
 import { reportError } from '@/lib/report-error';
+import { aiBudgetErrorFromBody, readRetryAfterHeader } from '@/lib/ai-budget-error';
 import { checkRateLimit, incrementRateLimit, getTimeUntilReset } from './rate-limit';
 import {
   getThemeById,
@@ -1526,6 +1527,10 @@ Avoid the bad pattern. Follow the good pattern.`;
     if (response.status === 401) {
       throw new Error('API key is invalid or expired. Please contact support.');
     } else if (response.status === 429) {
+      // The daily AI budget (SPEND_CAP_REACHED) says roughly when it frees
+      // up; every other 429 keeps the old copy. Neither is retried.
+      const budgetError = aiBudgetErrorFromBody(response.status, errorText, readRetryAfterHeader(response));
+      if (budgetError) throw budgetError;
       throw new Error('Rate limit exceeded. Please wait a moment and try again.');
     }
 

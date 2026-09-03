@@ -6,6 +6,7 @@ import type {
   PurchasesPackage,
 } from 'react-native-purchases';
 import { logger } from '@/lib/logger';
+import { getBuildProfile, resolvePaywallDiagnosticsEnabled } from '@/lib/build-profile';
 
 const DIAGNOSTIC_FILE_NAME = 'unfold-paywall-diagnostics.jsonl';
 const MAX_DIAGNOSTIC_LINES = 500;
@@ -26,8 +27,17 @@ export interface PaywallDiagnosticEntry {
   data?: unknown;
 }
 
+/**
+ * Diagnostics are a QA-build affordance: the explicit flag is required and a
+ * production build (stamped `extra.buildProfile`) is always OFF — see
+ * build-profile.ts for the decision table.
+ */
 export function isPaywallDiagnosticsEnabled(): boolean {
-  return process.env.EXPO_PUBLIC_ENABLE_QA_TOOLS === '1';
+  return resolvePaywallDiagnosticsEnabled({
+    buildProfile: getBuildProfile(),
+    isDev: __DEV__,
+    qaFlag: process.env.EXPO_PUBLIC_ENABLE_QA_TOOLS,
+  });
 }
 
 function getDiagnosticsBaseDirectory(): string | null {
@@ -276,6 +286,7 @@ export function recordPaywallDiagnostic(
 
   // Keep this as a real console line even in production QA/TestFlight builds so
   // Xcode/Console captures the same breadcrumb if file extraction fails.
+  // eslint-disable-next-line no-console -- deliberate: the __DEV__-gated logger would drop it in those builds
   console.log('[PaywallDiagnostics]', JSON.stringify(entry));
 
   writeQueue = writeQueue.then(() => appendDiagnosticEntry(entry)).catch((error) => {
@@ -301,4 +312,22 @@ export function recordPaywallDiagnosticLazy(
       error: sanitizeDiagnosticValue(error),
     }, 'error');
   }
+}
+
+/**
+ * Delete the diagnostics JSONL (full reset). Runs regardless of the gate so a
+ * file left behind by a QA build is still removed, and is queued behind any
+ * in-flight append so a late write cannot resurrect it. Best-effort.
+ */
+export function clearPaywallDiagnosticsFile(): Promise<void> {
+  const path = getPaywallDiagnosticsFilePath();
+  if (!path) return Promise.resolve();
+
+  writeQueue = writeQueue
+    .then(() => FileSystem.deleteAsync(path, { idempotent: true }))
+    .catch((error) => {
+      logger.warn('[PaywallDiagnostics] failed to delete diagnostics file', error);
+    });
+
+  return writeQueue;
 }

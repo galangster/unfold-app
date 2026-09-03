@@ -13,7 +13,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
-import { useRouter, useLocalSearchParams, usePathname } from 'expo-router';
+import { useRouter, useLocalSearchParams, useNavigation, useSegments } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
   FadeIn,
@@ -50,7 +50,7 @@ import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
 import { Typography } from '@/constants/typography';
 import { useTheme } from '@/lib/theme';
-import { useUnfoldStore, JournalMode, SoapResponses } from '@/lib/store';
+import { flushUnfoldStorePersist, useUnfoldStore, JournalMode, SoapResponses } from '@/lib/store';
 import { isOnline } from '@/lib/network-error-handler';
 import { PERSONA_BRIEF } from '@/constants/persona';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
@@ -59,7 +59,14 @@ import { checkRateLimit, incrementRateLimit } from '@/lib/rate-limit';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
 import { alpha } from '@/components/ui';
 import { buildFreeWritePlaceholder } from '@/lib/journal-freewrite-placeholder';
-import { buildInitialQuestionResponses, diffSoapWrites, resolveInitialJournalMode } from '@/lib/journal-entry-state';
+import {
+  EMPTY_SOAP_RESPONSES,
+  buildInitialQuestionResponses,
+  diffSoapWrites,
+  normalizeSoapResponses,
+  resolveInitialJournalMode,
+  resolveJournalCloseAction,
+} from '@/lib/journal-entry-state';
 import { useCreationGate } from '@/hooks/useCreationGate';
 import {
   createAutosaveController,
@@ -157,7 +164,8 @@ function AnimatedPrayerCircle({ isAnswered, accentColor, hintColor }: {
 
 export default function JournalScreen() {
   const router = useRouter();
-  const pathname = usePathname();
+  const segments = useSegments();
+  const navigation = useNavigation();
   const { colors, isDark } = useTheme();
   const reducedMotion = useReducedMotion();
   const params = useLocalSearchParams<{ devotionalId: string; dayNumber: string; focusQuestion?: string }>();
@@ -211,12 +219,14 @@ export default function JournalScreen() {
     resolveInitialJournalMode(existingEntry, currentDay)
   );
 
-  // SOAP state
+  // SOAP state. Read the persisted object through normalizeSoapResponses: an
+  // entry restored by sync can carry `{}` (NULL column) or a partial object,
+  // and the SOAP UI indexes the four fields unguarded.
   const [soapValues, setSoapValues] = useState<SoapResponses>(
-    existingEntry?.soapResponses ?? { scripture: '', observation: '', application: '', prayer: '' }
+    () => normalizeSoapResponses(existingEntry?.soapResponses) ?? EMPTY_SOAP_RESPONSES
   );
   const [expandedSoapSection, setExpandedSoapSection] = useState<keyof SoapResponses | null>(
-    existingEntry?.soapResponses ? null : 'scripture'
+    () => (normalizeSoapResponses(existingEntry?.soapResponses) ? null : 'scripture')
   );
   const soapInputRefs = useRef<Map<string, TextInput | null>>(new Map());
   const soapValuesRef = useRef(soapValues);
@@ -252,9 +262,9 @@ export default function JournalScreen() {
     if (existingEntry.content && existingEntry.content !== content) {
       setContent(existingEntry.content);
     }
-    // Resync SOAP values
-    if (existingEntry.soapResponses) {
-      const storeVals = existingEntry.soapResponses;
+    // Resync SOAP values (normalised: a pulled entry may hold `{}` or a partial object)
+    const storeVals = normalizeSoapResponses(existingEntry.soapResponses);
+    if (storeVals) {
       const localVals = soapValuesRef.current;
       const hasStoreDiff = (['scripture', 'observation', 'application', 'prayer'] as const).some(
         (k) => (storeVals[k] ?? '') !== (localVals[k] ?? '')
@@ -296,10 +306,13 @@ export default function JournalScreen() {
 
   const [showPremiumSheet, setShowPremiumSheet] = useState(false);
 
-  // Expandable question response state
+  // Expandable question response state. Local answers are keyed by QUESTION
+  // TEXT — the store's key — never by index: the rendered list is either the
+  // day's reflection questions (focusQuestion flow) or the AI prompts, and an
+  // index into one is meaningless in the other.
   const [expandedQuestionIndex, setExpandedQuestionIndex] = useState<number | null>(null);
-  const [questionResponses, setQuestionResponses] = useState<Map<number, string>>(() =>
-    buildInitialQuestionResponses(existingEntry, currentDay)
+  const [questionResponses, setQuestionResponses] = useState<Map<string, string>>(() =>
+    buildInitialQuestionResponses(existingEntry)
   );
   const questionInputRefs = useRef<Map<number, TextInput | null>>(new Map());
 
@@ -312,13 +325,11 @@ export default function JournalScreen() {
   const hasChangesRef = useRef(hasChanges);
   hasChangesRef.current = hasChanges;
 
-  // Handle focusQuestion param from journal hub navigation
+  // Handle focusQuestion param from the hub / reader: expand that reflection
+  // question (allQuestions renders the reflection list in this flow).
   useEffect(() => {
     if (focusQuestionIndex != null && currentDay?.reflectionQuestions?.length) {
       setExpandedQuestionIndex(focusQuestionIndex);
-      if (deeperPrompts.length === 0 && currentDay.reflectionQuestions.length > 0) {
-        setDeeperPrompts(currentDay.reflectionQuestions);
-      }
       if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
       focusTimerRef.current = setTimeout(() => {
         if (!isMountedRef.current) return;
@@ -355,18 +366,15 @@ export default function JournalScreen() {
     }
   }, [focusQuestionIndex, activeMode]);
 
-  // Ensure an entry exists (for SOAP/prayer saves)
+  // Ensure an entry exists (for SOAP/prayer saves). addJournalEntry returns
+  // the day's entry id — the existing one when the day already has an entry.
   const ensureEntry = useCallback((): string | null => {
     if (savedEntryIdRef.current) return savedEntryIdRef.current;
 
-    addJournalEntry({ devotionalId, dayNumber, content: '', journalMode: activeMode });
-    const entry = getJournalEntry(devotionalId, dayNumber);
-    if (entry) {
-      savedEntryIdRef.current = entry.id;
-      return entry.id;
-    }
-    return null;
-  }, [devotionalId, dayNumber, addJournalEntry, getJournalEntry, activeMode]);
+    const id = addJournalEntry({ devotionalId, dayNumber, content: '', journalMode: activeMode });
+    savedEntryIdRef.current = id;
+    return id;
+  }, [devotionalId, dayNumber, addJournalEntry, activeMode]);
 
   const saveEntry = useCallback((text: string) => {
     if (savedEntryIdRef.current) {
@@ -374,18 +382,14 @@ export default function JournalScreen() {
       updateJournalEntry(savedEntryIdRef.current, text);
     } else if (text.trim()) {
       // Only create a brand-new entry if there's actual content
-      addJournalEntry({
+      savedEntryIdRef.current = addJournalEntry({
         devotionalId,
         dayNumber,
         content: text,
         journalMode: activeMode,
       });
-      const newEntry = getJournalEntry(devotionalId, dayNumber);
-      if (newEntry) {
-        savedEntryIdRef.current = newEntry.id;
-      }
     }
-  }, [devotionalId, dayNumber, addJournalEntry, updateJournalEntry, getJournalEntry, activeMode]);
+  }, [devotionalId, dayNumber, addJournalEntry, updateJournalEntry, activeMode]);
 
   // Debounced freewrite save — invoked by the shared autosave controller.
   // Reads refs (not closures) so background/unmount flushes never save stale text.
@@ -425,6 +429,10 @@ export default function JournalScreen() {
       freewriteAutosaveRef.current?.flush();
       soapAutosaveRef.current?.flush();
       flushPrayerDraftRef.current();
+      // The store registered its own persist flush at module load, so it ran
+      // BEFORE this one; the writes just made above would otherwise sit in the
+      // 1000 ms coalescing window (WR-23) and die with a force-kill.
+      flushUnfoldStorePersist();
     });
 
     return () => subscription.remove();
@@ -440,12 +448,18 @@ export default function JournalScreen() {
   };
 
   const closeJournal = useCallback(() => {
-    if (pathname === '/(tabs)/(journal)/entry') {
+    // Segments keep route groups (usePathname() reports '/entry' for the
+    // Journal-tab mount, so a group-qualified pathname compare never matched).
+    const action = resolveJournalCloseAction({
+      segments,
+      stackIndex: navigation.getState()?.index ?? 0,
+    });
+    if (action === 'replace-journal-hub') {
       router.replace('/(tabs)/(journal)');
       return;
     }
     router.back();
-  }, [pathname, router]);
+  }, [segments, navigation, router]);
 
   const handleDone = () => {
     if (!gate()) return;
@@ -594,21 +608,17 @@ export default function JournalScreen() {
 
   // Save a question response to the store
   const handleQuestionResponseChange = useCallback(
-    (index: number, question: string, response: string) => {
+    (question: string, response: string) => {
       if (!gate()) return;
       setQuestionResponses((prev) => {
         const next = new Map(prev);
-        next.set(index, response);
+        next.set(question, response);
         return next;
       });
 
       if (!savedEntryIdRef.current) {
         if (!content.trim()) {
-          addJournalEntry({ devotionalId, dayNumber, content: '', journalMode: activeMode });
-          const newEntry = getJournalEntry(devotionalId, dayNumber);
-          if (newEntry) {
-            savedEntryIdRef.current = newEntry.id;
-          }
+          savedEntryIdRef.current = addJournalEntry({ devotionalId, dayNumber, content: '', journalMode: activeMode });
         } else {
           saveEntry(content);
         }
@@ -618,7 +628,7 @@ export default function JournalScreen() {
         updateQuestionResponse(savedEntryIdRef.current, question, response);
       }
     },
-    [content, devotionalId, dayNumber, addJournalEntry, getJournalEntry, saveEntry, updateQuestionResponse, activeMode, gate]
+    [content, devotionalId, dayNumber, addJournalEntry, saveEntry, updateQuestionResponse, activeMode, gate]
   );
 
   const handleToggleQuestion = useCallback(
@@ -642,38 +652,27 @@ export default function JournalScreen() {
     [expandedQuestionIndex]
   );
 
+  // The list the prompts section renders: the day's reflection questions when
+  // the hub/reader deep-linked to one of them, otherwise the AI prompts.
+  const reflectionQuestions = currentDay?.reflectionQuestions;
   const allQuestions = useMemo(() => {
-    if (deeperPrompts.length > 0) return deeperPrompts;
-    return [];
-  }, [deeperPrompts]);
-
-  const answeredCount = useMemo(() => {
-    let count = 0;
-    for (const [, response] of questionResponses) {
-      if (response.trim().length > 0) count++;
-    }
-    if (existingEntry?.questionResponses) {
-      for (const qr of existingEntry.questionResponses) {
-        const idx = allQuestions.findIndex((q) => q === qr.question);
-        if (idx >= 0 && !questionResponses.has(idx) && qr.response.trim().length > 0) {
-          count++;
-        }
-      }
-    }
-    return count;
-  }, [questionResponses, existingEntry, allQuestions]);
+    if (focusQuestionIndex != null && reflectionQuestions?.length) return reflectionQuestions;
+    return deeperPrompts;
+  }, [focusQuestionIndex, reflectionQuestions, deeperPrompts]);
 
   const getResponseForQuestion = useCallback(
-    (index: number, question: string): string => {
-      const local = questionResponses.get(index);
+    (question: string): string => {
+      const local = questionResponses.get(question);
       if (local != null) return local;
-      if (existingEntry?.questionResponses) {
-        const persisted = existingEntry.questionResponses.find((qr) => qr.question === question);
-        if (persisted) return persisted.response;
-      }
-      return '';
+      const persisted = existingEntry?.questionResponses?.find((qr) => qr.question === question);
+      return persisted?.response ?? '';
     },
     [questionResponses, existingEntry]
+  );
+
+  const answeredCount = useMemo(
+    () => allQuestions.filter((question) => getResponseForQuestion(question).trim().length > 0).length,
+    [allQuestions, getResponseForQuestion]
   );
 
   const handleGoDeeper = async () => {
@@ -799,9 +798,7 @@ Their journal entry:
 
         // Persist to store so questions survive navigation
         if (!savedEntryIdRef.current) {
-          addJournalEntry({ devotionalId, dayNumber, content: content || '', journalMode: activeMode });
-          const newEntry = getJournalEntry(devotionalId, dayNumber);
-          if (newEntry) savedEntryIdRef.current = newEntry.id;
+          savedEntryIdRef.current = addJournalEntry({ devotionalId, dayNumber, content: content || '', journalMode: activeMode });
         }
         if (savedEntryIdRef.current) {
           setDeeperQuestions(savedEntryIdRef.current, prompts);
@@ -1012,7 +1009,7 @@ Their journal entry:
 
                     {allQuestions.map((prompt, index) => {
                       const isExpanded = expandedQuestionIndex === index;
-                      const responseText = getResponseForQuestion(index, prompt);
+                      const responseText = getResponseForQuestion(prompt);
                       const isAnswered = responseText.trim().length > 0;
 
                       return (
@@ -1054,7 +1051,7 @@ Their journal entry:
                                     questionInputRefs.current.set(index, ref);
                                   }}
                                   value={responseText}
-                                  onChangeText={(text) => handleQuestionResponseChange(index, prompt, text)}
+                                  onChangeText={(text) => handleQuestionResponseChange(prompt, text)}
                                   placeholder="Write your response..."
                                   placeholderTextColor={colors.textHint}
                                   selectionColor={colors.accent}
@@ -1067,7 +1064,7 @@ Their journal entry:
                                 <VoiceInputBar
                                   inline
                                   value={responseText}
-                                  onChangeText={(text) => handleQuestionResponseChange(index, prompt, text)}
+                                  onChangeText={(text) => handleQuestionResponseChange(prompt, text)}
                                 />
                               </View>
                             </Animated.View>

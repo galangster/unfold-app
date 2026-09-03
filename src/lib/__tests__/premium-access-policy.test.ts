@@ -13,7 +13,7 @@
  */
 
 import { canUsePremiumFeature } from '../premium-access-helpers';
-import { resolvePremiumAccessPolicy } from '../premium-access-policy';
+import { canEarnPremiumMilestone, resolvePremiumAccessPolicy } from '../premium-access-policy';
 
 type Policy = 'granted' | 'denied' | 'unknown';
 
@@ -246,6 +246,23 @@ describe('Premium access policy — tri-state decision logic', () => {
     it('only unlocks premium features when policy is granted', () => {
       expect(canUsePremiumFeature('granted')).toBe(true);
       expect(canUsePremiumFeature('denied')).toBe(false);
+    });
+  });
+
+  describe('one-shot milestone earning', () => {
+    it('grants on a confirmed entitlement and refuses on a confirmed non-entitlement', () => {
+      expect(canEarnPremiumMilestone('granted', false)).toBe(true);
+      expect(canEarnPremiumMilestone('granted', undefined)).toBe(true);
+      expect(canEarnPremiumMilestone('denied', true)).toBe(false);
+    });
+
+    it('falls back to the persisted mirror while the policy is unknown', () => {
+      // The milestone fires once; 'unknown' can last a whole session when the
+      // RevenueCat identity sync fails, so failing closed here loses the reward
+      // permanently rather than merely delaying it.
+      expect(canEarnPremiumMilestone('unknown', true)).toBe(true);
+      expect(canEarnPremiumMilestone('unknown', false)).toBe(false);
+      expect(canEarnPremiumMilestone('unknown', undefined)).toBe(false);
     });
   });
 });

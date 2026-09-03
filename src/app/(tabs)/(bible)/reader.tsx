@@ -19,6 +19,7 @@ import { planHighlightApplication, planHighlightRemoval } from '@/lib/bible-high
 import { useReadingFont } from '@/lib/useReadingFont';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { useBibleChapter } from '@/hooks/useBibleChapter';
+import { resolveBibleReaderLocation, resolveTargetVerse } from '@/lib/bible-reader-params';
 import { useBibleDb } from '@/hooks/useBibleDb';
 import { BIBLE_BOOKS, getNextChapter, getPreviousChapter, formatScriptureReference } from '@/lib/bible-constants';
 import type { BibleTranslation } from '@/lib/bible-db';
@@ -377,8 +378,9 @@ export default function BibleReaderScreen() {
   const reducedMotion = useReducedMotion();
   const router = useRouter();
   const params = useLocalSearchParams<{ bookId: string; chapter: string; verse?: string }>();
-  const bookId = parseInt(params.bookId ?? '1', 10) || 1;
-  const chapter = parseInt(params.chapter ?? '1', 10) || 1;
+  // P3-4: clamp to the canon (1–66) and to the book's real chapter count so an
+  // out-of-range deep link lands on the nearest real chapter, not an empty query.
+  const { bookId, chapter } = resolveBibleReaderLocation(params);
 
   const { isReady: isDbReady, isDownloading, progress: downloadProgress, download: downloadDb, error: downloadError } = useBibleDb();
   const bibleReaderSettings = useUnfoldStore((s) => s.bibleReaderSettings);
@@ -578,8 +580,8 @@ export default function BibleReaderScreen() {
     });
   }, [router]);
 
-  // Parse verse param
-  const targetVerse = params.verse ? parseInt(params.verse, 10) : null;
+  // Parse verse param — clamped to the loaded chapter's last verse (P3-4).
+  const targetVerse = useMemo(() => resolveTargetVerse(params.verse, verses), [params.verse, verses]);
 
   // Record reading position on chapter change
   // Scroll-to-top is handled by navigateChapter / handleNavigatorSelect

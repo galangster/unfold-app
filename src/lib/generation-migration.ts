@@ -8,7 +8,8 @@ import { useUnfoldStore } from "./store";
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from "./api-config";
 import { logger } from "./logger";
 
-const MIGRATION_KEY = "generation-migration-v1-complete";
+/** Exported so full-reset can clear it — the migration is idempotent and re-runs after a wipe. */
+export const MIGRATION_KEY = "generation-migration-v1-complete";
 
 type MigrationStore = ReturnType<typeof useUnfoldStore.getState>;
 

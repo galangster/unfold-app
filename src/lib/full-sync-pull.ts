@@ -5,6 +5,8 @@ import { mmkvStorage } from './mmkv-storage';
 import { logger } from './logger';
 import { useUnfoldStore } from './store';
 import { peekSyncOutbox } from './sync-outbox';
+import { normalizeSoapResponses } from './journal-entry-state';
+import { mergeJournalEntryDuplicates } from './journal-entry-merge';
 import type {
   BibleHighlight,
   BibleReadingPosition,
@@ -22,7 +24,7 @@ import type {
 } from './store';
 import { useCompanionChatStore } from './companion-chat-store';
 import type { CompanionMessage, Conversation } from './companion-chat-store';
-import type { SyncPullResponse, SyncPulledRecord, SyncTable } from './sync-types';
+import type { SyncPullResponse, SyncPulledRecord, SyncPushResult, SyncTable } from './sync-types';
 
 export const LAST_PULLED_AT_KEY = 'unfold-last-pulled-at';
 
@@ -125,6 +127,28 @@ function upsertRecord<T extends { id?: string; updatedAt?: string; createdAt?: s
     : [mapped, ...items];
 }
 
+/**
+ * One entry per (devotionalId, dayNumber), without touching a store that is
+ * already canonical. Only days that actually gained a second entry are
+ * rewritten, so an ordinary pull returns the same array it was given.
+ */
+function collapseJournalEntryDays(entries: JournalEntry[]): JournalEntry[] {
+  const seen = new Set<string>();
+  let duplicated = false;
+  for (const entry of entries) {
+    if (!entry || typeof entry.devotionalId !== 'string' || typeof entry.dayNumber !== 'number') continue;
+    const key = `${entry.devotionalId}|${entry.dayNumber}`;
+    if (seen.has(key)) { duplicated = true; break; }
+    seen.add(key);
+  }
+  if (!duplicated) return entries;
+  const keyable = entries.filter(
+    (entry) => entry && typeof entry.devotionalId === 'string' && typeof entry.dayNumber === 'number'
+  );
+  const rest = entries.filter((entry) => entry && !keyable.includes(entry));
+  return [...mergeJournalEntryDuplicates(keyable), ...rest];
+}
+
 function mapJournalEntry(record: SyncPulledRecord): JournalEntry | null {
   const row = asRecord(record.data);
   const devotionalId = asString(row.devotionalId);
@@ -139,7 +163,9 @@ function mapJournalEntry(record: SyncPulledRecord): JournalEntry | null {
     createdAt: asString(row.createdAt) ?? recordUpdatedAt(record),
     updatedAt: recordUpdatedAt(record),
     journalMode: asString(row.journalMode) as JournalEntry['journalMode'],
-    soapResponses: asRecord(row.soapResponses) as unknown as JournalEntry['soapResponses'],
+    // NULL column (every freewrite entry) → no object; the journal screens
+    // read the four fields unguarded, so never hand them `{}` or a partial.
+    soapResponses: normalizeSoapResponses(row.soapResponses),
     prayerRequests: asArray(row.prayerRequests) as JournalEntry['prayerRequests'],
     questionResponses: asArray(row.questionResponses) as JournalEntry['questionResponses'],
     deeperQuestions: asArray<string>(row.deeperQuestions),
@@ -467,9 +493,15 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
 
     return {
       devotionals,
-      journalEntries: (changes.journal_entries ?? []).reduce(
-        (items, record) => upsertRecord(items, record, 'journal_entries', pendingByRecord, mapJournalEntry),
-        state.journalEntries
+      // Journal rows the server minted before entry ids were day-derived still
+      // carry random ids, so upserting them by id alone re-creates exactly the
+      // per-day duplicates the v41→42 migration merged. Collapse the day again
+      // after applying: the merge is idempotent and keeps every piece of text.
+      journalEntries: collapseJournalEntryDays(
+        (changes.journal_entries ?? []).reduce(
+          (items, record) => upsertRecord(items, record, 'journal_entries', pendingByRecord, mapJournalEntry),
+          state.journalEntries
+        )
       ),
       bookmarks: (changes.bookmarks ?? []).reduce(
         (items, record) => upsertRecord(items, record, 'bookmarks', pendingByRecord, mapBookmark),
@@ -564,6 +596,33 @@ function applyCompanionChanges(payload: SyncPullResponse): void {
 export function applyPulledUserData(payload: SyncPullResponse): void {
   applyMainStoreChanges(payload);
   applyCompanionChanges(payload);
+}
+
+/**
+ * Push conflicts: the server kept its (newer) row and returned it as
+ * serverData. Apply it exactly like a pulled record — the same mappers and
+ * the same LWW guard (a newer local change still pending in the outbox
+ * wins) — so this device converges on the server's version instead of
+ * keeping one the server has already rejected. The conflicted row's
+ * updated_at did not move, so no later incremental pull would bring it.
+ */
+export function applyServerConflictRecords(results: SyncPushResult[]): void {
+  const changes: SyncPullResponse['changes'] = {};
+  let timestamp = '';
+  for (const result of results) {
+    if (result.status !== 'conflict' || !result.serverData) continue;
+    const data = asRecord(result.serverData);
+    const records = changes[result.table] ?? (changes[result.table] = []);
+    records.push({
+      id: result.id,
+      data,
+      updatedAt: result.serverUpdatedAt,
+      deleted: Boolean(data.deletedAt),
+    });
+    if (result.serverUpdatedAt > timestamp) timestamp = result.serverUpdatedAt;
+  }
+  if (Object.keys(changes).length === 0) return;
+  applyPulledUserData({ changes, timestamp: timestamp || new Date().toISOString() });
 }
 
 export async function pullAllUserData(options: PullAllUserDataOptions = {}): Promise<SyncPullResponse> {

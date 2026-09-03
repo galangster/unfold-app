@@ -47,6 +47,17 @@ let activeReadingSession: LiveActivity<{
 
 let lastWidgetSyncFingerprint: string | null = null;
 
+/**
+ * The single native push shared by syncWidgets() and clearWidgets()
+ * (RT-WIDGETS-5: every widget receives the same multi-entry timeline; vault
+ * rule deterministic-twin-paths-must-share-one-helper).
+ */
+function pushTimelineToAllWidgets(entries: ReturnType<typeof buildWidgetTimelineEntries>): void {
+  UnfoldStreakWidget.updateTimeline(entries);
+  UnfoldTodayWidget.updateTimeline(entries);
+  UnfoldDashboardWidget.updateTimeline(entries);
+}
+
 /** Build the fingerprint string for the current store state. */
 function buildSyncFingerprint(now: Date): string {
   const state = useUnfoldStore.getState();
@@ -104,14 +115,41 @@ export function syncWidgets(): void {
       now
     );
 
-    UnfoldStreakWidget.updateTimeline(entries);
-    UnfoldTodayWidget.updateTimeline(entries);
-    UnfoldDashboardWidget.updateTimeline(entries);
+    pushTimelineToAllWidgets(entries);
 
     lastWidgetSyncFingerprint = fingerprint;
   } catch (error) {
     // Widgets may not be configured yet — fail silently
     logger.log('[Widgets] sync error (non-fatal):', error);
+  }
+}
+
+/**
+ * Push an EMPTY timeline to every widget (full reset). The App Group data
+ * otherwise keeps showing the old devotional until the next syncWidgets().
+ * Bypasses the fingerprint guard and resets it so the next real sync is
+ * never skipped. Non-fatal on any error, like syncWidgets().
+ */
+export function clearWidgets(): void {
+  try {
+    const entries = buildWidgetTimelineEntries(
+      {
+        streakCurrent: 0,
+        streakLongest: 0,
+        streakLastReadDate: null,
+        readingDuration: 5,
+        currentDevotional: null,
+        allDevotionals: [],
+      },
+      new Date(),
+    );
+
+    pushTimelineToAllWidgets(entries);
+
+    lastWidgetSyncFingerprint = null;
+    logger.log('[Widgets] Cleared widget timelines');
+  } catch (error) {
+    logger.log('[Widgets] clearWidgets error (non-fatal):', error);
   }
 }
 

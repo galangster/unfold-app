@@ -14,7 +14,7 @@ import { alpha } from '@/components/ui';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
-import { useUnfoldStore, FontSize } from '@/lib/store';
+import { flushUnfoldStorePersist, useUnfoldStore, FontSize } from '@/lib/store';
 import { getReflectionTypography, type ReflectionTypography } from '@/lib/reflection-typography';
 import { Typography } from '@/constants/typography';
 
@@ -147,19 +147,20 @@ export function InlineReflectionJournal({
         return saved.entryId;
       }
 
-      addJournalEntry({ devotionalId: targetDevotionalId, dayNumber: targetDayNumber, content: '' });
-      const entry = getJournalEntry(targetDevotionalId, targetDayNumber);
-      if (entry) {
-        savedEntryRef.current = {
-          devotionalId: targetDevotionalId,
-          dayNumber: targetDayNumber,
-          entryId: entry.id,
-        };
-        return entry.id;
-      }
-      return null;
+      // Returns the day's entry id — the existing one when it already exists.
+      const entryId = addJournalEntry({
+        devotionalId: targetDevotionalId,
+        dayNumber: targetDayNumber,
+        content: '',
+      });
+      savedEntryRef.current = {
+        devotionalId: targetDevotionalId,
+        dayNumber: targetDayNumber,
+        entryId,
+      };
+      return entryId;
     },
-    [devotionalId, dayNumber, addJournalEntry, getJournalEntry]
+    [devotionalId, dayNumber, addJournalEntry]
   );
 
   // Auto-save a response after 800ms of inactivity
@@ -282,6 +283,9 @@ export function InlineReflectionJournal({
     const subscription = AppState.addEventListener('change', (nextState) => {
       if (shouldFlushAutosaveOnAppState(nextState)) {
         autoSaveControllerRef.current?.flush();
+        // The store's persist flush (registered at module load) ran before
+        // this one, so land the response just written (WR-23 debounce).
+        flushUnfoldStorePersist();
       }
     });
 

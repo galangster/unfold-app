@@ -8,6 +8,7 @@ import Animated, { FadeIn, useSharedValue, useAnimatedScrollHandler } from 'reac
 import * as Haptics from 'expo-haptics';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
+import { logger } from '@/lib/logger';
 import { isQaToolsEnabled } from '@/lib/qa-tools';
 import { useUnfoldStore, type MoodLevel } from '@/lib/store';
 import { requestReviewOncePerVersion } from '@/lib/review-prompt';
@@ -270,7 +271,7 @@ export default function HomeScreen() {
       };
       // Only resume if not expired (15 min)
       if (Date.now() - inflight.submittedAt < 15 * 60 * 1000) {
-        console.log('[home] Resuming inflight generation job from MMKV:', inflight.jobId);
+        logger.log('[home] Resuming inflight generation job from MMKV:', inflight.jobId);
         // Navigate to generating screen — it will pick up the inflight job from MMKV
         router.replace('/generating');
         return;
@@ -332,7 +333,7 @@ export default function HomeScreen() {
           // discards the response, and must not advance the cursor.
           commitDevotionalPullCursor(pulled);
         } catch (err) {
-          console.warn('[home] Devotional sync refresh failed:', err instanceof Error ? err.message : err);
+          logger.warn('[home] Devotional sync refresh failed:', err instanceof Error ? err.message : err);
         }
       })();
 
@@ -403,7 +404,7 @@ export default function HomeScreen() {
         if (recovered?.devotionalDay) {
           addGeneratedDay(devId, recovered.devotionalDay);
           autoGenAttemptedRef.current = key;
-          console.log('[home] Applied existing server content for day', dayNum);
+          logger.log('[home] Applied existing server content for day', dayNum);
           return;
         }
 
@@ -415,7 +416,7 @@ export default function HomeScreen() {
         });
         if (cancelled) return;
         autoGenAttemptedRef.current = key;
-        console.log('[home] Submitted generation job:', resp.jobId);
+        logger.log('[home] Submitted generation job:', resp.jobId);
       } catch (err) {
         if (cancelled) return;
 
@@ -434,7 +435,7 @@ export default function HomeScreen() {
           }
         }
         // Don't set autoGenAttemptedRef — allow retry on next render cycle
-        console.warn('[home] Auto-generation failed, will retry:', err instanceof Error ? err.message : err);
+        logger.warn('[home] Auto-generation failed, will retry:', err instanceof Error ? err.message : err);
       }
     })();
 

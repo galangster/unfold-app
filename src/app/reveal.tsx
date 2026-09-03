@@ -21,11 +21,13 @@ import { CaretUp } from '@/components/icons';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
+import { logger } from '@/lib/logger';
 import { useUIState } from '@/lib/ui-state';
 import { alpha } from '@/components/ui';
 import { ScatterTitle } from '@/components/ScatterTitle';
 import { ShimmerText } from '@/components/ShimmerText';
 import { buildReadingRouteFromRevealParams } from '@/lib/push-notification-helpers';
+import { resolveRevealTarget } from '@/lib/reveal-params';
 import { Typography } from '@/constants/typography';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -60,7 +62,15 @@ export default function RevealScreen() {
   const markDayAsRevealed = useUnfoldStore((s) => s.markDayAsRevealed);
   const setCurrentDevotional = useUnfoldStore((s) => s.setCurrentDevotional);
   const setResumeContext = useUnfoldStore((s) => s.setResumeContext);
+  const devotionals = useUnfoldStore((s) => s.devotionals);
 
+  // P3-4: params are only trusted once they resolve to a devotional that
+  // exists locally and a day inside its range. Everything the store learns
+  // from this screen comes from `revealTarget`, never from the raw params.
+  const revealTarget = useMemo(
+    () => resolveRevealTarget({ devotionalId, dayNumber }, devotionals),
+    [devotionalId, dayNumber, devotionals],
+  );
 
   // ─── Entrance stagger state ────────────────────────────────────
   const eyebrowOpacity = useSharedValue(0);
@@ -140,42 +150,55 @@ export default function RevealScreen() {
     };
   }, []);
 
+  // Bail to Today when the params don't resolve (unknown devotional, day out
+  // of range, junk) — nothing is written to the store on that path.
+  // `devotionals` is a dependency so a late hydration re-evaluates the guard.
+  useEffect(() => {
+    if (revealTarget || hasNavigated.current) return;
+    if (!useUnfoldStore.persist.hasHydrated()) return;
+    hasNavigated.current = true;
+    logger.warn('[Reveal] params do not resolve to a local devotional day — redirecting to Today');
+    router.replace('/(tabs)/(today)');
+  }, [revealTarget, devotionals, router]);
+
   const navigateToReading = useCallback(() => {
-    console.log('[Reveal] navigateToReading START', { devotionalId, dayNumber, hasNavigated: hasNavigated.current });
     if (hasNavigated.current) {
-      console.log('[Reveal] already navigated, bailing');
+      return;
+    }
+    if (!revealTarget) {
+      // Guard (P3-4): no store writes for params that don't resolve locally.
+      logger.warn('[Reveal] refusing store writes for unresolved params — redirecting to Today');
+      hasNavigated.current = true;
+      router.replace('/(tabs)/(today)');
       return;
     }
     hasNavigated.current = true;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     // Mark this day as revealed — teaser card won't show again
-    if (devotionalId && dayNumber) {
-      console.log('[Reveal] markDayAsRevealed', { devotionalId, dayNumber });
-      markDayAsRevealed(devotionalId, Number(dayNumber));
-    }
-    if (devotionalId) {
-      console.log('[Reveal] setCurrentDevotional', devotionalId);
-      setCurrentDevotional(devotionalId);
-    }
-    console.log('[Reveal] setResumeContext for reading handoff', { devotionalId, dayNumber });
+    markDayAsRevealed(revealTarget.devotionalId, revealTarget.dayNumber);
+    setCurrentDevotional(revealTarget.devotionalId);
     setResumeContext({
       route: 'reading',
-      devotionalId,
-      dayNumber: Number(dayNumber ?? '1'),
-      devotionalTitle: seriesTitle,
-      dayTitle,
+      devotionalId: revealTarget.devotionalId,
+      dayNumber: revealTarget.dayNumber,
+      devotionalTitle: revealTarget.seriesTitle,
+      // Only what resolved against the local devotional: the raw param is
+      // attacker-controlled (bounded to 200 chars by the native allowlist,
+      // unbounded on web, which has no native-intent hook) and this value is
+      // persisted and rendered on the Today resume card. null when the day
+      // has no locally generated title yet — the card omits it.
+      dayTitle: revealTarget.dayTitle,
       touchedAt: new Date().toISOString(),
     });
     // Flag the transition so the home screen renders blank during the brief
     // moment React Navigation renders the tab index before the reading screen.
-    console.log('[Reveal] setRevealTransitioning(true)');
     useUIState.getState().setRevealTransitioning(true);
     // Safety valve: if the transition is interrupted before Reading mounts,
     // don't leave Home permanently blank.
     transitionResetTimerRef.current = setTimeout(() => {
       const { revealTransitioning, setRevealTransitioning } = useUIState.getState();
       if (revealTransitioning) {
-        console.log('[Reveal] fallback clear revealTransitioning after interrupted navigation');
+        logger.warn('[Reveal] fallback clear revealTransitioning after interrupted navigation');
         setRevealTransitioning(false);
       }
     }, 2000);
@@ -183,18 +206,13 @@ export default function RevealScreen() {
     // `dismissTo` can briefly pop through the tab index on this root-stack →
     // nested-tab handoff, which is exactly the blank/stranded path the reveal
     // transition guard is trying to avoid.
-    console.log('[Reveal] replace → /(tabs)/(today)/reading', {
-      devotionalId,
-      dayNumber: String(dayNumber ?? '1'),
-    });
     router.replace(
       buildReadingRouteFromRevealParams({
-        devotionalId,
-        dayNumber,
+        devotionalId: revealTarget.devotionalId,
+        dayNumber: String(revealTarget.dayNumber),
       }),
     );
-    console.log('[Reveal] navigateToReading DONE');
-  }, [devotionalId, dayNumber, router, markDayAsRevealed, setCurrentDevotional, setResumeContext, seriesTitle, dayTitle]);
+  }, [revealTarget, router, markDayAsRevealed, setCurrentDevotional, setResumeContext]);
 
   const fireApproachHaptic = useCallback(() => {
     Haptics.selectionAsync();
@@ -253,8 +271,8 @@ export default function RevealScreen() {
 
   // ─── Render ────────────────────────────────────────────────────
 
-  const dayNum = dayNumber ? parseInt(dayNumber, 10) : 1;
-  const total = totalDays ? parseInt(totalDays, 10) : 1;
+  const dayNum = revealTarget?.dayNumber ?? (dayNumber ? parseInt(dayNumber, 10) : 1);
+  const total = revealTarget?.totalDays ?? (totalDays ? parseInt(totalDays, 10) : 1);
 
   return (
     <GestureDetector gesture={panGesture}>

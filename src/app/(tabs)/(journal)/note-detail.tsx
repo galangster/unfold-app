@@ -54,7 +54,7 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Typography } from '@/constants/typography';
 import { useTheme } from '@/lib/theme';
-import { useUnfoldStore, READING_FONTS, type Note, type NoteCategory, type ScriptureRef } from '@/lib/store';
+import { flushUnfoldStorePersist, useUnfoldStore, READING_FONTS, type Note, type NoteCategory, type ScriptureRef } from '@/lib/store';
 import { ScriptureRefPill } from '@/components/notebook/ScriptureRefPill';
 import { ScriptureSearchSheet } from '@/components/notebook/ScriptureSearchSheet';
 import { MoveFolderSheet } from '@/components/notebook/MoveFolderSheet';
@@ -85,8 +85,10 @@ import {
   getNativeListCommand,
   getTitleDividerPresentation,
   hasMeaningfulNoteContent,
+  legacyMarkdownToHtml,
   normalizeNativeInitialHtml,
   persistNoteSnapshot,
+  resolveExternalNoteReload,
 } from '@/lib/note-detail-editor';
 import { buildNoteDraftDockPreview, useNoteDraftDock } from '@/lib/note-draft-dock';
 import {
@@ -110,28 +112,6 @@ function formatDate(dateStr: string): string {
   });
 }
 
-/** Convert legacy plain-text/markdown to minimal HTML for TipTap */
-function legacyMarkdownToHtml(content: string): string {
-  const lines = content.split('\n');
-  const htmlLines = lines.map((line) => {
-    const trimmed = line.trimStart();
-    if (trimmed.startsWith('[x] ')) {
-      return `<ul data-type="taskList"><li data-type="taskItem" data-checked="true"><label><input type="checkbox" checked /></label><div>${trimmed.slice(4)}</div></li></ul>`;
-    }
-    if (trimmed.startsWith('[ ] ')) {
-      return `<ul data-type="taskList"><li data-type="taskItem" data-checked="false"><label><input type="checkbox" /></label><div>${trimmed.slice(4)}</div></li></ul>`;
-    }
-    if (trimmed.startsWith('- ')) {
-      return `<ul><li>${trimmed.slice(2)}</li></ul>`;
-    }
-    if (trimmed === '') return '<p></p>';
-    const html = trimmed
-      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.+?)\*/g, '<em>$1</em>');
-    return `<p>${html}</p>`;
-  });
-  return htmlLines.join('') || '<p></p>';
-}
 
 /**
  * Reading-font preference → web font family for the tentap WebView editor.
@@ -372,6 +352,9 @@ export default function NoteDetailScreen() {
   const savedResetRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const pendingAutoSaveHtmlRef = useRef<string | undefined>(undefined);
   const autoSaveAllowEmptyRef = useRef(false);
+  // Set by the AppState flush: read the body from refs instead of awaiting a
+  // round trip to the editor while the app is being suspended.
+  const autoSaveReadFromRefsRef = useRef(false);
   const autoSaveSaveRef = useRef<() => void | Promise<void>>(() => undefined);
   const autoSaveControllerRef = useRef<AutosaveController | null>(null);
   if (!autoSaveControllerRef.current) {
@@ -411,6 +394,10 @@ export default function NoteDetailScreen() {
   const [selectionState, setSelectionState] = useState(DEFAULT_SELECTION_STATE);
   // Tracks latest HTML from onChangeHtml for explicit save (Done/Back)
   const latestHtmlRef = useRef(initialContent);
+  // The native editor applies initialHtml once per mount, so reloading an
+  // external version of the note is a remount (see the effect below).
+  const [nativeEditorInstance, setNativeEditorInstance] = useState(0);
+  const loadedUpdatedAtRef = useRef(existingNote?.updatedAt);
   const isMinimizingRef = useRef(false);
   const appliedStartEditingKeyRef = useRef<string | null>(null);
 
@@ -583,6 +570,39 @@ export default function NoteDetailScreen() {
   }, []);
 
 
+  // A version of this note from another device can land while it is open
+  // (a push conflict resolved to the server's row, or a pull). The editor
+  // read the note once at mount, so it kept showing the stale text and the
+  // next autosave wrote it back over the server's. Reload from the store
+  // when updatedAt moves and nothing local is pending; our own saves move
+  // updatedAt too, but then the store already matches the editor.
+  useEffect(() => {
+    if (!existingNote || existingNote.updatedAt === loadedUpdatedAtRef.current) return;
+    loadedUpdatedAtRef.current = existingNote.updatedAt;
+    const reload = resolveExternalNoteReload({
+      storeTitle: existingNote.title,
+      storeHtml: initialContent,
+      editorTitle: latestTitleRef.current,
+      editorHtml: latestHtmlRef.current,
+      hasPendingEdit: autoSaveControllerRef.current?.hasPending() ?? false,
+    });
+    if (!reload) return;
+    setScriptureRefs(existingNote.scriptureRefs);
+    if (reload.title !== undefined) {
+      latestTitleRef.current = reload.title;
+      setTitle(reload.title);
+    }
+    if (reload.html !== undefined) {
+      latestHtmlRef.current = reload.html;
+      if (IS_NATIVE_EDITOR) {
+        setNativeEditorInstance((instance) => instance + 1);
+      } else {
+        editor.setContent(reload.html);
+      }
+    }
+  }, [existingNote, initialContent, editor]);
+
+
   /* ───── Scripture insertion via pending prop ───── */
 
   const handleNativeScriptureInsert = useCallback(
@@ -657,14 +677,19 @@ export default function NoteDetailScreen() {
 
   /* ───── Debounced auto-save ───── */
 
+  // Deliberately NOT gated. The creation gate belongs on the actions that
+  // create or open a note (the hub's FAB, Minimize, folder creation); running
+  // it per keystroke dropped the save whenever it answered no — which it does
+  // for the whole time the premium policy is still 'unknown' — and on a
+  // churned account each keystroke also tried to raise a paywall. Words
+  // already typed into an open editor are always persisted.
   const scheduleAutoSave = useCallback((htmlFromEvent?: string) => {
-    if (!gate()) return;
     pendingAutoSaveHtmlRef.current = htmlFromEvent;
     autoSaveAllowEmptyRef.current = false;
     if (savedResetRef.current) clearTimeout(savedResetRef.current);
     setPendingSave(true);
     autoSaveControllerRef.current?.schedule();
-  }, [gate]);
+  }, []);
 
   const getCurrentEditorHtml = useCallback(async () => {
     return IS_NATIVE_EDITOR
@@ -720,11 +745,15 @@ export default function NoteDetailScreen() {
     pendingAutoSaveHtmlRef.current = undefined;
     const allowEmpty = autoSaveAllowEmptyRef.current;
     autoSaveAllowEmptyRef.current = false;
+    const readFromRefs = autoSaveReadFromRefsRef.current;
+    autoSaveReadFromRefsRef.current = false;
 
     // Native path: HTML pushed via onChangeHtml event. tentap: mirrored into
     // latestHtmlRef from onChange. Reading refs (not the editor bridge) keeps
-    // the normal debounced path safe to run from unmount cleanup.
-    const html = allowEmpty
+    // the normal debounced path safe to run from unmount cleanup — and on a
+    // background flush it is the only safe read: awaiting the bridge as iOS
+    // suspends the app can simply never come back, losing the edit.
+    const html = allowEmpty && !readFromRefs
       ? await getCurrentEditorHtml()
       : htmlFromEvent ?? latestHtmlRef.current;
     const titleVal = latestTitleRef.current;
@@ -760,9 +789,15 @@ export default function NoteDetailScreen() {
 
       pendingAutoSaveHtmlRef.current = undefined;
       autoSaveAllowEmptyRef.current = true;
+      autoSaveReadFromRefsRef.current = true;
       if (!autoSaveControllerRef.current?.flush()) {
         autoSaveAllowEmptyRef.current = false;
+        autoSaveReadFromRefsRef.current = false;
       }
+      // The store's own persist flush (registered at module load) already ran,
+      // so land the write this flush just made instead of leaving it in the
+      // 1000 ms coalescing window (WR-23).
+      flushUnfoldStorePersist();
     });
 
     return () => subscription.remove();
@@ -1509,6 +1544,7 @@ export default function NoteDetailScreen() {
           {IS_NATIVE_EDITOR ? (
             <>
             <UnfoldEditor
+              key={nativeEditorInstance}
               ref={editorRef}
               initialHtml={nativeInitialContent}
               onChangeHtml={(e: UnfoldEditorChangeHtmlEvent) => {

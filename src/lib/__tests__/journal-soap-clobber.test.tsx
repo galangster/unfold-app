@@ -22,7 +22,9 @@ const { act } = renderer;
 jest.mock('expo-router', () => ({
   useRouter: () => ({ back: jest.fn(), replace: jest.fn(), push: jest.fn() }),
   useLocalSearchParams: () => ({ devotionalId: 'dev-1', dayNumber: '1' }),
-  usePathname: () => '/(tabs)/(today)/journal',
+  // Today-flow mount: closeJournal reads segments + the enclosing stack state.
+  useSegments: () => ['(tabs)', '(today)', 'journal'],
+  useNavigation: () => ({ getState: () => ({ index: 1, routes: [] }) }),
 }));
 
 jest.mock('react-native-safe-area-context', () => {
@@ -169,13 +171,18 @@ jest.mock('@/lib/store', () => {
       get().journalEntries.find(
         (e: any) => e.devotionalId === devotionalId && e.dayNumber === dayNumber,
       ),
-    addJournalEntry: ({ devotionalId, dayNumber, content, journalMode }: any) =>
+    // Mirrors the store: one entry per (devotionalId, dayNumber), id returned.
+    addJournalEntry: ({ devotionalId, dayNumber, content, journalMode }: any) => {
+      const existing = get().journalEntries.find(
+        (e: any) => e.devotionalId === devotionalId && e.dayNumber === dayNumber,
+      );
+      if (existing) return existing.id;
+      const id = `entry-${++entrySeq}`;
       set((s: any) => ({
-        journalEntries: [
-          ...s.journalEntries,
-          { id: `entry-${++entrySeq}`, devotionalId, dayNumber, content, journalMode },
-        ],
-      })),
+        journalEntries: [...s.journalEntries, { id, devotionalId, dayNumber, content, journalMode }],
+      }));
+      return id;
+    },
     updateJournalEntry: (id: string, content: string) =>
       set((s: any) => ({
         journalEntries: s.journalEntries.map((e: any) => (e.id === id ? { ...e, content } : e)),

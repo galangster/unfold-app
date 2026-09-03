@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -30,7 +30,12 @@ import { EVENING_CELEBRATION_MESSAGES } from '@/constants/check-in-messages';
 import { EveningCelebration } from '@/components/EveningCelebration';
 import { useCreationGate } from '@/hooks/useCreationGate';
 import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
-import { getEveningWindDownDayNumber } from '@/lib/today-companion-state';
+import {
+  decideEveningWindDownEntry,
+  findTodayMiddayCheckIn,
+  resolveEveningLoadingCaption,
+  resolveEveningWindDownDayNumber,
+} from '@/lib/evening-wind-down-state';
 
 // Single unified flow: prayer + scripture together (no pill toggle)
 
@@ -144,11 +149,22 @@ export default function EveningWindDownScreen() {
   const user = useUnfoldStore((s) => s.user);
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
-  const getCheckIn = useUnfoldStore((s) => s.getCheckIn);
+  const checkIns = useUnfoldStore((s) => s.checkIns);
   const addCheckIn = useUnfoldStore((s) => s.addCheckIn);
   const markEveningWindDownCompleted = useUnfoldStore((s) => s.markEveningWindDownCompleted);
 
-  const { gate, showExclusiveOffer, dismissOffer } = useCreationGate();
+  const { gate, policy, showExclusiveOffer, dismissOffer } = useCreationGate();
+
+  // The Today card gates this screen before pushing it; a notification tap
+  // pushes it directly, so the same check runs here before anything loads.
+  const entryDecision = decideEveningWindDownEntry(policy);
+  const entryAllowed = entryDecision === 'allow';
+  const entryGateRanRef = useRef(false);
+  useEffect(() => {
+    if (entryDecision !== 'gate' || entryGateRanRef.current) return;
+    entryGateRanRef.current = true;
+    gate();
+  }, [entryDecision, gate]);
 
   const [showCelebration, setShowCelebration] = useState(false);
   const [celebrationMessage, setCelebrationMessage] = useState('');
@@ -156,15 +172,18 @@ export default function EveningWindDownScreen() {
   const requestedDayNumber = parsePositiveInteger(params.dayNumber);
   const effectiveDevotionalId = params.devotionalId ?? currentDevotionalId;
   const currentDevotional = devotionals.find((d) => d.id === effectiveDevotionalId);
-  const eveningDayNumber = requestedDayNumber ?? getEveningWindDownDayNumber(currentDevotional) ?? 1;
+  const eveningDayNumber = resolveEveningWindDownDayNumber(currentDevotional, requestedDayNumber);
   const currentDay = currentDevotional?.days.find(
     (d) => d.dayNumber === eveningDayNumber
   );
 
   const middayCheckIn = useMemo(() => {
     if (!currentDevotional || !currentDay) return undefined;
-    return getCheckIn(currentDevotional.id, currentDay.dayNumber, 'midday');
-  }, [currentDevotional, currentDay, getCheckIn]);
+    // By date: midday check-ins target the readable day, the evening targets
+    // the day completed today, so a day-number lookup drops the afternoon
+    // check-in after a morning read.
+    return findTodayMiddayCheckIn(checkIns, currentDevotional.id, currentDay.dayNumber);
+  }, [currentDevotional, currentDay, checkIns]);
 
   const middayCheckInInput = useMemo(() => {
     if (!middayCheckIn) return undefined;
@@ -212,7 +231,7 @@ export default function EveningWindDownScreen() {
       if (!result) throw new Error('Failed to generate examen');
       return result;
     },
-    enabled: !!currentDay && !!user && !!currentDevotional,
+    enabled: entryAllowed && !!currentDay && !!user && !!currentDevotional,
     staleTime: Infinity,
     retry: 1,
   });
@@ -227,7 +246,7 @@ export default function EveningWindDownScreen() {
       if (!result) throw new Error('Failed to fetch verse');
       return result;
     },
-    enabled: !!currentDay?.eveningScriptureRef,
+    enabled: entryAllowed && !!currentDay?.eveningScriptureRef,
     staleTime: Infinity,
     retry: 1,
   });
@@ -333,7 +352,7 @@ export default function EveningWindDownScreen() {
           {/* Unified content: Prayer → Scripture → Done */}
           <View style={{ paddingHorizontal: Spacing['7'] }}>
             {/* === EVENING PRAYER SECTION === */}
-            {loading ? (
+            {loading || entryDecision === 'wait' ? (
               <Animated.View
                 entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
                 style={{ alignItems: 'center', paddingTop: 40 }}
@@ -348,7 +367,7 @@ export default function EveningWindDownScreen() {
                     opacity: 0.7,
                   }}
                 >
-                  Preparing your evening prayer...
+                  {resolveEveningLoadingCaption(entryDecision)}
                 </Text>
               </Animated.View>
             ) : error ? (
@@ -455,13 +474,15 @@ export default function EveningWindDownScreen() {
                     lineHeight: 23,
                   }}
                 >
-                  Start a devotional to unlock{'\n'}personalized evening prayers.
+                  {entryDecision === 'gate'
+                    ? 'Evening prayers are part of Unfold Premium.'
+                    : `Start a devotional to unlock\npersonalized evening prayers.`}
                 </Text>
               </View>
             )}
 
             {/* === EVENING SCRIPTURE SECTION === */}
-            {currentDay?.eveningScriptureRef && (
+            {entryAllowed && currentDay?.eveningScriptureRef && (
               <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).delay(examen ? 800 : 200).easing(Ease.out)}>
                 {/* Section divider */}
                 <View

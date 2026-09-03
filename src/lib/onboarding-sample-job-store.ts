@@ -14,7 +14,8 @@
  */
 import { mmkvStorage } from './mmkv-storage';
 
-const STORE_KEY = 'onboarding-sample-job-v1';
+/** Exported so full-reset can clear a stale in-flight sample job. */
+export const STORE_KEY = 'onboarding-sample-job-v1';
 
 /** Records older than this are ignored (and treated as absent). */
 export const ONBOARDING_SAMPLE_JOB_TTL_MS = 24 * 60 * 60 * 1000;

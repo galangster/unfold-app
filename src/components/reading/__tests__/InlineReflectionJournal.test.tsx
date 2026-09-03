@@ -17,14 +17,13 @@ const mockEntries: Array<{
   questionResponses?: Array<{ question: string; response: string }>;
 }> = [];
 
+// Mirrors the store: one entry per (devotionalId, dayNumber), id returned.
 const mockAddJournalEntry = jest.fn(({ devotionalId, dayNumber, content }) => {
-  mockEntries.push({
-    id: `entry-${devotionalId}-${dayNumber}`,
-    devotionalId,
-    dayNumber,
-    content,
-    questionResponses: [],
-  });
+  const id = `entry-${devotionalId}-${dayNumber}`;
+  if (!mockEntries.some((entry) => entry.id === id)) {
+    mockEntries.push({ id, devotionalId, dayNumber, content, questionResponses: [] });
+  }
+  return id;
 });
 
 const mockUpdateQuestionResponse = jest.fn((entryId: string, question: string, response: string) => {
@@ -40,6 +39,8 @@ const mockUpdateQuestionResponse = jest.fn((entryId: string, question: string, r
   entry.questionResponses = responses;
 });
 
+const mockFlushUnfoldStorePersist = jest.fn(() => true);
+
 const mockGetJournalEntry = jest.fn((devotionalId: string, dayNumber: number) =>
   mockEntries.find((entry) => entry.devotionalId === devotionalId && entry.dayNumber === dayNumber)
 );
@@ -48,6 +49,7 @@ jest.mock('@/lib/store', () => ({
   FONT_SIZE_VALUES: {
     medium: { body: 18, bodyLineHeight: 28 },
   },
+  flushUnfoldStorePersist: () => mockFlushUnfoldStorePersist(),
   useUnfoldStore: (selector: (state: unknown) => unknown) =>
     selector({
       getJournalEntry: mockGetJournalEntry,
@@ -403,6 +405,13 @@ describe('InlineReflectionJournal', () => {
       'entry-devotional-1',
       'What stood out?',
       'Pending background answer'
+    );
+    // …and the store's coalesced persist is flushed AFTER that write: the
+    // store's own AppState listener registered at module load, so it already
+    // ran and would have left this response in the debounce window.
+    expect(mockFlushUnfoldStorePersist).toHaveBeenCalledTimes(1);
+    expect(mockUpdateQuestionResponse.mock.invocationCallOrder[0]).toBeLessThan(
+      mockFlushUnfoldStorePersist.mock.invocationCallOrder[0],
     );
 
     act(() => {

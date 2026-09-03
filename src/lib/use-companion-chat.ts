@@ -19,6 +19,7 @@ import { PRIMARY_BACKEND_URL, getAuthHeaders, sanitizeForPrompt } from '@/lib/ap
 import { useUnfoldStore } from '@/lib/store';
 import { logger } from '@/lib/logger';
 import { analyzeNetworkError } from '@/lib/network-error-handler';
+import { AiBudgetError, readAiBudgetError } from '@/lib/ai-budget-error';
 import { parseDeepLinks } from './parse-deep-links';
 import { generateConversationTitle } from './companion-service';
 import { companionReplyAnnouncement } from '@/lib/companion-announcements';
@@ -145,7 +146,8 @@ async function consumeSSE(
   });
 
   if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`);
+    // A daily AI budget 429 carries its own copy and must not be retried.
+    throw (await readAiBudgetError(response)) ?? new Error(`HTTP ${response.status}`);
   }
 
   // Attempt ReadableStream (RN 0.83+ with new architecture)
@@ -260,7 +262,7 @@ async function fallbackNonStreaming(
   );
 
   if (!response.ok) {
-    throw new Error(`Backend returned ${response.status}`);
+    throw (await readAiBudgetError(response)) ?? new Error(`Backend returned ${response.status}`);
   }
 
   const data = await response.json();
@@ -545,6 +547,11 @@ export function useCompanionChat() {
         } catch (sseErr: any) {
           if (sseErr.name === 'AbortError') throw sseErr;
 
+          // The daily AI budget is used up: the non-streaming endpoint would
+          // answer the same 429, so surface the budget copy instead of
+          // retrying into the generic failure.
+          if (sseErr instanceof AiBudgetError) throw sseErr;
+
           // P0-3: once tokens streamed (or the stream stalled after being
           // accepted), a retry through the non-streaming endpoint would
           // double-bill and rewind visible text — surface via the outer
@@ -683,6 +690,9 @@ export function useCompanionChat() {
           return current?.content ? 'sent' : 'error';
         } else {
           const analyzed = analyzeNetworkError(err);
+          // The budget copy (with its reset estimate) beats the generic classifier.
+          const userFriendlyMessage =
+            err instanceof AiBudgetError ? err.message : analyzed.userFriendlyMessage;
           logger.warn('[CompanionChat] Error:', err, analyzed.type);
           if (accumulatedText) {
             // WR-11: a partial answer survived the drop — keep it as a normal
@@ -693,20 +703,20 @@ export function useCompanionChat() {
               status: 'complete',
             }, streamConversationId);
             if (isStreamConversationVisible()) {
-              setError(`${analyzed.userFriendlyMessage} Your reply may be incomplete.`);
+              setError(`${userFriendlyMessage} Your reply may be incomplete.`);
             }
             AccessibilityInfo.announceForAccessibility(
-              `Connection interrupted. ${analyzed.userFriendlyMessage} Your reply may be incomplete.`,
+              `Connection interrupted. ${userFriendlyMessage} Your reply may be incomplete.`,
             );
             return 'sent';
           }
-          if (isStreamConversationVisible()) setError(analyzed.userFriendlyMessage);
+          if (isStreamConversationVisible()) setError(userFriendlyMessage);
           updateMessage(companionId, {
             status: 'error',
-            content: analyzed.userFriendlyMessage,
+            content: userFriendlyMessage,
           }, streamConversationId);
           AccessibilityInfo.announceForAccessibility(
-            `Companion reply failed. ${analyzed.userFriendlyMessage}`,
+            `Companion reply failed. ${userFriendlyMessage}`,
           );
           return 'error';
         }

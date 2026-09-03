@@ -156,10 +156,9 @@ export default function StreakSettingsScreen() {
     toggleWeekendAmnesty();
   };
 
-  // Calculate days until next freeze
+  // Days until the next 7-day milestone. 7 - (streak % 7) is already 1..7, so a
+  // streak sitting exactly on a milestone reports a full 7 without a special case.
   const daysUntilFreeze = streak > 0 ? 7 - (streak % 7) : 7;
-  // Handle edge case where streak % 7 === 0 and streak > 0
-  const adjustedDaysUntilFreeze = daysUntilFreeze === 0 ? 7 : daysUntilFreeze;
 
   // Streak Society tier calculations
   const currentTier = useMemo(() => getCurrentTier(streak), [streak]);
@@ -383,7 +382,7 @@ export default function StreakSettingsScreen() {
             >
               <CalendarIcon size={24} color={colors.textSubtle} weight="light" />
               <Text style={[ssStyles.statValue, { color: colors.text }]}>
-                {adjustedDaysUntilFreeze}
+                {daysUntilFreeze}
               </Text>
               <Text style={[ssStyles.statLabel, { color: colors.textMuted }]}>
                 Till Freeze
@@ -396,7 +395,7 @@ export default function StreakSettingsScreen() {
                 style={[ssStyles.tooltipBubble, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}
               >
                 <Text style={[ssStyles.tooltipText, { color: colors.textMuted }]}>
-                  Complete {adjustedDaysUntilFreeze} more {adjustedDaysUntilFreeze === 1 ? 'day' : 'days'} to earn your next streak freeze
+                  Complete {daysUntilFreeze} more {daysUntilFreeze === 1 ? 'day' : 'days'} to earn your next streak freeze
                 </Text>
               </Animated.View>
             )}

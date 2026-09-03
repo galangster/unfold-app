@@ -2,6 +2,7 @@ import {
   buildInitialQuestionResponses,
   diffSoapWrites,
   resolveInitialJournalMode,
+  resolveJournalCloseAction,
 } from '../journal-entry-state';
 
 describe('resolveInitialJournalMode', () => {
@@ -22,23 +23,21 @@ describe('resolveInitialJournalMode', () => {
 });
 
 describe('buildInitialQuestionResponses', () => {
-  it('hydrates responses onto the indices of matching question text', () => {
-    const map = buildInitialQuestionResponses(
-      { questionResponses: [{ question: 'Q2', response: 'my answer' }] },
-      { reflectionQuestions: ['Q1', 'Q2'] },
-    );
-    expect(map.get(1)).toBe('my answer');
-    expect(map.size).toBe(1);
+  it('keys persisted responses by their question text (the store key)', () => {
+    const map = buildInitialQuestionResponses({
+      questionResponses: [
+        { question: 'Q2', response: 'my answer' },
+        { question: 'AI prompt', response: 'deeper' },
+      ],
+    });
+    expect(map.get('Q2')).toBe('my answer');
+    expect(map.get('AI prompt')).toBe('deeper');
+    expect(map.size).toBe(2);
   });
 
-  it('returns an empty map when nothing is persisted or no questions match', () => {
-    expect(buildInitialQuestionResponses(undefined, { reflectionQuestions: ['Q1'] }).size).toBe(0);
-    expect(
-      buildInitialQuestionResponses(
-        { questionResponses: [{ question: 'gone', response: 'x' }] },
-        { reflectionQuestions: ['Q1'] },
-      ).size,
-    ).toBe(0);
+  it('returns an empty map when nothing is persisted', () => {
+    expect(buildInitialQuestionResponses(undefined).size).toBe(0);
+    expect(buildInitialQuestionResponses({ questionResponses: undefined }).size).toBe(0);
   });
 });
 
@@ -65,5 +64,31 @@ describe('diffSoapWrites', () => {
     expect(diffSoapWrites(soap({ scripture: 'John 3:16' }), undefined)).toEqual([
       { field: 'scripture', value: 'John 3:16' },
     ]);
+  });
+});
+
+describe('resolveJournalCloseAction', () => {
+  const journalTabEntry = ['(tabs)', '(journal)', 'entry'];
+
+  it('pops back to the hub when the Journal tab pushed the entry on top of it', () => {
+    expect(resolveJournalCloseAction({ segments: journalTabEntry, stackIndex: 1 })).toBe('back');
+  });
+
+  it('replaces the entry with the hub when it is the first route of the Journal stack', () => {
+    expect(resolveJournalCloseAction({ segments: journalTabEntry, stackIndex: 0 })).toBe(
+      'replace-journal-hub',
+    );
+  });
+
+  it('always pops in the Today flow, whatever the stack depth', () => {
+    const todayFlow = ['(tabs)', '(today)', 'journal'];
+    expect(resolveJournalCloseAction({ segments: todayFlow, stackIndex: 0 })).toBe('back');
+    expect(resolveJournalCloseAction({ segments: todayFlow, stackIndex: 2 })).toBe('back');
+  });
+
+  it('needs the route group to recognise the Journal-tab mount (pathname strips it)', () => {
+    // usePathname() reports '/entry' for (journal)/entry — without the group
+    // segment the screen is indistinguishable from any other entry route.
+    expect(resolveJournalCloseAction({ segments: ['entry'], stackIndex: 0 })).toBe('back');
   });
 });

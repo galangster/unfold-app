@@ -134,7 +134,10 @@ export function noteSyncData(note: Note): Record<string, unknown> {
     dayNumber: note.dayNumber,
     bibleBookId: note.bibleBookId,
     bibleChapter: note.bibleChapter,
-    folderId: note.folderId,
+    // Explicit null: the server applies null but ignores a missing key, and
+    // compact() drops undefined — "move to no folder" / "delete folder (keep
+    // notes)" must clear folder_id on every other device.
+    folderId: note.folderId ?? null,
   });
 }
 
@@ -142,7 +145,9 @@ export function noteFolderSyncData(folder: NoteFolder): Record<string, unknown> 
   return compact({
     name: folder.name,
     color: folder.color,
-    parentId: folder.parentId,
+    // Same as folderId above: a folder moved back to the root must clear
+    // parent_id server-side.
+    parentId: folder.parentId ?? null,
     sortOrder: folder.sortOrder,
   });
 }

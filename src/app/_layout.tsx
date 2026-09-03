@@ -27,6 +27,8 @@ import { shouldMarkNotificationNavigationReady } from '@/lib/push-notification-h
 import { migrateGenerationDataToServer } from '@/lib/generation-migration';
 import { endOrphanedReadingSessions } from '@/lib/widget-bridge';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { flushLastFatalBreadcrumb, installGlobalErrorHandler } from '@/lib/global-error-handler';
+import { armHealthyBootTimer } from '@/lib/crash-marker';
 import { AudioPlayerOverlay } from '@/components/AudioPlayerOverlay';
 import { PrivacyShield } from '@/components/PrivacyShield';
 
@@ -48,6 +50,16 @@ RNTextInput.defaultProps = { ...(RNTextInput.defaultProps ?? {}), maxFontSizeMul
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
+
+// Fatal JS errors never reach the error boundary. Record them (bug log + boot
+// crash-loop marker) before RN's own handler runs; no-op on web/jest where
+// ErrorUtils is absent. A launch that stays up for the healthy window without
+// crashing clears the boot crash count.
+installGlobalErrorHandler();
+// A fatal from the previous launch left a synchronous breadcrumb behind (its
+// own bug-log write died with the process); turn it into a bug-log entry now.
+flushLastFatalBreadcrumb();
+armHealthyBootTimer();
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -235,6 +247,19 @@ function RootLayoutNav() {
   );
 }
 
+/**
+ * "Go to Today" from the error boundary. The boundary remounts its subtree
+ * under a fresh key; the root Stack unmounted with the crashed subtree, which
+ * cleared the navigation container's state, so the remount mounts a fresh
+ * navigator at '/' and index routes a completed user to the Today tab. What
+ * is cleared here is the app state that would steer that fresh navigator
+ * straight back into the crash.
+ */
+function recoverToHome(): void {
+  // A fresh resume context makes Today auto-open the reading screen.
+  useUnfoldStore.getState().clearResumeContext();
+}
+
 function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
     'PPEditorialNew-Light': require('../../assets/fonts/PPEditorialNew-Light.otf'),
@@ -276,7 +301,7 @@ function RootLayout() {
   }
 
   return (
-    <ErrorBoundary>
+    <ErrorBoundary onNavigateHome={recoverToHome}>
       <QueryClientProvider client={queryClient}>
         <GestureHandlerRootView style={{ flex: 1, backgroundColor: Colors.background }}>
           <KeyboardProvider>

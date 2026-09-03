@@ -40,7 +40,8 @@ export function usePremiumNudge({ screen }: UsePremiumNudgeParams): UsePremiumNu
   const streakFreezes = useUnfoldStore((s) => s.streakFreezes);
   const streakGraceDaysUsedThisWeek = useUnfoldStore((s) => s.streakGraceDaysUsedThisWeek);
   const streakWeekStart = useUnfoldStore((s) => s.streakWeekStart);
-  const isPremiumUser = useUnfoldStore((s) => Boolean(s.user?.isPremium));
+  // Same premium source as the streak engine; 'unknown' counts as not premium.
+  const isPremiumUser = premiumPolicy === 'granted';
   const streakJustResetFlag = useUnfoldStore((s) => s.streakJustReset);
   const hasUsedAudio = useUnfoldStore((s) => s.hasUsedAudio);
   const justCompletedSeriesTitle = useUnfoldStore((s) => s.justCompletedSeriesTitle);
