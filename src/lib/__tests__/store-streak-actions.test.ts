@@ -131,8 +131,30 @@ describe('store streak actions', () => {
     expect(streakSnapshot()).toMatchObject({ streakCurrent: 7, streakFreezes: 0 });
   });
 
-  it("recordStreakRead treats an 'unknown' policy as not premium", () => {
+  it("recordStreakRead earns the milestone freeze under 'unknown' when the mirror says premium", () => {
+    // 'unknown' is sticky for the whole session when the RevenueCat identity
+    // sync fails (first launch after install/reset while offline). Milestones
+    // are one-shot, so failing closed here would permanently cost a paying
+    // user the day-7 freeze rather than merely delaying it.
     seedStreak({ user: { isPremium: true } as unknown as UserProfile });
+    setMockPremiumPolicy('unknown');
+
+    useUnfoldStore.getState().recordStreakRead();
+
+    expect(streakSnapshot()).toMatchObject({ streakCurrent: 7, streakFreezes: 1 });
+  });
+
+  it("recordStreakRead earns nothing under 'unknown' when the mirror says free", () => {
+    seedStreak({ user: { isPremium: false } as unknown as UserProfile });
+    setMockPremiumPolicy('unknown');
+
+    useUnfoldStore.getState().recordStreakRead();
+
+    expect(streakSnapshot()).toMatchObject({ streakCurrent: 7, streakFreezes: 0 });
+  });
+
+  it("recordStreakRead earns nothing under 'unknown' when there is no user at all", () => {
+    seedStreak({ user: null });
     setMockPremiumPolicy('unknown');
 
     useUnfoldStore.getState().recordStreakRead();
@@ -166,6 +188,30 @@ describe('store streak actions', () => {
       streakCurrent: 11,
       streakFreezes: 1,
       streakGraceDaysUsedThisWeek: 1,
+    });
+  });
+
+  it("reconcileStreakState never resets a streak banked freezes can cover, even under 'unknown'", () => {
+    // The dangerous cold-start path: the passive reconcile runs on hydration,
+    // before RevenueCat has reported in. Freeze CONSUMPTION is not premium-
+    // gated (decideStreakContinuation ignores isPremium for coverage), so a
+    // churned or not-yet-resolved user must keep the streak their banked
+    // freezes pay for. Sunday -> Wednesday leaves Monday and Tuesday missed:
+    // the weekly grace covers one, a banked freeze the other.
+    seedStreak({
+      streakCurrent: 10,
+      streakLongest: 10,
+      streakLastReadDate: LAST_SUNDAY.toISOString(),
+      streakFreezes: 2,
+    });
+    setMockPremiumPolicy('unknown');
+
+    useUnfoldStore.getState().reconcileStreakState();
+
+    expect(streakSnapshot()).toMatchObject({
+      streakCurrent: 10,
+      streakFreezes: 2,
+      streakJustReset: false,
     });
   });
 

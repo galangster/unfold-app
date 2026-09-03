@@ -24,6 +24,7 @@ import type { NudgeType, NudgeImpression } from './nudges';
 import { NUDGE_INITIAL_STATE } from './nudges';
 import { applyStreakRead, getWeekStart, reconcileStreakState } from './streak-helpers';
 import { getEffectivePremiumAccessPolicy } from './premium-state';
+import { canEarnPremiumMilestone } from './premium-access-policy';
 import { repairRehydratedState } from './store-rehydrate-repair';
 import type { WordStudy } from './word-study';
 import {
@@ -1418,9 +1419,15 @@ export const useUnfoldStore = create<UnfoldState>()(
               streakWeekendAmnesty: state.streakWeekendAmnesty,
               streakFreezes: state.streakFreezes,
               // Freeze earning follows the premium policy the UI shows (RevenueCat
-              // confirmed, dev/QA overrides included), not the persisted mirror;
-              // 'unknown' stays conservative and earns nothing.
-              isPremium: getEffectivePremiumAccessPolicy() === 'granted',
+              // confirmed, dev/QA overrides included), not the persisted mirror.
+              // 'unknown' is the exception: the milestone fires once and cannot
+              // be earned again, and 'unknown' can last a whole session when the
+              // identity sync fails, so it falls back to the mirror rather than
+              // silently burning a paying user's freeze.
+              isPremium: canEarnPremiumMilestone(
+                getEffectivePremiumAccessPolicy(),
+                state.user?.isPremium,
+              ),
               streakLongest: state.streakLongest,
             },
             new Date()
