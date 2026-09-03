@@ -294,6 +294,28 @@ only visible because the backend happened to log a sync uid.
 - `bun run lint`, `bun run typecheck`, `bun test` green. `/simplify` run on
   the merged diff before the build.
 
+### Simulator verification (2026-09-03, iPhone 17 Pro, dev client)
+
+Run against the branch build, hard-killing the process each time so no
+background flush could rescue the write. `flowdeck stop` reported "Force kill
+was required" on both runs.
+
+| Case | Result |
+|---|---|
+| Type a name, hard kill, relaunch | Returns to the name step with the typed value still in the field. No welcome screen, no cutscenes. |
+| Reach the paywall, hard kill, relaunch | Returns to the paywall. No welcome screen, no name re-prompt. This is the reported bug, reproduced and fixed. |
+| "I'll decide later" | Completes onboarding, lands on Today greeting the person by the name they typed, starts no generation. |
+| Storage boot path | `unfold-store-v2` opened encrypted; the recovery namespace is touched only by the outbox merge, so the storage-locked gate correctly stayed off. |
+
+Two notes on what the dev client cannot show. `__DEV__` forces the premium
+policy to `granted`, so the paywall CTA completes a purchase and the final page
+cannot be reached by tapping through; the decide-later run above is
+distinguishable because a purchase lands on `themeType` while decide-later
+lands on Today. The welcome-back beat needs a draft older than thirty minutes,
+so it is covered by unit tests rather than by this walkthrough. The
+decide-later control's render gate (`currentPage === totalPages - 1`, not
+QA-gated) carries five unit tests of its own.
+
 ### Follow-ups from the simplify pass
 
 Recorded, not done. None blocks the hotfix; all were judged too structural to
