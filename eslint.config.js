@@ -83,9 +83,6 @@ module.exports = defineConfig([
       // linted by `bun run lint` and print to the terminal on purpose.
       "scripts/**",
       "metro.config.js",
-      // TEMPORARY: two `[Journal]` breadcrumbs owned by the concurrent journal
-      // workstream. Move them to `logger` and delete this entry once it lands.
-      "src/app/(tabs)/(journal)/index.tsx",
     ],
     rules: {
       "no-console": "off",

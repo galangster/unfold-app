@@ -15,8 +15,6 @@ const config = require('../../../eslint.config.js') as FlatConfigEntry[];
 const ALLOWLIST = [
   'metro.config.js',
   'scripts/**',
-  // TEMPORARY — owned by the concurrent journal workstream; see eslint.config.js.
-  'src/app/(tabs)/(journal)/index.tsx',
   'src/components/reading/rangy-bundle.ts',
   'src/lib/logger.ts',
 ];

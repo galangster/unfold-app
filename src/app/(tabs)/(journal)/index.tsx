@@ -66,6 +66,7 @@ import { useCreationGate } from '@/hooks/useCreationGate';
 import { prepareJournalFolderDelete } from '@/lib/journal-folder-delete';
 import { undoJournalDeletions, type JournalUndoAction } from '@/lib/journal-undo';
 import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
+import { logger } from '@/lib/logger';
 
 type Segment = 'reflections' | 'notebook';
 
@@ -1121,17 +1122,12 @@ export default function JournalHubScreen() {
   // ---- Handlers ----
   const handleWriteToday = useCallback(() => {
     if (!currentDevotional) {
-      console.log('[Journal] handleWriteToday: no currentDevotional, returning');
+      logger.warn('[Journal] handleWriteToday with no current devotional');
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     // Navigate to the day being reflected on (last completed), not the next day
     const reflectionDay = currentDayData?.dayNumber ?? currentDevotional.currentDay;
-    console.log('[Journal] handleWriteToday → pushing /(tabs)/(journal)/entry', {
-      devotionalId: currentDevotional.id,
-      dayNumber: reflectionDay,
-      currentDevTitle: currentDevotional.title,
-    });
     router.push({
       pathname: '/(tabs)/(journal)/entry',
       params: {
