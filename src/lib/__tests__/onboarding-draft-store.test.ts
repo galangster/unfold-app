@@ -12,7 +12,9 @@ jest.mock('../mmkv-storage', () => {
   };
 });
 
+import { ABANDONED_MARKER_KEY as TELEMETRY_ABANDONED_MARKER_KEY } from '../onboarding-telemetry';
 import {
+  ABANDONED_MARKER_KEY,
   saveOnboardingDraft,
   saveOnboardingSampleDay,
   getOnboardingDraft,
@@ -140,5 +142,20 @@ describe('onboarding-draft-store', () => {
       throw new Error('MMKV unavailable');
     });
     expect(getOnboardingDraft({ deviceId: 'device-A' })).toBeNull();
+  });
+});
+
+describe('abandonment marker teardown', () => {
+  it('clears the marker with the draft, so the next abandonment still reports', () => {
+    saveOnboardingDraft({ deviceId: 'device-A', stepId: 'name', data: answers });
+    mmkvStorage.setItem(ABANDONED_MARKER_KEY, '1');
+
+    clearOnboardingDraft();
+
+    expect(mmkvStorage.getItem(ABANDONED_MARKER_KEY)).toBeNull();
+  });
+
+  it('keeps its mirrored key equal to the telemetry module that owns the name', () => {
+    expect(ABANDONED_MARKER_KEY).toBe(TELEMETRY_ABANDONED_MARKER_KEY);
   });
 });

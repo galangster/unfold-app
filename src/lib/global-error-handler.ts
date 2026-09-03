@@ -1,7 +1,6 @@
 import type { ErrorUtils as ErrorUtilsShape } from 'react-native';
 import { logBugError } from '@/lib/bug-logger';
 import { recordCrash, recordFatalBreadcrumb, takeLastFatalBreadcrumb } from '@/lib/crash-marker';
-import { captureAppError } from '@/lib/sentry';
 
 let installedOn: ErrorUtilsShape | null = null;
 
@@ -50,12 +49,14 @@ export function installGlobalErrorHandler(
         recordFatalBreadcrumb(error);
         recordCrash();
       }
-      // The reporter gets the error message and the fatal flag only — never
-      // anything the person wrote.
-      captureAppError('fatal', error instanceof Error ? error : new Error(String(error)), {
+      // One sink. `logBugError` writes the local trail and reports; capturing
+      // separately would file each fatal twice, under two different sources.
+      // The reporter gets the message and the fatal flag only — never anything
+      // the person wrote.
+      void logBugError('global-error', error, { isFatal: Boolean(isFatal) }, {
         isFatal: Boolean(isFatal),
+        mechanism: 'fatal',
       });
-      void logBugError('global-error', error, { isFatal: Boolean(isFatal) });
     } catch {
       // Recording must never mask the original error.
     }
@@ -75,11 +76,16 @@ export function flushLastFatalBreadcrumb(): boolean {
   try {
     const breadcrumb = takeLastFatalBreadcrumb();
     if (!breadcrumb) return false;
-    void logBugError('global-error-fatal-previous-launch', breadcrumb.message, {
-      isFatal: true,
-      crashedAt: breadcrumb.ts,
-      stack: breadcrumb.stack,
-    });
+    // Local trail only. This replays a fatal from a PREVIOUS launch, whose own
+    // bug-log write died with the process; the crash itself was already
+    // reported natively as it happened, so reporting here would file every
+    // crash a second time on the next launch.
+    void logBugError(
+      'global-error-fatal-previous-launch',
+      breadcrumb.message,
+      { isFatal: true, crashedAt: breadcrumb.ts, stack: breadcrumb.stack },
+      false,
+    );
     return true;
   } catch {
     return false;

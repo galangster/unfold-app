@@ -30,6 +30,9 @@ export const STORE_KEY = 'onboarding-draft-v1';
  */
 export const SAMPLE_DAY_KEY = 'onboarding-draft-sample-day-v1';
 
+/** Mirrors ABANDONED_MARKER_KEY in onboarding-telemetry.ts; a test holds them equal. */
+export const ABANDONED_MARKER_KEY = 'onboarding-abandon-reported-v1';
+
 /** Records older than this are ignored (and treated as absent). */
 export const ONBOARDING_DRAFT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -177,6 +180,11 @@ export function clearOnboardingDraft(): void {
   try {
     mmkvStorage.removeItem(STORE_KEY);
     mmkvStorage.removeItem(SAMPLE_DAY_KEY);
+    // The abandonment marker belongs to the draft's lifetime: a stale one
+    // silences the next report on this device. Owned here so a future clear
+    // path cannot forget it. The key is duplicated rather than imported to
+    // keep this store free of a cycle through the telemetry module.
+    mmkvStorage.removeItem(ABANDONED_MARKER_KEY);
   } catch {
     // Best-effort.
   }

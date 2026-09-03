@@ -64,6 +64,9 @@ const CONSOLE_BREADCRUMB_CATEGORY = 'console';
  * (`tags`, `extra`, breadcrumb `data`): step ids, route names, error identity,
  * and build/version provenance. Every other string is dropped.
  */
+/** Tag marking a funnel milestone rather than a failure. */
+const APP_EVENT_SOURCE = 'app_event';
+
 const ALLOWED_DATA_STRING_KEYS: ReadonlySet<string> = new Set([
   // Onboarding step ids and navigation route names.
   'step', 'stepId', 'step_id', 'fromStep', 'toStep', 'from', 'to',
@@ -71,6 +74,8 @@ const ALLOWED_DATA_STRING_KEYS: ReadonlySet<string> = new Set([
   // Error identity.
   'source', 'category', 'errorName', 'errorType', 'errorMessage',
   'mechanism', 'handled', 'phase', 'reason', 'result', 'status', 'level',
+  // Shape of a dropped payload: key names only, never their values.
+  'dataKeys', 'componentStack',
   // Build and version provenance.
   'release', 'dist', 'environment', 'platform',
   'appVersion', 'app_version', 'buildNumber', 'app_build', 'buildProfile',
@@ -466,7 +471,14 @@ export function initSentry(): void {
       attachStacktrace: false,
       maxBreadcrumbs: 50,
 
-      beforeSend: (event) => scrubEvent(event),
+      beforeSend: (event) => {
+        const scrubbed = scrubEvent(event);
+        // A funnel milestone is a counter, not a failure: the breadcrumb trail
+        // is only context for an error, so shipping 50 of them per event is
+        // payload and rebuild cost for nothing.
+        if (scrubbed && scrubbed.tags?.source === APP_EVENT_SOURCE) delete scrubbed.breadcrumbs;
+        return scrubbed;
+      },
       beforeBreadcrumb: (breadcrumb) => scrubBreadcrumb(breadcrumb),
       // A NATIVE crash is assembled and sent by the Cocoa SDK; it never passes
       // through `beforeSend` or `beforeBreadcrumb` above. Cocoa's own automatic
@@ -488,7 +500,11 @@ export function initSentry(): void {
     return;
   }
 
-  attachHashedUser(sentry);
+  // Off the launch path. attachHashedUser reads the Keychain synchronously via
+  // getDeviceId(), and this runs at module scope before the first frame. Events
+  // in the first tick simply carry no user, which costs nothing: they are still
+  // reported, and the hash is attached to everything after.
+  setTimeout(() => attachHashedUser(sentry), 0);
 }
 
 /** True only once `initSentry()` has actually started the SDK with a DSN. */
@@ -497,38 +513,8 @@ export function isSentryEnabled(): boolean {
 }
 
 /** Report a handled failure. `source` identifies the call site, e.g. 'onboarding'. */
-const DUPLICATE_REPORT_WINDOW_MS = 5_000;
-const recentReports = new Map<string, number>();
-
-/**
- * Pure: whether this report is an echo of one already sent. Exported for tests.
- *
- * Several layered paths legitimately see one failure: `reportError` writes the
- * local bug log, which reports too, and a couple of call sites invoke both by
- * hand. Reporting each separately would inflate every issue's count and destroy
- * the signal, so the FIRST report of a (source, message) wins and echoes inside
- * the window are dropped. Chosen over silencing one layer, because that left
- * real failures — a store rehydration error, say — reporting as breadcrumbs
- * only, and a breadcrumb is invisible unless some later event carries it.
- */
-export function isDuplicateReport(
-  key: string,
-  now: number,
-  seen: Map<string, number> = recentReports,
-  windowMs = DUPLICATE_REPORT_WINDOW_MS,
-): boolean {
-  for (const [seenKey, at] of seen) {
-    if (now - at > windowMs) seen.delete(seenKey);
-  }
-  const previous = seen.get(key);
-  if (previous !== undefined && now - previous <= windowMs) return true;
-  seen.set(key, now);
-  return false;
-}
-
 export function captureAppError(source: string, error: Error, extra?: Record<string, unknown>): void {
   if (!enabled || sentryModule === null) return;
-  if (isDuplicateReport(`${source}:${error.message}`, Date.now())) return;
   try {
     sentryModule.captureException(error, {
       tags: { source: truncate(source) },
@@ -564,7 +550,7 @@ export function captureAppEvent(name: string, data?: Record<string, string | num
   try {
     sentryModule.captureMessage(name, {
       level: 'info',
-      tags: { source: 'app_event' },
+      tags: { source: APP_EVENT_SOURCE },
       extra: data ?? {},
     });
   } catch {

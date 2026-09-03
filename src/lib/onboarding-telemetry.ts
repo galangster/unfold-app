@@ -176,6 +176,14 @@ function hasReportedAbandonedOnboarding(): boolean {
  * report. Call this wherever the draft itself is cleared — completion, or a
  * reset — or a stale marker will silence the signal for the next walk-through.
  */
+/**
+ * Clears the once-per-draft marker.
+ *
+ * `clearOnboardingDraft()` owns the teardown in production, so this exists for
+ * tests and for any future caller that drops a draft by another route. Kept
+ * exported deliberately: the marker and the draft must always die together, and
+ * a caller that cannot reach the draft store still needs this.
+ */
 export function clearAbandonedOnboardingMarker(): void {
   try {
     mmkvStorage.removeItem(ABANDONED_MARKER_KEY);

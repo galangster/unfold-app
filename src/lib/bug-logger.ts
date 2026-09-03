@@ -178,23 +178,40 @@ export function logBugEvent(
  * this layer — which would leave direct callers such as the store's
  * rehydration and validation failures reporting as breadcrumbs only, and a
  * breadcrumb is invisible unless a later event carries it — the echo is
- * dropped in `captureAppError` by `isDuplicateReport`. First report wins.
+ * collapsed by making this the only place that reports: `reportError`, the
+ * fatal handler and the error boundary all route through here rather than
+ * capturing alongside it.
  *
  * `data` is NOT forwarded. Call sites pass user-derived text through it
  * (`generating.tsx` sends a series title), so only its key names travel.
  */
-export function logBugError(category: string, error: unknown, data?: unknown): Promise<void> {
+export function logBugError(
+  category: string,
+  error: unknown,
+  data?: unknown,
+  reportExtra?: Record<string, string | number | boolean> | false,
+): Promise<void> {
   const payload = {
     error: serializeData(error),
     ...(data !== undefined ? { data: serializeData(data) } : {}),
   };
 
-  captureAppError(
-    category,
-    error instanceof Error ? error : new Error(String(error)),
-    // Key names only — the values can be user content.
-    data && typeof data === 'object' ? { dataKeys: Object.keys(data as object) } : undefined,
-  );
+  // `false` means the caller has a specific reason not to report — today only
+  // the replay of a previous launch's fatal, which the native SDK already filed
+  // at the moment of the crash. Reporting it again would duplicate every crash
+  // on the following launch.
+  if (reportExtra !== false) {
+    captureAppError(
+      category,
+      error instanceof Error ? error : new Error(String(error)),
+      // `data` is never forwarded: call sites put user-authored text in it (a
+      // series title, a devotional day title). `reportExtra` is the caller's
+      // vouched, primitive-only payload, and the scrubber still gates it.
+      reportExtra ?? (data && typeof data === 'object'
+        ? { dataKeys: Object.keys(data as object).join(',') }
+        : undefined),
+    );
+  }
 
   return logBugEvent(category, 'error', payload, 'error');
 }

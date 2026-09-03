@@ -1,6 +1,5 @@
 import { logger } from '@/lib/logger';
 import { logBugError } from '@/lib/bug-logger';
-import { captureAppError } from '@/lib/sentry';
 
 /**
  * Reduce an `extra` payload to what is safe to leave a device.
@@ -14,8 +13,8 @@ import { captureAppError } from '@/lib/sentry';
  *
  * Never pass user-authored text in `extra`.
  */
-function sanitizeExtra(extra: Record<string, unknown>): Record<string, unknown> {
-  const safe: Record<string, unknown> = {};
+function sanitizeExtra(extra: Record<string, unknown>): Record<string, string | number | boolean> {
+  const safe: Record<string, string | number | boolean> = {};
   for (const [key, value] of Object.entries(extra)) {
     const primitive =
       typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean';
@@ -41,9 +40,7 @@ export function reportError(
     logger.error(`[${source}] extra`, extra);
   }
 
-  void logBugError(source, err, extra);
-
-  // Last: the local trail is already written, so a reporter that misbehaves
-  // cannot cost us the bug log.
-  captureAppError(source, err, extra ? sanitizeExtra(extra) : undefined);
+  // `logBugError` is the single reporting sink: it writes the local trail and
+  // reports. Capturing here as well would file every one of these twice.
+  void logBugError(source, err, extra, extra ? sanitizeExtra(extra) : undefined);
 }

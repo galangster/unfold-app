@@ -8,7 +8,7 @@ import {
   recordCrash,
 } from '@/lib/crash-marker';
 import { performFullLocalReset } from '@/lib/full-reset';
-import { addAppBreadcrumb, captureAppError } from '@/lib/sentry';
+import { addAppBreadcrumb } from '@/lib/sentry';
 import { DarkColors, LightColors, type ColorTheme } from '@/constants/colors';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
@@ -146,14 +146,14 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    void logBugError('error-boundary', error, {
-      componentStack: errorInfo.componentStack,
-      timestamp: new Date().toISOString(),
-    });
-    // The component stack is code, not content — safe to send.
-    captureAppError('error-boundary', error, {
-      componentStack: errorInfo.componentStack,
-    });
+    // One sink: `logBugError` writes the local trail and reports. The
+    // component stack is code, not content, so it is vouched for explicitly.
+    void logBugError(
+      'error-boundary',
+      error,
+      { componentStack: errorInfo.componentStack, timestamp: new Date().toISOString() },
+      { componentStack: errorInfo.componentStack ?? '', mechanism: 'error-boundary' },
+    );
     if (isCrashLoop(recordCrash())) {
       this.setState({ mode: 'recovery' });
     }

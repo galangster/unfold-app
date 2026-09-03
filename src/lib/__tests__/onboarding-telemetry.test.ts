@@ -46,6 +46,7 @@ import {
   trackOnboardingStep,
 } from '../onboarding-telemetry';
 import { addAppBreadcrumb, captureAppEvent } from '@/lib/sentry';
+import { clearOnboardingDraft } from '../onboarding-draft-store';
 import { mmkvStorage } from '../mmkv-storage';
 
 const capture = captureAppEvent as jest.Mock;
@@ -119,6 +120,20 @@ describe('reportAbandonedOnboarding fires at most once per draft', () => {
       step: 'name',
       age_bucket: '6h',
     });
+  });
+
+  it('reports again after a completion path clears the draft', () => {
+    expect(reportAbandonedOnboarding('mirrorBack', 9 * HOUR)).toBe(true);
+
+    // Both onboarding completion paths clear the draft, and `clearOnboardingDraft`
+    // owns the marker's teardown now, so this is where the screen's two calls
+    // to `clearAbandonedOnboardingMarker` went. A marker left behind would
+    // silence the report for whoever onboards on this device next.
+    clearOnboardingDraft();
+    expect(mmkvStorage.getItem(ABANDONED_MARKER_KEY)).toBeNull();
+
+    expect(reportAbandonedOnboarding('name', 9 * HOUR)).toBe(true);
+    expect(capture).toHaveBeenCalledTimes(2);
   });
 
   it('still reports when the marker read throws', () => {
@@ -265,16 +280,20 @@ describe('screen wiring (ONB-TELEMETRY-1)', () => {
     return onboardingSrc.slice(start, end);
   }
 
-  it('reports the generated outcome from proceedToGeneration', () => {
+  // The abandonment marker is no longer cleared here: `clearOnboardingDraft`
+  // owns its teardown, so a completion path only has to clear the draft. What
+  // that call then clears is asserted behaviourally above and in
+  // `onboarding-draft-store.test.ts`.
+  it('reports the generated outcome from proceedToGeneration, and clears the draft with it', () => {
     const body = sliceBody('const proceedToGeneration = useCallback(', '}, [router, saveOnboardingData]);');
     expect(body).toContain("trackOnboardingCompleted('generated')");
-    expect(body).toContain('clearAbandonedOnboardingMarker()');
+    expect(body).toContain('clearOnboardingDraft()');
   });
 
-  it('reports the deferred outcome from handleDecideLater', () => {
+  it('reports the deferred outcome from handleDecideLater, and clears the draft with it', () => {
     const body = sliceBody('const handleDecideLater = useCallback(', 'const completeOnboarding');
     expect(body).toContain("trackOnboardingCompleted('deferred')");
-    expect(body).toContain('clearAbandonedOnboardingMarker()');
+    expect(body).toContain('clearOnboardingDraft()');
   });
 
   it('reports started at the name step and a breadcrumb per step change', () => {

@@ -193,7 +193,11 @@ export default function WelcomeScreen() {
     // completed user keeps a Keychain read, an MMKV read and a JSON.parse off
     // the blocking path of every ordinary cold start.
     if (user?.hasCompletedOnboarding) return null;
-    return getOnboardingDraft({ deviceId: getDeviceId() });
+    const draft = getOnboardingDraft({ deviceId: getDeviceId() });
+    // Keep the two fields this screen uses, not the record: `data` holds every
+    // answer the person typed, and there is no reason for a second copy of it
+    // to sit in component state for the life of the screen.
+    return draft ? { stepId: draft.stepId, savedAt: draft.savedAt } : null;
   });
   const hasOnboardingDraft = !!onboardingDraft;
 

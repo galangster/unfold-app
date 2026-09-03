@@ -87,9 +87,7 @@ import {
   trackOnboardingStarted,
   trackOnboardingStep,
   trackOnboardingResumed,
-  trackOnboardingCompleted,
-  clearAbandonedOnboardingMarker,
-} from '@/lib/onboarding-telemetry';
+  trackOnboardingCompleted} from '@/lib/onboarding-telemetry';
 import { createAutosaveController, shouldFlushAutosaveOnAppState } from '@/lib/autosave-controller';
 import {
   buildOnboardingSampleGenerationRequest,
@@ -1313,7 +1311,6 @@ export default function OnboardingScreen() {
     clearOnboardingDraft();
     // The draft is gone, so the abandonment marker must go with it or it would
     // silence the signal for whoever onboards on this device next.
-    clearAbandonedOnboardingMarker();
     trackOnboardingCompleted('generated');
     router.replace('/generating');
   }, [router, saveOnboardingData]);
@@ -1360,7 +1357,6 @@ export default function OnboardingScreen() {
 
     clearOnboardingDraft();
     clearOnboardingSampleJob();
-    clearAbandonedOnboardingMarker();
     // Completed, but deliberately unpaid. The split between the two outcomes is
     // the point of recording one at all.
     trackOnboardingCompleted('deferred');

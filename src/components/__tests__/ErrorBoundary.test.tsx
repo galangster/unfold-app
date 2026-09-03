@@ -107,6 +107,7 @@ describe('ErrorBoundary', () => {
       'error-boundary',
       expect.any(Error),
       expect.objectContaining({ timestamp: expect.any(String) }),
+      expect.objectContaining({ mechanism: 'error-boundary' }),
     );
     expect(mockRecordCrash).toHaveBeenCalledTimes(1);
 
@@ -120,18 +121,32 @@ describe('ErrorBoundary', () => {
   it('reports the caught error with its component stack, and still writes the local bug log', () => {
     renderBoundary();
 
-    expect(mockCaptureAppError).toHaveBeenCalledTimes(1);
-    const [source, reported, extra] = mockCaptureAppError.mock.calls[0] as [
+    // One sink: the boundary used to capture on its own AND write the bug log,
+    // and the bug log reports too, so every caught render error was filed
+    // twice. `bug-logger-sentry.test.ts` holds the other half — one sink call
+    // reaches the reporter exactly once, forwarding this vouched payload.
+    expect(mockLogBugError).toHaveBeenCalledTimes(1);
+    expect(mockCaptureAppError).not.toHaveBeenCalled();
+
+    const [source, reported, localData, reportExtra] = mockLogBugError.mock.calls[0] as [
       string,
       Error,
       Record<string, unknown>,
+      Record<string, string>,
     ];
     expect(source).toBe('error-boundary');
     expect(reported).toBeInstanceOf(Error);
     expect(reported.message).toBe('boom');
-    expect(Object.keys(extra)).toEqual(['componentStack']);
+    // The component stack is code, not content, so it is what the boundary
+    // vouches for — and it has to be the real stack, not an empty string.
+    expect(Object.keys(reportExtra).sort()).toEqual(['componentStack', 'mechanism']);
+    expect(reportExtra.componentStack).toContain('Bomb');
+    expect(reportExtra.mechanism).toBe('error-boundary');
     // The local trail has to survive alongside the report.
-    expect(mockLogBugError).toHaveBeenCalledTimes(1);
+    expect(localData).toMatchObject({
+      componentStack: expect.any(String),
+      timestamp: expect.any(String),
+    });
   });
 
   it('breadcrumbs a Try Again press in the error fallback', () => {

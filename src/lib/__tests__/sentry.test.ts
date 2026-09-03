@@ -409,39 +409,3 @@ describe('capture helpers', () => {
   });
 });
 
-describe('duplicate report suppression', () => {
-  const isDuplicateReport = (...args: Parameters<SentryLib['isDuplicateReport']>) =>
-    loadSentryLib().isDuplicateReport(...args);
-
-  it('lets the first report of a failure through', () => {
-    const seen = new Map<string, number>();
-    expect(isDuplicateReport('store:boom', 1_000, seen)).toBe(false);
-  });
-
-  it('drops the echo the layered error paths produce for one failure', () => {
-    const seen = new Map<string, number>();
-    isDuplicateReport('store:boom', 1_000, seen);
-    // reportError captured, then wrote its local trail through logBugError.
-    expect(isDuplicateReport('store:boom', 1_010, seen)).toBe(true);
-  });
-
-  it('reports the same failure again once the window has passed', () => {
-    const seen = new Map<string, number>();
-    isDuplicateReport('store:boom', 1_000, seen);
-    expect(isDuplicateReport('store:boom', 1_000 + 5_001, seen)).toBe(false);
-  });
-
-  it('never confuses two different failures', () => {
-    const seen = new Map<string, number>();
-    isDuplicateReport('store:boom', 1_000, seen);
-    expect(isDuplicateReport('reading:boom', 1_010, seen)).toBe(false);
-    expect(isDuplicateReport('store:other', 1_020, seen)).toBe(false);
-  });
-
-  it('does not grow without bound as failures age out', () => {
-    const seen = new Map<string, number>();
-    for (let i = 0; i < 50; i += 1) isDuplicateReport(`s:${i}`, i);
-    isDuplicateReport('later', 100_000, seen);
-    expect(seen.size).toBeLessThanOrEqual(1);
-  });
-});
