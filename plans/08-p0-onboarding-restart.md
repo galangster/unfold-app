@@ -21,20 +21,42 @@ hook → solution → unfoldIntro → name → aboutMe → relationshipWithGod �
 bibleFrequency → shockStat → growthGraph → growthGoals → obstacles →
 keyPeople → aspiration → vulnerabilityValidation → mirrorBack →
 featureSummary → founderNote → devotionalSegue → readDevotional →
-celebration → threeStepPaywall → purchaseConfirmation → themeType →
-studySubject → currentSituation → diagnosticRound → spiritualSeeking →
-upcomingEvent → readingDuration → devotionalLength → reminderTime → [save + /generating]
+celebration → commitment1 → commitment2 → threeStepPaywall →
+purchaseConfirmation → themeType → studySubject → currentSituation →
+diagnosticRound → spiritualSeeking → upcomingEvent → readingDuration →
+devotionalLength → reminderTime → [save + /generating]
 ```
 
 `threeStepPaywall` (`src/components/onboarding/ThreeStepPaywall.tsx`) has no
-exit in a production build other than a purchase. The only skip control is
-`Continue for QA`, gated by `isQaToolsEnabled()` (line ~1426). So a user who
-reads their sample devotional, hits the paywall, and closes the app has
-"finished" in their own mind, but `store.user` is still `null`. On the next
-launch `src/app/index.tsx` sees no user, routes to `/onboarding`, and
-`getInitialOnboardingStepId()` (`src/lib/onboarding-step-helpers.ts:213`)
-starts at `hook` with an empty form. Name is asked again. The same code ships
-in 1.0 (build 251, live) and 1.1 (build 253).
+forward exit in a production build other than a purchase or a Restore that
+finds an existing entitlement (line ~1300). The only skip control is
+`Continue for QA`, gated by `isQaToolsEnabled()` (line ~1426), which returns
+false unconditionally for the `production` EAS profile
+(`src/lib/build-profile.ts:70`). The screen has no close control, the stack
+sets `gestureEnabled: false` (`src/app/_layout.tsx:197`), and swipes only
+rotate review cards. So a user who reads their sample devotional, hits the
+paywall, and closes the app has "finished" in their own mind, but
+`store.user` is still `null`. On the next launch `src/app/index.tsx` finds no
+user and renders the welcome screen; the Continue button routes to
+`/onboarding`, and `getInitialOnboardingStepId()`
+(`src/lib/onboarding-step-helpers.ts:213`) starts at `hook` with an empty
+form. Name is asked again. The same code ships in 1.0 (build 251, live) and
+1.1 (build 253).
+
+**This also hits paying users.** `updateUser` returns early when `user` is
+null (`src/lib/store.ts:896-898`), so the paywall's
+`onPurchaseSuccess → updateUser({ isPremium: true })` is a silent no-op for a
+first-run user, and `purchasedDuringOnboarding` is React state. Someone who
+starts the trial and then closes the app before the final `reminderTime` step
+relaunches at `hook` with nothing saved and must find Restore Purchases on
+their own. Every `updateUser` call earlier in onboarding has the same
+problem, including the companion name at `featureSummary`.
+
+**Adjacent money bug found while verifying.** A purchase completed inside
+`ExclusiveOfferSheet` (shown when the user cancels the main purchase) never
+calls `onPurchaseSuccess`; `onDismiss` only sets a seen flag and closes the
+sheet (`ThreeStepPaywall.tsx:1510-1513`). That buyer is charged and stays on
+the paywall. Fix it in the same release.
 
 Contributing defect: the app has no way to know a user *started*. Nothing is
 written to the store, MMKV, or the server about the person until the last
@@ -77,20 +99,32 @@ subtract 7 h for Pacific). Both are on `Unfold/1.0.0`.
   boundary has no reset button; no server erase was requested.
 - Server pull overwriting `user`: `full-sync-pull.ts` never touches `user`.
 
-### Second, latent P0 (not what hit these two users, must still be fixed)
+### Second defect — latent, same symptom, unproven population
 
 `src/lib/mmkv-storage.ts` reads the MMKV encryption key and the device id
 from `expo-secure-store` at JS module init with the library default
 `keychainAccessible = WHEN_UNLOCKED`. If that read throws (iOS returns
-`errSecInteractionNotAllowed` when the app process is prewarmed or launched
-in the background while the device is locked), the app boots into the
-throwaway `unfold-store-v2-recovery` namespace, which is cleared on open.
-The store hydrates empty, `index.tsx` routes a fully onboarded user to
-onboarding, `getDeviceId()` hands out an `ephemeral-` id, and no screen
-explains anything (`isRecoverySession()` has no UI consumer). During that
-session `useCheckInNotifications` also cancels the real check-in
-notifications because `hasCompletedOnboarding` reads false. Symptom is
-identical to this report. Keep it in the same release.
+`errSecInteractionNotAllowed` when the process starts while the device is
+locked), the app boots into the throwaway `unfold-store-v2-recovery`
+namespace, which is cleared on open. The store hydrates empty, a fully
+onboarded user lands on the new-user welcome screen and can only go to
+onboarding from there, `getDeviceId()` hands out an `ephemeral-` id, and no
+screen explains anything (`isRecoverySession()` has no UI consumer at all).
+During that session `useCheckInNotifications` also cancels the midday
+check-in and evening wind-down schedules because `hasCompletedOnboarding`
+reads false.
+
+How likely is the trigger? Narrower than it first looks. The backend's only
+push sender emits a visible alert with no `_contentAvailable`
+(`backend/src/lib/push-notifications.ts:96-112`), and a visible push does not
+launch a terminated app. The `fetch` background mode in
+`ios/Unfold/Info.plist:123` comes from the auto-applied legacy
+`expo-background-fetch` plugin and no JS ever registers a task. `audio` does
+not launch a terminated app either. That leaves iOS prewarming, and the
+recovery session only reaches a person if that process survives until they
+foreground it. So this did not cause the reported incident and the affected
+population is speculative. Fix it anyway: it is cheap, the symptom is
+identical, and it will be indistinguishable from Lane 1 in the next report.
 
 ### Observability gaps found on the way
 
@@ -100,6 +134,17 @@ identical to this report. Keep it in the same release.
   data anywhere; `onboarding_step_completed` events go nowhere.
 - Railway `get-logs` returns the latest deployment only; last night's deploy
   at 02:07–02:08 UTC hid the first ten minutes of device `583f924a`.
+
+### How this was verified
+
+Two independent reviewers were run against the codebase and told to refute
+the diagnosis, one per claim. Both returned "not refuted" at high confidence
+with file-and-line citations. Their corrections are already folded in above:
+the `commitment1` / `commitment2` steps, Restore Purchases as a non-QA
+forward exit, the `updateUser` no-op that extends the bug to paying users,
+the `ExclusiveOfferSheet` purchase that never advances, the fact that
+`index.tsx` renders the welcome screen rather than auto-routing, and the
+narrower trigger surface for the Keychain defect.
 
 ## 2. Product decision needed from Nick (blocks nothing below, changes copy)
 
@@ -170,6 +215,14 @@ Files: `src/app/onboarding.tsx`, `src/app/index.tsx`,
    may hold both the pulled `onboarding-sample-<deviceId>` devotional and the
    new series. Verify My Content and Today hide or merge the sample; fix if
    they do not.
+7. **`ExclusiveOfferSheet` purchase must advance.** Wire its success outcome
+   to the same `onPurchaseSuccess` path the main CTA uses
+   (`ThreeStepPaywall.tsx:1510-1513`). Today a purchase there charges the
+   card and leaves the user on the paywall. Add a contract test.
+8. **Make a lost `updateUser` loud.** `src/lib/store.ts:896-898` silently
+   returns when `user` is null. Keep the early return, but log through
+   `logger.warn` (or `logBugEvent`) so a dropped write shows up in a bug
+   report instead of vanishing.
 
 Acceptance (all must pass before the build):
 
@@ -186,6 +239,11 @@ Acceptance (all must pass before the build):
   to `/generating`; then a full reset returns to `hook`.
 - Repeat the walkthrough quitting at `aboutMe`, `readDevotional`, and
   `themeType`.
+- Purchaser path: start the sandbox trial on the paywall, force-quit before
+  `reminderTime`, relaunch. Must resume past the paywall with premium intact
+  and never ask for Restore.
+- Buy through the `ExclusiveOfferSheet` (cancel the main purchase first).
+  Must advance to `purchaseConfirmation`.
 - Backend after the walkthrough: `sync_users` row exists for the device
   before the paywall.
 - `bun run lint`, `bun run typecheck`, `bun test` green; `/simplify` run on
@@ -254,8 +312,14 @@ Files: `src/lib/mmkv-storage.ts`, `src/lib/device-id.ts`,
 "Thanks for the report — this is a bug on our side, not you. The app was
 saving your setup only at the very last screen, so closing it before that
 point started you over. A fix is being built now. In the meantime, if you go
-through setup once more and continue past the subscription screen, it will
-stick. Your first devotional is safe on our servers and will come back."
+through setup once more and continue past the subscription screen to the end,
+it will stick. Your first devotional is safe on our servers and will come
+back."
+
+If he says he started a trial or was charged: he is on the paying variant of
+the same bug. Tell him to use **Restore Purchases** on the subscription
+screen, which will pick the subscription back up, and check RevenueCat for
+his transaction before replying.
 
 ## 6. Codex brief — Lane 1 (STE, ready to paste)
 
