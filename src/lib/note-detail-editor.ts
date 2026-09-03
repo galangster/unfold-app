@@ -135,6 +135,66 @@ export function normalizeNativeInitialHtml(html: string): string {
   return html;
 }
 
+/** `&`, `<`, `>` are the three that can change the parsed structure. */
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function inlineMarkdownToHtml(text: string): string {
+  // Escape FIRST: a legacy plain-text note is not markup. Without this a note
+  // containing "a < b" or a pasted tag was injected into the editor as HTML —
+  // silently swallowing the text (and, with a <script>, worse).
+  return escapeHtml(text)
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>');
+}
+
+function taskItem(text: string, checked: boolean): string {
+  const checkbox = checked ? '<input type="checkbox" checked />' : '<input type="checkbox" />';
+  return `<li data-type="taskItem" data-checked="${checked}"><label>${checkbox}</label><div>${inlineMarkdownToHtml(text)}</div></li>`;
+}
+
+/**
+ * Convert a legacy plain-text/markdown note to the minimal HTML the editors
+ * expect. Consecutive list lines become ONE list — every line used to open its
+ * own <ul>, so a five-item shopping list arrived as five one-item lists.
+ */
+export function legacyMarkdownToHtml(content: string): string {
+  const out: string[] = [];
+  let openList: 'bullet' | 'task' | null = null;
+
+  const closeList = () => {
+    if (openList) out.push('</ul>');
+    openList = null;
+  };
+  const openListOfType = (type: 'bullet' | 'task') => {
+    if (openList === type) return;
+    closeList();
+    out.push(type === 'task' ? '<ul data-type="taskList">' : '<ul>');
+    openList = type;
+  };
+
+  for (const line of content.split('\n')) {
+    const trimmed = line.trimStart();
+    const checked = trimmed.startsWith('[x] ');
+    if (checked || trimmed.startsWith('[ ] ')) {
+      openListOfType('task');
+      out.push(taskItem(trimmed.slice(4), checked));
+      continue;
+    }
+    if (trimmed.startsWith('- ')) {
+      openListOfType('bullet');
+      out.push(`<li>${inlineMarkdownToHtml(trimmed.slice(2))}</li>`);
+      continue;
+    }
+    closeList();
+    out.push(trimmed === '' ? '<p></p>' : `<p>${inlineMarkdownToHtml(trimmed)}</p>`);
+  }
+  closeList();
+
+  return out.join('') || '<p></p>';
+}
+
 export type ExternalNoteReload = { title?: string; html?: string };
 
 /**

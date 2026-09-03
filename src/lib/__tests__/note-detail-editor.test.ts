@@ -1,5 +1,6 @@
 import {
   buildNotePersistencePayload,
+  legacyMarkdownToHtml,
   getNativeBlockTypeCommand,
   getNativeListCommand,
   getTitleDividerPresentation,
@@ -242,5 +243,53 @@ describe('note detail editor persistence', () => {
 
     expect(id).toBe('empty-note-1');
     expect(updateNote).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('legacyMarkdownToHtml', () => {
+  it('escapes markup characters so a plain-text note is never parsed as HTML', () => {
+    // Before escaping, this note lost everything from "<" onward — the editor
+    // parsed it as a tag — and a pasted <script> went in as one.
+    expect(legacyMarkdownToHtml('a < b & c > d')).toBe('<p>a &lt; b &amp; c &gt; d</p>');
+    expect(legacyMarkdownToHtml('<script>alert(1)</script>')).toBe(
+      '<p>&lt;script&gt;alert(1)&lt;/script&gt;</p>',
+    );
+    expect(legacyMarkdownToHtml('Tom & Jerry')).toBe('<p>Tom &amp; Jerry</p>');
+    // Escaping runs before the markdown pass, and does not double-escape.
+    expect(legacyMarkdownToHtml('**bold & <b>**')).toBe('<p><strong>bold &amp; &lt;b&gt;</strong></p>');
+  });
+
+  it('groups consecutive bullet lines into one list', () => {
+    expect(legacyMarkdownToHtml('- milk\n- bread\n- eggs')).toBe(
+      '<ul><li>milk</li><li>bread</li><li>eggs</li></ul>',
+    );
+  });
+
+  it('groups consecutive task lines into one task list, preserving checked state', () => {
+    expect(legacyMarkdownToHtml('[x] done\n[ ] todo')).toBe(
+      '<ul data-type="taskList">' +
+        '<li data-type="taskItem" data-checked="true"><label><input type="checkbox" checked /></label><div>done</div></li>' +
+        '<li data-type="taskItem" data-checked="false"><label><input type="checkbox" /></label><div>todo</div></li>' +
+        '</ul>',
+    );
+  });
+
+  it('starts a new list when the run is broken, and closes lists at the end', () => {
+    expect(legacyMarkdownToHtml('- a\ntext\n- b')).toBe(
+      '<ul><li>a</li></ul><p>text</p><ul><li>b</li></ul>',
+    );
+    expect(legacyMarkdownToHtml('- a\n[ ] b')).toBe(
+      '<ul><li>a</li></ul>' +
+        '<ul data-type="taskList"><li data-type="taskItem" data-checked="false"><label><input type="checkbox" /></label><div>b</div></li></ul>',
+    );
+  });
+
+  it('keeps bold and italic, blank lines and the empty fallback', () => {
+    expect(legacyMarkdownToHtml('**bold** and *soft*')).toBe(
+      '<p><strong>bold</strong> and <em>soft</em></p>',
+    );
+    expect(legacyMarkdownToHtml('one\n\ntwo')).toBe('<p>one</p><p></p><p>two</p>');
+    expect(legacyMarkdownToHtml('')).toBe('<p></p>');
   });
 });

@@ -85,6 +85,7 @@ import {
   getNativeListCommand,
   getTitleDividerPresentation,
   hasMeaningfulNoteContent,
+  legacyMarkdownToHtml,
   normalizeNativeInitialHtml,
   persistNoteSnapshot,
   resolveExternalNoteReload,
@@ -111,28 +112,6 @@ function formatDate(dateStr: string): string {
   });
 }
 
-/** Convert legacy plain-text/markdown to minimal HTML for TipTap */
-function legacyMarkdownToHtml(content: string): string {
-  const lines = content.split('\n');
-  const htmlLines = lines.map((line) => {
-    const trimmed = line.trimStart();
-    if (trimmed.startsWith('[x] ')) {
-      return `<ul data-type="taskList"><li data-type="taskItem" data-checked="true"><label><input type="checkbox" checked /></label><div>${trimmed.slice(4)}</div></li></ul>`;
-    }
-    if (trimmed.startsWith('[ ] ')) {
-      return `<ul data-type="taskList"><li data-type="taskItem" data-checked="false"><label><input type="checkbox" /></label><div>${trimmed.slice(4)}</div></li></ul>`;
-    }
-    if (trimmed.startsWith('- ')) {
-      return `<ul><li>${trimmed.slice(2)}</li></ul>`;
-    }
-    if (trimmed === '') return '<p></p>';
-    const html = trimmed
-      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.+?)\*/g, '<em>$1</em>');
-    return `<p>${html}</p>`;
-  });
-  return htmlLines.join('') || '<p></p>';
-}
 
 /**
  * Reading-font preference → web font family for the tentap WebView editor.
