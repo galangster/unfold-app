@@ -23,6 +23,7 @@ import { AiBudgetError, readAiBudgetError } from '@/lib/ai-budget-error';
 import { parseDeepLinks } from './parse-deep-links';
 import { generateConversationTitle } from './companion-service';
 import { companionReplyAnnouncement } from '@/lib/companion-announcements';
+import { pickRegenerateTarget } from './companion-regenerate';
 
 /**
  * WR-20: screen-reader users get no signal when a reply lands — the list
@@ -43,6 +44,16 @@ function announceCompanionReply(content: string) {
  *  'error' — stream + fallback both failed with no usable response
  */
 export type SendOutcome = 'sent' | 'noop' | 'error';
+
+/**
+ * A regenerate turn rewrites an existing companion reply under its own id
+ * instead of adding a user turn and a new reply.
+ */
+interface RegenerateTurn {
+  companionId: string;
+  previousReply: string;
+  reason?: string;
+}
 
 export { COMPANION_MESSAGE_MAX_CHARS } from '@/lib/companion-limits';
 import { COMPANION_MESSAGE_MAX_CHARS } from '@/lib/companion-limits';
@@ -76,9 +87,15 @@ function buildCompanionContext(
   userName: string | null,
   companionName: string | null,
   devotional: { title?: string; currentDay?: number; totalDays?: number } | null,
-  streakDays: number
+  streakDays: number,
+  regenerate?: RegenerateTurn
 ) {
   return {
+    // The backend wraps these in its own regeneration instruction
+    // (lib/companion-prompt.ts); here they are data only.
+    regenerate: regenerate
+      ? { reason: regenerate.reason, previousReply: regenerate.previousReply }
+      : undefined,
     userName: userName ?? undefined,
     companionName: companionName ?? undefined,
     devotionalTitle: devotional?.title ?? undefined,
@@ -372,8 +389,8 @@ export function useCompanionChat() {
 
   // ── Send message ───────────────────────────────────────────────────────
 
-  const sendMessage = useCallback(
-    async (text: string): Promise<SendOutcome> => {
+  const runTurn = useCallback(
+    async (text: string, regenerate?: RegenerateTurn): Promise<SendOutcome> => {
       const trimmedText = text.trim();
       if (!trimmedText) return 'noop';
 
@@ -387,27 +404,45 @@ export function useCompanionChat() {
       setError(null);
       setSuggestions([]);
 
-      // User message — uuid ids: Date.now() collides when two messages land
-      // in the same millisecond (retry taps, chip + send race).
-      const userMsg: CompanionMessage = {
-        id: uuidv4(),
-        role: 'user',
-        content: trimmedText,
-        timestamp: Date.now(),
-        status: 'sent',
-      };
-      addMessage(userMsg);
+      let companionId: string;
+      if (regenerate) {
+        // Regenerate in place: the user turn already exists and the reply is
+        // rewritten under its own id, so nothing is deleted and sync sees an
+        // update rather than a new row.
+        companionId = regenerate.companionId;
+        updateMessage(companionId, {
+          content: '',
+          status: 'streaming',
+          feedback: null,
+          feedbackReason: null,
+          citations: undefined,
+          suggestions: undefined,
+          deepLinks: undefined,
+          interrupted: undefined,
+        }, streamConversationId);
+      } else {
+        // User message — uuid ids: Date.now() collides when two messages land
+        // in the same millisecond (retry taps, chip + send race).
+        const userMsg: CompanionMessage = {
+          id: uuidv4(),
+          role: 'user',
+          content: trimmedText,
+          timestamp: Date.now(),
+          status: 'sent',
+        };
+        addMessage(userMsg);
 
-      // Companion placeholder
-      const companionId = uuidv4();
-      const companionMsg: CompanionMessage = {
-        id: companionId,
-        role: 'companion',
-        content: '',
-        timestamp: Date.now(),
-        status: 'streaming',
-      };
-      addMessage(companionMsg);
+        // Companion placeholder
+        companionId = uuidv4();
+        const companionMsg: CompanionMessage = {
+          id: companionId,
+          role: 'companion',
+          content: '',
+          timestamp: Date.now(),
+          status: 'streaming',
+        };
+        addMessage(companionMsg);
+      }
 
       const abortController = new AbortController();
       inFlightRef.current.set(streamConversationId, { abort: abortController, companionId });
@@ -456,7 +491,9 @@ export function useCompanionChat() {
         // Build conversation context (last 10 messages)
         const currentMessages = selectActiveMessages(useCompanionChatStore.getState());
         const recentMessages = currentMessages
-          .filter((m) => m.status === 'sent' || m.status === 'complete')
+          // A regenerate turn rewrites its target, so the old reply must not
+          // sit in the history the model sees.
+          .filter((m) => m.id !== companionId && (m.status === 'sent' || m.status === 'complete'))
           .slice(-10)
           .map((m) => ({
             role: m.role === 'user' ? ('user' as const) : ('assistant' as const),
@@ -472,7 +509,8 @@ export function useCompanionChat() {
           userName,
           companionName,
           currentDevotional,
-          streakDays ?? 0
+          streakDays ?? 0,
+          regenerate
         );
         const headers = await getAuthHeaders();
 
@@ -739,6 +777,36 @@ export function useCompanionChat() {
     ]
   );
 
+  const sendMessage = useCallback(
+    (text: string): Promise<SendOutcome> => runTurn(text),
+    [runTurn]
+  );
+
+  // Regenerate the last reply in place. Same quota rules as a send: the
+  // screen charges a free message on 'sent'.
+  const regenerateReply = useCallback(
+    async (options?: { reason?: string }): Promise<SendOutcome> => {
+      const state = useCompanionChatStore.getState();
+      const conversationId = state.activeConversationId;
+      if (!conversationId || inFlightRef.current.has(conversationId)) return 'noop';
+      const target = pickRegenerateTarget(selectActiveMessages(state));
+      if (!target) return 'noop';
+      const { companionMessage } = target;
+      // An error row stores an app-authored error string unless it was an
+      // interrupted partial; only real reply text is worth quoting back.
+      const previousReply =
+        companionMessage.status === 'complete' || companionMessage.interrupted
+          ? companionMessage.content
+          : '';
+      return runTurn(target.userMessage.content, {
+        companionId: companionMessage.id,
+        previousReply,
+        reason: options?.reason,
+      });
+    },
+    [runTurn]
+  );
+
   // ── Stop generation ────────────────────────────────────────────────────
 
   const stopGeneration = useCallback(() => {
@@ -755,6 +823,7 @@ export function useCompanionChat() {
     suggestions,
     error,
     sendMessage,
+    regenerateReply,
     stopGeneration,
     startNewConversation,
   };

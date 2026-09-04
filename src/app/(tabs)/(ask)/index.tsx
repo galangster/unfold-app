@@ -34,11 +34,17 @@ import {
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { getCurrentDevotional } from '@/lib/home-devotional-state';
+import { getTodayReaderDayNumber } from '@/lib/devotional-day-access';
+import {
+  appendJournalContent,
+  buildCompanionJournalBlock,
+  isReplyAlreadyInJournal,
+} from '@/lib/companion-journal';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { CompanionOrb } from '@/components/CompanionOrb';
-import { COMPANION_MESSAGE_MAX_CHARS, useCompanionChat } from '@/lib/use-companion-chat';
-import type { CompanionMessage } from '@/lib/companion-chat-store';
+import { COMPANION_MESSAGE_MAX_CHARS, useCompanionChat, type SendOutcome } from '@/lib/use-companion-chat';
+import { selectActiveMessages, useCompanionChatStore, type CompanionMessage } from '@/lib/companion-chat-store';
 import {
   CompanionDrawer,
   DRAWER_WIDTH,
@@ -74,6 +80,8 @@ const MessageItem = React.memo(function MessageItem({
   isSearching,
   onVersePress,
   onRetry,
+  onRegenerate,
+  onSaveToJournal,
 }: {
   item: CompanionMessage;
   isFirstInGroup: boolean;
@@ -82,6 +90,8 @@ const MessageItem = React.memo(function MessageItem({
   isSearching?: boolean;
   onVersePress: (reference: string) => void;
   onRetry?: () => void;
+  onRegenerate?: (reason?: string) => void;
+  onSaveToJournal?: (messageId: string) => boolean;
 }) {
   const gapStyle = isFirstInGroup ? { marginTop: 16 } : { marginTop: 6 };
 
@@ -115,6 +125,9 @@ const MessageItem = React.memo(function MessageItem({
           messageId={item.id}
           content={item.content}
           feedback={item.feedback ?? null}
+          feedbackReason={item.feedbackReason ?? null}
+          onRegenerate={onRegenerate}
+          onSaveToJournal={onSaveToJournal}
           visible
         />
       )}
@@ -125,11 +138,14 @@ const MessageItem = React.memo(function MessageItem({
   prev.item.content === next.item.content &&
   prev.item.status === next.item.status &&
   prev.item.feedback === next.item.feedback &&
+  prev.item.feedbackReason === next.item.feedbackReason &&
   prev.isStreaming === next.isStreaming &&
   prev.isSearching === next.isSearching &&
   prev.isFirstInGroup === next.isFirstInGroup &&
   prev.isLastMessage === next.isLastMessage &&
-  prev.onRetry === next.onRetry
+  prev.onRetry === next.onRetry &&
+  prev.onRegenerate === next.onRegenerate &&
+  prev.onSaveToJournal === next.onSaveToJournal
 );
 
 // Memoized mounts: the screen re-renders on every streaming token flush —
@@ -171,6 +187,7 @@ export default function CompanionScreen() {
     suggestions,
     error,
     sendMessage,
+    regenerateReply,
     stopGeneration,
     startNewConversation,
   } = useCompanionChat();
@@ -179,11 +196,16 @@ export default function CompanionScreen() {
   // chips — same lookup today/index.tsx uses for its own "todayTheme".
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
   const devotionals = useUnfoldStore((s) => s.devotionals);
+  const currentDevotional = useMemo(
+    () => getCurrentDevotional(devotionals, currentDevotionalId),
+    [devotionals, currentDevotionalId]
+  );
   const todayTheme = useMemo(() => {
-    const currentDevotional = getCurrentDevotional(devotionals, currentDevotionalId);
     if (!currentDevotional) return undefined;
     return currentDevotional.days?.find((d) => d.dayNumber === currentDevotional.currentDay)?.title;
-  }, [devotionals, currentDevotionalId]);
+  }, [currentDevotional]);
+  // Save-to-journal needs a series to file the entry under.
+  const hasCurrentDevotional = currentDevotional != null;
 
   // P1: dismissible error banner. Dismissal is per-error-message; a new
   // stream clears it so the next failure surfaces again.
@@ -248,6 +270,32 @@ export default function CompanionScreen() {
     setVerseSheetRef(null);
   }, []);
 
+  // Every model call (send, regenerate) runs through the free daily quota.
+  // The guard runs synchronously: paywall on exhaustion, NOT the creation
+  // gate — that gate paywalls every non-premium user, which contradicted the
+  // visible "N of 5 free messages" promise. Creation actions (devotional
+  // generation) keep the creation gate. Quota is charged ONLY on a successful
+  // response (NET-2): a free message is consumed iff a reply was received.
+  // The in-flight guard inside the hook prevents concurrent over-spend.
+  const runWithQuota = useCallback(
+    (turn: () => Promise<SendOutcome>): boolean => {
+      if (!isPremium && !canSendCompanionMessage()) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        setShowPremiumSheet(true);
+        return false;
+      }
+      void (async () => {
+        const outcome = await turn();
+        if (!isPremium && outcome === 'sent') {
+          incrementCompanionDailyCount();
+          setDailyRemaining(getCompanionDailyUsage().remaining);
+        }
+      })();
+      return true;
+    },
+    [isPremium]
+  );
+
   const handleSend = useCallback(
     (text: string) => {
       const trimmed = text.trim();
@@ -262,27 +310,7 @@ export default function CompanionScreen() {
         return false;
       }
 
-      // Pre-send guard runs synchronously. Companion sends are governed by
-      // the free daily quota (paywall on exhaustion), NOT the creation gate —
-      // that gate paywalls every non-premium user, which contradicted the
-      // visible "N of 5 free messages" promise. Creation actions (devotional
-      // generation) keep the creation gate.
-      if (!isPremium && !canSendCompanionMessage()) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        setShowPremiumSheet(true);
-        return false;
-      }
-
-      // Charge quota ONLY on a successful response (NET-2):
-      // a free message is consumed iff a companion response was received.
-      // The isStreaming guard in sendMessage prevents concurrent over-spend.
-      void (async () => {
-        const outcome = await sendMessage(trimmed);
-        if (!isPremium && outcome === 'sent') {
-          incrementCompanionDailyCount();
-          setDailyRemaining(getCompanionDailyUsage().remaining);
-        }
-      })();
+      if (!runWithQuota(() => sendMessage(trimmed))) return false;
 
       setTimeout(() => {
         listRef.current?.scrollToOffset({ offset: 0, animated: true });
@@ -290,13 +318,51 @@ export default function CompanionScreen() {
 
       return true;
     },
-    [sendMessage, isPremium, isStreaming]
+    [sendMessage, runWithQuota, isStreaming]
   );
 
   // Retry handlers must be identity-stable per (message, text) or the
   // MessageItem memo comparator re-renders every error row on each list pass.
   const handleSendRef = useRef(handleSend);
   handleSendRef.current = handleSend;
+
+  // The hook returns 'noop' while a stream is in flight, so no guard here.
+  const handleRegenerate = useCallback(
+    (reason?: string) => {
+      runWithQuota(() => regenerateReply({ reason }));
+    },
+    [regenerateReply, runWithQuota]
+  );
+  const handleRegenerateRef = useRef(handleRegenerate);
+  handleRegenerateRef.current = handleRegenerate;
+  // Identity-stable so the MessageItem memo comparator stays quiet.
+  const onRegenerate = useCallback((reason?: string) => handleRegenerateRef.current(reason), []);
+
+  // Files the reply under today's day of the current series: append to the
+  // day's entry when one exists, else create it. Idempotent per reply.
+  const handleSaveToJournal = useCallback((messageId: string): boolean => {
+    const chatMessages = selectActiveMessages(useCompanionChatStore.getState());
+    const index = chatMessages.findIndex((m) => m.id === messageId);
+    if (index < 0) return false;
+    const reply = chatMessages[index];
+    let question: CompanionMessage | undefined;
+    for (let i = index - 1; i >= 0 && !question; i -= 1) {
+      if (chatMessages[i].role === 'user') question = chatMessages[i];
+    }
+    const store = useUnfoldStore.getState();
+    const devotional = getCurrentDevotional(store.devotionals, store.currentDevotionalId);
+    if (!devotional) return false;
+    const dayNumber = getTodayReaderDayNumber(devotional);
+    const entry = store.getJournalEntry(devotional.id, dayNumber);
+    if (entry && isReplyAlreadyInJournal(entry.content, reply.content)) return true;
+    const block = buildCompanionJournalBlock({ question: question?.content ?? '', reply: reply.content });
+    if (entry) {
+      store.updateJournalEntry(entry.id, appendJournalContent(entry.content, block));
+    } else {
+      store.addJournalEntry({ devotionalId: devotional.id, dayNumber, content: block });
+    }
+    return true;
+  }, []);
   const retryHandlersRef = useRef(new Map<string, () => void>());
 
   const handleChipSelect = useCallback(
@@ -363,10 +429,12 @@ export default function CompanionScreen() {
           isSearching={isSearching && isLastMessage}
           onVersePress={handleVersePress}
           onRetry={onRetry}
+          onRegenerate={onRegenerate}
+          onSaveToJournal={hasCurrentDevotional ? handleSaveToJournal : undefined}
         />
       );
     },
-    [isStreaming, isSearching, handleVersePress]
+    [isStreaming, isSearching, handleVersePress, onRegenerate, handleSaveToJournal, hasCurrentDevotional]
   );
 
   const keyExtractor = useCallback((item: CompanionMessage) => item.id, []);

@@ -198,6 +198,7 @@ export function companionMessageSyncData(message: CompanionMessage, conversation
     citations: message.citations,
     suggestions: message.suggestions,
     feedback: message.feedback,
+    feedbackReason: message.feedbackReason,
     deepLinks: message.deepLinks,
     // Only ever true; `compact` drops it otherwise, so untouched rows are unchanged.
     interrupted: message.interrupted === true ? true : undefined,

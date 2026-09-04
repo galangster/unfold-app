@@ -46,6 +46,8 @@ export interface CompanionMessage {
   citations?: Citation[];
   suggestions?: string[];
   feedback?: 'positive' | 'negative' | null;
+  /** Thumbs-down reason chip id (companion-regenerate.ts FEEDBACK_REASONS); null until picked. */
+  feedbackReason?: string | null;
   deepLinks?: DeepLinkData[];
   updatedAt?: string; // ISO timestamp for sync
   /**
@@ -205,7 +207,7 @@ interface CompanionChatState {
   // Actions
   addMessage: (msg: CompanionMessage) => void;
   updateMessage: (id: string, updates: Partial<CompanionMessage>, conversationId?: string) => void;
-  setFeedback: (id: string, feedback: 'positive' | 'negative') => void;
+  setFeedback: (id: string, feedback: 'positive' | 'negative', reason?: string) => void;
   startNewConversation: () => void;
   archiveActiveConversation: (title?: string, topicTags?: string[]) => void;
   checkAndArchiveStale: () => void;
@@ -312,7 +314,7 @@ export const useCompanionChatStore = create<CompanionChatState>()(
           };
         }),
 
-      setFeedback: (id, feedback) =>
+      setFeedback: (id, feedback, reason) =>
         set((s) => {
           const now = new Date().toISOString();
           const activeId = s.activeConversationId;
@@ -338,6 +340,7 @@ export const useCompanionChatStore = create<CompanionChatState>()(
                   model: 'claude-haiku-4-5-20251001',
                   companionName: null,
                   contextSummary: activeConv?.topicTags?.join(', '),
+                  reason: feedback === 'negative' ? reason ?? null : null,
                 }),
               }).catch(() => { /* silent */ });
             });
@@ -352,7 +355,13 @@ export const useCompanionChatStore = create<CompanionChatState>()(
                 updatedAt: now,
                 messages: (c.messages ?? []).map(m => {
                   if (m.id !== id) return m;
-                  changedMessage = { ...m, feedback, updatedAt: now };
+                  changedMessage = {
+                    ...m,
+                    feedback,
+                    // A bare thumbs-down keeps any earlier reason; a chip sets it; thumbs-up clears it.
+                    feedbackReason: feedback === 'negative' ? reason ?? m.feedbackReason ?? null : null,
+                    updatedAt: now,
+                  };
                   return changedMessage;
                 }),
               };

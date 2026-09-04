@@ -452,6 +452,7 @@ function mapMessage(record: SyncPulledRecord): (CompanionMessage & { conversatio
     citations: asArray(row.citations) as CompanionMessage['citations'],
     suggestions: asArray<string>(row.suggestions),
     feedback: (asString(row.feedback) as CompanionMessage['feedback']) ?? null,
+    feedbackReason: asString(row.feedbackReason) ?? null,
     deepLinks: asArray(row.deepLinks) as CompanionMessage['deepLinks'],
     interrupted: asBoolean(row.interrupted) === true ? true : undefined,
     updatedAt: recordUpdatedAt(record),
