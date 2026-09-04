@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, TouchableOpacity, AppState, AppStateStatus, AccessibilityInfo, ScrollView, StyleSheet, ActivityIndicator, Linking } from 'react-native';
-import { useRouter, useNavigation } from 'expo-router';
+import { useRouter, useNavigation, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
   useSharedValue,
@@ -42,6 +42,7 @@ import {
   resolveNotifyRequestOutcome,
   type NotifyRequestOutcome,
 } from '@/lib/generating-notify-state';
+import { resolveGeneratingEntry } from '@/lib/generating-entry';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
 import { mmkvStorage } from '@/lib/mmkv-storage';
@@ -54,6 +55,8 @@ const MAX_POLL_DURATION_MS = 10 * 60 * 1000;
 // Terminal-error copy for a completed-but-unopenable / unrecognized job.
 const INVALID_RESULT_MESSAGE = 'Your devotional finished, but we couldn’t open it. Please try again.';
 const UNKNOWN_STATUS_MESSAGE = 'We hit an unexpected problem finishing your devotional. Please try again.';
+// Shown when the reader arrives from the server's "We hit a snag" push.
+const PUSH_FAILURE_MESSAGE = 'We couldn\u2019t finish your devotional. Please try again.';
 // Grace period to wait for the persisted user to hydrate before erroring out
 // instead of sitting on an infinite spinner.
 const NO_USER_GRACE_MS = 5000;
@@ -98,6 +101,8 @@ const MESSAGE_CYCLE_MS = 3800;
 export default function GeneratingScreen() {
   const router = useRouter();
   const navigation = useNavigation();
+  // Set only by a tapped generation_failed push, which names the job that died.
+  const params = useLocalSearchParams<{ jobId?: string; devotionalId?: string }>();
   const { colors: themeColors } = useTheme();
   const { reducedMotion, entering, exiting } = useAccessibleAnimation();
 
@@ -596,27 +601,43 @@ export default function GeneratingScreen() {
     if (jobSubmittedRef.current) return;
     jobSubmittedRef.current = true;
 
-    // Check MMKV for an inflight job from a previous session (app-kill recovery)
-    const raw = mmkvStorage.getItem(INFLIGHT_KEY) as string | null;
-    if (raw) {
-      try {
-        const inflight = JSON.parse(raw) as { jobId: string; devotionalId?: string; submittedAt: number };
-        // Only resume if not expired (15 min)
-        if (Date.now() - inflight.submittedAt < 15 * 60 * 1000) {
-          logger.log('[generating] Resuming inflight job from MMKV:', inflight.jobId);
-          if (inflight.devotionalId) {
-            startGenerationSession({ devotionalId: inflight.devotionalId, totalDays: user.devotionalLength });
-          }
-          setPendingJobId(inflight.jobId);
-          pollStartTime.current = inflight.submittedAt;
-          startPolling(inflight.jobId);
-          return;
-        }
-        // Expired — clear and submit fresh
-        mmkvStorage.removeItem(INFLIGHT_KEY);
-      } catch {
-        mmkvStorage.removeItem(INFLIGHT_KEY);
+    // Resume an inflight job from a previous session (app-kill recovery),
+    // land on the job a failure push named, or submit fresh.
+    const entry = resolveGeneratingEntry({
+      inflightRaw: mmkvStorage.getItem(INFLIGHT_KEY) as string | null,
+      params: { jobId: params.jobId, devotionalId: params.devotionalId },
+      nowMs: Date.now(),
+    });
+    if (entry.kind === 'resume') {
+      const { inflight } = entry;
+      logger.log('[generating] Resuming inflight job from MMKV:', inflight.jobId);
+      if (inflight.devotionalId) {
+        startGenerationSession({ devotionalId: inflight.devotionalId, totalDays: user.devotionalLength });
       }
+      setPendingJobId(inflight.jobId);
+      pollStartTime.current = inflight.submittedAt;
+      startPolling(inflight.jobId);
+      return;
+    }
+    // Expired or malformed record — clear it before anything else.
+    mmkvStorage.removeItem(INFLIGHT_KEY);
+
+    if (entry.kind === 'failed-from-push') {
+      // The push says the job died and every terminal exit clears the inflight
+      // record, so there is nothing to poll. Land in the failed state and let
+      // Try again retry that job by id instead of submitting a duplicate.
+      logger.log('[generating] Landing on failed job from push:', entry.jobId);
+      void logBugEvent('generation', 'generation-failed-push-landing', { jobId: entry.jobId });
+      if (entry.devotionalId) {
+        startGenerationSession({ devotionalId: entry.devotionalId, totalDays: user.devotionalLength });
+      }
+      setPendingJobId(entry.jobId);
+      failGenerationSession(PUSH_FAILURE_MESSAGE);
+      setIsGenerating(false);
+      setIsReconnecting(false);
+      setError(PUSH_FAILURE_MESSAGE);
+      setCanRetry(true);
+      return;
     }
 
     const submitJob = async () => {

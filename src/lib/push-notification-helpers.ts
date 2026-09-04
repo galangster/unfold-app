@@ -189,6 +189,10 @@ export type EveningWindDownNotificationRoute = {
 
 export type GeneratingNotificationRoute = {
   pathname: '/generating';
+  params: {
+    jobId?: string;
+    devotionalId?: string;
+  };
 };
 
 export type NotificationNavigationRoute =
@@ -228,6 +232,11 @@ export function buildRevealNotificationRoute(
   };
 }
 
+function readStringField(data: Record<string, unknown>, key: string): string | undefined {
+  const value = data[key];
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
 export function buildNotificationNavigationRoute(
   data: Record<string, unknown> | null | undefined,
 ): NotificationNavigationRoute | null {
@@ -242,10 +251,16 @@ export function buildNotificationNavigationRoute(
     return { pathname: '/(tabs)/(today)/evening-wind-down' };
   }
 
-  // The server's "we hit a snag" push: the generating screen resumes the
-  // failed job from MMKV and offers Try again.
+  // The server's "we hit a snag" push: the generating screen lands on the
+  // job it names and offers Try again. The ids ride along as route params
+  // because every terminal exit clears the MMKV inflight record.
   if (data?.type === 'generation_failed') {
-    return { pathname: '/generating' };
+    const params: GeneratingNotificationRoute['params'] = {};
+    const jobId = readStringField(data, 'jobId');
+    const devotionalId = readStringField(data, 'devotionalId');
+    if (jobId) params.jobId = jobId;
+    if (devotionalId) params.devotionalId = devotionalId;
+    return { pathname: '/generating', params };
   }
 
   return null;

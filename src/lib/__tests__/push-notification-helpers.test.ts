@@ -182,10 +182,20 @@ describe('push notification helpers', () => {
       });
     });
 
-    it('routes the server failure push back to the generating screen', () => {
+    it('routes the server failure push to the generating screen with the job to retry', () => {
       expect(
         buildNotificationNavigationRoute({ type: 'generation_failed', devotionalId: 'd', jobId: 'j' }),
-      ).toEqual({ pathname: '/generating' });
+      ).toEqual({ pathname: '/generating', params: { jobId: 'j', devotionalId: 'd' } });
+    });
+
+    it('still routes a failure push that lost its ids, without inventing params', () => {
+      expect(buildNotificationNavigationRoute({ type: 'generation_failed' })).toEqual({
+        pathname: '/generating',
+        params: {},
+      });
+      expect(
+        buildNotificationNavigationRoute({ type: 'generation_failed', jobId: 7, devotionalId: '' }),
+      ).toEqual({ pathname: '/generating', params: {} });
     });
 
     it('still routes a ready push to reveal', () => {
