@@ -137,20 +137,25 @@ export function QaToolsSection() {
       <TouchableOpacity
         activeOpacity={0.7}
         onPress={() => {
+          // With no current series this used to do nothing at all, which
+          // read as a dead button. Seed one so the reveal is always testable.
           const store = useUnfoldStore.getState();
-          const devId = store.currentDevotionalId;
-          const dev = store.devotionals.find((d: any) => d.id === devId);
-          if (dev) {
-            router.push({
-              pathname: '/reveal',
-              params: {
-                devotionalId: dev.id,
-                dayNumber: String(dev.currentDay),
-                seriesTitle: dev.title,
-                dayTitle: dev.days?.find((d: any) => d.dayNumber === dev.currentDay)?.title ?? '',
-              },
-            });
+          let dev = store.devotionals.find((d) => d.id === store.currentDevotionalId);
+          if (!dev) {
+            dev = buildDevotionalSeed();
+            store.addDevotional(dev);
+            store.setCurrentDevotional(dev.id);
           }
+          router.push({
+            pathname: '/reveal',
+            params: {
+              devotionalId: dev.id,
+              dayNumber: String(dev.currentDay),
+              seriesTitle: dev.title,
+              dayTitle: dev.days?.find((d) => d.dayNumber === dev.currentDay)?.title ?? '',
+              totalDays: String(dev.totalDays),
+            },
+          });
         }}
         style={{
           padding: Spacing['4'],

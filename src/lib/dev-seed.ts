@@ -15,6 +15,9 @@ export function buildDevotionalSeed({
     currentDay: 1,
     createdAt: nowIso,
     updatedAt: nowIso,
+    // Day gating (tomorrow lock, unlock labels) keys off this anchor and
+    // fails closed without it, so a seed without one hides those states.
+    seriesStartDate: nowIso,
     generationMode: 'progressive',
     userContext: {
       name: 'Nick',
