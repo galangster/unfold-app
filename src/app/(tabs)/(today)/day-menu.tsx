@@ -10,7 +10,6 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
   withSequence,
-  withDelay,
 } from 'react-native-reanimated';
 import { Duration, Ease, Stagger } from '@/constants/animations';
 import { CheckIcon, LockSimpleIcon } from '@/components/icons';
@@ -204,20 +203,17 @@ function DayRow({
   const unlockCaption = isLocked ? presentation.unlockLabel ?? GENERIC_UNLOCK_LABEL : undefined;
 
   const pulse = useSharedValue(1);
-  const captionEmphasis = useSharedValue(0.75);
+  const captionEmphasis = useSharedValue(1);
 
   useEffect(() => {
     if (!isPulsing) return;
     if (reducedMotion) {
       // Still acknowledge the tap without motion: hold the caption at full
       // emphasis briefly instead of animating opacity.
-      captionEmphasis.value = 1;
-      captionEmphasis.value = withDelay(TAP_EMPHASIS_MS, withTiming(0.75, { duration: 1 }));
       return;
     }
     pulse.value = withSequence(withTiming(0.45, { duration: 110 }), withTiming(1, { duration: 260 }));
-    captionEmphasis.value = withTiming(1, { duration: 120 });
-    captionEmphasis.value = withDelay(TAP_EMPHASIS_MS, withTiming(0.75, { duration: 450 }));
+    captionEmphasis.value = withSequence(withTiming(0.45, { duration: 120 }), withTiming(1, { duration: 320 }));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- retrigger on every tap via tapToken
   }, [tapToken]);
 

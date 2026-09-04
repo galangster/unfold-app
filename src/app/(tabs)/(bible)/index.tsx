@@ -37,10 +37,9 @@ export type BibleHomeNavigationDecision =
  * - First ever open (hasSeenHome is false): jump straight into reading —
  *   the last saved position if there is one, otherwise Genesis 1 — so a new
  *   user isn't dropped on an empty grid.
- * - Returning user with a saved reading position: keep the "continue
- *   reading" convenience of opening straight into the reader.
- * - Returning user with no saved position: show the home screen (book grid
- *   + search) instead of silently redirecting them.
+ * - Every later open: show the home screen (book grid, continue-reading
+ *   card, search). Auto-redirecting whenever a saved position existed made
+ *   the home unreachable for anyone who had ever read a chapter.
  */
 export function resolveBibleHomeNavigation(params: {
   hasSeenHome: boolean;
@@ -52,10 +51,6 @@ export function resolveBibleHomeNavigation(params: {
     return lastPosition
       ? { action: 'navigate', bookId: lastPosition.bookId, chapter: lastPosition.chapter }
       : { action: 'navigate', bookId: 1, chapter: 1 };
-  }
-
-  if (lastPosition) {
-    return { action: 'navigate', bookId: lastPosition.bookId, chapter: lastPosition.chapter };
   }
 
   return { action: 'show-home' };

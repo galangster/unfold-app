@@ -732,7 +732,6 @@ const styles = StyleSheet.create({
   chipAbbrev: {
     fontFamily: FontFamily.ui,
     fontSize: FontSize.xs,
-    opacity: 0.7,
     marginTop: 1,
   },
 

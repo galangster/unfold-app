@@ -79,13 +79,13 @@ describe('resolveBibleHomeNavigation', () => {
     ).toEqual({ action: 'navigate', bookId: 1, chapter: 1 });
   });
 
-  it('navigates straight to reading for a returning user with a saved position', () => {
+  it('shows the home for a returning user even with a saved position', () => {
     expect(
       resolveBibleHomeNavigation({
         hasSeenHome: true,
         lastPosition: { bookId: 19, chapter: 23 },
       }),
-    ).toEqual({ action: 'navigate', bookId: 19, chapter: 23 });
+    ).toEqual({ action: 'show-home' });
   });
 
   it('shows the home screen for a returning user with no saved position', () => {

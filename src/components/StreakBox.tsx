@@ -274,7 +274,7 @@ const styles = StyleSheet.create({
   },
   calendarCaption: {
     fontFamily: FontFamily.ui,
-    fontSize: 10,
+    fontSize: FontSize.xs,
     textAlign: 'center',
     marginTop: Spacing['2'],
   },

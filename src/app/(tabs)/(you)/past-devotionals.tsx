@@ -19,7 +19,7 @@ import Animated, {
 // Old Swipeable API removed — crashes on Fabric. Using Gesture.Pan() instead (see SwipeableStudyCard).
 import { FlashList, type ListRenderItem } from '@shopify/flash-list';
 import * as Haptics from 'expo-haptics';
-import { CaretLeftIcon, BookOpenIcon, CheckIcon, DownloadSimpleIcon, MagnifyingGlassIcon, XCircleIcon, TrashIcon, DotsThreeIcon } from '@/components/icons';
+import { CaretLeftIcon, BookOpenIcon, CheckIcon, DownloadSimpleIcon, MagnifyingGlassIcon, XCircleIcon, TrashIcon } from '@/components/icons';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
@@ -441,7 +441,7 @@ function DevotionalCard({ item, colors, exportingId, exportSuccessId, isCurrent,
             accessibilityLabel="Delete devotional"
             accessibilityRole="button"
           >
-            <DotsThreeIcon size={22} color={colors.textMuted} weight="bold" />
+            <TrashIcon size={20} color={colors.textMuted} weight="light" />
           </TouchableOpacity>
 
         <TouchableOpacity activeOpacity={0.7}

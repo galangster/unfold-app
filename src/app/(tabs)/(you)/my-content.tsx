@@ -753,7 +753,7 @@ export default function MyContentScreen() {
               onPress={() => handleTabPress(tab.id)}
               accessibilityRole="tab"
               accessibilityState={{ selected: isActive }}
-              accessibilityLabel={`${tab.label} tab, ${tab.count} ${tab.count === 1 ? 'item' : 'items'}, ${index + 1} of ${tabs.length}`}
+              accessibilityLabel={`${tab.label}, ${tab.count} ${tab.count === 1 ? 'item' : 'items'}, ${index + 1} of ${tabs.length}`}
               style={{
                 flex: 1,
                 alignItems: 'center',

@@ -544,7 +544,7 @@ function ProgressIndicator({
   }, [progress, reducedMotion, width]);
 
   const barStyle = useAnimatedStyle(() => ({
-    width: `${width.value * 100}%`,
+    transform: [{ scaleX: width.value }],
   }));
 
   if (PROGRESS_HIDDEN_STEP_TYPES.has(stepType)) return null;
@@ -563,7 +563,7 @@ function ProgressIndicator({
         overflow: 'hidden',
       }}
     >
-      <Animated.View style={[{ height: 2, borderRadius: 1, backgroundColor: alpha(colors.text, 0.28) }, barStyle]} />
+      <Animated.View style={[{ width: '100%', height: 2, borderRadius: 1, backgroundColor: alpha(colors.text, 0.28), transformOrigin: 'left center' }, barStyle]} />
     </View>
   );
 }
