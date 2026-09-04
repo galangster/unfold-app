@@ -36,6 +36,7 @@ import { alpha } from '@/components/ui';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { RecommendedSeriesCard } from './RecommendedSeriesCard';
 import { InlineReflectComposer } from './InlineReflectComposer';
+import { useCompletedDayReflection } from './use-completed-day-reflection';
 import type { DevotionalCardState } from './compute-devotional-state';
 import { smartQuotes } from '@/lib/smart-quotes';
 import { titleWithPeriod } from '@/lib/display-title';
@@ -629,7 +630,11 @@ function MainCard({ state }: MainCardProps) {
         : state.type === 'unread'
           ? state.ctaText
           : 'Continue Reading';
-  const continueDayNumber = isTomorrowLocked ? Math.max(1, daysCompleted) : dayData.dayNumber;
+  const lockedState = state.type === 'tomorrow-locked' ? state : null;
+  const lockedCompletedDay = lockedState?.completedDayData ?? null;
+  const continueDayNumber = isTomorrowLocked
+    ? (lockedCompletedDay?.dayNumber ?? Math.max(1, daysCompleted))
+    : dayData.dayNumber;
   const onPress = 'onContinue' in state ? () => state.onContinue(continueDayNumber) : undefined;
   // "Start a new series" only appears once today's reading is done (complete-today).
   // Surfacing it on unread/tomorrow-locked competed with the single reading action
@@ -639,8 +644,31 @@ function MainCard({ state }: MainCardProps) {
   // Post-read, reflection not yet complete: the inline composer IS the primary
   // action — writing beats re-reading (see Dino feedback 2026-08-02). "Read
   // Again" demotes to a quiet link inside the composer block.
+  //
+  // complete-today carries the reflect payload for its own day. tomorrow-locked
+  // previews tomorrow, so its composer targets the day completed today and
+  // reads that day's journal state itself (Jordan, 2026-09-04: "I completed
+  // the first day, but there's nothing that prompts me").
   const completedState = state.type === 'complete-today' ? state : null;
-  const showInlineComposer = completedState !== null && completedState.reflectionStatus !== 'complete';
+  const lockedCompletedReflection = useCompletedDayReflection(lockedState?.devotionalId ?? '', lockedCompletedDay);
+  const composer = completedState
+    ? {
+        dayNumber: dayData.dayNumber,
+        draft: completedState.freeWriteDraft,
+        status: completedState.reflectionStatus,
+        onSave: completedState.onSaveFreeWrite,
+        onOpenFull: completedState.onReflect,
+      }
+    : lockedState && lockedCompletedDay
+      ? {
+          dayNumber: lockedCompletedDay.dayNumber,
+          draft: lockedCompletedReflection.freeWriteDraft,
+          status: lockedCompletedReflection.reflectionStatus,
+          onSave: lockedState.onSaveFreeWrite,
+          onOpenFull: lockedState.onReflect,
+        }
+      : null;
+  const showInlineComposer = composer !== null && composer.status !== 'complete';
 
   const accessibilityLabel = hasCompletedToday
     ? `Read ${seriesTitle}, day ${dayData.dayNumber} of ${totalDays} again`
@@ -746,14 +774,14 @@ function MainCard({ state }: MainCardProps) {
               </View>
             )}
 
-            {showInlineComposer && completedState ? (
+            {showInlineComposer && composer ? (
               <View style={styles.heroComposerBlock}>
                 <InlineReflectComposer
-                  key={`reflect-${dayData.dayNumber}`}
-                  initialDraft={completedState.freeWriteDraft}
-                  reflectionStatus={completedState.reflectionStatus}
-                  onSaveDraft={(text) => completedState.onSaveFreeWrite(dayData.dayNumber, text)}
-                  onOpenFull={() => completedState.onReflect(dayData.dayNumber)}
+                  key={`reflect-${composer.dayNumber}`}
+                  initialDraft={composer.draft}
+                  reflectionStatus={composer.status}
+                  onSaveDraft={(text) => composer.onSave(composer.dayNumber, text)}
+                  onOpenFull={() => composer.onOpenFull(composer.dayNumber)}
                   onReadAgain={onPress}
                 />
               </View>
@@ -798,10 +826,10 @@ function MainCard({ state }: MainCardProps) {
             </TouchableOpacity>
             )}
 
-            {isTomorrowLocked && state.type === 'tomorrow-locked' && (
+            {lockedState && !showInlineComposer && (
               <TouchableOpacity
                 activeOpacity={0.7}
-                onPress={() => state.onReflect(continueDayNumber)}
+                onPress={() => lockedState.onReflect(continueDayNumber)}
                 accessibilityRole="button"
                 accessibilityLabel="Reflect on today's reading"
                 accessibilityHint="Opens the journal for the day you completed"
