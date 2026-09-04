@@ -109,6 +109,31 @@ describe('onboarding answer draft lifecycle (ONB-RESUME-1)', () => {
   });
 });
 
+describe('paywall purchase exit', () => {
+  let handler = '';
+  beforeAll(() => {
+    handler = sliceBody('onPurchaseSuccess={() => {', 'onDecideLater={handleDecideLater}');
+  });
+
+  it('persists the purchase flag at the confirmation step before navigating', () => {
+    // The debounced writer lands up to 1.5 s later; a relaunch inside that
+    // window resumed ONTO the paywall for someone who had just paid.
+    const draftWrite = handler.indexOf('saveOnboardingDraft({');
+    const advance = handler.indexOf('advanceToNextStep();');
+    expect(draftWrite).toBeGreaterThan(-1);
+    expect(advance).toBeGreaterThan(draftWrite);
+    expect(handler).toContain("stepId: 'purchaseConfirmation'");
+    expect(handler).toContain('purchasedDuringOnboarding: true');
+    expect(handler).toContain('data: dataRef.current');
+    expect(handler).toContain('sampleDevotionalId: onboardingDevotionalId || null');
+    expect(handler.indexOf('setPurchasedDuringOnboarding(true)')).toBeLessThan(advance);
+  });
+
+  it('dropped the never-read paywall ref', () => {
+    expect(src).not.toContain('hasSeenPaywallRef');
+  });
+});
+
 describe('paywall "I\'ll decide later" exit', () => {
   let handler = '';
   beforeAll(() => {

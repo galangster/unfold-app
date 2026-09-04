@@ -900,8 +900,6 @@ export default function OnboardingScreen() {
     aspiration: [],
   });
 
-  // Track whether the user has already seen the paywall during onboarding
-  const hasSeenPaywallRef = useRef(false);
   const isPremium = existingUser?.isPremium ?? false;
   // Restored from the draft too: dropping it would re-run saveOnboardingData
   // with isPremium false for someone who already paid this walk-through.
@@ -3889,7 +3887,24 @@ export default function OnboardingScreen() {
           offeringsReady={offeringsReady}
           onRetryOfferings={() => { void queryClient.invalidateQueries({ queryKey: ['revenuecat', 'offerings'] }); }}
           onPurchaseSuccess={() => {
+            // Persist before navigating. The debounced draft writer lands up
+            // to 1.5 s later, and a relaunch inside that window resumed ONTO
+            // the paywall for someone who had just paid. ThreeStepPaywall
+            // calls this only on a verified entitlement, so a failed purchase
+            // can never skip the paywall on the next launch.
+            if (onboardingDeviceIdRef.current === null) {
+              onboardingDeviceIdRef.current = getDeviceId();
+            }
+            saveOnboardingDraft({
+              deviceId: onboardingDeviceIdRef.current,
+              stepId: 'purchaseConfirmation',
+              data: dataRef.current,
+              purchasedDuringOnboarding: true,
+              sampleDevotionalId: onboardingDevotionalId || null,
+            });
             setPurchasedDuringOnboarding(true);
+            // Dropped while no user record exists yet (see store.updateUser);
+            // the draft flag above carries premium until saveOnboardingData.
             updateUser({ isPremium: true });
             advanceToNextStep();
           }}

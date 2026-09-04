@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, memo } from 'react';
+import { useState, useCallback, useEffect, useRef, memo } from 'react';
 import {
   View,
   Text,
@@ -38,7 +38,12 @@ import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { Duration, Ease } from '@/constants/animations';
 import { useQueryClient } from '@tanstack/react-query';
-import { purchasePackage, restorePurchases, getOfferings } from '@/lib/revenuecatClient';
+import {
+  addCustomerInfoUpdateListener,
+  purchasePackage,
+  restorePurchases,
+  getOfferings,
+} from '@/lib/revenuecatClient';
 import { PURCHASE_PLANS_UNAVAILABLE_MESSAGE } from '@/lib/paywall-purchase-readiness';
 import { getPaywallRenewalDisclosure } from '@/lib/paywall-disclosure';
 import { syncTrialEndingNotification } from '@/lib/trial-notification';
@@ -53,7 +58,8 @@ import { isQaToolsEnabled } from '@/lib/qa-tools';
 import { getPerMonthEquivalent } from '@/lib/paywall-pricing';
 import {
   getThreeStepPaywallPrimaryAction,
-  resolvePurchaseOutcome,
+  hasUnfoldPremiumEntitlement,
+  resolveOnboardingPurchaseAdvance,
   resolveRestoreOutcome,
   runGuardedPaywallFlow,
 } from '@/lib/paywall-guardrails';
@@ -1240,6 +1246,52 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
   // Purchase / Restore
   // -----------------------------------------------------------------------
 
+  // The one exit that advances onboarding. Every path that ends in Premium —
+  // purchase, restore, the exclusive offer, a late entitlement — goes through
+  // here, so a second callback (a restore racing a purchase, the listener
+  // firing after a success) can never advance twice.
+  const advancedRef = useRef(false);
+  const [awaitingEntitlement, setAwaitingEntitlement] = useState(false);
+
+  const advanceOnce = useCallback((): boolean => {
+    if (advancedRef.current) return false;
+    advancedRef.current = true;
+    setAwaitingEntitlement(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    // Navigate first. The notification sync reads customer info with no
+    // timeout; awaiting it before onPurchaseSuccess once held a paying person
+    // on the paywall, and a rejection cancelled the advance outright.
+    onPurchaseSuccess();
+    syncTrialEndingNotification().catch((error: unknown) => {
+      logger.log('[ThreeStepPaywall] trial notification sync failed after purchase:', error);
+    });
+    return true;
+  }, [onPurchaseSuccess]);
+
+  // While a completed transaction waits on its entitlement, the SDK's
+  // customer-info listener is the exit: the grant arrives, the paywall
+  // advances, and nobody has to find Restore purchases.
+  useEffect(() => {
+    if (!awaitingEntitlement) return;
+    let cancelled = false;
+    let removeListener: (() => boolean) | null = null;
+    void addCustomerInfoUpdateListener((customerInfo) => {
+      if (cancelled || !hasUnfoldPremiumEntitlement(customerInfo)) return;
+      advanceOnce();
+    }).then((subscription) => {
+      if (!subscription.ok) return;
+      if (cancelled) {
+        subscription.data();
+        return;
+      }
+      removeListener = subscription.data;
+    });
+    return () => {
+      cancelled = true;
+      removeListener?.();
+    };
+  }, [awaitingEntitlement, advanceOnce]);
+
   // Both handlers are wrapped in runGuardedPaywallFlow so a rejected
   // purchasePackage / restorePurchases / fetchQuery can never leave isLoading
   // stuck at true (a permanent CTA spinner): loading is ALWAYS cleared and a
@@ -1267,30 +1319,32 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
       setPurchaseError(null);
       const result = await purchasePackage(pkg);
 
-      if (!result.ok) {
-        if (result.reason === 'user_cancelled') {
+      const decision = resolveOnboardingPurchaseAdvance({ result, hasAdvanced: advancedRef.current });
+      switch (decision.action) {
+        case 'advance':
+          advanceOnce();
+          return;
+        case 'noop':
+          return;
+        case 'cancelled': {
           const hasSeenOnboardingOffer = mmkvStorage.getItem('@unfold_onboarding_offer_seen') === 'true';
           if (!hasSeenOnboardingOffer) {
             setShowExclusiveOffer(true);
           }
-        } else {
-          setPurchaseError('Something went wrong. Please try again.');
+          return;
         }
-        return;
+        case 'wait_for_entitlement':
+          setAwaitingEntitlement(true);
+          setPurchaseError(decision.message);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          return;
+        case 'error':
+          setPurchaseError(decision.message);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          return;
       }
-
-      const outcome = resolvePurchaseOutcome(result);
-      if (outcome.kind === 'success') {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        await syncTrialEndingNotification();
-        onPurchaseSuccess();
-        return;
-      }
-
-      setPurchaseError(outcome.message);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     },
-  }), [selectedPlan, yearlyPackage, monthlyPackage, onPurchaseSuccess, queryClient]);
+  }), [selectedPlan, yearlyPackage, monthlyPackage, advanceOnce, queryClient]);
 
   // The exclusive offer is a real purchase surface, so it needs the same two
   // exits the main CTA has: a dismissal only marks the offer seen, while a
@@ -1308,9 +1362,8 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
 
   const handleExclusiveOfferPurchaseSuccess = useCallback(() => {
     dismissExclusiveOffer();
-    void syncTrialEndingNotification();
-    onPurchaseSuccess();
-  }, [dismissExclusiveOffer, onPurchaseSuccess]);
+    advanceOnce();
+  }, [dismissExclusiveOffer, advanceOnce]);
 
   const handleRestore = useCallback(() => runGuardedPaywallFlow({
     setLoading: setIsLoading,
@@ -1324,9 +1377,7 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
 
       const outcome = resolveRestoreOutcome(result);
       if (outcome.kind === 'success') {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        await syncTrialEndingNotification();
-        onPurchaseSuccess();
+        advanceOnce();
         return;
       }
 
@@ -1335,7 +1386,7 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
         Haptics.NotificationFeedbackType.Warning,
       );
     },
-  }), [onPurchaseSuccess]);
+  }), [advanceOnce]);
 
   // -----------------------------------------------------------------------
   // CTA press: navigate on screens 1-2, purchase on screen 3

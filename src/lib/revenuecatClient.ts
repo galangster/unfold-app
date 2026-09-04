@@ -89,6 +89,13 @@ const PURCHASE_TIMEOUT_MS = 60_000;
 const UNFOLD_PREMIUM_ENTITLEMENT = 'Unfold Premium';
 const POST_STORE_ACTION_REFRESH_DELAYS_MS = [0, 750, 1_500] as const;
 
+// How long a completed purchase keeps listening for the Premium grant after
+// the quick refresh above gives up. RevenueCat can take several seconds to
+// post a new trial's entitlement; without this window the onboarding paywall
+// reported the purchase as failed and Restore was the only way through.
+export const POST_PURCHASE_ENTITLEMENT_WAIT_MS = 10_000;
+const ENTITLEMENT_WAIT_POLL_INTERVAL_MS = 2_000;
+
 export type RevenueCatGuardReason =
   | "web_not_supported"
   | "not_configured"
@@ -133,9 +140,83 @@ const hasUnfoldPremiumEntitlement = (customerInfo: CustomerInfo): boolean => {
   return Boolean(customerInfo.entitlements.active?.[UNFOLD_PREMIUM_ENTITLEMENT]);
 };
 
+/**
+ * Resolve with the first customer info that carries the Unfold Premium
+ * entitlement, delivered by the SDK's update listener or by a 2 s poll.
+ * Resolves null once `timeoutMs` passes. Never rejects: a failed poll is
+ * ignored and the listener is always removed.
+ */
+export const waitForUnfoldPremiumEntitlement = (
+  timeoutMs: number,
+): Promise<CustomerInfo | null> => {
+  return new Promise<CustomerInfo | null>((resolve) => {
+    let settled = false;
+    let deadline: ReturnType<typeof setTimeout> | null = null;
+    let pollTimer: ReturnType<typeof setTimeout> | null = null;
+
+    function listener(customerInfo: CustomerInfo): void {
+      if (hasUnfoldPremiumEntitlement(customerInfo)) {
+        finish(customerInfo);
+      }
+    }
+
+    function finish(value: CustomerInfo | null): void {
+      if (settled) return;
+      settled = true;
+      if (deadline) clearTimeout(deadline);
+      if (pollTimer) clearTimeout(pollTimer);
+      try {
+        Purchases.removeCustomerInfoUpdateListener(listener);
+      } catch (error) {
+        logger.log(`${LOG_PREFIX} removeCustomerInfoUpdateListener failed:`, error);
+      }
+      void recordPaywallDiagnosticLazy('revenuecat.customer_info.entitlement_wait_end', () => ({
+        timeoutMs,
+        granted: value !== null,
+        customerInfo: value ? summarizeCustomerInfo(value) : null,
+      }), value ? 'info' : 'warn');
+      resolve(value);
+    }
+
+    async function poll(): Promise<void> {
+      if (settled) return;
+      try {
+        const customerInfo = await Purchases.getCustomerInfo();
+        if (hasUnfoldPremiumEntitlement(customerInfo)) {
+          finish(customerInfo);
+          return;
+        }
+      } catch (error) {
+        logger.log(`${LOG_PREFIX} entitlement wait poll failed:`, error);
+      }
+      if (!settled) {
+        pollTimer = setTimeout(() => { void poll(); }, ENTITLEMENT_WAIT_POLL_INTERVAL_MS);
+      }
+    }
+
+    void recordPaywallDiagnosticLazy('revenuecat.customer_info.entitlement_wait_start', () => ({
+      timeoutMs,
+    }), 'warn');
+
+    if (timeoutMs <= 0) {
+      finish(null);
+      return;
+    }
+
+    try {
+      Purchases.addCustomerInfoUpdateListener(listener);
+    } catch (error) {
+      logger.log(`${LOG_PREFIX} addCustomerInfoUpdateListener failed:`, error);
+    }
+    deadline = setTimeout(() => finish(null), timeoutMs);
+    pollTimer = setTimeout(() => { void poll(); }, ENTITLEMENT_WAIT_POLL_INTERVAL_MS);
+  });
+};
+
 const refreshCustomerInfoIfPremiumMissing = async (
   sourceAction: 'purchasePackage' | 'restorePurchases',
   customerInfo: CustomerInfo,
+  options: { extendedWaitMs?: number } = {},
 ): Promise<CustomerInfo> => {
   if (hasUnfoldPremiumEntitlement(customerInfo)) {
     return customerInfo;
@@ -172,6 +253,17 @@ const refreshCustomerInfoIfPremiumMissing = async (
       sourceAction,
       error: summarizeRevenueCatError(error),
     }), 'warn');
+  }
+
+  // The quick refresh is a few seconds at most. A purchase keeps listening
+  // for the grant past that, because the store transaction is already done
+  // and only RevenueCat's grant is late.
+  const extendedWaitMs = options.extendedWaitMs ?? 0;
+  if (extendedWaitMs > 0) {
+    const grantedCustomerInfo = await waitForUnfoldPremiumEntitlement(extendedWaitMs);
+    if (grantedCustomerInfo) {
+      return grantedCustomerInfo;
+    }
   }
 
   return latestCustomerInfo;
@@ -460,11 +552,34 @@ export const purchasePackage = (
       package: summarizePackage(packageToPurchase),
     }));
 
-    const purchaseResult = await withTimeout(
-      Purchases.purchasePackage(packageToPurchase),
-      PURCHASE_TIMEOUT_MS,
-      "purchasePackage",
-    );
+    let purchaseResult: Awaited<ReturnType<typeof Purchases.purchasePackage>>;
+    try {
+      purchaseResult = await withTimeout(
+        Purchases.purchasePackage(packageToPurchase),
+        PURCHASE_TIMEOUT_MS,
+        "purchasePackage",
+      );
+    } catch (error) {
+      if (!(error instanceof RevenueCatTimeoutError)) {
+        throw error;
+      }
+      // Our deadline is not Apple's. A slow first-time sheet can complete the
+      // transaction after 60 s, and reporting a timeout then left a paying
+      // person on the paywall. Give the grant one bounded window to land.
+      void recordPaywallDiagnosticLazy('revenuecat.purchase.timeout_wait_start', () => ({
+        elapsedMs: Date.now() - purchaseStartedAt,
+        waitMs: POST_PURCHASE_ENTITLEMENT_WAIT_MS,
+      }), 'warn');
+      const grantedCustomerInfo = await waitForUnfoldPremiumEntitlement(POST_PURCHASE_ENTITLEMENT_WAIT_MS);
+      if (grantedCustomerInfo) {
+        void recordPaywallDiagnosticLazy('revenuecat.purchase.timeout_wait_granted', () => ({
+          elapsedMs: Date.now() - purchaseStartedAt,
+          customerInfo: summarizeCustomerInfo(grantedCustomerInfo),
+        }));
+        return grantedCustomerInfo;
+      }
+      throw error;
+    }
 
     void recordPaywallDiagnosticLazy('revenuecat.purchase.native_resolved', () => ({
       elapsedMs: Date.now() - purchaseStartedAt,
@@ -479,7 +594,9 @@ export const purchasePackage = (
       customerInfo: summarizeCustomerInfo(purchaseResult.customerInfo),
     }));
 
-    return refreshCustomerInfoIfPremiumMissing('purchasePackage', purchaseResult.customerInfo);
+    return refreshCustomerInfoIfPremiumMissing('purchasePackage', purchaseResult.customerInfo, {
+      extendedWaitMs: POST_PURCHASE_ENTITLEMENT_WAIT_MS,
+    });
   });
 };
 
