@@ -2,7 +2,7 @@
   "expo": {
     "name": "Unfold",
     "slug": "unfold-app",
-    "version": "1.1.1",
+    "version": "1.1.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "backgroundColor": "#0A0A0A",
