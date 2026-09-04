@@ -50,6 +50,7 @@ import {
   getMiddayCheckInDayNumber,
 } from '@/lib/today-companion-state';
 import { getCalendarDayNumber } from '@/lib/devotional-day-access';
+import { useGeneratedDayWatch } from '@/hooks/useGeneratedDayWatch';
 import { getQaTodayProfileMarker } from '@/lib/qa-today-marker';
 import { getStreakDayKey, shouldCelebrateStreakDayFlip } from '@/lib/streak-helpers';
 
@@ -441,6 +442,18 @@ export default function HomeScreen() {
 
     return () => { cancelled = true; };
   }, [isPreparingCurrentDay, currentDevotional]);
+
+  // Keep looking for the day while the "preparing" card is up. Queuing the
+  // job above was fire-and-forget: the card stayed until the tab lost focus
+  // and regained it, because nothing here re-checked the server once the job
+  // finished. The watch ends when the day lands (isPreparingCurrentDay flips)
+  // or when the reader leaves the tab.
+  useGeneratedDayWatch({
+    devotionalId: currentDevotional?.id,
+    dayNumber: currentDevotional?.currentDay,
+    enabled: isPreparingCurrentDay && isTodayFocused,
+    onDay: addGeneratedDay,
+  });
 
   const qaContextSlot = useMemo<QaContextSlotPreview | null>(() => {
     if (!isQaToolsEnabled()) return null;

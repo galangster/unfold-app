@@ -2,6 +2,7 @@ import { getAuthHeaders, PRIMARY_BACKEND_URL } from './api-config';
 import { getDeviceId } from './mmkv-storage';
 import { logger } from './logger';
 import { enqueueSyncChanges } from './sync-outbox';
+import { buildSyncPushBody } from './sync-push-body';
 import type { UserProfile } from './store';
 
 export type UserProfileSyncChange = {
@@ -82,10 +83,7 @@ export async function syncUserProfileToBackend(
     const response = await fetch(`${PRIMARY_BACKEND_URL}/api/sync/push`, {
       method: 'POST',
       headers: await getAuthHeaders(),
-      body: JSON.stringify({
-        changes: [change],
-        deviceTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      }),
+      body: buildSyncPushBody([change]),
     });
 
     if (!response.ok) {

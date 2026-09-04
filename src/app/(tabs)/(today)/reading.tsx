@@ -35,7 +35,7 @@ import { Shadow } from '@/constants/shadows';
 import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, FONT_SIZE_VALUES } from '@/lib/store';
-import type { Highlight, Bookmark } from '@/lib/store';
+import type { Highlight, Bookmark, DevotionalDay } from '@/lib/store';
 import { refreshDailyReminder } from '@/lib/notifications';
 import { continueGeneratingDays, isFullGenerationActive } from '@/lib/devotional-service';
 import { submitGenerationJob, recoverCompletedGenerationResult, ApiError } from '@/lib/generation-api';
@@ -55,6 +55,8 @@ import {
   getTodayReaderDayNumber,
   resolveInitialReadingDayNumber,
 } from '@/lib/devotional-day-access';
+import { shouldWatchForGeneratedDay } from '@/lib/generated-day-watch';
+import { useGeneratedDayWatch } from '@/hooks/useGeneratedDayWatch';
 import { getServerOwnedSeriesTotalDays } from '@/lib/devotional-series-boundary';
 import { isTransientGenerationError, toFriendlyRemainingDaysGenerationError } from '@/lib/generation-errors';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
@@ -1308,6 +1310,30 @@ export default function ReadingScreen() {
     if (!currentDevotional || currentDayData || isCheckingForSyncedDay) return;
     void recoverSyncedDay('auto');
   }, [currentDevotional, currentDayData, isCheckingForSyncedDay, recoverSyncedDay]);
+
+  // The auto recovery above runs once per day: it pulls, then queues a day
+  // job if the server has nothing. After that the "isn't ready yet" screen
+  // sat until the reader tapped retry, because nothing watched the queued job
+  // finish. Keep checking while a due, in-series day is missing; the watch
+  // ends when the day lands or the reader moves on.
+  const seriesTitle = currentDevotional?.title;
+  const applyWatchedDay = useCallback((devotionalId: string, day: DevotionalDay) => {
+    updateDevotionalDays(devotionalId, [day], seriesTitle);
+    void logBugEvent('reading-sync-recovery', 'recovered-missing-day-while-watching', {
+      devotionalId,
+      viewingDay: day.dayNumber,
+    });
+  }, [updateDevotionalDays, seriesTitle]);
+  const shouldWatchViewingDay = useMemo(
+    () => shouldWatchForGeneratedDay(currentDevotional, viewingDay),
+    [currentDevotional, viewingDay],
+  );
+  useGeneratedDayWatch({
+    devotionalId: currentDevotional?.id,
+    dayNumber: viewingDay,
+    enabled: shouldWatchViewingDay,
+    onDay: applyWatchedDay,
+  });
 
   useEffect(() => {
     const devotionalId = effectiveDevotionalId;

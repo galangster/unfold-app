@@ -49,15 +49,23 @@ function buildPulledDevotionalShell(
     { totalDays, seriesArc: pulled.devotional?.seriesArc },
   );
 
+  // The calendar anchor decides which day is due today and, once pushed back
+  // on the first read, becomes the server's anchor too. The server's own
+  // seriesStartDate is authoritative; a shell rebuilt from a pull used to
+  // derive it from the first pulled day (or the row's updatedAt — days after
+  // the real start), which could lock a restored reader out of days they were
+  // owed and then push that wrong anchor upstream.
+  const seriesStartDate = pulled.devotional?.seriesStartDate ?? days[0]?.generatedAt ?? updatedAt;
+
   return {
     id: devotionalId,
     title: pulled.devotional?.title ?? days[0]?.title ?? 'Your Devotional',
     totalDays,
     currentDay,
     days,
-    createdAt: days[0]?.generatedAt ?? updatedAt,
+    createdAt: seriesStartDate,
     updatedAt,
-    seriesStartDate: days[0]?.generatedAt ?? updatedAt,
+    seriesStartDate,
     userContext: {
       name: '',
       aboutMe: '',
