@@ -103,6 +103,13 @@ export const PAYWALL_PURCHASE_TIMEOUT_MESSAGE =
 export const PAYWALL_ENTITLEMENT_PENDING_MESSAGE =
   'Your purchase went through, but Premium has not activated yet. It will unlock on its own in a moment — or tap Restore purchases.';
 
+/**
+ * Cue shown beside a spinner while the onboarding paywall waits on the grant.
+ * The wait is not an error — the person has paid — so it renders in a neutral
+ * slot, never in the error slot.
+ */
+export const PAYWALL_ENTITLEMENT_PENDING_CUE = 'Finishing up…';
+
 export type OnboardingPurchaseAdvanceDecision =
   | { action: 'advance' }
   | { action: 'noop' }

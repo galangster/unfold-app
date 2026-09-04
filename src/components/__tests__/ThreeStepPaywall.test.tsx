@@ -132,14 +132,15 @@ jest.mock('@tanstack/react-query', () => ({
 
 const mockPurchasePackage = jest.fn();
 const mockRestorePurchases = jest.fn();
-const mockAddCustomerInfoUpdateListener = jest.fn();
+const mockWaitForUnfoldPremiumEntitlement = jest.fn();
 const mockSyncTrialEndingNotification = jest.fn(() => Promise.resolve());
 
 jest.mock('@/lib/revenuecatClient', () => ({
+  POST_PURCHASE_ENTITLEMENT_WAIT_MS: 10_000,
   getOfferings: jest.fn(),
   purchasePackage: (...args: unknown[]) => mockPurchasePackage(...args),
   restorePurchases: (...args: unknown[]) => mockRestorePurchases(...args),
-  addCustomerInfoUpdateListener: (...args: unknown[]) => mockAddCustomerInfoUpdateListener(...args),
+  waitForUnfoldPremiumEntitlement: (...args: unknown[]) => mockWaitForUnfoldPremiumEntitlement(...args),
 }));
 
 jest.mock('@/lib/trial-notification', () => ({
@@ -160,10 +161,13 @@ jest.mock('@/lib/push-notification-helpers', () => ({
 import { ThreeStepPaywall } from '../onboarding/ThreeStepPaywall';
 // eslint-disable-next-line import/first -- same ordering constraint as above.
 import {
+  PAYWALL_ENTITLEMENT_PENDING_CUE,
   PAYWALL_ENTITLEMENT_PENDING_MESSAGE,
   PAYWALL_GENERIC_ERROR_MESSAGE,
   PAYWALL_PURCHASE_TIMEOUT_MESSAGE,
 } from '@/lib/paywall-guardrails';
+// eslint-disable-next-line import/first -- same ordering constraint as above.
+import * as Haptics from 'expo-haptics';
 
 const colors = {
   accent: '#C8A55C',
@@ -242,6 +246,32 @@ function findText(tree: any, text: string) {
   return tree.root.findAll((n: any) => n.props?.children === text);
 }
 
+/** Style colour of the outermost Text node rendering exactly `text`. */
+function textColor(tree: any, text: string): string | undefined {
+  const node = findText(tree, text)[0];
+  const style = node?.props?.style;
+  return Array.isArray(style) ? style.find((s: any) => s?.color)?.color : style?.color;
+}
+
+function notificationHaptics(): unknown[] {
+  return (Haptics.notificationAsync as jest.Mock).mock.calls.map((call) => call[0]);
+}
+
+/** A wait the test settles by hand, standing in for the SDK listener + poll. */
+function deferredEntitlementWait() {
+  let resolve!: (value: unknown) => void;
+  const promise = new Promise<unknown>((r) => {
+    resolve = r;
+  });
+  mockWaitForUnfoldPremiumEntitlement.mockReturnValue(promise);
+  return {
+    resolve: (value: unknown) => act(async () => {
+      resolve(value);
+    }),
+    signal: (): AbortSignal => mockWaitForUnfoldPremiumEntitlement.mock.calls[0][1].signal,
+  };
+}
+
 /**
  * Jordan (App Store 1.1.0): "after accepting the offer for the trial it takes
  * me back to the free trial page" / "I had to tap restore purchases to get
@@ -252,7 +282,7 @@ describe('ThreeStepPaywall purchase advances exactly once', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockIsQaToolsEnabled.mockReturnValue(false);
-    mockAddCustomerInfoUpdateListener.mockResolvedValue({ ok: true, data: jest.fn(() => true) });
+    mockWaitForUnfoldPremiumEntitlement.mockReturnValue(new Promise(() => {}));
     mockSyncTrialEndingNotification.mockResolvedValue(undefined);
   });
 
@@ -308,42 +338,117 @@ describe('ThreeStepPaywall purchase advances exactly once', () => {
     expect(props.onPurchaseSuccess).toHaveBeenCalledTimes(1);
   });
 
-  it('shows the timeout copy, not the generic error, on a client-side timeout', async () => {
+  it('shows the timeout copy as a neutral pending state, not the generic error, on a client-side timeout', async () => {
     mockPurchasePackage.mockResolvedValue({ ok: false, reason: 'timeout', error: new Error('timed out') });
+    const wait = deferredEntitlementWait();
     const { tree, props } = await renderOnFinalPage();
 
     await pressPrimaryCTA(tree);
 
     expect(props.onPurchaseSuccess).not.toHaveBeenCalled();
     expect(findText(tree, PAYWALL_PURCHASE_TIMEOUT_MESSAGE).length).toBeGreaterThan(0);
+    expect(textColor(tree, PAYWALL_PURCHASE_TIMEOUT_MESSAGE)).not.toBe(colors.error);
+    expect(findText(tree, PAYWALL_ENTITLEMENT_PENDING_CUE).length).toBeGreaterThan(0);
     expect(findText(tree, PAYWALL_GENERIC_ERROR_MESSAGE)).toHaveLength(0);
+    expect(notificationHaptics()).not.toContain('error');
+
+    // The wait gave up: the timeout copy becomes the error-slot verdict.
+    await wait.resolve(null);
+    expect(findText(tree, PAYWALL_ENTITLEMENT_PENDING_CUE)).toHaveLength(0);
+    expect(textColor(tree, PAYWALL_PURCHASE_TIMEOUT_MESSAGE)).toBe(colors.error);
+    expect(props.onPurchaseSuccess).not.toHaveBeenCalled();
   });
 
-  it('advances without Restore when the entitlement arrives late through the update listener', async () => {
-    const removeListener = jest.fn(() => true);
-    mockAddCustomerInfoUpdateListener.mockResolvedValue({ ok: true, data: removeListener });
+  it('renders the pending grant as "finishing up", not as an error', async () => {
     mockPurchasePackage.mockResolvedValue({ ok: true, data: unentitledCustomerInfo });
+    deferredEntitlementWait();
     const { tree, props } = await renderOnFinalPage();
 
     await pressPrimaryCTA(tree);
 
     expect(props.onPurchaseSuccess).not.toHaveBeenCalled();
+    expect(findText(tree, PAYWALL_ENTITLEMENT_PENDING_CUE).length).toBeGreaterThan(0);
     expect(findText(tree, PAYWALL_ENTITLEMENT_PENDING_MESSAGE).length).toBeGreaterThan(0);
-    expect(mockAddCustomerInfoUpdateListener).toHaveBeenCalledTimes(1);
-    const listener = mockAddCustomerInfoUpdateListener.mock.calls[0][0] as (info: unknown) => void;
+    expect(textColor(tree, PAYWALL_ENTITLEMENT_PENDING_MESSAGE)).toBe(colors.textMuted);
+    expect(textColor(tree, PAYWALL_ENTITLEMENT_PENDING_MESSAGE)).not.toBe(colors.error);
+    expect(notificationHaptics()).toEqual([]);
+    expect(mockWaitForUnfoldPremiumEntitlement).toHaveBeenCalledTimes(1);
+    expect(mockWaitForUnfoldPremiumEntitlement.mock.calls[0][0]).toBe(10_000);
+  });
 
-    await act(async () => {
-      listener(unentitledCustomerInfo);
-    });
+  it('advances without Restore when the entitlement arrives late through the bounded wait', async () => {
+    mockPurchasePackage.mockResolvedValue({ ok: true, data: unentitledCustomerInfo });
+    const wait = deferredEntitlementWait();
+    const { tree, props } = await renderOnFinalPage();
+
+    await pressPrimaryCTA(tree);
     expect(props.onPurchaseSuccess).not.toHaveBeenCalled();
 
-    await act(async () => {
-      listener(entitledCustomerInfo);
-      listener(entitledCustomerInfo);
-    });
+    await wait.resolve(entitledCustomerInfo);
 
     expect(props.onPurchaseSuccess).toHaveBeenCalledTimes(1);
-    expect(removeListener).toHaveBeenCalledTimes(1);
+    expect(notificationHaptics()).toEqual(['success']);
+    expect(findText(tree, PAYWALL_ENTITLEMENT_PENDING_CUE)).toHaveLength(0);
+  });
+
+  it('moves the pending copy to the error slot with its Restore guidance when the wait gives up', async () => {
+    mockPurchasePackage.mockResolvedValue({ ok: true, data: unentitledCustomerInfo });
+    const wait = deferredEntitlementWait();
+    const { tree, props } = await renderOnFinalPage();
+
+    await pressPrimaryCTA(tree);
+    await wait.resolve(null);
+
+    expect(props.onPurchaseSuccess).not.toHaveBeenCalled();
+    expect(findText(tree, PAYWALL_ENTITLEMENT_PENDING_CUE)).toHaveLength(0);
+    expect(findText(tree, PAYWALL_ENTITLEMENT_PENDING_MESSAGE).length).toBeGreaterThan(0);
+    expect(PAYWALL_ENTITLEMENT_PENDING_MESSAGE).toContain('Restore purchases');
+    expect(textColor(tree, PAYWALL_ENTITLEMENT_PENDING_MESSAGE)).toBe(colors.error);
+    expect(notificationHaptics()).toEqual(['warning']);
+    // One bounded wait only — nothing re-arms a listener after it gave up.
+    expect(mockWaitForUnfoldPremiumEntitlement).toHaveBeenCalledTimes(1);
+  });
+
+  it('aborts the entitlement wait when the paywall unmounts, so no listener outlives it', async () => {
+    mockPurchasePackage.mockResolvedValue({ ok: true, data: unentitledCustomerInfo });
+    const wait = deferredEntitlementWait();
+    const { tree, props } = await renderOnFinalPage();
+
+    await pressPrimaryCTA(tree);
+    expect(wait.signal().aborted).toBe(false);
+
+    await act(async () => {
+      tree.unmount();
+    });
+
+    expect(wait.signal().aborted).toBe(true);
+    // A grant that lands after unmount must not advance a dead screen.
+    await wait.resolve(entitledCustomerInfo);
+    expect(props.onPurchaseSuccess).not.toHaveBeenCalled();
+  });
+
+  it('aborts the previous wait when a new purchase attempt starts', async () => {
+    mockPurchasePackage.mockResolvedValueOnce({ ok: true, data: unentitledCustomerInfo });
+    const wait = deferredEntitlementWait();
+    const { tree } = await renderOnFinalPage();
+
+    await pressPrimaryCTA(tree);
+    const firstSignal = wait.signal();
+    expect(firstSignal.aborted).toBe(false);
+
+    // While the second attempt is still in flight the stale UI deadline is
+    // already gone: purchasePackage listens for the grant itself.
+    let resolveSecond!: (value: unknown) => void;
+    mockPurchasePackage.mockReturnValueOnce(new Promise((r) => { resolveSecond = r; }));
+    await pressPrimaryCTA(tree);
+    expect(firstSignal.aborted).toBe(true);
+    expect(findText(tree, PAYWALL_ENTITLEMENT_PENDING_CUE)).toHaveLength(0);
+
+    await act(async () => {
+      resolveSecond({ ok: true, data: unentitledCustomerInfo });
+    });
+    expect(mockWaitForUnfoldPremiumEntitlement).toHaveBeenCalledTimes(2);
+    expect(mockWaitForUnfoldPremiumEntitlement.mock.calls[1][1].signal.aborted).toBe(false);
   });
 
   it('does not advance or wait on a plain SDK error', async () => {
@@ -353,8 +458,11 @@ describe('ThreeStepPaywall purchase advances exactly once', () => {
     await pressPrimaryCTA(tree);
 
     expect(props.onPurchaseSuccess).not.toHaveBeenCalled();
-    expect(mockAddCustomerInfoUpdateListener).not.toHaveBeenCalled();
+    expect(mockWaitForUnfoldPremiumEntitlement).not.toHaveBeenCalled();
+    expect(findText(tree, PAYWALL_ENTITLEMENT_PENDING_CUE)).toHaveLength(0);
     expect(findText(tree, PAYWALL_GENERIC_ERROR_MESSAGE).length).toBeGreaterThan(0);
+    expect(textColor(tree, PAYWALL_GENERIC_ERROR_MESSAGE)).toBe(colors.error);
+    expect(notificationHaptics()).toEqual(['error']);
   });
 });
 

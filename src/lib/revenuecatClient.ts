@@ -143,12 +143,15 @@ const hasUnfoldPremiumEntitlement = (customerInfo: CustomerInfo): boolean => {
 /**
  * Resolve with the first customer info that carries the Unfold Premium
  * entitlement, delivered by the SDK's update listener or by a 2 s poll.
- * Resolves null once `timeoutMs` passes. Never rejects: a failed poll is
- * ignored and the listener is always removed.
+ * Resolves null once `timeoutMs` passes or `options.signal` aborts. Never
+ * rejects: a failed poll is ignored and the listener is always removed, so no
+ * SDK listener outlives the wait or the screen that started it.
  */
 export const waitForUnfoldPremiumEntitlement = (
   timeoutMs: number,
+  options: { signal?: AbortSignal } = {},
 ): Promise<CustomerInfo | null> => {
+  const { signal } = options;
   return new Promise<CustomerInfo | null>((resolve) => {
     let settled = false;
     let deadline: ReturnType<typeof setTimeout> | null = null;
@@ -160,11 +163,16 @@ export const waitForUnfoldPremiumEntitlement = (
       }
     }
 
+    function onAbort(): void {
+      finish(null);
+    }
+
     function finish(value: CustomerInfo | null): void {
       if (settled) return;
       settled = true;
       if (deadline) clearTimeout(deadline);
       if (pollTimer) clearTimeout(pollTimer);
+      signal?.removeEventListener('abort', onAbort);
       try {
         Purchases.removeCustomerInfoUpdateListener(listener);
       } catch (error) {
@@ -173,6 +181,7 @@ export const waitForUnfoldPremiumEntitlement = (
       void recordPaywallDiagnosticLazy('revenuecat.customer_info.entitlement_wait_end', () => ({
         timeoutMs,
         granted: value !== null,
+        aborted: signal?.aborted ?? false,
         customerInfo: value ? summarizeCustomerInfo(value) : null,
       }), value ? 'info' : 'warn');
       resolve(value);
@@ -198,7 +207,7 @@ export const waitForUnfoldPremiumEntitlement = (
       timeoutMs,
     }), 'warn');
 
-    if (timeoutMs <= 0) {
+    if (timeoutMs <= 0 || signal?.aborted) {
       finish(null);
       return;
     }
@@ -208,6 +217,7 @@ export const waitForUnfoldPremiumEntitlement = (
     } catch (error) {
       logger.log(`${LOG_PREFIX} addCustomerInfoUpdateListener failed:`, error);
     }
+    signal?.addEventListener('abort', onAbort);
     deadline = setTimeout(() => finish(null), timeoutMs);
     pollTimer = setTimeout(() => { void poll(); }, ENTITLEMENT_WAIT_POLL_INTERVAL_MS);
   });

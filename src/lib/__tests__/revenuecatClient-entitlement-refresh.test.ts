@@ -216,6 +216,40 @@ describe('RevenueCat entitlement refresh after store actions', () => {
       expect(purchasesMock.removeCustomerInfoUpdateListener).toHaveBeenCalledWith(listener);
     });
 
+    it('removes the listener and resolves null as soon as the caller aborts the wait', async () => {
+      const { client, purchasesMock } = await setup({ refreshedCustomerInfo: emptyCustomerInfo });
+      const controller = new AbortController();
+
+      const pending = client.waitForUnfoldPremiumEntitlement(
+        client.POST_PURCHASE_ENTITLEMENT_WAIT_MS,
+        { signal: controller.signal },
+      );
+      const listener = capturedListener(purchasesMock);
+      await jest.advanceTimersByTimeAsync(2_000);
+      expect(purchasesMock.getCustomerInfo).toHaveBeenCalledTimes(1);
+
+      controller.abort();
+
+      await expect(pending).resolves.toBeNull();
+      expect(purchasesMock.removeCustomerInfoUpdateListener).toHaveBeenCalledWith(listener);
+      // Nothing keeps polling for a screen that is gone.
+      await jest.advanceTimersByTimeAsync(client.POST_PURCHASE_ENTITLEMENT_WAIT_MS);
+      expect(purchasesMock.getCustomerInfo).toHaveBeenCalledTimes(1);
+    });
+
+    it('resolves null without registering a listener when the signal is already aborted', async () => {
+      const { client, purchasesMock } = await setup({ refreshedCustomerInfo: emptyCustomerInfo });
+      const controller = new AbortController();
+      controller.abort();
+
+      await expect(
+        client.waitForUnfoldPremiumEntitlement(client.POST_PURCHASE_ENTITLEMENT_WAIT_MS, {
+          signal: controller.signal,
+        }),
+      ).resolves.toBeNull();
+      expect(purchasesMock.addCustomerInfoUpdateListener).not.toHaveBeenCalled();
+    });
+
     it('does not extend the wait for a restore that finds no subscription', async () => {
       const { client, purchasesMock } = await setup({ refreshedCustomerInfo: emptyCustomerInfo });
 
