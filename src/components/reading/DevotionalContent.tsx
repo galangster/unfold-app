@@ -266,6 +266,8 @@ export function DevotionalContent({
               onScriptureTap?.(day.scriptureReference);
             }}
             hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+            accessibilityRole="button"
+            accessibilityLabel={`Open ${day.scriptureReference} in scripture view`}
           >
             <Text style={[dcStyles.scriptureRef, { color: colors.accent }]}>
               {day.scriptureReference}
@@ -345,6 +347,8 @@ export function DevotionalContent({
                   onScriptureTap?.(ref.reference);
                 }}
                 hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                accessibilityRole="button"
+                accessibilityLabel={`Open ${ref.reference} in scripture view`}
               >
                 <Text style={[dcStyles.crossRefReference, { color: colors.accent }]}>
                   {ref.reference}

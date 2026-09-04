@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useMemo, useState } from 'react';
-import { View, StyleSheet, Dimensions } from 'react-native';
+import { View, StyleSheet, Dimensions, PixelRatio } from 'react-native';
 import { WebView } from 'react-native-webview';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/lib/theme';
@@ -46,6 +46,16 @@ interface DevotionalWebViewProps {
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CONTENT_PADDING = 24;
 
+// System Dynamic Type is layered on top of the reader's own Aa font-size
+// choice, capped so a very large system setting can't blow up the layout.
+const MAX_SYSTEM_FONT_SCALE = 1.6;
+
+/** Clamp the system font scale to a sane multiplier for the reader body text. */
+export function clampSystemFontScale(scale: number): number {
+  if (!Number.isFinite(scale) || scale <= 0) return 1;
+  return Math.min(scale, MAX_SYSTEM_FONT_SCALE);
+}
+
 /** Stable empty default for `existingHighlights` — an inline `= []` default
  *  mints a new array identity on every render, invalidating the injected-JS
  *  memo below and re-injecting script into the WebView for free. */
@@ -76,8 +86,8 @@ interface ThemeVars {
   json: string;
 }
 
-function buildThemeVars(fontSize: FontSize, accentColor: string, isDark: boolean): ThemeVars {
-  const bodyFontSize = FONT_SIZE_VALUES[fontSize].body;
+function buildThemeVars(fontSize: FontSize, accentColor: string, isDark: boolean, fontScale: number): ThemeVars {
+  const bodyFontSize = Math.round(FONT_SIZE_VALUES[fontSize].body * clampSystemFontScale(fontScale));
   const lineHeight = bodyFontSize * 1.75;
   const vars: Record<string, string> = {
     '--body-font-size': `${bodyFontSize}px`,
@@ -166,9 +176,20 @@ export function DevotionalWebView({
 
   const [webViewHeight, setWebViewHeight] = useState(200);
 
+  // System Dynamic Type setting, layered on top of the reader's own Aa
+  // choice. Dimensions' 'change' event also fires when the OS text-size
+  // setting changes while the app is foregrounded, so re-read it there.
+  const [fontScale, setFontScale] = useState(() => PixelRatio.getFontScale());
+  useEffect(() => {
+    const subscription = Dimensions.addEventListener('change', () => {
+      setFontScale(PixelRatio.getFontScale());
+    });
+    return () => subscription.remove();
+  }, []);
+
   const themeVars = useMemo(
-    () => buildThemeVars(fontSize, colors.accent, isDark),
-    [fontSize, colors, isDark],
+    () => buildThemeVars(fontSize, colors.accent, isDark, fontScale),
+    [fontSize, colors, isDark, fontScale],
   );
 
   // Inject JS to report content height and apply highlights using rangy

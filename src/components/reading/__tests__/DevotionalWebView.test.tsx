@@ -1,4 +1,5 @@
 import React from 'react';
+import { PixelRatio } from 'react-native';
 
 import { DevotionalWebView } from '../DevotionalWebView';
 import { RANGY_BUNDLE } from '../rangy-bundle';
@@ -29,6 +30,14 @@ jest.mock('expo-haptics', () => ({
   selectionAsync: jest.fn(),
   impactAsync: jest.fn(),
 }));
+
+// The RN jest environment's Dimensions.get('window') has no `fontScale`, so
+// PixelRatio.getFontScale() falls back to the device pixel ratio instead —
+// a much larger number than any real system text-size setting. Pin it to a
+// neutral 1 so these tests exercise the reader's own Aa sizing, not that
+// fallback.
+jest.spyOn(PixelRatio, 'getFontScale').mockReturnValue(1);
+
 
 jest.mock('@/lib/theme', () => ({
   useTheme: () => ({

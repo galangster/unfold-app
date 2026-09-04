@@ -287,6 +287,10 @@ export default function ReadingScreen() {
   const [showScrollHint, setShowScrollHint] = useState(true);
   const [isRetrying, setIsRetrying] = useState(false);
   const [isCheckingForSyncedDay, setIsCheckingForSyncedDay] = useState(false);
+  // "Prepare Remaining Readings" is a secondary escape hatch — only worth
+  // showing once the primary "Check for Day X" action has actually been
+  // tried (or has failed).
+  const [hasAttemptedSyncCheck, setHasAttemptedSyncCheck] = useState(false);
   const [isHydratingMissingDevotional, setIsHydratingMissingDevotional] = useState(false);
   const [retryError, setRetryError] = useState<string | null>(null);
   const [isGeneratingMore, setIsGeneratingMore] = useState(false);
@@ -297,6 +301,7 @@ export default function ReadingScreen() {
   const [isOnline, setIsOnline] = useState(true);
   const [isWaitingForConnection, setIsWaitingForConnection] = useState(false);
   const [bookmarkToast, setBookmarkToast] = useState(false);
+  const [lockedDayToast, setLockedDayToast] = useState(false);
   const [selectedStudyMethod, setSelectedStudyMethod] = useState<string | undefined>(undefined);
   const [targetScrollRequest, setTargetScrollRequest] = useState<{ id: number; y: number } | null>(null);
   const [readerScrollReady, setReaderScrollReady] = useState(0);
@@ -316,6 +321,9 @@ export default function ReadingScreen() {
 
   // Bookmark toast auto-dismiss after 2.5s
   useAutoHide(bookmarkToast, 2500, useCallback(() => setBookmarkToast(false), []));
+
+  // Locked-day toast (blocked forward swipe) auto-dismiss after 2.5s
+  useAutoHide(lockedDayToast, 2500, useCallback(() => setLockedDayToast(false), []));
 
   // Button press micro-interaction — spring scale for Complete Day button
   const completeButtonScale = useSharedValue(1);
@@ -825,6 +833,12 @@ export default function ReadingScreen() {
         } else {
           // Rubber-band snap back with subtle haptic
           runOnJS(Haptics.selectionAsync)();
+          // A deliberate forward swipe with no day left to advance to is the
+          // locked-day case — surface why nothing happened instead of just
+          // the haptic.
+          if (event.translationX < -80 && viewingDay >= availableDays) {
+            runOnJS(setLockedDayToast)(true);
+          }
         }
         translateX.value = withTiming(0, { duration: Duration.normal });
       }),
@@ -1193,6 +1207,7 @@ export default function ReadingScreen() {
     setIsCheckingForSyncedDay(true);
     if (source === 'manual') {
       setRetryError(null);
+      setHasAttemptedSyncCheck(true);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
 
@@ -1656,43 +1671,6 @@ export default function ReadingScreen() {
                 accessibilityHint="Fetch the latest devotional day from your account"
                 accessibilityState={{ disabled: isCheckingForSyncedDay }}
                 style={{
-                  backgroundColor: colors.backgroundElevated,
-                  paddingVertical: Spacing['4'],
-                  borderRadius: Radius.card,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 10,
-                  opacity: isCheckingForSyncedDay ? 0.65 : 1,
-                }}
-              >
-                {isCheckingForSyncedDay ? (
-                  <ActivityIndicator color={colors.text} size="small" />
-                ) : (
-                  <ArrowsClockwiseIcon size={16} color={colors.text} weight="light" />
-                )}
-                <Text
-                  style={{
-                    fontFamily: FontFamily.uiSemiBold,
-                    fontSize: 15,
-                    color: colors.text,
-                  }}
-                >
-                  {isCheckingForSyncedDay ? 'Checking...' : `Check for Day ${viewingDay}`}
-                </Text>
-              </TouchableOpacity>
-
-              {/* Generate button - secondary recovery if sync has nothing yet */}
-              <TouchableOpacity activeOpacity={0.7}
-                onPress={handleRetryGeneration}
-                disabled={isCheckingForSyncedDay}
-                accessibilityRole="button"
-                accessibilityLabel="Prepare remaining readings"
-                accessibilityHint={`Prepare the remaining ${expectedDays - daysReady} readings in your devotional`}
-                accessibilityState={{ disabled: isCheckingForSyncedDay }}
-                style={{
                   backgroundColor: retryCtaButtonBg,
                   paddingVertical: 18,
                   borderRadius: Radius.card,
@@ -1705,17 +1683,54 @@ export default function ReadingScreen() {
                   opacity: isCheckingForSyncedDay ? 0.65 : 1,
                 }}
               >
-                <ArrowsClockwiseIcon size={16} color={btnText} weight="light" />
+                {isCheckingForSyncedDay ? (
+                  <ActivityIndicator color={colors.background} size="small" />
+                ) : (
+                  <ArrowsClockwiseIcon size={16} color={btnText} weight="light" />
+                )}
                 <Text
                   style={{
                     fontFamily: FontFamily.uiSemiBold,
-                    fontSize: FontSize.base,
+                    fontSize: 15,
                     color: btnText,
                   }}
                 >
-                  Prepare Remaining Readings
+                  {isCheckingForSyncedDay ? 'Checking...' : `Check for Day ${viewingDay}`}
                 </Text>
               </TouchableOpacity>
+
+              {/* Generate button - secondary text-style escape hatch, only
+                  offered once the primary check above has actually been
+                  tried (or failed) so it doesn't compete for attention. */}
+              {(hasAttemptedSyncCheck || !!retryError) && (
+                <TouchableOpacity activeOpacity={0.6}
+                  onPress={handleRetryGeneration}
+                  disabled={isCheckingForSyncedDay}
+                  accessibilityRole="button"
+                  accessibilityLabel="Prepare remaining readings"
+                  accessibilityHint={`Prepare the remaining ${expectedDays - daysReady} readings in your devotional`}
+                  accessibilityState={{ disabled: isCheckingForSyncedDay }}
+                  style={{
+                    paddingVertical: Spacing['3'],
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    opacity: isCheckingForSyncedDay ? 0.65 : 1,
+                  }}
+                >
+                  <ArrowsClockwiseIcon size={14} color={colors.textMuted} weight="light" />
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.uiMedium,
+                      fontSize: FontSize.sm,
+                      color: colors.textMuted,
+                    }}
+                  >
+                    Prepare Remaining Readings
+                  </Text>
+                </TouchableOpacity>
+              )}
 
               {/* Go back to last renderable day before this one - same solid button style */}
               {fallbackDayNumber !== null && (
@@ -2288,6 +2303,20 @@ export default function ReadingScreen() {
           ]}
         >
           <Text style={styles.toastText}>{audioToast.message}</Text>
+        </Animated.View>
+      )}
+
+      {/* Blocked forward swipe (locked day) toast */}
+      {lockedDayToast && (
+        <Animated.View
+          entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
+          exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
+          style={[
+            styles.toastContainer,
+            { backgroundColor: isDark ? 'rgba(40, 40, 40, 0.95)' : 'rgba(60, 60, 60, 0.95)' }
+          ]}
+        >
+          <Text style={styles.toastText}>Tomorrow's reading unlocks after midnight</Text>
         </Animated.View>
       )}
 

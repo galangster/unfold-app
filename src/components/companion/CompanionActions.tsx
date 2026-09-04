@@ -1,10 +1,10 @@
 /**
  * CompanionActions — post-response action row.
- * Copy, share, journal, read aloud, thumbs up/down.
+ * Copy, share, thumbs up/down.
  * Staggered 80ms fade-in per Storyboard D.
  */
 import { useEffect, useState } from 'react';
-import { Share, TouchableOpacity, View } from 'react-native';
+import { AccessibilityInfo, Share, TouchableOpacity, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import Animated, {
@@ -102,6 +102,7 @@ export function CompanionActions({ messageId, content, feedback, visible }: Prop
   const handleCopy = async () => {
     await Clipboard.setStringAsync(content);
     setCopied(true);
+    AccessibilityInfo.announceForAccessibility('Copied');
     setTimeout(() => setCopied(false), 2000);
   };
 
@@ -128,7 +129,7 @@ export function CompanionActions({ messageId, content, feedback, visible }: Prop
         isActive={copied}
         activeColor={colors.success}
         onPress={handleCopy}
-        accessibilityLabel="Copy response"
+        accessibilityLabel={copied ? 'Copied' : 'Copy response'}
         hintColor={colors.textHint}
       />
       <ActionButton

@@ -193,7 +193,14 @@ export function CompletionCelebration({
 
   return (
     <Modal visible={visible} transparent animationType="none" statusBarTranslucent>
-      <TouchableOpacity activeOpacity={1} style={StyleSheet.absoluteFill} onPress={onDismiss}>
+      <TouchableOpacity
+        activeOpacity={1}
+        style={StyleSheet.absoluteFill}
+        onPress={onDismiss}
+        accessibilityRole="button"
+        accessibilityLabel="Continue"
+        accessibilityHint="Tap anywhere to continue"
+      >
         <Animated.View style={[StyleSheet.absoluteFill, overlayStyle]}>
 
           {/* Canonical celebration ember field + luminous motes. EmberSystem

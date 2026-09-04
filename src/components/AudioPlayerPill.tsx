@@ -202,6 +202,7 @@ export function AudioPlayerPill() {
             activeOpacity={0.7}
             onPress={handleExpand}
             style={styles.bodyTouchable}
+            accessible={false}
           >
             {/* Pulsing dot — hidden when completed */}
             {!isCompleted && (
@@ -236,6 +237,7 @@ export function AudioPlayerPill() {
               onPress={handleToggle}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               style={styles.iconTouchable}
+              accessible={false}
             >
               {isPlaying ? (
                 <PauseIcon size={ICON_SIZE} color={colors.accent} weight="fill" />

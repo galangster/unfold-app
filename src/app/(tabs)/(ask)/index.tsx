@@ -16,7 +16,7 @@ import {
   TouchableOpacity,
   useWindowDimensions,
 } from 'react-native';
-// react-native-gesture-handler not needed — scroll banner uses normal TouchableOpacity
+import { GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useIsFocused } from 'expo-router';
 import {
@@ -32,6 +32,8 @@ import {
   useReducedMotion,
 } from 'react-native-reanimated';
 import { useTheme } from '@/lib/theme';
+import { useUnfoldStore } from '@/lib/store';
+import { getCurrentDevotional } from '@/lib/home-devotional-state';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { CompanionOrb } from '@/components/CompanionOrb';
@@ -40,6 +42,7 @@ import type { CompanionMessage } from '@/lib/companion-chat-store';
 import {
   CompanionDrawer,
   DRAWER_WIDTH,
+  useDrawerGesture,
 } from '@/components/companion/CompanionDrawer';
 import { CompanionEmptyState } from '@/components/companion/CompanionEmptyState';
 import { CompanionInput } from '@/components/companion/CompanionInput';
@@ -172,6 +175,16 @@ export default function CompanionScreen() {
     startNewConversation,
   } = useCompanionChat();
 
+  // Today's devotional theme, for the empty state's memory-aware starter
+  // chips — same lookup today/index.tsx uses for its own "todayTheme".
+  const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
+  const devotionals = useUnfoldStore((s) => s.devotionals);
+  const todayTheme = useMemo(() => {
+    const currentDevotional = getCurrentDevotional(devotionals, currentDevotionalId);
+    if (!currentDevotional) return undefined;
+    return currentDevotional.days?.find((d) => d.dayNumber === currentDevotional.currentDay)?.title;
+  }, [devotionals, currentDevotionalId]);
+
   // P1: dismissible error banner. Dismissal is per-error-message; a new
   // stream clears it so the next failure surfaces again.
   const [dismissedError, setDismissedError] = useState<string | null>(null);
@@ -218,7 +231,11 @@ export default function CompanionScreen() {
       : withSpring(-DRAWER_WIDTH, { duration: 300, dampingRatio: 1 });
   }, [drawerTranslateX, reducedMotion]);
 
-  // Gesture-based drawer open deferred — hamburger button + scrim tap for now
+  // Edge-swipe to open/close, alongside the hamburger button + scrim tap.
+  // activeOffsetX/failOffsetY inside useDrawerGesture keep this from
+  // stealing the transcript's vertical scroll — it only claims a touch once
+  // it reads as a deliberate horizontal drag.
+  const drawerPanGesture = useDrawerGesture(drawerTranslateX, drawerOpen, handleDrawerOpen, handleDrawerClose);
 
   // Scripture tap sheet state
   const [verseSheetRef, setVerseSheetRef] = useState<string | null>(null);
@@ -357,6 +374,7 @@ export default function CompanionScreen() {
   const isEmpty = messages.length === 0;
 
   return (
+    <GestureDetector gesture={drawerPanGesture}>
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: colors.background }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -432,7 +450,7 @@ export default function CompanionScreen() {
           taps inside messages. */}
       {isEmpty ? (
         <Pressable onPress={Keyboard.dismiss} style={{ flex: 1 }}>
-          <CompanionEmptyState onSelectStarter={handleSend} />
+          <CompanionEmptyState onSelectStarter={handleSend} todayTheme={todayTheme} />
         </Pressable>
       ) : (
         <View style={{ flex: 1 }}>
@@ -517,8 +535,9 @@ export default function CompanionScreen() {
         </View>
       )}
 
-      {/* Daily limit indicator for free users — shown once quota is spent */}
-      {!isPremium && dailyRemaining < FREE_COMPANION_DAILY_LIMIT && (
+      {/* Daily limit indicator for free users — shown at full quota too, not
+          only once some has been spent */}
+      {!isPremium && (
         <TouchableOpacity
           activeOpacity={0.7}
           accessibilityRole="button"
@@ -540,7 +559,9 @@ export default function CompanionScreen() {
           accessibilityLabel={
             dailyRemaining === 0
               ? 'Daily message limit reached. Tap to upgrade.'
-              : `${dailyRemaining} of ${FREE_COMPANION_DAILY_LIMIT} free messages remaining today`
+              : dailyRemaining === FREE_COMPANION_DAILY_LIMIT
+                ? `${FREE_COMPANION_DAILY_LIMIT} free messages today`
+                : `${dailyRemaining} of ${FREE_COMPANION_DAILY_LIMIT} free messages remaining today`
           }
         >
           {dailyRemaining === 0 ? (
@@ -549,18 +570,29 @@ export default function CompanionScreen() {
               <Text
                 style={{
                   fontFamily: FontFamily.uiMedium,
-                  fontSize: 12,
+                  fontSize: FontSize.xs,
                   color: colors.accent,
                 }}
               >
                 Daily limit reached. Upgrade for unlimited.
               </Text>
             </>
+          ) : dailyRemaining === FREE_COMPANION_DAILY_LIMIT ? (
+            <Text
+              style={{
+                fontFamily: FontFamily.ui,
+                fontSize: FontSize.xs,
+                color: colors.textSubtle,
+                fontVariant: ['tabular-nums'],
+              }}
+            >
+              {FREE_COMPANION_DAILY_LIMIT} free messages today
+            </Text>
           ) : (
             <Text
               style={{
                 fontFamily: FontFamily.ui,
-                fontSize: 11,
+                fontSize: FontSize.xs,
                 color: colors.textSubtle,
                 fontVariant: ['tabular-nums'],
               }}
@@ -609,5 +641,6 @@ export default function CompanionScreen() {
 
       {/* Removed: floating FAB approach failed due to FlatList gesture conflicts */}
     </KeyboardAvoidingView>
+    </GestureDetector>
   );
 }

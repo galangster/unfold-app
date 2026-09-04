@@ -1,9 +1,10 @@
-import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Modal } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
+import { MMKV } from 'react-native-mmkv';
 import { MagnifyingGlassIcon, ClockIcon, CaretRightIcon, XIcon } from '@/components/icons';
 import { FontFamily } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
@@ -19,6 +20,46 @@ import { Duration, Ease } from '@/constants/animations';
 import { Typography } from '@/constants/typography';
 
 const EMPTY_CHAPTERS: number[] = [];
+
+// Persisted once the user has ever seen the Bible home screen (book grid +
+// search). Non-sensitive, so this doesn't need encryption — same pattern as
+// other one-off flag stores in src/lib (e.g. bible-db.ts's bibleMeta).
+const bibleHomeMeta = new MMKV({ id: 'unfold-bible-home-meta' });
+const HAS_SEEN_BIBLE_HOME_KEY = 'hasSeenBibleHome';
+
+export type BibleHomeNavigationDecision =
+  | { action: 'navigate'; bookId: number; chapter: number }
+  | { action: 'show-home' };
+
+/**
+ * Decide what the Bible tab should do on mount.
+ *
+ * - First ever open (hasSeenHome is false): jump straight into reading —
+ *   the last saved position if there is one, otherwise Genesis 1 — so a new
+ *   user isn't dropped on an empty grid.
+ * - Returning user with a saved reading position: keep the "continue
+ *   reading" convenience of opening straight into the reader.
+ * - Returning user with no saved position: show the home screen (book grid
+ *   + search) instead of silently redirecting them.
+ */
+export function resolveBibleHomeNavigation(params: {
+  hasSeenHome: boolean;
+  lastPosition: { bookId: number; chapter: number } | null;
+}): BibleHomeNavigationDecision {
+  const { hasSeenHome, lastPosition } = params;
+
+  if (!hasSeenHome) {
+    return lastPosition
+      ? { action: 'navigate', bookId: lastPosition.bookId, chapter: lastPosition.chapter }
+      : { action: 'navigate', bookId: 1, chapter: 1 };
+  }
+
+  if (lastPosition) {
+    return { action: 'navigate', bookId: lastPosition.bookId, chapter: lastPosition.chapter };
+  }
+
+  return { action: 'show-home' };
+}
 
 export default function BibleHomeScreen() {
   const { colors, isDark } = useTheme();
@@ -40,19 +81,29 @@ export default function BibleHomeScreen() {
     [selectedBook],
   );
 
-  // Auto-navigate to reader on first mount
-  const hasAutoNavigated = useRef(false);
+  // Decide once (per mount) whether to auto-navigate into the reader or
+  // show the home screen. 'pending' keeps the screen blank for a frame so
+  // the book grid never flashes before a redirect.
+  const [homeState, setHomeState] = useState<'pending' | 'navigating' | 'ready'>('pending');
 
   useEffect(() => {
-    if (!isReady || hasAutoNavigated.current) return;
-    hasAutoNavigated.current = true;
+    if (!isReady || homeState !== 'pending') return;
 
-    const target = lastPosition
-      ? `/(tabs)/(bible)/reader?bookId=${lastPosition.bookId}&chapter=${lastPosition.chapter}`
-      : '/(tabs)/(bible)/reader?bookId=1&chapter=1';
+    const hasSeenHome = bibleHomeMeta.getBoolean(HAS_SEEN_BIBLE_HOME_KEY) ?? false;
+    const decision = resolveBibleHomeNavigation({ hasSeenHome, lastPosition });
 
-    router.replace(target);
-  }, [isReady, lastPosition, router]);
+    if (!hasSeenHome) {
+      bibleHomeMeta.set(HAS_SEEN_BIBLE_HOME_KEY, true);
+    }
+
+    if (decision.action === 'navigate') {
+      setHomeState('navigating');
+      router.replace(`/(tabs)/(bible)/reader?bookId=${decision.bookId}&chapter=${decision.chapter}`);
+      return;
+    }
+
+    setHomeState('ready');
+  }, [isReady, lastPosition, router, homeState]);
 
   const handleBookPress = useCallback((book: BibleBookInfo) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -154,9 +205,9 @@ export default function BibleHomeScreen() {
     );
   }
 
-  // Blank screen while auto-navigating to reader on first mount
-  // Prevents the book picker from flashing for one frame
-  if (!hasAutoNavigated.current) {
+  // Blank screen while deciding, or while auto-navigating to the reader.
+  // Prevents the book picker from flashing for one frame.
+  if (homeState !== 'ready') {
     return <View style={{ flex: 1, backgroundColor: colors.background }} />;
   }
 

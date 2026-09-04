@@ -16,10 +16,16 @@ let mockStoreState = {
   setReaderBrightness: mockSetReaderBrightness,
 };
 
+let mockIsFocused = true;
+
 jest.mock('expo-brightness', () => ({
   isAvailableAsync: (...args: unknown[]) => mockIsAvailableAsync(...args),
   getBrightnessAsync: (...args: unknown[]) => mockGetBrightnessAsync(...args),
   setBrightnessAsync: (...args: unknown[]) => mockSetBrightnessAsync(...args),
+}));
+
+jest.mock('expo-router', () => ({
+  useIsFocused: () => mockIsFocused,
 }));
 
 jest.mock('@/lib/store', () => ({
@@ -92,6 +98,7 @@ describe('useReaderBrightness', () => {
       readerBrightness: null,
       setReaderBrightness: mockSetReaderBrightness,
     };
+    mockIsFocused = true;
     mockIsAvailableAsync.mockResolvedValue(true);
     mockGetBrightnessAsync.mockResolvedValue(0.8);
     mockSetBrightnessAsync.mockResolvedValue(undefined);
@@ -206,5 +213,36 @@ describe('useReaderBrightness', () => {
     expect(result.brightnessAvailable).toBe(false);
     expect(mockGetBrightnessAsync).not.toHaveBeenCalled();
     expect(mockSetBrightnessAsync).not.toHaveBeenCalled();
+  });
+
+  it('does not apply device brightness while the reader is not focused', async () => {
+    mockIsFocused = false;
+    mockStoreState.readerBrightness = 0.4;
+
+    await renderHookProbe();
+
+    expect(mockGetBrightnessAsync).not.toHaveBeenCalled();
+    expect(mockSetBrightnessAsync).not.toHaveBeenCalled();
+  });
+
+  it('restores original brightness on blur, and re-applies the override on refocus, without unmounting', async () => {
+    mockStoreState.readerBrightness = 0.42;
+    const { rerender } = await renderHookProbeTree();
+
+    expect(mockSetBrightnessAsync).toHaveBeenCalledTimes(1);
+    expect(mockSetBrightnessAsync).toHaveBeenCalledWith(0.42);
+
+    // Losing focus (e.g. switching tabs) restores the device's own
+    // brightness — this used to only happen when the sheet unmounted.
+    mockIsFocused = false;
+    await rerender();
+    expect(mockSetBrightnessAsync).toHaveBeenCalledTimes(2);
+    expect(mockSetBrightnessAsync).toHaveBeenLastCalledWith(0.8);
+
+    // Regaining focus re-applies the reader override.
+    mockIsFocused = true;
+    await rerender();
+    expect(mockSetBrightnessAsync).toHaveBeenCalledTimes(3);
+    expect(mockSetBrightnessAsync).toHaveBeenLastCalledWith(0.42);
   });
 });
