@@ -19,7 +19,8 @@
       "env": {
         "EAS_USE_CACHE": "1",
         "EXPO_PUBLIC_SENTRY_DSN": "https://d7dd319bd4190a884d48917fcad1e663@o4511044263673856.ingest.us.sentry.io/4512024787419136"
-      }
+      },
+      "environment": "preview"
     },
     "qa-testflight": {
       "autoIncrement": true,
@@ -33,7 +34,8 @@
       },
       "ios": {
         "distribution": "store"
-      }
+      },
+      "environment": "preview"
     },
     "production": {
       "autoIncrement": true,
@@ -49,7 +51,8 @@
       },
       "android": {
         "distribution": "store"
-      }
+      },
+      "environment": "production"
     }
   },
   "submit": {
