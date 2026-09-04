@@ -5,6 +5,7 @@ import {
   Dimensions,
   StyleSheet,
   TouchableOpacity,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -53,6 +54,13 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const TOTAL_CARDS = 8;
 const CLOSE_HIT_SLOP = { top: 12, bottom: 12, left: 12, right: 12 };
+
+// Screen-reader equivalent of the tap-zone/swipe navigation on the recap card
+// surface — a stable module-level array so it isn't recreated every render.
+const recapCardAccessibilityActions = [
+  { name: 'next', label: 'Next card' },
+  { name: 'previous', label: 'Previous card' },
+];
 
 // ─── Color System ────────────────────────────────────────────
 // Each card has its own distinct mood — not just gold on black
@@ -1088,6 +1096,10 @@ function ClosingCard({ data, userName }: { data: RecapData; userName: string }) 
       });
     } catch (err) {
       logger.error('[UNFOLDED] share error:', err);
+      const msg = err instanceof Error ? err.message : '';
+      if (!msg.includes('cancel') && !msg.includes('dismiss')) {
+        Alert.alert('Error', 'Could not share the image. Please try again.');
+      }
     } finally {
       setIsSharing(false);
     }
@@ -1244,6 +1256,17 @@ export default function UnfoldedScreen() {
   const goNext = useCallback(() => goTo(currentCard + 1), [currentCard, goTo]);
   const goPrev = useCallback(() => goTo(currentCard - 1), [currentCard, goTo]);
 
+  const handleRecapAccessibilityAction = useCallback(
+    (event: { nativeEvent: { actionName: string } }) => {
+      if (event.nativeEvent.actionName === 'next') {
+        goNext();
+      } else if (event.nativeEvent.actionName === 'previous') {
+        goPrev();
+      }
+    },
+    [goNext, goPrev],
+  );
+
   // Auto-advance when progress bar completes
   const handleSegmentComplete = useCallback(() => {
     if (currentCard < TOTAL_CARDS - 1) {
@@ -1396,15 +1419,31 @@ export default function UnfoldedScreen() {
           </View>
         </View>
 
-        {/* Card area — tap left/right to navigate, long-press to pause, swipe */}
+        {/* Card area — tap left/right to navigate, long-press to pause, swipe.
+            The tap-zone/long-press/swipe gestures have no screen-reader
+            equivalent, so the surface also exposes "next"/"previous"
+            accessibility actions that call the same goNext/goPrev used by
+            touch. */}
         {currentCard === TOTAL_CARDS - 1 ? (
           /* Last card: no gesture detector — Share button needs native touches */
-          <Animated.View style={[s.cardArea, swipeAnimStyle]}>
+          <Animated.View
+            style={[s.cardArea, swipeAnimStyle]}
+            accessible
+            accessibilityLabel={`Series recap, card ${currentCard + 1} of ${TOTAL_CARDS}`}
+            accessibilityActions={recapCardAccessibilityActions}
+            onAccessibilityAction={handleRecapAccessibilityAction}
+          >
             {renderCard()}
           </Animated.View>
         ) : (
           <GestureDetector gesture={composedGesture}>
-            <Animated.View style={[s.cardArea, swipeAnimStyle]}>
+            <Animated.View
+              style={[s.cardArea, swipeAnimStyle]}
+              accessible
+              accessibilityLabel={`Series recap, card ${currentCard + 1} of ${TOTAL_CARDS}`}
+              accessibilityActions={recapCardAccessibilityActions}
+              onAccessibilityAction={handleRecapAccessibilityAction}
+            >
               {renderCard()}
             </Animated.View>
           </GestureDetector>

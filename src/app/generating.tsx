@@ -16,7 +16,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { BellIcon, BookOpenTextIcon } from '@/components/icons';
+import { BellIcon, BookOpenTextIcon, WarningCircleIcon } from '@/components/icons';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
@@ -797,7 +797,7 @@ export default function GeneratingScreen() {
         <SafeAreaView style={genStyles.errorSafeArea}>
           {/* Error icon */}
           <View style={genStyles.errorIcon}>
-            <Text style={genStyles.errorIconText}>{'  '}</Text>
+            <WarningCircleIcon size={28} color={colors.accent} weight="light" />
           </View>
 
           <Text style={[genStyles.errorTitle, { color: colors.text }]}>
@@ -1204,7 +1204,7 @@ export default function GeneratingScreen() {
               fully safe \u2014 the job is persisted to MMKV and continues server-side;
               Today shows the preparing card and the recovery ladder picks the
               content up when it lands. */}
-          {isGenerating && !isComplete && !showNotificationPrompt && (
+          {isGenerating && !isComplete && (
             <Animated.View
               entering={entering(FadeIn.duration(600).delay(1200))}
               style={{ marginTop: Spacing['8'], alignItems: 'center', gap: Spacing['3'] }}
@@ -1231,8 +1231,10 @@ export default function GeneratingScreen() {
                 </Text>
               </TouchableOpacity>
 
-              {/* Second chance at the ready-notification for "I'll wait" users */}
-              {notificationPermission !== 'granted' && (
+              {/* Second chance at the ready-notification for "I'll wait" users.
+                  Hidden while the main notification prompt above is already
+                  showing its own Notify me control, so the two never duplicate. */}
+              {!showNotificationPrompt && notificationPermission !== 'granted' && (
                 <TouchableOpacity
                   activeOpacity={0.7}
                   onPress={handleRequestNotifications}
@@ -1432,9 +1434,6 @@ const genStyles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: Spacing['7'],
-  },
-  errorIconText: {
-    fontSize: 28,
   },
   errorTitle: {
     fontFamily: FontFamily.display,

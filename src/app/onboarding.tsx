@@ -218,6 +218,16 @@ const pickRandom = <T,>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)]
 // with the chip/pill controls (alpha 0.18) so every selected control matches.
 const selectedAccentSurface = (accent: string, opacity = 0.18) => alpha(accent, opacity);
 
+// Long-text inputs hit INPUT_LIMITS.LONG_TEXT.max silently — nothing told the
+// user they were close to being cut off. Once the remaining budget drops to
+// 10% of the cap or below, surface a quiet "<n> left" counter instead.
+export function remainingCharsLabel(length: number, max: number): string | null {
+  if (max <= 0) return null;
+  const remaining = Math.max(0, max - length);
+  if (remaining > max * 0.1) return null;
+  return `${remaining} left`;
+}
+
 // MirrorBackContent type imported from devotional-service
 
 // ThemePill component - defined at module scope to avoid nested component definition
@@ -506,13 +516,56 @@ export interface OnboardingData {
   mirrorCorrection?: string;
 }
 
-// Progress indicator component
-function ProgressIndicator({ currentStepIndex, totalSteps, colors }: { currentStepIndex: number; totalSteps: number; colors: any }) {
-  // Hidden for now — keeping the slot for future use
-  void currentStepIndex;
-  void totalSteps;
-  void colors;
-  return null;
+// Step types where the progress bar stays hidden: the paywall and the
+// celebration payoff aren't "steps toward a finish line" and showing
+// percent-complete there would read as a countdown to a sales pitch.
+const PROGRESS_HIDDEN_STEP_TYPES = new Set(['threeStepPaywall', 'purchaseConfirmation', 'celebration']);
+
+// Progress indicator component — a thin, quiet bar so onboarding never feels
+// like a form. Hidden on the paywall and celebration steps (see
+// PROGRESS_HIDDEN_STEP_TYPES); respects reduced motion.
+function ProgressIndicator({
+  currentStepIndex,
+  totalSteps,
+  colors,
+  stepType,
+}: {
+  currentStepIndex: number;
+  totalSteps: number;
+  colors: ReturnType<typeof useTheme>['colors'];
+  stepType: string;
+}) {
+  const reducedMotion = useReducedMotion();
+  const progress = totalSteps > 0 ? Math.min(1, Math.max(0, currentStepIndex / totalSteps)) : 0;
+  const width = useSharedValue(progress);
+
+  useEffect(() => {
+    width.value = reducedMotion ? progress : withTiming(progress, { duration: 260, easing: Easing.out(Easing.ease) });
+  }, [progress, reducedMotion, width]);
+
+  const barStyle = useAnimatedStyle(() => ({
+    width: `${width.value * 100}%`,
+  }));
+
+  if (PROGRESS_HIDDEN_STEP_TYPES.has(stepType)) return null;
+
+  return (
+    <View
+      accessible
+      accessibilityRole="progressbar"
+      accessibilityLabel="Onboarding progress"
+      accessibilityValue={{ min: 0, max: totalSteps, now: currentStepIndex }}
+      style={{
+        height: 2,
+        marginHorizontal: 16,
+        borderRadius: 1,
+        backgroundColor: alpha(colors.text, 0.08),
+        overflow: 'hidden',
+      }}
+    >
+      <Animated.View style={[{ height: 2, borderRadius: 1, backgroundColor: alpha(colors.text, 0.28) }, barStyle]} />
+    </View>
+  );
 }
 
 export default function OnboardingScreen() {
@@ -2481,6 +2534,8 @@ export default function OnboardingScreen() {
               borderColor: colors.border,
             }}
             autoFocus
+            autoCapitalize="words"
+            textContentType="givenName"
             maxLength={INPUT_LIMITS.NAME.max}
             onSubmitEditing={canProceed() ? handleNext : undefined}
             returnKeyType="done"
@@ -2528,6 +2583,9 @@ export default function OnboardingScreen() {
                         return { ...prev, [step.id]: updated };
                       });
                     }}
+                    accessibilityRole="checkbox"
+                    accessibilityLabel={chip}
+                    accessibilityState={{ selected: isChipSelected }}
                     style={{
                       paddingHorizontal: Spacing['3.5'],
                       paddingVertical: Spacing['3'],
@@ -2584,6 +2642,17 @@ export default function OnboardingScreen() {
               scrollEnabled
             />
           </View>
+          {(() => {
+            const label = remainingCharsLabel(
+              ((data[step.id as keyof OnboardingData] as string) ?? '').length,
+              INPUT_LIMITS.LONG_TEXT.max,
+            );
+            return label ? (
+              <Text style={{ fontFamily: FontFamily.ui, fontSize: 12, color: colors.textMuted, marginTop: Spacing['1.5'], textAlign: 'right' }}>
+                {label}
+              </Text>
+            ) : null;
+          })()}
           <VoiceInputBar
             value={data[step.id as keyof OnboardingData] as string}
             onChangeText={(text) => setData((prev) => ({ ...prev, [step.id]: text }))}
@@ -2714,6 +2783,14 @@ export default function OnboardingScreen() {
               scrollEnabled
             />
           </View>
+          {(() => {
+            const label = remainingCharsLabel(diagnosticDraft.length, INPUT_LIMITS.LONG_TEXT.max);
+            return label ? (
+              <Text style={{ fontFamily: FontFamily.ui, fontSize: 12, color: colors.textMuted, marginTop: Spacing['1.5'], textAlign: 'right' }}>
+                {label}
+              </Text>
+            ) : null;
+          })()}
           <VoiceInputBar
             value={diagnosticDraft}
             onChangeText={setDiagnosticDraft}
@@ -3018,7 +3095,11 @@ export default function OnboardingScreen() {
           : step.options || [];
 
       return (
-        <View style={{ gap: Spacing['3'], marginTop: Spacing['2'] }}>
+        <View
+          style={{ gap: Spacing['3'], marginTop: Spacing['2'] }}
+          accessibilityRole="radiogroup"
+          accessibilityLabel={step.question || 'Choose one'}
+        >
           {options.map((option) => {
             const isSelected = data[step.id as keyof OnboardingData] === option.value;
 
@@ -3046,7 +3127,9 @@ export default function OnboardingScreen() {
                     setTimeout(() => advanceToNextStep(), 50);
                   }, 300);
                 }}
+                accessibilityRole="radio"
                 accessibilityLabel={isLockedOption ? `${option.label}, premium only` : option.label}
+                accessibilityState={{ selected: isSelected, disabled: isLockedOption }}
               >
                     <View style={{
                       backgroundColor: isSelected ? selectedAccentSurface(colors.accent) : colors.inputBackground,
@@ -3948,11 +4031,12 @@ export default function OnboardingScreen() {
             )}
           </View>
 
-          {/* Progress indicator - always visible */}
-          <ProgressIndicator 
-            currentStepIndex={currentStepIndex} 
-            totalSteps={STEPS.length} 
-            colors={colors} 
+          {/* Progress indicator — hidden on the paywall/celebration steps */}
+          <ProgressIndicator
+            currentStepIndex={currentStepIndex}
+            totalSteps={STEPS.length}
+            colors={colors}
+            stepType={step.type}
           />
 
           <Animated.View

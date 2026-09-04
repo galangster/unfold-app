@@ -121,7 +121,6 @@ function MovementCard({
           ...Typography.cardMeta,
           color: mutedColor,
           marginBottom: Spacing['2'],
-          opacity: 0.7,
         }}
       >
         {index + 1}. {movement.title}
@@ -342,7 +341,6 @@ export default function EveningWindDownScreen() {
                 fontFamily: FontFamily.bodyItalic,
                 fontSize: 15,
                 color: colors.textMuted,
-                opacity: 0.7,
               }}
             >
               {currentDay?.title ? `Reflecting on "${currentDay.title}"` : 'A moment of peace before rest'}
@@ -364,7 +362,6 @@ export default function EveningWindDownScreen() {
                     fontSize: FontSize.sm,
                     color: colors.textSubtle,
                     marginTop: Spacing['4'],
-                    opacity: 0.7,
                   }}
                 >
                   {resolveEveningLoadingCaption(entryDecision)}
@@ -456,7 +453,6 @@ export default function EveningWindDownScreen() {
                       fontFamily: FontFamily.bodyItalic,
                       fontSize: 13,
                       color: colors.textSubtle,
-                      opacity: 0.5,
                     }}
                   >
                     Amen.
@@ -499,7 +495,6 @@ export default function EveningWindDownScreen() {
                     ...Typography.cardMeta,
                     color: colors.textMuted,
                     marginBottom: Spacing['5'],
-                    opacity: 0.7,
                   }}
                 >
                   {currentDay.eveningScriptureRef}
@@ -514,7 +509,6 @@ export default function EveningWindDownScreen() {
                         fontSize: FontSize.sm,
                         color: colors.textSubtle,
                         marginTop: Spacing['3'],
-                        opacity: 0.7,
                       }}
                     >
                       Loading passage...

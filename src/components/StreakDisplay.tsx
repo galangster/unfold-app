@@ -108,7 +108,12 @@ export function StreakDisplay({ size = 'medium', compact, showFreeze = true, hid
   }
 
   return (
-    <TouchableOpacity activeOpacity={0.7} onPress={handlePress}>
+    <TouchableOpacity
+      activeOpacity={0.7}
+      onPress={handlePress}
+      accessibilityRole="button"
+      accessibilityLabel={`${streak} day${streak !== 1 ? 's' : ''} streak`}
+    >
       <Animated.View
         entering={reducedMotion ? undefined : FadeInUp.easing(Ease.out)}
         style={{
@@ -155,6 +160,22 @@ export function StreakDisplay({ size = 'medium', compact, showFreeze = true, hid
             }}
           >
             day{streak !== 1 ? 's' : ''}
+          </Text>
+        )}
+        {hideDayLabel && (
+          // Compact spots (e.g. the greeting row) hide the full "days" label
+          // to save width, but a bare number reads as an unlabeled count —
+          // this short suffix keeps sighted users oriented; the outer
+          // TouchableOpacity carries the full "<n> days streak" label for AT.
+          <Text
+            importantForAccessibility="no-hide-descendants"
+            style={{
+              fontFamily: FontFamily.ui,
+              fontSize: config.number * 0.7,
+              color: colors.textMuted,
+            }}
+          >
+            d
           </Text>
         )}
       </View>

@@ -34,6 +34,7 @@ import {
   SunIcon,
   XIcon,
   PencilSimpleIcon,
+  CaretLeftIcon,
 } from '@/components/icons';
 import { useTheme } from '@/lib/theme';
 import { FontFamily, FontSize } from '@/constants/fonts';
@@ -147,7 +148,11 @@ function MoodStep({
       >
         Tap the one that fits
       </Text>
-      <View style={styles.moodRow}>
+      <View
+        style={styles.moodRow}
+        accessibilityRole="radiogroup"
+        accessibilityLabel="Mood"
+      >
         {MOOD_OPTIONS.map(({ value, label, Icon }) => {
           const isSelected = selectedMood === value || hoveredMood === value;
           return (
@@ -168,7 +173,7 @@ function MoodStep({
                     : 'transparent',
                 },
               ]}
-              accessibilityRole="button"
+              accessibilityRole="radio"
               accessibilityLabel={label}
               accessibilityState={{ selected: isSelected }}
             >
@@ -666,6 +671,11 @@ export function CheckInSheet({
     setTimeout(() => setCurrentStep(2), 300);
   }, []);
 
+  const handleBack = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setCurrentStep((step) => Math.max(0, step - 1));
+  }, []);
+
   const triggerCelebration = useCallback(
     (data: { mood: MoodValue; moodLabel: string; chipAnswer?: string; freeText?: string }) => {
       completionDataRef.current = data;
@@ -753,14 +763,27 @@ export function CheckInSheet({
               />
             </View>
 
-            {/* Header row: step dots + close button */}
+            {/* Header row: back + step dots + close button */}
             <View style={styles.headerRow}>
-              <StepDots
-                currentStep={currentStep}
-                totalSteps={TOTAL_STEPS}
-                accentColor={colors.accent}
-                mutedColor={alpha(colors.text, isDark ? 0.12 : 0.08)}
-              />
+              <View style={styles.headerLeft}>
+                {!showCelebration && currentStep > 0 && (
+                  <TouchableOpacity activeOpacity={0.7}
+                    onPress={handleBack}
+                    style={styles.backButton}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Back"
+                  >
+                    <CaretLeftIcon size={18} color={colors.textMuted} weight="light" />
+                  </TouchableOpacity>
+                )}
+                <StepDots
+                  currentStep={currentStep}
+                  totalSteps={TOTAL_STEPS}
+                  accentColor={colors.accent}
+                  mutedColor={alpha(colors.text, isDark ? 0.12 : 0.08)}
+                />
+              </View>
               <TouchableOpacity activeOpacity={0.7}
                 onPress={handleClose}
                 style={styles.closeButton}
@@ -852,6 +875,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 18,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing['2'],
+  },
+  backButton: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   /* Step dots */

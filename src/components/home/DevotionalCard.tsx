@@ -445,9 +445,8 @@ function PreparingState({
   return (
     <View
       accessible
-      accessibilityRole="progressbar"
-      accessibilityLabel={`Preparing day ${dayNumber} of ${seriesTitle}`}
-      accessibilityValue={{ text: 'Your next reading will appear here automatically' }}
+      accessibilityRole="text"
+      accessibilityLabel="Preparing your reading"
       style={styles.preparingContainer}
     >
       <View style={styles.preparingContent}>
@@ -632,7 +631,10 @@ function MainCard({ state }: MainCardProps) {
           : 'Continue Reading';
   const continueDayNumber = isTomorrowLocked ? Math.max(1, daysCompleted) : dayData.dayNumber;
   const onPress = 'onContinue' in state ? () => state.onContinue(continueDayNumber) : undefined;
-  const onCreateNew = 'onCreateNew' in state ? state.onCreateNew : undefined;
+  // "Start a new series" only appears once today's reading is done (complete-today).
+  // Surfacing it on unread/tomorrow-locked competed with the single reading action
+  // this hero exists to drive; the You tab already offers new-series creation.
+  const onCreateNew = state.type === 'complete-today' ? state.onCreateNew : undefined;
 
   // Post-read, reflection not yet complete: the inline composer IS the primary
   // action — writing beats re-reading (see Dino feedback 2026-08-02). "Read
