@@ -1,3 +1,4 @@
+import { getServerOwnedSeriesTotalDays } from './devotional-series-boundary';
 import type { PremiumAccessPolicy } from './premium-access-policy';
 import type { Devotional, DevotionalDay } from './store';
 
@@ -93,10 +94,17 @@ export function getDailyReminderContent({
     };
   }
 
-  // Content not generated yet for a confirmed/unknown access state.
+  // The next day is not on device yet. This is the NORMAL state at bedtime:
+  // today's reading is done, tomorrow's is generated overnight and only
+  // arrives when the app next opens. The reminder is baked into the OS at
+  // schedule time, so "being prepared — check back soon" fired every morning
+  // on a day that was already waiting. Name the day instead and let the app
+  // fetch it on open.
+  const nextDayNumber = Math.max(1, currentDevotional.currentDay || 1);
+  const inSeries = nextDayNumber <= getServerOwnedSeriesTotalDays(currentDevotional);
   return {
-    title: 'Your reading is being prepared',
-    body: 'Check back soon — it\'ll be ready.',
+    title: inSeries ? `Day ${nextDayNumber} of ${currentDevotional.title}` : currentDevotional.title,
+    body: 'Your next reading is waiting for you.',
   };
 }
 
@@ -117,6 +125,7 @@ export function buildDailyReminderFingerprint({
     currentDevotional?.id ?? '',
     currentDevotional?.title ?? '',
     currentDevotional?.currentDay ?? '',
+    currentDevotional ? getServerOwnedSeriesTotalDays(currentDevotional) : '',
     currentDay?.dayNumber ?? '',
     currentDay ? 'day' : currentDevotional ? 'pending' : 'empty',
     currentDay?.title ?? '',

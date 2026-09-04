@@ -21,6 +21,7 @@
 import { mmkvStorage, getDeviceId } from '@/lib/mmkv-storage';
 import { isEphemeralDeviceId } from '@/lib/device-id';
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from '@/lib/api-config';
+import { buildSyncPushBody } from '@/lib/sync-push-body';
 import type { SyncPushChange, SyncPushResult, SyncTable } from '@/lib/sync-types';
 // RS13-1: single owner — the key is defined in mmkv-recovery-outbox.ts (pure, no native deps)
 // and re-exported here so all consumers import from one place via sync-outbox.
@@ -207,7 +208,7 @@ export function drainSyncOutbox(): Promise<void> {
       const response = await fetch(`${PRIMARY_BACKEND_URL}/api/sync/push`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ changes }),
+        body: buildSyncPushBody(changes),
         signal: controller.signal,
       });
 

@@ -16,7 +16,7 @@ jest.mock('../mmkv-storage', () => {
   };
 });
 
-import { buildDevotionalReadSyncChanges } from '@/lib/devotional-read-sync';
+import { buildDevotionalReadSyncChanges, syncDevotionalDayRead } from '@/lib/devotional-read-sync';
 import type { Devotional, DevotionalDay } from '@/lib/store';
 
 const day: DevotionalDay = {
@@ -140,5 +140,30 @@ describe('buildDevotionalReadSyncChanges', () => {
       scriptureText: 'I have called you by name.',
       content: day,
     });
+  });
+
+});
+
+describe('syncDevotionalDayRead', () => {
+  const originalFetch = global.fetch;
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  it('sends the device timezone so the server paces on the reader\'s calendar', async () => {
+    const fetchMock = jest.fn(async () => ({
+      ok: true,
+      json: async () => ({ results: [{ status: 'accepted' }, { status: 'accepted' }] }),
+      text: async () => '',
+    }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await syncDevotionalDayRead({ devotional, day, readAt: '2026-04-25T12:00:00.000Z' });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const body = JSON.parse((fetchMock.mock.calls[0] as unknown as [string, { body: string }])[1].body);
+    expect(body.changes).toHaveLength(2);
+    expect(body.deviceTimezone).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone);
   });
 });

@@ -101,4 +101,30 @@ describe('daily reminder content', () => {
 
     expect(disabledFingerprint).not.toBe(enabledFingerprint);
   });
+
+  it('names the next day instead of "being prepared" when tomorrow has not been pulled yet', () => {
+    // Bedtime state: Day 6 read today, currentDay advanced to 7, Day 7 is
+    // generated overnight and only lands when the app opens. The 8am
+    // reminder used to say the reading was still being prepared.
+    const content = getDailyReminderContent({
+      currentDevotional: devotional({ currentDay: 7, days: [day({ dayNumber: 6, isRead: true })] }),
+      premiumPolicy: 'granted',
+      now,
+    });
+
+    expect(content.title).toBe('Day 7 of When God Calls You Home');
+    expect(content.body).toBe('Your next reading is waiting for you.');
+    expect(`${content.title} ${content.body}`).not.toMatch(/prepar|check back/i);
+  });
+
+  it('falls back to the series title when the pointer sits past the series end', () => {
+    const content = getDailyReminderContent({
+      currentDevotional: devotional({ currentDay: 8, totalDays: 7, days: [day({ dayNumber: 7, isRead: true })] }),
+      premiumPolicy: 'unknown',
+      now,
+    });
+
+    expect(content.title).toBe('When God Calls You Home');
+    expect(`${content.title} ${content.body}`).not.toMatch(/prepar/i);
+  });
 });

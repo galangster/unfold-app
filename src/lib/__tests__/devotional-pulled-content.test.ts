@@ -177,4 +177,43 @@ describe('pulled devotional content application', () => {
 
     expect(result).toBe(devotionals);
   });
+
+  it('anchors a rebuilt shell on the server seriesStartDate, not the first pulled day', () => {
+    // Restore on a new device three days into a series: the first pulled
+    // day may be Day 3 (incremental content) and the parent row's updatedAt
+    // is today. Neither is the series start; the server's anchor is.
+    const dayThree: DevotionalDay = { ...dayTwo, id: 'day-devotional-1-3', dayNumber: 3, generatedAt: '2026-04-27T04:10:00.000Z' };
+    const result = applyPulledDevotionalContentToDevotionals(
+      [],
+      'devotional-1',
+      pulledContent({
+        days: [dayThree],
+        devotional: {
+          id: 'devotional-1',
+          title: 'The Names That Hold You',
+          totalDays: 14,
+          currentDay: 3,
+          seriesStartDate: '2026-04-24T14:42:19.225Z',
+          updatedAt: '2026-04-27T13:29:48.574Z',
+        },
+      }),
+    );
+
+    expect(result[0]).toMatchObject({
+      seriesStartDate: '2026-04-24T14:42:19.225Z',
+      createdAt: '2026-04-24T14:42:19.225Z',
+      currentDay: 3,
+    });
+  });
+
+  it('falls back to the first pulled day when the server has no anchor', () => {
+    const anchoredDay: DevotionalDay = { ...dayTwo, dayNumber: 1, id: 'day-devotional-1-1', generatedAt: '2026-04-24T15:00:00.000Z' };
+    const result = applyPulledDevotionalContentToDevotionals(
+      [],
+      'devotional-1',
+      pulledContent({ days: [anchoredDay] }),
+    );
+
+    expect(result[0]).toMatchObject({ seriesStartDate: '2026-04-24T15:00:00.000Z' });
+  });
 });
