@@ -19,7 +19,7 @@ import Animated, {
 // Old Swipeable API removed — crashes on Fabric. Using Gesture.Pan() instead (see SwipeableStudyCard).
 import { FlashList, type ListRenderItem } from '@shopify/flash-list';
 import * as Haptics from 'expo-haptics';
-import { CaretLeftIcon, BookOpenIcon, CheckIcon, DownloadSimpleIcon, MagnifyingGlassIcon, XCircleIcon, TrashIcon } from '@/components/icons';
+import { CaretLeftIcon, BookOpenIcon, CheckIcon, DownloadSimpleIcon, MagnifyingGlassIcon, XCircleIcon, TrashIcon, DotsThreeIcon } from '@/components/icons';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
@@ -356,20 +356,35 @@ interface DevotionalCardProps {
   colors: ReturnType<typeof useTheme>['colors'];
   exportingId: string | null;
   exportSuccessId: string | null;
+  isCurrent?: boolean;
   onSelect: (id: string) => void;
   onExport: (devotional: Devotional) => void;
+  onDelete: (devotional: Devotional) => void;
 }
 
-function DevotionalCard({ item, colors, exportingId, exportSuccessId, onSelect, onExport }: DevotionalCardProps) {
+function DevotionalCard({ item, colors, exportingId, exportSuccessId, isCurrent, onSelect, onExport, onDelete }: DevotionalCardProps) {
   const completedDays = (item.days ?? []).filter((d) => d.isRead).length;
   const isComplete = completedDays >= item.totalDays;
   const progress = (completedDays / item.totalDays) * 100;
   const createdDate = format(new Date(item.createdAt), 'MMM d, yyyy');
 
+  const handleAccessibilityAction = useCallback(
+    (event: { nativeEvent: { actionName: string } }) => {
+      if (event.nativeEvent.actionName === 'delete') {
+        onDelete(item);
+      }
+    },
+    [onDelete, item],
+  );
+
   return (
     <TouchableOpacity
       activeOpacity={0.7}
       onPress={() => onSelect(item.id)}
+      accessibilityRole="button"
+      accessibilityLabel={`${item.title}${isCurrent ? ', current series' : ''}, ${isComplete ? 'completed' : `day ${item.currentDay} of ${item.totalDays}`}`}
+      accessibilityActions={[{ name: 'delete', label: 'Delete devotional' }]}
+      onAccessibilityAction={handleAccessibilityAction}
       style={{
         backgroundColor: colors.inputBackground,
         borderRadius: Radius.lg,
@@ -379,16 +394,55 @@ function DevotionalCard({ item, colors, exportingId, exportSuccessId, onSelect, 
         marginBottom: Spacing['3'],
       }}
     >
-      {/* Top row: date + download circle */}
+      {/* Top row: date + overflow (delete) + download circle */}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-        <Text
-          style={{
-            ...Typography.cardMeta,
-            color: colors.textHint,
-          }}
-        >
-          {createdDate}
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Text
+            style={{
+              ...Typography.cardMeta,
+              color: colors.textHint,
+            }}
+          >
+            {createdDate}
+          </Text>
+          {isCurrent && (
+            <View
+              style={{
+                backgroundColor: alpha(colors.accent, 0.12),
+                paddingHorizontal: 8,
+                paddingVertical: 3,
+                borderRadius: 6,
+              }}
+            >
+              <Text
+                style={{
+                  fontFamily: FontFamily.uiMedium,
+                  fontSize: 11,
+                  letterSpacing: 0.3,
+                  color: colors.accent,
+                }}
+              >
+                Current
+              </Text>
+            </View>
+          )}
+        </View>
+
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <TouchableOpacity activeOpacity={0.7}
+            onPress={(e) => { e.stopPropagation(); onDelete(item); }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={{
+              width: 44,
+              height: 44,
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+            accessibilityLabel="Delete devotional"
+            accessibilityRole="button"
+          >
+            <DotsThreeIcon size={22} color={colors.textMuted} weight="bold" />
+          </TouchableOpacity>
 
         <TouchableOpacity activeOpacity={0.7}
           onPress={(e) => { e.stopPropagation(); onExport(item); }}
@@ -415,6 +469,7 @@ function DevotionalCard({ item, colors, exportingId, exportSuccessId, onSelect, 
             <DownloadSimpleIcon size={22} color={colors.accent} weight="regular" />
           )}
         </TouchableOpacity>
+        </View>
       </View>
 
       {/* Title + progress (progress bar only for in-progress studies) */}
@@ -485,6 +540,7 @@ export default function PastDevotionalsScreen() {
   const reducedMotion = useReducedMotion();
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const removeDevotional = useUnfoldStore((s) => s.removeDevotional);
+  const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
   const premiumPolicy = usePremiumAccessPolicy();
   const journalEntries = useUnfoldStore((s) => s.journalEntries);
   const checkIns = useUnfoldStore((s) => s.checkIns);
@@ -609,9 +665,12 @@ export default function PastDevotionalsScreen() {
   }, [exportingId, premiumPolicy, router, journalEntries, checkIns, colors.accent]);
 
   const handleDeleteDevotional = useCallback((devotional: Devotional) => {
+    const isCurrent = devotional.id === currentDevotionalId;
     Alert.alert(
       'Delete this devotional?',
-      'This cannot be undone.',
+      isCurrent
+        ? "This is the series on your Today tab. This cannot be undone."
+        : 'This cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -624,7 +683,7 @@ export default function PastDevotionalsScreen() {
         },
       ],
     );
-  }, [removeDevotional]);
+  }, [removeDevotional, currentDevotionalId]);
 
   const renderItem = useCallback<ListRenderItem<Devotional>>(({ item }) => (
     <SwipeableStudyCard onDelete={() => handleDeleteDevotional(item)}>
@@ -633,11 +692,13 @@ export default function PastDevotionalsScreen() {
         colors={colors}
         exportingId={exportingId}
         exportSuccessId={exportSuccessId}
+        isCurrent={item.id === currentDevotionalId}
         onSelect={handleSelectDevotional}
         onExport={handleExportPDF}
+        onDelete={handleDeleteDevotional}
       />
     </SwipeableStudyCard>
-  ), [colors, exportingId, exportSuccessId, handleSelectDevotional, handleExportPDF, handleDeleteDevotional]);
+  ), [colors, exportingId, exportSuccessId, currentDevotionalId, handleSelectDevotional, handleExportPDF, handleDeleteDevotional]);
 
   const keyExtractor = useCallback((item: Devotional) => item.id, []);
 

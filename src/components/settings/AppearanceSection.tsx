@@ -160,6 +160,9 @@ export function AppearanceSection({ onPremiumFeature }: AppearanceSectionProps) 
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               setExpandedPremium(expandedPremium === 'colors' ? null : 'colors');
             }}
+            accessibilityRole="button"
+            accessibilityLabel="Accent Colors"
+            accessibilityState={{ expanded: expandedPremium === 'colors' }}
             style={{
               flexDirection: 'row',
               alignItems: 'center',
@@ -259,6 +262,9 @@ export function AppearanceSection({ onPremiumFeature }: AppearanceSectionProps) 
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               setExpandedPremium(expandedPremium === 'fonts' ? null : 'fonts');
             }}
+            accessibilityRole="button"
+            accessibilityLabel="Reading Font"
+            accessibilityState={{ expanded: expandedPremium === 'fonts' }}
             style={{
               flexDirection: 'row',
               alignItems: 'center',

@@ -259,7 +259,10 @@ export function RemindersSection() {
             <TouchableOpacity
               activeOpacity={0.7}
               onPress={() => handleToggleMiddayCheckIn(!middayCheckInEnabled)}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+              accessibilityRole="switch"
+              accessibilityLabel="Midday check-in"
+              accessibilityState={{ checked: middayCheckInEnabled }}
             >
               <Text
                 style={{
@@ -326,7 +329,10 @@ export function RemindersSection() {
             <TouchableOpacity
               activeOpacity={0.7}
               onPress={() => handleToggleEveningWindDown(!eveningWindDownEnabled)}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+              accessibilityRole="switch"
+              accessibilityLabel="Evening wind-down"
+              accessibilityState={{ checked: eveningWindDownEnabled }}
             >
               <Text
                 style={{

@@ -10,6 +10,7 @@ import { Radius } from '@/constants/radius';
 import { Duration, Ease } from '@/constants/animations';
 import { Typography } from '@/constants/typography';
 import { alpha } from '@/components/ui';
+import { useUnfoldStore, type Devotional } from '@/lib/store';
 
 interface DayData {
   day: string;
@@ -35,7 +36,39 @@ function getRhythmCopy(streak: number): string {
   return 'A long obedience, one morning at a time.';
 }
 
-function generateDaysData(streakCount: number, hasReadToday: boolean): DayData[] {
+/** Local calendar-day key (not a UTC one) — matches how a person thinks about "today". */
+function dayKey(date: Date): string {
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
+/** Every calendar day with at least one devotional day actually marked read. */
+function collectReadDayKeys(devotionals: Devotional[]): Set<string> {
+  const keys = new Set<string>();
+  for (const devotional of devotionals) {
+    for (const day of devotional.days ?? []) {
+      if (!day.isRead || !day.readAt) continue;
+      const readDate = new Date(day.readAt);
+      if (Number.isNaN(readDate.getTime())) continue;
+      keys.add(dayKey(readDate));
+    }
+  }
+  return keys;
+}
+
+/**
+ * When real per-day read timestamps are available, the strip reflects what
+ * was actually read on each of the last 7 calendar days — not a positional
+ * fill derived from the streak count, which can light up a day nothing was
+ * read on (e.g. a day a freeze or grace day covered). Falls back to the old
+ * count-based fill only when there is no read history to draw from at all
+ * (e.g. a brand-new account) — callers should caption that case as showing
+ * the streak, not a calendar of read days.
+ */
+function generateDaysData(
+  streakCount: number,
+  hasReadToday: boolean,
+  readDayKeys: Set<string>,
+): { days: DayData[]; fromRealReads: boolean } {
   const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
   const today = new Date().getDay();
   const todayIndex = today === 0 ? 6 : today - 1;
@@ -43,25 +76,36 @@ function generateDaysData(streakCount: number, hasReadToday: boolean): DayData[]
     ...days.slice(todayIndex + 1),
     ...days.slice(0, todayIndex + 1),
   ];
+  const fromRealReads = readDayKeys.size > 0;
 
-  return reorderedDays.map((day, index) => {
+  const daysData = reorderedDays.map((day, index) => {
     const isToday = index === 6;
     const daysFromToday = 6 - index;
-    const completed = hasReadToday
-      ? streakCount > 0 && daysFromToday < streakCount
-      : streakCount > 0 && daysFromToday > 0 && daysFromToday <= streakCount;
-    return {
-      day,
-      completed,
-      isToday,
-    };
+    let completed: boolean;
+    if (fromRealReads) {
+      const date = new Date();
+      date.setDate(date.getDate() - daysFromToday);
+      completed = readDayKeys.has(dayKey(date));
+    } else {
+      completed = hasReadToday
+        ? streakCount > 0 && daysFromToday < streakCount
+        : streakCount > 0 && daysFromToday > 0 && daysFromToday <= streakCount;
+    }
+    return { day, completed, isToday };
   });
+
+  return { days: daysData, fromRealReads };
 }
 
 export function StreakBox({ streakCount, hasReadToday = false, onPress }: StreakBoxProps) {
   const { colors, isDark } = useTheme();
   const reducedMotion = useReducedMotion();
-  const daysData = useMemo(() => generateDaysData(streakCount, hasReadToday), [streakCount, hasReadToday]);
+  const devotionals = useUnfoldStore((s) => s.devotionals);
+  const readDayKeys = useMemo(() => collectReadDayKeys(devotionals), [devotionals]);
+  const { days: daysData, fromRealReads } = useMemo(
+    () => generateDaysData(streakCount, hasReadToday, readDayKeys),
+    [streakCount, hasReadToday, readDayKeys],
+  );
   const rhythmCopy = useMemo(() => getRhythmCopy(streakCount), [streakCount]);
   const streakLabel = streakCount === 1 ? 'day' : 'days';
 
@@ -138,6 +182,15 @@ export function StreakBox({ streakCount, hasReadToday = false, onPress }: Streak
               );
             })}
           </View>
+
+          {!fromRealReads && streakCount > 0 && (
+            <Text
+              style={[styles.calendarCaption, { color: colors.textSubtle }]}
+              maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}
+            >
+              Shows your streak, not which days you read
+            </Text>
+          )}
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -218,5 +271,11 @@ const styles = StyleSheet.create({
   dayLabel: {
     fontFamily: FontFamily.ui,
     fontSize: FontSize.xs,
+  },
+  calendarCaption: {
+    fontFamily: FontFamily.ui,
+    fontSize: 10,
+    textAlign: 'center',
+    marginTop: Spacing['2'],
   },
 });

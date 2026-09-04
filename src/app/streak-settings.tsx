@@ -432,7 +432,19 @@ export default function StreakSettingsScreen() {
           <InfoIcon size={18} color={colors.textMuted} weight="light" style={ssStyles.infoIcon} />
           <View style={ssStyles.flex1}>
             <Text style={[ssStyles.infoText, { color: colors.textMuted }]}>
-              Complete a 7-day streak to earn a freeze. Freezes automatically protect your streak if you miss a day.
+              {isPremium
+                ? 'Complete a 7-day streak to earn a freeze. Freezes automatically protect your streak if you miss a day.'
+                : 'Freezes are a Premium feature.'}
+            </Text>
+          </View>
+        </View>
+
+        {/* Weekly grace day — everyone gets this, premium or not */}
+        <View style={[ssStyles.infoCard, { backgroundColor: colors.inputBackground }]}>
+          <CalendarIcon size={18} color={colors.textMuted} weight="light" style={ssStyles.infoIcon} />
+          <View style={ssStyles.flex1}>
+            <Text style={[ssStyles.infoText, { color: colors.textMuted }]}>
+              Weekly grace day: one missed weekday per week is forgiven for everyone, on top of Weekend Amnesty.
             </Text>
           </View>
         </View>

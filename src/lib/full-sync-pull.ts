@@ -5,7 +5,7 @@ import { mmkvStorage } from './mmkv-storage';
 import { logger } from './logger';
 import { useUnfoldStore } from './store';
 import { peekSyncOutbox } from './sync-outbox';
-import { normalizeSoapResponses } from './journal-entry-state';
+import { normalizeJournalMode, normalizeSoapResponses } from './journal-entry-state';
 import { mergeJournalEntryDuplicates } from './journal-entry-merge';
 import type {
   BibleHighlight,
@@ -162,7 +162,10 @@ function mapJournalEntry(record: SyncPulledRecord): JournalEntry | null {
     content,
     createdAt: asString(row.createdAt) ?? recordUpdatedAt(record),
     updatedAt: recordUpdatedAt(record),
-    journalMode: asString(row.journalMode) as JournalEntry['journalMode'],
+    // Normalise the same way the entry screen does: a synced "guided" value
+    // (or anything else unrecognised) has no matching UI, so it becomes
+    // "freewrite" here rather than reaching the screen unnormalised.
+    journalMode: normalizeJournalMode(asString(row.journalMode)),
     // NULL column (every freewrite entry) → no object; the journal screens
     // read the four fields unguarded, so never hand them `{}` or a partial.
     soapResponses: normalizeSoapResponses(row.soapResponses),
