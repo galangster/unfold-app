@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, TouchableOpacity, AppState, AppStateStatus, AccessibilityInfo, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, AppState, AppStateStatus, AccessibilityInfo, ScrollView, StyleSheet, ActivityIndicator, Linking } from 'react-native';
 import { useRouter, useNavigation } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
@@ -37,6 +37,11 @@ import {
   areNotificationsEnabled,
 } from '@/lib/notifications';
 import { registerPushToken } from '@/lib/push-notifications';
+import {
+  getNotifyControlState,
+  resolveNotifyRequestOutcome,
+  type NotifyRequestOutcome,
+} from '@/lib/generating-notify-state';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
 import { mmkvStorage } from '@/lib/mmkv-storage';
@@ -179,6 +184,8 @@ export default function GeneratingScreen() {
   const [notificationPermission, setNotificationPermission] = useState<'unknown' | 'granted' | 'denied'>('unknown');
   const [hasAskedPermission, setHasAskedPermission] = useState(false);
   const [showNotificationPrompt, setShowNotificationPrompt] = useState(false);
+  // How the reader's "Notify me" tap ended; null until they tap.
+  const [notifyOutcome, setNotifyOutcome] = useState<NotifyRequestOutcome | null>(null);
 
   // Sample preview state -- shows after a short delay to give users something to read
   const [showSamplePreview, setShowSamplePreview] = useState(false);
@@ -217,7 +224,11 @@ export default function GeneratingScreen() {
       const enabled = await areNotificationsEnabled();
       setNotificationPermission(enabled ? 'granted' : 'denied');
 
-      if (!enabled) {
+      if (enabled) {
+        // "Feel free to step away — we'll notify you" must be backed by a
+        // token the server holds; the session dedupe makes this free.
+        void registerPushToken();
+      } else {
         notificationPromptTimerRef.current = setTimeout(() => {
           setShowNotificationPrompt(true);
         }, 6000);
@@ -329,12 +340,42 @@ export default function GeneratingScreen() {
     }
 
     setHasAskedPermission(true);
+    setNotifyOutcome(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const granted = await requestNotificationPermissions();
     setNotificationPermission(granted ? 'granted' : 'denied');
     setShowNotificationPrompt(false);
-    if (granted) void registerPushToken();
+    const registration = granted ? await registerPushToken() : null;
+    setNotifyOutcome(resolveNotifyRequestOutcome({ granted, registration }));
   };
+
+  const handleOpenNotificationSettings = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    void Linking.openSettings();
+  };
+
+  // Back from Settings: pick up a permission the reader just switched on.
+  useEffect(() => {
+    if (notifyOutcome !== 'denied') return;
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (nextAppState !== 'active') return;
+      void (async () => {
+        if (!(await areNotificationsEnabled())) return;
+        setNotificationPermission('granted');
+        const registration = await registerPushToken();
+        setNotifyOutcome(resolveNotifyRequestOutcome({ granted: true, registration }));
+      })();
+    });
+    return () => subscription.remove();
+  }, [notifyOutcome]);
+
+  const notifyControl = getNotifyControlState({
+    permission: notificationPermission,
+    hasAskedPermission,
+    showNotificationPrompt,
+    isComplete,
+    outcome: notifyOutcome,
+  });
 
   const handleDismissNotificationPrompt = () => {
     if (notificationPromptTimerRef.current) {
@@ -1040,7 +1081,7 @@ export default function GeneratingScreen() {
           ) : null}
 
           {/* Notification prompt -- appears after a delay */}
-          {showNotificationPrompt && notificationPermission !== 'granted' && !hasAskedPermission && !isComplete && (
+          {notifyControl === 'prompt' && (
             <Animated.View
               entering={entering(FadeInUp.duration(500))}
               style={{
@@ -1150,7 +1191,7 @@ export default function GeneratingScreen() {
           )}
 
           {/* After enabling notifications */}
-          {notificationPermission === 'granted' && hasAskedPermission && (
+          {notifyControl === 'confirmed' && (
             <Animated.View
               entering={entering(FadeIn.duration(400))}
               style={{
@@ -1179,8 +1220,56 @@ export default function GeneratingScreen() {
             </Animated.View>
           )}
 
+          {/* Permission denied -- say so, and point at Settings */}
+          {notifyControl === 'denied' && (
+            <Animated.View
+              entering={entering(FadeIn.duration(400))}
+              style={{ marginTop: Spacing['10'], width: '100%', alignItems: 'center', gap: Spacing['3'] }}
+            >
+              <View style={[genStyles.notifyNote, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
+                <BellIcon size={14} color={colors.textSubtle} weight="light" />
+                <Text style={[genStyles.notifyNoteText, { color: colors.textMuted }]}>
+                  {'Notifications are off for Unfold. Turn them on in Settings and we\u2019ll nudge you when it\u2019s\u00A0ready.'}
+                </Text>
+              </View>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={handleOpenNotificationSettings}
+                accessibilityRole="button"
+                accessibilityLabel="Open Settings to turn on notifications"
+                hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}
+              >
+                <Text
+                  style={{
+                    fontFamily: FontFamily.ui,
+                    fontSize: FontSize.sm,
+                    color: colors.textMuted,
+                    textDecorationLine: 'underline',
+                  }}
+                >
+                  Open Settings
+                </Text>
+              </TouchableOpacity>
+            </Animated.View>
+          )}
+
+          {/* Permission granted but the token never reached the server */}
+          {notifyControl === 'registration-failed' && (
+            <Animated.View
+              entering={entering(FadeIn.duration(400))}
+              style={{ marginTop: Spacing['10'], width: '100%', alignItems: 'center' }}
+            >
+              <View style={[genStyles.notifyNote, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
+                <BellIcon size={14} color={colors.textSubtle} weight="light" />
+                <Text style={[genStyles.notifyNoteText, { color: colors.textMuted }]}>
+                  {'We couldn\u2019t set up the nudge. Check your connection and tap Notify me\u00A0again.'}
+                </Text>
+              </View>
+            </Animated.View>
+          )}
+
           {/* Already had notifications -- gentle note */}
-          {notificationPermission === 'granted' && !hasAskedPermission && !isComplete && (
+          {notifyControl === 'granted-note' && (
             <Animated.View
               entering={entering(FadeIn.duration(600).delay(4000))}
               style={{ marginTop: Spacing['10'] }}
@@ -1233,8 +1322,9 @@ export default function GeneratingScreen() {
 
               {/* Second chance at the ready-notification for "I'll wait" users.
                   Hidden while the main notification prompt above is already
-                  showing its own Notify me control, so the two never duplicate. */}
-              {!showNotificationPrompt && notificationPermission !== 'granted' && (
+                  showing its own Notify me control, so the two never duplicate.
+                  Kept after a failed registration so the reader can retry. */}
+              {(notifyControl === 'link' || notifyControl === 'registration-failed') && (
                 <TouchableOpacity
                   activeOpacity={0.7}
                   onPress={handleRequestNotifications}
@@ -1417,6 +1507,22 @@ const genStyles = StyleSheet.create({
   transparentFlex: {
     flex: 1,
     backgroundColor: 'transparent',
+  },
+  notifyNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    width: '100%',
+    paddingHorizontal: Spacing['4'],
+    paddingVertical: 10,
+    borderRadius: Radius.xl,
+    borderWidth: 1,
+  },
+  notifyNoteText: {
+    flex: 1,
+    fontFamily: FontFamily.ui,
+    fontSize: 13,
+    lineHeight: 18,
+    marginLeft: Spacing['2'],
   },
   errorSafeArea: {
     flex: 1,

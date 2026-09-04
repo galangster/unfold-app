@@ -187,10 +187,15 @@ export type EveningWindDownNotificationRoute = {
   pathname: '/(tabs)/(today)/evening-wind-down';
 };
 
+export type GeneratingNotificationRoute = {
+  pathname: '/generating';
+};
+
 export type NotificationNavigationRoute =
   | RevealNotificationRoute
   | TodayNotificationRoute
-  | EveningWindDownNotificationRoute;
+  | EveningWindDownNotificationRoute
+  | GeneratingNotificationRoute;
 
 export function buildRevealNotificationRoute(
   data: Record<string, unknown> | null | undefined,
@@ -235,6 +240,12 @@ export function buildNotificationNavigationRoute(
 
   if (data?.type === 'evening-winddown' || data?.type === 'evening_winddown') {
     return { pathname: '/(tabs)/(today)/evening-wind-down' };
+  }
+
+  // The server's "we hit a snag" push: the generating screen resumes the
+  // failed job from MMKV and offers Try again.
+  if (data?.type === 'generation_failed') {
+    return { pathname: '/generating' };
   }
 
   return null;

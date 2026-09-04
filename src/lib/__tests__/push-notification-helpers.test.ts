@@ -181,6 +181,18 @@ describe('push notification helpers', () => {
         pathname: '/(tabs)/(today)/evening-wind-down',
       });
     });
+
+    it('routes the server failure push back to the generating screen', () => {
+      expect(
+        buildNotificationNavigationRoute({ type: 'generation_failed', devotionalId: 'd', jobId: 'j' }),
+      ).toEqual({ pathname: '/generating' });
+    });
+
+    it('still routes a ready push to reveal', () => {
+      expect(
+        buildNotificationNavigationRoute({ type: 'devotional_ready', devotionalId: 'd', dayNumber: 1 }),
+      ).toMatchObject({ pathname: '/reveal', params: { devotionalId: 'd', dayNumber: '1' } });
+    });
   });
 
   describe('shouldHydrateNotificationResponse', () => {
