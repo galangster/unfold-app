@@ -493,3 +493,34 @@ describe('computeDevotionalState — preparingFirstSeries', () => {
     expect(state.type).toBe('unread');
   });
 });
+
+describe('computeDevotionalState — firstSeriesFailed', () => {
+  const failed = { message: 'We couldn’t finish creating this devotional right now.', onTryAgain: noop, onDismiss: noop };
+
+  it('shows the failed card with a retry when nothing is in the store and the first series failed', () => {
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDevotional: null,
+      currentDayData: null,
+      firstSeriesFailed: failed,
+    });
+
+    expect(state).toEqual({ type: 'first-series-failed', ...failed });
+  });
+
+  it('lets an in-flight first series win over a stale failure', () => {
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDevotional: null,
+      currentDayData: null,
+      preparingFirstSeries: { seriesTitle: 'your devotional' },
+      firstSeriesFailed: failed,
+    });
+
+    expect(state.type).toBe('preparing');
+  });
+
+  it('ignores firstSeriesFailed once a devotional exists', () => {
+    expect(computeDevotionalState({ ...baseInput, firstSeriesFailed: failed }).type).toBe('unread');
+  });
+});

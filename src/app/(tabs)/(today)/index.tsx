@@ -32,6 +32,7 @@ import { getContentAwareMiddayMessage, getContentAwareEveningMessage } from '@/c
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { Duration, Ease } from '@/constants/animations';
 import { submitGenerationJob, recoverCompletedGenerationResult, ApiError } from '@/lib/generation-api';
+import { toFriendlyOnboardingGenerationError } from '@/lib/generation-errors';
 import {
   readInflightGenerationJob,
   resolvePreparingFirstSeriesTitle,
@@ -259,35 +260,49 @@ export default function HomeScreen() {
     downloadBibleDb().catch(() => {});
   }, []);
 
-  // In-flight first-series job from a previous screen or app session. Without
-  // the leftForHome marker the record is app-kill recovery and the reader goes
-  // back to /generating — at mount only, exactly as before: a later session
-  // change while /generating itself sits on top of the tabs (RecommendedSeries
-  // pushes it) must not stack a second copy. With the marker the reader tapped
-  // "Go home — we'll keep writing": keep the record, show the preparing card
-  // and watch the job from here. Re-read whenever the generation session
-  // moves, so a submission that resolves after the reader already left, and
-  // the job settling, both land.
+  // In-flight first-series job from a previous screen or app session. Read
+  // only while Today is the focused screen, and re-read every time it gains
+  // focus and whenever the generation session moves (a submission resolving
+  // after the reader already left; the job settling). Focus, not mount: a
+  // /generating pushed on top of the tabs (RecommendedSeriesCard) leaves this
+  // instance mounted and unfocused, so a mount-only read could go stale, and
+  // an unfocused instance must never redirect. Without the leftForHome marker
+  // the record is app-kill recovery and the reader goes back to /generating.
+  // With the marker the reader tapped "Go home — we'll keep writing": keep
+  // the record, show the preparing card and watch the job from here.
   const generationSessionStatus = useUnfoldStore((s) => s.generationSession.status);
   const generationSessionDevotionalId = useUnfoldStore((s) => s.generationSession.devotionalId);
   const generationSessionTitle = useUnfoldStore((s) => s.generationSession.title);
-  const inflightResumeAttempted = useRef(false);
+  const generationSessionError = useUnfoldStore((s) => s.generationSession.error);
+  const clearGenerationSession = useUnfoldStore((s) => s.clearGenerationSession);
   const [inflightFirstSeries, setInflightFirstSeries] = useState<InflightGenerationJob | null>(null);
   useEffect(() => {
-    const isMountRead = !inflightResumeAttempted.current;
-    inflightResumeAttempted.current = true;
+    if (!isTodayFocused) return;
     const decision = resolveTodayInflightAction(readInflightGenerationJob());
     if (decision.action === 'resume-on-generating') {
       setInflightFirstSeries(null);
-      if (!isMountRead) return;
       logger.log('[home] Resuming inflight generation job from MMKV:', decision.job.jobId);
       // Navigate to generating screen — it will pick up the inflight job from MMKV
       router.replace('/generating');
       return;
     }
     setInflightFirstSeries(decision.action === 'watch-on-today' ? decision.job : null);
-  }, [router, generationSessionStatus, generationSessionDevotionalId]);
+  }, [router, isTodayFocused, generationSessionStatus, generationSessionDevotionalId]);
   const onInflightFirstSeriesSettled = useCallback(() => setInflightFirstSeries(null), []);
+
+  // The first series failed after the reader left for Today (the watch below
+  // settled on a failure, or the submission itself failed). The session holds
+  // the error and nothing is in the store; without a card for it Today sat on
+  // the new-user empty state and said nothing. Try again re-enters
+  // /generating, which submits a fresh job from the same answers.
+  const handleRetryFirstSeries = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.replace('/generating');
+  }, [router]);
+  const handleDismissFirstSeriesFailure = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    clearGenerationSession();
+  }, [clearGenerationSession]);
 
   // Check premium status through the tri-state policy so QA premium override can
   // unlock UI without mutating RevenueCat's persisted mirror.
@@ -470,6 +485,10 @@ export default function HomeScreen() {
     onSettled: onInflightFirstSeriesSettled,
   });
   const isPreparingFirstSeries = !currentDevotional && inflightFirstSeries != null && premiumPolicy !== 'denied';
+  const isFirstSeriesFailed = !currentDevotional
+    && inflightFirstSeries == null
+    && generationSessionStatus === 'error'
+    && premiumPolicy !== 'denied';
 
   const qaContextSlot = useMemo<QaContextSlotPreview | null>(() => {
     if (!isQaToolsEnabled()) return null;
@@ -1242,6 +1261,13 @@ export default function HomeScreen() {
     isPreparing: !hasReadToday && (isPreparingCurrentDay || (!currentDayData && !!currentDevotional && premiumPolicy !== 'denied')),
     preparingFirstSeries: isPreparingFirstSeries
       ? { seriesTitle: resolvePreparingFirstSeriesTitle(generationSessionTitle) }
+      : null,
+    firstSeriesFailed: isFirstSeriesFailed
+      ? {
+          message: toFriendlyOnboardingGenerationError(generationSessionError ?? ''),
+          onTryAgain: handleRetryFirstSeries,
+          onDismiss: handleDismissFirstSeriesFailure,
+        }
       : null,
     premiumPolicy,
     daysCompleted,

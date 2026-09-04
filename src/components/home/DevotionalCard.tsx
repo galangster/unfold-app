@@ -1,8 +1,8 @@
 /**
- * DevotionalCard — 8-state hero card for the home screen.
+ * DevotionalCard — 9-state hero card for the home screen.
  *
  * Renders based on a DevotionalCardState discriminated union:
- *   empty | preparing | premium-paused | reveal-ready | unread | complete-today | tomorrow-locked | journey-complete
+ *   empty | preparing | first-series-failed | premium-paused | reveal-ready | unread | complete-today | tomorrow-locked | journey-complete
  *
  * Extracted from (tabs)/(today)/index.tsx for single-responsibility and testability.
  */
@@ -284,6 +284,60 @@ function ReturningEmptyState({ onCreateNew }: { onCreateNew: () => void }) {
       onChooseOther={onCreateNew}
       renderFallback={() => <ReturningEmptyStateFallback onCreateNew={onCreateNew} />}
     />
+  );
+}
+
+// ─── First series failed ────────────────────────────────────────
+
+/**
+ * The first series failed after the reader chose "Go home — we'll keep
+ * writing" (Jordan, 1.1.0). Same card shell as the returning empty state so
+ * the failure reads as a state of the same surface, not an alert.
+ */
+function FirstSeriesFailedState({ state }: { state: Extract<DevotionalCardState, { type: 'first-series-failed' }> }) {
+  const { colors } = useTheme();
+  const { entering } = useAccessibleAnimation();
+
+  return (
+    <Animated.View
+      entering={entering(FadeIn.duration(Duration.normal).delay(80).easing(Ease.out))}
+      testID="home-first-series-failed"
+      style={[
+        styles.returningCard,
+        {
+          backgroundColor: alpha(colors.backgroundElevated, 0.72),
+          borderColor: alpha(colors.accent, 0.14),
+          shadowColor: colors.accent,
+        },
+      ]}
+    >
+      <View style={styles.returningContent}>
+        <Text style={[styles.returningTitle, { color: colors.text }]}>We couldn’t finish your devotional.</Text>
+        <Text style={[styles.returningSubtitle, { color: colors.textMuted }]}>{state.message}</Text>
+
+        <TouchableOpacity
+          activeOpacity={0.72}
+          onPress={state.onTryAgain}
+          accessibilityRole="button"
+          accessibilityLabel="Try again"
+          style={[styles.returningCta, { borderColor: alpha(colors.accent, 0.28), backgroundColor: alpha(colors.accent, 0.08) }]}
+        >
+          <Text style={[styles.returningCtaText, { color: colors.text }]}>Try again</Text>
+          <Text style={[styles.returningCtaArrow, { color: colors.accent }]}>→</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          activeOpacity={0.72}
+          onPress={state.onDismiss}
+          accessibilityRole="button"
+          accessibilityLabel="Not now"
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          style={styles.failedDismiss}
+        >
+          <Text style={[styles.failedDismissText, { color: colors.textSubtle }]}>Not now</Text>
+        </TouchableOpacity>
+      </View>
+    </Animated.View>
   );
 }
 
@@ -859,6 +913,7 @@ export function DevotionalCard({ state, scrollY, inStack, isReturningUser }: Pro
           dayNumber={state.dayNumber}
         />
       )}
+      {state.type === 'first-series-failed' && <FirstSeriesFailedState state={state} />}
       {state.type === 'premium-paused' && <PremiumPausedState state={state} />}
       {state.type === 'journey-complete' && (
         <JourneyCompleteState seriesTitle={state.seriesTitle} onCreateNew={state.onCreateNew} />
@@ -1188,6 +1243,16 @@ const styles = StyleSheet.create({
     fontSize: 17,
     lineHeight: 20,
     marginTop: -1,
+  },
+  failedDismiss: {
+    alignSelf: 'flex-start',
+    marginTop: Spacing['4'],
+    paddingVertical: Spacing['1'],
+  },
+  failedDismissText: {
+    fontFamily: FontFamily.body,
+    fontSize: 14,
+    lineHeight: 20,
   },
   premiumPausedProgress: {
     ...Typography.cardMeta,

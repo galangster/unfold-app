@@ -280,6 +280,35 @@ describe('DevotionalCard composer integration', () => {
   });
 });
 
+describe('DevotionalCard first-series-failed', () => {
+  it('shows the failure copy and routes Try again / Not now to the state callbacks', () => {
+    const onTryAgain = jest.fn();
+    const onDismiss = jest.fn();
+    const tree = renderInAct(
+      <DevotionalCard
+        state={{ type: 'first-series-failed', message: 'We couldn’t reach the writing service.', onTryAgain, onDismiss }}
+      />,
+    );
+
+    expect(tree.root.findByProps({ testID: 'home-first-series-failed' })).toBeTruthy();
+    expect(
+      tree.root.findAll(
+        (node: any) => node.type === 'Text' && textContent(node).includes('We couldn’t reach the writing service.'),
+      ).length,
+    ).toBeGreaterThan(0);
+
+    act(() => {
+      findByLabel(tree, 'Try again')[0].props.onPress();
+    });
+    expect(onTryAgain).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      findByLabel(tree, 'Not now')[0].props.onPress();
+    });
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+});
+
 function textContent(node: any): string {
   return node.children
     .map((child: any) => (typeof child === 'string' ? child : textContent(child)))

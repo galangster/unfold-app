@@ -17,6 +17,7 @@ export type ReflectionStatus = 'empty' | 'started' | 'complete';
 export type DevotionalCardState =
   | { type: 'empty'; onCreateNew: () => void }
   | { type: 'preparing'; progress: number; seriesTitle: string; dayNumber: number; onCreateNew: () => void }
+  | { type: 'first-series-failed'; message: string; onTryAgain: () => void; onDismiss: () => void }
   | {
       type: 'premium-paused';
       seriesTitle: string;
@@ -93,6 +94,12 @@ export interface ComputeInput {
    * preparing card in place of the new-user empty state.
    */
   preparingFirstSeries?: { seriesTitle: string } | null;
+  /**
+   * The first series failed after the reader left /generating for Today and
+   * nothing is in the store. Renders a visible failure with a retry in place
+   * of the new-user empty state, which said nothing about it.
+   */
+  firstSeriesFailed?: { message: string; onTryAgain: () => void; onDismiss: () => void } | null;
   premiumPolicy: PremiumAccessPolicy;
   daysCompleted: number;
   totalDays: number;
@@ -117,6 +124,7 @@ export interface ComputeInput {
  *
  * Priority order (first match wins):
  * 1. No devotional, first series in flight  -> preparing (day 1)
+ * 1. No devotional, first series failed     -> first-series-failed
  * 1. No devotional                          -> empty
  * 2. !hasReadToday && (preparing/no data)   -> preparing
  * 3. No day data (fallback)                 -> preparing
@@ -135,6 +143,7 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
     isJourneyComplete,
     isPreparing,
     preparingFirstSeries = null,
+    firstSeriesFailed = null,
     premiumPolicy,
     daysCompleted,
     totalDays,
@@ -163,6 +172,9 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
         dayNumber: 1,
         onCreateNew,
       };
+    }
+    if (firstSeriesFailed) {
+      return { type: 'first-series-failed', ...firstSeriesFailed };
     }
     return { type: 'empty', onCreateNew };
   }
