@@ -16,7 +16,6 @@ import { mmkvStorage } from '@/lib/mmkv-storage';
 export const INFLIGHT_GENERATION_JOB_KEY = 'inflight-generation-job';
 /** A record older than this is stale: the server job is long done or dead. */
 export const INFLIGHT_JOB_TTL_MS = 15 * 60 * 1000;
-export const TODAY_HREF = '/(tabs)/(today)' as const;
 /** Session title written at submission, before the server names the series. */
 export const GENERATING_SESSION_TITLE_PLACEHOLDER = 'Generating...';
 /** What the preparing card calls the series before the server names it. */
@@ -102,41 +101,18 @@ export function resolveTodayInflightAction(read: InflightGenerationJobRead): Tod
     : { action: 'resume-on-generating', job: read.job };
 }
 
-export type NotificationPermissionState = 'unknown' | 'granted' | 'denied';
-
-export interface GoHomeFromGeneratingContext {
-  notificationPermission: NotificationPermissionState;
-  hasAskedPermission: boolean;
-}
-
-export interface GoHomeFromGeneratingPlan {
-  /** The record to persist before leaving; null when no job was submitted yet. */
-  record: InflightGenerationJob | null;
-  href: typeof TODAY_HREF;
-}
-
 /**
- * Pure: leaving /generating for Today. The notification state is an input on
- * purpose: the decision must never depend on it, so no permission prompt can
- * sit between the tap and the navigation. The job record is kept (marked, not
- * removed) so the server job keeps running and Today can watch it.
+ * "Go home — we'll keep writing": mark the active record as left for Today
+ * and return it (null when no job was submitted yet). The record is kept, not
+ * removed, so the server job keeps running and Today can watch it. Synchronous
+ * on purpose: nothing may sit between the tap and the navigation.
  */
-export function planGoHomeFromGenerating(
-  input: { job: InflightGenerationJob | null } & GoHomeFromGeneratingContext,
-): GoHomeFromGeneratingPlan {
-  const record = input.job ? { ...input.job, leftForHome: true as const } : null;
-  return { record, href: TODAY_HREF };
-}
-
-/** Persist the leftForHome marker on the active record and return the plan. */
-export function markInflightJobLeftForHome(
-  context: GoHomeFromGeneratingContext,
-  now = Date.now(),
-): GoHomeFromGeneratingPlan {
+export function markInflightJobLeftForHome(now = Date.now()): InflightGenerationJob | null {
   const read = readInflightGenerationJob(now);
-  const plan = planGoHomeFromGenerating({ job: read.kind === 'active' ? read.job : null, ...context });
-  if (plan.record) writeInflightGenerationJob(plan.record);
-  return plan;
+  if (read.kind !== 'active') return null;
+  const record = { ...read.job, leftForHome: true as const };
+  writeInflightGenerationJob(record);
+  return record;
 }
 
 /** Title for the preparing card while the first series has no name yet. */

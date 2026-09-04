@@ -23,7 +23,7 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
-import { useUnfoldStore, type DevotionalDay } from '@/lib/store';
+import { useUnfoldStore } from '@/lib/store';
 import { submitGenerationJob, pollJobStatus, retryJob, recoverCompletedGenerationResult, buildInitialArcUserContext } from '@/lib/generation-api';
 import {
   clearInflightGenerationJob,
@@ -38,7 +38,7 @@ import {
   INITIAL_ARC_TIMEOUT_MESSAGE,
   INITIAL_ARC_UNKNOWN_STATUS_MESSAGE,
 } from '@/lib/inflight-initial-arc-watch';
-import { applyInitialArcResult, requireCanonicalDevotionalId } from '@/lib/initial-arc-result';
+import { applyInitialArcResult, requireCanonicalDevotionalId, type InitialArcResult } from '@/lib/initial-arc-result';
 import {
   evaluateGenerationPoll,
   getNextPollDelayMs,
@@ -346,13 +346,7 @@ export default function GeneratingScreen() {
 
   // ========== GENERATION COMPLETE HANDLER ==========
 
-  const handleGenerationComplete = useCallback((result: {
-    devotionalDay: DevotionalDay;
-    seriesTitle?: string;
-    totalDays?: number;
-    arc?: import('@/lib/store').SeriesArc;
-    devotionalId: string;
-  }) => {
+  const handleGenerationComplete = useCallback((result: InitialArcResult) => {
     // Store, scripture bookkeeping, in-flight record and session are landed by
     // the shared helper (Today lands the same job the same way after "Go home").
     const { devotionalId, seriesTitle, day1 } = applyInitialArcResult(result, { user, devotionalLength });
@@ -541,7 +535,7 @@ export default function GeneratingScreen() {
           jobId,
           devotionalId,
           submittedAt: Date.now(),
-          ...(leftForHomeRef.current ? { leftForHome: true as const } : {}),
+          leftForHome: leftForHomeRef.current || undefined,
         });
         startGenerationSession({ devotionalId, totalDays: user.devotionalLength });
         logger.log('[generating] Job submitted:', jobId);
@@ -589,7 +583,7 @@ export default function GeneratingScreen() {
             jobId: existingJobId,
             devotionalId: sessionDevotionalId ?? undefined,
             submittedAt: Date.now(),
-            ...(leftForHomeRef.current ? { leftForHome: true as const } : {}),
+            leftForHome: leftForHomeRef.current || undefined,
           });
           if (leftForHomeRef.current) {
             logger.log('[generating] Existing job adopted after the reader went home; Today owns the watch');
@@ -751,14 +745,14 @@ export default function GeneratingScreen() {
   // leave this screen.
   const handleLeaveForHome = () => {
     leftForHomeRef.current = true;
-    const { href, record } = markInflightJobLeftForHome({ notificationPermission, hasAskedPermission });
+    const record = markInflightJobLeftForHome();
     void logBugEvent('generation', 'generation-left-for-home', {
       jobId: record?.jobId ?? pendingJobId,
       notificationPermission,
       hasAskedPermission,
     });
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.replace(href);
+    router.replace('/(tabs)/(today)');
   };
 
   // ========== RENDER: ERROR STATE ==========

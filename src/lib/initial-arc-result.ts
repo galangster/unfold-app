@@ -20,12 +20,12 @@ export interface InitialArcResult {
   devotionalId?: string | null;
 }
 
-export interface InitialArcResultContext {
+interface InitialArcResultContext {
   user: UserProfile | null | undefined;
   devotionalLength: number;
 }
 
-export interface AppliedInitialArcResult {
+interface AppliedInitialArcResult {
   devotionalId: string;
   seriesTitle: string;
   day1: DevotionalDay;

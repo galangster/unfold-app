@@ -22,17 +22,14 @@ import {
   INFLIGHT_JOB_TTL_MS,
   GENERATING_SESSION_TITLE_PLACEHOLDER,
   PREPARING_FIRST_SERIES_FALLBACK_TITLE,
-  TODAY_HREF,
   clearInflightGenerationJob,
   markInflightJobLeftForHome,
   parseInflightGenerationJob,
-  planGoHomeFromGenerating,
   readInflightGenerationJob,
   resolvePreparingFirstSeriesTitle,
   resolveTodayInflightAction,
   writeInflightGenerationJob,
   type InflightGenerationJob,
-  type NotificationPermissionState,
 } from '../inflight-generation-job';
 
 const NOW = 1_800_000_000_000;
@@ -120,35 +117,11 @@ describe('resolveTodayInflightAction', () => {
   });
 });
 
-describe('planGoHomeFromGenerating', () => {
-  const permissions: NotificationPermissionState[] = ['unknown', 'granted', 'denied'];
-
-  it.each(permissions.flatMap((p) => [[p, false] as const, [p, true] as const]))(
-    'always navigates to Today and marks the record (notificationPermission=%s, hasAskedPermission=%s)',
-    (notificationPermission, hasAskedPermission) => {
-      const plan = planGoHomeFromGenerating({ job: fresh, notificationPermission, hasAskedPermission });
-      expect(plan.href).toBe(TODAY_HREF);
-      expect(plan.href).toBe('/(tabs)/(today)');
-      expect(plan.record).toEqual({ ...fresh, leftForHome: true });
-    },
-  );
-
-  it('still navigates when no job has been submitted yet', () => {
-    const plan = planGoHomeFromGenerating({ job: null, notificationPermission: 'unknown', hasAskedPermission: false });
-    expect(plan).toEqual({ record: null, href: TODAY_HREF });
-  });
-
-  it('preserves the job identity and clock', () => {
-    const { record } = planGoHomeFromGenerating({ job: fresh, notificationPermission: 'denied', hasAskedPermission: true });
-    expect(record).toMatchObject({ jobId: 'job-1', devotionalId: 'devo-1', submittedAt: fresh.submittedAt });
-  });
-});
-
 describe('markInflightJobLeftForHome', () => {
-  it('rewrites the active record under the same key with the marker set', () => {
+  it('rewrites the active record under the same key with the marker set and returns it', () => {
     writeInflightGenerationJob(fresh);
-    const plan = markInflightJobLeftForHome({ notificationPermission: 'unknown', hasAskedPermission: false }, NOW);
-    expect(plan.href).toBe(TODAY_HREF);
+    const record = markInflightJobLeftForHome(NOW);
+    expect(record).toEqual({ ...fresh, leftForHome: true });
     expect(mmkvStorage.setItem).toHaveBeenLastCalledWith(
       INFLIGHT_GENERATION_JOB_KEY,
       JSON.stringify({ ...fresh, leftForHome: true }),
@@ -156,10 +129,16 @@ describe('markInflightJobLeftForHome', () => {
     expect(resolveTodayInflightAction(readInflightGenerationJob(NOW)).action).toBe('watch-on-today');
   });
 
-  it('writes nothing when there is no active record but still returns Today', () => {
-    const plan = markInflightJobLeftForHome({ notificationPermission: 'granted', hasAskedPermission: true }, NOW);
-    expect(plan).toEqual({ record: null, href: TODAY_HREF });
+  it('writes nothing and returns null when there is no active record', () => {
+    expect(markInflightJobLeftForHome(NOW)).toBeNull();
     expect(mmkvStorage.setItem).not.toHaveBeenCalled();
+  });
+
+  it('drops a stale record instead of marking it', () => {
+    writeInflightGenerationJob({ ...fresh, submittedAt: NOW - INFLIGHT_JOB_TTL_MS });
+    expect(markInflightJobLeftForHome(NOW)).toBeNull();
+    expect(mmkvStorage.removeItem).toHaveBeenCalledWith(INFLIGHT_GENERATION_JOB_KEY);
+    expect(mmkvStorage.getItem(INFLIGHT_GENERATION_JOB_KEY)).toBeNull();
   });
 });
 
