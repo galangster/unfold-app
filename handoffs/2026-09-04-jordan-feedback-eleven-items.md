@@ -13,11 +13,18 @@ session hit its token limit mid-flight. **Nothing is merged. No lane was reviewe
    Both are clean and in sync with `origin`. Seven `fix/jordan-*` branches exist locally
    in both repos. None has a remote tracking branch.
 
-2. **Two lanes have NO commit at all.** `fix/jordan-generation-error-false` and
-   `fix/jordan-notify-when-ready` point at exactly their main tips. `git log main..<branch>`
-   prints nothing for both. Their entire work is uncommitted working-tree edits inside
-   `/private/tmp`. A third lane, `key-people-multi`, is **half-committed**: it has a commit
-   AND uncommitted repair work on the same files. Merging that branch silently drops the repair.
+2. **Every lane is now committed.** This was true as of 2026-09-04 evening; earlier text in
+   this file described two lanes as having no commit, and that is no longer the case.
+   All ten lane worktrees are clean and every branch is ahead of its main.
+
+   | Lane | New commit | Note |
+   |---|---|---|
+   | `generation-error-false` | mobile `2235947e`, backend `0e69da2` | **backend is INERT — see item 7** |
+   | `notify-when-ready` | mobile `6e534745`, backend `23526a9` | includes the two formerly untracked modules |
+   | `key-people-multi` | mobile `e206940c` (now 2 commits) | the repair round answering two failing reviewers |
+
+   Being committed is not being ready. **Five of seven lanes still have no adversarial
+   review and no gate run.** The commit messages record that per lane.
 
 3. **No lane received adversarial review, except three.** The session limit killed the
    reviewers mid-run. A recorded `review FAIL (0/0)` means *zero reviewers returned*, not
@@ -29,17 +36,21 @@ session hit its token limit mid-flight. **Nothing is merged. No lane was reviewe
 ### Backups already exist. Use them if `/private/tmp` is gone.
 
 All lane work was exported to `/Users/galangster/clawd/work/unfold/jordan-lane-patches/`
-before this handoff was written. Twelve patch files, all non-empty. Every uncommitted
-patch was verified with `git apply --check` against current `main` and applies clean.
+before the commits in fact 2 were made. Twelve patch files, all non-empty. Every
+uncommitted patch was verified with `git apply --check` against current `main` and applies
+clean. **The patches now duplicate work that lives in commits**, so they are a redundant
+second copy rather than the only copy. Keep them until the lanes merge.
 
 ```bash
 ls -la /Users/galangster/clawd/work/unfold/jordan-lane-patches
 ```
 
-The two **untracked** new modules in `notify-when-ready` are NOT in any patch. They are
-copied verbatim to `jordan-lane-patches/untracked/notify-when-ready/mobile/src/lib/`:
-`generating-notify-state.ts` and `__tests__/generating-notify-state.test.ts`. A
-`git apply` will not create them. Copy them by hand.
+The two formerly untracked modules in `notify-when-ready` — `generating-notify-state.ts`
+and `__tests__/generating-notify-state.test.ts` — are now **inside commit `6e534745`**, so
+a normal merge carries them. Verbatim copies also sit at
+`jordan-lane-patches/untracked/notify-when-ready/mobile/src/lib/` as a fallback. If you ever
+fall back to `git apply` of the patch instead of the commit, that patch will not create
+them; copy them by hand.
 
 ### Worktree paths
 
@@ -84,14 +95,14 @@ died. Trust `git`, and trust the journal. Do not trust that JSON's bookkeeping f
 
 | # | Item | Branch | Committed | Reviewed | Ready |
 |---|---|---|---|---|---|
-| 1 | Key people: one person per relationship | `fix/jordan-key-people-multi` | mobile `4aac4179`, backend `71b93aa` **+ uncommitted repair** | 1 pass / 2 fail | No |
+| 1 | Key people: one person per relationship | `fix/jordan-key-people-multi` | mobile `4aac4179` + `e206940c`, backend `71b93aa` | 1 pass / 2 fail; repair unreviewed | No |
 | 2 | "We heard you" hard-edged empty panel | `fix/jordan-segue-cutoff` | `d7b5ec83` | 2 pass | **Closest** |
 | 3 | Paywall phone mockup cut flat | `fix/jordan-paywall-mockup-cutoff` | `d1ed7809` | 1 fail, 2 must-fix open | No |
 | 4 | Post-purchase loop (critical) | `fix/jordan-post-purchase-loop` | `a1c58560` | none | No |
 | 5 | 3-day trial continuation (feature) | — | none | — | Design only |
 | 6 | "Go home" link does nothing | `fix/jordan-go-home-dead` | `add0c7ab` | none | No |
-| 7 | False "Something went wrong" | `fix/jordan-generation-error-false` | **NONE** | none | No — backend inert |
-| 8 | No notification when ready | `fix/jordan-notify-when-ready` | **NONE** | none | No |
+| 7 | False "Something went wrong" | `fix/jordan-generation-error-false` | mobile `2235947e`, backend `0e69da2` | none | No — **backend inert** |
+| 8 | No notification when ready | `fix/jordan-notify-when-ready` | mobile `6e534745`, backend `23526a9` | none | No |
 | 9 | Review prompt after first devotional | — | on `main` `a13d481a` | confirmed | **Done** |
 | 10 | Day ends with nothing to do (new) | — | none | — | Diagnosed |
 | 11 | Journal asks the same thing 3 ways (new) | — | none | — | Diagnosed |
@@ -148,7 +159,7 @@ Those are full-screen and their glow correctly anchors at the screen edge.
 
 ---
 
-### Item 1 — `key-people-multi` · mobile `4aac4179` + backend `71b93aa` · half-committed
+### Item 1 — `key-people-multi` · mobile `4aac4179` + `e206940c`, backend `71b93aa`
 
 **Jordan wanted:** two friends, each with a name. He got one row per relationship.
 
@@ -180,8 +191,8 @@ profile and the generation payload keep the `{ name, relationship }[]` shape the
 validates. Drafts written by 1.1.x carry rows with no id and are normalised by
 `withKeyPersonIds` in the lazy `useState` initialiser at `onboarding.tsx:658`.
 
-**THE UNCOMMITTED REPAIR — do not lose this.** Three tracked mobile files carry +67 / −12
-on top of `4aac4179`. It is the repair round answering the two failing reviewers:
+**THE REPAIR ROUND — now commit `e206940c`.** Three mobile files, +67 / −12 on top of
+`4aac4179`. It answers the two failing reviewers:
 - `consumeAutofocus` (`:2902-2904`) plus `onFocus` (`:2967`) clears the autofocus ref once
   the row takes focus. Without it, Continue then Back re-opens the keyboard on a finished
   step. This was reviewer must-fix 1, raised independently by two reviewers.
@@ -190,7 +201,8 @@ on top of `4aac4179`. It is the repair round answering the two failing reviewers
 - Adds `accessibilityState={{ disabled: maxPeopleReached }}` and a count to the chip label.
 - Adds two test cases.
 
-It **extends** the commit; it does not supersede it. The repair agent died before committing.
+It **extends** `4aac4179`; it does not supersede it. The repair agent died before
+committing, so `e206940c` was made separately and has never been reviewed.
 
 **Gates:** recorded against `4aac4179` / `71b93aa` **only**, never re-run after the repair.
 Mobile tsc 0, eslint 33 pre-existing warnings, Jest 11 suites / 164 tests.
@@ -388,7 +400,7 @@ permission prompt can sit between the tap and the navigation.
 
 ---
 
-### Item 7 — `generation-error-false` · NO COMMIT · and the backend half is inert
+### Item 7 — `generation-error-false` · mobile `2235947e`, backend `0e69da2` · backend is inert
 
 **Jordan saw:** "Something went wrong" after about ten minutes, though he believed the
 series existed.
@@ -465,7 +477,7 @@ principle the rest of the lane adopts.
 
 ---
 
-### Item 8 — `notify-when-ready` · NO COMMIT · but the code reads as finished
+### Item 8 — `notify-when-ready` · mobile `6e534745`, backend `23526a9` · code reads as finished
 
 **Jordan saw:** he tapped "Notify me when it's ready" and never got a notification.
 
@@ -784,12 +796,11 @@ diffstat, never by exit code — two branches are no-ops.
 | `src/components/__tests__/ThreeStepPaywall.test.tsx` | `paywall-mockup-cutoff`, `post-purchase-loop` |
 | `src/app/(tabs)/(today)/index.tsx` | `generation-error-false` (uncommitted), `go-home-dead` (committed) |
 
-**Step 0, before anything else: commit the three lanes that hold uncommitted work.**
-`generation-error-false` (both repos), `notify-when-ready` (both repos, and remember the two
-untracked files), and the `key-people-multi` mobile repair round. Uncommitted work cannot
-survive a rebase or a conflicted merge.
+**Step 0 is done.** All three lanes that held uncommitted work were committed on
+2026-09-04 evening — see section 0, fact 2. Nothing is at risk of a rebase or a conflicted
+merge any more.
 
-Then, in this order:
+Merge in this order:
 
 1. **`segue-cutoff`** — two lines in `onboarding.tsx`, its other files are uncontested.
 2. **`paywall-mockup-cutoff`** — establishes `ThreeStepPaywall.tsx` first.
@@ -990,9 +1001,8 @@ Do not use ASC key `38BW73P7M5` — its `.p8` is not on this machine.
 
 ## 10. Ordered next actions
 
-1. **Commit the three lanes with uncommitted work**, before anything else.
-   `generation-error-false` (mobile + backend), `notify-when-ready` (mobile + backend, plus
-   the two untracked files), and the `key-people-multi` mobile repair round.
+1. ~~Commit the three lanes with uncommitted work.~~ **Done** — `2235947e` / `0e69da2`,
+   `6e534745` / `23526a9`, `e206940c`. All worktrees clean, all branches ahead of main.
 2. **Re-check whether 1.1.3 (build 259) came back from review.** Mint the ASC JWT the way
    `scripts/set-testflight-changelog.mjs` does and
    `GET /v1/apps/6760814444/appStoreVersions`. If rejected: "Update Review" on the version
@@ -1033,8 +1043,11 @@ Do not use ASC key `38BW73P7M5` — its `.p8` is not on this machine.
 - **Patch backups:** `/Users/galangster/clawd/work/unfold/jordan-lane-patches/`, 12 patch
   files plus 2 untracked modules. All four uncommitted patches verified with
   `git apply --check` against current `main`.
-- **Not done in this session:** nothing was committed to either repo except this handoff,
-  no branch was merged, no gate was run, no worktree was modified, and nothing was pushed.
+- **Committed in this session:** this handoff (`2649f6cc`, mobile main), and the five lane
+  commits listed in section 0 fact 2 (on their own branches, not on main).
+- **Not done in this session:** no branch was merged, no gate was run, no lane code was
+  edited, and **nothing was pushed**. Mobile main is 1 commit ahead of origin (the handoff);
+  backend main is level.
 
 ---
 
@@ -1044,13 +1057,14 @@ Do not use ASC key `38BW73P7M5` — its `.p8` is not on this machine.
 Read app/mobile/handoffs/2026-09-04-jordan-feedback-eleven-items.md first, in full.
 
 Unfold has eleven items from tester Jordan. Seven have fix lanes in worktrees under
-/private/tmp; NOTHING is merged; mobile main is 5fcb0edf and backend main is 105b7c2.
-Two lanes (generation-error-false, notify-when-ready) have NO commit and exist only as
-uncommitted working-tree edits. key-people-multi is half-committed. Patch backups are at
-~/clawd/work/unfold/jordan-lane-patches if /private/tmp is gone.
+/private/tmp; NOTHING is merged; mobile main is 5fcb0edf plus one handoff commit, and
+backend main is 105b7c2. Every lane is now committed on its own branch and every worktree
+is clean, but five of seven lanes have had no adversarial review and no gate run at all.
+Patch backups are at ~/clawd/work/unfold/jordan-lane-patches if /private/tmp is gone.
 
-Start with section 10, action 1: commit the three lanes that hold uncommitted work, before
-anything else. Then work section 10 in order.
+Section 10 action 1 is already done. Start at action 2, and work section 10 in order.
+The highest-value single fix is action 3: the backend half of generation-error-false is
+committed but INERT, and it is the only thing that actually fixes what Jordan reported.
 
 Do not trust the reviewPass/repaired fields in the old workflow JSON — five of seven lanes
 were never reviewed. Do not merge generation-error-false and go-home-dead textually; the
