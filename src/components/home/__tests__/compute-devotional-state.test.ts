@@ -449,3 +449,47 @@ describe('computeDevotionalState', () => {
     expect(state.type).toBe('empty');
   });
 });
+
+// ─── First series still in flight (Go home from /generating) ─────
+
+describe('computeDevotionalState — preparingFirstSeries', () => {
+  it('shows the preparing card for day 1 when nothing is in the store but the first series is being written', () => {
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDevotional: null,
+      currentDayData: null,
+      preparingFirstSeries: { seriesTitle: 'your devotional' },
+    });
+
+    expect(state).toEqual({
+      type: 'preparing',
+      progress: 0,
+      seriesTitle: 'your devotional',
+      dayNumber: 1,
+      onCreateNew: noop,
+    });
+  });
+
+  it('keeps the empty state when nothing is in the store and no first series is in flight', () => {
+    expect(
+      computeDevotionalState({ ...baseInput, currentDevotional: null, currentDayData: null }).type,
+    ).toBe('empty');
+    expect(
+      computeDevotionalState({
+        ...baseInput,
+        currentDevotional: null,
+        currentDayData: null,
+        preparingFirstSeries: null,
+      }).type,
+    ).toBe('empty');
+  });
+
+  it('ignores preparingFirstSeries once a devotional exists', () => {
+    const state = computeDevotionalState({
+      ...baseInput,
+      preparingFirstSeries: { seriesTitle: 'your devotional' },
+    });
+
+    expect(state.type).toBe('unread');
+  });
+});

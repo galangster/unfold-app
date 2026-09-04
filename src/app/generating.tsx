@@ -23,8 +23,22 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
-import { useUnfoldStore, type Devotional, type DevotionalDay } from '@/lib/store';
+import { useUnfoldStore, type DevotionalDay } from '@/lib/store';
 import { submitGenerationJob, pollJobStatus, retryJob, recoverCompletedGenerationResult, buildInitialArcUserContext } from '@/lib/generation-api';
+import {
+  clearInflightGenerationJob,
+  markInflightJobLeftForHome,
+  readInflightGenerationJob,
+  writeInflightGenerationJob,
+  GENERATING_SESSION_TITLE_PLACEHOLDER,
+} from '@/lib/inflight-generation-job';
+import {
+  INITIAL_ARC_INVALID_RESULT_MESSAGE,
+  INITIAL_ARC_MAX_POLL_DURATION_MS,
+  INITIAL_ARC_TIMEOUT_MESSAGE,
+  INITIAL_ARC_UNKNOWN_STATUS_MESSAGE,
+} from '@/lib/inflight-initial-arc-watch';
+import { applyInitialArcResult, requireCanonicalDevotionalId } from '@/lib/initial-arc-result';
 import {
   evaluateGenerationPoll,
   getNextPollDelayMs,
@@ -39,16 +53,8 @@ import {
 import { registerPushToken } from '@/lib/push-notifications';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
-import { mmkvStorage } from '@/lib/mmkv-storage';
 import { Typography } from '@/constants/typography';
 
-// MMKV key for persisting in-flight generation job across app kills
-const INFLIGHT_KEY = 'inflight-generation-job';
-// Maximum time to poll before giving up (10 minutes)
-const MAX_POLL_DURATION_MS = 10 * 60 * 1000;
-// Terminal-error copy for a completed-but-unopenable / unrecognized job.
-const INVALID_RESULT_MESSAGE = 'Your devotional finished, but we couldn’t open it. Please try again.';
-const UNKNOWN_STATUS_MESSAGE = 'We hit an unexpected problem finishing your devotional. Please try again.';
 // Grace period to wait for the persisted user to hydrate before erroring out
 // instead of sitting on an infinite spinner.
 const NO_USER_GRACE_MS = 5000;
@@ -76,14 +82,6 @@ const WAITING_MESSAGES = [
   'Crafting something\u00A0personal',
 ];
 
-function requireCanonicalDevotionalId(devotionalId?: string | null, context = 'generation completion'): string {
-  if (!devotionalId) {
-    throw new Error(`${context} did not return a canonical devotionalId`);
-  }
-
-  return devotionalId;
-}
-
 // Ripple animation
 const RIPPLE_DURATION = 2800;
 const RIPPLE_COUNT = 3;
@@ -110,12 +108,8 @@ export default function GeneratingScreen() {
   };
 
   const user = useUnfoldStore((s) => s.user);
-  const addDevotional = useUnfoldStore((s) => s.addDevotional);
-  const addUsedScriptures = useUnfoldStore((s) => s.addUsedScriptures);
-  const addGeneratedDay = useUnfoldStore((s) => s.addGeneratedDay);
   const startGenerationSession = useUnfoldStore((s) => s.startGenerationSession);
   const updateGenerationSessionProgress = useUnfoldStore((s) => s.updateGenerationSessionProgress);
-  const completeGenerationSession = useUnfoldStore((s) => s.completeGenerationSession);
   const failGenerationSession = useUnfoldStore((s) => s.failGenerationSession);
   const clearGenerationSession = useUnfoldStore((s) => s.clearGenerationSession);
 
@@ -133,6 +127,10 @@ export default function GeneratingScreen() {
   // instead of re-arming a second timer chain next to the current one.
   const pollRunRef = useRef(0);
   const jobSubmittedRef = useRef(false);
+  // Set by "Go home — we'll keep writing". A submission that resolves after
+  // the reader left persists its record already marked for Today and does not
+  // start a poll loop on a screen nobody is looking at.
+  const leftForHomeRef = useRef(false);
   // Consecutive unrecognized job statuses — bounded so we don't poll forever
   // against a status we don't understand.
   const unknownStatusCountRef = useRef(0);
@@ -355,59 +353,11 @@ export default function GeneratingScreen() {
     arc?: import('@/lib/store').SeriesArc;
     devotionalId: string;
   }) => {
-    const devotionalId = requireCanonicalDevotionalId(result.devotionalId);
-    const seriesTitle = result.seriesTitle ?? 'Your Devotional';
-    const totalDays = result.totalDays ?? devotionalLength;
-    const day1 = result.devotionalDay;
+    // Store, scripture bookkeeping, in-flight record and session are landed by
+    // the shared helper (Today lands the same job the same way after "Go home").
+    const { devotionalId, seriesTitle, day1 } = applyInitialArcResult(result, { user, devotionalLength });
 
-    // Check if this devotional already exists in the store (e.g., from a retry)
-    const existingDevotional = useUnfoldStore.getState().devotionals.find((d) => d.id === devotionalId);
-
-    if (existingDevotional) {
-      // Devotional shell already exists -- just add the day
-      addGeneratedDay(devotionalId, day1);
-    } else {
-      // Create the full devotional shell with Day 1
-      const newDevotional: Devotional = {
-        id: devotionalId,
-        title: seriesTitle,
-        totalDays,
-        currentDay: 1,
-        days: [day1],
-        createdAt: new Date().toISOString(),
-        seriesStartDate: new Date().toISOString(),
-        userContext: {
-          name: user?.name ?? '',
-          aboutMe: user?.aboutMe ?? '',
-          currentSituation: user?.currentSituation ?? '',
-          emotionalState: user?.emotionalState ?? '',
-        },
-        themeCategory: user?.selectedTheme,
-        devotionalType: user?.selectedType || 'personal',
-        studySubject: user?.selectedStudySubject,
-        generationMode: 'progressive',
-        seriesArc: result.arc,
-        progressiveMemory: { fullDays: [], summaries: [], narrative: null },
-      };
-      addDevotional(newDevotional);
-    }
-
-    // Track scripture usage
-    if (day1.scriptureReference) {
-      const book = day1.scriptureReference.split(/\s+\d/)[0].trim();
-      addUsedScriptures([{
-        reference: day1.scriptureReference,
-        book,
-        usedAt: new Date().toISOString(),
-        devotionalId,
-      }]);
-    }
-
-    // Clear inflight job from MMKV — generation succeeded
-    mmkvStorage.removeItem(INFLIGHT_KEY);
-
-    // Update session and UI state
-    completeGenerationSession({ title: seriesTitle });
+    // Update UI state
     setDevotionalTitle(seriesTitle);
     setCurrentSeriesTitle(seriesTitle);
     setPendingNotification({ title: seriesTitle });
@@ -421,7 +371,7 @@ export default function GeneratingScreen() {
       title: seriesTitle,
       dayTitle: day1.title,
     });
-  }, [user, devotionalLength, addDevotional, addGeneratedDay, addUsedScriptures, completeGenerationSession]);
+  }, [user, devotionalLength]);
 
   // ========== POLLING LOGIC ==========
 
@@ -436,7 +386,7 @@ export default function GeneratingScreen() {
     const failTerminal = (message: string, phase: string, cause?: unknown) => {
       pollingRef.current = false;
       logger.error(`[generating] ${phase}:`, message);
-      mmkvStorage.removeItem(INFLIGHT_KEY);
+      clearInflightGenerationJob();
       failGenerationSession(message);
       void logBugError('generation', cause instanceof Error ? cause : new Error(message), { jobId, phase });
       setIsGenerating(false);
@@ -448,11 +398,11 @@ export default function GeneratingScreen() {
 
     const poll = async () => {
       // Check max poll duration timeout
-      if (Date.now() - pollStartTime.current > MAX_POLL_DURATION_MS) {
+      if (Date.now() - pollStartTime.current > INITIAL_ARC_MAX_POLL_DURATION_MS) {
         pollingRef.current = false;
-        const timeoutMsg = 'Generation is taking longer than expected. Please try again.';
+        const timeoutMsg = INITIAL_ARC_TIMEOUT_MESSAGE;
         logger.warn('[generating] Poll timeout reached after 10 minutes');
-        mmkvStorage.removeItem(INFLIGHT_KEY);
+        clearInflightGenerationJob();
         failGenerationSession(timeoutMsg);
         setIsGenerating(false);
         setIsReconnecting(false);
@@ -487,14 +437,14 @@ export default function GeneratingScreen() {
           case 'invalid-result':
             // Complete-without-result OR an unreconcilable result: terminal, not
             // a re-poll loop.
-            failTerminal(INVALID_RESULT_MESSAGE, 'server-poll-invalid-result');
+            failTerminal(INITIAL_ARC_INVALID_RESULT_MESSAGE, 'server-poll-invalid-result');
             return;
 
           case 'failed': {
             pollingRef.current = false;
             const errorMsg = outcome.error;
             logger.error('[generating] Server job failed:', errorMsg);
-            mmkvStorage.removeItem(INFLIGHT_KEY);
+            clearInflightGenerationJob();
             failGenerationSession(errorMsg);
             void logBugError('generation', new Error(errorMsg), { jobId, phase: 'server-poll' });
             setIsGenerating(false);
@@ -506,7 +456,7 @@ export default function GeneratingScreen() {
           }
 
           case 'unknown-terminal':
-            failTerminal(UNKNOWN_STATUS_MESSAGE, 'server-poll-unknown-status');
+            failTerminal(INITIAL_ARC_UNKNOWN_STATUS_MESSAGE, 'server-poll-unknown-status');
             return;
 
           case 'waiting':
@@ -555,27 +505,21 @@ export default function GeneratingScreen() {
     if (jobSubmittedRef.current) return;
     jobSubmittedRef.current = true;
 
-    // Check MMKV for an inflight job from a previous session (app-kill recovery)
-    const raw = mmkvStorage.getItem(INFLIGHT_KEY) as string | null;
-    if (raw) {
-      try {
-        const inflight = JSON.parse(raw) as { jobId: string; devotionalId?: string; submittedAt: number };
-        // Only resume if not expired (15 min)
-        if (Date.now() - inflight.submittedAt < 15 * 60 * 1000) {
-          logger.log('[generating] Resuming inflight job from MMKV:', inflight.jobId);
-          if (inflight.devotionalId) {
-            startGenerationSession({ devotionalId: inflight.devotionalId, totalDays: user.devotionalLength });
-          }
-          setPendingJobId(inflight.jobId);
-          pollStartTime.current = inflight.submittedAt;
-          startPolling(inflight.jobId);
-          return;
-        }
-        // Expired — clear and submit fresh
-        mmkvStorage.removeItem(INFLIGHT_KEY);
-      } catch {
-        mmkvStorage.removeItem(INFLIGHT_KEY);
+    // Check MMKV for an inflight job from a previous session (app-kill
+    // recovery). A stale record is dropped by the read; a record the reader
+    // once left for Today resumes here just the same — this screen owns the
+    // wait whenever it is on screen.
+    const inflightRead = readInflightGenerationJob();
+    if (inflightRead.kind === 'active') {
+      const inflight = inflightRead.job;
+      logger.log('[generating] Resuming inflight job from MMKV:', inflight.jobId);
+      if (inflight.devotionalId) {
+        startGenerationSession({ devotionalId: inflight.devotionalId, totalDays: user.devotionalLength });
       }
+      setPendingJobId(inflight.jobId);
+      pollStartTime.current = inflight.submittedAt;
+      startPolling(inflight.jobId);
+      return;
     }
 
     const submitJob = async () => {
@@ -589,19 +533,28 @@ export default function GeneratingScreen() {
         });
 
         const devotionalId = requireCanonicalDevotionalId(submittedDevotionalId, 'initial devotional job submission');
-        startGenerationSession({ devotionalId, totalDays: user.devotionalLength });
 
-        logger.log('[generating] Job submitted:', jobId);
-        setPendingJobId(jobId);
-        setIsReconnecting(false);
-        updateGenerationSessionProgress({ title: 'Generating...' });
-
-        // Persist inflight job to MMKV for app-kill recovery
-        mmkvStorage.setItem(INFLIGHT_KEY, JSON.stringify({
+        // Persist inflight job to MMKV for app-kill recovery. Written before
+        // the session starts so Today, which re-reads the record when the
+        // session changes, never sees the session without the record.
+        writeInflightGenerationJob({
           jobId,
           devotionalId,
           submittedAt: Date.now(),
-        }));
+          ...(leftForHomeRef.current ? { leftForHome: true as const } : {}),
+        });
+        startGenerationSession({ devotionalId, totalDays: user.devotionalLength });
+        logger.log('[generating] Job submitted:', jobId);
+
+        if (leftForHomeRef.current) {
+          // The reader already went home; Today watches this job now.
+          logger.log('[generating] Job submitted after the reader went home; Today owns the watch');
+          return;
+        }
+
+        setPendingJobId(jobId);
+        setIsReconnecting(false);
+        updateGenerationSessionProgress({ title: GENERATING_SESSION_TITLE_PLACEHOLDER });
 
         // Reset poll start time and start polling
         pollStartTime.current = Date.now();
@@ -625,7 +578,6 @@ export default function GeneratingScreen() {
                 })
               : null;
             if (recovered) {
-              mmkvStorage.removeItem(INFLIGHT_KEY);
               handleGenerationComplete(recovered);
               return;
             }
@@ -633,13 +585,18 @@ export default function GeneratingScreen() {
             logger.warn('[generating] Existing-job recovery failed; will poll instead:', recoverErr);
           }
           // Not ready yet (or no known devotionalId) — poll the existing job.
-          setPendingJobId(existingJobId);
-          setIsReconnecting(false);
-          mmkvStorage.setItem(INFLIGHT_KEY, JSON.stringify({
+          writeInflightGenerationJob({
             jobId: existingJobId,
             devotionalId: sessionDevotionalId ?? undefined,
             submittedAt: Date.now(),
-          }));
+            ...(leftForHomeRef.current ? { leftForHome: true as const } : {}),
+          });
+          if (leftForHomeRef.current) {
+            logger.log('[generating] Existing job adopted after the reader went home; Today owns the watch');
+            return;
+          }
+          setPendingJobId(existingJobId);
+          setIsReconnecting(false);
           pollStartTime.current = Date.now();
           startPolling(existingJobId);
           return;
@@ -647,7 +604,7 @@ export default function GeneratingScreen() {
 
         const errorMessage = failure.message;
         logger.error('[generating] Job submission failed:', errorMessage);
-        mmkvStorage.removeItem(INFLIGHT_KEY);
+        clearInflightGenerationJob();
         failGenerationSession(errorMessage);
         void logBugError('generation', err, { jobType: 'initial_arc', phase: 'server-job-submission' });
         setIsGenerating(false);
@@ -706,11 +663,11 @@ export default function GeneratingScreen() {
         logger.log('[generating] Job retried:', jobId);
         setPendingJobId(jobId);
         // Update MMKV with new jobId
-        mmkvStorage.setItem(INFLIGHT_KEY, JSON.stringify({
+        writeInflightGenerationJob({
           jobId,
-          devotionalId: useUnfoldStore.getState().generationSession.devotionalId,
+          devotionalId: useUnfoldStore.getState().generationSession.devotionalId ?? undefined,
           submittedAt: Date.now(),
-        }));
+        });
         startPolling(jobId);
       } else {
         // No job ID -- resubmit from scratch
@@ -738,18 +695,18 @@ export default function GeneratingScreen() {
           logger.log('[generating] Re-submitted job:', jobId);
           setPendingJobId(jobId);
           // Persist inflight job to MMKV
-          mmkvStorage.setItem(INFLIGHT_KEY, JSON.stringify({
+          writeInflightGenerationJob({
             jobId,
             devotionalId,
             submittedAt: Date.now(),
-          }));
+          });
           startPolling(jobId);
         }
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       logger.error('[generating] Retry failed:', errorMessage);
-      mmkvStorage.removeItem(INFLIGHT_KEY);
+      clearInflightGenerationJob();
       failGenerationSession(errorMessage);
       setIsGenerating(false);
       setIsReconnecting(false);
@@ -767,7 +724,7 @@ export default function GeneratingScreen() {
       pollTimerRef.current = null;
     }
     pollingRef.current = false;
-    mmkvStorage.removeItem(INFLIGHT_KEY);
+    clearInflightGenerationJob();
     clearGenerationSession();
     setError(null);
     router.replace('/onboarding');
@@ -782,9 +739,26 @@ export default function GeneratingScreen() {
       pollTimerRef.current = null;
     }
     pollingRef.current = false;
-    mmkvStorage.removeItem(INFLIGHT_KEY);
+    clearInflightGenerationJob();
     clearGenerationSession();
     router.replace('/(tabs)/(today)');
+  };
+
+  // "Go home — we'll keep writing" (waiting state). The record stays, marked
+  // leftForHome, so the server job keeps running and Today shows the
+  // preparing card and watches it instead of bouncing back here. Nothing is
+  // awaited and no permission prompt sits on this path: the tap must always
+  // leave this screen.
+  const handleLeaveForHome = () => {
+    leftForHomeRef.current = true;
+    const { href, record } = markInflightJobLeftForHome({ notificationPermission, hasAskedPermission });
+    void logBugEvent('generation', 'generation-left-for-home', {
+      jobId: record?.jobId ?? pendingJobId,
+      notificationPermission,
+      hasAskedPermission,
+    });
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.replace(href);
   };
 
   // ========== RENDER: ERROR STATE ==========
@@ -1202,8 +1176,10 @@ export default function GeneratingScreen() {
           {/* ========== GO HOME \u2014 the waiting state must never be a dead end ========== */}
           {/* Dino (build 245): after "I'll wait" there was no way back. Leaving is
               fully safe \u2014 the job is persisted to MMKV and continues server-side;
-              Today shows the preparing card and the recovery ladder picks the
-              content up when it lands. */}
+              Today shows the preparing card and watches the job until it lands.
+              Jordan (1.1.0): the record is marked leftForHome on the way out,
+              otherwise Today read it as app-kill recovery and bounced straight
+              back here, which looked like a dead link. */}
           {isGenerating && !isComplete && (
             <Animated.View
               entering={entering(FadeIn.duration(600).delay(1200))}
@@ -1211,10 +1187,7 @@ export default function GeneratingScreen() {
             >
               <TouchableOpacity
                 activeOpacity={0.7}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  router.replace('/(tabs)/(today)');
-                }}
+                onPress={handleLeaveForHome}
                 accessibilityRole="button"
                 accessibilityLabel="Go home while your devotional is prepared"
                 hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}

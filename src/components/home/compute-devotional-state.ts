@@ -87,6 +87,12 @@ export interface ComputeInput {
   dayLabel: DayLabel;
   isJourneyComplete: boolean;
   isPreparing: boolean;
+  /**
+   * The first series is still being written on the server and nothing is in
+   * the store yet (the reader left /generating for Today). Renders the
+   * preparing card in place of the new-user empty state.
+   */
+  preparingFirstSeries?: { seriesTitle: string } | null;
   premiumPolicy: PremiumAccessPolicy;
   daysCompleted: number;
   totalDays: number;
@@ -110,6 +116,7 @@ export interface ComputeInput {
  * Compute the DevotionalCard state from app data.
  *
  * Priority order (first match wins):
+ * 1. No devotional, first series in flight  -> preparing (day 1)
  * 1. No devotional                          -> empty
  * 2. !hasReadToday && (preparing/no data)   -> preparing
  * 3. No day data (fallback)                 -> preparing
@@ -127,6 +134,7 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
     dayLabel,
     isJourneyComplete,
     isPreparing,
+    preparingFirstSeries = null,
     premiumPolicy,
     daysCompleted,
     totalDays,
@@ -144,8 +152,18 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
     onSaveFreeWrite = () => {},
   } = input;
 
-  // 1. No devotional at all
+  // 1. No devotional at all. While the first series is still being written
+  // the card must say so; the empty state would invite a second series.
   if (!currentDevotional) {
+    if (preparingFirstSeries) {
+      return {
+        type: 'preparing',
+        progress: 0,
+        seriesTitle: preparingFirstSeries.seriesTitle,
+        dayNumber: 1,
+        onCreateNew,
+      };
+    }
     return { type: 'empty', onCreateNew };
   }
 
