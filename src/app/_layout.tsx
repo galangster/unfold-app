@@ -31,6 +31,7 @@ import { migrateGenerationDataToServer } from '@/lib/generation-migration';
 import { endOrphanedReadingSessions } from '@/lib/widget-bridge';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { flushLastFatalBreadcrumb, installGlobalErrorHandler } from '@/lib/global-error-handler';
+import { initSentry } from '@/lib/sentry';
 import { armHealthyBootTimer } from '@/lib/crash-marker';
 import { AudioPlayerOverlay } from '@/components/AudioPlayerOverlay';
 import { PrivacyShield } from '@/components/PrivacyShield';
@@ -54,6 +55,10 @@ RNTextInput.defaultProps = { ...(RNTextInput.defaultProps ?? {}), maxFontSizeMul
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
+// Crash/error reporting comes up FIRST so Sentry is already listening when the
+// global handler below installs itself and starts routing fatals into it. A
+// no-op until EXPO_PUBLIC_SENTRY_DSN exists, and never under Jest.
+initSentry();
 // Fatal JS errors never reach the error boundary. Record them (bug log + boot
 // crash-loop marker) before RN's own handler runs; no-op on web/jest where
 // ErrorUtils is absent. A launch that stays up for the healthy window without

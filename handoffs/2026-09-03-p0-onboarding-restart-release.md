@@ -56,6 +56,31 @@ Simulator walkthrough with hard process kills at the name step and at the
 paywall: both resume to the right step with answers intact and no welcome
 screen. Details in the plan.
 
+## Observability (added 2026-09-03, branch `feat/sentry-and-onboarding-telemetry`)
+
+- Sentry project `unfold-mobile` (React Native) in the `the-creative-company`
+  org, the same org as the backend. DSN in `eas.json` for production,
+  qa-testflight and preview; development deliberately has none.
+- DSN verified end to end: a test event posted to the ingest endpoint returned
+  200 and appeared in the project. Safe to delete that issue.
+- Source map and debug-symbol upload wired into the committed Xcode project by
+  driving Sentry's own plugin mutation against it (prebuild never runs here).
+  `ios/sentry.properties` and `android/sentry.properties` carry org and project
+  only, no token. UNVERIFIED until the next EAS build runs those phases; they
+  fail loudly in the build log if wrong.
+- `SENTRY_AUTH_TOKEN` is an EAS **secret** on production and preview. The first
+  token minted was read into the session transcript because the in-app browser
+  blocks clipboard, downloads and fetch-to-localhost; it was revoked the same
+  session. The replacement (Sentry org token id 1099136) was handed to a
+  one-shot local listener by a top-level form POST, which the page's CSP does
+  not restrict, so its value never entered the transcript.
+- The funnel signal that actually catches the P0 class: `onboarding_abandoned`
+  fires once per draft when a draft older than six hours is found on launch,
+  carrying the step id and a bucketed age. A cluster on one step is the alarm.
+- Sentry's setup wizard was NOT run and must not be: it patches the SDK init
+  and would overwrite the privacy scrubbing and the disabled native
+  breadcrumbs. Tracing must stay off (transactions bypass `beforeSend`).
+
 ## Open items
 
 1. ~~Release 1.1.1 when approved~~ — not needed, it releases itself on

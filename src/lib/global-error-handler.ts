@@ -19,9 +19,14 @@ export function resolveErrorUtils(): ErrorUtilsShape | null {
 
 /**
  * Wraps the global JS error handler so fatal errors — which never reach a
- * React error boundary — are written to the bug log and counted by the boot
- * crash-loop marker before the previous handler (RN's red box, native crash
- * reporting) runs. Idempotent. Returns false when there is no ErrorUtils.
+ * React error boundary — are written to the bug log, sent to the crash
+ * reporter and counted by the boot crash-loop marker before the previous
+ * handler (RN's red box, native crash reporting) runs. Idempotent. Returns
+ * false when there is no ErrorUtils.
+ *
+ * `flushLastFatalBreadcrumb` deliberately does NOT capture: it replays a
+ * breadcrumb from a previous launch that this handler already reported, so
+ * capturing there would file the same crash twice.
  *
  * The bug-log write is asynchronous (AsyncStorage behind an await) and the
  * previous handler kills the process on a production fatal, so it normally
@@ -44,7 +49,14 @@ export function installGlobalErrorHandler(
         recordFatalBreadcrumb(error);
         recordCrash();
       }
-      void logBugError('global-error', error, { isFatal: Boolean(isFatal) });
+      // One sink. `logBugError` writes the local trail and reports; capturing
+      // separately would file each fatal twice, under two different sources.
+      // The reporter gets the message and the fatal flag only — never anything
+      // the person wrote.
+      void logBugError('global-error', error, { isFatal: Boolean(isFatal) }, {
+        isFatal: Boolean(isFatal),
+        mechanism: 'fatal',
+      });
     } catch {
       // Recording must never mask the original error.
     }
@@ -64,11 +76,16 @@ export function flushLastFatalBreadcrumb(): boolean {
   try {
     const breadcrumb = takeLastFatalBreadcrumb();
     if (!breadcrumb) return false;
-    void logBugError('global-error-fatal-previous-launch', breadcrumb.message, {
-      isFatal: true,
-      crashedAt: breadcrumb.ts,
-      stack: breadcrumb.stack,
-    });
+    // Local trail only. This replays a fatal from a PREVIOUS launch, whose own
+    // bug-log write died with the process; the crash itself was already
+    // reported natively as it happened, so reporting here would file every
+    // crash a second time on the next launch.
+    void logBugError(
+      'global-error-fatal-previous-launch',
+      breadcrumb.message,
+      { isFatal: true, crashedAt: breadcrumb.ts, stack: breadcrumb.stack },
+      false,
+    );
     return true;
   } catch {
     return false;

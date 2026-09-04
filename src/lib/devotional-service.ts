@@ -1881,10 +1881,9 @@ export async function generateDevotional(
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
+      // reportError writes the local bug log through logBugError already; the
+      // second call filed the same failure twice under a different source.
       reportError('devotional-generation', error, { phase: 'full-generation' });
-      void logBugError('devotional-service', error, {
-        phase: 'full-generation',
-      });
 
       if (errorMessage.includes('Network request failed') || errorMessage.includes('fetch')) {
         throw new Error('Unable to connect. Please check your internet connection and try again.');
@@ -2014,11 +2013,8 @@ export async function continueGeneratingDays(
 
       return allDays;
     } catch (error) {
+      // Single entry — see the note on the full-generation path above.
       reportError('devotional-continuation', error, {
-        devotionalId: devotional.id,
-        phase: 'continuation',
-      });
-      void logBugError('devotional-service', error, {
         devotionalId: devotional.id,
         phase: 'continuation',
       });

@@ -5,6 +5,7 @@ import Constants from 'expo-constants';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
 import { logger } from './logger';
+import { addAppBreadcrumb, captureAppError } from './sentry';
 
 import { useUnfoldStore } from './store';
 
@@ -125,12 +126,30 @@ export async function getBugLogEntries(): Promise<BugLogEntry[]> {
   return readLogEntries();
 }
 
+/**
+ * Bug-log payloads carry user-derived text: a devotional title is generated
+ * from what someone wrote about their own life, and `dayTitle` with it. Only
+ * the shape of a payload is safe to leave the device, so every value is
+ * dropped and the key names are kept as the breadcrumb's signal.
+ */
+function describePayloadShape(data: unknown): { dataKeys: string } | undefined {
+  if (!data || typeof data !== 'object') return undefined;
+  const keys = Array.isArray(data) ? [] : Object.keys(data as Record<string, unknown>);
+  return keys.length > 0 ? { dataKeys: keys.join(',') } : undefined;
+}
+
 export function logBugEvent(
   category: string,
   message: string,
   data?: unknown,
   level: BugLogLevel = 'info'
 ): Promise<void> {
+  // Events are context, not failures — they become breadcrumbs attached to
+  // whatever error is captured later. Messages are developer-authored
+  // constants at every call site; payload values are not, so only their key
+  // names travel.
+  addAppBreadcrumb(category, message, { level, ...describePayloadShape(data) });
+
   writeQueue = writeQueue.then(async () => {
     const existing = await readLogEntries();
     const next: BugLogEntry = {
@@ -149,11 +168,50 @@ export function logBugEvent(
   return writeQueue;
 }
 
-export function logBugError(category: string, error: unknown, data?: unknown): Promise<void> {
+/**
+ * Writes an error to the local bug log AND reports it.
+ *
+ * Three paths legitimately reach one failure twice: `reportError` writes its
+ * local trail through this function after capturing; `devotional-service`
+ * calls both back to back with the same error; and the error boundary and the
+ * fatal handler capture explicitly before writing here. Rather than silence
+ * this layer — which would leave direct callers such as the store's
+ * rehydration and validation failures reporting as breadcrumbs only, and a
+ * breadcrumb is invisible unless a later event carries it — the echo is
+ * collapsed by making this the only place that reports: `reportError`, the
+ * fatal handler and the error boundary all route through here rather than
+ * capturing alongside it.
+ *
+ * `data` is NOT forwarded. Call sites pass user-derived text through it
+ * (`generating.tsx` sends a series title), so only its key names travel.
+ */
+export function logBugError(
+  category: string,
+  error: unknown,
+  data?: unknown,
+  reportExtra?: Record<string, string | number | boolean> | false,
+): Promise<void> {
   const payload = {
     error: serializeData(error),
     ...(data !== undefined ? { data: serializeData(data) } : {}),
   };
+
+  // `false` means the caller has a specific reason not to report — today only
+  // the replay of a previous launch's fatal, which the native SDK already filed
+  // at the moment of the crash. Reporting it again would duplicate every crash
+  // on the following launch.
+  if (reportExtra !== false) {
+    captureAppError(
+      category,
+      error instanceof Error ? error : new Error(String(error)),
+      // `data` is never forwarded: call sites put user-authored text in it (a
+      // series title, a devotional day title). `reportExtra` is the caller's
+      // vouched, primitive-only payload, and the scrubber still gates it.
+      reportExtra ?? (data && typeof data === 'object'
+        ? { dataKeys: Object.keys(data as object).join(',') }
+        : undefined),
+    );
+  }
 
   return logBugEvent(category, 'error', payload, 'error');
 }

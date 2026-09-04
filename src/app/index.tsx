@@ -24,6 +24,7 @@ import { Radius } from '@/constants/radius';
 import { Duration } from '@/constants/animations';
 import { useUnfoldStore } from '@/lib/store';
 import { getOnboardingDraft } from '@/lib/onboarding-draft-store';
+import { reportAbandonedOnboarding } from '@/lib/onboarding-telemetry';
 import { getDeviceId } from '@/lib/mmkv-storage';
 import { useTheme } from '@/lib/theme';
 import { logger } from '@/lib/logger';
@@ -187,13 +188,28 @@ export default function WelcomeScreen() {
   // typed again, answers gone. A saved draft means they are returning, not
   // arriving: send them straight back into the flow. Read once via a lazy
   // initializer so getDeviceId() isn't hit on every render.
-  const [hasOnboardingDraft] = useState(() => {
+  const [onboardingDraft] = useState(() => {
     // Only someone mid-onboarding can have a draft. Skipping the read for a
     // completed user keeps a Keychain read, an MMKV read and a JSON.parse off
     // the blocking path of every ordinary cold start.
-    if (user?.hasCompletedOnboarding) return false;
-    return !!getOnboardingDraft({ deviceId: getDeviceId() });
+    if (user?.hasCompletedOnboarding) return null;
+    const draft = getOnboardingDraft({ deviceId: getDeviceId() });
+    // Keep the two fields this screen uses, not the record: `data` holds every
+    // answer the person typed, and there is no reason for a second copy of it
+    // to sit in component state for the life of the screen.
+    return draft ? { stepId: draft.stepId, savedAt: draft.savedAt } : null;
   });
+  const hasOnboardingDraft = !!onboardingDraft;
+
+  // ONB-TELEMETRY-1: a draft still sitting here hours later is someone who
+  // started setting themselves up and never came back. Nothing threw, so no
+  // crash reporter would ever see it — this launch-time read is the only place
+  // the app can notice. Reuses the draft already read above rather than opening
+  // MMKV a second time, and reports at most once per draft.
+  useEffect(() => {
+    if (!onboardingDraft) return;
+    reportAbandonedOnboarding(onboardingDraft.stepId, Date.now() - onboardingDraft.savedAt);
+  }, [onboardingDraft]);
 
   // Three phases: welcome → cutscene → features (all on same background)
   const [phase, setPhase] = useState<'welcome' | 'cutscene' | 'features'>('welcome');

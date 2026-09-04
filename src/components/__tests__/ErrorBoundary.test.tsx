@@ -14,9 +14,18 @@ const mockGetCount = jest.fn(() => 0);
 const mockRecordCrash = jest.fn(() => 1);
 const mockClearCount = jest.fn();
 const mockReset = jest.fn(() => Promise.resolve());
+const mockCaptureAppError = jest.fn((..._args: unknown[]) => undefined);
+const mockAddAppBreadcrumb = jest.fn((..._args: unknown[]) => undefined);
 
 jest.mock('@/lib/bug-logger', () => ({
   logBugError: (...args: unknown[]) => mockLogBugError(...args),
+}));
+
+jest.mock('@/lib/sentry', () => ({
+  captureAppError: (...args: unknown[]) => mockCaptureAppError(...args),
+  addAppBreadcrumb: (...args: unknown[]) => mockAddAppBreadcrumb(...args),
+  captureAppEvent: jest.fn(),
+  isSentryEnabled: () => false,
 }));
 
 jest.mock('@/lib/crash-marker', () => ({
@@ -98,6 +107,7 @@ describe('ErrorBoundary', () => {
       'error-boundary',
       expect.any(Error),
       expect.objectContaining({ timestamp: expect.any(String) }),
+      expect.objectContaining({ mechanism: 'error-boundary' }),
     );
     expect(mockRecordCrash).toHaveBeenCalledTimes(1);
 
@@ -106,6 +116,87 @@ describe('ErrorBoundary', () => {
 
     expect(visibleText(tree.root)).toContain('recovered');
     expect(has(tree.root, 'error-boundary-retry')).toBe(false);
+  });
+
+  it('reports the caught error with its component stack, and still writes the local bug log', () => {
+    renderBoundary();
+
+    // One sink: the boundary used to capture on its own AND write the bug log,
+    // and the bug log reports too, so every caught render error was filed
+    // twice. `bug-logger-sentry.test.ts` holds the other half — one sink call
+    // reaches the reporter exactly once, forwarding this vouched payload.
+    expect(mockLogBugError).toHaveBeenCalledTimes(1);
+    expect(mockCaptureAppError).not.toHaveBeenCalled();
+
+    const [source, reported, localData, reportExtra] = mockLogBugError.mock.calls[0] as [
+      string,
+      Error,
+      Record<string, unknown>,
+      Record<string, string>,
+    ];
+    expect(source).toBe('error-boundary');
+    expect(reported).toBeInstanceOf(Error);
+    expect(reported.message).toBe('boom');
+    // The component stack is code, not content, so it is what the boundary
+    // vouches for — and it has to be the real stack, not an empty string.
+    expect(Object.keys(reportExtra).sort()).toEqual(['componentStack', 'mechanism']);
+    expect(reportExtra.componentStack).toContain('Bomb');
+    expect(reportExtra.mechanism).toBe('error-boundary');
+    // The local trail has to survive alongside the report.
+    expect(localData).toMatchObject({
+      componentStack: expect.any(String),
+      timestamp: expect.any(String),
+    });
+  });
+
+  it('breadcrumbs a Try Again press in the error fallback', () => {
+    const tree = renderBoundary();
+    explode = false;
+
+    press(tree.root, 'error-boundary-retry');
+
+    expect(mockAddAppBreadcrumb).toHaveBeenCalledWith('error-boundary', 'try-again-pressed', {
+      retryCount: 0,
+      mode: 'error',
+    });
+  });
+
+  it('breadcrumbs a Try Again press on the recovery screen', () => {
+    mockRecordCrash.mockReturnValue(3);
+    const tree = renderBoundary();
+    explode = false;
+
+    press(tree.root, 'error-boundary-recovery-retry');
+
+    expect(mockAddAppBreadcrumb).toHaveBeenCalledWith('error-boundary', 'try-again-pressed', {
+      retryCount: 0,
+      mode: 'recovery',
+    });
+  });
+
+  it('breadcrumbs a confirmed local data reset, once per confirmation', async () => {
+    mockRecordCrash.mockReturnValue(3);
+    const tree = renderBoundary();
+
+    press(tree.root, 'error-boundary-reset');
+    expect(mockAddAppBreadcrumb).not.toHaveBeenCalledWith(
+      'error-boundary',
+      'local-reset-confirmed',
+      expect.anything(),
+    );
+
+    explode = false;
+    const [confirm] = pressables(tree.root, 'error-boundary-reset-confirm');
+    await act(async () => {
+      confirm.props.onPress();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockAddAppBreadcrumb).toHaveBeenCalledWith('error-boundary', 'local-reset-confirmed', {
+      retryCount: 0,
+    });
+    expect(mockReset).toHaveBeenCalledTimes(1);
   });
 
   it('offers Go to Today only after two resets ended in another catch, and calls onNavigateHome', () => {

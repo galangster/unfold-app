@@ -353,6 +353,45 @@ land in a P0 that must ship.
    behaviour. Splitting the flow's logic out of the 3800-line component is the
    real fix.
 
+### Follow-ups from the observability work (2026-09-03)
+
+Recorded, not done. Sentry and the onboarding funnel signal are on
+`feat/sentry-and-onboarding-telemetry`.
+
+1. **One source for onboarding step ids.** There are now seven parallel lists:
+   `ALL_STEPS` and the `StepId` union in the screen, four id sets in
+   `onboarding-step-helpers.ts`, and the telemetry allowlist. A native-free
+   `src/lib/onboarding-steps.ts` that the screen and both libs import would
+   collapse them. Guarded for now by a test that parses the screen's own block,
+   so a renamed step fails CI rather than silently bucketing every abandonment
+   as `unknown`.
+2. **A shared MMKV record store.** Three single-key stores now repeat the same
+   try/catch, TTL and swallow. The reusable core is a thin `safeGet`/`safeSet`/
+   `safeRemove`, repeated in nine lib files.
+3. **The dead analytics class is a decoy.** `src/lib/analytics.ts` still imports
+   `mockFirebaseAnalytics`, and it already has an `ONBOARDING_STARTED` and a
+   `trackOnboardingStep`, named exactly what the next engineer will reach for,
+   and it silently swallows. Point `AnalyticsService.logEvent` at
+   `captureAppEvent` and delete the duplicate constants. Small, and it removes a
+   trap. Note that only one component calls `AnalyticsEvents` today, so this
+   lights up four events, not the app.
+4. **Generalise stale-draft reporting** when a second flow needs it. The
+   mechanism is not onboarding-specific; devotional generation has the same
+   shape. Do it at the second caller, not before.
+5. **A `bootstrap.ts` with an explicit ordered startup.** `initSentry()` sits at
+   module scope in the root layout, but import hoisting already ran
+   `mmkv-storage` and `revenuecatClient` (which configures itself at module
+   scope) before it. Sentry is not listening for import-time failures in those.
+6. **Source-scanning tests.** Several onboarding tests assert against the
+   screen's source text because the component is too large to render. They break
+   on reformatting and would pass on wrong behaviour. Splitting the flow's logic
+   out of the 3800-line component is the real fix.
+
+Not deferred, decided: the backend's `hashUidForTelemetry` and the mobile hash
+must stay byte-identical. There is no shared package between `app/mobile` and
+`backend`, so the duplication is accepted; the mobile side names the constant
+and cross-references the backend, and the backend should gain the same comment.
+
 ## 4. Release
 
 - 1.1.0 (253) finished on EAS at 03:57 UTC today and an iOS submission

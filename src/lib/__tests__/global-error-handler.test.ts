@@ -1,6 +1,7 @@
 import type { ErrorUtils } from 'react-native';
 
 const mockLogBugError = jest.fn((..._args: unknown[]) => Promise.resolve());
+const mockCaptureAppError = jest.fn((..._args: unknown[]) => undefined);
 const mockRecordCrash = jest.fn(() => 1);
 const mockRecordFatalBreadcrumb = jest.fn((..._args: unknown[]) => undefined);
 const mockTakeLastFatalBreadcrumb = jest.fn<
@@ -10,6 +11,13 @@ const mockTakeLastFatalBreadcrumb = jest.fn<
 
 jest.mock('@/lib/bug-logger', () => ({
   logBugError: (...args: unknown[]) => mockLogBugError(...args),
+}));
+
+jest.mock('@/lib/sentry', () => ({
+  captureAppError: (...args: unknown[]) => mockCaptureAppError(...args),
+  addAppBreadcrumb: jest.fn(),
+  captureAppEvent: jest.fn(),
+  isSentryEnabled: () => false,
 }));
 
 jest.mock('@/lib/crash-marker', () => ({
@@ -57,7 +65,12 @@ describe('installGlobalErrorHandler', () => {
     expect(installGlobalErrorHandler(fake.utils)).toBe(true);
     fake.invoke(error, true);
 
-    expect(mockLogBugError).toHaveBeenCalledWith('global-error', error, { isFatal: true });
+    expect(mockLogBugError).toHaveBeenCalledWith(
+      'global-error',
+      error,
+      { isFatal: true },
+      { isFatal: true, mechanism: 'fatal' },
+    );
     expect(mockRecordCrash).toHaveBeenCalledTimes(1);
     expect(fake.previous).toHaveBeenCalledWith(error, true);
   });
@@ -100,9 +113,79 @@ describe('installGlobalErrorHandler', () => {
     installGlobalErrorHandler(fake.utils);
     fake.invoke(error, false);
 
-    expect(mockLogBugError).toHaveBeenCalledWith('global-error', error, { isFatal: false });
+    expect(mockLogBugError).toHaveBeenCalledWith(
+      'global-error',
+      error,
+      { isFatal: false },
+      { isFatal: false, mechanism: 'fatal' },
+    );
     expect(mockRecordCrash).not.toHaveBeenCalled();
     expect(fake.previous).toHaveBeenCalledWith(error, false);
+  });
+
+  it('reports a fatal once with the fatal flag, and still counts the boot-crash streak', () => {
+    const fake = fakeErrorUtils();
+    const error = new Error('fatal');
+
+    installGlobalErrorHandler(fake.utils);
+    fake.invoke(error, true);
+
+    // One sink, one report. This handler used to capture on its own AND write
+    // the bug log, and the bug log reports too, so every fatal was filed twice
+    // under two different sources ('fatal' and 'global-error'). The vouched
+    // payload carries the fatal flag; `bug-logger-sentry.test.ts` asserts that
+    // one sink call reaches the reporter exactly once, over this very path.
+    expect(mockLogBugError).toHaveBeenCalledTimes(1);
+    expect(mockLogBugError).toHaveBeenCalledWith(
+      'global-error',
+      error,
+      { isFatal: true },
+      { isFatal: true, mechanism: 'fatal' },
+    );
+    expect(mockCaptureAppError).not.toHaveBeenCalled();
+    // The streak is what flips the boundary into recovery mode. Reporting
+    // must not cost the app that, and must not double-count it either.
+    expect(mockRecordFatalBreadcrumb).toHaveBeenCalledWith(error);
+    expect(mockRecordCrash).toHaveBeenCalledTimes(1);
+    expect(fake.previous).toHaveBeenCalledWith(error, true);
+  });
+
+  it('reports a non-fatal once with the flag cleared and no crash-marker write', () => {
+    const fake = fakeErrorUtils();
+    const error = new Error('soft');
+
+    installGlobalErrorHandler(fake.utils);
+    fake.invoke(error, false);
+
+    expect(mockLogBugError).toHaveBeenCalledTimes(1);
+    expect(mockLogBugError).toHaveBeenCalledWith(
+      'global-error',
+      error,
+      { isFatal: false },
+      { isFatal: false, mechanism: 'fatal' },
+    );
+    expect(mockCaptureAppError).not.toHaveBeenCalled();
+    expect(mockRecordCrash).not.toHaveBeenCalled();
+  });
+
+  it('hands a thrown non-Error to the sink, which wraps it before reporting', () => {
+    const fake = fakeErrorUtils();
+
+    installGlobalErrorHandler(fake.utils);
+    fake.invoke('string boom', true);
+
+    const [source, thrown, , reportExtra] = mockLogBugError.mock.calls[0] as [
+      string,
+      unknown,
+      Record<string, unknown>,
+      Record<string, unknown>,
+    ];
+    expect(source).toBe('global-error');
+    expect(thrown).toBe('string boom');
+    expect(reportExtra).toEqual({ isFatal: true, mechanism: 'fatal' });
+    // `logBugError` does the wrapping for every caller, so the reporter always
+    // receives an Error. `bug-logger-sentry.test.ts` asserts that over this
+    // path, with the real sink behind the handler.
   });
 
   it('installs once per ErrorUtils', () => {
@@ -154,7 +237,23 @@ describe('flushLastFatalBreadcrumb', () => {
         crashedAt: '2026-09-03T10:00:00.000Z',
         stack: 'Error: fatal boom\n    at boot (app.js:1)',
       },
+      // Explicitly not reported: the crash was already filed natively.
+      false,
     );
+  });
+
+  it('adds no capture of its own when replaying the previous launch', () => {
+    mockTakeLastFatalBreadcrumb.mockReturnValueOnce({
+      message: 'Error: fatal boom',
+      stack: 'Error: fatal boom\n    at boot (app.js:1)',
+      ts: '2026-09-03T10:00:00.000Z',
+    });
+
+    expect(flushLastFatalBreadcrumb()).toBe(true);
+    // One entry through the one sink and nothing else: this path never
+    // captures separately, exactly like the live handler above.
+    expect(mockLogBugError).toHaveBeenCalledTimes(1);
+    expect(mockCaptureAppError).not.toHaveBeenCalled();
   });
 
   it('is a no-op on a launch that follows no fatal', () => {
