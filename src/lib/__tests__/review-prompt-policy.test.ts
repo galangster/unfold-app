@@ -33,6 +33,10 @@ describe('review prompt call-site contract', () => {
     path.join(sourceRoot, 'components/onboarding/OnboardingCelebration.tsx'),
     'utf-8',
   );
+  const onboardingSource = fs.readFileSync(
+    path.join(sourceRoot, 'app/onboarding.tsx'),
+    'utf-8',
+  );
 
   it('keeps native review calls behind the shared once-per-version helper', () => {
     expect(reviewPromptSource).toContain("import * as StoreReview from 'expo-store-review'");
@@ -40,6 +44,7 @@ describe('review prompt call-site contract', () => {
     expect(reviewPromptSource).toContain('REVIEW_PROMPT_VERSION_STORAGE_KEY');
     expect(todaySource).not.toContain("expo-store-review");
     expect(onboardingCelebrationSource).not.toContain("expo-store-review");
+    expect(onboardingSource).not.toContain("expo-store-review");
   });
 
   it('routes the Today prompt through the shared helper', () => {
@@ -49,12 +54,20 @@ describe('review prompt call-site contract', () => {
     expect(todaySource).toContain('await requestReviewOncePerVersion()');
   });
 
-  it('never asks for a review during onboarding', () => {
-    // The celebration used to fire the native rating sheet as it was dismissed,
-    // landing it over the next onboarding step minutes into a first session.
-    // Apple's HIG advises against prompting during onboarding or mid-task, and
-    // it spends one of three yearly requests on the least-invested users.
-    // Today remains the only call site.
+  it('asks once right after the onboarding reading is completed, not on the celebration', () => {
+    // Ruled by Nick 2026-09-04: the rating sheet lands the moment the reader
+    // completes their first devotional inside onboarding, over the celebration.
+    // The celebration itself stays silent (its dismiss used to fire the sheet
+    // over the next step), and the call goes through the once-per-version helper.
+    expect(onboardingSource).toContain(
+      "import { requestReviewOncePerVersion } from '@/lib/review-prompt';",
+    );
+    const readStep = onboardingSource.slice(
+      onboardingSource.indexOf('<ReadDevotionalStep'),
+      onboardingSource.indexOf('<OnboardingCelebration'),
+    );
+    expect(readStep).toContain('advanceToNextStep();');
+    expect(readStep).toContain('void requestReviewOncePerVersion();');
     expect(onboardingCelebrationSource).not.toContain('requestReviewOncePerVersion');
     expect(onboardingCelebrationSource).not.toContain('@/lib/review-prompt');
   });
