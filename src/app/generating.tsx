@@ -34,6 +34,7 @@ import {
   resolveGenerationRetryAction,
   resolveGenerationSubmitFailure,
   resolveGoHomeCleanup,
+  resolveRetryFailureCleanup,
   shiftPollStart,
   MAX_CONSECUTIVE_POLL_NETWORK_ERRORS,
   type GenerationDeadlineDecision,
@@ -819,7 +820,9 @@ export default function GeneratingScreen() {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       logger.error('[generating] Retry failed:', errorMessage);
-      mmkvStorage.removeItem(INFLIGHT_KEY);
+      // A failed retry request is not a verdict on the job: keep the record
+      // for a known job so Today can resume it; clear it only with no job.
+      if (resolveRetryFailureCleanup(action) === 'clear') mmkvStorage.removeItem(INFLIGHT_KEY);
       failGenerationSession(errorMessage);
       setIsGenerating(false);
       setIsReconnecting(false);

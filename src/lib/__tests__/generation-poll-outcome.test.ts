@@ -20,6 +20,7 @@ import {
   resolveGenerationSubmitFailure,
   resolveGoHomeCleanup,
   resolveInflightResume,
+  resolveRetryFailureCleanup,
   shiftPollStart,
   INFLIGHT_MAX_AGE_MS,
   LONG_RUNNING_AFTER_MS,
@@ -314,6 +315,26 @@ describe('resolveGoHomeCleanup — leaving must not orphan a live job', () => {
   it('keeps the inflight record while the job may still be alive', () => {
     for (const observedState of ['unobserved', 'alive'] as const) {
       expect(resolveGoHomeCleanup({ pendingJobId: 'job-1', observedState })).toBe('keep-inflight');
+    }
+  });
+});
+
+describe('resolveRetryFailureCleanup — a failed retry request is not a verdict', () => {
+  it('keeps the inflight record when the retry targeted a known job', () => {
+    expect(resolveRetryFailureCleanup({ kind: 'resume-poll', jobId: 'job-1' })).toBe('keep-inflight');
+    expect(resolveRetryFailureCleanup({ kind: 'retry-existing', jobId: 'job-1' })).toBe('keep-inflight');
+  });
+
+  it('clears the record when there was no job to resume', () => {
+    expect(resolveRetryFailureCleanup({ kind: 'resubmit' })).toBe('clear');
+  });
+
+  it('keeps the record for a known job whatever the server last said about it', () => {
+    // POST /retry failing client-side leaves the job in its server state; Today
+    // asks the server (resolveInflightResume) and discards a failed record itself.
+    for (const observedState of ['unobserved', 'alive', 'failed', 'invalid-result', 'unknown-terminal', 'complete'] as const) {
+      const action = resolveGenerationRetryAction({ pendingJobId: 'job-1', observedState });
+      expect(resolveRetryFailureCleanup(action)).toBe('keep-inflight');
     }
   });
 });

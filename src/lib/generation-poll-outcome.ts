@@ -255,6 +255,18 @@ export function resolveGoHomeCleanup(input: {
     : 'clear';
 }
 
+/**
+ * "Try again" threw before the server gave a verdict: the /retry or submit
+ * request failed client-side (network, 4xx). That is not a verdict on the job.
+ * With a known job the inflight record survives — the job's server state is
+ * unchanged, and Today reconciles the record against the server through
+ * `resolveInflightResume`. With no job there is nothing to resume, so the
+ * record is cleared.
+ */
+export function resolveRetryFailureCleanup(action: GenerationRetryAction): 'clear' | 'keep-inflight' {
+  return action.kind === 'resubmit' ? 'clear' : 'keep-inflight';
+}
+
 // ── Inflight record resume (Today) ────────────────────────────────────────
 
 export type InflightResumeDecision = 'resume' | 'discard' | 'keep';
