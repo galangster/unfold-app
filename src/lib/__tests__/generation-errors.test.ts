@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import {
   isTransientGenerationError,
   toFriendlyOnboardingGenerationError,
@@ -58,6 +60,31 @@ describe('generation error helpers', () => {
         );
       },
     );
+
+    it('names the shaping problem for the server JSON-parse failure (prod job 7e8b59bc, 2026-09-04)', () => {
+      const shaping = 'We couldn’t finish shaping your series. Try again, or start over with a shorter plan.';
+      expect(
+        toFriendlyOnboardingGenerationError(
+          "Arc generation: JSON parse failed -- Expected ',' or ']' after array element in JSON at position 5011",
+        ),
+      ).toBe(shaping);
+      expect(toFriendlyOnboardingGenerationError('Arc generation returned no valid JSON')).toBe(shaping);
+    });
+
+    it('maps the server truncation error to the truncation copy', () => {
+      expect(
+        toFriendlyOnboardingGenerationError('Arc generation: output truncated (max_tokens=7000, totalDays=30)'),
+      ).toMatch(/too long to generate in one go/);
+    });
+
+    it('the generating screen no longer produces a wall-clock timeout error', () => {
+      const src = fs.readFileSync(path.resolve(__dirname, '../../app/generating.tsx'), 'utf8');
+      expect(src).not.toContain('Generation is taking longer than expected');
+      expect(src).not.toContain('MAX_POLL_DURATION_MS');
+      // The soft state replaces it and the leave path stays available.
+      expect(src).toContain('LONG_RUNNING_MESSAGE');
+      expect(src).toContain('evaluateGenerationDeadline');
+    });
 
     it('keeps onboarding generic fallback copy', () => {
       expect(toFriendlyOnboardingGenerationError('Generation failed on server')).toBe(

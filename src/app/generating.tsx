@@ -26,9 +26,18 @@ import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, type Devotional, type DevotionalDay } from '@/lib/store';
 import { submitGenerationJob, pollJobStatus, retryJob, recoverCompletedGenerationResult, buildInitialArcUserContext } from '@/lib/generation-api';
 import {
+  countConsecutiveNetworkErrors,
+  evaluateGenerationDeadline,
   evaluateGenerationPoll,
   getNextPollDelayMs,
+  isInflightRecordExpired,
+  resolveGenerationRetryAction,
   resolveGenerationSubmitFailure,
+  resolveGoHomeCleanup,
+  shiftPollStart,
+  MAX_CONSECUTIVE_POLL_NETWORK_ERRORS,
+  type GenerationDeadlineDecision,
+  type ObservedJobState,
 } from '@/lib/generation-poll-outcome';
 import { toFriendlyOnboardingGenerationError } from '@/lib/generation-errors';
 
@@ -44,11 +53,17 @@ import { Typography } from '@/constants/typography';
 
 // MMKV key for persisting in-flight generation job across app kills
 const INFLIGHT_KEY = 'inflight-generation-job';
-// Maximum time to poll before giving up (10 minutes)
-const MAX_POLL_DURATION_MS = 10 * 60 * 1000;
 // Terminal-error copy for a completed-but-unopenable / unrecognized job.
 const INVALID_RESULT_MESSAGE = 'Your devotional finished, but we couldn’t open it. Please try again.';
 const UNKNOWN_STATUS_MESSAGE = 'We hit an unexpected problem finishing your devotional. Please try again.';
+// The client gave up reaching the server (MAX_CONSECUTIVE_POLL_NETWORK_ERRORS
+// failed status requests in a row). This is not a verdict on the job — it may
+// still be running — so the copy routes through the connection branch of
+// toFriendlyOnboardingGenerationError and the inflight record is kept.
+const POLL_NETWORK_ERROR_MESSAGE = 'Unable to connect to the writing service while checking on your devotional.';
+// Soft copy once a job outlives LONG_RUNNING_AFTER_MS. Time alone is never a
+// failure: the server decides, and polling continues at the slow tier.
+const LONG_RUNNING_MESSAGE = 'Still writing — taking a little longer';
 // Grace period to wait for the persisted user to hydrate before erroring out
 // instead of sitting on an infinite spinner.
 const NO_USER_GRACE_MS = 5000;
@@ -136,8 +151,16 @@ export default function GeneratingScreen() {
   // Consecutive unrecognized job statuses — bounded so we don't poll forever
   // against a status we don't understand.
   const unknownStatusCountRef = useRef(0);
+  // Consecutive failed status requests — the only client-side give-up.
+  const consecutiveNetworkErrorsRef = useRef(0);
+  // The server's last word on the current job; drives retry / leave decisions.
+  const observedJobStateRef = useRef<ObservedJobState>('unobserved');
+  // When the app left the foreground; background time is not polling time.
+  const backgroundedAtRef = useRef<number | null>(null);
+  // Soft "still writing" state past LONG_RUNNING_AFTER_MS (never an error).
+  const [isLongRunning, setIsLongRunning] = useState(false);
 
-  // Track when polling started for max-duration timeout
+  // Track when polling started for the long-running threshold and poll cadence
   const pollStartTime = useRef(Date.now());
 
   // Track whether we are auto-retrying after returning from background
@@ -250,6 +273,7 @@ export default function GeneratingScreen() {
     const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
       if (nextAppState === 'background' || nextAppState === 'inactive') {
         setWasInBackground(true);
+        if (backgroundedAtRef.current === null) backgroundedAtRef.current = Date.now();
         // Stop polling while backgrounded to save resources
         if (pollTimerRef.current) {
           clearTimeout(pollTimerRef.current);
@@ -261,6 +285,12 @@ export default function GeneratingScreen() {
 
       // Returning to foreground
       if (nextAppState === 'active') {
+        // Background time does not count toward the long-running threshold —
+        // the first foreground poll asks the server before any decision.
+        if (backgroundedAtRef.current !== null) {
+          pollStartTime.current = shiftPollStart(pollStartTime.current, backgroundedAtRef.current, Date.now());
+          backgroundedAtRef.current = null;
+        }
         // If we have a pending job and we're not already done/errored, do a single poll
         const currentJobId = pendingJobId;
         if (currentJobId && !isComplete && !error && !pollingRef.current) {
@@ -430,13 +460,22 @@ export default function GeneratingScreen() {
     pollingRef.current = true;
     const run = ++pollRunRef.current;
     unknownStatusCountRef.current = 0;
+    consecutiveNetworkErrorsRef.current = 0;
+    observedJobStateRef.current = 'unobserved';
 
-    // Shared terminal-failure exit: stop polling, clear the inflight record and
-    // surface the error state with a retry path (instead of an infinite spinner).
-    const failTerminal = (message: string, phase: string, cause?: unknown) => {
+    // Shared terminal-failure exit: stop polling and surface the error state
+    // with a retry path (instead of an infinite spinner). The inflight record
+    // is cleared only on a server verdict; a client-side network give-up keeps
+    // it so Today can resume a job the server may still be running.
+    const failTerminal = (
+      message: string,
+      phase: string,
+      cause?: unknown,
+      options: { keepInflight?: boolean } = {},
+    ) => {
       pollingRef.current = false;
       logger.error(`[generating] ${phase}:`, message);
-      mmkvStorage.removeItem(INFLIGHT_KEY);
+      if (!options.keepInflight) mmkvStorage.removeItem(INFLIGHT_KEY);
       failGenerationSession(message);
       void logBugError('generation', cause instanceof Error ? cause : new Error(message), { jobId, phase });
       setIsGenerating(false);
@@ -446,27 +485,28 @@ export default function GeneratingScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     };
 
+    // Liveness check. Time alone never fails the job: past the threshold the
+    // UI softens to "still writing" and polling continues at the slow tier.
+    // Only a run of failed status requests ends the wait client-side; a
+    // server 'failed' status stays authoritative via evaluateGenerationPoll.
+    const assessDeadline = (): GenerationDeadlineDecision => {
+      const decision = evaluateGenerationDeadline({
+        elapsedMs: Date.now() - pollStartTime.current,
+        consecutiveNetworkErrors: consecutiveNetworkErrorsRef.current,
+      });
+      setIsLongRunning(decision === 'long-running');
+      return decision;
+    };
+
     const poll = async () => {
-      // Check max poll duration timeout
-      if (Date.now() - pollStartTime.current > MAX_POLL_DURATION_MS) {
-        pollingRef.current = false;
-        const timeoutMsg = 'Generation is taking longer than expected. Please try again.';
-        logger.warn('[generating] Poll timeout reached after 10 minutes');
-        mmkvStorage.removeItem(INFLIGHT_KEY);
-        failGenerationSession(timeoutMsg);
-        setIsGenerating(false);
-        setIsReconnecting(false);
-        setError(timeoutMsg);
-        setCanRetry(true);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        return;
-      }
+      assessDeadline();
 
       try {
         const status = await pollJobStatus(jobId);
         // Polling stopped (or restarted) while this request was in flight:
         // the response belongs to a chain that no longer exists.
         if (!pollingRef.current || pollRunRef.current !== run) return;
+        consecutiveNetworkErrorsRef.current = countConsecutiveNetworkErrors(consecutiveNetworkErrorsRef.current, true);
         const { outcome, consecutiveUnknown } = evaluateGenerationPoll({
           status: status.status,
           result: status.result,
@@ -480,6 +520,7 @@ export default function GeneratingScreen() {
 
         switch (outcome.kind) {
           case 'complete':
+            observedJobStateRef.current = 'complete';
             pollingRef.current = false;
             handleGenerationComplete(outcome.result);
             return;
@@ -487,10 +528,13 @@ export default function GeneratingScreen() {
           case 'invalid-result':
             // Complete-without-result OR an unreconcilable result: terminal, not
             // a re-poll loop.
+            observedJobStateRef.current = 'invalid-result';
             failTerminal(INVALID_RESULT_MESSAGE, 'server-poll-invalid-result');
             return;
 
           case 'failed': {
+            // The server's verdict — the only thing that fails a job.
+            observedJobStateRef.current = 'failed';
             pollingRef.current = false;
             const errorMsg = outcome.error;
             logger.error('[generating] Server job failed:', errorMsg);
@@ -506,6 +550,7 @@ export default function GeneratingScreen() {
           }
 
           case 'unknown-terminal':
+            observedJobStateRef.current = 'unknown-terminal';
             failTerminal(UNKNOWN_STATUS_MESSAGE, 'server-poll-unknown-status');
             return;
 
@@ -515,14 +560,24 @@ export default function GeneratingScreen() {
             // Still pending / processing (or a tolerated unknown) -- poll again.
             // Cadence escalates with the job's age (3s -> 5s -> 8s, jittered
             // after the first minute); pollStartTime resets per job.
+            observedJobStateRef.current = 'alive';
             pollTimerRef.current = setTimeout(poll, getNextPollDelayMs(Date.now() - pollStartTime.current));
             return;
         }
       } catch (err) {
         if (!pollingRef.current || pollRunRef.current !== run) return;
-        // Network error during polling -- keep trying a few times
         const errorMsg = err instanceof Error ? err.message : String(err);
-        logger.warn('[generating] Poll error (will retry):', errorMsg);
+        consecutiveNetworkErrorsRef.current = countConsecutiveNetworkErrors(consecutiveNetworkErrorsRef.current, false);
+        if (assessDeadline() === 'network-error') {
+          // We cannot reach the server; that is not a verdict on the job, so
+          // the inflight record survives for "Try again" (re-poll) and Today.
+          failTerminal(POLL_NETWORK_ERROR_MESSAGE, 'server-poll-unreachable', err, { keepInflight: true });
+          return;
+        }
+        logger.warn(
+          `[generating] Poll error ${consecutiveNetworkErrorsRef.current}/${MAX_CONSECUTIVE_POLL_NETWORK_ERRORS} (will retry):`,
+          errorMsg,
+        );
 
         // Keep polling on transient errors -- the server job is still running
         // (doubled cadence, as before)
@@ -538,7 +593,7 @@ export default function GeneratingScreen() {
   useEffect(() => {
     if (!user) {
       // The persisted user normally hydrates within a frame. If it never
-      // arrives, don't sit on an infinite spinner — the 10-min poll cap lives
+      // arrives, don't sit on an infinite spinner — the network give-up lives
       // inside poll(), which never starts here. Surface the error state after a
       // short grace so the user still gets a retry / go-home path.
       const graceTimer = setTimeout(() => {
@@ -560,8 +615,9 @@ export default function GeneratingScreen() {
     if (raw) {
       try {
         const inflight = JSON.parse(raw) as { jobId: string; devotionalId?: string; submittedAt: number };
-        // Only resume if not expired (15 min)
-        if (Date.now() - inflight.submittedAt < 15 * 60 * 1000) {
+        // Only resume if not expired (INFLIGHT_MAX_AGE_MS, 25 min — covers the
+        // worker's worst case). The first poll then asks the server.
+        if (!isInflightRecordExpired(inflight.submittedAt, Date.now())) {
           logger.log('[generating] Resuming inflight job from MMKV:', inflight.jobId);
           if (inflight.devotionalId) {
             startGenerationSession({ devotionalId: inflight.devotionalId, totalDays: user.devotionalLength });
@@ -699,10 +755,24 @@ export default function GeneratingScreen() {
     // Reset poll start time for retry
     pollStartTime.current = Date.now();
 
+    // Never create a duplicate series: with a known job the server's last word
+    // on it decides between re-polling (client lost contact) and POST /retry
+    // (server verdict). Only with no job at all do we submit, and the server
+    // dedups that too (active-job 200 / completed-day 409 + existingJobId).
+    const action = resolveGenerationRetryAction({ pendingJobId, observedState: observedJobStateRef.current });
+
     try {
-      if (pendingJobId) {
+      if (action.kind === 'resume-poll') {
+        logger.log('[generating] Re-polling job after a client-side give-up:', action.jobId);
+        mmkvStorage.setItem(INFLIGHT_KEY, JSON.stringify({
+          jobId: action.jobId,
+          devotionalId: useUnfoldStore.getState().generationSession.devotionalId,
+          submittedAt: Date.now(),
+        }));
+        startPolling(action.jobId);
+      } else if (action.kind === 'retry-existing') {
         // Retry existing job on the server
-        const { jobId } = await retryJob(pendingJobId);
+        const { jobId } = await retryJob(action.jobId);
         logger.log('[generating] Job retried:', jobId);
         setPendingJobId(jobId);
         // Update MMKV with new jobId
@@ -782,8 +852,15 @@ export default function GeneratingScreen() {
       pollTimerRef.current = null;
     }
     pollingRef.current = false;
-    mmkvStorage.removeItem(INFLIGHT_KEY);
-    clearGenerationSession();
+    const cleanup = resolveGoHomeCleanup({ pendingJobId, observedState: observedJobStateRef.current });
+    if (cleanup === 'clear') {
+      mmkvStorage.removeItem(INFLIGHT_KEY);
+      clearGenerationSession();
+    } else {
+      // We only lost contact with the server; it may still own this job.
+      // Keep the inflight record so Today can check on it and resume.
+      logger.log('[generating] Leaving with a possibly live job in flight:', pendingJobId);
+    }
     router.replace('/(tabs)/(today)');
   };
 
@@ -984,7 +1061,9 @@ export default function GeneratingScreen() {
             </View>
           )}
 
-          {/* Rotating contemplative message -- swapped for reconnecting msg when auto-retrying */}
+          {/* Rotating contemplative message -- swapped for reconnecting msg when
+              auto-retrying, or for the soft "still writing" line once the job
+              outlives the long-running threshold (never an error). */}
           <View style={{ height: 28, justifyContent: 'center', marginBottom: Spacing['3'] }}>
             {isReconnecting ? (
               <Animated.Text
@@ -998,6 +1077,21 @@ export default function GeneratingScreen() {
                 }}
               >
                 {'Reconnecting\u2026'}
+              </Animated.Text>
+            ) : isLongRunning ? (
+              <Animated.Text
+                key="long-running"
+                entering={entering(FadeIn.duration(600))}
+                accessibilityLiveRegion="polite"
+                numberOfLines={1}
+                style={{
+                  fontFamily: FontFamily.bodyItalic,
+                  fontSize: 17,
+                  color: colors.text,
+                  textAlign: 'center',
+                }}
+              >
+                {LONG_RUNNING_MESSAGE}
               </Animated.Text>
             ) : (
               <Animated.Text

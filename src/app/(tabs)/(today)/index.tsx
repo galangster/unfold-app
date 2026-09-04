@@ -31,7 +31,8 @@ import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { getContentAwareMiddayMessage, getContentAwareEveningMessage } from '@/constants/check-in-messages';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { Duration, Ease } from '@/constants/animations';
-import { submitGenerationJob, recoverCompletedGenerationResult, ApiError } from '@/lib/generation-api';
+import { submitGenerationJob, recoverCompletedGenerationResult, pollJobStatus, ApiError } from '@/lib/generation-api';
+import { isInflightRecordExpired, resolveInflightResume } from '@/lib/generation-poll-outcome';
 import { mmkvStorage } from '@/lib/mmkv-storage';
 import { TodayCardStack, type TodayCardStackCard } from '@/components/home/TodayCardStack';
 import { animateCardDismiss } from '@/lib/card-dismiss-animation';
@@ -255,7 +256,11 @@ export default function HomeScreen() {
     downloadBibleDb().catch(() => {});
   }, []);
 
-  // Resume inflight generation job from a previous app session (app-kill recovery)
+  // Resume inflight generation job from a previous app session (app-kill recovery).
+  // The server is the authority: route back into /generating only when it
+  // reports the job alive or complete. A blind route on record age would bounce
+  // the reader into /generating for a job that already failed, and the old
+  // 15-minute expiry was shorter than the worker's worst case (now 25 min).
   const inflightResumeAttempted = useRef(false);
   useEffect(() => {
     if (inflightResumeAttempted.current) return;
@@ -264,24 +269,47 @@ export default function HomeScreen() {
     const raw = mmkvStorage.getItem(INFLIGHT_KEY) as string | null;
     if (!raw) return;
 
+    let inflight: { jobId?: unknown; devotionalId?: string; submittedAt?: unknown } | null = null;
     try {
-      const inflight = JSON.parse(raw) as {
-        jobId: string;
-        devotionalId?: string;
-        submittedAt: number;
-      };
-      // Only resume if not expired (15 min)
-      if (Date.now() - inflight.submittedAt < 15 * 60 * 1000) {
-        logger.log('[home] Resuming inflight generation job from MMKV:', inflight.jobId);
+      inflight = JSON.parse(raw);
+    } catch {
+      inflight = null;
+    }
+    const jobId = typeof inflight?.jobId === 'string' ? inflight.jobId : null;
+    const submittedAt = typeof inflight?.submittedAt === 'number' ? inflight.submittedAt : Number.NaN;
+    if (!jobId || isInflightRecordExpired(submittedAt, Date.now())) {
+      // Corrupt or expired — clean up
+      mmkvStorage.removeItem(INFLIGHT_KEY);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      let serverStatus: string | undefined;
+      try {
+        serverStatus = (await pollJobStatus(jobId)).status;
+      } catch (err) {
+        logger.warn('[home] Could not check inflight job; keeping the record:', err instanceof Error ? err.message : err);
+      }
+      if (cancelled) return;
+
+      const decision = resolveInflightResume({ submittedAt, now: Date.now(), serverStatus });
+      if (decision === 'resume') {
+        logger.log(`[home] Resuming inflight generation job ${jobId} (server: ${serverStatus})`);
         // Navigate to generating screen — it will pick up the inflight job from MMKV
         router.replace('/generating');
         return;
       }
-      // Expired — clean up
-      mmkvStorage.removeItem(INFLIGHT_KEY);
-    } catch {
-      mmkvStorage.removeItem(INFLIGHT_KEY);
-    }
+      if (decision === 'discard') {
+        logger.log(`[home] Dropping inflight generation job ${jobId} (server: ${serverStatus})`);
+        mmkvStorage.removeItem(INFLIGHT_KEY);
+      }
+      // 'keep': status unavailable this launch — leave the record for the next one.
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   // Check premium status through the tri-state policy so QA premium override can

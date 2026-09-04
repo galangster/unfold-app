@@ -43,6 +43,14 @@ export function toFriendlyOnboardingGenerationError(errorMessage: string): strin
     return 'The devotional was too long to generate in one go. Tap retry — we’ll break it into smaller pieces.';
   }
 
+  // The server's arc call returned JSON it could not parse (prod 2026-09-04:
+  // "Arc generation: JSON parse failed -- Expected ',' or ']' after array
+  // element" on a 30-day plan). Name the shape problem instead of the generic
+  // fallback so the reader has a real next step.
+  if (normalized.includes('json parse') || normalized.includes('no valid json')) {
+    return 'We couldn’t finish shaping your series. Try again, or start over with a shorter plan.';
+  }
+
   return 'We couldn’t finish creating this devotional right now. Please try again.';
 }
 
