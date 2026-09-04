@@ -1,5 +1,5 @@
 import { useEffect, useCallback, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, TouchableOpacity, AccessibilityInfo } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
@@ -265,6 +265,25 @@ export default function RevealScreen() {
     transform: [{ translateY: translateY.value }],
   }));
 
+  // Accessible alternative to the swipe gesture — a VoiceOver "activate"
+  // action on the gesture surface, plus a visually-quiet always-reachable
+  // button below, both land here. Mirrors the swipe-commit path (curtain
+  // lifts, then navigates) so the two ways in feel like the same action.
+  const activateReveal = useCallback(() => {
+    if (hasNavigated.current) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    AccessibilityInfo.announceForAccessibility('Revealing today’s reading');
+    if (reducedMotion) {
+      navigateToReading();
+      return;
+    }
+    translateY.value = withSpring(-SCREEN_HEIGHT, CURTAIN_SPRING, (finished) => {
+      if (finished) {
+        runOnJS(navigateToReading)();
+      }
+    });
+  }, [reducedMotion, navigateToReading, translateY]);
+
   const onScatterComplete = useCallback(() => {
     onTitleComplete();
   }, [onTitleComplete]);
@@ -290,6 +309,12 @@ export default function RevealScreen() {
         accessible
         accessibilityLabel={`New devotional ready: ${seriesTitle ?? 'Series'}, ${dayTitle ?? 'Today'}. Day ${dayNum} of ${total}. Swipe up to reveal your devotional.`}
         accessibilityRole="header"
+        accessibilityActions={[{ name: 'activate', label: 'Reveal' }]}
+        onAccessibilityAction={(event) => {
+          if (event.nativeEvent.actionName === 'activate') {
+            activateReveal();
+          }
+        }}
       >
         {/* Main content — centered */}
         <View style={styles.content}>
@@ -354,6 +379,22 @@ export default function RevealScreen() {
             pauseDuration={2200}
             initialDelay={1800}
           />
+
+          {/* Always-reachable alternative to the swipe gesture — visually
+              secondary since swiping is the primary affordance, but never
+              hidden from touch or screen-reader navigation. */}
+          <TouchableOpacity
+            activeOpacity={0.6}
+            onPress={activateReveal}
+            hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}
+            style={styles.revealButton}
+            accessibilityRole="button"
+            accessibilityLabel="Reveal today's reading"
+          >
+            <Text style={[styles.revealButtonText, { color: colors.textMuted }]}>
+              Reveal
+            </Text>
+          </TouchableOpacity>
         </Animated.View>
       </Animated.View>
     </GestureDetector>
@@ -384,5 +425,16 @@ const styles = StyleSheet.create({
   swipePrompt: {
     alignItems: 'center',
     paddingBottom: 16,
+  },
+  revealButton: {
+    marginTop: 16,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  revealButtonText: {
+    fontFamily: FontFamily.ui,
+    fontSize: 12,
+    textAlign: 'center',
+    textDecorationLine: 'underline',
   },
 });

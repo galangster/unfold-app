@@ -41,7 +41,7 @@ export function InlineReflectComposer({
   onOpenFull,
   onReadAgain,
 }: Props) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const [text, setText] = useState(initialDraft);
   const [inputHeight, setInputHeight] = useState(MIN_HEIGHT);
   const [isFocused, setIsFocused] = useState(false);
@@ -94,7 +94,7 @@ export function InlineReflectComposer({
         multiline
         placeholder="What stayed with you today?"
         placeholderTextColor={colors.textMuted}
-        keyboardAppearance="dark"
+        keyboardAppearance={isDark ? 'dark' : 'light'}
         testID="home-reflect-composer"
         accessibilityLabel="Reflect on today's reading"
         accessibilityHint="Type a short reflection. It saves automatically to your journal."

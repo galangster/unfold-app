@@ -405,6 +405,17 @@ export function TodayCardStack({
         {reducedMotion || !topCard.onDismiss ? topCardContent : (
           <GestureDetector gesture={swipeGesture}>{topCardContent}</GestureDetector>
         )}
+
+        {model.totalCount > 1 ? (
+          <Text
+            style={[styles.moreCountLabel, { color: colors.textMuted }]}
+            maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}
+            accessibilityElementsHidden
+            importantForAccessibility="no"
+          >
+            +{model.totalCount - 1} more
+          </Text>
+        ) : null}
       </View>
     </Animated.View>
   );
@@ -517,5 +528,11 @@ const styles = StyleSheet.create({
     top: Spacing['2'],
     width: 32,
     zIndex: 4,
+  },
+  moreCountLabel: {
+    ...Typography.caption,
+    position: 'absolute',
+    bottom: 0,
+    right: Spacing['4'],
   },
 });

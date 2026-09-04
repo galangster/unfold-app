@@ -28,14 +28,19 @@ function Pill({ option, isSelected, onPress, disabled, colors, isDark }: {
   colors: ColorTheme;
   isDark: boolean;
 }) {
+  const isDisabled = disabled && !isSelected;
+
   return (
     <TouchableOpacity
       activeOpacity={1}
-      disabled={disabled && !isSelected}
+      disabled={isDisabled}
       onPress={() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         onPress();
       }}
+      accessibilityRole="checkbox"
+      accessibilityLabel={option.label}
+      accessibilityState={{ selected: isSelected, disabled: isDisabled }}
       style={{
         paddingVertical: Spacing['3'],
         paddingHorizontal: Spacing['4'],
@@ -43,7 +48,7 @@ function Pill({ option, isSelected, onPress, disabled, colors, isDark }: {
         borderWidth: 1.5,
         borderColor: isSelected ? colors.accent : colors.border,
         backgroundColor: isSelected ? alpha(colors.accent, 0.18) : 'transparent',
-        opacity: disabled && !isSelected ? 0.4 : 1,
+        opacity: isDisabled ? 0.4 : 1,
       }}
     >
       <Text style={{
