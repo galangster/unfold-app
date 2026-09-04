@@ -34,6 +34,11 @@ Date: 2026-09-04 (afternoon session). Author: Claude (Fable 5.1) with Nick. Scop
 ## Found in prod, fixed
 - Every tool-using companion reply (the "Walk me through today's reading" starter chip) died after its first sentence with the banner "Something went wrong. Try again? Your reply may be incomplete." Railway log: Anthropic 400 `text content blocks must be non-empty` on the tool round. Root cause in `backend/src/routes/companion.ts`: text deltas never wrote into the streamed content block, so the assistant turn replayed with the tool result carried `text: ""`. The live-stream test asserted that empty block. Fixed in `105b7c2` with a regression test for a never-filled block.
 
+## Later the same day
+- **Build 260 (1.1.4) is in TestFlight.** Release commit `8e8e955b`; EAS build `c69540fc`; submission `f0e76421` FINISHED after ~35 min in Expo's queue; ASC build `05181dca` VALID, uploaded 2026-09-04T12:19 PT; "What to Test" set from `changelogs/build-260.md`. The `iTMSTransporter` fallback from the morning handoff no longer exists (Apple moved it into Transporter.app); install Transporter from the Mac App Store if Expo's queue stalls again.
+- **Onboarding review prompt, ruled by Nick:** `a13d481a` fires the native rating sheet the moment the reader completes the first devotional inside onboarding, over the celebration, through the once-per-version helper. Proven on the simulator (dev builds always show it); screenshot saved to `~/Downloads/unfold-review-prompt-20260904-113419.png`. **Not in build 260**; it ships with the next build.
+- 1.1.3 (build 259) was still WAITING_FOR_REVIEW at 12:40 PT.
+
 ## Open items, ordered
 1. When 1.1.3 returns from review: install build 259 on a phone and run the three unverified items from the prior handoff (`changelogs/build-259.md`). If rejected: "Update Review" on the 1.1.3 version page, then Resubmit.
 2. Companion polish, both pre-existing: (a) text from consecutive tool rounds is joined with no separator ("for you.Let me try"), fix where `fullText += round.fullText` and the client sink concatenate rounds in `backend/src/routes/companion.ts`; (b) `get_devotional_day` cannot see a series that exists only on the device (the sim's Dev Tools seed), so the companion says it cannot pull up the text; real series sync first, so this is a QA-profile limitation, not a reader-facing one.
