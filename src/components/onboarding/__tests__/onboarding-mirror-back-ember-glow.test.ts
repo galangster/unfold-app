@@ -93,8 +93,10 @@ describe('EmberSystem glow prop plumbing', () => {
 
   it('both render paths gate the gradient on glowOpacity > 0', () => {
     // Animated path and the reduce-motion still poster each skip the
-    // LinearGradient when the resolved opacity is 0, so no render change is
-    // needed for the opt-out.
+    // LinearGradient when the opacity they receive is 0. The still poster
+    // borrows the celebration glow from getCelebrationStillGlow(), so it
+    // applies the opt-out itself; EmberSystem.glow.test.tsx proves both
+    // paths at render level.
     expect(component).toContain('{params.glowOpacity > 0 && (');
     expect(component).toContain('{glowOpacity > 0 && (');
   });

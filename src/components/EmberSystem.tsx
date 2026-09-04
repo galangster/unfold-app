@@ -535,6 +535,9 @@ export function EmberSystem({
   const glowAnchorTop = variant === 'ambient' && effectiveDirection === 'down';
 
   if (!showAnimatedField) {
+    // The celebration still borrows the next tier's glow (canon). `glow={false}`
+    // still wins there, exactly as it does on the resolver path.
+    const stillGlow = variant === 'celebration' ? getCelebrationStillGlow() : params;
     return (
       <View style={[StyleSheet.absoluteFill, styles.container, style]} pointerEvents="none" onLayout={onLayout}>
         <EmberStillPoster
@@ -547,8 +550,8 @@ export function EmberSystem({
           layoutHeight={layout.height}
           exclusionZones={exclusionZones}
           glowBase={glowBase}
-          glowOpacity={variant === 'celebration' ? getCelebrationStillGlow().glowOpacity : params.glowOpacity}
-          glowHeight={variant === 'celebration' ? getCelebrationStillGlow().glowHeight : params.glowHeight}
+          glowOpacity={glow ? stillGlow.glowOpacity : 0}
+          glowHeight={stillGlow.glowHeight}
           isDark={isDark}
         />
       </View>
