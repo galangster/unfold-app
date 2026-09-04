@@ -154,3 +154,33 @@ describe('3.1.2(c) billed amount is the most conspicuous price (App Review rejec
     expect(equivalentText).not.toContain('fontSize: 15');
   });
 });
+
+describe('Screen 1 phone mockup fits the page instead of hard-cutting at the CTA block (tester report 2026-09-04)', () => {
+  it('sizes the bezel from the measured wrapper, not from the window width', () => {
+    expect(threeStep).toContain("import { computeMockupSize } from '@/lib/paywall-mockup-size';");
+    expect(threeStep).toContain('computeMockupSize(');
+    // The width-only sizing that produced the ~1.34x-screen-width frame.
+    expect(threeStep).not.toContain('DEVICE_BEZEL_WIDTH');
+    expect(threeStep).not.toContain('aspectRatio: 9 / 19.5');
+  });
+
+  it('fades with theme-derived stops, and only when the frame actually overflows', () => {
+    expect(threeStep).not.toContain('rgba(10,10,10');
+    expect(threeStep).toContain('mockupSize?.overflows && (');
+    const fadeBlock = threeStep.slice(
+      threeStep.indexOf('mockupSize?.overflows && ('),
+      threeStep.indexOf('styles.screen1Gradient'),
+    );
+    expect(fadeBlock).toContain('alpha(colors.background, 0)');
+    expect(fadeBlock).toContain('alpha(colors.background, 0.85)');
+    expect(fadeBlock).not.toMatch(/#[0-9a-fA-F]{6}/);
+  });
+
+  it('caps the Screen 1 headline at 1.3x so large Dynamic Type does not eat the mockup area', () => {
+    const headlineBlock = threeStep.slice(
+      threeStep.indexOf('styles.screen1TopSection'),
+      threeStep.indexOf('paywall-mockup-wrapper'),
+    );
+    expect(headlineBlock).toContain('maxFontSizeMultiplier={1.3}');
+  });
+});

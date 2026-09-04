@@ -291,3 +291,90 @@ describe('ThreeStepPaywall decide-later exit', () => {
     expect(usesMutedInk).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Screen 1 phone mockup sizing. The bezel used to be sized from the window
+// width alone (62% wide at 9:19.5), which made it taller than the page area on
+// every supported iPhone, so the frame was always clipped in a straight line
+// where the CTA block begins (Jordan's "cut at the bottom" report, 2026-09-04).
+// ---------------------------------------------------------------------------
+
+function findByTestId(tree: any, testID: string) {
+  return tree.root.findAll((n: any) => n.props?.testID === testID, { deep: false });
+}
+
+function flatStyle(node: any): Record<string, any> {
+  return Object.assign({}, ...[node.props.style].flat(Infinity).filter(Boolean));
+}
+
+async function layoutWrapper(tree: any, width: number, height: number) {
+  const wrapper = findByTestId(tree, 'paywall-mockup-wrapper')[0];
+  if (!wrapper) throw new Error('mockup wrapper not found');
+  await act(async () => {
+    wrapper.props.onLayout({ nativeEvent: { layout: { x: 0, y: 0, width, height } } });
+  });
+}
+
+const MOCKUP_ASPECT = 9 / 19.5;
+
+describe('ThreeStepPaywall Screen 1 phone mockup sizing', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockIsQaToolsEnabled.mockReturnValue(false);
+  });
+
+  it('paints no frame before the wrapper has been measured', async () => {
+    const tree = await render(baseProps({ hasFreeTrial: true }));
+
+    expect(findByTestId(tree, 'paywall-mockup-wrapper')).toHaveLength(1);
+    expect(findByTestId(tree, 'paywall-mockup-bezel')).toHaveLength(0);
+    expect(findByTestId(tree, 'paywall-mockup-fade')).toHaveLength(0);
+  });
+
+  it('fits the frame inside the measured wrapper, no fade, when there is room (13 mini page area)', async () => {
+    const tree = await render(baseProps({ hasFreeTrial: true }));
+    await layoutWrapper(tree, 375, 500);
+
+    const bezel = findByTestId(tree, 'paywall-mockup-bezel');
+    expect(bezel).toHaveLength(1);
+    const style = flatStyle(bezel[0]);
+    // 16pt wrapper paddingTop + 16pt clearance above the CTA block.
+    expect(style.height).toBeLessThanOrEqual(500 - 32);
+    expect(style.height).toBeGreaterThanOrEqual(260);
+    expect(style.width).toBeCloseTo(style.height * MOCKUP_ASPECT, 6);
+    expect(style.width).toBeLessThanOrEqual(375 * 0.62);
+    expect(findByTestId(tree, 'paywall-mockup-fade')).toHaveLength(0);
+  });
+
+  it('floors the frame at the minimum height and fades it into the theme background when the page is too short', async () => {
+    const tree = await render(baseProps({ hasFreeTrial: true }));
+    await layoutWrapper(tree, 375, 200);
+
+    const style = flatStyle(findByTestId(tree, 'paywall-mockup-bezel')[0]);
+    expect(style.height).toBe(260);
+    expect(style.width).toBeCloseTo(260 * MOCKUP_ASPECT, 6);
+
+    const fade = findByTestId(tree, 'paywall-mockup-fade');
+    expect(fade).toHaveLength(1);
+    // The alpha mock stringifies as `${color}${opacity}`: every stop derives
+    // from the theme background, none is a hardcoded grey.
+    expect(fade[0].props.colors).toEqual([
+      `${colors.background}0`,
+      `${colors.background}0.85`,
+      colors.background,
+    ]);
+  });
+
+  it('re-fits the frame when the wrapper is re-measured (Dynamic Type change)', async () => {
+    const tree = await render(baseProps({ hasFreeTrial: true }));
+    await layoutWrapper(tree, 375, 500);
+    const before = flatStyle(findByTestId(tree, 'paywall-mockup-bezel')[0]).height;
+
+    await layoutWrapper(tree, 375, 420);
+    const after = flatStyle(findByTestId(tree, 'paywall-mockup-bezel')[0]).height;
+
+    expect(after).toBeLessThan(before);
+    expect(after).toBeLessThanOrEqual(420 - 32);
+    expect(findByTestId(tree, 'paywall-mockup-fade')).toHaveLength(0);
+  });
+});
