@@ -8,6 +8,11 @@
 
 import React from 'react';
 import type { ColorTheme } from '@/constants/colors';
+import {
+  MOCKUP_BOTTOM_CLEARANCE,
+  MOCKUP_TOP_PADDING,
+  PAYWALL_DRAG_DOWNWARD_PEAK,
+} from '@/lib/paywall-mockup-size';
 
 const renderer = require('react-test-renderer');
 const { act } = renderer;
@@ -338,8 +343,9 @@ describe('ThreeStepPaywall Screen 1 phone mockup sizing', () => {
     const bezel = findByTestId(tree, 'paywall-mockup-bezel');
     expect(bezel).toHaveLength(1);
     const style = flatStyle(bezel[0]);
-    // 16pt wrapper paddingTop + 16pt clearance above the CTA block.
-    expect(style.height).toBeLessThanOrEqual(500 - 32);
+    // Wrapper paddingTop + the clearance above the CTA block (the clearance
+    // also covers the drag gesture's downward peak).
+    expect(style.height).toBeLessThanOrEqual(500 - MOCKUP_TOP_PADDING - MOCKUP_BOTTOM_CLEARANCE);
     expect(style.height).toBeGreaterThanOrEqual(260);
     expect(style.width).toBeCloseTo(style.height * MOCKUP_ASPECT, 6);
     expect(style.width).toBeLessThanOrEqual(375 * 0.62);
@@ -365,6 +371,16 @@ describe('ThreeStepPaywall Screen 1 phone mockup sizing', () => {
     ]);
   });
 
+  it('keeps the frame bottom inside the page through a full downward pull (review must-fix 1)', async () => {
+    const tree = await render(baseProps({ hasFreeTrial: true }));
+    await layoutWrapper(tree, 375, 500);
+
+    const style = flatStyle(findByTestId(tree, 'paywall-mockup-bezel')[0]);
+    // screen1Root is overflow: 'hidden'; the frame bottom must not cross the
+    // wrapper bottom even at the drag's +peak.
+    expect(MOCKUP_TOP_PADDING + style.height + PAYWALL_DRAG_DOWNWARD_PEAK).toBeLessThanOrEqual(500);
+  });
+
   it('re-fits the frame when the wrapper is re-measured (Dynamic Type change)', async () => {
     const tree = await render(baseProps({ hasFreeTrial: true }));
     await layoutWrapper(tree, 375, 500);
@@ -374,7 +390,7 @@ describe('ThreeStepPaywall Screen 1 phone mockup sizing', () => {
     const after = flatStyle(findByTestId(tree, 'paywall-mockup-bezel')[0]).height;
 
     expect(after).toBeLessThan(before);
-    expect(after).toBeLessThanOrEqual(420 - 32);
+    expect(after).toBeLessThanOrEqual(420 - MOCKUP_TOP_PADDING - MOCKUP_BOTTOM_CLEARANCE);
     expect(findByTestId(tree, 'paywall-mockup-fade')).toHaveLength(0);
   });
 });

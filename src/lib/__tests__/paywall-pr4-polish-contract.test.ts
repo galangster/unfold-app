@@ -157,7 +157,8 @@ describe('3.1.2(c) billed amount is the most conspicuous price (App Review rejec
 
 describe('Screen 1 phone mockup fits the page instead of hard-cutting at the CTA block (tester report 2026-09-04)', () => {
   it('sizes the bezel from the measured wrapper, not from the window width', () => {
-    expect(threeStep).toContain("import { computeMockupSize } from '@/lib/paywall-mockup-size';");
+    expect(threeStep).toContain("} from '@/lib/paywall-mockup-size';");
+    expect(threeStep).toContain('  computeMockupSize,\n');
     expect(threeStep).toContain('computeMockupSize(');
     // The width-only sizing that produced the ~1.34x-screen-width frame.
     expect(threeStep).not.toContain('DEVICE_BEZEL_WIDTH');
@@ -182,5 +183,26 @@ describe('Screen 1 phone mockup fits the page instead of hard-cutting at the CTA
       threeStep.indexOf('paywall-mockup-wrapper'),
     );
     expect(headlineBlock).toContain('maxFontSizeMultiplier={1.3}');
+  });
+
+  it('routes both drag worklets through the shared rubber-band so the clearance covers the drag peak', () => {
+    expect(threeStep).toContain("computePaywallDragOffset,");
+    expect(threeStep.split('computePaywallDragOffset(e.translationY)')).toHaveLength(3);
+    // The per-screen copies of MAX_DRAG and the inline formula are gone.
+    expect(threeStep).not.toMatch(/const MAX_DRAG\b/);
+    expect(threeStep).not.toContain('e.translationY * 0.4');
+  });
+
+  it('derives the bottom fade height from the floor frame height', () => {
+    const start = threeStep.indexOf('screen1Gradient: {');
+    expect(start).toBeGreaterThan(-1);
+    const gradientBlock = threeStep.slice(start, threeStep.indexOf('},', start));
+    expect(gradientBlock).toContain('height: MOCKUP_MIN_HEIGHT');
+    expect(gradientBlock).not.toContain('height: 240');
+  });
+
+  it('no longer describes the retired 80px / 500ms entrance', () => {
+    expect(threeStep).not.toContain('Option A entrance');
+    expect(threeStep).not.toContain('80px below');
   });
 });

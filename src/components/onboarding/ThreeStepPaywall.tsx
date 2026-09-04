@@ -52,7 +52,12 @@ import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
 import { mmkvStorage } from '@/lib/mmkv-storage';
 import { isQaToolsEnabled } from '@/lib/qa-tools';
 import { getPerMonthEquivalent } from '@/lib/paywall-pricing';
-import { computeMockupSize } from '@/lib/paywall-mockup-size';
+import {
+  computeMockupSize,
+  computePaywallDragOffset,
+  MOCKUP_MIN_HEIGHT,
+  MOCKUP_TOP_PADDING,
+} from '@/lib/paywall-mockup-size';
 import {
   getThreeStepPaywallPrimaryAction,
   resolvePurchaseOutcome,
@@ -112,11 +117,9 @@ const TOTAL_PAGES_NO_TRIAL = 2;
 // badge behaves identically across both paywall surfaces.
 const SAVE_BADGE_DIMMED_OPACITY = 0.45;
 
-// Screen 1 phone mockup: gap above the frame (the wrapper's paddingTop) and
-// the gap kept between the frame bottom and the CTA block. Both feed
-// computeMockupSize so the sizing math and the layout stay in lockstep.
-const MOCKUP_TOP_PADDING = Spacing['4'];
-const MOCKUP_BOTTOM_CLEARANCE = Spacing['4'];
+// Screens 1 and 2 follow the finger through the rubber-band in
+// computePaywallDragOffset and spring back with this on release.
+const DRAG_RETURN_SPRING = { damping: 30, stiffness: 300, mass: 1, overshootClamping: true };
 
 // Ember exclusion zones (normalized): benefit copy band + the stacked-card
 // dot indicators — stray embers next to the dots read as faux pagination.
@@ -409,8 +412,6 @@ function ScreenProductInAction({
   // is no dead zone at all — the phone doesn't animate either way.
 
   const dragY = useSharedValue(0);
-  const MAX_DRAG = 60; // 15% of ~400px content area
-  const SPRING_CONFIG = { damping: 30, stiffness: 300, mass: 1, overshootClamping: true };
 
   const dragGesture = Gesture.Pan()
     .activeOffsetY([-8, 8])
@@ -418,12 +419,11 @@ function ScreenProductInAction({
     .shouldCancelWhenOutside(false)
     .onUpdate((e) => {
       'worklet';
-      const raw = e.translationY * 0.4;
-      dragY.value = raw * (1 - Math.abs(raw) / (MAX_DRAG * 2));
+      dragY.value = computePaywallDragOffset(e.translationY);
     })
     .onFinalize(() => {
       'worklet';
-      dragY.value = withSpring(0, SPRING_CONFIG);
+      dragY.value = withSpring(0, DRAG_RETURN_SPRING);
     });
 
   const dragStyle = useAnimatedStyle(() => ({
@@ -451,8 +451,6 @@ function ScreenProductInAction({
     ? computeMockupSize({
         availableHeight: wrapperLayout.height,
         availableWidth: wrapperLayout.width,
-        topPadding: MOCKUP_TOP_PADDING,
-        bottomClearance: MOCKUP_BOTTOM_CLEARANCE,
       })
     : null;
 
@@ -482,11 +480,10 @@ function ScreenProductInAction({
             </View>
 
             {/* Device bezel -- sized to fit the wrapper so the rounded frame
-                bottom sits MOCKUP_BOTTOM_CLEARANCE above the CTA block. It
-                only overflows (and fades) below MOCKUP_MIN_HEIGHT. */}
-            {/* Option A entrance: phone rises from 80px below, fades in, and
-                scales from 0.95 → 1 with a critically-damped spring (~500ms).
-                Feels like the mockup is being handed to the user. */}
+                bottom sits MOCKUP_BOTTOM_CLEARANCE above the CTA block, a gap
+                that also covers the drag gesture's downward peak. It only
+                overflows (and fades) below MOCKUP_MIN_HEIGHT. The entrance is
+                `phoneEntering` above. */}
             <Animated.View
               testID="paywall-mockup-wrapper"
               style={styles.screen1DeviceWrapper}
@@ -572,8 +569,6 @@ function ScreenTrialReminder({
 }) {
   const reducedMotion = useReducedMotion();
   const dragY = useSharedValue(0);
-  const MAX_DRAG = 60;
-  const SPRING_CONFIG = { damping: 30, stiffness: 300, mass: 1, overshootClamping: true };
 
   const dragGesture = Gesture.Pan()
     .activeOffsetY([-8, 8])
@@ -581,12 +576,11 @@ function ScreenTrialReminder({
     .shouldCancelWhenOutside(false)
     .onUpdate((e) => {
       'worklet';
-      const raw = e.translationY * 0.4;
-      dragY.value = raw * (1 - Math.abs(raw) / (MAX_DRAG * 2));
+      dragY.value = computePaywallDragOffset(e.translationY);
     })
     .onFinalize(() => {
       'worklet';
-      dragY.value = withSpring(0, SPRING_CONFIG);
+      dragY.value = withSpring(0, DRAG_RETURN_SPRING);
     });
 
   const dragStyle = useAnimatedStyle(() => ({
@@ -1649,7 +1643,9 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 240,
+    // Covers the floor-height frame that overflows the page, so the fade
+    // and the frame it hides stay in lockstep.
+    height: MOCKUP_MIN_HEIGHT,
   },
 
   // ------- Screen 2 -------
