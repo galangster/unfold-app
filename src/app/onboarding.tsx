@@ -102,6 +102,7 @@ import {
   resolveQuickDateChip,
   addKeyPerson,
   KEY_PEOPLE_MAX_COUNT,
+  keyPeopleCapMessage,
   keyPersonChipAccessibility,
   keyPersonChipLabel,
   keyPersonRowLabel,
@@ -2875,6 +2876,7 @@ export default function OnboardingScreen() {
     if (step.type === 'keyPeople') {
       const people = data.keyPeople;
       const maxPeopleReached = people.length >= KEY_PEOPLE_MAX_COUNT;
+      const capMessage = keyPeopleCapMessage(people.length);
       const relationshipCounts: Record<string, number> = {};
       for (const person of people) {
         relationshipCounts[person.relationship] = (relationshipCounts[person.relationship] ?? 0) + 1;
@@ -2925,6 +2927,9 @@ export default function OnboardingScreen() {
                     backgroundColor: isActive ? selectedAccentSurface(colors.accent, 0.18) : colors.inputBackground,
                     borderWidth: 1,
                     borderColor: isActive ? colors.accent : colors.border,
+                    // Same dim MultiSelectPills uses at its cap, so a locked
+                    // chip reads as locked without a haptic or a press.
+                    opacity: chipA11y.disabled ? 0.4 : 1,
                   }}
                 >
                   <Text style={{
@@ -2938,6 +2943,20 @@ export default function OnboardingScreen() {
               );
             })}
           </View>
+
+          {capMessage && (
+            <Text
+              accessibilityRole="text"
+              style={{
+                fontFamily: FontFamily.ui,
+                fontSize: FontSize.xs,
+                color: colors.textHint,
+                marginTop: Spacing['3'],
+              }}
+            >
+              {capMessage}
+            </Text>
+          )}
 
           {people.length > 0 && (
             <View style={{ gap: Spacing['3'], marginTop: Spacing['4'] }}>

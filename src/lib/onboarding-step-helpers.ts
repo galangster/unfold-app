@@ -444,6 +444,17 @@ export function keyPersonChipLabel(relationship: string, count: number): string 
 }
 
 /**
+ * The one sentence that explains a locked chip row, or undefined below the
+ * cap. The screen prints it under the chips and VoiceOver reads it as each
+ * chip's hint, so a sighted reader and a screen-reader user get the same why.
+ */
+export function keyPeopleCapMessage(peopleCount: number, maxCount = KEY_PEOPLE_MAX_COUNT): string | undefined {
+  return peopleCount >= maxCount
+    ? `Maximum of ${maxCount} people reached. Remove a person to add another.`
+    : undefined;
+}
+
+/**
  * Accessibility props for a relationship chip. Once `peopleCount` reaches the
  * cap the chip is truly disabled (no press, no haptic) and the hint says why,
  * so the "dimmed" VoiceOver announces matches a control that does nothing.
@@ -454,11 +465,11 @@ export function keyPersonChipAccessibility(
   peopleCount: number,
   maxCount = KEY_PEOPLE_MAX_COUNT,
 ): { label: string; hint: string | undefined; disabled: boolean } {
-  const disabled = peopleCount >= maxCount;
+  const hint = keyPeopleCapMessage(peopleCount, maxCount);
   return {
     label: count > 0 ? `Add another ${relationship}, ${count} added` : `Add ${relationship}`,
-    hint: disabled ? `Maximum of ${maxCount} people reached. Remove a person to add another.` : undefined,
-    disabled,
+    hint,
+    disabled: hint !== undefined,
   };
 }
 

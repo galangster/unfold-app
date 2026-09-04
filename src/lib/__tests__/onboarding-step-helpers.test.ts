@@ -10,6 +10,7 @@ import {
   resolveQuickDateChip,
   addKeyPerson,
   KEY_PEOPLE_MAX_COUNT,
+  keyPeopleCapMessage,
   keyPersonChipAccessibility,
   keyPersonChipLabel,
   keyPersonRowLabel,
@@ -563,6 +564,18 @@ describe('onboarding step helpers', () => {
         disabled: true,
       });
       expect(keyPersonChipAccessibility('Friend', 1, 2, 2).disabled).toBe(true);
+    });
+
+    it('prints the cap message only at the cap and reuses it as the chip hint', () => {
+      expect(keyPeopleCapMessage(0)).toBeUndefined();
+      expect(keyPeopleCapMessage(KEY_PEOPLE_MAX_COUNT - 1)).toBeUndefined();
+      expect(keyPeopleCapMessage(KEY_PEOPLE_MAX_COUNT)).toBe(
+        'Maximum of 5 people reached. Remove a person to add another.',
+      );
+      expect(keyPeopleCapMessage(2, 2)).toBe('Maximum of 2 people reached. Remove a person to add another.');
+      expect(keyPersonChipAccessibility('Friend', 1, KEY_PEOPLE_MAX_COUNT).hint).toBe(
+        keyPeopleCapMessage(KEY_PEOPLE_MAX_COUNT),
+      );
     });
   });
 
