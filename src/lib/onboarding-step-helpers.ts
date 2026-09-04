@@ -340,6 +340,70 @@ export function shapeKeyPeople(
   return shaped;
 }
 
+/** Most people the step accepts; the backend clamps to the same number. */
+export const KEY_PEOPLE_MAX_COUNT = 5;
+
+/**
+ * One row of the key-people editing state. `id` exists only so the UI can
+ * address a row when several share a relationship (two friends, say);
+ * shapeKeyPeople drops it before anything is persisted or sent.
+ */
+export type KeyPersonRow = { id: string; name: string; relationship: string };
+
+// Ids only need to be unique within the editing state, but a restored draft
+// can carry ids minted by an earlier process, so the counter is namespaced by
+// module load time to keep new ids from colliding with restored ones.
+const KEY_PERSON_ID_RUN = Date.now().toString(36);
+let keyPersonIdSeq = 0;
+
+function nextKeyPersonId(): string {
+  keyPersonIdSeq += 1;
+  return `kp-${KEY_PERSON_ID_RUN}-${keyPersonIdSeq}`;
+}
+
+/**
+ * Gives every row a stable id. Rows restored from a draft written before ids
+ * existed get one here; rows that already carry an id keep it.
+ */
+export function withKeyPersonIds(
+  people: readonly { id?: string | null; name?: string | null; relationship?: string | null }[] | null | undefined,
+): KeyPersonRow[] {
+  if (!people) return [];
+  return people.map((person) => ({
+    id: typeof person?.id === 'string' && person.id ? person.id : nextKeyPersonId(),
+    name: typeof person?.name === 'string' ? person.name : '',
+    relationship: typeof person?.relationship === 'string' ? person.relationship : '',
+  }));
+}
+
+/**
+ * Appends an empty row for `relationship`. Tapping the same chip twice adds
+ * two rows. Returns the input array untouched once `maxCount` rows exist.
+ */
+export function addKeyPerson(
+  people: KeyPersonRow[],
+  relationship: string,
+  maxCount = KEY_PEOPLE_MAX_COUNT,
+): KeyPersonRow[] {
+  if (people.length >= maxCount) return people;
+  return [...people, { id: nextKeyPersonId(), name: '', relationship }];
+}
+
+/** Removes only the row with `id`; other rows keep their order. */
+export function removeKeyPerson(people: KeyPersonRow[], id: string): KeyPersonRow[] {
+  return people.filter((person) => person.id !== id);
+}
+
+/** Renames only the row with `id`, keeping the name within `maxNameLength`. */
+export function renameKeyPerson(
+  people: KeyPersonRow[],
+  id: string,
+  name: string,
+  maxNameLength = 50,
+): KeyPersonRow[] {
+  return people.map((person) => (person.id === id ? { ...person, name: name.slice(0, maxNameLength) } : person));
+}
+
 // ---------------------------------------------------------------------------
 // Upcoming event (onboarding "what's coming up" step)
 // ---------------------------------------------------------------------------

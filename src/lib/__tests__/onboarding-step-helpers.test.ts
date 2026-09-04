@@ -8,7 +8,13 @@ import {
   getOnboardingStepLayoutMode,
   isFullScreenOnboardingStepType,
   resolveQuickDateChip,
+  addKeyPerson,
+  KEY_PEOPLE_MAX_COUNT,
+  removeKeyPerson,
+  renameKeyPerson,
   shapeKeyPeople,
+  withKeyPersonIds,
+  type KeyPersonRow,
   shapeUpcomingEvent,
   shouldShowOnboardingTopContinue,
   shouldStartOnboardingSampleGeneration,
@@ -414,6 +420,84 @@ describe('onboarding step helpers', () => {
     it('returns an empty array for null or undefined input', () => {
       expect(shapeKeyPeople(null)).toEqual([]);
       expect(shapeKeyPeople(undefined)).toEqual([]);
+    });
+
+    it('keeps multiple people with the same relationship in order', () => {
+      expect(
+        shapeKeyPeople([
+          { name: 'Anthony', relationship: 'Friend' },
+          { name: 'Mi Young', relationship: 'Friend' },
+        ]),
+      ).toEqual([
+        { name: 'Anthony', relationship: 'Friend' },
+        { name: 'Mi Young', relationship: 'Friend' },
+      ]);
+    });
+
+    it('strips editing-only fields so the stored shape stays { name, relationship }', () => {
+      const shaped = shapeKeyPeople([
+        { id: 'kp-1', name: 'Anthony', relationship: 'Friend' },
+        { id: 'kp-2', name: 'Sam', relationship: 'Spouse' },
+      ] as KeyPersonRow[]);
+      expect(shaped).toEqual([
+        { name: 'Anthony', relationship: 'Friend' },
+        { name: 'Sam', relationship: 'Spouse' },
+      ]);
+      for (const person of shaped) expect(Object.keys(person).sort()).toEqual(['name', 'relationship']);
+    });
+  });
+
+  describe('key people editing rows', () => {
+    it('adds a row per chip tap, so the same relationship can appear twice with distinct ids', () => {
+      const once = addKeyPerson([], 'Friend');
+      const twice = addKeyPerson(once, 'Friend');
+      expect(twice).toHaveLength(2);
+      expect(twice.map((p) => p.relationship)).toEqual(['Friend', 'Friend']);
+      expect(twice.map((p) => p.name)).toEqual(['', '']);
+      expect(twice[0].id).not.toBe(twice[1].id);
+      expect(once).toHaveLength(1);
+    });
+
+    it('is a no-op that returns the same array once the cap is reached', () => {
+      let people: KeyPersonRow[] = [];
+      for (let i = 0; i < KEY_PEOPLE_MAX_COUNT; i += 1) people = addKeyPerson(people, 'Friend');
+      expect(people).toHaveLength(5);
+      expect(addKeyPerson(people, 'Mentor')).toBe(people);
+    });
+
+    it('removes only the row with the given id', () => {
+      const people = addKeyPerson(addKeyPerson(addKeyPerson([], 'Friend'), 'Friend'), 'Spouse');
+      const removed = removeKeyPerson(people, people[0].id);
+      expect(removed.map((p) => p.id)).toEqual([people[1].id, people[2].id]);
+      expect(removeKeyPerson(people, 'missing')).toEqual(people);
+    });
+
+    it('renames only the row with the given id and keeps the name within the limit', () => {
+      const people = addKeyPerson(addKeyPerson([], 'Friend'), 'Friend');
+      const renamed = renameKeyPerson(people, people[1].id, 'Mi Young');
+      expect(renamed[0].name).toBe('');
+      expect(renamed[1].name).toBe('Mi Young');
+      expect(renamed[1].id).toBe(people[1].id);
+      expect(renameKeyPerson(people, people[0].id, 'x'.repeat(80))[0].name).toHaveLength(50);
+      expect(renameKeyPerson(people, people[0].id, 'x'.repeat(80), 10)[0].name).toHaveLength(10);
+    });
+
+    it('gives restored rows without ids a distinct id and keeps existing ids', () => {
+      const rows = withKeyPersonIds([
+        { name: 'Anthony', relationship: 'Friend' },
+        { name: 'Mi Young', relationship: 'Friend' },
+        { id: 'kp-kept', name: 'Sam', relationship: 'Spouse' },
+      ]);
+      expect(rows.map((p) => ({ name: p.name, relationship: p.relationship }))).toEqual([
+        { name: 'Anthony', relationship: 'Friend' },
+        { name: 'Mi Young', relationship: 'Friend' },
+        { name: 'Sam', relationship: 'Spouse' },
+      ]);
+      expect(rows[0].id).toBeTruthy();
+      expect(rows[0].id).not.toBe(rows[1].id);
+      expect(rows[2].id).toBe('kp-kept');
+      expect(withKeyPersonIds(null)).toEqual([]);
+      expect(withKeyPersonIds(undefined)).toEqual([]);
     });
   });
 
