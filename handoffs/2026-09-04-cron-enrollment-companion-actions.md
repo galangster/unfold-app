@@ -16,7 +16,7 @@ Date: 2026-09-04 (afternoon session). Author: Claude (Fable 5.1) with Nick. Scop
 - `105b7c2` (carries `04d299c`) deployed SUCCESS on both services at 2026-09-04T17:54:31Z (deployment `3029f191-…`).
 
 ### Simulator
-- iPhone 17 Pro booted with the Debug dev client; Metro was started through the `unfold-metro` launch config and left running at the end of the session (stop it with `preview_stop` or kill port 8081). Note: a full Metro reload lands the sim on the onboarding re-entry screen ("Is there something specific you want to explore?"); `unfold://(tabs)/(today)` returns to Today.
+- iPhone 17 Pro booted with the Debug dev client; Metro (`unfold-metro` launch config) was stopped at the end of the session. Start it again with `preview_start`, then open `unfold://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081`. Note: a full Metro reload lands the sim on the onboarding re-entry screen ("Is there something specific you want to explore?"); `unfold://(tabs)/(today)` returns to Today.
 
 ## Decisions taken
 - **Item 2, ruled by Nick ("enroll on sync").** The sync-push upsert assigns `stagger_offset_minutes` (shared helper `backend/src/lib/stagger-offset.ts`, COALESCE-guarded so an existing offset never moves). Every syncing reader is now pre-generated overnight; notifications stay gated on `expo_push_token`; the pacing cap bounds a churned reader to one catch-up day. Existing rows fill in on their next push; no migration. Prod at the time: 20 sync_users, 5 enrolled, on-demand day jobs averaged 147s (max 506s).
