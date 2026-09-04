@@ -1,4 +1,6 @@
 
+import { INPUT_LIMITS } from './validation';
+
 type OnboardingStepLike = {
   id: string;
   skipIfHasValue?: boolean;
@@ -318,6 +320,12 @@ export function buildOnboardingSampleGenerationRequest({
 // Key people (onboarding "who's walking through this with you?" step)
 // ---------------------------------------------------------------------------
 
+/** Most people the step accepts; the backend clamps to the same number. */
+export const KEY_PEOPLE_MAX_COUNT = 5;
+
+/** Longest name a row keeps; the same limit the name field enforces. */
+export const KEY_PERSON_NAME_MAX_LENGTH: number = INPUT_LIMITS.NAME.max;
+
 /**
  * Shapes raw keyPeople editing state (which may include chip-revealed rows
  * with no name typed yet) into the payload persisted to the user profile:
@@ -325,8 +333,8 @@ export function buildOnboardingSampleGenerationRequest({
  */
 export function shapeKeyPeople(
   people: readonly { name?: string | null; relationship?: string | null }[] | null | undefined,
-  maxCount = 5,
-  maxNameLength = 50,
+  maxCount = KEY_PEOPLE_MAX_COUNT,
+  maxNameLength = KEY_PERSON_NAME_MAX_LENGTH,
 ): { name: string; relationship: string }[] {
   if (!people) return [];
   const shaped: { name: string; relationship: string }[] = [];
@@ -339,9 +347,6 @@ export function shapeKeyPeople(
   }
   return shaped;
 }
-
-/** Most people the step accepts; the backend clamps to the same number. */
-export const KEY_PEOPLE_MAX_COUNT = 5;
 
 /**
  * One row of the key-people editing state. `id` exists only so the UI can
@@ -399,9 +404,34 @@ export function renameKeyPerson(
   people: KeyPersonRow[],
   id: string,
   name: string,
-  maxNameLength = 50,
+  maxNameLength = KEY_PERSON_NAME_MAX_LENGTH,
 ): KeyPersonRow[] {
   return people.map((person) => (person.id === id ? { ...person, name: name.slice(0, maxNameLength) } : person));
+}
+
+/**
+ * Label for the row at `index`: "Friend 1" / "Friend 2" while two rows share
+ * a relationship, the plain relationship once it is the only one.
+ */
+export function keyPersonRowLabel(people: readonly KeyPersonRow[], index: number): string {
+  const person = people[index];
+  if (!person) return '';
+  let ordinal = 0;
+  let total = 0;
+  people.forEach((candidate, i) => {
+    if (candidate.relationship !== person.relationship) return;
+    total += 1;
+    if (i <= index) ordinal += 1;
+  });
+  return total > 1 ? `${person.relationship} ${ordinal}` : person.relationship;
+}
+
+/**
+ * Label for a relationship chip: "Friend · 2" once two rows share it, so the
+ * count never reads as part of a name; the plain relationship below that.
+ */
+export function keyPersonChipLabel(relationship: string, count: number): string {
+  return count > 1 ? `${relationship} \u00B7 ${count}` : relationship;
 }
 
 // ---------------------------------------------------------------------------

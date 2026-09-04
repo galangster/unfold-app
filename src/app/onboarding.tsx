@@ -102,6 +102,8 @@ import {
   resolveQuickDateChip,
   addKeyPerson,
   KEY_PEOPLE_MAX_COUNT,
+  keyPersonChipLabel,
+  keyPersonRowLabel,
   removeKeyPerson,
   renameKeyPerson,
   shapeKeyPeople,
@@ -926,7 +928,9 @@ export default function OnboardingScreen() {
   const [showListScrollHint, setShowListScrollHint] = useState(true);
   const inputOpacity = useSharedValue(0);
   const scrollViewRef = useRef<ScrollView>(null);
-  // The key-people row added by the latest chip tap opens the keyboard on mount.
+  // The key-people row added by the latest chip tap opens the keyboard on
+  // mount; the row clears this once it has focus so a remount (Back into the
+  // step) does not reopen the keyboard.
   const lastAddedKeyPersonIdRef = useRef<string | null>(null);
   // Restore a persisted onboarding sample job (survives force-quit + relaunch):
   // the segue then resumes the SAME job instead of submitting a duplicate. Read
@@ -2895,6 +2899,10 @@ export default function OnboardingScreen() {
         setData((prev) => ({ ...prev, keyPeople: renameKeyPerson(prev.keyPeople, id, name, INPUT_LIMITS.NAME.max) }));
       };
 
+      const consumeAutofocus = (id: string) => {
+        if (lastAddedKeyPersonIdRef.current === id) lastAddedKeyPersonIdRef.current = null;
+      };
+
       return (
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing['2'] }}>
@@ -2906,7 +2914,8 @@ export default function OnboardingScreen() {
                   key={relationship}
                   onPress={() => addPerson(relationship)}
                   accessibilityRole="button"
-                  accessibilityLabel={isActive ? `Add another ${relationship}` : `Add ${relationship}`}
+                  accessibilityLabel={isActive ? `Add another ${relationship}, ${count} added` : `Add ${relationship}`}
+                  accessibilityState={{ disabled: maxPeopleReached }}
                   style={{
                     paddingHorizontal: Spacing['3.5'],
                     paddingVertical: Spacing['3'],
@@ -2921,7 +2930,7 @@ export default function OnboardingScreen() {
                     fontSize: FontSize.sm,
                     color: isActive ? colors.accent : colors.textMuted,
                   }}>
-                    {count > 1 ? `${relationship} \u00B7 ${count}` : relationship}
+                    {keyPersonChipLabel(relationship, count)}
                   </Text>
                 </TouchableOpacity>
               );
@@ -2931,9 +2940,7 @@ export default function OnboardingScreen() {
           {people.length > 0 && (
             <View style={{ gap: Spacing['3'], marginTop: Spacing['4'] }}>
               {people.map((person, index) => {
-                // Two friends read as "Friend 1" and "Friend 2"; a lone spouse stays "Spouse".
-                const ordinal = people.slice(0, index + 1).filter((p) => p.relationship === person.relationship).length;
-                const label = relationshipCounts[person.relationship] > 1 ? `${person.relationship} ${ordinal}` : person.relationship;
+                const label = keyPersonRowLabel(people, index);
                 return (
                   <View key={person.id}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing['1'] }}>
@@ -2957,6 +2964,7 @@ export default function OnboardingScreen() {
                       value={person.name}
                       onChangeText={(text) => updatePersonName(person.id, text)}
                       autoFocus={person.id === lastAddedKeyPersonIdRef.current}
+                      onFocus={() => consumeAutofocus(person.id)}
                       placeholder="Their name"
                       placeholderTextColor={colors.textMuted}
                       selectionColor={colors.accent}

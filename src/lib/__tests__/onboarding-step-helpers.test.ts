@@ -10,6 +10,8 @@ import {
   resolveQuickDateChip,
   addKeyPerson,
   KEY_PEOPLE_MAX_COUNT,
+  keyPersonChipLabel,
+  keyPersonRowLabel,
   removeKeyPerson,
   renameKeyPerson,
   shapeKeyPeople,
@@ -498,6 +500,21 @@ describe('onboarding step helpers', () => {
       expect(rows[2].id).toBe('kp-kept');
       expect(withKeyPersonIds(null)).toEqual([]);
       expect(withKeyPersonIds(undefined)).toEqual([]);
+    });
+
+    it('numbers row labels only while a relationship repeats', () => {
+      const people = addKeyPerson(addKeyPerson(addKeyPerson([], 'Friend'), 'Spouse'), 'Friend');
+      expect(people.map((_, index) => keyPersonRowLabel(people, index))).toEqual(['Friend 1', 'Spouse', 'Friend 2']);
+      const survivors = removeKeyPerson(people, people[0].id);
+      expect(survivors.map((_, index) => keyPersonRowLabel(survivors, index))).toEqual(['Spouse', 'Friend']);
+      expect(keyPersonRowLabel(people, people.length)).toBe('');
+    });
+
+    it('shows the count on a chip only once two rows share the relationship', () => {
+      expect(keyPersonChipLabel('Friend', 0)).toBe('Friend');
+      expect(keyPersonChipLabel('Friend', 1)).toBe('Friend');
+      expect(keyPersonChipLabel('Friend', 2)).toBe('Friend \u00B7 2');
+      expect(keyPersonChipLabel('Friend', 2)).toBe('Friend · 2');
     });
   });
 
