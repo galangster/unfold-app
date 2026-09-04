@@ -82,6 +82,26 @@ export const SwipeableNoteCard = memo(function SwipeableNoteCard({
     [onPress],
   );
 
+  const onAccessibilityAction = useCallback(
+    (event: { nativeEvent: { actionName: string } }) => {
+      switch (event.nativeEvent.actionName) {
+        case 'activate':
+          handlePress(note);
+          break;
+        case 'share':
+          handleShare();
+          break;
+        case 'move':
+          handleMove();
+          break;
+        case 'delete':
+          handleDelete();
+          break;
+      }
+    },
+    [handlePress, note, handleShare, handleMove, handleDelete],
+  );
+
   const panGesture = useMemo(
     () =>
       Gesture.Pan()
@@ -167,7 +187,19 @@ export const SwipeableNoteCard = memo(function SwipeableNoteCard({
 
       {/* Sliding card content */}
       <GestureDetector gesture={panGesture}>
-        <Animated.View style={contentStyle}>
+        <Animated.View
+          style={contentStyle}
+          accessible
+          accessibilityRole="button"
+          accessibilityLabel={note.title.trim() || 'Untitled note'}
+          accessibilityActions={[
+            { name: 'activate', label: 'Open note' },
+            { name: 'share', label: 'Share note' },
+            { name: 'move', label: 'Move note to folder' },
+            { name: 'delete', label: 'Delete note' },
+          ]}
+          onAccessibilityAction={onAccessibilityAction}
+        >
           <NoteCard note={note} onPress={handlePress} index={index} />
         </Animated.View>
       </GestureDetector>

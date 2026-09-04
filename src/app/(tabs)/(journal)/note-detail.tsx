@@ -10,6 +10,7 @@ import {
   Platform,
   AccessibilityInfo,
   ScrollView,
+  Share,
 } from 'react-native';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,6 +21,7 @@ import {
   CaretLeftIcon,
   DotsThreeIcon,
   TrashIcon,
+  ArrowUpRightIcon,
   StarIcon,
   FolderSimpleIcon,
   BookBookmarkIcon,
@@ -948,6 +950,28 @@ export default function NoteDetailScreen() {
     setShowMoreMenu(false);
   }, [ensureNoteSaved, notes, updateNote]);
 
+  const handleShare = useCallback(async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const id = await ensureNoteSaved();
+    const currentNote = notes.find((n) => n.id === id);
+    setShowMoreMenu(false);
+    if (!currentNote) return;
+
+    const plainContent = isHtmlContent(currentNote.content)
+      ? stripHtml(currentNote.content)
+      : currentNote.content;
+    const shareTitle = currentNote.title.trim() || 'Note';
+    const shareMessage = currentNote.title.trim()
+      ? `${currentNote.title}\n\n${plainContent}`
+      : plainContent;
+
+    try {
+      await Share.share({ title: shareTitle, message: shareMessage });
+    } catch {
+      // User cancelled or share failed — no action needed
+    }
+  }, [ensureNoteSaved, notes]);
+
   const handleDelete = useCallback(() => {
     if (!noteId) {
       // Discarding an unsaved note — cancel any pending autosave so the
@@ -1369,6 +1393,25 @@ export default function NoteDetailScreen() {
               },
             ]}
           >
+            {/* Share */}
+            <TouchableOpacity
+              onPress={handleShare}
+              style={styles.menuItem}
+              activeOpacity={0.6}
+              accessible
+              testID="note-more-share"
+              accessibilityRole="button"
+              accessibilityLabel="Share note"
+              accessibilityHint="Opens the share sheet for this note"
+            >
+              <ArrowUpRightIcon size={16} color={colors.textMuted} weight="light" />
+              <Text style={[styles.menuItemText, { color: colors.text }]}>
+                Share
+              </Text>
+            </TouchableOpacity>
+
+            <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+
             {/* Favorite toggle */}
             <TouchableOpacity
               onPress={handleToggleFavorite}

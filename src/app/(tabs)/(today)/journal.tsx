@@ -518,12 +518,17 @@ export default function JournalScreen() {
     soapValuesRef.current = next;
     setSoapValues(next);
     hasPendingSoapRef.current = true;
+    hasChangesRef.current = true;
+    setHasChanges(true);
     soapAutosaveRef.current?.schedule();
   }, [gate]);
 
   // Flush all pending SOAP values to the store immediately. Writes every
   // field that differs from the persisted entry — including cleared (empty)
   // fields — so deletions made inside the debounce window stick (COR-6).
+  // Drives the same hasChanges/justSaved state as the free-write path so the
+  // Saving/Saved band (and the section's "Auto-saved" caption) reflect the
+  // actual flush, not a static label.
   const flushSoapSaves = useCallback(() => {
     if (!hasPendingSoapRef.current) return;
     const entryId = ensureEntry();
@@ -534,6 +539,14 @@ export default function JournalScreen() {
       }
     }
     hasPendingSoapRef.current = false;
+    hasChangesRef.current = false;
+    if (!isMountedRef.current) return;
+    setHasChanges(false);
+    setJustSaved(true);
+    if (justSavedTimerRef.current) clearTimeout(justSavedTimerRef.current);
+    justSavedTimerRef.current = setTimeout(() => {
+      if (isMountedRef.current) setJustSaved(false);
+    }, 2000);
   }, [ensureEntry, updateSoapResponse, getJournalEntry, devotionalId, dayNumber]);
   flushSoapSavesRef.current = flushSoapSaves;
 
@@ -817,7 +830,7 @@ Their journal entry:
     }
   };
 
-  const showDeeperButton = activeMode === 'freewrite' && content.trim().length >= 10 && deeperPrompts.length === 0 && focusQuestionIndex == null;
+  const showDeeperButton = activeMode === 'freewrite' && content.trim().length >= 10 && deeperPrompts.length === 0 && focusQuestionIndex == null && !deeperError;
 
   // Prayer requests from existing entry
   const prayerRequests = existingEntry?.prayerRequests ?? [];
@@ -941,9 +954,9 @@ Their journal entry:
                     textAlignVertical="top"
                     keyboardAppearance={isDark ? 'dark' : 'light'}
                     accessibilityLabel="Journal entry"
-                    style={[jStyles.freewriteInput, { color: colors.text, fontSize: typography.responseFontSize, lineHeight: typography.responseLineHeight }]}
+                    style={[jStyles.freewriteInput, { color: colors.text, paddingBottom: 40, fontSize: typography.responseFontSize, lineHeight: typography.responseLineHeight }]}
                   />
-                  <VoiceInputBar value={content} onChangeText={handleTextChange} />
+                  <VoiceInputBar inline value={content} onChangeText={handleTextChange} />
                 </Animated.View>
 
                 {/* Go Deeper button */}
@@ -1194,8 +1207,8 @@ Their journal entry:
                               onChangeText={(text) => handleSoapChange(section.key, text)}
                             />
                           </View>
-                          <Text style={[jStyles.autoSavedLabel, { color: colors.textHint }]}>
-                            Auto-saved
+                          <Text style={[jStyles.autoSavedLabel, { color: justSaved ? colors.accent : colors.textHint }]}>
+                            {hasChanges ? 'Saving...' : justSaved ? 'Saved' : 'Auto-saved'}
                           </Text>
                         </Animated.View>
                       )}

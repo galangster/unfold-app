@@ -7,11 +7,19 @@ import type { DevotionalDay, JournalEntry, JournalMode, SoapResponses } from '@/
  * across a temporal dead zone; TDZ-enforcing engines crash).
  */
 
+/**
+ * The entry screen only ever renders the free-write field or the SOAP
+ * fields — "guided" is a legacy mode with no matching UI. A persisted or
+ * synced "guided" value (or any other unrecognised value) must not reach
+ * the screen: normalise it to "freewrite" here, at the source, rather than
+ * at every render site.
+ */
 export function resolveInitialJournalMode(
   existingEntry: Pick<JournalEntry, 'journalMode'> | undefined,
   currentDay: Pick<DevotionalDay, 'studyMethod'> | undefined,
-): JournalMode {
-  if (existingEntry?.journalMode) return existingEntry.journalMode;
+): Exclude<JournalMode, 'guided'> {
+  const normalizedPersisted = normalizeJournalMode(existingEntry?.journalMode);
+  if (normalizedPersisted) return normalizedPersisted;
   if (currentDay?.studyMethod === 'soap_journal') return 'soap';
   return 'freewrite';
 }
@@ -29,6 +37,18 @@ export function buildInitialQuestionResponses(
     initial.set(qr.question, qr.response);
   }
   return initial;
+}
+
+/**
+ * Normalises a raw (possibly synced) journal-mode value the same way
+ * resolveInitialJournalMode does: "guided" and anything unrecognised become
+ * "freewrite" so no screen has to guard against a mode it can't render.
+ * Returns undefined for an absent value, so callers can still fall back to
+ * the study-method suggestion.
+ */
+export function normalizeJournalMode(value: unknown): Exclude<JournalMode, 'guided'> | undefined {
+  if (value === undefined) return undefined;
+  return value === 'soap' ? 'soap' : 'freewrite';
 }
 
 export const SOAP_FIELDS = ['scripture', 'observation', 'application', 'prayer'] as const;

@@ -745,12 +745,15 @@ export default function MyContentScreen() {
           borderBottomColor: colors.border,
         }}
       >
-        {tabs.map((tab) => {
+        {tabs.map((tab, index) => {
           const isActive = activeTab === tab.id;
           return (
             <TouchableOpacity activeOpacity={0.7}
               key={tab.id}
               onPress={() => handleTabPress(tab.id)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: isActive }}
+              accessibilityLabel={`${tab.label} tab, ${tab.count} ${tab.count === 1 ? 'item' : 'items'}, ${index + 1} of ${tabs.length}`}
               style={{
                 flex: 1,
                 alignItems: 'center',

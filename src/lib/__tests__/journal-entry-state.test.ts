@@ -1,3 +1,4 @@
+import type { JournalMode } from '@/lib/store';
 import {
   buildInitialQuestionResponses,
   diffSoapWrites,
@@ -8,8 +9,23 @@ import {
 describe('resolveInitialJournalMode', () => {
   it('honors a persisted journal mode over the study-method suggestion', () => {
     expect(
+      resolveInitialJournalMode({ journalMode: 'freewrite' }, { studyMethod: 'soap_journal' }),
+    ).toBe('freewrite');
+  });
+
+  it('maps a persisted "guided" mode to freewrite — no UI renders guided (COR-7)', () => {
+    expect(
       resolveInitialJournalMode({ journalMode: 'guided' }, { studyMethod: 'soap_journal' }),
-    ).toBe('guided');
+    ).toBe('freewrite');
+  });
+
+  it('maps an unrecognised persisted mode to freewrite', () => {
+    expect(
+      resolveInitialJournalMode(
+        { journalMode: 'not-a-real-mode' as JournalMode },
+        { studyMethod: 'soap_journal' },
+      ),
+    ).toBe('freewrite');
   });
 
   it('auto-selects SOAP for soap_journal study-method days with no persisted mode (COR-5)', () => {

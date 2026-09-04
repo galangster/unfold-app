@@ -61,6 +61,17 @@ export function WritingStyleSection() {
     <>
       <SettingsSectionHeader label="Writing Style" />
 
+      <Text
+        style={{
+          fontFamily: FontFamily.ui,
+          fontSize: FontSize.xs,
+          color: colors.textMuted,
+          marginBottom: Spacing['3'],
+        }}
+      >
+        Applies to readings written from now on. Today's reading stays as it is.
+      </Text>
+
       <View style={getSettingsCardStyle(colors)}>
         {/* Tone */}
         <TouchableOpacity activeOpacity={0.7}
@@ -68,6 +79,9 @@ export function WritingStyleSection() {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             setExpandedPreference(expandedPreference === 'tone' ? null : 'tone');
           }}
+          accessibilityRole="button"
+          accessibilityLabel="Tone"
+          accessibilityState={{ expanded: expandedPreference === 'tone' }}
           style={{
             flexDirection: 'row',
             alignItems: 'center',
@@ -111,6 +125,9 @@ export function WritingStyleSection() {
               return (
                 <TouchableOpacity activeOpacity={0.7}
                   key={option.value}
+                  accessibilityRole="button"
+                  accessibilityLabel={option.label}
+                  accessibilityState={{ selected: isSelected }}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     updateUser({
@@ -165,6 +182,9 @@ export function WritingStyleSection() {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             setExpandedPreference(expandedPreference === 'depth' ? null : 'depth');
           }}
+          accessibilityRole="button"
+          accessibilityLabel="Depth"
+          accessibilityState={{ expanded: expandedPreference === 'depth' }}
           style={{
             flexDirection: 'row',
             alignItems: 'center',
@@ -205,6 +225,9 @@ export function WritingStyleSection() {
               return (
                 <TouchableOpacity activeOpacity={0.7}
                   key={option.value}
+                  accessibilityRole="button"
+                  accessibilityLabel={option.label}
+                  accessibilityState={{ selected: isSelected }}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     updateUser({
@@ -259,6 +282,9 @@ export function WritingStyleSection() {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             setExpandedPreference(expandedPreference === 'faith' ? null : 'faith');
           }}
+          accessibilityRole="button"
+          accessibilityLabel="Faith Background"
+          accessibilityState={{ expanded: expandedPreference === 'faith' }}
           style={{
             flexDirection: 'row',
             alignItems: 'center',
@@ -299,6 +325,9 @@ export function WritingStyleSection() {
               return (
                 <TouchableOpacity activeOpacity={0.7}
                   key={option.value}
+                  accessibilityRole="button"
+                  accessibilityLabel={option.label}
+                  accessibilityState={{ selected: isSelected }}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     updateUser({
@@ -353,6 +382,9 @@ export function WritingStyleSection() {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             setExpandedPreference(expandedPreference === 'lifeStage' ? null : 'lifeStage');
           }}
+          accessibilityRole="button"
+          accessibilityLabel="Life Stage"
+          accessibilityState={{ expanded: expandedPreference === 'lifeStage' }}
           style={{
             flexDirection: 'row',
             alignItems: 'center',
@@ -391,6 +423,9 @@ export function WritingStyleSection() {
               return (
                 <TouchableOpacity activeOpacity={0.7}
                   key={option.value}
+                  accessibilityRole="button"
+                  accessibilityLabel={option.label}
+                  accessibilityState={{ selected: isSelected }}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     updateUser({

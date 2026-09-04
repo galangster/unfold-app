@@ -272,6 +272,13 @@ export default function SeriesDetailScreen() {
                   contentIsReady &&
                   day.dayNumber === devotional.currentDay;
                 const isLocked = !isRead && !isCurrent && !isTomorrow;
+                const dayStateLabel = isRead
+                  ? 'completed'
+                  : isCurrent
+                  ? 'current'
+                  : isTomorrow
+                  ? 'available tomorrow'
+                  : 'locked';
 
                 return (
                   <Animated.View
@@ -299,6 +306,9 @@ export default function SeriesDetailScreen() {
                       onPress={() => {
                         if (isOpenable) handleDayPress(day.dayNumber);
                       }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Day ${day.dayNumber}, ${dayStateLabel}`}
+                      accessibilityState={{ disabled: !isOpenable }}
                       style={[
                         styles.dayRow,
                         {

@@ -192,6 +192,7 @@ function SegmentedControl({ activeSegment, onSegmentChange }: SegmentedControlPr
                   : colors.textSubtle,
             },
           ]}
+          maxFontSizeMultiplier={1.3}
         >
           Reflections
         </Text>
@@ -219,6 +220,7 @@ function SegmentedControl({ activeSegment, onSegmentChange }: SegmentedControlPr
                   : colors.textSubtle,
             },
           ]}
+          maxFontSizeMultiplier={1.3}
         >
           Notebook
         </Text>
@@ -229,7 +231,7 @@ function SegmentedControl({ activeSegment, onSegmentChange }: SegmentedControlPr
 
 const segStyles = StyleSheet.create({
   container: {
-    height: 36,
+    minHeight: 36,
     borderRadius: 18,
     borderWidth: 1,
     flexDirection: 'row',
@@ -250,7 +252,7 @@ const segStyles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    height: '100%',
+    minHeight: 30,
     zIndex: 1,
   },
   segmentText: {

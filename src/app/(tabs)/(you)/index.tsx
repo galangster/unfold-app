@@ -109,9 +109,13 @@ export default function YouScreen() {
     router.push({ pathname: '/(tabs)/(you)/checkin-schedule', params: { type } });
   }, [isPremium, router]);
 
-  const openSettings = useCallback(() => {
+  const openSettings = useCallback((section?: 'reminders' | 'appearance') => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push('/(tabs)/(you)/settings');
+    router.push(
+      section
+        ? { pathname: '/(tabs)/(you)/settings', params: { section } }
+        : '/(tabs)/(you)/settings',
+    );
   }, [router]);
 
   const habitItems: HabitItem[] = [
@@ -135,13 +139,13 @@ export default function YouScreen() {
       icon: BellIcon,
       label: 'Daily Reminders',
       subtitle: user?.dailyReminderEnabled ? formatReminderTime(user.reminderTime ?? '8:00 AM') : 'Off',
-      onPress: openSettings,
+      onPress: () => openSettings('reminders'),
     },
     {
       icon: PaletteIcon,
       label: 'Appearance',
       subtitle: THEME_MODE_LABELS[user?.themeMode ?? 'dark'],
-      onPress: openSettings,
+      onPress: () => openSettings('appearance'),
     },
   ];
 
@@ -448,7 +452,8 @@ export default function YouScreen() {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     router.push(item.route as any);
                   }}
-
+                  accessibilityRole="button"
+                  accessibilityLabel={item.subtitle ? `${item.label}, ${item.subtitle}` : item.label}
                 >
                   <View
                     style={{
@@ -527,6 +532,8 @@ export default function YouScreen() {
                 <TouchableOpacity activeOpacity={0.7}
                   key={item.label}
                   onPress={item.onPress}
+                  accessibilityRole="button"
+                  accessibilityLabel={item.subtitle ? `${item.label}, ${item.subtitle}` : item.label}
                 >
                   <View
                     style={{

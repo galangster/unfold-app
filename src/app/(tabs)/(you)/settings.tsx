@@ -1,7 +1,7 @@
-import { useState } from 'react';
-import { View, Text, ScrollView, Alert, ActivityIndicator, StyleSheet } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { View, Text, ScrollView, Alert, ActivityIndicator, StyleSheet, type LayoutChangeEvent } from 'react-native';
 import { TouchableOpacity } from 'react-native-gesture-handler';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Application from 'expo-application';
 import * as Haptics from 'expo-haptics';
@@ -26,9 +26,15 @@ const SERVER_ERASE_NOT_CONFIRMED_TITLE = 'Server data not confirmed deleted';
 const SERVER_ERASE_NOT_CONFIRMED_MESSAGE =
   "Your data was deleted from this device, but we couldn't confirm that your synced data was deleted from Unfold's servers. This device is no longer linked to it. If you'd like it removed, contact us from the Support section in Settings.";
 
+type SettingsSection = 'reminders' | 'appearance';
+
 export default function SettingsScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  // Opened from the You tab's "Daily Reminders" / "Appearance" habit rows
+  // with a section param — scrolled into view below instead of landing on
+  // the top of the screen.
+  const { section } = useLocalSearchParams<{ section?: string }>();
   // Cross-tab entries (reader sheets) pass `from: 'bible' | 'home'` so back
   // returns to the source tab; without a `from` param (opened from the You
   // screen gear) this pops normally back to You.
@@ -39,6 +45,32 @@ export default function SettingsScreen() {
   const [showPremiumSheet, setShowPremiumSheet] = useState(false);
   const [premiumFeature, setPremiumFeature] = useState<'voice' | 'theme' | 'font' | 'general' | null>(null);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+
+  const scrollViewRef = useRef<ScrollView>(null);
+  const [sectionOffsets, setSectionOffsets] = useState<Partial<Record<SettingsSection, number>>>({});
+  const hasScrolledToSectionRef = useRef(false);
+
+  const handleSectionLayout = useCallback(
+    (target: SettingsSection) => (e: LayoutChangeEvent) => {
+      const y = e.nativeEvent.layout.y;
+      setSectionOffsets((prev) => (prev[target] === y ? prev : { ...prev, [target]: y }));
+    },
+    [],
+  );
+
+  // Scroll the requested section into view once its layout is known. Only
+  // runs once per mount so a later re-layout (e.g. keyboard) can't yank the
+  // scroll position back.
+  useEffect(() => {
+    if (hasScrolledToSectionRef.current) return;
+    const target: SettingsSection | undefined =
+      section === 'reminders' || section === 'appearance' ? section : undefined;
+    if (!target) return;
+    const y = sectionOffsets[target];
+    if (y === undefined) return;
+    hasScrolledToSectionRef.current = true;
+    scrollViewRef.current?.scrollTo({ y: Math.max(y - Spacing['4'], 0), animated: true });
+  }, [section, sectionOffsets]);
 
   const handleResetData = async () => {
     if (isDeletingAccount) return;
@@ -100,6 +132,7 @@ export default function SettingsScreen() {
         </View>
 
         <ScrollView
+          ref={scrollViewRef}
           contentContainerStyle={{ paddingBottom: 100 }}
           showsVerticalScrollIndicator={false}
         >
@@ -108,13 +141,17 @@ export default function SettingsScreen() {
                 surfaced as an "Appearance" row on the You profile's Habits
                 card — both read/write the same user.themeMode field. Accent
                 colors, reading font, and font size stay settings-only. */}
-            <AppearanceSection onPremiumFeature={setPremiumFeature} />
+            <View onLayout={handleSectionLayout('appearance')}>
+              <AppearanceSection onPremiumFeature={setPremiumFeature} />
+            </View>
 
             {/* Midday check-in, evening wind-down, and daily reminders from
                 RemindersSection are also surfaced on the You profile's
                 Habits card (src/app/(tabs)/(you)/index.tsx) — same store
                 fields and paywall gate, no duplicated logic. */}
-            <RemindersSection />
+            <View onLayout={handleSectionLayout('reminders')}>
+              <RemindersSection />
+            </View>
 
             <WritingStyleSection />
 
@@ -149,7 +186,7 @@ export default function SettingsScreen() {
                       marginLeft: Spacing['3'],
                     }}
                   >
-                    {isDeletingAccount ? 'Resetting...' : 'Reset all data'}
+                    {isDeletingAccount ? 'Resetting...' : 'Reset all data (deletes your account)'}
                   </Text>
                 </View>
               </TouchableOpacity>

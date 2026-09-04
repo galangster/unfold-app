@@ -249,24 +249,29 @@ function FolderChip({ folderId, folder, label, color, isActive, hasChildren, onP
   const pillTextColor = isActive ? colors.accent : colors.textMuted;
   const pillFontFamily = isActive ? FontFamily.uiMedium : FontFamily.ui;
 
+  // The chevron is a sibling of the label touchable, not nested inside it —
+  // a touchable nested inside another accessible touchable is unreachable
+  // to VoiceOver, since the outer one absorbs the whole subtree as a single
+  // accessibility element.
   return (
-    <TouchableOpacity
-      onPress={handlePress}
-      onLongPress={folder ? handleLongPress : undefined}
-      delayLongPress={400}
-      activeOpacity={0.7}
-      accessibilityRole="button"
-      accessibilityLabel={`Filter by ${label}`}
-      accessibilityState={{ selected: isActive }}
+    <View
+      style={[
+        styles.pill,
+        {
+          backgroundColor: pillBg,
+          borderColor: pillBorder,
+        },
+      ]}
     >
-      <View
-        style={[
-          styles.pill,
-          {
-            backgroundColor: pillBg,
-            borderColor: pillBorder,
-          },
-        ]}
+      <TouchableOpacity
+        onPress={handlePress}
+        onLongPress={folder ? handleLongPress : undefined}
+        delayLongPress={400}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel={`Filter by ${label}`}
+        accessibilityState={{ selected: isActive }}
+        style={styles.pillLabelTouchable}
       >
         {/* Color dot for folders with a color */}
         {color && (
@@ -281,21 +286,25 @@ function FolderChip({ folderId, folder, label, color, isActive, hasChildren, onP
             },
           ]}
           numberOfLines={1}
+          maxFontSizeMultiplier={1.3}
         >
           {label}
         </Text>
-        {/* Chevron indicator for folders with subfolders */}
-        {hasChildren && folderId && onDrillIn && (
-          <TouchableOpacity
-            onPress={() => onDrillIn(folderId)}
-            hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
-            activeOpacity={0.6}
-          >
-            <CaretRightIcon size={11} color={pillTextColor} weight="bold" style={{ marginLeft: -2 }} />
-          </TouchableOpacity>
-        )}
-      </View>
-    </TouchableOpacity>
+      </TouchableOpacity>
+      {/* Chevron indicator for folders with subfolders — its own accessible
+          element and hit target, sibling to the label touchable above. */}
+      {hasChildren && folderId && onDrillIn && (
+        <TouchableOpacity
+          onPress={() => onDrillIn(folderId)}
+          hitSlop={{ top: 14, bottom: 14, left: 10, right: 14 }}
+          activeOpacity={0.6}
+          accessibilityRole="button"
+          accessibilityLabel={`Open ${label} subfolders`}
+        >
+          <CaretRightIcon size={11} color={pillTextColor} weight="bold" style={{ marginLeft: -2 }} />
+        </TouchableOpacity>
+      )}
+    </View>
   );
 }
 
@@ -310,7 +319,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   pill: {
-    height: 32,
+    minHeight: 32,
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: Radius.lg,
@@ -318,6 +327,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 6,
+  },
+  pillLabelTouchable: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 6,
   },
   colorDot: {
