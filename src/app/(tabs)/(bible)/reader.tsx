@@ -3,10 +3,11 @@ import React, { useState, useCallback, useMemo, useRef, useEffect, useLayoutEffe
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, TextInput, Platform, Keyboard, Dimensions, type LayoutChangeEvent } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeOut, useSharedValue, useAnimatedStyle, useAnimatedScrollHandler, withTiming, withDelay, withSpring, Easing, runOnJS, useReducedMotion } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut, useSharedValue, useAnimatedStyle, useAnimatedScrollHandler, withTiming, withDelay, withSpring, withSequence, Easing, runOnJS, useReducedMotion } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
+import { MMKV } from 'react-native-mmkv';
 import { CaretRightIcon, CaretLeftIcon, GearSixIcon, XIcon, BookOpenIcon, HighlighterCircleIcon, NotePencilIcon, NotepadIcon, UploadSimpleIcon, LockSimpleIcon } from '@/components/icons';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
@@ -125,6 +126,22 @@ const ARROW_REVEAL_DISTANCE = DRAG_MAX * 0.6;
 const NAV_EXIT_DURATION = 180;
 // Spring back when gesture ends without commit (clamped — raw config is ζ≈0.72, so no-bounce needs overshootClamping)
 const SWIPE_SPRING_BACK = { damping: 22, stiffness: 260, mass: 0.9, overshootClamping: true };
+
+// ─── One-time chapter-swipe discoverability hint ──────────────────────────
+// Chapter swipe has no visible affordance, so the edge arrow briefly peeks
+// on its own the first time ever a chapter loads. Persisted so it shows once.
+const bibleReaderHints = new MMKV({ id: 'unfold-bible-reader-hints' });
+const HAS_SEEN_SWIPE_HINT_KEY = 'hasSeenChapterSwipeHint';
+const SWIPE_HINT_PEEK_DURATION = 260;
+
+/** Pure decision: should the one-time swipe hint play on this load? */
+export function shouldPlaySwipeHint(params: {
+  hasSeenHint: boolean;
+  reducedMotion: boolean;
+  canSwipe: boolean;
+}): boolean {
+  return !params.hasSeenHint && !params.reducedMotion && params.canSwipe;
+}
 
 // ─── Verse Item with per-line highlight via onTextLayout ────────────────────
 
@@ -309,6 +326,8 @@ const VerseItem = React.memo(function VerseItem({
         accessible
         testID={`bible-verse-${verse.verse}`}
         accessibilityLabel={`Verse ${verse.verse}: ${verse.text}`}
+        accessibilityState={{ selected: isSelected }}
+        accessibilityHint="Double tap to select this verse for highlighting, notes, or sharing"
       >
         {/* Flash highlight overlay (full row, fades in then out) — always mounted so animation plays */}
         <Animated.View
@@ -1002,6 +1021,27 @@ export default function BibleReaderScreen() {
       }),
     [prevChapter, nextChapter, navigateChapter, dragX, nativeScrollGesture, reducedMotion],
   );
+
+  // Chapter swipe is otherwise undiscoverable — peek the edge arrow once,
+  // ever, the first time a chapter loads. The persisted flag (set the moment
+  // this plays) keeps every later effect run — including later chapter
+  // changes in this same session — a no-op.
+  useEffect(() => {
+    const hasSeenHint = bibleReaderHints.getBoolean(HAS_SEEN_SWIPE_HINT_KEY) ?? false;
+    const canSwipe = !!prevChapter || !!nextChapter;
+    if (!shouldPlaySwipeHint({ hasSeenHint, reducedMotion, canSwipe })) return;
+
+    bibleReaderHints.set(HAS_SEEN_SWIPE_HINT_KEY, true);
+
+    const peekTarget = nextChapter ? -ARROW_REVEAL_DISTANCE : ARROW_REVEAL_DISTANCE;
+    dragX.value = withDelay(
+      500,
+      withSequence(
+        withTiming(peekTarget, { duration: SWIPE_HINT_PEEK_DURATION, easing: EASE_OUT_QUART }),
+        withTiming(0, { duration: SWIPE_HINT_PEEK_DURATION, easing: EASE_OUT_QUART }),
+      ),
+    );
+  }, [prevChapter, nextChapter, reducedMotion, dragX]);
 
   // ─── Tab bar hide/show on scroll ──────────────────────────────────────────
 

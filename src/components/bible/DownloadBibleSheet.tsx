@@ -8,6 +8,47 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
 
+const GENERIC_DOWNLOAD_ERROR = "Something went wrong. Please try again.";
+
+/**
+ * Map a raw download error (a thrown Error's message, straight from the
+ * network/filesystem layer in bible-db.ts) to short, friendly copy. Falls
+ * back to a safe generic message for anything unrecognized.
+ */
+export function mapBibleDownloadError(rawError: string | null): string {
+  if (!rawError) return GENERIC_DOWNLOAD_ERROR;
+
+  const message = rawError.toLowerCase();
+
+  if (
+    message.includes('network') ||
+    message.includes('offline') ||
+    message.includes('internet') ||
+    message.includes('fetch') ||
+    message.includes('timed out') ||
+    message.includes('timeout')
+  ) {
+    return "You're offline. Check your connection and try again.";
+  }
+
+  if (message.includes('status 5') || message.includes('status 4')) {
+    return "Our server had a problem. Please try again in a moment.";
+  }
+
+  if (
+    message.includes('space') ||
+    message.includes('storage') ||
+    message.includes('too small') ||
+    message.includes('corrupt') ||
+    message.includes('not found after download') ||
+    message.includes('verification failed')
+  ) {
+    return "Couldn't save the download. Free up storage and try again.";
+  }
+
+  return GENERIC_DOWNLOAD_ERROR;
+}
+
 interface DownloadBibleSheetProps {
   visible: boolean;
   onComplete: () => void;
@@ -56,14 +97,22 @@ export function DownloadBibleSheet({
           <View style={styles.errorRow}>
             <WarningCircleIcon size={16} color={colors.error} weight="light" />
             <Text style={[styles.errorText, { color: colors.error }]}>
-              {error}
+              {mapBibleDownloadError(error)}
             </Text>
           </View>
         )}
 
         {isDownloading ? (
           <View style={styles.progressContainer}>
-            <View style={[styles.progressBar, { backgroundColor: colors.inputBackground }]}>
+            <View
+              style={[styles.progressBar, { backgroundColor: colors.inputBackground }]}
+              accessibilityRole="progressbar"
+              accessibilityValue={{
+                min: 0,
+                max: 100,
+                now: progress != null && progress >= 0 ? Math.round(progress * 100) : undefined,
+              }}
+            >
               <View
                 style={[
                   styles.progressFill,
@@ -84,11 +133,11 @@ export function DownloadBibleSheet({
             onPress={onDownload}
             style={[styles.downloadButton, { backgroundColor: colors.accent }]}
             activeOpacity={0.7}
-            accessibilityLabel="Download Bible"
+            accessibilityLabel={error ? 'Try again' : 'Download Bible'}
             accessibilityRole="button"
           >
             <Text style={[styles.downloadButtonText, { fontFamily: FontFamily.uiMedium, color: isDark ? '#FFFFFF' : colors.backgroundPure }]}>
-              Download
+              {error ? 'Try again' : 'Download'}
             </Text>
           </TouchableOpacity>
         )}

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Brightness from 'expo-brightness';
+import { useIsFocused } from 'expo-router';
 import { useUnfoldStore } from '@/lib/store';
 import { logger } from '@/lib/logger';
 
@@ -14,6 +15,10 @@ export function clampReaderBrightness(value: number): number {
 export function useReaderBrightness() {
   const storedBrightness = useUnfoldStore((state) => state.readerBrightness ?? null);
   const setStoredBrightness = useUnfoldStore((state) => state.setReaderBrightness);
+  // The sheet that calls this hook stays mounted (only hidden) while the
+  // reader tab is open, so the override must track screen focus rather than
+  // mount/unmount — otherwise it leaks into other tabs.
+  const isFocused = useIsFocused();
   const [brightnessAvailable, setBrightnessAvailable] = useState(true);
   const [prepared, setPrepared] = useState(false);
   const originalBrightnessRef = useRef<number | null>(null);
@@ -33,7 +38,11 @@ export function useReaderBrightness() {
     await Brightness.setBrightnessAsync(clamped);
   }, []);
 
+  // Apply the override only while the reader is focused, and restore the
+  // device's original brightness on blur (not just on unmount).
   useEffect(() => {
+    if (!isFocused) return;
+
     let cancelled = false;
 
     async function prepareBrightness() {
@@ -65,30 +74,33 @@ export function useReaderBrightness() {
 
     return () => {
       cancelled = true;
+      setPrepared(false);
+      appliedBrightnessRef.current = null;
       if (changedReaderBrightnessRef.current && originalBrightnessRef.current != null) {
+        changedReaderBrightnessRef.current = false;
         Brightness.setBrightnessAsync(originalBrightnessRef.current).catch((error) => {
           logger.warn('[reader-brightness] Unable to restore original brightness', error);
         });
       }
     };
-  }, [applyStoredBrightness]);
+  }, [isFocused, applyStoredBrightness]);
 
   // A value that hydrates after prepare finished (async rehydration, a sync
   // pull) is applied once; values this hook set itself are already recorded
   // as applied, so re-renders never re-apply.
   useEffect(() => {
-    if (!prepared || !brightnessAvailable || storedBrightness == null) return;
+    if (!isFocused || !prepared || !brightnessAvailable || storedBrightness == null) return;
     applyStoredBrightness(storedBrightness).catch((error) => {
       logger.warn('[reader-brightness] Unable to apply stored reader brightness', error);
     });
-  }, [prepared, brightnessAvailable, storedBrightness, applyStoredBrightness]);
+  }, [isFocused, prepared, brightnessAvailable, storedBrightness, applyStoredBrightness]);
 
   const setBrightness = useCallback(
     async (value: number) => {
       const clamped = clampReaderBrightness(value);
       setStoredBrightness(clamped);
 
-      if (!brightnessAvailable) return;
+      if (!isFocused || !brightnessAvailable) return;
 
       try {
         appliedBrightnessRef.current = clamped;
@@ -98,14 +110,14 @@ export function useReaderBrightness() {
         logger.warn('[reader-brightness] Unable to set reader brightness', error);
       }
     },
-    [brightnessAvailable, setStoredBrightness],
+    [isFocused, brightnessAvailable, setStoredBrightness],
   );
 
   const resetBrightness = useCallback(async () => {
     setStoredBrightness(null);
     appliedBrightnessRef.current = null;
 
-    if (!brightnessAvailable || originalBrightnessRef.current == null) return;
+    if (!isFocused || !brightnessAvailable || originalBrightnessRef.current == null) return;
 
     try {
       changedReaderBrightnessRef.current = false;
@@ -113,7 +125,7 @@ export function useReaderBrightness() {
     } catch (error) {
       logger.warn('[reader-brightness] Unable to reset reader brightness', error);
     }
-  }, [brightnessAvailable, setStoredBrightness]);
+  }, [isFocused, brightnessAvailable, setStoredBrightness]);
 
   return {
     brightness: storedBrightness,

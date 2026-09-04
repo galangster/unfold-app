@@ -48,7 +48,10 @@ describe('Reader loading skeleton (#24)', () => {
     const indicatorColors = source.match(/<ActivityIndicator[^>]*?color=\{([^}]+)\}/g) ?? [];
     expect(indicatorColors.length).toBeGreaterThan(0);
     for (const tag of indicatorColors) {
-      expect(tag).toMatch(/colors\.(accent|text|textSubtle|textMuted)/);
+      // `background` included for a spinner riding on a solid accent-colored
+      // button (contrast color, same convention the button's own icon uses)
+      // — still theme-derived, never a hardcoded blue.
+      expect(tag).toMatch(/colors\.(accent|text|textSubtle|textMuted|background)/);
     }
     // No stock blue refresh/pull-to-refresh banner remains to re-theme.
     expect(source).not.toContain('RefreshControl');

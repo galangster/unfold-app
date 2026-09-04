@@ -55,6 +55,11 @@ interface BookChapterNavigatorProps {
 /** Books with only 1 chapter — tap skips straight to chapter selection */
 const SINGLE_CHAPTER_BOOK_IDS = new Set([31, 57, 63, 64, 65]);
 
+// Book chips show the full name; the abbreviation only fits as a second
+// line for names up to this length (e.g. "1 Chronicles" fits, "Song of
+// Solomon" and "1 Thessalonians" do not).
+export const BOOK_CHIP_ABBREVIATION_FIT_LENGTH = 13;
+
 const TAB_LABELS = ['Book', 'Chapter', 'Verse'] as const;
 const TAB_PADDING = 3;
 
@@ -378,7 +383,7 @@ export function BookChapterNavigator({
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 Keyboard.dismiss();
-                onSelect(result.bookId, result.chapter);
+                onSelect(result.bookId, result.chapter, result.verse);
               }}
               style={[styles.searchResultRow, { borderBottomColor: isDark ? 'rgba(245, 240, 235, 0.05)' : 'rgba(28, 23, 16, 0.05)' }]}
               accessibilityLabel={`${result.reference}: ${result.text}`}
@@ -427,10 +432,19 @@ export function BookChapterNavigator({
                   { color: isCurrentBook ? colors.accent : colors.text },
                   isCurrentBook && { fontFamily: FontFamily.uiMedium },
                 ]}
-                numberOfLines={1}
+                numberOfLines={book.name.length > BOOK_CHIP_ABBREVIATION_FIT_LENGTH ? 2 : 1}
               >
-                {book.abbreviation}
+                {book.name}
               </Text>
+              {book.abbreviation !== book.name &&
+                book.name.length <= BOOK_CHIP_ABBREVIATION_FIT_LENGTH && (
+                  <Text
+                    style={[styles.chipAbbrev, { color: isCurrentBook ? colors.accent : colors.textSubtle }]}
+                    numberOfLines={1}
+                  >
+                    {book.abbreviation}
+                  </Text>
+                )}
             </TouchableOpacity>
           );
         })}
@@ -713,6 +727,13 @@ const styles = StyleSheet.create({
   chipText: {
     fontFamily: FontFamily.ui,
     fontSize: 13,
+    textAlign: 'center',
+  },
+  chipAbbrev: {
+    fontFamily: FontFamily.ui,
+    fontSize: FontSize.xs,
+    opacity: 0.7,
+    marginTop: 1,
   },
 
   // Number chips (chapters + verses) — same flex-fill as book chips

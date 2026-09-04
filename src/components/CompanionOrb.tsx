@@ -279,16 +279,8 @@ export function CompanionOrb({
     onPress?.();
   };
 
-  return (
-    <View style={{ width: size, height: size, overflow: 'visible' }}>
-      <TouchableOpacity activeOpacity={0.7}
-        onPress={handlePress}
-        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        accessibilityRole="button"
-        accessibilityLabel="Companion orb"
-        style={{ width: size, height: size }}
-      >
-        <Animated.View style={[{ width: size, height: size, overflow: 'visible' }, containerStyle]}>
+  const orb = (
+    <Animated.View style={[{ width: size, height: size, overflow: 'visible' }, containerStyle]}>
           <Canvas
             style={{
               width: canvasSize,
@@ -346,8 +338,26 @@ export function CompanionOrb({
               </Path>
             </Group>
           </Canvas>
-        </Animated.View>
-      </TouchableOpacity>
+    </Animated.View>
+  );
+
+  return (
+    <View style={{ width: size, height: size, overflow: 'visible' }}>
+      {onPress ? (
+        <TouchableOpacity activeOpacity={0.7}
+          onPress={handlePress}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          accessibilityRole="button"
+          accessibilityLabel="Companion orb"
+          style={{ width: size, height: size }}
+        >
+          {orb}
+        </TouchableOpacity>
+      ) : (
+        <View style={{ width: size, height: size }}>
+          {orb}
+        </View>
+      )}
 
       {/* Badge dot */}
       {showBadge && (

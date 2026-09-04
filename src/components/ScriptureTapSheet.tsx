@@ -231,6 +231,8 @@ export function ScriptureTapSheet({
                       onPress={handleCopy}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                       style={[s.iconBtn, { backgroundColor: copied ? alpha(colors.accent, 0.10) : 'transparent' }]}
+                      accessibilityRole="button"
+                      accessibilityLabel="Copy verse text"
                     >
                       {copied ? (
                         <CheckIcon size={16} color={colors.accent} weight="bold" />
@@ -247,6 +249,8 @@ export function ScriptureTapSheet({
                       onPress={handleBookmark}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                       style={[s.iconBtn, { backgroundColor: saved ? alpha(colors.accent, 0.10) : 'transparent' }]}
+                      accessibilityRole="button"
+                      accessibilityLabel={saved ? 'Remove bookmark' : 'Save bookmark'}
                     >
                       <BookmarkSimpleIcon
                         size={16}

@@ -48,4 +48,18 @@ describe('RichMessageText verse pills', () => {
     expect(/\s/.test(VERSE_PILL_PAD)).toBe(true); // still whitespace for layout
     expect(VERSE_PILL_PAD).not.toBe(' ');
   });
+
+  it('gives the pill at least 6px of horizontal padding and room to breathe vertically', () => {
+    const tree = render('See 1 Kings 19:11-12 for the full account.');
+    const pill = tree.root
+      .findAllByType(Text)
+      .find((node: any) => node.props.accessibilityRole === 'button');
+
+    expect(pill.props.style.paddingHorizontal).toBeGreaterThanOrEqual(6);
+    expect(pill.props.style.paddingVertical).toBeGreaterThan(0);
+    // Line height comfortably taller than the pill's own font size, not a
+    // cramped 1x \u2014 the earlier padding-only fix did nothing for tap comfort
+    // since nested Text ignores padding on iOS/Android.
+    expect(pill.props.style.lineHeight).toBeGreaterThan(pill.props.style.fontSize * 1.4);
+  });
 });

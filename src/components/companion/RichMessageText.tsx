@@ -289,10 +289,12 @@ function InlineText({
               style={{
                 fontFamily: FontFamily.uiMedium,
                 fontSize: FontSize.sm,
+                lineHeight: FontSize.sm * 1.8,
                 color: colors.accent,
                 backgroundColor: alpha(colors.accent, flashIndex === i ? 0.30 : 0.10),
                 borderRadius: 6,
-                paddingHorizontal: 2,
+                paddingHorizontal: 6,
+                paddingVertical: 4,
               }}
             >
               {VERSE_PILL_PAD}{seg.reference}{VERSE_PILL_PAD}
