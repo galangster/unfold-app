@@ -89,6 +89,43 @@ describe('resolveEmberParams', () => {
     expect(params.glowOpacity).toBeCloseTo(baseTier.glowOpacity * 0.6);
   });
 
+  it('glow: false zeroes glowOpacity for contained mounts and leaves the rest of the preset alone', () => {
+    // The onboarding mirrorBack preset (count 10 / intensity 0.7, dark): count 10
+    // ties down to the count-8 tier, so the glow is a 180pt ramp at 0.035 alpha.
+    // Anchored to the bottom of a 380pt box that ends mid-screen it painted as
+    // a hard-edged band (tester report, build 254, 2026-09-04).
+    const withGlow = resolveEmberParams({ variant: 'ambient', isDark: true, count: 10, intensity: 0.7 });
+    expect(withGlow.glowHeight).toBe(180);
+    expect(withGlow.glowOpacity).toBeCloseTo(0.035);
+
+    const contained = resolveEmberParams({
+      variant: 'ambient',
+      isDark: true,
+      count: 10,
+      intensity: 0.7,
+      glow: false,
+    });
+    expect(contained.glowOpacity).toBe(0);
+    expect(contained.count).toBe(withGlow.count);
+    expect(contained.opacityMin).toBe(withGlow.opacityMin);
+    expect(contained.opacityMax).toBe(withGlow.opacityMax);
+    expect(contained.sizeMin).toBe(withGlow.sizeMin);
+    expect(contained.sizeMax).toBe(withGlow.sizeMax);
+    expect(contained.glowHeight).toBe(withGlow.glowHeight);
+    expect(contained.halo).toBe(withGlow.halo);
+  });
+
+  it('glow defaults on so full-screen mounts keep their light source', () => {
+    const ambient = resolveEmberParams({ variant: 'ambient', isDark: true, streakLevel: 0 });
+    expect(ambient.glowOpacity).toBeGreaterThan(0);
+
+    // The opt-out is variant-independent; the celebration canon test above
+    // (no `glow` key) stays untouched.
+    const celebration = resolveEmberParams({ variant: 'celebration', isDark: true, glow: false });
+    expect(celebration.glowOpacity).toBe(0);
+    expect(celebration.glowHeight).toBe(CELEBRATION_TIER.glowHeight);
+  });
+
   it('raises the ambient opacity floor for the home preset', () => {
     const params = resolveEmberParams({ variant: 'ambient', isDark: true, streakLevel: 0, opacityFloor: 0.5 });
     expect(params.opacityMin).toBe(0.5);

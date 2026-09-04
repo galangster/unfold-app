@@ -421,6 +421,12 @@ export interface EmberSystemProps {
   count?: number;
   /** Raise the ambient opacity floor (Today home uses ≥0.5). */
   opacityFloor?: number;
+  /**
+   * Bottom glow on/off (default on). The glow is anchored to the container's
+   * bottom edge and clips flat when the mount ends mid-screen, so contained,
+   * non-full-screen mounts pass `glow={false}`.
+   */
+  glow?: boolean;
   /** Normalized (0–1) rects where embers fade out — headline blocks, chrome. */
   exclusionZones?: ReadonlyArray<ExclusionZone>;
   /** Defaults to the theme accent. Never pass a hardcoded brand hex. */
@@ -439,6 +445,7 @@ export function EmberSystem({
   intensity,
   count,
   opacityFloor,
+  glow = true,
   exclusionZones = NO_ZONES,
   accentColor,
   active = true,
@@ -464,8 +471,8 @@ export function EmberSystem({
   };
 
   const params = useMemo(
-    () => resolveEmberParams({ variant, isDark, streakLevel, count, intensity, opacityFloor }),
-    [variant, isDark, streakLevel, count, intensity, opacityFloor],
+    () => resolveEmberParams({ variant, isDark, streakLevel, count, intensity, opacityFloor, glow }),
+    [variant, isDark, streakLevel, count, intensity, opacityFloor, glow],
   );
 
   const emberColors = useMemo(() => getEmberPalette(accent, isDark), [accent, isDark]);
