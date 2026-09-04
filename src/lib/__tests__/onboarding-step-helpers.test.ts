@@ -10,6 +10,7 @@ import {
   resolveQuickDateChip,
   addKeyPerson,
   KEY_PEOPLE_MAX_COUNT,
+  keyPersonChipAccessibility,
   keyPersonChipLabel,
   keyPersonRowLabel,
   removeKeyPerson,
@@ -515,6 +516,53 @@ describe('onboarding step helpers', () => {
       expect(keyPersonChipLabel('Friend', 1)).toBe('Friend');
       expect(keyPersonChipLabel('Friend', 2)).toBe('Friend \u00B7 2');
       expect(keyPersonChipLabel('Friend', 2)).toBe('Friend · 2');
+    });
+
+    it('mints ids with a run, a sequence, and a per-call random component', () => {
+      const people = addKeyPerson(addKeyPerson([], 'Friend'), 'Friend');
+      for (const person of people) expect(person.id).toMatch(/^kp-[0-9a-z]+-[1-9]\d*-[0-9a-z]{6}$/);
+      expect(people[0].id).not.toBe(people[1].id);
+
+      const random = jest.spyOn(Math, 'random').mockReturnValueOnce(0);
+      try {
+        expect(addKeyPerson([], 'Friend')[0].id).toMatch(/-000000$/);
+      } finally {
+        random.mockRestore();
+      }
+    });
+
+    it('keeps a row id stable through rename, removal of a sibling, and re-normalisation', () => {
+      const people = addKeyPerson(addKeyPerson([], 'Friend'), 'Spouse');
+      const [friend, spouse] = people;
+      const renamed = renameKeyPerson(people, friend.id, 'Anthony');
+      expect(renamed[0].id).toBe(friend.id);
+      const survivors = removeKeyPerson(renamed, spouse.id);
+      expect(survivors.map((p) => p.id)).toEqual([friend.id]);
+      expect(withKeyPersonIds(survivors)[0].id).toBe(friend.id);
+    });
+
+    it('disables the chip with a hint only once the cap is reached', () => {
+      expect(keyPersonChipAccessibility('Friend', 0, 0)).toEqual({
+        label: 'Add Friend',
+        hint: undefined,
+        disabled: false,
+      });
+      expect(keyPersonChipAccessibility('Friend', 2, KEY_PEOPLE_MAX_COUNT - 1)).toEqual({
+        label: 'Add another Friend, 2 added',
+        hint: undefined,
+        disabled: false,
+      });
+      expect(keyPersonChipAccessibility('Friend', 2, KEY_PEOPLE_MAX_COUNT)).toEqual({
+        label: 'Add another Friend, 2 added',
+        hint: 'Maximum of 5 people reached. Remove a person to add another.',
+        disabled: true,
+      });
+      expect(keyPersonChipAccessibility('Mentor', 0, KEY_PEOPLE_MAX_COUNT)).toEqual({
+        label: 'Add Mentor',
+        hint: 'Maximum of 5 people reached. Remove a person to add another.',
+        disabled: true,
+      });
+      expect(keyPersonChipAccessibility('Friend', 1, 2, 2).disabled).toBe(true);
     });
   });
 

@@ -357,13 +357,22 @@ export type KeyPersonRow = { id: string; name: string; relationship: string };
 
 // Ids only need to be unique within the editing state, but a restored draft
 // can carry ids minted by an earlier process, so the counter is namespaced by
-// module load time to keep new ids from colliding with restored ones.
+// module load time, and each id also carries a per-call random component so
+// two processes that load in the same millisecond cannot mint the same id.
+// An id is minted once, when the row is created, and never changes after.
 const KEY_PERSON_ID_RUN = Date.now().toString(36);
+const KEY_PERSON_ID_SALT_LENGTH = 6;
 let keyPersonIdSeq = 0;
+
+function keyPersonIdSalt(): string {
+  return Math.floor(Math.random() * 36 ** KEY_PERSON_ID_SALT_LENGTH)
+    .toString(36)
+    .padStart(KEY_PERSON_ID_SALT_LENGTH, '0');
+}
 
 function nextKeyPersonId(): string {
   keyPersonIdSeq += 1;
-  return `kp-${KEY_PERSON_ID_RUN}-${keyPersonIdSeq}`;
+  return `kp-${KEY_PERSON_ID_RUN}-${keyPersonIdSeq}-${keyPersonIdSalt()}`;
 }
 
 /**
@@ -432,6 +441,25 @@ export function keyPersonRowLabel(people: readonly KeyPersonRow[], index: number
  */
 export function keyPersonChipLabel(relationship: string, count: number): string {
   return count > 1 ? `${relationship} \u00B7 ${count}` : relationship;
+}
+
+/**
+ * Accessibility props for a relationship chip. Once `peopleCount` reaches the
+ * cap the chip is truly disabled (no press, no haptic) and the hint says why,
+ * so the "dimmed" VoiceOver announces matches a control that does nothing.
+ */
+export function keyPersonChipAccessibility(
+  relationship: string,
+  count: number,
+  peopleCount: number,
+  maxCount = KEY_PEOPLE_MAX_COUNT,
+): { label: string; hint: string | undefined; disabled: boolean } {
+  const disabled = peopleCount >= maxCount;
+  return {
+    label: count > 0 ? `Add another ${relationship}, ${count} added` : `Add ${relationship}`,
+    hint: disabled ? `Maximum of ${maxCount} people reached. Remove a person to add another.` : undefined,
+    disabled,
+  };
 }
 
 // ---------------------------------------------------------------------------

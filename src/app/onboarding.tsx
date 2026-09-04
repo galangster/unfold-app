@@ -102,6 +102,7 @@ import {
   resolveQuickDateChip,
   addKeyPerson,
   KEY_PEOPLE_MAX_COUNT,
+  keyPersonChipAccessibility,
   keyPersonChipLabel,
   keyPersonRowLabel,
   removeKeyPerson,
@@ -2880,10 +2881,8 @@ export default function OnboardingScreen() {
       }
 
       const addPerson = (relationship: string) => {
-        if (maxPeopleReached) {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-          return;
-        }
+        // The chips are disabled at the cap, so this only guards a stale press.
+        if (maxPeopleReached) return;
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         const next = addKeyPerson(people, relationship);
         lastAddedKeyPersonIdRef.current = next[next.length - 1]?.id ?? null;
@@ -2909,13 +2908,16 @@ export default function OnboardingScreen() {
             {KEY_PEOPLE_RELATIONSHIP_CHIPS.map((relationship) => {
               const count = relationshipCounts[relationship] ?? 0;
               const isActive = count > 0;
+              const chipA11y = keyPersonChipAccessibility(relationship, count, people.length);
               return (
                 <TouchableOpacity activeOpacity={1}
                   key={relationship}
                   onPress={() => addPerson(relationship)}
+                  disabled={chipA11y.disabled}
                   accessibilityRole="button"
-                  accessibilityLabel={isActive ? `Add another ${relationship}, ${count} added` : `Add ${relationship}`}
-                  accessibilityState={{ disabled: maxPeopleReached }}
+                  accessibilityLabel={chipA11y.label}
+                  accessibilityHint={chipA11y.hint}
+                  accessibilityState={{ disabled: chipA11y.disabled }}
                   style={{
                     paddingHorizontal: Spacing['3.5'],
                     paddingVertical: Spacing['3'],
