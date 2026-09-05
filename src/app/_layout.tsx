@@ -1,5 +1,5 @@
 import { ThemeProvider as NavigationThemeProvider } from 'expo-router/react-navigation';
-import { Stack, usePathname, useRootNavigationState } from 'expo-router';
+import { Stack, useNavigationContainerRef, usePathname, useRootNavigationState } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { QueryClient, QueryClientProvider, onlineManager, focusManager } from '@tanstack/react-query';
@@ -31,7 +31,7 @@ import { migrateGenerationDataToServer } from '@/lib/generation-migration';
 import { endOrphanedReadingSessions } from '@/lib/widget-bridge';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { flushLastFatalBreadcrumb, installGlobalErrorHandler } from '@/lib/global-error-handler';
-import { initSentry } from '@/lib/sentry';
+import { initSentry, registerNavigationContainer, wrapRootComponent } from '@/lib/sentry';
 import { armHealthyBootTimer } from '@/lib/crash-marker';
 import { AudioPlayerOverlay } from '@/components/AudioPlayerOverlay';
 import { PrivacyShield } from '@/components/PrivacyShield';
@@ -332,6 +332,14 @@ function RootLayout() {
     // that never resolves.
   });
 
+  // Route changes become navigation spans and breadcrumbs, and the native
+  // app-start measurement attaches to the first of them. A no-op while crash
+  // reporting is off.
+  const navigationContainerRef = useNavigationContainerRef();
+  useEffect(() => {
+    registerNavigationContainer(navigationContainerRef);
+  }, [navigationContainerRef]);
+
   useEffect(() => {
     if (fontsLoaded || fontError) {
       // Wait one frame for the first render to paint before hiding splash
@@ -368,4 +376,6 @@ function RootLayout() {
   );
 }
 
-export default RootLayout;
+// Touch breadcrumbs and the first-render marker for the app-start span; the
+// bare component when reporting is off.
+export default wrapRootComponent(RootLayout);
