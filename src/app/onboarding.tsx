@@ -2949,8 +2949,11 @@ export default function OnboardingScreen() {
               accessibilityRole="text"
               style={{
                 fontFamily: FontFamily.ui,
-                fontSize: FontSize.xs,
-                color: colors.textHint,
+                fontSize: FontSize.sm,
+                // textMuted, not textHint: the caption is the only sighted
+                // explanation for the locked chips, and textHint sits at
+                // 2.0:1 dark / 2.5:1 light, under WCAG AA (WR-21 rule).
+                color: colors.textMuted,
                 marginTop: Spacing['3'],
               }}
             >

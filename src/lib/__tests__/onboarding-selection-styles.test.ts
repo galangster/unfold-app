@@ -18,6 +18,23 @@ describe('onboarding selection styling', () => {
     expect(source).not.toContain('activeOpacity={0.7}');
   });
 
+  // Same rule as WR-21: the cap caption is the only sighted explanation for
+  // the locked key-people chips, so it must not sit at hint-level contrast
+  // (2.0:1 dark, 2.5:1 light) or at 12pt.
+  it('prints the key-people cap caption at readable muted contrast', () => {
+    const source = readSource('src/app/onboarding.tsx');
+    const captionStart = source.indexOf('{capMessage && (');
+    const captionEnd = source.indexOf('{capMessage}', captionStart);
+    expect(captionStart).toBeGreaterThan(-1);
+    expect(captionEnd).toBeGreaterThan(captionStart);
+    const caption = source.slice(captionStart, captionEnd);
+
+    expect(caption).toContain('color: colors.textMuted');
+    expect(caption).not.toContain('colors.textHint');
+    expect(caption).toContain('fontSize: FontSize.sm');
+    expect(caption).not.toContain('FontSize.xs');
+  });
+
   it('keeps onboarding chips on full-bright accent styling when selected', () => {
     const multiSelectSource = readSource('src/components/onboarding/MultiSelectPills.tsx');
 
