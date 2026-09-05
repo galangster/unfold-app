@@ -512,6 +512,7 @@ export default function WelcomeScreen() {
               <TouchableOpacity
                 activeOpacity={0.7}
                 onPress={handleContinue}
+                accessibilityRole="button"
                 style={{ backgroundColor: colors.accent, paddingVertical: 18, borderRadius: 28, alignItems: 'center' }}
               >
                 <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 17, color: '#1C1710', letterSpacing: 0.3 }}>
