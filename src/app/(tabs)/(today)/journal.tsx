@@ -773,8 +773,10 @@ Their journal entry:
       clearTimeout(timeoutId);
       if (!response.ok) {
         const errBody = await response.text().catch(() => '');
+        // The body is already logged (__DEV__ only); keeping it out of the
+        // Error message keeps it out of Sentry's `exception.value`.
         logger.error('[Go Deeper] Backend error:', response.status, errBody);
-        throw new Error(`Backend ${response.status}: ${errBody.slice(0, 200)}`);
+        throw new Error(`Backend ${response.status}`);
       }
 
       const data = await response.json();

@@ -21,9 +21,29 @@
  *     needs) but nothing else does;
  *   - `console` breadcrumbs are dropped whole, because the app logs user
  *     content through `logger`;
+ *   - a URL (http breadcrumbs, failed-request events, spans) survives only
+ *     with its query string and fragment cut off;
  *   - session replay, screenshots, and view-hierarchy attachments are never
- *     enabled, and performance tracing is off (transactions bypass
- *     `beforeSend` entirely, so the only safe setting is "not collected").
+ *     enabled — for replay that means OMITTING the two sample rates, because
+ *     at @sentry/react-native 7.11.0 passing them (even as 0) is what installs
+ *     `mobileReplayIntegration`; transactions (one production session in ten,
+ *     none elsewhere) bypass `beforeSend`, so `scrubTransaction` rebuilds them
+ *     the same way.
+ *
+ * NATIVE FIRST
+ * A Release build starts the Cocoa SDK in `ios/Unfold/AppDelegate.swift`
+ * before React Native boots, so a crash before JavaScript exists (build 259
+ * shipped without a bundle, died on launch, and Sentry saw nothing) is
+ * recorded and sent on the next launch. `initSentry()` then ATTACHES to that
+ * instance (`autoInitializeNativeSdk: false`) instead of restarting it, which
+ * means every native-only option lives in the Swift file and the two must
+ * agree. A Debug build has no native start; JavaScript starts native itself.
+ * Neither side passes a release or a dist: both are derived from the built
+ * Info.plist (`nativeReleaseIntegration` here, Cocoa's own default form in the
+ * Swift file), which is the `<bundle id>@<version>+<build>` / `<build>` pair
+ * `sentry-cli react-native xcode` uploads this build's source maps under. The
+ * Expo config cannot supply them — `eas.json` uses `appVersionSource: remote`,
+ * so `app.json`'s `ios.buildNumber` has sat at "183" since build 183.
  *
  * DISABLED UNTIL A DSN EXISTS
  * Without `EXPO_PUBLIC_SENTRY_DSN` every export is a no-op, `isSentryEnabled()`
@@ -31,10 +51,12 @@
  * with no DSN and why nothing here loads under Jest.
  */
 
-import type { Breadcrumb, ErrorEvent, Exception, StackFrame, Stacktrace, User } from '@sentry/react-native';
+import type { Breadcrumb, ErrorEvent, Exception, StackFrame, Stacktrace, TransactionEvent, User } from '@sentry/react-native';
+import type { ComponentType } from 'react';
 import { Platform } from 'react-native';
 
-import { getBuildProfile } from './build-profile';
+import { PRIMARY_BACKEND_URL } from './backend-url';
+import { getBuildProfile, isProductionBuildProfile } from './build-profile';
 
 type SentryModule = typeof import('@sentry/react-native');
 
@@ -46,6 +68,16 @@ const DEVICE_HASH_LENGTH = 8;
 
 /** How deep `scrubBag` walks a nested value before giving up on it. */
 const MAX_SCRUB_DEPTH = 4;
+
+/** A component stack is code, so it keeps more than the 200-character leash. */
+const COMPONENT_STACK_KEY = 'componentStack';
+const MAX_COMPONENT_STACK_LENGTH = 4000;
+
+/** One production session in ten carries performance spans; no other build does. */
+const PRODUCTION_TRACES_SAMPLE_RATE = 0.1;
+
+/** Sentry's `type` for request breadcrumbs (`fetch` and `xhr` categories). */
+const HTTP_BREADCRUMB_TYPE = 'http';
 
 /**
  * Breadcrumbs this app emits through `addAppBreadcrumb` are namespaced. Only
@@ -76,6 +108,10 @@ const ALLOWED_DATA_STRING_KEYS: ReadonlySet<string> = new Set([
   'mechanism', 'handled', 'phase', 'reason', 'result', 'status', 'level',
   // Shape of a dropped payload: key names only, never their values.
   'dataKeys', 'componentStack',
+  // Touched component names and their source files (touch breadcrumbs).
+  'element', 'file',
+  // Request verbs and span provenance.
+  'method', 'http.method', 'http.request.method', 'sentry.op', 'sentry.origin', 'sentry.source',
   // Build and version provenance.
   'release', 'dist', 'environment', 'platform',
   'appVersion', 'app_version', 'buildNumber', 'app_build', 'buildProfile',
@@ -100,6 +136,9 @@ const ALLOWED_CONTEXT_STRING_KEYS: Readonly<Record<string, ReadonlySet<string>>>
     'js_engine', 'hermes_version', 'react_native_version', 'expo_version', 'turbo_module', 'fabric',
   ]),
   trace: new Set(['trace_id', 'span_id', 'parent_span_id', 'op', 'origin', 'status']),
+  // A failed request's response: `status_code` and `body_size` are numbers and
+  // survive unnamed; headers and cookies never do.
+  response: new Set<string>(),
 };
 
 /**
@@ -114,6 +153,7 @@ let sentryModule: SentryModule | null = null;
 let initialized = false;
 let enabled = false;
 let hashedDeviceId: string | null = null;
+let navigationIntegration: ReturnType<SentryModule['reactNavigationIntegration']> | null = null;
 
 // ---------------------------------------------------------------------------
 // Scrubbing
@@ -131,9 +171,20 @@ type ScrubbedValue = string | number | boolean | ScrubbedValue[] | { [key: strin
 const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
 const REDACTED_UUID = '[uuid]';
 
-function truncate(value: string): string {
+function truncate(value: string, limit = MAX_STRING_LENGTH): string {
   const masked = value.replace(UUID_PATTERN, REDACTED_UUID);
-  return masked.length > MAX_STRING_LENGTH ? masked.slice(0, MAX_STRING_LENGTH) : masked;
+  return masked.length > limit ? masked.slice(0, limit) : masked;
+}
+
+/**
+ * A URL survives as scheme, host and path only: the query string and fragment
+ * are where a search term or a token would travel. Path UUIDs are masked by
+ * `truncate`.
+ */
+function sanitizeUrl(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const cut = value.search(/[?#]/);
+  return truncate(cut === -1 ? value : value.slice(0, cut));
 }
 
 /** Truncate a string that is allowed through by position rather than by key. */
@@ -149,7 +200,10 @@ function scrubValue(
 ): ScrubbedValue | undefined {
   if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
   if (typeof value === 'boolean') return value;
-  if (typeof value === 'string') return allowed.has(key) ? truncate(value) : undefined;
+  if (typeof value === 'string') {
+    if (!allowed.has(key)) return undefined;
+    return truncate(value, key === COMPONENT_STACK_KEY ? MAX_COMPONENT_STACK_LENGTH : MAX_STRING_LENGTH);
+  }
   if (depth >= MAX_SCRUB_DEPTH) return undefined;
   if (Array.isArray(value)) {
     const items = value
@@ -208,6 +262,30 @@ function scrubContexts(contexts: unknown): Record<string, Record<string, unknown
 }
 
 /**
+ * A native (cocoa) frame carries no filename: Sentry resolves it by locating
+ * `instruction_addr` inside the debug image at `image_addr`. Those frames
+ * reach `beforeSend` when the NativeLinkedErrors integration appends a bridge
+ * NSException's stack to a JavaScript error, and without the addresses they
+ * arrive as `{platform, in_app}` and cannot be symbolicated at all. Only a
+ * `0x`-prefixed hex literal is carried, so the key cannot smuggle a string.
+ * `package` is deliberately NOT carried: it is
+ * `/private/var/containers/Bundle/Application/<uuid>/Unfold.app/Unfold`, an
+ * on-disk path that buys nothing once the two addresses are present.
+ */
+const NATIVE_FRAME_ADDRESS_KEYS = ['instruction_addr', 'image_addr', 'symbol_addr'] as const;
+const HEX_ADDRESS_PATTERN = /^0x[0-9a-f]+$/i;
+
+function nativeFrameAddresses(frame: StackFrame): Record<string, string> {
+  const source = frame as unknown as Record<string, unknown>;
+  const out: Record<string, string> = {};
+  for (const key of NATIVE_FRAME_ADDRESS_KEYS) {
+    const value = source[key];
+    if (typeof value === 'string' && HEX_ADDRESS_PATTERN.test(value)) out[key] = value;
+  }
+  return out;
+}
+
+/**
  * Frames are rebuilt from code identifiers only. `vars` (the local variables
  * of the frame) is the single largest leak vector in a stack trace and is
  * dropped, as are `abs_path` and the `context_line` / `pre_context` /
@@ -215,6 +293,7 @@ function scrubContexts(contexts: unknown): Record<string, Record<string, unknown
  */
 function scrubFrame(frame: StackFrame): StackFrame {
   return {
+    ...nativeFrameAddresses(frame),
     filename: truncateOrDrop(frame.filename),
     function: truncateOrDrop(frame.function),
     module: truncateOrDrop(frame.module),
@@ -247,7 +326,15 @@ function scrubException(exception: ErrorEvent['exception']): ErrorEvent['excepti
 
 type DebugImages = NonNullable<NonNullable<ErrorEvent['debug_meta']>['images']>;
 
-/** Symbolication metadata only: identifiers pass through, on-disk paths do not. */
+/**
+ * Symbolication metadata only. `debug_id` and `uuid` are symbolication
+ * identifiers rather than device identifiers, so they pass through
+ * byte-identical — Sentry matches an image by them, and the UUID mask would
+ * destroy that. `debug_file` and `code_file` ARE on-disk paths and survive,
+ * but only UUID-masked and truncated by `truncate()`; `code_file` is how a
+ * sourcemap image is matched to a frame's `filename`, so dropping it would
+ * break JavaScript symbolication. Every other key is dropped.
+ */
 const ALLOWED_DEBUG_IMAGE_KEYS = [
   'type', 'debug_id', 'debug_file', 'code_id', 'code_file', 'image_addr', 'image_size', 'uuid', 'arch',
 ] as const;
@@ -279,25 +366,37 @@ function scrubUser(user: User | undefined): User | undefined {
 /**
  * Rebuild a breadcrumb. Console breadcrumbs are dropped outright — the app
  * logs user content through `logger` — and only app-namespaced breadcrumbs
- * keep their free-text message.
+ * keep their free-text message. A request breadcrumb keeps which endpoint was
+ * called, never what was asked of it.
  */
 function scrubBreadcrumb(breadcrumb: Breadcrumb): Breadcrumb | null {
   const category = typeof breadcrumb.category === 'string' ? breadcrumb.category : undefined;
   if (category === CONSOLE_BREADCRUMB_CATEGORY) return null;
   const isAppBreadcrumb = category?.startsWith(APP_BREADCRUMB_PREFIX) ?? false;
+  const data = scrubBag(breadcrumb.data);
+  if (breadcrumb.type === HTTP_BREADCRUMB_TYPE) {
+    const url = sanitizeUrl(breadcrumb.data?.url);
+    if (url !== undefined) data.url = url;
+  }
   return {
     type: truncateOrDrop(breadcrumb.type),
     category: category === undefined ? undefined : truncate(category),
     level: breadcrumb.level,
     timestamp: typeof breadcrumb.timestamp === 'number' ? breadcrumb.timestamp : undefined,
     message: isAppBreadcrumb ? truncateOrDrop(breadcrumb.message) : undefined,
-    data: emptyToUndefined(scrubBag(breadcrumb.data)),
+    data: emptyToUndefined(data),
   };
 }
 
+/** A failed-request event names its endpoint and verb, never headers or a query. */
+function scrubRequest(request: ErrorEvent['request']): ErrorEvent['request'] {
+  const url = sanitizeUrl(request?.url);
+  return url === undefined ? undefined : { url, method: truncateOrDrop(request?.method) };
+}
+
 /**
- * Rebuild the whole event. Anything not named below — `request` (URLs and
- * headers), `server_name` (the device name), `threads`, `modules`,
+ * Rebuild the whole event. Anything not named below — request headers and
+ * cookies, `server_name` (the device name), `threads`, `modules`,
  * `fingerprint`, `logentry`, attachments — is gone by construction.
  */
 function scrubEvent(event: ErrorEvent): ErrorEvent {
@@ -319,6 +418,7 @@ function scrubEvent(event: ErrorEvent): ErrorEvent {
     debug_meta: scrubDebugMeta(event.debug_meta),
     // A route name, and the name passed to `captureAppEvent`.
     transaction: truncateOrDrop(event.transaction),
+    request: scrubRequest(event.request),
     message: truncateOrDrop(event.message),
     user: scrubUser(event.user),
     exception: scrubException(event.exception),
@@ -326,6 +426,64 @@ function scrubEvent(event: ErrorEvent): ErrorEvent {
     tags: scrubTags(event.tags),
     extra: emptyToUndefined(scrubBag(event.extra)),
     breadcrumbs: breadcrumbs.length > 0 ? breadcrumbs : undefined,
+  };
+}
+
+type SpanJSON = NonNullable<TransactionEvent['spans']>[number];
+
+/**
+ * A span keeps its identity, timing and op. Its description is a route name,
+ * a component name or `GET https://…`, so the URL cut is the only edit it
+ * needs; its attributes go through the same allowlist as every other bag.
+ */
+function scrubSpan(span: SpanJSON): SpanJSON {
+  return {
+    span_id: span.span_id,
+    trace_id: span.trace_id,
+    parent_span_id: span.parent_span_id,
+    op: truncateOrDrop(span.op),
+    origin: span.origin,
+    status: truncateOrDrop(span.status),
+    description: sanitizeUrl(span.description),
+    start_timestamp: span.start_timestamp,
+    timestamp: span.timestamp,
+    data: scrubBag(span.data) as SpanJSON['data'],
+  };
+}
+
+function scrubMeasurements(measurements: TransactionEvent['measurements']): TransactionEvent['measurements'] {
+  if (!measurements) return undefined;
+  const out: NonNullable<TransactionEvent['measurements']> = {};
+  for (const [name, measurement] of Object.entries(measurements)) {
+    if (typeof measurement?.value === 'number' && Number.isFinite(measurement.value)) {
+      out[name] = { value: measurement.value, unit: measurement.unit };
+    }
+  }
+  return emptyToUndefined(out);
+}
+
+/**
+ * Transactions never pass through `beforeSend`, so they get the same rebuild
+ * here. Breadcrumbs are dropped: they are context for an error, not a timing.
+ */
+function scrubTransaction(event: TransactionEvent): TransactionEvent {
+  return {
+    type: 'transaction',
+    event_id: event.event_id,
+    timestamp: event.timestamp,
+    start_timestamp: event.start_timestamp,
+    platform: event.platform,
+    release: event.release,
+    dist: event.dist,
+    environment: event.environment,
+    sdk: event.sdk,
+    transaction: sanitizeUrl(event.transaction),
+    transaction_info: event.transaction_info,
+    user: scrubUser(event.user),
+    contexts: scrubContexts(event.contexts),
+    tags: scrubTags(event.tags),
+    measurements: scrubMeasurements(event.measurements),
+    spans: event.spans?.map(scrubSpan),
   };
 }
 
@@ -361,33 +519,37 @@ function loadSentry(): SentryModule | null {
   }
 }
 
-/** Release/dist provenance, straight off the resolved Expo config. */
-function readAppIdentity(): { release: string | undefined; dist: string | undefined } {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const Constants = require('expo-constants').default as
-      | {
-          expoConfig?: {
-            version?: unknown;
-            ios?: { buildNumber?: unknown };
-            android?: { versionCode?: unknown };
-          } | null;
-        }
-      | undefined;
-    const config = Constants?.expoConfig;
-    const version = typeof config?.version === 'string' ? config.version : undefined;
-    const iosBuild = typeof config?.ios?.buildNumber === 'string' ? config.ios.buildNumber : undefined;
-    const androidBuild =
-      typeof config?.android?.versionCode === 'number' ? String(config.android.versionCode) : undefined;
-    return { release: version, dist: Platform.OS === 'android' ? androidBuild : iosBuild };
-  } catch {
-    return { release: undefined, dist: undefined };
-  }
-}
-
 /** The EAS build profile that produced this binary, reused from build-profile.ts. */
 function resolveEnvironment(): string {
   return getBuildProfile() ?? (__DEV__ ? 'development' : 'unknown');
+}
+
+/** Pure: performance spans are sampled in production builds only. */
+export function resolveTracesSampleRate(environment: string): number {
+  return isProductionBuildProfile(environment) ? PRODUCTION_TRACES_SAMPLE_RATE : 0;
+}
+
+/**
+ * Pure: whether JavaScript must start the native SDK itself. A Release iOS
+ * build already started it in AppDelegate.swift under `#if !DEBUG` — the same
+ * Xcode configuration that bundles JavaScript with `__DEV__ === false` — so
+ * there JavaScript attaches. Debug builds and every other platform have no
+ * native start and keep the SDK's own behaviour.
+ */
+export function resolveAutoInitializeNativeSdk(isDev: boolean, platform: string): boolean {
+  return isDev || platform !== 'ios';
+}
+
+/**
+ * Pure: a pattern matching URLs on exactly this origin's host — the only host
+ * that may receive `sentry-trace` headers or have its failed requests filed.
+ * A plain string target is a substring match, so it would also cover
+ * `api.unfoldapp.co.example.com`; the anchored pattern does not.
+ */
+export function originPattern(url: string): RegExp {
+  const trimmed = url.trim();
+  const origin = /^(https?:\/\/[^/?#]+)/i.exec(trimmed)?.[1] ?? trimmed;
+  return new RegExp(`^${origin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:[/?#]|$)`, 'i');
 }
 
 /**
@@ -443,14 +605,34 @@ export function initSentry(): void {
   if (sentry === null) return;
 
   initialized = true;
-  const { release, dist } = readAppIdentity();
+  const environment = resolveEnvironment();
+  const backendOnly = originPattern(PRIMARY_BACKEND_URL);
 
   try {
+    // Route changes become `navigation` spans and breadcrumbs, and the native
+    // app-start measurement attaches to the first of them. The container is
+    // handed over from the root layout via `registerNavigationContainer`.
+    navigationIntegration = sentry.reactNavigationIntegration();
+
     sentry.init({
       dsn,
-      release,
-      dist,
-      environment: resolveEnvironment(),
+      environment,
+
+      // No `release` / `dist`. Passing either short-circuits
+      // `nativeReleaseIntegration` (integrations/release.js) before its
+      // `${id}@${version}+${build}` native fallback — which is exactly the
+      // release `sentry-cli react-native xcode` uploads this build's source
+      // maps under, and exactly what AppDelegate.swift sets natively. The
+      // Expo config's `ios.buildNumber` is stale ("183") under
+      // `appVersionSource: remote`, so deriving from native is also the only
+      // way the two sides agree on one dist.
+
+      // NATIVE FIRST (see the file header). A Release iOS build started the
+      // Cocoa SDK in AppDelegate.swift before JavaScript existed; restarting
+      // it here would discard that instance's session and integrations.
+      // Every native-only option (session tracking, crash handler, app hangs,
+      // watchdog terminations, Cocoa breadcrumbs) is set in the Swift file.
+      autoInitializeNativeSdk: resolveAutoInitializeNativeSdk(__DEV__, Platform.OS),
 
       // Privacy (see the file header). These are the defaults for most of
       // them; they are written out so that turning one on is a deliberate,
@@ -458,17 +640,37 @@ export function initSentry(): void {
       sendDefaultPii: false,
       attachScreenshot: false,
       attachViewHierarchy: false,
-      replaysSessionSampleRate: 0,
-      replaysOnErrorSampleRate: 0,
-      enableCaptureFailedRequests: false,
+      // NO `replaysSessionSampleRate` / `replaysOnErrorSampleRate`. At
+      // @sentry/react-native 7.11.0 `integrations/default.js` installs
+      // `mobileReplayIntegration()` when either key is `typeof === 'number'`,
+      // which `0` satisfies — so writing them out as 0 would INSTALL replay,
+      // not suppress it. Their absence is what keeps it out;
+      // `src/lib/__tests__/sentry.test.ts` asserts the absence.
       enableUserInteractionTracing: false,
       enableLogs: false,
-      // Transactions do NOT pass through `beforeSend`, so performance data is
-      // never collected rather than scrubbed.
-      enableAutoPerformanceTracing: false,
-      // Only relevant for message events, whose `threads` scrubEvent does not
-      // forward, so collecting the stack would be data we throw away.
-      attachStacktrace: false,
+
+      // A backend 5xx is filed as an event (`scrubEvent` keeps the endpoint
+      // and status, drops headers and query). Only the backend: a third
+      // party's failure is not this app's bug, and `sentry-trace` / `baggage`
+      // headers must never reach one. The flag adds a default `HttpClient`
+      // integration; the explicit instance below replaces it (same name) so
+      // the target list is honoured.
+      enableCaptureFailedRequests: true,
+      tracePropagationTargets: [backendOnly],
+
+      // App start, route changes, http spans, stalls and native frames.
+      // Transactions bypass `beforeSend`, so `beforeSendTransaction` below
+      // rebuilds them from the same allowlists.
+      enableAutoPerformanceTracing: true,
+      tracesSampleRate: resolveTracesSampleRate(environment),
+      integrations: [
+        navigationIntegration,
+        sentry.httpClientIntegration({ failedRequestTargets: [backendOnly] }),
+      ],
+
+      // A stack for message events and for errors thrown without one; frames
+      // are rebuilt by `scrubFrame` like every other stack.
+      attachStacktrace: true,
       maxBreadcrumbs: 50,
 
       beforeSend: (event) => {
@@ -479,20 +681,16 @@ export function initSentry(): void {
         if (scrubbed && scrubbed.tags?.source === APP_EVENT_SOURCE) delete scrubbed.breadcrumbs;
         return scrubbed;
       },
+      // Every breadcrumb — the SDK's own console/fetch/xhr/navigation/touch
+      // ones and this app's — is rebuilt here before it reaches the scope, and
+      // the scope is what is synced to the native SDK. So the trail attached to
+      // a native crash report is the scrubbed trail. Cocoa's own breadcrumbs
+      // never pass here, which is why they are turned off in AppDelegate.swift
+      // — and that takes TWO switches, not one: `enableAutoBreadcrumbTracking`
+      // does not govern network breadcrumbs, which have their own
+      // `enableNetworkBreadcrumbs` (default YES) and record `http.query` raw.
       beforeBreadcrumb: (breadcrumb) => scrubBreadcrumb(breadcrumb),
-      // A NATIVE crash is assembled and sent by the Cocoa SDK; it never passes
-      // through `beforeSend` or `beforeBreadcrumb` above. Cocoa's own automatic
-      // breadcrumbs include `ui.click` entries labelled with the tapped view's
-      // accessibility label, which in this app is regularly a person's name or
-      // the title of something they wrote. Turning them off is the only way to
-      // keep user content out of a native crash report.
-      //
-      // Not in `ReactNativeOptions`, but the JS layer forwards every unknown
-      // key to `RNSentry.initNativeSdk` (wrapper.js builds `filteredOptions`
-      // with a rest spread), and the bridge hands that dictionary straight to
-      // `SentryOptionsInternal initWithDict:` (SentrySDKWrapper.m), which does
-      // read this key. Hence the cast.
-      ...({ enableAutoBreadcrumbTracking: false } as Record<string, boolean>),
+      beforeSendTransaction: (event) => scrubTransaction(event),
     });
     enabled = true;
   } catch {
@@ -555,5 +753,34 @@ export function captureAppEvent(name: string, data?: Record<string, string | num
     });
   } catch {
     // Ignored, as above.
+  }
+}
+
+/**
+ * Hand expo-router's navigation container (or its ref) to the navigation
+ * instrumentation. Safe to call on every render: the integration ignores a
+ * container it already holds.
+ */
+export function registerNavigationContainer(container: unknown): void {
+  if (!enabled || navigationIntegration === null) return;
+  try {
+    navigationIntegration.registerNavigationContainer(container);
+  } catch {
+    // Instrumentation must never take the app down with it.
+  }
+}
+
+/**
+ * Sentry's root wrapper: a touch-event boundary (a `touch` breadcrumb naming
+ * the tapped component, scrubbed like every other breadcrumb) and the
+ * profiler that marks the first render for the app-start span. Returns the
+ * component untouched while reporting is off.
+ */
+export function wrapRootComponent<P extends Record<string, unknown>>(component: ComponentType<P>): ComponentType<P> {
+  if (!enabled || sentryModule === null) return component;
+  try {
+    return sentryModule.wrap(component);
+  } catch {
+    return component;
   }
 }

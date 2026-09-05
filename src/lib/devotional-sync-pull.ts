@@ -240,7 +240,11 @@ export async function pullDevotionalContent(
 
   if (!response.ok) {
     const body = await response.text().catch(() => '');
-    throw new Error(`Sync pull failed: ${response.status} ${body.slice(0, 120)}`);
+    // The body stays out of the Error message: a captured exception's `value`
+    // is allowlisted through to Sentry, and a backend error body can quote the
+    // devotional or journal text it failed on. `logger` is __DEV__-only.
+    logger.warn('[sync/devotional-pull] pull failed', response.status, body.slice(0, 120));
+    throw new Error(`Sync pull failed: ${response.status}`);
   }
 
   const payload = await response.json() as SyncPullResponse;

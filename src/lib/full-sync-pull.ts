@@ -640,7 +640,10 @@ export async function pullAllUserData(options: PullAllUserDataOptions = {}): Pro
 
   if (!response.ok) {
     const body = await response.text().catch(() => '');
-    throw new Error(`Sync pull failed: ${response.status} ${body.slice(0, 120)}`);
+    // See devotional-sync-pull.ts: the body is diagnostics, not an error
+    // message, because `scrubException` lets an exception value through.
+    logger.warn('[sync/pull-all] pull failed', response.status, body.slice(0, 120));
+    throw new Error(`Sync pull failed: ${response.status}`);
   }
 
   const payload = await response.json() as SyncPullResponse;
