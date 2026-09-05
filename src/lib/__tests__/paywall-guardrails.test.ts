@@ -1,6 +1,7 @@
 import {
   finishVerifiedPaywallFlow,
   getThreeStepPaywallPrimaryAction,
+  resolveEntitlementWaitCompletion,
   resolveOnboardingPurchaseAdvance,
   resolvePaywallCompletionNavigation,
   resolvePurchaseOutcome,
@@ -164,6 +165,65 @@ describe('paywall guardrails', () => {
         resolveOnboardingPurchaseAdvance({ result: { ok: false, reason: 'timeout' }, hasAdvanced: false }),
       ];
       expect(decisions.map((d) => d.action)).not.toContain('advance');
+    });
+  });
+
+  describe('resolveEntitlementWaitCompletion (MP-3)', () => {
+    it('advances once when a delayed entitlement grant is verified', () => {
+      expect(
+        resolveEntitlementWaitCompletion({
+          granted: true,
+          aborted: false,
+          hasAdvanced: false,
+          sessionCurrent: true,
+        }),
+      ).toBe('advance');
+    });
+
+    it('ignores a late grant after unmount, identity reset, or a prior advance', () => {
+      expect(
+        resolveEntitlementWaitCompletion({
+          granted: true,
+          aborted: true,
+          hasAdvanced: false,
+          sessionCurrent: true,
+        }),
+      ).toBe('ignore');
+      expect(
+        resolveEntitlementWaitCompletion({
+          granted: true,
+          aborted: false,
+          hasAdvanced: true,
+          sessionCurrent: true,
+        }),
+      ).toBe('ignore');
+      expect(
+        resolveEntitlementWaitCompletion({
+          granted: false,
+          aborted: true,
+          hasAdvanced: false,
+          sessionCurrent: true,
+        }),
+      ).toBe('ignore');
+      expect(
+        resolveEntitlementWaitCompletion({
+          granted: true,
+          aborted: false,
+          hasAdvanced: false,
+          sessionCurrent: false,
+        }),
+      ).toBe('ignore');
+    });
+
+    it('times out without inventing a paid entitlement so restore remains the next step', () => {
+      expect(
+        resolveEntitlementWaitCompletion({
+          granted: false,
+          aborted: false,
+          hasAdvanced: false,
+          sessionCurrent: true,
+        }),
+      ).toBe('timeout');
     });
   });
 

@@ -62,7 +62,7 @@ describe('paywall plan selector semantics (RT-PAYWALL-3/4/6)', () => {
   });
 
   it('disables purchase CTA and exposes retry while prices are unavailable', () => {
-    expect(src).toContain('const isSubscribeDisabled = isPurchasing || !offeringsReady;');
+    expect(src).toContain('const isSubscribeDisabled = isPurchasing || !offeringsReady || isWaitingForEntitlement');
     expect(src).toContain('Subscription plans unavailable');
     expect(src).toContain('Tap to retry');
   });

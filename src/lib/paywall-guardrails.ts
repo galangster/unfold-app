@@ -180,6 +180,46 @@ export function finishVerifiedPaywallFlow(params: {
   });
 }
 
+export type PaywallLifecycleSession = {
+  mounted: boolean;
+  generation: number;
+};
+
+export function isPaywallLifecycleCurrent(
+  session: PaywallLifecycleSession,
+  generation: number,
+): boolean {
+  return session.mounted && session.generation === generation;
+}
+
+export type EntitlementWaitCompletion = 'advance' | 'timeout' | 'ignore';
+
+/**
+ * Decide what a bounded Premium wait does when it settles.
+ *
+ * Advance only on a verified grant. Ignore work after unmount, identity
+ * reset, or a prior advance. Timeout keeps restore/retry as the next step.
+ */
+export function resolveEntitlementWaitCompletion({
+  granted,
+  aborted,
+  hasAdvanced,
+  sessionCurrent,
+}: {
+  granted: boolean;
+  aborted: boolean;
+  hasAdvanced: boolean;
+  sessionCurrent: boolean;
+}): EntitlementWaitCompletion {
+  if (!sessionCurrent || aborted || hasAdvanced) {
+    return 'ignore';
+  }
+  if (granted) {
+    return 'advance';
+  }
+  return 'timeout';
+}
+
 /**
  * Run a paywall purchase/restore flow with guaranteed loading + error hygiene.
  *

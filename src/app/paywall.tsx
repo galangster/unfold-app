@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, ActivityIndicator, Linking, ScrollView, Platform, Pressable } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { LEGAL_LINKS } from '@/lib/push-notification-helpers';
@@ -21,15 +21,28 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getOfferings, purchasePackage, restorePurchases, isRevenueCatEnabled } from '@/lib/revenuecatClient';
+import {
+  getOfferings,
+  isRevenueCatEnabled,
+  POST_PURCHASE_ENTITLEMENT_WAIT_MS,
+  purchasePackage,
+  restorePurchases,
+  subscribeRevenueCatIdentityEpoch,
+  waitForUnfoldPremiumEntitlement,
+} from '@/lib/revenuecatClient';
 import { syncTrialEndingNotification } from '@/lib/trial-notification';
 import {
   finishVerifiedPaywallFlow,
+  hasUnfoldPremiumEntitlement,
+  isPaywallLifecycleCurrent,
+  PAYWALL_ENTITLEMENT_PENDING_CUE,
+  resolveEntitlementWaitCompletion,
+  resolveOnboardingPurchaseAdvance,
   resolvePaywallCompletionNavigation,
-  resolvePurchaseOutcome,
   resolveRestoreOutcome,
+  type PaywallLifecycleSession,
 } from '@/lib/paywall-guardrails';
-import type { PurchasesPackage } from 'react-native-purchases';
+import type { CustomerInfo, PurchasesPackage } from 'react-native-purchases';
 import Purchases from 'react-native-purchases';
 import { useUnfoldStore } from '@/lib/store';
 import { logger } from '@/lib/logger';
@@ -110,6 +123,106 @@ export default function PaywallScreen() {
 
     router.replace(navigation.href);
   };
+
+  const completePaywallFlowRef = useRef(completePaywallFlow);
+  completePaywallFlowRef.current = completePaywallFlow;
+  const lifecycleSessionRef = useRef<PaywallLifecycleSession>({
+    mounted: true,
+    generation: 0,
+  });
+  const advancedRef = useRef(false);
+  const waitAbortRef = useRef<AbortController | null>(null);
+  const [entitlementPendingMessage, setEntitlementPendingMessage] = useState<string | null>(null);
+  const [subscribeError, setSubscribeError] = useState('');
+  const [isRetryingOfferings, setIsRetryingOfferings] = useState(false);
+
+  const clearStaleWaitUi = useCallback(() => {
+    setEntitlementPendingMessage(null);
+    setSubscribeError('');
+    setIsRetryingOfferings(false);
+  }, []);
+
+  useEffect(() => {
+    const session = lifecycleSessionRef.current;
+    session.mounted = true;
+    const unsubscribeIdentity = subscribeRevenueCatIdentityEpoch((_epoch) => {
+      session.generation += 1;
+      advancedRef.current = false;
+      waitAbortRef.current?.abort();
+      if (session.mounted) {
+        clearStaleWaitUi();
+      }
+    });
+    return () => {
+      session.mounted = false;
+      waitAbortRef.current?.abort();
+      unsubscribeIdentity();
+    };
+  }, [clearStaleWaitUi]);
+
+  const advanceOnce = useCallback((
+    generation: number,
+    customerInfo?: CustomerInfo,
+    source: 'purchase' | 'restore' = 'purchase',
+  ) => {
+    const session = lifecycleSessionRef.current;
+    if (!session.mounted) return false;
+    if (advancedRef.current) return false;
+    if (!isPaywallLifecycleCurrent(session, generation)) return false;
+    advancedRef.current = true;
+    setEntitlementPendingMessage(null);
+    updateUser({ isPremium: true });
+    finishVerifiedPaywallFlow({
+      complete: () => {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        if (customerInfo) {
+          void recordPaywallDiagnosticLazy(`paywall.${source}.entitlement_active`, () => ({
+            customerInfo: summarizeCustomerInfo(customerInfo),
+          }));
+        }
+        queryClient.invalidateQueries({ queryKey: ['revenuecat'] });
+        completePaywallFlowRef.current();
+      },
+      syncOptionalWork: syncTrialEndingNotification,
+      onOptionalWorkError: (error) => {
+        logger.log('[Paywall] trial notification sync failed after verified payment:', error);
+      },
+    });
+    return true;
+  }, [updateUser, queryClient]);
+
+  useEffect(() => {
+    if (entitlementPendingMessage === null) return;
+    const session = lifecycleSessionRef.current;
+    const generation = session.generation;
+    const controller = new AbortController();
+    waitAbortRef.current = controller;
+    void waitForUnfoldPremiumEntitlement(POST_PURCHASE_ENTITLEMENT_WAIT_MS, {
+      signal: controller.signal,
+    }).then((customerInfo) => {
+      if (!session.mounted || advancedRef.current) return;
+      const decision = resolveEntitlementWaitCompletion({
+        granted: Boolean(customerInfo && hasUnfoldPremiumEntitlement(customerInfo)),
+        aborted: controller.signal.aborted,
+        hasAdvanced: advancedRef.current,
+        sessionCurrent: isPaywallLifecycleCurrent(session, generation),
+      });
+      if (decision === 'ignore') return;
+      if (decision === 'advance' && customerInfo) {
+        advanceOnce(generation, customerInfo);
+        return;
+      }
+      setEntitlementPendingMessage(null);
+      setSubscribeError(entitlementPendingMessage);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    });
+    return () => {
+      controller.abort();
+      if (waitAbortRef.current === controller) {
+        waitAbortRef.current = null;
+      }
+    };
+  }, [entitlementPendingMessage, advanceOnce]);
 
   // Pull user's onboarding data for personalization
   const userName = useUnfoldStore((s) => s.user?.name);
@@ -270,8 +383,13 @@ export default function PaywallScreen() {
   const selectedTrialDuration = selectedPlan === 'yearly' ? yearlyTrialDuration : monthlyTrialDuration;
 
   const purchaseMutation = useMutation({
-    mutationFn: (pkg: PurchasesPackage) => purchasePackage(pkg),
-    onSuccess: async (result) => {
+    mutationFn: ({ pkg }: { pkg: PurchasesPackage; generation: number }) =>
+      purchasePackage(pkg),
+    onSuccess: async (result, variables) => {
+      const session = lifecycleSessionRef.current;
+      if (!session.mounted || advancedRef.current) return;
+      if (!isPaywallLifecycleCurrent(session, variables.generation)) return;
+
       void recordPaywallDiagnosticLazy('paywall.purchase.mutation_success', () => (result.ok
         ? {
             ok: true,
@@ -283,69 +401,58 @@ export default function PaywallScreen() {
             error: summarizeRevenueCatError(result.error),
           }));
 
-      if (result.ok) {
-        const activeEntitlements = result.data.entitlements.active;
-        const hasPremium = Boolean(activeEntitlements?.['Unfold Premium']);
-        logger.log(
-          '[Paywall] Purchase succeeded. Active entitlements:',
-          JSON.stringify(Object.keys(activeEntitlements ?? {})),
-          'hasPremium:', hasPremium,
-          'allEntitlements:', JSON.stringify(Object.keys(result.data.entitlements.all ?? {})),
-        );
-
-        const outcome = resolvePurchaseOutcome(result);
-        if (outcome.kind !== 'success') {
-          logger.log('[Paywall] WARNING: Purchase ok but no Unfold Premium entitlement. Check RevenueCat dashboard.');
-          void recordPaywallDiagnosticLazy('paywall.purchase.no_premium_entitlement', () => ({
-            outcomeMessage: outcome.message,
-            customerInfo: summarizeCustomerInfo(result.data),
-          }), 'warn');
-          setSubscribeError(outcome.message);
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      const decision = resolveOnboardingPurchaseAdvance({
+        result,
+        hasAdvanced: advancedRef.current,
+      });
+      switch (decision.action) {
+        case 'advance':
+          if (result.ok) {
+            const activeEntitlements = result.data.entitlements.active;
+            logger.log(
+              '[Paywall] Purchase succeeded. Active entitlements:',
+              JSON.stringify(Object.keys(activeEntitlements ?? {})),
+              'hasPremium: true',
+            );
+            advanceOnce(variables.generation, result.data);
+          }
+          return;
+        case 'noop':
+          return;
+        case 'cancelled': {
+          void recordPaywallDiagnosticLazy('paywall.purchase.user_cancelled', () => ({}), 'warn');
+          const hasSeenOnboardingOffer = mmkvStorage.getItem('@unfold_onboarding_offer_seen') === 'true';
+          if (!hasSeenOnboardingOffer) {
+            setShowExclusiveOffer(true);
+          }
           return;
         }
-
-        updateUser({ isPremium: true });
-        finishVerifiedPaywallFlow({
-          complete: () => {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            void recordPaywallDiagnosticLazy('paywall.purchase.entitlement_active', () => ({
-              customerInfo: summarizeCustomerInfo(result.data),
-            }));
-            queryClient.invalidateQueries({ queryKey: ['revenuecat'] });
-            completePaywallFlow();
-          },
-          syncOptionalWork: syncTrialEndingNotification,
-          onOptionalWorkError: (error) => {
-            logger.log('[Paywall] trial notification sync failed after purchase:', error);
-          },
-        });
-      } else if (result.reason === 'user_cancelled') {
-        void recordPaywallDiagnosticLazy('paywall.purchase.user_cancelled', () => ({}), 'warn');
-        const hasSeenOnboardingOffer = mmkvStorage.getItem('@unfold_onboarding_offer_seen') === 'true';
-        if (!hasSeenOnboardingOffer) {
-          setShowExclusiveOffer(true);
-        }
-        return;
-      } else if (result.reason === 'timeout') {
-        logger.log('[Paywall] Purchase timed out');
-        void recordPaywallDiagnosticLazy('paywall.purchase.timeout', () => ({
-          error: summarizeRevenueCatError(result.error),
-        }), 'error');
-        setSubscribeError('Purchase took too long. Please check your connection and try again.');
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      } else {
-        // Actual SDK error
-        logger.log('[Paywall] Purchase did not complete:', JSON.stringify(result));
-        void recordPaywallDiagnosticLazy('paywall.purchase.sdk_error', () => ({
-          reason: result.reason,
-          error: summarizeRevenueCatError(result.error),
-        }), 'error');
-        setSubscribeError('Something went wrong. Please try again.');
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        case 'wait_for_entitlement':
+          logger.log('[Paywall] Purchase completed without active Premium; waiting for entitlement');
+          void recordPaywallDiagnosticLazy('paywall.purchase.wait_for_entitlement', () => ({
+            message: decision.message,
+            result: result.ok
+              ? { ok: true, customerInfo: summarizeCustomerInfo(result.data) }
+              : { ok: false, reason: result.reason, error: summarizeRevenueCatError(result.error) },
+          }), 'warn');
+          setSubscribeError('');
+          setEntitlementPendingMessage(decision.message);
+          return;
+        case 'error':
+          logger.log('[Paywall] Purchase did not complete:', JSON.stringify(result));
+          void recordPaywallDiagnosticLazy('paywall.purchase.sdk_error', () => ({
+            reason: result.ok ? 'missing_entitlement' : result.reason,
+            error: result.ok ? undefined : summarizeRevenueCatError(result.error),
+          }), 'error');
+          setSubscribeError(decision.message);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          return;
       }
     },
-    onError: (error) => {
+    onError: (error, variables) => {
+      const session = lifecycleSessionRef.current;
+      if (!session.mounted) return;
+      if (!isPaywallLifecycleCurrent(session, variables.generation)) return;
       logger.log('[Paywall] Purchase error:', error);
       void recordPaywallDiagnosticLazy('paywall.purchase.mutation_error', () => ({
         error: summarizeRevenueCatError(error),
@@ -356,8 +463,12 @@ export default function PaywallScreen() {
   });
 
   const restoreMutation = useMutation({
-    mutationFn: restorePurchases,
-    onSuccess: async (result) => {
+    mutationFn: (_variables: { generation: number }) => restorePurchases(),
+    onSuccess: async (result, variables) => {
+      const session = lifecycleSessionRef.current;
+      if (!session.mounted || advancedRef.current) return;
+      if (!isPaywallLifecycleCurrent(session, variables.generation)) return;
+
       void recordPaywallDiagnosticLazy('paywall.restore.mutation_success', () => (result.ok
         ? {
             ok: true,
@@ -371,21 +482,7 @@ export default function PaywallScreen() {
 
       const outcome = resolveRestoreOutcome(result);
       if (outcome.kind === 'success' && result.ok) {
-        updateUser({ isPremium: true });
-        finishVerifiedPaywallFlow({
-          complete: () => {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            void recordPaywallDiagnosticLazy('paywall.restore.entitlement_active', () => ({
-              customerInfo: summarizeCustomerInfo(result.data),
-            }));
-            queryClient.invalidateQueries({ queryKey: ['revenuecat'] });
-            completePaywallFlow();
-          },
-          syncOptionalWork: syncTrialEndingNotification,
-          onOptionalWorkError: (error) => {
-            logger.log('[Paywall] trial notification sync failed after restore:', error);
-          },
-        });
+        advanceOnce(variables.generation, result.data, 'restore');
         return;
       }
 
@@ -408,7 +505,10 @@ export default function PaywallScreen() {
           : Haptics.NotificationFeedbackType.Error,
       );
     },
-    onError: (error) => {
+    onError: (error, variables) => {
+      const session = lifecycleSessionRef.current;
+      if (!session.mounted) return;
+      if (!isPaywallLifecycleCurrent(session, variables.generation)) return;
       logger.log('[Paywall] Restore error:', error);
       void recordPaywallDiagnosticLazy('paywall.restore.mutation_error', () => ({
         error: summarizeRevenueCatError(error),
@@ -421,19 +521,23 @@ export default function PaywallScreen() {
   const handleClose = () => {
     if (isPurchasing) return;
 
+    const session = lifecycleSessionRef.current;
+    waitAbortRef.current?.abort();
+    session.generation += 1;
+    clearStaleWaitUi();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     completePaywallFlow();
   };
 
-  const [subscribeError, setSubscribeError] = useState('');
-
-  const [isRetryingOfferings, setIsRetryingOfferings] = useState(false);
-
   const handleSubscribe = async () => {
-    if (isPurchasing) {
+    const generation = lifecycleSessionRef.current.generation;
+    if (!isPaywallLifecycleCurrent(lifecycleSessionRef.current, generation)) {
+      return;
+    }
+    if (isPurchasing || entitlementPendingMessage !== null) {
       void recordPaywallDiagnosticLazy('paywall.subscribe_tap_ignored', () => ({
         selectedPlan,
-        reason: 'already_purchasing',
+        reason: isPurchasing ? 'already_purchasing' : 'waiting_for_entitlement',
       }), 'warn');
       return;
     }
@@ -471,8 +575,15 @@ export default function PaywallScreen() {
           error: summarizeRevenueCatError(e),
         }), 'error');
       } finally {
-        setIsRetryingOfferings(false);
+        if (isPaywallLifecycleCurrent(lifecycleSessionRef.current, generation)) {
+          setIsRetryingOfferings(false);
+        }
       }
+    }
+
+    if (!lifecycleSessionRef.current.mounted) return;
+    if (!isPaywallLifecycleCurrent(lifecycleSessionRef.current, generation)) {
+      return;
     }
 
     if (!pkg) {
@@ -510,21 +621,26 @@ export default function PaywallScreen() {
       package: summarizePackage(pkg),
     }));
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    purchaseMutation.mutate(pkg);
+    purchaseMutation.mutate({ pkg, generation });
   };
 
   const handleRestore = () => {
+    const session = lifecycleSessionRef.current;
+    const generation = session.generation;
+    if (!session.mounted) return;
+    if (!isPaywallLifecycleCurrent(session, generation)) return;
     void recordPaywallDiagnosticLazy('paywall.restore_tap', () => ({
       source,
       selectedPlan,
       revenueCatEnabled: isRevenueCatEnabled(),
     }));
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    restoreMutation.mutate();
+    restoreMutation.mutate({ generation });
   };
 
   const isPurchasing = purchaseMutation.isPending || restoreMutation.isPending || isRetryingOfferings;
-  const isSubscribeDisabled = isPurchasing || !offeringsReady;
+  const isWaitingForEntitlement = entitlementPendingMessage !== null;
+  const isSubscribeDisabled = isPurchasing || !offeringsReady || isWaitingForEntitlement;
 
   // Never render stale fallback prices (PRICE-1): wait for RevenueCat packages.
   // Prices are the empty string until both offerings resolve — the CTA is
@@ -1047,10 +1163,21 @@ export default function PaywallScreen() {
               marginBottom: 4,
             }}
           >
-            {(isPurchasing || isLoadingOfferings) ? (
+            {(isPurchasing || isLoadingOfferings || isWaitingForEntitlement) ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing['2'] }}>
                 <ActivityIndicator color={colors.background} size="small" />
-                {isLoadingOfferings && !isPurchasing && (
+                {isWaitingForEntitlement && !isPurchasing && (
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.ui,
+                      fontSize: 15,
+                      color: colors.background,
+                    }}
+                  >
+                    {PAYWALL_ENTITLEMENT_PENDING_CUE}
+                  </Text>
+                )}
+                {isLoadingOfferings && !isPurchasing && !isWaitingForEntitlement && (
                   <Text
                     style={{
                       fontFamily: FontFamily.ui,
@@ -1112,8 +1239,19 @@ export default function PaywallScreen() {
           </View>
         ) : null}
 
+        {entitlementPendingMessage ? (
+          <View style={{ alignItems: 'center', marginTop: 6, gap: 4 }} accessibilityLiveRegion="polite">
+            <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, color: colors.text, textAlign: 'center' }}>
+              {PAYWALL_ENTITLEMENT_PENDING_CUE}
+            </Text>
+            <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, color: colors.textMuted, textAlign: 'center' }}>
+              {entitlementPendingMessage}
+            </Text>
+          </View>
+        ) : null}
+
         {/* Error */}
-        {subscribeError ? (
+        {subscribeError && !entitlementPendingMessage ? (
           <View style={{ alignItems: 'center', marginTop: 6, gap: 4 }}>
             <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, color: colors.error, textAlign: 'center' }}>
               {subscribeError}
