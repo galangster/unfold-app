@@ -24,6 +24,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getOfferings, purchasePackage, restorePurchases, isRevenueCatEnabled } from '@/lib/revenuecatClient';
 import { syncTrialEndingNotification } from '@/lib/trial-notification';
 import {
+  finishVerifiedPaywallFlow,
   resolvePaywallCompletionNavigation,
   resolvePurchaseOutcome,
   resolveRestoreOutcome,
@@ -305,15 +306,20 @@ export default function PaywallScreen() {
         }
 
         updateUser({ isPremium: true });
-
-        await syncTrialEndingNotification();
-
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        void recordPaywallDiagnosticLazy('paywall.purchase.entitlement_active', () => ({
-          customerInfo: summarizeCustomerInfo(result.data),
-        }));
-        queryClient.invalidateQueries({ queryKey: ['revenuecat'] });
-        completePaywallFlow();
+        finishVerifiedPaywallFlow({
+          complete: () => {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            void recordPaywallDiagnosticLazy('paywall.purchase.entitlement_active', () => ({
+              customerInfo: summarizeCustomerInfo(result.data),
+            }));
+            queryClient.invalidateQueries({ queryKey: ['revenuecat'] });
+            completePaywallFlow();
+          },
+          syncOptionalWork: syncTrialEndingNotification,
+          onOptionalWorkError: (error) => {
+            logger.log('[Paywall] trial notification sync failed after purchase:', error);
+          },
+        });
       } else if (result.reason === 'user_cancelled') {
         void recordPaywallDiagnosticLazy('paywall.purchase.user_cancelled', () => ({}), 'warn');
         const hasSeenOnboardingOffer = mmkvStorage.getItem('@unfold_onboarding_offer_seen') === 'true';
@@ -366,15 +372,20 @@ export default function PaywallScreen() {
       const outcome = resolveRestoreOutcome(result);
       if (outcome.kind === 'success' && result.ok) {
         updateUser({ isPremium: true });
-
-        await syncTrialEndingNotification();
-
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        void recordPaywallDiagnosticLazy('paywall.restore.entitlement_active', () => ({
-          customerInfo: summarizeCustomerInfo(result.data),
-        }));
-        queryClient.invalidateQueries({ queryKey: ['revenuecat'] });
-        completePaywallFlow();
+        finishVerifiedPaywallFlow({
+          complete: () => {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            void recordPaywallDiagnosticLazy('paywall.restore.entitlement_active', () => ({
+              customerInfo: summarizeCustomerInfo(result.data),
+            }));
+            queryClient.invalidateQueries({ queryKey: ['revenuecat'] });
+            completePaywallFlow();
+          },
+          syncOptionalWork: syncTrialEndingNotification,
+          onOptionalWorkError: (error) => {
+            logger.log('[Paywall] trial notification sync failed after restore:', error);
+          },
+        });
         return;
       }
 

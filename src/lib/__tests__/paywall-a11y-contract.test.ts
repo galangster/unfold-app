@@ -80,3 +80,10 @@ describe('paywall plan selector semantics (RT-PAYWALL-3/4/6)', () => {
     expect(src).not.toContain('`${colors.accent}30`');
   });
 });
+
+describe('standalone paywall verified completion (MP-2)', () => {
+  it('does not await optional notification work on the verified payment path', () => {
+    expect(src).toContain('finishVerifiedPaywallFlow');
+    expect(src).not.toMatch(/await syncTrialEndingNotification\(\)/);
+  });
+});

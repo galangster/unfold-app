@@ -161,6 +161,26 @@ export function resolveOnboardingPurchaseAdvance({
 }
 
 /**
+ * Finish a verified standalone paywall purchase or restore.
+ *
+ * TanStack Query awaits `onSuccess` and treats a rejection as mutation
+ * failure (`@tanstack/query-core` mutation.ts:243-250, 269-287). Optional
+ * notification work must not be awaited on that path: navigation runs first,
+ * and a hung or rejected notification cannot hold the paywall or turn
+ * payment success into payment failure.
+ */
+export function finishVerifiedPaywallFlow(params: {
+  complete: () => void;
+  syncOptionalWork: () => Promise<void>;
+  onOptionalWorkError?: (error: unknown) => void;
+}): void {
+  params.complete();
+  void params.syncOptionalWork().catch((error) => {
+    params.onOptionalWorkError?.(error);
+  });
+}
+
+/**
  * Run a paywall purchase/restore flow with guaranteed loading + error hygiene.
  *
  * Without this, a rejected purchasePackage / restorePurchases / fetchQuery left

@@ -1,4 +1,5 @@
 import {
+  finishVerifiedPaywallFlow,
   getThreeStepPaywallPrimaryAction,
   resolveOnboardingPurchaseAdvance,
   resolvePaywallCompletionNavigation,
@@ -186,6 +187,55 @@ describe('paywall guardrails', () => {
           data: { entitlements: { active: { 'Unfold Premium': { identifier: 'Unfold Premium' } } } },
         }),
       ).toEqual({ kind: 'success' });
+    });
+  });
+
+  describe('finishVerifiedPaywallFlow (MP-2: optional notification cannot block payment)', () => {
+    it('navigates immediately while optional async work is still pending', async () => {
+      const complete = jest.fn();
+      const onOptionalWorkError = jest.fn();
+      let settleOptional!: () => void;
+      const syncOptionalWork = async (): Promise<void> => {
+        await new Promise<void>((resolve) => {
+          settleOptional = resolve;
+        });
+      };
+
+      finishVerifiedPaywallFlow({
+        complete,
+        syncOptionalWork,
+        onOptionalWorkError,
+      });
+
+      expect(complete).toHaveBeenCalledTimes(1);
+      await Promise.resolve();
+      expect(complete).toHaveBeenCalledTimes(1);
+      expect(onOptionalWorkError).not.toHaveBeenCalled();
+      settleOptional();
+      await Promise.resolve();
+      expect(complete).toHaveBeenCalledTimes(1);
+      expect(onOptionalWorkError).not.toHaveBeenCalled();
+    });
+
+    it('rejected optional async work does not fail the verified payment', async () => {
+      const complete = jest.fn();
+      const onOptionalWorkError = jest.fn();
+      const failure = new Error('getCustomerInfo failed');
+      const syncOptionalWork = async (): Promise<void> => {
+        throw failure;
+      };
+
+      finishVerifiedPaywallFlow({
+        complete,
+        syncOptionalWork,
+        onOptionalWorkError,
+      });
+
+      expect(complete).toHaveBeenCalledTimes(1);
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(complete).toHaveBeenCalledTimes(1);
+      expect(onOptionalWorkError).toHaveBeenCalledWith(failure);
     });
   });
 
