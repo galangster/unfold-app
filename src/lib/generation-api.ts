@@ -199,7 +199,11 @@ export async function pollJobStatus(
   );
 
   if (!response.ok) {
-    throw new Error(`Poll job failed: ${response.status}`);
+    // Carry the status and code: 404 / 400 is the server's word that it does
+    // not hold this job (`classifyPollFailure`), not a connection problem.
+    const body = (await response.json().catch(() => null)) as { error?: { code?: string; message?: string } } | null;
+    const detail = body?.error?.message ? ` — ${body.error.message}` : '';
+    throw new ApiError(`Poll job failed: ${response.status}${detail}`, response.status, body?.error?.code ?? 'POLL_FAILED');
   }
 
   return response.json();

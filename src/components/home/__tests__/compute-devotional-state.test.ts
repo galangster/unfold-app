@@ -1,4 +1,4 @@
-import { computeDevotionalState, type ComputeInput } from '../compute-devotional-state';
+import { computeDevotionalState, findMostRecentlyReadDay, type ComputeInput } from '../compute-devotional-state';
 import type { DevotionalDay, Devotional } from '@/lib/store';
 
 // ─── Fixtures ───────────────────────────────────────────────────
@@ -237,6 +237,103 @@ describe('computeDevotionalState', () => {
     }
   });
 
+  // ─── The day after a completed reading still invites reflection (item 10) ──
+
+  it('day 1 of a 7-day series completed today: tomorrow-locked carries the completed day and the free-write save', () => {
+    const onSaveFreeWrite = jest.fn();
+    const dayOne = makeDayData({ dayNumber: 1, isRead: true, readAt: '2026-09-04T08:00:00Z' });
+    const dayTwo = makeDayData({ dayNumber: 2, isRead: false, isRevealed: false });
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDevotional: makeDevotional({ currentDay: 2, days: [dayOne, dayTwo] }),
+      currentDayData: dayTwo,
+      hasReadToday: true,
+      dayLabel: 'Tomorrow',
+      daysCompleted: 1,
+      progress: 14.3,
+      onSaveFreeWrite,
+    });
+    expect(state.type).toBe('tomorrow-locked');
+    if (state.type === 'tomorrow-locked') {
+      expect(state.devotionalId).toBe('dev-1');
+      expect(state.dayData.dayNumber).toBe(2);
+      expect(state.completedDayData).toBe(dayOne);
+      expect(state.onSaveFreeWrite).toBe(onSaveFreeWrite);
+    }
+  });
+
+  it('a day completed yesterday routes to reveal-ready today, with no reflect payload', () => {
+    const dayOne = makeDayData({ dayNumber: 1, isRead: true, readAt: '2026-09-03T08:00:00Z' });
+    const dayTwo = makeDayData({ dayNumber: 2, isRead: false, isRevealed: false });
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDevotional: makeDevotional({ currentDay: 2, days: [dayOne, dayTwo] }),
+      currentDayData: dayTwo,
+      hasReadToday: false,
+      dayLabel: 'Today',
+      daysCompleted: 1,
+      progress: 14.3,
+    });
+    expect(state.type).toBe('reveal-ready');
+    expect('completedDayData' in state).toBe(false);
+    expect('onSaveFreeWrite' in state).toBe(false);
+  });
+
+  // A day finished yesterday is not "today's completed reading". Even when
+  // tomorrow's reading is generated ahead (dayLabel 'Tomorrow'), the card must
+  // not lock to tomorrow with a reflect target pointing at yesterday's day —
+  // hasReadToday is the only guard between the two.
+  it('regression: Jordan item 10 — a day completed yesterday does not resolve to tomorrow-locked with a reflect target', () => {
+    const onSaveFreeWrite = jest.fn();
+    const dayOne = makeDayData({ dayNumber: 1, isRead: true, readAt: '2026-09-03T08:00:00Z' });
+    const dayTwo = makeDayData({ dayNumber: 2, isRead: false, isRevealed: false });
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDevotional: makeDevotional({ currentDay: 2, days: [dayOne, dayTwo] }),
+      currentDayData: dayTwo,
+      hasReadToday: false,
+      dayLabel: 'Tomorrow',
+      daysCompleted: 1,
+      progress: 14.3,
+      onSaveFreeWrite,
+    });
+    expect(state.type).toBe('reveal-ready');
+    expect('completedDayData' in state).toBe(false);
+    expect('onSaveFreeWrite' in state).toBe(false);
+  });
+
+  it('a 1-day series completed today keeps its journey-complete state', () => {
+    const dayOne = makeDayData({ dayNumber: 1, isRead: true, readAt: '2026-09-04T08:00:00Z' });
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDevotional: makeDevotional({ totalDays: 1, currentDay: 1, days: [dayOne] }),
+      currentDayData: dayOne,
+      hasReadToday: true,
+      dayLabel: 'Today',
+      isJourneyComplete: true,
+      daysCompleted: 1,
+      totalDays: 1,
+      progress: 100,
+    });
+    expect(state.type).toBe('journey-complete');
+  });
+
+  it('tomorrow-locked defaults onSaveFreeWrite to a noop and completedDayData to null when nothing is read', () => {
+    const state = computeDevotionalState({
+      ...baseInput,
+      hasReadToday: true,
+      dayLabel: 'Tomorrow',
+      daysCompleted: 1,
+      currentDayData: makeDayData({ dayNumber: 2, isRead: false }),
+      onSaveFreeWrite: undefined,
+    });
+    expect(state.type).toBe('tomorrow-locked');
+    if (state.type === 'tomorrow-locked') {
+      expect(state.completedDayData).toBeNull();
+      expect(() => state.onSaveFreeWrite(1, 'text')).not.toThrow();
+    }
+  });
+
   it('returns complete-today when current day is marked as read', () => {
     const state = computeDevotionalState({
       ...baseInput,
@@ -438,6 +535,20 @@ describe('computeDevotionalState', () => {
     expect(state.type).toBe('journey-complete');
   });
 
+  it('findMostRecentlyReadDay picks the latest readAt, then the highest day number, ignoring unread days', () => {
+    const readEarly = makeDayData({ dayNumber: 3, isRead: true, readAt: '2026-09-03T08:00:00Z' });
+    const readLate = makeDayData({ dayNumber: 2, isRead: true, readAt: '2026-09-04T08:00:00Z' });
+    const unread = makeDayData({ dayNumber: 4, isRead: false });
+    expect(findMostRecentlyReadDay([readEarly, readLate, unread])).toBe(readLate);
+
+    const noStampLow = makeDayData({ dayNumber: 1, isRead: true });
+    const noStampHigh = makeDayData({ dayNumber: 2, isRead: true });
+    expect(findMostRecentlyReadDay([noStampHigh, noStampLow])).toBe(noStampHigh);
+
+    expect(findMostRecentlyReadDay([unread])).toBeNull();
+    expect(findMostRecentlyReadDay([])).toBeNull();
+  });
+
   it('empty takes priority over everything', () => {
     const state = computeDevotionalState({
       ...baseInput,
@@ -447,5 +558,114 @@ describe('computeDevotionalState', () => {
       hasReadToday: true,
     });
     expect(state.type).toBe('empty');
+  });
+});
+
+// ─── First series still in flight (Go home from /generating) ─────
+
+describe('computeDevotionalState — preparingInflightSeries', () => {
+  it('shows the preparing card for day 1 when nothing is in the store but the first series is being written', () => {
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDevotional: null,
+      currentDayData: null,
+      preparingInflightSeries: { seriesTitle: 'your devotional' },
+    });
+
+    expect(state).toEqual({
+      type: 'preparing',
+      progress: 0,
+      seriesTitle: 'your devotional',
+      dayNumber: 1,
+      onCreateNew: noop,
+    });
+  });
+
+  it('keeps the empty state when nothing is in the store and no first series is in flight', () => {
+    expect(
+      computeDevotionalState({ ...baseInput, currentDevotional: null, currentDayData: null }).type,
+    ).toBe('empty');
+    expect(
+      computeDevotionalState({
+        ...baseInput,
+        currentDevotional: null,
+        currentDayData: null,
+        preparingInflightSeries: null,
+      }).type,
+    ).toBe('empty');
+  });
+
+  // Jordan's "appeared to do nothing" on the second-series path: "Start
+  // study" on a finished journey, then "Go home — we'll keep writing". The
+  // finished journey is still the current devotional, so journey-complete
+  // would hand back the same card and the same CTA the reader just tapped.
+  it('wins over a finished journey while the next series is being written', () => {
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDevotional: makeDevotional({ currentDay: 8, days: [makeDayData({ isRead: true })] }),
+      currentDayData: null,
+      isJourneyComplete: true,
+      daysCompleted: 7,
+      preparingInflightSeries: { seriesTitle: 'Learning to Trust Again' },
+    });
+
+    expect(state).toEqual({
+      type: 'preparing',
+      progress: 0,
+      seriesTitle: 'Learning to Trust Again',
+      dayNumber: 1,
+      onCreateNew: noop,
+    });
+  });
+
+  it('wins over the paused card of a churned account when the caller still reports an in-flight series', () => {
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDayData: null,
+      premiumPolicy: 'denied',
+      preparingInflightSeries: { seriesTitle: 'your devotional' },
+    });
+
+    expect(state.type).toBe('preparing');
+  });
+});
+
+describe('computeDevotionalState — inflightSeriesFailed', () => {
+  const failed = { message: 'We couldn’t finish creating this devotional right now.', onTryAgain: noop, onDismiss: noop };
+
+  it('shows the failed card with a retry when nothing is in the store and the first series failed', () => {
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDevotional: null,
+      currentDayData: null,
+      inflightSeriesFailed: failed,
+    });
+
+    expect(state).toEqual({ type: 'first-series-failed', ...failed });
+  });
+
+  it('lets an in-flight series win over a stale failure', () => {
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDevotional: null,
+      currentDayData: null,
+      preparingInflightSeries: { seriesTitle: 'your devotional' },
+      inflightSeriesFailed: failed,
+    });
+
+    expect(state.type).toBe('preparing');
+  });
+
+  it('shows the failed card over a finished journey when the next series failed after the reader went home', () => {
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDevotional: makeDevotional({ currentDay: 8, days: [makeDayData({ isRead: true })] }),
+      currentDayData: null,
+      isJourneyComplete: true,
+      daysCompleted: 7,
+      inflightSeriesFailed: failed,
+    });
+
+    expect(state).toEqual({ type: 'first-series-failed', ...failed });
   });
 });

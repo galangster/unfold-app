@@ -187,10 +187,19 @@ export type EveningWindDownNotificationRoute = {
   pathname: '/(tabs)/(today)/evening-wind-down';
 };
 
+export type GeneratingNotificationRoute = {
+  pathname: '/generating';
+  params: {
+    jobId?: string;
+    devotionalId?: string;
+  };
+};
+
 export type NotificationNavigationRoute =
   | RevealNotificationRoute
   | TodayNotificationRoute
-  | EveningWindDownNotificationRoute;
+  | EveningWindDownNotificationRoute
+  | GeneratingNotificationRoute;
 
 export function buildRevealNotificationRoute(
   data: Record<string, unknown> | null | undefined,
@@ -223,6 +232,11 @@ export function buildRevealNotificationRoute(
   };
 }
 
+function readStringField(data: Record<string, unknown>, key: string): string | undefined {
+  const value = data[key];
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
 export function buildNotificationNavigationRoute(
   data: Record<string, unknown> | null | undefined,
 ): NotificationNavigationRoute | null {
@@ -235,6 +249,22 @@ export function buildNotificationNavigationRoute(
 
   if (data?.type === 'evening-winddown' || data?.type === 'evening_winddown') {
     return { pathname: '/(tabs)/(today)/evening-wind-down' };
+  }
+
+  // The server's "we hit a snag" push: the generating screen polls the job
+  // it names and offers Try again. The ids ride along as route params
+  // because every terminal exit clears the MMKV inflight record. Only the
+  // first arc lands there: that screen owns the job and retries it by id,
+  // so a push for anything else (the onboarding sample, a day) just opens
+  // the app rather than pulling the reader onto the wrong screen.
+  if (data?.type === 'generation_failed') {
+    if (readStringField(data, 'jobType') !== 'initial_arc') return null;
+    const params: GeneratingNotificationRoute['params'] = {};
+    const jobId = readStringField(data, 'jobId');
+    const devotionalId = readStringField(data, 'devotionalId');
+    if (jobId) params.jobId = jobId;
+    if (devotionalId) params.devotionalId = devotionalId;
+    return { pathname: '/generating', params };
   }
 
   return null;

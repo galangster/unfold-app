@@ -1,8 +1,8 @@
 /**
- * DevotionalCard — 8-state hero card for the home screen.
+ * DevotionalCard — 9-state hero card for the home screen.
  *
  * Renders based on a DevotionalCardState discriminated union:
- *   empty | preparing | premium-paused | reveal-ready | unread | complete-today | tomorrow-locked | journey-complete
+ *   empty | preparing | first-series-failed | premium-paused | reveal-ready | unread | complete-today | tomorrow-locked | journey-complete
  *
  * Extracted from (tabs)/(today)/index.tsx for single-responsibility and testability.
  */
@@ -36,6 +36,7 @@ import { alpha } from '@/components/ui';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { RecommendedSeriesCard } from './RecommendedSeriesCard';
 import { InlineReflectComposer } from './InlineReflectComposer';
+import { useCompletedDayReflection } from './use-completed-day-reflection';
 import type { DevotionalCardState } from './compute-devotional-state';
 import { smartQuotes } from '@/lib/smart-quotes';
 import { titleWithPeriod } from '@/lib/display-title';
@@ -284,6 +285,60 @@ function ReturningEmptyState({ onCreateNew }: { onCreateNew: () => void }) {
       onChooseOther={onCreateNew}
       renderFallback={() => <ReturningEmptyStateFallback onCreateNew={onCreateNew} />}
     />
+  );
+}
+
+// ─── First series failed ────────────────────────────────────────
+
+/**
+ * The first series failed after the reader chose "Go home — we'll keep
+ * writing" (Jordan, 1.1.0). Same card shell as the returning empty state so
+ * the failure reads as a state of the same surface, not an alert.
+ */
+function FirstSeriesFailedState({ state }: { state: Extract<DevotionalCardState, { type: 'first-series-failed' }> }) {
+  const { colors } = useTheme();
+  const { entering } = useAccessibleAnimation();
+
+  return (
+    <Animated.View
+      entering={entering(FadeIn.duration(Duration.normal).delay(80).easing(Ease.out))}
+      testID="home-first-series-failed"
+      style={[
+        styles.returningCard,
+        {
+          backgroundColor: alpha(colors.backgroundElevated, 0.72),
+          borderColor: alpha(colors.accent, 0.14),
+          shadowColor: colors.accent,
+        },
+      ]}
+    >
+      <View style={styles.returningContent}>
+        <Text style={[styles.returningTitle, { color: colors.text }]}>We couldn’t finish your devotional.</Text>
+        <Text style={[styles.returningSubtitle, { color: colors.textMuted }]}>{state.message}</Text>
+
+        <TouchableOpacity
+          activeOpacity={0.72}
+          onPress={state.onTryAgain}
+          accessibilityRole="button"
+          accessibilityLabel="Try again"
+          style={[styles.returningCta, { borderColor: alpha(colors.accent, 0.28), backgroundColor: alpha(colors.accent, 0.08) }]}
+        >
+          <Text style={[styles.returningCtaText, { color: colors.text }]}>Try again</Text>
+          <Text style={[styles.returningCtaArrow, { color: colors.accent }]}>→</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          activeOpacity={0.72}
+          onPress={state.onDismiss}
+          accessibilityRole="button"
+          accessibilityLabel="Not now"
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          style={styles.failedDismiss}
+        >
+          <Text style={[styles.failedDismissText, { color: colors.textSubtle }]}>Not now</Text>
+        </TouchableOpacity>
+      </View>
+    </Animated.View>
   );
 }
 
@@ -629,7 +684,11 @@ function MainCard({ state }: MainCardProps) {
         : state.type === 'unread'
           ? state.ctaText
           : 'Continue Reading';
-  const continueDayNumber = isTomorrowLocked ? Math.max(1, daysCompleted) : dayData.dayNumber;
+  const lockedState = state.type === 'tomorrow-locked' ? state : null;
+  const lockedCompletedDay = lockedState?.completedDayData ?? null;
+  const continueDayNumber = isTomorrowLocked
+    ? (lockedCompletedDay?.dayNumber ?? Math.max(1, daysCompleted))
+    : dayData.dayNumber;
   const onPress = 'onContinue' in state ? () => state.onContinue(continueDayNumber) : undefined;
   // "Start a new series" only appears once today's reading is done (complete-today).
   // Surfacing it on unread/tomorrow-locked competed with the single reading action
@@ -639,8 +698,31 @@ function MainCard({ state }: MainCardProps) {
   // Post-read, reflection not yet complete: the inline composer IS the primary
   // action — writing beats re-reading (see Dino feedback 2026-08-02). "Read
   // Again" demotes to a quiet link inside the composer block.
+  //
+  // complete-today carries the reflect payload for its own day. tomorrow-locked
+  // previews tomorrow, so its composer targets the day completed today and
+  // reads that day's journal state itself (Jordan, 2026-09-04: "I completed
+  // the first day, but there's nothing that prompts me").
   const completedState = state.type === 'complete-today' ? state : null;
-  const showInlineComposer = completedState !== null && completedState.reflectionStatus !== 'complete';
+  const lockedCompletedReflection = useCompletedDayReflection(lockedState?.devotionalId ?? '', lockedCompletedDay);
+  const composer = completedState
+    ? {
+        dayNumber: dayData.dayNumber,
+        draft: completedState.freeWriteDraft,
+        status: completedState.reflectionStatus,
+        onSave: completedState.onSaveFreeWrite,
+        onOpenFull: completedState.onReflect,
+      }
+    : lockedState && lockedCompletedDay
+      ? {
+          dayNumber: lockedCompletedDay.dayNumber,
+          draft: lockedCompletedReflection.freeWriteDraft,
+          status: lockedCompletedReflection.reflectionStatus,
+          onSave: lockedState.onSaveFreeWrite,
+          onOpenFull: lockedState.onReflect,
+        }
+      : null;
+  const showInlineComposer = composer !== null && composer.status !== 'complete';
 
   const accessibilityLabel = hasCompletedToday
     ? `Read ${seriesTitle}, day ${dayData.dayNumber} of ${totalDays} again`
@@ -746,14 +828,14 @@ function MainCard({ state }: MainCardProps) {
               </View>
             )}
 
-            {showInlineComposer && completedState ? (
+            {showInlineComposer && composer ? (
               <View style={styles.heroComposerBlock}>
                 <InlineReflectComposer
-                  key={`reflect-${dayData.dayNumber}`}
-                  initialDraft={completedState.freeWriteDraft}
-                  reflectionStatus={completedState.reflectionStatus}
-                  onSaveDraft={(text) => completedState.onSaveFreeWrite(dayData.dayNumber, text)}
-                  onOpenFull={() => completedState.onReflect(dayData.dayNumber)}
+                  key={`reflect-${composer.dayNumber}`}
+                  initialDraft={composer.draft}
+                  reflectionStatus={composer.status}
+                  onSaveDraft={(text) => composer.onSave(composer.dayNumber, text)}
+                  onOpenFull={() => composer.onOpenFull(composer.dayNumber)}
                   onReadAgain={onPress}
                 />
               </View>
@@ -798,10 +880,10 @@ function MainCard({ state }: MainCardProps) {
             </TouchableOpacity>
             )}
 
-            {isTomorrowLocked && state.type === 'tomorrow-locked' && (
+            {lockedState && !showInlineComposer && (
               <TouchableOpacity
                 activeOpacity={0.7}
-                onPress={() => state.onReflect(continueDayNumber)}
+                onPress={() => lockedState.onReflect(continueDayNumber)}
                 accessibilityRole="button"
                 accessibilityLabel="Reflect on today's reading"
                 accessibilityHint="Opens the journal for the day you completed"
@@ -859,6 +941,7 @@ export function DevotionalCard({ state, scrollY, inStack, isReturningUser }: Pro
           dayNumber={state.dayNumber}
         />
       )}
+      {state.type === 'first-series-failed' && <FirstSeriesFailedState state={state} />}
       {state.type === 'premium-paused' && <PremiumPausedState state={state} />}
       {state.type === 'journey-complete' && (
         <JourneyCompleteState seriesTitle={state.seriesTitle} onCreateNew={state.onCreateNew} />
@@ -1188,6 +1271,16 @@ const styles = StyleSheet.create({
     fontSize: 17,
     lineHeight: 20,
     marginTop: -1,
+  },
+  failedDismiss: {
+    alignSelf: 'flex-start',
+    marginTop: Spacing['4'],
+    paddingVertical: Spacing['1'],
+  },
+  failedDismissText: {
+    fontFamily: FontFamily.body,
+    fontSize: 14,
+    lineHeight: 20,
   },
   premiumPausedProgress: {
     ...Typography.cardMeta,

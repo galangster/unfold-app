@@ -94,16 +94,24 @@ async function hydrateLastNotificationResponse(): Promise<void> {
  * permission — the in-context ask (generating.tsx / settings) owns that.
  * Re-register after permission is granted and on foreground to recover from
  * any failed POST earlier in the session.
+ *
+ * Resolves 'registered' once the backend holds the token (this call or an
+ * earlier one this session), 'skipped' when registration does not apply
+ * (simulator, no permission, no project id), and 'failed' when the token
+ * fetch or the POST failed — the caller decides whether the reader hears
+ * about it.
  */
-export async function registerPushToken(): Promise<void> {
+export type PushRegistrationResult = 'registered' | 'skipped' | 'failed';
+
+export async function registerPushToken(): Promise<PushRegistrationResult> {
   // Push tokens are only available on physical devices
   if (!Device.isDevice) {
     logger.log('[push] Skipping push registration on simulator');
-    return;
+    return 'skipped';
   }
 
   if (registeredThisSession) {
-    return;
+    return 'registered';
   }
 
   try {
@@ -113,7 +121,7 @@ export async function registerPushToken(): Promise<void> {
     // proceeds when permission already exists.
     if (existingStatus !== 'granted') {
       logger.log('[push] Permission not granted; skipping background registration');
-      return;
+      return 'skipped';
     }
 
     // Android requires a notification channel
@@ -135,7 +143,7 @@ export async function registerPushToken(): Promise<void> {
       logger.warn(
         '[push] No EAS project ID found — cannot obtain push token',
       );
-      return;
+      return 'skipped';
     }
 
     const tokenData = await Notifications.getExpoPushTokenAsync({
@@ -168,13 +176,15 @@ export async function registerPushToken(): Promise<void> {
       logger.warn(
         `[push] Backend rejected push token: ${response.status} ${response.statusText}`,
       );
-      return;
+      return 'failed';
     }
 
     registeredThisSession = true;
     logger.log('[push] Push token registered with backend');
+    return 'registered';
   } catch (err) {
     logger.warn('[push] Failed to register push token:', err);
+    return 'failed';
   }
 }
 

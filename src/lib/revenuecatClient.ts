@@ -89,6 +89,16 @@ const PURCHASE_TIMEOUT_MS = 60_000;
 const UNFOLD_PREMIUM_ENTITLEMENT = 'Unfold Premium';
 const POST_STORE_ACTION_REFRESH_DELAYS_MS = [0, 750, 1_500] as const;
 
+// How long the onboarding paywall keeps listening for the Premium grant once
+// a completed purchase comes back without it (the quick refresh above gave
+// up, or the store call outlived PURCHASE_TIMEOUT_MS). RevenueCat can take
+// several seconds to post a new trial's entitlement; without this window the
+// paywall reported the purchase as failed and Restore was the only way
+// through. The screen owns that wait (waitForUnfoldPremiumEntitlement);
+// purchasePackage itself returns as soon as the quick refresh is done.
+export const POST_PURCHASE_ENTITLEMENT_WAIT_MS = 10_000;
+const ENTITLEMENT_WAIT_POLL_INTERVAL_MS = 2_000;
+
 export type RevenueCatGuardReason =
   | "web_not_supported"
   | "not_configured"
@@ -133,6 +143,109 @@ const hasUnfoldPremiumEntitlement = (customerInfo: CustomerInfo): boolean => {
   return Boolean(customerInfo.entitlements.active?.[UNFOLD_PREMIUM_ENTITLEMENT]);
 };
 
+/**
+ * Clear the SDK cache, read customer info fresh and check it for the Premium
+ * grant. The SDK vends its cache for five minutes after a fetch (production
+ * and sandbox alike), so a plain getCustomerInfo re-reads the last unentitled
+ * read and never sees the grant, and the update listener only fires on a
+ * cache write. Every re-read — the quick refresh after a store action and the
+ * entitlement wait's poll — goes through here.
+ */
+const readPremiumGrant = async (): Promise<{ customerInfo: CustomerInfo; granted: boolean }> => {
+  await Purchases.invalidateCustomerInfoCache();
+  const customerInfo = await Purchases.getCustomerInfo();
+  return { customerInfo, granted: hasUnfoldPremiumEntitlement(customerInfo) };
+};
+
+/**
+ * Resolve with the first customer info that carries the Unfold Premium
+ * entitlement, delivered by the SDK's update listener or by a 2 s poll.
+ * Resolves null once `timeoutMs` passes or `options.signal` aborts. Never
+ * rejects: a failed poll is ignored and the listener is always removed, so no
+ * SDK listener outlives the wait or the screen that started it.
+ */
+export const waitForUnfoldPremiumEntitlement = (
+  timeoutMs: number,
+  options: { signal?: AbortSignal } = {},
+): Promise<CustomerInfo | null> => {
+  const { signal } = options;
+  return new Promise<CustomerInfo | null>((resolve) => {
+    let settled = false;
+    let deadline: ReturnType<typeof setTimeout> | null = null;
+    let pollTimer: ReturnType<typeof setTimeout> | null = null;
+
+    function listener(customerInfo: CustomerInfo): void {
+      if (hasUnfoldPremiumEntitlement(customerInfo)) {
+        finish(customerInfo);
+      }
+    }
+
+    function onAbort(): void {
+      finish(null);
+    }
+
+    function finish(value: CustomerInfo | null): void {
+      if (settled) return;
+      settled = true;
+      if (deadline) clearTimeout(deadline);
+      if (pollTimer) clearTimeout(pollTimer);
+      signal?.removeEventListener('abort', onAbort);
+      try {
+        Purchases.removeCustomerInfoUpdateListener(listener);
+      } catch (error) {
+        logger.log(`${LOG_PREFIX} removeCustomerInfoUpdateListener failed:`, error);
+      }
+      void recordPaywallDiagnosticLazy('revenuecat.customer_info.entitlement_wait_end', () => ({
+        timeoutMs,
+        granted: value !== null,
+        aborted: signal?.aborted ?? false,
+        customerInfo: value ? summarizeCustomerInfo(value) : null,
+      }), value ? 'info' : 'warn');
+      resolve(value);
+    }
+
+    async function poll(): Promise<void> {
+      if (settled) return;
+      try {
+        const { customerInfo, granted } = await readPremiumGrant();
+        if (granted) {
+          finish(customerInfo);
+          return;
+        }
+      } catch (error) {
+        logger.log(`${LOG_PREFIX} entitlement wait poll failed:`, error);
+      }
+      if (!settled) {
+        pollTimer = setTimeout(() => { void poll(); }, ENTITLEMENT_WAIT_POLL_INTERVAL_MS);
+      }
+    }
+
+    void recordPaywallDiagnosticLazy('revenuecat.customer_info.entitlement_wait_start', () => ({
+      timeoutMs,
+    }), 'warn');
+
+    if (timeoutMs <= 0 || signal?.aborted) {
+      finish(null);
+      return;
+    }
+
+    try {
+      Purchases.addCustomerInfoUpdateListener(listener);
+    } catch (error) {
+      logger.log(`${LOG_PREFIX} addCustomerInfoUpdateListener failed:`, error);
+    }
+    signal?.addEventListener('abort', onAbort);
+    deadline = setTimeout(() => finish(null), timeoutMs);
+    pollTimer = setTimeout(() => { void poll(); }, ENTITLEMENT_WAIT_POLL_INTERVAL_MS);
+  });
+};
+
+/**
+ * A store action that resolved without the Premium grant re-reads customer
+ * info a few times over ~2.25 s. That is the whole wait for a restore; a
+ * purchase that is still unentitled after it returns as it is, and the
+ * paywall's bounded wait takes over.
+ */
 const refreshCustomerInfoIfPremiumMissing = async (
   sourceAction: 'purchasePackage' | 'restorePurchases',
   customerInfo: CustomerInfo,
@@ -148,22 +261,21 @@ const refreshCustomerInfoIfPremiumMissing = async (
 
   let latestCustomerInfo = customerInfo;
   try {
-    await Purchases.invalidateCustomerInfoCache();
-
     for (let attemptIndex = 0; attemptIndex < POST_STORE_ACTION_REFRESH_DELAYS_MS.length; attemptIndex += 1) {
       const delayMs = POST_STORE_ACTION_REFRESH_DELAYS_MS[attemptIndex];
       if (delayMs > 0) {
         await sleep(delayMs);
       }
 
-      latestCustomerInfo = await Purchases.getCustomerInfo();
+      const read = await readPremiumGrant();
+      latestCustomerInfo = read.customerInfo;
       void recordPaywallDiagnosticLazy('revenuecat.customer_info.refresh_missing_entitlement_result', () => ({
         sourceAction,
         attempt: attemptIndex + 1,
         customerInfo: summarizeCustomerInfo(latestCustomerInfo),
-      }), hasUnfoldPremiumEntitlement(latestCustomerInfo) ? 'info' : 'warn');
+      }), read.granted ? 'info' : 'warn');
 
-      if (hasUnfoldPremiumEntitlement(latestCustomerInfo)) {
+      if (read.granted) {
         return latestCustomerInfo;
       }
     }
@@ -460,6 +572,10 @@ export const purchasePackage = (
       package: summarizePackage(packageToPurchase),
     }));
 
+    // Our deadline is not Apple's: a slow first-time sheet can complete the
+    // transaction after 60 s. The timeout result is the paywall's cue to wait
+    // for the grant (wait_for_entitlement), not a failure verdict, and that
+    // wait lives on the screen — so this call reports the timeout promptly.
     const purchaseResult = await withTimeout(
       Purchases.purchasePackage(packageToPurchase),
       PURCHASE_TIMEOUT_MS,

@@ -42,6 +42,16 @@ describe('buildInitialArcUserContext', () => {
     expect(context.userCorrection).toBe('Actually it is about trust, not control.');
   });
 
+  it('passes several people who share a relationship through unchanged', () => {
+    const keyPeople = [
+      { name: 'Anthony', relationship: 'Friend' },
+      { name: 'Mi Young', relationship: 'Friend' },
+    ];
+    const context = buildInitialArcUserContext({ ...baseUser, keyPeople });
+
+    expect(context.keyPeople).toEqual(keyPeople);
+  });
+
   it('leaves the 5 new fields undefined when absent, without inventing defaults', () => {
     const context = buildInitialArcUserContext(baseUser);
 

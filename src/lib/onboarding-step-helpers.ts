@@ -1,4 +1,6 @@
 
+import { INPUT_LIMITS } from './validation';
+
 type OnboardingStepLike = {
   id: string;
   skipIfHasValue?: boolean;
@@ -318,6 +320,12 @@ export function buildOnboardingSampleGenerationRequest({
 // Key people (onboarding "who's walking through this with you?" step)
 // ---------------------------------------------------------------------------
 
+/** Most people the step accepts; the backend clamps to the same number. */
+export const KEY_PEOPLE_MAX_COUNT = 5;
+
+/** Longest name a row keeps; the same limit the name field enforces. */
+export const KEY_PERSON_NAME_MAX_LENGTH: number = INPUT_LIMITS.NAME.max;
+
 /**
  * Shapes raw keyPeople editing state (which may include chip-revealed rows
  * with no name typed yet) into the payload persisted to the user profile:
@@ -325,8 +333,8 @@ export function buildOnboardingSampleGenerationRequest({
  */
 export function shapeKeyPeople(
   people: readonly { name?: string | null; relationship?: string | null }[] | null | undefined,
-  maxCount = 5,
-  maxNameLength = 50,
+  maxCount = KEY_PEOPLE_MAX_COUNT,
+  maxNameLength = KEY_PERSON_NAME_MAX_LENGTH,
 ): { name: string; relationship: string }[] {
   if (!people) return [];
   const shaped: { name: string; relationship: string }[] = [];
@@ -338,6 +346,119 @@ export function shapeKeyPeople(
     if (shaped.length >= maxCount) break;
   }
   return shaped;
+}
+
+/**
+ * One row of the key-people editing state. `id` exists only so the UI can
+ * address a row when several share a relationship (two friends, say);
+ * shapeKeyPeople drops it before anything is persisted or sent.
+ */
+export type KeyPersonRow = { id: string; name: string; relationship: string };
+
+// Ids only need to be unique within the editing state, but a restored draft
+// can carry ids minted by an earlier process, so each id carries the clock
+// and a random component. An id is minted once, when the row is created, and
+// never changes after.
+function nextKeyPersonId(): string {
+  return `kp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/**
+ * Gives every row a stable id. Rows restored from a draft written before ids
+ * existed get one here; rows that already carry an id keep it.
+ */
+export function withKeyPersonIds(
+  people: readonly { id?: string | null; name?: string | null; relationship?: string | null }[] | null | undefined,
+): KeyPersonRow[] {
+  if (!people) return [];
+  return people.map((person) => ({
+    id: typeof person?.id === 'string' && person.id ? person.id : nextKeyPersonId(),
+    name: typeof person?.name === 'string' ? person.name : '',
+    relationship: typeof person?.relationship === 'string' ? person.relationship : '',
+  }));
+}
+
+/**
+ * Appends an empty row for `relationship`. Tapping the same chip twice adds
+ * two rows. Returns the input array untouched once `maxCount` rows exist.
+ */
+export function addKeyPerson(
+  people: KeyPersonRow[],
+  relationship: string,
+  maxCount = KEY_PEOPLE_MAX_COUNT,
+): KeyPersonRow[] {
+  if (people.length >= maxCount) return people;
+  return [...people, { id: nextKeyPersonId(), name: '', relationship }];
+}
+
+/** Removes only the row with `id`; other rows keep their order. */
+export function removeKeyPerson(people: KeyPersonRow[], id: string): KeyPersonRow[] {
+  return people.filter((person) => person.id !== id);
+}
+
+/** Renames only the row with `id`, keeping the name within `maxNameLength`. */
+export function renameKeyPerson(
+  people: KeyPersonRow[],
+  id: string,
+  name: string,
+  maxNameLength = KEY_PERSON_NAME_MAX_LENGTH,
+): KeyPersonRow[] {
+  return people.map((person) => (person.id === id ? { ...person, name: name.slice(0, maxNameLength) } : person));
+}
+
+/**
+ * Label for the row at `index`: "Friend 1" / "Friend 2" while two rows share
+ * a relationship, the plain relationship once it is the only one.
+ */
+export function keyPersonRowLabel(people: readonly KeyPersonRow[], index: number): string {
+  const person = people[index];
+  if (!person) return '';
+  let ordinal = 0;
+  let total = 0;
+  people.forEach((candidate, i) => {
+    if (candidate.relationship !== person.relationship) return;
+    total += 1;
+    if (i <= index) ordinal += 1;
+  });
+  return total > 1 ? `${person.relationship} ${ordinal}` : person.relationship;
+}
+
+/**
+ * Label for a relationship chip: "Friend · 2" once two rows share it, so the
+ * count never reads as part of a name; the plain relationship below that.
+ */
+export function keyPersonChipLabel(relationship: string, count: number): string {
+  return count > 1 ? `${relationship} \u00B7 ${count}` : relationship;
+}
+
+/**
+ * The one sentence that explains a locked chip row, or undefined below the
+ * cap. The screen prints it under the chips and VoiceOver reads it as each
+ * chip's hint, so a sighted reader and a screen-reader user get the same why.
+ */
+export function keyPeopleCapMessage(peopleCount: number, maxCount = KEY_PEOPLE_MAX_COUNT): string | undefined {
+  return peopleCount >= maxCount
+    ? `Maximum of ${maxCount} people reached. Remove a person to add another.`
+    : undefined;
+}
+
+/**
+ * Accessibility props for a relationship chip. Once `peopleCount` reaches the
+ * cap the chip is truly disabled (no press, no haptic) and the hint says why,
+ * so the "dimmed" VoiceOver announces matches a control that does nothing.
+ */
+export function keyPersonChipAccessibility(
+  relationship: string,
+  count: number,
+  peopleCount: number,
+  maxCount = KEY_PEOPLE_MAX_COUNT,
+): { label: string; hint: string | undefined; disabled: boolean } {
+  const hint = keyPeopleCapMessage(peopleCount, maxCount);
+  return {
+    label: count > 0 ? `Add another ${relationship}, ${count} added` : `Add ${relationship}`,
+    hint,
+    disabled: hint !== undefined,
+  };
 }
 
 // ---------------------------------------------------------------------------

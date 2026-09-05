@@ -31,8 +31,20 @@ import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { getContentAwareMiddayMessage, getContentAwareEveningMessage } from '@/constants/check-in-messages';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { Duration, Ease } from '@/constants/animations';
-import { submitGenerationJob, recoverCompletedGenerationResult, ApiError } from '@/lib/generation-api';
-import { mmkvStorage } from '@/lib/mmkv-storage';
+import { submitGenerationJob, recoverCompletedGenerationResult, pollJobStatus, ApiError } from '@/lib/generation-api';
+import { toFriendlyOnboardingGenerationError } from '@/lib/generation-errors';
+import {
+  hasInflightSeriesLanded,
+  readInflightGenerationJob,
+  resolveInflightResume,
+  resolvePreparingFirstSeriesTitle,
+  resolveTodayInflightAction,
+  type InflightGenerationJob,
+} from '@/lib/inflight-generation-job';
+import { classifyInitialArcPoll, type InitialArcPollResult } from '@/lib/inflight-initial-arc-watch';
+import { classifyPollFailure } from '@/lib/generation-poll-outcome';
+import { settleInflightInitialArcWatch } from '@/lib/initial-arc-result';
+import { useInflightInitialArcWatch } from '@/hooks/useInflightInitialArcWatch';
 import { TodayCardStack, type TodayCardStackCard } from '@/components/home/TodayCardStack';
 import { animateCardDismiss } from '@/lib/card-dismiss-animation';
 import { getBibleDbStatus, downloadBibleDb } from '@/lib/bible-db';
@@ -54,8 +66,6 @@ import { useGeneratedDayWatch } from '@/hooks/useGeneratedDayWatch';
 import { getQaTodayProfileMarker } from '@/lib/qa-today-marker';
 import { getStreakDayKey, shouldCelebrateStreakDayFlip } from '@/lib/streak-helpers';
 
-// Must match the key used in generating.tsx
-const INFLIGHT_KEY = 'inflight-generation-job';
 const QA_TODAY_PROFILE_MARKER = getQaTodayProfileMarker();
 const QA_TODAY_CONTEXT_SLOT_PREFIX = 'QA Today context slot:';
 const QA_TODAY_PREPARING_LOADING_MARKER = 'QA Today preparing loading preview.';
@@ -78,7 +88,8 @@ type QaContextSlotPreview = Extract<ContextSlotType, 'midday' | 'evening' | 'bri
 
 // Zone components
 import { type ContextSlotType } from '@/lib/context-slot-priority';
-import { computeDevotionalState, type ReflectionStatus } from '@/components/home/compute-devotional-state';
+import { computeDevotionalState } from '@/components/home/compute-devotional-state';
+import { useCompletedDayReflection } from '@/components/home/use-completed-day-reflection';
 import { DevotionalCard } from '@/components/home/DevotionalCard';
 import { GreetingRow } from '@/components/home/GreetingRow';
 import { BentoGrid } from '@/components/home/BentoGrid';
@@ -135,7 +146,6 @@ export default function HomeScreen() {
   const setDismissedRememberThisCardDate = useUnfoldStore((s) => s.setDismissedRememberThisCardDate);
 
   const checkIns = useUnfoldStore((s) => s.checkIns);
-  const journalEntries = useUnfoldStore((s) => s.journalEntries);
 
   // Auto-navigate to reading when coming from the reveal screen.
   // The reveal sets resumeContext with a fresh touchedAt timestamp,
@@ -255,34 +265,107 @@ export default function HomeScreen() {
     downloadBibleDb().catch(() => {});
   }, []);
 
-  // Resume inflight generation job from a previous app session (app-kill recovery)
-  const inflightResumeAttempted = useRef(false);
+  // In-flight series job from a previous screen or app session. Read
+  // only while Today is the focused screen, and re-read every time it gains
+  // focus and whenever the generation session moves (a submission resolving
+  // after the reader already left; the job settling). Focus, not mount: a
+  // /generating pushed on top of the tabs (RecommendedSeriesCard) leaves this
+  // instance mounted and unfocused, so a mount-only read could go stale, and
+  // an unfocused instance must never redirect. With the leftForHome marker
+  // the reader tapped "Go home — we'll keep writing": keep the record, show
+  // the preparing card and watch the job from here. Without it the record is
+  // app-kill recovery — and the server, never the record's age, decides
+  // where the reader goes: /generating is re-entered only while it reports
+  // the job alive or complete; a failed job settles here, as the watch would,
+  // so the failed card shows instead of a bounce into /generating's error
+  // state; an unreachable server keeps the record for the next focus. A
+  // server that answers "no such job" (404 / 400) is a verdict, not
+  // unreachable: that record is dropped too, or it would be kept forever.
+  const generationSessionStatus = useUnfoldStore((s) => s.generationSession.status);
+  const generationSessionDevotionalId = useUnfoldStore((s) => s.generationSession.devotionalId);
+  const generationSessionTitle = useUnfoldStore((s) => s.generationSession.title);
+  const generationSessionError = useUnfoldStore((s) => s.generationSession.error);
+  const clearGenerationSession = useUnfoldStore((s) => s.clearGenerationSession);
+  const [inflightSeries, setInflightSeries] = useState<InflightGenerationJob | null>(null);
   useEffect(() => {
-    if (inflightResumeAttempted.current) return;
-    inflightResumeAttempted.current = true;
-
-    const raw = mmkvStorage.getItem(INFLIGHT_KEY) as string | null;
-    if (!raw) return;
-
-    try {
-      const inflight = JSON.parse(raw) as {
-        jobId: string;
-        devotionalId?: string;
-        submittedAt: number;
-      };
-      // Only resume if not expired (15 min)
-      if (Date.now() - inflight.submittedAt < 15 * 60 * 1000) {
-        logger.log('[home] Resuming inflight generation job from MMKV:', inflight.jobId);
+    if (!isTodayFocused) return;
+    const decision = resolveTodayInflightAction(readInflightGenerationJob(), generationSessionStatus);
+    if (decision.action !== 'resume-on-generating') {
+      const next = decision.action === 'watch-on-today' ? decision.job : null;
+      // The same record read again on focus keeps its object, so the watch
+      // keyed on it is not restarted.
+      setInflightSeries((prev) => (
+        prev && next
+        && prev.jobId === next.jobId
+        && prev.devotionalId === next.devotionalId
+        && prev.submittedAt === next.submittedAt
+        && prev.leftForHome === next.leftForHome
+        && prev.superseded === next.superseded
+          ? prev
+          : next
+      ));
+      return;
+    }
+    setInflightSeries(null);
+    const { jobId, devotionalId } = decision.job;
+    let cancelled = false;
+    void (async () => {
+      let poll: InitialArcPollResult;
+      try {
+        poll = { status: await pollJobStatus(jobId) };
+      } catch (err) {
+        poll = { error: err };
+        logger.warn(
+          classifyPollFailure(err) === 'job-gone'
+            ? '[home] Server does not hold the inflight job; dropping the record:'
+            : '[home] Could not check inflight job; keeping the record:',
+          err instanceof Error ? err.message : err,
+        );
+      }
+      if (cancelled) return;
+      const resume = resolveInflightResume(poll);
+      if (resume === 'resume') {
+        const serverStatus = 'status' in poll ? poll.status.status : null;
+        logger.log(`[home] Resuming inflight generation job ${jobId} (server: ${serverStatus})`);
         // Navigate to generating screen — it will pick up the inflight job from MMKV
         router.replace('/generating');
         return;
       }
-      // Expired — clean up
-      mmkvStorage.removeItem(INFLIGHT_KEY);
-    } catch {
-      mmkvStorage.removeItem(INFLIGHT_KEY);
-    }
+      if (resume === 'discard') {
+        // The server's verdict (its failed status, or "no such job") is the
+        // failed outcome the watch would settle on; one poll with no history
+        // classifies it the same way. 'discard' is always settled — the
+        // check narrows the type.
+        const step = classifyInitialArcPoll(poll, {
+          consecutiveUnknown: 0,
+          consecutiveNetworkErrors: 0,
+          elapsedMs: 0,
+          fallbackDevotionalId: devotionalId,
+        });
+        if (step.kind === 'settled') settleInflightInitialArcWatch(step.outcome, { jobId });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [router, isTodayFocused, generationSessionStatus, generationSessionDevotionalId]);
+  const onInflightSeriesSettled = useCallback(() => setInflightSeries(null), []);
+
+  // The series failed after the reader left for Today (the watch below
+  // settled on a failure, or the submission itself failed). The session holds
+  // the error and the series never reached the store; without a card for it
+  // Today sat on the new-user empty state and said nothing. Try again
+  // re-enters /generating, which resumes the kept record when the watch only
+  // lost contact with the server, and otherwise submits a fresh job from the
+  // same answers.
+  const handleRetryInflightSeries = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.replace('/generating');
   }, [router]);
+  const handleDismissInflightSeriesFailure = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    clearGenerationSession();
+  }, [clearGenerationSession]);
 
   // Check premium status through the tri-state policy so QA premium override can
   // unlock UI without mutating RevenueCat's persisted mirror.
@@ -454,6 +537,26 @@ export default function HomeScreen() {
     enabled: isPreparingCurrentDay && isTodayFocused,
     onDay: addGeneratedDay,
   });
+
+  // The series the reader left /generating for. It is not in the store until
+  // the job finishes, so the preparing card is driven by the in-flight record
+  // and this watch lands day 1 (or the failure) exactly as /generating would
+  // have. The gate is "has that series landed", not "is there no devotional":
+  // a reader who tapped "Start study" on a finished journey still has that
+  // journey, and Today showed it — with the same "Start study" — as if the
+  // tap had done nothing. A churned account is paused, not preparing.
+  useInflightInitialArcWatch({
+    job: inflightSeries,
+    enabled: inflightSeries != null && isTodayFocused,
+    onSettled: onInflightSeriesSettled,
+  });
+  const isPreparingInflightSeries = inflightSeries != null
+    && !hasInflightSeriesLanded(inflightSeries.devotionalId, devotionals, !!currentDevotional)
+    && premiumPolicy !== 'denied';
+  const isInflightSeriesFailed = inflightSeries == null
+    && generationSessionStatus === 'error'
+    && !hasInflightSeriesLanded(generationSessionDevotionalId, devotionals, !!currentDevotional)
+    && premiumPolicy !== 'denied';
 
   const qaContextSlot = useMemo<QaContextSlotPreview | null>(() => {
     if (!isQaToolsEnabled()) return null;
@@ -792,17 +895,15 @@ export default function HomeScreen() {
     });
   }, [currentDevotional, currentDayData?.dayNumber, router]);
 
-  // Free-write draft + save for the inline composer on the completed card.
-  // Mirrors journal.tsx's saveEntry: update the existing entry (including to
-  // empty — the user deleted their text), only create one for real content.
-  const currentDayFreeWriteDraft = useMemo(() => {
-    if (!currentDevotional || !currentDayData) return '';
-    const entry = journalEntries.find(
-      (journalEntry) => journalEntry.devotionalId === currentDevotional.id && journalEntry.dayNumber === currentDayData.dayNumber,
-    );
-    return entry?.content ?? '';
-  }, [currentDevotional, currentDayData, journalEntries]);
+  // Free-write draft + reflection status for the inline composer on the
+  // completed card, from the one store-backed derivation the card itself uses.
+  const {
+    freeWriteDraft: currentDayFreeWriteDraft,
+    reflectionStatus: currentDayReflectionStatus,
+  } = useCompletedDayReflection(currentDevotional?.id ?? '', currentDayData);
 
+  // Save mirrors journal.tsx's saveEntry: update the existing entry (including
+  // to empty — the user deleted their text), only create one for real content.
   const handleSaveFreeWrite = useCallback((dayNumber: number, text: string) => {
     if (!currentDevotional) return;
     const store = useUnfoldStore.getState();
@@ -813,29 +914,6 @@ export default function HomeScreen() {
       store.addJournalEntry({ devotionalId: currentDevotional.id, dayNumber, content: text });
     }
   }, [currentDevotional]);
-
-  const currentDayReflectionStatus = useMemo<ReflectionStatus>(() => {
-    if (!currentDevotional || !currentDayData) return 'empty';
-
-    const entry = journalEntries.find(
-      (journalEntry) => journalEntry.devotionalId === currentDevotional.id && journalEntry.dayNumber === currentDayData.dayNumber,
-    );
-    if (!entry) return 'empty';
-
-    const hasFreeWrite = entry.content.trim().length > 0;
-    const hasSoap = Object.values(entry.soapResponses ?? {}).some((value) => value.trim().length > 0);
-    const answeredReflectionCount = (entry.questionResponses ?? []).filter((response) => response.response.trim().length > 0).length;
-    const hasPrayer = (entry.prayerRequests ?? []).some((prayer) => prayer.text.trim().length > 0);
-    const hasAnyReflection = hasFreeWrite || hasSoap || answeredReflectionCount > 0 || hasPrayer;
-    if (!hasAnyReflection) return 'empty';
-
-    const totalReflectionQuestions = currentDayData.reflectionQuestions?.length ?? 0;
-    if (totalReflectionQuestions > 0 && answeredReflectionCount >= totalReflectionQuestions) {
-      return 'complete';
-    }
-
-    return 'started';
-  }, [currentDevotional, currentDayData, journalEntries]);
 
   // Content-aware check-in messages — reference today's devotional when available
   const middayMessage = useMemo(() => getContentAwareMiddayMessage(currentDayData ? {
@@ -1224,6 +1302,16 @@ export default function HomeScreen() {
     dayLabel: getReadingDayLabel(),
     isJourneyComplete,
     isPreparing: !hasReadToday && (isPreparingCurrentDay || (!currentDayData && !!currentDevotional && premiumPolicy !== 'denied')),
+    preparingInflightSeries: isPreparingInflightSeries
+      ? { seriesTitle: resolvePreparingFirstSeriesTitle(generationSessionTitle) }
+      : null,
+    inflightSeriesFailed: isInflightSeriesFailed
+      ? {
+          message: toFriendlyOnboardingGenerationError(generationSessionError ?? ''),
+          onTryAgain: handleRetryInflightSeries,
+          onDismiss: handleDismissInflightSeriesFailure,
+        }
+      : null,
     premiumPolicy,
     daysCompleted,
     totalDays: currentDevotional?.totalDays ?? 0,
