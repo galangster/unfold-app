@@ -28,9 +28,15 @@ import {
   enqueueSyncChanges,
   peekSyncOutbox,
   drainSyncOutbox,
+  replaceSyncOutbox,
   resetDrainStateForTesting,
   OUTBOX_KEY,
 } from '../sync-outbox';
+import {
+  beginLocalResetSession,
+  endLocalResetSession,
+  resetSyncSessionFenceForTesting,
+} from '../sync-session-fence';
 import type { SyncPushChange } from '../sync-outbox';
 import { mmkvStorage, getDeviceId } from '../mmkv-storage';
 
@@ -68,12 +74,12 @@ function rejectedResult(change: SyncPushChange, reason = 'internal error') {
 beforeEach(() => {
   jest.clearAllMocks();
   (mmkvStorage as any).__clearMockStorage?.();
-  // Explicitly clear the outbox key so the cap test's 200 entries
-  // don't leak into subsequent tests (the mock store is a shared Map).
+  // Explicitly clear the outbox key so large-queue tests do not leak.
   mmkvStorage.removeItem(OUTBOX_KEY);
   // Reset module-level drain state (inflight, interval timestamps) so
   // the interval guard from RS10-4 doesn't bleed between tests.
   resetDrainStateForTesting();
+  resetSyncSessionFenceForTesting();
   jest.resetModules();
 });
 
@@ -163,10 +169,8 @@ describe('sync-outbox', () => {
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
-  it('outbox is capped at 200, evicting the OLDEST by clientUpdatedAt', () => {
+  it('keeps every durable snapshot, including the oldest of 250', () => {
     const changes: SyncPushChange[] = [];
-    // Formula: 250 entries, one minute apart starting 2026-06-01T00:00:00Z —
-    // index i ↔ timestamp base + i minutes. Newest 200 = indices 50..249.
     const base = Date.parse('2026-06-01T00:00:00Z');
     for (let i = 0; i < 250; i++) {
       changes.push(makeChange(`id-${i}`, 'devotionals', new Date(base + i * 60_000).toISOString()));
@@ -174,12 +178,18 @@ describe('sync-outbox', () => {
     enqueueSyncChanges(changes);
 
     const outbox = peekSyncOutbox();
-    expect(outbox).toHaveLength(200);
+    expect(outbox).toHaveLength(250);
     const ids = new Set(outbox.map((c) => c.id));
-    expect(ids.has('id-49')).toBe(false);  // oldest 50 (0..49) evicted
-    expect(ids.has('id-0')).toBe(false);
-    expect(ids.has('id-50')).toBe(true);   // survivor boundary
-    expect(ids.has('id-249')).toBe(true);  // newest retained
+    expect(ids.has('id-0')).toBe(true);
+    expect(ids.has('id-249')).toBe(true);
+  });
+
+  it('replaceSyncOutbox keeps every supplied snapshot', () => {
+    const changes = Array.from({ length: 201 }, (_, i) => (
+      makeChange(`rep-${i}`, 'notes', `2026-06-01T00:${String(i % 60).padStart(2, '0')}:00.000Z`)
+    ));
+    replaceSyncOutbox(changes);
+    expect(peekSyncOutbox()).toHaveLength(201);
   });
 
   it('changes enqueued while the drain POST is in flight survive the success clear (REVM-1)', async () => {
@@ -513,5 +523,149 @@ describe('MD-4 exact snapshot acknowledgements', () => {
     await drainAccepting(submitted);
 
     expect(peekSyncOutbox()).toHaveLength(0);
+  });
+});
+
+describe('MD-3 bounded drain batches', () => {
+  const ts = '2026-06-01T00:00:00.000Z';
+
+  function manyChanges(count: number): SyncPushChange[] {
+    const base = Date.parse(ts);
+    return Array.from({ length: count }, (_, i) => (
+      makeChange(`n-${i}`, 'notes', new Date(base + i * 1000).toISOString())
+    ));
+  }
+
+  function postedChanges(call: number): SyncPushChange[] {
+    const init = (global.fetch as jest.Mock).mock.calls[call][1] as { body?: string };
+    return (JSON.parse(String(init.body)) as { changes: SyncPushChange[] }).changes;
+  }
+
+  it('drains more than 500 mixed results without letting rejects block later siblings', async () => {
+    const changes = manyChanges(501);
+    enqueueSyncChanges(changes);
+
+    global.fetch = jest.fn(async (_url: string, init: { body?: string }) => {
+      const batch = (JSON.parse(String(init.body)) as { changes: SyncPushChange[] }).changes;
+      return {
+        ok: true,
+        json: async () => ({
+          results: batch.map((change) => (
+            change.id === 'n-0' ? rejectedResult(change) : acceptedResult(change)
+          )),
+        }),
+      };
+    }) as unknown as typeof fetch;
+
+    await drainSyncOutbox();
+
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(postedChanges(0)).toHaveLength(500);
+    expect(postedChanges(1)).toHaveLength(1);
+    expect(postedChanges(1)[0].id).toBe('n-500');
+    expect(peekSyncOutbox()).toEqual([expect.objectContaining({ id: 'n-0' })]);
+  });
+
+  it('splits multibyte payloads that exceed the 5 MiB body bound', async () => {
+    const pad = '你'.repeat(900_000);
+    const first = { ...makeChange('mb-a', 'notes', ts), data: { pad } };
+    const second = { ...makeChange('mb-b', 'notes', '2026-06-01T00:00:01.000Z'), data: { pad } };
+    enqueueSyncChanges([first, second]);
+
+    global.fetch = jest.fn(async (_url: string, init: { body?: string }) => {
+      const batch = (JSON.parse(String(init.body)) as { changes: SyncPushChange[] }).changes;
+      return {
+        ok: true,
+        json: async () => ({ results: batch.map((change) => acceptedResult(change)) }),
+      };
+    }) as unknown as typeof fetch;
+
+    await drainSyncOutbox();
+
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(postedChanges(0)).toHaveLength(1);
+    expect(postedChanges(1)).toHaveLength(1);
+    expect(peekSyncOutbox()).toHaveLength(0);
+  });
+
+  it('retains a single oversized entry and still drains smaller siblings', async () => {
+    const oversized = {
+      ...makeChange('huge', 'notes', ts),
+      data: { pad: 'x'.repeat(5_300_000) },
+    };
+    const sibling = makeChange('small', 'notes', '2026-06-01T00:00:01.000Z');
+    enqueueSyncChanges([oversized, sibling]);
+
+    global.fetch = jest.fn(async () => ({
+      ok: true,
+      json: async () => ({ results: [acceptedResult(sibling)] }),
+    })) as unknown as typeof fetch;
+
+    await drainSyncOutbox();
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(postedChanges(0).map((change) => change.id)).toEqual(['small']);
+    expect(peekSyncOutbox()).toEqual([expect.objectContaining({ id: 'huge' })]);
+  });
+
+  it('stops later batches after reset and keeps unsent initial snapshots', async () => {
+    enqueueSyncChanges(manyChanges(501));
+    let resetToken: number | undefined;
+
+    global.fetch = jest.fn(async (_url: string, init: { body?: string }) => {
+      const batch = (JSON.parse(String(init.body)) as { changes: SyncPushChange[] }).changes;
+      if ((global.fetch as jest.Mock).mock.calls.length === 2) {
+        resetToken = beginLocalResetSession();
+      }
+      return {
+        ok: true,
+        json: async () => ({ results: batch.map((change) => acceptedResult(change)) }),
+      };
+    }) as unknown as typeof fetch;
+
+    await drainSyncOutbox();
+
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(peekSyncOutbox()).toEqual([expect.objectContaining({ id: 'n-500' })]);
+    if (resetToken !== undefined) endLocalResetSession(resetToken);
+  });
+
+  it('keeps writes enqueued during a multi-batch drain for a later cycle', async () => {
+    enqueueSyncChanges(manyChanges(501));
+    const late = makeChange('late', 'notes', '2026-06-02T00:00:00.000Z');
+
+    global.fetch = jest.fn(async (_url: string, init: { body?: string }) => {
+      if ((global.fetch as jest.Mock).mock.calls.length === 1) enqueueSyncChanges([late]);
+      const batch = (JSON.parse(String(init.body)) as { changes: SyncPushChange[] }).changes;
+      return {
+        ok: true,
+        json: async () => ({ results: batch.map((change) => acceptedResult(change)) }),
+      };
+    }) as unknown as typeof fetch;
+
+    await drainSyncOutbox();
+
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(postedChanges(0).some((change) => change.id === 'late')).toBe(false);
+    expect(postedChanges(1).some((change) => change.id === 'late')).toBe(false);
+    expect(peekSyncOutbox()).toEqual([expect.objectContaining({ id: 'late' })]);
+  });
+
+  it('stops the cycle on a later-batch transport failure', async () => {
+    enqueueSyncChanges(manyChanges(501));
+
+    global.fetch = jest.fn(async (_url: string, init: { body?: string }) => {
+      if ((global.fetch as jest.Mock).mock.calls.length === 2) throw new Error('network');
+      const batch = (JSON.parse(String(init.body)) as { changes: SyncPushChange[] }).changes;
+      return {
+        ok: true,
+        json: async () => ({ results: batch.map((change) => acceptedResult(change)) }),
+      };
+    }) as unknown as typeof fetch;
+
+    await drainSyncOutbox();
+
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(peekSyncOutbox()).toEqual([expect.objectContaining({ id: 'n-500' })]);
   });
 });

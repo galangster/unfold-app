@@ -11,7 +11,8 @@
  *  - Dedup: table+id keyed; later clientUpdatedAt wins, and on an equal
  *    timestamp the later enqueue wins (writes are ms-resolution; a flush
  *    can put several writes to one record in the same millisecond).
- *  - Cap: 200 entries; oldest dropped when exceeded.
+ *  - Durable queue is uncapped. Drain posts at most 500 changes and 5 MiB
+ *    per request. Each initial snapshot is attempted once per cycle.
  *  - Never throws: drain resolves (not rejects) on network failure.
  *  - Only accepted results and conflicts with object serverData clear a
  *    submitted entry when the current snapshot equals the sent snapshot.
@@ -22,7 +23,11 @@
 import { mmkvStorage, getDeviceId } from '@/lib/mmkv-storage';
 import { isEphemeralDeviceId } from '@/lib/device-id';
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from '@/lib/api-config';
-import { buildSyncPushBody } from '@/lib/sync-push-body';
+import {
+  createSyncPushBodyEnvelope,
+  selectEncodedSyncPushBatch,
+  type SyncPushBodyEnvelope,
+} from '@/lib/sync-push-body';
 import {
   isValidConflictResult,
   resolvingAcknowledgementPairs,
@@ -43,7 +48,8 @@ export type { SyncPushChange };
 
 // Re-export the canonical key so consumers don't need to know where it lives.
 export const OUTBOX_KEY = RECOVERY_OUTBOX_KEY;
-const OUTBOX_CAP = 200;
+const MAX_PUSH_CHANGES = 500;
+const MAX_PUSH_BODY_BYTES = 5 * 1024 * 1024;
 
 // mmkvStorage.getItem has a union return type (string | null | Promise<...>)
 // for the StateStorage contract, but our adapter is synchronous. Cast once here.
@@ -75,10 +81,10 @@ export function peekSyncOutbox(): SyncPushChange[] {
 /**
  * Replace the whole queue. Only the store migration uses this, to re-key
  * queued journal writes when entry ids became day-derived; ordinary writers
- * go through enqueueSyncChanges so the cap and the dedup apply.
+ * go through enqueueSyncChanges so dedup applies.
  */
 export function replaceSyncOutbox(changes: SyncPushChange[]): void {
-  writeOutbox(changes.slice(-OUTBOX_CAP));
+  writeOutbox(changes);
 }
 
 export function removeSyncChangesForRecords(records: Array<{ table: SyncTable; id: string }>): void {
@@ -132,17 +138,27 @@ export function enqueueSyncChanges(changes: SyncPushChange[]): void {
     }
   }
 
-  let merged = Array.from(map.values());
-
-  // Cap: keep the newest OUTBOX_CAP entries by clientUpdatedAt
-  if (merged.length > OUTBOX_CAP) {
-    merged = merged
-      .sort((a, b) => (a.clientUpdatedAt < b.clientUpdatedAt ? 1 : -1))
-      .slice(0, OUTBOX_CAP);
-  }
-
-  writeOutbox(merged);
+  writeOutbox(Array.from(map.values()));
   lastEnqueueAt = Date.now();
+}
+
+function takeTransportBatch(
+  initial: readonly SyncPushChange[],
+  start: number,
+  liveByKey: ReadonlyMap<string, SyncPushChange>,
+  envelope: SyncPushBodyEnvelope,
+) {
+  return selectEncodedSyncPushBatch(
+    initial,
+    start,
+    (candidate) => {
+      const live = liveByKey.get(`${candidate.table}:${candidate.id}`);
+      return !!live && syncSnapshotsEqual(live, candidate);
+    },
+    envelope,
+    MAX_PUSH_CHANGES,
+    MAX_PUSH_BODY_BYTES,
+  );
 }
 
 /**
@@ -210,55 +226,75 @@ export function drainSyncOutbox(): Promise<void> {
 
   const promise = (async () => {
     if (!isSyncSessionCurrent(session)) return;
-    const changes = readOutbox();
-    if (changes.length === 0) return;
+    const initial = readOutbox();
+    if (initial.length === 0) return;
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15_000);
+    let timeoutId = setTimeout(() => controller.abort(), 15_000);
     const unregister = registerSyncTransport(controller);
 
     try {
       const headers = await getAuthHeaders();
       if (!isSyncSessionCurrent(session)) return;
 
-      const response = await fetch(`${PRIMARY_BACKEND_URL}/api/sync/push`, {
-        method: 'POST',
-        headers,
-        body: buildSyncPushBody(changes),
-        signal: controller.signal,
-      });
+      const envelope = createSyncPushBodyEnvelope();
+      let offset = 0;
+      let completed = true;
+      while (offset < initial.length) {
+        if (!isSyncSessionCurrent(session)) {
+          completed = false;
+          break;
+        }
 
-      if (!response.ok) {
-        // Non-ok: keep the outbox; retry on next drain trigger
-        return;
+        const liveByKey = new Map(
+          readOutbox().map((entry) => [`${entry.table}:${entry.id}`, entry] as const),
+        );
+        const { batch, next, body } = takeTransportBatch(initial, offset, liveByKey, envelope);
+        offset = next;
+        if (batch.length === 0) continue;
+
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => controller.abort(), 15_000);
+
+        const response = await fetch(`${PRIMARY_BACKEND_URL}/api/sync/push`, {
+          method: 'POST',
+          headers,
+          body,
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          completed = false;
+          break;
+        }
+
+        const payload = (await response.json().catch(() => null)) as {
+          results?: unknown[];
+        } | null;
+
+        if (!isSyncSessionCurrent(session)) {
+          completed = false;
+          break;
+        }
+
+        const resolving = resolvingAcknowledgementPairs(batch, payload?.results ?? []);
+        const resolvingByKey = new Map(
+          resolving.map((pair) => [`${pair.change.table}:${pair.change.id}`, pair] as const),
+        );
+        const remaining = readOutbox().filter((entry) => {
+          const pair = resolvingByKey.get(`${entry.table}:${entry.id}`);
+          return !pair || !syncSnapshotsEqual(entry, pair.change);
+        });
+        writeOutbox(remaining);
+        const conflictsToApply = resolving
+          .filter((pair) => isValidConflictResult(pair.result))
+          .filter((pair) => !remaining.some((entry) => (
+            entry.table === pair.change.table && entry.id === pair.change.id
+          )))
+          .map((pair) => pair.result);
+        applyConflictResults(conflictsToApply);
       }
-
-      const payload = (await response.json().catch(() => null)) as {
-        results?: unknown[];
-      } | null;
-
-      // A stale session must not ack or apply. Leave the current outbox
-      // untouched — reset may have wiped it, or a newer enqueue may exist.
-      if (!isSyncSessionCurrent(session)) return;
-
-      const resolving = resolvingAcknowledgementPairs(changes, payload?.results ?? []);
-      const resolvingByKey = new Map(
-        resolving.map((pair) => [`${pair.change.table}:${pair.change.id}`, pair] as const),
-      );
-      const current = readOutbox();
-      const remaining = current.filter((entry) => {
-        const pair = resolvingByKey.get(`${entry.table}:${entry.id}`);
-        return !pair || !syncSnapshotsEqual(entry, pair.change);
-      });
-      writeOutbox(remaining);
-      lastDrainCompletedAt = Date.now();
-      const conflictsToApply = resolving
-        .filter((pair) => isValidConflictResult(pair.result))
-        .filter((pair) => !remaining.some((entry) => (
-          entry.table === pair.change.table && entry.id === pair.change.id
-        )))
-        .map((pair) => pair.result);
-      applyConflictResults(conflictsToApply);
+      if (completed) lastDrainCompletedAt = Date.now();
     } catch {
       // Network error / timeout / abort — keep the outbox intact for retry
     } finally {
