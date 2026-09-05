@@ -125,7 +125,14 @@ describe('user profile sync payloads', () => {
       .mockRejectedValueOnce(new Error('offline'))
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ results: [{ status: 'accepted' }] }),
+        json: async () => ({
+          results: [{
+            table: 'users',
+            id: 'user-profile-test-device',
+            status: 'accepted',
+            serverUpdatedAt: '2026-05-06T20:00:00.000Z',
+          }],
+        }),
       });
     global.fetch = mockFetch as unknown as typeof fetch;
 

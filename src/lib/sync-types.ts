@@ -38,6 +38,7 @@ export interface SyncPushChange {
 /** Server response for a single pushed change. */
 export interface SyncPushResult {
   table: SyncTable;
+  requestedId?: string;
   id: string;
   serverUpdatedAt: string;
   status: 'accepted' | 'conflict' | 'rejected';

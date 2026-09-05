@@ -13,15 +13,20 @@
  *    can put several writes to one record in the same millisecond).
  *  - Cap: 200 entries; oldest dropped when exceeded.
  *  - Never throws: drain resolves (not rejects) on network failure.
- *  - Server is authoritative on rejected/conflict — those are dropped, not
- *    retried forever. A conflict carries the server's row, which is applied
- *    locally (see applyConflictResults) so the two sides converge.
+ *  - Only accepted results and conflicts with object serverData clear a
+ *    submitted entry when the current timestamp is not newer. Rejected
+ *    results, especially internal error, stay queued. A valid conflict is
+ *    applied locally after the outbox settles.
  */
 
 import { mmkvStorage, getDeviceId } from '@/lib/mmkv-storage';
 import { isEphemeralDeviceId } from '@/lib/device-id';
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from '@/lib/api-config';
 import { buildSyncPushBody } from '@/lib/sync-push-body';
+import {
+  isValidConflictResult,
+  resolvingAcknowledgementPairs,
+} from '@/lib/sync-acknowledgements';
 import type { SyncPushChange, SyncPushResult, SyncTable } from '@/lib/sync-types';
 // RS13-1: single owner — the key is defined in mmkv-recovery-outbox.ts (pure, no native deps)
 // and re-exported here so all consumers import from one place via sync-outbox.
@@ -156,15 +161,8 @@ export function resetDrainStateForTesting(): void {
  * diverge for good. Feed it through the pull mappers — same LWW guard, so a
  * newer local change still pending in the outbox is left alone.
  */
-function applyConflictResults(results: Partial<SyncPushResult>[]): void {
-  const conflicts = results.filter(
-    (result): result is SyncPushResult =>
-      result.status === 'conflict' &&
-      typeof result.table === 'string' &&
-      typeof result.id === 'string' &&
-      typeof result.serverUpdatedAt === 'string' &&
-      !!result.serverData,
-  );
+function applyConflictResults(results: SyncPushResult[]): void {
+  const conflicts = results.filter(isValidConflictResult);
   if (conflicts.length === 0) return;
   try {
     // full-sync-pull imports the store, and the store reaches this module
@@ -235,33 +233,31 @@ export function drainSyncOutbox(): Promise<void> {
       }
 
       const payload = (await response.json().catch(() => null)) as {
-        results?: Partial<SyncPushResult>[];
+        results?: unknown[];
       } | null;
 
       // A stale session must not ack or apply. Leave the current outbox
       // untouched — reset may have wiped it, or a newer enqueue may exist.
       if (!isSyncSessionCurrent(session)) return;
 
-      // Server is authoritative: accepted | conflict | rejected all clear from
-      // the outbox. Two things must survive (REVM-1):
-      //  - changes the server didn't answer for (partial response), and
-      //  - anything enqueued while the POST was in flight. So: re-read the
-      //    outbox and remove exactly the answered snapshot entries — a
-      //    same-key change with a NEWER clientUpdatedAt stays queued.
-      const answeredCount = payload?.results?.length ?? 0;
-      const answered = changes.slice(0, answeredCount);
-      const answeredAt = new Map(
-        answered.map((c) => [`${c.table}:${c.id}`, c.clientUpdatedAt]),
+      const resolving = resolvingAcknowledgementPairs(changes, payload?.results ?? []);
+      const resolvingByKey = new Map(
+        resolving.map((pair) => [`${pair.change.table}:${pair.change.id}`, pair] as const),
       );
-      const remaining = readOutbox().filter((c) => {
-        const sentAt = answeredAt.get(`${c.table}:${c.id}`);
-        return sentAt === undefined || c.clientUpdatedAt > sentAt;
+      const current = readOutbox();
+      const remaining = current.filter((entry) => {
+        const pair = resolvingByKey.get(`${entry.table}:${entry.id}`);
+        return !pair || entry.clientUpdatedAt > pair.change.clientUpdatedAt;
       });
       writeOutbox(remaining);
-      // Mark successful completion for the interval guard (RS10-4).
       lastDrainCompletedAt = Date.now();
-      // After the outbox is settled: the LWW guard reads what is still pending.
-      applyConflictResults(payload?.results ?? []);
+      const conflictsToApply = resolving
+        .filter((pair) => isValidConflictResult(pair.result))
+        .filter((pair) => !remaining.some((entry) => (
+          entry.table === pair.change.table && entry.id === pair.change.id
+        )))
+        .map((pair) => pair.result);
+      applyConflictResults(conflictsToApply);
     } catch {
       // Network error / timeout / abort — keep the outbox intact for retry
     } finally {

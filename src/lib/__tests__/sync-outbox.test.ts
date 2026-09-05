@@ -36,11 +36,31 @@ import { mmkvStorage, getDeviceId } from '../mmkv-storage';
 
 function makeChange(id: string, table: string, ts: string): SyncPushChange {
   return {
-    table: table as 'devotionals' | 'devotional_days',
+    table: table as 'devotionals' | 'devotional_days' | 'bible_reading_positions' | 'notes',
     id,
     clientUpdatedAt: ts,
     data: { schemaVersion: 1, value: id },
     deleted: false,
+  };
+}
+
+function acceptedResult(change: SyncPushChange, overrides: Record<string, unknown> = {}) {
+  return {
+    table: change.table,
+    id: change.id,
+    status: 'accepted' as const,
+    serverUpdatedAt: '2026-06-01T12:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function rejectedResult(change: SyncPushChange, reason = 'internal error') {
+  return {
+    table: change.table,
+    id: change.id,
+    status: 'rejected' as const,
+    reason,
+    serverUpdatedAt: '2026-06-01T12:00:00.000Z',
   };
 }
 
@@ -76,16 +96,15 @@ describe('sync-outbox', () => {
   });
 
   it('drain posts all changes and clears on accepted', async () => {
+    const first = makeChange('d1', 'devotionals', '2026-06-01T00:00:00Z');
+    const second = makeChange('d2', 'devotionals', '2026-06-01T00:00:00Z');
     const mockFetch = jest.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ results: [{ status: 'accepted' }, { status: 'accepted' }] }),
+      json: async () => ({ results: [acceptedResult(first), acceptedResult(second)] }),
     });
     global.fetch = mockFetch as any;
 
-    enqueueSyncChanges([
-      makeChange('d1', 'devotionals', '2026-06-01T00:00:00Z'),
-      makeChange('d2', 'devotionals', '2026-06-01T00:00:00Z'),
-    ]);
+    enqueueSyncChanges([first, second]);
 
     await drainSyncOutbox();
 
@@ -103,21 +122,20 @@ describe('sync-outbox', () => {
     expect(peekSyncOutbox()).toHaveLength(1);
   });
 
-  it('rejected results are dropped, not retried forever', async () => {
+  it('retains a rejected internal-error snapshot while an accepted sibling clears', async () => {
+    const rejected = makeChange('d1', 'devotionals', '2026-06-01T00:00:00Z');
+    const accepted = makeChange('d2', 'devotionals', '2026-06-01T00:00:00Z');
     const mockFetch = jest.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ results: [{ status: 'rejected' }, { status: 'accepted' }] }),
+      json: async () => ({ results: [rejectedResult(rejected), acceptedResult(accepted)] }),
     });
     global.fetch = mockFetch as any;
 
-    enqueueSyncChanges([
-      makeChange('d1', 'devotionals', '2026-06-01T00:00:00Z'),
-      makeChange('d2', 'devotionals', '2026-06-01T00:00:00Z'),
-    ]);
+    enqueueSyncChanges([rejected, accepted]);
 
     await drainSyncOutbox();
 
-    expect(peekSyncOutbox()).toHaveLength(0);
+    expect(peekSyncOutbox()).toEqual([expect.objectContaining({ id: 'd1', data: rejected.data })]);
   });
 
   it('concurrent drains are single-flight', async () => {
@@ -129,7 +147,7 @@ describe('sync-outbox', () => {
     const mockFetch = jest.fn().mockReturnValue(
       hangingPost.then(() => ({
         ok: true,
-        json: async () => ({ results: [{ status: 'accepted' }] }),
+        json: async () => ({ results: [acceptedResult(makeChange('d1', 'devotionals', '2026-06-01T00:00:00Z'))] }),
       })),
     );
     global.fetch = mockFetch as any;
@@ -170,7 +188,7 @@ describe('sync-outbox', () => {
       enqueueSyncChanges([makeChange('d-late', 'devotionals', '2026-06-03T00:00:00Z')]);
       return {
         ok: true,
-        json: async () => ({ results: [{ status: 'accepted' }] }),
+        json: async () => ({ results: [acceptedResult(makeChange('d1', 'devotionals', '2026-06-01T00:00:00Z'))] }),
       };
     });
     global.fetch = mockFetch as any;
@@ -188,7 +206,7 @@ describe('sync-outbox', () => {
       enqueueSyncChanges([makeChange('d1', 'devotionals', '2026-06-02T00:00:00Z')]);
       return {
         ok: true,
-        json: async () => ({ results: [{ status: 'accepted' }] }),
+        json: async () => ({ results: [acceptedResult(makeChange('d1', 'devotionals', '2026-06-01T00:00:00Z'))] }),
       };
     });
     global.fetch = mockFetch as any;
@@ -239,7 +257,9 @@ describe('sync-outbox', () => {
       enqueueSyncChanges([makeChange('d3', 'devotionals', '2026-06-03T00:00:00Z')]);
       return {
         ok: true,
-        json: async () => ({ results: [{ status: 'accepted' }] }),
+        json: async () => ({
+          results: [acceptedResult(makeChange('d1', 'devotionals', '2026-06-01T00:00:00Z'))],
+        }),
       };
     });
     global.fetch = mockFetch as any;
@@ -253,5 +273,181 @@ describe('sync-outbox', () => {
     const outbox = peekSyncOutbox();
     const ids = outbox.map((c) => c.id).sort();
     expect(ids).toEqual(['d2', 'd3']);
+  });
+});
+
+describe('MD-2 sync acknowledgements', () => {
+  async function drainWith(results: unknown[]) {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ results }),
+    }) as unknown as typeof fetch;
+    await drainSyncOutbox();
+  }
+
+  it('clears a legacy matching-id success and a composite remap', async () => {
+    const note = makeChange('note-1', 'notes', '2026-06-01T00:00:00.000Z');
+    const day = makeChange('client-day-1', 'devotional_days', '2026-06-01T00:00:00.000Z');
+    enqueueSyncChanges([note, day]);
+
+    await drainWith([
+      acceptedResult(note),
+      acceptedResult(day, { id: 'day-devotional-1-1' }),
+    ]);
+
+    expect(peekSyncOutbox()).toHaveLength(0);
+  });
+
+  it('maps explicit requested IDs when results arrive out of order', async () => {
+    const first = makeChange('note-a', 'notes', '2026-06-01T00:00:00.000Z');
+    const second = makeChange('note-b', 'notes', '2026-06-01T00:01:00.000Z');
+    enqueueSyncChanges([first, second]);
+
+    await drainWith([
+      acceptedResult(second, { requestedId: second.id }),
+      acceptedResult(first, { requestedId: first.id }),
+    ]);
+
+    expect(peekSyncOutbox()).toHaveLength(0);
+  });
+
+  it('rejects a longer response and retains every submitted change', async () => {
+    const first = makeChange('note-a', 'notes', '2026-06-01T00:00:00.000Z');
+    enqueueSyncChanges([first]);
+
+    await drainWith([acceptedResult(first), acceptedResult(first, { id: 'ghost' })]);
+
+    expect(peekSyncOutbox()).toEqual([expect.objectContaining({ id: 'note-a' })]);
+  });
+
+  it('retains a change named by both a legacy result and an explicit result', async () => {
+    const first = makeChange('note-a', 'notes', '2026-06-01T00:00:00.000Z');
+    const second = makeChange('note-b', 'notes', '2026-06-01T00:01:00.000Z');
+    enqueueSyncChanges([first, second]);
+
+    await drainWith([
+      acceptedResult(first),
+      { ...rejectedResult(first), requestedId: first.id },
+    ]);
+
+    expect(peekSyncOutbox().map((entry) => entry.id).sort()).toEqual(['note-a', 'note-b']);
+  });
+
+  it('retains a status-only result in a same-length response', async () => {
+    const first = makeChange('note-a', 'notes', '2026-06-01T00:00:00.000Z');
+    enqueueSyncChanges([first]);
+
+    await drainWith([{ status: 'accepted' }]);
+
+    expect(peekSyncOutbox()).toEqual([expect.objectContaining({ id: 'note-a' })]);
+  });
+
+  it('retains an unknown requested ID in a same-length response', async () => {
+    const first = makeChange('note-a', 'notes', '2026-06-01T00:00:00.000Z');
+    enqueueSyncChanges([first]);
+
+    await drainWith([{
+      table: 'notes',
+      requestedId: 'missing-note',
+      id: 'note-x',
+      status: 'accepted',
+      serverUpdatedAt: '2026-06-01T12:00:00.000Z',
+    }]);
+
+    expect(peekSyncOutbox()).toEqual([expect.objectContaining({ id: 'note-a' })]);
+  });
+
+  it('retains an empty requested ID in a same-length response', async () => {
+    const first = makeChange('note-a', 'notes', '2026-06-01T00:00:00.000Z');
+    enqueueSyncChanges([first]);
+
+    await drainWith([{
+      table: 'notes',
+      requestedId: '',
+      id: first.id,
+      status: 'accepted',
+      serverUpdatedAt: '2026-06-01T12:00:00.000Z',
+    }]);
+
+    expect(peekSyncOutbox()).toEqual([expect.objectContaining({ id: 'note-a' })]);
+  });
+
+  it('retains a when a valid explicit claim is followed by a malformed explicit duplicate', async () => {
+    const first = makeChange('note-a', 'notes', '2026-06-01T00:00:00.000Z');
+    const second = makeChange('note-b', 'notes', '2026-06-01T00:01:00.000Z');
+    enqueueSyncChanges([first, second]);
+
+    await drainWith([
+      acceptedResult(first, { requestedId: first.id }),
+      { table: 'notes', requestedId: first.id, id: first.id, status: 'rejected', reason: 'internal error' },
+    ]);
+
+    expect(peekSyncOutbox().map((entry) => entry.id).sort()).toEqual(['note-a', 'note-b']);
+  });
+
+  it('retains a when a malformed explicit claim is followed by a valid explicit duplicate', async () => {
+    const first = makeChange('note-a', 'notes', '2026-06-01T00:00:00.000Z');
+    const second = makeChange('note-b', 'notes', '2026-06-01T00:01:00.000Z');
+    enqueueSyncChanges([first, second]);
+
+    await drainWith([
+      { table: 'notes', requestedId: first.id, id: first.id, status: 'rejected', reason: 'internal error' },
+      acceptedResult(first, { requestedId: first.id }),
+    ]);
+
+    expect(peekSyncOutbox().map((entry) => entry.id).sort()).toEqual(['note-a', 'note-b']);
+  });
+
+  it('clears an explicit composite remap that names another submitted row', async () => {
+    const first = makeChange('client-day-1', 'devotional_days', '2026-06-01T00:00:00.000Z');
+    const second = makeChange('day-devotional-1-2', 'devotional_days', '2026-06-01T00:01:00.000Z');
+    enqueueSyncChanges([first, second]);
+
+    await drainWith([
+      acceptedResult(first, { requestedId: first.id, id: second.id }),
+      acceptedResult(second, { requestedId: second.id }),
+    ]);
+
+    expect(peekSyncOutbox()).toHaveLength(0);
+  });
+
+  it('does not treat a remapped id that names another submitted row as an acknowledgement', async () => {
+    const first = makeChange('client-day-1', 'devotional_days', '2026-06-01T00:00:00.000Z');
+    const second = makeChange('day-devotional-1-2', 'devotional_days', '2026-06-01T00:01:00.000Z');
+    enqueueSyncChanges([first, second]);
+
+    await drainWith([
+      acceptedResult(first, { id: second.id }),
+      acceptedResult(second),
+    ]);
+
+    expect(peekSyncOutbox()).toEqual([expect.objectContaining({ id: 'client-day-1' })]);
+  });
+
+  it('does not remap a non-composite table to a different id', async () => {
+    const note = makeChange('note-1', 'notes', '2026-06-01T00:00:00.000Z');
+    enqueueSyncChanges([note]);
+
+    await drainWith([acceptedResult(note, { id: 'server-note-1' })]);
+
+    expect(peekSyncOutbox()).toEqual([expect.objectContaining({ id: 'note-1' })]);
+  });
+
+  it('does not remap an explicit non-composite result to a different canonical id', async () => {
+    const note = makeChange('note-1', 'notes', '2026-06-01T00:00:00.000Z');
+    enqueueSyncChanges([note]);
+
+    await drainWith([acceptedResult(note, { requestedId: note.id, id: 'server-note-1' })]);
+
+    expect(peekSyncOutbox()).toEqual([expect.objectContaining({ id: 'note-1' })]);
+  });
+
+  it('clears a bible reading position through a canonical remap', async () => {
+    const position = makeChange('client-position-b', 'bible_reading_positions', '2026-06-01T00:00:00.000Z');
+    enqueueSyncChanges([position]);
+
+    await drainWith([acceptedResult(position, { id: 'server-position-a' })]);
+
+    expect(peekSyncOutbox()).toHaveLength(0);
   });
 });
