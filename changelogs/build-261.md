@@ -1,31 +1,36 @@
-# Build 261 (1.1.4) - Jordan's feedback
+# Build 261 (1.1.4) - launch crash fix, Jordan's feedback, and everything since 1.1.1
 
-Everything in build 260, plus fixes for the items tester Jordan reported on 1.1.0, and the onboarding review prompt that missed build 260.
+**Read first:** builds 255 through 260 shipped with **no JavaScript bundle** and crashed on launch on every device. App Review rejected 1.1.3 (build 259) for exactly that (Guideline 2.1, crash on an iPad Air). Nothing listed in the changelogs for 257, 258, 259 or 260 was ever run on a device. Build 261 is the first build since 1.1.1 (254) that starts. Please test it as if it were all of them.
 
 ## Fixed
 
-- **Key people** - several people per relationship. Tapping a chip again adds another row (two friends, each with a name); remove with the row's x. Up to five.
-- **"We heard you." screen** - no more faint hard-edged band under the spinner.
+- **App starts.** The iOS bundle step handed Sentry's wrapper `/bin/sh` instead of the React Native script, so it bundled nothing and the build still "succeeded". The wrapper call is corrected, a build-time guard now fails any Release build that lacks `main.jsbundle`, and a unit test pins the wrapper line.
+- **Key people** - several people per relationship; tapping a chip again adds a row; remove with the row's x; up to five.
+- **"We heard you." screen** - no faint hard-edged band under the spinner.
 - **Paywall** - the phone mockup fits the page, including through a full downward drag.
 - **After Start Free Trial** the app advances on its own; no Restore tap. A slow entitlement shows "Finishing up" and self-advances within about ten seconds.
-- **"Go home - we'll keep writing"** really leaves for Today, which shows a preparing card and lands the series when it is ready.
-- **Long generations never fail by the clock.** "Still writing - taking a little longer" replaces "Something went wrong". Backend: 30-day plans no longer truncate at 7000 tokens (live once the backend deploys; a 30-day plan now takes three to four minutes).
-- **"Notify me when it's ready"** - a push arrives when the series fails permanently; a denied permission shows Open Settings; a failed registration keeps the link so you can retry.
+- **"Go home - we'll keep writing"** really leaves for Today, which shows a preparing card and lands the series when ready.
+- **Long generations never fail by the clock.** "Still writing" replaces "Something went wrong". Backend (live): 30-day plans no longer truncate; they take three to four minutes.
+- **"Notify me when it's ready"** - a push arrives if the series fails; denied permission shows Open Settings; failed registration keeps the link.
 - **After finishing a day**, the write-in-place reflect field appears on Today.
 
-## New
+## Also in this build, never device-tested before (from 257-260)
 
-- **App Store review prompt** right after the first devotional in onboarding.
+- Companion reply actions: Try another reply, Save to journal, "What was off?" chips (260).
+- Tool-using companion replies finish instead of stopping after one sentence (260, backend).
+- Tomorrow's reading is pre-generated overnight for everyone (260, backend).
+- Daily-loop fixes (257), usability sweeps (258, 259), App Store review prompt after the first onboarding devotional.
 
 ## What to Test
 
-- [ ] Key people: tap Friend twice, name both. Both names appear in the devotional.
+- [ ] Cold launch on an iPhone AND an iPad: the app opens to the welcome or Today screen. No crash.
+- [ ] Key people: tap Friend twice, name both; both names appear in the devotional.
 - [ ] "We heard you." shows no band under the verse card.
-- [ ] Paywall screen 1: drag the mockup fully down. No flat cut.
-- [ ] Sandbox Apple ID that has never trialed: Start Free Trial, then the app advances with no Restore. Force-quit within two seconds of the transition; the resume never shows the paywall. With Network Link Conditioner on "Very Bad Network": "Finishing up" appears, then it self-advances inside ten seconds. "Unlock Premium" never appears after a purchase.
-- [ ] Restore on an empty account still answers in about three seconds.
-- [ ] Physical iPhone: tap "Notify me when it's ready". Deny: Open Settings appears. Allow: a notification arrives when the job finishes or fails. Tapping a failure push lands on that job with Try again.
-- [ ] During generation tap "Go home": Today shows preparing and the series lands without returning to the ripple.
-- [ ] A 30-day plan completes. No "Something went wrong" from time alone. Background the app for fifteen minutes and return: still writing.
-- [ ] Complete day 1: the reflect field is on Today.
-- [ ] First devotional in onboarding: the review sheet appears once.
+- [ ] Paywall screen 1: drag the mockup fully down; no flat cut.
+- [ ] Sandbox Apple ID, never trialed: Start Free Trial advances with no Restore. Force-quit within two seconds; the resume never shows the paywall. "Unlock Premium" never appears after a purchase.
+- [ ] Physical iPhone: "Notify me when it's ready" - deny shows Open Settings; allow delivers a notification when the job finishes or fails.
+- [ ] During generation tap "Go home": Today shows preparing; the series lands without the ripple.
+- [ ] A 30-day plan completes; no "Something went wrong" from time alone.
+- [ ] Complete day 1: the reflect field is on Today. First onboarding devotional: the review sheet appears once.
+- [ ] Companion: arrows re-stream a different reply; thumbs-down shows the four chips; pencil saves to today's journal entry, no duplicate on a second tap.
+- [ ] Run the 257 and 258 checklists (`changelogs/build-257.md`, `build-258.md`).
