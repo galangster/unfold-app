@@ -62,6 +62,10 @@ class AppDelegate: ExpoAppDelegate {
 }
 
 #if !DEBUG
+private func dropNativeSentryUser(_ event: Event) {
+  event.user = nil
+}
+
 extension AppDelegate {
   /// Mirrors the privacy posture of `src/lib/sentry.ts`, which ATTACHES to this
   /// instance (`autoInitializeNativeSdk: false`) instead of restarting it — so
@@ -151,9 +155,9 @@ extension AppDelegate {
       // `prepareOptions`). Starting the SDK here instead means they have to be
       // installed here, or every fatal JS error is filed twice: once scrubbed
       // from JavaScript, and once natively as an RCTFatalException whose type
-      // is the raw error message and which no scrubber ever sees. Total by
-      // construction — two substring searches, no allocation, no callback into
-      // JavaScript, nothing that can throw.
+      // is the raw error message and which no scrubber ever sees. Native
+      // events never reach the JavaScript beforeSend, so user is cleared here
+      // after those filters. No callback into JavaScript.
       options.beforeSend = { event in
         if let type = event.exceptions?.first?.type, type.contains("Unhandled JS Exception") {
           return nil
@@ -163,6 +167,7 @@ extension AppDelegate {
         if event.exceptions?.contains(where: { $0.value.contains("ExceptionsManager.reportException") }) == true {
           return nil
         }
+        dropNativeSentryUser(event)
         return event
       }
     }

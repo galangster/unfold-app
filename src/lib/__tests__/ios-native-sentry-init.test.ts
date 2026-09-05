@@ -204,6 +204,18 @@ describe('iOS native-first Sentry init (regression: launch crash with no JS bund
     expect(rnSentry).toContain('@"ExceptionsManager.reportException"');
   });
 
+  it('clears native event.user after the duplicate filters', () => {
+    // Native events never reach src/lib/sentry.ts beforeSend.
+    expect(appDelegate).toContain('private func dropNativeSentryUser(_ event: Event)');
+    expect(appDelegate).toContain('event.user = nil');
+    expect(sentryOptions).toContain('dropNativeSentryUser(event)');
+    const filtersAt = Math.max(
+      sentryOptions.indexOf('Unhandled JS Exception'),
+      sentryOptions.indexOf('ExceptionsManager.reportException'),
+    );
+    expect(sentryOptions.indexOf('dropNativeSentryUser(event)')).toBeGreaterThan(filtersAt);
+  });
+
   it('tracks sessions and hands app-start measurements to JavaScript', () => {
     expectOptionSetOnce('enableAutoSessionTracking', 'true');
     expectOptionSetOnce('enableWatchdogTerminationTracking', 'true');
