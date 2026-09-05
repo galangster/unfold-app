@@ -115,6 +115,24 @@ export function markInflightJobLeftForHome(now = Date.now()): InflightGeneration
   return record;
 }
 
+/**
+ * Pure: whether the series a job, or the session it started, names has
+ * reached the store. Today drives its preparing and failed cards from this
+ * rather than from "no devotional at all": a reader who taps "Start study" on
+ * a finished journey and goes home still has that journey, and the card must
+ * say the new one is being written instead of offering "Start study" again.
+ * A record with no id (an adopted job whose devotional was never known) falls
+ * back to the older test, whether any series is current.
+ */
+export function hasInflightSeriesLanded(
+  devotionalId: string | null | undefined,
+  devotionals: readonly { id: string }[],
+  hasCurrentDevotional: boolean,
+): boolean {
+  if (!devotionalId) return hasCurrentDevotional;
+  return devotionals.some((devotional) => devotional.id === devotionalId);
+}
+
 /** Title for the preparing card while the first series has no name yet. */
 export function resolvePreparingFirstSeriesTitle(sessionTitle: string | null | undefined): string {
   const trimmed = sessionTitle?.trim();

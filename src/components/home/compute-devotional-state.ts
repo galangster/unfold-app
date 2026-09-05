@@ -89,17 +89,19 @@ export interface ComputeInput {
   isJourneyComplete: boolean;
   isPreparing: boolean;
   /**
-   * The first series is still being written on the server and nothing is in
-   * the store yet (the reader left /generating for Today). Renders the
-   * preparing card in place of the new-user empty state.
+   * A series the reader left /generating for ("Go home — we'll keep writing")
+   * is still being written on the server and has not reached the store.
+   * Renders the preparing card for its day 1 in place of whatever the store
+   * would show: the new-user empty state, or the finished journey the reader
+   * tapped "Start study" from. The caller decides whether it has landed.
    */
-  preparingFirstSeries?: { seriesTitle: string } | null;
+  preparingInflightSeries?: { seriesTitle: string } | null;
   /**
-   * The first series failed after the reader left /generating for Today and
-   * nothing is in the store. Renders a visible failure with a retry in place
-   * of the new-user empty state, which said nothing about it.
+   * That series failed after the reader left /generating for Today and never
+   * reached the store. Renders a visible failure with a retry in place of a
+   * card that would say nothing about it.
    */
-  firstSeriesFailed?: { message: string; onTryAgain: () => void; onDismiss: () => void } | null;
+  inflightSeriesFailed?: { message: string; onTryAgain: () => void; onDismiss: () => void } | null;
   premiumPolicy: PremiumAccessPolicy;
   daysCompleted: number;
   totalDays: number;
@@ -123,8 +125,8 @@ export interface ComputeInput {
  * Compute the DevotionalCard state from app data.
  *
  * Priority order (first match wins):
- * 1. No devotional, first series in flight  -> preparing (day 1)
- * 1. No devotional, first series failed     -> first-series-failed
+ * 0. In-flight series not in the store yet  -> preparing (day 1)
+ * 0. In-flight series failed                -> first-series-failed
  * 1. No devotional                          -> empty
  * 2. !hasReadToday && (preparing/no data)   -> preparing
  * 3. No day data (fallback)                 -> preparing
@@ -142,8 +144,8 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
     dayLabel,
     isJourneyComplete,
     isPreparing,
-    preparingFirstSeries = null,
-    firstSeriesFailed = null,
+    preparingInflightSeries = null,
+    inflightSeriesFailed = null,
     premiumPolicy,
     daysCompleted,
     totalDays,
@@ -161,21 +163,26 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
     onSaveFreeWrite = () => {},
   } = input;
 
-  // 1. No devotional at all. While the first series is still being written
-  // the card must say so; the empty state would invite a second series.
+  // 0. A series the reader is waiting on from Today. It is not in the store,
+  // so every store-driven state below — the empty state, the finished journey
+  // the reader tapped "Start study" from — would read as "nothing is
+  // happening", which is exactly what "Go home — we'll keep writing" looked
+  // like. The card must say the series is being written, or that it failed.
+  if (preparingInflightSeries) {
+    return {
+      type: 'preparing',
+      progress: 0,
+      seriesTitle: preparingInflightSeries.seriesTitle,
+      dayNumber: 1,
+      onCreateNew,
+    };
+  }
+  if (inflightSeriesFailed) {
+    return { type: 'first-series-failed', ...inflightSeriesFailed };
+  }
+
+  // 1. No devotional at all.
   if (!currentDevotional) {
-    if (preparingFirstSeries) {
-      return {
-        type: 'preparing',
-        progress: 0,
-        seriesTitle: preparingFirstSeries.seriesTitle,
-        dayNumber: 1,
-        onCreateNew,
-      };
-    }
-    if (firstSeriesFailed) {
-      return { type: 'first-series-failed', ...firstSeriesFailed };
-    }
     return { type: 'empty', onCreateNew };
   }
 

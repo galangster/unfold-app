@@ -23,6 +23,7 @@ import {
   GENERATING_SESSION_TITLE_PLACEHOLDER,
   PREPARING_FIRST_SERIES_FALLBACK_TITLE,
   clearInflightGenerationJob,
+  hasInflightSeriesLanded,
   markInflightJobLeftForHome,
   parseInflightGenerationJob,
   readInflightGenerationJob,
@@ -139,6 +140,43 @@ describe('markInflightJobLeftForHome', () => {
     expect(markInflightJobLeftForHome(NOW)).toBeNull();
     expect(mmkvStorage.removeItem).toHaveBeenCalledWith(INFLIGHT_GENERATION_JOB_KEY);
     expect(mmkvStorage.getItem(INFLIGHT_GENERATION_JOB_KEY)).toBeNull();
+  });
+
+  // /generating "Try again" after a failure: the failed job already cleared
+  // the record, so "Go home" during the awaited retry finds nothing to mark.
+  // The retry then resolves on the unmounted screen and writes the record
+  // itself. It has to carry the marker on its own, or Today reads the fresh
+  // record as app-kill recovery and bounces the reader back — the symptom
+  // Jordan reported, re-created on the retry path.
+  it('leaves a job that resolves after the tap to carry the marker itself', () => {
+    expect(markInflightJobLeftForHome(NOW)).toBeNull();
+
+    const retried: InflightGenerationJob = { ...fresh, jobId: 'job-2', leftForHome: true };
+    writeInflightGenerationJob(retried);
+    expect(resolveTodayInflightAction(readInflightGenerationJob(NOW))).toEqual({ action: 'watch-on-today', job: retried });
+
+    writeInflightGenerationJob({ ...fresh, jobId: 'job-2' });
+    expect(resolveTodayInflightAction(readInflightGenerationJob(NOW)).action).toBe('resume-on-generating');
+  });
+});
+
+describe('hasInflightSeriesLanded', () => {
+  const devotionals = [{ id: 'devo-old' }];
+
+  it('is true only once the named series is in the store', () => {
+    expect(hasInflightSeriesLanded('devo-1', devotionals, true)).toBe(false);
+    expect(hasInflightSeriesLanded('devo-1', [...devotionals, { id: 'devo-1' }], true)).toBe(true);
+  });
+
+  it('does not mistake the finished journey the reader started the new series from for the new series', () => {
+    // "Start study" on a completed journey, then "Go home": the old series is
+    // current, the new one is not in the store. Today must show preparing.
+    expect(hasInflightSeriesLanded('devo-1', devotionals, true)).toBe(false);
+  });
+
+  it('falls back to whether any series is current when the record has no id', () => {
+    expect(hasInflightSeriesLanded(undefined, [], false)).toBe(false);
+    expect(hasInflightSeriesLanded(null, devotionals, true)).toBe(true);
   });
 });
 

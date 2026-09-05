@@ -127,10 +127,26 @@ export default function GeneratingScreen() {
   // instead of re-arming a second timer chain next to the current one.
   const pollRunRef = useRef(0);
   const jobSubmittedRef = useRef(false);
-  // Set by "Go home — we'll keep writing". A submission that resolves after
-  // the reader left persists its record already marked for Today and does not
-  // start a poll loop on a screen nobody is looking at.
+  // Set by "Go home — we'll keep writing". A job that resolves after the
+  // reader left (a submission, a retry, an adopted job) persists its record
+  // already marked for Today and does not start a poll loop on a screen
+  // nobody is looking at.
   const leftForHomeRef = useRef(false);
+
+  // Persist the job the server just returned — submitted, retried or adopted.
+  // After "Go home — we'll keep writing" the record carries the marker so
+  // Today keeps it and watches it instead of bouncing back here, and this
+  // screen, already unmounted, must not poll it too: every caller returns
+  // when Today owns the watch. One writer, so no path can drop the marker.
+  const recordJob = useCallback((jobId: string, devotionalId: string | undefined): { todayOwnsWatch: boolean } => {
+    writeInflightGenerationJob({
+      jobId,
+      devotionalId,
+      submittedAt: Date.now(),
+      leftForHome: leftForHomeRef.current || undefined,
+    });
+    return { todayOwnsWatch: leftForHomeRef.current };
+  }, []);
   // Consecutive unrecognized job statuses — bounded so we don't poll forever
   // against a status we don't understand.
   const unknownStatusCountRef = useRef(0);
@@ -531,17 +547,11 @@ export default function GeneratingScreen() {
         // Persist inflight job to MMKV for app-kill recovery. Written before
         // the session starts so Today, which re-reads the record when the
         // session changes, never sees the session without the record.
-        writeInflightGenerationJob({
-          jobId,
-          devotionalId,
-          submittedAt: Date.now(),
-          leftForHome: leftForHomeRef.current || undefined,
-        });
+        const { todayOwnsWatch } = recordJob(jobId, devotionalId);
         startGenerationSession({ devotionalId, totalDays: user.devotionalLength });
         logger.log('[generating] Job submitted:', jobId);
 
-        if (leftForHomeRef.current) {
-          // The reader already went home; Today watches this job now.
+        if (todayOwnsWatch) {
           logger.log('[generating] Job submitted after the reader went home; Today owns the watch');
           return;
         }
@@ -579,13 +589,8 @@ export default function GeneratingScreen() {
             logger.warn('[generating] Existing-job recovery failed; will poll instead:', recoverErr);
           }
           // Not ready yet (or no known devotionalId) — poll the existing job.
-          writeInflightGenerationJob({
-            jobId: existingJobId,
-            devotionalId: sessionDevotionalId ?? undefined,
-            submittedAt: Date.now(),
-            leftForHome: leftForHomeRef.current || undefined,
-          });
-          if (leftForHomeRef.current) {
+          const { todayOwnsWatch } = recordJob(existingJobId, sessionDevotionalId ?? undefined);
+          if (todayOwnsWatch) {
             logger.log('[generating] Existing job adopted after the reader went home; Today owns the watch');
             return;
           }
@@ -655,13 +660,17 @@ export default function GeneratingScreen() {
         // Retry existing job on the server
         const { jobId } = await retryJob(pendingJobId);
         logger.log('[generating] Job retried:', jobId);
+        const { todayOwnsWatch } = recordJob(jobId, useUnfoldStore.getState().generationSession.devotionalId ?? undefined);
+        // The session sat on the failure while the job is running again.
+        // Moving it back to running is also what tells Today, which re-reads
+        // the record when the session moves, to swap the failed card for the
+        // preparing one when the reader already went home.
+        updateGenerationSessionProgress({ title: GENERATING_SESSION_TITLE_PLACEHOLDER });
+        if (todayOwnsWatch) {
+          logger.log('[generating] Job retried after the reader went home; Today owns the watch');
+          return;
+        }
         setPendingJobId(jobId);
-        // Update MMKV with new jobId
-        writeInflightGenerationJob({
-          jobId,
-          devotionalId: useUnfoldStore.getState().generationSession.devotionalId ?? undefined,
-          submittedAt: Date.now(),
-        });
         startPolling(jobId);
       } else {
         // No job ID -- resubmit from scratch
@@ -684,16 +693,15 @@ export default function GeneratingScreen() {
           });
 
           const devotionalId = requireCanonicalDevotionalId(submittedDevotionalId, 'retry initial devotional job submission');
+          // Record before the session starts, as on first submission.
+          const { todayOwnsWatch } = recordJob(jobId, devotionalId);
           startGenerationSession({ devotionalId, totalDays: user.devotionalLength });
-
           logger.log('[generating] Re-submitted job:', jobId);
+          if (todayOwnsWatch) {
+            logger.log('[generating] Job re-submitted after the reader went home; Today owns the watch');
+            return;
+          }
           setPendingJobId(jobId);
-          // Persist inflight job to MMKV
-          writeInflightGenerationJob({
-            jobId,
-            devotionalId,
-            submittedAt: Date.now(),
-          });
           startPolling(jobId);
         }
       }

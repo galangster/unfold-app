@@ -34,6 +34,7 @@ import { Duration, Ease } from '@/constants/animations';
 import { submitGenerationJob, recoverCompletedGenerationResult, ApiError } from '@/lib/generation-api';
 import { toFriendlyOnboardingGenerationError } from '@/lib/generation-errors';
 import {
+  hasInflightSeriesLanded,
   readInflightGenerationJob,
   resolvePreparingFirstSeriesTitle,
   resolveTodayInflightAction,
@@ -260,7 +261,7 @@ export default function HomeScreen() {
     downloadBibleDb().catch(() => {});
   }, []);
 
-  // In-flight first-series job from a previous screen or app session. Read
+  // In-flight series job from a previous screen or app session. Read
   // only while Today is the focused screen, and re-read every time it gains
   // focus and whenever the generation session moves (a submission resolving
   // after the reader already left; the job settling). Focus, not mount: a
@@ -275,31 +276,31 @@ export default function HomeScreen() {
   const generationSessionTitle = useUnfoldStore((s) => s.generationSession.title);
   const generationSessionError = useUnfoldStore((s) => s.generationSession.error);
   const clearGenerationSession = useUnfoldStore((s) => s.clearGenerationSession);
-  const [inflightFirstSeries, setInflightFirstSeries] = useState<InflightGenerationJob | null>(null);
+  const [inflightSeries, setInflightSeries] = useState<InflightGenerationJob | null>(null);
   useEffect(() => {
     if (!isTodayFocused) return;
     const decision = resolveTodayInflightAction(readInflightGenerationJob());
     if (decision.action === 'resume-on-generating') {
-      setInflightFirstSeries(null);
+      setInflightSeries(null);
       logger.log('[home] Resuming inflight generation job from MMKV:', decision.job.jobId);
       // Navigate to generating screen — it will pick up the inflight job from MMKV
       router.replace('/generating');
       return;
     }
-    setInflightFirstSeries(decision.action === 'watch-on-today' ? decision.job : null);
+    setInflightSeries(decision.action === 'watch-on-today' ? decision.job : null);
   }, [router, isTodayFocused, generationSessionStatus, generationSessionDevotionalId]);
-  const onInflightFirstSeriesSettled = useCallback(() => setInflightFirstSeries(null), []);
+  const onInflightSeriesSettled = useCallback(() => setInflightSeries(null), []);
 
-  // The first series failed after the reader left for Today (the watch below
+  // The series failed after the reader left for Today (the watch below
   // settled on a failure, or the submission itself failed). The session holds
-  // the error and nothing is in the store; without a card for it Today sat on
-  // the new-user empty state and said nothing. Try again re-enters
-  // /generating, which submits a fresh job from the same answers.
-  const handleRetryFirstSeries = useCallback(() => {
+  // the error and the series never reached the store; without a card for it
+  // Today sat on the new-user empty state and said nothing. Try again
+  // re-enters /generating, which submits a fresh job from the same answers.
+  const handleRetryInflightSeries = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.replace('/generating');
   }, [router]);
-  const handleDismissFirstSeriesFailure = useCallback(() => {
+  const handleDismissInflightSeriesFailure = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     clearGenerationSession();
   }, [clearGenerationSession]);
@@ -475,19 +476,24 @@ export default function HomeScreen() {
     onDay: addGeneratedDay,
   });
 
-  // The first series the reader left /generating for. Nothing is in the store
-  // until the job finishes, so the preparing card is driven by the in-flight
-  // record and this watch lands day 1 (or the failure) exactly as /generating
-  // would have. A churned account is paused, not preparing.
+  // The series the reader left /generating for. It is not in the store until
+  // the job finishes, so the preparing card is driven by the in-flight record
+  // and this watch lands day 1 (or the failure) exactly as /generating would
+  // have. The gate is "has that series landed", not "is there no devotional":
+  // a reader who tapped "Start study" on a finished journey still has that
+  // journey, and Today showed it — with the same "Start study" — as if the
+  // tap had done nothing. A churned account is paused, not preparing.
   useInflightInitialArcWatch({
-    job: inflightFirstSeries,
-    enabled: inflightFirstSeries != null && isTodayFocused,
-    onSettled: onInflightFirstSeriesSettled,
+    job: inflightSeries,
+    enabled: inflightSeries != null && isTodayFocused,
+    onSettled: onInflightSeriesSettled,
   });
-  const isPreparingFirstSeries = !currentDevotional && inflightFirstSeries != null && premiumPolicy !== 'denied';
-  const isFirstSeriesFailed = !currentDevotional
-    && inflightFirstSeries == null
+  const isPreparingInflightSeries = inflightSeries != null
+    && !hasInflightSeriesLanded(inflightSeries.devotionalId, devotionals, !!currentDevotional)
+    && premiumPolicy !== 'denied';
+  const isInflightSeriesFailed = inflightSeries == null
     && generationSessionStatus === 'error'
+    && !hasInflightSeriesLanded(generationSessionDevotionalId, devotionals, !!currentDevotional)
     && premiumPolicy !== 'denied';
 
   const qaContextSlot = useMemo<QaContextSlotPreview | null>(() => {
@@ -1259,14 +1265,14 @@ export default function HomeScreen() {
     dayLabel: getReadingDayLabel(),
     isJourneyComplete,
     isPreparing: !hasReadToday && (isPreparingCurrentDay || (!currentDayData && !!currentDevotional && premiumPolicy !== 'denied')),
-    preparingFirstSeries: isPreparingFirstSeries
+    preparingInflightSeries: isPreparingInflightSeries
       ? { seriesTitle: resolvePreparingFirstSeriesTitle(generationSessionTitle) }
       : null,
-    firstSeriesFailed: isFirstSeriesFailed
+    inflightSeriesFailed: isInflightSeriesFailed
       ? {
           message: toFriendlyOnboardingGenerationError(generationSessionError ?? ''),
-          onTryAgain: handleRetryFirstSeries,
-          onDismiss: handleDismissFirstSeriesFailure,
+          onTryAgain: handleRetryInflightSeries,
+          onDismiss: handleDismissInflightSeriesFailure,
         }
       : null,
     premiumPolicy,
