@@ -8,7 +8,17 @@ import {
   getOnboardingStepLayoutMode,
   isFullScreenOnboardingStepType,
   resolveQuickDateChip,
+  addKeyPerson,
+  KEY_PEOPLE_MAX_COUNT,
+  keyPeopleCapMessage,
+  keyPersonChipAccessibility,
+  keyPersonChipLabel,
+  keyPersonRowLabel,
+  removeKeyPerson,
+  renameKeyPerson,
   shapeKeyPeople,
+  withKeyPersonIds,
+  type KeyPersonRow,
   shapeUpcomingEvent,
   shouldShowOnboardingTopContinue,
   shouldStartOnboardingSampleGeneration,
@@ -414,6 +424,158 @@ describe('onboarding step helpers', () => {
     it('returns an empty array for null or undefined input', () => {
       expect(shapeKeyPeople(null)).toEqual([]);
       expect(shapeKeyPeople(undefined)).toEqual([]);
+    });
+
+    it('keeps multiple people with the same relationship in order', () => {
+      expect(
+        shapeKeyPeople([
+          { name: 'Anthony', relationship: 'Friend' },
+          { name: 'Mi Young', relationship: 'Friend' },
+        ]),
+      ).toEqual([
+        { name: 'Anthony', relationship: 'Friend' },
+        { name: 'Mi Young', relationship: 'Friend' },
+      ]);
+    });
+
+    it('strips editing-only fields so the stored shape stays { name, relationship }', () => {
+      const shaped = shapeKeyPeople([
+        { id: 'kp-1', name: 'Anthony', relationship: 'Friend' },
+        { id: 'kp-2', name: 'Sam', relationship: 'Spouse' },
+      ] as KeyPersonRow[]);
+      expect(shaped).toEqual([
+        { name: 'Anthony', relationship: 'Friend' },
+        { name: 'Sam', relationship: 'Spouse' },
+      ]);
+      for (const person of shaped) expect(Object.keys(person).sort()).toEqual(['name', 'relationship']);
+    });
+  });
+
+  describe('key people editing rows', () => {
+    it('adds a row per chip tap, so the same relationship can appear twice with distinct ids', () => {
+      const once = addKeyPerson([], 'Friend');
+      const twice = addKeyPerson(once, 'Friend');
+      expect(twice).toHaveLength(2);
+      expect(twice.map((p) => p.relationship)).toEqual(['Friend', 'Friend']);
+      expect(twice.map((p) => p.name)).toEqual(['', '']);
+      expect(twice[0].id).not.toBe(twice[1].id);
+      expect(once).toHaveLength(1);
+    });
+
+    it('is a no-op that returns the same array once the cap is reached', () => {
+      let people: KeyPersonRow[] = [];
+      for (let i = 0; i < KEY_PEOPLE_MAX_COUNT; i += 1) people = addKeyPerson(people, 'Friend');
+      expect(people).toHaveLength(5);
+      expect(addKeyPerson(people, 'Mentor')).toBe(people);
+    });
+
+    it('removes only the row with the given id', () => {
+      const people = addKeyPerson(addKeyPerson(addKeyPerson([], 'Friend'), 'Friend'), 'Spouse');
+      const removed = removeKeyPerson(people, people[0].id);
+      expect(removed.map((p) => p.id)).toEqual([people[1].id, people[2].id]);
+      expect(removeKeyPerson(people, 'missing')).toEqual(people);
+    });
+
+    it('renames only the row with the given id and keeps the name within the limit', () => {
+      const people = addKeyPerson(addKeyPerson([], 'Friend'), 'Friend');
+      const renamed = renameKeyPerson(people, people[1].id, 'Mi Young');
+      expect(renamed[0].name).toBe('');
+      expect(renamed[1].name).toBe('Mi Young');
+      expect(renamed[1].id).toBe(people[1].id);
+      expect(renameKeyPerson(people, people[0].id, 'x'.repeat(80))[0].name).toHaveLength(50);
+      expect(renameKeyPerson(people, people[0].id, 'x'.repeat(80), 10)[0].name).toHaveLength(10);
+    });
+
+    it('gives restored rows without ids a distinct id and keeps existing ids', () => {
+      const rows = withKeyPersonIds([
+        { name: 'Anthony', relationship: 'Friend' },
+        { name: 'Mi Young', relationship: 'Friend' },
+        { id: 'kp-kept', name: 'Sam', relationship: 'Spouse' },
+      ]);
+      expect(rows.map((p) => ({ name: p.name, relationship: p.relationship }))).toEqual([
+        { name: 'Anthony', relationship: 'Friend' },
+        { name: 'Mi Young', relationship: 'Friend' },
+        { name: 'Sam', relationship: 'Spouse' },
+      ]);
+      expect(rows[0].id).toBeTruthy();
+      expect(rows[0].id).not.toBe(rows[1].id);
+      expect(rows[2].id).toBe('kp-kept');
+      expect(withKeyPersonIds(null)).toEqual([]);
+      expect(withKeyPersonIds(undefined)).toEqual([]);
+    });
+
+    it('numbers row labels only while a relationship repeats', () => {
+      const people = addKeyPerson(addKeyPerson(addKeyPerson([], 'Friend'), 'Spouse'), 'Friend');
+      expect(people.map((_, index) => keyPersonRowLabel(people, index))).toEqual(['Friend 1', 'Spouse', 'Friend 2']);
+      const survivors = removeKeyPerson(people, people[0].id);
+      expect(survivors.map((_, index) => keyPersonRowLabel(survivors, index))).toEqual(['Spouse', 'Friend']);
+      expect(keyPersonRowLabel(people, people.length)).toBe('');
+    });
+
+    it('shows the count on a chip only once two rows share the relationship', () => {
+      expect(keyPersonChipLabel('Friend', 0)).toBe('Friend');
+      expect(keyPersonChipLabel('Friend', 1)).toBe('Friend');
+      expect(keyPersonChipLabel('Friend', 2)).toBe('Friend \u00B7 2');
+      expect(keyPersonChipLabel('Friend', 2)).toBe('Friend · 2');
+    });
+
+    it('mints ids with a run, a sequence, and a per-call random component', () => {
+      const people = addKeyPerson(addKeyPerson([], 'Friend'), 'Friend');
+      for (const person of people) expect(person.id).toMatch(/^kp-[0-9a-z]+-[1-9]\d*-[0-9a-z]{6}$/);
+      expect(people[0].id).not.toBe(people[1].id);
+
+      const random = jest.spyOn(Math, 'random').mockReturnValueOnce(0);
+      try {
+        expect(addKeyPerson([], 'Friend')[0].id).toMatch(/-000000$/);
+      } finally {
+        random.mockRestore();
+      }
+    });
+
+    it('keeps a row id stable through rename, removal of a sibling, and re-normalisation', () => {
+      const people = addKeyPerson(addKeyPerson([], 'Friend'), 'Spouse');
+      const [friend, spouse] = people;
+      const renamed = renameKeyPerson(people, friend.id, 'Anthony');
+      expect(renamed[0].id).toBe(friend.id);
+      const survivors = removeKeyPerson(renamed, spouse.id);
+      expect(survivors.map((p) => p.id)).toEqual([friend.id]);
+      expect(withKeyPersonIds(survivors)[0].id).toBe(friend.id);
+    });
+
+    it('disables the chip with a hint only once the cap is reached', () => {
+      expect(keyPersonChipAccessibility('Friend', 0, 0)).toEqual({
+        label: 'Add Friend',
+        hint: undefined,
+        disabled: false,
+      });
+      expect(keyPersonChipAccessibility('Friend', 2, KEY_PEOPLE_MAX_COUNT - 1)).toEqual({
+        label: 'Add another Friend, 2 added',
+        hint: undefined,
+        disabled: false,
+      });
+      expect(keyPersonChipAccessibility('Friend', 2, KEY_PEOPLE_MAX_COUNT)).toEqual({
+        label: 'Add another Friend, 2 added',
+        hint: 'Maximum of 5 people reached. Remove a person to add another.',
+        disabled: true,
+      });
+      expect(keyPersonChipAccessibility('Mentor', 0, KEY_PEOPLE_MAX_COUNT)).toEqual({
+        label: 'Add Mentor',
+        hint: 'Maximum of 5 people reached. Remove a person to add another.',
+        disabled: true,
+      });
+      expect(keyPersonChipAccessibility('Friend', 1, 2, 2).disabled).toBe(true);
+    });
+
+    it('prints the cap message only at the cap and reuses it as the chip hint', () => {
+      expect(keyPeopleCapMessage(0)).toBeUndefined();
+      expect(keyPeopleCapMessage(KEY_PEOPLE_MAX_COUNT - 1)).toBeUndefined();
+      expect(keyPeopleCapMessage(KEY_PEOPLE_MAX_COUNT)).toBe(
+        'Maximum of 5 people reached. Remove a person to add another.',
+      );
+      expect(keyPeopleCapMessage(2, 2)).toBe('Maximum of 2 people reached. Remove a person to add another.');
+      expect(keyPersonChipAccessibility('Friend', 1, KEY_PEOPLE_MAX_COUNT).hint).toBe(
+        keyPeopleCapMessage(KEY_PEOPLE_MAX_COUNT),
+      );
     });
   });
 

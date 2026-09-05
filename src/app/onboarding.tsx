@@ -100,10 +100,20 @@ import {
   QUICK_DATE_CHIPS,
   resolveOnboardingResumeStep,
   resolveQuickDateChip,
+  addKeyPerson,
+  KEY_PEOPLE_MAX_COUNT,
+  keyPeopleCapMessage,
+  keyPersonChipAccessibility,
+  keyPersonChipLabel,
+  keyPersonRowLabel,
+  removeKeyPerson,
+  renameKeyPerson,
   shapeKeyPeople,
   shapeUpcomingEvent,
   shouldShowOnboardingTopContinue,
   shouldStartOnboardingSampleGeneration,
+  withKeyPersonIds,
+  type KeyPersonRow,
   type OnboardingSampleGenerationRequest,
 } from '@/lib/onboarding-step-helpers';
 import { ShockStat } from '@/components/onboarding/ShockStat';
@@ -504,7 +514,7 @@ export interface OnboardingData {
   aspiration: string;
   growthGoals: string[];
   obstacles: string[];
-  keyPeople: { name: string; relationship: string }[];
+  keyPeople: KeyPersonRow[];
   relationshipWithGod?: RelationshipWithGod;
   bibleFrequency?: BibleFrequency;
   readingDuration: 5 | 15 | 30;
@@ -639,7 +649,6 @@ export default function OnboardingScreen() {
     aspiration: '',
     growthGoals: [],
     obstacles: [],
-    keyPeople: [],
     relationshipWithGod: undefined,
     bibleFrequency: undefined,
     readingDuration: 15,
@@ -647,6 +656,8 @@ export default function OnboardingScreen() {
     reminderTime: '8:00 AM',
     mirrorBackCommitted: false,
     ...(restoredDraft?.data ?? {}),
+    // Drafts written before key-people rows carried ids restore without them.
+    keyPeople: withKeyPersonIds(restoredDraft?.data?.keyPeople),
   }));
 
   // RevenueCat — fetch offerings for direct purchase from threeStepPaywall
@@ -917,6 +928,10 @@ export default function OnboardingScreen() {
   const [showListScrollHint, setShowListScrollHint] = useState(true);
   const inputOpacity = useSharedValue(0);
   const scrollViewRef = useRef<ScrollView>(null);
+  // The key-people row added by the latest chip tap opens the keyboard on
+  // mount; the row clears this once it has focus so a remount (Back into the
+  // step) does not reopen the keyboard.
+  const lastAddedKeyPersonIdRef = useRef<string | null>(null);
   // Restore a persisted onboarding sample job (survives force-quit + relaunch):
   // the segue then resumes the SAME job instead of submitting a duplicate. Read
   // once via a lazy initializer so getDeviceId() isn't hit on every render.
@@ -2851,46 +2866,58 @@ export default function OnboardingScreen() {
       );
     }
 
-    // Key people — fully optional. Tapping a relationship chip reveals a name
-    // field for it; the header Continue is always enabled, plus an explicit
-    // Skip link since there's nothing to require here.
+    // Key people — fully optional. Tapping a relationship chip adds a name
+    // field for it, and tapping the same chip again adds another (two friends,
+    // each with a name); each row carries its own remove control. The header
+    // Continue is always enabled, plus an explicit Skip link since there's
+    // nothing to require here.
     if (step.type === 'keyPeople') {
       const people = data.keyPeople;
-      const maxPeopleReached = people.length >= 5;
+      const maxPeopleReached = people.length >= KEY_PEOPLE_MAX_COUNT;
+      const capMessage = keyPeopleCapMessage(people.length);
+      const relationshipCounts: Record<string, number> = {};
+      for (const person of people) {
+        relationshipCounts[person.relationship] = (relationshipCounts[person.relationship] ?? 0) + 1;
+      }
 
-      const toggleRelationship = (relationship: string) => {
-        const alreadyActive = people.some((p) => p.relationship === relationship);
-        if (alreadyActive) {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          setData((prev) => ({ ...prev, keyPeople: prev.keyPeople.filter((p) => p.relationship !== relationship) }));
-          return;
-        }
-        if (maxPeopleReached) {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-          return;
-        }
+      const addPerson = (relationship: string) => {
+        // The chips are disabled at the cap, so this only guards a stale press.
+        if (maxPeopleReached) return;
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        setData((prev) => ({ ...prev, keyPeople: [...prev.keyPeople, { name: '', relationship }] }));
+        const next = addKeyPerson(people, relationship);
+        lastAddedKeyPersonIdRef.current = next[next.length - 1]?.id ?? null;
+        setData((prev) => ({ ...prev, keyPeople: next }));
       };
 
-      const updatePersonName = (relationship: string, name: string) => {
-        setData((prev) => ({
-          ...prev,
-          keyPeople: prev.keyPeople.map((p) =>
-            p.relationship === relationship ? { ...p, name: name.slice(0, INPUT_LIMITS.NAME.max) } : p
-          ),
-        }));
+      const removePerson = (id: string) => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        setData((prev) => ({ ...prev, keyPeople: removeKeyPerson(prev.keyPeople, id) }));
+      };
+
+      const updatePersonName = (id: string, name: string) => {
+        setData((prev) => ({ ...prev, keyPeople: renameKeyPerson(prev.keyPeople, id, name, INPUT_LIMITS.NAME.max) }));
+      };
+
+      const consumeAutofocus = (id: string) => {
+        if (lastAddedKeyPersonIdRef.current === id) lastAddedKeyPersonIdRef.current = null;
       };
 
       return (
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing['2'] }}>
             {KEY_PEOPLE_RELATIONSHIP_CHIPS.map((relationship) => {
-              const isActive = people.some((p) => p.relationship === relationship);
+              const count = relationshipCounts[relationship] ?? 0;
+              const isActive = count > 0;
+              const chipA11y = keyPersonChipAccessibility(relationship, count, people.length);
               return (
                 <TouchableOpacity activeOpacity={1}
                   key={relationship}
-                  onPress={() => toggleRelationship(relationship)}
+                  onPress={() => addPerson(relationship)}
+                  disabled={chipA11y.disabled}
+                  accessibilityRole="button"
+                  accessibilityLabel={chipA11y.label}
+                  accessibilityHint={chipA11y.hint}
+                  accessibilityState={{ disabled: chipA11y.disabled }}
                   style={{
                     paddingHorizontal: Spacing['3.5'],
                     paddingVertical: Spacing['3'],
@@ -2898,6 +2925,9 @@ export default function OnboardingScreen() {
                     backgroundColor: isActive ? selectedAccentSurface(colors.accent, 0.18) : colors.inputBackground,
                     borderWidth: 1,
                     borderColor: isActive ? colors.accent : colors.border,
+                    // Same dim MultiSelectPills uses at its cap, so a locked
+                    // chip reads as locked without a haptic or a press.
+                    opacity: chipA11y.disabled ? 0.4 : 1,
                   }}
                 >
                   <Text style={{
@@ -2905,48 +2935,79 @@ export default function OnboardingScreen() {
                     fontSize: FontSize.sm,
                     color: isActive ? colors.accent : colors.textMuted,
                   }}>
-                    {relationship}
+                    {keyPersonChipLabel(relationship, count)}
                   </Text>
                 </TouchableOpacity>
               );
             })}
           </View>
 
+          {capMessage && (
+            <Text
+              accessibilityRole="text"
+              style={{
+                fontFamily: FontFamily.ui,
+                fontSize: FontSize.sm,
+                // textMuted, not textHint: the caption is the only sighted
+                // explanation for the locked chips, and textHint sits at
+                // 2.0:1 dark / 2.5:1 light, under WCAG AA (WR-21 rule).
+                color: colors.textMuted,
+                marginTop: Spacing['3'],
+              }}
+            >
+              {capMessage}
+            </Text>
+          )}
+
           {people.length > 0 && (
             <View style={{ gap: Spacing['3'], marginTop: Spacing['4'] }}>
-              {people.map((person) => (
-                <View key={person.relationship}>
-                  <Text style={{
-                    fontFamily: FontFamily.ui,
-                    fontSize: FontSize.sm,
-                    color: colors.textMuted,
-                    marginBottom: Spacing['1'],
-                  }}>
-                    {person.relationship}
-                  </Text>
-                  <TextInput
-                    value={person.name}
-                    onChangeText={(text) => updatePersonName(person.relationship, text)}
-                    placeholder="Their name"
-                    placeholderTextColor={colors.textMuted}
-                    selectionColor={colors.accent}
-                    cursorColor={colors.accent}
-                    style={{
-                      fontFamily: FontFamily.body,
-                      fontSize: FontSize.lg,
-                      color: colors.text,
-                      paddingVertical: Spacing['3.5'],
-                      paddingHorizontal: Spacing['5'],
-                      backgroundColor: colors.inputBackground,
-                      borderRadius: Radius.lg,
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                    }}
-                    maxLength={INPUT_LIMITS.NAME.max}
-                    returnKeyType="done"
-                  />
-                </View>
-              ))}
+              {people.map((person, index) => {
+                const label = keyPersonRowLabel(people, index);
+                return (
+                  <View key={person.id}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing['1'] }}>
+                      <Text style={{
+                        fontFamily: FontFamily.ui,
+                        fontSize: FontSize.sm,
+                        color: colors.textMuted,
+                      }}>
+                        {label}
+                      </Text>
+                      <TouchableOpacity activeOpacity={1}
+                        onPress={() => removePerson(person.id)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Remove ${label}`}
+                        hitSlop={{ top: 14, bottom: 14, left: 16, right: 16 }}
+                      >
+                        <XIcon size={16} color={colors.textMuted} weight="light" />
+                      </TouchableOpacity>
+                    </View>
+                    <TextInput
+                      value={person.name}
+                      onChangeText={(text) => updatePersonName(person.id, text)}
+                      autoFocus={person.id === lastAddedKeyPersonIdRef.current}
+                      onFocus={() => consumeAutofocus(person.id)}
+                      placeholder="Their name"
+                      placeholderTextColor={colors.textMuted}
+                      selectionColor={colors.accent}
+                      cursorColor={colors.accent}
+                      style={{
+                        fontFamily: FontFamily.body,
+                        fontSize: FontSize.lg,
+                        color: colors.text,
+                        paddingVertical: Spacing['3.5'],
+                        paddingHorizontal: Spacing['5'],
+                        backgroundColor: colors.inputBackground,
+                        borderRadius: Radius.lg,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                      }}
+                      maxLength={INPUT_LIMITS.NAME.max}
+                      returnKeyType="done"
+                    />
+                  </View>
+                );
+              })}
             </View>
           )}
 
