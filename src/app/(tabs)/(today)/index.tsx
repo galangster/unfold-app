@@ -32,7 +32,15 @@ import { getContentAwareMiddayMessage, getContentAwareEveningMessage } from '@/c
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { Duration, Ease } from '@/constants/animations';
 import { submitGenerationJob, recoverCompletedGenerationResult, ApiError } from '@/lib/generation-api';
-import { mmkvStorage } from '@/lib/mmkv-storage';
+import { toFriendlyOnboardingGenerationError } from '@/lib/generation-errors';
+import {
+  hasInflightSeriesLanded,
+  readInflightGenerationJob,
+  resolvePreparingFirstSeriesTitle,
+  resolveTodayInflightAction,
+  type InflightGenerationJob,
+} from '@/lib/inflight-generation-job';
+import { useInflightInitialArcWatch } from '@/hooks/useInflightInitialArcWatch';
 import { TodayCardStack, type TodayCardStackCard } from '@/components/home/TodayCardStack';
 import { animateCardDismiss } from '@/lib/card-dismiss-animation';
 import { getBibleDbStatus, downloadBibleDb } from '@/lib/bible-db';
@@ -54,8 +62,6 @@ import { useGeneratedDayWatch } from '@/hooks/useGeneratedDayWatch';
 import { getQaTodayProfileMarker } from '@/lib/qa-today-marker';
 import { getStreakDayKey, shouldCelebrateStreakDayFlip } from '@/lib/streak-helpers';
 
-// Must match the key used in generating.tsx
-const INFLIGHT_KEY = 'inflight-generation-job';
 const QA_TODAY_PROFILE_MARKER = getQaTodayProfileMarker();
 const QA_TODAY_CONTEXT_SLOT_PREFIX = 'QA Today context slot:';
 const QA_TODAY_PREPARING_LOADING_MARKER = 'QA Today preparing loading preview.';
@@ -255,34 +261,49 @@ export default function HomeScreen() {
     downloadBibleDb().catch(() => {});
   }, []);
 
-  // Resume inflight generation job from a previous app session (app-kill recovery)
-  const inflightResumeAttempted = useRef(false);
+  // In-flight series job from a previous screen or app session. Read
+  // only while Today is the focused screen, and re-read every time it gains
+  // focus and whenever the generation session moves (a submission resolving
+  // after the reader already left; the job settling). Focus, not mount: a
+  // /generating pushed on top of the tabs (RecommendedSeriesCard) leaves this
+  // instance mounted and unfocused, so a mount-only read could go stale, and
+  // an unfocused instance must never redirect. Without the leftForHome marker
+  // the record is app-kill recovery and the reader goes back to /generating.
+  // With the marker the reader tapped "Go home — we'll keep writing": keep
+  // the record, show the preparing card and watch the job from here.
+  const generationSessionStatus = useUnfoldStore((s) => s.generationSession.status);
+  const generationSessionDevotionalId = useUnfoldStore((s) => s.generationSession.devotionalId);
+  const generationSessionTitle = useUnfoldStore((s) => s.generationSession.title);
+  const generationSessionError = useUnfoldStore((s) => s.generationSession.error);
+  const clearGenerationSession = useUnfoldStore((s) => s.clearGenerationSession);
+  const [inflightSeries, setInflightSeries] = useState<InflightGenerationJob | null>(null);
   useEffect(() => {
-    if (inflightResumeAttempted.current) return;
-    inflightResumeAttempted.current = true;
-
-    const raw = mmkvStorage.getItem(INFLIGHT_KEY) as string | null;
-    if (!raw) return;
-
-    try {
-      const inflight = JSON.parse(raw) as {
-        jobId: string;
-        devotionalId?: string;
-        submittedAt: number;
-      };
-      // Only resume if not expired (15 min)
-      if (Date.now() - inflight.submittedAt < 15 * 60 * 1000) {
-        logger.log('[home] Resuming inflight generation job from MMKV:', inflight.jobId);
-        // Navigate to generating screen — it will pick up the inflight job from MMKV
-        router.replace('/generating');
-        return;
-      }
-      // Expired — clean up
-      mmkvStorage.removeItem(INFLIGHT_KEY);
-    } catch {
-      mmkvStorage.removeItem(INFLIGHT_KEY);
+    if (!isTodayFocused) return;
+    const decision = resolveTodayInflightAction(readInflightGenerationJob());
+    if (decision.action === 'resume-on-generating') {
+      setInflightSeries(null);
+      logger.log('[home] Resuming inflight generation job from MMKV:', decision.job.jobId);
+      // Navigate to generating screen — it will pick up the inflight job from MMKV
+      router.replace('/generating');
+      return;
     }
+    setInflightSeries(decision.action === 'watch-on-today' ? decision.job : null);
+  }, [router, isTodayFocused, generationSessionStatus, generationSessionDevotionalId]);
+  const onInflightSeriesSettled = useCallback(() => setInflightSeries(null), []);
+
+  // The series failed after the reader left for Today (the watch below
+  // settled on a failure, or the submission itself failed). The session holds
+  // the error and the series never reached the store; without a card for it
+  // Today sat on the new-user empty state and said nothing. Try again
+  // re-enters /generating, which submits a fresh job from the same answers.
+  const handleRetryInflightSeries = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.replace('/generating');
   }, [router]);
+  const handleDismissInflightSeriesFailure = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    clearGenerationSession();
+  }, [clearGenerationSession]);
 
   // Check premium status through the tri-state policy so QA premium override can
   // unlock UI without mutating RevenueCat's persisted mirror.
@@ -454,6 +475,26 @@ export default function HomeScreen() {
     enabled: isPreparingCurrentDay && isTodayFocused,
     onDay: addGeneratedDay,
   });
+
+  // The series the reader left /generating for. It is not in the store until
+  // the job finishes, so the preparing card is driven by the in-flight record
+  // and this watch lands day 1 (or the failure) exactly as /generating would
+  // have. The gate is "has that series landed", not "is there no devotional":
+  // a reader who tapped "Start study" on a finished journey still has that
+  // journey, and Today showed it — with the same "Start study" — as if the
+  // tap had done nothing. A churned account is paused, not preparing.
+  useInflightInitialArcWatch({
+    job: inflightSeries,
+    enabled: inflightSeries != null && isTodayFocused,
+    onSettled: onInflightSeriesSettled,
+  });
+  const isPreparingInflightSeries = inflightSeries != null
+    && !hasInflightSeriesLanded(inflightSeries.devotionalId, devotionals, !!currentDevotional)
+    && premiumPolicy !== 'denied';
+  const isInflightSeriesFailed = inflightSeries == null
+    && generationSessionStatus === 'error'
+    && !hasInflightSeriesLanded(generationSessionDevotionalId, devotionals, !!currentDevotional)
+    && premiumPolicy !== 'denied';
 
   const qaContextSlot = useMemo<QaContextSlotPreview | null>(() => {
     if (!isQaToolsEnabled()) return null;
@@ -1224,6 +1265,16 @@ export default function HomeScreen() {
     dayLabel: getReadingDayLabel(),
     isJourneyComplete,
     isPreparing: !hasReadToday && (isPreparingCurrentDay || (!currentDayData && !!currentDevotional && premiumPolicy !== 'denied')),
+    preparingInflightSeries: isPreparingInflightSeries
+      ? { seriesTitle: resolvePreparingFirstSeriesTitle(generationSessionTitle) }
+      : null,
+    inflightSeriesFailed: isInflightSeriesFailed
+      ? {
+          message: toFriendlyOnboardingGenerationError(generationSessionError ?? ''),
+          onTryAgain: handleRetryInflightSeries,
+          onDismiss: handleDismissInflightSeriesFailure,
+        }
+      : null,
     premiumPolicy,
     daysCompleted,
     totalDays: currentDevotional?.totalDays ?? 0,

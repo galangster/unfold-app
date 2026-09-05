@@ -537,3 +537,112 @@ describe('computeDevotionalState', () => {
     expect(state.type).toBe('empty');
   });
 });
+
+// ─── First series still in flight (Go home from /generating) ─────
+
+describe('computeDevotionalState — preparingInflightSeries', () => {
+  it('shows the preparing card for day 1 when nothing is in the store but the first series is being written', () => {
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDevotional: null,
+      currentDayData: null,
+      preparingInflightSeries: { seriesTitle: 'your devotional' },
+    });
+
+    expect(state).toEqual({
+      type: 'preparing',
+      progress: 0,
+      seriesTitle: 'your devotional',
+      dayNumber: 1,
+      onCreateNew: noop,
+    });
+  });
+
+  it('keeps the empty state when nothing is in the store and no first series is in flight', () => {
+    expect(
+      computeDevotionalState({ ...baseInput, currentDevotional: null, currentDayData: null }).type,
+    ).toBe('empty');
+    expect(
+      computeDevotionalState({
+        ...baseInput,
+        currentDevotional: null,
+        currentDayData: null,
+        preparingInflightSeries: null,
+      }).type,
+    ).toBe('empty');
+  });
+
+  // Jordan's "appeared to do nothing" on the second-series path: "Start
+  // study" on a finished journey, then "Go home — we'll keep writing". The
+  // finished journey is still the current devotional, so journey-complete
+  // would hand back the same card and the same CTA the reader just tapped.
+  it('wins over a finished journey while the next series is being written', () => {
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDevotional: makeDevotional({ currentDay: 8, days: [makeDayData({ isRead: true })] }),
+      currentDayData: null,
+      isJourneyComplete: true,
+      daysCompleted: 7,
+      preparingInflightSeries: { seriesTitle: 'Learning to Trust Again' },
+    });
+
+    expect(state).toEqual({
+      type: 'preparing',
+      progress: 0,
+      seriesTitle: 'Learning to Trust Again',
+      dayNumber: 1,
+      onCreateNew: noop,
+    });
+  });
+
+  it('wins over the paused card of a churned account when the caller still reports an in-flight series', () => {
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDayData: null,
+      premiumPolicy: 'denied',
+      preparingInflightSeries: { seriesTitle: 'your devotional' },
+    });
+
+    expect(state.type).toBe('preparing');
+  });
+});
+
+describe('computeDevotionalState — inflightSeriesFailed', () => {
+  const failed = { message: 'We couldn’t finish creating this devotional right now.', onTryAgain: noop, onDismiss: noop };
+
+  it('shows the failed card with a retry when nothing is in the store and the first series failed', () => {
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDevotional: null,
+      currentDayData: null,
+      inflightSeriesFailed: failed,
+    });
+
+    expect(state).toEqual({ type: 'first-series-failed', ...failed });
+  });
+
+  it('lets an in-flight series win over a stale failure', () => {
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDevotional: null,
+      currentDayData: null,
+      preparingInflightSeries: { seriesTitle: 'your devotional' },
+      inflightSeriesFailed: failed,
+    });
+
+    expect(state.type).toBe('preparing');
+  });
+
+  it('shows the failed card over a finished journey when the next series failed after the reader went home', () => {
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDevotional: makeDevotional({ currentDay: 8, days: [makeDayData({ isRead: true })] }),
+      currentDayData: null,
+      isJourneyComplete: true,
+      daysCompleted: 7,
+      inflightSeriesFailed: failed,
+    });
+
+    expect(state).toEqual({ type: 'first-series-failed', ...failed });
+  });
+});
