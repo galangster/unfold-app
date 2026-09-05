@@ -112,9 +112,17 @@ jest.mock('@/hooks/useAccessibility', () => ({
   }),
 }));
 
+// The tomorrow-locked composer reads the completed day's journal entry from
+// the store itself (the Today screen keys its reflect props on tomorrow's day).
+const mockStoreState: { journalEntries: JournalEntry[] } = { journalEntries: [] };
+
+jest.mock('@/lib/store', () => ({
+  useUnfoldStore: (selector: (state: typeof mockStoreState) => unknown) => selector(mockStoreState),
+}));
+
 import { DevotionalCard } from '../DevotionalCard';
 import type { DevotionalCardState } from '../compute-devotional-state';
-import type { DevotionalDay } from '@/lib/store';
+import type { DevotionalDay, JournalEntry } from '@/lib/store';
 
 // ─── Fixtures ───────────────────────────────────────────────────
 
@@ -159,6 +167,7 @@ function makeTomorrowLockedState(
 ): Extract<DevotionalCardState, { type: 'tomorrow-locked' }> {
   return {
     type: 'tomorrow-locked',
+    devotionalId: 'dev-1',
     dayData: makeDayData({ dayNumber: 4, isRead: false }),
     dayLabel: 'Tomorrow',
     seriesTitle: 'Faith Foundations',
@@ -166,9 +175,23 @@ function makeTomorrowLockedState(
     daysCompleted: 3,
     totalDays: 7,
     tomorrowTeaser: null,
+    completedDayData: null,
     onContinue: noop,
     onReflect: noop,
     onCreateNew: noop,
+    onSaveFreeWrite: noop,
+    ...overrides,
+  };
+}
+
+function makeJournalEntry(overrides: Partial<JournalEntry> = {}): JournalEntry {
+  return {
+    id: 'dev-1:1',
+    devotionalId: 'dev-1',
+    dayNumber: 1,
+    content: '',
+    createdAt: '2026-09-04T09:00:00Z',
+    updatedAt: '2026-09-04T09:00:00Z',
     ...overrides,
   };
 }
@@ -190,6 +213,10 @@ function findByLabel(tree: any, label: string) {
 // ─── Tests ──────────────────────────────────────────────────────
 
 describe('DevotionalCard composer integration', () => {
+  beforeEach(() => {
+    mockStoreState.journalEntries = [];
+  });
+
   it('renders the inline composer (not the CTA pill) when reflectionStatus is empty, prefilled with the draft', () => {
     const state = makeCompleteTodayState({ reflectionStatus: 'empty', freeWriteDraft: 'A quiet start.' });
     const tree = renderInAct(<DevotionalCard state={state} />);
@@ -252,6 +279,111 @@ describe('DevotionalCard composer integration', () => {
     });
 
     expect(onReflect).toHaveBeenCalledWith(1);
+  });
+
+  // ─── Day 1 of a multi-day series, finished today (Jordan, item 10) ────
+
+  it('renders the composer for tomorrow-locked when a day was completed today, and saves to that day', () => {
+    jest.useFakeTimers();
+    const onSaveFreeWrite = jest.fn();
+    const onReflect = jest.fn();
+    const onContinue = jest.fn();
+    const state = makeTomorrowLockedState({
+      dayData: makeDayData({ dayNumber: 2, isRead: false }),
+      daysCompleted: 1,
+      totalDays: 7,
+      completedDayData: makeDayData({ dayNumber: 1, isRead: true, readAt: '2026-09-04T08:00:00Z' }),
+      onSaveFreeWrite,
+      onReflect,
+      onContinue,
+    });
+    const tree = renderInAct(<DevotionalCard state={state} />);
+
+    const composer = tree.root.findByProps({ testID: 'home-reflect-composer' });
+    expect(composer.props.value).toBe('');
+    expect(tree.root.findAll((node: any) => node.props.testID === 'home-devotional-cta')).toHaveLength(0);
+    expect(findByLabel(tree, "Reflect on today's reading")).toHaveLength(0);
+
+    act(() => {
+      composer.props.onChangeText('Day one stayed with me.');
+    });
+    act(() => {
+      jest.advanceTimersByTime(2100);
+    });
+    expect(onSaveFreeWrite).toHaveBeenCalledWith(1, 'Day one stayed with me.');
+
+    act(() => {
+      findByLabel(tree, 'Open full reflection')[0].props.onPress();
+    });
+    expect(onReflect).toHaveBeenCalledWith(1);
+
+    act(() => {
+      findByLabel(tree, "Read today's devotional again")[0].props.onPress();
+    });
+    expect(onContinue).toHaveBeenCalledWith(1);
+
+    jest.useRealTimers();
+  });
+
+  it("prefills the tomorrow-locked composer from the completed day's journal entry, not tomorrow's", () => {
+    mockStoreState.journalEntries = [
+      makeJournalEntry({ dayNumber: 1, content: 'Written after day one.' }),
+      makeJournalEntry({ id: 'dev-1:2', dayNumber: 2, content: 'Stray entry on tomorrow.' }),
+    ];
+    const state = makeTomorrowLockedState({
+      dayData: makeDayData({ dayNumber: 2, isRead: false }),
+      daysCompleted: 1,
+      completedDayData: makeDayData({ dayNumber: 1, isRead: true, readAt: '2026-09-04T08:00:00Z' }),
+    });
+    const tree = renderInAct(<DevotionalCard state={state} />);
+
+    const composer = tree.root.findByProps({ testID: 'home-reflect-composer' });
+    expect(composer.props.value).toBe('Written after day one.');
+    expect(findByLabel(tree, 'Finish your reflection').length).toBeGreaterThan(0);
+  });
+
+  it("hides the tomorrow-locked composer once the completed day's reflection is complete", () => {
+    mockStoreState.journalEntries = [
+      makeJournalEntry({
+        dayNumber: 1,
+        content: 'Done.',
+        questionResponses: [
+          { question: 'Q1', response: 'A1' },
+          { question: 'Q2', response: 'A2' },
+        ],
+      }),
+    ];
+    const onReflect = jest.fn();
+    const state = makeTomorrowLockedState({
+      dayData: makeDayData({ dayNumber: 2, isRead: false }),
+      daysCompleted: 1,
+      completedDayData: makeDayData({
+        dayNumber: 1,
+        isRead: true,
+        readAt: '2026-09-04T08:00:00Z',
+        reflectionQuestions: ['Q1', 'Q2'],
+      }),
+      onReflect,
+    });
+    const tree = renderInAct(<DevotionalCard state={state} />);
+
+    expect(tree.root.findAll((node: any) => node.props.testID === 'home-reflect-composer')).toHaveLength(0);
+    expect(tree.root.findByProps({ testID: 'home-devotional-cta' })).toBeTruthy();
+    const reflectLinks = findByLabel(tree, "Reflect on today's reading");
+    expect(reflectLinks.length).toBeGreaterThan(0);
+    act(() => {
+      reflectLinks[0].props.onPress();
+    });
+    expect(onReflect).toHaveBeenCalledWith(1);
+  });
+
+  it('keeps the CTA pill and reflect link when tomorrow-locked carries no completed day', () => {
+    const state = makeTomorrowLockedState({ completedDayData: null, daysCompleted: 3 });
+    const tree = renderInAct(<DevotionalCard state={state} />);
+
+    expect(tree.root.findAll((node: any) => node.props.testID === 'home-reflect-composer')).toHaveLength(0);
+    expect(tree.root.findByProps({ testID: 'home-devotional-cta' })).toBeTruthy();
+    expect(findByLabel(tree, "Reflect on today's reading").length).toBeGreaterThan(0);
   });
 
   it('autosaves the typed draft after the debounce/maxWait window elapses', () => {
