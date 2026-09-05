@@ -151,6 +151,33 @@ describe('RevenueCat entitlement refresh after store actions', () => {
       return purchasesMock.addCustomerInfoUpdateListener.mock.calls[0][0] as (info: unknown) => void;
     };
 
+    /**
+     * Model the SDK cache the poll has to defeat. Native getCustomerInfo uses
+     * the cachedOrFetched policy and treats the foreground cache as fresh for
+     * five minutes, so it vends the last fetched info until
+     * invalidateCustomerInfoCache clears it. A poll that reads without
+     * clearing can never observe a grant that landed after the last fetch.
+     */
+    const modelSdkCache = (
+      purchasesMock: { invalidateCustomerInfoCache: jest.Mock; getCustomerInfo: jest.Mock },
+      initialServerInfo: unknown,
+    ) => {
+      let serverInfo = initialServerInfo;
+      let cache: unknown = null;
+      purchasesMock.invalidateCustomerInfoCache.mockImplementation(async () => {
+        cache = null;
+      });
+      purchasesMock.getCustomerInfo.mockImplementation(async () => {
+        if (cache === null) cache = serverInfo;
+        return cache;
+      });
+      return {
+        grant: (info: unknown) => {
+          serverInfo = info;
+        },
+      };
+    };
+
     it('returns the entitled customer info delivered by the update listener after the quick refresh gave up', async () => {
       const { client, purchasesMock } = await setup({ refreshedCustomerInfo: emptyCustomerInfo });
 
@@ -162,25 +189,45 @@ describe('RevenueCat entitlement refresh after store actions', () => {
       // 4.25 s after the purchase resolved: one 2 s poll has run and found nothing.
       await jest.advanceTimersByTimeAsync(2_000);
       expect(purchasesMock.getCustomerInfo).toHaveBeenCalledTimes(4);
+      // The quick refresh cleared the cache once; the poll cleared it again.
+      expect(purchasesMock.invalidateCustomerInfoCache).toHaveBeenCalledTimes(2);
       listener(activeCustomerInfo);
 
       await expect(pending).resolves.toEqual({ ok: true, data: activeCustomerInfo });
       expect(purchasesMock.removeCustomerInfoUpdateListener).toHaveBeenCalledWith(listener);
     });
 
-    it('returns the entitled customer info found by the 2 s poll', async () => {
-      const { client, purchasesMock } = await setup({ refreshedCustomerInfo: emptyCustomerInfo });
-      purchasesMock.getCustomerInfo
-        .mockResolvedValueOnce(emptyCustomerInfo)
-        .mockResolvedValueOnce(emptyCustomerInfo)
-        .mockResolvedValueOnce(emptyCustomerInfo)
-        .mockResolvedValue(activeCustomerInfo);
+    it('returns the entitled customer info found by the 2 s poll, which clears the SDK cache before it reads', async () => {
+      const { client, purchasesMock } = await setup();
+      const sdk = modelSdkCache(purchasesMock, emptyCustomerInfo);
 
       const pending = client.purchasePackage({ identifier: '$rc_annual' } as any);
-      await jest.advanceTimersByTimeAsync(QUICK_REFRESH_WINDOW_MS + 2_000);
+      await jest.advanceTimersByTimeAsync(QUICK_REFRESH_WINDOW_MS);
+      // The grant lands after the quick refresh cached an unentitled read.
+      sdk.grant(activeCustomerInfo);
+      await jest.advanceTimersByTimeAsync(2_000);
 
       await expect(pending).resolves.toEqual({ ok: true, data: activeCustomerInfo });
+      // One clear for the quick refresh, one for the poll that found the grant.
+      expect(purchasesMock.invalidateCustomerInfoCache).toHaveBeenCalledTimes(2);
+      expect(purchasesMock.getCustomerInfo).toHaveBeenCalledTimes(4);
       expect(purchasesMock.removeCustomerInfoUpdateListener).toHaveBeenCalledTimes(1);
+    });
+
+    it('clears the SDK cache on every poll, not only on the first one', async () => {
+      const { client, purchasesMock } = await setup();
+      const sdk = modelSdkCache(purchasesMock, emptyCustomerInfo);
+
+      const pending = client.purchasePackage({ identifier: '$rc_annual' } as any);
+      // Quick refresh plus the first poll, which fetched and found nothing.
+      await jest.advanceTimersByTimeAsync(QUICK_REFRESH_WINDOW_MS + 2_000);
+      expect(purchasesMock.invalidateCustomerInfoCache).toHaveBeenCalledTimes(2);
+      sdk.grant(activeCustomerInfo);
+      await jest.advanceTimersByTimeAsync(2_000);
+
+      await expect(pending).resolves.toEqual({ ok: true, data: activeCustomerInfo });
+      expect(purchasesMock.invalidateCustomerInfoCache).toHaveBeenCalledTimes(3);
+      expect(purchasesMock.getCustomerInfo).toHaveBeenCalledTimes(5);
     });
 
     it('recovers a purchase that outlived the client timeout when the listener delivers the entitlement', async () => {
@@ -226,6 +273,7 @@ describe('RevenueCat entitlement refresh after store actions', () => {
       );
       const listener = capturedListener(purchasesMock);
       await jest.advanceTimersByTimeAsync(2_000);
+      expect(purchasesMock.invalidateCustomerInfoCache).toHaveBeenCalledTimes(1);
       expect(purchasesMock.getCustomerInfo).toHaveBeenCalledTimes(1);
 
       controller.abort();

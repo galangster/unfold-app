@@ -190,6 +190,13 @@ export const waitForUnfoldPremiumEntitlement = (
     async function poll(): Promise<void> {
       if (settled) return;
       try {
+        // The SDK vends its cache for five minutes after a fetch (production
+        // and sandbox alike), and the quick refresh before this wait just
+        // wrote an unentitled read into it. A plain getCustomerInfo would
+        // re-read that same info every poll and never see the grant, and the
+        // update listener only fires on a cache write. Clear it every poll.
+        await Purchases.invalidateCustomerInfoCache();
+        if (settled) return;
         const customerInfo = await Purchases.getCustomerInfo();
         if (hasUnfoldPremiumEntitlement(customerInfo)) {
           finish(customerInfo);

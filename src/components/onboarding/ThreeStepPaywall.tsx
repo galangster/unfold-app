@@ -926,11 +926,18 @@ function GlowingCTA({
   colors,
   onPress,
   isLoading,
+  disabled = false,
 }: {
   label: string;
   colors: ColorTheme;
   onPress: () => void;
   isLoading: boolean;
+  /**
+   * Inert and dimmed, with no spinner of its own. Set while a completed
+   * purchase waits on its Premium grant: the pending block above the button
+   * already carries the spinner, and a second purchase would abort that wait.
+   */
+  disabled?: boolean;
 }) {
   // Seamless breathing halo — uses a linear phase counter (0 → 1 → 0 → 1...)
   // mapped through a sine wave so the shadowOpacity rises and falls
@@ -962,13 +969,14 @@ function GlowingCTA({
   });
 
   return (
-    <TouchableOpacity activeOpacity={0.7} onPress={onPress} disabled={isLoading}>
+    <TouchableOpacity activeOpacity={0.7} onPress={onPress} disabled={isLoading || disabled}>
       <Animated.View
         style={[
           styles.ctaButton,
           styles.ctaShadow,
           { backgroundColor: colors.accent, shadowColor: colors.accent },
           shadowStyle,
+          disabled && styles.ctaButtonInert,
         ]}
       >
         {isLoading ? (
@@ -1116,6 +1124,10 @@ function BottomCTA({
         colors={colors}
         onPress={onPress}
         isLoading={isLoading}
+        // The person has paid and the grant is on its way. The most prominent
+        // control on the screen must not invite a second purchase that would
+        // abort the wait; Restore purchases stays live as the fallback.
+        disabled={entitlementPendingMessage !== null}
       />
 
       {/* Renewal disclosure -- reflects selected plan; hidden until offerings
@@ -1356,6 +1368,8 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
       setPurchaseError(null);
       // A fresh attempt owns the wait from here; purchasePackage listens for
       // the grant itself, and a stale UI deadline must not fire underneath it.
+      // handleCTAPress keeps the CTA inert while a grant is pending, so in
+      // practice this only clears an already-null state.
       setEntitlementPendingMessage(null);
       const result = await purchasePackage(pkg);
 
@@ -1445,8 +1459,16 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
       return;
     }
 
+    // A completed purchase is waiting on its grant. Buying again would abort
+    // that wait and re-open the store sheet for a product the person already
+    // owns, which is the Restore-only dead end Jordan hit. The button is also
+    // disabled; this guard covers any press that reaches the handler anyway.
+    if (entitlementPendingMessage !== null) {
+      return;
+    }
+
     handlePurchase();
-  }, [currentPage, totalPages, stableHasFreeTrial, nextPage, handlePurchase]);
+  }, [currentPage, totalPages, stableHasFreeTrial, nextPage, handlePurchase, entitlementPendingMessage]);
 
   // -----------------------------------------------------------------------
   // Render
@@ -1868,6 +1890,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
+  },
+  // Disabled without a spinner: the pending block above already shows one.
+  ctaButtonInert: {
+    opacity: 0.5,
   },
   // iOS native shadow produces a true GPU-blurred colored halo that
   // actually feathers at the edges. Combined with the sin-wave animated

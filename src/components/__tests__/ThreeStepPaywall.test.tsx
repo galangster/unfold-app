@@ -227,11 +227,18 @@ function findByLabel(tree: any, label: string) {
 }
 
 // The primary CTA is the only pressable in the file with activeOpacity 0.7.
-function pressPrimaryCTA(tree: any) {
+function primaryCTA(tree: any) {
   const cta = tree.root.findAll(
     (n: any) => n.props?.activeOpacity === 0.7 && typeof n.props?.onPress === 'function',
   )[0];
   if (!cta) throw new Error('primary CTA not found');
+  return cta;
+}
+
+// Presses through onPress directly, so a `disabled` prop is not honoured
+// here; a test that needs the control inert asserts the prop and the handler.
+function pressPrimaryCTA(tree: any) {
+  const cta = primaryCTA(tree);
   return act(async () => {
     cta.props.onPress();
   });
@@ -268,7 +275,8 @@ function deferredEntitlementWait() {
     resolve: (value: unknown) => act(async () => {
       resolve(value);
     }),
-    signal: (): AbortSignal => mockWaitForUnfoldPremiumEntitlement.mock.calls[0][1].signal,
+    signal: (callIndex = 0): AbortSignal =>
+      mockWaitForUnfoldPremiumEntitlement.mock.calls[callIndex][1].signal,
   };
 }
 
@@ -427,28 +435,55 @@ describe('ThreeStepPaywall purchase advances exactly once', () => {
     expect(props.onPurchaseSuccess).not.toHaveBeenCalled();
   });
 
-  it('aborts the previous wait when a new purchase attempt starts', async () => {
-    mockPurchasePackage.mockResolvedValueOnce({ ok: true, data: unentitledCustomerInfo });
+  it('keeps the primary CTA inert while the grant is pending, so a second tap cannot abort the wait', async () => {
+    mockPurchasePackage.mockResolvedValue({ ok: true, data: unentitledCustomerInfo });
     const wait = deferredEntitlementWait();
+    const { tree, props } = await renderOnFinalPage();
+
+    await pressPrimaryCTA(tree);
+    expect(mockPurchasePackage).toHaveBeenCalledTimes(1);
+    expect(primaryCTA(tree).props.disabled).toBe(true);
+
+    // Jordan's dead end: a second purchase aborted the wait and dropped its
+    // listener, re-opened the store sheet for a product the person already
+    // owned, and left Restore purchases as the only exit.
+    await pressPrimaryCTA(tree);
+
+    expect(mockPurchasePackage).toHaveBeenCalledTimes(1);
+    expect(wait.signal().aborted).toBe(false);
+    expect(findText(tree, PAYWALL_ENTITLEMENT_PENDING_CUE).length).toBeGreaterThan(0);
+    expect(findText(tree, PAYWALL_GENERIC_ERROR_MESSAGE)).toHaveLength(0);
+    expect(notificationHaptics()).toEqual([]);
+
+    // The one wait still owns the exit.
+    await wait.resolve(entitledCustomerInfo);
+    expect(props.onPurchaseSuccess).toHaveBeenCalledTimes(1);
+  });
+
+  it('re-enables the primary CTA after the wait gives up, and a new attempt gets its own wait', async () => {
+    mockPurchasePackage.mockResolvedValue({ ok: true, data: unentitledCustomerInfo });
+    const firstWait = deferredEntitlementWait();
     const { tree } = await renderOnFinalPage();
 
     await pressPrimaryCTA(tree);
-    const firstSignal = wait.signal();
-    expect(firstSignal.aborted).toBe(false);
+    await firstWait.resolve(null);
+    expect(primaryCTA(tree).props.disabled).toBe(false);
+    expect(textColor(tree, PAYWALL_ENTITLEMENT_PENDING_MESSAGE)).toBe(colors.error);
 
-    // While the second attempt is still in flight the stale UI deadline is
-    // already gone: purchasePackage listens for the grant itself.
-    let resolveSecond!: (value: unknown) => void;
-    mockPurchasePackage.mockReturnValueOnce(new Promise((r) => { resolveSecond = r; }));
+    const secondWait = deferredEntitlementWait();
     await pressPrimaryCTA(tree);
-    expect(firstSignal.aborted).toBe(true);
-    expect(findText(tree, PAYWALL_ENTITLEMENT_PENDING_CUE)).toHaveLength(0);
 
-    await act(async () => {
-      resolveSecond({ ok: true, data: unentitledCustomerInfo });
-    });
+    expect(mockPurchasePackage).toHaveBeenCalledTimes(2);
     expect(mockWaitForUnfoldPremiumEntitlement).toHaveBeenCalledTimes(2);
-    expect(mockWaitForUnfoldPremiumEntitlement.mock.calls[1][1].signal.aborted).toBe(false);
+    // The given-up wait released its signal when pending cleared; the fresh
+    // attempt listens on its own, live signal.
+    expect(firstWait.signal(0).aborted).toBe(true);
+    expect(secondWait.signal(1).aborted).toBe(false);
+    // Back in the neutral pending state: the Restore guidance has left the
+    // error slot and the CTA is inert again.
+    expect(findText(tree, PAYWALL_ENTITLEMENT_PENDING_CUE).length).toBeGreaterThan(0);
+    expect(textColor(tree, PAYWALL_ENTITLEMENT_PENDING_MESSAGE)).toBe(colors.textMuted);
+    expect(primaryCTA(tree).props.disabled).toBe(true);
   });
 
   it('does not advance or wait on a plain SDK error', async () => {
