@@ -216,6 +216,25 @@ describe('iOS native-first Sentry init (regression: launch crash with no JS bund
     expect(sentryOptions.indexOf('dropNativeSentryUser(event)')).toBeGreaterThan(filtersAt);
   });
 
+  it('clears native device_app_hash and the app.device tag after the duplicate filters', () => {
+    const dropUser = functionBody(appDelegate, 'dropNativeSentryUser');
+    expect(dropUser).toContain('event.user = nil');
+    expect(dropUser).toContain('removeValue(forKey: "device_app_hash")');
+    expect(dropUser).toContain('removeValue(forKey: "app.device")');
+    expect(dropUser).toContain('context["app"]');
+    expect(dropUser).toContain('event.tags');
+    expect(sentryOptions).toContain('dropNativeSentryUser(event)');
+    const filtersAt = Math.max(
+      sentryOptions.indexOf('Unhandled JS Exception'),
+      sentryOptions.indexOf('ExceptionsManager.reportException'),
+    );
+    expect(sentryOptions.indexOf('dropNativeSentryUser(event)')).toBeGreaterThan(filtersAt);
+    expect(dropUser).not.toMatch(/event\.context\s*=\s*nil/);
+    expect(dropUser).not.toMatch(/removeValue\(forKey: "app"\)/);
+    expect(dropUser).not.toMatch(/removeValue\(forKey: "app_id"\)/);
+    expectOptionSetOnce('enableAutoSessionTracking', 'true');
+  });
+
   it('strips native frame package paths and masks debug-path UUIDs', () => {
     // Static pins only. This file does not compile native code.
     expect(appDelegate).toContain('private func stripNativeSentryFramePackages(_ stacktrace: SentryStacktrace?)');

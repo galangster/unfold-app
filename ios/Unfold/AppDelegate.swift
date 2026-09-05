@@ -69,6 +69,15 @@ private let nativeSentryPathUUID = try! NSRegularExpression(
 
 private func dropNativeSentryUser(_ event: Event) {
   event.user = nil
+  if var context = event.context, var app = context["app"] {
+    app.removeValue(forKey: "device_app_hash")
+    context["app"] = app
+    event.context = context
+  }
+  if var tags = event.tags {
+    tags.removeValue(forKey: "app.device")
+    event.tags = tags
+  }
 }
 
 private func maskNativeSentryPathUUIDs(_ value: String?) -> String? {
@@ -186,10 +195,10 @@ extension AppDelegate {
       // installed here, or every fatal JS error is filed twice: once scrubbed
       // from JavaScript, and once natively as an RCTFatalException whose type
       // is the raw error message and which no scrubber ever sees. Native
-      // events never reach the JavaScript beforeSend, so user and on-disk
-      // frame package paths are cleared here after those filters. Container
-      // UUIDs in retained debug paths are masked. Symbolication IDs and
-      // addresses stay. No callback into JavaScript.
+      // events never reach the JavaScript beforeSend, so user, device/app
+      // hash, and on-disk frame package paths are cleared here after those
+      // filters. Container UUIDs in retained debug paths are masked.
+      // Symbolication IDs and addresses stay. No callback into JavaScript.
       options.beforeSend = { event in
         if let type = event.exceptions?.first?.type, type.contains("Unhandled JS Exception") {
           return nil
