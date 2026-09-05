@@ -451,3 +451,67 @@ describe('MD-2 sync acknowledgements', () => {
     expect(peekSyncOutbox()).toHaveLength(0);
   });
 });
+
+describe('MD-4 exact snapshot acknowledgements', () => {
+  const ts = '2026-06-01T00:00:00.000Z';
+
+  async function drainAccepting(submitted: SyncPushChange, midFlight?: SyncPushChange) {
+    global.fetch = jest.fn().mockImplementation(async () => {
+      if (midFlight) enqueueSyncChanges([midFlight]);
+      return {
+        ok: true,
+        json: async () => ({ results: [acceptedResult(submitted)] }),
+      };
+    }) as unknown as typeof fetch;
+    await drainSyncOutbox();
+  }
+
+  it('retains equal-timestamp content that changed while the push was in flight', async () => {
+    const submitted = makeChange('note-1', 'notes', ts);
+    const replacement = { ...submitted, data: { schemaVersion: 1, value: 'edited-same-ms' } };
+    enqueueSyncChanges([submitted]);
+
+    await drainAccepting(submitted, replacement);
+
+    expect(peekSyncOutbox()).toEqual([expect.objectContaining({ id: 'note-1', data: replacement.data })]);
+  });
+
+  it('retains an equal-timestamp deletion-flag change that arrived during flight', async () => {
+    const submitted = makeChange('note-1', 'notes', ts);
+    const replacement = { ...submitted, deleted: true };
+    enqueueSyncChanges([submitted]);
+
+    await drainAccepting(submitted, replacement);
+
+    expect(peekSyncOutbox()).toEqual([expect.objectContaining({ id: 'note-1', deleted: true })]);
+  });
+
+  it('retains an equal-timestamp replacement after a valid canonical remap', async () => {
+    const submitted = makeChange('client-position-b', 'bible_reading_positions', ts);
+    const replacement = { ...submitted, data: { schemaVersion: 1, value: 'replaced-same-ms' } };
+    enqueueSyncChanges([submitted]);
+
+    global.fetch = jest.fn().mockImplementation(async () => {
+      enqueueSyncChanges([replacement]);
+      return {
+        ok: true,
+        json: async () => ({ results: [acceptedResult(submitted, { id: 'server-position-a' })] }),
+      };
+    }) as unknown as typeof fetch;
+
+    await drainSyncOutbox();
+
+    expect(peekSyncOutbox()).toEqual([
+      expect.objectContaining({ id: 'client-position-b', data: replacement.data }),
+    ]);
+  });
+
+  it('clears an unchanged submitted snapshot', async () => {
+    const submitted = makeChange('note-1', 'notes', ts);
+    enqueueSyncChanges([submitted]);
+
+    await drainAccepting(submitted);
+
+    expect(peekSyncOutbox()).toHaveLength(0);
+  });
+});

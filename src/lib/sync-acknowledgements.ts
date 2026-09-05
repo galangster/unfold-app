@@ -57,6 +57,14 @@ function validateResult(raw: Record<string, unknown>): SyncPushResult | null {
   return result;
 }
 
+export function syncSnapshotsEqual(left: SyncPushChange, right: SyncPushChange): boolean {
+  return left.table === right.table
+    && left.id === right.id
+    && left.clientUpdatedAt === right.clientUpdatedAt
+    && left.deleted === right.deleted
+    && JSON.stringify(left.data) === JSON.stringify(right.data);
+}
+
 export function isValidConflictResult(result: SyncPushResult): boolean {
   return result.status === 'conflict' && isRecord(result.serverData);
 }

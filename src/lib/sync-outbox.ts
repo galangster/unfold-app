@@ -14,9 +14,9 @@
  *  - Cap: 200 entries; oldest dropped when exceeded.
  *  - Never throws: drain resolves (not rejects) on network failure.
  *  - Only accepted results and conflicts with object serverData clear a
- *    submitted entry when the current timestamp is not newer. Rejected
- *    results, especially internal error, stay queued. A valid conflict is
- *    applied locally after the outbox settles.
+ *    submitted entry when the current snapshot equals the sent snapshot.
+ *    Rejected results, especially internal error, stay queued. A valid
+ *    conflict is applied locally after the outbox settles.
  */
 
 import { mmkvStorage, getDeviceId } from '@/lib/mmkv-storage';
@@ -26,6 +26,7 @@ import { buildSyncPushBody } from '@/lib/sync-push-body';
 import {
   isValidConflictResult,
   resolvingAcknowledgementPairs,
+  syncSnapshotsEqual,
 } from '@/lib/sync-acknowledgements';
 import type { SyncPushChange, SyncPushResult, SyncTable } from '@/lib/sync-types';
 // RS13-1: single owner — the key is defined in mmkv-recovery-outbox.ts (pure, no native deps)
@@ -247,7 +248,7 @@ export function drainSyncOutbox(): Promise<void> {
       const current = readOutbox();
       const remaining = current.filter((entry) => {
         const pair = resolvingByKey.get(`${entry.table}:${entry.id}`);
-        return !pair || entry.clientUpdatedAt > pair.change.clientUpdatedAt;
+        return !pair || !syncSnapshotsEqual(entry, pair.change);
       });
       writeOutbox(remaining);
       lastDrainCompletedAt = Date.now();

@@ -1,6 +1,7 @@
 import {
   correlateSyncAcknowledgements,
   resolvingAcknowledgementPairs,
+  syncSnapshotsEqual,
 } from '../sync-acknowledgements';
 import type { SyncPushChange } from '../sync-types';
 
@@ -191,5 +192,12 @@ describe('sync acknowledgement correlation', () => {
 
   it('retains a conflict without an object row', () => {
     expect(resolvedIds([change('a')], [result('a', { status: 'conflict', serverData: [] })])).toEqual([]);
+  });
+
+  it('treats snapshots as equal only when table, id, timestamp, deleted, and data match', () => {
+    const base = change('a');
+    expect(syncSnapshotsEqual(base, { ...base })).toBe(true);
+    expect(syncSnapshotsEqual(base, { ...base, data: { schemaVersion: 1, value: 'other' } })).toBe(false);
+    expect(syncSnapshotsEqual(base, { ...base, deleted: true })).toBe(false);
   });
 });

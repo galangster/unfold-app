@@ -266,4 +266,42 @@ describe('push conflict → server version', () => {
       translation: 'BSB',
     }));
   });
+
+  it('does not apply a remapped conflict when equal-timestamp requested-id work remains', async () => {
+    const requestedId = 'client-position-b';
+    const submitted = {
+      table: 'bible_reading_positions' as const,
+      id: requestedId,
+      clientUpdatedAt: at(0),
+      deleted: false,
+      data: { schemaVersion: 1, bookId: 43, chapter: 1 },
+    };
+    const replacement = {
+      ...submitted,
+      data: { schemaVersion: 1, bookId: 43, chapter: 5 },
+    };
+    enqueueSyncChanges([submitted]);
+    mockPushResponse(() => {
+      enqueueSyncChanges([replacement]);
+      const serverData = serverBiblePositionRow('server-position-a', at(30_000));
+      return [{
+        table: 'bible_reading_positions',
+        requestedId,
+        id: serverData.id,
+        status: 'conflict',
+        serverUpdatedAt: serverData.updatedAt,
+        serverData,
+      }];
+    });
+
+    const applyConflicts = jest.spyOn(fullSyncPull, 'applyServerConflictRecords');
+    await drainSyncOutbox();
+
+    expect(applyConflicts).not.toHaveBeenCalled();
+    expect(peekSyncOutbox()).toEqual([
+      expect.objectContaining({ id: requestedId, data: replacement.data }),
+    ]);
+    expect(useUnfoldStore.getState().bibleReadingHistory.some((item) => item.id === 'server-position-a')).toBe(false);
+    applyConflicts.mockRestore();
+  });
 });
