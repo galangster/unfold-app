@@ -1,6 +1,6 @@
 /**
  * How the generating screen enters: resume an inflight job from a previous
- * session, land on the job the server's failure push named, or submit fresh.
+ * session, poll the job the server's failure push named, or submit fresh.
  * The screen owns the side effects; this module owns the decision.
  */
 
@@ -22,7 +22,7 @@ export type GeneratingRouteParams = {
 
 export type GeneratingEntry =
   | { kind: 'resume'; inflight: InflightGenerationRecord }
-  | { kind: 'failed-from-push'; jobId: string; devotionalId: string | null }
+  | { kind: 'poll-from-push'; jobId: string; devotionalId: string | null }
   | { kind: 'submit' };
 
 /**
@@ -58,9 +58,11 @@ function readParam(value: string | string[] | undefined): string | null {
 /**
  * A fresh inflight record always wins: polling it reaches the same failed
  * status the push announced, with the server's own error text. Without one
- * (every terminal exit clears it), a push that named a job lands the reader
- * in the failed state so Try again retries that job by id instead of
- * submitting a duplicate. With neither, submit fresh.
+ * (every terminal exit clears it), a push that named a job has the screen
+ * poll that job by id instead of submitting a duplicate. The push is never
+ * the verdict: iOS keeps it in Notification Center after a retry or a fresh
+ * start already resolved the job, so the server's status decides what the
+ * reader lands on. With neither, submit fresh.
  */
 export function resolveGeneratingEntry({
   inflightRaw,
@@ -76,7 +78,7 @@ export function resolveGeneratingEntry({
 
   const jobId = readParam(params?.jobId);
   if (jobId) {
-    return { kind: 'failed-from-push', jobId, devotionalId: readParam(params?.devotionalId) };
+    return { kind: 'poll-from-push', jobId, devotionalId: readParam(params?.devotionalId) };
   }
 
   return { kind: 'submit' };

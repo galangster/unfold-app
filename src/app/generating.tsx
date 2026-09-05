@@ -55,8 +55,6 @@ const MAX_POLL_DURATION_MS = 10 * 60 * 1000;
 // Terminal-error copy for a completed-but-unopenable / unrecognized job.
 const INVALID_RESULT_MESSAGE = 'Your devotional finished, but we couldn’t open it. Please try again.';
 const UNKNOWN_STATUS_MESSAGE = 'We hit an unexpected problem finishing your devotional. Please try again.';
-// Shown when the reader arrives from the server's "We hit a snag" push.
-const PUSH_FAILURE_MESSAGE = 'We couldn\u2019t finish your devotional. Please try again.';
 // Grace period to wait for the persisted user to hydrate before erroring out
 // instead of sitting on an infinite spinner.
 const NO_USER_GRACE_MS = 5000;
@@ -231,8 +229,12 @@ export default function GeneratingScreen() {
 
       if (enabled) {
         // "Feel free to step away — we'll notify you" must be backed by a
-        // token the server holds; the session dedupe makes this free.
-        void registerPushToken();
+        // token the server holds, so the note waits for the registration and
+        // a failed one says so instead of promising. The session dedupe makes
+        // the common case free.
+        setNotifyOutcome('pending');
+        const registration = await registerPushToken();
+        setNotifyOutcome(registration === 'failed' ? 'registration_failed' : null);
       } else {
         notificationPromptTimerRef.current = setTimeout(() => {
           setShowNotificationPrompt(true);
@@ -350,6 +352,10 @@ export default function GeneratingScreen() {
     const granted = await requestNotificationPermissions();
     setNotificationPermission(granted ? 'granted' : 'denied');
     setShowNotificationPrompt(false);
+    // Nothing promises a nudge until the token reaches the server. The
+    // registration can stall for tens of seconds on a bad network, and a
+    // reader told to step away during it would never get the push.
+    if (granted) setNotifyOutcome('pending');
     const registration = granted ? await registerPushToken() : null;
     setNotifyOutcome(resolveNotifyRequestOutcome({ granted, registration }));
   };
@@ -360,13 +366,15 @@ export default function GeneratingScreen() {
   };
 
   // Back from Settings: pick up a permission the reader just switched on.
+  // Back from anywhere after a failed registration: try the token once more.
   useEffect(() => {
-    if (notifyOutcome !== 'denied') return;
+    if (notifyOutcome !== 'denied' && notifyOutcome !== 'registration_failed') return;
     const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
       if (nextAppState !== 'active') return;
       void (async () => {
         if (!(await areNotificationsEnabled())) return;
         setNotificationPermission('granted');
+        setNotifyOutcome('pending');
         const registration = await registerPushToken();
         setNotifyOutcome(resolveNotifyRequestOutcome({ granted: true, registration }));
       })();
@@ -622,21 +630,23 @@ export default function GeneratingScreen() {
     // Expired or malformed record — clear it before anything else.
     mmkvStorage.removeItem(INFLIGHT_KEY);
 
-    if (entry.kind === 'failed-from-push') {
-      // The push says the job died and every terminal exit clears the inflight
-      // record, so there is nothing to poll. Land in the failed state and let
-      // Try again retry that job by id instead of submitting a duplicate.
-      logger.log('[generating] Landing on failed job from push:', entry.jobId);
+    if (entry.kind === 'poll-from-push') {
+      // The push named a job and every terminal exit clears the inflight
+      // record, so poll that job by id instead of submitting a duplicate. The
+      // push is not the verdict: iOS keeps it in Notification Center after a
+      // retry or a fresh start already resolved the job, so the server's
+      // status decides. A failed job lands with the server's error text and
+      // retry budget, a complete one opens the devotional, a re-queued one
+      // keeps waiting. Asserting failure here made Try again 409-loop on a
+      // complete job and resurrect a superseded one.
+      logger.log('[generating] Polling the job a failure push named:', entry.jobId);
       void logBugEvent('generation', 'generation-failed-push-landing', { jobId: entry.jobId });
       if (entry.devotionalId) {
         startGenerationSession({ devotionalId: entry.devotionalId, totalDays: user.devotionalLength });
       }
       setPendingJobId(entry.jobId);
-      failGenerationSession(PUSH_FAILURE_MESSAGE);
-      setIsGenerating(false);
-      setIsReconnecting(false);
-      setError(PUSH_FAILURE_MESSAGE);
-      setCanRetry(true);
+      pollStartTime.current = Date.now();
+      startPolling(entry.jobId);
       return;
     }
 
@@ -1207,6 +1217,28 @@ export default function GeneratingScreen() {
                     I'll wait
                   </Text>
                 </TouchableOpacity>
+              </View>
+            </Animated.View>
+          )}
+
+          {/* Token registration in flight -- nothing promises a nudge yet. The
+              entrance delay hides the state when the session dedupe resolves it
+              within a frame. */}
+          {notifyControl === 'pending' && (
+            <Animated.View
+              entering={entering(FadeIn.duration(400).delay(300))}
+              style={{ marginTop: Spacing['10'], width: '100%', alignItems: 'center' }}
+            >
+              <View
+                style={[
+                  genStyles.notifyNote,
+                  { alignItems: 'center', backgroundColor: colors.inputBackground, borderColor: colors.border },
+                ]}
+              >
+                <ActivityIndicator size="small" color={colors.textSubtle} />
+                <Text style={[genStyles.notifyNoteText, { color: colors.textMuted }]}>
+                  {'Setting up your nudge\u2026'}
+                </Text>
               </View>
             </Animated.View>
           )}

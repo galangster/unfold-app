@@ -58,6 +58,24 @@ describe('getNotifyControlState', () => {
     ).toBe('confirmed');
   });
 
+  it('never confirms on the permission alone while the token registration is still in flight', () => {
+    // "Feel free to step away" during a stalled registration is the window
+    // Jordan fell through: the POST then fails and no push ever comes.
+    expect(
+      getNotifyControlState({ ...base, permission: 'granted', hasAskedPermission: true, outcome: 'pending' }),
+    ).toBe('pending');
+    expect(
+      getNotifyControlState({ ...base, permission: 'granted', hasAskedPermission: true, outcome: null }),
+    ).not.toBe('confirmed');
+  });
+
+  it('holds the gentle note back while the mount-time registration is pending', () => {
+    expect(getNotifyControlState({ ...base, permission: 'granted', outcome: 'pending' })).toBe('pending');
+    expect(getNotifyControlState({ ...base, permission: 'granted', outcome: 'registration_failed' })).toBe(
+      'registration-failed',
+    );
+  });
+
   it('shows the gentle note when notifications were already on', () => {
     expect(getNotifyControlState({ ...base, permission: 'granted' })).toBe('granted-note');
   });

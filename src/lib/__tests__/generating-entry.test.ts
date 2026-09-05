@@ -44,35 +44,44 @@ describe('resolveGeneratingEntry', () => {
     });
   });
 
-  it('lands on the failed job from the push when the inflight record is gone', () => {
+  it('polls the job the push named when the inflight record is gone', () => {
     expect(resolveGeneratingEntry({ inflightRaw: null, params: pushParams, nowMs: NOW })).toEqual({
-      kind: 'failed-from-push',
+      kind: 'poll-from-push',
       jobId: 'job-failed',
       devotionalId: 'dev-failed',
     });
   });
 
-  it('lands on the failed job when the inflight record expired or is malformed', () => {
+  it('polls the named job when the inflight record expired or is malformed', () => {
     const stale = JSON.stringify({ jobId: 'job-old', submittedAt: NOW - INFLIGHT_MAX_AGE_MS - 1 });
     expect(resolveGeneratingEntry({ inflightRaw: stale, params: pushParams, nowMs: NOW })).toMatchObject({
-      kind: 'failed-from-push',
+      kind: 'poll-from-push',
       jobId: 'job-failed',
     });
     expect(resolveGeneratingEntry({ inflightRaw: '{oops', params: pushParams, nowMs: NOW })).toMatchObject({
-      kind: 'failed-from-push',
+      kind: 'poll-from-push',
       jobId: 'job-failed',
     });
   });
 
   it('carries a null devotionalId when the push had none, and unwraps array params', () => {
     expect(resolveGeneratingEntry({ inflightRaw: null, params: { jobId: 'job-failed' }, nowMs: NOW })).toEqual({
-      kind: 'failed-from-push',
+      kind: 'poll-from-push',
       jobId: 'job-failed',
       devotionalId: null,
     });
     expect(
       resolveGeneratingEntry({ inflightRaw: null, params: { jobId: ['job-a', 'job-b'], devotionalId: ['dev-a'] }, nowMs: NOW }),
-    ).toEqual({ kind: 'failed-from-push', jobId: 'job-a', devotionalId: 'dev-a' });
+    ).toEqual({ kind: 'poll-from-push', jobId: 'job-a', devotionalId: 'dev-a' });
+  });
+
+  it('never asserts a failure itself: the named job is polled, whatever the push claimed', () => {
+    // A stale push can outlive a retry or a fresh start; only the server's
+    // status may land the reader in the failed state.
+    const entry = resolveGeneratingEntry({ inflightRaw: null, params: pushParams, nowMs: NOW });
+    expect(entry.kind).toBe('poll-from-push');
+    expect(entry).not.toHaveProperty('error');
+    expect(entry).not.toHaveProperty('canRetry');
   });
 
   it('submits fresh with neither a record nor a job in the params', () => {

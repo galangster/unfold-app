@@ -182,20 +182,37 @@ describe('push notification helpers', () => {
       });
     });
 
-    it('routes the server failure push to the generating screen with the job to retry', () => {
+    it('routes the first-arc failure push to the generating screen with the job to retry', () => {
       expect(
-        buildNotificationNavigationRoute({ type: 'generation_failed', devotionalId: 'd', jobId: 'j' }),
+        buildNotificationNavigationRoute({
+          type: 'generation_failed',
+          jobType: 'initial_arc',
+          devotionalId: 'd',
+          jobId: 'j',
+        }),
       ).toEqual({ pathname: '/generating', params: { jobId: 'j', devotionalId: 'd' } });
     });
 
-    it('still routes a failure push that lost its ids, without inventing params', () => {
-      expect(buildNotificationNavigationRoute({ type: 'generation_failed' })).toEqual({
+    it('still routes a first-arc failure push that lost its ids, without inventing params', () => {
+      expect(buildNotificationNavigationRoute({ type: 'generation_failed', jobType: 'initial_arc' })).toEqual({
         pathname: '/generating',
         params: {},
       });
       expect(
-        buildNotificationNavigationRoute({ type: 'generation_failed', jobId: 7, devotionalId: '' }),
+        buildNotificationNavigationRoute({ type: 'generation_failed', jobType: 'initial_arc', jobId: 7, devotionalId: '' }),
       ).toEqual({ pathname: '/generating', params: {} });
+    });
+
+    it('ignores a failure push for a job the generating screen does not own', () => {
+      // An onboarding sample fails inline on the onboarding step; landing it
+      // on /generating would retry the sample as the reader's series.
+      expect(
+        buildNotificationNavigationRoute({ type: 'generation_failed', jobType: 'onboarding', jobId: 'j', devotionalId: 'd' }),
+      ).toBeNull();
+      expect(
+        buildNotificationNavigationRoute({ type: 'generation_failed', jobType: 'day', jobId: 'j' }),
+      ).toBeNull();
+      expect(buildNotificationNavigationRoute({ type: 'generation_failed', jobId: 'j' })).toBeNull();
     });
 
     it('still routes a ready push to reveal', () => {

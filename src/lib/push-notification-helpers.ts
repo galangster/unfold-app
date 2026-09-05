@@ -251,10 +251,14 @@ export function buildNotificationNavigationRoute(
     return { pathname: '/(tabs)/(today)/evening-wind-down' };
   }
 
-  // The server's "we hit a snag" push: the generating screen lands on the
-  // job it names and offers Try again. The ids ride along as route params
-  // because every terminal exit clears the MMKV inflight record.
+  // The server's "we hit a snag" push: the generating screen polls the job
+  // it names and offers Try again. The ids ride along as route params
+  // because every terminal exit clears the MMKV inflight record. Only the
+  // first arc lands there: that screen owns the job and retries it by id,
+  // so a push for anything else (the onboarding sample, a day) just opens
+  // the app rather than pulling the reader onto the wrong screen.
   if (data?.type === 'generation_failed') {
+    if (readStringField(data, 'jobType') !== 'initial_arc') return null;
     const params: GeneratingNotificationRoute['params'] = {};
     const jobId = readStringField(data, 'jobId');
     const devotionalId = readStringField(data, 'devotionalId');
