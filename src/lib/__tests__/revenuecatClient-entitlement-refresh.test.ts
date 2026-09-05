@@ -90,7 +90,12 @@ describe('RevenueCat entitlement refresh after store actions', () => {
 
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const client = require('../revenuecatClient') as typeof import('../revenuecatClient');
-    return { client, purchasesMock };
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const fence = require('../sync-session-fence') as typeof import('../sync-session-fence');
+    for (let i = 0; i < 12; i += 1) {
+      await Promise.resolve();
+    }
+    return { client, purchasesMock, fence };
   };
 
   afterEach(() => {
@@ -224,20 +229,101 @@ describe('RevenueCat entitlement refresh after store actions', () => {
       expect(purchasesMock.getCustomerInfo).not.toHaveBeenCalled();
     });
 
-    it('resolves with the entitled customer info the update listener delivers', async () => {
+    it('resolves with entitled customer info after a same-identity listener signal triggers a guarded read', async () => {
       const { client, purchasesMock } = await setup({ refreshedCustomerInfo: emptyCustomerInfo });
 
       const pending = client.waitForUnfoldPremiumEntitlement(client.POST_PURCHASE_ENTITLEMENT_WAIT_MS);
       const listener = capturedListener(purchasesMock);
-      // One 2 s poll has run and found nothing.
       await jest.advanceTimersByTimeAsync(2_000);
       expect(purchasesMock.getCustomerInfo).toHaveBeenCalledTimes(1);
       expect(purchasesMock.invalidateCustomerInfoCache).toHaveBeenCalledTimes(1);
-      listener(emptyCustomerInfo);
-      listener(activeCustomerInfo);
+
+      purchasesMock.getCustomerInfo.mockResolvedValue(activeCustomerInfo);
+      listener({
+        marker: 'stale-event',
+        entitlements: { active: { 'Unfold Premium': { identifier: 'Unfold Premium' } } },
+      });
+      await jest.advanceTimersByTimeAsync(0);
 
       await expect(pending).resolves.toEqual(activeCustomerInfo);
       expect(purchasesMock.removeCustomerInfoUpdateListener).toHaveBeenCalledWith(listener);
+      expect(purchasesMock.getAppUserID).toHaveBeenCalled();
+    });
+
+    it('settles a wait started before reset as null when identity changes', async () => {
+      const { client, purchasesMock } = await setup({ refreshedCustomerInfo: emptyCustomerInfo });
+
+      const pending = client.waitForUnfoldPremiumEntitlement(client.POST_PURCHASE_ENTITLEMENT_WAIT_MS);
+      const listener = capturedListener(purchasesMock);
+      client.invalidateRevenueCatIdentityReadiness();
+      listener(activeCustomerInfo);
+      await jest.advanceTimersByTimeAsync(0);
+
+      await expect(pending).resolves.toBeNull();
+      expect(purchasesMock.removeCustomerInfoUpdateListener).toHaveBeenCalledWith(listener);
+    });
+
+    it('does not grant old cached or listener entitlements for a wait started during reset', async () => {
+      const { client, purchasesMock, fence } = await setup({ refreshedCustomerInfo: activeCustomerInfo });
+      const token = fence.beginLocalResetSession();
+      client.invalidateRevenueCatIdentityReadiness();
+
+      const pending = client.waitForUnfoldPremiumEntitlement(client.POST_PURCHASE_ENTITLEMENT_WAIT_MS);
+      const listener = capturedListener(purchasesMock);
+      listener(activeCustomerInfo);
+      await jest.advanceTimersByTimeAsync(2_000);
+
+      let settled: 'pending' | 'granted' | 'null' = 'pending';
+      void pending.then((value) => {
+        settled = value ? 'granted' : 'null';
+      });
+      await jest.advanceTimersByTimeAsync(0);
+      expect(settled).toBe('pending');
+      expect(purchasesMock.getCustomerInfo).not.toHaveBeenCalled();
+
+      fence.endLocalResetSession(token);
+      await jest.advanceTimersByTimeAsync(2_000);
+      expect(settled).toBe('pending');
+
+      await jest.advanceTimersByTimeAsync(client.POST_PURCHASE_ENTITLEMENT_WAIT_MS);
+      await expect(pending).resolves.toBeNull();
+    });
+
+    it('keeps a timed-out native purchase in the identity sequence until it settles', async () => {
+      let releasePurchase!: (value: {
+        customerInfo: typeof emptyCustomerInfo;
+        productIdentifier: string;
+      }) => void;
+      const { client, purchasesMock } = await setup({
+        purchaseCustomerInfo: emptyCustomerInfo,
+        refreshedCustomerInfo: emptyCustomerInfo,
+      });
+      purchasesMock.purchasePackage.mockImplementation(
+        () => new Promise((resolve) => {
+          releasePurchase = resolve;
+        }),
+      );
+
+      const pendingPurchase = client.purchasePackage({ identifier: '$rc_annual' } as any);
+      await jest.advanceTimersByTimeAsync(0);
+      expect(purchasesMock.purchasePackage).toHaveBeenCalledTimes(1);
+
+      await jest.advanceTimersByTimeAsync(60_000);
+      await expect(pendingPurchase).resolves.toEqual(
+        expect.objectContaining({ ok: false, reason: 'timeout' }),
+      );
+
+      const pendingLogout = client.logoutUser();
+      await jest.advanceTimersByTimeAsync(0);
+      expect(purchasesMock.logOut).not.toHaveBeenCalled();
+
+      releasePurchase({
+        customerInfo: emptyCustomerInfo,
+        productIdentifier: 'unfold_premium_yearly',
+      });
+      await jest.advanceTimersByTimeAsync(0);
+      await pendingLogout;
+      expect(purchasesMock.logOut).toHaveBeenCalledTimes(1);
     });
 
     it('resolves with the entitled customer info found by the 2 s poll, which clears the SDK cache before it reads', async () => {

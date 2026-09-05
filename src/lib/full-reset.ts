@@ -16,19 +16,11 @@
  *   - Delete the profile photo (document directory) and the exported share
  *     cards / devotional workbook PDFs (cache directory)
  *   - Push an empty timeline to the iOS widgets (App Group data)
- *   - Log RevenueCat out best-effort so the next launch re-establishes the
- *     identity from the new device id
- *   - Rotate device identity LAST
- *
- * NOTE (RevenueCat identity, pre-existing): `configuredAppUserID` in
- * revenuecatClient.ts is module scope, set once when the SDK is configured at
- * launch, and rotateDeviceId() does not update it — it keeps the OLD
- * device-scoped id for the rest of the session. logoutUser() above only drops
- * the SDK's current user, so if the identity sync had failed this session,
- * `retryRevenueCatIdentitySync()` (fired by useRevenueCatSync on foreground
- * while `revenueCatResolved` is still false) can log the OLD identity back in
- * AFTER the reset. The next cold start establishes the new id. Entitlement
- * recovery for the user is Apple/Google restore-purchases either way.
+ *   - Raise the reset fence, then immediately invalidate RevenueCat readiness
+ *     and session entitlement resolution
+ *   - Log out best-effort, rotate the device id, then log in to the new
+ *     deterministic id. Ordinary RevenueCat use stays blocked until then
+ *   - Rotate device identity LAST, then establish the new RevenueCat target
  *
  * Unifies the previously split user path ((you)/index.tsx) and QA path
  * (debug-reset-beginning.tsx) — vault rule deterministic-twin-paths-must-
@@ -54,7 +46,12 @@ import { clearReviewPromptState } from '@/lib/review-prompt';
 import { clearPaywallDiagnosticsFile } from '@/lib/paywall-diagnostics';
 import { clearAudioCache } from '@/lib/tts-service';
 import { clearWidgets } from '@/lib/widget-bridge';
-import { logoutUser } from '@/lib/revenuecatClient';
+import {
+  establishRevenueCatIdentityForCurrentDevice,
+  invalidateRevenueCatIdentityReadiness,
+  logoutUser,
+} from '@/lib/revenuecatClient';
+import { useUIState } from '@/lib/ui-state';
 import {
   requestServerAccountErase,
   SERVER_ERASE_TIMEOUT_MS,
@@ -209,7 +206,12 @@ export function performFullLocalReset(options: FullResetOptions = {}): Promise<F
 
   // Fence first, before any await. Identity still matches in-flight sync
   // until step 12, so identity checks cannot stop those responses.
+  // RevenueCat readiness and entitlement resolution drop in the same
+  // synchronous turn so ordinary retries and store actions cannot reopen
+  // the old target before rotation.
   const resetToken = beginLocalResetSession();
+  invalidateRevenueCatIdentityReadiness();
+  useUIState.getState().clearRevenueCatResolved();
   let tracked: Promise<FullResetResult>;
   try {
     tracked = runFullLocalReset(options).finally(() => {
@@ -306,9 +308,11 @@ async function runFullLocalReset(options: FullResetOptions): Promise<FullResetRe
   //     the next syncWidgets(); push an empty timeline now.
   await bestEffort('clear widgets', clearWidgets);
 
-  // 11. RevenueCat — logoutUser() is already guarded (web / not configured /
-  //     SDK errors resolve to { ok: false }); the timeout keeps a hung SDK
-  //     from blocking the reset. The next launch logs in under the new id.
+  // 11. RevenueCat — readiness was already dropped at reset start.
+  //     logoutUser() does not wait for identity (Cocoa rejects logout when
+  //     the SDK is already anonymous). The timeout only stops waiting; the
+  //     native logout stays in the client's identity sequence. Configure is
+  //     never called again.
   await bestEffort('RevenueCat logout', () =>
     withTimeout(
       logoutUser(),
@@ -320,7 +324,17 @@ async function runFullLocalReset(options: FullResetOptions): Promise<FullResetRe
   // 12. Rotate device identity LAST — server data (if the erase above did not
   //     confirm) becomes permanently unreachable from this install.
   rotateDeviceId();
-  logger.warn('[reset] Device identity rotated; RevenueCat identity refreshes on next launch');
+
+  // 13. Log in to the new deterministic id. The timeout only stops waiting;
+  //     the native login stays in the client's identity sequence. Ordinary
+  //     store actions stay non-ok until that sequence verifies the new target.
+  await bestEffort('RevenueCat identity', () =>
+    withTimeout(
+      establishRevenueCatIdentityForCurrentDevice(),
+      options.revenueCatLogoutTimeoutMs ?? REVENUECAT_LOGOUT_TIMEOUT_MS,
+      'RevenueCat identity',
+    ),
+  );
 
   return { serverErase };
 }

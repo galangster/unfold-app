@@ -13,6 +13,15 @@
 let sessionEpoch = 0;
 const activeResetTokens = new Set<number>();
 const transports = new Set<AbortController>();
+const resetIdleListeners = new Set<(session: number) => void>();
+
+function notifyLocalResetIdle(): void {
+  if (activeResetTokens.size > 0) return;
+  const session = sessionEpoch;
+  for (const listener of [...resetIdleListeners]) {
+    listener(session);
+  }
+}
 
 export class SyncSessionInvalidatedError extends Error {
   readonly name = 'SyncSessionInvalidatedError';
@@ -38,7 +47,23 @@ export function beginLocalResetSession(): number {
 
 /** Release only the reset that issued this token. */
 export function endLocalResetSession(token: number): void {
-  activeResetTokens.delete(token);
+  if (!activeResetTokens.delete(token)) return;
+  notifyLocalResetIdle();
+}
+
+/**
+ * Fires when the last active reset token is released. The session argument is
+ * the fence generation that just became idle. Ending an unknown or
+ * already-released token does not notify. Overlapping tokens stay closed
+ * until every issued token ends.
+ */
+export function subscribeLocalResetIdle(
+  listener: (session: number) => void,
+): () => void {
+  resetIdleListeners.add(listener);
+  return () => {
+    resetIdleListeners.delete(listener);
+  };
 }
 
 export function captureSyncSession(): number {
@@ -70,4 +95,5 @@ export function resetSyncSessionFenceForTesting(): void {
   sessionEpoch = 0;
   activeResetTokens.clear();
   transports.clear();
+  resetIdleListeners.clear();
 }

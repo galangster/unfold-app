@@ -86,7 +86,18 @@ jest.mock('../widget-bridge', () => ({
 
 jest.mock('../revenuecatClient', () => ({
   logoutUser: jest.fn(() => Promise.resolve({ ok: true, data: undefined })),
+  invalidateRevenueCatIdentityReadiness: jest.fn(),
+  establishRevenueCatIdentityForCurrentDevice: jest.fn(() => Promise.resolve(true)),
 }));
+
+jest.mock('../ui-state', () => {
+  const clearRevenueCatResolved = jest.fn();
+  return {
+    useUIState: {
+      getState: jest.fn(() => ({ clearRevenueCatResolved })),
+    },
+  };
+});
 
 // full-sync-pull drags NetInfo + the sync graph in; only its key is needed here.
 jest.mock('../full-sync-pull', () => ({
@@ -123,7 +134,12 @@ import { clearReviewPromptState } from '../review-prompt';
 import { clearPaywallDiagnosticsFile } from '../paywall-diagnostics';
 import { clearAudioCache } from '../tts-service';
 import { clearWidgets } from '../widget-bridge';
-import { logoutUser } from '../revenuecatClient';
+import {
+  establishRevenueCatIdentityForCurrentDevice,
+  invalidateRevenueCatIdentityReadiness,
+  logoutUser,
+} from '../revenuecatClient';
+import { useUIState } from '../ui-state';
 import { PRIMARY_BACKEND_URL } from '../api-config';
 import { deleteAsync, readDirectoryAsync } from 'expo-file-system/legacy';
 
@@ -231,8 +247,58 @@ describe('performFullLocalReset', () => {
     expect(clearPaywallDiagnosticsFile).toHaveBeenCalledTimes(1);
     expect(clearAudioCache).toHaveBeenCalledTimes(1);
     expect(clearWidgets).toHaveBeenCalledTimes(1);
+    expect(invalidateRevenueCatIdentityReadiness).toHaveBeenCalledTimes(1);
     expect(logoutUser).toHaveBeenCalledTimes(1);
     expect(rotateDeviceId).toHaveBeenCalledTimes(1);
+    expect(establishRevenueCatIdentityForCurrentDevice).toHaveBeenCalledTimes(1);
+    expect(useUIState.getState().clearRevenueCatResolved).toHaveBeenCalled();
+  });
+
+  it('invalidates RevenueCat readiness and entitlement resolution before the first await', async () => {
+    const order: string[] = [];
+    (invalidateRevenueCatIdentityReadiness as jest.Mock).mockImplementationOnce(() => {
+      order.push('invalidate');
+    });
+    (useUIState.getState().clearRevenueCatResolved as jest.Mock).mockImplementationOnce(() => {
+      order.push('clear-resolved');
+    });
+    mockFetch.mockImplementationOnce(async () => {
+      order.push('server-erase');
+      return okResponse();
+    });
+
+    const pending = performFullLocalReset();
+    expect(order).toEqual(['invalidate', 'clear-resolved']);
+    expect(isLocalResetInProgress()).toBe(true);
+
+    await pending;
+
+    expect(order.indexOf('server-erase')).toBeGreaterThan(order.indexOf('clear-resolved'));
+    expect(invalidateRevenueCatIdentityReadiness).toHaveBeenCalledTimes(1);
+    expect(useUIState.getState().clearRevenueCatResolved).toHaveBeenCalled();
+  });
+
+  it('invalidates RevenueCat readiness before logout and establishes the new identity after rotation', async () => {
+    const order: string[] = [];
+    (invalidateRevenueCatIdentityReadiness as jest.Mock).mockImplementationOnce(() => {
+      order.push('invalidate');
+    });
+    (logoutUser as jest.Mock).mockImplementationOnce(async () => {
+      order.push('logout');
+      return { ok: true, data: undefined };
+    });
+    (rotateDeviceId as jest.Mock).mockImplementationOnce(() => {
+      order.push('rotate');
+      return 'new-id';
+    });
+    (establishRevenueCatIdentityForCurrentDevice as jest.Mock).mockImplementationOnce(async () => {
+      order.push('establish');
+      return true;
+    });
+
+    await performFullLocalReset();
+
+    expect(order).toEqual(['invalidate', 'logout', 'rotate', 'establish']);
   });
 
   it('cancels every scheduled OS notification before the store reset', async () => {
@@ -355,6 +421,30 @@ describe('performFullLocalReset', () => {
 
     expect(logoutUser).toHaveBeenCalledTimes(1);
     expect(rotateDeviceId).toHaveBeenCalledTimes(1);
+    expect(establishRevenueCatIdentityForCurrentDevice).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the reset fence closed while the new RevenueCat identity is established', async () => {
+    let releaseIdentity!: (value: boolean) => void;
+    (establishRevenueCatIdentityForCurrentDevice as jest.Mock).mockImplementationOnce(
+      () => new Promise<boolean>((resolve) => {
+        releaseIdentity = resolve;
+      }),
+    );
+
+    const pending = performFullLocalReset();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    for (let i = 0; i < 50 && !releaseIdentity; i += 1) {
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
+
+    expect(rotateDeviceId).toHaveBeenCalledTimes(1);
+    expect(isLocalResetInProgress()).toBe(true);
+
+    releaseIdentity(true);
+    await pending;
+
+    expect(isLocalResetInProgress()).toBe(false);
   });
 
   it('deletes the profile photo, reading its file name before the store reset wipes it', async () => {

@@ -61,7 +61,18 @@ jest.mock('../tts-service', () => ({ clearAudioCache: jest.fn(() => Promise.reso
 jest.mock('../widget-bridge', () => ({ clearWidgets: jest.fn() }));
 jest.mock('../revenuecatClient', () => ({
   logoutUser: jest.fn(() => Promise.resolve({ ok: true })),
+  invalidateRevenueCatIdentityReadiness: jest.fn(),
+  establishRevenueCatIdentityForCurrentDevice: jest.fn(() => Promise.resolve(true)),
 }));
+
+jest.mock('../ui-state', () => {
+  const clearRevenueCatResolved = jest.fn();
+  return {
+    useUIState: {
+      getState: jest.fn(() => ({ clearRevenueCatResolved })),
+    },
+  };
+});
 jest.mock('../sync-ids', () => ({
   newId: jest.fn(() => `test-id-${Math.random().toString(36).slice(2, 8)}`),
   compositeId: jest.fn((...parts: unknown[]) => parts.join(':')),
@@ -103,6 +114,7 @@ import {
   isLocalResetInProgress,
   isSyncSessionCurrent,
   resetSyncSessionFenceForTesting,
+  subscribeLocalResetIdle,
   SyncSessionInvalidatedError,
 } from '../sync-session-fence';
 import { getDeviceId, mmkvStorage, rotateDeviceId } from '../mmkv-storage';
@@ -570,6 +582,28 @@ describe('MD-1 sync session fence', () => {
     endLocalResetSession(second);
     expect(isLocalResetInProgress()).toBe(false);
     expect(isSyncSessionCurrent(second)).toBe(true);
+  });
+
+  it('notifies reset-idle observers only when the last owned token ends', () => {
+    const idleSessions: number[] = [];
+    const unsubscribe = subscribeLocalResetIdle((session) => {
+      idleSessions.push(session);
+    });
+
+    const first = beginLocalResetSession();
+    const second = beginLocalResetSession();
+    endLocalResetSession(first);
+    expect(idleSessions).toEqual([]);
+    endLocalResetSession(first + second + 1);
+    expect(idleSessions).toEqual([]);
+    endLocalResetSession(second);
+    expect(idleSessions).toEqual([second]);
+    expect(isSyncSessionCurrent(second)).toBe(true);
+
+    unsubscribe();
+    const third = beginLocalResetSession();
+    endLocalResetSession(third);
+    expect(idleSessions).toEqual([second]);
   });
 
   it('shares one in-flight reset so overlapping callers cannot wipe or rotate twice', async () => {

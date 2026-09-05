@@ -20,11 +20,46 @@ import {
   getOfferings,
   hasRevenueCatConfigurationAttemptFailed,
   isRevenueCatEnabled,
+  isRevenueCatIdentityVerified,
   retryRevenueCatIdentitySync,
+  subscribeRevenueCatIdentityEpoch,
+  subscribeRevenueCatIdentityVerified,
 } from '@/lib/revenuecatClient';
 import { syncTrialEndingNotification } from '@/lib/trial-notification';
 import { createSingleListenerGuard } from '@/lib/listener-registration';
+import { isLocalResetInProgress, subscribeLocalResetIdle } from '@/lib/sync-session-fence';
 import { logger } from '@/lib/logger';
+
+function waitForCurrentIdentityDelivery(isCancelled: () => boolean): {
+  promise: Promise<void>;
+  abort: () => void;
+} {
+  let settle!: () => void;
+  const promise = new Promise<void>((resolve) => {
+    settle = resolve;
+  });
+  let settled = false;
+  const finish = (): void => {
+    if (settled) return;
+    settled = true;
+    unsubscribeIdle();
+    unsubscribeVerified();
+    settle();
+  };
+  const check = (): void => {
+    if (isCancelled()) {
+      finish();
+      return;
+    }
+    if (!isLocalResetInProgress() && isRevenueCatIdentityVerified()) {
+      finish();
+    }
+  };
+  const unsubscribeIdle = subscribeLocalResetIdle(check);
+  const unsubscribeVerified = subscribeRevenueCatIdentityVerified(check);
+  check();
+  return { promise, abort: finish };
+}
 
 export function useRevenueCatSync() {
   const updateUser = useUnfoldStore((s) => s.updateUser);
@@ -49,6 +84,7 @@ export function useRevenueCatSync() {
 
     const applyCustomerInfo = (customerInfo: CustomerInfo) => {
       if (didCancel) return;
+      if (isLocalResetInProgress()) return;
       const hasSubscription = Boolean(customerInfo.entitlements.active?.['Unfold Premium']);
       updateUser({ isPremium: hasSubscription });
       // Any first-hand answer from RevenueCat counts as resolved for this
@@ -113,6 +149,7 @@ export function useRevenueCatSync() {
     // retry once. Naturally rate-limited to foreground transitions.
     const appStateSub = AppState.addEventListener('change', (next) => {
       if (next !== 'active') return;
+      if (isLocalResetInProgress()) return;
       if (useUIState.getState().revenueCatResolved) return; // recovered already
       void (async () => {
         await retryRevenueCatIdentitySync();
@@ -122,8 +159,34 @@ export function useRevenueCatSync() {
       })();
     });
 
+    let refreshGeneration = 0;
+    let abortDeliveryWait: (() => void) | null = null;
+
+    const unsubscribeIdentityEpoch = subscribeRevenueCatIdentityEpoch(() => {
+      if (didCancel) return;
+      useUIState.getState().clearRevenueCatResolved();
+      refreshGeneration += 1;
+      const generation = refreshGeneration;
+      abortDeliveryWait?.();
+      const deliveryWait = waitForCurrentIdentityDelivery(
+        () => didCancel || generation !== refreshGeneration,
+      );
+      abortDeliveryWait = deliveryWait.abort;
+      void deliveryWait.promise.then(async () => {
+        if (didCancel || generation !== refreshGeneration) return;
+        const result = await getCustomerInfo();
+        if (didCancel || generation !== refreshGeneration) return;
+        if (result.ok) applyCustomerInfo(result.data);
+        void listenerGuard.ensure();
+      }).catch(() => {
+        // Fail closed until the current identity reports.
+      });
+    });
+
     return () => {
       didCancel = true;
+      abortDeliveryWait?.();
+      unsubscribeIdentityEpoch();
       listenerGuard.dispose();
       appStateSub.remove();
     };
