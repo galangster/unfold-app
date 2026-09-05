@@ -3747,6 +3747,9 @@ export default function OnboardingScreen() {
                 const isSelected = data.faithBackground === opt.value;
                 return (
                   <TouchableOpacity key={opt.value} activeOpacity={1}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: isSelected }}
+                    accessibilityLabel={`${opt.label}, ${opt.description}`}
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       setData((prev) => ({ ...prev, faithBackground: opt.value }));
@@ -3785,6 +3788,9 @@ export default function OnboardingScreen() {
                 const isSelected = data.lifeStage === opt.value;
                 return (
                   <TouchableOpacity key={opt.value} activeOpacity={1}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: isSelected }}
+                    accessibilityLabel={`${opt.label}, ${opt.description}`}
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       setData((prev) => ({ ...prev, lifeStage: opt.value }));
@@ -3841,6 +3847,10 @@ export default function OnboardingScreen() {
                 const isSelected = data.tone === opt.value;
                 return (
                   <TouchableOpacity key={opt.value} activeOpacity={1}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: isSelected }}
+                    accessibilityLabel={`${opt.label}, ${opt.description}`}
+                    accessibilityHint={opt.example}
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       setData((prev) => ({ ...prev, tone: opt.value }));
@@ -3881,6 +3891,9 @@ export default function OnboardingScreen() {
                 const isSelected = data.depth === opt.value;
                 return (
                   <TouchableOpacity key={opt.value} activeOpacity={1}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: isSelected }}
+                    accessibilityLabel={`${opt.label}, ${opt.description}`}
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       setData((prev) => ({ ...prev, depth: opt.value }));
