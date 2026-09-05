@@ -11,6 +11,7 @@ jest.mock('../mmkv-storage', () => ({
 }));
 
 import {
+  classifyPollFailure,
   countConsecutiveNetworkErrors,
   evaluateGenerationDeadline,
   evaluateGenerationPoll,
@@ -333,5 +334,23 @@ describe('resolveRetryFailureCleanup — a failed retry request is not a verdict
       const action = resolveGenerationRetryAction({ pendingJobId: 'job-1', observedState });
       expect(resolveRetryFailureCleanup(action)).toBe('keep-inflight');
     }
+  });
+});
+
+describe('classifyPollFailure — 404 / 400 on the status request is a verdict, not connectivity', () => {
+  it('reads a NOT_FOUND or INVALID_PARAMS ApiError as job-gone', () => {
+    expect(classifyPollFailure(new ApiError('Poll job failed: 404 — Job not found', 404, 'NOT_FOUND'))).toBe('job-gone');
+    expect(classifyPollFailure(new ApiError('Poll job failed: 400', 400, 'INVALID_PARAMS'))).toBe('job-gone');
+  });
+
+  it('reads every other failure as unreachable: 5xx, auth, timeouts, plain network errors', () => {
+    expect(classifyPollFailure(new ApiError('Poll job failed: 503', 503, 'POLL_FAILED'))).toBe('unreachable');
+    expect(classifyPollFailure(new ApiError('Poll job failed: 401', 401, 'UNAUTHORIZED'))).toBe('unreachable');
+    expect(classifyPollFailure(new Error('Network request failed'))).toBe('unreachable');
+    expect(classifyPollFailure(Object.assign(new Error('aborted'), { name: 'AbortError' }))).toBe('unreachable');
+    expect(classifyPollFailure(null)).toBe('unreachable');
+    expect(classifyPollFailure(undefined)).toBe('unreachable');
+    // A status that is not a number is not a status.
+    expect(classifyPollFailure({ status: '404' })).toBe('unreachable');
   });
 });

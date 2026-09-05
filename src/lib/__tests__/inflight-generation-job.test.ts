@@ -29,6 +29,7 @@ import {
   resolveInflightResume,
   resolvePreparingFirstSeriesTitle,
   resolveTodayInflightAction,
+  supersedeInflightGenerationJob,
   writeInflightGenerationJob,
   type InflightGenerationJob,
 } from '../inflight-generation-job';
@@ -210,5 +211,73 @@ describe('resolvePreparingFirstSeriesTitle', () => {
 
   it('uses a real series title once there is one', () => {
     expect(resolvePreparingFirstSeriesTitle('Learning to Trust Again')).toBe('Learning to Trust Again');
+  });
+});
+
+// Jordan (item 8, follow-up): "Start over with new answers" used to delete the
+// record. With no record and no session, the "We hit a snag" push iOS kept for
+// the abandoned job polled it back to life, and Try again re-ran the answers
+// the reader had just walked away from. The record now stays, marked
+// superseded: nothing to resume, nothing to watch, and the push reads as stale.
+describe('supersedeInflightGenerationJob', () => {
+  it('keeps the abandoned job under the same key with the marker set', () => {
+    writeInflightGenerationJob(fresh);
+    supersedeInflightGenerationJob('job-1');
+    expect(mmkvStorage.setItem).toHaveBeenLastCalledWith(INFLIGHT_GENERATION_JOB_KEY, expect.any(String));
+    expect(readInflightGenerationJob()).toEqual({
+      kind: 'active',
+      job: { jobId: 'job-1', submittedAt: expect.any(Number), superseded: true },
+    });
+  });
+
+  it('clears the record when no job was ever known', () => {
+    writeInflightGenerationJob(fresh);
+    supersedeInflightGenerationJob(null);
+    expect(readInflightGenerationJob()).toEqual({ kind: 'none' });
+  });
+
+  it('parses the marker only when it is exactly true', () => {
+    expect(parseInflightGenerationJob(JSON.stringify({ ...fresh, superseded: true }))).toEqual({
+      kind: 'active',
+      job: { ...fresh, superseded: true },
+    });
+    expect(parseInflightGenerationJob(JSON.stringify({ ...fresh, superseded: 'yes' }))).toEqual({ kind: 'active', job: fresh });
+  });
+
+  it('is none on Today, whatever the session holds', () => {
+    const superseded = { ...fresh, superseded: true as const };
+    for (const sessionStatus of ['idle', 'running', 'error', 'complete'] as const) {
+      expect(resolveTodayInflightAction({ kind: 'active', job: superseded }, sessionStatus)).toEqual({ action: 'none' });
+    }
+  });
+
+  it('is nothing to mark for home: the record is left as it is', () => {
+    writeInflightGenerationJob({ ...fresh, superseded: true });
+    expect(markInflightJobLeftForHome()).toBeNull();
+    expect(readInflightGenerationJob()).toEqual({ kind: 'active', job: { ...fresh, superseded: true } });
+  });
+
+  it('is replaced by the next submission\'s write', () => {
+    supersedeInflightGenerationJob('job-1');
+    writeInflightGenerationJob({ jobId: 'job-2', devotionalId: 'devo-2', submittedAt: NOW });
+    expect(readInflightGenerationJob()).toEqual({
+      kind: 'active',
+      job: { jobId: 'job-2', devotionalId: 'devo-2', submittedAt: NOW },
+    });
+  });
+});
+
+// A record whose job the server does not hold (a deleted row, another backend
+// environment, another device id) read as "could not fetch": keep, once per
+// focus, forever — and no new series could ever be submitted over it.
+describe('resolveInflightResume — a job the server does not hold is a verdict', () => {
+  it('discards the record on a 404 / 400 poll failure instead of keeping it for the next focus', () => {
+    expect(resolveInflightResume(undefined, 'job-gone')).toBe('discard');
+  });
+
+  it('still keeps the record when the server could not be reached', () => {
+    expect(resolveInflightResume(undefined, 'unreachable')).toBe('keep');
+    expect(resolveInflightResume(undefined, null)).toBe('keep');
+    expect(resolveInflightResume('pending', 'unreachable')).toBe('resume');
   });
 });

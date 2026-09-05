@@ -41,7 +41,8 @@ import {
   resolveTodayInflightAction,
   type InflightGenerationJob,
 } from '@/lib/inflight-generation-job';
-import { INITIAL_ARC_UNKNOWN_STATUS_MESSAGE } from '@/lib/inflight-initial-arc-watch';
+import { INITIAL_ARC_JOB_NOT_FOUND_MESSAGE, INITIAL_ARC_UNKNOWN_STATUS_MESSAGE } from '@/lib/inflight-initial-arc-watch';
+import { classifyPollFailure, type PollFailureKind } from '@/lib/generation-poll-outcome';
 import { settleInflightInitialArcWatch } from '@/lib/initial-arc-result';
 import { useInflightInitialArcWatch } from '@/hooks/useInflightInitialArcWatch';
 import { TodayCardStack, type TodayCardStackCard } from '@/components/home/TodayCardStack';
@@ -277,7 +278,9 @@ export default function HomeScreen() {
   // where the reader goes: /generating is re-entered only while it reports
   // the job alive or complete; a failed job settles here, as the watch would,
   // so the failed card shows instead of a bounce into /generating's error
-  // state; an unreachable server keeps the record for the next focus.
+  // state; an unreachable server keeps the record for the next focus. A
+  // server that answers "no such job" (404 / 400) is a verdict, not
+  // unreachable: that record is dropped too, or it would be kept forever.
   const generationSessionStatus = useUnfoldStore((s) => s.generationSession.status);
   const generationSessionDevotionalId = useUnfoldStore((s) => s.generationSession.devotionalId);
   const generationSessionTitle = useUnfoldStore((s) => s.generationSession.title);
@@ -296,13 +299,20 @@ export default function HomeScreen() {
     let cancelled = false;
     void (async () => {
       let status: GenerationJobResponse | null = null;
+      let pollFailure: PollFailureKind | null = null;
       try {
         status = await pollJobStatus(jobId);
       } catch (err) {
-        logger.warn('[home] Could not check inflight job; keeping the record:', err instanceof Error ? err.message : err);
+        pollFailure = classifyPollFailure(err);
+        logger.warn(
+          pollFailure === 'job-gone'
+            ? '[home] Server does not hold the inflight job; dropping the record:'
+            : '[home] Could not check inflight job; keeping the record:',
+          err instanceof Error ? err.message : err,
+        );
       }
       if (cancelled) return;
-      const resume = resolveInflightResume(status?.status);
+      const resume = resolveInflightResume(status?.status, pollFailure);
       if (resume === 'resume') {
         logger.log(`[home] Resuming inflight generation job ${jobId} (server: ${status?.status})`);
         // Navigate to generating screen — it will pick up the inflight job from MMKV
@@ -311,12 +321,14 @@ export default function HomeScreen() {
       }
       if (resume === 'discard') {
         settleInflightInitialArcWatch(
-          {
-            kind: 'failed',
-            message: status?.error ?? INITIAL_ARC_UNKNOWN_STATUS_MESSAGE,
-            phase: 'server-poll',
-            canRetry: status?.canRetry ?? true,
-          },
+          pollFailure === 'job-gone'
+            ? { kind: 'failed', message: INITIAL_ARC_JOB_NOT_FOUND_MESSAGE, phase: 'server-poll-not-found', canRetry: true }
+            : {
+                kind: 'failed',
+                message: status?.error ?? INITIAL_ARC_UNKNOWN_STATUS_MESSAGE,
+                phase: 'server-poll',
+                canRetry: status?.canRetry ?? true,
+              },
           { jobId },
         );
       }

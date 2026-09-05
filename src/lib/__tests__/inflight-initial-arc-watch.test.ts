@@ -1,5 +1,6 @@
 import {
   INITIAL_ARC_INVALID_RESULT_MESSAGE,
+  INITIAL_ARC_JOB_NOT_FOUND_MESSAGE,
   INITIAL_ARC_UNKNOWN_STATUS_MESSAGE,
   INITIAL_ARC_UNREACHABLE_MESSAGE,
   watchInflightInitialArc,
@@ -207,5 +208,47 @@ describe('watchInflightInitialArc', () => {
 
     expect(outcome.kind).toBe('complete');
     expect(fetchStatus).toHaveBeenCalledTimes(statuses.length);
+  });
+});
+
+// A record whose job the server does not hold (a deleted row, another backend
+// environment, another device id) used to read as connectivity: six polls,
+// 'unreachable', record kept — and, with no age gate, kept for good. The
+// server answered; that answer is a verdict, and the record is dropped.
+describe('watchInflightInitialArc — a job the server does not hold', () => {
+  const gone = (status: number) => Object.assign(new Error(`Poll job failed: ${status}`), { status });
+
+  it('fails terminally on the first 404, so the record is dropped instead of kept for good', async () => {
+    const fetchStatus = fetchSequence([gone(404)]);
+    const sleeps: number[] = [];
+
+    await expect(
+      watchInflightInitialArc({ jobId: 'job-1', fetchStatus, sleep: async (ms) => { sleeps.push(ms); } }),
+    ).resolves.toEqual({
+      kind: 'failed',
+      message: INITIAL_ARC_JOB_NOT_FOUND_MESSAGE,
+      phase: 'server-poll-not-found',
+      canRetry: true,
+    });
+    expect(fetchStatus).toHaveBeenCalledTimes(1);
+    expect(sleeps).toEqual([]);
+  });
+
+  it('treats an id the server cannot parse (400) the same way', async () => {
+    const fetchStatus = fetchSequence([gone(400)]);
+
+    const outcome = await watchInflightInitialArc({ jobId: 'not-a-uuid', fetchStatus, sleep: immediate });
+
+    expect(outcome).toMatchObject({ kind: 'failed', phase: 'server-poll-not-found' });
+    expect(fetchStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it('still counts a 5xx or a bare network error toward the unreachable give-up, never as a verdict', async () => {
+    const fetchStatus = fetchSequence([gone(503), new Error('network'), completedStatus]);
+
+    const outcome = await watchInflightInitialArc({ jobId: 'job-1', fetchStatus, sleep: immediate });
+
+    expect(outcome.kind).toBe('complete');
+    expect(fetchStatus).toHaveBeenCalledTimes(3);
   });
 });

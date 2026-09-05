@@ -10,13 +10,16 @@
  * polled at the slow tier (Jordan, item 7 — a ten-minute wall clock declared a
  * running job failed without asking the server). The only client-side give-up
  * is a run of failed status requests, and that is 'unreachable', not
- * 'failed': the record stays so the job can be picked up again.
+ * 'failed': the record stays so the job can be picked up again. A status
+ * request the server answers with "no such job" (404 / 400) is the server's
+ * verdict, though, and fails terminally on the spot so the record is dropped.
  */
 import type { GenerationResultPayload } from './generation-reconciliation';
 // Type-only import — erased at compile time, so this module stays free of the
 // native (MMKV) dependencies that the generation-api runtime pulls in.
 import type { CanonicalGenerationResultPayload } from './generation-api';
 import {
+  classifyPollFailure,
   countConsecutiveNetworkErrors,
   evaluateGenerationDeadline,
   evaluateGenerationPoll,
@@ -33,6 +36,13 @@ export const INITIAL_ARC_UNKNOWN_STATUS_MESSAGE = 'We hit an unexpected problem 
  * toFriendlyOnboardingGenerationError and the inflight record is kept.
  */
 export const INITIAL_ARC_UNREACHABLE_MESSAGE = 'Unable to connect to the writing service while checking on your devotional.';
+/**
+ * Copy for the server's "no such job" answer (404 NOT_FOUND / 400
+ * INVALID_PARAMS on the status request). A verdict, not a connection problem:
+ * it takes the generic branch of toFriendlyOnboardingGenerationError, the
+ * inflight record is dropped, and Try again submits a fresh series.
+ */
+export const INITIAL_ARC_JOB_NOT_FOUND_MESSAGE = 'We couldn’t find your devotional job on the writing service. Please try again.';
 
 export type InitialArcJobStatus = {
   status: string;
@@ -44,7 +54,9 @@ export type InitialArcJobStatus = {
 export type InitialArcFailurePhase =
   | 'server-poll'
   | 'server-poll-invalid-result'
-  | 'server-poll-unknown-status';
+  | 'server-poll-unknown-status'
+  /** The server does not hold the job (404 / 400 on the status request). */
+  | 'server-poll-not-found';
 
 export type InflightInitialArcWatchOutcome =
   | { kind: 'complete'; result: CanonicalGenerationResultPayload }
@@ -77,7 +89,10 @@ function defaultSleep(ms: number): Promise<void> {
  * server stops answering. The first poll is immediate (the reader just left a
  * screen that was polling). A throwing fetch is "not yet": the server job is
  * still running, so wait (at double cadence) and ask again — until the
- * consecutive-error cap, which ends the wait without a verdict.
+ * consecutive-error cap, which ends the wait without a verdict. The one
+ * throw that is a verdict is the server's "no such job" (404 / 400): that
+ * fails terminally at once, so the record is dropped rather than kept for a
+ * job nothing will ever resolve.
  */
 export async function watchInflightInitialArc(
   options: WatchInflightInitialArcOptions,
@@ -101,7 +116,10 @@ export async function watchInflightInitialArc(
     let status: InitialArcJobStatus;
     try {
       status = await fetchStatus(jobId);
-    } catch {
+    } catch (err) {
+      if (classifyPollFailure(err) === 'job-gone') {
+        return { kind: 'failed', message: INITIAL_ARC_JOB_NOT_FOUND_MESSAGE, phase: 'server-poll-not-found', canRetry: true };
+      }
       consecutiveNetworkErrors = countConsecutiveNetworkErrors(consecutiveNetworkErrors, false);
       const decision = evaluateGenerationDeadline({ elapsedMs: now() - startedAt, consecutiveNetworkErrors });
       if (decision === 'network-error') {

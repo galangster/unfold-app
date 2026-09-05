@@ -29,16 +29,19 @@ import {
   clearInflightGenerationJob,
   markInflightJobLeftForHome,
   readInflightGenerationJob,
+  supersedeInflightGenerationJob,
   writeInflightGenerationJob,
   GENERATING_SESSION_TITLE_PLACEHOLDER,
 } from '@/lib/inflight-generation-job';
 import {
   INITIAL_ARC_INVALID_RESULT_MESSAGE,
+  INITIAL_ARC_JOB_NOT_FOUND_MESSAGE,
   INITIAL_ARC_UNKNOWN_STATUS_MESSAGE,
   INITIAL_ARC_UNREACHABLE_MESSAGE,
 } from '@/lib/inflight-initial-arc-watch';
 import { applyInitialArcResult, requireCanonicalDevotionalId, type InitialArcResult } from '@/lib/initial-arc-result';
 import {
+  classifyPollFailure,
   countConsecutiveNetworkErrors,
   evaluateGenerationDeadline,
   evaluateGenerationPoll,
@@ -577,6 +580,17 @@ export default function GeneratingScreen() {
       } catch (err) {
         if (!pollingRef.current || pollRunRef.current !== run) return;
         const errorMsg = err instanceof Error ? err.message : String(err);
+        if (classifyPollFailure(err) === 'job-gone') {
+          // The server answered and does not hold this job (404: a deleted
+          // row, another environment or device id; 400: an id it cannot
+          // parse). A verdict, not connectivity: the record is dropped and no
+          // job is pending, so Try again submits fresh and Go home clears the
+          // session, instead of keeping a record nothing will ever resolve.
+          observedJobStateRef.current = 'unknown-terminal';
+          setPendingJobId(null);
+          failTerminal(INITIAL_ARC_JOB_NOT_FOUND_MESSAGE, 'server-poll-not-found', err);
+          return;
+        }
         consecutiveNetworkErrorsRef.current = countConsecutiveNetworkErrors(consecutiveNetworkErrorsRef.current, false);
         if (assessDeadline() === 'network-error') {
           // We cannot reach the server; that is not a verdict on the job, so
@@ -625,11 +639,16 @@ export default function GeneratingScreen() {
     // land on the job a failure push named, send a stale push home, or submit
     // fresh. The record carries no expiry: the first poll asks the server,
     // which alone decides the job's fate.
+    // A push is judged stale against the generation session and the series
+    // already in the store, never against currentDevotionalId: onboarding's
+    // sample and a finished journey are "current" too, and read as moved on.
     const inflightRead = readInflightGenerationJob();
+    const { generationSession, devotionals } = useUnfoldStore.getState();
     const entry = resolveGeneratingEntry({
       inflight: inflightRead.kind === 'active' ? inflightRead.job : null,
       params: { jobId: params.jobId, devotionalId: params.devotionalId },
-      currentDevotionalId: useUnfoldStore.getState().currentDevotionalId,
+      sessionDevotionalId: generationSession.devotionalId,
+      landedDevotionalIds: devotionals.map((devotional) => devotional.id),
     });
     if (entry.kind === 'resume') {
       const { inflight } = entry;
@@ -882,7 +901,11 @@ export default function GeneratingScreen() {
       pollTimerRef.current = null;
     }
     pollingRef.current = false;
-    clearInflightGenerationJob();
+    // The job is abandoned, not finished: the record stays, marked superseded,
+    // so the "We hit a snag" push iOS keeps for it cannot poll it back to life
+    // and re-run the answers the reader just walked away from. The fresh
+    // submission's own write replaces it.
+    supersedeInflightGenerationJob(pendingJobId);
     clearGenerationSession();
     setError(null);
     router.replace('/onboarding');

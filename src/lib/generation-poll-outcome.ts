@@ -104,6 +104,32 @@ export function resolveGenerationSubmitFailure(
   };
 }
 
+/**
+ * HTTP statuses on GET /api/jobs/:id that are a verdict, not connectivity.
+ * The server answered and does not hold this job for this device — 404
+ * NOT_FOUND (a deleted row, another backend environment, another device id)
+ * — or cannot even parse the id — 400 INVALID_PARAMS. Waiting on such a job,
+ * however long, reaches nothing.
+ */
+export const JOB_GONE_HTTP_STATUSES: readonly number[] = [400, 404];
+
+export type PollFailureKind = 'job-gone' | 'unreachable';
+
+/**
+ * How a throwing status request is read. Most throws are "not yet": the
+ * network, a timeout, a 5xx — the server job is still running, and the caller
+ * counts the throw toward the consecutive-error give-up, which keeps the
+ * inflight record. A job-gone status is terminal instead: the record is
+ * dropped, so the reader can start a fresh series. Before this, a 404 read as
+ * connectivity, and with no age gate on the record the reader could never
+ * create a series again. Structural check on the ApiError shape keeps this
+ * module native-free.
+ */
+export function classifyPollFailure(err: unknown): PollFailureKind {
+  const status = (err as { status?: unknown } | null | undefined)?.status;
+  return typeof status === 'number' && JOB_GONE_HTTP_STATUSES.includes(status) ? 'job-gone' : 'unreachable';
+}
+
 // ── Poll cadence ──────────────────────────────────────────────────────────
 
 /** Fixed cadence for the first minute of a job, when completion is likeliest. */

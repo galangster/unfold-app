@@ -16,9 +16,18 @@
  * screens ask it — /generating by polling, Today through
  * `resolveInflightResume` — and the worker's stale sweep guarantees every job
  * reaches a terminal status. A record is dropped on a server verdict, never
- * on age.
+ * on age. "No such job" (404 / 400 on the status request) is such a verdict.
+ *
+ * "Start over with new answers" does not delete the record either: it keeps
+ * it with the `superseded` marker. With the record gone and the session
+ * cleared, nothing said the reader had abandoned the job, and the "We hit a
+ * snag" push iOS keeps for it polled the job back to life — Try again then
+ * re-ran the answers the reader had just walked away from. A superseded
+ * record is nothing to resume or watch; the next submission's write
+ * replaces it, and /generating reads any push against it as stale.
  */
 import { mmkvStorage } from '@/lib/mmkv-storage';
+import type { PollFailureKind } from '@/lib/generation-poll-outcome';
 import type { GenerationSessionStatus } from '@/lib/store';
 
 export const INFLIGHT_GENERATION_JOB_KEY = 'inflight-generation-job';
@@ -33,6 +42,11 @@ export interface InflightGenerationJob {
   submittedAt: number;
   /** The reader left /generating for Today; Today watches the job instead. */
   leftForHome?: true;
+  /**
+   * "Start over with new answers" abandoned this job. Neither screen resumes
+   * or watches it; it only marks the job's failure push as stale.
+   */
+  superseded?: true;
 }
 
 export type InflightGenerationJobRead =
@@ -50,6 +64,7 @@ function toInflightGenerationJob(value: unknown): InflightGenerationJob | null {
     ...(typeof record.devotionalId === 'string' ? { devotionalId: record.devotionalId } : {}),
     submittedAt: record.submittedAt,
     ...(record.leftForHome === true ? { leftForHome: true as const } : {}),
+    ...(record.superseded === true ? { superseded: true as const } : {}),
   };
 }
 
@@ -87,6 +102,20 @@ export function clearInflightGenerationJob(): void {
   mmkvStorage.removeItem(INFLIGHT_GENERATION_JOB_KEY);
 }
 
+/**
+ * "Start over with new answers": the job is abandoned, not finished. With a
+ * known job the record stays under the same key, marked superseded, so the
+ * failure push iOS keeps for that job cannot poll it back to life. With no
+ * job there is nothing a push could name, so the record is simply cleared.
+ */
+export function supersedeInflightGenerationJob(jobId: string | null): void {
+  if (!jobId) {
+    clearInflightGenerationJob();
+    return;
+  }
+  writeInflightGenerationJob({ jobId, submittedAt: Date.now(), superseded: true });
+}
+
 export type TodayInflightDecision =
   | { action: 'none' }
   /** App-kill recovery: the reader never chose to leave, so /generating owns the wait. */
@@ -100,13 +129,14 @@ export type TodayInflightDecision =
  * holds a failure. With the marker set that failure is the watch's own
  * give-up (the server could not be reached six polls running), so the failed
  * card owns the moment: Try again re-enters /generating on the kept record,
- * Dismiss clears the session and the watch starts again.
+ * Dismiss clears the session and the watch starts again. A superseded record
+ * is nothing to resume or watch.
  */
 export function resolveTodayInflightAction(
   read: InflightGenerationJobRead,
   sessionStatus: GenerationSessionStatus,
 ): TodayInflightDecision {
-  if (read.kind !== 'active') return { action: 'none' };
+  if (read.kind !== 'active' || read.job.superseded) return { action: 'none' };
   if (!read.job.leftForHome) return { action: 'resume-on-generating', job: read.job };
   return sessionStatus === 'error' ? { action: 'none' } : { action: 'watch-on-today', job: read.job };
 }
@@ -119,9 +149,14 @@ export type InflightResumeDecision = 'resume' | 'discard' | 'keep';
  * alive or complete; discard on its failure verdict — Today settles that
  * failure itself so the reader sees the failed card, not /generating's error
  * state; keep the record, and ask again on the next focus, when the status
- * could not be fetched.
+ * could not be fetched — unless the server answered that it does not hold
+ * the job at all (`pollFailure` 'job-gone'), which is a verdict: discard.
  */
-export function resolveInflightResume(serverStatus: string | null | undefined): InflightResumeDecision {
+export function resolveInflightResume(
+  serverStatus: string | null | undefined,
+  pollFailure?: PollFailureKind | null,
+): InflightResumeDecision {
+  if (pollFailure === 'job-gone') return 'discard';
   switch (serverStatus) {
     case 'pending':
     case 'processing':
@@ -142,7 +177,7 @@ export function resolveInflightResume(serverStatus: string | null | undefined): 
  */
 export function markInflightJobLeftForHome(): InflightGenerationJob | null {
   const read = readInflightGenerationJob();
-  if (read.kind !== 'active') return null;
+  if (read.kind !== 'active' || read.job.superseded) return null;
   const record = { ...read.job, leftForHome: true as const };
   writeInflightGenerationJob(record);
   return record;
