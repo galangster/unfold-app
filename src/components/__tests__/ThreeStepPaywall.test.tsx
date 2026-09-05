@@ -135,14 +135,21 @@ jest.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ fetchQuery: jest.fn(), invalidateQueries: jest.fn() }),
 }));
 
+const mockPurchasePackage = jest.fn();
+const mockRestorePurchases = jest.fn();
+const mockWaitForUnfoldPremiumEntitlement = jest.fn();
+const mockSyncTrialEndingNotification = jest.fn(() => Promise.resolve());
+
 jest.mock('@/lib/revenuecatClient', () => ({
+  POST_PURCHASE_ENTITLEMENT_WAIT_MS: 10_000,
   getOfferings: jest.fn(),
-  purchasePackage: jest.fn(),
-  restorePurchases: jest.fn(),
+  purchasePackage: (...args: unknown[]) => mockPurchasePackage(...args),
+  restorePurchases: (...args: unknown[]) => mockRestorePurchases(...args),
+  waitForUnfoldPremiumEntitlement: (...args: unknown[]) => mockWaitForUnfoldPremiumEntitlement(...args),
 }));
 
 jest.mock('@/lib/trial-notification', () => ({
-  syncTrialEndingNotification: jest.fn(() => Promise.resolve()),
+  syncTrialEndingNotification: () => mockSyncTrialEndingNotification(),
 }));
 
 jest.mock('@/lib/mmkv-storage', () => ({
@@ -157,6 +164,15 @@ jest.mock('@/lib/push-notification-helpers', () => ({
 
 // eslint-disable-next-line import/first -- component import must run after Jest module mocks are registered.
 import { ThreeStepPaywall } from '../onboarding/ThreeStepPaywall';
+// eslint-disable-next-line import/first -- same ordering constraint as above.
+import {
+  PAYWALL_ENTITLEMENT_PENDING_CUE,
+  PAYWALL_ENTITLEMENT_PENDING_MESSAGE,
+  PAYWALL_GENERIC_ERROR_MESSAGE,
+  PAYWALL_PURCHASE_TIMEOUT_MESSAGE,
+} from '@/lib/paywall-guardrails';
+// eslint-disable-next-line import/first -- same ordering constraint as above.
+import * as Haptics from 'expo-haptics';
 
 const colors = {
   accent: '#C8A55C',
@@ -216,15 +232,279 @@ function findByLabel(tree: any, label: string) {
 }
 
 // The primary CTA is the only pressable in the file with activeOpacity 0.7.
-function pressPrimaryCTA(tree: any) {
+function primaryCTA(tree: any) {
   const cta = tree.root.findAll(
     (n: any) => n.props?.activeOpacity === 0.7 && typeof n.props?.onPress === 'function',
   )[0];
   if (!cta) throw new Error('primary CTA not found');
+  return cta;
+}
+
+// Presses through onPress directly, so a `disabled` prop is not honoured
+// here; a test that needs the control inert asserts the prop and the handler.
+function pressPrimaryCTA(tree: any) {
+  const cta = primaryCTA(tree);
   return act(async () => {
     cta.props.onPress();
   });
 }
+
+const entitledCustomerInfo = {
+  entitlements: { active: { 'Unfold Premium': { identifier: 'Unfold Premium' } } },
+};
+const unentitledCustomerInfo = { entitlements: { active: {} } };
+
+function findText(tree: any, text: string) {
+  return tree.root.findAll((n: any) => n.props?.children === text);
+}
+
+/** Style colour of the outermost Text node rendering exactly `text`. */
+function textColor(tree: any, text: string): string | undefined {
+  const node = findText(tree, text)[0];
+  const style = node?.props?.style;
+  return Array.isArray(style) ? style.find((s: any) => s?.color)?.color : style?.color;
+}
+
+function notificationHaptics(): unknown[] {
+  return (Haptics.notificationAsync as jest.Mock).mock.calls.map((call) => call[0]);
+}
+
+/** A wait the test settles by hand, standing in for the SDK listener + poll. */
+function deferredEntitlementWait() {
+  let resolve!: (value: unknown) => void;
+  const promise = new Promise<unknown>((r) => {
+    resolve = r;
+  });
+  mockWaitForUnfoldPremiumEntitlement.mockReturnValue(promise);
+  return {
+    resolve: (value: unknown) => act(async () => {
+      resolve(value);
+    }),
+    signal: (callIndex = 0): AbortSignal =>
+      mockWaitForUnfoldPremiumEntitlement.mock.calls[callIndex][1].signal,
+  };
+}
+
+/**
+ * Jordan (App Store 1.1.0): "after accepting the offer for the trial it takes
+ * me back to the free trial page" / "I had to tap restore purchases to get
+ * through it". The paywall had one exit and every other terminal branch of a
+ * completed purchase left the person on it.
+ */
+describe('ThreeStepPaywall purchase advances exactly once', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockIsQaToolsEnabled.mockReturnValue(false);
+    mockWaitForUnfoldPremiumEntitlement.mockReturnValue(new Promise(() => {}));
+    mockSyncTrialEndingNotification.mockResolvedValue(undefined);
+  });
+
+  // hasFreeTrial false is two pages: one CTA press reaches the final page, the
+  // next one purchases. yearlyPackage present keeps the handler off fetchQuery.
+  async function renderOnFinalPage(overrides: Record<string, unknown> = {}) {
+    const props = baseProps({ yearlyPackage: { identifier: '$rc_annual' }, ...overrides });
+    const tree = await render(props);
+    await pressPrimaryCTA(tree);
+    return { tree, props };
+  }
+
+  it('advances once on an entitled result even when the notification sync rejects', async () => {
+    mockPurchasePackage.mockResolvedValue({ ok: true, data: entitledCustomerInfo });
+    mockSyncTrialEndingNotification.mockRejectedValue(new Error('getCustomerInfo hung'));
+    const { tree, props } = await renderOnFinalPage();
+
+    await pressPrimaryCTA(tree);
+
+    expect(props.onPurchaseSuccess).toHaveBeenCalledTimes(1);
+    expect(mockSyncTrialEndingNotification).toHaveBeenCalledTimes(1);
+    expect(findText(tree, PAYWALL_GENERIC_ERROR_MESSAGE)).toHaveLength(0);
+    expect(findText(tree, PAYWALL_ENTITLEMENT_PENDING_MESSAGE)).toHaveLength(0);
+  });
+
+  it('navigates before the notification sync starts, never after it', async () => {
+    const order: string[] = [];
+    mockPurchasePackage.mockResolvedValue({ ok: true, data: entitledCustomerInfo });
+    mockSyncTrialEndingNotification.mockImplementation(() => {
+      order.push('sync');
+      return new Promise(() => {});
+    });
+    const { tree, props } = await renderOnFinalPage({
+      onPurchaseSuccess: jest.fn(() => order.push('advance')),
+    });
+
+    await pressPrimaryCTA(tree);
+
+    expect(props.onPurchaseSuccess).toHaveBeenCalledTimes(1);
+    expect(order).toEqual(['advance', 'sync']);
+  });
+
+  it('advances only once when a restore lands after a successful purchase', async () => {
+    mockPurchasePackage.mockResolvedValue({ ok: true, data: entitledCustomerInfo });
+    mockRestorePurchases.mockResolvedValue({ ok: true, data: entitledCustomerInfo });
+    const { tree, props } = await renderOnFinalPage();
+
+    await pressPrimaryCTA(tree);
+    await act(async () => {
+      findByLabel(tree, 'Restore purchases')[0].props.onPress();
+    });
+
+    expect(props.onPurchaseSuccess).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the timeout copy as a neutral pending state, not the generic error, on a client-side timeout', async () => {
+    mockPurchasePackage.mockResolvedValue({ ok: false, reason: 'timeout', error: new Error('timed out') });
+    const wait = deferredEntitlementWait();
+    const { tree, props } = await renderOnFinalPage();
+
+    await pressPrimaryCTA(tree);
+
+    expect(props.onPurchaseSuccess).not.toHaveBeenCalled();
+    expect(findText(tree, PAYWALL_PURCHASE_TIMEOUT_MESSAGE).length).toBeGreaterThan(0);
+    expect(textColor(tree, PAYWALL_PURCHASE_TIMEOUT_MESSAGE)).not.toBe(colors.error);
+    expect(findText(tree, PAYWALL_ENTITLEMENT_PENDING_CUE).length).toBeGreaterThan(0);
+    expect(findText(tree, PAYWALL_GENERIC_ERROR_MESSAGE)).toHaveLength(0);
+    expect(notificationHaptics()).not.toContain('error');
+
+    // The wait gave up: the timeout copy becomes the error-slot verdict.
+    await wait.resolve(null);
+    expect(findText(tree, PAYWALL_ENTITLEMENT_PENDING_CUE)).toHaveLength(0);
+    expect(textColor(tree, PAYWALL_PURCHASE_TIMEOUT_MESSAGE)).toBe(colors.error);
+    expect(props.onPurchaseSuccess).not.toHaveBeenCalled();
+  });
+
+  it('renders the pending grant as "finishing up", not as an error', async () => {
+    mockPurchasePackage.mockResolvedValue({ ok: true, data: unentitledCustomerInfo });
+    deferredEntitlementWait();
+    const { tree, props } = await renderOnFinalPage();
+
+    await pressPrimaryCTA(tree);
+
+    expect(props.onPurchaseSuccess).not.toHaveBeenCalled();
+    expect(findText(tree, PAYWALL_ENTITLEMENT_PENDING_CUE).length).toBeGreaterThan(0);
+    expect(findText(tree, PAYWALL_ENTITLEMENT_PENDING_MESSAGE).length).toBeGreaterThan(0);
+    expect(textColor(tree, PAYWALL_ENTITLEMENT_PENDING_MESSAGE)).toBe(colors.textMuted);
+    expect(textColor(tree, PAYWALL_ENTITLEMENT_PENDING_MESSAGE)).not.toBe(colors.error);
+    expect(notificationHaptics()).toEqual([]);
+    expect(mockWaitForUnfoldPremiumEntitlement).toHaveBeenCalledTimes(1);
+    expect(mockWaitForUnfoldPremiumEntitlement.mock.calls[0][0]).toBe(10_000);
+  });
+
+  it('advances without Restore when the entitlement arrives late through the bounded wait', async () => {
+    mockPurchasePackage.mockResolvedValue({ ok: true, data: unentitledCustomerInfo });
+    const wait = deferredEntitlementWait();
+    const { tree, props } = await renderOnFinalPage();
+
+    await pressPrimaryCTA(tree);
+    expect(props.onPurchaseSuccess).not.toHaveBeenCalled();
+
+    await wait.resolve(entitledCustomerInfo);
+
+    expect(props.onPurchaseSuccess).toHaveBeenCalledTimes(1);
+    expect(notificationHaptics()).toEqual(['success']);
+    expect(findText(tree, PAYWALL_ENTITLEMENT_PENDING_CUE)).toHaveLength(0);
+  });
+
+  it('moves the pending copy to the error slot with its Restore guidance when the wait gives up', async () => {
+    mockPurchasePackage.mockResolvedValue({ ok: true, data: unentitledCustomerInfo });
+    const wait = deferredEntitlementWait();
+    const { tree, props } = await renderOnFinalPage();
+
+    await pressPrimaryCTA(tree);
+    await wait.resolve(null);
+
+    expect(props.onPurchaseSuccess).not.toHaveBeenCalled();
+    expect(findText(tree, PAYWALL_ENTITLEMENT_PENDING_CUE)).toHaveLength(0);
+    expect(findText(tree, PAYWALL_ENTITLEMENT_PENDING_MESSAGE).length).toBeGreaterThan(0);
+    expect(PAYWALL_ENTITLEMENT_PENDING_MESSAGE).toContain('Restore purchases');
+    expect(textColor(tree, PAYWALL_ENTITLEMENT_PENDING_MESSAGE)).toBe(colors.error);
+    expect(notificationHaptics()).toEqual(['warning']);
+    // One bounded wait only — nothing re-arms a listener after it gave up.
+    expect(mockWaitForUnfoldPremiumEntitlement).toHaveBeenCalledTimes(1);
+  });
+
+  it('aborts the entitlement wait when the paywall unmounts, so no listener outlives it', async () => {
+    mockPurchasePackage.mockResolvedValue({ ok: true, data: unentitledCustomerInfo });
+    const wait = deferredEntitlementWait();
+    const { tree, props } = await renderOnFinalPage();
+
+    await pressPrimaryCTA(tree);
+    expect(wait.signal().aborted).toBe(false);
+
+    await act(async () => {
+      tree.unmount();
+    });
+
+    expect(wait.signal().aborted).toBe(true);
+    // A grant that lands after unmount must not advance a dead screen.
+    await wait.resolve(entitledCustomerInfo);
+    expect(props.onPurchaseSuccess).not.toHaveBeenCalled();
+  });
+
+  it('keeps the primary CTA inert while the grant is pending, so a second tap cannot abort the wait', async () => {
+    mockPurchasePackage.mockResolvedValue({ ok: true, data: unentitledCustomerInfo });
+    const wait = deferredEntitlementWait();
+    const { tree, props } = await renderOnFinalPage();
+
+    await pressPrimaryCTA(tree);
+    expect(mockPurchasePackage).toHaveBeenCalledTimes(1);
+    expect(primaryCTA(tree).props.disabled).toBe(true);
+
+    // Jordan's dead end: a second purchase aborted the wait and dropped its
+    // listener, re-opened the store sheet for a product the person already
+    // owned, and left Restore purchases as the only exit.
+    await pressPrimaryCTA(tree);
+
+    expect(mockPurchasePackage).toHaveBeenCalledTimes(1);
+    expect(wait.signal().aborted).toBe(false);
+    expect(findText(tree, PAYWALL_ENTITLEMENT_PENDING_CUE).length).toBeGreaterThan(0);
+    expect(findText(tree, PAYWALL_GENERIC_ERROR_MESSAGE)).toHaveLength(0);
+    expect(notificationHaptics()).toEqual([]);
+
+    // The one wait still owns the exit.
+    await wait.resolve(entitledCustomerInfo);
+    expect(props.onPurchaseSuccess).toHaveBeenCalledTimes(1);
+  });
+
+  it('re-enables the primary CTA after the wait gives up, and a new attempt gets its own wait', async () => {
+    mockPurchasePackage.mockResolvedValue({ ok: true, data: unentitledCustomerInfo });
+    const firstWait = deferredEntitlementWait();
+    const { tree } = await renderOnFinalPage();
+
+    await pressPrimaryCTA(tree);
+    await firstWait.resolve(null);
+    expect(primaryCTA(tree).props.disabled).toBe(false);
+    expect(textColor(tree, PAYWALL_ENTITLEMENT_PENDING_MESSAGE)).toBe(colors.error);
+
+    const secondWait = deferredEntitlementWait();
+    await pressPrimaryCTA(tree);
+
+    expect(mockPurchasePackage).toHaveBeenCalledTimes(2);
+    expect(mockWaitForUnfoldPremiumEntitlement).toHaveBeenCalledTimes(2);
+    // The given-up wait released its signal when pending cleared; the fresh
+    // attempt listens on its own, live signal.
+    expect(firstWait.signal(0).aborted).toBe(true);
+    expect(secondWait.signal(1).aborted).toBe(false);
+    // Back in the neutral pending state: the Restore guidance has left the
+    // error slot and the CTA is inert again.
+    expect(findText(tree, PAYWALL_ENTITLEMENT_PENDING_CUE).length).toBeGreaterThan(0);
+    expect(textColor(tree, PAYWALL_ENTITLEMENT_PENDING_MESSAGE)).toBe(colors.textMuted);
+    expect(primaryCTA(tree).props.disabled).toBe(true);
+  });
+
+  it('does not advance or wait on a plain SDK error', async () => {
+    mockPurchasePackage.mockResolvedValue({ ok: false, reason: 'sdk_error', error: new Error('boom') });
+    const { tree, props } = await renderOnFinalPage();
+
+    await pressPrimaryCTA(tree);
+
+    expect(props.onPurchaseSuccess).not.toHaveBeenCalled();
+    expect(mockWaitForUnfoldPremiumEntitlement).not.toHaveBeenCalled();
+    expect(findText(tree, PAYWALL_ENTITLEMENT_PENDING_CUE)).toHaveLength(0);
+    expect(findText(tree, PAYWALL_GENERIC_ERROR_MESSAGE).length).toBeGreaterThan(0);
+    expect(textColor(tree, PAYWALL_GENERIC_ERROR_MESSAGE)).toBe(colors.error);
+    expect(notificationHaptics()).toEqual(['error']);
+  });
+});
 
 describe('ThreeStepPaywall decide-later exit', () => {
   beforeEach(() => {

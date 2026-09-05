@@ -1,11 +1,24 @@
 import {
   getThreeStepPaywallPrimaryAction,
+  resolveOnboardingPurchaseAdvance,
   resolvePaywallCompletionNavigation,
   resolvePurchaseOutcome,
   resolveRestoreOutcome,
   runGuardedPaywallFlow,
+  PAYWALL_ENTITLEMENT_PENDING_MESSAGE,
   PAYWALL_GENERIC_ERROR_MESSAGE,
+  PAYWALL_PURCHASE_TIMEOUT_MESSAGE,
 } from '../paywall-guardrails';
+
+const entitledResult = {
+  ok: true as const,
+  data: { entitlements: { active: { 'Unfold Premium': { identifier: 'Unfold Premium' } } } },
+};
+
+const unentitledResult = {
+  ok: true as const,
+  data: { entitlements: { active: {} } },
+};
 
 describe('paywall guardrails', () => {
   describe('three-step onboarding paywall primary CTA', () => {
@@ -85,6 +98,71 @@ describe('paywall guardrails', () => {
           data: { entitlements: { active: { 'Unfold Premium': { identifier: 'Unfold Premium' } } } },
         }),
       ).toEqual({ kind: 'success' });
+    });
+  });
+
+  describe('onboarding purchase advance decision', () => {
+    it('advances once on a result that carries the Unfold Premium entitlement', () => {
+      expect(
+        resolveOnboardingPurchaseAdvance({ result: entitledResult, hasAdvanced: false }),
+      ).toEqual({ action: 'advance' });
+    });
+
+    it('is a no-op after the paywall has already advanced, whatever the result', () => {
+      expect(
+        resolveOnboardingPurchaseAdvance({ result: entitledResult, hasAdvanced: true }),
+      ).toEqual({ action: 'noop' });
+      expect(
+        resolveOnboardingPurchaseAdvance({
+          result: { ok: false, reason: 'sdk_error' },
+          hasAdvanced: true,
+        }),
+      ).toEqual({ action: 'noop' });
+    });
+
+    it('waits for the entitlement when the store transaction resolved without it', () => {
+      expect(
+        resolveOnboardingPurchaseAdvance({ result: unentitledResult, hasAdvanced: false }),
+      ).toEqual({ action: 'wait_for_entitlement', message: PAYWALL_ENTITLEMENT_PENDING_MESSAGE });
+    });
+
+    it('waits for the entitlement on a client-side timeout with the timeout copy', () => {
+      expect(
+        resolveOnboardingPurchaseAdvance({
+          result: { ok: false, reason: 'timeout' },
+          hasAdvanced: false,
+        }),
+      ).toEqual({ action: 'wait_for_entitlement', message: PAYWALL_PURCHASE_TIMEOUT_MESSAGE });
+      expect(PAYWALL_PURCHASE_TIMEOUT_MESSAGE).not.toBe(PAYWALL_GENERIC_ERROR_MESSAGE);
+    });
+
+    it('reports a cancellation without a message', () => {
+      expect(
+        resolveOnboardingPurchaseAdvance({
+          result: { ok: false, reason: 'user_cancelled' },
+          hasAdvanced: false,
+        }),
+      ).toEqual({ action: 'cancelled' });
+    });
+
+    it('surfaces the generic message for every other failure', () => {
+      for (const reason of ['sdk_error', 'not_configured', 'web_not_supported', undefined]) {
+        expect(
+          resolveOnboardingPurchaseAdvance({
+            result: { ok: false, reason },
+            hasAdvanced: false,
+          }),
+        ).toEqual({ action: 'error', message: PAYWALL_GENERIC_ERROR_MESSAGE });
+      }
+    });
+
+    it('never advances without the entitlement on the result actually used (3.1.2)', () => {
+      const decisions = [
+        resolveOnboardingPurchaseAdvance({ result: unentitledResult, hasAdvanced: false }),
+        resolveOnboardingPurchaseAdvance({ result: { ok: true, data: {} }, hasAdvanced: false }),
+        resolveOnboardingPurchaseAdvance({ result: { ok: false, reason: 'timeout' }, hasAdvanced: false }),
+      ];
+      expect(decisions.map((d) => d.action)).not.toContain('advance');
     });
   });
 

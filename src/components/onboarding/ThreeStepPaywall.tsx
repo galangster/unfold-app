@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, memo } from 'react';
+import { useState, useCallback, useEffect, useRef, memo } from 'react';
 import {
   View,
   Text,
@@ -39,7 +39,13 @@ import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { Duration, Ease } from '@/constants/animations';
 import { useQueryClient } from '@tanstack/react-query';
-import { purchasePackage, restorePurchases, getOfferings } from '@/lib/revenuecatClient';
+import {
+  POST_PURCHASE_ENTITLEMENT_WAIT_MS,
+  purchasePackage,
+  restorePurchases,
+  getOfferings,
+  waitForUnfoldPremiumEntitlement,
+} from '@/lib/revenuecatClient';
 import { PURCHASE_PLANS_UNAVAILABLE_MESSAGE } from '@/lib/paywall-purchase-readiness';
 import { getPaywallRenewalDisclosure } from '@/lib/paywall-disclosure';
 import { syncTrialEndingNotification } from '@/lib/trial-notification';
@@ -60,7 +66,8 @@ import {
 } from '@/lib/paywall-mockup-size';
 import {
   getThreeStepPaywallPrimaryAction,
-  resolvePurchaseOutcome,
+  PAYWALL_ENTITLEMENT_PENDING_CUE,
+  resolveOnboardingPurchaseAdvance,
   resolveRestoreOutcome,
   runGuardedPaywallFlow,
 } from '@/lib/paywall-guardrails';
@@ -963,11 +970,18 @@ function GlowingCTA({
   colors,
   onPress,
   isLoading,
+  disabled = false,
 }: {
   label: string;
   colors: ColorTheme;
   onPress: () => void;
   isLoading: boolean;
+  /**
+   * Inert and dimmed, with no spinner of its own. Set while a completed
+   * purchase waits on its Premium grant: the pending block above the button
+   * already carries the spinner, and a second purchase would abort that wait.
+   */
+  disabled?: boolean;
 }) {
   // Seamless breathing halo — uses a linear phase counter (0 → 1 → 0 → 1...)
   // mapped through a sine wave so the shadowOpacity rises and falls
@@ -999,13 +1013,14 @@ function GlowingCTA({
   });
 
   return (
-    <TouchableOpacity activeOpacity={0.7} onPress={onPress} disabled={isLoading}>
+    <TouchableOpacity activeOpacity={0.7} onPress={onPress} disabled={isLoading || disabled}>
       <Animated.View
         style={[
           styles.ctaButton,
           styles.ctaShadow,
           { backgroundColor: colors.accent, shadowColor: colors.accent },
           shadowStyle,
+          disabled && styles.ctaButtonInert,
         ]}
       >
         {isLoading ? (
@@ -1040,6 +1055,7 @@ function BottomCTA({
   selectedPlan,
   isLoading,
   purchaseError,
+  entitlementPendingMessage,
   offeringsReady,
   onPress,
 }: {
@@ -1055,6 +1071,8 @@ function BottomCTA({
   selectedPlan: 'yearly' | 'monthly';
   isLoading: boolean;
   purchaseError: string | null;
+  /** Set while a completed purchase waits on its Premium grant. Not an error. */
+  entitlementPendingMessage: string | null;
   offeringsReady: boolean;
   onPress: () => void;
 }) {
@@ -1079,6 +1097,36 @@ function BottomCTA({
 
   return (
     <View style={styles.ctaContainer}>
+      {/* Grant pending: the person has paid, so this is a "finishing up"
+          cue in neutral colours, never the error treatment below. */}
+      {entitlementPendingMessage && (
+        <View style={styles.pendingBlock} accessibilityLiveRegion="polite">
+          <View style={styles.pendingRow}>
+            <ActivityIndicator size="small" color={colors.accent} />
+            <Text
+              style={{
+                fontFamily: FontFamily.uiMedium,
+                fontSize: FontSize.sm,
+                color: colors.text,
+                marginLeft: Spacing['1.5'],
+              }}
+            >
+              {PAYWALL_ENTITLEMENT_PENDING_CUE}
+            </Text>
+          </View>
+          <Text
+            style={{
+              fontFamily: FontFamily.ui,
+              fontSize: FontSize.sm,
+              color: colors.textMuted,
+              textAlign: 'center',
+            }}
+          >
+            {entitlementPendingMessage}
+          </Text>
+        </View>
+      )}
+
       {/* Error message */}
       {purchaseError && (
         <Text
@@ -1120,6 +1168,10 @@ function BottomCTA({
         colors={colors}
         onPress={onPress}
         isLoading={isLoading}
+        // The person has paid and the grant is on its way. The most prominent
+        // control on the screen must not invite a second purchase that would
+        // abort the wait; Restore purchases stays live as the fallback.
+        disabled={entitlementPendingMessage !== null}
       />
 
       {/* Renewal disclosure -- reflects selected plan; hidden until offerings
@@ -1284,6 +1336,55 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
   // Purchase / Restore
   // -----------------------------------------------------------------------
 
+  // The one exit that advances onboarding. Every path that ends in Premium —
+  // purchase, restore, the exclusive offer, a late entitlement — goes through
+  // here, so a second callback (a restore racing a purchase, the listener
+  // firing after a success) can never advance twice.
+  const advancedRef = useRef(false);
+  // Copy shown while a completed transaction waits on its Premium grant; null
+  // when nothing is pending. Kept apart from purchaseError on purpose: the
+  // person has paid, so this state gets neutral styling and no error haptic.
+  const [entitlementPendingMessage, setEntitlementPendingMessage] = useState<string | null>(null);
+
+  const advanceOnce = useCallback((): boolean => {
+    if (advancedRef.current) return false;
+    advancedRef.current = true;
+    setEntitlementPendingMessage(null);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    // Navigate first. The notification sync reads customer info with no
+    // timeout; awaiting it before onPurchaseSuccess once held a paying person
+    // on the paywall, and a rejection cancelled the advance outright.
+    onPurchaseSuccess();
+    syncTrialEndingNotification().catch((error: unknown) => {
+      logger.log('[ThreeStepPaywall] trial notification sync failed after purchase:', error);
+    });
+    return true;
+  }, [onPurchaseSuccess]);
+
+  // While a completed transaction waits on its entitlement, one bounded wait
+  // (the SDK listener plus a 2 s poll) is the exit: the grant arrives, the
+  // paywall advances, and nobody has to find Restore purchases. When the wait
+  // gives up, the same copy moves to the error slot so its Restore guidance
+  // reads as the next step, and the listener is already gone. Unmount aborts
+  // the wait, so no listener outlives this screen.
+  useEffect(() => {
+    if (entitlementPendingMessage === null) return;
+    const controller = new AbortController();
+    void waitForUnfoldPremiumEntitlement(POST_PURCHASE_ENTITLEMENT_WAIT_MS, {
+      signal: controller.signal,
+    }).then((customerInfo) => {
+      if (controller.signal.aborted) return;
+      if (customerInfo) {
+        advanceOnce();
+        return;
+      }
+      setEntitlementPendingMessage(null);
+      setPurchaseError(entitlementPendingMessage);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    });
+    return () => controller.abort();
+  }, [entitlementPendingMessage, advanceOnce]);
+
   // Both handlers are wrapped in runGuardedPaywallFlow so a rejected
   // purchasePackage / restorePurchases / fetchQuery can never leave isLoading
   // stuck at true (a permanent CTA spinner): loading is ALWAYS cleared and a
@@ -1309,32 +1410,40 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
       }
       setIsLoading(true);
       setPurchaseError(null);
+      // A fresh attempt owns the wait from here; purchasePackage listens for
+      // the grant itself, and a stale UI deadline must not fire underneath it.
+      // handleCTAPress keeps the CTA inert while a grant is pending, so in
+      // practice this only clears an already-null state.
+      setEntitlementPendingMessage(null);
       const result = await purchasePackage(pkg);
 
-      if (!result.ok) {
-        if (result.reason === 'user_cancelled') {
+      const decision = resolveOnboardingPurchaseAdvance({ result, hasAdvanced: advancedRef.current });
+      switch (decision.action) {
+        case 'advance':
+          advanceOnce();
+          return;
+        case 'noop':
+          return;
+        case 'cancelled': {
           const hasSeenOnboardingOffer = mmkvStorage.getItem('@unfold_onboarding_offer_seen') === 'true';
           if (!hasSeenOnboardingOffer) {
             setShowExclusiveOffer(true);
           }
-        } else {
-          setPurchaseError('Something went wrong. Please try again.');
+          return;
         }
-        return;
+        case 'wait_for_entitlement':
+          // Not a failure: the store transaction is done and only the grant
+          // is late. No error haptic, and the copy renders in the neutral
+          // pending slot with a "finishing up" cue, not the error slot.
+          setEntitlementPendingMessage(decision.message);
+          return;
+        case 'error':
+          setPurchaseError(decision.message);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          return;
       }
-
-      const outcome = resolvePurchaseOutcome(result);
-      if (outcome.kind === 'success') {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        await syncTrialEndingNotification();
-        onPurchaseSuccess();
-        return;
-      }
-
-      setPurchaseError(outcome.message);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     },
-  }), [selectedPlan, yearlyPackage, monthlyPackage, onPurchaseSuccess, queryClient]);
+  }), [selectedPlan, yearlyPackage, monthlyPackage, advanceOnce, queryClient]);
 
   // The exclusive offer is a real purchase surface, so it needs the same two
   // exits the main CTA has: a dismissal only marks the offer seen, while a
@@ -1352,9 +1461,8 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
 
   const handleExclusiveOfferPurchaseSuccess = useCallback(() => {
     dismissExclusiveOffer();
-    void syncTrialEndingNotification();
-    onPurchaseSuccess();
-  }, [dismissExclusiveOffer, onPurchaseSuccess]);
+    advanceOnce();
+  }, [dismissExclusiveOffer, advanceOnce]);
 
   const handleRestore = useCallback(() => runGuardedPaywallFlow({
     setLoading: setIsLoading,
@@ -1368,9 +1476,7 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
 
       const outcome = resolveRestoreOutcome(result);
       if (outcome.kind === 'success') {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        await syncTrialEndingNotification();
-        onPurchaseSuccess();
+        advanceOnce();
         return;
       }
 
@@ -1379,7 +1485,7 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
         Haptics.NotificationFeedbackType.Warning,
       );
     },
-  }), [onPurchaseSuccess]);
+  }), [advanceOnce]);
 
   // -----------------------------------------------------------------------
   // CTA press: navigate on screens 1-2, purchase on screen 3
@@ -1397,8 +1503,16 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
       return;
     }
 
+    // A completed purchase is waiting on its grant. Buying again would abort
+    // that wait and re-open the store sheet for a product the person already
+    // owns, which is the Restore-only dead end Jordan hit. The button is also
+    // disabled; this guard covers any press that reaches the handler anyway.
+    if (entitlementPendingMessage !== null) {
+      return;
+    }
+
     handlePurchase();
-  }, [currentPage, totalPages, stableHasFreeTrial, nextPage, handlePurchase]);
+  }, [currentPage, totalPages, stableHasFreeTrial, nextPage, handlePurchase, entitlementPendingMessage]);
 
   // -----------------------------------------------------------------------
   // Render
@@ -1489,6 +1603,7 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
             selectedPlan={selectedPlan}
             isLoading={isLoading}
             purchaseError={purchaseError}
+            entitlementPendingMessage={entitlementPendingMessage}
             offeringsReady={offeringsReady}
             onPress={currentPage === totalPages - 1 && !offeringsReady ? () => {} : handleCTAPress}
           />
@@ -1800,6 +1915,16 @@ const styles = StyleSheet.create({
   ctaContainer: {
     gap: 0,
   },
+  pendingBlock: {
+    alignItems: 'center',
+    marginBottom: Spacing['2'],
+  },
+  pendingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing['1'],
+  },
   noPaymentRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1812,6 +1937,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
+  },
+  // Disabled without a spinner: the pending block above already shows one.
+  ctaButtonInert: {
+    opacity: 0.5,
   },
   // iOS native shadow produces a true GPU-blurred colored halo that
   // actually feathers at the edges. Combined with the sin-wave animated

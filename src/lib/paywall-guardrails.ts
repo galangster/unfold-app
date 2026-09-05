@@ -95,6 +95,71 @@ export function resolveRestoreOutcome(
 /** User-facing fallback when a purchase/restore rejects unexpectedly. */
 export const PAYWALL_GENERIC_ERROR_MESSAGE = 'Something went wrong. Please try again.';
 
+/** Copy for a purchase Apple has not answered inside the client deadline. */
+export const PAYWALL_PURCHASE_TIMEOUT_MESSAGE =
+  'Purchase took too long. Please check your connection and try again.';
+
+/** Copy while the store transaction is done but Premium has not been granted yet. */
+export const PAYWALL_ENTITLEMENT_PENDING_MESSAGE =
+  'Your purchase went through, but Premium has not activated yet. It will unlock on its own in a moment — or tap Restore purchases.';
+
+/**
+ * Cue shown beside a spinner while the onboarding paywall waits on the grant.
+ * The wait is not an error — the person has paid — so it renders in a neutral
+ * slot, never in the error slot.
+ */
+export const PAYWALL_ENTITLEMENT_PENDING_CUE = 'Finishing up…';
+
+export type OnboardingPurchaseAdvanceDecision =
+  | { action: 'advance' }
+  | { action: 'noop' }
+  | { action: 'cancelled' }
+  | { action: 'wait_for_entitlement'; message: string }
+  | { action: 'error'; message: string };
+
+/**
+ * Decide what the onboarding paywall does with a purchase result.
+ *
+ * The paywall has exactly one exit that advances onboarding. Before this
+ * decision existed, every terminal branch except a clean success stranded a
+ * completed Apple purchase on the paywall with Restore as the only way out.
+ *
+ * - `advance` fires at most once per paywall mount (`hasAdvanced`).
+ * - `wait_for_entitlement` covers the two branches where the store
+ *   transaction may have completed even though the result carries no
+ *   entitlement yet: an `ok` result whose customer info lags the grant, and a
+ *   client-side timeout. The caller keeps listening for the entitlement.
+ * - The entitlement gate is unchanged: `advance` never fires without
+ *   `entitlements.active['Unfold Premium']` on the result actually used (3.1.2).
+ */
+export function resolveOnboardingPurchaseAdvance({
+  result,
+  hasAdvanced,
+}: {
+  result: MinimalRevenueCatResult;
+  hasAdvanced: boolean;
+}): OnboardingPurchaseAdvanceDecision {
+  if (hasAdvanced) {
+    return { action: 'noop' };
+  }
+
+  if (!result.ok) {
+    if (result.reason === 'user_cancelled') {
+      return { action: 'cancelled' };
+    }
+    if (result.reason === 'timeout') {
+      return { action: 'wait_for_entitlement', message: PAYWALL_PURCHASE_TIMEOUT_MESSAGE };
+    }
+    return { action: 'error', message: PAYWALL_GENERIC_ERROR_MESSAGE };
+  }
+
+  if (!hasUnfoldPremiumEntitlement(result.data)) {
+    return { action: 'wait_for_entitlement', message: PAYWALL_ENTITLEMENT_PENDING_MESSAGE };
+  }
+
+  return { action: 'advance' };
+}
+
 /**
  * Run a paywall purchase/restore flow with guaranteed loading + error hygiene.
  *
