@@ -148,5 +148,7 @@
     <string>Automatic</string>
     <key>UIViewControllerBasedStatusBarAppearance</key>
     <false/>
+    <key>UNFOLDBuildProfile</key>
+    <string>$(EAS_BUILD_PROFILE)</string>
   </dict>
 </plist>

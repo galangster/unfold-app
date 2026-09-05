@@ -24,8 +24,11 @@
  *   - a URL (http breadcrumbs, failed-request events, spans) survives only
  *     with its query string and fragment cut off;
  *   - session replay, screenshots, and view-hierarchy attachments are never
- *     enabled; transactions (one production session in ten, none elsewhere)
- *     bypass `beforeSend`, so `scrubTransaction` rebuilds them the same way.
+ *     enabled — for replay that means OMITTING the two sample rates, because
+ *     at @sentry/react-native 7.11.0 passing them (even as 0) is what installs
+ *     `mobileReplayIntegration`; transactions (one production session in ten,
+ *     none elsewhere) bypass `beforeSend`, so `scrubTransaction` rebuilds them
+ *     the same way.
  *
  * NATIVE FIRST
  * A Release build starts the Cocoa SDK in `ios/Unfold/AppDelegate.swift`
@@ -35,6 +38,12 @@
  * instance (`autoInitializeNativeSdk: false`) instead of restarting it, which
  * means every native-only option lives in the Swift file and the two must
  * agree. A Debug build has no native start; JavaScript starts native itself.
+ * Neither side passes a release or a dist: both are derived from the built
+ * Info.plist (`nativeReleaseIntegration` here, Cocoa's own default form in the
+ * Swift file), which is the `<bundle id>@<version>+<build>` / `<build>` pair
+ * `sentry-cli react-native xcode` uploads this build's source maps under. The
+ * Expo config cannot supply them — `eas.json` uses `appVersionSource: remote`,
+ * so `app.json`'s `ios.buildNumber` has sat at "183" since build 183.
  *
  * DISABLED UNTIL A DSN EXISTS
  * Without `EXPO_PUBLIC_SENTRY_DSN` every export is a no-op, `isSentryEnabled()`
@@ -253,6 +262,30 @@ function scrubContexts(contexts: unknown): Record<string, Record<string, unknown
 }
 
 /**
+ * A native (cocoa) frame carries no filename: Sentry resolves it by locating
+ * `instruction_addr` inside the debug image at `image_addr`. Those frames
+ * reach `beforeSend` when the NativeLinkedErrors integration appends a bridge
+ * NSException's stack to a JavaScript error, and without the addresses they
+ * arrive as `{platform, in_app}` and cannot be symbolicated at all. Only a
+ * `0x`-prefixed hex literal is carried, so the key cannot smuggle a string.
+ * `package` is deliberately NOT carried: it is
+ * `/private/var/containers/Bundle/Application/<uuid>/Unfold.app/Unfold`, an
+ * on-disk path that buys nothing once the two addresses are present.
+ */
+const NATIVE_FRAME_ADDRESS_KEYS = ['instruction_addr', 'image_addr', 'symbol_addr'] as const;
+const HEX_ADDRESS_PATTERN = /^0x[0-9a-f]+$/i;
+
+function nativeFrameAddresses(frame: StackFrame): Record<string, string> {
+  const source = frame as unknown as Record<string, unknown>;
+  const out: Record<string, string> = {};
+  for (const key of NATIVE_FRAME_ADDRESS_KEYS) {
+    const value = source[key];
+    if (typeof value === 'string' && HEX_ADDRESS_PATTERN.test(value)) out[key] = value;
+  }
+  return out;
+}
+
+/**
  * Frames are rebuilt from code identifiers only. `vars` (the local variables
  * of the frame) is the single largest leak vector in a stack trace and is
  * dropped, as are `abs_path` and the `context_line` / `pre_context` /
@@ -260,6 +293,7 @@ function scrubContexts(contexts: unknown): Record<string, Record<string, unknown
  */
 function scrubFrame(frame: StackFrame): StackFrame {
   return {
+    ...nativeFrameAddresses(frame),
     filename: truncateOrDrop(frame.filename),
     function: truncateOrDrop(frame.function),
     module: truncateOrDrop(frame.module),
@@ -292,7 +326,15 @@ function scrubException(exception: ErrorEvent['exception']): ErrorEvent['excepti
 
 type DebugImages = NonNullable<NonNullable<ErrorEvent['debug_meta']>['images']>;
 
-/** Symbolication metadata only: identifiers pass through, on-disk paths do not. */
+/**
+ * Symbolication metadata only. `debug_id` and `uuid` are symbolication
+ * identifiers rather than device identifiers, so they pass through
+ * byte-identical — Sentry matches an image by them, and the UUID mask would
+ * destroy that. `debug_file` and `code_file` ARE on-disk paths and survive,
+ * but only UUID-masked and truncated by `truncate()`; `code_file` is how a
+ * sourcemap image is matched to a frame's `filename`, so dropping it would
+ * break JavaScript symbolication. Every other key is dropped.
+ */
 const ALLOWED_DEBUG_IMAGE_KEYS = [
   'type', 'debug_id', 'debug_file', 'code_id', 'code_file', 'image_addr', 'image_size', 'uuid', 'arch',
 ] as const;
@@ -477,30 +519,6 @@ function loadSentry(): SentryModule | null {
   }
 }
 
-/** Release/dist provenance, straight off the resolved Expo config. */
-function readAppIdentity(): { release: string | undefined; dist: string | undefined } {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const Constants = require('expo-constants').default as
-      | {
-          expoConfig?: {
-            version?: unknown;
-            ios?: { buildNumber?: unknown };
-            android?: { versionCode?: unknown };
-          } | null;
-        }
-      | undefined;
-    const config = Constants?.expoConfig;
-    const version = typeof config?.version === 'string' ? config.version : undefined;
-    const iosBuild = typeof config?.ios?.buildNumber === 'string' ? config.ios.buildNumber : undefined;
-    const androidBuild =
-      typeof config?.android?.versionCode === 'number' ? String(config.android.versionCode) : undefined;
-    return { release: version, dist: Platform.OS === 'android' ? androidBuild : iosBuild };
-  } catch {
-    return { release: undefined, dist: undefined };
-  }
-}
-
 /** The EAS build profile that produced this binary, reused from build-profile.ts. */
 function resolveEnvironment(): string {
   return getBuildProfile() ?? (__DEV__ ? 'development' : 'unknown');
@@ -587,7 +605,6 @@ export function initSentry(): void {
   if (sentry === null) return;
 
   initialized = true;
-  const { release, dist } = readAppIdentity();
   const environment = resolveEnvironment();
   const backendOnly = originPattern(PRIMARY_BACKEND_URL);
 
@@ -599,9 +616,16 @@ export function initSentry(): void {
 
     sentry.init({
       dsn,
-      release,
-      dist,
       environment,
+
+      // No `release` / `dist`. Passing either short-circuits
+      // `nativeReleaseIntegration` (integrations/release.js) before its
+      // `${id}@${version}+${build}` native fallback — which is exactly the
+      // release `sentry-cli react-native xcode` uploads this build's source
+      // maps under, and exactly what AppDelegate.swift sets natively. The
+      // Expo config's `ios.buildNumber` is stale ("183") under
+      // `appVersionSource: remote`, so deriving from native is also the only
+      // way the two sides agree on one dist.
 
       // NATIVE FIRST (see the file header). A Release iOS build started the
       // Cocoa SDK in AppDelegate.swift before JavaScript existed; restarting
@@ -616,8 +640,12 @@ export function initSentry(): void {
       sendDefaultPii: false,
       attachScreenshot: false,
       attachViewHierarchy: false,
-      replaysSessionSampleRate: 0,
-      replaysOnErrorSampleRate: 0,
+      // NO `replaysSessionSampleRate` / `replaysOnErrorSampleRate`. At
+      // @sentry/react-native 7.11.0 `integrations/default.js` installs
+      // `mobileReplayIntegration()` when either key is `typeof === 'number'`,
+      // which `0` satisfies — so writing them out as 0 would INSTALL replay,
+      // not suppress it. Their absence is what keeps it out;
+      // `src/lib/__tests__/sentry.test.ts` asserts the absence.
       enableUserInteractionTracing: false,
       enableLogs: false,
 
@@ -656,8 +684,11 @@ export function initSentry(): void {
       // Every breadcrumb — the SDK's own console/fetch/xhr/navigation/touch
       // ones and this app's — is rebuilt here before it reaches the scope, and
       // the scope is what is synced to the native SDK. So the trail attached to
-      // a native crash report is the scrubbed trail; Cocoa's own automatic
-      // breadcrumbs stay off in AppDelegate.swift because they never pass here.
+      // a native crash report is the scrubbed trail. Cocoa's own breadcrumbs
+      // never pass here, which is why they are turned off in AppDelegate.swift
+      // — and that takes TWO switches, not one: `enableAutoBreadcrumbTracking`
+      // does not govern network breadcrumbs, which have their own
+      // `enableNetworkBreadcrumbs` (default YES) and record `http.query` raw.
       beforeBreadcrumb: (breadcrumb) => scrubBreadcrumb(breadcrumb),
       beforeSendTransaction: (event) => scrubTransaction(event),
     });

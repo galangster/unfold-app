@@ -101,6 +101,36 @@ function bootEnabled(): SentryLib {
   return lib;
 }
 
+/**
+ * Boot the way a real build would, with `__DEV__` and `Platform.OS` chosen
+ * rather than whatever Jest happens to provide. Jest runs as `__DEV__ === true`
+ * on iOS, which is the OPPOSITE of the production-critical case.
+ */
+function bootEnabledAs(isDev: boolean, platformOS: string): InitOptions {
+  const devGlobal = globalThis as typeof globalThis & { __DEV__: boolean };
+  const originalDev = devGlobal.__DEV__;
+  process.env.EXPO_PUBLIC_SENTRY_DSN = DSN;
+  delete process.env.JEST_WORKER_ID;
+  devGlobal.__DEV__ = isDev;
+  mockInit.mockClear();
+  // The isolated copy schedules attachHashedUser on a timer it would fire
+  // after this registry is gone; never let it run.
+  jest.useFakeTimers();
+  try {
+    jest.isolateModules(() => {
+      jest.doMock('react-native', () => ({ Platform: { OS: platformOS } }));
+      const lib = require('../sentry') as SentryLib;
+      lib.initSentry();
+    });
+  } finally {
+    jest.clearAllTimers();
+    jest.useRealTimers();
+    jest.dontMock('react-native');
+    devGlobal.__DEV__ = originalDev;
+  }
+  return initOptions();
+}
+
 function initOptions(): InitOptions {
   expect(mockInit).toHaveBeenCalled();
   return mockInit.mock.calls[0][0] as InitOptions;
@@ -188,14 +218,10 @@ describe('initSentry', () => {
 
     const options = initOptions();
     expect(options.dsn).toBe(DSN);
-    expect(options.release).toBe('1.1.1');
-    expect(options.dist).toBe('183');
     expect(options.environment).toBe('production');
     expect(options.sendDefaultPii).toBe(false);
     expect(options.attachScreenshot).toBe(false);
     expect(options.attachViewHierarchy).toBe(false);
-    expect(options.replaysSessionSampleRate).toBe(0);
-    expect(options.replaysOnErrorSampleRate).toBe(0);
     expect(options.enableLogs).toBe(false);
     expect(options.enableUserInteractionTracing).toBe(false);
     expect(options.enableAutoPerformanceTracing).toBe(true);
@@ -208,6 +234,32 @@ describe('initSentry', () => {
     // nothing native-only is smuggled through the JS options any more.
     expect(options).not.toHaveProperty('enableAutoBreadcrumbTracking');
   });
+
+  it('passes NO replay sample rates, because passing 0 is what installs replay', () => {
+    // integrations/default.js installs mobileReplayIntegration() when either
+    // key is `typeof === 'number'` — which 0 satisfies. Absence keeps it out,
+    // so asserting `=== 0` here would pin the defect in place.
+    bootEnabled();
+    const options = initOptions();
+
+    expect(options).not.toHaveProperty('replaysSessionSampleRate');
+    expect(options).not.toHaveProperty('replaysOnErrorSampleRate');
+    expect(options).not.toHaveProperty('_experiments');
+  });
+
+  it('passes NO release or dist, so both are derived from the built Info.plist', () => {
+    // Passing either short-circuits nativeReleaseIntegration before its
+    // `${id}@${version}+${build}` fallback — the only string that matches
+    // both AppDelegate.swift and the source maps sentry-cli uploads. The
+    // Expo config cannot supply it: app.json's ios.buildNumber is stale at
+    // "183" under eas.json's appVersionSource: remote.
+    bootEnabled();
+    const options = initOptions();
+
+    expect(options).not.toHaveProperty('release');
+    expect(options).not.toHaveProperty('dist');
+    expect(mockConstants.expoConfig.ios.buildNumber).toBe('183');
+  });
 });
 
 describe('native-first init', () => {
@@ -219,10 +271,16 @@ describe('native-first init', () => {
     expect(resolveAutoInitializeNativeSdk(false, 'android')).toBe(true);
   });
 
-  it('passes that decision to the SDK (a Jest bundle is __DEV__, so it initialises native)', () => {
-    bootEnabled();
-
-    expect(initOptions().autoInitializeNativeSdk).toBe(true);
+  it('passes the PRODUCTION decision to the SDK, not the value Jest happens to have', () => {
+    // The mutant this kills: `autoInitializeNativeSdk: true` hardcoded. On a
+    // Release iOS build that restarts the Cocoa SDK on top of the instance
+    // AppDelegate.swift already started, with JS options that carry none of
+    // the native-only settings — so `enableAutoBreadcrumbTracking` reverts to
+    // Cocoa's default YES and screen titles (arc and devotional names) attach
+    // to native crash events that never pass through the JS beforeBreadcrumb.
+    expect(bootEnabledAs(false, 'ios').autoInitializeNativeSdk).toBe(false);
+    expect(bootEnabledAs(false, 'android').autoInitializeNativeSdk).toBe(true);
+    expect(bootEnabledAs(true, 'ios').autoInitializeNativeSdk).toBe(true);
   });
 });
 
@@ -449,6 +507,135 @@ describe('beforeSend', () => {
     expect(serialized).not.toContain('go-deeper?');
     expect(serialized).not.toContain('secret-token');
     expect(serialized).not.toContain(mockDeviceId);
+  });
+
+  it('carries a native frame’s addresses, without its on-disk package path', () => {
+    // A cocoa frame has no filename: Sentry resolves it from instruction_addr
+    // inside the debug image at image_addr. Dropping those (which the
+    // JS-shaped allowlist did) left the frames NativeLinkedErrors appends as
+    // {platform, in_app} — unsymbolicatable.
+    bootEnabled();
+
+    const scrubbed = initOptions().beforeSend({
+      exception: {
+        values: [{
+          type: 'RCTFatalException',
+          value: 'bridge exception',
+          stacktrace: {
+            frames: [{
+              platform: 'cocoa',
+              in_app: true,
+              instruction_addr: '0x0000000102f4c1a8',
+              image_addr: '0x0000000102f40000',
+              symbol_addr: '0x0000000102f4c100',
+              package: `/private/var/containers/Bundle/Application/${mockDeviceId}/Unfold.app/Unfold`,
+            }],
+          },
+        }],
+      },
+    }) as unknown as { exception: { values: { stacktrace: { frames: Record<string, unknown>[] } }[] } };
+
+    const frame = scrubbed.exception.values[0].stacktrace.frames[0];
+    expect(frame.instruction_addr).toBe('0x0000000102f4c1a8');
+    expect(frame.image_addr).toBe('0x0000000102f40000');
+    expect(frame.symbol_addr).toBe('0x0000000102f4c100');
+    expect(frame.platform).toBe('cocoa');
+    expect(frame.in_app).toBe(true);
+    // The container path buys nothing once the addresses are there.
+    expect(frame.package).toBeUndefined();
+    expect(JSON.stringify(scrubbed)).not.toContain(mockDeviceId);
+  });
+
+  it('lets only a hex address through those keys, never a string', () => {
+    bootEnabled();
+
+    const scrubbed = initOptions().beforeSend({
+      exception: {
+        values: [{
+          type: 'Error',
+          stacktrace: { frames: [{ instruction_addr: JOURNAL_TEXT, image_addr: '0xnothex' }] },
+        }],
+      },
+    }) as unknown as { exception: { values: { stacktrace: { frames: Record<string, unknown>[] } }[] } };
+
+    const frame = scrubbed.exception.values[0].stacktrace.frames[0];
+    expect(frame.instruction_addr).toBeUndefined();
+    expect(frame.image_addr).toBeUndefined();
+    expect(JSON.stringify(scrubbed)).not.toContain(JOURNAL_TEXT);
+  });
+
+  it('keeps debug images to the symbolication allowlist, masking only the paths', () => {
+    // debug_meta is what resolves a stack frame to a source map or a dSYM, so
+    // this is a symbolication contract, not a privacy one: debug_id and uuid
+    // must survive the UUID mask byte-identical or the image stops matching.
+    bootEnabled();
+
+    const scrubbed = initOptions().beforeSend({
+      debug_meta: {
+        images: [
+          { type: 'sourcemap', code_file: 'app:///main.jsbundle', debug_id: '9c3f1b7a-1c2d-4e5f-8a9b-0c1d2e3f4a5b' },
+          {
+            type: 'macho',
+            uuid: 'b1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d5e',
+            debug_id: 'b1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d5e',
+            image_addr: '0x0000000102f40000',
+            image_size: 65536,
+            code_file: `/private/var/containers/Bundle/Application/${mockDeviceId}/Unfold.app/Unfold`,
+            arch: 'arm64',
+            junk: 'anything else at all',
+          },
+        ],
+      },
+    }) as unknown as { debug_meta: { images: Record<string, unknown>[] } };
+
+    const [sourcemap, macho] = scrubbed.debug_meta.images;
+    expect(sourcemap).toEqual({
+      type: 'sourcemap',
+      code_file: 'app:///main.jsbundle',
+      debug_id: '9c3f1b7a-1c2d-4e5f-8a9b-0c1d2e3f4a5b',
+    });
+    // The two deliberate exceptions to the UUID mask, byte-identical.
+    expect(macho.debug_id).toBe('b1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d5e');
+    expect(macho.uuid).toBe('b1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d5e');
+    // The path survives — it is how an image is matched — but masked.
+    expect(macho.code_file).toBe('/private/var/containers/Bundle/Application/[uuid]/Unfold.app/Unfold');
+    expect(macho.junk).toBeUndefined();
+    expect(macho.image_addr).toBe('0x0000000102f40000');
+    expect(macho.image_size).toBe(65536);
+    expect(macho.arch).toBe('arm64');
+    expect(JSON.stringify(scrubbed)).not.toContain(mockDeviceId);
+  });
+
+  it('leaves debug_meta absent when the event carried none', () => {
+    bootEnabled();
+
+    const scrubbed = initOptions().beforeSend({ message: 'no images' }) as Record<string, unknown>;
+
+    expect(scrubbed.debug_meta).toBeUndefined();
+    expect('debug_meta' in scrubbed).toBe(true);
+  });
+
+  it('drops the breadcrumb trail from a funnel milestone, but keeps it on a failure', () => {
+    // captureAppEvent tags source=app_event: a counter, not a failure, so 50
+    // breadcrumbs of context are payload cost for nothing.
+    bootEnabled();
+    const beforeSend = initOptions().beforeSend;
+    const breadcrumbs = [{ category: 'app.onboarding', message: 'step advanced', data: { step: 'name' } }];
+
+    const milestone = beforeSend({
+      message: 'onboarding_completed',
+      tags: { source: 'app_event' },
+      breadcrumbs,
+    }) as Record<string, unknown>;
+    const failure = beforeSend({
+      message: 'onboarding failed',
+      tags: { source: 'onboarding' },
+      breadcrumbs,
+    }) as Record<string, unknown>;
+
+    expect(milestone.breadcrumbs).toBeUndefined();
+    expect('breadcrumbs' in milestone).toBe(false);
+    expect(failure.breadcrumbs).toHaveLength(1);
   });
 
   it('keeps a component stack up to 4000 characters, every other string to 200', () => {

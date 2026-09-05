@@ -377,10 +377,14 @@ describe('devotional pull cursor', () => {
     mockFetch.mockResolvedValueOnce({
       ok: false,
       status: 500,
-      text: async () => '{"error":"INTERNAL_ERROR"}',
+      text: async () => '{"error":"Could not merge entry: I keep failing my brother Michael."}',
     });
 
-    await expect(pullDevotionalContent(DEVOTIONAL_ID)).rejects.toThrow('Sync pull failed: 500');
+    // Exact message: the status and NOTHING of the response body. An
+    // exception's `value` is allowlisted through to Sentry by `scrubException`,
+    // and a backend error body can quote the journal text it failed on.
+    await expect(pullDevotionalContent(DEVOTIONAL_ID))
+      .rejects.toThrow(new Error('Sync pull failed: 500'));
 
     expect(requestBodies()).toEqual([{ lastPulledAt: overlapped(before.lastPulledAt) }]);
     expect(storedCursor()).toEqual(before);

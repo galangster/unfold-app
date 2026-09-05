@@ -2,6 +2,8 @@
 
 # dependencies
 node_modules/
+# also match a SYMLINK named node_modules: a trailing-slash pattern does not.
+node_modules
 
 # Expo
 .expo/
