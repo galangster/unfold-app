@@ -838,7 +838,7 @@ Their journal entry:
   const prayerRequests = existingEntry?.prayerRequests ?? [];
 
   return (
-    <TouchableOpacity activeOpacity={1} style={[jStyles.flex1, { backgroundColor: colors.background }]} onPress={Keyboard.dismiss}>
+    <TouchableOpacity accessible={false} activeOpacity={1} style={[jStyles.flex1, { backgroundColor: colors.background }]} onPress={Keyboard.dismiss}>
       <SafeAreaView style={jStyles.flex1} edges={['top']}>
           {/* Header */}
           <View style={jStyles.headerRow}>
