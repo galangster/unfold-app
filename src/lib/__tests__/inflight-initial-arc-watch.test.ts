@@ -176,6 +176,29 @@ describe('watchInflightInitialArc', () => {
     expect(fetchStatus).toHaveBeenCalledTimes(1);
   });
 
+  it('regression: Jordan item 7 — keeps polling after a processing answer past ten minutes, never failing on time alone', async () => {
+    // The old /generating loop declared "Something went wrong" once the wall
+    // clock passed ten minutes, without a further server poll. Here the server
+    // still says "processing" at twelve minutes and completes at twenty-four:
+    // the watch must ask again, on either side of the old cap, and land the job.
+    let clock = 0;
+    const fetchStatus = fetchSequence([{ status: 'processing' }, { status: 'processing' }, completedStatus]);
+
+    const outcome = await watchInflightInitialArc({
+      jobId: 'job-1',
+      fetchStatus,
+      startedAt: 0,
+      now: () => clock,
+      sleep: async (ms) => { clock += ms; },
+      delayFor: () => 12 * 60 * 1000,
+    });
+
+    expect(outcome.kind).toBe('complete');
+    expect(fetchStatus).toHaveBeenCalledTimes(3);
+    // The second answer arrived past the old cap, and the loop still asked again.
+    expect(clock).toBe(24 * 60 * 1000);
+  });
+
   it('gives up as unreachable, not failed, after the consecutive network-error cap', async () => {
     const fetchStatus = fetchSequence(
       Array.from({ length: MAX_CONSECUTIVE_POLL_NETWORK_ERRORS }, () => new Error('network')),
