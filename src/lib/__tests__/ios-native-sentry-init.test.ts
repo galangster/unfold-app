@@ -249,6 +249,14 @@ describe('iOS native-first Sentry init (regression: launch crash with no JS bund
     expect(crashReporting).toContain('PrivateSentrySDKOnly.framesTrackingMeasurementHybridSDKMode = true');
   });
 
+  it('does not assign a JavaScript user hash while session tracking stays on', () => {
+    expectOptionSetOnce('enableAutoSessionTracking', 'true');
+    expect(sentryTs).not.toContain('hashedDeviceId');
+    expect(sentryTs).not.toMatch(/SHA-?256/);
+    expect(sentryTs).not.toMatch(/sentry\.setUser\(/);
+    expect(sentryTs).not.toMatch(/enableAutoSessionTracking\s*:\s*false/);
+  });
+
   it('reports the same release and dist scheme as JavaScript and as the sourcemap upload', () => {
     // Native: built by hand from three Info.plist keys.
     expect(sentryOptions).toContain(

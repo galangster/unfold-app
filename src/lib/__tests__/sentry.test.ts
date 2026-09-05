@@ -12,8 +12,6 @@
  * plausibly reach and the serialized payload is asserted not to contain it.
  */
 
-import { createHash } from 'node:crypto';
-
 const mockInit = jest.fn();
 const mockSetUser = jest.fn();
 const mockCaptureException = jest.fn();
@@ -41,12 +39,6 @@ jest.mock('@sentry/react-native', () => ({
 
 /** A realistic device id: uuid v4, exactly what getDeviceId() returns. */
 const mockDeviceId = '3f2504e0-4f89-41d3-9a0c-0305e82c3301';
-const mockStorageState = { recovery: false };
-
-jest.mock('../mmkv-storage', () => ({
-  getDeviceId: () => mockDeviceId,
-  isRecoverySession: () => mockStorageState.recovery,
-}));
 
 const mockConstants = {
   expoConfig: {
@@ -59,14 +51,6 @@ const mockConstants = {
 
 jest.mock('expo-constants', () => ({ __esModule: true, default: mockConstants }));
 
-const mockDigestStringAsync = jest.fn(async (_algorithm: string, data: string) =>
-  createHash('sha256').update(data).digest('hex'));
-
-jest.mock('expo-crypto', () => ({
-  CryptoDigestAlgorithm: { SHA256: 'SHA-256' },
-  digestStringAsync: mockDigestStringAsync,
-}));
-
 type SentryLib = typeof import('../sentry');
 type InitOptions = {
   beforeSend: (event: Record<string, unknown>) => Record<string, unknown> | null;
@@ -75,7 +59,9 @@ type InitOptions = {
   [key: string]: unknown;
 };
 
-const EXPECTED_HASH = createHash('sha256').update(mockDeviceId).digest('hex').slice(0, 8);
+/** Former 8-hex device-id digest, and Cocoa's installation UUID shape. */
+const FORMER_JS_USER_HASH = 'a1b2c3d4';
+const INSTALLATION_UUID = 'A1B2C3D4-E5F6-4789-ABCD-EF1234567890';
 const DSN = 'https://publickey@o1.ingest.sentry.io/123';
 const JOURNAL_TEXT = 'I keep failing my brother Michael and I cannot pray about it.';
 
@@ -113,9 +99,6 @@ function bootEnabledAs(isDev: boolean, platformOS: string): InitOptions {
   delete process.env.JEST_WORKER_ID;
   devGlobal.__DEV__ = isDev;
   mockInit.mockClear();
-  // The isolated copy schedules attachHashedUser on a timer it would fire
-  // after this registry is gone; never let it run.
-  jest.useFakeTimers();
   try {
     jest.isolateModules(() => {
       jest.doMock('react-native', () => ({ Platform: { OS: platformOS } }));
@@ -123,8 +106,6 @@ function bootEnabledAs(isDev: boolean, platformOS: string): InitOptions {
       lib.initSentry();
     });
   } finally {
-    jest.clearAllTimers();
-    jest.useRealTimers();
     jest.dontMock('react-native');
     devGlobal.__DEV__ = originalDev;
   }
@@ -151,7 +132,6 @@ const flushMicrotasks = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockStorageState.recovery = false;
 });
 
 afterEach(() => {
@@ -230,9 +210,11 @@ describe('initSentry', () => {
     expect(typeof options.beforeSend).toBe('function');
     expect(typeof options.beforeBreadcrumb).toBe('function');
     expect(typeof options.beforeSendTransaction).toBe('function');
-    // Cocoa's automatic breadcrumbs are governed in AppDelegate.swift now;
-    // nothing native-only is smuggled through the JS options any more.
+    // Cocoa's automatic breadcrumbs and session tracking are governed in
+    // AppDelegate.swift now; nothing native-only is smuggled through the JS
+    // options any more. Session tracking stays enabled there.
     expect(options).not.toHaveProperty('enableAutoBreadcrumbTracking');
+    expect(options).not.toHaveProperty('enableAutoSessionTracking');
   });
 
   it('passes NO replay sample rates, because passing 0 is what installs replay', () => {
@@ -341,24 +323,12 @@ describe('tracing scope', () => {
 });
 
 describe('device identity', () => {
-  it('sets the user to a truncated SHA-256 and never the raw device id', async () => {
+  it('never hashes the device id or assigns a Sentry user', async () => {
     bootEnabled();
     await flushMicrotasks();
 
-    expect(mockDigestStringAsync).toHaveBeenCalledWith('SHA-256', mockDeviceId);
-    expect(mockSetUser).toHaveBeenCalledWith({ id: EXPECTED_HASH });
-    expect(EXPECTED_HASH).toHaveLength(8);
-    expect(everythingSentToSentry()).not.toContain(mockDeviceId);
-  });
-
-  it('sets no user at all in a storage-locked recovery session', async () => {
-    mockStorageState.recovery = true;
-
-    bootEnabled();
-    await flushMicrotasks();
-
-    expect(mockDigestStringAsync).not.toHaveBeenCalled();
     expect(mockSetUser).not.toHaveBeenCalled();
+    expect(everythingSentToSentry()).not.toContain(mockDeviceId);
   });
 });
 
@@ -455,13 +425,16 @@ describe('beforeSend', () => {
     expect(frame.context_line).toBeUndefined();
   });
 
-  it('keeps only a hashed-looking user id', () => {
+  it('strips every user identifier, including hashed and SDK-supplied values', () => {
     bootEnabled();
     const beforeSend = initOptions().beforeSend;
 
     expect(beforeSend({ user: { id: mockDeviceId } })?.user).toBeUndefined();
-    expect(beforeSend({ user: { id: EXPECTED_HASH, email: 'nick@example.com' } })?.user)
-      .toEqual({ id: EXPECTED_HASH });
+    expect(beforeSend({ user: { id: FORMER_JS_USER_HASH, email: 'nick@example.com' } })?.user)
+      .toBeUndefined();
+    expect(beforeSend({
+      user: { id: INSTALLATION_UUID, ip_address: '{{auto}}' },
+    })?.user).toBeUndefined();
   });
 
   it('truncates a surviving string to 200 characters', () => {
@@ -730,6 +703,21 @@ describe('beforeSendTransaction', () => {
     expect(serialized).not.toContain("Nick's iPhone");
     expect(serialized).not.toContain('q=');
     expect(serialized).not.toContain('nick@example.com');
+  });
+
+  it('strips user identifiers the SDK applied onto the transaction', () => {
+    bootEnabled();
+
+    const scrubbed = initOptions().beforeSendTransaction({
+      type: 'transaction',
+      user: { id: FORMER_JS_USER_HASH, email: 'nick@example.com', ip_address: '10.0.0.4' },
+    });
+
+    expect(scrubbed?.user).toBeUndefined();
+    const serialized = JSON.stringify(scrubbed);
+    expect(serialized).not.toContain(FORMER_JS_USER_HASH);
+    expect(serialized).not.toContain('nick@example.com');
+    expect(serialized).not.toContain('10.0.0.4');
   });
 });
 

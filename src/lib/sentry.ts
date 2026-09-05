@@ -23,6 +23,8 @@
  *     content through `logger`;
  *   - a URL (http breadcrumbs, failed-request events, spans) survives only
  *     with its query string and fragment cut off;
+ *   - error and transaction events carry no `user`; native release-health
+ *     sessions keep their installation ID;
  *   - session replay, screenshots, and view-hierarchy attachments are never
  *     enabled — for replay that means OMITTING the two sample rates, because
  *     at @sentry/react-native 7.11.0 passing them (even as 0) is what installs
@@ -51,7 +53,7 @@
  * with no DSN and why nothing here loads under Jest.
  */
 
-import type { Breadcrumb, ErrorEvent, Exception, StackFrame, Stacktrace, TransactionEvent, User } from '@sentry/react-native';
+import type { Breadcrumb, ErrorEvent, Exception, StackFrame, Stacktrace, TransactionEvent } from '@sentry/react-native';
 import type { ComponentType } from 'react';
 import { Platform } from 'react-native';
 
@@ -62,9 +64,6 @@ type SentryModule = typeof import('@sentry/react-native');
 
 /** Every string that survives scrubbing is cut to this many characters. */
 const MAX_STRING_LENGTH = 200;
-
-/** Hex characters of the device-id SHA-256 used as the Sentry user id. */
-const DEVICE_HASH_LENGTH = 8;
 
 /** How deep `scrubBag` walks a nested value before giving up on it. */
 const MAX_SCRUB_DEPTH = 4;
@@ -141,18 +140,9 @@ const ALLOWED_CONTEXT_STRING_KEYS: Readonly<Record<string, ReadonlySet<string>>>
   response: new Set<string>(),
 };
 
-/**
- * The only shape a Sentry user id may take: the lowercase SHA-256 prefix set
- * by `attachHashedUser`. Anything else — Sentry's own installation UUID, an
- * email, an ip_address — is dropped, so a raw device id cannot reach Sentry
- * even if some future code path writes one onto the scope.
- */
-const HASHED_USER_ID_PATTERN = /^[0-9a-f]{8}$/;
-
 let sentryModule: SentryModule | null = null;
 let initialized = false;
 let enabled = false;
-let hashedDeviceId: string | null = null;
 let navigationIntegration: ReturnType<SentryModule['reactNavigationIntegration']> | null = null;
 
 // ---------------------------------------------------------------------------
@@ -358,11 +348,6 @@ function scrubDebugMeta(debugMeta: ErrorEvent['debug_meta']): ErrorEvent['debug_
   return { images: scrubbed as unknown as DebugImages };
 }
 
-function scrubUser(user: User | undefined): User | undefined {
-  const id = typeof user?.id === 'string' && HASHED_USER_ID_PATTERN.test(user.id) ? user.id : undefined;
-  return id === undefined ? undefined : { id };
-}
-
 /**
  * Rebuild a breadcrumb. Console breadcrumbs are dropped outright — the app
  * logs user content through `logger` — and only app-namespaced breadcrumbs
@@ -397,7 +382,7 @@ function scrubRequest(request: ErrorEvent['request']): ErrorEvent['request'] {
 /**
  * Rebuild the whole event. Anything not named below — request headers and
  * cookies, `server_name` (the device name), `threads`, `modules`,
- * `fingerprint`, `logentry`, attachments — is gone by construction.
+ * `fingerprint`, `logentry`, attachments, `user` — is gone by construction.
  */
 function scrubEvent(event: ErrorEvent): ErrorEvent {
   const breadcrumbs = (event.breadcrumbs ?? [])
@@ -420,7 +405,6 @@ function scrubEvent(event: ErrorEvent): ErrorEvent {
     transaction: truncateOrDrop(event.transaction),
     request: scrubRequest(event.request),
     message: truncateOrDrop(event.message),
-    user: scrubUser(event.user),
     exception: scrubException(event.exception),
     contexts: scrubContexts(event.contexts),
     tags: scrubTags(event.tags),
@@ -479,7 +463,6 @@ function scrubTransaction(event: TransactionEvent): TransactionEvent {
     sdk: event.sdk,
     transaction: sanitizeUrl(event.transaction),
     transaction_info: event.transaction_info,
-    user: scrubUser(event.user),
     contexts: scrubContexts(event.contexts),
     tags: scrubTags(event.tags),
     measurements: scrubMeasurements(event.measurements),
@@ -550,42 +533,6 @@ export function originPattern(url: string): RegExp {
   const trimmed = url.trim();
   const origin = /^(https?:\/\/[^/?#]+)/i.exec(trimmed)?.[1] ?? trimmed;
   return new RegExp(`^${origin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:[/?#]|$)`, 'i');
-}
-
-/**
- * SECURITY: `getDeviceId()` is this app's ONLY auth credential — the backend
- * accepts its raw value in the `X-Device-ID` header as proof of identity — so
- * only a SHA-256 prefix of it may ever leave the device, matching the
- * backend's own `hashUidForTelemetry`.
- *
- * expo-crypto has no synchronous SHA-256, so the digest is awaited and cached;
- * the user is set once it resolves. Events captured before then simply carry
- * no user. In a storage-locked (recovery) session no user is set at all:
- * reading the device id there would mint or expose a one-session identity.
- */
-function attachHashedUser(sentry: SentryModule): void {
-  if (hashedDeviceId !== null) {
-    sentry.setUser({ id: hashedDeviceId });
-    return;
-  }
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const storage = require('./mmkv-storage') as typeof import('./mmkv-storage');
-    if (storage.isRecoverySession()) return;
-    const deviceId = storage.getDeviceId();
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const Crypto = require('expo-crypto') as typeof import('expo-crypto');
-    void Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, deviceId)
-      .then((digest) => {
-        hashedDeviceId = digest.slice(0, DEVICE_HASH_LENGTH).toLowerCase();
-        sentry.setUser({ id: hashedDeviceId });
-      })
-      .catch(() => {
-        // No identity is strictly better than a raw one.
-      });
-  } catch {
-    // Storage or crypto unavailable: report without a user.
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -697,12 +644,6 @@ export function initSentry(): void {
     enabled = false;
     return;
   }
-
-  // Off the launch path. attachHashedUser reads the Keychain synchronously via
-  // getDeviceId(), and this runs at module scope before the first frame. Events
-  // in the first tick simply carry no user, which costs nothing: they are still
-  // reported, and the hash is attached to everything after.
-  setTimeout(() => attachHashedUser(sentry), 0);
 }
 
 /** True only once `initSentry()` has actually started the SDK with a DSN. */
