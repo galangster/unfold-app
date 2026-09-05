@@ -279,6 +279,29 @@ describe('computeDevotionalState', () => {
     expect('onSaveFreeWrite' in state).toBe(false);
   });
 
+  // A day finished yesterday is not "today's completed reading". Even when
+  // tomorrow's reading is generated ahead (dayLabel 'Tomorrow'), the card must
+  // not lock to tomorrow with a reflect target pointing at yesterday's day —
+  // hasReadToday is the only guard between the two.
+  it('regression: Jordan item 10 — a day completed yesterday does not resolve to tomorrow-locked with a reflect target', () => {
+    const onSaveFreeWrite = jest.fn();
+    const dayOne = makeDayData({ dayNumber: 1, isRead: true, readAt: '2026-09-03T08:00:00Z' });
+    const dayTwo = makeDayData({ dayNumber: 2, isRead: false, isRevealed: false });
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDevotional: makeDevotional({ currentDay: 2, days: [dayOne, dayTwo] }),
+      currentDayData: dayTwo,
+      hasReadToday: false,
+      dayLabel: 'Tomorrow',
+      daysCompleted: 1,
+      progress: 14.3,
+      onSaveFreeWrite,
+    });
+    expect(state.type).toBe('reveal-ready');
+    expect('completedDayData' in state).toBe(false);
+    expect('onSaveFreeWrite' in state).toBe(false);
+  });
+
   it('a 1-day series completed today keeps its journey-complete state', () => {
     const dayOne = makeDayData({ dayNumber: 1, isRead: true, readAt: '2026-09-04T08:00:00Z' });
     const state = computeDevotionalState({
