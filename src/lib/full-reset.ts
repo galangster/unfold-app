@@ -73,6 +73,11 @@ import { STORE_KEY as ONBOARDING_DRAFT_KEY } from '@/lib/onboarding-draft-store'
 import { ABANDONED_MARKER_KEY as ONBOARDING_ABANDON_MARKER_KEY } from '@/lib/onboarding-telemetry';
 import { DYNAMIC_EXAMPLE_KEY } from '@/lib/generation-api';
 import { RATE_LIMIT_STORAGE_KEY } from '@/lib/rate-limit';
+import {
+  beginLocalResetSession,
+  endLocalResetSession,
+  isLocalResetInProgress,
+} from '@/lib/sync-session-fence';
 
 /**
  * All MMKV keys that hold user-specific data and must be cleared on reset.
@@ -195,7 +200,34 @@ async function sweepExportedPersonalFiles(): Promise<void> {
   }
 }
 
-export async function performFullLocalReset(options: FullResetOptions = {}): Promise<FullResetResult> {
+let inFlightReset: Promise<FullResetResult> | null = null;
+
+export function performFullLocalReset(options: FullResetOptions = {}): Promise<FullResetResult> {
+  if (inFlightReset && isLocalResetInProgress()) {
+    return inFlightReset;
+  }
+
+  // Fence first, before any await. Identity still matches in-flight sync
+  // until step 12, so identity checks cannot stop those responses.
+  const resetToken = beginLocalResetSession();
+  let tracked: Promise<FullResetResult>;
+  try {
+    tracked = runFullLocalReset(options).finally(() => {
+      endLocalResetSession(resetToken);
+      if (inFlightReset === tracked) {
+        inFlightReset = null;
+      }
+    });
+  } catch (error) {
+    endLocalResetSession(resetToken);
+    inFlightReset = null;
+    throw error;
+  }
+  inFlightReset = tracked;
+  return tracked;
+}
+
+async function runFullLocalReset(options: FullResetOptions): Promise<FullResetResult> {
   // 0. Server erase under the OLD identity — MUST run before rotateDeviceId()
   //    (step 12): the current X-Device-ID is the only thing the server can
   //    match. Best-effort with a short timeout; never throws.

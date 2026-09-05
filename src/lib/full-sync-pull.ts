@@ -25,6 +25,14 @@ import type {
 import { useCompanionChatStore } from './companion-chat-store';
 import type { CompanionMessage, Conversation } from './companion-chat-store';
 import type { SyncPullResponse, SyncPulledRecord, SyncPushResult, SyncTable } from './sync-types';
+import {
+  assertSyncSessionCurrent,
+  captureSyncSession,
+  isLocalResetInProgress,
+  isSyncSessionCurrent,
+  registerSyncTransport,
+  SyncSessionInvalidatedError,
+} from './sync-session-fence';
 
 export const LAST_PULLED_AT_KEY = 'unfold-last-pulled-at';
 
@@ -630,43 +638,82 @@ export function applyServerConflictRecords(results: SyncPushResult[]): void {
 }
 
 export async function pullAllUserData(options: PullAllUserDataOptions = {}): Promise<SyncPullResponse> {
+  const session = captureSyncSession();
+  assertSyncSessionCurrent(session, 'sync pull');
   const lastPulledAt = options.full ? null : syncGet(LAST_PULLED_AT_KEY);
   const headers = await getAuthHeaders();
-  const response = await fetch(`${PRIMARY_BACKEND_URL}/api/sync/pull`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ lastPulledAt }),
-  });
+  assertSyncSessionCurrent(session, 'sync pull');
 
-  if (!response.ok) {
-    const body = await response.text().catch(() => '');
-    // See devotional-sync-pull.ts: the body is diagnostics, not an error
-    // message, because `scrubException` lets an exception value through.
-    logger.warn('[sync/pull-all] pull failed', response.status, body.slice(0, 120));
-    throw new Error(`Sync pull failed: ${response.status}`);
+  const controller = new AbortController();
+  const unregister = registerSyncTransport(controller);
+  try {
+    const response = await fetch(`${PRIMARY_BACKEND_URL}/api/sync/pull`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ lastPulledAt }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      // See devotional-sync-pull.ts: the body is diagnostics, not an error
+      // message, because `scrubException` lets an exception value through.
+      logger.warn('[sync/pull-all] pull failed', response.status, body.slice(0, 120));
+      throw new Error(`Sync pull failed: ${response.status}`);
+    }
+
+    const payload = await response.json() as SyncPullResponse;
+    assertSyncSessionCurrent(session, 'sync pull');
+    applyPulledUserData(payload);
+    mmkvStorage.setItem(LAST_PULLED_AT_KEY, payload.timestamp);
+    return payload;
+  } catch (error) {
+    if (!isSyncSessionCurrent(session)) {
+      throw new SyncSessionInvalidatedError('sync pull');
+    }
+    throw error;
+  } finally {
+    unregister();
   }
-
-  const payload = await response.json() as SyncPullResponse;
-  applyPulledUserData(payload);
-  mmkvStorage.setItem(LAST_PULLED_AT_KEY, payload.timestamp);
-  return payload;
 }
 
-let pullInFlight: Promise<void> | null = null;
+type InFlightPull = {
+  session: number;
+  promise: Promise<void>;
+};
+
+let pullInFlight: InFlightPull | null = null;
 
 export function triggerUserDataPull(reason: string, options: PullAllUserDataOptions = {}): Promise<void> {
-  if (pullInFlight) return pullInFlight;
-  pullInFlight = pullAllUserData(options)
+  if (isLocalResetInProgress()) {
+    return Promise.resolve();
+  }
+  const session = captureSyncSession();
+  if (pullInFlight && pullInFlight.session === session) {
+    return pullInFlight.promise;
+  }
+  const promise = pullAllUserData(options)
     .then((payload) => {
       logger.log(`[sync/pull-all] ${reason} applied timestamp=${payload.timestamp}`);
     })
     .catch((error) => {
+      if (error instanceof SyncSessionInvalidatedError) {
+        logger.log(`[sync/pull-all] ${reason} discarded after session change`);
+        return;
+      }
       logger.warn(`[sync/pull-all] ${reason} failed`, error);
     })
     .finally(() => {
-      pullInFlight = null;
+      if (pullInFlight?.promise === promise) {
+        pullInFlight = null;
+      }
     });
-  return pullInFlight;
+  pullInFlight = { session, promise };
+  return promise;
+}
+
+export function resetUserDataPullForTesting(): void {
+  pullInFlight = null;
 }
 
 export function registerUserDataPullOnReconnect(): () => void {

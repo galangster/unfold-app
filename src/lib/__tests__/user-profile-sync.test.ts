@@ -23,6 +23,11 @@ import {
   syncUserProfileToBackend,
 } from '../user-profile-sync';
 import { drainSyncOutbox, peekSyncOutbox, resetDrainStateForTesting } from '../sync-outbox';
+import {
+  beginLocalResetSession,
+  endLocalResetSession,
+  resetSyncSessionFenceForTesting,
+} from '../sync-session-fence';
 import { mmkvStorage } from '../mmkv-storage';
 import type { UserProfile } from '../store';
 
@@ -65,6 +70,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   (mmkvStorage as any).__clearMockStorage?.();
   resetDrainStateForTesting();
+  resetSyncSessionFenceForTesting();
 });
 
 describe('user profile sync payloads', () => {
@@ -135,6 +141,27 @@ describe('user profile sync payloads', () => {
     await drainSyncOutbox();
 
     expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(peekSyncOutbox()).toHaveLength(0);
+  });
+
+  it('does not enqueue a delayed profile failure after the captured session is reset', async () => {
+    let rejectPush!: (reason: Error) => void;
+    const mockFetch = jest.fn(
+      () => new Promise<never>((_resolve, reject) => {
+        rejectPush = reject;
+      }),
+    );
+    global.fetch = mockFetch as unknown as typeof fetch;
+
+    const pending = syncUserProfileToBackend(baseUser, '2026-05-06T20:00:00.000Z').catch(() => undefined);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    const resetToken = beginLocalResetSession();
+    (mmkvStorage as any).__clearMockStorage?.();
+    endLocalResetSession(resetToken);
+    rejectPush(new Error('offline'));
+    await pending;
+
     expect(peekSyncOutbox()).toHaveLength(0);
   });
 });

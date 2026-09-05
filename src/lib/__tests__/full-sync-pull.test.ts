@@ -200,6 +200,7 @@ describe('full user-data sync', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ lastPulledAt: '2026-07-01T11:00:00.000Z' }),
+      signal: expect.any(AbortSignal),
     });
     expect(mmkvStorage.getItem(LAST_PULLED_AT_KEY)).toBe('2026-07-01T12:00:00.000Z');
   });

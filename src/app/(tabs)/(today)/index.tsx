@@ -50,6 +50,7 @@ import { animateCardDismiss } from '@/lib/card-dismiss-animation';
 import { getBibleDbStatus, downloadBibleDb } from '@/lib/bible-db';
 import { commitDevotionalPullCursor, pullDevotionalContent } from '@/lib/devotional-sync-pull';
 import { applyPulledDevotionalContent } from '@/lib/devotional-pulled-content';
+import { captureSyncSession, isSyncSessionCurrent } from '@/lib/sync-session-fence';
 import {
   getCurrentDevotional,
   getHomeDevotionalDayData,
@@ -400,8 +401,9 @@ export default function HomeScreen() {
       let cancelled = false;
       void (async () => {
         try {
+          const session = captureSyncSession();
           const pulled = await pullDevotionalContent(devotionalId);
-          if (cancelled) return;
+          if (cancelled || !isSyncSessionCurrent(session)) return;
 
           applyPulledDevotionalContent({
             devotionalId,

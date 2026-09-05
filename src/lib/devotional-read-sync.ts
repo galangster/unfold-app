@@ -5,6 +5,13 @@ import { isCanonicalProgressiveDevotional } from './reading-generation-policy';
 import type { Devotional, DevotionalDay } from './store';
 import type { SyncPushChange } from './sync-types';
 import { enqueueSyncChanges } from './sync-outbox';
+import {
+  assertSyncSessionCurrent,
+  captureSyncSession,
+  isSyncSessionCurrent,
+  registerSyncTransport,
+  SyncSessionInvalidatedError,
+} from './sync-session-fence';
 
 // Re-export for legacy consumers (api-config, etc.)
 export type { SyncPushChange };
@@ -80,19 +87,26 @@ export async function syncDevotionalDayRead(params: {
   day: DevotionalDay;
   readAt?: string;
 }): Promise<void> {
+  const session = captureSyncSession();
+  assertSyncSessionCurrent(session, 'devotional read sync');
   const readAt = params.readAt ?? new Date().toISOString();
-  const headers = await getAuthHeaders();
   const changes = buildDevotionalReadSyncChanges({
     devotional: params.devotional,
     day: params.day,
     readAt,
   });
 
+  const controller = new AbortController();
+  const unregister = registerSyncTransport(controller);
   try {
+    const headers = await getAuthHeaders();
+    assertSyncSessionCurrent(session, 'devotional read sync');
+
     const response = await fetch(`${PRIMARY_BACKEND_URL}/api/sync/push`, {
       method: 'POST',
       headers,
       body: buildSyncPushBody(changes),
+      signal: controller.signal,
     });
 
     if (!response.ok) {
@@ -101,13 +115,21 @@ export async function syncDevotionalDayRead(params: {
     }
 
     const payload = await response.json().catch(() => null) as { results?: Array<{ status?: string }> } | null;
+    assertSyncSessionCurrent(session, 'devotional read sync');
     const rejected = payload?.results?.filter((result) => result.status === 'rejected') ?? [];
     if (rejected.length > 0) {
       throw new Error(`Sync read state rejected ${rejected.length} change(s)`);
     }
   } catch (err) {
+    if (!isSyncSessionCurrent(session)) {
+      throw err instanceof SyncSessionInvalidatedError
+        ? err
+        : new SyncSessionInvalidatedError('devotional read sync');
+    }
     // Enqueue for retry via the outbox drain hook (useSyncOutboxDrain)
     enqueueSyncChanges(changes);
     throw err;
+  } finally {
+    unregister();
   }
 }

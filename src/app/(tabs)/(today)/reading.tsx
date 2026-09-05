@@ -42,6 +42,11 @@ import { submitGenerationJob, recoverCompletedGenerationResult, ApiError } from 
 import { syncDevotionalDayRead } from '@/lib/devotional-read-sync';
 import { commitDevotionalPullCursor, pullDevotionalContent } from '@/lib/devotional-sync-pull';
 import { applyPulledDevotionalContent } from '@/lib/devotional-pulled-content';
+import {
+  captureSyncSession,
+  isSyncSessionCurrent,
+  SyncSessionInvalidatedError,
+} from '@/lib/sync-session-fence';
 import { isCanonicalProgressiveDevotional, shouldUseLegacyDirectContinuation } from '@/lib/reading-generation-policy';
 import {
   getHighestContiguousRenderableDayNumber,
@@ -313,6 +318,7 @@ export default function ReadingScreen() {
   const autoRetryTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const syncRecoveryAttemptRef = useRef<Record<string, boolean>>({});
   const missingDevotionalHydrationAttemptRef = useRef<Record<string, boolean>>({});
+  const readingMountedRef = useRef(true);
 
   const translateX = useSharedValue(0);
   const chevronBounce = useSharedValue(0);
@@ -324,6 +330,13 @@ export default function ReadingScreen() {
 
   // Locked-day toast (blocked forward swipe) auto-dismiss after 2.5s
   useAutoHide(lockedDayToast, 2500, useCallback(() => setLockedDayToast(false), []));
+
+  useEffect(() => {
+    readingMountedRef.current = true;
+    return () => {
+      readingMountedRef.current = false;
+    };
+  }, []);
 
   // Button press micro-interaction — spring scale for Complete Day button
   const completeButtonScale = useSharedValue(1);
@@ -1211,10 +1224,16 @@ export default function ReadingScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
 
+    const session = captureSyncSession();
+    const isRecoveryCurrent = () => readingMountedRef.current && isSyncSessionCurrent(session);
+
     try {
       // A day we expected is missing locally: the cursor cannot be trusted
       // to have covered it, so distrust it and pull the whole devotional.
       const pulled = await pullDevotionalContent(currentDevotional.id, { forceFull: true });
+      if (!isRecoveryCurrent()) {
+        return false;
+      }
       applyPulledDevotionalContent({
         devotionalId: currentDevotional.id,
         pulled,
@@ -1247,6 +1266,10 @@ export default function ReadingScreen() {
           dayNumber: viewingDay,
         }).catch(() => null);
 
+        if (!isRecoveryCurrent()) {
+          return false;
+        }
+
         if (recovered?.devotionalDay) {
           updateDevotionalDays(currentDevotional.id, [recovered.devotionalDay], currentDevotional.title);
           void logBugEvent('reading-sync-recovery', 'recovered-missing-day-from-completed-job', {
@@ -1261,11 +1284,17 @@ export default function ReadingScreen() {
         }
 
         try {
+          if (!isRecoveryCurrent()) {
+            return false;
+          }
           await submitGenerationJob({
             devotionalId: currentDevotional.id,
             dayNumber: viewingDay,
             jobType: 'day',
           });
+          if (!isRecoveryCurrent()) {
+            return false;
+          }
           void logBugEvent('reading-sync-recovery', 'queued-missing-day-canonical-job', {
             devotionalId: currentDevotional.id,
             viewingDay,
@@ -1277,12 +1306,19 @@ export default function ReadingScreen() {
           }
           return true;
         } catch (err) {
+          if (!isRecoveryCurrent()) {
+            return false;
+          }
           if (err instanceof ApiError && err.status === 409) {
             const recoveredFromExisting = await recoverCompletedGenerationResult({
               devotionalId: currentDevotional.id,
               dayNumber: viewingDay,
               existingJobId: err.existingJobId,
             }).catch(() => null);
+
+            if (!isRecoveryCurrent()) {
+              return false;
+            }
 
             if (recoveredFromExisting?.devotionalDay) {
               updateDevotionalDays(currentDevotional.id, [recoveredFromExisting.devotionalDay], currentDevotional.title);
@@ -1301,11 +1337,17 @@ export default function ReadingScreen() {
         }
       }
 
+      if (!isRecoveryCurrent()) {
+        return false;
+      }
       if (source === 'manual') {
         setRetryError('This reading is still being prepared. Try again in a moment, or prepare the next reading below.');
       }
       return false;
     } catch (err) {
+      if (err instanceof SyncSessionInvalidatedError || !isRecoveryCurrent()) {
+        return false;
+      }
       void logBugError('reading-sync-recovery', err, {
         devotionalId: currentDevotional.id,
         viewingDay,
@@ -1317,7 +1359,9 @@ export default function ReadingScreen() {
       }
       return false;
     } finally {
-      setIsCheckingForSyncedDay(false);
+      if (readingMountedRef.current) {
+        setIsCheckingForSyncedDay(false);
+      }
     }
   }, [currentDevotional, currentDayData, isCheckingForSyncedDay, updateDevotionalDays, viewingDay]);
 
@@ -1361,8 +1405,9 @@ export default function ReadingScreen() {
 
     void (async () => {
       try {
+        const session = captureSyncSession();
         const pulled = await pullDevotionalContent(devotionalId);
-        if (cancelled) return;
+        if (cancelled || !isSyncSessionCurrent(session)) return;
 
         applyPulledDevotionalContent({
           devotionalId,

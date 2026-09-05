@@ -26,6 +26,11 @@ import type { SyncPushChange, SyncPushResult, SyncTable } from '@/lib/sync-types
 // RS13-1: single owner — the key is defined in mmkv-recovery-outbox.ts (pure, no native deps)
 // and re-exported here so all consumers import from one place via sync-outbox.
 import { RECOVERY_OUTBOX_KEY } from '@/lib/mmkv-recovery-outbox';
+import {
+  captureSyncSession,
+  isSyncSessionCurrent,
+  registerSyncTransport,
+} from '@/lib/sync-session-fence';
 
 // Re-export the type so consumers can import from one place
 export type { SyncPushChange };
@@ -174,7 +179,12 @@ function applyConflictResults(results: Partial<SyncPushResult>[]): void {
 }
 
 // Single-flight guard — concurrent drains collapse into one POST
-let inflight: Promise<void> | null = null;
+type InFlightDrain = {
+  session: number;
+  promise: Promise<void>;
+};
+
+let inflight: InFlightDrain | null = null;
 
 export function drainSyncOutbox(): Promise<void> {
   // FAP-LIB-1 (orphaned-pushes): never POST under an ephemeral recovery
@@ -183,6 +193,9 @@ export function drainSyncOutbox(): Promise<void> {
   // outbox intact: entries are carried across recovery boots (RS5-4) and
   // drained after a normal boot restores the real identity (RS2-1 merge).
   if (isEphemeralDeviceId(getDeviceId())) return Promise.resolve();
+
+  const session = captureSyncSession();
+  if (!isSyncSessionCurrent(session)) return Promise.resolve();
 
   // Min-interval guard (RS10-4): skip if a drain completed recently AND no
   // new entries were enqueued since then. Bypassed by new enqueues so
@@ -194,17 +207,21 @@ export function drainSyncOutbox(): Promise<void> {
     return Promise.resolve();
   }
 
-  if (inflight) return inflight;
+  if (inflight && inflight.session === session) return inflight.promise;
 
-  inflight = (async () => {
+  const promise = (async () => {
+    if (!isSyncSessionCurrent(session)) return;
     const changes = readOutbox();
     if (changes.length === 0) return;
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15_000);
+    const unregister = registerSyncTransport(controller);
 
     try {
       const headers = await getAuthHeaders();
+      if (!isSyncSessionCurrent(session)) return;
+
       const response = await fetch(`${PRIMARY_BACKEND_URL}/api/sync/push`, {
         method: 'POST',
         headers,
@@ -220,6 +237,10 @@ export function drainSyncOutbox(): Promise<void> {
       const payload = (await response.json().catch(() => null)) as {
         results?: Partial<SyncPushResult>[];
       } | null;
+
+      // A stale session must not ack or apply. Leave the current outbox
+      // untouched — reset may have wiped it, or a newer enqueue may exist.
+      if (!isSyncSessionCurrent(session)) return;
 
       // Server is authoritative: accepted | conflict | rejected all clear from
       // the outbox. Two things must survive (REVM-1):
@@ -245,10 +266,12 @@ export function drainSyncOutbox(): Promise<void> {
       // Network error / timeout / abort — keep the outbox intact for retry
     } finally {
       clearTimeout(timeoutId);
+      unregister();
     }
   })().finally(() => {
-    inflight = null;
+    if (inflight?.promise === promise) inflight = null;
   });
 
-  return inflight;
+  inflight = { session, promise };
+  return promise;
 }

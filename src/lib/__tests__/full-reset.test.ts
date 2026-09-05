@@ -103,6 +103,10 @@ import {
   FULL_RESET_MMKV_KEY_PREFIXES,
 } from '../full-reset';
 import {
+  isLocalResetInProgress,
+  resetSyncSessionFenceForTesting,
+} from '../sync-session-fence';
+import {
   mmkvStorage,
   rotateDeviceId,
   purgeRealStoreForRecoveryReset,
@@ -137,6 +141,7 @@ beforeEach(() => {
   mockStore.clear();
   mockCacheEntries.length = 0;
   mockDeviceId = 'old-device-id';
+  resetSyncSessionFenceForTesting();
   jest.clearAllMocks();
   mockFetch.mockReset();
   mockFetch.mockResolvedValue(okResponse());
@@ -243,6 +248,19 @@ describe('performFullLocalReset', () => {
 
     expect(order.indexOf('cancelAll')).toBeGreaterThanOrEqual(0);
     expect(order.indexOf('reset')).toBeGreaterThan(order.indexOf('cancelAll'));
+  });
+
+  it('raises the sync session fence before the first asynchronous reset step and releases it after', async () => {
+    let fenceDuringFirstAwait = false;
+    mockFetch.mockImplementationOnce(async () => {
+      fenceDuringFirstAwait = isLocalResetInProgress();
+      return okResponse();
+    });
+
+    await performFullLocalReset();
+
+    expect(fenceDuringFirstAwait).toBe(true);
+    expect(isLocalResetInProgress()).toBe(false);
   });
 
   it('asks the server to erase this device under the OLD identity, before rotating it', async () => {
@@ -431,6 +449,32 @@ describe('performFullLocalReset', () => {
     await expect(performFullLocalReset()).resolves.toMatchObject({ serverErase: { ok: true } });
     expect(mmkvStorage.removeItem).toHaveBeenCalledWith('unfold-storage');
     expect(rotateDeviceId).toHaveBeenCalledTimes(1);
+  });
+
+  it('shares one in-flight reset so a second caller cannot rotate identity twice', async () => {
+    let releaseLogout!: () => void;
+    (logoutUser as jest.Mock).mockImplementationOnce(
+      () => new Promise<void>((resolve) => {
+        releaseLogout = resolve;
+      }),
+    );
+
+    const first = performFullLocalReset();
+    const second = performFullLocalReset();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    for (let i = 0; i < 50 && !releaseLogout; i += 1) {
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
+
+    expect(first).toBe(second);
+    expect(rotateDeviceId).toHaveBeenCalledTimes(0);
+    expect(isLocalResetInProgress()).toBe(true);
+
+    releaseLogout();
+    await Promise.all([second, first]);
+
+    expect(rotateDeviceId).toHaveBeenCalledTimes(1);
+    expect(isLocalResetInProgress()).toBe(false);
   });
 
   it('a throwing best-effort step (notifications, TTS, widgets) never aborts the reset', async () => {
