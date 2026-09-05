@@ -39,16 +39,23 @@ export function toFriendlyOnboardingGenerationError(errorMessage: string): strin
     return 'We hit a temporary writing limit. Try again with the same answers.';
   }
 
-  if (normalized.includes('output_truncated') || normalized.includes('truncated')) {
-    return 'The devotional was too long to generate in one go. Tap retry — we’ll break it into smaller pieces.';
+  // The server's arc call could not produce a complete payload: the parser
+  // rejected it (prod 2026-09-04: "Arc generation: JSON parse failed --
+  // Expected ',' or ']' after array element" on a 30-day plan) or the model
+  // hit max_tokens twice ("Arc generation: output hit max_tokens=…"). Name
+  // the shape problem so the reader has a real next step. This branch sits
+  // ahead of the truncation branch on purpose: that copy promises to break
+  // the work into smaller pieces, and an arc retry re-runs the same input.
+  if (
+    normalized.includes('arc generation') ||
+    normalized.includes('json parse') ||
+    normalized.includes('no valid json')
+  ) {
+    return 'We couldn’t finish shaping your series. Try again, or start over with a shorter plan.';
   }
 
-  // The server's arc call returned JSON it could not parse (prod 2026-09-04:
-  // "Arc generation: JSON parse failed -- Expected ',' or ']' after array
-  // element" on a 30-day plan). Name the shape problem instead of the generic
-  // fallback so the reader has a real next step.
-  if (normalized.includes('json parse') || normalized.includes('no valid json')) {
-    return 'We couldn’t finish shaping your series. Try again, or start over with a shorter plan.';
+  if (normalized.includes('output_truncated') || normalized.includes('truncated')) {
+    return 'The devotional was too long to generate in one go. Tap retry — we’ll break it into smaller pieces.';
   }
 
   return 'We couldn’t finish creating this devotional right now. Please try again.';

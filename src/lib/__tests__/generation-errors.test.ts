@@ -71,10 +71,21 @@ describe('generation error helpers', () => {
       expect(toFriendlyOnboardingGenerationError('Arc generation returned no valid JSON')).toBe(shaping);
     });
 
-    it('maps the server truncation error to the truncation copy', () => {
+    it('maps every arc-generation failure to the shaping copy, never the smaller-pieces promise', () => {
+      const shaping = 'We couldn’t finish shaping your series. Try again, or start over with a shorter plan.';
+      // The backend message after two max_tokens stops (arc-generator requestArcText).
       expect(
-        toFriendlyOnboardingGenerationError('Arc generation: output truncated (max_tokens=7000, totalDays=30)'),
-      ).toMatch(/too long to generate in one go/);
+        toFriendlyOnboardingGenerationError(
+          'Arc generation: output hit max_tokens=24000 twice (totalDays=30); the JSON never closed',
+        ),
+      ).toBe(shaping);
+      // The pre-repair wording lands on the same copy: an arc retry re-runs the
+      // same input, so "we’ll break it into smaller pieces" was never true here.
+      const legacy = toFriendlyOnboardingGenerationError(
+        'Arc generation: output truncated (max_tokens=7000, totalDays=30)',
+      );
+      expect(legacy).toBe(shaping);
+      expect(legacy).not.toMatch(/smaller/);
     });
 
     it('the generating screen no longer produces a wall-clock timeout error', () => {
