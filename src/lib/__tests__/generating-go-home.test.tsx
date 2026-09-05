@@ -236,10 +236,7 @@ describe('regression: Jordan item 6 — Go home from /generating', () => {
     // The record is kept (the server job keeps running) and now carries the
     // marker. Today reads it and keeps the reader there.
     const read = readInflightGenerationJob();
-    expect(read).toEqual({
-      kind: 'active',
-      job: { jobId: 'job-1', devotionalId: 'devo-1', submittedAt: expect.any(Number), leftForHome: true },
-    });
+    expect(read).toEqual({ jobId: 'job-1', devotionalId: 'devo-1', submittedAt: expect.any(Number), leftForHome: true });
     for (const sessionStatus of ['idle', 'running', 'complete'] as const) {
       expect(resolveTodayInflightAction(read, sessionStatus)).toEqual({
         action: 'watch-on-today',
@@ -256,7 +253,7 @@ describe('regression: Jordan item 6 — Go home from /generating', () => {
 
     const tree = await renderScreen();
     mounted.push(tree);
-    expect(readInflightGenerationJob()).toEqual({ kind: 'none' });
+    expect(readInflightGenerationJob()).toBeNull();
     findPressable(tree, 'Try again');
 
     // The retry request is still in flight when the reader taps Go home:
@@ -265,7 +262,7 @@ describe('regression: Jordan item 6 — Go home from /generating', () => {
     mockRetryJob.mockReturnValue(retry.promise);
     await press(tree, 'Try again');
     expect(mockRetryJob).toHaveBeenCalledWith('job-1');
-    expect(readInflightGenerationJob()).toEqual({ kind: 'none' });
+    expect(readInflightGenerationJob()).toBeNull();
 
     await press(tree, GO_HOME_LABEL);
     expect(mockReplace).toHaveBeenCalledWith('/(tabs)/(today)');
@@ -281,10 +278,7 @@ describe('regression: Jordan item 6 — Go home from /generating', () => {
     await flush();
 
     const read = readInflightGenerationJob();
-    expect(read).toEqual({
-      kind: 'active',
-      job: expect.objectContaining({ jobId: 'job-2', leftForHome: true }),
-    });
+    expect(read).toEqual(expect.objectContaining({ jobId: 'job-2', leftForHome: true }));
     expect(resolveTodayInflightAction(read, 'running')).toEqual({
       action: 'watch-on-today',
       job: expect.objectContaining({ jobId: 'job-2', leftForHome: true }),

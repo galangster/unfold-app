@@ -48,6 +48,7 @@ import {
   applyInitialArcResult,
   settleInflightInitialArcWatch,
 } from '../initial-arc-result';
+import { extractBookFromReference } from '../devotional-service';
 import { mmkvStorage } from '../mmkv-storage';
 import { useUnfoldStore, type DevotionalDay, type UserProfile } from '../store';
 
@@ -160,11 +161,21 @@ describe('applyInitialArcResult', () => {
     ]);
   });
 
+  it('keys a numbered book the way the scripture variance engine does', () => {
+    const reference = '1 Corinthians 13:4-7';
+    applyInitialArcResult({ ...result, devotionalDay: { ...day1, scriptureReference: reference } }, { user, devotionalLength: 7 });
+
+    expect(extractBookFromReference(reference)).toBe('1 Corinthians');
+    expect(useUnfoldStore.getState().usedScriptures).toEqual([
+      expect.objectContaining({ reference, book: extractBookFromReference(reference), devotionalId: 'devo-1' }),
+    ]);
+  });
+
   it('removes the in-flight record and completes the session with the series title', () => {
     applyInitialArcResult(result, { user, devotionalLength: 7 });
 
     expect(mmkvStorage.removeItem).toHaveBeenCalledWith(INFLIGHT_GENERATION_JOB_KEY);
-    expect(readInflightGenerationJob()).toEqual({ kind: 'none' });
+    expect(readInflightGenerationJob()).toBeNull();
     expect(useUnfoldStore.getState().generationSession).toMatchObject({
       status: 'complete',
       title: 'Learning to Trust Again',
@@ -177,7 +188,7 @@ describe('applyInitialArcResult', () => {
       /did not return a canonical devotionalId/,
     );
     expect(useUnfoldStore.getState().devotionals).toHaveLength(0);
-    expect(readInflightGenerationJob().kind).toBe('active');
+    expect(readInflightGenerationJob()).not.toBeNull();
   });
 });
 
@@ -189,7 +200,7 @@ describe('settleInflightInitialArcWatch', () => {
     expect(state.currentDevotionalId).toBe('devo-1');
     expect(state.devotionals[0].totalDays).toBe(3);
     expect(state.generationSession.status).toBe('complete');
-    expect(readInflightGenerationJob()).toEqual({ kind: 'none' });
+    expect(readInflightGenerationJob()).toBeNull();
     expect(logBugEvent).toHaveBeenCalledWith(
       'generation',
       'server-generation-complete',
@@ -203,7 +214,7 @@ describe('settleInflightInitialArcWatch', () => {
       { jobId: 'job-1' },
     );
 
-    expect(readInflightGenerationJob()).toEqual({ kind: 'none' });
+    expect(readInflightGenerationJob()).toBeNull();
     expect(useUnfoldStore.getState().generationSession).toMatchObject({ status: 'error', error: 'Model overloaded' });
     expect(useUnfoldStore.getState().devotionals).toHaveLength(0);
     expect(logBugError).toHaveBeenCalledWith('generation', expect.any(Error), { jobId: 'job-1', phase: 'server-poll' });
@@ -212,7 +223,7 @@ describe('settleInflightInitialArcWatch', () => {
   it('keeps the record and fails the session when the server could not be reached', () => {
     settleInflightInitialArcWatch({ kind: 'unreachable', message: 'Unable to connect' }, { jobId: 'job-1' });
 
-    expect(readInflightGenerationJob().kind).toBe('active');
+    expect(readInflightGenerationJob()).not.toBeNull();
     expect(useUnfoldStore.getState().generationSession).toMatchObject({ status: 'error', error: 'Unable to connect' });
     expect(useUnfoldStore.getState().devotionals).toHaveLength(0);
     expect(logBugError).toHaveBeenCalledWith('generation', expect.any(Error), { jobId: 'job-1', phase: 'server-poll-unreachable' });
@@ -224,7 +235,7 @@ describe('settleInflightInitialArcWatch', () => {
       { jobId: 'job-1' },
     );
 
-    expect(readInflightGenerationJob()).toEqual({ kind: 'none' });
+    expect(readInflightGenerationJob()).toBeNull();
     expect(useUnfoldStore.getState().generationSession.status).toBe('error');
     expect(logBugError).toHaveBeenCalledWith('generation', expect.any(Error), { jobId: 'job-1', phase: 'today-apply-initial-arc' });
   });
@@ -232,7 +243,7 @@ describe('settleInflightInitialArcWatch', () => {
   it('leaves everything in place when the watch was cancelled', () => {
     settleInflightInitialArcWatch({ kind: 'cancelled' }, { jobId: 'job-1' });
 
-    expect(readInflightGenerationJob().kind).toBe('active');
+    expect(readInflightGenerationJob()).not.toBeNull();
     expect(useUnfoldStore.getState().generationSession.status).toBe('running');
     expect(logBugError).not.toHaveBeenCalled();
   });

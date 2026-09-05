@@ -27,7 +27,8 @@
  * replaces it, and /generating reads any push against it as stale.
  */
 import { mmkvStorage } from '@/lib/mmkv-storage';
-import type { PollFailureKind } from '@/lib/generation-poll-outcome';
+import { classifyPollFailure } from '@/lib/generation-poll-outcome';
+import type { InitialArcPollResult } from '@/lib/inflight-initial-arc-watch';
 import type { GenerationSessionStatus } from '@/lib/store';
 
 export const INFLIGHT_GENERATION_JOB_KEY = 'inflight-generation-job';
@@ -41,18 +42,13 @@ export interface InflightGenerationJob {
   devotionalId?: string;
   submittedAt: number;
   /** The reader left /generating for Today; Today watches the job instead. */
-  leftForHome?: true;
+  leftForHome?: boolean;
   /**
    * "Start over with new answers" abandoned this job. Neither screen resumes
    * or watches it; it only marks the job's failure push as stale.
    */
-  superseded?: true;
+  superseded?: boolean;
 }
-
-export type InflightGenerationJobRead =
-  | { kind: 'none' }
-  | { kind: 'invalid' }
-  | { kind: 'active'; job: InflightGenerationJob };
 
 function toInflightGenerationJob(value: unknown): InflightGenerationJob | null {
   if (!value || typeof value !== 'object') return null;
@@ -63,23 +59,19 @@ function toInflightGenerationJob(value: unknown): InflightGenerationJob | null {
     jobId: record.jobId,
     ...(typeof record.devotionalId === 'string' ? { devotionalId: record.devotionalId } : {}),
     submittedAt: record.submittedAt,
-    ...(record.leftForHome === true ? { leftForHome: true as const } : {}),
-    ...(record.superseded === true ? { superseded: true as const } : {}),
+    ...(record.leftForHome === true ? { leftForHome: true } : {}),
+    ...(record.superseded === true ? { superseded: true } : {}),
   };
 }
 
-/** Pure: classify a raw MMKV value. */
-export function parseInflightGenerationJob(raw: string | null | undefined): InflightGenerationJobRead {
-  if (!raw) return { kind: 'none' };
-  let parsed: unknown;
+/** Pure: the record a raw MMKV value holds, or null for nothing readable. */
+export function parseInflightGenerationJob(raw: string | null | undefined): InflightGenerationJob | null {
+  if (!raw) return null;
   try {
-    parsed = JSON.parse(raw);
+    return toInflightGenerationJob(JSON.parse(raw));
   } catch {
-    return { kind: 'invalid' };
+    return null;
   }
-  const job = toInflightGenerationJob(parsed);
-  if (!job) return { kind: 'invalid' };
-  return { kind: 'active', job };
 }
 
 /**
@@ -87,11 +79,11 @@ export function parseInflightGenerationJob(raw: string | null | undefined): Infl
  * both screens always did, so nothing keeps bouncing on a record nobody can
  * act on.
  */
-export function readInflightGenerationJob(): InflightGenerationJobRead {
+export function readInflightGenerationJob(): InflightGenerationJob | null {
   const raw = mmkvStorage.getItem(INFLIGHT_GENERATION_JOB_KEY) as string | null;
-  const read = parseInflightGenerationJob(raw);
-  if (read.kind === 'invalid') clearInflightGenerationJob();
-  return read;
+  const job = parseInflightGenerationJob(raw);
+  if (raw && !job) clearInflightGenerationJob();
+  return job;
 }
 
 export function writeInflightGenerationJob(job: InflightGenerationJob): void {
@@ -133,12 +125,12 @@ export type TodayInflightDecision =
  * is nothing to resume or watch.
  */
 export function resolveTodayInflightAction(
-  read: InflightGenerationJobRead,
+  job: InflightGenerationJob | null,
   sessionStatus: GenerationSessionStatus,
 ): TodayInflightDecision {
-  if (read.kind !== 'active' || read.job.superseded) return { action: 'none' };
-  if (!read.job.leftForHome) return { action: 'resume-on-generating', job: read.job };
-  return sessionStatus === 'error' ? { action: 'none' } : { action: 'watch-on-today', job: read.job };
+  if (!job || job.superseded) return { action: 'none' };
+  if (!job.leftForHome) return { action: 'resume-on-generating', job };
+  return sessionStatus === 'error' ? { action: 'none' } : { action: 'watch-on-today', job };
 }
 
 export type InflightResumeDecision = 'resume' | 'discard' | 'keep';
@@ -150,14 +142,12 @@ export type InflightResumeDecision = 'resume' | 'discard' | 'keep';
  * failure itself so the reader sees the failed card, not /generating's error
  * state; keep the record, and ask again on the next focus, when the status
  * could not be fetched — unless the server answered that it does not hold
- * the job at all (`pollFailure` 'job-gone'), which is a verdict: discard.
+ * the job at all (404 / 400, `classifyPollFailure` 'job-gone'), which is a
+ * verdict: discard.
  */
-export function resolveInflightResume(
-  serverStatus: string | null | undefined,
-  pollFailure?: PollFailureKind | null,
-): InflightResumeDecision {
-  if (pollFailure === 'job-gone') return 'discard';
-  switch (serverStatus) {
+export function resolveInflightResume(poll: InitialArcPollResult): InflightResumeDecision {
+  if ('error' in poll) return classifyPollFailure(poll.error) === 'job-gone' ? 'discard' : 'keep';
+  switch (poll.status.status) {
     case 'pending':
     case 'processing':
     case 'complete':
@@ -176,9 +166,9 @@ export function resolveInflightResume(
  * on purpose: nothing may sit between the tap and the navigation.
  */
 export function markInflightJobLeftForHome(): InflightGenerationJob | null {
-  const read = readInflightGenerationJob();
-  if (read.kind !== 'active' || read.job.superseded) return null;
-  const record = { ...read.job, leftForHome: true as const };
+  const job = readInflightGenerationJob();
+  if (!job || job.superseded) return null;
+  const record = { ...job, leftForHome: true };
   writeInflightGenerationJob(record);
   return record;
 }

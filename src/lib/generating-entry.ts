@@ -6,6 +6,7 @@
  * module, one key, no expiry: the server decides a job's fate, never a clock.
  */
 import type { InflightGenerationJob } from './inflight-generation-job';
+import { firstParam } from './reveal-params';
 
 /** Route params a tapped "We hit a snag" push carries into /generating. */
 export type GeneratingRouteParams = {
@@ -19,11 +20,6 @@ export type GeneratingEntry =
   /** The push names a job the reader has moved past; Today reconciles. */
   | { kind: 'stale-push'; jobId: string }
   | { kind: 'submit' };
-
-function readParam(value: string | string[] | undefined): string | null {
-  const single = Array.isArray(value) ? value[0] : value;
-  return single ? single : null;
-}
 
 /**
  * A push that names a job is checked against what the reader has now. The
@@ -63,7 +59,7 @@ export function resolveGeneratingEntry({
   /** Ids of the series already in the store; a pushed series among them has landed. */
   landedDevotionalIds?: readonly string[];
 }): GeneratingEntry {
-  const pushedJobId = readParam(params?.jobId);
+  const pushedJobId = firstParam(params?.jobId);
   if (!pushedJobId) {
     return inflight && !inflight.superseded ? { kind: 'resume', inflight } : { kind: 'submit' };
   }
@@ -72,7 +68,7 @@ export function resolveGeneratingEntry({
   if (inflight) {
     return !inflight.superseded && inflight.jobId === pushedJobId ? { kind: 'resume', inflight } : stale;
   }
-  const pushedDevotionalId = readParam(params?.devotionalId);
+  const pushedDevotionalId = firstParam(params?.devotionalId) || null;
   if (sessionDevotionalId && sessionDevotionalId !== pushedDevotionalId) return stale;
   if (pushedDevotionalId && landedDevotionalIds.includes(pushedDevotionalId)) return stale;
   return { kind: 'poll-from-push', jobId: pushedJobId, devotionalId: pushedDevotionalId };

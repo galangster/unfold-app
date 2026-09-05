@@ -186,7 +186,7 @@ describe('regression: Jordan item 6 — Today after Go home', () => {
 
     // The record is gone with the series landed: nothing is left for either
     // screen to resume, so /generating is never entered again.
-    expect(readInflightGenerationJob()).toEqual({ kind: 'none' });
+    expect(readInflightGenerationJob()).toBeNull();
     expect(resolveTodayInflightAction(readInflightGenerationJob(), landed.generationSession.status)).toEqual({ action: 'none' });
 
     await act(async () => {

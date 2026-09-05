@@ -24,7 +24,8 @@ export type WatchForGeneratedDayOptions = {
   sleep?: (ms: number) => Promise<void>;
 };
 
-function defaultSleep(ms: number): Promise<void> {
+/** The wall-clock sleep the watch loops use outside tests. */
+export function defaultSleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 

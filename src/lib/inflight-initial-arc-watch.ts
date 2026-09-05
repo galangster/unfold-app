@@ -18,6 +18,7 @@ import type { GenerationResultPayload } from './generation-reconciliation';
 // Type-only import — erased at compile time, so this module stays free of the
 // native (MMKV) dependencies that the generation-api runtime pulls in.
 import type { CanonicalGenerationResultPayload } from './generation-api';
+import { defaultSleep } from './generated-day-watch';
 import {
   classifyPollFailure,
   countConsecutiveNetworkErrors,
@@ -65,6 +66,94 @@ export type InflightInitialArcWatchOutcome =
   | { kind: 'unreachable'; message: string }
   | { kind: 'cancelled' };
 
+/** One status request's answer: what the server said, or the throw. */
+export type InitialArcPollResult =
+  | { status: InitialArcJobStatus }
+  | { error: unknown };
+
+/** What one poll reads from the loop and the next poll inherits. */
+export type InitialArcPollState = {
+  consecutiveUnknown: number;
+  consecutiveNetworkErrors: number;
+  /** How long the job has been polled; feeds the liveness rule. */
+  elapsedMs: number;
+  /** Identity fallback when the server result omits its devotionalId. */
+  fallbackDevotionalId?: string | null;
+};
+
+export type InitialArcPollStep =
+  /** A verdict, or the client's give-up: the wait ends here. */
+  | { kind: 'settled'; outcome: Exclude<InflightInitialArcWatchOutcome, { kind: 'cancelled' }> }
+  /** Not yet: ask again, at double cadence after a throwing fetch. */
+  | {
+      kind: 'poll-again';
+      consecutiveUnknown: number;
+      consecutiveNetworkErrors: number;
+      cadence: 'normal' | 'doubled';
+    };
+
+function settled(outcome: Exclude<InflightInitialArcWatchOutcome, { kind: 'cancelled' }>): InitialArcPollStep {
+  return { kind: 'settled', outcome };
+}
+
+/**
+ * Classify one poll. Shared by the loop below and by Today's one-shot
+ * app-kill-recovery probe, so a server verdict reads the same wherever it is
+ * seen. A throwing fetch is "not yet" — the server job is still running —
+ * and counts toward the consecutive-error give-up, which ends the wait
+ * without a verdict; the one throw that is a verdict is the server's "no
+ * such job" (404 / 400). A status goes through `evaluateGenerationPoll`.
+ */
+export function classifyInitialArcPoll(poll: InitialArcPollResult, state: InitialArcPollState): InitialArcPollStep {
+  if ('error' in poll) {
+    if (classifyPollFailure(poll.error) === 'job-gone') {
+      return settled({ kind: 'failed', message: INITIAL_ARC_JOB_NOT_FOUND_MESSAGE, phase: 'server-poll-not-found', canRetry: true });
+    }
+    const consecutiveNetworkErrors = countConsecutiveNetworkErrors(state.consecutiveNetworkErrors, false);
+    if (evaluateGenerationDeadline({ elapsedMs: state.elapsedMs, consecutiveNetworkErrors }) === 'network-error') {
+      return settled({ kind: 'unreachable', message: INITIAL_ARC_UNREACHABLE_MESSAGE });
+    }
+    return { kind: 'poll-again', consecutiveUnknown: state.consecutiveUnknown, consecutiveNetworkErrors, cadence: 'doubled' };
+  }
+
+  const evaluated = evaluateGenerationPoll({
+    status: poll.status.status,
+    result: poll.status.result,
+    error: poll.status.error,
+    canRetry: poll.status.canRetry,
+    fallbackDevotionalId: state.fallbackDevotionalId ?? null,
+    dayNumber: 1,
+    priorConsecutiveUnknown: state.consecutiveUnknown,
+  });
+
+  switch (evaluated.outcome.kind) {
+    case 'complete':
+      return settled({ kind: 'complete', result: evaluated.outcome.result });
+    case 'failed':
+      return settled({
+        kind: 'failed',
+        message: evaluated.outcome.error,
+        phase: 'server-poll',
+        canRetry: evaluated.outcome.canRetry,
+      });
+    case 'invalid-result':
+      return settled({ kind: 'failed', message: INITIAL_ARC_INVALID_RESULT_MESSAGE, phase: 'server-poll-invalid-result', canRetry: true });
+    case 'unknown-terminal':
+      return settled({ kind: 'failed', message: INITIAL_ARC_UNKNOWN_STATUS_MESSAGE, phase: 'server-poll-unknown-status', canRetry: true });
+    case 'waiting':
+    case 'unknown-retry':
+    default:
+      // Still pending / processing (or a tolerated unknown). Past the
+      // long-running threshold this is a soft state, never a failure.
+      return {
+        kind: 'poll-again',
+        consecutiveUnknown: evaluated.consecutiveUnknown,
+        consecutiveNetworkErrors: countConsecutiveNetworkErrors(state.consecutiveNetworkErrors, true),
+        cadence: 'normal',
+      };
+  }
+}
+
 export type WatchInflightInitialArcOptions = {
   jobId: string;
   fetchStatus: (jobId: string) => Promise<InitialArcJobStatus>;
@@ -80,19 +169,11 @@ export type WatchInflightInitialArcOptions = {
   delayFor?: (elapsedMs: number) => number;
 };
 
-function defaultSleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 /**
  * Poll the job until it completes, fails terminally, is cancelled, or the
  * server stops answering. The first poll is immediate (the reader just left a
- * screen that was polling). A throwing fetch is "not yet": the server job is
- * still running, so wait (at double cadence) and ask again — until the
- * consecutive-error cap, which ends the wait without a verdict. The one
- * throw that is a verdict is the server's "no such job" (404 / 400): that
- * fails terminally at once, so the record is dropped rather than kept for a
- * job nothing will ever resolve.
+ * screen that was polling); every poll is classified by
+ * `classifyInitialArcPoll`, and the loop only carries its state forward.
  */
 export async function watchInflightInitialArc(
   options: WatchInflightInitialArcOptions,
@@ -113,55 +194,23 @@ export async function watchInflightInitialArc(
   for (;;) {
     if (isCancelled()) return { kind: 'cancelled' };
 
-    let status: InitialArcJobStatus;
+    let poll: InitialArcPollResult;
     try {
-      status = await fetchStatus(jobId);
-    } catch (err) {
-      if (classifyPollFailure(err) === 'job-gone') {
-        return { kind: 'failed', message: INITIAL_ARC_JOB_NOT_FOUND_MESSAGE, phase: 'server-poll-not-found', canRetry: true };
-      }
-      consecutiveNetworkErrors = countConsecutiveNetworkErrors(consecutiveNetworkErrors, false);
-      const decision = evaluateGenerationDeadline({ elapsedMs: now() - startedAt, consecutiveNetworkErrors });
-      if (decision === 'network-error') {
-        return { kind: 'unreachable', message: INITIAL_ARC_UNREACHABLE_MESSAGE };
-      }
-      await sleep(delayFor(now() - startedAt) * 2);
-      continue;
+      poll = { status: await fetchStatus(jobId) };
+    } catch (error) {
+      poll = { error };
     }
     if (isCancelled()) return { kind: 'cancelled' };
-    consecutiveNetworkErrors = countConsecutiveNetworkErrors(consecutiveNetworkErrors, true);
 
-    const evaluated = evaluateGenerationPoll({
-      status: status.status,
-      result: status.result,
-      error: status.error,
-      canRetry: status.canRetry,
+    const step = classifyInitialArcPoll(poll, {
+      consecutiveUnknown,
+      consecutiveNetworkErrors,
+      elapsedMs: now() - startedAt,
       fallbackDevotionalId,
-      dayNumber: 1,
-      priorConsecutiveUnknown: consecutiveUnknown,
     });
-    consecutiveUnknown = evaluated.consecutiveUnknown;
-
-    switch (evaluated.outcome.kind) {
-      case 'complete':
-        return { kind: 'complete', result: evaluated.outcome.result };
-      case 'failed':
-        return {
-          kind: 'failed',
-          message: evaluated.outcome.error,
-          phase: 'server-poll',
-          canRetry: evaluated.outcome.canRetry,
-        };
-      case 'invalid-result':
-        return { kind: 'failed', message: INITIAL_ARC_INVALID_RESULT_MESSAGE, phase: 'server-poll-invalid-result', canRetry: true };
-      case 'unknown-terminal':
-        return { kind: 'failed', message: INITIAL_ARC_UNKNOWN_STATUS_MESSAGE, phase: 'server-poll-unknown-status', canRetry: true };
-      case 'waiting':
-      case 'unknown-retry':
-      default:
-        // Still pending / processing (or a tolerated unknown). Past the
-        // long-running threshold this is a soft state, never a failure.
-        await sleep(delayFor(now() - startedAt));
-    }
+    if (step.kind === 'settled') return step.outcome;
+    consecutiveUnknown = step.consecutiveUnknown;
+    consecutiveNetworkErrors = step.consecutiveNetworkErrors;
+    await sleep(delayFor(now() - startedAt) * (step.cadence === 'doubled' ? 2 : 1));
   }
 }

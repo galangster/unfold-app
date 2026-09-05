@@ -356,23 +356,11 @@ export function shapeKeyPeople(
 export type KeyPersonRow = { id: string; name: string; relationship: string };
 
 // Ids only need to be unique within the editing state, but a restored draft
-// can carry ids minted by an earlier process, so the counter is namespaced by
-// module load time, and each id also carries a per-call random component so
-// two processes that load in the same millisecond cannot mint the same id.
-// An id is minted once, when the row is created, and never changes after.
-const KEY_PERSON_ID_RUN = Date.now().toString(36);
-const KEY_PERSON_ID_SALT_LENGTH = 6;
-let keyPersonIdSeq = 0;
-
-function keyPersonIdSalt(): string {
-  return Math.floor(Math.random() * 36 ** KEY_PERSON_ID_SALT_LENGTH)
-    .toString(36)
-    .padStart(KEY_PERSON_ID_SALT_LENGTH, '0');
-}
-
+// can carry ids minted by an earlier process, so each id carries the clock
+// and a random component. An id is minted once, when the row is created, and
+// never changes after.
 function nextKeyPersonId(): string {
-  keyPersonIdSeq += 1;
-  return `kp-${KEY_PERSON_ID_RUN}-${keyPersonIdSeq}-${keyPersonIdSalt()}`;
+  return `kp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 /**

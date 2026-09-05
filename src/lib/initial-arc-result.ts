@@ -6,6 +6,7 @@
  */
 import { useUnfoldStore, type Devotional, type DevotionalDay, type SeriesArc, type UserProfile } from '@/lib/store';
 import { clearInflightGenerationJob } from '@/lib/inflight-generation-job';
+import { extractBookFromReference } from '@/lib/devotional-service';
 import type { InflightInitialArcWatchOutcome } from '@/lib/inflight-initial-arc-watch';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
@@ -86,10 +87,11 @@ export function applyInitialArcResult(
   }
 
   if (day1.scriptureReference) {
-    const book = day1.scriptureReference.split(/\s+\d/)[0].trim();
+    // The same book key the scripture variance engine writes, so day 1's
+    // reference counts against the books it avoids.
     store.addUsedScriptures([{
       reference: day1.scriptureReference,
-      book,
+      book: extractBookFromReference(day1.scriptureReference),
       usedAt: new Date().toISOString(),
       devotionalId,
     }]);

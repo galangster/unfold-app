@@ -114,7 +114,15 @@ jest.mock('@/hooks/useAccessibility', () => ({
 
 // The tomorrow-locked composer reads the completed day's journal entry from
 // the store itself (the Today screen keys its reflect props on tomorrow's day).
-const mockStoreState: { journalEntries: JournalEntry[] } = { journalEntries: [] };
+type MockStoreState = {
+  journalEntries: JournalEntry[];
+  getJournalEntry: (devotionalId: string, dayNumber: number) => JournalEntry | undefined;
+};
+const mockStoreState: MockStoreState = {
+  journalEntries: [],
+  getJournalEntry: (devotionalId, dayNumber) =>
+    mockStoreState.journalEntries.find((entry) => entry.devotionalId === devotionalId && entry.dayNumber === dayNumber),
+};
 
 jest.mock('@/lib/store', () => ({
   useUnfoldStore: (selector: (state: typeof mockStoreState) => unknown) => selector(mockStoreState),

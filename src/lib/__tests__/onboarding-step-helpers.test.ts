@@ -519,17 +519,10 @@ describe('onboarding step helpers', () => {
       expect(keyPersonChipLabel('Friend', 2)).toBe('Friend · 2');
     });
 
-    it('mints ids with a run, a sequence, and a per-call random component', () => {
+    it('mints ids from the clock and a random component, unique per row', () => {
       const people = addKeyPerson(addKeyPerson([], 'Friend'), 'Friend');
-      for (const person of people) expect(person.id).toMatch(/^kp-[0-9a-z]+-[1-9]\d*-[0-9a-z]{6}$/);
+      for (const person of people) expect(person.id).toMatch(/^kp-[0-9a-z]+-[0-9a-z]+$/);
       expect(people[0].id).not.toBe(people[1].id);
-
-      const random = jest.spyOn(Math, 'random').mockReturnValueOnce(0);
-      try {
-        expect(addKeyPerson([], 'Friend')[0].id).toMatch(/-000000$/);
-      } finally {
-        random.mockRestore();
-      }
     });
 
     it('keeps a row id stable through rename, removal of a sibling, and re-normalisation', () => {

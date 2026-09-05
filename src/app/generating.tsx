@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, type ComponentProps, type ReactNode } from 'react';
 import { View, Text, TouchableOpacity, AppState, AppStateStatus, AccessibilityInfo, ScrollView, StyleSheet, ActivityIndicator, Linking } from 'react-native';
 import { useRouter, useNavigation, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -65,6 +65,7 @@ import { registerPushToken } from '@/lib/push-notifications';
 import {
   getNotifyControlState,
   resolveNotifyRequestOutcome,
+  type NotifyControlState,
   type NotifyRequestOutcome,
 } from '@/lib/generating-notify-state';
 import { resolveGeneratingEntry } from '@/lib/generating-entry';
@@ -107,6 +108,56 @@ const RIPPLE_DURATION = 2800;
 const RIPPLE_COUNT = 3;
 const RIPPLE_STAGGER = 900;
 const MESSAGE_CYCLE_MS = 3800;
+
+/** Copy for the nudge notes under the notify control: one tree, three states. */
+const NOTIFY_NOTE_COPY: Record<Extract<NotifyControlState, 'pending' | 'denied' | 'registration-failed'>, string> = {
+  pending: 'Setting up your nudge\u2026',
+  denied: 'Notifications are off for Unfold. Turn them on in Settings and we\u2019ll nudge you when it\u2019s\u00A0ready.',
+  'registration-failed': 'We couldn\u2019t set up the nudge. Check your connection and tap Notify me\u00A0again.',
+};
+
+type NotifyNoteColors = { inputBackground: string; border: string; textMuted: string; textSubtle: string };
+
+/**
+ * A bordered note under the notify control: an icon (the bell unless given)
+ * beside muted copy, with optional content — the Settings link — below it.
+ */
+function NotifyNote({
+  entering,
+  colors,
+  text,
+  icon,
+  centered = false,
+  gap,
+  children,
+}: {
+  entering: ComponentProps<typeof Animated.View>['entering'];
+  colors: NotifyNoteColors;
+  text: string;
+  icon?: ReactNode;
+  /** Centre the icon on the text (the spinner) instead of top-aligning it. */
+  centered?: boolean;
+  gap?: number;
+  children?: ReactNode;
+}) {
+  return (
+    <Animated.View
+      entering={entering}
+      style={{ marginTop: Spacing['10'], width: '100%', alignItems: 'center', ...(gap === undefined ? {} : { gap }) }}
+    >
+      <View
+        style={[
+          genStyles.notifyNote,
+          { ...(centered ? { alignItems: 'center' as const } : {}), backgroundColor: colors.inputBackground, borderColor: colors.border },
+        ]}
+      >
+        {icon ?? <BellIcon size={14} color={colors.textSubtle} weight="light" />}
+        <Text style={[genStyles.notifyNoteText, { color: colors.textMuted }]}>{text}</Text>
+      </View>
+      {children}
+    </Animated.View>
+  );
+}
 
 export default function GeneratingScreen() {
   const router = useRouter();
@@ -157,17 +208,16 @@ export default function GeneratingScreen() {
 
   // Persist the job the server just returned — submitted, retried or adopted.
   // After "Go home — we'll keep writing" the record carries the marker so
-  // Today keeps it and watches it instead of bouncing back here, and this
-  // screen, already unmounted, must not poll it too: every caller returns
-  // when Today owns the watch. One writer, so no path can drop the marker.
-  const recordJob = useCallback((jobId: string, devotionalId: string | undefined): { todayOwnsWatch: boolean } => {
+  // Today keeps it and watches it instead of bouncing back here. One writer,
+  // so no path can drop the marker; startPolling refuses the loop once Today
+  // owns the watch.
+  const recordJob = useCallback((jobId: string, devotionalId: string | undefined): void => {
     writeInflightGenerationJob({
       jobId,
       devotionalId,
       submittedAt: Date.now(),
-      leftForHome: leftForHomeRef.current || undefined,
+      leftForHome: leftForHomeRef.current,
     });
-    return { todayOwnsWatch: leftForHomeRef.current };
   }, []);
   // Consecutive unrecognized job statuses — bounded so we don't poll forever
   // against a status we don't understand.
@@ -469,6 +519,13 @@ export default function GeneratingScreen() {
   // ========== POLLING LOGIC ==========
 
   const startPolling = useCallback((jobId: string) => {
+    // After "Go home — we'll keep writing" Today owns the watch. A job that
+    // resolves on this unmounted screen — a submission, a retry, an adopted
+    // job — has recorded itself for Today and must not poll here too.
+    if (leftForHomeRef.current) {
+      logger.log('[generating] Job resolved after the reader went home; Today owns the watch:', jobId);
+      return;
+    }
     if (pollingRef.current) return;
     pollingRef.current = true;
     const run = ++pollRunRef.current;
@@ -642,10 +699,9 @@ export default function GeneratingScreen() {
     // A push is judged stale against the generation session and the series
     // already in the store, never against currentDevotionalId: onboarding's
     // sample and a finished journey are "current" too, and read as moved on.
-    const inflightRead = readInflightGenerationJob();
     const { generationSession, devotionals } = useUnfoldStore.getState();
     const entry = resolveGeneratingEntry({
-      inflight: inflightRead.kind === 'active' ? inflightRead.job : null,
+      inflight: readInflightGenerationJob(),
       params: { jobId: params.jobId, devotionalId: params.devotionalId },
       sessionDevotionalId: generationSession.devotionalId,
       landedDevotionalIds: devotionals.map((devotional) => devotional.id),
@@ -708,14 +764,9 @@ export default function GeneratingScreen() {
         // Persist inflight job to MMKV for app-kill recovery. Written before
         // the session starts so Today, which re-reads the record when the
         // session changes, never sees the session without the record.
-        const { todayOwnsWatch } = recordJob(jobId, devotionalId);
+        recordJob(jobId, devotionalId);
         startGenerationSession({ devotionalId, totalDays: user.devotionalLength });
         logger.log('[generating] Job submitted:', jobId);
-
-        if (todayOwnsWatch) {
-          logger.log('[generating] Job submitted after the reader went home; Today owns the watch');
-          return;
-        }
 
         setPendingJobId(jobId);
         setIsReconnecting(false);
@@ -750,11 +801,7 @@ export default function GeneratingScreen() {
             logger.warn('[generating] Existing-job recovery failed; will poll instead:', recoverErr);
           }
           // Not ready yet (or no known devotionalId) — poll the existing job.
-          const { todayOwnsWatch } = recordJob(existingJobId, sessionDevotionalId ?? undefined);
-          if (todayOwnsWatch) {
-            logger.log('[generating] Existing job adopted after the reader went home; Today owns the watch');
-            return;
-          }
+          recordJob(existingJobId, sessionDevotionalId ?? undefined);
           setPendingJobId(existingJobId);
           setIsReconnecting(false);
           pollStartTime.current = Date.now();
@@ -833,16 +880,12 @@ export default function GeneratingScreen() {
         // Retry existing job on the server
         const { jobId } = await retryJob(action.jobId);
         logger.log('[generating] Job retried:', jobId);
-        const { todayOwnsWatch } = recordJob(jobId, useUnfoldStore.getState().generationSession.devotionalId ?? undefined);
+        recordJob(jobId, useUnfoldStore.getState().generationSession.devotionalId ?? undefined);
         // The session sat on the failure while the job is running again.
         // Moving it back to running is also what tells Today, which re-reads
         // the record when the session moves, to swap the failed card for the
         // preparing one when the reader already went home.
         updateGenerationSessionProgress({ title: GENERATING_SESSION_TITLE_PLACEHOLDER });
-        if (todayOwnsWatch) {
-          logger.log('[generating] Job retried after the reader went home; Today owns the watch');
-          return;
-        }
         setPendingJobId(jobId);
         startPolling(jobId);
       } else {
@@ -867,13 +910,9 @@ export default function GeneratingScreen() {
 
           const devotionalId = requireCanonicalDevotionalId(submittedDevotionalId, 'retry initial devotional job submission');
           // Record before the session starts, as on first submission.
-          const { todayOwnsWatch } = recordJob(jobId, devotionalId);
+          recordJob(jobId, devotionalId);
           startGenerationSession({ devotionalId, totalDays: user.devotionalLength });
           logger.log('[generating] Re-submitted job:', jobId);
-          if (todayOwnsWatch) {
-            logger.log('[generating] Job re-submitted after the reader went home; Today owns the watch');
-            return;
-          }
           setPendingJobId(jobId);
           startPolling(jobId);
         }
@@ -1337,22 +1376,13 @@ export default function GeneratingScreen() {
               entrance delay hides the state when the session dedupe resolves it
               within a frame. */}
           {notifyControl === 'pending' && (
-            <Animated.View
+            <NotifyNote
               entering={entering(FadeIn.duration(400).delay(300))}
-              style={{ marginTop: Spacing['10'], width: '100%', alignItems: 'center' }}
-            >
-              <View
-                style={[
-                  genStyles.notifyNote,
-                  { alignItems: 'center', backgroundColor: colors.inputBackground, borderColor: colors.border },
-                ]}
-              >
-                <ActivityIndicator size="small" color={colors.textSubtle} />
-                <Text style={[genStyles.notifyNoteText, { color: colors.textMuted }]}>
-                  {'Setting up your nudge\u2026'}
-                </Text>
-              </View>
-            </Animated.View>
+              colors={colors}
+              centered
+              icon={<ActivityIndicator size="small" color={colors.textSubtle} />}
+              text={NOTIFY_NOTE_COPY.pending}
+            />
           )}
 
           {/* After enabling notifications */}
@@ -1387,16 +1417,7 @@ export default function GeneratingScreen() {
 
           {/* Permission denied -- say so, and point at Settings */}
           {notifyControl === 'denied' && (
-            <Animated.View
-              entering={entering(FadeIn.duration(400))}
-              style={{ marginTop: Spacing['10'], width: '100%', alignItems: 'center', gap: Spacing['3'] }}
-            >
-              <View style={[genStyles.notifyNote, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
-                <BellIcon size={14} color={colors.textSubtle} weight="light" />
-                <Text style={[genStyles.notifyNoteText, { color: colors.textMuted }]}>
-                  {'Notifications are off for Unfold. Turn them on in Settings and we\u2019ll nudge you when it\u2019s\u00A0ready.'}
-                </Text>
-              </View>
+            <NotifyNote entering={entering(FadeIn.duration(400))} colors={colors} gap={Spacing['3']} text={NOTIFY_NOTE_COPY.denied}>
               <TouchableOpacity
                 activeOpacity={0.7}
                 onPress={handleOpenNotificationSettings}
@@ -1415,22 +1436,12 @@ export default function GeneratingScreen() {
                   Open Settings
                 </Text>
               </TouchableOpacity>
-            </Animated.View>
+            </NotifyNote>
           )}
 
           {/* Permission granted but the token never reached the server */}
           {notifyControl === 'registration-failed' && (
-            <Animated.View
-              entering={entering(FadeIn.duration(400))}
-              style={{ marginTop: Spacing['10'], width: '100%', alignItems: 'center' }}
-            >
-              <View style={[genStyles.notifyNote, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
-                <BellIcon size={14} color={colors.textSubtle} weight="light" />
-                <Text style={[genStyles.notifyNoteText, { color: colors.textMuted }]}>
-                  {'We couldn\u2019t set up the nudge. Check your connection and tap Notify me\u00A0again.'}
-                </Text>
-              </View>
-            </Animated.View>
+            <NotifyNote entering={entering(FadeIn.duration(400))} colors={colors} text={NOTIFY_NOTE_COPY['registration-failed']} />
           )}
 
           {/* Already had notifications -- gentle note */}

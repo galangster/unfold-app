@@ -440,6 +440,30 @@ describe('ThreeStepPaywall purchase advances exactly once', () => {
     expect(props.onPurchaseSuccess).not.toHaveBeenCalled();
   });
 
+  it('keeps one entitlement wait through a parent re-render that hands over a new onPurchaseSuccess', async () => {
+    mockPurchasePackage.mockResolvedValue({ ok: true, data: unentitledCustomerInfo });
+    const wait = deferredEntitlementWait();
+    const { tree, props } = await renderOnFinalPage();
+
+    await pressPrimaryCTA(tree);
+    expect(mockWaitForUnfoldPremiumEntitlement).toHaveBeenCalledTimes(1);
+
+    // onboarding.tsx passes an inline arrow, so every parent render is a new
+    // prop. The wait, and the listener inside it, must survive that.
+    const latestOnPurchaseSuccess = jest.fn();
+    await act(async () => {
+      tree.update(<ThreeStepPaywall {...({ ...props, onPurchaseSuccess: latestOnPurchaseSuccess } as any)} />);
+    });
+
+    expect(mockWaitForUnfoldPremiumEntitlement).toHaveBeenCalledTimes(1);
+    expect(wait.signal().aborted).toBe(false);
+
+    // The grant advances through the newest callback, not the one it started with.
+    await wait.resolve(entitledCustomerInfo);
+    expect(latestOnPurchaseSuccess).toHaveBeenCalledTimes(1);
+    expect(props.onPurchaseSuccess).not.toHaveBeenCalled();
+  });
+
   it('keeps the primary CTA inert while the grant is pending, so a second tap cannot abort the wait', async () => {
     mockPurchasePackage.mockResolvedValue({ ok: true, data: unentitledCustomerInfo });
     const wait = deferredEntitlementWait();

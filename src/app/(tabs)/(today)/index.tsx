@@ -31,7 +31,7 @@ import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { getContentAwareMiddayMessage, getContentAwareEveningMessage } from '@/constants/check-in-messages';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { Duration, Ease } from '@/constants/animations';
-import { submitGenerationJob, recoverCompletedGenerationResult, pollJobStatus, ApiError, type GenerationJobResponse } from '@/lib/generation-api';
+import { submitGenerationJob, recoverCompletedGenerationResult, pollJobStatus, ApiError } from '@/lib/generation-api';
 import { toFriendlyOnboardingGenerationError } from '@/lib/generation-errors';
 import {
   hasInflightSeriesLanded,
@@ -41,8 +41,8 @@ import {
   resolveTodayInflightAction,
   type InflightGenerationJob,
 } from '@/lib/inflight-generation-job';
-import { INITIAL_ARC_JOB_NOT_FOUND_MESSAGE, INITIAL_ARC_UNKNOWN_STATUS_MESSAGE } from '@/lib/inflight-initial-arc-watch';
-import { classifyPollFailure, type PollFailureKind } from '@/lib/generation-poll-outcome';
+import { classifyInitialArcPoll, type InitialArcPollResult } from '@/lib/inflight-initial-arc-watch';
+import { classifyPollFailure } from '@/lib/generation-poll-outcome';
 import { settleInflightInitialArcWatch } from '@/lib/initial-arc-result';
 import { useInflightInitialArcWatch } from '@/hooks/useInflightInitialArcWatch';
 import { TodayCardStack, type TodayCardStackCard } from '@/components/home/TodayCardStack';
@@ -88,7 +88,8 @@ type QaContextSlotPreview = Extract<ContextSlotType, 'midday' | 'evening' | 'bri
 
 // Zone components
 import { type ContextSlotType } from '@/lib/context-slot-priority';
-import { computeDevotionalState, type ReflectionStatus } from '@/components/home/compute-devotional-state';
+import { computeDevotionalState } from '@/components/home/compute-devotional-state';
+import { useCompletedDayReflection } from '@/components/home/use-completed-day-reflection';
 import { DevotionalCard } from '@/components/home/DevotionalCard';
 import { GreetingRow } from '@/components/home/GreetingRow';
 import { BentoGrid } from '@/components/home/BentoGrid';
@@ -145,7 +146,6 @@ export default function HomeScreen() {
   const setDismissedRememberThisCardDate = useUnfoldStore((s) => s.setDismissedRememberThisCardDate);
 
   const checkIns = useUnfoldStore((s) => s.checkIns);
-  const journalEntries = useUnfoldStore((s) => s.journalEntries);
 
   // Auto-navigate to reading when coming from the reveal screen.
   // The reveal sets resumeContext with a fresh touchedAt timestamp,
@@ -291,46 +291,58 @@ export default function HomeScreen() {
     if (!isTodayFocused) return;
     const decision = resolveTodayInflightAction(readInflightGenerationJob(), generationSessionStatus);
     if (decision.action !== 'resume-on-generating') {
-      setInflightSeries(decision.action === 'watch-on-today' ? decision.job : null);
+      const next = decision.action === 'watch-on-today' ? decision.job : null;
+      // The same record read again on focus keeps its object, so the watch
+      // keyed on it is not restarted.
+      setInflightSeries((prev) => (
+        prev && next
+        && prev.jobId === next.jobId
+        && prev.devotionalId === next.devotionalId
+        && prev.submittedAt === next.submittedAt
+        && prev.leftForHome === next.leftForHome
+        && prev.superseded === next.superseded
+          ? prev
+          : next
+      ));
       return;
     }
     setInflightSeries(null);
-    const { jobId } = decision.job;
+    const { jobId, devotionalId } = decision.job;
     let cancelled = false;
     void (async () => {
-      let status: GenerationJobResponse | null = null;
-      let pollFailure: PollFailureKind | null = null;
+      let poll: InitialArcPollResult;
       try {
-        status = await pollJobStatus(jobId);
+        poll = { status: await pollJobStatus(jobId) };
       } catch (err) {
-        pollFailure = classifyPollFailure(err);
+        poll = { error: err };
         logger.warn(
-          pollFailure === 'job-gone'
+          classifyPollFailure(err) === 'job-gone'
             ? '[home] Server does not hold the inflight job; dropping the record:'
             : '[home] Could not check inflight job; keeping the record:',
           err instanceof Error ? err.message : err,
         );
       }
       if (cancelled) return;
-      const resume = resolveInflightResume(status?.status, pollFailure);
+      const resume = resolveInflightResume(poll);
       if (resume === 'resume') {
-        logger.log(`[home] Resuming inflight generation job ${jobId} (server: ${status?.status})`);
+        const serverStatus = 'status' in poll ? poll.status.status : null;
+        logger.log(`[home] Resuming inflight generation job ${jobId} (server: ${serverStatus})`);
         // Navigate to generating screen — it will pick up the inflight job from MMKV
         router.replace('/generating');
         return;
       }
       if (resume === 'discard') {
-        settleInflightInitialArcWatch(
-          pollFailure === 'job-gone'
-            ? { kind: 'failed', message: INITIAL_ARC_JOB_NOT_FOUND_MESSAGE, phase: 'server-poll-not-found', canRetry: true }
-            : {
-                kind: 'failed',
-                message: status?.error ?? INITIAL_ARC_UNKNOWN_STATUS_MESSAGE,
-                phase: 'server-poll',
-                canRetry: status?.canRetry ?? true,
-              },
-          { jobId },
-        );
+        // The server's verdict (its failed status, or "no such job") is the
+        // failed outcome the watch would settle on; one poll with no history
+        // classifies it the same way. 'discard' is always settled — the
+        // check narrows the type.
+        const step = classifyInitialArcPoll(poll, {
+          consecutiveUnknown: 0,
+          consecutiveNetworkErrors: 0,
+          elapsedMs: 0,
+          fallbackDevotionalId: devotionalId,
+        });
+        if (step.kind === 'settled') settleInflightInitialArcWatch(step.outcome, { jobId });
       }
     })();
     return () => {
@@ -883,17 +895,15 @@ export default function HomeScreen() {
     });
   }, [currentDevotional, currentDayData?.dayNumber, router]);
 
-  // Free-write draft + save for the inline composer on the completed card.
-  // Mirrors journal.tsx's saveEntry: update the existing entry (including to
-  // empty — the user deleted their text), only create one for real content.
-  const currentDayFreeWriteDraft = useMemo(() => {
-    if (!currentDevotional || !currentDayData) return '';
-    const entry = journalEntries.find(
-      (journalEntry) => journalEntry.devotionalId === currentDevotional.id && journalEntry.dayNumber === currentDayData.dayNumber,
-    );
-    return entry?.content ?? '';
-  }, [currentDevotional, currentDayData, journalEntries]);
+  // Free-write draft + reflection status for the inline composer on the
+  // completed card, from the one store-backed derivation the card itself uses.
+  const {
+    freeWriteDraft: currentDayFreeWriteDraft,
+    reflectionStatus: currentDayReflectionStatus,
+  } = useCompletedDayReflection(currentDevotional?.id ?? '', currentDayData);
 
+  // Save mirrors journal.tsx's saveEntry: update the existing entry (including
+  // to empty — the user deleted their text), only create one for real content.
   const handleSaveFreeWrite = useCallback((dayNumber: number, text: string) => {
     if (!currentDevotional) return;
     const store = useUnfoldStore.getState();
@@ -904,29 +914,6 @@ export default function HomeScreen() {
       store.addJournalEntry({ devotionalId: currentDevotional.id, dayNumber, content: text });
     }
   }, [currentDevotional]);
-
-  const currentDayReflectionStatus = useMemo<ReflectionStatus>(() => {
-    if (!currentDevotional || !currentDayData) return 'empty';
-
-    const entry = journalEntries.find(
-      (journalEntry) => journalEntry.devotionalId === currentDevotional.id && journalEntry.dayNumber === currentDayData.dayNumber,
-    );
-    if (!entry) return 'empty';
-
-    const hasFreeWrite = entry.content.trim().length > 0;
-    const hasSoap = Object.values(entry.soapResponses ?? {}).some((value) => value.trim().length > 0);
-    const answeredReflectionCount = (entry.questionResponses ?? []).filter((response) => response.response.trim().length > 0).length;
-    const hasPrayer = (entry.prayerRequests ?? []).some((prayer) => prayer.text.trim().length > 0);
-    const hasAnyReflection = hasFreeWrite || hasSoap || answeredReflectionCount > 0 || hasPrayer;
-    if (!hasAnyReflection) return 'empty';
-
-    const totalReflectionQuestions = currentDayData.reflectionQuestions?.length ?? 0;
-    if (totalReflectionQuestions > 0 && answeredReflectionCount >= totalReflectionQuestions) {
-      return 'complete';
-    }
-
-    return 'started';
-  }, [currentDevotional, currentDayData, journalEntries]);
 
   // Content-aware check-in messages — reference today's devotional when available
   const middayMessage = useMemo(() => getContentAwareMiddayMessage(currentDayData ? {

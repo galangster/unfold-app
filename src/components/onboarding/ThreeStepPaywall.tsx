@@ -1341,6 +1341,12 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
   // here, so a second callback (a restore racing a purchase, the listener
   // firing after a success) can never advance twice.
   const advancedRef = useRef(false);
+  // onboarding.tsx hands over an inline arrow, so every parent render is a new
+  // onPurchaseSuccess. Read it through a ref: advanceOnce keeps one identity,
+  // and the entitlement wait keyed on it is never aborted and restarted by a
+  // parent render — a restart would drop the listener mid-grant.
+  const onPurchaseSuccessRef = useRef(onPurchaseSuccess);
+  onPurchaseSuccessRef.current = onPurchaseSuccess;
   // Copy shown while a completed transaction waits on its Premium grant; null
   // when nothing is pending. Kept apart from purchaseError on purpose: the
   // person has paid, so this state gets neutral styling and no error haptic.
@@ -1354,19 +1360,21 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
     // Navigate first. The notification sync reads customer info with no
     // timeout; awaiting it before onPurchaseSuccess once held a paying person
     // on the paywall, and a rejection cancelled the advance outright.
-    onPurchaseSuccess();
+    onPurchaseSuccessRef.current();
     syncTrialEndingNotification().catch((error: unknown) => {
       logger.log('[ThreeStepPaywall] trial notification sync failed after purchase:', error);
     });
     return true;
-  }, [onPurchaseSuccess]);
+  }, []);
 
   // While a completed transaction waits on its entitlement, one bounded wait
   // (the SDK listener plus a 2 s poll) is the exit: the grant arrives, the
   // paywall advances, and nobody has to find Restore purchases. When the wait
   // gives up, the same copy moves to the error slot so its Restore guidance
   // reads as the next step, and the listener is already gone. Unmount aborts
-  // the wait, so no listener outlives this screen.
+  // the wait, so no listener outlives this screen. The effect is keyed on the
+  // pending copy alone (advanceOnce is identity-stable), so nothing else
+  // aborts and restarts it.
   useEffect(() => {
     if (entitlementPendingMessage === null) return;
     const controller = new AbortController();
@@ -1410,11 +1418,6 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
       }
       setIsLoading(true);
       setPurchaseError(null);
-      // A fresh attempt owns the wait from here; purchasePackage listens for
-      // the grant itself, and a stale UI deadline must not fire underneath it.
-      // handleCTAPress keeps the CTA inert while a grant is pending, so in
-      // practice this only clears an already-null state.
-      setEntitlementPendingMessage(null);
       const result = await purchasePackage(pkg);
 
       const decision = resolveOnboardingPurchaseAdvance({ result, hasAdvanced: advancedRef.current });

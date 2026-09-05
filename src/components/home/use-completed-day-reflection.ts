@@ -7,10 +7,10 @@ export interface CompletedDayReflection {
 }
 
 /**
- * Journal state for the day the reader finished today, read straight from
- * the store. The Today screen keys its reflect props on the card's current
- * day, which in the tomorrow-locked state is tomorrow's reading — so the
- * composer for the completed day has to look its own entry up.
+ * Journal state for one day of a series, read straight from the store: the
+ * day the reader finished today, or the card's current day. In the
+ * tomorrow-locked state the card's current day is tomorrow's reading, so the
+ * composer for the completed day looks its own entry up through this too.
  */
 export function useCompletedDayReflection(
   devotionalId: string,
@@ -18,11 +18,7 @@ export function useCompletedDayReflection(
 ): CompletedDayReflection {
   const completedDayNumber = completedDay?.dayNumber ?? null;
   const entry = useUnfoldStore((state) => (
-    completedDayNumber === null
-      ? undefined
-      : state.journalEntries.find(
-          (journalEntry) => journalEntry.devotionalId === devotionalId && journalEntry.dayNumber === completedDayNumber,
-        )
+    completedDayNumber === null ? undefined : state.getJournalEntry(devotionalId, completedDayNumber)
   ));
 
   return {
