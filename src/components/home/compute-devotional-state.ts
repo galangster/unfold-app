@@ -41,6 +41,7 @@ export type DevotionalCardState =
     }
   | {
       type: 'complete-today';
+      devotionalId: string;
       dayData: DevotionalDay;
       dayLabel: DayLabel;
       seriesTitle: string;
@@ -258,6 +259,7 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
   if (currentDayData.isRead) {
     return {
       type: 'complete-today',
+      devotionalId: currentDevotional.id,
       dayData: currentDayData,
       dayLabel,
       seriesTitle,

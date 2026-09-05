@@ -320,6 +320,7 @@ describe('computeDevotionalState', () => {
     });
     expect(state.type).toBe('complete-today');
     if (state.type === 'complete-today') {
+      expect(state.devotionalId).toBe('dev-1');
       expect(state.seriesTitle).toBe('Faith Foundations');
       expect(typeof state.onContinue).toBe('function');
       expect(typeof state.onReflect).toBe('function');

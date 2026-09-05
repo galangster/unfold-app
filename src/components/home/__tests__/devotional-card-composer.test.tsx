@@ -146,6 +146,7 @@ function makeCompleteTodayState(
 ): Extract<DevotionalCardState, { type: 'complete-today' }> {
   return {
     type: 'complete-today',
+    devotionalId: 'dev-1',
     dayData: makeDayData(),
     dayLabel: 'Today',
     seriesTitle: 'Faith Foundations',
@@ -375,6 +376,54 @@ describe('DevotionalCard composer integration', () => {
       reflectLinks[0].props.onPress();
     });
     expect(onReflect).toHaveBeenCalledWith(1);
+  });
+
+  it('remounts the composer when the current series changes, so typed text never crosses series', () => {
+    jest.useFakeTimers();
+    mockStoreState.journalEntries = [
+      makeJournalEntry({ id: 'dev-2:1', devotionalId: 'dev-2', dayNumber: 1, content: 'Series two, day one.' }),
+    ];
+    const onSaveFreeWriteA = jest.fn();
+    const onSaveFreeWriteB = jest.fn();
+    const completedDayOne = makeDayData({ dayNumber: 1, isRead: true, readAt: '2026-09-04T08:00:00Z' });
+    const stateA = makeTomorrowLockedState({
+      devotionalId: 'dev-1',
+      dayData: makeDayData({ dayNumber: 2, isRead: false }),
+      daysCompleted: 1,
+      completedDayData: completedDayOne,
+      onSaveFreeWrite: onSaveFreeWriteA,
+    });
+    const tree = renderInAct(<DevotionalCard state={stateA} />);
+
+    const composerA = tree.root.findByProps({ testID: 'home-reflect-composer' });
+    expect(composerA.props.value).toBe('');
+    act(() => {
+      composerA.props.onChangeText('abc');
+    });
+
+    const stateB = makeTomorrowLockedState({
+      devotionalId: 'dev-2',
+      seriesTitle: 'Second Series',
+      dayData: makeDayData({ dayNumber: 2, isRead: false }),
+      daysCompleted: 1,
+      completedDayData: completedDayOne,
+      onSaveFreeWrite: onSaveFreeWriteB,
+    });
+    act(() => {
+      tree.update(<DevotionalCard state={stateB} />);
+    });
+
+    const composerB = tree.root.findByProps({ testID: 'home-reflect-composer' });
+    expect(composerB.props.value).toBe('Series two, day one.');
+
+    act(() => {
+      jest.advanceTimersByTime(2100);
+    });
+    // The unmount flush saved A's text to A; nothing wrote A's text into B.
+    expect(onSaveFreeWriteA).toHaveBeenCalledWith(1, 'abc');
+    expect(onSaveFreeWriteB).not.toHaveBeenCalled();
+
+    jest.useRealTimers();
   });
 
   it('keeps the CTA pill and reflect link when tomorrow-locked carries no completed day', () => {

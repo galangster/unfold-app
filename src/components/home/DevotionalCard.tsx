@@ -653,6 +653,7 @@ function MainCard({ state }: MainCardProps) {
   const lockedCompletedReflection = useCompletedDayReflection(lockedState?.devotionalId ?? '', lockedCompletedDay);
   const composer = completedState
     ? {
+        devotionalId: completedState.devotionalId,
         dayNumber: dayData.dayNumber,
         draft: completedState.freeWriteDraft,
         status: completedState.reflectionStatus,
@@ -661,6 +662,7 @@ function MainCard({ state }: MainCardProps) {
       }
     : lockedState && lockedCompletedDay
       ? {
+          devotionalId: lockedState.devotionalId,
           dayNumber: lockedCompletedDay.dayNumber,
           draft: lockedCompletedReflection.freeWriteDraft,
           status: lockedCompletedReflection.reflectionStatus,
@@ -777,7 +779,11 @@ function MainCard({ state }: MainCardProps) {
             {showInlineComposer && composer ? (
               <View style={styles.heroComposerBlock}>
                 <InlineReflectComposer
-                  key={`reflect-${composer.dayNumber}`}
+                  // Keyed on series + day: the card is not remounted when the
+                  // current series changes under it, and the composer seeds
+                  // its text once, so a day-1 composer for series A must not
+                  // survive into series B and autosave A's text there.
+                  key={`reflect-${composer.devotionalId}-${composer.dayNumber}`}
                   initialDraft={composer.draft}
                   reflectionStatus={composer.status}
                   onSaveDraft={(text) => composer.onSave(composer.dayNumber, text)}
