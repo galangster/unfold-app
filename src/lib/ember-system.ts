@@ -140,6 +140,12 @@ export interface ResolveEmberParamsInput {
   intensity?: number;
   /** Raise the ambient opacity floor (Today home preset uses ≥0.5). */
   opacityFloor?: number;
+  /**
+   * Bottom glow on/off (default on). The glow is a gradient anchored to the
+   * container's bottom edge, so it clips flat when the mount ends mid-screen.
+   * Contained, non-full-screen mounts pass `glow: false`.
+   */
+  glow?: boolean;
 }
 
 /**
@@ -186,6 +192,12 @@ export function resolveEmberParams(input: ResolveEmberParamsInput): ResolvedEmbe
       opacityMin = Math.max(opacityMin, input.opacityFloor);
       opacityMax = Math.max(opacityMax, opacityMin);
     }
+  }
+
+  if (input.glow === false) {
+    // Contained mounts drop the light source; glowHeight stays so the preset
+    // is otherwise untouched and the still-poster anchor math does not move.
+    glowOpacity = 0;
   }
 
   let sizeMin = tier.sizeMin;

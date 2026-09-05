@@ -3177,6 +3177,7 @@ export default function OnboardingScreen() {
               direction="both"
               count={10}
               intensity={0.7}
+              glow={false}
               exclusionZones={ONBOARDING_MIRROR_LOADING_EXCLUSION}
             />
             <View style={{ alignItems: 'center', gap: Spacing['4'] }}>
@@ -3197,6 +3198,7 @@ export default function OnboardingScreen() {
             direction="both"
             count={10}
             intensity={0.7}
+            glow={false}
             exclusionZones={ONBOARDING_MIRROR_VERSE_EXCLUSION}
           />
 
