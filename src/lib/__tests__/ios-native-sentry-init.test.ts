@@ -216,6 +216,31 @@ describe('iOS native-first Sentry init (regression: launch crash with no JS bund
     expect(sentryOptions.indexOf('dropNativeSentryUser(event)')).toBeGreaterThan(filtersAt);
   });
 
+  it('strips native frame package paths and masks debug-path UUIDs', () => {
+    // Static pins only. This file does not compile native code.
+    expect(appDelegate).toContain('private func stripNativeSentryFramePackages(_ stacktrace: SentryStacktrace?)');
+    expect(appDelegate).toContain('private func scrubNativeSentrySymbolicationPaths(_ event: Event)');
+    expect(appDelegate).toContain('$0.package = nil');
+    expect(appDelegate).toContain('event.stacktrace');
+    expect(appDelegate).toContain('event.threads');
+    expect(appDelegate).toContain('event.exceptions');
+    expect(appDelegate).toContain('image.codeFile');
+    expect(appDelegate).toContain('image.name');
+    expect(appDelegate).toContain('[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}');
+    expect(appDelegate).toContain('"[uuid]"');
+    expect(sentryOptions).toContain('scrubNativeSentrySymbolicationPaths(event)');
+    expect(sentryOptions.indexOf('scrubNativeSentrySymbolicationPaths(event)'))
+      .toBeGreaterThan(sentryOptions.indexOf('dropNativeSentryUser(event)'));
+    expect(appDelegate).not.toMatch(/exception\.value\s*=/);
+    expect(appDelegate).not.toMatch(/instructionAddress\s*=\s*nil/);
+    expect(appDelegate).not.toMatch(/imageAddress\s*=\s*nil/);
+    expect(appDelegate).not.toMatch(/symbolAddress\s*=\s*nil/);
+    expect(appDelegate).not.toMatch(/image\.uuid\s*=/);
+    expect(appDelegate).not.toMatch(/image\.debugID\s*=/);
+    expect(sentryTs).toContain("const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi");
+    expect(sentryTs).toContain("const REDACTED_UUID = '[uuid]'");
+  });
+
   it('tracks sessions and hands app-start measurements to JavaScript', () => {
     expectOptionSetOnce('enableAutoSessionTracking', 'true');
     expectOptionSetOnce('enableWatchdogTerminationTracking', 'true');

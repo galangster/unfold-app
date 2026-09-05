@@ -62,8 +62,38 @@ class AppDelegate: ExpoAppDelegate {
 }
 
 #if !DEBUG
+private let nativeSentryPathUUID = try! NSRegularExpression(
+  pattern: "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+  options: [.caseInsensitive]
+)
+
 private func dropNativeSentryUser(_ event: Event) {
   event.user = nil
+}
+
+private func maskNativeSentryPathUUIDs(_ value: String?) -> String? {
+  guard let value else { return nil }
+  let range = NSRange(value.startIndex..<value.endIndex, in: value)
+  return nativeSentryPathUUID.stringByReplacingMatches(
+    in: value,
+    options: [],
+    range: range,
+    withTemplate: "[uuid]"
+  )
+}
+
+private func stripNativeSentryFramePackages(_ stacktrace: SentryStacktrace?) {
+  stacktrace?.frames.forEach { $0.package = nil }
+}
+
+private func scrubNativeSentrySymbolicationPaths(_ event: Event) {
+  stripNativeSentryFramePackages(event.stacktrace)
+  event.threads?.forEach { stripNativeSentryFramePackages($0.stacktrace) }
+  event.exceptions?.forEach { stripNativeSentryFramePackages($0.stacktrace) }
+  event.debugMeta?.forEach { image in
+    image.codeFile = maskNativeSentryPathUUIDs(image.codeFile)
+    image.name = maskNativeSentryPathUUIDs(image.name)
+  }
 }
 
 extension AppDelegate {
@@ -156,8 +186,10 @@ extension AppDelegate {
       // installed here, or every fatal JS error is filed twice: once scrubbed
       // from JavaScript, and once natively as an RCTFatalException whose type
       // is the raw error message and which no scrubber ever sees. Native
-      // events never reach the JavaScript beforeSend, so user is cleared here
-      // after those filters. No callback into JavaScript.
+      // events never reach the JavaScript beforeSend, so user and on-disk
+      // frame package paths are cleared here after those filters. Container
+      // UUIDs in retained debug paths are masked. Symbolication IDs and
+      // addresses stay. No callback into JavaScript.
       options.beforeSend = { event in
         if let type = event.exceptions?.first?.type, type.contains("Unhandled JS Exception") {
           return nil
@@ -168,6 +200,7 @@ extension AppDelegate {
           return nil
         }
         dropNativeSentryUser(event)
+        scrubNativeSentrySymbolicationPaths(event)
         return event
       }
     }
