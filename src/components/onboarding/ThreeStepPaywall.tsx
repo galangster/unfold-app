@@ -10,6 +10,7 @@ import {
   Platform,
   Linking,
 } from 'react-native';
+import type { LayoutChangeEvent } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { LEGAL_LINKS } from '@/lib/push-notification-helpers';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -51,6 +52,12 @@ import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
 import { mmkvStorage } from '@/lib/mmkv-storage';
 import { isQaToolsEnabled } from '@/lib/qa-tools';
 import { getPerMonthEquivalent } from '@/lib/paywall-pricing';
+import {
+  computeMockupSize,
+  computePaywallDragOffset,
+  MOCKUP_MIN_HEIGHT,
+  MOCKUP_TOP_PADDING,
+} from '@/lib/paywall-mockup-size';
 import {
   getThreeStepPaywallPrimaryAction,
   resolvePurchaseOutcome,
@@ -110,7 +117,9 @@ const TOTAL_PAGES_NO_TRIAL = 2;
 // badge behaves identically across both paywall surfaces.
 const SAVE_BADGE_DIMMED_OPACITY = 0.45;
 
-const DEVICE_BEZEL_WIDTH = SCREEN_WIDTH * 0.62;
+// Screens 1 and 2 follow the finger through the rubber-band in
+// computePaywallDragOffset and spring back with this on release.
+const DRAG_RETURN_SPRING = { damping: 30, stiffness: 300, mass: 1, overshootClamping: true };
 
 // Ember exclusion zones (normalized): benefit copy band + the stacked-card
 // dot indicators — stray embers next to the dots read as faux pagination.
@@ -403,8 +412,6 @@ function ScreenProductInAction({
   // is no dead zone at all — the phone doesn't animate either way.
 
   const dragY = useSharedValue(0);
-  const MAX_DRAG = 60; // 15% of ~400px content area
-  const SPRING_CONFIG = { damping: 30, stiffness: 300, mass: 1, overshootClamping: true };
 
   const dragGesture = Gesture.Pan()
     .activeOffsetY([-8, 8])
@@ -412,17 +419,40 @@ function ScreenProductInAction({
     .shouldCancelWhenOutside(false)
     .onUpdate((e) => {
       'worklet';
-      const raw = e.translationY * 0.4;
-      dragY.value = raw * (1 - Math.abs(raw) / (MAX_DRAG * 2));
+      dragY.value = computePaywallDragOffset(e.translationY);
     })
     .onFinalize(() => {
       'worklet';
-      dragY.value = withSpring(0, SPRING_CONFIG);
+      dragY.value = withSpring(0, DRAG_RETURN_SPRING);
     });
 
   const dragStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: dragY.value }],
   }));
+
+  // The bezel is sized from the space the wrapper actually has between the
+  // headline and the CTA block, so the rounded frame bottom stays visible on
+  // every iPhone height and at large Dynamic Type. Sizing from the window
+  // width alone made the frame ~1.34x the screen width tall — taller than the
+  // page area on every supported device — so it was always clipped in a
+  // straight line where the CTA block begins. Nothing renders until the
+  // first layout so no wrong-size frame is ever painted (the entering
+  // animation would hide it, but Reduce Motion skips that animation).
+  const [wrapperLayout, setWrapperLayout] = useState<{ width: number; height: number } | null>(
+    null,
+  );
+  const handleWrapperLayout = useCallback((e: LayoutChangeEvent) => {
+    const { width, height } = e.nativeEvent.layout;
+    setWrapperLayout((prev) =>
+      prev && prev.width === width && prev.height === height ? prev : { width, height },
+    );
+  }, []);
+  const mockupSize = wrapperLayout
+    ? computeMockupSize({
+        availableHeight: wrapperLayout.height,
+        availableWidth: wrapperLayout.width,
+      })
+    : null;
 
   return (
     <View style={styles.screen1Root}>
@@ -439,6 +469,9 @@ function ScreenProductInAction({
                     textAlign: 'center',
                   },
                 ]}
+                // Tighter than the global 1.8 cap: at AX sizes the headline
+                // would otherwise eat the page area the phone mockup needs.
+                maxFontSizeMultiplier={1.3}
               >
                 {hasFreeTrial
                   ? `We want you to try\nUnfold for free.`
@@ -446,65 +479,79 @@ function ScreenProductInAction({
               </Text>
             </View>
 
-            {/* Device bezel -- clips at the bottom edge of the viewport */}
-            {/* Option A entrance: phone rises from 80px below, fades in, and
-                scales from 0.95 → 1 with a critically-damped spring (~500ms).
-                Feels like the mockup is being handed to the user. */}
+            {/* Device bezel -- sized to fit the wrapper so the rounded frame
+                bottom sits MOCKUP_BOTTOM_CLEARANCE above the CTA block, a gap
+                that also covers the drag gesture's downward peak. It only
+                overflows (and fades) below MOCKUP_MIN_HEIGHT. The entrance is
+                `phoneEntering` above. */}
             <Animated.View
+              testID="paywall-mockup-wrapper"
               style={styles.screen1DeviceWrapper}
               entering={phoneEntering}
+              onLayout={handleWrapperLayout}
             >
-              <View
-                style={[
-                  styles.deviceBezel,
-                  {
-                    width: DEVICE_BEZEL_WIDTH,
-                    borderColor: 'rgba(255,255,255,0.1)',
-                  },
-                ]}
-              >
-                <View style={styles.deviceInner}>
-                  {/* Poster: static first frame, visible until the video's
-                      first real frame renders. Prevents the black-gap flash
-                      while AVPlayerItem initializes. Fades to 0 over 200ms
-                      via onFirstFrameRender so the transition is seamless. */}
-                  <Animated.View
-                    pointerEvents="none"
-                    style={[StyleSheet.absoluteFill, posterStyle]}
-                  >
-                    <ExpoImage
-                      source={require('../../../assets/video/paywall-walkthrough-poster.jpg')}
-                      style={StyleSheet.absoluteFill}
-                      contentFit="cover"
-                      cachePolicy="memory-disk"
-                    />
-                  </Animated.View>
-                  {hasMountedVideo && (
-                    <VideoView
-                      player={player}
-                      style={styles.deviceVideo}
-                      contentFit="cover"
-                      nativeControls={false}
-                      onFirstFrameRender={handleFirstFrame}
-                      // Content is a silent app walkthrough — no audio to
-                      // route and no PiP expected from a paywall background.
-                      allowsPictureInPicture={false}
-                      fullscreenOptions={{ enable: false }}
-                    />
-                  )}
+              {mockupSize && (
+                <View
+                  testID="paywall-mockup-bezel"
+                  style={[
+                    styles.deviceBezel,
+                    {
+                      width: mockupSize.width,
+                      height: mockupSize.height,
+                      borderColor: 'rgba(255,255,255,0.1)',
+                    },
+                  ]}
+                >
+                  <View style={styles.deviceInner}>
+                    {/* Poster: static first frame, visible until the video's
+                        first real frame renders. Prevents the black-gap flash
+                        while AVPlayerItem initializes. Fades to 0 over 200ms
+                        via onFirstFrameRender so the transition is seamless. */}
+                    <Animated.View
+                      pointerEvents="none"
+                      style={[StyleSheet.absoluteFill, posterStyle]}
+                    >
+                      <ExpoImage
+                        source={require('../../../assets/video/paywall-walkthrough-poster.jpg')}
+                        style={StyleSheet.absoluteFill}
+                        contentFit="cover"
+                        cachePolicy="memory-disk"
+                      />
+                    </Animated.View>
+                    {hasMountedVideo && (
+                      <VideoView
+                        player={player}
+                        style={styles.deviceVideo}
+                        contentFit="cover"
+                        nativeControls={false}
+                        onFirstFrameRender={handleFirstFrame}
+                        // Content is a silent app walkthrough — no audio to
+                        // route and no PiP expected from a paywall background.
+                        allowsPictureInPicture={false}
+                        fullscreenOptions={{ enable: false }}
+                      />
+                    )}
+                  </View>
                 </View>
-              </View>
+              )}
             </Animated.View>
           </Animated.View>
         </View>
       </GestureDetector>
 
-      {/* Gradient fade at the bottom -- stays fixed, doesn't move with drag */}
-      <LinearGradient
-        colors={['rgba(10,10,10,0)', 'rgba(10,10,10,0.85)', 'rgba(10,10,10,1)']}
-        style={styles.screen1Gradient}
-        pointerEvents="none"
-      />
+      {/* Gradient fade at the bottom -- only when the frame is too tall for
+          the page and gets clipped. Stays fixed, doesn't move with drag.
+          Built from the theme background so it matches the forced-dark
+          onboarding surface (and any future theme) instead of a hardcoded
+          grey. */}
+      {mockupSize?.overflows && (
+        <LinearGradient
+          testID="paywall-mockup-fade"
+          colors={[alpha(colors.background, 0), alpha(colors.background, 0.85), colors.background]}
+          style={styles.screen1Gradient}
+          pointerEvents="none"
+        />
+      )}
     </View>
   );
 }
@@ -522,8 +569,6 @@ function ScreenTrialReminder({
 }) {
   const reducedMotion = useReducedMotion();
   const dragY = useSharedValue(0);
-  const MAX_DRAG = 60;
-  const SPRING_CONFIG = { damping: 30, stiffness: 300, mass: 1, overshootClamping: true };
 
   const dragGesture = Gesture.Pan()
     .activeOffsetY([-8, 8])
@@ -531,12 +576,11 @@ function ScreenTrialReminder({
     .shouldCancelWhenOutside(false)
     .onUpdate((e) => {
       'worklet';
-      const raw = e.translationY * 0.4;
-      dragY.value = raw * (1 - Math.abs(raw) / (MAX_DRAG * 2));
+      dragY.value = computePaywallDragOffset(e.translationY);
     })
     .onFinalize(() => {
       'worklet';
-      dragY.value = withSpring(0, SPRING_CONFIG);
+      dragY.value = withSpring(0, DRAG_RETURN_SPRING);
     });
 
   const dragStyle = useAnimatedStyle(() => ({
@@ -1592,14 +1636,16 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'flex-start',
-    paddingTop: Spacing['4'],
+    paddingTop: MOCKUP_TOP_PADDING,
   },
   screen1Gradient: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: 240,
+    // Covers the floor-height frame that overflows the page, so the fade
+    // and the frame it hides stay in lockstep.
+    height: MOCKUP_MIN_HEIGHT,
   },
 
   // ------- Screen 2 -------
@@ -1637,8 +1683,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   deviceInner: {
+    // The bezel carries the computed width/height (9:19.5); fill it.
     width: '100%',
-    aspectRatio: 9 / 19.5,
+    height: '100%',
     backgroundColor: '#0F0F0F',
     // overflow:hidden on the parent deviceBezel already clips to the 36px
     // radius, but Android can leak native video surfaces past rounded
