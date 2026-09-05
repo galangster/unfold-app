@@ -31,15 +31,18 @@ import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { getContentAwareMiddayMessage, getContentAwareEveningMessage } from '@/constants/check-in-messages';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { Duration, Ease } from '@/constants/animations';
-import { submitGenerationJob, recoverCompletedGenerationResult, ApiError } from '@/lib/generation-api';
+import { submitGenerationJob, recoverCompletedGenerationResult, pollJobStatus, ApiError, type GenerationJobResponse } from '@/lib/generation-api';
 import { toFriendlyOnboardingGenerationError } from '@/lib/generation-errors';
 import {
   hasInflightSeriesLanded,
   readInflightGenerationJob,
+  resolveInflightResume,
   resolvePreparingFirstSeriesTitle,
   resolveTodayInflightAction,
   type InflightGenerationJob,
 } from '@/lib/inflight-generation-job';
+import { INITIAL_ARC_UNKNOWN_STATUS_MESSAGE } from '@/lib/inflight-initial-arc-watch';
+import { settleInflightInitialArcWatch } from '@/lib/initial-arc-result';
 import { useInflightInitialArcWatch } from '@/hooks/useInflightInitialArcWatch';
 import { TodayCardStack, type TodayCardStackCard } from '@/components/home/TodayCardStack';
 import { animateCardDismiss } from '@/lib/card-dismiss-animation';
@@ -267,10 +270,14 @@ export default function HomeScreen() {
   // after the reader already left; the job settling). Focus, not mount: a
   // /generating pushed on top of the tabs (RecommendedSeriesCard) leaves this
   // instance mounted and unfocused, so a mount-only read could go stale, and
-  // an unfocused instance must never redirect. Without the leftForHome marker
-  // the record is app-kill recovery and the reader goes back to /generating.
-  // With the marker the reader tapped "Go home — we'll keep writing": keep
-  // the record, show the preparing card and watch the job from here.
+  // an unfocused instance must never redirect. With the leftForHome marker
+  // the reader tapped "Go home — we'll keep writing": keep the record, show
+  // the preparing card and watch the job from here. Without it the record is
+  // app-kill recovery — and the server, never the record's age, decides
+  // where the reader goes: /generating is re-entered only while it reports
+  // the job alive or complete; a failed job settles here, as the watch would,
+  // so the failed card shows instead of a bounce into /generating's error
+  // state; an unreachable server keeps the record for the next focus.
   const generationSessionStatus = useUnfoldStore((s) => s.generationSession.status);
   const generationSessionDevotionalId = useUnfoldStore((s) => s.generationSession.devotionalId);
   const generationSessionTitle = useUnfoldStore((s) => s.generationSession.title);
@@ -279,15 +286,44 @@ export default function HomeScreen() {
   const [inflightSeries, setInflightSeries] = useState<InflightGenerationJob | null>(null);
   useEffect(() => {
     if (!isTodayFocused) return;
-    const decision = resolveTodayInflightAction(readInflightGenerationJob());
-    if (decision.action === 'resume-on-generating') {
-      setInflightSeries(null);
-      logger.log('[home] Resuming inflight generation job from MMKV:', decision.job.jobId);
-      // Navigate to generating screen — it will pick up the inflight job from MMKV
-      router.replace('/generating');
+    const decision = resolveTodayInflightAction(readInflightGenerationJob(), generationSessionStatus);
+    if (decision.action !== 'resume-on-generating') {
+      setInflightSeries(decision.action === 'watch-on-today' ? decision.job : null);
       return;
     }
-    setInflightSeries(decision.action === 'watch-on-today' ? decision.job : null);
+    setInflightSeries(null);
+    const { jobId } = decision.job;
+    let cancelled = false;
+    void (async () => {
+      let status: GenerationJobResponse | null = null;
+      try {
+        status = await pollJobStatus(jobId);
+      } catch (err) {
+        logger.warn('[home] Could not check inflight job; keeping the record:', err instanceof Error ? err.message : err);
+      }
+      if (cancelled) return;
+      const resume = resolveInflightResume(status?.status);
+      if (resume === 'resume') {
+        logger.log(`[home] Resuming inflight generation job ${jobId} (server: ${status?.status})`);
+        // Navigate to generating screen — it will pick up the inflight job from MMKV
+        router.replace('/generating');
+        return;
+      }
+      if (resume === 'discard') {
+        settleInflightInitialArcWatch(
+          {
+            kind: 'failed',
+            message: status?.error ?? INITIAL_ARC_UNKNOWN_STATUS_MESSAGE,
+            phase: 'server-poll',
+            canRetry: status?.canRetry ?? true,
+          },
+          { jobId },
+        );
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [router, isTodayFocused, generationSessionStatus, generationSessionDevotionalId]);
   const onInflightSeriesSettled = useCallback(() => setInflightSeries(null), []);
 
@@ -295,7 +331,9 @@ export default function HomeScreen() {
   // settled on a failure, or the submission itself failed). The session holds
   // the error and the series never reached the store; without a card for it
   // Today sat on the new-user empty state and said nothing. Try again
-  // re-enters /generating, which submits a fresh job from the same answers.
+  // re-enters /generating, which resumes the kept record when the watch only
+  // lost contact with the server, and otherwise submits a fresh job from the
+  // same answers.
   const handleRetryInflightSeries = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.replace('/generating');

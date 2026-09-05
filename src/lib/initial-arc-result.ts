@@ -105,8 +105,10 @@ export function applyInitialArcResult(
 /**
  * Settle a Today-side watch the way /generating settles its own poll loop:
  * a finished job lands in the store, a failed one clears the in-flight record
- * and marks the session failed. A cancelled watch leaves everything for the
- * next watcher.
+ * and marks the session failed. An unreachable server is not a verdict: the
+ * session takes the connection copy so Today shows the failed card, but the
+ * record stays for the next attempt. A cancelled watch leaves everything for
+ * the next watcher.
  */
 export function settleInflightInitialArcWatch(
   outcome: InflightInitialArcWatchOutcome,
@@ -136,6 +138,13 @@ export function settleInflightInitialArcWatch(
       store.failGenerationSession(message);
       void logBugError('generation', err, { jobId, phase: 'today-apply-initial-arc' });
     }
+    return;
+  }
+
+  if (outcome.kind === 'unreachable') {
+    logger.warn('[home] server-poll-unreachable:', outcome.message);
+    store.failGenerationSession(outcome.message);
+    void logBugError('generation', new Error(outcome.message), { jobId, phase: 'server-poll-unreachable' });
     return;
   }
 

@@ -164,7 +164,7 @@ describe('applyInitialArcResult', () => {
     applyInitialArcResult(result, { user, devotionalLength: 7 });
 
     expect(mmkvStorage.removeItem).toHaveBeenCalledWith(INFLIGHT_GENERATION_JOB_KEY);
-    expect(readInflightGenerationJob(NOW)).toEqual({ kind: 'none' });
+    expect(readInflightGenerationJob()).toEqual({ kind: 'none' });
     expect(useUnfoldStore.getState().generationSession).toMatchObject({
       status: 'complete',
       title: 'Learning to Trust Again',
@@ -177,7 +177,7 @@ describe('applyInitialArcResult', () => {
       /did not return a canonical devotionalId/,
     );
     expect(useUnfoldStore.getState().devotionals).toHaveLength(0);
-    expect(readInflightGenerationJob(NOW).kind).toBe('active');
+    expect(readInflightGenerationJob().kind).toBe('active');
   });
 });
 
@@ -189,7 +189,7 @@ describe('settleInflightInitialArcWatch', () => {
     expect(state.currentDevotionalId).toBe('devo-1');
     expect(state.devotionals[0].totalDays).toBe(3);
     expect(state.generationSession.status).toBe('complete');
-    expect(readInflightGenerationJob(NOW)).toEqual({ kind: 'none' });
+    expect(readInflightGenerationJob()).toEqual({ kind: 'none' });
     expect(logBugEvent).toHaveBeenCalledWith(
       'generation',
       'server-generation-complete',
@@ -203,10 +203,19 @@ describe('settleInflightInitialArcWatch', () => {
       { jobId: 'job-1' },
     );
 
-    expect(readInflightGenerationJob(NOW)).toEqual({ kind: 'none' });
+    expect(readInflightGenerationJob()).toEqual({ kind: 'none' });
     expect(useUnfoldStore.getState().generationSession).toMatchObject({ status: 'error', error: 'Model overloaded' });
     expect(useUnfoldStore.getState().devotionals).toHaveLength(0);
     expect(logBugError).toHaveBeenCalledWith('generation', expect.any(Error), { jobId: 'job-1', phase: 'server-poll' });
+  });
+
+  it('keeps the record and fails the session when the server could not be reached', () => {
+    settleInflightInitialArcWatch({ kind: 'unreachable', message: 'Unable to connect' }, { jobId: 'job-1' });
+
+    expect(readInflightGenerationJob().kind).toBe('active');
+    expect(useUnfoldStore.getState().generationSession).toMatchObject({ status: 'error', error: 'Unable to connect' });
+    expect(useUnfoldStore.getState().devotionals).toHaveLength(0);
+    expect(logBugError).toHaveBeenCalledWith('generation', expect.any(Error), { jobId: 'job-1', phase: 'server-poll-unreachable' });
   });
 
   it('treats a result it cannot land as a failure instead of leaving the record live', () => {
@@ -215,7 +224,7 @@ describe('settleInflightInitialArcWatch', () => {
       { jobId: 'job-1' },
     );
 
-    expect(readInflightGenerationJob(NOW)).toEqual({ kind: 'none' });
+    expect(readInflightGenerationJob()).toEqual({ kind: 'none' });
     expect(useUnfoldStore.getState().generationSession.status).toBe('error');
     expect(logBugError).toHaveBeenCalledWith('generation', expect.any(Error), { jobId: 'job-1', phase: 'today-apply-initial-arc' });
   });
@@ -223,7 +232,7 @@ describe('settleInflightInitialArcWatch', () => {
   it('leaves everything in place when the watch was cancelled', () => {
     settleInflightInitialArcWatch({ kind: 'cancelled' }, { jobId: 'job-1' });
 
-    expect(readInflightGenerationJob(NOW).kind).toBe('active');
+    expect(readInflightGenerationJob().kind).toBe('active');
     expect(useUnfoldStore.getState().generationSession.status).toBe('running');
     expect(logBugError).not.toHaveBeenCalled();
   });

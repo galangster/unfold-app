@@ -19,7 +19,6 @@ jest.mock('../mmkv-storage', () => {
 import { mmkvStorage } from '../mmkv-storage';
 import {
   INFLIGHT_GENERATION_JOB_KEY,
-  INFLIGHT_JOB_TTL_MS,
   GENERATING_SESSION_TITLE_PLACEHOLDER,
   PREPARING_FIRST_SERIES_FALLBACK_TITLE,
   clearInflightGenerationJob,
@@ -27,6 +26,7 @@ import {
   markInflightJobLeftForHome,
   parseInflightGenerationJob,
   readInflightGenerationJob,
+  resolveInflightResume,
   resolvePreparingFirstSeriesTitle,
   resolveTodayInflightAction,
   writeInflightGenerationJob,
@@ -50,29 +50,32 @@ describe('INFLIGHT_GENERATION_JOB_KEY', () => {
 
 describe('parseInflightGenerationJob', () => {
   it('returns none for a missing record', () => {
-    expect(parseInflightGenerationJob(null, NOW)).toEqual({ kind: 'none' });
-    expect(parseInflightGenerationJob('', NOW)).toEqual({ kind: 'none' });
+    expect(parseInflightGenerationJob(null)).toEqual({ kind: 'none' });
+    expect(parseInflightGenerationJob('')).toEqual({ kind: 'none' });
   });
 
   it('returns invalid for malformed JSON or a record without a job id or clock', () => {
-    expect(parseInflightGenerationJob('{not json', NOW)).toEqual({ kind: 'invalid' });
-    expect(parseInflightGenerationJob(JSON.stringify({ devotionalId: 'devo-1', submittedAt: NOW }), NOW)).toEqual({ kind: 'invalid' });
-    expect(parseInflightGenerationJob(JSON.stringify({ jobId: 'job-1' }), NOW)).toEqual({ kind: 'invalid' });
-    expect(parseInflightGenerationJob('null', NOW)).toEqual({ kind: 'invalid' });
+    expect(parseInflightGenerationJob('{not json')).toEqual({ kind: 'invalid' });
+    expect(parseInflightGenerationJob(JSON.stringify({ devotionalId: 'devo-1', submittedAt: NOW }))).toEqual({ kind: 'invalid' });
+    expect(parseInflightGenerationJob(JSON.stringify({ jobId: 'job-1' }))).toEqual({ kind: 'invalid' });
+    expect(parseInflightGenerationJob('null')).toEqual({ kind: 'invalid' });
   });
 
-  it('returns expired once the record is 15 minutes old', () => {
-    const old = { ...fresh, submittedAt: NOW - INFLIGHT_JOB_TTL_MS };
-    expect(parseInflightGenerationJob(JSON.stringify(old), NOW)).toEqual({ kind: 'expired', job: old });
+  // Jordan (item 7): the wall clock is never a verdict. A record older than
+  // any worker budget is still the server's to settle, so it stays active
+  // and the screen that reads it asks the server.
+  it('has no expiry: a record hours old is still active', () => {
+    const old = { ...fresh, submittedAt: NOW - 3 * 60 * 60 * 1000 };
+    expect(parseInflightGenerationJob(JSON.stringify(old))).toEqual({ kind: 'active', job: old });
   });
 
   it('returns active for a fresh record and keeps only a true leftForHome marker', () => {
-    expect(parseInflightGenerationJob(JSON.stringify(fresh), NOW)).toEqual({ kind: 'active', job: fresh });
-    expect(parseInflightGenerationJob(JSON.stringify({ ...fresh, leftForHome: true }), NOW)).toEqual({
+    expect(parseInflightGenerationJob(JSON.stringify(fresh))).toEqual({ kind: 'active', job: fresh });
+    expect(parseInflightGenerationJob(JSON.stringify({ ...fresh, leftForHome: true }))).toEqual({
       kind: 'active',
       job: { ...fresh, leftForHome: true },
     });
-    expect(parseInflightGenerationJob(JSON.stringify({ ...fresh, leftForHome: 'yes' }), NOW)).toEqual({
+    expect(parseInflightGenerationJob(JSON.stringify({ ...fresh, leftForHome: 'yes' }))).toEqual({
       kind: 'active',
       job: fresh,
     });
@@ -83,63 +86,81 @@ describe('readInflightGenerationJob', () => {
   it('reads the record under the shared key', () => {
     writeInflightGenerationJob(fresh);
     expect(mmkvStorage.setItem).toHaveBeenCalledWith(INFLIGHT_GENERATION_JOB_KEY, JSON.stringify(fresh));
-    expect(readInflightGenerationJob(NOW)).toEqual({ kind: 'active', job: fresh });
+    expect(readInflightGenerationJob()).toEqual({ kind: 'active', job: fresh });
   });
 
-  it('drops an expired or unreadable record on read, as both screens always did', () => {
-    writeInflightGenerationJob({ ...fresh, submittedAt: NOW - INFLIGHT_JOB_TTL_MS - 1 });
-    expect(readInflightGenerationJob(NOW).kind).toBe('expired');
-    expect(mmkvStorage.removeItem).toHaveBeenCalledWith(INFLIGHT_GENERATION_JOB_KEY);
-    expect(readInflightGenerationJob(NOW)).toEqual({ kind: 'none' });
+  it('drops an unreadable record on read, as both screens always did, and never an old one', () => {
+    writeInflightGenerationJob({ ...fresh, submittedAt: NOW - 24 * 60 * 60 * 1000 });
+    expect(readInflightGenerationJob().kind).toBe('active');
+    expect(mmkvStorage.removeItem).not.toHaveBeenCalled();
 
     mmkvStorage.setItem(INFLIGHT_GENERATION_JOB_KEY, '{oops');
-    expect(readInflightGenerationJob(NOW).kind).toBe('invalid');
-    expect(readInflightGenerationJob(NOW)).toEqual({ kind: 'none' });
+    expect(readInflightGenerationJob().kind).toBe('invalid');
+    expect(readInflightGenerationJob()).toEqual({ kind: 'none' });
   });
 });
 
 describe('resolveTodayInflightAction', () => {
   it('sends an active record without the marker back to /generating (app-kill recovery)', () => {
-    expect(resolveTodayInflightAction({ kind: 'active', job: fresh })).toEqual({
-      action: 'resume-on-generating',
-      job: fresh,
-    });
+    for (const sessionStatus of ['idle', 'running', 'error', 'complete'] as const) {
+      expect(resolveTodayInflightAction({ kind: 'active', job: fresh }, sessionStatus)).toEqual({
+        action: 'resume-on-generating',
+        job: fresh,
+      });
+    }
   });
 
   it('keeps a record the reader left for home on Today', () => {
     const left = { ...fresh, leftForHome: true as const };
-    expect(resolveTodayInflightAction({ kind: 'active', job: left })).toEqual({ action: 'watch-on-today', job: left });
+    for (const sessionStatus of ['idle', 'running', 'complete'] as const) {
+      expect(resolveTodayInflightAction({ kind: 'active', job: left }, sessionStatus)).toEqual({ action: 'watch-on-today', job: left });
+    }
   });
 
-  it('does nothing for a missing, expired or invalid record', () => {
-    expect(resolveTodayInflightAction({ kind: 'none' })).toEqual({ action: 'none' });
-    expect(resolveTodayInflightAction({ kind: 'invalid' })).toEqual({ action: 'none' });
-    expect(resolveTodayInflightAction({ kind: 'expired', job: fresh })).toEqual({ action: 'none' });
+  it('leaves a marked record to the failed card while the session holds the watch\'s own give-up', () => {
+    // The watch could not reach the server six polls running: it kept the
+    // record and failed the session. Restarting the watch on that session
+    // change would loop; the card's Try again re-enters /generating instead.
+    const left = { ...fresh, leftForHome: true as const };
+    expect(resolveTodayInflightAction({ kind: 'active', job: left }, 'error')).toEqual({ action: 'none' });
+  });
+
+  it('does nothing for a missing or invalid record', () => {
+    expect(resolveTodayInflightAction({ kind: 'none' }, 'running')).toEqual({ action: 'none' });
+    expect(resolveTodayInflightAction({ kind: 'invalid' }, 'running')).toEqual({ action: 'none' });
+  });
+});
+
+describe('resolveInflightResume — Today asks the server before routing back', () => {
+  it('resumes only when the server reports the job alive or complete', () => {
+    for (const serverStatus of ['pending', 'processing', 'complete']) {
+      expect(resolveInflightResume(serverStatus)).toBe('resume');
+    }
+  });
+
+  it('discards a failed job and keeps the record when the status could not be fetched', () => {
+    expect(resolveInflightResume('failed')).toBe('discard');
+    expect(resolveInflightResume(undefined)).toBe('keep');
+    expect(resolveInflightResume(null)).toBe('keep');
+    expect(resolveInflightResume('garbage')).toBe('keep');
   });
 });
 
 describe('markInflightJobLeftForHome', () => {
   it('rewrites the active record under the same key with the marker set and returns it', () => {
     writeInflightGenerationJob(fresh);
-    const record = markInflightJobLeftForHome(NOW);
+    const record = markInflightJobLeftForHome();
     expect(record).toEqual({ ...fresh, leftForHome: true });
     expect(mmkvStorage.setItem).toHaveBeenLastCalledWith(
       INFLIGHT_GENERATION_JOB_KEY,
       JSON.stringify({ ...fresh, leftForHome: true }),
     );
-    expect(resolveTodayInflightAction(readInflightGenerationJob(NOW)).action).toBe('watch-on-today');
+    expect(resolveTodayInflightAction(readInflightGenerationJob(), 'running').action).toBe('watch-on-today');
   });
 
   it('writes nothing and returns null when there is no active record', () => {
-    expect(markInflightJobLeftForHome(NOW)).toBeNull();
+    expect(markInflightJobLeftForHome()).toBeNull();
     expect(mmkvStorage.setItem).not.toHaveBeenCalled();
-  });
-
-  it('drops a stale record instead of marking it', () => {
-    writeInflightGenerationJob({ ...fresh, submittedAt: NOW - INFLIGHT_JOB_TTL_MS });
-    expect(markInflightJobLeftForHome(NOW)).toBeNull();
-    expect(mmkvStorage.removeItem).toHaveBeenCalledWith(INFLIGHT_GENERATION_JOB_KEY);
-    expect(mmkvStorage.getItem(INFLIGHT_GENERATION_JOB_KEY)).toBeNull();
   });
 
   // /generating "Try again" after a failure: the failed job already cleared
@@ -149,14 +170,14 @@ describe('markInflightJobLeftForHome', () => {
   // record as app-kill recovery and bounces the reader back — the symptom
   // Jordan reported, re-created on the retry path.
   it('leaves a job that resolves after the tap to carry the marker itself', () => {
-    expect(markInflightJobLeftForHome(NOW)).toBeNull();
+    expect(markInflightJobLeftForHome()).toBeNull();
 
     const retried: InflightGenerationJob = { ...fresh, jobId: 'job-2', leftForHome: true };
     writeInflightGenerationJob(retried);
-    expect(resolveTodayInflightAction(readInflightGenerationJob(NOW))).toEqual({ action: 'watch-on-today', job: retried });
+    expect(resolveTodayInflightAction(readInflightGenerationJob(), 'running')).toEqual({ action: 'watch-on-today', job: retried });
 
     writeInflightGenerationJob({ ...fresh, jobId: 'job-2' });
-    expect(resolveTodayInflightAction(readInflightGenerationJob(NOW)).action).toBe('resume-on-generating');
+    expect(resolveTodayInflightAction(readInflightGenerationJob(), 'running').action).toBe('resume-on-generating');
   });
 });
 

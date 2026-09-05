@@ -137,3 +137,126 @@ export function getNextPollDelayMs(elapsedMs: number, rng: () => number = Math.r
   const jitter = (unit * 2 - 1) * POLL_JITTER_RATIO; // [-0.2, +0.2]
   return Math.round(base * (1 + jitter));
 }
+
+// ── Liveness: the wall clock is never a verdict ───────────────────────────
+
+/**
+ * Elapsed polling time after which the waiting UI softens to "still writing".
+ * Formerly a hard 10-minute cap that declared failure WITHOUT asking the
+ * server. A 30-day arc can legitimately outlive it (three worker attempts of
+ * ~2.5–4 min each plus 60 s / 120 s backoff), and the clock kept running while
+ * the app was backgrounded, so a return after ten minutes errored instantly
+ * on a job that was still processing or already complete.
+ */
+export const LONG_RUNNING_AFTER_MS = 10 * 60 * 1000;
+/**
+ * Consecutive status requests that may fail (network / 5xx) before the client
+ * stops waiting. Only the SERVER can fail a job; this cap exists so a dead
+ * backend never yields an infinite spinner.
+ */
+export const MAX_CONSECUTIVE_POLL_NETWORK_ERRORS = 6;
+
+export type GenerationDeadlineDecision = 'poll' | 'long-running' | 'network-error';
+
+/**
+ * Decide whether the poll loop keeps going. Time alone never yields an error:
+ * past `maxDurationMs` the loop continues in a softened 'long-running' state.
+ * The only client-side give-up is `maxNetworkErrors` consecutive failed status
+ * requests. A server 'failed' status stays authoritative via
+ * `evaluateGenerationPoll`.
+ */
+export function evaluateGenerationDeadline(input: {
+  elapsedMs: number;
+  maxDurationMs?: number;
+  consecutiveNetworkErrors: number;
+  maxNetworkErrors?: number;
+}): GenerationDeadlineDecision {
+  const maxNetworkErrors = input.maxNetworkErrors ?? MAX_CONSECUTIVE_POLL_NETWORK_ERRORS;
+  if (input.consecutiveNetworkErrors >= maxNetworkErrors) return 'network-error';
+  const maxDurationMs = input.maxDurationMs ?? LONG_RUNNING_AFTER_MS;
+  // A NaN or negative elapsed value (unset start, clock skew) fails this
+  // comparison and stays on the normal path.
+  if (input.elapsedMs >= maxDurationMs) return 'long-running';
+  return 'poll';
+}
+
+/** Next value of the consecutive network-error counter after one poll. */
+export function countConsecutiveNetworkErrors(prior: number, pollSucceeded: boolean): number {
+  return pollSucceeded ? 0 : prior + 1;
+}
+
+/**
+ * Move a poll-start timestamp forward by the time the app spent backgrounded,
+ * so background time does not count toward the long-running threshold. The
+ * result never passes `now`, and a non-positive pause is a no-op.
+ */
+export function shiftPollStart(pollStart: number, backgroundedAt: number, now: number): number {
+  const paused = now - backgroundedAt;
+  if (!(paused > 0)) return pollStart;
+  return Math.min(pollStart + paused, now);
+}
+
+// ── Retry / leave decisions ───────────────────────────────────────────────
+
+/** What the server last said about the job the screen is watching. */
+export type ObservedJobState =
+  | 'unobserved'
+  | 'alive'
+  | 'complete'
+  | 'failed'
+  | 'invalid-result'
+  | 'unknown-terminal';
+
+export type GenerationRetryAction =
+  | { kind: 'resume-poll'; jobId: string }
+  | { kind: 'retry-existing'; jobId: string }
+  | { kind: 'resubmit' };
+
+/**
+ * "Try again" must never create a duplicate series. With a known job the
+ * action follows the server's last word on it:
+ * - a terminal verdict (failed, or complete-but-unopenable) → POST /retry on
+ *   that same job; the server refuses to retry a job that is not failed, so no
+ *   second job can be created;
+ * - alive, or never observed because the client gave up on network errors →
+ *   poll the same job again — it may be running or already finished;
+ * - no job known → submit; the server dedups active and completed work and
+ *   the caller adopts the existing job via `resolveGenerationSubmitFailure`.
+ */
+export function resolveGenerationRetryAction(input: {
+  pendingJobId: string | null;
+  observedState: ObservedJobState;
+}): GenerationRetryAction {
+  if (!input.pendingJobId) return { kind: 'resubmit' };
+  if (input.observedState === 'unobserved' || input.observedState === 'alive') {
+    return { kind: 'resume-poll', jobId: input.pendingJobId };
+  }
+  return { kind: 'retry-existing', jobId: input.pendingJobId };
+}
+
+/**
+ * Leaving the error screen must not orphan a job the server still owns. The
+ * inflight record and the store session are cleared only when the server gave
+ * a terminal verdict (or there is no job); otherwise Today can resume it.
+ */
+export function resolveGoHomeCleanup(input: {
+  pendingJobId: string | null;
+  observedState: ObservedJobState;
+}): 'clear' | 'keep-inflight' {
+  if (!input.pendingJobId) return 'clear';
+  return input.observedState === 'unobserved' || input.observedState === 'alive'
+    ? 'keep-inflight'
+    : 'clear';
+}
+
+/**
+ * "Try again" threw before the server gave a verdict: the /retry or submit
+ * request failed client-side (network, 4xx). That is not a verdict on the job.
+ * With a known job the inflight record survives — the job's server state is
+ * unchanged, and Today reconciles the record against the server through
+ * `resolveInflightResume`. With no job there is nothing to resume, so the
+ * record is cleared.
+ */
+export function resolveRetryFailureCleanup(action: GenerationRetryAction): 'clear' | 'keep-inflight' {
+  return action.kind === 'resubmit' ? 'clear' : 'keep-inflight';
+}

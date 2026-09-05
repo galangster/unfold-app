@@ -1,11 +1,11 @@
 import {
   INITIAL_ARC_INVALID_RESULT_MESSAGE,
-  INITIAL_ARC_TIMEOUT_MESSAGE,
   INITIAL_ARC_UNKNOWN_STATUS_MESSAGE,
+  INITIAL_ARC_UNREACHABLE_MESSAGE,
   watchInflightInitialArc,
   type InitialArcJobStatus,
 } from '../inflight-initial-arc-watch';
-import { MAX_UNKNOWN_GENERATION_STATUS } from '../generation-poll-outcome';
+import { MAX_CONSECUTIVE_POLL_NETWORK_ERRORS, MAX_UNKNOWN_GENERATION_STATUS } from '../generation-poll-outcome';
 
 const immediate = async () => {};
 
@@ -140,42 +140,72 @@ describe('watchInflightInitialArc', () => {
     expect(fetchStatus).not.toHaveBeenCalled();
   });
 
-  it('gives up with the timeout copy once the job is past its budget, counted from submission', async () => {
-    let clock = 1_000_000;
-    const fetchStatus = jest.fn(async () => ({ status: 'pending' }));
+  // Jordan (item 7): a ten-minute wall clock declared a running job failed
+  // without asking the server. Time is never a verdict here either.
+  it('never gives up on time alone: a job long past the old ten-minute cap still lands', async () => {
+    let clock = 0;
+    const fetchStatus = fetchSequence([{ status: 'processing' }, { status: 'processing' }, completedStatus]);
 
     const outcome = await watchInflightInitialArc({
       jobId: 'job-1',
       fetchStatus,
-      startedAt: clock,
+      startedAt: 0,
       now: () => clock,
-      maxDurationMs: 10_000,
       sleep: async (ms) => { clock += ms; },
-      delayFor: () => 4_000,
+      delayFor: () => 8 * 60 * 1000,
     });
 
-    expect(outcome).toEqual({
-      kind: 'failed',
-      message: INITIAL_ARC_TIMEOUT_MESSAGE,
-      phase: 'server-poll-timeout',
-      canRetry: true,
-    });
-    // Polled at t=0s, 4s, 8s; 12s is past the 10s budget.
+    expect(outcome.kind).toBe('complete');
     expect(fetchStatus).toHaveBeenCalledTimes(3);
+    expect(clock).toBeGreaterThan(10 * 60 * 1000);
   });
 
-  it('times out immediately for a record already older than the budget', async () => {
+  it('polls a record already far older than the old cap instead of failing it unasked', async () => {
     const fetchStatus = jest.fn(async () => completedStatus);
 
     const outcome = await watchInflightInitialArc({
       jobId: 'job-1',
       fetchStatus,
       startedAt: 0,
-      now: () => 11 * 60 * 1000,
+      now: () => 3 * 60 * 60 * 1000,
       sleep: immediate,
     });
 
-    expect(outcome.kind).toBe('failed');
-    expect(fetchStatus).not.toHaveBeenCalled();
+    expect(outcome.kind).toBe('complete');
+    expect(fetchStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it('gives up as unreachable, not failed, after the consecutive network-error cap', async () => {
+    const fetchStatus = fetchSequence(
+      Array.from({ length: MAX_CONSECUTIVE_POLL_NETWORK_ERRORS }, () => new Error('network')),
+    );
+    const sleeps: number[] = [];
+
+    const outcome = await watchInflightInitialArc({
+      jobId: 'job-1',
+      fetchStatus,
+      sleep: async (ms) => { sleeps.push(ms); },
+      delayFor: () => 3_000,
+    });
+
+    expect(outcome).toEqual({ kind: 'unreachable', message: INITIAL_ARC_UNREACHABLE_MESSAGE });
+    expect(fetchStatus).toHaveBeenCalledTimes(MAX_CONSECUTIVE_POLL_NETWORK_ERRORS);
+    // A doubled-cadence wait between attempts; none after the give-up.
+    expect(sleeps).toEqual(Array.from({ length: MAX_CONSECUTIVE_POLL_NETWORK_ERRORS - 1 }, () => 6_000));
+  });
+
+  it('resets the network-error count on every answer, so scattered failures never add up', async () => {
+    const statuses: (InitialArcJobStatus | Error)[] = [];
+    for (let round = 0; round < 3; round += 1) {
+      for (let n = 0; n < MAX_CONSECUTIVE_POLL_NETWORK_ERRORS - 1; n += 1) statuses.push(new Error('network'));
+      statuses.push({ status: 'processing' });
+    }
+    statuses.push(completedStatus);
+    const fetchStatus = fetchSequence(statuses);
+
+    const outcome = await watchInflightInitialArc({ jobId: 'job-1', fetchStatus, sleep: immediate });
+
+    expect(outcome.kind).toBe('complete');
+    expect(fetchStatus).toHaveBeenCalledTimes(statuses.length);
   });
 });

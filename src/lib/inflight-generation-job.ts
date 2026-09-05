@@ -4,18 +4,24 @@
  * string, so no second key may appear.
  *
  * Two screens read the record. The post-paywall /generating screen resumes
- * polling from it on mount. Today used to treat every unexpired record as
- * app-kill recovery and bounce straight back to /generating, which made the
+ * polling from it on mount. Today used to treat every record as app-kill
+ * recovery and bounce straight back to /generating, which made the
  * "Go home — we'll keep writing" link look dead: tap, Today for one frame,
  * back on the ripple (Jordan, App Store 1.1.0, 2026-09-04). The `leftForHome`
  * marker tells "the reader chose to wait on Today" apart from "the app died
  * mid-generation"; only the latter goes back to /generating.
+ *
+ * The record carries no expiry. The server is the only authority on the job
+ * (Jordan, item 7: a wall clock declared a running job failed), so both
+ * screens ask it — /generating by polling, Today through
+ * `resolveInflightResume` — and the worker's stale sweep guarantees every job
+ * reaches a terminal status. A record is dropped on a server verdict, never
+ * on age.
  */
 import { mmkvStorage } from '@/lib/mmkv-storage';
+import type { GenerationSessionStatus } from '@/lib/store';
 
 export const INFLIGHT_GENERATION_JOB_KEY = 'inflight-generation-job';
-/** A record older than this is stale: the server job is long done or dead. */
-export const INFLIGHT_JOB_TTL_MS = 15 * 60 * 1000;
 /** Session title written at submission, before the server names the series. */
 export const GENERATING_SESSION_TITLE_PLACEHOLDER = 'Generating...';
 /** What the preparing card calls the series before the server names it. */
@@ -32,7 +38,6 @@ export interface InflightGenerationJob {
 export type InflightGenerationJobRead =
   | { kind: 'none' }
   | { kind: 'invalid' }
-  | { kind: 'expired'; job: InflightGenerationJob }
   | { kind: 'active'; job: InflightGenerationJob };
 
 function toInflightGenerationJob(value: unknown): InflightGenerationJob | null {
@@ -49,10 +54,7 @@ function toInflightGenerationJob(value: unknown): InflightGenerationJob | null {
 }
 
 /** Pure: classify a raw MMKV value. */
-export function parseInflightGenerationJob(
-  raw: string | null | undefined,
-  now = Date.now(),
-): InflightGenerationJobRead {
+export function parseInflightGenerationJob(raw: string | null | undefined): InflightGenerationJobRead {
   if (!raw) return { kind: 'none' };
   let parsed: unknown;
   try {
@@ -62,19 +64,18 @@ export function parseInflightGenerationJob(
   }
   const job = toInflightGenerationJob(parsed);
   if (!job) return { kind: 'invalid' };
-  // Negated `<` so a NaN clock lands on expired rather than active.
-  if (!(now - job.submittedAt < INFLIGHT_JOB_TTL_MS)) return { kind: 'expired', job };
   return { kind: 'active', job };
 }
 
 /**
- * Read the persisted record. A stale or unreadable record is removed on read,
- * as both screens always did, so nothing keeps bouncing on a dead job.
+ * Read the persisted record. An unreadable record is removed on read, as
+ * both screens always did, so nothing keeps bouncing on a record nobody can
+ * act on.
  */
-export function readInflightGenerationJob(now = Date.now()): InflightGenerationJobRead {
+export function readInflightGenerationJob(): InflightGenerationJobRead {
   const raw = mmkvStorage.getItem(INFLIGHT_GENERATION_JOB_KEY) as string | null;
-  const read = parseInflightGenerationJob(raw, now);
-  if (read.kind === 'expired' || read.kind === 'invalid') clearInflightGenerationJob();
+  const read = parseInflightGenerationJob(raw);
+  if (read.kind === 'invalid') clearInflightGenerationJob();
   return read;
 }
 
@@ -93,12 +94,44 @@ export type TodayInflightDecision =
   /** The reader chose Today: keep the record, show preparing, watch from here. */
   | { action: 'watch-on-today'; job: InflightGenerationJob };
 
-/** Pure: what Today does with the record it finds on mount. */
-export function resolveTodayInflightAction(read: InflightGenerationJobRead): TodayInflightDecision {
+/**
+ * Pure: what Today does with the record it finds on focus. A record the
+ * reader left for Today is watched from there — unless the session already
+ * holds a failure. With the marker set that failure is the watch's own
+ * give-up (the server could not be reached six polls running), so the failed
+ * card owns the moment: Try again re-enters /generating on the kept record,
+ * Dismiss clears the session and the watch starts again.
+ */
+export function resolveTodayInflightAction(
+  read: InflightGenerationJobRead,
+  sessionStatus: GenerationSessionStatus,
+): TodayInflightDecision {
   if (read.kind !== 'active') return { action: 'none' };
-  return read.job.leftForHome
-    ? { action: 'watch-on-today', job: read.job }
-    : { action: 'resume-on-generating', job: read.job };
+  if (!read.job.leftForHome) return { action: 'resume-on-generating', job: read.job };
+  return sessionStatus === 'error' ? { action: 'none' } : { action: 'watch-on-today', job: read.job };
+}
+
+export type InflightResumeDecision = 'resume' | 'discard' | 'keep';
+
+/**
+ * Pure: whether Today re-enters /generating for an unmarked record (app-kill
+ * recovery). The server is the authority: resume while it reports the job
+ * alive or complete; discard on its failure verdict — Today settles that
+ * failure itself so the reader sees the failed card, not /generating's error
+ * state; keep the record, and ask again on the next focus, when the status
+ * could not be fetched.
+ */
+export function resolveInflightResume(serverStatus: string | null | undefined): InflightResumeDecision {
+  switch (serverStatus) {
+    case 'pending':
+    case 'processing':
+    case 'complete':
+      return 'resume';
+    case 'failed':
+      return 'discard';
+    default:
+      return 'keep';
+  }
 }
 
 /**
@@ -107,8 +140,8 @@ export function resolveTodayInflightAction(read: InflightGenerationJobRead): Tod
  * removed, so the server job keeps running and Today can watch it. Synchronous
  * on purpose: nothing may sit between the tap and the navigation.
  */
-export function markInflightJobLeftForHome(now = Date.now()): InflightGenerationJob | null {
-  const read = readInflightGenerationJob(now);
+export function markInflightJobLeftForHome(): InflightGenerationJob | null {
+  const read = readInflightGenerationJob();
   if (read.kind !== 'active') return null;
   const record = { ...read.job, leftForHome: true as const };
   writeInflightGenerationJob(record);

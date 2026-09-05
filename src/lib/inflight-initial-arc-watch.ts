@@ -2,21 +2,37 @@
  * Poll loop for the first-series (`initial_arc`) job when the reader is not on
  * /generating any more. Native-free so the loop is unit tested with an injected
  * clock and sleep; the /generating screen keeps its own timer-driven loop but
- * shares the same outcome classification (`evaluateGenerationPoll`), cadence
- * and terminal copy, so both screens fail and finish the same way.
+ * shares the same outcome classification (`evaluateGenerationPoll`), liveness
+ * rule (`evaluateGenerationDeadline`), cadence and terminal copy, so both
+ * screens fail and finish the same way.
+ *
+ * Time is never a verdict: a job past the long-running threshold keeps being
+ * polled at the slow tier (Jordan, item 7 — a ten-minute wall clock declared a
+ * running job failed without asking the server). The only client-side give-up
+ * is a run of failed status requests, and that is 'unreachable', not
+ * 'failed': the record stays so the job can be picked up again.
  */
 import type { GenerationResultPayload } from './generation-reconciliation';
 // Type-only import — erased at compile time, so this module stays free of the
 // native (MMKV) dependencies that the generation-api runtime pulls in.
 import type { CanonicalGenerationResultPayload } from './generation-api';
-import { evaluateGenerationPoll, getNextPollDelayMs } from './generation-poll-outcome';
+import {
+  countConsecutiveNetworkErrors,
+  evaluateGenerationDeadline,
+  evaluateGenerationPoll,
+  getNextPollDelayMs,
+} from './generation-poll-outcome';
 
-/** Maximum time to poll one job before giving up (10 minutes). */
-export const INITIAL_ARC_MAX_POLL_DURATION_MS = 10 * 60 * 1000;
-export const INITIAL_ARC_TIMEOUT_MESSAGE = 'Generation is taking longer than expected. Please try again.';
 /** Terminal-error copy for a completed-but-unopenable / unrecognized job. */
 export const INITIAL_ARC_INVALID_RESULT_MESSAGE = 'Your devotional finished, but we couldn’t open it. Please try again.';
 export const INITIAL_ARC_UNKNOWN_STATUS_MESSAGE = 'We hit an unexpected problem finishing your devotional. Please try again.';
+/**
+ * Copy for the client-side give-up (MAX_CONSECUTIVE_POLL_NETWORK_ERRORS failed
+ * status requests in a row). Not a verdict on the job — it may still be
+ * running — so it routes through the connection branch of
+ * toFriendlyOnboardingGenerationError and the inflight record is kept.
+ */
+export const INITIAL_ARC_UNREACHABLE_MESSAGE = 'Unable to connect to the writing service while checking on your devotional.';
 
 export type InitialArcJobStatus = {
   status: string;
@@ -28,12 +44,13 @@ export type InitialArcJobStatus = {
 export type InitialArcFailurePhase =
   | 'server-poll'
   | 'server-poll-invalid-result'
-  | 'server-poll-unknown-status'
-  | 'server-poll-timeout';
+  | 'server-poll-unknown-status';
 
 export type InflightInitialArcWatchOutcome =
   | { kind: 'complete'; result: CanonicalGenerationResultPayload }
   | { kind: 'failed'; message: string; phase: InitialArcFailurePhase; canRetry: boolean }
+  /** The client gave up reaching the server; the job may still be running. */
+  | { kind: 'unreachable'; message: string }
   | { kind: 'cancelled' };
 
 export type WatchInflightInitialArcOptions = {
@@ -41,9 +58,8 @@ export type WatchInflightInitialArcOptions = {
   fetchStatus: (jobId: string) => Promise<InitialArcJobStatus>;
   /** Identity fallback when the server result omits its devotionalId. */
   fallbackDevotionalId?: string | null;
-  /** When the job was submitted; the 10-minute budget counts from here. */
+  /** When the job was submitted; the poll cadence escalates from here. */
   startedAt?: number;
-  maxDurationMs?: number;
   /** Consulted before each fetch and after each wait; true stops the loop. */
   isCancelled?: () => boolean;
   /** Injectable for tests. */
@@ -57,10 +73,11 @@ function defaultSleep(ms: number): Promise<void> {
 }
 
 /**
- * Poll the job until it completes, fails terminally, is cancelled, or runs
- * past its budget. The first poll is immediate (the reader just left a screen
- * that was polling). A throwing fetch is "not yet": the server job is still
- * running, so wait (at double cadence) and ask again.
+ * Poll the job until it completes, fails terminally, is cancelled, or the
+ * server stops answering. The first poll is immediate (the reader just left a
+ * screen that was polling). A throwing fetch is "not yet": the server job is
+ * still running, so wait (at double cadence) and ask again — until the
+ * consecutive-error cap, which ends the wait without a verdict.
  */
 export async function watchInflightInitialArc(
   options: WatchInflightInitialArcOptions,
@@ -69,7 +86,6 @@ export async function watchInflightInitialArc(
     jobId,
     fetchStatus,
     fallbackDevotionalId = null,
-    maxDurationMs = INITIAL_ARC_MAX_POLL_DURATION_MS,
     isCancelled = () => false,
     sleep = defaultSleep,
     now = Date.now,
@@ -77,22 +93,25 @@ export async function watchInflightInitialArc(
   } = options;
   const startedAt = options.startedAt ?? now();
   let consecutiveUnknown = 0;
+  let consecutiveNetworkErrors = 0;
 
   for (;;) {
     if (isCancelled()) return { kind: 'cancelled' };
-    const elapsedMs = now() - startedAt;
-    if (elapsedMs > maxDurationMs) {
-      return { kind: 'failed', message: INITIAL_ARC_TIMEOUT_MESSAGE, phase: 'server-poll-timeout', canRetry: true };
-    }
 
     let status: InitialArcJobStatus;
     try {
       status = await fetchStatus(jobId);
     } catch {
-      await sleep(delayFor(elapsedMs) * 2);
+      consecutiveNetworkErrors = countConsecutiveNetworkErrors(consecutiveNetworkErrors, false);
+      const decision = evaluateGenerationDeadline({ elapsedMs: now() - startedAt, consecutiveNetworkErrors });
+      if (decision === 'network-error') {
+        return { kind: 'unreachable', message: INITIAL_ARC_UNREACHABLE_MESSAGE };
+      }
+      await sleep(delayFor(now() - startedAt) * 2);
       continue;
     }
     if (isCancelled()) return { kind: 'cancelled' };
+    consecutiveNetworkErrors = countConsecutiveNetworkErrors(consecutiveNetworkErrors, true);
 
     const evaluated = evaluateGenerationPoll({
       status: status.status,
@@ -122,6 +141,8 @@ export async function watchInflightInitialArc(
       case 'waiting':
       case 'unknown-retry':
       default:
+        // Still pending / processing (or a tolerated unknown). Past the
+        // long-running threshold this is a soft state, never a failure.
         await sleep(delayFor(now() - startedAt));
     }
   }
