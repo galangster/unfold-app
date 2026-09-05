@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, TouchableOpacity, AppState, AppStateStatus, AccessibilityInfo, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
-import { useRouter, useNavigation } from 'expo-router';
+import { View, Text, TouchableOpacity, AppState, AppStateStatus, AccessibilityInfo, ScrollView, StyleSheet, ActivityIndicator, Linking } from 'react-native';
+import { useRouter, useNavigation, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
   useSharedValue,
@@ -59,6 +59,12 @@ import {
   areNotificationsEnabled,
 } from '@/lib/notifications';
 import { registerPushToken } from '@/lib/push-notifications';
+import {
+  getNotifyControlState,
+  resolveNotifyRequestOutcome,
+  type NotifyRequestOutcome,
+} from '@/lib/generating-notify-state';
+import { resolveGeneratingEntry } from '@/lib/generating-entry';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
 import { Typography } from '@/constants/typography';
@@ -102,6 +108,8 @@ const MESSAGE_CYCLE_MS = 3800;
 export default function GeneratingScreen() {
   const router = useRouter();
   const navigation = useNavigation();
+  // Set only by a tapped generation_failed push, which names the job that died.
+  const params = useLocalSearchParams<{ jobId?: string; devotionalId?: string }>();
   const { colors: themeColors } = useTheme();
   const { reducedMotion, entering, exiting } = useAccessibleAnimation();
 
@@ -212,6 +220,8 @@ export default function GeneratingScreen() {
   const [notificationPermission, setNotificationPermission] = useState<'unknown' | 'granted' | 'denied'>('unknown');
   const [hasAskedPermission, setHasAskedPermission] = useState(false);
   const [showNotificationPrompt, setShowNotificationPrompt] = useState(false);
+  // How the reader's "Notify me" tap ended; null until they tap.
+  const [notifyOutcome, setNotifyOutcome] = useState<NotifyRequestOutcome | null>(null);
 
   // Sample preview state -- shows after a short delay to give users something to read
   const [showSamplePreview, setShowSamplePreview] = useState(false);
@@ -250,7 +260,15 @@ export default function GeneratingScreen() {
       const enabled = await areNotificationsEnabled();
       setNotificationPermission(enabled ? 'granted' : 'denied');
 
-      if (!enabled) {
+      if (enabled) {
+        // "Feel free to step away — we'll notify you" must be backed by a
+        // token the server holds, so the note waits for the registration and
+        // a failed one says so instead of promising. The session dedupe makes
+        // the common case free.
+        setNotifyOutcome('pending');
+        const registration = await registerPushToken();
+        setNotifyOutcome(registration === 'failed' ? 'registration_failed' : null);
+      } else {
         notificationPromptTimerRef.current = setTimeout(() => {
           setShowNotificationPrompt(true);
         }, 6000);
@@ -369,12 +387,48 @@ export default function GeneratingScreen() {
     }
 
     setHasAskedPermission(true);
+    setNotifyOutcome(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const granted = await requestNotificationPermissions();
     setNotificationPermission(granted ? 'granted' : 'denied');
     setShowNotificationPrompt(false);
-    if (granted) void registerPushToken();
+    // Nothing promises a nudge until the token reaches the server. The
+    // registration can stall for tens of seconds on a bad network, and a
+    // reader told to step away during it would never get the push.
+    if (granted) setNotifyOutcome('pending');
+    const registration = granted ? await registerPushToken() : null;
+    setNotifyOutcome(resolveNotifyRequestOutcome({ granted, registration }));
   };
+
+  const handleOpenNotificationSettings = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    void Linking.openSettings();
+  };
+
+  // Back from Settings: pick up a permission the reader just switched on.
+  // Back from anywhere after a failed registration: try the token once more.
+  useEffect(() => {
+    if (notifyOutcome !== 'denied' && notifyOutcome !== 'registration_failed') return;
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (nextAppState !== 'active') return;
+      void (async () => {
+        if (!(await areNotificationsEnabled())) return;
+        setNotificationPermission('granted');
+        setNotifyOutcome('pending');
+        const registration = await registerPushToken();
+        setNotifyOutcome(resolveNotifyRequestOutcome({ granted: true, registration }));
+      })();
+    });
+    return () => subscription.remove();
+  }, [notifyOutcome]);
+
+  const notifyControl = getNotifyControlState({
+    permission: notificationPermission,
+    hasAskedPermission,
+    showNotificationPrompt,
+    isComplete,
+    outcome: notifyOutcome,
+  });
 
   const handleDismissNotificationPrompt = () => {
     if (notificationPromptTimerRef.current) {
@@ -566,14 +620,19 @@ export default function GeneratingScreen() {
     if (jobSubmittedRef.current) return;
     jobSubmittedRef.current = true;
 
-    // Check MMKV for an inflight job from a previous session (app-kill
-    // recovery). The record carries no expiry — the first poll asks the
-    // server, which alone decides the job's fate — and a record the reader
-    // once left for Today resumes here just the same: this screen owns the
-    // wait whenever it is on screen.
+    // Resume an in-flight job (app-kill recovery, or a record the reader once
+    // left for Today — this screen owns the wait whenever it is on screen),
+    // land on the job a failure push named, send a stale push home, or submit
+    // fresh. The record carries no expiry: the first poll asks the server,
+    // which alone decides the job's fate.
     const inflightRead = readInflightGenerationJob();
-    if (inflightRead.kind === 'active') {
-      const inflight = inflightRead.job;
+    const entry = resolveGeneratingEntry({
+      inflight: inflightRead.kind === 'active' ? inflightRead.job : null,
+      params: { jobId: params.jobId, devotionalId: params.devotionalId },
+      currentDevotionalId: useUnfoldStore.getState().currentDevotionalId,
+    });
+    if (entry.kind === 'resume') {
+      const { inflight } = entry;
       logger.log('[generating] Resuming inflight job from MMKV:', inflight.jobId);
       if (inflight.devotionalId) {
         startGenerationSession({ devotionalId: inflight.devotionalId, totalDays: user.devotionalLength });
@@ -581,6 +640,37 @@ export default function GeneratingScreen() {
       setPendingJobId(inflight.jobId);
       pollStartTime.current = inflight.submittedAt;
       startPolling(inflight.jobId);
+      return;
+    }
+
+    if (entry.kind === 'stale-push') {
+      // "We hit a snag" outlived the job it names: iOS keeps the push after
+      // Start over already wrote a new series, or another job is in flight.
+      // Try again on the old job would resurrect a superseded series, so
+      // Today reconciles whatever is current or in flight instead.
+      logger.log('[generating] Ignoring a failure push for a superseded job:', entry.jobId);
+      void logBugEvent('generation', 'generation-failed-push-stale', { jobId: entry.jobId });
+      router.replace('/(tabs)/(today)');
+      return;
+    }
+
+    if (entry.kind === 'poll-from-push') {
+      // The push named a job and every terminal exit clears the inflight
+      // record, so poll that job by id instead of submitting a duplicate. The
+      // push is not the verdict: iOS keeps it in Notification Center after a
+      // retry or a fresh start already resolved the job, so the server's
+      // status decides. A failed job lands with the server's error text and
+      // retry budget, a complete one opens the devotional, a re-queued one
+      // keeps waiting. Asserting failure here made Try again 409-loop on a
+      // complete job and resurrect a superseded one.
+      logger.log('[generating] Polling the job a failure push named:', entry.jobId);
+      void logBugEvent('generation', 'generation-failed-push-landing', { jobId: entry.jobId });
+      if (entry.devotionalId) {
+        startGenerationSession({ devotionalId: entry.devotionalId, totalDays: user.devotionalLength });
+      }
+      setPendingJobId(entry.jobId);
+      pollStartTime.current = Date.now();
+      startPolling(entry.jobId);
       return;
     }
 
@@ -1111,7 +1201,7 @@ export default function GeneratingScreen() {
           ) : null}
 
           {/* Notification prompt -- appears after a delay */}
-          {showNotificationPrompt && notificationPermission !== 'granted' && !hasAskedPermission && !isComplete && (
+          {notifyControl === 'prompt' && (
             <Animated.View
               entering={entering(FadeInUp.duration(500))}
               style={{
@@ -1220,8 +1310,30 @@ export default function GeneratingScreen() {
             </Animated.View>
           )}
 
+          {/* Token registration in flight -- nothing promises a nudge yet. The
+              entrance delay hides the state when the session dedupe resolves it
+              within a frame. */}
+          {notifyControl === 'pending' && (
+            <Animated.View
+              entering={entering(FadeIn.duration(400).delay(300))}
+              style={{ marginTop: Spacing['10'], width: '100%', alignItems: 'center' }}
+            >
+              <View
+                style={[
+                  genStyles.notifyNote,
+                  { alignItems: 'center', backgroundColor: colors.inputBackground, borderColor: colors.border },
+                ]}
+              >
+                <ActivityIndicator size="small" color={colors.textSubtle} />
+                <Text style={[genStyles.notifyNoteText, { color: colors.textMuted }]}>
+                  {'Setting up your nudge\u2026'}
+                </Text>
+              </View>
+            </Animated.View>
+          )}
+
           {/* After enabling notifications */}
-          {notificationPermission === 'granted' && hasAskedPermission && (
+          {notifyControl === 'confirmed' && (
             <Animated.View
               entering={entering(FadeIn.duration(400))}
               style={{
@@ -1250,8 +1362,56 @@ export default function GeneratingScreen() {
             </Animated.View>
           )}
 
+          {/* Permission denied -- say so, and point at Settings */}
+          {notifyControl === 'denied' && (
+            <Animated.View
+              entering={entering(FadeIn.duration(400))}
+              style={{ marginTop: Spacing['10'], width: '100%', alignItems: 'center', gap: Spacing['3'] }}
+            >
+              <View style={[genStyles.notifyNote, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
+                <BellIcon size={14} color={colors.textSubtle} weight="light" />
+                <Text style={[genStyles.notifyNoteText, { color: colors.textMuted }]}>
+                  {'Notifications are off for Unfold. Turn them on in Settings and we\u2019ll nudge you when it\u2019s\u00A0ready.'}
+                </Text>
+              </View>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={handleOpenNotificationSettings}
+                accessibilityRole="button"
+                accessibilityLabel="Open Settings to turn on notifications"
+                hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}
+              >
+                <Text
+                  style={{
+                    fontFamily: FontFamily.ui,
+                    fontSize: FontSize.sm,
+                    color: colors.textMuted,
+                    textDecorationLine: 'underline',
+                  }}
+                >
+                  Open Settings
+                </Text>
+              </TouchableOpacity>
+            </Animated.View>
+          )}
+
+          {/* Permission granted but the token never reached the server */}
+          {notifyControl === 'registration-failed' && (
+            <Animated.View
+              entering={entering(FadeIn.duration(400))}
+              style={{ marginTop: Spacing['10'], width: '100%', alignItems: 'center' }}
+            >
+              <View style={[genStyles.notifyNote, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
+                <BellIcon size={14} color={colors.textSubtle} weight="light" />
+                <Text style={[genStyles.notifyNoteText, { color: colors.textMuted }]}>
+                  {'We couldn\u2019t set up the nudge. Check your connection and tap Notify me\u00A0again.'}
+                </Text>
+              </View>
+            </Animated.View>
+          )}
+
           {/* Already had notifications -- gentle note */}
-          {notificationPermission === 'granted' && !hasAskedPermission && !isComplete && (
+          {notifyControl === 'granted-note' && (
             <Animated.View
               entering={entering(FadeIn.duration(600).delay(4000))}
               style={{ marginTop: Spacing['10'] }}
@@ -1303,8 +1463,9 @@ export default function GeneratingScreen() {
 
               {/* Second chance at the ready-notification for "I'll wait" users.
                   Hidden while the main notification prompt above is already
-                  showing its own Notify me control, so the two never duplicate. */}
-              {!showNotificationPrompt && notificationPermission !== 'granted' && (
+                  showing its own Notify me control, so the two never duplicate.
+                  Kept after a failed registration so the reader can retry. */}
+              {(notifyControl === 'link' || notifyControl === 'registration-failed') && (
                 <TouchableOpacity
                   activeOpacity={0.7}
                   onPress={handleRequestNotifications}
@@ -1487,6 +1648,22 @@ const genStyles = StyleSheet.create({
   transparentFlex: {
     flex: 1,
     backgroundColor: 'transparent',
+  },
+  notifyNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    width: '100%',
+    paddingHorizontal: Spacing['4'],
+    paddingVertical: 10,
+    borderRadius: Radius.xl,
+    borderWidth: 1,
+  },
+  notifyNoteText: {
+    flex: 1,
+    fontFamily: FontFamily.ui,
+    fontSize: 13,
+    lineHeight: 18,
+    marginLeft: Spacing['2'],
   },
   errorSafeArea: {
     flex: 1,

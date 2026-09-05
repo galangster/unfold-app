@@ -181,6 +181,45 @@ describe('push notification helpers', () => {
         pathname: '/(tabs)/(today)/evening-wind-down',
       });
     });
+
+    it('routes the first-arc failure push to the generating screen with the job to retry', () => {
+      expect(
+        buildNotificationNavigationRoute({
+          type: 'generation_failed',
+          jobType: 'initial_arc',
+          devotionalId: 'd',
+          jobId: 'j',
+        }),
+      ).toEqual({ pathname: '/generating', params: { jobId: 'j', devotionalId: 'd' } });
+    });
+
+    it('still routes a first-arc failure push that lost its ids, without inventing params', () => {
+      expect(buildNotificationNavigationRoute({ type: 'generation_failed', jobType: 'initial_arc' })).toEqual({
+        pathname: '/generating',
+        params: {},
+      });
+      expect(
+        buildNotificationNavigationRoute({ type: 'generation_failed', jobType: 'initial_arc', jobId: 7, devotionalId: '' }),
+      ).toEqual({ pathname: '/generating', params: {} });
+    });
+
+    it('ignores a failure push for a job the generating screen does not own', () => {
+      // An onboarding sample fails inline on the onboarding step; landing it
+      // on /generating would retry the sample as the reader's series.
+      expect(
+        buildNotificationNavigationRoute({ type: 'generation_failed', jobType: 'onboarding', jobId: 'j', devotionalId: 'd' }),
+      ).toBeNull();
+      expect(
+        buildNotificationNavigationRoute({ type: 'generation_failed', jobType: 'day', jobId: 'j' }),
+      ).toBeNull();
+      expect(buildNotificationNavigationRoute({ type: 'generation_failed', jobId: 'j' })).toBeNull();
+    });
+
+    it('still routes a ready push to reveal', () => {
+      expect(
+        buildNotificationNavigationRoute({ type: 'devotional_ready', devotionalId: 'd', dayNumber: 1 }),
+      ).toMatchObject({ pathname: '/reveal', params: { devotionalId: 'd', dayNumber: '1' } });
+    });
   });
 
   describe('shouldHydrateNotificationResponse', () => {
