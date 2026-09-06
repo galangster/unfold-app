@@ -39,6 +39,15 @@ import type { SyncPushChange, SyncTable } from '../sync-types';
 
 const mockFetch = jest.fn();
 
+function acceptedLegacyResults(changes: readonly SyncPushChange[]) {
+  return changes.map((change) => ({
+    table: change.table,
+    id: change.id,
+    status: 'accepted' as const,
+    serverUpdatedAt: change.clientUpdatedAt,
+  }));
+}
+
 function recordsFromChanges(changes: SyncPushChange[]) {
   return changes.reduce((acc, change) => {
     acc[change.table] ??= [];
@@ -132,7 +141,7 @@ describe('full user-data sync', () => {
 
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ results: pushedChanges.map(() => ({ status: 'accepted' })) }),
+      json: async () => ({ results: acceptedLegacyResults(pushedChanges) }),
     });
     await drainSyncOutbox();
     expect(peekSyncOutbox()).toHaveLength(0);
@@ -170,7 +179,7 @@ describe('full user-data sync', () => {
 
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ results: deleteChanges.map(() => ({ status: 'accepted' })) }),
+      json: async () => ({ results: acceptedLegacyResults(deleteChanges) }),
     });
     await drainSyncOutbox();
 
@@ -250,7 +259,7 @@ describe('full user-data sync', () => {
 
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ results: peekSyncOutbox().map(() => ({ status: 'accepted' })) }),
+      json: async () => ({ results: acceptedLegacyResults(peekSyncOutbox()) }),
     });
     await drainSyncOutbox();
     expect(peekSyncOutbox()).toHaveLength(0);
