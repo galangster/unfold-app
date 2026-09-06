@@ -107,9 +107,11 @@ export const MIN_DRAIN_INTERVAL_MS = 15_000;
 // (i.e. the POST returned ok). 0 means "never drained".
 let lastDrainCompletedAt = 0;
 
-// Timestamp (Date.now()) when entries were last enqueued.
-// Used to bypass the interval guard when fresh work arrived.
-let lastEnqueueAt = 0;
+// Monotonic enqueue revision. Marks that the queued snapshot changed.
+// A cycle captures this beside its immutable initial snapshot and records
+// that captured value on successful same-session completion.
+let enqueueRevision = 0;
+let lastAttemptedEnqueueRevision = 0;
 
 export function enqueueSyncChanges(changes: SyncPushChange[]): void {
   // FAP-LIB-1: never queue work minted under an ephemeral recovery identity.
@@ -139,7 +141,7 @@ export function enqueueSyncChanges(changes: SyncPushChange[]): void {
   }
 
   writeOutbox(Array.from(map.values()));
-  lastEnqueueAt = Date.now();
+  enqueueRevision += 1;
 }
 
 function takeTransportBatch(
@@ -168,7 +170,8 @@ function takeTransportBatch(
 export function resetDrainStateForTesting(): void {
   inflight = null;
   lastDrainCompletedAt = 0;
-  lastEnqueueAt = 0;
+  enqueueRevision = 0;
+  lastAttemptedEnqueueRevision = 0;
 }
 
 /**
@@ -213,12 +216,13 @@ export function drainSyncOutbox(): Promise<void> {
   if (!isSyncSessionCurrent(session)) return Promise.resolve();
 
   // Min-interval guard (RS10-4): skip if a drain completed recently AND no
-  // new entries were enqueued since then. Bypassed by new enqueues so
-  // fresh offline work always gets a chance to drain promptly.
+  // new enqueue revision exists since that cycle's captured revision.
+  // Fresh work bypasses the 15-second wall-clock retry used for unchanged
+  // rejected snapshots.
   const now = Date.now();
   const intervalNotExpired = now - lastDrainCompletedAt < MIN_DRAIN_INTERVAL_MS;
-  const noNewEnqueueSinceDrain = lastEnqueueAt <= lastDrainCompletedAt;
-  if (lastDrainCompletedAt > 0 && intervalNotExpired && noNewEnqueueSinceDrain) {
+  const noNewEnqueueSinceLastAttempt = enqueueRevision <= lastAttemptedEnqueueRevision;
+  if (lastDrainCompletedAt > 0 && intervalNotExpired && noNewEnqueueSinceLastAttempt) {
     return Promise.resolve();
   }
 
@@ -227,6 +231,7 @@ export function drainSyncOutbox(): Promise<void> {
   const promise = (async () => {
     if (!isSyncSessionCurrent(session)) return;
     const initial = readOutbox();
+    const capturedRevision = enqueueRevision;
     if (initial.length === 0) return;
 
     const controller = new AbortController();
@@ -294,7 +299,10 @@ export function drainSyncOutbox(): Promise<void> {
           .map((pair) => pair.result);
         applyConflictResults(conflictsToApply);
       }
-      if (completed) lastDrainCompletedAt = Date.now();
+      if (completed && isSyncSessionCurrent(session)) {
+        lastAttemptedEnqueueRevision = capturedRevision;
+        lastDrainCompletedAt = Date.now();
+      }
     } catch {
       // Network error / timeout / abort — keep the outbox intact for retry
     } finally {
