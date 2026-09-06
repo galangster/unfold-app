@@ -21,7 +21,12 @@ describe('Settings appearance rows Dynamic Type contract (RT-DYN-1/RT-DYN-2)', (
   });
 
   it('caps both row labels and both chip groups', () => {
-    expect((appearanceSrc.match(/maxFontSizeMultiplier=\{SETTINGS_LABEL_MAX_SCALE\}/g) ?? []).length).toBe(2);
+    // Theme and Font size share PreferenceChipRow, which applies the label cap
+    // once. Both chip groups still set the chip cap at each control.
+    expect(appearanceSrc).toContain('function PreferenceChipRow');
+    expect(appearanceSrc).toContain('label="Theme"');
+    expect(appearanceSrc).toContain('label="Font size"');
+    expect((appearanceSrc.match(/maxFontSizeMultiplier=\{SETTINGS_LABEL_MAX_SCALE\}/g) ?? []).length).toBe(1);
     expect((appearanceSrc.match(/maxFontSizeMultiplier=\{SETTINGS_CHIP_MAX_SCALE\}/g) ?? []).length).toBe(2);
   });
 });
