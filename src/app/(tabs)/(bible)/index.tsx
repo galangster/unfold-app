@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Modal } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Modal, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown, useReducedMotion } from 'react-native-reanimated';
@@ -13,6 +13,7 @@ import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { useBibleDb } from '@/hooks/useBibleDb';
 import { OT_BOOKS, NT_BOOKS, getBookCategory, CATEGORY_LABELS, citationBookName, type BibleBookInfo, type BibleCategory } from '@/lib/bible-constants';
+import { bibleHubBookPillColumnCount, bibleHubBookPillWidthStyle } from '@/lib/bible-hub-book-pill-layout';
 import { DownloadBibleSheet } from '@/components/bible/DownloadBibleSheet';
 import { alpha } from '@/components/ui';
 import { Spacing } from '@/constants/spacing';
@@ -58,8 +59,13 @@ export function resolveBibleHomeNavigation(params: {
 
 export default function BibleHomeScreen() {
   const { colors, isDark } = useTheme();
+  const { width, fontScale } = useWindowDimensions();
   const reducedMotion = useReducedMotion();
   const router = useRouter();
+  const bookPillWidth = useMemo(
+    () => bibleHubBookPillWidthStyle(bibleHubBookPillColumnCount(width, fontScale)),
+    [width, fontScale],
+  );
   const { isReady, isDownloading, progress, download, error } = useBibleDb();
   const getLastBiblePosition = useUnfoldStore((s) => s.getLastBiblePosition);
   const [selectedBook, setSelectedBook] = useState<BibleBookInfo | null>(null);
@@ -155,7 +161,7 @@ export default function BibleHomeScreen() {
                   <TouchableOpacity
                     key={book.id}
                     onPress={() => handleBookPress(book)}
-                    style={[styles.bookPill, {
+                    style={[styles.bookPill, bookPillWidth, {
                       backgroundColor: isSelected
                         ? alpha(colors.accent, 0.16)
                         : isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
@@ -168,7 +174,6 @@ export default function BibleHomeScreen() {
                   >
                     <Text
                       style={[styles.bookName, { color: isSelected ? colors.accent : colors.text }]}
-                      numberOfLines={1}
                     >
                       {book.name}
                     </Text>
@@ -180,7 +185,7 @@ export default function BibleHomeScreen() {
         ))}
       </View>
     );
-  }, [isDark, colors, selectedBook, handleBookPress]);
+  }, [isDark, colors, selectedBook, handleBookPress, bookPillWidth]);
 
   // Show download prompt if Bible not ready (including during download)
   if (!isReady) {
@@ -425,10 +430,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: Radius.sm,
     borderWidth: 1,
-    minWidth: '30%',
-    flexGrow: 1,
-    flexBasis: '30%',
-    maxWidth: '48%',
   },
   bookName: {
     fontFamily: FontFamily.ui,
