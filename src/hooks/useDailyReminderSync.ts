@@ -161,8 +161,11 @@ export function useDailyReminderSync() {
         return;
       }
 
-      await scheduleDailyReminder(reminderTime, originatingSession, originatingOperation);
+      const scheduledId = await scheduleDailyReminder(reminderTime, originatingSession, originatingOperation);
       if (!isDailyReminderOriginCurrent(originatingSession, originatingOperation)) {
+        return;
+      }
+      if (scheduledId == null) {
         return;
       }
 
