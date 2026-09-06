@@ -6,7 +6,30 @@
  * These cases load the actual service/caller modules with a synthetic native
  * adapter and intercepted fetch.
  */
-/* eslint-disable import/first */
+import {
+  beginDailyReminderOperation,
+  cancelNotificationById,
+  commitDailyReminderSetting,
+  NOTIFICATION_IDS,
+  refreshDailyReminder,
+  resetDailyReminderOwnershipForTesting,
+  scheduleDailyReminder,
+} from '../notifications';
+import {
+  cancelTrialEndingNotification,
+  clearTrialNotificationMirror,
+  scheduleTrialEndingNotification,
+  syncTrialEndingNotification,
+} from '../trial-notification';
+import { performFullLocalReset } from '../full-reset';
+import {
+  beginLocalResetSession,
+  captureSyncSession,
+  endLocalResetSession,
+  resetSyncSessionFenceForTesting,
+} from '../sync-session-fence';
+import { useUnfoldStore } from '../store';
+import type { CustomerInfo } from 'react-native-purchases';
 
 jest.mock('expo-file-system/legacy', () => ({
   documentDirectory: 'file:///documents/',
@@ -291,31 +314,6 @@ jest.mock('../revenuecatClient', () => {
     getCustomerInfo: jest.fn(() => harness.getCustomerInfoImpl()),
   };
 });
-
-import {
-  beginDailyReminderOperation,
-  cancelNotificationById,
-  commitDailyReminderSetting,
-  NOTIFICATION_IDS,
-  refreshDailyReminder,
-  resetDailyReminderOwnershipForTesting,
-  scheduleDailyReminder,
-} from '../notifications';
-import {
-  cancelTrialEndingNotification,
-  clearTrialNotificationMirror,
-  scheduleTrialEndingNotification,
-  syncTrialEndingNotification,
-} from '../trial-notification';
-import { performFullLocalReset } from '../full-reset';
-import {
-  beginLocalResetSession,
-  captureSyncSession,
-  endLocalResetSession,
-  resetSyncSessionFenceForTesting,
-} from '../sync-session-fence';
-import { useUnfoldStore } from '../store';
-import type { CustomerInfo } from 'react-native-purchases';
 
 const mmkvStorageMock = jest.requireMock('../mmkv-storage') as {
   __clearMockStorage: () => void;

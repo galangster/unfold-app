@@ -74,8 +74,8 @@ describe('notifications routing + cancellation', () => {
     mockGetAllScheduledNotificationsAsync.mockResolvedValue([]);
     mockGetPermissionsAsync.mockClear();
     mockRequestPermissionsAsync.mockClear();
-    const { resetSyncSessionFenceForTesting } = require('../sync-session-fence');
-    const { resetDailyReminderOwnershipForTesting } = require('../notifications');
+    const { resetSyncSessionFenceForTesting } = jest.requireActual('../sync-session-fence');
+    const { resetDailyReminderOwnershipForTesting } = jest.requireActual('../notifications');
     resetSyncSessionFenceForTesting();
     resetDailyReminderOwnershipForTesting();
   });

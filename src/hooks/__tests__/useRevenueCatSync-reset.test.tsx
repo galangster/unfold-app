@@ -55,10 +55,10 @@ async function waitUntil(predicate: () => boolean, label: string): Promise<void>
 function makePurchasesMock() {
   let sdkUser = ANON_SDK_USER;
   const logins: string[] = [];
-  const loginWaits: Array<{
+  const loginWaits: {
     id: string;
     resolve: (value: { created: boolean; customerInfo: typeof emptyCustomerInfo }) => void;
-  }> = [];
+  }[] = [];
   let holdLogin = false;
   let customerInfoWait: ReturnType<typeof deferred<typeof emptyCustomerInfo>> | null = null;
   let customerInfoListener: ((info: typeof emptyCustomerInfo) => void) | null = null;

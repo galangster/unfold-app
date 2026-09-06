@@ -40,8 +40,8 @@ jest.mock('../mmkv-storage', () => {
 
 import { mmkvStorage } from '../mmkv-storage';
 import { useUnfoldStore } from '../store';
-import * as fullSyncPull from '../full-sync-pull';
-import { drainSyncOutbox, enqueueSyncChanges, OUTBOX_KEY, peekSyncOutbox, resetDrainStateForTesting } from '../sync-outbox';
+const fullSyncPull = jest.requireActual('../full-sync-pull') as typeof import('../full-sync-pull');
+const { drainSyncOutbox, enqueueSyncChanges, OUTBOX_KEY, peekSyncOutbox, resetDrainStateForTesting } = jest.requireActual('../sync-outbox') as typeof import('../sync-outbox');
 
 const T0 = new Date('2026-09-01T12:00:00.000Z');
 const at = (offsetMs: number) => new Date(T0.getTime() + offsetMs).toISOString();

@@ -3,7 +3,18 @@
  * originating reset session and device identity. Native Expo token/permission
  * APIs are mocked; getExpoPushTokenAsync is never pointed at a real device.
  */
-/* eslint-disable import/first */
+import * as Notifications from 'expo-notifications';
+import {
+  registerPushToken,
+  resetPushRegistrationSession,
+} from '../push-notifications';
+import { getAuthHeaders } from '../api-config';
+import {
+  beginLocalResetSession,
+  endLocalResetSession,
+  resetSyncSessionFenceForTesting,
+} from '../sync-session-fence';
+import * as mmkvStorage from '../mmkv-storage';
 
 const mockDeviceState = { isDevice: true };
 const mockConstantsState: { projectId: string | undefined } = {
@@ -59,7 +70,7 @@ jest.mock('../mmkv-storage', () => {
 });
 
 jest.mock('../api-config', () => {
-  const { getDeviceId } = require('../mmkv-storage');
+  const { getDeviceId } = jest.requireMock('../mmkv-storage');
   return {
     PRIMARY_BACKEND_URL: 'https://example.invalid',
     getAuthHeaders: jest.fn(async () => ({
@@ -84,19 +95,6 @@ jest.mock('../logger', () => ({
     error: jest.fn(),
   },
 }));
-
-import * as Notifications from 'expo-notifications';
-import {
-  registerPushToken,
-  resetPushRegistrationSession,
-} from '../push-notifications';
-import { getAuthHeaders } from '../api-config';
-import {
-  beginLocalResetSession,
-  endLocalResetSession,
-  resetSyncSessionFenceForTesting,
-} from '../sync-session-fence';
-import * as mmkvStorage from '../mmkv-storage';
 
 const mockGetAuthHeaders = getAuthHeaders as jest.MockedFunction<typeof getAuthHeaders>;
 const mockGetPermissionsAsync = Notifications.getPermissionsAsync as jest.Mock;

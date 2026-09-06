@@ -1,3 +1,5 @@
+import type { BibleReadingPosition } from '../store';
+
 jest.mock('../api-config', () => ({
   PRIMARY_BACKEND_URL: 'https://example.test',
   getAuthHeaders: jest.fn(async () => ({ 'Content-Type': 'application/json' })),
@@ -25,10 +27,9 @@ jest.mock('../mmkv-storage', () => {
   };
 });
 
-import { useUnfoldStore } from '../store';
-import { applyPulledUserData, applyServerConflictRecords } from '../full-sync-pull';
-import { peekSyncOutbox, replaceSyncOutbox } from '../sync-outbox';
-import type { BibleReadingPosition } from '../store';
+const { useUnfoldStore } = jest.requireActual('../store') as typeof import('../store');
+const { applyPulledUserData, applyServerConflictRecords } = jest.requireActual('../full-sync-pull') as typeof import('../full-sync-pull');
+const { peekSyncOutbox, replaceSyncOutbox } = jest.requireActual('../sync-outbox') as typeof import('../sync-outbox');
 
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const T0 = '2026-09-05T00:00:00.000Z';

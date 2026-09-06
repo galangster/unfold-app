@@ -3,7 +3,7 @@ import { StyleSheet, Text } from 'react-native';
 import { AppearanceSection } from '../AppearanceSection';
 import { shouldStackSettingsPreferenceRow } from '../preference-row-layout';
 
-const renderer = require('react-test-renderer');
+const renderer = jest.requireActual('react-test-renderer');
 const { act } = renderer;
 
 const mockAppearanceState = {
@@ -18,17 +18,17 @@ const mockAppearanceState = {
   window: { width: 402, height: 874, scale: 3, fontScale: 1 },
 };
 
-jest.spyOn(require('react-native'), 'useWindowDimensions').mockImplementation(() => ({
+jest.spyOn(jest.requireActual('react-native'), 'useWindowDimensions').mockImplementation(() => ({
   ...mockAppearanceState.window,
 }));
 
 jest.mock('react-native-gesture-handler', () => {
-  const { TouchableOpacity } = require('react-native');
+  const { TouchableOpacity } = jest.requireActual('react-native');
   return { TouchableOpacity };
 });
 
 jest.mock('react-native-reanimated', () => {
-  const { View } = require('react-native');
+  const { View } = jest.requireActual('react-native');
   return {
     __esModule: true,
     default: { View },
@@ -167,7 +167,7 @@ describe('AppearanceSection preference rows', () => {
   });
 
   it('opens the family selector and writes the chosen reading font when premium', () => {
-    const { loadReadingFont } = require('@/lib/reading-fonts-loader');
+    const { loadReadingFont } = jest.requireMock('@/lib/reading-fonts-loader');
     const tree = createSection();
     const toggle = tree.root.findByProps({ accessibilityLabel: 'Reading Font' });
     expect(toggle.props.accessibilityRole).toBe('button');

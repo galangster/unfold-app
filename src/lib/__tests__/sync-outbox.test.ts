@@ -32,11 +32,11 @@ import {
   resetDrainStateForTesting,
   OUTBOX_KEY,
 } from '../sync-outbox';
-import {
+const {
   beginLocalResetSession,
   endLocalResetSession,
   resetSyncSessionFenceForTesting,
-} from '../sync-session-fence';
+} = jest.requireActual('../sync-session-fence') as typeof import('../sync-session-fence');
 import type { SyncPushChange } from '../sync-outbox';
 import { mmkvStorage, getDeviceId } from '../mmkv-storage';
 

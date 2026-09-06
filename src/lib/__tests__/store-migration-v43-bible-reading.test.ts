@@ -17,10 +17,10 @@ jest.mock('../mmkv-storage', () => {
   };
 });
 
-import { migrateUnfoldStore } from '../store-migrations';
-import { compositeId } from '../sync-ids';
-import { OUTBOX_KEY, peekSyncOutbox, replaceSyncOutbox } from '../sync-outbox';
-import { mmkvStorage } from '../mmkv-storage';
+const { migrateUnfoldStore } = jest.requireActual('../store-migrations') as typeof import('../store-migrations');
+const { compositeId } = jest.requireActual('../sync-ids') as typeof import('../sync-ids');
+const { OUTBOX_KEY, peekSyncOutbox, replaceSyncOutbox } = jest.requireActual('../sync-outbox') as typeof import('../sync-outbox');
+const { mmkvStorage } = jest.requireMock('../mmkv-storage') as typeof import('../mmkv-storage');
 
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const KEPT = 'bbbbbbbb-2222-4222-8222-222222222222';
@@ -65,7 +65,7 @@ describe('v42→43 bible reading ids', () => {
       ],
     };
 
-    const migrated = migrateUnfoldStore(state, 42) as { bibleReadingHistory: Array<{ id?: string; bookId: number; chapter: number }> };
+    const migrated = migrateUnfoldStore(state, 42) as { bibleReadingHistory: { id?: string; bookId: number; chapter: number }[] };
     const history = migrated.bibleReadingHistory;
 
     expect(history.map((row) => `${row.bookId}:${row.chapter}`)).toEqual(['43:3', '1:2', '1:1', '2:1']);
@@ -78,11 +78,11 @@ describe('v42→43 bible reading ids', () => {
     expect(new Set(history.map((row) => row.id)).size).toBe(4);
 
     const ids = history.map((row) => row.id);
-    const clone = () => JSON.parse(JSON.stringify(migrated)) as { bibleReadingHistory: Array<{ id?: string }> };
-    const idsOf = (state: { bibleReadingHistory: Array<{ id?: string }> }) =>
+    const clone = () => JSON.parse(JSON.stringify(migrated)) as { bibleReadingHistory: { id?: string }[] };
+    const idsOf = (state: { bibleReadingHistory: { id?: string }[] }) =>
       state.bibleReadingHistory.map((row) => row.id);
-    expect(idsOf(migrateUnfoldStore(clone(), 43) as { bibleReadingHistory: Array<{ id?: string }> })).toEqual(ids);
-    expect(idsOf(migrateUnfoldStore(clone(), 42) as { bibleReadingHistory: Array<{ id?: string }> })).toEqual(ids);
+    expect(idsOf(migrateUnfoldStore(clone(), 43) as { bibleReadingHistory: { id?: string }[] })).toEqual(ids);
+    expect(idsOf(migrateUnfoldStore(clone(), 42) as { bibleReadingHistory: { id?: string }[] })).toEqual(ids);
   });
 
   it('gives two v28 chapters that shared one compositeId distinct ids and maps the queued chapter', () => {
@@ -103,7 +103,7 @@ describe('v42→43 bible reading ids', () => {
         position({ id: v5, chapter: 2, lastReadAt: '2026-09-01T09:00:00.000Z' }),
         position({ id: v5, chapter: 1 }),
       ],
-    }, 42) as { bibleReadingHistory: Array<{ id: string; chapter: number }> };
+    }, 42) as { bibleReadingHistory: { id: string; chapter: number }[] };
 
     const chapter2 = migrated.bibleReadingHistory.find((row) => row.chapter === 2);
     const chapter1 = migrated.bibleReadingHistory.find((row) => row.chapter === 1);
@@ -134,7 +134,7 @@ describe('v42→43 bible reading ids', () => {
 
     const migrated = migrateUnfoldStore({
       bibleReadingHistory: [position({ id: legacy })],
-    }, 42) as { bibleReadingHistory: Array<{ id: string }> };
+    }, 42) as { bibleReadingHistory: { id: string }[] };
 
     const queued = peekSyncOutbox();
     const write = queued.find((change) => !change.deleted);
@@ -157,7 +157,7 @@ describe('v42→43 bible reading ids', () => {
         chapter: 1,
         lastReadAt: '2026-09-01T08:00:00.000Z',
       }],
-    }, 28) as { bibleReadingHistory: Array<{ id: string; chapter: number }> };
+    }, 28) as { bibleReadingHistory: { id: string; chapter: number }[] };
 
     expect(migrated.bibleReadingHistory[0].id).toMatch(UUID_V4);
     expect(migrated.bibleReadingHistory[0].id).not.toBe(fallback);
@@ -179,7 +179,7 @@ describe('v42→43 bible reading ids', () => {
         chapter: 1,
         lastReadAt: '2026-09-01T08:00:00.000Z',
       }],
-    }, 42) as { bibleReadingHistory: Array<{ id: string; chapter: number }> };
+    }, 42) as { bibleReadingHistory: { id: string; chapter: number }[] };
 
     expect(migrated.bibleReadingHistory[0].id).toMatch(UUID_V4);
     expect(migrated.bibleReadingHistory[0].id).not.toBe(fallback);

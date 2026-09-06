@@ -2,14 +2,15 @@ import React from 'react';
 import { StyleSheet, Text } from 'react-native';
 import { OT_BOOKS } from '@/lib/bible-constants';
 import { bibleHubBookPillColumnCount, bibleHubBookPillWidthStyle } from '@/lib/bible-hub-book-pill-layout';
+import BibleHomeScreen from '../../../app/(tabs)/(bible)/index';
 
-const renderer = require('react-test-renderer');
+const renderer = jest.requireActual('react-test-renderer');
 const { act } = renderer;
 
 const mockBibleWindow = { width: 402, height: 874, scale: 3, fontScale: 1 };
 const mockRouter = { push: jest.fn(), replace: jest.fn() };
 
-jest.spyOn(require('react-native'), 'useWindowDimensions').mockImplementation(() => ({
+jest.spyOn(jest.requireActual('react-native'), 'useWindowDimensions').mockImplementation(() => ({
   ...mockBibleWindow,
 }));
 
@@ -32,7 +33,7 @@ jest.mock('react-native-mmkv', () => ({
 }));
 
 jest.mock('react-native-reanimated', () => {
-  const { View } = require('react-native');
+  const { View } = jest.requireActual('react-native');
   return {
     __esModule: true,
     default: { View },
@@ -49,7 +50,7 @@ jest.mock('react-native-reanimated', () => {
 });
 
 jest.mock('react-native-safe-area-context', () => {
-  const { View } = require('react-native');
+  const { View } = jest.requireActual('react-native');
   return { SafeAreaView: View };
 });
 
@@ -98,8 +99,6 @@ jest.mock('@/components/icons', () =>
 jest.mock('@/constants/shadows', () => ({
   elevated: () => ({}),
 }));
-
-import BibleHomeScreen from '../../../app/(tabs)/(bible)/index';
 
 const TRUNCATED_IN_AUDIT = [
   'Genesis',

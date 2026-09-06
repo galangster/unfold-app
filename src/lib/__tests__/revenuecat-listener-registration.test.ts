@@ -177,13 +177,13 @@ afterEach(() => {
 
 describe('MP-5 listener registration ownership', () => {
   it('does not retain an SDK listener when reset rejects admission after add', async () => {
-    const rows: Array<{
+    const rows: {
       delay: number;
       registeredAtReset: number;
       ok: boolean;
       returnedDisposer: boolean;
       listenersLeft: number;
-    }> = [];
+    }[] = [];
 
     for (let delay = 0; delay < 10; delay += 1) {
       const { client, sdk, state } = await setupClient();

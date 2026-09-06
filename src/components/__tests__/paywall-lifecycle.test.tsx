@@ -14,7 +14,7 @@ import {
   PAYWALL_GENERIC_ERROR_MESSAGE,
 } from '@/lib/paywall-guardrails';
 
-const renderer = require('react-test-renderer');
+const renderer = jest.requireActual('react-test-renderer');
 const { act } = renderer;
 
 const mockBack = jest.fn();
@@ -28,7 +28,7 @@ const mockSyncTrialEndingNotification = jest.fn(() => Promise.resolve());
 const mockIdentityListeners = new Set<(epoch: number) => void>();
 
 jest.mock('react-native-reanimated', () => {
-  const { View } = require('react-native');
+  const { View } = jest.requireActual('react-native');
   const chainable = () => {
     const anim: Record<string, unknown> = {};
     for (const method of ['duration', 'delay', 'easing', 'springify', 'build', 'withInitialValues']) {
@@ -59,7 +59,7 @@ jest.mock('react-native-reanimated', () => {
 });
 
 jest.mock('react-native-gesture-handler', () => {
-  const { TouchableOpacity, View } = require('react-native');
+  const { TouchableOpacity, View } = jest.requireActual('react-native');
   return {
     TouchableOpacity,
     View,
@@ -84,7 +84,7 @@ jest.mock('expo-linear-gradient', () => ({ LinearGradient: 'LinearGradient' }));
 jest.mock('expo-application', () => ({ nativeApplicationVersion: '1.0.0', nativeBuildVersion: '1' }));
 jest.mock('expo-constants', () => ({ default: { appOwnership: 'expo' } }));
 jest.mock('@react-native-masked-view/masked-view', () => {
-  const ReactNative = require('react-native');
+  const ReactNative = jest.requireActual('react-native');
   return { __esModule: true, default: ({ children }: { children: React.ReactNode }) => children ?? ReactNative.View };
 });
 

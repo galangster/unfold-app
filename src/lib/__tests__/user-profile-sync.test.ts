@@ -23,11 +23,11 @@ import {
   syncUserProfileToBackend,
 } from '../user-profile-sync';
 import { drainSyncOutbox, peekSyncOutbox, resetDrainStateForTesting } from '../sync-outbox';
-import {
+const {
   beginLocalResetSession,
   endLocalResetSession,
   resetSyncSessionFenceForTesting,
-} from '../sync-session-fence';
+} = jest.requireActual('../sync-session-fence') as typeof import('../sync-session-fence');
 import { mmkvStorage } from '../mmkv-storage';
 import type { UserProfile } from '../store';
 

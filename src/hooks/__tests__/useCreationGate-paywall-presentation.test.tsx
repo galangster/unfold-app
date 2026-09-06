@@ -3,7 +3,7 @@ import * as path from 'path';
 import React, { useEffect } from 'react';
 import { useCreationGate } from '../useCreationGate';
 
-const renderer = require('react-test-renderer');
+const renderer = jest.requireActual('react-test-renderer');
 const { act } = renderer;
 
 const mockNavigate = jest.fn();

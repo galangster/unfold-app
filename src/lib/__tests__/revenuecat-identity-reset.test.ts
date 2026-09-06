@@ -63,11 +63,11 @@ function makePurchasesMock(initialSdkUser = ANON_SDK_USER) {
   const logins: string[] = [];
   const purchases: string[] = [];
   const restores: string[] = [];
-  const loginWaits: Array<{
+  const loginWaits: {
     id: string;
     resolve: (value: { created: boolean; customerInfo: typeof emptyCustomerInfo }) => void;
     reject: (reason?: unknown) => void;
-  }> = [];
+  }[] = [];
   let loginFails = false;
   let holdLogin = false;
   let customerInfoWait: ReturnType<typeof deferred<typeof emptyCustomerInfo>> | null = null;
@@ -279,7 +279,7 @@ async function setupClient({
   const fence = require('../sync-session-fence') as typeof import('../sync-session-fence');
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const reset = withReset
-    ? require('../full-reset') as typeof import('../full-reset')
+    ? jest.requireActual('../full-reset') as typeof import('../full-reset')
     : null;
   await tick();
   if (!holdLogin) {
@@ -386,7 +386,7 @@ describe('MP-1 RevenueCat identity after reset', () => {
     const logout = await client.logoutUser();
     rotate();
     const established = await client.establishRevenueCatIdentityForCurrentDevice();
-    const purchase = await client.purchasePackage({ identifier: 'synthetic_package' } as any);
+    await client.purchasePackage({ identifier: 'synthetic_package' } as any);
 
     expect(logout.ok).toBe(false);
     expect(established).toBe(true);
@@ -421,7 +421,7 @@ describe('MP-1 RevenueCat identity after reset', () => {
 
   it('discards delayed customer info from the old identity', async () => {
     const { client, sdk, rotate } = await setupClient();
-    const held = sdk.holdCustomerInfo();
+    sdk.holdCustomerInfo();
     const pending = client.getCustomerInfo();
     await waitUntil(() => sdk.purchasesMock.getCustomerInfo.mock.calls.length > 0, 'old customer info');
 
@@ -466,7 +466,7 @@ describe('MP-1 RevenueCat identity after reset', () => {
     rotate();
     sdk.setLoginFails(false);
     const recovered = await client.retryRevenueCatIdentitySync();
-    const purchase = await client.purchasePackage({ identifier: 'synthetic_package' } as any);
+    await client.purchasePackage({ identifier: 'synthetic_package' } as any);
 
     expect(failedRead.ok).toBe(false);
     expect(blockedLogout.ok).toBe(true);

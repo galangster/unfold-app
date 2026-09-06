@@ -25,7 +25,7 @@ function getSingularId(name: string, options: { params?: Record<string, unknown>
   }).join('/');
 }
 
-const { StackRouter: RNStackRouter } = require(rnStackRouterPath) as {
+const { StackRouter: RNStackRouter } = jest.requireActual(rnStackRouterPath) as {
   StackRouter: (options: Record<string, unknown>) => { getStateForAction: Function };
 };
 
@@ -110,7 +110,7 @@ function apply(state: StackState, action: { type: string; payload?: { name: stri
   return next as StackState;
 }
 
-function applyQueued(state: StackState, actions: Array<{ type: string; payload?: { name: string } }>): StackState {
+function applyQueued(state: StackState, actions: { type: string; payload?: { name: string } }[]): StackState {
   return actions.reduce((current, action) => apply(current, action), state);
 }
 

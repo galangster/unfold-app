@@ -56,12 +56,12 @@ export function allocateBibleReadingId(
     chapter: number;
     translation: string;
   },
-  history: ReadonlyArray<{
+  history: readonly {
     id?: string;
     bookId: number;
     chapter: number;
     translation: string;
-  }> = [],
+  }[] = [],
 ): string {
   if (position.id && !isCollidingBibleReadingId(position.id, position.bookId, position.translation)) {
     return position.id;

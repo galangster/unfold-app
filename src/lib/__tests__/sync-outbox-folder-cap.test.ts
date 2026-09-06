@@ -30,9 +30,9 @@ jest.mock('../mmkv-storage', () => {
   };
 });
 
-import { mmkvStorage } from '../mmkv-storage';
-import { useUnfoldStore } from '../store';
-import { OUTBOX_KEY, peekSyncOutbox, resetDrainStateForTesting } from '../sync-outbox';
+const { mmkvStorage } = jest.requireMock('../mmkv-storage') as typeof import('../mmkv-storage');
+const { useUnfoldStore } = jest.requireActual('../store') as typeof import('../store');
+const { OUTBOX_KEY, peekSyncOutbox, resetDrainStateForTesting } = jest.requireActual('../sync-outbox') as typeof import('../sync-outbox');
 
 describe('folder deletion outbox volume', () => {
   beforeEach(() => {

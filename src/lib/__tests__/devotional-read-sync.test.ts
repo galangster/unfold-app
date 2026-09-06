@@ -17,12 +17,12 @@ jest.mock('../mmkv-storage', () => {
 });
 
 import { buildDevotionalReadSyncChanges, syncDevotionalDayRead } from '@/lib/devotional-read-sync';
-import { peekSyncOutbox, resetDrainStateForTesting } from '@/lib/sync-outbox';
-import {
+const { peekSyncOutbox, resetDrainStateForTesting } = jest.requireActual('@/lib/sync-outbox') as typeof import('@/lib/sync-outbox');
+const {
   beginLocalResetSession,
   endLocalResetSession,
   resetSyncSessionFenceForTesting,
-} from '@/lib/sync-session-fence';
+} = jest.requireActual('@/lib/sync-session-fence') as typeof import('@/lib/sync-session-fence');
 import type { Devotional, DevotionalDay } from '@/lib/store';
 
 const day: DevotionalDay = {
