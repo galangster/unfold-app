@@ -1124,7 +1124,7 @@ export default function OnboardingScreen() {
   // returns null on any failure, with no legacy fallback.
   useEffect(() => {
     if (currentStepId !== 'diagnosticRound') return;
-    if (diagnosticQuestions !== null || isLoadingDiagnostic) return;
+    if (diagnosticQuestions !== null) return;
 
     const situation = data.currentSituation.trim();
     if (!situation) {
@@ -1132,9 +1132,9 @@ export default function OnboardingScreen() {
       return;
     }
 
-    // If the user backs out while the fetch is in flight, the resolution must
-    // become a no-op — the stale closure's advanceToNextStep would otherwise
-    // yank them forward from wherever they navigated to.
+    // Each visit owns its request. Leaving cancels this work so a later visit
+    // can start a replacement. The cancelled result must not apply questions,
+    // skip the step, or clear a newer entry's loading flag.
     let cancelled = false;
     const session = captureSyncSession();
     if (!ownsOnboardingWork(session)) return;
@@ -1164,7 +1164,7 @@ export default function OnboardingScreen() {
         advanceToNextStep();
       })
       .finally(() => {
-        if (!ownsOnboardingWork(session)) return;
+        if (cancelled || !ownsOnboardingWork(session)) return;
         setIsLoadingDiagnostic(false);
       });
 

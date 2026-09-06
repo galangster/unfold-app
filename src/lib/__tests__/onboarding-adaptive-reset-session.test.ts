@@ -473,7 +473,9 @@ describe('mounted mirror-back and diagnostic callbacks', () => {
       staleResolve({ questions: [{ question: 'Cancelled diagnostic?', subtext: '', chips: [] }] });
     });
     expect(tree.toJSON()?.props.questions).toBeNull();
-    expect(tree.toJSON()?.props.loading).toBe(false);
+    // Cancelled settlement must not write. Loading stays true until a later
+    // entry owns the request, matching reset/unmount ownership.
+    expect(tree.toJSON()?.props.loading).toBe(true);
     await act(async () => {
       tree.unmount();
     });
