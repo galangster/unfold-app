@@ -181,52 +181,65 @@ export default function BibleHomeScreen() {
     router.push('/(tabs)/(bible)/search');
   }, [router]);
 
-  const bookTargetProps = useCallback((book: BibleBookInfo, isSelected: boolean) => ({
-    onPress: () => handleBookPress(book),
-    accessibilityLabel: book.name,
-    accessibilityHint: bibleHubBookAccessibilityHint(book),
-    accessibilityRole: 'button' as const,
-    accessibilityState: { selected: isSelected },
-    activeOpacity: 0.6,
-  }), [handleBookPress]);
-
-  const bookChrome = useCallback((book: BibleBookInfo, isSelected: boolean) => (
-    bibleHubBookChrome({
+  const renderBook = useCallback((book: BibleBookInfo) => {
+    const isSelected = selectedBook?.id === book.id;
+    const chrome = bibleHubBookChrome({
       category: getBookCategory(book.id),
       isDark,
       isSelected,
       background: colors.background,
       accent: colors.accent,
       text: colors.text,
-    })
-  ), [colors.accent, colors.background, colors.text, isDark]);
-
-  const renderCanonicalGrid = useCallback((books: BibleBookInfo[]) => (
-    <View style={styles.overviewGrid}>
-      {books.map((book) => {
-        const isSelected = selectedBook?.id === book.id;
-        const chrome = bookChrome(book, isSelected);
-        return (
-          <TouchableOpacity
-            key={book.id}
-            {...bookTargetProps(book, isSelected)}
-            style={[styles.overviewTile, {
+    });
+    const isGrid = viewMode === 'grid';
+    return (
+      <TouchableOpacity
+        key={book.id}
+        onPress={() => handleBookPress(book)}
+        accessibilityLabel={book.name}
+        accessibilityHint={bibleHubBookAccessibilityHint(book)}
+        accessibilityRole="button"
+        accessibilityState={{ selected: isSelected }}
+        activeOpacity={0.6}
+        style={isGrid
+          ? [styles.overviewTile, {
               width: overviewMetrics.tileWidth,
               minWidth: overviewMetrics.tileWidth,
               maxWidth: overviewMetrics.tileWidth,
               minHeight: overviewMetrics.minTileHeight,
               backgroundColor: chrome.backgroundColor,
               borderColor: chrome.borderColor,
+            }]
+          : [styles.bookPill, bookPillWidth, {
+              backgroundColor: chrome.backgroundColor,
+              borderColor: chrome.borderColor,
             }]}
-          >
-            <Text style={[styles.overviewAbbrev, { color: chrome.color }]} maxFontSizeMultiplier={0}>
-              {book.abbreviation}
-            </Text>
-          </TouchableOpacity>
-        );
-      })}
+      >
+        <Text
+          style={[isGrid ? styles.overviewAbbrev : styles.bookName, { color: chrome.color }]}
+          maxFontSizeMultiplier={0}
+        >
+          {isGrid ? book.abbreviation : book.name}
+        </Text>
+      </TouchableOpacity>
+    );
+  }, [
+    bookPillWidth,
+    colors.accent,
+    colors.background,
+    colors.text,
+    handleBookPress,
+    isDark,
+    overviewMetrics,
+    selectedBook,
+    viewMode,
+  ]);
+
+  const renderCanonicalGrid = useCallback((books: BibleBookInfo[]) => (
+    <View style={styles.overviewGrid}>
+      {books.map(renderBook)}
     </View>
-  ), [bookChrome, bookTargetProps, overviewMetrics, selectedBook]);
+  ), [renderBook]);
 
   /** Group books by literary category and render with sub-labels */
   const renderCategorizedBooks = useCallback((books: BibleBookInfo[]) => {
@@ -252,30 +265,13 @@ export default function BibleHomeScreen() {
               {CATEGORY_LABELS[group.category]}
             </Text>
             <View style={styles.bookGrid}>
-              {group.books.map((book) => {
-                const isSelected = selectedBook?.id === book.id;
-                const chrome = bookChrome(book, isSelected);
-                return (
-                  <TouchableOpacity
-                    key={book.id}
-                    {...bookTargetProps(book, isSelected)}
-                    style={[styles.bookPill, bookPillWidth, {
-                      backgroundColor: chrome.backgroundColor,
-                      borderColor: chrome.borderColor,
-                    }]}
-                  >
-                    <Text style={[styles.bookName, { color: chrome.color }]} maxFontSizeMultiplier={0}>
-                      {book.name}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
+              {group.books.map(renderBook)}
             </View>
           </View>
         ))}
       </View>
     );
-  }, [bookChrome, bookPillWidth, bookTargetProps, isDark, selectedBook]);
+  }, [isDark, renderBook]);
 
   const renderCategoryLegend = useCallback((
     categories: BibleCategory[],

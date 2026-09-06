@@ -1,32 +1,14 @@
-import fs from 'node:fs';
-import path from 'node:path';
 import { DarkColors, LightColors } from '@/constants/colors';
 import { getBookCategory, type BibleCategory } from '../bible-constants';
 import {
   BIBLE_HUB_CATEGORY_TEXT_DARK,
   BIBLE_HUB_CATEGORY_TEXT_LIGHT,
-  BIBLE_HUB_INK_BLACK,
-  BIBLE_HUB_INK_WHITE,
   BIBLE_HUB_MIN_TEXT_CONTRAST,
   bibleHubBookChrome,
   bibleHubCategoryFill,
   bibleHubCategoryText,
-  bibleHubContrastInk,
   contrastRatio,
 } from '../bible-hub-category-palette';
-
-function accentThemeFills(): { id: string; fill: string; mode: 'dark' | 'light' }[] {
-  const source = fs.readFileSync(path.join(__dirname, '../store.ts'), 'utf8');
-  const block = source.slice(
-    source.indexOf('export const ACCENT_THEMES'),
-    source.indexOf('export const READING_FONTS'),
-  );
-  return [...block.matchAll(/\{ id: '([^']+)', name: '[^']+', dark: '(#[0-9A-Fa-f]{6})', light: '(#[0-9A-Fa-f]{6})' \}/g)]
-    .flatMap((match) => [
-      { id: match[1], fill: match[2], mode: 'dark' as const },
-      { id: match[1], fill: match[3], mode: 'light' as const },
-    ]);
-}
 
 const CATEGORIES = Object.keys(BIBLE_HUB_CATEGORY_TEXT_DARK) as BibleCategory[];
 
@@ -53,18 +35,6 @@ describe('bible hub category palette contrast', () => {
     expect(BIBLE_HUB_CATEGORY_TEXT_LIGHT.historical).toBe('#6E685E');
     expect(BIBLE_HUB_CATEGORY_TEXT_DARK.pentateuch).toBe('#F59378');
     expect(BIBLE_HUB_CATEGORY_TEXT_DARK.acts).toBe('#7ED0BE');
-  });
-
-  it('picks black or white ink on every ACCENT_THEMES solid fill', () => {
-    const fills = accentThemeFills();
-    expect(fills).toHaveLength(14);
-    for (const { fill } of fills) {
-      const ink = bibleHubContrastInk(fill);
-      const other = ink === BIBLE_HUB_INK_BLACK ? BIBLE_HUB_INK_WHITE : BIBLE_HUB_INK_BLACK;
-      expect([BIBLE_HUB_INK_BLACK, BIBLE_HUB_INK_WHITE]).toContain(ink);
-      expect(contrastRatio(ink, fill)).toBeGreaterThanOrEqual(BIBLE_HUB_MIN_TEXT_CONTRAST);
-      expect(contrastRatio(ink, fill)).toBeGreaterThanOrEqual(contrastRatio(other, fill));
-    }
   });
 
   it('keeps selected accent fills legible in both themes', () => {

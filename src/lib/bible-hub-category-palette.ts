@@ -59,7 +59,7 @@ export function bibleHubCategoryText(category: BibleCategory, isDark: boolean): 
     : BIBLE_HUB_CATEGORY_TEXT_LIGHT[category];
 }
 
-export function hexRgb(hex: string): [number, number, number] {
+function hexRgb(hex: string): [number, number, number] {
   const match = /^#([0-9A-Fa-f]{6})$/.exec(hex.trim());
   if (!match) {
     throw new Error(`Expected a 6-digit hex color, received ${hex}`);
@@ -73,7 +73,7 @@ function channelToLinear(channel: number): number {
   return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
 }
 
-export function relativeLuminance(hex: string): number {
+function relativeLuminance(hex: string): number {
   const [r, g, b] = hexRgb(hex);
   return 0.2126 * channelToLinear(r) + 0.7152 * channelToLinear(g) + 0.0722 * channelToLinear(b);
 }
@@ -91,7 +91,7 @@ export function bibleHubContrastInk(background: string): typeof BIBLE_HUB_INK_BL
   return white > black ? BIBLE_HUB_INK_WHITE : BIBLE_HUB_INK_BLACK;
 }
 
-export function compositeHex(foreground: string, background: string, opacity: number): string {
+function compositeHex(foreground: string, background: string, opacity: number): string {
   const [fr, fg, fb] = hexRgb(foreground);
   const [br, bg, bb] = hexRgb(background);
   const clamped = Math.min(1, Math.max(0, opacity));

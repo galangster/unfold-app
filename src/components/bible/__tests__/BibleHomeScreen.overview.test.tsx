@@ -5,6 +5,8 @@ import { StyleSheet, Text } from 'react-native';
 import { DarkColors, LightColors } from '@/constants/colors';
 import { BIBLE_BOOKS, CATEGORY_LABELS, getBookCategory } from '@/lib/bible-constants';
 import {
+  BIBLE_HUB_INK_BLACK,
+  BIBLE_HUB_INK_WHITE,
   BIBLE_HUB_MIN_TEXT_CONTRAST,
   bibleHubBookChrome,
   bibleHubCategoryText,
@@ -387,8 +389,15 @@ describe('Bible hub overview restoration', () => {
       const control = tree.root.findByProps({ testID: 'bible-hub-view-control' });
       expect(control.props.tintColor).toBe(fill);
       expect(control.props.activeFontStyle.color).toBe(bibleHubContrastInk(fill));
+      expect([BIBLE_HUB_INK_BLACK, BIBLE_HUB_INK_WHITE]).toContain(control.props.activeFontStyle.color);
+      const otherInk = control.props.activeFontStyle.color === BIBLE_HUB_INK_BLACK
+        ? BIBLE_HUB_INK_WHITE
+        : BIBLE_HUB_INK_BLACK;
       expect(contrastRatio(control.props.activeFontStyle.color, control.props.tintColor)).toBeGreaterThanOrEqual(
         BIBLE_HUB_MIN_TEXT_CONTRAST,
+      );
+      expect(contrastRatio(control.props.activeFontStyle.color, fill)).toBeGreaterThanOrEqual(
+        contrastRatio(otherInk, fill),
       );
       const selectedTitle = tree.root.findByProps({ accessibilityLabel: 'Grid' }).findAllByType(Text)[0];
       expect(StyleSheet.flatten(selectedTitle.props.style).color).toBe(control.props.activeFontStyle.color);
