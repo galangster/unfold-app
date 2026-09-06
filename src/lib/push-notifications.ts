@@ -18,6 +18,7 @@ import { AppState, type AppStateStatus, Platform } from 'react-native';
 import { router } from 'expo-router';
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from './api-config';
 import { logger } from '@/lib/logger';
+import { getDeviceId } from '@/lib/mmkv-storage';
 import { useUnfoldStore } from '@/lib/store';
 import {
   buildNotificationPreferenceRequestBody,
@@ -25,6 +26,11 @@ import {
   createNotificationNavigationCoordinator,
   shouldHydrateNotificationResponse,
 } from '@/lib/push-notification-helpers';
+import {
+  captureSyncSession,
+  isSyncSessionCurrent,
+  registerSyncTransport,
+} from '@/lib/sync-session-fence';
 
 const notificationNavigationCoordinator = createNotificationNavigationCoordinator({
   replace: (route) => router.replace(route),
@@ -35,13 +41,44 @@ const notificationNavigationCoordinator = createNotificationNavigationCoordinato
 
 let initialNotificationHydrationSettled = false;
 
-// Session-dedupe: avoid re-POSTing the push token on every foreground transition
-// once the backend POST has already succeeded this session.
-let registeredThisSession = false;
+export type PushRegistrationResult = 'registered' | 'skipped' | 'failed';
+
+type PushRegistrationOwner = {
+  session: number;
+  deviceId: string;
+};
+
+type InFlightPushRegistration = {
+  owner: PushRegistrationOwner;
+  promise: Promise<PushRegistrationResult>;
+};
+
+// Deduplicate registrations within their originating reset session and device identity.
+let registeredOwner: PushRegistrationOwner | null = null;
+let inFlightRegistration: InFlightPushRegistration | null = null;
+
+function capturePushRegistrationOwner(): PushRegistrationOwner {
+  return {
+    session: captureSyncSession(),
+    deviceId: getDeviceId(),
+  };
+}
+
+function isPushRegistrationOwnerCurrent(owner: PushRegistrationOwner): boolean {
+  return isSyncSessionCurrent(owner.session) && owner.deviceId === getDeviceId();
+}
+
+function isSamePushRegistrationOwner(
+  left: PushRegistrationOwner,
+  right: PushRegistrationOwner,
+): boolean {
+  return left.session === right.session && left.deviceId === right.deviceId;
+}
 
 /** Reset for tests that need to exercise the full registration path. */
 export function resetPushRegistrationSession(): void {
-  registeredThisSession = false;
+  registeredOwner = null;
+  inFlightRegistration = null;
 }
 
 function getNotificationResponseKey(
@@ -89,20 +126,19 @@ async function hydrateLastNotificationResponse(): Promise<void> {
 /**
  * Obtain an Expo push token and register it with the backend.
  *
- * Safe to call multiple times — deduped per session after a successful POST.
- * Skips on simulator and when permission is not yet granted. Does NOT request
- * permission — the in-context ask (generating.tsx / settings) owns that.
- * Re-register after permission is granted and on foreground to recover from
- * any failed POST earlier in the session.
+ * Safe to call multiple times — deduped for the current reset session and
+ * device identity after a successful POST. Skips on simulator and when
+ * permission is not yet granted. Does NOT request permission — the
+ * in-context ask (generating.tsx / settings) owns that. Re-register after
+ * permission is granted and on foreground to recover from any failed POST
+ * earlier in the session.
  *
  * Resolves 'registered' once the backend holds the token (this call or an
- * earlier one this session), 'skipped' when registration does not apply
- * (simulator, no permission, no project id), and 'failed' when the token
- * fetch or the POST failed — the caller decides whether the reader hears
- * about it.
+ * earlier one for this identity), 'skipped' when registration does not apply
+ * (simulator, no permission, no project id, stale or resetting identity),
+ * and 'failed' when the token fetch or the POST failed — the caller decides
+ * whether the reader hears about it.
  */
-export type PushRegistrationResult = 'registered' | 'skipped' | 'failed';
-
 export async function registerPushToken(): Promise<PushRegistrationResult> {
   // Push tokens are only available on physical devices
   if (!Device.isDevice) {
@@ -110,12 +146,45 @@ export async function registerPushToken(): Promise<PushRegistrationResult> {
     return 'skipped';
   }
 
-  if (registeredThisSession) {
+  const owner = capturePushRegistrationOwner();
+  if (!isPushRegistrationOwnerCurrent(owner)) {
+    return 'skipped';
+  }
+
+  if (registeredOwner && isPushRegistrationOwnerCurrent(registeredOwner)) {
     return 'registered';
   }
 
+  if (
+    inFlightRegistration &&
+    isSamePushRegistrationOwner(inFlightRegistration.owner, owner)
+  ) {
+    return inFlightRegistration.promise;
+  }
+
+  const promise = registerPushTokenForOwner(owner);
+  inFlightRegistration = { owner, promise };
   try {
+    return await promise;
+  } finally {
+    if (inFlightRegistration?.promise === promise) {
+      inFlightRegistration = null;
+    }
+  }
+}
+
+async function registerPushTokenForOwner(
+  owner: PushRegistrationOwner,
+): Promise<PushRegistrationResult> {
+  try {
+    if (!isPushRegistrationOwnerCurrent(owner)) {
+      return 'skipped';
+    }
+
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    if (!isPushRegistrationOwnerCurrent(owner)) {
+      return 'skipped';
+    }
     // NEVER request permission here — the in-context ask (generating.tsx /
     // settings) owns requestPermissionsAsync. Background registration only
     // proceeds when permission already exists.
@@ -132,6 +201,9 @@ export async function registerPushToken(): Promise<PushRegistrationResult> {
         vibrationPattern: [0, 250, 250, 250],
         lightColor: '#FF8C42',
       });
+      if (!isPushRegistrationOwnerCurrent(owner)) {
+        return 'skipped';
+      }
     }
 
     // Resolve the EAS project ID from app config (set in app.json → extra / eas)
@@ -149,28 +221,49 @@ export async function registerPushToken(): Promise<PushRegistrationResult> {
     const tokenData = await Notifications.getExpoPushTokenAsync({
       projectId,
     });
+    // Auth headers read the live device id. A stale permission/token
+    // continuation must not authenticate or POST under a later identity.
+    if (!isPushRegistrationOwnerCurrent(owner)) {
+      return 'skipped';
+    }
 
     const token = tokenData.data;
     logger.log(`[push] Push token obtained: ${token.slice(0, 30)}...`);
 
     const headers = await getAuthHeaders();
+    if (!isPushRegistrationOwnerCurrent(owner)) {
+      return 'skipped';
+    }
+
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const preferredNotificationTime = useUnfoldStore.getState().user?.reminderTime;
 
-    const response = await fetch(
-      `${PRIMARY_BACKEND_URL}/api/users/push-token`,
-      {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(
-          buildPushRegistrationRequestBody({
-            expoPushToken: token,
-            timezone: tz,
-            preferredNotificationTime,
-          }),
-        ),
-      },
-    );
+    const controller = new AbortController();
+    const unregister = registerSyncTransport(controller);
+    let response: Response;
+    try {
+      response = await fetch(
+        `${PRIMARY_BACKEND_URL}/api/users/push-token`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(
+            buildPushRegistrationRequestBody({
+              expoPushToken: token,
+              timezone: tz,
+              preferredNotificationTime,
+            }),
+          ),
+          signal: controller.signal,
+        },
+      );
+    } finally {
+      unregister();
+    }
+
+    if (!isPushRegistrationOwnerCurrent(owner)) {
+      return 'skipped';
+    }
 
     if (!response.ok) {
       logger.warn(
@@ -179,10 +272,13 @@ export async function registerPushToken(): Promise<PushRegistrationResult> {
       return 'failed';
     }
 
-    registeredThisSession = true;
+    registeredOwner = owner;
     logger.log('[push] Push token registered with backend');
     return 'registered';
   } catch (err) {
+    if (!isPushRegistrationOwnerCurrent(owner)) {
+      return 'skipped';
+    }
     logger.warn('[push] Failed to register push token:', err);
     return 'failed';
   }
