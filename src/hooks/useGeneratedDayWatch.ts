@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 
 import { recoverCompletedGenerationResult } from '@/lib/generation-api';
+import { captureSyncSession, isSyncSessionCurrent } from '@/lib/generation-session';
 import { watchForGeneratedDay } from '@/lib/generated-day-watch';
 import type { DevotionalDay } from '@/lib/store';
 
@@ -26,11 +27,12 @@ export function useGeneratedDayWatch({
     if (!enabled || !devotionalId || !dayNumber) return;
 
     let cancelled = false;
+    const session = captureSyncSession();
     void watchForGeneratedDay(
-      () => recoverCompletedGenerationResult({ devotionalId, dayNumber }),
-      { isCancelled: () => cancelled },
+      () => recoverCompletedGenerationResult({ devotionalId, dayNumber, session }),
+      { isCancelled: () => cancelled || !isSyncSessionCurrent(session) },
     ).then((recovered) => {
-      if (cancelled || !recovered?.devotionalDay) return;
+      if (cancelled || !isSyncSessionCurrent(session) || !recovered?.devotionalDay) return;
       onDay(devotionalId, recovered.devotionalDay);
     });
 

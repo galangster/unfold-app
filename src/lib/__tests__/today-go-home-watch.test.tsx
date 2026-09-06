@@ -170,7 +170,7 @@ describe('regression: Jordan item 6 — Today after Go home', () => {
     });
     await flush();
 
-    expect(mockPollJobStatus).toHaveBeenCalledWith('job-1');
+    expect(mockPollJobStatus).toHaveBeenCalledWith('job-1', expect.any(Number));
     const landed = useUnfoldStore.getState();
     expect(landed.currentDevotionalId).toBe('devo-1');
     expect(landed.devotionals).toEqual([

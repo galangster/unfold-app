@@ -21,6 +21,11 @@ import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { Duration, Ease } from '@/constants/animations';
 import { ApiError, findCompletedJob, pollJobStatus, retryJob } from '@/lib/generation-api';
+import {
+  captureSyncSession,
+  isGenerationSessionInvalidatedError,
+  isSyncSessionCurrent,
+} from '@/lib/generation-session';
 import { getDeviceId } from '@/lib/mmkv-storage';
 import {
   buildOnboardingSampleDevotionalId,
@@ -379,6 +384,7 @@ export function DevotionalSegue({
   const pollInFlightRef = useRef(false);
   const lastSeenPropJobIdRef = useRef<string | null>(jobId);
   const lastSeenPropDevotionalIdRef = useRef<string | null>(devotionalId ?? null);
+  const generationSessionRef = useRef(captureSyncSession());
 
   const clearPolling = useCallback(() => {
     if (pollingRef.current) {
@@ -413,10 +419,11 @@ export function DevotionalSegue({
     }
   }, [devotionalId, jobId]);
 
-  const recoverCompletedOnboardingSample = useCallback(async (): Promise<boolean> => {
+  const recoverCompletedOnboardingSample = useCallback(async (session = generationSessionRef.current): Promise<boolean> => {
     const recoveryDevotionalId =
       activeDevotionalId ?? buildOnboardingSampleDevotionalId(getDeviceId());
-    const completedJob = await findCompletedJob(recoveryDevotionalId, 1);
+    const completedJob = await findCompletedJob(recoveryDevotionalId, 1, session);
+    if (!isSyncSessionCurrent(session)) return false;
     const normalizedResult = completedJob
       ? normalizeOnboardingGenerationJobResult(completedJob, recoveryDevotionalId)
       : null;
@@ -439,7 +446,8 @@ export function DevotionalSegue({
     return true;
   }, [activeDevotionalId, clearPolling, onDevotionalReady]);
 
-  const startFallbackSubmission = useCallback(async () => {
+  const startFallbackSubmission = useCallback(async (session = generationSessionRef.current) => {
+    if (!isSyncSessionCurrent(session)) return;
     if (!submitFallback) {
       setGenerationIssue({
         kind: 'submit',
@@ -451,14 +459,16 @@ export function DevotionalSegue({
       return;
     }
 
+    const originatingDeviceId = getDeviceId();
     try {
       const result = normalizeOnboardingSubmitResult(await submitFallback());
+      if (!isSyncSessionCurrent(session)) return;
       // Persist so a force-quit before completion can resume THIS job instead
       // of submitting a duplicate on relaunch.
       saveOnboardingSampleJob({
         jobId: result.jobId,
         devotionalId: result.devotionalId,
-        deviceId: getDeviceId(),
+        deviceId: originatingDeviceId,
       });
       setActiveJobId(result.jobId);
       setActiveDevotionalId(result.devotionalId);
@@ -466,9 +476,10 @@ export function DevotionalSegue({
       consecutivePollErrorsRef.current = 0;
       setPollCycle((value) => value + 1);
     } catch (error) {
+      if (!isSyncSessionCurrent(session) || isGenerationSessionInvalidatedError(error)) return;
       if (
         isExistingOnboardingSampleError(error) &&
-        (await recoverCompletedOnboardingSample())
+        (await recoverCompletedOnboardingSample(session))
       ) {
         return;
       }
@@ -479,10 +490,13 @@ export function DevotionalSegue({
 
   /* ── Fallback startup: resume persisted job → recover completed → submit ── */
   const runFallbackStartup = useCallback(async () => {
+    const session = captureSyncSession();
+    generationSessionRef.current = session;
     const persisted = getOnboardingSampleJob({ deviceId: getDeviceId() });
     await runOnboardingSampleFallback({
       persistedJobId: persisted?.jobId ?? null,
       usePersistedJob: (jobId) => {
+        if (!isSyncSessionCurrent(session)) return;
         setActiveJobId(jobId);
         if (persisted?.devotionalId) {
           setActiveDevotionalId(persisted.devotionalId);
@@ -491,8 +505,9 @@ export function DevotionalSegue({
         consecutivePollErrorsRef.current = 0;
         setPollCycle((value) => value + 1);
       },
-      recoverCompleted: recoverCompletedOnboardingSample,
-      submitFallback: startFallbackSubmission,
+      recoverCompleted: () => recoverCompletedOnboardingSample(session),
+      submitFallback: () => startFallbackSubmission(session),
+      isCurrent: () => isSyncSessionCurrent(session),
     });
   }, [recoverCompletedOnboardingSample, startFallbackSubmission]);
 
@@ -500,7 +515,8 @@ export function DevotionalSegue({
   useEffect(() => {
     if (activeJobId || fallbackAttemptedRef.current || !submitFallback) return;
     fallbackAttemptedRef.current = true;
-    runFallbackStartup().catch(() => {
+    runFallbackStartup().catch((err) => {
+      if (isGenerationSessionInvalidatedError(err)) return;
       setGenerationIssue({
         kind: 'submit',
         title: 'We couldn’t start your devotional yet.',
@@ -531,13 +547,15 @@ export function DevotionalSegue({
     }
 
     let cancelled = false;
+    const session = captureSyncSession();
+    generationSessionRef.current = session;
     pollStartedAtRef.current = Date.now();
     consecutivePollErrorsRef.current = 0;
     pollInFlightRef.current = false;
     setGenerationIssue(null);
 
     const stopWithIssue = (issue: GenerationIssue) => {
-      if (cancelled) return;
+      if (cancelled || !isSyncSessionCurrent(session)) return;
       setGenerationIssue(issue);
       clearPolling();
     };
@@ -551,8 +569,8 @@ export function DevotionalSegue({
       // being declared a timeout one tick too late.
       pollInFlightRef.current = true;
       try {
-        const response = await pollJobStatus(activeJobId);
-        if (cancelled) return;
+        const response = await pollJobStatus(activeJobId, session);
+        if (cancelled || !isSyncSessionCurrent(session)) return;
         consecutivePollErrorsRef.current = 0;
 
         const normalizedResult =
@@ -610,8 +628,8 @@ export function DevotionalSegue({
           default:
             return;
         }
-      } catch {
-        if (cancelled) return;
+      } catch (err) {
+        if (cancelled || isGenerationSessionInvalidatedError(err) || !isSyncSessionCurrent(session)) return;
         consecutivePollErrorsRef.current += 1;
         if (consecutivePollErrorsRef.current >= MAX_CONSECUTIVE_POLL_ERRORS) {
           stopWithIssue({
@@ -640,6 +658,8 @@ export function DevotionalSegue({
   const handleRetry = useCallback(async () => {
     if (isRetrying) return;
 
+    const session = captureSyncSession();
+    generationSessionRef.current = session;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setIsRetrying(true);
     setGenerationIssue(null);
@@ -651,11 +671,13 @@ export function DevotionalSegue({
     try {
       if (generationIssue?.kind === 'failed' && activeJobId) {
         try {
-          const retryResponse = await retryJob(activeJobId);
+          const retryResponse = await retryJob(activeJobId, session);
+          if (!isSyncSessionCurrent(session)) return;
           setActiveJobId(retryResponse.jobId ?? activeJobId);
           setPollCycle((value) => value + 1);
           return;
-        } catch {
+        } catch (err) {
+          if (isGenerationSessionInvalidatedError(err) || !isSyncSessionCurrent(session)) return;
           if (!submitFallback) throw new Error('Failed to retry onboarding generation job');
         }
       }
@@ -667,12 +689,13 @@ export function DevotionalSegue({
 
       if (submitFallback) {
         fallbackAttemptedRef.current = true;
-        await startFallbackSubmission();
+        await startFallbackSubmission(session);
         return;
       }
 
       setPollCycle((value) => value + 1);
-    } catch {
+    } catch (err) {
+      if (isGenerationSessionInvalidatedError(err) || !isSyncSessionCurrent(session)) return;
       setGenerationIssue({
         kind: 'submit',
         title: 'We couldn’t restart your devotional yet.',
@@ -681,7 +704,9 @@ export function DevotionalSegue({
         canRetry: true,
       });
     } finally {
-      setIsRetrying(false);
+      if (isSyncSessionCurrent(session)) {
+        setIsRetrying(false);
+      }
     }
   }, [activeJobId, generationIssue, isRetrying, startFallbackSubmission, submitFallback]);
 

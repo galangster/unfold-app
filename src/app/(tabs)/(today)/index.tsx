@@ -310,10 +310,11 @@ export default function HomeScreen() {
     setInflightSeries(null);
     const { jobId, devotionalId } = decision.job;
     let cancelled = false;
+    const session = captureSyncSession();
     void (async () => {
       let poll: InitialArcPollResult;
       try {
-        poll = { status: await pollJobStatus(jobId) };
+        poll = { status: await pollJobStatus(jobId, session) };
       } catch (err) {
         poll = { error: err };
         logger.warn(
@@ -323,7 +324,7 @@ export default function HomeScreen() {
           err instanceof Error ? err.message : err,
         );
       }
-      if (cancelled) return;
+      if (cancelled || !isSyncSessionCurrent(session)) return;
       const resume = resolveInflightResume(poll);
       if (resume === 'resume') {
         const serverStatus = 'status' in poll ? poll.status.status : null;
@@ -343,7 +344,7 @@ export default function HomeScreen() {
           elapsedMs: 0,
           fallbackDevotionalId: devotionalId,
         });
-        if (step.kind === 'settled') settleInflightInitialArcWatch(step.outcome, { jobId });
+        if (step.kind === 'settled') settleInflightInitialArcWatch(step.outcome, { jobId, session });
       }
     })();
     return () => {
@@ -478,14 +479,16 @@ export default function HomeScreen() {
     if (autoGenAttemptedRef.current === key) return;
 
     let cancelled = false;
+    const session = captureSyncSession();
 
     (async () => {
       try {
         const recovered = await recoverCompletedGenerationResult({
           devotionalId: devId,
           dayNumber: dayNum,
+          session,
         });
-        if (cancelled) return;
+        if (cancelled || !isSyncSessionCurrent(session)) return;
 
         if (recovered?.devotionalDay) {
           addGeneratedDay(devId, recovered.devotionalDay);
@@ -499,12 +502,13 @@ export default function HomeScreen() {
           devotionalId: devId,
           dayNumber: dayNum,
           jobType: 'day',
+          session,
         });
-        if (cancelled) return;
+        if (cancelled || !isSyncSessionCurrent(session)) return;
         autoGenAttemptedRef.current = key;
         logger.log('[home] Submitted generation job:', resp.jobId);
       } catch (err) {
-        if (cancelled) return;
+        if (cancelled || !isSyncSessionCurrent(session)) return;
 
         // Handle 409 with structured error — server already has this day's content
         if (err instanceof ApiError && err.status === 409) {
@@ -512,8 +516,9 @@ export default function HomeScreen() {
             devotionalId: devId,
             dayNumber: dayNum,
             existingJobId: err.existingJobId,
+            session,
           }).catch(() => null);
-          if (cancelled) return;
+          if (cancelled || !isSyncSessionCurrent(session)) return;
           if (recovered?.devotionalDay) {
             addGeneratedDay(devId, recovered.devotionalDay);
             autoGenAttemptedRef.current = key;

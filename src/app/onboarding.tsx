@@ -72,6 +72,11 @@ import { Current } from '@/components/Current';
 import { ScatterTitle } from '@/components/ScatterTitle';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { submitGenerationJob } from '@/lib/generation-api';
+import {
+  captureSyncSession,
+  isSyncSessionCurrent,
+  SyncSessionInvalidatedError,
+} from '@/lib/generation-session';
 import { getDeviceId } from '@/lib/mmkv-storage';
 import {
   saveOnboardingSampleJob,
@@ -1564,13 +1569,17 @@ export default function OnboardingScreen() {
         // Accepted race (~30-45s): if a changed-context resubmit lands while the
         // original is pending/processing, backend dedupe can return its old jobId,
         // leaving this session on the stale sample.
-        submitGenerationJob(nextSampleGenerationRequest).then(({ jobId, devotionalId }) => {
+        const session = captureSyncSession();
+        const originatingDeviceId = getDeviceId();
+        submitGenerationJob({ ...nextSampleGenerationRequest, session }).then(({ jobId, devotionalId }) => {
+          if (!isSyncSessionCurrent(session)) return;
           onboardingJobIdRef.current = jobId;
           onboardingSubmittedDevotionalIdRef.current = devotionalId ?? null;
           onboardingSubmittedRequestRef.current = nextSampleGenerationRequest;
-          saveOnboardingSampleJob({ jobId, devotionalId: devotionalId ?? null, deviceId: getDeviceId() });
+          saveOnboardingSampleJob({ jobId, devotionalId: devotionalId ?? null, deviceId: originatingDeviceId });
           logger.log('[Onboarding] Sample generation triggered, jobId:', jobId);
         }).catch((err) => {
+          if (err instanceof SyncSessionInvalidatedError) return;
           logger.warn('[Onboarding] Background sample generation failed:', err);
         });
       }
@@ -3528,15 +3537,23 @@ export default function OnboardingScreen() {
           jobId={onboardingJobIdRef.current}
           devotionalId={onboardingSubmittedDevotionalIdRef.current}
           submitFallback={async () => {
+            const session = captureSyncSession();
+            const originatingDeviceId = getDeviceId();
             const fallbackRequest = buildOnboardingSampleGenerationRequest({
               answers: data,
               existingUser,
             });
-            const { jobId, devotionalId } = await submitGenerationJob(fallbackRequest);
+            const { jobId, devotionalId } = await submitGenerationJob({
+              ...fallbackRequest,
+              session,
+            });
+            if (!isSyncSessionCurrent(session)) {
+              throw new SyncSessionInvalidatedError('onboarding sample submit');
+            }
             onboardingJobIdRef.current = jobId;
             onboardingSubmittedDevotionalIdRef.current = devotionalId ?? null;
             onboardingSubmittedRequestRef.current = fallbackRequest;
-            saveOnboardingSampleJob({ jobId, devotionalId: devotionalId ?? null, deviceId: getDeviceId() });
+            saveOnboardingSampleJob({ jobId, devotionalId: devotionalId ?? null, deviceId: originatingDeviceId });
             return { jobId, devotionalId };
           }}
           onDevotionalReady={(result) => {

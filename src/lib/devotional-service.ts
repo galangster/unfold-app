@@ -51,9 +51,20 @@ export { DEVOTIONAL_PERSONAS, DevotionalPersona };
 
 // Centralized backend config + auth headers
 import { getBackendCandidates, getAuthHeaders, PRIMARY_BACKEND_URL, sanitizeForPrompt } from '@/lib/api-config';
+import {
+  assertSyncSessionCurrent,
+  isGenerationSessionInvalidatedError,
+  isSyncSessionCurrent,
+  registerSyncTransport,
+  rejectStaleGenerationWork,
+  resolveGenerationSession,
+  shouldReuseInflightGenerationPromise,
+  SyncSessionInvalidatedError,
+} from '@/lib/generation-session';
 
 interface BackendPostOptions {
   timeoutMs?: number;
+  session?: number;
 }
 
 interface BackendPostResult {
@@ -69,6 +80,8 @@ export async function postJsonWithBackendFallback(
   options: BackendPostOptions = {}
 ): Promise<BackendPostResult> {
   const timeoutMs = options.timeoutMs ?? 300000;
+  const session = resolveGenerationSession(options.session);
+  assertSyncSessionCurrent(session, 'generation request');
   const backendCandidates = getBackendCandidates();
 
   let lastError: unknown = null;
@@ -77,16 +90,21 @@ export async function postJsonWithBackendFallback(
     const backendUrl = backendCandidates[i];
     const hasAnotherCandidate = i < backendCandidates.length - 1;
 
+    assertSyncSessionCurrent(session, 'generation request');
     const controller = new AbortController();
+    const unregister = registerSyncTransport(controller);
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
+      const headers = await getAuthHeaders();
+      assertSyncSessionCurrent(session, 'generation request');
       const response = await fetch(`${backendUrl}${path}`, {
         method: 'POST',
-        headers: await getAuthHeaders(),
+        headers,
         body: JSON.stringify(payload),
         signal: controller.signal,
       });
+      assertSyncSessionCurrent(session, 'generation request');
 
       // If this backend fails and we have a fallback endpoint, try it.
       // This specifically guards against stale/misconfigured deployments returning
@@ -105,6 +123,11 @@ export async function postJsonWithBackendFallback(
         attempts: i + 1,
       };
     } catch (error) {
+      if (!isSyncSessionCurrent(session) || isGenerationSessionInvalidatedError(error)) {
+        throw error instanceof SyncSessionInvalidatedError
+          ? error
+          : new SyncSessionInvalidatedError('generation request');
+      }
       lastError = error;
 
       const aborted = controller.signal.aborted;
@@ -123,6 +146,7 @@ export async function postJsonWithBackendFallback(
       throw error;
     } finally {
       clearTimeout(timeoutId);
+      unregister();
     }
   }
 
@@ -135,8 +159,8 @@ export async function postJsonWithBackendFallback(
 const activeFullGenerationIds = new Set<string>();
 
 // Request-level idempotency maps to dedupe accidental duplicate generation calls.
-const inFlightFullGenerationRequests = new Map<string, Promise<GeneratedDevotional>>();
-const inFlightContinuationRequests = new Map<string, Promise<DevotionalDay[]>>();
+const inFlightFullGenerationRequests = new Map<string, { session: number; promise: Promise<GeneratedDevotionalResult> }>();
+const inFlightContinuationRequests = new Map<string, { session: number; promise: Promise<DevotionalDay[]> }>();
 
 export function markFullGenerationActive(devotionalId: string): void {
   activeFullGenerationIds.add(devotionalId);
@@ -1158,8 +1182,10 @@ function extractAnthropicText(data: unknown): string {
 
 export async function generateSeriesArc(
   context: GenerationContext,
-  resolvedPersona: { primary: PersonaTrait; secondary: PersonaTrait; templateSeed: number }
+  resolvedPersona: { primary: PersonaTrait; secondary: PersonaTrait; templateSeed: number },
+  session?: number,
 ): Promise<SeriesArc | null> {
+  const origin = resolveGenerationSession(session);
   try {
     const scriptureVariety = context.usedScriptureHistory && context.usedScriptureHistory.length > 0
       ? analyzeScriptureVariety(context.usedScriptureHistory)
@@ -1215,11 +1241,12 @@ The "days" array must contain exactly ${context.devotionalLength} entries, numbe
         system: systemPrompt,
         messages: [{ role: 'user', content: userPrompt }],
       },
-      { timeoutMs: 60000 }
+      { timeoutMs: 60000, session: origin }
     );
 
     if (!backendResult.response.ok) {
       const errorText = await backendResult.response.text();
+      assertSyncSessionCurrent(origin, 'full generation');
       logger.warn(`[Devotional] Arc request failed (${backendResult.response.status}); continuing without arc. ${errorText.slice(0, 200)}`);
       void logBugEvent('devotional-service', 'arc-request-failed', {
         status: backendResult.response.status,
@@ -1228,7 +1255,9 @@ The "days" array must contain exactly ${context.devotionalLength} entries, numbe
       return null;
     }
 
-    const data = JSON.parse(await backendResult.response.text()) as Record<string, unknown>;
+    const arcBody = await backendResult.response.text();
+    assertSyncSessionCurrent(origin, 'full generation');
+    const data = JSON.parse(arcBody) as Record<string, unknown>;
     if ('error' in data && data.error) {
       logger.warn('[Devotional] Arc backend returned 200 with error field; continuing without arc.');
       return null;
@@ -1279,8 +1308,9 @@ The "days" array must contain exactly ${context.devotionalLength} entries, numbe
       titleOnly: arc.days.length === 0,
     });
     return arc;
-  } catch (error) {
-    logger.warn('[Devotional] generateSeriesArc failed (non-fatal):', error instanceof Error ? error.message : String(error));
+    } catch (error) {
+      rejectStaleGenerationWork(error, origin, 'full generation');
+      logger.warn('[Devotional] generateSeriesArc failed (non-fatal):', error instanceof Error ? error.message : String(error));
     void logBugEvent('devotional-service', 'arc-request-failed', {
       snippet: error instanceof Error ? error.message.slice(0, 200) : 'unknown',
     }, 'warn');
@@ -1312,8 +1342,10 @@ async function generateBatch(
   previousDayTitles: string[],
   retryLevel: number = 0,
   resolvedPersona?: { primary: PersonaTrait; secondary: PersonaTrait; templateSeed: number },
-  arc: SeriesArc | null = null
+  arc: SeriesArc | null = null,
+  session?: number,
 ): Promise<{ title: string; days: DevotionalDay[] }> {
+  const origin = resolveGenerationSession(session);
   const baseSystemPrompt = getSystemPrompt(retryLevel);
   // V2: Use composable voice overlay instead of dead v1 persona system
   const persona = resolvedPersona ?? resolvePersonaForGeneration(context);
@@ -1372,6 +1404,7 @@ Avoid the bad pattern. Follow the good pattern.`;
     } catch {
       // Silent -- dynamic example is best-effort enrichment
     }
+    assertSyncSessionCurrent(origin, 'generation batch');
   }
 
   // System prompt contains ONLY series-stable content (same bytes for every
@@ -1409,6 +1442,7 @@ Avoid the bad pattern. Follow the good pattern.`;
       } catch {
         logger.warn('[Devotional] Batch story fetch failed, continuing without');
       }
+      assertSyncSessionCurrent(origin, 'generation batch');
     }
   }
 
@@ -1449,6 +1483,7 @@ Avoid the bad pattern. Follow the good pattern.`;
   try {
     logger.log(`[Devotional] Sending request to backend for days ${startDay}-${endDay} with model ${model}...`);
 
+    assertSyncSessionCurrent(origin, 'generation batch');
     const backendResult = await postJsonWithBackendFallback(
       '/api/generate/devotional',
       {
@@ -1462,7 +1497,7 @@ Avoid the bad pattern. Follow the good pattern.`;
           },
         ],
       },
-      { timeoutMs }
+      { timeoutMs, session: origin }
     );
 
     response = backendResult.response;
@@ -1481,6 +1516,7 @@ Avoid the bad pattern. Follow the good pattern.`;
       `[Devotional] Got response: status=${response.status} for days ${startDay}-${endDay} (backend: ${backendUrlUsed})`
     );
   } catch (fetchError) {
+    rejectStaleGenerationWork(fetchError, origin, 'generation batch');
     const fetchMessage = fetchError instanceof Error ? fetchError.message : String(fetchError);
 
     if (fetchMessage.toLowerCase().includes('timed out')) {
@@ -1504,6 +1540,7 @@ Avoid the bad pattern. Follow the good pattern.`;
 
   if (!response.ok) {
     const errorText = await response.text();
+    assertSyncSessionCurrent(origin, 'generation batch');
     void logBugEvent('devotional-service', 'batch-request-non-200', {
       startDay,
       endDay,
@@ -1539,6 +1576,7 @@ Avoid the bad pattern. Follow the good pattern.`;
 
   // Read raw text first so we can debug if JSON parsing fails
   const rawResponseText = await response.text();
+  assertSyncSessionCurrent(origin, 'generation batch');
   logger.log(`[Devotional] Raw response length: ${rawResponseText.length} chars`);
 
   let data: Record<string, unknown>;
@@ -1635,8 +1673,10 @@ async function generateBatchWithRetry(
   previousDayTitles: string[],
   maxRetries: number = 3,
   resolvedPersona?: { primary: PersonaTrait; secondary: PersonaTrait; templateSeed: number },
-  arc: SeriesArc | null = null
+  arc: SeriesArc | null = null,
+  session?: number,
 ): Promise<{ title: string; days: DevotionalDay[] }> {
+  const origin = resolveGenerationSession(session);
   let lastError: Error | null = null;
   const daysInBatch = endDay - startDay + 1;
 
@@ -1657,6 +1697,7 @@ async function generateBatchWithRetry(
 
       logger.log(`[Devotional] Attempt ${attempt + 1}/${maxRetries + 1}, retryLevel=${retryLevel}`);
 
+      assertSyncSessionCurrent(origin, 'generation retry');
       return await generateBatch(
         contextToUse,
         startDay,
@@ -1665,9 +1706,11 @@ async function generateBatchWithRetry(
         previousDayTitles,
         retryLevel,
         resolvedPersona,
-        arc
+        arc,
+        origin,
       );
     } catch (error) {
+      rejectStaleGenerationWork(error, origin, 'generation retry');
       lastError = error instanceof Error ? error : new Error(String(error));
 
       // OUTPUT_TRUNCATED: batch is too large for the token budget.
@@ -1680,12 +1723,13 @@ async function generateBatchWithRetry(
 
         const midDay = startDay + Math.floor(daysInBatch / 2);
         const firstHalf = await generateBatchWithRetry(
-          context, startDay, midDay - 1, seriesTitle, previousDayTitles, maxRetries, resolvedPersona, arc
+          context, startDay, midDay - 1, seriesTitle, previousDayTitles, maxRetries, resolvedPersona, arc, origin
         );
+        assertSyncSessionCurrent(origin, 'generation retry');
         // Use the series title from the first half for the second half
         const updatedTitles = [...previousDayTitles, ...firstHalf.days.map(d => d.title)];
         const secondHalf = await generateBatchWithRetry(
-          context, midDay, endDay, firstHalf.title, updatedTitles, maxRetries, resolvedPersona, arc
+          context, midDay, endDay, firstHalf.title, updatedTitles, maxRetries, resolvedPersona, arc, origin
         );
 
         return {
@@ -1723,6 +1767,7 @@ async function generateBatchWithRetry(
             ? 2000 + attempt * 1000
             : 1000;
           await new Promise((resolve) => setTimeout(resolve, delay));
+          assertSyncSessionCurrent(origin, 'generation retry');
           continue;
         }
       }
@@ -1777,22 +1822,27 @@ export interface GeneratedDevotionalResult extends GeneratedDevotional {
 export async function generateDevotional(
   context: GenerationContext,
   onProgress?: (status: string) => void,
-  onDayGenerated?: OnDayGeneratedCallback
+  onDayGenerated?: OnDayGeneratedCallback,
+  session?: number,
 ): Promise<GeneratedDevotionalResult> {
+  const origin = resolveGenerationSession(session);
+  assertSyncSessionCurrent(origin, 'full generation');
+
   // Check rate limit before starting generation
   const rateLimit = await checkRateLimit('devotional');
   if (!rateLimit.allowed) {
     logger.warn('[Devotional] Rate limit exceeded:', rateLimit);
     throw new Error(`Daily devotional generation limit reached. Please try again in ${getTimeUntilReset(rateLimit.resetTime)}.`);
   }
+  assertSyncSessionCurrent(origin, 'full generation');
 
   const requestKey = buildFullGenerationRequestKey(context);
   const existingRequest = inFlightFullGenerationRequests.get(requestKey);
 
-  if (existingRequest) {
+  if (existingRequest && shouldReuseInflightGenerationPromise(existingRequest.session, origin)) {
     logger.log('[Devotional] Reusing in-flight full generation request');
     void logBugEvent('devotional-service', 'full-generation-deduped');
-    return existingRequest;
+    return existingRequest.promise;
   }
 
   const requestPromise = (async () => {
@@ -1813,7 +1863,8 @@ export async function generateDevotional(
     // whole series (title + per-day outline) before Sonnet writes anything.
     // Best-effort — a null arc means generation runs exactly as before.
     onProgress?.('Shaping your series');
-    const arc = await generateSeriesArc(context, resolvedPersona);
+    const arc = await generateSeriesArc(context, resolvedPersona, origin);
+    assertSyncSessionCurrent(origin, 'full generation');
 
     try {
       let seriesTitle: string | null = arc?.seriesTitle ?? null;
@@ -1822,6 +1873,7 @@ export async function generateDevotional(
 
       for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
         const { start: startDay, end: endDay } = batches[batchIndex];
+        assertSyncSessionCurrent(origin, 'full generation');
 
         logger.log(`Generating batch ${batchIndex + 1}/${batches.length}: days ${startDay}-${endDay}`);
 
@@ -1840,8 +1892,10 @@ export async function generateDevotional(
           allDayTitles,
           3,
           resolvedPersona,
-          arc
+          arc,
+          origin,
         );
+        assertSyncSessionCurrent(origin, 'full generation');
 
         // Save the series title from first batch (the arc title, when present,
         // was already pinned via seriesTitle and echoed back by the model)
@@ -1863,6 +1917,7 @@ export async function generateDevotional(
         // Small delay between batches to avoid rate limiting
         if (batchIndex < batches.length - 1) {
           await new Promise((resolve) => setTimeout(resolve, 500));
+          assertSyncSessionCurrent(origin, 'full generation');
         }
       }
 
@@ -1872,6 +1927,7 @@ export async function generateDevotional(
       });
 
       // Increment rate limit counter on success
+      assertSyncSessionCurrent(origin, 'full generation');
       await incrementRateLimit('devotional');
 
       return {
@@ -1880,6 +1936,7 @@ export async function generateDevotional(
         resolvedPersona,
       };
     } catch (error) {
+      rejectStaleGenerationWork(error, origin, 'full generation');
       const errorMessage = error instanceof Error ? error.message : String(error);
       // reportError writes the local bug log through logBugError already; the
       // second call filed the same failure twice under a different source.
@@ -1901,12 +1958,13 @@ export async function generateDevotional(
     }
   })();
 
-  inFlightFullGenerationRequests.set(requestKey, requestPromise);
+  const tracked = { session: origin, promise: requestPromise };
+  inFlightFullGenerationRequests.set(requestKey, tracked);
 
   try {
     return await requestPromise;
   } finally {
-    if (inFlightFullGenerationRequests.get(requestKey) === requestPromise) {
+    if (inFlightFullGenerationRequests.get(requestKey) === tracked) {
       inFlightFullGenerationRequests.delete(requestKey);
     }
   }
@@ -1921,8 +1979,12 @@ export async function continueGeneratingDays(
     readingDuration: 5 | 15 | 30;
     bibleTranslation: BibleTranslation;
   },
-  onDayGenerated?: OnDayGeneratedCallback
+  onDayGenerated?: OnDayGeneratedCallback,
+  session?: number,
 ): Promise<DevotionalDay[]> {
+  const origin = resolveGenerationSession(session);
+  assertSyncSessionCurrent(origin, 'legacy continuation');
+
   const existingDayCount = devotional.days.length;
   const targetDays = devotional.totalDays;
 
@@ -1933,12 +1995,12 @@ export async function continueGeneratingDays(
   const requestKey = buildContinuationRequestKey(devotional, user.readingDuration, user.bibleTranslation);
   const existingRequest = inFlightContinuationRequests.get(requestKey);
 
-  if (existingRequest) {
+  if (existingRequest && shouldReuseInflightGenerationPromise(existingRequest.session, origin)) {
     logger.log(`[Devotional] Reusing in-flight continuation request for ${devotional.id}`);
     void logBugEvent('devotional-service', 'continuation-deduped', {
       devotionalId: devotional.id,
     });
-    return existingRequest;
+    return existingRequest.promise;
   }
 
   const requestPromise = (async () => {
@@ -1982,6 +2044,7 @@ export async function continueGeneratingDays(
 
       for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
         const { start, end } = batches[batchIndex];
+        assertSyncSessionCurrent(origin, 'legacy continuation');
         logger.log(`[Devotional] Continue batch ${batchIndex + 1}/${batches.length}: days ${start}-${end}`);
 
         const result = await generateBatchWithRetry(
@@ -1990,7 +2053,12 @@ export async function continueGeneratingDays(
           end,
           devotional.title,
           previousDayTitles,
+          3,
+          undefined,
+          null,
+          origin,
         );
+        assertSyncSessionCurrent(origin, 'legacy continuation');
 
         allDays.push(...result.days);
         previousDayTitles.push(...result.days.map((d) => d.title));
@@ -2003,6 +2071,7 @@ export async function continueGeneratingDays(
 
         if (batchIndex < batches.length - 1) {
           await new Promise((resolve) => setTimeout(resolve, 500));
+          assertSyncSessionCurrent(origin, 'legacy continuation');
         }
       }
 
@@ -2013,6 +2082,7 @@ export async function continueGeneratingDays(
 
       return allDays;
     } catch (error) {
+      rejectStaleGenerationWork(error, origin, 'legacy continuation');
       // Single entry — see the note on the full-generation path above.
       reportError('devotional-continuation', error, {
         devotionalId: devotional.id,
@@ -2022,12 +2092,13 @@ export async function continueGeneratingDays(
     }
   })();
 
-  inFlightContinuationRequests.set(requestKey, requestPromise);
+  const tracked = { session: origin, promise: requestPromise };
+  inFlightContinuationRequests.set(requestKey, tracked);
 
   try {
     return await requestPromise;
   } finally {
-    if (inFlightContinuationRequests.get(requestKey) === requestPromise) {
+    if (inFlightContinuationRequests.get(requestKey) === tracked) {
       inFlightContinuationRequests.delete(requestKey);
     }
   }

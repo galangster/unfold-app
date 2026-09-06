@@ -70,16 +70,24 @@ export async function runOnboardingSampleFallback(deps: {
   usePersistedJob: (jobId: string) => void;
   recoverCompleted: () => Promise<boolean>;
   submitFallback: () => Promise<void>;
-}): Promise<'persisted' | 'recovered' | 'submitted'> {
+  isCurrent?: () => boolean;
+}): Promise<'persisted' | 'recovered' | 'submitted' | 'canceled'> {
   if (deps.persistedJobId) {
     deps.usePersistedJob(deps.persistedJobId);
     return 'persisted';
   }
 
-  if (await deps.recoverCompleted()) {
+  const recovered = await deps.recoverCompleted();
+  if (deps.isCurrent && !deps.isCurrent()) {
+    return 'canceled';
+  }
+  if (recovered) {
     return 'recovered';
   }
 
+  if (deps.isCurrent && !deps.isCurrent()) {
+    return 'canceled';
+  }
   await deps.submitFallback();
   return 'submitted';
 }
