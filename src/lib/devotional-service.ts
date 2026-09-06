@@ -2136,14 +2136,18 @@ export async function generateAdaptiveQuestion(
   previousAnswers: { question: string; answer: string }[],
   nextQuestionBase: { question: string; subtext: string },
   stepPosition?: 'opening' | 'depth' | 'bridge' | 'longing',
-  userContext?: { growthGoals?: string[]; obstacles?: string[]; relationshipWithGod?: string }
+  userContext?: { growthGoals?: string[]; obstacles?: string[]; relationshipWithGod?: string },
+  session?: number,
 ): Promise<{ question: string; subtext: string; chips?: string[]; source: 'backend' | 'fallback'; backendUrl?: string }> {
   if (previousAnswers.length === 0) {
     return { ...nextQuestionBase, source: 'fallback' };
   }
 
+  const origin = resolveGenerationSession(session);
+
   // Check rate limit before making API call
   const rateLimit = await checkRateLimit('adaptive-question');
+  assertSyncSessionCurrent(origin, 'adaptive question');
   if (!rateLimit.allowed) {
     logger.warn('[Adaptive] Rate limit exceeded:', rateLimit);
     // Fall back to base question if rate limited
@@ -2177,10 +2181,11 @@ export async function generateAdaptiveQuestion(
             userContext,
           },
         },
-        { timeoutMs: 15000 },
+        { timeoutMs: 15000, session: origin },
       );
       if (insightResult.response.ok) {
         const data = await insightResult.response.json();
+        assertSyncSessionCurrent(origin, 'adaptive question');
         if (typeof data?.question === 'string' && data.question.trim()) {
           return {
             question: data.question,
@@ -2194,6 +2199,7 @@ export async function generateAdaptiveQuestion(
         logger.log('[Adaptive] onboarding-insight unavailable, using legacy path:', insightResult.response.status);
       }
     } catch (insightErr) {
+      rejectStaleGenerationWork(insightErr, origin, 'adaptive question');
       logger.log('[Adaptive] onboarding-insight failed, using legacy path:', insightErr);
     }
 
@@ -2339,7 +2345,7 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
           },
         ],
       },
-      { timeoutMs: 15000 }
+      { timeoutMs: 15000, session: origin }
     );
 
     logger.log('[Adaptive] Backend candidates:', getBackendCandidates());
@@ -2351,11 +2357,13 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
 
     if (!response.ok) {
       const errorText = await response.text();
+      assertSyncSessionCurrent(origin, 'adaptive question');
       logger.warn('[Adaptive] Backend API error (recoverable, using fallback question):', response.status, errorText.substring(0, 200));
       return { ...nextQuestionBase, source: 'fallback' };
     }
 
     const data = await response.json();
+    assertSyncSessionCurrent(origin, 'adaptive question');
 
     const clampQuestion = (value: string): string => {
       const trimmed = value.replace(/\s+/g, ' ').trim();
@@ -2369,6 +2377,7 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
     // Accept already-structured JSON directly from backend.
     if (typeof data?.question === 'string' && data.question.trim()) {
       await incrementRateLimit('adaptive-question');
+      assertSyncSessionCurrent(origin, 'adaptive question');
       return {
         question: clampQuestion(data.question),
         subtext: typeof data?.subtext === 'string' && data.subtext.trim()
@@ -2420,6 +2429,7 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
 
     // Increment rate limit counter on success
     await incrementRateLimit('adaptive-question');
+    assertSyncSessionCurrent(origin, 'adaptive question');
 
     return {
       question: clampQuestion(parsedResult.question || nextQuestionBase.question),
@@ -2429,6 +2439,7 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
       backendUrl: backendResult.backendUrl,
     };
   } catch (err) {
+    rejectStaleGenerationWork(err, origin, 'adaptive question');
     logger.warn('[Adaptive] Backend parse error (recoverable, using fallback question):', err);
     return { ...nextQuestionBase, source: 'fallback' };
   }
@@ -2447,8 +2458,10 @@ export async function generateDiagnosticQuestions(data: {
   relationshipWithGod?: string;
   selectedThemes?: string[];
   selectedType?: string;
-}): Promise<{ questions: { question: string; subtext: string; chips: string[] }[] } | null> {
+}, session?: number): Promise<{ questions: { question: string; subtext: string; chips: string[] }[] } | null> {
+  const origin = resolveGenerationSession(session);
   const rateLimit = await checkRateLimit('adaptive-question');
+  assertSyncSessionCurrent(origin, 'diagnostic questions');
   if (!rateLimit.allowed) {
     logger.warn('[Diagnostic] Rate limit exceeded:', rateLimit);
     return null;
@@ -2458,7 +2471,7 @@ export async function generateDiagnosticQuestions(data: {
     const insightResult = await postJsonWithBackendFallback(
       '/api/generate/onboarding-insight',
       { kind: 'diagnostic-round', data },
-      { timeoutMs: 20000 },
+      { timeoutMs: 20000, session: origin },
     );
 
     if (!insightResult.response.ok) {
@@ -2467,6 +2480,7 @@ export async function generateDiagnosticQuestions(data: {
     }
 
     const responseData = await insightResult.response.json();
+    assertSyncSessionCurrent(origin, 'diagnostic questions');
     if (!Array.isArray(responseData?.questions)) {
       logger.warn('[Diagnostic] Backend returned no questions array');
       return null;
@@ -2487,8 +2501,10 @@ export async function generateDiagnosticQuestions(data: {
     }
 
     await incrementRateLimit('adaptive-question');
+    assertSyncSessionCurrent(origin, 'diagnostic questions');
     return { questions };
   } catch (err) {
+    rejectStaleGenerationWork(err, origin, 'diagnostic questions');
     logger.warn('[Diagnostic] Generation failed:', err);
     return null;
   }
@@ -2517,9 +2533,12 @@ export async function generateMirrorBackText(
     relationshipWithGod?: string;
     growthGoals?: string[];
     obstacles?: string[];
-  }
+  },
+  session?: number,
 ): Promise<{ content: MirrorBackContent; source: 'backend' | 'fallback' }> {
+  const origin = resolveGenerationSession(session);
   const rateLimit = await checkRateLimit('adaptive-question');
+  assertSyncSessionCurrent(origin, 'mirror-back');
   if (!rateLimit.allowed) {
     logger.warn('[MirrorBack] Rate limited, using fallback');
     return { content: buildFallbackMirrorBack(onboardingData), source: 'fallback' };
@@ -2533,10 +2552,11 @@ export async function generateMirrorBackText(
       const insightResult = await postJsonWithBackendFallback(
         '/api/generate/onboarding-insight',
         { kind: 'mirror-back', data: onboardingData },
-        { timeoutMs: 15000 },
+        { timeoutMs: 15000, session: origin },
       );
       if (insightResult.response.ok) {
         const data = await insightResult.response.json();
+        assertSyncSessionCurrent(origin, 'mirror-back');
         if (typeof data?.reflection === 'string' && data.reflection.trim()) {
           return {
             content: {
@@ -2553,6 +2573,7 @@ export async function generateMirrorBackText(
         logger.log('[MirrorBack] onboarding-insight unavailable, using legacy path:', insightResult.response.status);
       }
     } catch (insightErr) {
+      rejectStaleGenerationWork(insightErr, origin, 'mirror-back');
       logger.log('[MirrorBack] onboarding-insight failed, using legacy path:', insightErr);
     }
 
@@ -2620,7 +2641,7 @@ RULES:
         system: systemPrompt,
         messages: [{ role: 'user', content: userPrompt }],
       },
-      { timeoutMs: 12000 },
+      { timeoutMs: 12000, session: origin },
     );
 
     const { response } = backendResult;
@@ -2631,10 +2652,12 @@ RULES:
     }
 
     const data = await response.json();
+    assertSyncSessionCurrent(origin, 'mirror-back');
 
     // Try direct structured response
     if (typeof data?.reflection === 'string' && data.reflection.trim()) {
       await incrementRateLimit('adaptive-question');
+      assertSyncSessionCurrent(origin, 'mirror-back');
       return {
         content: {
           reflection: data.reflection.trim(),
@@ -2660,6 +2683,7 @@ RULES:
       const parsed = JSON.parse(jsonText);
       if (parsed?.reflection) {
         await incrementRateLimit('adaptive-question');
+        assertSyncSessionCurrent(origin, 'mirror-back');
         return {
           content: {
             reflection: parsed.reflection.trim(),
@@ -2675,6 +2699,7 @@ RULES:
     logger.warn('[MirrorBack] Could not parse backend response, using fallback');
     return { content: buildFallbackMirrorBack(onboardingData), source: 'fallback' };
   } catch (err) {
+    rejectStaleGenerationWork(err, origin, 'mirror-back');
     logger.warn('[MirrorBack] Error generating mirror-back:', err);
     return { content: buildFallbackMirrorBack(onboardingData), source: 'fallback' };
   }

@@ -870,6 +870,16 @@ export default function OnboardingScreen() {
   const dataRef = useRef(data);
   dataRef.current = data;
 
+  const onboardingMountedRef = useRef(true);
+  useEffect(() => {
+    onboardingMountedRef.current = true;
+    return () => {
+      onboardingMountedRef.current = false;
+    };
+  }, []);
+  const ownsOnboardingWork = (session: number) =>
+    onboardingMountedRef.current && isSyncSessionCurrent(session);
+
   // Track if user is in theme sub-selection mode
   const [themeSelectionMode, setThemeSelectionMode] = useState<'none' | 'theme' | 'type'>('none');
   
@@ -1071,6 +1081,8 @@ export default function OnboardingScreen() {
   // Generate AI mirror-back when reaching that step
   useEffect(() => {
     if (currentStepId === 'mirrorBack' && !aiMirrorBack && !isLoadingMirrorBack) {
+      const session = captureSyncSession();
+      if (!ownsOnboardingWork(session)) return;
       setIsLoadingMirrorBack(true);
       generateMirrorBackText({
         selectedThemes: data.selectedThemes,
@@ -1084,8 +1096,9 @@ export default function OnboardingScreen() {
         relationshipWithGod: data.relationshipWithGod,
         growthGoals: data.growthGoals,
         obstacles: data.obstacles,
-      })
+      }, session)
         .then(({ content }) => {
+          if (!ownsOnboardingWork(session)) return;
           setAiMirrorBack(content);
           // Stored whenever a working read is shown, regardless of whether the
           // user later ratifies or corrects it.
@@ -1094,10 +1107,12 @@ export default function OnboardingScreen() {
           }
         })
         .catch((err) => {
+          if (err instanceof SyncSessionInvalidatedError || !ownsOnboardingWork(session)) return;
           logger.warn('[MirrorBack] Generation failed, using fallback:', err);
           setAiMirrorBack(mirrorBackContent);
         })
         .finally(() => {
+          if (!ownsOnboardingWork(session)) return;
           setIsLoadingMirrorBack(false);
         });
     }
@@ -1121,6 +1136,8 @@ export default function OnboardingScreen() {
     // become a no-op — the stale closure's advanceToNextStep would otherwise
     // yank them forward from wherever they navigated to.
     let cancelled = false;
+    const session = captureSyncSession();
+    if (!ownsOnboardingWork(session)) return;
 
     setIsLoadingDiagnostic(true);
     generateDiagnosticQuestions({
@@ -1131,9 +1148,9 @@ export default function OnboardingScreen() {
       relationshipWithGod: data.relationshipWithGod,
       selectedThemes: data.selectedThemes,
       selectedType: data.selectedType,
-    })
+    }, session)
       .then((result) => {
-        if (cancelled) return;
+        if (cancelled || !ownsOnboardingWork(session)) return;
         if (result && result.questions.length > 0) {
           setDiagnosticIndex(0);
           setDiagnosticDraft('');
@@ -1142,11 +1159,12 @@ export default function OnboardingScreen() {
           advanceToNextStep();
         }
       })
-      .catch(() => {
-        if (cancelled) return;
+      .catch((err) => {
+        if (cancelled || err instanceof SyncSessionInvalidatedError || !ownsOnboardingWork(session)) return;
         advanceToNextStep();
       })
       .finally(() => {
+        if (!ownsOnboardingWork(session)) return;
         setIsLoadingDiagnostic(false);
       });
 
@@ -1775,21 +1793,28 @@ export default function OnboardingScreen() {
       subtext: nextStepDef?.subtext ?? "Take your time.",
     };
 
+    const session = captureSyncSession();
+    if (!ownsOnboardingWork(session)) return;
+
     setIsLoadingAdaptive(true);
     try {
       const result = await generateAdaptiveQuestion(previousAnswers, fallbackQuestion, stepPosition, {
         growthGoals: data.growthGoals,
         obstacles: data.obstacles,
         relationshipWithGod: data.relationshipWithGod,
-      });
+      }, session);
+      if (!ownsOnboardingWork(session)) return;
       setAdaptedSteps((prev) => ({
         ...prev,
         [nextStepId]: { question: result.question, subtext: result.subtext, chips: result.chips },
       }));
-    } catch {
+    } catch (err) {
+      if (err instanceof SyncSessionInvalidatedError || !ownsOnboardingWork(session)) return;
       // Falls back to default step question (adaptedSteps won't have an entry)
     } finally {
-      setIsLoadingAdaptive(false);
+      if (ownsOnboardingWork(session)) {
+        setIsLoadingAdaptive(false);
+      }
     }
   };
 
