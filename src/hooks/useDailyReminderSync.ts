@@ -33,11 +33,14 @@ import {
   scheduleDailyReminder,
   cancelNotificationById,
   areNotificationsEnabled,
+  beginDailyReminderOperation,
+  isDailyReminderOriginCurrent,
   NOTIFICATION_IDS,
 } from '@/lib/notifications';
 import { logger } from '@/lib/logger';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { buildDailyReminderFingerprint } from '@/lib/daily-reminder-content';
+import { captureSyncSession } from '@/lib/sync-session-fence';
 
 const DEBOUNCE_MS = 750;
 
@@ -91,6 +94,7 @@ export function useDailyReminderSync() {
 
   async function runSync(reason: 'hydration' | 'fingerprint' | 'foreground'): Promise<void> {
     if (!hasHydrated) return;
+    const originatingSession = captureSyncSession();
     const targetPremiumPolicy = latestPremiumPolicyRef.current;
     if (targetPremiumPolicy === 'unknown') {
       logger.log(`[useDailyReminderSync] Premium policy unknown; deferring daily reminder sync (reason=${reason})`);
@@ -122,6 +126,7 @@ export function useDailyReminderSync() {
     }
 
     inFlightRef.current = true;
+    const originatingOperation = beginDailyReminderOperation();
     try {
       // Re-read state at execution time so a queued run picks up the freshest
       // values, not whatever was current when it was enqueued.
@@ -132,7 +137,14 @@ export function useDailyReminderSync() {
       if (!reminderTime || !dailyReminderEnabled) {
         // No reminder configured or user disabled it — make sure nothing is
         // pending in the OS without touching check-in notifications.
-        await cancelNotificationById(NOTIFICATION_IDS.DAILY_REMINDER);
+        await cancelNotificationById(
+          NOTIFICATION_IDS.DAILY_REMINDER,
+          originatingSession,
+          originatingOperation,
+        );
+        if (!isDailyReminderOriginCurrent(originatingSession, originatingOperation)) {
+          return;
+        }
         lastAppliedRef.current = latestFingerprintRef.current;
         lastAppliedDayRef.current = todayStr;
         logger.log(`[useDailyReminderSync] Daily reminder disabled; cancelled daily reminder (reason=${reason})`);
@@ -141,12 +153,18 @@ export function useDailyReminderSync() {
 
       // Passive sync — NEVER prompt. If permission is off, leave it off.
       const hasPermission = await areNotificationsEnabled();
+      if (!isDailyReminderOriginCurrent(originatingSession, originatingOperation)) {
+        return;
+      }
       if (!hasPermission) {
         logger.log('[useDailyReminderSync] No permission; skipping schedule');
         return;
       }
 
-      await scheduleDailyReminder(reminderTime);
+      await scheduleDailyReminder(reminderTime, originatingSession, originatingOperation);
+      if (!isDailyReminderOriginCurrent(originatingSession, originatingOperation)) {
+        return;
+      }
 
       // Post-schedule stale-check: if state changed during the await (e.g.
       // user tapped "Delete Everything" mid-flight and we just recreated a
@@ -157,7 +175,11 @@ export function useDailyReminderSync() {
       const freshReminderTime = freshState.user?.reminderTime;
       const freshDailyReminderEnabled = freshState.user?.dailyReminderEnabled ?? Boolean(freshReminderTime);
       if (!freshReminderTime || !freshDailyReminderEnabled || latestFingerprintRef.current !== target) {
-        await cancelNotificationById(NOTIFICATION_IDS.DAILY_REMINDER);
+        await cancelNotificationById(
+          NOTIFICATION_IDS.DAILY_REMINDER,
+          originatingSession,
+          originatingOperation,
+        );
         // Force another run to converge on the new state.
         pendingRef.current = true;
         logger.log('[useDailyReminderSync] State changed during schedule; cancelled and re-queuing');

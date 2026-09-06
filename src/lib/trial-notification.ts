@@ -32,6 +32,7 @@ import {
   isRevenueCatEnabled,
 } from '@/lib/revenuecatClient';
 import { getSharedEncryptionKey } from '@/lib/mmkv-storage';
+import { captureSyncSession, isSyncSessionCurrent } from '@/lib/sync-session-fence';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -41,6 +42,18 @@ const LOG_PREFIX = '[TrialNotification]';
 
 /** Stable identifier so we can cancel/replace reliably. */
 const TRIAL_NOTIFICATION_ID = 'unfold-trial-ending';
+const TRIAL_NOTIFICATION_ID_SEPARATOR = ':';
+
+function trialEndingIdentifierForSession(session: number): string {
+  return `${TRIAL_NOTIFICATION_ID}${TRIAL_NOTIFICATION_ID_SEPARATOR}${session}`;
+}
+
+function isTrialEndingFamilyIdentifier(identifier: string): boolean {
+  return (
+    identifier === TRIAL_NOTIFICATION_ID ||
+    identifier.startsWith(`${TRIAL_NOTIFICATION_ID}${TRIAL_NOTIFICATION_ID_SEPARATOR}`)
+  );
+}
 
 /** RevenueCat entitlement identifier for the premium tier. */
 const PREMIUM_ENTITLEMENT = 'Unfold Premium';
@@ -101,14 +114,51 @@ function storeScheduledId(id: string, scheduledFor: Date): void {
  * Safe to call repeatedly — no-op if nothing is scheduled. Uses the stable
  * identifier so cancellation works across app launches.
  */
-export async function cancelTrialEndingNotification(): Promise<void> {
+export async function cancelTrialEndingNotification(
+  originatingSession: number = captureSyncSession(),
+): Promise<void> {
+  if (!isSyncSessionCurrent(originatingSession)) {
+    logger.log(`${LOG_PREFIX} Cancel skipped — reset session is not current`);
+    return;
+  }
+
   if (isUnsupportedPlatform()) {
     clearStoredId();
     return;
   }
 
+  const identifiers = new Set<string>([
+    TRIAL_NOTIFICATION_ID,
+    trialEndingIdentifierForSession(originatingSession),
+  ]);
+  const storedId = trialNotificationStore.getString(MMKV_SCHEDULED_ID_KEY);
+  if (storedId) {
+    identifiers.add(storedId);
+  }
   try {
-    await Notifications.cancelScheduledNotificationAsync(TRIAL_NOTIFICATION_ID);
+    const pending = await Notifications.getAllScheduledNotificationsAsync();
+    if (!isSyncSessionCurrent(originatingSession)) {
+      return;
+    }
+    for (const request of pending) {
+      if (isTrialEndingFamilyIdentifier(request.identifier)) {
+        identifiers.add(request.identifier);
+      }
+    }
+  } catch {
+    // Listing is best-effort. Known identifiers still cancel.
+  }
+
+  if (!isSyncSessionCurrent(originatingSession)) {
+    return;
+  }
+
+  try {
+    await Promise.all(
+      [...identifiers].map((identifier) =>
+        Notifications.cancelScheduledNotificationAsync(identifier),
+      ),
+    );
     logger.log(`${LOG_PREFIX} Cancelled pending trial-ending notification`);
   } catch (error) {
     // expo-notifications does not throw for unknown identifiers on iOS, but
@@ -116,6 +166,9 @@ export async function cancelTrialEndingNotification(): Promise<void> {
     logger.log(`${LOG_PREFIX} Cancel attempt ignored:`, error);
   }
 
+  if (!isSyncSessionCurrent(originatingSession)) {
+    return;
+  }
   clearStoredId();
 }
 
@@ -127,8 +180,14 @@ export async function cancelTrialEndingNotification(): Promise<void> {
  */
 export async function scheduleTrialEndingNotification(
   customerInfo: CustomerInfo,
+  originatingSession: number = captureSyncSession(),
 ): Promise<string | null> {
   if (isUnsupportedPlatform()) {
+    return null;
+  }
+
+  if (!isSyncSessionCurrent(originatingSession)) {
+    logger.log(`${LOG_PREFIX} Skipped: reset session is not current`);
     return null;
   }
 
@@ -137,13 +196,13 @@ export async function scheduleTrialEndingNotification(
   // Not in a trial — make sure nothing is queued and bail out.
   if (!entitlement || entitlement.periodType !== 'TRIAL') {
     logger.log(`${LOG_PREFIX} Skipped: entitlement is not a trial`);
-    await cancelTrialEndingNotification();
+    await cancelTrialEndingNotification(originatingSession);
     return null;
   }
 
   if (!entitlement.expirationDate) {
     logger.log(`${LOG_PREFIX} Skipped: trial has no expirationDate`);
-    await cancelTrialEndingNotification();
+    await cancelTrialEndingNotification(originatingSession);
     return null;
   }
 
@@ -153,7 +212,7 @@ export async function scheduleTrialEndingNotification(
       `${LOG_PREFIX} Skipped: could not parse expirationDate`,
       entitlement.expirationDate,
     );
-    await cancelTrialEndingNotification();
+    await cancelTrialEndingNotification(originatingSession);
     return null;
   }
 
@@ -166,11 +225,15 @@ export async function scheduleTrialEndingNotification(
         `(trial ends ${entitlement.expirationDate})`,
     );
     // No point leaving a stale schedule around.
-    await cancelTrialEndingNotification();
+    await cancelTrialEndingNotification(originatingSession);
     return null;
   }
 
   const hasPermission = await hasNotificationPermission();
+  if (!isSyncSessionCurrent(originatingSession)) {
+    logger.log(`${LOG_PREFIX} Abandoned after permission — reset session is not current`);
+    return null;
+  }
   if (!hasPermission) {
     logger.log(`${LOG_PREFIX} Skipped: notification permission not granted`);
     // Can't schedule — also clean up any stored state so we don't lie about it.
@@ -181,17 +244,18 @@ export async function scheduleTrialEndingNotification(
   // Always cancel the previous schedule before creating a new one. Scheduling
   // with the same identifier replaces the existing request on iOS, but we
   // cancel explicitly to keep Android behavior deterministic too.
-  try {
-    await Notifications.cancelScheduledNotificationAsync(TRIAL_NOTIFICATION_ID);
-  } catch {
-    // Ignore — nothing was scheduled.
+  await cancelTrialEndingNotification(originatingSession);
+  if (!isSyncSessionCurrent(originatingSession)) {
+    logger.log(`${LOG_PREFIX} Abandoned after cancel — reset session is not current`);
+    return null;
   }
 
   const reminderDate = new Date(reminderMs);
+  const identifier = trialEndingIdentifierForSession(originatingSession);
 
   try {
-    const identifier = await Notifications.scheduleNotificationAsync({
-      identifier: TRIAL_NOTIFICATION_ID,
+    const scheduled = await Notifications.scheduleNotificationAsync({
+      identifier,
       content: {
         title: 'Your Unfold trial ends in 2 days',
         body: "Your devotionals, journal, and everything you've built is waiting. Don't lose your progress.",
@@ -204,15 +268,23 @@ export async function scheduleTrialEndingNotification(
       },
     });
 
-    storeScheduledId(identifier, reminderDate);
+    if (!isSyncSessionCurrent(originatingSession)) {
+      await Notifications.cancelScheduledNotificationAsync(identifier);
+      logger.log(`${LOG_PREFIX} Late schedule discarded — reset session is not current`);
+      return null;
+    }
+
+    storeScheduledId(scheduled, reminderDate);
     logger.log(
       `${LOG_PREFIX} Scheduled for ${reminderDate.toISOString()} ` +
         `(trial ends ${entitlement.expirationDate})`,
     );
-    return identifier;
+    return scheduled;
   } catch (error) {
     logger.error(`${LOG_PREFIX} Failed to schedule trial-ending notification:`, error);
-    clearStoredId();
+    if (isSyncSessionCurrent(originatingSession)) {
+      clearStoredId();
+    }
     return null;
   }
 }
@@ -279,16 +351,22 @@ export async function debugFireTrialEndingNotification(
  * (e.g., web, missing API keys) — it no-ops.
  */
 export async function syncTrialEndingNotification(): Promise<void> {
+  const originatingSession = captureSyncSession();
   if (isUnsupportedPlatform()) return;
+  if (!isSyncSessionCurrent(originatingSession)) return;
 
   if (!isRevenueCatEnabled()) {
     // Without RevenueCat we cannot know the trial state — make sure there's
     // nothing stale left over and bail.
-    await cancelTrialEndingNotification();
+    await cancelTrialEndingNotification(originatingSession);
     return;
   }
 
   const customerInfoResult = await getCustomerInfo();
+  if (!isSyncSessionCurrent(originatingSession)) {
+    logger.log(`${LOG_PREFIX} Sync abandoned after customer info — reset session is not current`);
+    return;
+  }
   if (!customerInfoResult.ok) {
     logger.log(
       `${LOG_PREFIX} Sync skipped: getCustomerInfo failed (${customerInfoResult.reason})`,
@@ -296,7 +374,7 @@ export async function syncTrialEndingNotification(): Promise<void> {
     return;
   }
 
-  await scheduleTrialEndingNotification(customerInfoResult.data);
+  await scheduleTrialEndingNotification(customerInfoResult.data, originatingSession);
 }
 
 /**

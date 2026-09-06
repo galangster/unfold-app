@@ -1,12 +1,13 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
-import { useUnfoldStore, type Devotional } from './store';
+import { useUnfoldStore, type Devotional, type UserProfile } from './store';
 import { getEffectivePremiumAccessPolicy } from './premium-state';
 import { logger } from '@/lib/logger';
 import { getMessageForToday, MIDDAY_MESSAGES, EVENING_MESSAGES } from '@/constants/check-in-messages';
 import { getTodayCarryLine } from '@/lib/home-devotional-state';
 import { buildDevotionalReadyNotificationData } from '@/lib/push-notification-helpers';
 import { getDailyReminderContent } from '@/lib/daily-reminder-content';
+import { captureSyncSession, isSyncSessionCurrent } from '@/lib/sync-session-fence';
 
 // Notification identifiers for targeted cancel/reschedule.
 //
@@ -24,6 +25,102 @@ export const NOTIFICATION_IDS = {
   MIDDAY_CHECKIN: 'unfold-midday-checkin',
   EVENING_WINDDOWN: 'unfold-evening-winddown',
 } as const;
+
+const DAILY_REMINDER_ID_SEPARATOR = ':';
+
+// Last identifier this process successfully committed for the current owner.
+// Cross-launch leftovers also use the legacy fixed id or a session-scoped id.
+let lastDailyReminderIdentifier: string | null = null;
+
+// Distinguishes newer daily work from older work in the same reset session.
+// Session epoch alone cannot: two in-flight 8:00 / 9:00 schedules share a session.
+let dailyOperationEpoch = 0;
+
+export function dailyReminderIdentifierForSession(session: number): string {
+  return `${NOTIFICATION_IDS.DAILY_REMINDER}${DAILY_REMINDER_ID_SEPARATOR}${session}`;
+}
+
+function dailyReminderIdentifierForOperation(session: number, operation: number): string {
+  return `${dailyReminderIdentifierForSession(session)}${DAILY_REMINDER_ID_SEPARATOR}${operation}`;
+}
+
+function isDailyReminderFamilyIdentifier(identifier: string): boolean {
+  return (
+    identifier === NOTIFICATION_IDS.DAILY_REMINDER ||
+    identifier.startsWith(`${NOTIFICATION_IDS.DAILY_REMINDER}${DAILY_REMINDER_ID_SEPARATOR}`)
+  );
+}
+
+export function beginDailyReminderOperation(): number {
+  dailyOperationEpoch += 1;
+  return dailyOperationEpoch;
+}
+
+export function isDailyReminderOriginCurrent(session: number, operation: number): boolean {
+  return isSyncSessionCurrent(session) && operation === dailyOperationEpoch;
+}
+
+function claimDailyReminderOperation(
+  originatingSession: number,
+  originatingOperation?: number,
+): number | null {
+  if (originatingOperation !== undefined) {
+    return isDailyReminderOriginCurrent(originatingSession, originatingOperation)
+      ? originatingOperation
+      : null;
+  }
+  if (!isSyncSessionCurrent(originatingSession)) {
+    return null;
+  }
+  return beginDailyReminderOperation();
+}
+
+async function cancelOwnedDailyReminderIdentifiers(
+  session: number,
+  operation: number,
+): Promise<void> {
+  const extras = new Set<string>();
+  extras.add(dailyReminderIdentifierForSession(session));
+  extras.add(dailyReminderIdentifierForOperation(session, operation));
+  const ownedAtStart = lastDailyReminderIdentifier;
+  if (ownedAtStart) {
+    extras.add(ownedAtStart);
+  }
+  try {
+    const pending = await Notifications.getAllScheduledNotificationsAsync();
+    if (!isDailyReminderOriginCurrent(session, operation)) {
+      return;
+    }
+    for (const request of pending) {
+      if (isDailyReminderFamilyIdentifier(request.identifier)) {
+        extras.add(request.identifier);
+      }
+    }
+  } catch {
+    if (!isDailyReminderOriginCurrent(session, operation)) {
+      return;
+    }
+    // Listing is best-effort. Literal + session-scoped cancels still run.
+  }
+  if (!isDailyReminderOriginCurrent(session, operation)) {
+    return;
+  }
+  extras.delete(NOTIFICATION_IDS.DAILY_REMINDER);
+  await Promise.all(
+    [...extras].map((identifier) => Notifications.cancelScheduledNotificationAsync(identifier)),
+  );
+  if (!isDailyReminderOriginCurrent(session, operation)) {
+    return;
+  }
+  if (lastDailyReminderIdentifier === ownedAtStart) {
+    lastDailyReminderIdentifier = null;
+  }
+}
+
+export function resetDailyReminderOwnershipForTesting(): void {
+  lastDailyReminderIdentifier = null;
+  dailyOperationEpoch = 0;
+}
 
 // Day keys used across the store + UI + notifications layers.
 // Order matters: WEEKLY ops are emitted in this order regardless of how the
@@ -160,10 +257,29 @@ export async function areNotificationsEnabled(): Promise<boolean> {
   return status === 'granted';
 }
 
-// Cancel a specific scheduled notification by its identifier
-export async function cancelNotificationById(identifier: string): Promise<void> {
+// Cancel a specific scheduled notification by its identifier.
+// Callers that await and then cancel must pass the originating reset session.
+// Daily wrappers that already own an operation must pass it so a stale call
+// cannot expand into a newer same-session request or begin a fresh operation.
+// Public daily cancel claims ownership before the first native await so a
+// delayed literal cancel cannot later steal ownership from a newer request.
+export async function cancelNotificationById(
+  identifier: string,
+  originatingSession: number = captureSyncSession(),
+  originatingOperation?: number,
+): Promise<void> {
   if (Platform.OS === 'web') return;
+  const dailyOperation =
+    identifier === NOTIFICATION_IDS.DAILY_REMINDER
+      ? claimDailyReminderOperation(originatingSession, originatingOperation)
+      : null;
   await Notifications.cancelScheduledNotificationAsync(identifier);
+  if (
+    dailyOperation !== null &&
+    isDailyReminderOriginCurrent(originatingSession, dailyOperation)
+  ) {
+    await cancelOwnedDailyReminderIdentifiers(originatingSession, dailyOperation);
+  }
   logger.log(`[Notifications] Cancelled notification: ${identifier}`);
 }
 
@@ -204,17 +320,38 @@ function getCurrentDevotionalNotificationData(): ReturnType<typeof buildDevotion
   return buildDevotionalReadyNotificationData(currentDevotional, currentDevotional.currentDay);
 }
 
-// Schedule a daily reminder notification
-export async function scheduleDailyReminder(timeString: string): Promise<string | null> {
+// Schedule a daily reminder notification.
+// Wrappers that already awaited must pass the originating reset session and
+// daily operation so a stale call cannot capture a fresh session/operation
+// and write after reset or a newer same-session request.
+export async function scheduleDailyReminder(
+  timeString: string,
+  originatingSession: number = captureSyncSession(),
+  originatingOperation?: number,
+): Promise<string | null> {
   if (Platform.OS === 'web') {
     logger.log('[Notifications] Not available on web');
     return null;
   }
 
-  // Cancel only the daily reminder (not midday/evening)
-  await cancelNotificationById(NOTIFICATION_IDS.DAILY_REMINDER);
+  const operation = claimDailyReminderOperation(originatingSession, originatingOperation);
+  if (operation === null) {
+    logger.log('[Notifications] Daily reminder skipped — originating owner is not current');
+    return null;
+  }
+
+  // Cancel only the daily reminder family (not midday/evening)
+  await cancelNotificationById(NOTIFICATION_IDS.DAILY_REMINDER, originatingSession, operation);
+  if (!isDailyReminderOriginCurrent(originatingSession, operation)) {
+    logger.log('[Notifications] Daily reminder abandoned after cancel — originating owner is not current');
+    return null;
+  }
 
   const hasPermission = await requestNotificationPermissions();
+  if (!isDailyReminderOriginCurrent(originatingSession, operation)) {
+    logger.log('[Notifications] Daily reminder abandoned after permission — originating owner is not current');
+    return null;
+  }
   if (!hasPermission) {
     logger.log('[Notifications] Permission not granted');
     return null;
@@ -223,10 +360,11 @@ export async function scheduleDailyReminder(timeString: string): Promise<string 
   const { hours, minutes } = parseTimeString(timeString);
   const { title, body } = getNotificationContent();
   const data = getCurrentDevotionalNotificationData();
+  const identifier = dailyReminderIdentifierForOperation(originatingSession, operation);
 
   try {
-    const identifier = await Notifications.scheduleNotificationAsync({
-      identifier: NOTIFICATION_IDS.DAILY_REMINDER,
+    const scheduled = await Notifications.scheduleNotificationAsync({
+      identifier,
       content: {
         title,
         body,
@@ -240,13 +378,63 @@ export async function scheduleDailyReminder(timeString: string): Promise<string 
       },
     });
 
+    if (!isDailyReminderOriginCurrent(originatingSession, operation)) {
+      // Apple replaces a pending request that reuses the same identifier.
+      // This attempt uses its own operation id so a newer request survives.
+      await Notifications.cancelScheduledNotificationAsync(identifier);
+      logger.log('[Notifications] Late daily schedule discarded — originating owner is not current');
+      return null;
+    }
+
+    lastDailyReminderIdentifier = scheduled;
     logger.log(`[Notifications] Daily reminder scheduled for ${timeString} (${hours}:${minutes})`);
     logger.log(`[Notifications] Content: "${title}" — "${body.substring(0, 50)}..."`);
-    return identifier;
+    return scheduled;
   } catch (error) {
     logger.error('[Notifications] Failed to schedule:', error);
     return null;
   }
+}
+
+/**
+ * Settings toggle follow-up. Captures the originating reset session and daily
+ * operation before permission / native work so a stale settings call cannot
+ * restore erased preferences after reset or overwrite a newer same-session
+ * time selection written before the owner debounce starts.
+ */
+export async function commitDailyReminderSetting(
+  enabled: boolean,
+  timeString: string,
+  persistPreference: (updates: Partial<UserProfile>) => void,
+): Promise<boolean> {
+  const originatingSession = captureSyncSession();
+  if (!isSyncSessionCurrent(originatingSession)) {
+    return false;
+  }
+  const originatingOperation = beginDailyReminderOperation();
+  if (enabled) {
+    const result = await scheduleDailyReminder(
+      timeString,
+      originatingSession,
+      originatingOperation,
+    );
+    if (!result || !isDailyReminderOriginCurrent(originatingSession, originatingOperation)) {
+      return false;
+    }
+    persistPreference({ reminderTime: timeString, dailyReminderEnabled: true });
+    return true;
+  }
+
+  await cancelNotificationById(
+    NOTIFICATION_IDS.DAILY_REMINDER,
+    originatingSession,
+    originatingOperation,
+  );
+  if (!isDailyReminderOriginCurrent(originatingSession, originatingOperation)) {
+    return false;
+  }
+  persistPreference({ dailyReminderEnabled: false });
+  return true;
 }
 
 // Cancel all Unfold reminders (daily + midday + evening) by ID
@@ -708,9 +896,14 @@ export async function cancelEveningWindDown(): Promise<void> {
 // Refresh daily reminder with new content (call when day advances)
 // This re-schedules the notification with the latest teaser content
 export async function refreshDailyReminder(): Promise<boolean> {
+  const originatingSession = captureSyncSession();
   if (Platform.OS === 'web') {
     return false;
   }
+  if (!isSyncSessionCurrent(originatingSession)) {
+    return false;
+  }
+  const originatingOperation = beginDailyReminderOperation();
 
   // Get the user's reminder time from the store
   const state = useUnfoldStore.getState();
@@ -723,12 +916,20 @@ export async function refreshDailyReminder(): Promise<boolean> {
 
   // Check if we have permission before refreshing
   const hasPermission = await areNotificationsEnabled();
+  if (!isDailyReminderOriginCurrent(originatingSession, originatingOperation)) {
+    return false;
+  }
   if (!hasPermission) {
     logger.log('[Notifications] No permission, skipping refresh');
     return false;
   }
 
-  // Re-schedule with new content
-  const result = await scheduleDailyReminder(reminderTime);
+  // Re-schedule with the originating session and operation — do not begin a
+  // new daily operation after the permission wait.
+  const result = await scheduleDailyReminder(
+    reminderTime,
+    originatingSession,
+    originatingOperation,
+  );
   return result !== null;
 }
