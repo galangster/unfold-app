@@ -13,6 +13,10 @@ jest.mock('expo-haptics', () => ({
   impactAsync: jest.fn(),
   ImpactFeedbackStyle: { Light: 'light' },
 }));
+jest.mock('@react-native-segmented-control/segmented-control', () => ({
+  __esModule: true,
+  default: () => null,
+}));
 jest.mock('react-native-mmkv', () => ({
   MMKV: jest.fn().mockImplementation(() => ({
     getBoolean: jest.fn(() => false),

@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, Text } from 'react-native';
 import { OT_BOOKS } from '@/lib/bible-constants';
 import { bibleHubBookPillColumnCount, bibleHubBookPillWidthStyle } from '@/lib/bible-hub-book-pill-layout';
+import { BIBLE_HUB_VIEW_STORAGE_KEY } from '@/lib/bible-hub-view-preference';
 import BibleHomeScreen from '../../../app/(tabs)/(bible)/index';
 
 const renderer = jest.requireActual('react-test-renderer');
@@ -23,14 +24,33 @@ jest.mock('expo-haptics', () => ({
   ImpactFeedbackStyle: { Light: 'light' },
 }));
 
-jest.mock('react-native-mmkv', () => ({
-  MMKV: jest.fn().mockImplementation(() => ({
-    getBoolean: jest.fn(() => true),
-    set: jest.fn(),
-    getString: jest.fn(),
-    delete: jest.fn(),
-  })),
+jest.mock('@react-native-segmented-control/segmented-control', () => ({
+  __esModule: true,
+  default: () => null,
 }));
+
+jest.mock('react-native-mmkv', () => {
+  const store = new Map<string, string | boolean>();
+  (globalThis as typeof globalThis & { __bibleHomeMeta: Map<string, string | boolean> }).__bibleHomeMeta = store;
+  return {
+    MMKV: jest.fn().mockImplementation(() => ({
+      getBoolean: (key: string) => {
+        const value = store.get(key);
+        return typeof value === 'boolean' ? value : true;
+      },
+      getString: (key: string) => {
+        const value = store.get(key);
+        return typeof value === 'string' ? value : undefined;
+      },
+      set: (key: string, value: string | boolean) => {
+        store.set(key, value);
+      },
+      delete: (key: string) => {
+        store.delete(key);
+      },
+    })),
+  };
+});
 
 jest.mock('react-native-reanimated', () => {
   const { View } = jest.requireActual('react-native');
@@ -123,12 +143,18 @@ function flatten(style: unknown) {
   return StyleSheet.flatten(style) as Record<string, unknown>;
 }
 
+function bibleHomeMeta() {
+  return (globalThis as typeof globalThis & { __bibleHomeMeta: Map<string, string | boolean> }).__bibleHomeMeta;
+}
+
 describe('Bible hub category book pills', () => {
   beforeEach(() => {
     mockRouter.push.mockReset();
     mockRouter.replace.mockReset();
     mockBibleWindow.width = 402;
     mockBibleWindow.fontScale = 1;
+    bibleHomeMeta().clear();
+    bibleHomeMeta().set(BIBLE_HUB_VIEW_STORAGE_KEY, 'names');
   });
 
   it('renders complete book names without a line cap at 402pt default text', () => {
@@ -142,6 +168,7 @@ describe('Bible hub category book pills', () => {
       const label = pill.findAllByType(Text)[0];
       expect(label.props.children).toBe(name);
       expect(label.props.numberOfLines).toBeUndefined();
+      expect(label.props.maxFontSizeMultiplier).toBe(0);
       expect(flatten(pill.props.style)).toEqual(expect.objectContaining(bibleHubBookPillWidthStyle(3)));
     }
   });
