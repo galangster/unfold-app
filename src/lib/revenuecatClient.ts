@@ -1029,40 +1029,70 @@ export const restorePurchases = (): Promise<
 export const addCustomerInfoUpdateListener = (
   listener: CustomerInfoUpdateListener,
 ): Promise<RevenueCatResult<() => boolean>> => {
-  return guardRevenueCatUsage("addCustomerInfoUpdateListener", async () => {
-    let refreshInflight: Promise<void> | null = null;
-    let refreshQueued = false;
+  let gatedListener: CustomerInfoUpdateListener | null = null;
+  let disposed = false;
+  let refreshInflight: Promise<void> | null = null;
+  let refreshQueued = false;
 
-    const requestCurrentIdentityRead = (): void => {
-      if (refreshInflight) {
-        refreshQueued = true;
-        return;
+  const dispose = (): boolean => {
+    if (disposed) {
+      return false;
+    }
+    disposed = true;
+    refreshQueued = false;
+    if (!gatedListener) {
+      return false;
+    }
+    const removed = Purchases.removeCustomerInfoUpdateListener(gatedListener);
+    gatedListener = null;
+    return removed;
+  };
+
+  const requestCurrentIdentityRead = (): void => {
+    if (disposed) {
+      return;
+    }
+    if (refreshInflight) {
+      refreshQueued = true;
+      return;
+    }
+    refreshInflight = (async () => {
+      try {
+        do {
+          refreshQueued = false;
+          if (disposed) {
+            return;
+          }
+          const epoch = identityEpoch;
+          const result = await getCustomerInfo();
+          if (disposed) {
+            return;
+          }
+          if (identityEpoch !== epoch) continue;
+          if (!result.ok) continue;
+          if (isLocalResetInProgress()) continue;
+          listener(result.data);
+        } while (refreshQueued);
+      } catch (error) {
+        logger.log(`${LOG_PREFIX} listener current-identity read failed:`, error);
+      } finally {
+        refreshInflight = null;
       }
-      refreshInflight = (async () => {
-        try {
-          do {
-            refreshQueued = false;
-            const epoch = identityEpoch;
-            const result = await getCustomerInfo();
-            if (identityEpoch !== epoch) continue;
-            if (!result.ok) continue;
-            if (isLocalResetInProgress()) continue;
-            listener(result.data);
-          } while (refreshQueued);
-        } catch (error) {
-          logger.log(`${LOG_PREFIX} listener current-identity read failed:`, error);
-        } finally {
-          refreshInflight = null;
-        }
-      })();
-    };
+    })();
+  };
 
-    const gatedListener: CustomerInfoUpdateListener = () => {
+  return guardRevenueCatUsage("addCustomerInfoUpdateListener", async () => {
+    const nextListener: CustomerInfoUpdateListener = () => {
       requestCurrentIdentityRead();
     };
-
-    Purchases.addCustomerInfoUpdateListener(gatedListener);
-    return () => Purchases.removeCustomerInfoUpdateListener(gatedListener);
+    Purchases.addCustomerInfoUpdateListener(nextListener);
+    gatedListener = nextListener;
+    return dispose;
+  }).then((result) => {
+    if (!result.ok) {
+      dispose();
+    }
+    return result;
   });
 };
 
