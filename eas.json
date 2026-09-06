@@ -39,6 +39,7 @@
     },
     "production": {
       "autoIncrement": true,
+      "bun": "1.3.14",
       "env": {
         "EXPO_PUBLIC_BACKEND_URL": "https://api.unfoldapp.co",
         "EXPO_PUBLIC_REVENUECAT_APPLE_KEY": "appl_oQNnQifEgzWidhmeJGtsJSjjwJx",
