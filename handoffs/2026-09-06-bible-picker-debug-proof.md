@@ -19,6 +19,9 @@ Date: 2026-09-06
 - `Revelation` stayed 182 points wide in its final New Testament row.
 - The flow reached Genesis chapter 1, verse 1, and the reader.
 - The reader displayed `Genesis 1` after selection.
+- Navigator tabs show complete labels at normal text size.
+- Navigator tabs show complete labels at extra extra extra large text size.
+- Tab items keep a 44-point minimum touch target.
 - Simulator Dynamic Type now reads `large`.
 
 ## Proof files
@@ -27,6 +30,8 @@ Date: 2026-09-06
 - `proofs/2026-09-06-bible-picker/large-text.png`
 - `proofs/2026-09-06-bible-picker/reader-genesis-1.jpg`
 - `proofs/2026-09-06-bible-picker/final-row-geometry.json`
+- `proofs/2026-09-06-bible-picker/tabs-normal-fixed.jpg`
+- `proofs/2026-09-06-bible-picker/tabs-large-text-fixed.jpg`
 
 The proof contains Bible navigation only. It contains no journal or user content.
 

@@ -651,6 +651,7 @@ const styles = StyleSheet.create({
   },
   tabItem: {
     flex: 1,
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: Spacing['2'],
@@ -659,6 +660,7 @@ const styles = StyleSheet.create({
   tabLabel: {
     fontFamily: FontFamily.ui,
     fontSize: 13,
+    lineHeight: 20,
     letterSpacing: 0.2,
   },
 
