@@ -256,6 +256,11 @@ export function isRevenueCatIdentityVerified(): boolean {
   return configuredAppUserID !== null && revenueCatIdentityError === null;
 }
 
+/** Return the exact SDK-verified identity for an explicit user support action. */
+export function getRevenueCatSupportId(): string | null {
+  return isRevenueCatIdentityVerified() ? configuredAppUserID : null;
+}
+
 function notifyIdentityVerified(): void {
   if (!isRevenueCatIdentityVerified()) return;
   const epoch = identityEpoch;
