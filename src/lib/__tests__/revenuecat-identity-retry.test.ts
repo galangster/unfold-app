@@ -99,6 +99,8 @@ describe('retryRevenueCatIdentitySync', () => {
   it('identity failure is sticky until retried', async () => {
     const { client } = await setupWithFailingLogin();
 
+    expect(client.getRevenueCatSupportId()).toBeNull();
+
     // Baseline pin: failed identity → sdk_error
     const result = await client.getCustomerInfo();
     expect(result).toMatchObject({ ok: false, reason: 'sdk_error' });
@@ -121,6 +123,7 @@ describe('retryRevenueCatIdentitySync', () => {
     // After retry, getCustomerInfo should succeed
     const result = await client.getCustomerInfo();
     expect(result).toMatchObject({ ok: true });
+    expect(client.getRevenueCatSupportId()).toBe('anon_11111111-1111-4111-8111-111111111111');
   });
 
   it('retry is single-flight', async () => {
