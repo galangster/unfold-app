@@ -40,6 +40,7 @@ const mockUpdateQuestionResponse = jest.fn((entryId: string, question: string, r
 });
 
 const mockFlushUnfoldStorePersist = jest.fn(() => true);
+const mockFlushUnfoldStorePersistAsync = jest.fn(() => new Promise<boolean>(() => {}));
 
 const mockGetJournalEntry = jest.fn((devotionalId: string, dayNumber: number) =>
   mockEntries.find((entry) => entry.devotionalId === devotionalId && entry.dayNumber === dayNumber)
@@ -50,6 +51,7 @@ jest.mock('@/lib/store', () => ({
     medium: { body: 18, bodyLineHeight: 28 },
   },
   flushUnfoldStorePersist: () => mockFlushUnfoldStorePersist(),
+  flushUnfoldStorePersistAsync: () => mockFlushUnfoldStorePersistAsync(),
   useUnfoldStore: (selector: (state: unknown) => unknown) =>
     selector({
       getJournalEntry: mockGetJournalEntry,
@@ -122,6 +124,7 @@ describe('InlineReflectionJournal', () => {
   beforeEach(() => {
     jest.useFakeTimers();
     jest.clearAllMocks();
+    mockFlushUnfoldStorePersistAsync.mockImplementation(() => new Promise<boolean>(() => {}));
     appStateListener = null;
     jest.spyOn(AppState, 'addEventListener').mockImplementation((event, listener) => {
       if (event === 'change') {
@@ -139,8 +142,251 @@ describe('InlineReflectionJournal', () => {
     });
   });
 
-  afterEach(() => {
-    jest.runOnlyPendingTimers();
+  it('marks reflection optional without claiming an untouched response was saved', () => {
+    let tree: any;
+
+    act(() => {
+      tree = renderer.create(
+        <InlineReflectionJournal
+          questions={['What stood out?']}
+          devotionalId="devotional"
+          dayNumber={2}
+          onOpenFullJournal={jest.fn()}
+        />
+      );
+    });
+
+    const labels = tree!.root.findAllByType(Text).map((node: any) => node.props.children).join(' ');
+    expect(labels).toContain('Optional reflection');
+    expect(labels).not.toContain('Saving...');
+    expect(labels).not.toContain('Saved to Journal');
+    expect(mockAddJournalEntry).not.toHaveBeenCalled();
+
+    act(() => tree!.unmount());
+  });
+
+  it('shows pending status until the response reaches durable persistence', async () => {
+    let resolvePersist: ((value: boolean) => void) | undefined;
+    mockFlushUnfoldStorePersistAsync.mockImplementationOnce(
+      () => new Promise<boolean>((resolve) => { resolvePersist = resolve; })
+    );
+    let tree: any;
+
+    act(() => {
+      tree = renderer.create(
+        <InlineReflectionJournal
+          questions={['What stood out?']}
+          devotionalId="devotional"
+          dayNumber={2}
+          onOpenFullJournal={jest.fn()}
+        />
+      );
+    });
+
+    act(() => {
+      tree!.root.findByType(TextInput).props.onChangeText('Grace stayed with me.');
+    });
+    expect(tree!.root.findByProps({ testID: 'reflection-save-status-0' }).props.children).toBe('Saving...');
+
+    act(() => {
+      jest.advanceTimersByTime(800);
+    });
+    expect(mockUpdateQuestionResponse).toHaveBeenCalledWith(
+      'entry-devotional-2',
+      'What stood out?',
+      'Grace stayed with me.'
+    );
+    expect(tree!.root.findByProps({ testID: 'reflection-save-status-0' }).props.children).toBe('Saving...');
+
+    await act(async () => {
+      resolvePersist?.(true);
+      await Promise.resolve();
+    });
+    expect(tree!.root.findByProps({ testID: 'reflection-save-status-0' }).props.children).toBe('Saved to Journal');
+
+    act(() => tree!.unmount());
+  });
+
+  it('shows a persistence failure and retries the same response on explicit tap', async () => {
+    mockFlushUnfoldStorePersistAsync.mockRejectedValueOnce(new Error('disk unavailable'));
+    mockFlushUnfoldStorePersistAsync.mockResolvedValueOnce(true);
+    let tree: any;
+
+    act(() => {
+      tree = renderer.create(
+        <InlineReflectionJournal
+          questions={['What stood out?']}
+          devotionalId="devotional"
+          dayNumber={2}
+          onOpenFullJournal={jest.fn()}
+        />
+      );
+    });
+
+    act(() => {
+      tree!.root.findByType(TextInput).props.onChangeText('Keep this exact response.');
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(800);
+      await Promise.resolve();
+    });
+
+    const retry = tree!.root.findByProps({ accessibilityLabel: 'Save failed. Tap to retry.' });
+    expect(retry).toBeTruthy();
+    expect(mockEntries.find((entry) => entry.dayNumber === 2)?.questionResponses).toEqual([
+      { question: 'What stood out?', response: 'Keep this exact response.' },
+    ]);
+
+    await act(async () => {
+      retry.props.onPress();
+      await Promise.resolve();
+    });
+
+    expect(mockUpdateQuestionResponse).toHaveBeenLastCalledWith(
+      'entry-devotional-2',
+      'What stood out?',
+      'Keep this exact response.'
+    );
+    expect(tree!.root.findByProps({ testID: 'reflection-save-status-0' }).props.children).toBe('Saved to Journal');
+
+    act(() => tree!.unmount());
+  });
+
+  it('flushes the first response before another question can replace it', () => {
+    let tree: any;
+
+    act(() => {
+      tree = renderer.create(
+        <InlineReflectionJournal
+          questions={['What stood out?', 'What will you carry forward?']}
+          devotionalId="devotional"
+          dayNumber={2}
+          onOpenFullJournal={jest.fn()}
+        />
+      );
+    });
+
+    act(() => {
+      tree!.root.findByType(TextInput).props.onChangeText('The first response.');
+      tree!.root
+        .findByProps({ accessibilityLabel: 'Reflection question 2: What will you carry forward?' })
+        .props.onPress();
+    });
+
+    expect(mockUpdateQuestionResponse).toHaveBeenCalledWith(
+      'entry-devotional-2',
+      'What stood out?',
+      'The first response.'
+    );
+
+    act(() => tree!.unmount());
+  });
+
+  it('keeps an older question save failure available after another question changes', async () => {
+    let rejectFirstSave: ((reason: Error) => void) | undefined;
+    mockFlushUnfoldStorePersistAsync.mockImplementationOnce(
+      () => new Promise<boolean>((_resolve, reject) => { rejectFirstSave = reject; })
+    );
+    let tree: any;
+
+    act(() => {
+      tree = renderer.create(
+        <InlineReflectionJournal
+          questions={['What stood out?', 'What will you carry forward?']}
+          devotionalId="devotional"
+          dayNumber={2}
+          onOpenFullJournal={jest.fn()}
+        />
+      );
+    });
+
+    act(() => {
+      tree!.root.findByType(TextInput).props.onChangeText('First answer');
+      tree!.root
+        .findByProps({ accessibilityLabel: 'Reflection question 2: What will you carry forward?' })
+        .props.onPress();
+    });
+    act(() => {
+      tree!.root.findByType(TextInput).props.onChangeText('Second answer');
+    });
+
+    await act(async () => {
+      rejectFirstSave?.(new Error('first write failed'));
+      await Promise.resolve();
+    });
+
+    act(() => {
+      tree!.root
+        .findByProps({ accessibilityLabel: 'Reflection question 1: What stood out?' })
+        .props.onPress();
+    });
+
+    expect(tree!.root.findByProps({ accessibilityLabel: 'Save failed. Tap to retry.' })).toBeTruthy();
+
+    act(() => tree!.unmount());
+  });
+
+  it('does not reuse a stale save revision after returning to an earlier day', async () => {
+    let resolveFirstSave: ((value: boolean) => void) | undefined;
+    mockFlushUnfoldStorePersistAsync.mockImplementationOnce(
+      () => new Promise<boolean>((resolve) => { resolveFirstSave = resolve; })
+    );
+    let tree: any;
+    const questions = ['What stood out?'];
+
+    act(() => {
+      tree = renderer.create(
+        <InlineReflectionJournal
+          questions={questions}
+          devotionalId="devotional"
+          dayNumber={1}
+          onOpenFullJournal={jest.fn()}
+        />
+      );
+    });
+    act(() => {
+      tree!.root.findByType(TextInput).props.onChangeText('Old day one edit');
+      jest.advanceTimersByTime(800);
+    });
+    act(() => {
+      tree!.update(
+        <InlineReflectionJournal
+          questions={questions}
+          devotionalId="devotional"
+          dayNumber={2}
+          onOpenFullJournal={jest.fn()}
+        />
+      );
+    });
+    act(() => {
+      tree!.update(
+        <InlineReflectionJournal
+          questions={questions}
+          devotionalId="devotional"
+          dayNumber={1}
+          onOpenFullJournal={jest.fn()}
+        />
+      );
+    });
+    act(() => {
+      tree!.root.findByType(TextInput).props.onChangeText('New day one edit');
+    });
+
+    await act(async () => {
+      resolveFirstSave?.(true);
+      await Promise.resolve();
+    });
+
+    expect(tree!.root.findByProps({ testID: 'reflection-save-status-0' }).props.children).toBe('Saving...');
+
+    act(() => tree!.unmount());
+  });
+
+  afterEach(async () => {
+    await act(async () => {
+      jest.runOnlyPendingTimers();
+      await Promise.resolve();
+    });
     jest.useRealTimers();
     jest.restoreAllMocks();
   });

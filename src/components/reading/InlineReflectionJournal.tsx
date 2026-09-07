@@ -14,7 +14,12 @@ import { alpha } from '@/components/ui';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
-import { flushUnfoldStorePersist, useUnfoldStore, FontSize } from '@/lib/store';
+import {
+  flushUnfoldStorePersist,
+  flushUnfoldStorePersistAsync,
+  useUnfoldStore,
+  FontSize,
+} from '@/lib/store';
 import { getReflectionTypography, type ReflectionTypography } from '@/lib/reflection-typography';
 import { Typography } from '@/constants/typography';
 
@@ -43,6 +48,17 @@ interface InlineReflectionJournalProps {
   scrollViewRef?: RefObject<ScrollView | null>;
   onFocusInput?: (contentY: number) => void;
 }
+
+type ReflectionSaveState = 'saving' | 'saved' | 'error';
+
+type PendingResponse = {
+  index: number;
+  question: string;
+  response: string;
+  devotionalId: string;
+  dayNumber: number;
+  revision: number;
+};
 
 /**
  * Interactive inline reflection journal that appears in the reading screen.
@@ -82,16 +98,17 @@ export function InlineReflectionJournal({
 
   // Local response state (before debounced save)
   const [localResponses, setLocalResponses] = useState<Map<number, string>>(new Map());
+  const [saveStatuses, setSaveStatuses] = useState<Map<number, ReflectionSaveState>>(new Map());
   const localResponsesRef = useRef<Map<number, string>>(localResponses);
   localResponsesRef.current = localResponses;
   const hasPendingSaveRef = useRef(false);
-  const pendingResponseRef = useRef<{
-    index: number;
-    question: string;
-    response: string;
-    devotionalId: string;
-    dayNumber: number;
-  } | null>(null);
+  const pendingResponseRef = useRef<PendingResponse | null>(null);
+  const failedResponsesRef = useRef<Map<number, PendingResponse>>(new Map());
+  const latestRevisionsRef = useRef<Map<number, number>>(new Map());
+  const revisionCounterRef = useRef(0);
+  const currentScopeRef = useRef({ devotionalId, dayNumber });
+  currentScopeRef.current = { devotionalId, dayNumber };
+  const isMountedRef = useRef(true);
   const flushPendingResponseRef = useRef<() => void>(() => {});
   const autoSaveControllerRef = useRef<AutosaveController | null>(null);
   if (!autoSaveControllerRef.current) {
@@ -104,6 +121,13 @@ export function InlineReflectionJournal({
 
   const questionsKey = useMemo(() => questions.join('\u001f'), [questions]);
 
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   // Load day-scoped responses from store. This must also clear stale local state when
   // swiping from an answered day to an unanswered day, because the component instance
   // is reused across devotional days.
@@ -113,8 +137,11 @@ export function InlineReflectionJournal({
       focusTimerRef.current = null;
     }
     autoSaveControllerRef.current?.flush();
+    latestRevisionsRef.current.clear();
     pendingResponseRef.current = null;
+    failedResponsesRef.current.clear();
     hasPendingSaveRef.current = false;
+    setSaveStatuses(new Map());
 
     const initial = new Map<number, string>();
     if (existingEntry?.questionResponses) {
@@ -163,21 +190,54 @@ export function InlineReflectionJournal({
     [devotionalId, dayNumber, addJournalEntry]
   );
 
+  const isCurrentSaveAttempt = useCallback((pending: PendingResponse): boolean => {
+    const currentScope = currentScopeRef.current;
+    return (
+      isMountedRef.current &&
+      latestRevisionsRef.current.get(pending.index) === pending.revision &&
+      currentScope.devotionalId === pending.devotionalId &&
+      currentScope.dayNumber === pending.dayNumber
+    );
+  }, []);
+
   // Auto-save a response after 800ms of inactivity
   const saveResponse = useCallback(
-    (
+    async (
       index: number,
       question: string,
       response: string,
       targetDevotionalId = devotionalId,
-      targetDayNumber = dayNumber
+      targetDayNumber = dayNumber,
+      revision = latestRevisionsRef.current.get(index) ?? ++revisionCounterRef.current,
     ) => {
-      const entryId = ensureEntry(targetDevotionalId, targetDayNumber);
-      if (entryId) {
+      const pending: PendingResponse = {
+        index,
+        question,
+        response,
+        devotionalId: targetDevotionalId,
+        dayNumber: targetDayNumber,
+        revision,
+      };
+
+      try {
+        const entryId = ensureEntry(targetDevotionalId, targetDayNumber);
+        if (!entryId) throw new Error('Journal entry unavailable');
         updateQuestionResponse(entryId, question, response);
+        const wrote = await flushUnfoldStorePersistAsync();
+        if (!wrote) throw new Error('Journal persistence unavailable');
+
+        if (isCurrentSaveAttempt(pending)) {
+          failedResponsesRef.current.delete(index);
+          setSaveStatuses((current) => new Map(current).set(index, 'saved'));
+        }
+      } catch {
+        if (isCurrentSaveAttempt(pending)) {
+          failedResponsesRef.current.set(index, pending);
+          setSaveStatuses((current) => new Map(current).set(index, 'error'));
+        }
       }
     },
-    [devotionalId, dayNumber, ensureEntry, updateQuestionResponse]
+    [devotionalId, dayNumber, ensureEntry, isCurrentSaveAttempt, updateQuestionResponse]
   );
   const saveResponseRef = useRef(saveResponse);
   saveResponseRef.current = saveResponse;
@@ -191,7 +251,8 @@ export function InlineReflectionJournal({
       pending.question,
       pending.response,
       pending.devotionalId,
-      pending.dayNumber
+      pending.dayNumber,
+      pending.revision,
     );
     pendingResponseRef.current = null;
     hasPendingSaveRef.current = false;
@@ -207,18 +268,38 @@ export function InlineReflectionJournal({
       });
 
       // Debounced save
+      const revision = ++revisionCounterRef.current;
+      latestRevisionsRef.current.set(index, revision);
       hasPendingSaveRef.current = true;
+      failedResponsesRef.current.delete(index);
+      setSaveStatuses((current) => new Map(current).set(index, 'saving'));
       pendingResponseRef.current = {
         index,
         question,
         response: text,
         devotionalId,
         dayNumber,
+        revision,
       };
       autoSaveControllerRef.current?.schedule();
     },
     [devotionalId, dayNumber]
   );
+
+  const handleRetrySave = useCallback((index: number) => {
+    const failed = failedResponsesRef.current.get(index);
+    if (!failed) return;
+
+    setSaveStatuses((current) => new Map(current).set(index, 'saving'));
+    void saveResponseRef.current(
+      failed.index,
+      failed.question,
+      failed.response,
+      failed.devotionalId,
+      failed.dayNumber,
+      failed.revision,
+    );
+  }, []);
 
   const measureFocusedInput = useCallback(
     (index: number) => {
@@ -242,6 +323,9 @@ export function InlineReflectionJournal({
   const handleQuestionTap = useCallback(
     (index: number) => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      if (expandedIndex !== null) {
+        autoSaveControllerRef.current?.flush();
+      }
 
       if (expandedIndex === index) {
         // Collapse
@@ -272,7 +356,7 @@ export function InlineReflectionJournal({
       if (hasPendingSaveRef.current) {
         localResponsesRef.current.forEach((response, index) => {
           if (index < questions.length) {
-            saveResponseRef.current(index, questions[index], response);
+            void saveResponseRef.current(index, questions[index], response);
           }
         });
       }
@@ -332,7 +416,7 @@ export function InlineReflectionJournal({
             textAlign: 'center',
           }}
         >
-          For Reflection
+          Optional reflection
         </Text>
       </View>
 
@@ -374,6 +458,8 @@ export function InlineReflectionJournal({
             response={response}
             onTap={handleQuestionTap}
             onResponseChange={handleResponseChange}
+            saveState={saveStatuses.get(index) ?? null}
+            onRetrySave={handleRetrySave}
             inputRefs={inputRefs}
             colors={colors}
             isDark={isDark}
@@ -435,6 +521,8 @@ function ReflectionQuestionCard({
   response,
   onTap,
   onResponseChange,
+  saveState,
+  onRetrySave,
   inputRefs,
   colors,
   isDark,
@@ -449,6 +537,8 @@ function ReflectionQuestionCard({
   response: string;
   onTap: (index: number) => void;
   onResponseChange: (index: number, question: string, text: string) => void;
+  saveState: ReflectionSaveState | null;
+  onRetrySave: (index: number) => void;
   inputRefs: React.MutableRefObject<Map<number, TextInput | null>>;
   colors: any;
   isDark: boolean;
@@ -538,7 +628,7 @@ function ReflectionQuestionCard({
               textAlignVertical="top"
               keyboardAppearance={isDark ? 'dark' : 'light'}
               accessibilityLabel={`Your response to: ${question}`}
-              accessibilityHint={editable ? 'Write your reflection. Auto-saved.' : 'Unlock Premium to write reflections.'}
+              accessibilityHint={editable ? 'Write your reflection. Save status appears below.' : 'Unlock Premium to write reflections.'}
               style={{
                 minHeight: 80,
                 fontFamily: FontFamily.body,
@@ -550,9 +640,36 @@ function ReflectionQuestionCard({
             />
           </View>
 
-          {/* Auto-save hint — only show for premium users */}
-          {editable && (
+          {editable && saveState === 'error' ? (
+            <TouchableOpacity
+              onPress={() => onRetrySave(index)}
+              accessibilityRole="button"
+              accessibilityLabel="Save failed. Tap to retry."
+              accessibilityLiveRegion="assertive"
+              style={{
+                minHeight: 44,
+                marginTop: Spacing['2'],
+                alignSelf: 'flex-end',
+                justifyContent: 'center',
+                paddingHorizontal: Spacing['2'],
+              }}
+            >
+              <Text
+                testID={`reflection-save-status-${index}`}
+                style={{
+                  fontFamily: FontFamily.ui,
+                  fontSize: 11,
+                  color: colors.error,
+                  textAlign: 'right',
+                }}
+              >
+                Save failed. Tap to retry.
+              </Text>
+            </TouchableOpacity>
+          ) : editable && saveState ? (
             <Text
+              testID={`reflection-save-status-${index}`}
+              accessibilityLiveRegion="polite"
               style={{
                 fontFamily: FontFamily.ui,
                 fontSize: 11,
@@ -561,9 +678,9 @@ function ReflectionQuestionCard({
                 textAlign: 'right',
               }}
             >
-              Auto-saved
+              {saveState === 'saving' ? 'Saving...' : 'Saved to Journal'}
             </Text>
-          )}
+          ) : null}
         </Animated.View>
       )}
 

@@ -2125,6 +2125,9 @@ AppState.addEventListener('change', (status) => {
 /** Test/maintenance hook: force any pending coalesced persist write to disk. */
 export const flushUnfoldStorePersist = () => unfoldPersistStorage.flushPendingWrites();
 
+/** Await the concrete storage write before presenting a durable-save confirmation. */
+export const flushUnfoldStorePersistAsync = () => unfoldPersistStorage.flushPendingWritesAsync();
+
 // Hydration tracking — components can check if persisted state has been loaded
 export const useHasHydrated = () => {
   const [hasHydrated, setHasHydrated] = useState(useUnfoldStore.persist.hasHydrated());
