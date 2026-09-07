@@ -30,7 +30,7 @@ const mockRouter = { push: jest.fn(), replace: jest.fn() };
 const mockThemeState = { isDark: true, accent: DarkColors.accent };
 const mockBibleDbState = { isReady: true };
 const mockStoreState = {
-  lastPosition: null as { bookId: number; chapter: number; bookName: string } | null,
+  lastPosition: null as { bookId: number; chapter: number; bookName: string; verse?: number } | null,
 };
 
 jest.spyOn(jest.requireActual('react-native'), 'useWindowDimensions').mockImplementation(() => ({
@@ -156,8 +156,8 @@ jest.mock('@/lib/theme', () => {
 });
 
 jest.mock('@/lib/store', () => ({
-  useUnfoldStore: (selector: (state: { getLastBiblePosition: () => typeof mockStoreState.lastPosition }) => unknown) =>
-    selector({ getLastBiblePosition: () => mockStoreState.lastPosition }),
+  useUnfoldStore: (selector: (state: { bibleReadingHistory: NonNullable<typeof mockStoreState.lastPosition>[] }) => unknown) =>
+    selector({ bibleReadingHistory: mockStoreState.lastPosition ? [mockStoreState.lastPosition] : [] }),
 }));
 
 jest.mock('@/hooks/useBibleDb', () => ({
@@ -195,7 +195,7 @@ function bibleHomeMeta() {
 }
 
 function createHome() {
-  let tree: { root: any; unmount: () => void };
+  let tree: { root: any; unmount: () => void; update: (element: React.ReactElement) => void };
   act(() => {
     tree = renderer.create(<BibleHomeScreen />);
   });
@@ -442,12 +442,12 @@ describe('Bible hub overview restoration', () => {
       act(() => {
         tree.root.findByProps({ accessibilityLabel: 'Chapter 3', accessibilityRole: 'button' }).props.onPress();
       });
-      expect(mockRouter.push).toHaveBeenCalledWith('/(tabs)/(bible)/reader?bookId=1&chapter=3');
+      expect(mockRouter.push).toHaveBeenCalledWith('/(tabs)/(bible)/reader?bookId=1&chapter=3&verse=1');
 
       act(() => {
         bookTarget(tree, 'Obadiah').props.onPress();
       });
-      expect(mockRouter.push).toHaveBeenCalledWith('/(tabs)/(bible)/reader?bookId=31&chapter=1');
+      expect(mockRouter.push).toHaveBeenCalledWith('/(tabs)/(bible)/reader?bookId=31&chapter=1&verse=1');
       act(() => {
         tree.unmount();
       });
@@ -455,7 +455,7 @@ describe('Bible hub overview restoration', () => {
   });
 
   it('routes search and continue reading from the hub', () => {
-    mockStoreState.lastPosition = { bookId: 43, chapter: 3, bookName: 'John' };
+    mockStoreState.lastPosition = { bookId: 43, chapter: 3, bookName: 'John', verse: 16 };
     const tree = createHome();
     act(() => {
       tree.root.findByProps({ accessibilityLabel: 'Search the Bible' }).props.onPress();
@@ -464,13 +464,28 @@ describe('Bible hub overview restoration', () => {
     act(() => {
       tree.root.findByProps({ accessibilityLabel: 'Continue reading John 3' }).props.onPress();
     });
-    expect(mockRouter.push).toHaveBeenCalledWith('/(tabs)/(bible)/reader?bookId=43&chapter=3');
+    expect(mockRouter.push).toHaveBeenCalledWith('/(tabs)/(bible)/reader?bookId=43&chapter=3&verse=16');
+  });
+
+  it('updates the continue route when reading history changes while the hub is mounted', () => {
+    mockStoreState.lastPosition = { bookId: 43, chapter: 3, bookName: 'John', verse: 2 };
+    const tree = createHome();
+
+    mockStoreState.lastPosition = { bookId: 24, chapter: 16, bookName: 'Jeremiah', verse: 18 };
+    act(() => {
+      tree.update(<BibleHomeScreen />);
+    });
+    act(() => {
+      tree.root.findByProps({ accessibilityLabel: 'Continue reading Jeremiah 16' }).props.onPress();
+    });
+
+    expect(mockRouter.push).toHaveBeenCalledWith('/(tabs)/(bible)/reader?bookId=24&chapter=16&verse=18');
   });
 
   it('keeps first-open reader redirect and the download sheet off the book grid', () => {
     bibleHomeMeta().set('hasSeenBibleHome', false);
     const firstOpen = createHome();
-    expect(mockRouter.replace).toHaveBeenCalledWith('/(tabs)/(bible)/reader?bookId=1&chapter=1');
+    expect(mockRouter.replace).toHaveBeenCalledWith('/(tabs)/(bible)/reader?bookId=1&chapter=1&verse=1');
     expect(firstOpen.root.findAllByProps({ accessibilityLabel: 'Genesis' })).toHaveLength(0);
     act(() => {
       firstOpen.unmount();

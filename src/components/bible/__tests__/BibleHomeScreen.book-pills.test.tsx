@@ -89,8 +89,8 @@ jest.mock('@/lib/theme', () => ({
 }));
 
 jest.mock('@/lib/store', () => ({
-  useUnfoldStore: (selector: (state: { getLastBiblePosition: () => null }) => unknown) =>
-    selector({ getLastBiblePosition: () => null }),
+  useUnfoldStore: (selector: (state: { bibleReadingHistory: never[] }) => unknown) =>
+    selector({ bibleReadingHistory: [] }),
 }));
 
 jest.mock('@/hooks/useBibleDb', () => ({
@@ -220,6 +220,6 @@ describe('Bible hub category book pills', () => {
     act(() => {
       tree.root.findByProps({ accessibilityLabel: 'Obadiah', accessibilityRole: 'button' }).props.onPress();
     });
-    expect(mockRouter.push).toHaveBeenCalledWith(`/(tabs)/(bible)/reader?bookId=${obadiah!.id}&chapter=1`);
+    expect(mockRouter.push).toHaveBeenCalledWith(`/(tabs)/(bible)/reader?bookId=${obadiah!.id}&chapter=1&verse=1`);
   });
 });

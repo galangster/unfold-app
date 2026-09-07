@@ -64,6 +64,11 @@ function asNumber(value: unknown): number | undefined {
   return undefined;
 }
 
+function asPositiveInteger(value: unknown): number | undefined {
+  const parsed = asNumber(value);
+  return parsed !== undefined && Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+}
+
 function asBoolean(value: unknown): boolean | undefined {
   return typeof value === 'boolean' ? value : undefined;
 }
@@ -411,6 +416,7 @@ function mapBibleReadingPosition(record: SyncPulledRecord): BibleReadingPosition
     bookId,
     bookName: asString(row.bookName) ?? '',
     chapter,
+    verse: asPositiveInteger(row.verse),
     translation: asString(row.translation) ?? 'BSB',
     lastReadAt: asString(row.lastReadAt) ?? recordUpdatedAt(record),
     updatedAt: recordUpdatedAt(record),

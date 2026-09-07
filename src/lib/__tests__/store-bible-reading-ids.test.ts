@@ -95,6 +95,35 @@ describe('recordBibleReading unique ids', () => {
     expect(peekSyncOutbox().filter((change) => change.table === 'bible_reading_positions')).toHaveLength(2);
   });
 
+  it('updates the saved verse on the existing chapter row', () => {
+    useUnfoldStore.getState().recordBibleReading({
+      bookId: 24,
+      bookName: 'Jeremiah',
+      chapter: 16,
+      verse: 1,
+      translation: 'BSB',
+    });
+    const id = useUnfoldStore.getState().bibleReadingHistory[0].id;
+
+    useUnfoldStore.getState().recordBibleReading({
+      bookId: 24,
+      bookName: 'Jeremiah',
+      chapter: 16,
+      verse: 12,
+      translation: 'BSB',
+    });
+
+    expect(useUnfoldStore.getState().bibleReadingHistory).toEqual([
+      expect.objectContaining({ id, bookId: 24, chapter: 16, verse: 12 }),
+    ]);
+    expect(peekSyncOutbox()).toEqual([
+      expect.objectContaining({
+        id,
+        data: expect.objectContaining({ bookId: 24, chapter: 16, verse: 12 }),
+      }),
+    ]);
+  });
+
   it('keeps chapter history and newest-first order', () => {
     read(1, 1);
     read(1, 2);

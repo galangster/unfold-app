@@ -60,7 +60,7 @@ const bibleHomeMeta = new MMKV({ id: 'unfold-bible-home-meta' });
 const HAS_SEEN_BIBLE_HOME_KEY = 'hasSeenBibleHome';
 
 export type BibleHomeNavigationDecision =
-  | { action: 'navigate'; bookId: number; chapter: number }
+  | { action: 'navigate'; bookId: number; chapter: number; verse: number }
   | { action: 'show-home' };
 
 /**
@@ -75,14 +75,14 @@ export type BibleHomeNavigationDecision =
  */
 export function resolveBibleHomeNavigation(params: {
   hasSeenHome: boolean;
-  lastPosition: { bookId: number; chapter: number } | null;
+  lastPosition: { bookId: number; chapter: number; verse?: number } | null;
 }): BibleHomeNavigationDecision {
   const { hasSeenHome, lastPosition } = params;
 
   if (!hasSeenHome) {
     return lastPosition
-      ? { action: 'navigate', bookId: lastPosition.bookId, chapter: lastPosition.chapter }
-      : { action: 'navigate', bookId: 1, chapter: 1 };
+      ? { action: 'navigate', bookId: lastPosition.bookId, chapter: lastPosition.chapter, verse: lastPosition.verse ?? 1 }
+      : { action: 'navigate', bookId: 1, chapter: 1, verse: 1 };
   }
 
   return { action: 'show-home' };
@@ -106,13 +106,11 @@ export default function BibleHomeScreen() {
     [fontScale, width],
   );
   const { isReady, isDownloading, progress, download, error } = useBibleDb();
-  const getLastBiblePosition = useUnfoldStore((s) => s.getLastBiblePosition);
+  const lastPosition = useUnfoldStore((s) => s.bibleReadingHistory[0] ?? null);
   const [selectedBook, setSelectedBook] = useState<BibleBookInfo | null>(null);
   const [viewMode, setViewMode] = useState<BibleHubView>(() =>
     parseBibleHubViewPreference(bibleHomeMeta.getString(BIBLE_HUB_VIEW_STORAGE_KEY)),
   );
-
-  const lastPosition = useMemo(() => getLastBiblePosition(), [getLastBiblePosition]);
 
   // Chapter numbers for the grid modal — rebuilt only when the selected book's
   // chapter count changes, not on every render of this screen.
@@ -141,7 +139,7 @@ export default function BibleHomeScreen() {
 
     if (decision.action === 'navigate') {
       setHomeState('navigating');
-      router.replace(`/(tabs)/(bible)/reader?bookId=${decision.bookId}&chapter=${decision.chapter}`);
+      router.replace(`/(tabs)/(bible)/reader?bookId=${decision.bookId}&chapter=${decision.chapter}&verse=${decision.verse}`);
       return;
     }
 
@@ -158,7 +156,7 @@ export default function BibleHomeScreen() {
   const handleBookPress = useCallback((book: BibleBookInfo) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (book.chapterCount === 1) {
-      router.push(`/(tabs)/(bible)/reader?bookId=${book.id}&chapter=1`);
+      router.push(`/(tabs)/(bible)/reader?bookId=${book.id}&chapter=1&verse=1`);
     } else {
       setSelectedBook(book);
     }
@@ -168,13 +166,13 @@ export default function BibleHomeScreen() {
     if (!selectedBook) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSelectedBook(null);
-    router.push(`/(tabs)/(bible)/reader?bookId=${selectedBook.id}&chapter=${chapter}`);
+    router.push(`/(tabs)/(bible)/reader?bookId=${selectedBook.id}&chapter=${chapter}&verse=1`);
   }, [selectedBook, router]);
 
   const handleContinueReading = useCallback(() => {
     if (!lastPosition) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push(`/(tabs)/(bible)/reader?bookId=${lastPosition.bookId}&chapter=${lastPosition.chapter}`);
+    router.push(`/(tabs)/(bible)/reader?bookId=${lastPosition.bookId}&chapter=${lastPosition.chapter}&verse=${lastPosition.verse ?? 1}`);
   }, [lastPosition, router]);
 
   const handleSearchPress = useCallback(() => {

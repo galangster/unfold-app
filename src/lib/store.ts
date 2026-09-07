@@ -146,6 +146,7 @@ export interface BibleReadingPosition {
   bookId: number;
   bookName: string;
   chapter: number;
+  verse?: number;
   translation: string;
   lastReadAt: string;
   id?: string; // Added for sync — composite from bookId:translation
@@ -2135,4 +2136,3 @@ export const useHasHydrated = () => {
 
   return hasHydrated;
 };
-

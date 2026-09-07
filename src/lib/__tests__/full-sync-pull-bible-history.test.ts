@@ -202,6 +202,18 @@ describe('bible reading pull history', () => {
     expect(firstAdvance[1].id).not.toBe('server-canonical');
   });
 
+  it('round-trips a saved verse and accepts an old row without one', () => {
+    applyPull('saved-anchor', 16, T1, { bookId: 24, bookName: 'Jeremiah', verse: 12 });
+    expect(useUnfoldStore.getState().bibleReadingHistory[0]).toEqual(
+      expect.objectContaining({ id: 'saved-anchor', bookId: 24, chapter: 16, verse: 12 }),
+    );
+
+    applyPull('old-row', 17, T2, { bookId: 24, bookName: 'Jeremiah' });
+    expect(useUnfoldStore.getState().bibleReadingHistory[0]).toEqual(
+      expect.objectContaining({ id: 'old-row', bookId: 24, chapter: 17, verse: undefined }),
+    );
+  });
+
   it('keeps newer destination chapter content when a canonical-id row is older', () => {
     useUnfoldStore.setState({
       bibleReadingHistory: [
