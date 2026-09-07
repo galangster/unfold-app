@@ -1,5 +1,7 @@
 import {
+  finishVerifiedPaywallFlow,
   getThreeStepPaywallPrimaryAction,
+  resolveEntitlementWaitCompletion,
   resolveOnboardingPurchaseAdvance,
   resolvePaywallCompletionNavigation,
   resolvePurchaseOutcome,
@@ -166,6 +168,65 @@ describe('paywall guardrails', () => {
     });
   });
 
+  describe('resolveEntitlementWaitCompletion (MP-3)', () => {
+    it('advances once when a delayed entitlement grant is verified', () => {
+      expect(
+        resolveEntitlementWaitCompletion({
+          granted: true,
+          aborted: false,
+          hasAdvanced: false,
+          sessionCurrent: true,
+        }),
+      ).toBe('advance');
+    });
+
+    it('ignores a late grant after unmount, identity reset, or a prior advance', () => {
+      expect(
+        resolveEntitlementWaitCompletion({
+          granted: true,
+          aborted: true,
+          hasAdvanced: false,
+          sessionCurrent: true,
+        }),
+      ).toBe('ignore');
+      expect(
+        resolveEntitlementWaitCompletion({
+          granted: true,
+          aborted: false,
+          hasAdvanced: true,
+          sessionCurrent: true,
+        }),
+      ).toBe('ignore');
+      expect(
+        resolveEntitlementWaitCompletion({
+          granted: false,
+          aborted: true,
+          hasAdvanced: false,
+          sessionCurrent: true,
+        }),
+      ).toBe('ignore');
+      expect(
+        resolveEntitlementWaitCompletion({
+          granted: true,
+          aborted: false,
+          hasAdvanced: false,
+          sessionCurrent: false,
+        }),
+      ).toBe('ignore');
+    });
+
+    it('times out without inventing a paid entitlement so restore remains the next step', () => {
+      expect(
+        resolveEntitlementWaitCompletion({
+          granted: false,
+          aborted: false,
+          hasAdvanced: false,
+          sessionCurrent: true,
+        }),
+      ).toBe('timeout');
+    });
+  });
+
   describe('restore entitlement verification', () => {
     it('does not treat restore as success when no active entitlement is present', () => {
       expect(
@@ -186,6 +247,55 @@ describe('paywall guardrails', () => {
           data: { entitlements: { active: { 'Unfold Premium': { identifier: 'Unfold Premium' } } } },
         }),
       ).toEqual({ kind: 'success' });
+    });
+  });
+
+  describe('finishVerifiedPaywallFlow (MP-2: optional notification cannot block payment)', () => {
+    it('navigates immediately while optional async work is still pending', async () => {
+      const complete = jest.fn();
+      const onOptionalWorkError = jest.fn();
+      let settleOptional!: () => void;
+      const syncOptionalWork = async (): Promise<void> => {
+        await new Promise<void>((resolve) => {
+          settleOptional = resolve;
+        });
+      };
+
+      finishVerifiedPaywallFlow({
+        complete,
+        syncOptionalWork,
+        onOptionalWorkError,
+      });
+
+      expect(complete).toHaveBeenCalledTimes(1);
+      await Promise.resolve();
+      expect(complete).toHaveBeenCalledTimes(1);
+      expect(onOptionalWorkError).not.toHaveBeenCalled();
+      settleOptional();
+      await Promise.resolve();
+      expect(complete).toHaveBeenCalledTimes(1);
+      expect(onOptionalWorkError).not.toHaveBeenCalled();
+    });
+
+    it('rejected optional async work does not fail the verified payment', async () => {
+      const complete = jest.fn();
+      const onOptionalWorkError = jest.fn();
+      const failure = new Error('getCustomerInfo failed');
+      const syncOptionalWork = async (): Promise<void> => {
+        throw failure;
+      };
+
+      finishVerifiedPaywallFlow({
+        complete,
+        syncOptionalWork,
+        onOptionalWorkError,
+      });
+
+      expect(complete).toHaveBeenCalledTimes(1);
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(complete).toHaveBeenCalledTimes(1);
+      expect(onOptionalWorkError).toHaveBeenCalledWith(failure);
     });
   });
 

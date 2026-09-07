@@ -20,6 +20,7 @@ import {
   getServerOwnedSeriesTotalDays,
 } from './devotional-series-boundary';
 import { newId } from './sync-ids';
+import { allocateBibleReadingId } from './bible-reading-ids';
 import { canonicalJournalEntryId } from './journal-entry-merge';
 import type { NudgeType, NudgeImpression } from './nudges';
 import { NUDGE_INITIAL_STATE } from './nudges';
@@ -145,6 +146,7 @@ export interface BibleReadingPosition {
   bookId: number;
   bookName: string;
   chapter: number;
+  verse?: number;
   translation: string;
   lastReadAt: string;
   id?: string; // Added for sync — composite from bookId:translation
@@ -1753,7 +1755,7 @@ export const useUnfoldStore = create<UnfoldState>()(
           const now = new Date().toISOString();
           const newEntry: BibleReadingPosition = {
             ...position,
-            id: position.id ?? `brp_${position.bookId}_${position.chapter}_${position.translation}`,
+            id: allocateBibleReadingId(position, state.bibleReadingHistory),
             lastReadAt: now,
             updatedAt: now,
           };
@@ -2012,7 +2014,7 @@ export const useUnfoldStore = create<UnfoldState>()(
     {
       name: 'unfold-storage',
       storage: unfoldPersistStorage,
-      version: 42, // v42: one journal entry per day, under a deterministic id
+      version: 43, // v43: globally unique bible reading position ids
       // WR-23: drop session-scoped flags from the persisted blob.
       partialize: (state): PersistedUnfoldState => {
         const { nudgeShownThisSession, streakJustReset, ...persisted } = state;
@@ -2134,4 +2136,3 @@ export const useHasHydrated = () => {
 
   return hasHydrated;
 };
-

@@ -42,6 +42,11 @@ import { submitGenerationJob, recoverCompletedGenerationResult, ApiError } from 
 import { syncDevotionalDayRead } from '@/lib/devotional-read-sync';
 import { commitDevotionalPullCursor, pullDevotionalContent } from '@/lib/devotional-sync-pull';
 import { applyPulledDevotionalContent } from '@/lib/devotional-pulled-content';
+import {
+  captureSyncSession,
+  isSyncSessionCurrent,
+  SyncSessionInvalidatedError,
+} from '@/lib/sync-session-fence';
 import { isCanonicalProgressiveDevotional, shouldUseLegacyDirectContinuation } from '@/lib/reading-generation-policy';
 import {
   getHighestContiguousRenderableDayNumber,
@@ -313,6 +318,7 @@ export default function ReadingScreen() {
   const autoRetryTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const syncRecoveryAttemptRef = useRef<Record<string, boolean>>({});
   const missingDevotionalHydrationAttemptRef = useRef<Record<string, boolean>>({});
+  const readingMountedRef = useRef(true);
 
   const translateX = useSharedValue(0);
   const chevronBounce = useSharedValue(0);
@@ -324,6 +330,13 @@ export default function ReadingScreen() {
 
   // Locked-day toast (blocked forward swipe) auto-dismiss after 2.5s
   useAutoHide(lockedDayToast, 2500, useCallback(() => setLockedDayToast(false), []));
+
+  useEffect(() => {
+    readingMountedRef.current = true;
+    return () => {
+      readingMountedRef.current = false;
+    };
+  }, []);
 
   // Button press micro-interaction — spring scale for Complete Day button
   const completeButtonScale = useSharedValue(1);
@@ -1006,6 +1019,7 @@ export default function ReadingScreen() {
       return { ok: false, retriable: false };
     }
 
+    const session = captureSyncSession();
     setIsGeneratingMore(true);
 
     if (withHaptics) {
@@ -1025,6 +1039,7 @@ export default function ReadingScreen() {
           bibleTranslation: user.bibleTranslation ?? 'BSB',
         },
         (day) => {
+          if (!isSyncSessionCurrent(session)) return;
           const current = useUnfoldStore.getState().devotionals.find((d) => d.id === currentDevotional.id);
           if (current) {
             const updated = [...current.days];
@@ -1033,8 +1048,13 @@ export default function ReadingScreen() {
               updateDevotionalDays(currentDevotional.id, updated);
             }
           }
-        }
+        },
+        session,
       );
+
+      if (!isSyncSessionCurrent(session)) {
+        return { ok: false, retriable: false };
+      }
 
       updateDevotionalDays(currentDevotional.id, allDays, currentDevotional.title);
 
@@ -1057,6 +1077,9 @@ export default function ReadingScreen() {
 
       return { ok: true, retriable: false };
     } catch (err) {
+      if (err instanceof SyncSessionInvalidatedError || !isSyncSessionCurrent(session)) {
+        return { ok: false, retriable: false };
+      }
       const message = err instanceof Error ? err.message : String(err);
       const retriable = isTransientGenerationError(message);
       logger.error('[Reading] Generate more failed:', message);
@@ -1069,7 +1092,9 @@ export default function ReadingScreen() {
       }
       return { ok: false, retriable };
     } finally {
-      setIsGeneratingMore(false);
+      if (isSyncSessionCurrent(session)) {
+        setIsGeneratingMore(false);
+      }
     }
   }, [user, currentDevotional, isGeneratingMore, isOnline, updateDevotionalDays]);
 
@@ -1211,10 +1236,16 @@ export default function ReadingScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
 
+    const session = captureSyncSession();
+    const isRecoveryCurrent = () => readingMountedRef.current && isSyncSessionCurrent(session);
+
     try {
       // A day we expected is missing locally: the cursor cannot be trusted
       // to have covered it, so distrust it and pull the whole devotional.
       const pulled = await pullDevotionalContent(currentDevotional.id, { forceFull: true });
+      if (!isRecoveryCurrent()) {
+        return false;
+      }
       applyPulledDevotionalContent({
         devotionalId: currentDevotional.id,
         pulled,
@@ -1245,7 +1276,15 @@ export default function ReadingScreen() {
         const recovered = await recoverCompletedGenerationResult({
           devotionalId: currentDevotional.id,
           dayNumber: viewingDay,
-        }).catch(() => null);
+          session,
+        }).catch((err) => {
+          if (err instanceof SyncSessionInvalidatedError) throw err;
+          return null;
+        });
+
+        if (!isRecoveryCurrent()) {
+          return false;
+        }
 
         if (recovered?.devotionalDay) {
           updateDevotionalDays(currentDevotional.id, [recovered.devotionalDay], currentDevotional.title);
@@ -1261,11 +1300,18 @@ export default function ReadingScreen() {
         }
 
         try {
+          if (!isRecoveryCurrent()) {
+            return false;
+          }
           await submitGenerationJob({
             devotionalId: currentDevotional.id,
             dayNumber: viewingDay,
             jobType: 'day',
+            session,
           });
+          if (!isRecoveryCurrent()) {
+            return false;
+          }
           void logBugEvent('reading-sync-recovery', 'queued-missing-day-canonical-job', {
             devotionalId: currentDevotional.id,
             viewingDay,
@@ -1277,12 +1323,23 @@ export default function ReadingScreen() {
           }
           return true;
         } catch (err) {
+          if (!isRecoveryCurrent()) {
+            return false;
+          }
           if (err instanceof ApiError && err.status === 409) {
             const recoveredFromExisting = await recoverCompletedGenerationResult({
               devotionalId: currentDevotional.id,
               dayNumber: viewingDay,
               existingJobId: err.existingJobId,
-            }).catch(() => null);
+              session,
+            }).catch((recoverErr) => {
+              if (recoverErr instanceof SyncSessionInvalidatedError) throw recoverErr;
+              return null;
+            });
+
+            if (!isRecoveryCurrent()) {
+              return false;
+            }
 
             if (recoveredFromExisting?.devotionalDay) {
               updateDevotionalDays(currentDevotional.id, [recoveredFromExisting.devotionalDay], currentDevotional.title);
@@ -1301,11 +1358,17 @@ export default function ReadingScreen() {
         }
       }
 
+      if (!isRecoveryCurrent()) {
+        return false;
+      }
       if (source === 'manual') {
         setRetryError('This reading is still being prepared. Try again in a moment, or prepare the next reading below.');
       }
       return false;
     } catch (err) {
+      if (err instanceof SyncSessionInvalidatedError || !isRecoveryCurrent()) {
+        return false;
+      }
       void logBugError('reading-sync-recovery', err, {
         devotionalId: currentDevotional.id,
         viewingDay,
@@ -1317,7 +1380,9 @@ export default function ReadingScreen() {
       }
       return false;
     } finally {
-      setIsCheckingForSyncedDay(false);
+      if (readingMountedRef.current && isSyncSessionCurrent(session)) {
+        setIsCheckingForSyncedDay(false);
+      }
     }
   }, [currentDevotional, currentDayData, isCheckingForSyncedDay, updateDevotionalDays, viewingDay]);
 
@@ -1361,8 +1426,9 @@ export default function ReadingScreen() {
 
     void (async () => {
       try {
+        const session = captureSyncSession();
         const pulled = await pullDevotionalContent(devotionalId);
-        if (cancelled) return;
+        if (cancelled || !isSyncSessionCurrent(session)) return;
 
         applyPulledDevotionalContent({
           devotionalId,
@@ -1438,116 +1504,144 @@ export default function ReadingScreen() {
     );
 
     const handleRetryGeneration = async () => {
-      if (!user || isRetrying || isCheckingForSyncedDay) return;
-      if (!isOnline) {
-        void logBugEvent('reading-generation', 'manual-retry-blocked-offline', {
-          viewingDay,
-        }, 'warn');
-        setRetryError('You appear to be offline. Reconnect and try again.');
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        return;
-      }
-
-      const synced = await recoverSyncedDay('manual');
-      if (synced) return;
-
-      void logBugEvent('reading-generation', 'manual-retry-started', {
-        viewingDay,
-      });
-
-      setIsRetrying(true);
-      setRetryError(null);
-      setIsWaitingForConnection(false);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
       try {
-        // Progressive/canonical mode: reconcile any completed server-side day before submitting another job
-        if (isCanonicalProgressiveDevotional(currentDevotional)) {
-          const recovered = await recoverCompletedGenerationResult({
-            devotionalId: currentDevotionalId!,
-            dayNumber: viewingDay,
-          }).catch(() => null);
-
-          if (recovered?.devotionalDay) {
-            updateDevotionalDays(currentDevotional.id, [recovered.devotionalDay], currentDevotional.title);
-            void logBugEvent('reading-generation', 'manual-retry-progressive-recovered', {
-              viewingDay,
-            });
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            return;
-          }
-
-          await submitGenerationJob({
-            devotionalId: currentDevotionalId!,
-            dayNumber: viewingDay,
-            jobType: 'day',
-          });
-          void logBugEvent('reading-generation', 'manual-retry-progressive-success', {
+        if (!user || isRetrying || isCheckingForSyncedDay) return;
+        if (!isOnline) {
+          void logBugEvent('reading-generation', 'manual-retry-blocked-offline', {
             viewingDay,
-          });
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        } else {
-          // Batch mode: generate all remaining days
-          const targetTotalDays = Math.max(currentDevotional.totalDays, user.devotionalLength, viewingDay);
-          const fixedDevotional = { ...currentDevotional, totalDays: targetTotalDays };
-          const allDays = await continueGeneratingDays(
-            fixedDevotional,
-            {
-              spiritualSeeking: user.spiritualSeeking ?? '',
-              readingDuration: user.readingDuration,
-              bibleTranslation: user.bibleTranslation ?? 'BSB',
-            },
-            (day) => {
-              const current = useUnfoldStore.getState().devotionals.find((d) => d.id === currentDevotional.id);
-              if (current) {
-                const updated = [...current.days];
-                if (!updated.some((d) => d.dayNumber === day.dayNumber)) {
-                  updated.push(day);
-                  updateDevotionalDays(currentDevotional.id, updated);
-                }
-              }
-            }
-          );
-          updateDevotionalDays(currentDevotional.id, allDays, currentDevotional.title);
-          void logBugEvent('reading-generation', 'manual-retry-success', {
-            viewingDay,
-            totalDaysAfterRetry: allDays.length,
-          });
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        }
-        // After generation, the store update triggers re-render automatically
-      } catch (err) {
-        if (
-          isCanonicalProgressiveDevotional(currentDevotional) &&
-          err instanceof ApiError &&
-          err.status === 409
-        ) {
-          const recovered = await recoverCompletedGenerationResult({
-            devotionalId: currentDevotionalId!,
-            dayNumber: viewingDay,
-            existingJobId: err.existingJobId,
-          }).catch(() => null);
-
-          if (recovered?.devotionalDay) {
-            updateDevotionalDays(currentDevotional.id, [recovered.devotionalDay], currentDevotional.title);
-            void logBugEvent('reading-generation', 'manual-retry-progressive-recovered-409', {
-              viewingDay,
-            });
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            return;
-          }
+          }, 'warn');
+          setRetryError('You appear to be offline. Reconnect and try again.');
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          return;
         }
 
-        const msg = err instanceof Error ? err.message : 'Something went wrong';
-        logger.error('[Reading] Retry generation failed:', msg);
-        void logBugError('reading-generation', err, {
+        const session = captureSyncSession();
+        const synced = await recoverSyncedDay('manual');
+        if (!isSyncSessionCurrent(session)) return;
+        if (synced) return;
+
+        void logBugEvent('reading-generation', 'manual-retry-started', {
           viewingDay,
-          phase: 'manual-retry',
         });
-        setRetryError(toFriendlyRemainingDaysGenerationError(msg));
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      } finally {
-        setIsRetrying(false);
+
+        setIsRetrying(true);
+        setRetryError(null);
+        setIsWaitingForConnection(false);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+        try {
+          // Progressive/canonical mode: reconcile any completed server-side day before submitting another job
+          if (isCanonicalProgressiveDevotional(currentDevotional)) {
+            const recovered = await recoverCompletedGenerationResult({
+              devotionalId: currentDevotionalId!,
+              dayNumber: viewingDay,
+              session,
+            }).catch((err) => {
+              if (err instanceof SyncSessionInvalidatedError) throw err;
+              return null;
+            });
+
+            if (!isSyncSessionCurrent(session)) return;
+            if (recovered?.devotionalDay) {
+              updateDevotionalDays(currentDevotional.id, [recovered.devotionalDay], currentDevotional.title);
+              void logBugEvent('reading-generation', 'manual-retry-progressive-recovered', {
+                viewingDay,
+              });
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              return;
+            }
+
+            await submitGenerationJob({
+              devotionalId: currentDevotionalId!,
+              dayNumber: viewingDay,
+              jobType: 'day',
+              session,
+            });
+            if (!isSyncSessionCurrent(session)) return;
+            void logBugEvent('reading-generation', 'manual-retry-progressive-success', {
+              viewingDay,
+            });
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          } else {
+            // Batch mode: generate all remaining days
+            const targetTotalDays = Math.max(currentDevotional.totalDays, user.devotionalLength, viewingDay);
+            const fixedDevotional = { ...currentDevotional, totalDays: targetTotalDays };
+            const allDays = await continueGeneratingDays(
+              fixedDevotional,
+              {
+                spiritualSeeking: user.spiritualSeeking ?? '',
+                readingDuration: user.readingDuration,
+                bibleTranslation: user.bibleTranslation ?? 'BSB',
+              },
+              (day) => {
+                if (!isSyncSessionCurrent(session)) return;
+                const current = useUnfoldStore.getState().devotionals.find((d) => d.id === currentDevotional.id);
+                if (current) {
+                  const updated = [...current.days];
+                  if (!updated.some((d) => d.dayNumber === day.dayNumber)) {
+                    updated.push(day);
+                    updateDevotionalDays(currentDevotional.id, updated);
+                  }
+                }
+              },
+              session,
+            );
+            if (!isSyncSessionCurrent(session)) return;
+            updateDevotionalDays(currentDevotional.id, allDays, currentDevotional.title);
+            void logBugEvent('reading-generation', 'manual-retry-success', {
+              viewingDay,
+              totalDaysAfterRetry: allDays.length,
+            });
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          }
+          // After generation, the store update triggers re-render automatically
+        } catch (err) {
+          if (err instanceof SyncSessionInvalidatedError || !isSyncSessionCurrent(session)) return;
+          if (
+            isCanonicalProgressiveDevotional(currentDevotional) &&
+            err instanceof ApiError &&
+            err.status === 409
+          ) {
+            let recovered;
+            try {
+              recovered = await recoverCompletedGenerationResult({
+                devotionalId: currentDevotionalId!,
+                dayNumber: viewingDay,
+                existingJobId: err.existingJobId,
+                session,
+              });
+            } catch (recoverErr) {
+              if (recoverErr instanceof SyncSessionInvalidatedError || !isSyncSessionCurrent(session)) return;
+              recovered = null;
+            }
+
+            if (!isSyncSessionCurrent(session)) return;
+            if (recovered?.devotionalDay) {
+              updateDevotionalDays(currentDevotional.id, [recovered.devotionalDay], currentDevotional.title);
+              void logBugEvent('reading-generation', 'manual-retry-progressive-recovered-409', {
+                viewingDay,
+              });
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              return;
+            }
+          }
+
+          const msg = err instanceof Error ? err.message : 'Something went wrong';
+          logger.error('[Reading] Retry generation failed:', msg);
+          void logBugError('reading-generation', err, {
+            viewingDay,
+            phase: 'manual-retry',
+          });
+          setRetryError(toFriendlyRemainingDaysGenerationError(msg));
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        } finally {
+          if (isSyncSessionCurrent(session)) {
+            setIsRetrying(false);
+          }
+        }
+      } catch (err) {
+        if (err instanceof SyncSessionInvalidatedError) return;
+        throw err;
       }
     };
 

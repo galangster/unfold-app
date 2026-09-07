@@ -8,6 +8,8 @@ import {
   StyleSheet,
   Keyboard,
   ActivityIndicator,
+  useWindowDimensions,
+  type LayoutChangeEvent,
 } from 'react-native';
 // reanimated no longer needed — all animations removed for instant transitions
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -36,6 +38,11 @@ import { Spacing } from '@/constants/spacing';
 import { useBibleSearch } from '@/hooks/useBibleSearch';
 import { getChapterVerseCount } from '@/lib/bible-db';
 import type { BibleTranslation } from '@/lib/bible-db';
+import {
+  BOOK_PICKER_GRID_GAP,
+  bookPickerChipWidth,
+  bookPickerColumnCount,
+} from './book-picker-layout';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -54,11 +61,6 @@ interface BookChapterNavigatorProps {
 
 /** Books with only 1 chapter — tap skips straight to chapter selection */
 const SINGLE_CHAPTER_BOOK_IDS = new Set([31, 57, 63, 64, 65]);
-
-// Book chips show the full name; the abbreviation only fits as a second
-// line for names up to this length (e.g. "1 Chronicles" fits, "Song of
-// Solomon" and "1 Thessalonians" do not).
-export const BOOK_CHIP_ABBREVIATION_FIT_LENGTH = 13;
 
 const TAB_LABELS = ['Book', 'Chapter', 'Verse'] as const;
 const TAB_PADDING = 3;
@@ -132,12 +134,14 @@ export function BookChapterNavigator({
 }: BookChapterNavigatorProps) {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const { width: windowWidth, fontScale } = useWindowDimensions();
 
   const [mode, setMode] = useState<NavigatorMode>('books');
   const [selectedBook, setSelectedBook] = useState<BibleBookInfo | null>(null);
   const [selectedChapter, setSelectedChapter] = useState<number>(0);
   const [verseCount, setVerseCount] = useState<number>(0);
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [bookGridWidth, setBookGridWidth] = useState(0);
   const prevVisibleRef = useRef(false);
 
   // ── Reset to books mode when navigator closes, so next open is clean ────
@@ -204,6 +208,10 @@ export function BookChapterNavigator({
     [selectedBook?.chapterCount],
   );
   const verseNumbers = useMemo(() => buildNumberRange(verseCount), [verseCount]);
+  const estimatedBookGridWidth = Math.max(0, windowWidth - Spacing['4'] * 2);
+  const resolvedBookGridWidth = bookGridWidth || estimatedBookGridWidth;
+  const bookColumnCount = bookPickerColumnCount(resolvedBookGridWidth, fontScale);
+  const bookChipWidth = bookPickerChipWidth(resolvedBookGridWidth, bookColumnCount);
 
   // ── Header title removed — step tabs indicate context ──────────────────
 
@@ -277,6 +285,13 @@ export function BookChapterNavigator({
     setSearchQuery('');
   }, []);
 
+  const handleBookGridLayout = useCallback((event: LayoutChangeEvent) => {
+    const measuredWidth = event.nativeEvent.layout.width;
+    setBookGridWidth((currentWidth) =>
+      Math.abs(currentWidth - measuredWidth) < 0.5 ? currentWidth : measuredWidth,
+    );
+  }, []);
+
   const handleTabPress = useCallback((index: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (index === 0) {
@@ -307,6 +322,7 @@ export function BookChapterNavigator({
   const showSearchLoading = shouldSearch && isSearching;
 
   const chipBg = isDark ? 'rgba(245, 240, 235, 0.08)' : 'rgba(28, 23, 16, 0.06)';
+  const bookChipBg = alpha(colors.text, isDark ? 0.05 : 0.035);
 
   // ── Render: Search bar ────────────────────────────────────────────────
 
@@ -409,7 +425,7 @@ export function BookChapterNavigator({
   const renderBookChips = (books: BibleBookInfo[], sectionLabel: string) => (
     <View style={styles.bookSection}>
       <Text style={[styles.sectionLabel, { color: colors.textSubtle }]}>{sectionLabel}</Text>
-      <View style={styles.chipGrid}>
+      <View style={styles.chipGrid} onLayout={handleBookGridLayout}>
         {books.map((book) => {
           const isCurrentBook = book.id === currentBookId;
           // Single-accent / neutral coding — no per-book rainbow. The current
@@ -420,10 +436,14 @@ export function BookChapterNavigator({
               onPress={() => handleBookSelect(book)}
               style={[
                 styles.bookChip,
-                { backgroundColor: isCurrentBook ? alpha(colors.accent, 0.16) : chipBg },
+                {
+                  width: bookChipWidth,
+                  backgroundColor: isCurrentBook ? alpha(colors.accent, 0.16) : bookChipBg,
+                },
                 isCurrentBook && { borderWidth: 1.5, borderColor: colors.accent },
               ]}
               accessibilityLabel={`${book.name}${isCurrentBook ? ', current book' : ''}`}
+              accessibilityRole="button"
               accessibilityState={{ selected: isCurrentBook }}
             >
               <Text
@@ -432,19 +452,9 @@ export function BookChapterNavigator({
                   { color: isCurrentBook ? colors.accent : colors.text },
                   isCurrentBook && { fontFamily: FontFamily.uiMedium },
                 ]}
-                numberOfLines={book.name.length > BOOK_CHIP_ABBREVIATION_FIT_LENGTH ? 2 : 1}
               >
                 {book.name}
               </Text>
-              {book.abbreviation !== book.name &&
-                book.name.length <= BOOK_CHIP_ABBREVIATION_FIT_LENGTH && (
-                  <Text
-                    style={[styles.chipAbbrev, { color: isCurrentBook ? colors.accent : colors.textSubtle }]}
-                    numberOfLines={1}
-                  >
-                    {book.abbreviation}
-                  </Text>
-                )}
             </TouchableOpacity>
           );
         })}
@@ -641,6 +651,7 @@ const styles = StyleSheet.create({
   },
   tabItem: {
     flex: 1,
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: Spacing['2'],
@@ -649,6 +660,7 @@ const styles = StyleSheet.create({
   tabLabel: {
     fontFamily: FontFamily.ui,
     fontSize: 13,
+    lineHeight: 20,
     letterSpacing: 0.2,
   },
 
@@ -711,15 +723,12 @@ const styles = StyleSheet.create({
   chipGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: BOOK_PICKER_GRID_GAP,
   },
   bookChip: {
-    minWidth: '18%',
-    flexGrow: 1,
-    // Raised from 10 -> 12 for a >=40pt effective tap target in this dense
-    // grid (hitSlop isn't viable here — adjacent chips sit edge to edge).
+    minHeight: 44,
     paddingVertical: 12,
-    paddingHorizontal: 6,
+    paddingHorizontal: Spacing['2'],
     borderRadius: Radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
@@ -727,15 +736,11 @@ const styles = StyleSheet.create({
   chipText: {
     fontFamily: FontFamily.ui,
     fontSize: 13,
+    lineHeight: 17,
     textAlign: 'center',
   },
-  chipAbbrev: {
-    fontFamily: FontFamily.ui,
-    fontSize: FontSize.xs,
-    marginTop: 1,
-  },
 
-  // Number chips (chapters + verses) — same flex-fill as book chips
+  // Number chips (chapters + verses) keep their compact flex-fill layout.
   numberChip: {
     minWidth: '12%',
     flexGrow: 1,

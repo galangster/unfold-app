@@ -62,7 +62,7 @@ describe('paywall plan selector semantics (RT-PAYWALL-3/4/6)', () => {
   });
 
   it('disables purchase CTA and exposes retry while prices are unavailable', () => {
-    expect(src).toContain('const isSubscribeDisabled = isPurchasing || !offeringsReady;');
+    expect(src).toContain('const isSubscribeDisabled = isPurchasing || !offeringsReady || isWaitingForEntitlement');
     expect(src).toContain('Subscription plans unavailable');
     expect(src).toContain('Tap to retry');
   });
@@ -78,5 +78,12 @@ describe('paywall plan selector semantics (RT-PAYWALL-3/4/6)', () => {
     expect(badge).toContain('accessibilityElementsHidden');
     expect(badge).toContain('color: colors.background');
     expect(src).not.toContain('`${colors.accent}30`');
+  });
+});
+
+describe('standalone paywall verified completion (MP-2)', () => {
+  it('does not await optional notification work on the verified payment path', () => {
+    expect(src).toContain('finishVerifiedPaywallFlow');
+    expect(src).not.toMatch(/await syncTrialEndingNotification\(\)/);
   });
 });

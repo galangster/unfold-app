@@ -72,6 +72,11 @@ import { Current } from '@/components/Current';
 import { ScatterTitle } from '@/components/ScatterTitle';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { submitGenerationJob } from '@/lib/generation-api';
+import {
+  captureSyncSession,
+  isSyncSessionCurrent,
+  SyncSessionInvalidatedError,
+} from '@/lib/generation-session';
 import { getDeviceId } from '@/lib/mmkv-storage';
 import {
   saveOnboardingSampleJob,
@@ -865,6 +870,16 @@ export default function OnboardingScreen() {
   const dataRef = useRef(data);
   dataRef.current = data;
 
+  const onboardingMountedRef = useRef(true);
+  useEffect(() => {
+    onboardingMountedRef.current = true;
+    return () => {
+      onboardingMountedRef.current = false;
+    };
+  }, []);
+  const ownsOnboardingWork = (session: number) =>
+    onboardingMountedRef.current && isSyncSessionCurrent(session);
+
   // Track if user is in theme sub-selection mode
   const [themeSelectionMode, setThemeSelectionMode] = useState<'none' | 'theme' | 'type'>('none');
   
@@ -1066,6 +1081,8 @@ export default function OnboardingScreen() {
   // Generate AI mirror-back when reaching that step
   useEffect(() => {
     if (currentStepId === 'mirrorBack' && !aiMirrorBack && !isLoadingMirrorBack) {
+      const session = captureSyncSession();
+      if (!ownsOnboardingWork(session)) return;
       setIsLoadingMirrorBack(true);
       generateMirrorBackText({
         selectedThemes: data.selectedThemes,
@@ -1079,8 +1096,9 @@ export default function OnboardingScreen() {
         relationshipWithGod: data.relationshipWithGod,
         growthGoals: data.growthGoals,
         obstacles: data.obstacles,
-      })
+      }, session)
         .then(({ content }) => {
+          if (!ownsOnboardingWork(session)) return;
           setAiMirrorBack(content);
           // Stored whenever a working read is shown, regardless of whether the
           // user later ratifies or corrects it.
@@ -1089,10 +1107,12 @@ export default function OnboardingScreen() {
           }
         })
         .catch((err) => {
+          if (err instanceof SyncSessionInvalidatedError || !ownsOnboardingWork(session)) return;
           logger.warn('[MirrorBack] Generation failed, using fallback:', err);
           setAiMirrorBack(mirrorBackContent);
         })
         .finally(() => {
+          if (!ownsOnboardingWork(session)) return;
           setIsLoadingMirrorBack(false);
         });
     }
@@ -1104,7 +1124,7 @@ export default function OnboardingScreen() {
   // returns null on any failure, with no legacy fallback.
   useEffect(() => {
     if (currentStepId !== 'diagnosticRound') return;
-    if (diagnosticQuestions !== null || isLoadingDiagnostic) return;
+    if (diagnosticQuestions !== null) return;
 
     const situation = data.currentSituation.trim();
     if (!situation) {
@@ -1112,10 +1132,12 @@ export default function OnboardingScreen() {
       return;
     }
 
-    // If the user backs out while the fetch is in flight, the resolution must
-    // become a no-op — the stale closure's advanceToNextStep would otherwise
-    // yank them forward from wherever they navigated to.
+    // Each visit owns its request. Leaving cancels this work so a later visit
+    // can start a replacement. The cancelled result must not apply questions,
+    // skip the step, or clear a newer entry's loading flag.
     let cancelled = false;
+    const session = captureSyncSession();
+    if (!ownsOnboardingWork(session)) return;
 
     setIsLoadingDiagnostic(true);
     generateDiagnosticQuestions({
@@ -1126,9 +1148,9 @@ export default function OnboardingScreen() {
       relationshipWithGod: data.relationshipWithGod,
       selectedThemes: data.selectedThemes,
       selectedType: data.selectedType,
-    })
+    }, session)
       .then((result) => {
-        if (cancelled) return;
+        if (cancelled || !ownsOnboardingWork(session)) return;
         if (result && result.questions.length > 0) {
           setDiagnosticIndex(0);
           setDiagnosticDraft('');
@@ -1137,11 +1159,12 @@ export default function OnboardingScreen() {
           advanceToNextStep();
         }
       })
-      .catch(() => {
-        if (cancelled) return;
+      .catch((err) => {
+        if (cancelled || err instanceof SyncSessionInvalidatedError || !ownsOnboardingWork(session)) return;
         advanceToNextStep();
       })
       .finally(() => {
+        if (cancelled || !ownsOnboardingWork(session)) return;
         setIsLoadingDiagnostic(false);
       });
 
@@ -1564,13 +1587,17 @@ export default function OnboardingScreen() {
         // Accepted race (~30-45s): if a changed-context resubmit lands while the
         // original is pending/processing, backend dedupe can return its old jobId,
         // leaving this session on the stale sample.
-        submitGenerationJob(nextSampleGenerationRequest).then(({ jobId, devotionalId }) => {
+        const session = captureSyncSession();
+        const originatingDeviceId = getDeviceId();
+        submitGenerationJob({ ...nextSampleGenerationRequest, session }).then(({ jobId, devotionalId }) => {
+          if (!isSyncSessionCurrent(session)) return;
           onboardingJobIdRef.current = jobId;
           onboardingSubmittedDevotionalIdRef.current = devotionalId ?? null;
           onboardingSubmittedRequestRef.current = nextSampleGenerationRequest;
-          saveOnboardingSampleJob({ jobId, devotionalId: devotionalId ?? null, deviceId: getDeviceId() });
+          saveOnboardingSampleJob({ jobId, devotionalId: devotionalId ?? null, deviceId: originatingDeviceId });
           logger.log('[Onboarding] Sample generation triggered, jobId:', jobId);
         }).catch((err) => {
+          if (err instanceof SyncSessionInvalidatedError) return;
           logger.warn('[Onboarding] Background sample generation failed:', err);
         });
       }
@@ -1766,21 +1793,28 @@ export default function OnboardingScreen() {
       subtext: nextStepDef?.subtext ?? "Take your time.",
     };
 
+    const session = captureSyncSession();
+    if (!ownsOnboardingWork(session)) return;
+
     setIsLoadingAdaptive(true);
     try {
       const result = await generateAdaptiveQuestion(previousAnswers, fallbackQuestion, stepPosition, {
         growthGoals: data.growthGoals,
         obstacles: data.obstacles,
         relationshipWithGod: data.relationshipWithGod,
-      });
+      }, session);
+      if (!ownsOnboardingWork(session)) return;
       setAdaptedSteps((prev) => ({
         ...prev,
         [nextStepId]: { question: result.question, subtext: result.subtext, chips: result.chips },
       }));
-    } catch {
+    } catch (err) {
+      if (err instanceof SyncSessionInvalidatedError || !ownsOnboardingWork(session)) return;
       // Falls back to default step question (adaptedSteps won't have an entry)
     } finally {
-      setIsLoadingAdaptive(false);
+      if (ownsOnboardingWork(session)) {
+        setIsLoadingAdaptive(false);
+      }
     }
   };
 
@@ -3528,15 +3562,23 @@ export default function OnboardingScreen() {
           jobId={onboardingJobIdRef.current}
           devotionalId={onboardingSubmittedDevotionalIdRef.current}
           submitFallback={async () => {
+            const session = captureSyncSession();
+            const originatingDeviceId = getDeviceId();
             const fallbackRequest = buildOnboardingSampleGenerationRequest({
               answers: data,
               existingUser,
             });
-            const { jobId, devotionalId } = await submitGenerationJob(fallbackRequest);
+            const { jobId, devotionalId } = await submitGenerationJob({
+              ...fallbackRequest,
+              session,
+            });
+            if (!isSyncSessionCurrent(session)) {
+              throw new SyncSessionInvalidatedError('onboarding sample submit');
+            }
             onboardingJobIdRef.current = jobId;
             onboardingSubmittedDevotionalIdRef.current = devotionalId ?? null;
             onboardingSubmittedRequestRef.current = fallbackRequest;
-            saveOnboardingSampleJob({ jobId, devotionalId: devotionalId ?? null, deviceId: getDeviceId() });
+            saveOnboardingSampleJob({ jobId, devotionalId: devotionalId ?? null, deviceId: originatingDeviceId });
             return { jobId, devotionalId };
           }}
           onDevotionalReady={(result) => {
@@ -3747,6 +3789,9 @@ export default function OnboardingScreen() {
                 const isSelected = data.faithBackground === opt.value;
                 return (
                   <TouchableOpacity key={opt.value} activeOpacity={1}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: isSelected }}
+                    accessibilityLabel={`${opt.label}, ${opt.description}`}
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       setData((prev) => ({ ...prev, faithBackground: opt.value }));
@@ -3785,6 +3830,9 @@ export default function OnboardingScreen() {
                 const isSelected = data.lifeStage === opt.value;
                 return (
                   <TouchableOpacity key={opt.value} activeOpacity={1}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: isSelected }}
+                    accessibilityLabel={`${opt.label}, ${opt.description}`}
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       setData((prev) => ({ ...prev, lifeStage: opt.value }));
@@ -3841,6 +3889,10 @@ export default function OnboardingScreen() {
                 const isSelected = data.tone === opt.value;
                 return (
                   <TouchableOpacity key={opt.value} activeOpacity={1}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: isSelected }}
+                    accessibilityLabel={`${opt.label}, ${opt.description}`}
+                    accessibilityHint={opt.example}
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       setData((prev) => ({ ...prev, tone: opt.value }));
@@ -3881,6 +3933,9 @@ export default function OnboardingScreen() {
                 const isSelected = data.depth === opt.value;
                 return (
                   <TouchableOpacity key={opt.value} activeOpacity={1}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: isSelected }}
+                    accessibilityLabel={`${opt.label}, ${opt.description}`}
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       setData((prev) => ({ ...prev, depth: opt.value }));

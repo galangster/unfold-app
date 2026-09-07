@@ -45,28 +45,6 @@ describe('Bible search empty state (#24)', () => {
   });
 });
 
-describe('Bible book chips — single accent, no rainbow (#25)', () => {
-  const source = readSource('src/app/(tabs)/(bible)/index.tsx');
-
-  it('removes the per-book rainbow color coding', () => {
-    expect(source).not.toContain('getBookColor');
-    expect(source).not.toContain('CATEGORY_COLORS');
-    expect(source).not.toContain('bookColor');
-  });
-
-  it('codes book names neutral with a single selected accent state', () => {
-    expect(source).toContain('color: isSelected ? colors.accent : colors.text');
-    expect(source).toContain('selectedBook?.id === book.id');
-    expect(source).toContain('accessibilityState={{ selected: isSelected }}');
-  });
-
-  it('keeps category labels neutral, never a hardcoded or per-category color', () => {
-    expect(source).toContain('color: colors.textSubtle');
-    expect(source).not.toMatch(/categoryLabel.*getBookColor/);
-  });
-
-  it('derives the selected chip fill from the accent token, not a fixed hex', () => {
-    expect(source).toContain('alpha(colors.accent, 0.16)');
-    expect(source).toContain('borderColor: isSelected ? colors.accent : \'transparent\'');
-  });
-});
+// Hub category colors and selected-state contrast live in
+// bible-hub-category-palette.test.ts. The reader picker remains single-accent
+// in reader-chrome-pr4.test.ts.

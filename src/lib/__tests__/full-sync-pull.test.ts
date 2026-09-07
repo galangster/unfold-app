@@ -38,6 +38,47 @@ import { mmkvStorage } from '../mmkv-storage';
 import type { SyncPushChange, SyncTable } from '../sync-types';
 
 const mockFetch = jest.fn();
+const FIXED_CLOCK = new Date('2026-07-01T12:00:00.000Z');
+
+function clearMockMmkv() {
+  const mocked = jest.requireMock('../mmkv-storage') as { __clearMockStorage: () => void };
+  mocked.__clearMockStorage();
+}
+
+function serveSync(handlers: {
+  push?: (changes: SyncPushChange[]) => unknown;
+  pull?: (body: { lastPulledAt?: string | null }) => unknown;
+}) {
+  mockFetch.mockImplementation(async (input: RequestInfo, init?: RequestInit) => {
+    const url = String(input);
+    const body = init?.body ? JSON.parse(String(init.body)) as {
+      changes?: SyncPushChange[];
+      lastPulledAt?: string | null;
+    } : {};
+    if (url.endsWith('/api/sync/push')) {
+      const push = handlers.push;
+      if (!push) throw new Error(`unexpected push ${url}`);
+      if (!Array.isArray(body.changes)) throw new Error(`push missing changes ${url}`);
+      const changes = body.changes;
+      return { ok: true, json: async () => push(changes) };
+    }
+    if (url.endsWith('/api/sync/pull')) {
+      const pull = handlers.pull;
+      if (!pull) throw new Error(`unexpected pull ${url}`);
+      return { ok: true, json: async () => pull(body) };
+    }
+    throw new Error(`unexpected request ${url}`);
+  });
+}
+
+function acceptedLegacyResults(changes: readonly SyncPushChange[]) {
+  return changes.map((change) => ({
+    table: change.table,
+    id: change.id,
+    status: 'accepted' as const,
+    serverUpdatedAt: change.clientUpdatedAt,
+  }));
+}
 
 function recordsFromChanges(changes: SyncPushChange[]) {
   return changes.reduce((acc, change) => {
@@ -60,10 +101,16 @@ function recordsFromChanges(changes: SyncPushChange[]) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockFetch.mockReset();
+  mockFetch.mockImplementation((input: RequestInfo) => {
+    throw new Error(`unexpected request ${String(input)}`);
+  });
   global.fetch = mockFetch as unknown as typeof fetch;
-  (mmkvStorage as any).__clearMockStorage?.();
+  clearMockMmkv();
   resetDrainStateForTesting();
   useUnfoldStore.getState().reset();
+  jest.useFakeTimers();
+  jest.setSystemTime(FIXED_CLOCK);
 });
 
 afterEach(() => {
@@ -130,9 +177,8 @@ describe('full user-data sync', () => {
       'bookmarks',
     ]));
 
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ results: pushedChanges.map(() => ({ status: 'accepted' })) }),
+    serveSync({
+      push: (changes) => ({ results: acceptedLegacyResults(changes) }),
     });
     await drainSyncOutbox();
     expect(peekSyncOutbox()).toHaveLength(0);
@@ -140,9 +186,8 @@ describe('full user-data sync', () => {
     useUnfoldStore.getState().reset();
     expect(useUnfoldStore.getState().notes).toHaveLength(0);
 
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
+    serveSync({
+      pull: () => ({
         timestamp: '2026-07-01T12:00:00.000Z',
         changes: recordsFromChanges(pushedChanges),
       }),
@@ -168,16 +213,15 @@ describe('full user-data sync', () => {
     const deleteChanges = peekSyncOutbox();
     expect(deleteChanges).toContainEqual(expect.objectContaining({ table: 'notes', id: noteId, deleted: true }));
 
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ results: deleteChanges.map(() => ({ status: 'accepted' })) }),
+    serveSync({
+      push: (changes) => ({ results: acceptedLegacyResults(changes) }),
     });
     await drainSyncOutbox();
+    expect(peekSyncOutbox()).toHaveLength(0);
 
     useUnfoldStore.getState().reset();
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
+    serveSync({
+      pull: () => ({
         timestamp: '2026-07-01T12:05:00.000Z',
         changes: recordsFromChanges(deleteChanges),
       }),
@@ -189,9 +233,8 @@ describe('full user-data sync', () => {
 
   it('sends the persisted lastPulledAt cursor and advances it after apply', async () => {
     mmkvStorage.setItem(LAST_PULLED_AT_KEY, '2026-07-01T11:00:00.000Z');
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ timestamp: '2026-07-01T12:00:00.000Z', changes: {} }),
+    serveSync({
+      pull: () => ({ timestamp: '2026-07-01T12:00:00.000Z', changes: {} }),
     });
 
     await pullAllUserData();
@@ -200,6 +243,7 @@ describe('full user-data sync', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ lastPulledAt: '2026-07-01T11:00:00.000Z' }),
+      signal: expect.any(AbortSignal),
     });
     expect(mmkvStorage.getItem(LAST_PULLED_AT_KEY)).toBe('2026-07-01T12:00:00.000Z');
   });
@@ -247,9 +291,8 @@ describe('full user-data sync', () => {
       scriptureRefs: [],
     });
 
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ results: peekSyncOutbox().map(() => ({ status: 'accepted' })) }),
+    serveSync({
+      push: (changes) => ({ results: acceptedLegacyResults(changes) }),
     });
     await drainSyncOutbox();
     expect(peekSyncOutbox()).toHaveLength(0);

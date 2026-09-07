@@ -10,10 +10,9 @@ import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import {
-  scheduleDailyReminder,
-  cancelNotificationById,
-  NOTIFICATION_IDS,
+  commitDailyReminderSetting,
   areNotificationsEnabled,
+  beginDailyReminderOperation,
 } from '@/lib/notifications';
 import { formatReminderTime } from '@/lib/format-reminder-time';
 // NOTE: scheduleMiddayCheckIn / scheduleEveningWindDown / cancelMiddayCheckIn /
@@ -68,21 +67,14 @@ export function RemindersSection() {
 
   const handleToggleNotifications = async (value: boolean) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (value) {
-      const time = user?.reminderTime ?? '8:00 AM';
-      const result = await scheduleDailyReminder(time);
-      if (result) {
-        setNotificationsEnabled(true);
-        updateUser({ reminderTime: time, dailyReminderEnabled: true });
-        // Midday / evening check-in scheduling is owned by
-        // `useCheckInNotifications` — it will detect any permission change
-        // on the next foreground reconcile (or immediately, via its
-        // fingerprint watcher, if policy / enabled flags change here).
-      }
-    } else {
-      await cancelNotificationById(NOTIFICATION_IDS.DAILY_REMINDER);
-      setNotificationsEnabled(false);
-      updateUser({ dailyReminderEnabled: false });
+    const time = user?.reminderTime ?? '8:00 AM';
+    const applied = await commitDailyReminderSetting(value, time, updateUser);
+    if (applied) {
+      setNotificationsEnabled(value);
+      // Midday / evening check-in scheduling is owned by
+      // `useCheckInNotifications` — it will detect any permission change
+      // on the next foreground reconcile (or immediately, via its
+      // fingerprint watcher, if policy / enabled flags change here).
     }
   };
 
@@ -137,6 +129,9 @@ export function RemindersSection() {
     // useDailyReminderSync picks this up via the fingerprint and reschedules.
     // Do not call scheduleDailyReminder here — that created a dual scheduling
     // authority that raced with the centralized sync hook.
+    // Mark this write as the current daily owner so an older settings persist
+    // or in-flight 8:00 schedule cannot overwrite it before the 750ms debounce.
+    beginDailyReminderOperation();
     updateUser({ reminderTime: time, dailyReminderEnabled: true });
     setShowTimeSelector(false);
   };

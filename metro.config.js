@@ -2,12 +2,17 @@
 // NOTE TO AI: Do note change this file unless you are 110% sure you know what you are doing. It will likely break the app.
 
 const { getDefaultConfig } = require("expo/metro-config");
+const { getSentryExpoConfig } = require("@sentry/react-native/metro");
 const { withNativeWind } = require("nativewind/metro");
 const path = require("path");
 const fs = require("fs");
 
 /** @type {import('expo/metro-config').MetroConfig} */
-const config = getDefaultConfig(__dirname);
+const config = getSentryExpoConfig(__dirname, {
+  getDefaultConfig,
+  injectReleaseForWeb: false,
+  enableSourceContextInDevelopment: false,
+});
 
 // Only configure shared folder if it exists (may not exist during Docker build)
 const sharedFolder = path.resolve(__dirname, "../shared");

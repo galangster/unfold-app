@@ -31,6 +31,7 @@ export const useUIState = create<{
       cannot drive side-effects before the source confirms the current session. */
   revenueCatResolved: boolean;
   setRevenueCatResolved: () => void;
+  clearRevenueCatResolved: () => void;
   /** QA-only Today completion ambience override (set by the debug-seed-today
       `scene=` deep link). When set AND QA tools are enabled, AmbientArtCanvas
       renders this exact ambience instead of the stable-hash rotation, so we can
@@ -49,6 +50,7 @@ export const useUIState = create<{
   setQaPremiumOverride: (value) => set({ qaPremiumOverride: value }),
   revenueCatResolved: false,
   setRevenueCatResolved: () => set({ revenueCatResolved: true }),
+  clearRevenueCatResolved: () => set({ revenueCatResolved: false }),
   qaAmbienceOverride: null,
   setQaAmbienceOverride: (value) => set({ qaAmbienceOverride: value }),
 }));

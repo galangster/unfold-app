@@ -1,10 +1,11 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Modal } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Modal, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { MMKV } from 'react-native-mmkv';
+import SegmentedControl from '@react-native-segmented-control/segmented-control';
 import { MagnifyingGlassIcon, ClockIcon, CaretRightIcon, XIcon } from '@/components/icons';
 import { FontFamily } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
@@ -12,9 +13,40 @@ import { elevated } from '@/constants/shadows';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { useBibleDb } from '@/hooks/useBibleDb';
-import { OT_BOOKS, NT_BOOKS, getBookCategory, CATEGORY_LABELS, citationBookName, type BibleBookInfo, type BibleCategory } from '@/lib/bible-constants';
+import {
+  OT_BOOKS,
+  NT_BOOKS,
+  getBookCategory,
+  CATEGORY_LABELS,
+  citationBookName,
+  type BibleBookInfo,
+  type BibleCategory,
+} from '@/lib/bible-constants';
+import { bibleHubBookPillColumnCount, bibleHubBookPillWidthStyle } from '@/lib/bible-hub-book-pill-layout';
+import {
+  bibleHubBookChrome,
+  bibleHubCategoryText,
+  bibleHubContrastInk,
+  BIBLE_HUB_NT_LEGEND,
+  BIBLE_HUB_OT_LEGEND,
+} from '@/lib/bible-hub-category-palette';
+import {
+  BIBLE_HUB_OVERVIEW_MIN_TILE,
+  BIBLE_HUB_OVERVIEW_TILE_BORDER,
+  BIBLE_HUB_OVERVIEW_TILE_PADDING_X,
+  BIBLE_HUB_SEGMENTED_MIN_HEIGHT,
+  bibleHubBookAccessibilityHint,
+  bibleHubOverviewMetrics,
+  bibleHubSegmentedMetrics,
+} from '@/lib/bible-hub-overview-layout';
+import {
+  BIBLE_HUB_VIEW_LABELS,
+  BIBLE_HUB_VIEW_STORAGE_KEY,
+  bibleHubViewFromLabel,
+  parseBibleHubViewPreference,
+  type BibleHubView,
+} from '@/lib/bible-hub-view-preference';
 import { DownloadBibleSheet } from '@/components/bible/DownloadBibleSheet';
-import { alpha } from '@/components/ui';
 import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
 import { Typography } from '@/constants/typography';
@@ -28,7 +60,7 @@ const bibleHomeMeta = new MMKV({ id: 'unfold-bible-home-meta' });
 const HAS_SEEN_BIBLE_HOME_KEY = 'hasSeenBibleHome';
 
 export type BibleHomeNavigationDecision =
-  | { action: 'navigate'; bookId: number; chapter: number }
+  | { action: 'navigate'; bookId: number; chapter: number; verse: number }
   | { action: 'show-home' };
 
 /**
@@ -43,14 +75,14 @@ export type BibleHomeNavigationDecision =
  */
 export function resolveBibleHomeNavigation(params: {
   hasSeenHome: boolean;
-  lastPosition: { bookId: number; chapter: number } | null;
+  lastPosition: { bookId: number; chapter: number; verse?: number } | null;
 }): BibleHomeNavigationDecision {
   const { hasSeenHome, lastPosition } = params;
 
   if (!hasSeenHome) {
     return lastPosition
-      ? { action: 'navigate', bookId: lastPosition.bookId, chapter: lastPosition.chapter }
-      : { action: 'navigate', bookId: 1, chapter: 1 };
+      ? { action: 'navigate', bookId: lastPosition.bookId, chapter: lastPosition.chapter, verse: lastPosition.verse ?? 1 }
+      : { action: 'navigate', bookId: 1, chapter: 1, verse: 1 };
   }
 
   return { action: 'show-home' };
@@ -58,13 +90,27 @@ export function resolveBibleHomeNavigation(params: {
 
 export default function BibleHomeScreen() {
   const { colors, isDark } = useTheme();
+  const { width, fontScale } = useWindowDimensions();
   const reducedMotion = useReducedMotion();
   const router = useRouter();
+  const bookPillWidth = useMemo(
+    () => bibleHubBookPillWidthStyle(bibleHubBookPillColumnCount(width, fontScale)),
+    [width, fontScale],
+  );
+  const overviewMetrics = useMemo(
+    () => bibleHubOverviewMetrics(width, fontScale),
+    [width, fontScale],
+  );
+  const segmentedMetrics = useMemo(
+    () => bibleHubSegmentedMetrics(fontScale, width),
+    [fontScale, width],
+  );
   const { isReady, isDownloading, progress, download, error } = useBibleDb();
-  const getLastBiblePosition = useUnfoldStore((s) => s.getLastBiblePosition);
+  const lastPosition = useUnfoldStore((s) => s.bibleReadingHistory[0] ?? null);
   const [selectedBook, setSelectedBook] = useState<BibleBookInfo | null>(null);
-
-  const lastPosition = useMemo(() => getLastBiblePosition(), [getLastBiblePosition]);
+  const [viewMode, setViewMode] = useState<BibleHubView>(() =>
+    parseBibleHubViewPreference(bibleHomeMeta.getString(BIBLE_HUB_VIEW_STORAGE_KEY)),
+  );
 
   // Chapter numbers for the grid modal — rebuilt only when the selected book's
   // chapter count changes, not on every render of this screen.
@@ -93,17 +139,24 @@ export default function BibleHomeScreen() {
 
     if (decision.action === 'navigate') {
       setHomeState('navigating');
-      router.replace(`/(tabs)/(bible)/reader?bookId=${decision.bookId}&chapter=${decision.chapter}`);
+      router.replace(`/(tabs)/(bible)/reader?bookId=${decision.bookId}&chapter=${decision.chapter}&verse=${decision.verse}`);
       return;
     }
 
     setHomeState('ready');
   }, [isReady, lastPosition, router, homeState]);
 
+  const handleViewChange = useCallback((value: string) => {
+    const next = bibleHubViewFromLabel(value);
+    if (next === viewMode) return;
+    bibleHomeMeta.set(BIBLE_HUB_VIEW_STORAGE_KEY, next);
+    setViewMode(next);
+  }, [viewMode]);
+
   const handleBookPress = useCallback((book: BibleBookInfo) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (book.chapterCount === 1) {
-      router.push(`/(tabs)/(bible)/reader?bookId=${book.id}&chapter=1`);
+      router.push(`/(tabs)/(bible)/reader?bookId=${book.id}&chapter=1&verse=1`);
     } else {
       setSelectedBook(book);
     }
@@ -113,22 +166,81 @@ export default function BibleHomeScreen() {
     if (!selectedBook) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSelectedBook(null);
-    router.push(`/(tabs)/(bible)/reader?bookId=${selectedBook.id}&chapter=${chapter}`);
+    router.push(`/(tabs)/(bible)/reader?bookId=${selectedBook.id}&chapter=${chapter}&verse=1`);
   }, [selectedBook, router]);
 
   const handleContinueReading = useCallback(() => {
     if (!lastPosition) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push(`/(tabs)/(bible)/reader?bookId=${lastPosition.bookId}&chapter=${lastPosition.chapter}`);
+    router.push(`/(tabs)/(bible)/reader?bookId=${lastPosition.bookId}&chapter=${lastPosition.chapter}&verse=${lastPosition.verse ?? 1}`);
   }, [lastPosition, router]);
 
   const handleSearchPress = useCallback(() => {
     router.push('/(tabs)/(bible)/search');
   }, [router]);
 
+  const renderBook = useCallback((book: BibleBookInfo) => {
+    const isSelected = selectedBook?.id === book.id;
+    const chrome = bibleHubBookChrome({
+      category: getBookCategory(book.id),
+      isDark,
+      isSelected,
+      background: colors.background,
+      accent: colors.accent,
+      text: colors.text,
+    });
+    const isGrid = viewMode === 'grid';
+    return (
+      <TouchableOpacity
+        key={book.id}
+        onPress={() => handleBookPress(book)}
+        accessibilityLabel={book.name}
+        accessibilityHint={bibleHubBookAccessibilityHint(book)}
+        accessibilityRole="button"
+        accessibilityState={{ selected: isSelected }}
+        activeOpacity={0.6}
+        style={isGrid
+          ? [styles.overviewTile, {
+              width: overviewMetrics.tileWidth,
+              minWidth: overviewMetrics.tileWidth,
+              maxWidth: overviewMetrics.tileWidth,
+              minHeight: overviewMetrics.minTileHeight,
+              backgroundColor: chrome.backgroundColor,
+              borderColor: chrome.borderColor,
+            }]
+          : [styles.bookPill, bookPillWidth, {
+              backgroundColor: chrome.backgroundColor,
+              borderColor: chrome.borderColor,
+            }]}
+      >
+        <Text
+          style={[isGrid ? styles.overviewAbbrev : styles.bookName, { color: chrome.color }]}
+          maxFontSizeMultiplier={0}
+        >
+          {isGrid ? book.abbreviation : book.name}
+        </Text>
+      </TouchableOpacity>
+    );
+  }, [
+    bookPillWidth,
+    colors.accent,
+    colors.background,
+    colors.text,
+    handleBookPress,
+    isDark,
+    overviewMetrics,
+    selectedBook,
+    viewMode,
+  ]);
+
+  const renderCanonicalGrid = useCallback((books: BibleBookInfo[]) => (
+    <View style={styles.overviewGrid}>
+      {books.map(renderBook)}
+    </View>
+  ), [renderBook]);
+
   /** Group books by literary category and render with sub-labels */
   const renderCategorizedBooks = useCallback((books: BibleBookInfo[]) => {
-    // Group books into contiguous category runs
     const groups: { category: BibleCategory; books: BibleBookInfo[] }[] = [];
     for (const book of books) {
       const cat = getBookCategory(book.id);
@@ -144,43 +256,44 @@ export default function BibleHomeScreen() {
       <View style={{ marginBottom: Spacing['7'] }}>
         {groups.map((group) => (
           <View key={group.category} style={{ marginBottom: Spacing['4'] }}>
-            {/* Single-accent / neutral coding — no per-book rainbow */}
-            <Text style={[styles.categoryLabel, { color: colors.textSubtle }]}>
+            <Text
+              style={[styles.categoryLabel, { color: bibleHubCategoryText(group.category, isDark) }]}
+              maxFontSizeMultiplier={0}
+            >
               {CATEGORY_LABELS[group.category]}
             </Text>
             <View style={styles.bookGrid}>
-              {group.books.map((book) => {
-                const isSelected = selectedBook?.id === book.id;
-                return (
-                  <TouchableOpacity
-                    key={book.id}
-                    onPress={() => handleBookPress(book)}
-                    style={[styles.bookPill, {
-                      backgroundColor: isSelected
-                        ? alpha(colors.accent, 0.16)
-                        : isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
-                      borderColor: isSelected ? colors.accent : 'transparent',
-                    }]}
-                    activeOpacity={0.6}
-                    accessibilityLabel={book.name}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: isSelected }}
-                  >
-                    <Text
-                      style={[styles.bookName, { color: isSelected ? colors.accent : colors.text }]}
-                      numberOfLines={1}
-                    >
-                      {book.name}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
+              {group.books.map(renderBook)}
             </View>
           </View>
         ))}
       </View>
     );
-  }, [isDark, colors, selectedBook, handleBookPress]);
+  }, [isDark, renderBook]);
+
+  const renderCategoryLegend = useCallback((
+    categories: BibleCategory[],
+    testamentLabel: string,
+  ) => (
+    <View style={styles.legendBlock}>
+      <Text style={[styles.legendContext, { color: colors.text }]}>
+        {testamentLabel}
+      </Text>
+      <View style={styles.legendItems}>
+        {categories.map((category) => {
+          const color = bibleHubCategoryText(category, isDark);
+          return (
+            <View key={category} style={styles.legendItem}>
+              <View style={[styles.legendSwatch, { backgroundColor: color }]} />
+              <Text style={[styles.legendLabel, { color }]} maxFontSizeMultiplier={0}>
+                {CATEGORY_LABELS[category]}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  ), [colors.text, isDark]);
 
   // Show download prompt if Bible not ready (including during download)
   if (!isReady) {
@@ -208,14 +321,32 @@ export default function BibleHomeScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
       <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.text, fontFamily: FontFamily.display }]}>
+        <Text
+          style={[styles.title, { color: colors.text, fontFamily: FontFamily.display }]}
+          maxFontSizeMultiplier={0}
+        >
           Bible
         </Text>
+        <SegmentedControl
+          values={[...BIBLE_HUB_VIEW_LABELS]}
+          selectedIndex={viewMode === 'names' ? 1 : 0}
+          onValueChange={handleViewChange}
+          appearance={isDark ? 'dark' : 'light'}
+          tintColor={colors.accent}
+          fontStyle={{ fontSize: segmentedMetrics.fontSize, color: colors.text }}
+          activeFontStyle={{
+            fontSize: segmentedMetrics.fontSize,
+            color: bibleHubContrastInk(colors.accent),
+          }}
+          style={{
+            width: segmentedMetrics.width,
+            height: segmentedMetrics.height,
+            minHeight: BIBLE_HUB_SEGMENTED_MIN_HEIGHT,
+          }}
+        />
       </View>
 
-      {/* Search Bar */}
       <TouchableOpacity
         onPress={handleSearchPress}
         style={[styles.searchBar, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)' }]}
@@ -233,7 +364,6 @@ export default function BibleHomeScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Continue Reading */}
         {lastPosition && (
           <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).easing(Ease.out)}>
             <TouchableOpacity
@@ -260,17 +390,22 @@ export default function BibleHomeScreen() {
           </Animated.View>
         )}
 
-        {/* Old Testament */}
         <Text style={[styles.sectionHeader, { color: colors.text }]}>
           Old Testament
         </Text>
-        {renderCategorizedBooks(OT_BOOKS)}
+        {viewMode === 'grid' ? renderCanonicalGrid(OT_BOOKS) : renderCategorizedBooks(OT_BOOKS)}
 
-        {/* New Testament */}
         <Text style={[styles.sectionHeader, { color: colors.text }]}>
           New Testament
         </Text>
-        {renderCategorizedBooks(NT_BOOKS)}
+        {viewMode === 'grid' ? renderCanonicalGrid(NT_BOOKS) : renderCategorizedBooks(NT_BOOKS)}
+
+        {viewMode === 'grid' && (
+          <View style={styles.legendSection}>
+            {renderCategoryLegend(BIBLE_HUB_OT_LEGEND, 'Old Testament')}
+            {renderCategoryLegend(BIBLE_HUB_NT_LEGEND, 'New Testament')}
+          </View>
+        )}
 
         <View style={{ height: 100 }} />
       </ScrollView>
@@ -351,11 +486,13 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: Spacing['6'],
     paddingTop: Spacing['2'],
     paddingBottom: Spacing['3'],
+    gap: Spacing['3'],
   },
   title: {
     fontSize: 27,
@@ -413,7 +550,6 @@ const styles = StyleSheet.create({
   categoryLabel: {
     ...Typography.cardMeta,
     marginBottom: 8,
-    opacity: 0.7,
   },
   bookGrid: {
     flexDirection: 'row',
@@ -421,19 +557,68 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   bookPill: {
+    minHeight: BIBLE_HUB_OVERVIEW_MIN_TILE,
+    justifyContent: 'center',
     paddingHorizontal: Spacing['3'],
     paddingVertical: 10,
     borderRadius: Radius.sm,
     borderWidth: 1,
-    minWidth: '30%',
-    flexGrow: 1,
-    flexBasis: '30%',
-    maxWidth: '48%',
   },
   bookName: {
     fontFamily: FontFamily.ui,
     fontSize: 13,
     textAlign: 'center',
+  },
+  overviewGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: Spacing['6'],
+  },
+  overviewTile: {
+    flexGrow: 0,
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: BIBLE_HUB_OVERVIEW_TILE_PADDING_X,
+    paddingVertical: 4,
+    borderRadius: Radius.sm,
+    borderWidth: BIBLE_HUB_OVERVIEW_TILE_BORDER,
+  },
+  overviewAbbrev: {
+    fontFamily: FontFamily.ui,
+    fontSize: 11,
+    textAlign: 'center',
+  },
+  legendSection: {
+    gap: Spacing['3'],
+    marginTop: Spacing['1'],
+  },
+  legendBlock: {
+    gap: Spacing['2'],
+  },
+  legendContext: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 12,
+  },
+  legendItems: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing['2'],
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  legendSwatch: {
+    width: 8,
+    height: 8,
+    borderRadius: 2,
+  },
+  legendLabel: {
+    fontFamily: FontFamily.ui,
+    fontSize: 11,
   },
   modalOverlay: {
     flex: 1,

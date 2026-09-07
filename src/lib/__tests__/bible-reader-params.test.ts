@@ -7,9 +7,14 @@ import {
   MAX_VERSE_NUMBER,
   clampBookId,
   clampChapter,
+  findVisibleVerseAnchor,
   getChapterCount,
   resolveBibleReaderLocation,
+  resolveInitialVerseAnchor,
+  resolveRecordedVerseAnchor,
   resolveTargetVerse,
+  resolveTranslationRefreshVerse,
+  resolveVerseScrollTarget,
 } from '../bible-reader-params';
 
 describe('clampBookId', () => {
@@ -93,5 +98,129 @@ describe('resolveTargetVerse', () => {
     expect(resolveTargetVerse('16', undefined)).toBe(16);
     expect(resolveTargetVerse('16', [])).toBe(16);
     expect(resolveTargetVerse('99999', null)).toBe(MAX_VERSE_NUMBER);
+  });
+});
+
+describe('resolveInitialVerseAnchor', () => {
+  const history = [
+    { bookId: 24, chapter: 16, verse: 12 },
+    { bookId: 43, chapter: 3, verse: 8 },
+  ];
+
+  it('resumes the saved verse for the current chapter', () => {
+    expect(resolveInitialVerseAnchor({ bookId: 24, chapter: 16, history })).toBe(12);
+  });
+
+  it('keeps old history rows at the chapter start', () => {
+    expect(resolveInitialVerseAnchor({
+      bookId: 24,
+      chapter: 16,
+      history: [{ bookId: 24, chapter: 16 }],
+    })).toBeNull();
+  });
+});
+
+describe('resolveRecordedVerseAnchor', () => {
+  it('preserves and clamps the current anchor when translation changes', () => {
+    const verses = Array.from({ length: 10 }, (_, index) => ({ verse: index + 1 }));
+    expect(resolveRecordedVerseAnchor({ entryVerse: 1, currentVerse: 8, verses })).toBe(8);
+    expect(resolveRecordedVerseAnchor({ entryVerse: 1, currentVerse: 12, verses })).toBe(10);
+  });
+
+  it('uses the chapter-entry verse before any settled scroll exists', () => {
+    expect(resolveRecordedVerseAnchor({ entryVerse: 4, verses: undefined })).toBe(4);
+  });
+});
+
+describe('resolveTranslationRefreshVerse', () => {
+  const persistedPosition = { chapterKey: '43:3', verse: 16 };
+
+  it('restores the persisted verse when a translation replaces the same chapter', () => {
+    expect(resolveTranslationRefreshVerse({
+      hadPreviousContent: true,
+      previousChapterKey: '43:3',
+      chapterKey: '43:3',
+      persistedPosition,
+    })).toBe(16);
+  });
+
+  it('does not carry an anchor across chapters or treat first mount as refresh', () => {
+    expect(resolveTranslationRefreshVerse({
+      hadPreviousContent: true,
+      previousChapterKey: '43:3',
+      chapterKey: '43:4',
+      persistedPosition,
+    })).toBeNull();
+    expect(resolveTranslationRefreshVerse({
+      hadPreviousContent: false,
+      previousChapterKey: '',
+      chapterKey: '43:3',
+      persistedPosition,
+    })).toBeNull();
+  });
+});
+
+describe('resolveVerseScrollTarget', () => {
+  const verses = [{ verse: 1 }, { verse: 2 }, { verse: 3 }, { verse: 4 }];
+
+  it('uses a saved anchor once on chapter entry', () => {
+    expect(resolveVerseScrollTarget({
+      savedVerse: 3,
+      savedVerseConsumed: false,
+      verses,
+    })).toEqual({ verse: 3, source: 'saved' });
+  });
+
+  it('gives an explicit target priority before the saved fallback is consumed', () => {
+    expect(resolveVerseScrollTarget({
+      routeVerse: '2',
+      savedVerse: 3,
+      savedVerseConsumed: false,
+      verses,
+    })).toEqual({ verse: 2, source: 'explicit' });
+  });
+
+  it('does not replay a consumed saved anchor after verses reload', () => {
+    expect(resolveVerseScrollTarget({
+      savedVerse: 3,
+      savedVerseConsumed: true,
+      verses: [...verses],
+    })).toBeNull();
+  });
+
+  it('accepts a later explicit same-chapter target after fallback consumption', () => {
+    expect(resolveVerseScrollTarget({
+      routeVerse: '2',
+      savedVerse: 3,
+      savedVerseConsumed: true,
+      verses,
+    })).toEqual({ verse: 2, source: 'explicit' });
+  });
+
+  it('does not replay an explicit target after that route value is consumed', () => {
+    expect(resolveVerseScrollTarget({
+      routeVerse: '2',
+      explicitVerseConsumed: true,
+      savedVerse: 3,
+      savedVerseConsumed: true,
+      verses,
+    })).toBeNull();
+  });
+});
+
+describe('findVisibleVerseAnchor', () => {
+  const layouts = { 1: 0, 2: 72, 3: 156, 4: 238 };
+
+  it('uses the same header offset as scroll-to-verse positioning', () => {
+    expect(findVisibleVerseAnchor(layouts, 144, 12)).toBe(3);
+  });
+
+  it('keeps the preceding verse while its text remains at the visible top', () => {
+    expect(findVisibleVerseAnchor(layouts, 180, 12)).toBe(3);
+    expect(findVisibleVerseAnchor(layouts, 226, 12)).toBe(4);
+  });
+
+  it('returns null until verse layouts exist', () => {
+    expect(findVisibleVerseAnchor({}, 200, 12)).toBeNull();
   });
 });

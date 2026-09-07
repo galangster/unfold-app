@@ -23,6 +23,11 @@ import {
   syncUserProfileToBackend,
 } from '../user-profile-sync';
 import { drainSyncOutbox, peekSyncOutbox, resetDrainStateForTesting } from '../sync-outbox';
+const {
+  beginLocalResetSession,
+  endLocalResetSession,
+  resetSyncSessionFenceForTesting,
+} = jest.requireActual('../sync-session-fence') as typeof import('../sync-session-fence');
 import { mmkvStorage } from '../mmkv-storage';
 import type { UserProfile } from '../store';
 
@@ -65,6 +70,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   (mmkvStorage as any).__clearMockStorage?.();
   resetDrainStateForTesting();
+  resetSyncSessionFenceForTesting();
 });
 
 describe('user profile sync payloads', () => {
@@ -119,7 +125,14 @@ describe('user profile sync payloads', () => {
       .mockRejectedValueOnce(new Error('offline'))
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ results: [{ status: 'accepted' }] }),
+        json: async () => ({
+          results: [{
+            table: 'users',
+            id: 'user-profile-test-device',
+            status: 'accepted',
+            serverUpdatedAt: '2026-05-06T20:00:00.000Z',
+          }],
+        }),
       });
     global.fetch = mockFetch as unknown as typeof fetch;
 
@@ -135,6 +148,27 @@ describe('user profile sync payloads', () => {
     await drainSyncOutbox();
 
     expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(peekSyncOutbox()).toHaveLength(0);
+  });
+
+  it('does not enqueue a delayed profile failure after the captured session is reset', async () => {
+    let rejectPush!: (reason: Error) => void;
+    const mockFetch = jest.fn(
+      () => new Promise<never>((_resolve, reject) => {
+        rejectPush = reject;
+      }),
+    );
+    global.fetch = mockFetch as unknown as typeof fetch;
+
+    const pending = syncUserProfileToBackend(baseUser, '2026-05-06T20:00:00.000Z').catch(() => undefined);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    const resetToken = beginLocalResetSession();
+    (mmkvStorage as any).__clearMockStorage?.();
+    endLocalResetSession(resetToken);
+    rejectPush(new Error('offline'));
+    await pending;
+
     expect(peekSyncOutbox()).toHaveLength(0);
   });
 });

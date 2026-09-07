@@ -47,4 +47,17 @@ describe('Bible reader verse measurement source contract', () => {
     expect(readerSource).toContain('verseLayoutsRef.current[verseNum] = y;');
     expect(readerSource).toContain('onLayout={handleVerseLayout}');
   });
+
+  it('scopes row readiness and delayed scrolls to the active chapter translation', () => {
+    expect(readerSource).toContain('contentKey={readerContentKey}');
+    expect(readerSource).toContain('if (contentKey !== activeContentKeyRef.current) return;');
+    expect(readerSource).toContain('if (request.contentKey !== activeContentKeyRef.current) return;');
+    expect(readerSource).toContain('const readerContentKey = `${chapterKey}:${bibleReaderSettings.translation}`;');
+  });
+
+  it('cancels delayed scroll work and invalidates the fallback native target', () => {
+    expect(readerSource).toContain('if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);');
+    expect(readerSource).toContain('if (flashTimerRef.current) clearTimeout(flashTimerRef.current);');
+    expect(readerSource).toContain('if (node === null) scrollNativeTargetRef.current = null;');
+  });
 });

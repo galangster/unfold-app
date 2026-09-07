@@ -21,6 +21,7 @@
 
 import { Platform } from "react-native";
 import { logger } from '@/lib/logger';
+import { isEphemeralDeviceId } from '@/lib/device-id';
 import { getDeviceId, isRecoverySession } from '@/lib/mmkv-storage';
 import {
   isPaywallDiagnosticsEnabled,
@@ -33,6 +34,7 @@ import {
   sanitizeDiagnosticText,
 } from '@/lib/paywall-diagnostics';
 import { buildRevenueCatAppUserId } from '@/lib/revenuecat-user-id';
+import { isLocalResetInProgress } from '@/lib/sync-session-fence';
 import Purchases, {
   type PurchasesOfferings,
   type CustomerInfo,
@@ -72,6 +74,17 @@ let revenueCatConfigured = false;
 let revenueCatIdentityReadyPromise: Promise<void> | null = null;
 let revenueCatIdentityError: unknown = null;
 let configuredAppUserID: string | null = null;
+let identityEpoch = 0;
+let identityRetryInflight: Promise<boolean> | null = null;
+let identityReadyResolve: (() => void) | null = null;
+let nativeOpTail: Promise<void> = Promise.resolve();
+let nativeIdentityMutationsPending = 0;
+let identityReadinessTimer: ReturnType<typeof setTimeout> | null = null;
+const identityEpochListeners = new Set<(epoch: number) => void>();
+const identityVerifiedListeners = new Set<(epoch: number) => void>();
+const IDENTITY_READINESS_TIMEOUT_MS = 5_000;
+const RESET_UNAVAILABLE_ERROR = 'RevenueCat unavailable during reset';
+const PENDING_IDENTITY_MUTATION_ERROR = 'RevenueCat native identity mutation is still pending';
 
 const LOG_PREFIX = "[RevenueCat]";
 
@@ -118,6 +131,14 @@ class RevenueCatTimeoutError extends Error {
   }
 }
 
+class RevenueCatIdentityEpochError extends Error {
+  readonly isRevenueCatIdentityEpoch = true as const;
+  constructor(message = 'RevenueCat identity epoch changed') {
+    super(message);
+    this.name = 'RevenueCatIdentityEpochError';
+  }
+}
+
 /** Race a promise against a timeout. Rejects if the deadline hits first. */
 const withTimeout = <T>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
   return new Promise<T>((resolve, reject) => {
@@ -139,6 +160,195 @@ const withTimeout = <T>(promise: Promise<T>, ms: number, label: string): Promise
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
+function notifyIdentityEpoch(epoch: number): void {
+  for (const listener of identityEpochListeners) {
+    listener(epoch);
+  }
+}
+
+function settleIdentityReady(): void {
+  const resolve = identityReadyResolve;
+  identityReadyResolve = null;
+  resolve?.();
+}
+
+function clearIdentityReadinessBound(): void {
+  if (identityReadinessTimer !== null) {
+    clearTimeout(identityReadinessTimer);
+    identityReadinessTimer = null;
+  }
+}
+
+function startIdentityReadinessBound(epoch: number): void {
+  clearIdentityReadinessBound();
+  identityReadinessTimer = setTimeout(() => {
+    identityReadinessTimer = null;
+    if (identityEpoch !== epoch) return;
+    if (configuredAppUserID && revenueCatIdentityError === null) return;
+    revenueCatIdentityError = new RevenueCatTimeoutError(
+      'identity readiness',
+      IDENTITY_READINESS_TIMEOUT_MS,
+    );
+    settleIdentityReady();
+  }, IDENTITY_READINESS_TIMEOUT_MS);
+}
+
+function enqueueAfterNativeOps<T>(operation: () => Promise<T>): Promise<T> {
+  const run = nativeOpTail.then(operation, operation);
+  nativeOpTail = run.then(() => undefined, () => undefined);
+  return run;
+}
+
+function enqueueNativeIdentityMutation<T>(operation: () => Promise<T>): Promise<T> {
+  nativeIdentityMutationsPending += 1;
+  return enqueueAfterNativeOps(async () => {
+    try {
+      return await operation();
+    } finally {
+      nativeIdentityMutationsPending -= 1;
+    }
+  });
+}
+
+function throwIfOrdinaryUseBlocked(): void {
+  if (isLocalResetInProgress()) {
+    throw new Error(RESET_UNAVAILABLE_ERROR);
+  }
+}
+
+function currentDeviceAppUserId(): string | null {
+  if (isRecoverySession()) return null;
+  const deviceId = getDeviceId();
+  if (isEphemeralDeviceId(deviceId)) return null;
+  try {
+    return buildRevenueCatAppUserId(deviceId);
+  } catch {
+    return null;
+  }
+}
+
+async function assertSdkMatchesTarget(epoch: number): Promise<void> {
+  if (identityEpoch !== epoch) {
+    throw new RevenueCatIdentityEpochError();
+  }
+  if (!configuredAppUserID) {
+    throw new Error('RevenueCat identity is not ready');
+  }
+  const sdkAppUserID = await Purchases.getAppUserID();
+  if (identityEpoch !== epoch) {
+    throw new RevenueCatIdentityEpochError();
+  }
+  if (sdkAppUserID !== configuredAppUserID) {
+    throw new Error('RevenueCat SDK identity does not match the current device identity');
+  }
+}
+
+export function subscribeRevenueCatIdentityEpoch(
+  listener: (epoch: number) => void,
+): () => void {
+  identityEpochListeners.add(listener);
+  return () => {
+    identityEpochListeners.delete(listener);
+  };
+}
+
+export function isRevenueCatIdentityVerified(): boolean {
+  return configuredAppUserID !== null && revenueCatIdentityError === null;
+}
+
+/** Return the exact SDK-verified identity for an explicit user support action. */
+export function getRevenueCatSupportId(): string | null {
+  return isRevenueCatIdentityVerified() ? configuredAppUserID : null;
+}
+
+function notifyIdentityVerified(): void {
+  if (!isRevenueCatIdentityVerified()) return;
+  const epoch = identityEpoch;
+  for (const listener of [...identityVerifiedListeners]) {
+    listener(epoch);
+  }
+}
+
+function markIdentityVerified(appUserID: string): void {
+  configuredAppUserID = appUserID;
+  revenueCatIdentityError = null;
+  clearIdentityReadinessBound();
+  revenueCatIdentityReadyPromise = Promise.resolve();
+  settleIdentityReady();
+  notifyIdentityVerified();
+}
+
+/**
+ * Fires when the wrapper has verified the current deterministic target.
+ * This is not an identity-epoch notification. Invalidation does not emit it.
+ */
+export function subscribeRevenueCatIdentityVerified(
+  listener: (epoch: number) => void,
+): () => void {
+  identityVerifiedListeners.add(listener);
+  return () => {
+    identityVerifiedListeners.delete(listener);
+  };
+}
+
+/**
+ * Drop prior readiness before device rotation. Purchase and restore wait
+ * for `establishRevenueCatIdentityForCurrentDevice` after the new id exists.
+ * Does not call Purchases.configure again.
+ */
+export function invalidateRevenueCatIdentityReadiness(): void {
+  if (!revenueCatConfigured) return;
+
+  const previousResolve = identityReadyResolve;
+  identityEpoch += 1;
+  identityRetryInflight = null;
+  configuredAppUserID = null;
+  revenueCatIdentityError = new Error('RevenueCat identity transition in progress');
+  revenueCatIdentityReadyPromise = new Promise<void>((resolve) => {
+    identityReadyResolve = resolve;
+  });
+  startIdentityReadinessBound(identityEpoch);
+  previousResolve?.();
+  notifyIdentityEpoch(identityEpoch);
+}
+
+/**
+ * Log in to the current deterministic device id. Call after rotateDeviceId().
+ * Recovery and ephemeral identities stay fail-closed and never call logIn.
+ */
+export async function establishRevenueCatIdentityForCurrentDevice(): Promise<boolean> {
+  if (!revenueCatConfigured) return false;
+
+  const epoch = identityEpoch;
+  const appUserID = currentDeviceAppUserId();
+  if (!appUserID) {
+    if (epoch === identityEpoch) {
+      configuredAppUserID = null;
+      revenueCatIdentityError = new Error('RevenueCat identity unavailable');
+      clearIdentityReadinessBound();
+      settleIdentityReady();
+    }
+    return false;
+  }
+
+  try {
+    await synchronizeRevenueCatAppUserID(appUserID, epoch);
+    if (epoch !== identityEpoch) return false;
+    markIdentityVerified(appUserID);
+    return true;
+  } catch (error) {
+    if (epoch !== identityEpoch) return false;
+    revenueCatIdentityError = error;
+    logger.error(`${LOG_PREFIX} App user ID synchronization failed:`, error);
+    void recordPaywallDiagnosticLazy('revenuecat.identity.sync_error', () => ({
+      targetAppUserID: summarizeDiagnosticIdentifier(appUserID),
+      error: summarizeRevenueCatError(error),
+    }), 'error');
+    settleIdentityReady();
+    return false;
+  }
+}
+
 const hasUnfoldPremiumEntitlement = (customerInfo: CustomerInfo): boolean => {
   return Boolean(customerInfo.entitlements.active?.[UNFOLD_PREMIUM_ENTITLEMENT]);
 };
@@ -151,33 +361,68 @@ const hasUnfoldPremiumEntitlement = (customerInfo: CustomerInfo): boolean => {
  * cache write. Every re-read — the quick refresh after a store action and the
  * entitlement wait's poll — goes through here.
  */
-const readPremiumGrant = async (): Promise<{ customerInfo: CustomerInfo; granted: boolean }> => {
+const readPremiumGrant = async (
+  epoch: number,
+): Promise<{ customerInfo: CustomerInfo; granted: boolean }> => {
+  throwIfOrdinaryUseBlocked();
+  if (identityEpoch !== epoch) {
+    throw new RevenueCatIdentityEpochError();
+  }
+  if (revenueCatIdentityError) {
+    throw revenueCatIdentityError;
+  }
+  if (!configuredAppUserID) {
+    throw new Error('RevenueCat identity is not ready');
+  }
+  await assertSdkMatchesTarget(epoch);
+
   await Purchases.invalidateCustomerInfoCache();
+  throwIfOrdinaryUseBlocked();
+  if (identityEpoch !== epoch) {
+    throw new RevenueCatIdentityEpochError();
+  }
+  await assertSdkMatchesTarget(epoch);
+
   const customerInfo = await Purchases.getCustomerInfo();
+  throwIfOrdinaryUseBlocked();
+  if (identityEpoch !== epoch) {
+    throw new RevenueCatIdentityEpochError();
+  }
+  await assertSdkMatchesTarget(epoch);
   return { customerInfo, granted: hasUnfoldPremiumEntitlement(customerInfo) };
 };
 
 /**
  * Resolve with the first customer info that carries the Unfold Premium
- * entitlement, delivered by the SDK's update listener or by a 2 s poll.
- * Resolves null once `timeoutMs` passes or `options.signal` aborts. Never
- * rejects: a failed poll is ignored and the listener is always removed, so no
- * SDK listener outlives the wait or the screen that started it.
+ * entitlement on a guarded current-identity read. SDK update events are
+ * signals only; their payloads are not granted. A 2 s poll uses the same
+ * read. Resolves null once `timeoutMs` passes, `options.signal` aborts, or
+ * the identity epoch changes. Never rejects: a failed poll is ignored and
+ * the listener is always removed, so no SDK listener outlives the wait or
+ * the screen that started it.
  */
 export const waitForUnfoldPremiumEntitlement = (
   timeoutMs: number,
   options: { signal?: AbortSignal } = {},
 ): Promise<CustomerInfo | null> => {
   const { signal } = options;
+  const epochAtStart = identityEpoch;
   return new Promise<CustomerInfo | null>((resolve) => {
     let settled = false;
     let deadline: ReturnType<typeof setTimeout> | null = null;
     let pollTimer: ReturnType<typeof setTimeout> | null = null;
+    let refreshInflight: Promise<void> | null = null;
+    let refreshQueued = false;
+    let unsubscribeEpoch: (() => void) | null = null;
 
-    function listener(customerInfo: CustomerInfo): void {
-      if (hasUnfoldPremiumEntitlement(customerInfo)) {
-        finish(customerInfo);
+    function onIdentityEpoch(epoch: number): void {
+      if (epoch !== epochAtStart) {
+        finish(null);
       }
+    }
+
+    function listener(): void {
+      requestCurrentGrantRead();
     }
 
     function onAbort(): void {
@@ -190,6 +435,7 @@ export const waitForUnfoldPremiumEntitlement = (
       if (deadline) clearTimeout(deadline);
       if (pollTimer) clearTimeout(pollTimer);
       signal?.removeEventListener('abort', onAbort);
+      unsubscribeEpoch?.();
       try {
         Purchases.removeCustomerInfoUpdateListener(listener);
       } catch (error) {
@@ -204,17 +450,51 @@ export const waitForUnfoldPremiumEntitlement = (
       resolve(value);
     }
 
+    function requestCurrentGrantRead(): void {
+      if (settled) return;
+      if (identityEpoch !== epochAtStart) {
+        finish(null);
+        return;
+      }
+      if (refreshInflight) {
+        refreshQueued = true;
+        return;
+      }
+      refreshInflight = (async () => {
+        try {
+          do {
+            refreshQueued = false;
+            if (settled) return;
+            if (identityEpoch !== epochAtStart) {
+              finish(null);
+              return;
+            }
+            const { customerInfo, granted } = await readPremiumGrant(epochAtStart);
+            if (settled) return;
+            if (identityEpoch !== epochAtStart) {
+              finish(null);
+              return;
+            }
+            if (granted) {
+              finish(customerInfo);
+              return;
+            }
+          } while (refreshQueued);
+        } catch (error) {
+          if (error instanceof RevenueCatIdentityEpochError) {
+            finish(null);
+            return;
+          }
+          logger.log(`${LOG_PREFIX} entitlement wait current-identity read failed:`, error);
+        } finally {
+          refreshInflight = null;
+        }
+      })();
+    }
+
     async function poll(): Promise<void> {
       if (settled) return;
-      try {
-        const { customerInfo, granted } = await readPremiumGrant();
-        if (granted) {
-          finish(customerInfo);
-          return;
-        }
-      } catch (error) {
-        logger.log(`${LOG_PREFIX} entitlement wait poll failed:`, error);
-      }
+      requestCurrentGrantRead();
       if (!settled) {
         pollTimer = setTimeout(() => { void poll(); }, ENTITLEMENT_WAIT_POLL_INTERVAL_MS);
       }
@@ -225,6 +505,12 @@ export const waitForUnfoldPremiumEntitlement = (
     }), 'warn');
 
     if (timeoutMs <= 0 || signal?.aborted) {
+      finish(null);
+      return;
+    }
+
+    unsubscribeEpoch = subscribeRevenueCatIdentityEpoch(onIdentityEpoch);
+    if (identityEpoch !== epochAtStart) {
       finish(null);
       return;
     }
@@ -249,6 +535,7 @@ export const waitForUnfoldPremiumEntitlement = (
 const refreshCustomerInfoIfPremiumMissing = async (
   sourceAction: 'purchasePackage' | 'restorePurchases',
   customerInfo: CustomerInfo,
+  epoch: number,
 ): Promise<CustomerInfo> => {
   if (hasUnfoldPremiumEntitlement(customerInfo)) {
     return customerInfo;
@@ -266,8 +553,11 @@ const refreshCustomerInfoIfPremiumMissing = async (
       if (delayMs > 0) {
         await sleep(delayMs);
       }
+      if (identityEpoch !== epoch) {
+        throw new RevenueCatIdentityEpochError();
+      }
 
-      const read = await readPremiumGrant();
+      const read = await readPremiumGrant(epoch);
       latestCustomerInfo = read.customerInfo;
       void recordPaywallDiagnosticLazy('revenuecat.customer_info.refresh_missing_entitlement_result', () => ({
         sourceAction,
@@ -293,7 +583,14 @@ const refreshCustomerInfoIfPremiumMissing = async (
 const guardRevenueCatUsage = async <T>(
   action: string,
   operation: () => Promise<T>,
+  options: {
+    requireIdentity?: boolean;
+    allowDuringReset?: boolean;
+  } = {},
 ): Promise<RevenueCatResult<T>> => {
+  const requireIdentity = options.requireIdentity !== false;
+  const allowDuringReset = options.allowDuringReset === true;
+  const epochAtStart = identityEpoch;
   const startedAt = Date.now();
   if (isWeb) {
     logger.log(
@@ -316,15 +613,50 @@ const guardRevenueCatUsage = async <T>(
     return { ok: false, reason: "not_configured" };
   }
 
+  if (!allowDuringReset && isLocalResetInProgress()) {
+    logger.log(`${LOG_PREFIX} ${action} skipped: local reset in progress`);
+    void recordPaywallDiagnosticLazy('revenuecat.operation.skipped', () => ({
+      action,
+      reason: 'sdk_error',
+    }), 'warn');
+    return { ok: false, reason: "sdk_error", error: new Error(RESET_UNAVAILABLE_ERROR) };
+  }
+
   try {
     void recordPaywallDiagnosticLazy('revenuecat.operation.start', () => ({ action }));
-    if (revenueCatIdentityReadyPromise) {
-      await revenueCatIdentityReadyPromise;
+    if (requireIdentity) {
+      if (revenueCatIdentityReadyPromise) {
+        await withTimeout(
+          revenueCatIdentityReadyPromise,
+          IDENTITY_READINESS_TIMEOUT_MS,
+          'identity readiness',
+        );
+      }
+      if (!allowDuringReset) {
+        throwIfOrdinaryUseBlocked();
+      }
+      if (identityEpoch !== epochAtStart) {
+        throw new RevenueCatIdentityEpochError();
+      }
+      if (revenueCatIdentityError) {
+        throw revenueCatIdentityError;
+      }
+      if (!configuredAppUserID) {
+        throw new Error('RevenueCat identity is not ready');
+      }
+      if (nativeIdentityMutationsPending > 0) {
+        throw new Error(PENDING_IDENTITY_MUTATION_ERROR);
+      }
+      await assertSdkMatchesTarget(epochAtStart);
     }
-    if (revenueCatIdentityError) {
-      throw revenueCatIdentityError;
-    }
+
     const data = await operation();
+    if (requireIdentity && identityEpoch !== epochAtStart) {
+      throw new RevenueCatIdentityEpochError();
+    }
+    if (requireIdentity && !allowDuringReset) {
+      throwIfOrdinaryUseBlocked();
+    }
     void recordPaywallDiagnosticLazy('revenuecat.operation.success', () => ({
       action,
       elapsedMs: Date.now() - startedAt,
@@ -362,35 +694,53 @@ const guardRevenueCatUsage = async <T>(
   }
 };
 
-const synchronizeRevenueCatAppUserID = async (appUserID: string): Promise<void> => {
-  void recordPaywallDiagnosticLazy('revenuecat.identity.sync_start', () => ({
-    targetAppUserID: summarizeDiagnosticIdentifier(appUserID),
-  }));
-
-  const currentAppUserID = await Purchases.getAppUserID();
-  if (currentAppUserID === appUserID) {
-    logger.log(`${LOG_PREFIX} App user ID already synchronized`);
-    void recordPaywallDiagnosticLazy('revenuecat.identity.already_synchronized', () => ({
-      appUserID: summarizeDiagnosticIdentifier(appUserID),
+async function synchronizeRevenueCatAppUserID(
+  appUserID: string,
+  epoch: number,
+): Promise<void> {
+  await enqueueNativeIdentityMutation(async () => {
+    void recordPaywallDiagnosticLazy('revenuecat.identity.sync_start', () => ({
+      targetAppUserID: summarizeDiagnosticIdentifier(appUserID),
     }));
-    return;
-  }
 
-  const wasAnonymous = currentAppUserID.startsWith('$RCAnonymousID:');
-  const result = await Purchases.logIn(appUserID);
-  logger.log(
-    `${LOG_PREFIX} App user ID synchronized (${wasAnonymous ? 'anonymous migrated' : 'custom switched'}, ${
-      result.created ? 'created' : 'existing'
-    } customer)`,
-  );
-  void recordPaywallDiagnosticLazy('revenuecat.identity.synchronized', () => ({
-    previousAppUserID: summarizeDiagnosticIdentifier(currentAppUserID),
-    targetAppUserID: summarizeDiagnosticIdentifier(appUserID),
-    wasAnonymous,
-    created: result.created,
-    customerInfo: summarizeCustomerInfo(result.customerInfo),
-  }));
-};
+    const currentAppUserID = await Purchases.getAppUserID();
+    if (epoch !== identityEpoch) {
+      throw new RevenueCatIdentityEpochError();
+    }
+    if (currentAppUserID === appUserID) {
+      logger.log(`${LOG_PREFIX} App user ID already synchronized`);
+      void recordPaywallDiagnosticLazy('revenuecat.identity.already_synchronized', () => ({
+        appUserID: summarizeDiagnosticIdentifier(appUserID),
+      }));
+      return;
+    }
+
+    const wasAnonymous = currentAppUserID.startsWith('$RCAnonymousID:');
+    const result = await Purchases.logIn(appUserID);
+    if (epoch !== identityEpoch) {
+      throw new RevenueCatIdentityEpochError();
+    }
+    const verifiedAppUserID = await Purchases.getAppUserID();
+    if (epoch !== identityEpoch) {
+      throw new RevenueCatIdentityEpochError();
+    }
+    if (verifiedAppUserID !== appUserID) {
+      throw new Error('RevenueCat SDK identity does not match the requested device identity');
+    }
+    logger.log(
+      `${LOG_PREFIX} App user ID synchronized (${wasAnonymous ? 'anonymous migrated' : 'custom switched'}, ${
+        result.created ? 'created' : 'existing'
+      } customer)`,
+    );
+    void recordPaywallDiagnosticLazy('revenuecat.identity.synchronized', () => ({
+      previousAppUserID: summarizeDiagnosticIdentifier(currentAppUserID),
+      targetAppUserID: summarizeDiagnosticIdentifier(appUserID),
+      wasAnonymous,
+      created: result.created,
+      customerInfo: summarizeCustomerInfo(result.customerInfo),
+    }));
+  });
+}
 
 // Initialize RevenueCat if key exists.
 //
@@ -433,7 +783,6 @@ if (hasRevenueCatApiKey && !isRecoverySession()) {
     });
 
     const appUserID = buildRevenueCatAppUserId(getDeviceId());
-    configuredAppUserID = appUserID;
     void recordPaywallDiagnosticLazy('revenuecat.configure.attempt', () => ({
       keyType,
       platform: Platform.OS,
@@ -446,13 +795,23 @@ if (hasRevenueCatApiKey && !isRecoverySession()) {
     // our deterministic device-scoped ID before any guarded SDK operation runs.
     Purchases.configure({ apiKey: apiKey! });
     revenueCatConfigured = true;
-    revenueCatIdentityReadyPromise = synchronizeRevenueCatAppUserID(appUserID).catch((error) => {
+    const identitySyncEpoch = identityEpoch;
+    revenueCatIdentityReadyPromise = new Promise<void>((resolve) => {
+      identityReadyResolve = resolve;
+    });
+    startIdentityReadinessBound(identitySyncEpoch);
+    void synchronizeRevenueCatAppUserID(appUserID, identitySyncEpoch).then(() => {
+      if (identitySyncEpoch !== identityEpoch) return;
+      markIdentityVerified(appUserID);
+    }).catch((error) => {
+      if (identitySyncEpoch !== identityEpoch) return;
       revenueCatIdentityError = error;
       logger.error(`${LOG_PREFIX} App user ID synchronization failed:`, error);
       void recordPaywallDiagnosticLazy('revenuecat.identity.sync_error', () => ({
         targetAppUserID: summarizeDiagnosticIdentifier(appUserID),
         error: summarizeRevenueCatError(error),
       }), 'error');
+      settleIdentityReady();
     });
     logger.log(`${LOG_PREFIX} SDK initialized successfully (${keyType} key, ${Platform.OS})`);
     void recordPaywallDiagnosticLazy('revenuecat.configure.success', () => ({
@@ -507,25 +866,18 @@ export const hasRevenueCatConfigurationAttemptFailed = (): boolean => {
  *
  * Returns `true` if the retry succeeded (error cleared), `false` otherwise.
  */
-let identityRetryInflight: Promise<boolean> | null = null;
 export const retryRevenueCatIdentitySync = (): Promise<boolean> => {
-  if (!revenueCatConfigured || !configuredAppUserID) return Promise.resolve(false);
-  if (!revenueCatIdentityError) return Promise.resolve(true); // nothing to repair
+  if (!revenueCatConfigured) return Promise.resolve(false);
+  if (isLocalResetInProgress()) return Promise.resolve(false);
   if (identityRetryInflight) return identityRetryInflight;
-  identityRetryInflight = synchronizeRevenueCatAppUserID(configuredAppUserID)
-    .then(() => {
-      revenueCatIdentityError = null;
-      revenueCatIdentityReadyPromise = Promise.resolve();
-      return true;
-    })
-    .catch((error) => {
-      revenueCatIdentityError = error;
-      return false;
-    })
-    .finally(() => {
+  const started = establishRevenueCatIdentityForCurrentDevice();
+  identityRetryInflight = started;
+  void started.finally(() => {
+    if (identityRetryInflight === started) {
       identityRetryInflight = null;
-    });
-  return identityRetryInflight;
+    }
+  });
+  return started;
 };
 
 /**
@@ -568,16 +920,27 @@ export const purchasePackage = (
 ): Promise<RevenueCatResult<CustomerInfo>> => {
   return guardRevenueCatUsage("purchasePackage", async () => {
     const purchaseStartedAt = Date.now();
+    const epochAtStart = identityEpoch;
     void recordPaywallDiagnosticLazy('revenuecat.purchase.native_call_start', () => ({
       package: summarizePackage(packageToPurchase),
     }));
 
-    // Our deadline is not Apple's: a slow first-time sheet can complete the
-    // transaction after 60 s. The timeout result is the paywall's cue to wait
-    // for the grant (wait_for_entitlement), not a failure verdict, and that
-    // wait lives on the screen — so this call reports the timeout promptly.
+    // Admit the native purchase into the identity sequence. The UI deadline
+    // only stops waiting; the native promise stays in that sequence until it
+    // actually settles, so a later reset cannot mutate identity underneath it.
+    const heldNativePurchase = enqueueAfterNativeOps(async () => {
+      throwIfOrdinaryUseBlocked();
+      if (identityEpoch !== epochAtStart) {
+        throw new RevenueCatIdentityEpochError();
+      }
+      if (nativeIdentityMutationsPending > 0) {
+        throw new Error(PENDING_IDENTITY_MUTATION_ERROR);
+      }
+      await assertSdkMatchesTarget(epochAtStart);
+      return Purchases.purchasePackage(packageToPurchase);
+    });
     const purchaseResult = await withTimeout(
-      Purchases.purchasePackage(packageToPurchase),
+      heldNativePurchase,
       PURCHASE_TIMEOUT_MS,
       "purchasePackage",
     );
@@ -595,7 +958,11 @@ export const purchasePackage = (
       customerInfo: summarizeCustomerInfo(purchaseResult.customerInfo),
     }));
 
-    return refreshCustomerInfoIfPremiumMissing('purchasePackage', purchaseResult.customerInfo);
+    return refreshCustomerInfoIfPremiumMissing(
+      'purchasePackage',
+      purchaseResult.customerInfo,
+      epochAtStart,
+    );
   });
 };
 
@@ -639,8 +1006,20 @@ export const restorePurchases = (): Promise<
 > => {
   return guardRevenueCatUsage("restorePurchases", async () => {
     const restoreStartedAt = Date.now();
+    const epochAtStart = identityEpoch;
+    const heldNativeRestore = enqueueAfterNativeOps(async () => {
+      throwIfOrdinaryUseBlocked();
+      if (identityEpoch !== epochAtStart) {
+        throw new RevenueCatIdentityEpochError();
+      }
+      if (nativeIdentityMutationsPending > 0) {
+        throw new Error(PENDING_IDENTITY_MUTATION_ERROR);
+      }
+      await assertSdkMatchesTarget(epochAtStart);
+      return Purchases.restorePurchases();
+    });
     const customerInfo = await withTimeout(
-      Purchases.restorePurchases(),
+      heldNativeRestore,
       RESTORE_TIMEOUT_MS,
       "restorePurchases",
     );
@@ -648,28 +1027,77 @@ export const restorePurchases = (): Promise<
       elapsedMs: Date.now() - restoreStartedAt,
       customerInfo: summarizeCustomerInfo(customerInfo),
     }));
-    return refreshCustomerInfoIfPremiumMissing('restorePurchases', customerInfo);
+    return refreshCustomerInfoIfPremiumMissing('restorePurchases', customerInfo, epochAtStart);
   });
 };
 
 export const addCustomerInfoUpdateListener = (
   listener: CustomerInfoUpdateListener,
 ): Promise<RevenueCatResult<() => boolean>> => {
-  return guardRevenueCatUsage("addCustomerInfoUpdateListener", async () => {
-    if (!isPaywallDiagnosticsEnabled()) {
-      Purchases.addCustomerInfoUpdateListener(listener);
-      return () => Purchases.removeCustomerInfoUpdateListener(listener);
+  let gatedListener: CustomerInfoUpdateListener | null = null;
+  let disposed = false;
+  let refreshInflight: Promise<void> | null = null;
+  let refreshQueued = false;
+
+  const dispose = (): boolean => {
+    if (disposed) {
+      return false;
     }
+    disposed = true;
+    refreshQueued = false;
+    if (!gatedListener) {
+      return false;
+    }
+    const removed = Purchases.removeCustomerInfoUpdateListener(gatedListener);
+    gatedListener = null;
+    return removed;
+  };
 
-    const diagnosticListener: CustomerInfoUpdateListener = (customerInfo) => {
-      void recordPaywallDiagnosticLazy('revenuecat.customer_info.listener_update', () => ({
-        customerInfo: summarizeCustomerInfo(customerInfo),
-      }));
-      listener(customerInfo);
+  const requestCurrentIdentityRead = (): void => {
+    if (disposed) {
+      return;
+    }
+    if (refreshInflight) {
+      refreshQueued = true;
+      return;
+    }
+    refreshInflight = (async () => {
+      try {
+        do {
+          refreshQueued = false;
+          if (disposed) {
+            return;
+          }
+          const epoch = identityEpoch;
+          const result = await getCustomerInfo();
+          if (disposed) {
+            return;
+          }
+          if (identityEpoch !== epoch) continue;
+          if (!result.ok) continue;
+          if (isLocalResetInProgress()) continue;
+          listener(result.data);
+        } while (refreshQueued);
+      } catch (error) {
+        logger.log(`${LOG_PREFIX} listener current-identity read failed:`, error);
+      } finally {
+        refreshInflight = null;
+      }
+    })();
+  };
+
+  return guardRevenueCatUsage("addCustomerInfoUpdateListener", async () => {
+    const nextListener: CustomerInfoUpdateListener = () => {
+      requestCurrentIdentityRead();
     };
-
-    Purchases.addCustomerInfoUpdateListener(diagnosticListener);
-    return () => Purchases.removeCustomerInfoUpdateListener(diagnosticListener);
+    Purchases.addCustomerInfoUpdateListener(nextListener);
+    gatedListener = nextListener;
+    return dispose;
+  }).then((result) => {
+    if (!result.ok) {
+      dispose();
+    }
+    return result;
   });
 };
 
@@ -686,8 +1114,8 @@ export const addCustomerInfoUpdateListener = (
  */
 export const logoutUser = (): Promise<RevenueCatResult<void>> => {
   return guardRevenueCatUsage("logoutUser", async () => {
-    await Purchases.logOut();
-  });
+    await enqueueNativeIdentityMutation(() => Purchases.logOut());
+  }, { requireIdentity: false, allowDuringReset: true });
 };
 
 /**

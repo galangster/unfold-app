@@ -8,6 +8,13 @@
  */
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from "./api-config";
 import { reconcileGenerationResultIdentity, type GeneratedDayWithIdentity, type GenerationResultPayload } from './generation-reconciliation';
+import {
+  assertSyncSessionCurrent,
+  isSyncSessionCurrent,
+  registerSyncTransport,
+  resolveGenerationSession,
+  SyncSessionInvalidatedError,
+} from './generation-session';
 import { mmkvStorage } from "./mmkv-storage";
 
 /** MMKV key for caching the active dynamic prompt example */
@@ -26,16 +33,30 @@ export class ApiError extends Error {
 }
 
 /** Hermes-compatible fetch timeout (AbortSignal.timeout() not available) */
-function fetchWithTimeout(
+async function fetchWithTimeout(
   url: string,
   options: RequestInit,
-  ms: number
+  ms: number,
+  session: number,
+  action: string,
 ): Promise<Response> {
+  assertSyncSessionCurrent(session, action);
   const controller = new AbortController();
+  const unregister = registerSyncTransport(controller);
   const timer = setTimeout(() => controller.abort(), ms);
-  return fetch(url, { ...options, signal: controller.signal }).finally(() =>
-    clearTimeout(timer)
-  );
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    assertSyncSessionCurrent(session, action);
+    return response;
+  } catch (error) {
+    if (!isSyncSessionCurrent(session)) {
+      throw new SyncSessionInvalidatedError(action);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    unregister();
+  }
 }
 
 export interface GenerationJobResponse {
@@ -148,7 +169,11 @@ export async function submitGenerationJob(params: {
   dayNumber: number;
   jobType: "initial_arc" | "day" | "onboarding";
   userContext?: InitialArcUserContext;
+  session?: number;
 }): Promise<Pick<GenerationJobResponse, 'jobId' | 'status' | 'devotionalId'>> {
+  const session = resolveGenerationSession(params.session);
+  assertSyncSessionCurrent(session, 'submit generation job');
+
   // Read cached dynamic prompt example (if any) for self-improving generation quality
   let dynamicExample: { rule: string; badText: string; goodText: string } | undefined;
   try {
@@ -160,90 +185,128 @@ export async function submitGenerationJob(params: {
     // Silent -- example is best-effort enrichment
   }
 
+  assertSyncSessionCurrent(session, 'submit generation job');
   const headers = await getAuthHeaders();
-  const body = dynamicExample ? { ...params, dynamicExample } : params;
+  assertSyncSessionCurrent(session, 'submit generation job');
+  const { session: _session, ...requestParams } = params;
+  const body = dynamicExample ? { ...requestParams, dynamicExample } : requestParams;
   const response = await fetchWithTimeout(
     `${PRIMARY_BACKEND_URL}/api/jobs/generate-day`,
     { method: "POST", headers, body: JSON.stringify(body) },
-    15_000
+    15_000,
+    session,
+    'submit generation job',
   );
 
   if (response.status === 409) {
-    const body = await response.json();
+    const conflictBody = await response.json();
+    assertSyncSessionCurrent(session, 'submit generation job');
     throw new ApiError(
-      body.error?.message ?? 'Already generated today',
+      conflictBody.error?.message ?? 'Already generated today',
       409,
-      body.error?.code ?? 'ALREADY_GENERATED_TODAY',
-      body.existingJobId,
+      conflictBody.error?.code ?? 'ALREADY_GENERATED_TODAY',
+      conflictBody.existingJobId,
     );
   }
 
   if (!response.ok) {
-    const body = await response.text().catch(() => "");
+    const errorBody = await response.text().catch(() => "");
+    assertSyncSessionCurrent(session, 'submit generation job');
     throw new Error(
-      `Submit job failed: ${response.status} — ${body.slice(0, 200)}`
+      `Submit job failed: ${response.status} — ${errorBody.slice(0, 200)}`
     );
   }
 
-  return response.json();
+  const payload = await response.json();
+  assertSyncSessionCurrent(session, 'submit generation job');
+  return payload;
 }
 
 export async function pollJobStatus(
-  jobId: string
+  jobId: string,
+  session?: number,
 ): Promise<GenerationJobResponse> {
+  const origin = resolveGenerationSession(session);
+  assertSyncSessionCurrent(origin, 'poll generation job');
   const headers = await getAuthHeaders();
+  assertSyncSessionCurrent(origin, 'poll generation job');
   const response = await fetchWithTimeout(
     `${PRIMARY_BACKEND_URL}/api/jobs/${jobId}`,
     { method: "GET", headers },
-    10_000
+    10_000,
+    origin,
+    'poll generation job',
   );
 
   if (!response.ok) {
     // Carry the status and code: 404 / 400 is the server's word that it does
     // not hold this job (`classifyPollFailure`), not a connection problem.
     const body = (await response.json().catch(() => null)) as { error?: { code?: string; message?: string } } | null;
+    assertSyncSessionCurrent(origin, 'poll generation job');
     const detail = body?.error?.message ? ` — ${body.error.message}` : '';
     throw new ApiError(`Poll job failed: ${response.status}${detail}`, response.status, body?.error?.code ?? 'POLL_FAILED');
   }
 
-  return response.json();
+  const payload = await response.json();
+  assertSyncSessionCurrent(origin, 'poll generation job');
+  return payload;
 }
 
 export async function retryJob(
-  jobId: string
+  jobId: string,
+  session?: number,
 ): Promise<{ jobId: string; status: string }> {
+  const origin = resolveGenerationSession(session);
+  assertSyncSessionCurrent(origin, 'retry generation job');
   const headers = await getAuthHeaders();
+  assertSyncSessionCurrent(origin, 'retry generation job');
   const response = await fetchWithTimeout(
     `${PRIMARY_BACKEND_URL}/api/jobs/${jobId}/retry`,
     { method: "POST", headers },
-    10_000
+    10_000,
+    origin,
+    'retry generation job',
   );
 
   if (!response.ok) {
     const body = await response.text().catch(() => "");
+    assertSyncSessionCurrent(origin, 'retry generation job');
     throw new Error(
       `Retry job failed: ${response.status} — ${body.slice(0, 200)}`
     );
   }
 
-  return response.json();
+  const payload = await response.json();
+  assertSyncSessionCurrent(origin, 'retry generation job');
+  return payload;
 }
 
 /**
  * Single-fetch job result — for 409 recovery, NOT polling.
- * Returns null on any error (non-throwing).
+ * Returns null on any error (non-throwing), except a reset-invalidated session.
  */
 export async function fetchJobResult(
   jobId: string,
+  session?: number,
 ): Promise<GenerationJobResponse | null> {
+  const origin = resolveGenerationSession(session);
+  assertSyncSessionCurrent(origin, 'fetch generation job');
   const headers = await getAuthHeaders();
+  assertSyncSessionCurrent(origin, 'fetch generation job');
   const response = await fetchWithTimeout(
     `${PRIMARY_BACKEND_URL}/api/jobs/${jobId}`,
     { method: "GET", headers },
     10_000,
+    origin,
+    'fetch generation job',
   );
-  if (!response.ok) return null;
-  return response.json();
+  if (!response.ok) {
+    assertSyncSessionCurrent(origin, 'fetch generation job');
+    return null;
+  }
+  const payload = await response.json();
+  assertSyncSessionCurrent(origin, 'fetch generation job');
+  return payload;
 }
 
 /**
@@ -253,16 +316,30 @@ export async function fetchJobResult(
 export async function findCompletedJob(
   devotionalId: string,
   dayNumber: number,
+  session?: number,
 ): Promise<GenerationJobResponse | null> {
+  const origin = resolveGenerationSession(session);
+  assertSyncSessionCurrent(origin, 'find completed generation job');
   const headers = await getAuthHeaders();
+  assertSyncSessionCurrent(origin, 'find completed generation job');
   const response = await fetchWithTimeout(
     `${PRIMARY_BACKEND_URL}/api/jobs/find-completed?devotionalId=${encodeURIComponent(devotionalId)}&dayNumber=${dayNumber}`,
     { method: "GET", headers },
     10_000,
+    origin,
+    'find completed generation job',
   );
-  if (response.status === 404) return null;
-  if (!response.ok) throw new Error(`Find job failed: ${response.status}`);
-  return response.json();
+  if (response.status === 404) {
+    assertSyncSessionCurrent(origin, 'find completed generation job');
+    return null;
+  }
+  if (!response.ok) {
+    assertSyncSessionCurrent(origin, 'find completed generation job');
+    throw new Error(`Find job failed: ${response.status}`);
+  }
+  const payload = await response.json();
+  assertSyncSessionCurrent(origin, 'find completed generation job');
+  return payload;
 }
 
 /**
@@ -274,11 +351,18 @@ export async function recoverCompletedGenerationResult(params: {
   devotionalId: string;
   dayNumber: number;
   existingJobId?: string | null;
+  session?: number;
 }): Promise<CanonicalGenerationResultPayload | null> {
+  const session = resolveGenerationSession(params.session);
+  assertSyncSessionCurrent(session, 'recover generation result');
   const response = params.existingJobId
-    ? await fetchJobResult(params.existingJobId).catch(() => null)
-    : await findCompletedJob(params.devotionalId, params.dayNumber);
+    ? await fetchJobResult(params.existingJobId, session).catch((error) => {
+        if (error instanceof SyncSessionInvalidatedError) throw error;
+        return null;
+      })
+    : await findCompletedJob(params.devotionalId, params.dayNumber, session);
 
+  assertSyncSessionCurrent(session, 'recover generation result');
   if (!response?.result?.devotionalDay) return null;
 
   return normalizeGenerationResult(

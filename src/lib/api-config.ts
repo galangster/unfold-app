@@ -5,18 +5,17 @@
  * All service files should import from here instead of defining their own URLs.
  */
 import { Platform } from 'react-native';
+import { PRIMARY_BACKEND_URL } from '@/lib/backend-url';
 import { getDeviceId } from '@/lib/mmkv-storage';
 
 // Custom User-Agent for Cloudflare WAF allowlisting
 const APP_USER_AGENT = `Unfold/1.0.0 (${Platform.OS}; ${Platform.Version})`;
 
 // ---------------------------------------------------------------------------
-// Backend URL (single definition — used by all service files)
-// Routes through Cloudflare WAF → Railway. Never expose the raw Railway URL.
+// Backend URL (single definition in backend-url.ts — used by all service files)
 // ---------------------------------------------------------------------------
 
-export const PRIMARY_BACKEND_URL =
-  process.env.EXPO_PUBLIC_BACKEND_URL?.trim() || 'https://api.unfoldapp.co';
+export { PRIMARY_BACKEND_URL };
 
 export function getBackendCandidates(): string[] {
   return [PRIMARY_BACKEND_URL];

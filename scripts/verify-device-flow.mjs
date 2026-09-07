@@ -1,4 +1,5 @@
 import { execSync } from 'node:child_process';
+import { evaluateSimulatorReleaseProof, releaseProofRequired } from './release-proof-lib.mjs';
 
 function hasCmd(cmd) {
   try {
@@ -42,6 +43,19 @@ function discoverUnfoldBundleIds() {
   } catch {
     return [];
   }
+}
+
+if (releaseProofRequired()) {
+  const result = evaluateSimulatorReleaseProof({
+    recordPath: process.env.CVL_RELEASE_PROOF,
+  });
+  if (!result.ok) {
+    console.error(`[cvl][device] FAIL required release proof: ${result.reason}`);
+    process.exit(1);
+  }
+  console.log('[cvl][device] MATCH simulator-release evidence');
+  console.log('[cvl][device] local record only; not App Store IPA or physical-device proof');
+  process.exit(0);
 }
 
 if (process.env.CI === 'true') {

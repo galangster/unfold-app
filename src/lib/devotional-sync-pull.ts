@@ -11,9 +11,17 @@ import {
   serializeDevotionalPullCursor,
 } from './devotional-pull-cursor';
 import type { CommittedDevotionalPull, DevotionalPullCursor, DevotionalPullScope } from './devotional-pull-cursor';
+import { bindPulledDevotionalSession } from './devotional-pulled-content';
 import { logger } from './logger';
 import { getDeviceId, mmkvStorage } from './mmkv-storage';
 import { useUnfoldStore } from './store';
+import {
+  assertSyncSessionCurrent,
+  captureSyncSession,
+  isSyncSessionCurrent,
+  registerSyncTransport,
+  SyncSessionInvalidatedError,
+} from './sync-session-fence';
 import type { Devotional, DevotionalDay } from './store';
 import type { SyncPullResponse, SyncPulledRecord } from './sync-types';
 import { normalizeWordStudy } from './word-study';
@@ -171,7 +179,7 @@ export type PullDevotionalContentOptions = {
  * that was actually produced by a pull — and only after the caller applied it
  * (a cancelled or failed apply never advances the cursor).
  */
-const pendingCursors = new WeakMap<PulledDevotionalContent, CommittedDevotionalPull>();
+const pendingCursors = new WeakMap<PulledDevotionalContent, CommittedDevotionalPull & { session: number }>();
 
 function readStoredDevotionalPullCursor(): DevotionalPullCursor | null {
   const raw = mmkvStorage.getItem(DEVOTIONAL_PULL_CURSOR_KEY);
@@ -215,6 +223,9 @@ export async function pullDevotionalContent(
   devotionalId: string,
   options: PullDevotionalContentOptions = {},
 ): Promise<PulledDevotionalContent> {
+  const session = captureSyncSession();
+  assertSyncSessionCurrent(session, 'devotional pull');
+
   const scope = currentDevotionalPullScope(devotionalId);
   const startedAt = Date.now();
   const decision = resolvePullCursor({
@@ -232,27 +243,47 @@ export async function pullDevotionalContent(
   );
 
   const headers = await getAuthHeaders();
-  const response = await fetch(`${PRIMARY_BACKEND_URL}/api/sync/pull`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ lastPulledAt: decision.lastPulledAt }),
-  });
+  assertSyncSessionCurrent(session, 'devotional pull');
 
-  if (!response.ok) {
-    const body = await response.text().catch(() => '');
-    throw new Error(`Sync pull failed: ${response.status} ${body.slice(0, 120)}`);
+  const controller = new AbortController();
+  const unregister = registerSyncTransport(controller);
+  try {
+    const response = await fetch(`${PRIMARY_BACKEND_URL}/api/sync/pull`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ lastPulledAt: decision.lastPulledAt }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      // The body stays out of the Error message: a captured exception's `value`
+      // is allowlisted through to Sentry, and a backend error body can quote the
+      // devotional or journal text it failed on. `logger` is __DEV__-only.
+      logger.warn('[sync/devotional-pull] pull failed', response.status, body.slice(0, 120));
+      throw new Error(`Sync pull failed: ${response.status}`);
+    }
+
+    const payload = await response.json() as SyncPullResponse;
+    assertSyncSessionCurrent(session, 'devotional pull');
+    const pulled = extractPulledDevotionalContent(payload, devotionalId);
+    bindPulledDevotionalSession(pulled, session);
+
+    if (isValidTimestamp(payload.timestamp)) {
+      pendingCursors.set(pulled, { scope, mode: decision.mode, timestamp: payload.timestamp, startedAt, session });
+    } else {
+      logger.warn('[sync/devotional-pull] response has no server timestamp; cursor will not advance');
+    }
+
+    return pulled;
+  } catch (error) {
+    if (!isSyncSessionCurrent(session)) {
+      throw new SyncSessionInvalidatedError('devotional pull');
+    }
+    throw error;
+  } finally {
+    unregister();
   }
-
-  const payload = await response.json() as SyncPullResponse;
-  const pulled = extractPulledDevotionalContent(payload, devotionalId);
-
-  if (isValidTimestamp(payload.timestamp)) {
-    pendingCursors.set(pulled, { scope, mode: decision.mode, timestamp: payload.timestamp, startedAt });
-  } else {
-    logger.warn('[sync/devotional-pull] response has no server timestamp; cursor will not advance');
-  }
-
-  return pulled;
 }
 
 /**
@@ -265,6 +296,10 @@ export function commitDevotionalPullCursor(pulled: PulledDevotionalContent): boo
   const committed = pendingCursors.get(pulled);
   if (!committed) return false;
   pendingCursors.delete(pulled);
+
+  if (!isSyncSessionCurrent(committed.session)) {
+    return false;
+  }
 
   const next = buildNextDevotionalPullCursor(readStoredDevotionalPullCursor(), committed);
   if (!next) return false;

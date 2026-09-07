@@ -9,7 +9,7 @@ import {
   StyleSheet,
   Platform,
   AccessibilityInfo,
-  ScrollView,
+  LayoutChangeEvent,
   Share,
 } from 'react-native';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
@@ -24,7 +24,6 @@ import {
   ArrowUpRightIcon,
   StarIcon,
   FolderSimpleIcon,
-  BookBookmarkIcon,
   ListBulletsIcon,
   ListNumbersIcon,
   CheckSquareIcon,
@@ -62,6 +61,7 @@ import { ScriptureSearchSheet } from '@/components/notebook/ScriptureSearchSheet
 import { MoveFolderSheet } from '@/components/notebook/MoveFolderSheet';
 import { CreateFolderSheet } from '@/components/notebook/CreateFolderSheet';
 import { NoteDetailSaveIndicator } from '@/components/notebook/NoteDetailSaveIndicator';
+import { CompactEditorToolbar } from '@/components/notebook/CompactEditorToolbar';
 import { isHtmlContent, stripHtml } from '@/lib/note-html';
 import { logger } from '@/lib/logger';
 import { alpha } from '@/components/ui';
@@ -77,7 +77,6 @@ import {
 import { referenceToRoute, routeToReference } from '@/lib/bible-constants';
 import {
   NOTEBOOK_TOOLBAR_BOTTOM_PADDING_IOS,
-  NOTEBOOK_TOOLBAR_ROW_HEIGHT,
   NOTEBOOK_TOOLBAR_TOTAL_HEIGHT,
   getNativeEditorToolbarInset,
   shouldReuseSelectionFormattingState,
@@ -374,6 +373,7 @@ export default function NoteDetailScreen() {
 
   // Scripture search & insert state
   const [showScriptureSheet, setShowScriptureSheet] = useState(false);
+  const [showFormatting, setShowFormatting] = useState(false);
   const [pendingScriptureInsert, setPendingScriptureInsert] = useState<{
     reference: string;
     text: string;
@@ -449,8 +449,10 @@ export default function NoteDetailScreen() {
   // RN Keyboard-listener based (tentap's hook wraps Keyboard events), so it
   // works for both the native (iOS) and tentap (Android) editor paths.
   const { keyboardHeight, isKeyboardUp } = useKeyboard();
+  const [editorToolbarHeight, setEditorToolbarHeight] = useState(NOTEBOOK_TOOLBAR_TOTAL_HEIGHT);
   const nativeEditorToolbarInset = getNativeEditorToolbarInset({
     isKeyboardUp,
+    toolbarHeight: editorToolbarHeight,
   });
   const nativeEditorBottomOverlayInset = isKeyboardUp
     ? 0
@@ -539,7 +541,7 @@ export default function NoteDetailScreen() {
     if (!editorState.isReady) return;
     if (isKeyboardUp && keyboardHeight > 0) {
       // Toolbar is anchored above the keyboard whenever it's up
-      const totalPadding = keyboardHeight + NOTEBOOK_TOOLBAR_TOTAL_HEIGHT + 20;
+      const totalPadding = keyboardHeight + editorToolbarHeight + 20;
       editor.injectJS(`
         (function() {
           var doc = document.querySelector('.ProseMirror');
@@ -556,7 +558,12 @@ export default function NoteDetailScreen() {
       `);
       editor.updateScrollThresholdAndMargin(0);
     }
-  }, [isKeyboardUp, keyboardHeight, editorState.isReady]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isKeyboardUp, keyboardHeight, editorState.isReady, editorToolbarHeight]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleToolbarLayout = useCallback((event: LayoutChangeEvent) => {
+    const nextHeight = Math.ceil(event.nativeEvent.layout.height);
+    if (nextHeight > 0) setEditorToolbarHeight(nextHeight);
+  }, []);
 
   // Cleanup on unmount — flush (not cancel) any pending autosave so edits
   // survive navigation that bypasses handleBack. The save path reads
@@ -817,7 +824,7 @@ export default function NoteDetailScreen() {
 
   /* ───── Keyboard dismissal ───── */
 
-  const handleDismissKeyboard = useCallback(() => {
+  const handleDismissKeyboard = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     // Blur EVERY possible first responder, not just the rich-text editor.
@@ -831,7 +838,7 @@ export default function NoteDetailScreen() {
     // stuck up.
     titleInputRef.current?.blur();
     if (IS_NATIVE_EDITOR) {
-      Promise.resolve(editorRef.current?.blur()).catch(() => {
+      await Promise.resolve(editorRef.current?.blur()).catch(() => {
         // Native blur failed — Keyboard.dismiss below is the only fallback.
       });
     } else {
@@ -1679,9 +1686,11 @@ export default function NoteDetailScreen() {
           </Animated.View>
         )}
 
-        {/* ── Toolbar (whenever the keyboard is up) ── */}
+        {/* ── Compact editor actions (whenever the keyboard is up) ── */}
         {isPremium && (IS_NATIVE_EDITOR || editorState.isReady) && isKeyboardUp && (
           <View
+            testID="note-editor-toolbar"
+            onLayout={handleToolbarLayout}
             style={[
               styles.toolbar,
               {
@@ -1694,150 +1703,96 @@ export default function NoteDetailScreen() {
               },
             ]}
           >
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-              contentContainerStyle={styles.toolbarRow}
-            >
-              <ToolbarButton
-                onPress={handleBold}
-                active={IS_NATIVE_EDITOR ? selectionState.bold : editorState.isBoldActive}
-                label="Bold"
+            {showFormatting ? (
+              <View
+                style={[
+                  styles.formattingPanel,
+                  { borderBottomColor: colors.border },
+                ]}
               >
-                <TextBIcon
-                  size={18}
-                  color={(IS_NATIVE_EDITOR ? selectionState.bold : editorState.isBoldActive) ? colors.accent : colors.textMuted}
-                  weight="regular"
-                />
-              </ToolbarButton>
-
-              <ToolbarButton
-                onPress={handleItalic}
-                active={IS_NATIVE_EDITOR ? selectionState.italic : editorState.isItalicActive}
-                label="Italic"
-              >
-                <TextItalicIcon
-                  size={18}
-                  color={(IS_NATIVE_EDITOR ? selectionState.italic : editorState.isItalicActive) ? colors.accent : colors.textMuted}
-                  weight="regular"
-                />
-              </ToolbarButton>
-
-              <ToolbarButton
-                onPress={handleH1}
-                active={IS_NATIVE_EDITOR ? selectionState.blockType === 'h1' : editorState.headingLevel === 1}
-                label="Heading 1"
-              >
-                <TextHOneIcon
-                  size={18}
-                  color={(IS_NATIVE_EDITOR ? selectionState.blockType === 'h1' : editorState.headingLevel === 1) ? colors.accent : colors.textMuted}
-                  weight="regular"
-                />
-              </ToolbarButton>
-
-              <ToolbarButton
-                onPress={handleH2}
-                active={IS_NATIVE_EDITOR ? selectionState.blockType === 'h2' : editorState.headingLevel === 2}
-                label="Heading 2"
-              >
-                <TextHTwoIcon
-                  size={18}
-                  color={(IS_NATIVE_EDITOR ? selectionState.blockType === 'h2' : editorState.headingLevel === 2) ? colors.accent : colors.textMuted}
-                  weight="regular"
-                />
-              </ToolbarButton>
-
-              <ToolbarButton
-                onPress={handleH3}
-                active={IS_NATIVE_EDITOR ? selectionState.blockType === 'h3' : editorState.headingLevel === 3}
-                label="Heading 3"
-              >
-                <TextHThreeIcon
-                  size={18}
-                  color={(IS_NATIVE_EDITOR ? selectionState.blockType === 'h3' : editorState.headingLevel === 3) ? colors.accent : colors.textMuted}
-                  weight="regular"
-                />
-              </ToolbarButton>
-
-              <View style={[styles.toolbarSep, { backgroundColor: colors.border }]} />
-
-              <ToolbarButton
-                onPress={handleBulletList}
-                active={IS_NATIVE_EDITOR ? selectionState.listType === 'bullet' : editorState.isBulletListActive}
-                label="Bullet list"
-              >
-                <ListBulletsIcon
-                  size={18}
-                  color={(IS_NATIVE_EDITOR ? selectionState.listType === 'bullet' : editorState.isBulletListActive) ? colors.accent : colors.textMuted}
-                  weight="light"
-                />
-              </ToolbarButton>
-
-              <ToolbarButton
-                onPress={handleOrderedList}
-                active={IS_NATIVE_EDITOR ? selectionState.listType === 'ordered' : editorState.isOrderedListActive}
-                label="Numbered list"
-              >
-                <ListNumbersIcon
-                  size={18}
-                  color={(IS_NATIVE_EDITOR ? selectionState.listType === 'ordered' : editorState.isOrderedListActive) ? colors.accent : colors.textMuted}
-                  weight="light"
-                />
-              </ToolbarButton>
-
-              <ToolbarButton
-                onPress={handleTaskList}
-                active={IS_NATIVE_EDITOR ? selectionState.listType === 'checklist' : editorState.isTaskListActive}
-                label="Checklist"
-              >
-                <CheckSquareIcon
-                  size={18}
-                  color={(IS_NATIVE_EDITOR ? selectionState.listType === 'checklist' : editorState.isTaskListActive) ? colors.accent : colors.textMuted}
-                  weight="light"
-                />
-              </ToolbarButton>
-
-              <View style={[styles.toolbarSep, { backgroundColor: colors.border }]} />
-
-              <ToolbarButton
-                onPress={handleIndent}
-                label="Indent"
-                disabled={IS_NATIVE_EDITOR ? false : (!editorState.canSink && !editorState.canSinkTaskListItem)}
-              >
-                <ArrowLineRightIcon
-                  size={18}
-                  color={
-                    !IS_NATIVE_EDITOR && !editorState.canSink && !editorState.canSinkTaskListItem
-                      ? colors.textHint
-                      : colors.textMuted
-                  }
-                  weight="light"
-                />
-              </ToolbarButton>
-
-              <ToolbarButton
-                onPress={handleOutdent}
-                label="Outdent"
-                disabled={IS_NATIVE_EDITOR ? false : (!editorState.canLift && !editorState.canLiftTaskListItem)}
-              >
-                <ArrowLineLeftIcon
-                  size={18}
-                  color={
-                    !IS_NATIVE_EDITOR && !editorState.canLift && !editorState.canLiftTaskListItem
-                      ? colors.textHint
-                      : colors.textMuted
-                  }
-                  weight="light"
-                />
-              </ToolbarButton>
-
-              <View style={[styles.toolbarSep, { backgroundColor: colors.border }]} />
-
-              <ToolbarButton onPress={handleScripturePress} label="Add scripture">
-                <BookBookmarkIcon size={18} color={colors.textMuted} weight="light" />
-              </ToolbarButton>
-            </ScrollView>
+                <View style={styles.formattingHeadingRow}>
+                  <Text style={[styles.formattingTitle, { color: colors.text }]}>Formatting</Text>
+                  <Text style={[styles.formattingDescription, { color: colors.textMuted }]}>Selected text</Text>
+                </View>
+                <View style={styles.formattingGrid}>
+          <ToolbarButton
+            onPress={handleBold}
+            active={IS_NATIVE_EDITOR ? selectionState.bold : editorState.isBoldActive}
+            label="Bold"
+          >
+            <TextBIcon size={19} color={(IS_NATIVE_EDITOR ? selectionState.bold : editorState.isBoldActive) ? colors.accent : colors.textMuted} weight="regular" />
+          </ToolbarButton>
+          <ToolbarButton
+            onPress={handleItalic}
+            active={IS_NATIVE_EDITOR ? selectionState.italic : editorState.isItalicActive}
+            label="Italic"
+          >
+            <TextItalicIcon size={19} color={(IS_NATIVE_EDITOR ? selectionState.italic : editorState.isItalicActive) ? colors.accent : colors.textMuted} weight="regular" />
+          </ToolbarButton>
+          <ToolbarButton
+            onPress={handleH1}
+            active={IS_NATIVE_EDITOR ? selectionState.blockType === 'h1' : editorState.headingLevel === 1}
+            label="Heading 1"
+          >
+            <TextHOneIcon size={19} color={(IS_NATIVE_EDITOR ? selectionState.blockType === 'h1' : editorState.headingLevel === 1) ? colors.accent : colors.textMuted} weight="regular" />
+          </ToolbarButton>
+          <ToolbarButton
+            onPress={handleH2}
+            active={IS_NATIVE_EDITOR ? selectionState.blockType === 'h2' : editorState.headingLevel === 2}
+            label="Heading 2"
+          >
+            <TextHTwoIcon size={19} color={(IS_NATIVE_EDITOR ? selectionState.blockType === 'h2' : editorState.headingLevel === 2) ? colors.accent : colors.textMuted} weight="regular" />
+          </ToolbarButton>
+          <ToolbarButton
+            onPress={handleH3}
+            active={IS_NATIVE_EDITOR ? selectionState.blockType === 'h3' : editorState.headingLevel === 3}
+            label="Heading 3"
+          >
+            <TextHThreeIcon size={19} color={(IS_NATIVE_EDITOR ? selectionState.blockType === 'h3' : editorState.headingLevel === 3) ? colors.accent : colors.textMuted} weight="regular" />
+          </ToolbarButton>
+          <ToolbarButton
+            onPress={handleBulletList}
+            active={IS_NATIVE_EDITOR ? selectionState.listType === 'bullet' : editorState.isBulletListActive}
+            label="Bullets"
+          >
+            <ListBulletsIcon size={19} color={(IS_NATIVE_EDITOR ? selectionState.listType === 'bullet' : editorState.isBulletListActive) ? colors.accent : colors.textMuted} weight="light" />
+          </ToolbarButton>
+          <ToolbarButton
+            onPress={handleOrderedList}
+            active={IS_NATIVE_EDITOR ? selectionState.listType === 'ordered' : editorState.isOrderedListActive}
+            label="Numbered"
+          >
+            <ListNumbersIcon size={19} color={(IS_NATIVE_EDITOR ? selectionState.listType === 'ordered' : editorState.isOrderedListActive) ? colors.accent : colors.textMuted} weight="light" />
+          </ToolbarButton>
+          <ToolbarButton
+            onPress={handleTaskList}
+            active={IS_NATIVE_EDITOR ? selectionState.listType === 'checklist' : editorState.isTaskListActive}
+            label="Checklist"
+          >
+            <CheckSquareIcon size={19} color={(IS_NATIVE_EDITOR ? selectionState.listType === 'checklist' : editorState.isTaskListActive) ? colors.accent : colors.textMuted} weight="light" />
+          </ToolbarButton>
+          <ToolbarButton
+            onPress={handleIndent}
+            label="Indent"
+            disabled={IS_NATIVE_EDITOR ? false : (!editorState.canSink && !editorState.canSinkTaskListItem)}
+          >
+            <ArrowLineRightIcon size={19} color={!IS_NATIVE_EDITOR && !editorState.canSink && !editorState.canSinkTaskListItem ? colors.textHint : colors.textMuted} weight="light" />
+          </ToolbarButton>
+          <ToolbarButton
+            onPress={handleOutdent}
+            label="Outdent"
+            disabled={IS_NATIVE_EDITOR ? false : (!editorState.canLift && !editorState.canLiftTaskListItem)}
+          >
+            <ArrowLineLeftIcon size={19} color={!IS_NATIVE_EDITOR && !editorState.canLift && !editorState.canLiftTaskListItem ? colors.textHint : colors.textMuted} weight="light" />
+          </ToolbarButton>
+                </View>
+              </View>
+            ) : null}
+            <CompactEditorToolbar
+              formattingExpanded={showFormatting}
+              onOpenFormatting={() => setShowFormatting((visible) => !visible)}
+              onInsertScripture={handleScripturePress}
+            />
           </View>
         )}
       </SafeAreaView>
@@ -1909,6 +1864,9 @@ function ToolbarButton({
       accessibilityState={{ selected: !!active, disabled: !!disabled }}
     >
       {children}
+      <Text style={[styles.toolbarButtonLabel, { color: active ? colors.accent : colors.textMuted }]}>
+        {label}
+      </Text>
     </TouchableOpacity>
   );
 }
@@ -2078,25 +2036,53 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingBottom: Platform.OS === 'ios' ? NOTEBOOK_TOOLBAR_BOTTOM_PADDING_IOS : 0,
   },
-  toolbarRow: {
+  formattingPanel: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: Spacing['3'],
+    paddingTop: Spacing['2'],
+    paddingBottom: Spacing['2'],
+  },
+  formattingHeadingRow: {
+    minHeight: 32,
     flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: NOTEBOOK_TOOLBAR_ROW_HEIGHT,
-    paddingHorizontal: Spacing['1.5'],
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: Spacing['3'],
+  },
+  formattingTitle: {
+    fontFamily: FontFamily.display,
+    fontSize: 20,
+    lineHeight: 26,
+  },
+  formattingDescription: {
+    flexShrink: 1,
+    fontFamily: FontFamily.ui,
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: 'right',
+  },
+  formattingGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing['2'],
   },
   toolbarButton: {
-    width: 44,
-    height: 44,
+    width: '31%',
+    minHeight: 66,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 6,
+    gap: Spacing['1'],
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing['1'],
   },
   toolbarButtonDisabled: {
     opacity: 0.3,
   },
-  toolbarSep: {
-    width: StyleSheet.hairlineWidth,
-    height: 18,
-    marginHorizontal: 3,
+  toolbarButtonLabel: {
+    flexShrink: 1,
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 11,
+    lineHeight: 16,
+    textAlign: 'center',
   },
 });

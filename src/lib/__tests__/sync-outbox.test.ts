@@ -28,15 +28,21 @@ import {
   enqueueSyncChanges,
   peekSyncOutbox,
   drainSyncOutbox,
+  replaceSyncOutbox,
   resetDrainStateForTesting,
   OUTBOX_KEY,
 } from '../sync-outbox';
+const {
+  beginLocalResetSession,
+  endLocalResetSession,
+  resetSyncSessionFenceForTesting,
+} = jest.requireActual('../sync-session-fence') as typeof import('../sync-session-fence');
 import type { SyncPushChange } from '../sync-outbox';
 import { mmkvStorage, getDeviceId } from '../mmkv-storage';
 
 function makeChange(id: string, table: string, ts: string): SyncPushChange {
   return {
-    table: table as 'devotionals' | 'devotional_days',
+    table: table as 'devotionals' | 'devotional_days' | 'bible_reading_positions' | 'notes',
     id,
     clientUpdatedAt: ts,
     data: { schemaVersion: 1, value: id },
@@ -44,16 +50,36 @@ function makeChange(id: string, table: string, ts: string): SyncPushChange {
   };
 }
 
+function acceptedResult(change: SyncPushChange, overrides: Record<string, unknown> = {}) {
+  return {
+    table: change.table,
+    id: change.id,
+    status: 'accepted' as const,
+    serverUpdatedAt: '2026-06-01T12:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function rejectedResult(change: SyncPushChange, reason = 'internal error') {
+  return {
+    table: change.table,
+    id: change.id,
+    status: 'rejected' as const,
+    reason,
+    serverUpdatedAt: '2026-06-01T12:00:00.000Z',
+  };
+}
+
 // Reset the outbox and fetch mock between tests
 beforeEach(() => {
   jest.clearAllMocks();
   (mmkvStorage as any).__clearMockStorage?.();
-  // Explicitly clear the outbox key so the cap test's 200 entries
-  // don't leak into subsequent tests (the mock store is a shared Map).
+  // Explicitly clear the outbox key so large-queue tests do not leak.
   mmkvStorage.removeItem(OUTBOX_KEY);
   // Reset module-level drain state (inflight, interval timestamps) so
   // the interval guard from RS10-4 doesn't bleed between tests.
   resetDrainStateForTesting();
+  resetSyncSessionFenceForTesting();
   jest.resetModules();
 });
 
@@ -76,16 +102,15 @@ describe('sync-outbox', () => {
   });
 
   it('drain posts all changes and clears on accepted', async () => {
+    const first = makeChange('d1', 'devotionals', '2026-06-01T00:00:00Z');
+    const second = makeChange('d2', 'devotionals', '2026-06-01T00:00:00Z');
     const mockFetch = jest.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ results: [{ status: 'accepted' }, { status: 'accepted' }] }),
+      json: async () => ({ results: [acceptedResult(first), acceptedResult(second)] }),
     });
     global.fetch = mockFetch as any;
 
-    enqueueSyncChanges([
-      makeChange('d1', 'devotionals', '2026-06-01T00:00:00Z'),
-      makeChange('d2', 'devotionals', '2026-06-01T00:00:00Z'),
-    ]);
+    enqueueSyncChanges([first, second]);
 
     await drainSyncOutbox();
 
@@ -103,21 +128,20 @@ describe('sync-outbox', () => {
     expect(peekSyncOutbox()).toHaveLength(1);
   });
 
-  it('rejected results are dropped, not retried forever', async () => {
+  it('retains a rejected internal-error snapshot while an accepted sibling clears', async () => {
+    const rejected = makeChange('d1', 'devotionals', '2026-06-01T00:00:00Z');
+    const accepted = makeChange('d2', 'devotionals', '2026-06-01T00:00:00Z');
     const mockFetch = jest.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ results: [{ status: 'rejected' }, { status: 'accepted' }] }),
+      json: async () => ({ results: [rejectedResult(rejected), acceptedResult(accepted)] }),
     });
     global.fetch = mockFetch as any;
 
-    enqueueSyncChanges([
-      makeChange('d1', 'devotionals', '2026-06-01T00:00:00Z'),
-      makeChange('d2', 'devotionals', '2026-06-01T00:00:00Z'),
-    ]);
+    enqueueSyncChanges([rejected, accepted]);
 
     await drainSyncOutbox();
 
-    expect(peekSyncOutbox()).toHaveLength(0);
+    expect(peekSyncOutbox()).toEqual([expect.objectContaining({ id: 'd1', data: rejected.data })]);
   });
 
   it('concurrent drains are single-flight', async () => {
@@ -129,7 +153,7 @@ describe('sync-outbox', () => {
     const mockFetch = jest.fn().mockReturnValue(
       hangingPost.then(() => ({
         ok: true,
-        json: async () => ({ results: [{ status: 'accepted' }] }),
+        json: async () => ({ results: [acceptedResult(makeChange('d1', 'devotionals', '2026-06-01T00:00:00Z'))] }),
       })),
     );
     global.fetch = mockFetch as any;
@@ -145,10 +169,8 @@ describe('sync-outbox', () => {
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
-  it('outbox is capped at 200, evicting the OLDEST by clientUpdatedAt', () => {
+  it('keeps every durable snapshot, including the oldest of 250', () => {
     const changes: SyncPushChange[] = [];
-    // Formula: 250 entries, one minute apart starting 2026-06-01T00:00:00Z —
-    // index i ↔ timestamp base + i minutes. Newest 200 = indices 50..249.
     const base = Date.parse('2026-06-01T00:00:00Z');
     for (let i = 0; i < 250; i++) {
       changes.push(makeChange(`id-${i}`, 'devotionals', new Date(base + i * 60_000).toISOString()));
@@ -156,12 +178,18 @@ describe('sync-outbox', () => {
     enqueueSyncChanges(changes);
 
     const outbox = peekSyncOutbox();
-    expect(outbox).toHaveLength(200);
+    expect(outbox).toHaveLength(250);
     const ids = new Set(outbox.map((c) => c.id));
-    expect(ids.has('id-49')).toBe(false);  // oldest 50 (0..49) evicted
-    expect(ids.has('id-0')).toBe(false);
-    expect(ids.has('id-50')).toBe(true);   // survivor boundary
-    expect(ids.has('id-249')).toBe(true);  // newest retained
+    expect(ids.has('id-0')).toBe(true);
+    expect(ids.has('id-249')).toBe(true);
+  });
+
+  it('replaceSyncOutbox keeps every supplied snapshot', () => {
+    const changes = Array.from({ length: 201 }, (_, i) => (
+      makeChange(`rep-${i}`, 'notes', `2026-06-01T00:${String(i % 60).padStart(2, '0')}:00.000Z`)
+    ));
+    replaceSyncOutbox(changes);
+    expect(peekSyncOutbox()).toHaveLength(201);
   });
 
   it('changes enqueued while the drain POST is in flight survive the success clear (REVM-1)', async () => {
@@ -170,7 +198,7 @@ describe('sync-outbox', () => {
       enqueueSyncChanges([makeChange('d-late', 'devotionals', '2026-06-03T00:00:00Z')]);
       return {
         ok: true,
-        json: async () => ({ results: [{ status: 'accepted' }] }),
+        json: async () => ({ results: [acceptedResult(makeChange('d1', 'devotionals', '2026-06-01T00:00:00Z'))] }),
       };
     });
     global.fetch = mockFetch as any;
@@ -188,7 +216,7 @@ describe('sync-outbox', () => {
       enqueueSyncChanges([makeChange('d1', 'devotionals', '2026-06-02T00:00:00Z')]);
       return {
         ok: true,
-        json: async () => ({ results: [{ status: 'accepted' }] }),
+        json: async () => ({ results: [acceptedResult(makeChange('d1', 'devotionals', '2026-06-01T00:00:00Z'))] }),
       };
     });
     global.fetch = mockFetch as any;
@@ -239,7 +267,9 @@ describe('sync-outbox', () => {
       enqueueSyncChanges([makeChange('d3', 'devotionals', '2026-06-03T00:00:00Z')]);
       return {
         ok: true,
-        json: async () => ({ results: [{ status: 'accepted' }] }),
+        json: async () => ({
+          results: [acceptedResult(makeChange('d1', 'devotionals', '2026-06-01T00:00:00Z'))],
+        }),
       };
     });
     global.fetch = mockFetch as any;
@@ -253,5 +283,389 @@ describe('sync-outbox', () => {
     const outbox = peekSyncOutbox();
     const ids = outbox.map((c) => c.id).sort();
     expect(ids).toEqual(['d2', 'd3']);
+  });
+});
+
+describe('MD-2 sync acknowledgements', () => {
+  async function drainWith(results: unknown[]) {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ results }),
+    }) as unknown as typeof fetch;
+    await drainSyncOutbox();
+  }
+
+  it('clears a legacy matching-id success and a composite remap', async () => {
+    const note = makeChange('note-1', 'notes', '2026-06-01T00:00:00.000Z');
+    const day = makeChange('client-day-1', 'devotional_days', '2026-06-01T00:00:00.000Z');
+    enqueueSyncChanges([note, day]);
+
+    await drainWith([
+      acceptedResult(note),
+      acceptedResult(day, { id: 'day-devotional-1-1' }),
+    ]);
+
+    expect(peekSyncOutbox()).toHaveLength(0);
+  });
+
+  it('maps explicit requested IDs when results arrive out of order', async () => {
+    const first = makeChange('note-a', 'notes', '2026-06-01T00:00:00.000Z');
+    const second = makeChange('note-b', 'notes', '2026-06-01T00:01:00.000Z');
+    enqueueSyncChanges([first, second]);
+
+    await drainWith([
+      acceptedResult(second, { requestedId: second.id }),
+      acceptedResult(first, { requestedId: first.id }),
+    ]);
+
+    expect(peekSyncOutbox()).toHaveLength(0);
+  });
+
+  it('rejects a longer response and retains every submitted change', async () => {
+    const first = makeChange('note-a', 'notes', '2026-06-01T00:00:00.000Z');
+    enqueueSyncChanges([first]);
+
+    await drainWith([acceptedResult(first), acceptedResult(first, { id: 'ghost' })]);
+
+    expect(peekSyncOutbox()).toEqual([expect.objectContaining({ id: 'note-a' })]);
+  });
+
+  it('retains a change named by both a legacy result and an explicit result', async () => {
+    const first = makeChange('note-a', 'notes', '2026-06-01T00:00:00.000Z');
+    const second = makeChange('note-b', 'notes', '2026-06-01T00:01:00.000Z');
+    enqueueSyncChanges([first, second]);
+
+    await drainWith([
+      acceptedResult(first),
+      { ...rejectedResult(first), requestedId: first.id },
+    ]);
+
+    expect(peekSyncOutbox().map((entry) => entry.id).sort()).toEqual(['note-a', 'note-b']);
+  });
+
+  it('retains a status-only result in a same-length response', async () => {
+    const first = makeChange('note-a', 'notes', '2026-06-01T00:00:00.000Z');
+    enqueueSyncChanges([first]);
+
+    await drainWith([{ status: 'accepted' }]);
+
+    expect(peekSyncOutbox()).toEqual([expect.objectContaining({ id: 'note-a' })]);
+  });
+
+  it('retains an unknown requested ID in a same-length response', async () => {
+    const first = makeChange('note-a', 'notes', '2026-06-01T00:00:00.000Z');
+    enqueueSyncChanges([first]);
+
+    await drainWith([{
+      table: 'notes',
+      requestedId: 'missing-note',
+      id: 'note-x',
+      status: 'accepted',
+      serverUpdatedAt: '2026-06-01T12:00:00.000Z',
+    }]);
+
+    expect(peekSyncOutbox()).toEqual([expect.objectContaining({ id: 'note-a' })]);
+  });
+
+  it('retains an empty requested ID in a same-length response', async () => {
+    const first = makeChange('note-a', 'notes', '2026-06-01T00:00:00.000Z');
+    enqueueSyncChanges([first]);
+
+    await drainWith([{
+      table: 'notes',
+      requestedId: '',
+      id: first.id,
+      status: 'accepted',
+      serverUpdatedAt: '2026-06-01T12:00:00.000Z',
+    }]);
+
+    expect(peekSyncOutbox()).toEqual([expect.objectContaining({ id: 'note-a' })]);
+  });
+
+  it('retains a when a valid explicit claim is followed by a malformed explicit duplicate', async () => {
+    const first = makeChange('note-a', 'notes', '2026-06-01T00:00:00.000Z');
+    const second = makeChange('note-b', 'notes', '2026-06-01T00:01:00.000Z');
+    enqueueSyncChanges([first, second]);
+
+    await drainWith([
+      acceptedResult(first, { requestedId: first.id }),
+      { table: 'notes', requestedId: first.id, id: first.id, status: 'rejected', reason: 'internal error' },
+    ]);
+
+    expect(peekSyncOutbox().map((entry) => entry.id).sort()).toEqual(['note-a', 'note-b']);
+  });
+
+  it('retains a when a malformed explicit claim is followed by a valid explicit duplicate', async () => {
+    const first = makeChange('note-a', 'notes', '2026-06-01T00:00:00.000Z');
+    const second = makeChange('note-b', 'notes', '2026-06-01T00:01:00.000Z');
+    enqueueSyncChanges([first, second]);
+
+    await drainWith([
+      { table: 'notes', requestedId: first.id, id: first.id, status: 'rejected', reason: 'internal error' },
+      acceptedResult(first, { requestedId: first.id }),
+    ]);
+
+    expect(peekSyncOutbox().map((entry) => entry.id).sort()).toEqual(['note-a', 'note-b']);
+  });
+
+  it('clears an explicit composite remap that names another submitted row', async () => {
+    const first = makeChange('client-day-1', 'devotional_days', '2026-06-01T00:00:00.000Z');
+    const second = makeChange('day-devotional-1-2', 'devotional_days', '2026-06-01T00:01:00.000Z');
+    enqueueSyncChanges([first, second]);
+
+    await drainWith([
+      acceptedResult(first, { requestedId: first.id, id: second.id }),
+      acceptedResult(second, { requestedId: second.id }),
+    ]);
+
+    expect(peekSyncOutbox()).toHaveLength(0);
+  });
+
+  it('does not treat a remapped id that names another submitted row as an acknowledgement', async () => {
+    const first = makeChange('client-day-1', 'devotional_days', '2026-06-01T00:00:00.000Z');
+    const second = makeChange('day-devotional-1-2', 'devotional_days', '2026-06-01T00:01:00.000Z');
+    enqueueSyncChanges([first, second]);
+
+    await drainWith([
+      acceptedResult(first, { id: second.id }),
+      acceptedResult(second),
+    ]);
+
+    expect(peekSyncOutbox()).toEqual([expect.objectContaining({ id: 'client-day-1' })]);
+  });
+
+  it('does not remap a non-composite table to a different id', async () => {
+    const note = makeChange('note-1', 'notes', '2026-06-01T00:00:00.000Z');
+    enqueueSyncChanges([note]);
+
+    await drainWith([acceptedResult(note, { id: 'server-note-1' })]);
+
+    expect(peekSyncOutbox()).toEqual([expect.objectContaining({ id: 'note-1' })]);
+  });
+
+  it('does not remap an explicit non-composite result to a different canonical id', async () => {
+    const note = makeChange('note-1', 'notes', '2026-06-01T00:00:00.000Z');
+    enqueueSyncChanges([note]);
+
+    await drainWith([acceptedResult(note, { requestedId: note.id, id: 'server-note-1' })]);
+
+    expect(peekSyncOutbox()).toEqual([expect.objectContaining({ id: 'note-1' })]);
+  });
+
+  it('clears a bible reading position through a canonical remap', async () => {
+    const position = makeChange('client-position-b', 'bible_reading_positions', '2026-06-01T00:00:00.000Z');
+    enqueueSyncChanges([position]);
+
+    await drainWith([acceptedResult(position, { id: 'server-position-a' })]);
+
+    expect(peekSyncOutbox()).toHaveLength(0);
+  });
+});
+
+describe('MD-4 exact snapshot acknowledgements', () => {
+  const ts = '2026-06-01T00:00:00.000Z';
+
+  async function drainAccepting(submitted: SyncPushChange, midFlight?: SyncPushChange) {
+    global.fetch = jest.fn().mockImplementation(async () => {
+      if (midFlight) enqueueSyncChanges([midFlight]);
+      return {
+        ok: true,
+        json: async () => ({ results: [acceptedResult(submitted)] }),
+      };
+    }) as unknown as typeof fetch;
+    await drainSyncOutbox();
+  }
+
+  it('retains equal-timestamp content that changed while the push was in flight', async () => {
+    const submitted = makeChange('note-1', 'notes', ts);
+    const replacement = { ...submitted, data: { schemaVersion: 1, value: 'edited-same-ms' } };
+    enqueueSyncChanges([submitted]);
+
+    await drainAccepting(submitted, replacement);
+
+    expect(peekSyncOutbox()).toEqual([expect.objectContaining({ id: 'note-1', data: replacement.data })]);
+  });
+
+  it('retains an equal-timestamp deletion-flag change that arrived during flight', async () => {
+    const submitted = makeChange('note-1', 'notes', ts);
+    const replacement = { ...submitted, deleted: true };
+    enqueueSyncChanges([submitted]);
+
+    await drainAccepting(submitted, replacement);
+
+    expect(peekSyncOutbox()).toEqual([expect.objectContaining({ id: 'note-1', deleted: true })]);
+  });
+
+  it('retains an equal-timestamp replacement after a valid canonical remap', async () => {
+    const submitted = makeChange('client-position-b', 'bible_reading_positions', ts);
+    const replacement = { ...submitted, data: { schemaVersion: 1, value: 'replaced-same-ms' } };
+    enqueueSyncChanges([submitted]);
+
+    global.fetch = jest.fn().mockImplementation(async () => {
+      enqueueSyncChanges([replacement]);
+      return {
+        ok: true,
+        json: async () => ({ results: [acceptedResult(submitted, { id: 'server-position-a' })] }),
+      };
+    }) as unknown as typeof fetch;
+
+    await drainSyncOutbox();
+
+    expect(peekSyncOutbox()).toEqual([
+      expect.objectContaining({ id: 'client-position-b', data: replacement.data }),
+    ]);
+  });
+
+  it('clears an unchanged submitted snapshot', async () => {
+    const submitted = makeChange('note-1', 'notes', ts);
+    enqueueSyncChanges([submitted]);
+
+    await drainAccepting(submitted);
+
+    expect(peekSyncOutbox()).toHaveLength(0);
+  });
+});
+
+describe('MD-3 bounded drain batches', () => {
+  const ts = '2026-06-01T00:00:00.000Z';
+
+  function manyChanges(count: number): SyncPushChange[] {
+    const base = Date.parse(ts);
+    return Array.from({ length: count }, (_, i) => (
+      makeChange(`n-${i}`, 'notes', new Date(base + i * 1000).toISOString())
+    ));
+  }
+
+  function postedChanges(call: number): SyncPushChange[] {
+    const init = (global.fetch as jest.Mock).mock.calls[call][1] as { body?: string };
+    return (JSON.parse(String(init.body)) as { changes: SyncPushChange[] }).changes;
+  }
+
+  it('drains more than 500 mixed results without letting rejects block later siblings', async () => {
+    const changes = manyChanges(501);
+    enqueueSyncChanges(changes);
+
+    global.fetch = jest.fn(async (_url: string, init: { body?: string }) => {
+      const batch = (JSON.parse(String(init.body)) as { changes: SyncPushChange[] }).changes;
+      return {
+        ok: true,
+        json: async () => ({
+          results: batch.map((change) => (
+            change.id === 'n-0' ? rejectedResult(change) : acceptedResult(change)
+          )),
+        }),
+      };
+    }) as unknown as typeof fetch;
+
+    await drainSyncOutbox();
+
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(postedChanges(0)).toHaveLength(500);
+    expect(postedChanges(1)).toHaveLength(1);
+    expect(postedChanges(1)[0].id).toBe('n-500');
+    expect(peekSyncOutbox()).toEqual([expect.objectContaining({ id: 'n-0' })]);
+  });
+
+  it('splits multibyte payloads that exceed the 5 MiB body bound', async () => {
+    const pad = '你'.repeat(900_000);
+    const first = { ...makeChange('mb-a', 'notes', ts), data: { pad } };
+    const second = { ...makeChange('mb-b', 'notes', '2026-06-01T00:00:01.000Z'), data: { pad } };
+    enqueueSyncChanges([first, second]);
+
+    global.fetch = jest.fn(async (_url: string, init: { body?: string }) => {
+      const batch = (JSON.parse(String(init.body)) as { changes: SyncPushChange[] }).changes;
+      return {
+        ok: true,
+        json: async () => ({ results: batch.map((change) => acceptedResult(change)) }),
+      };
+    }) as unknown as typeof fetch;
+
+    await drainSyncOutbox();
+
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(postedChanges(0)).toHaveLength(1);
+    expect(postedChanges(1)).toHaveLength(1);
+    expect(peekSyncOutbox()).toHaveLength(0);
+  });
+
+  it('retains a single oversized entry and still drains smaller siblings', async () => {
+    const oversized = {
+      ...makeChange('huge', 'notes', ts),
+      data: { pad: 'x'.repeat(5_300_000) },
+    };
+    const sibling = makeChange('small', 'notes', '2026-06-01T00:00:01.000Z');
+    enqueueSyncChanges([oversized, sibling]);
+
+    global.fetch = jest.fn(async () => ({
+      ok: true,
+      json: async () => ({ results: [acceptedResult(sibling)] }),
+    })) as unknown as typeof fetch;
+
+    await drainSyncOutbox();
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(postedChanges(0).map((change) => change.id)).toEqual(['small']);
+    expect(peekSyncOutbox()).toEqual([expect.objectContaining({ id: 'huge' })]);
+  });
+
+  it('stops later batches after reset and keeps unsent initial snapshots', async () => {
+    enqueueSyncChanges(manyChanges(501));
+    let resetToken: number | undefined;
+
+    global.fetch = jest.fn(async (_url: string, init: { body?: string }) => {
+      const batch = (JSON.parse(String(init.body)) as { changes: SyncPushChange[] }).changes;
+      if ((global.fetch as jest.Mock).mock.calls.length === 2) {
+        resetToken = beginLocalResetSession();
+      }
+      return {
+        ok: true,
+        json: async () => ({ results: batch.map((change) => acceptedResult(change)) }),
+      };
+    }) as unknown as typeof fetch;
+
+    await drainSyncOutbox();
+
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(peekSyncOutbox()).toEqual([expect.objectContaining({ id: 'n-500' })]);
+    if (resetToken !== undefined) endLocalResetSession(resetToken);
+  });
+
+  it('keeps writes enqueued during a multi-batch drain for a later cycle', async () => {
+    enqueueSyncChanges(manyChanges(501));
+    const late = makeChange('late', 'notes', '2026-06-02T00:00:00.000Z');
+
+    global.fetch = jest.fn(async (_url: string, init: { body?: string }) => {
+      if ((global.fetch as jest.Mock).mock.calls.length === 1) enqueueSyncChanges([late]);
+      const batch = (JSON.parse(String(init.body)) as { changes: SyncPushChange[] }).changes;
+      return {
+        ok: true,
+        json: async () => ({ results: batch.map((change) => acceptedResult(change)) }),
+      };
+    }) as unknown as typeof fetch;
+
+    await drainSyncOutbox();
+
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(postedChanges(0).some((change) => change.id === 'late')).toBe(false);
+    expect(postedChanges(1).some((change) => change.id === 'late')).toBe(false);
+    expect(peekSyncOutbox()).toEqual([expect.objectContaining({ id: 'late' })]);
+  });
+
+  it('stops the cycle on a later-batch transport failure', async () => {
+    enqueueSyncChanges(manyChanges(501));
+
+    global.fetch = jest.fn(async (_url: string, init: { body?: string }) => {
+      if ((global.fetch as jest.Mock).mock.calls.length === 2) throw new Error('network');
+      const batch = (JSON.parse(String(init.body)) as { changes: SyncPushChange[] }).changes;
+      return {
+        ok: true,
+        json: async () => ({ results: batch.map((change) => acceptedResult(change)) }),
+      };
+    }) as unknown as typeof fetch;
+
+    await drainSyncOutbox();
+
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(peekSyncOutbox()).toEqual([expect.objectContaining({ id: 'n-500' })]);
   });
 });

@@ -147,4 +147,22 @@ describe('runOnboardingSampleFallback (FIX 2: no duplicate job)', () => {
     expect(submitFallback).toHaveBeenCalledTimes(1);
     expect(usePersistedJob).not.toHaveBeenCalled();
   });
+
+  it('does not submit fallback when empty recovery is canceled after reset', async () => {
+    const usePersistedJob = jest.fn();
+    const recoverCompleted = jest.fn(async () => false);
+    const submitFallback = jest.fn(async () => {});
+
+    const branch = await runOnboardingSampleFallback({
+      persistedJobId: null,
+      usePersistedJob,
+      recoverCompleted,
+      submitFallback,
+      isCurrent: () => false,
+    });
+
+    expect(branch).toBe('canceled');
+    expect(recoverCompleted).toHaveBeenCalledTimes(1);
+    expect(submitFallback).not.toHaveBeenCalled();
+  });
 });

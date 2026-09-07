@@ -161,6 +161,66 @@ export function resolveOnboardingPurchaseAdvance({
 }
 
 /**
+ * Finish a verified standalone paywall purchase or restore.
+ *
+ * TanStack Query awaits `onSuccess` and treats a rejection as mutation
+ * failure (`@tanstack/query-core` mutation.ts:243-250, 269-287). Optional
+ * notification work must not be awaited on that path: navigation runs first,
+ * and a hung or rejected notification cannot hold the paywall or turn
+ * payment success into payment failure.
+ */
+export function finishVerifiedPaywallFlow(params: {
+  complete: () => void;
+  syncOptionalWork: () => Promise<void>;
+  onOptionalWorkError?: (error: unknown) => void;
+}): void {
+  params.complete();
+  void params.syncOptionalWork().catch((error) => {
+    params.onOptionalWorkError?.(error);
+  });
+}
+
+export type PaywallLifecycleSession = {
+  mounted: boolean;
+  generation: number;
+};
+
+export function isPaywallLifecycleCurrent(
+  session: PaywallLifecycleSession,
+  generation: number,
+): boolean {
+  return session.mounted && session.generation === generation;
+}
+
+export type EntitlementWaitCompletion = 'advance' | 'timeout' | 'ignore';
+
+/**
+ * Decide what a bounded Premium wait does when it settles.
+ *
+ * Advance only on a verified grant. Ignore work after unmount, identity
+ * reset, or a prior advance. Timeout keeps restore/retry as the next step.
+ */
+export function resolveEntitlementWaitCompletion({
+  granted,
+  aborted,
+  hasAdvanced,
+  sessionCurrent,
+}: {
+  granted: boolean;
+  aborted: boolean;
+  hasAdvanced: boolean;
+  sessionCurrent: boolean;
+}): EntitlementWaitCompletion {
+  if (!sessionCurrent || aborted || hasAdvanced) {
+    return 'ignore';
+  }
+  if (granted) {
+    return 'advance';
+  }
+  return 'timeout';
+}
+
+/**
  * Run a paywall purchase/restore flow with guaranteed loading + error hygiene.
  *
  * Without this, a rejected purchasePackage / restorePurchases / fetchQuery left

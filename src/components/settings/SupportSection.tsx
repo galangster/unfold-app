@@ -6,6 +6,7 @@ import {
   CreditCardIcon,
   ChatDotsIcon,
   StarIcon,
+  CopyIcon,
   LockIcon,
   BookIcon,
   CaretRightIcon,
@@ -21,6 +22,7 @@ import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { exportBugReportBundleToFile, logBugEvent } from '@/lib/bug-logger';
 import { analyzeNetworkError } from '@/lib/network-error-handler';
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from '@/lib/api-config';
+import { getRevenueCatSupportId } from '@/lib/revenuecatClient';
 import { SettingsSectionHeader, getSettingsCardStyle } from './SettingsSectionHeader';
 
 export function SupportSection() {
@@ -40,6 +42,25 @@ export function SupportSection() {
       try {
         await Linking.openURL(`https://play.google.com/store/apps/details?id=${bundleId}`);
       } catch {}
+    }
+  };
+
+  const handleCopySupportId = async () => {
+    const supportId = getRevenueCatSupportId();
+
+    if (!supportId) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Support ID unavailable', 'Unlock your device, restart Unfold, and try again.');
+      return;
+    }
+
+    try {
+      await Clipboard.setStringAsync(supportId);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert('Support ID copied', 'You can now paste it into your support conversation.');
+    } catch {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert("Couldn't copy Support ID", 'Please try again.');
     }
   };
 
@@ -211,6 +232,39 @@ export function SupportSection() {
             </Text>
             <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textMuted, marginTop: Spacing['0.5'] }}>
               {isExportingData ? 'Please wait...' : 'Send diagnostics report'}
+            </Text>
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={handleCopySupportId}
+          accessibilityRole="button"
+          accessibilityLabel="Copy Support ID"
+          accessibilityHint="Copies the identifier used to find your subscription account."
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            padding: Spacing['4'],
+            borderBottomWidth: 1,
+            borderBottomColor: colors.border,
+          }}
+        >
+          <View
+            style={{
+              width: 36, height: 36, borderRadius: 10,
+              backgroundColor: colors.buttonBackground,
+              justifyContent: 'center', alignItems: 'center',
+            }}
+          >
+            <CopyIcon size={18} color={colors.text} weight="light" />
+          </View>
+          <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
+            <Text style={{ fontFamily: FontFamily.ui, fontSize: 15, lineHeight: 20, color: colors.text }}>
+              Copy Support ID
+            </Text>
+            <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, lineHeight: 18, color: colors.textMuted, marginTop: Spacing['0.5'] }}>
+              For subscription support
             </Text>
           </View>
         </TouchableOpacity>

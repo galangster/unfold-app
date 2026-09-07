@@ -142,10 +142,8 @@ export const CATEGORY_LABELS: Record<BibleCategory, string> = {
   prophecy: 'Prophecy',
 };
 
-// The per-category "rainbow" book colors and their lookup helper were removed
-// in PR4 #25 — book chips now use neutral text + a single accent selected-state
-// (the accent follows the user's theme). Category grouping + labels remain, but
-// they carry no per-category color.
+// Category grouping and labels stay here. The hub palette lives in
+// bible-hub-category-palette.ts. BookChapterNavigator stays single-accent.
 
 // ─── Derived collections ─────────────────────────────────────────────────────
 

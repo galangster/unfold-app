@@ -241,4 +241,28 @@ describe('generation migration', () => {
       '[gen-migration] Skipping scripture without resolvable dayNumber: devo-1 Psalm 1:1',
     );
   });
+
+  it('does not write the completion marker after reset invalidates the originating session', async () => {
+    const { migrateGenerationDataToServer, MIGRATION_KEY } = loadSubject();
+    const {
+      beginLocalResetSession,
+      endLocalResetSession,
+    } = require('../sync-session-fence') as typeof import('../sync-session-fence');
+
+    let finishFirst: ((value: { ok: boolean; status: number }) => void) | undefined;
+    mockFetch.mockImplementation(() => new Promise((resolve) => {
+      finishFirst = resolve;
+    }));
+
+    const pending = migrateGenerationDataToServer();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const token = beginLocalResetSession();
+    endLocalResetSession(token);
+    finishFirst?.({ ok: true, status: 200 });
+    await pending;
+
+    expect(mockSetItem).not.toHaveBeenCalledWith(MIGRATION_KEY, 'true');
+  });
 });

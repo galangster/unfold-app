@@ -54,7 +54,7 @@ export function repairRehydratedState(
     reset('generationSession');
   }
 
-  if (!state.user || typeof state.user !== 'object') {
+  if (state.user !== null && typeof state.user !== 'object') {
     reset('user');
   }
 

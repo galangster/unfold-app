@@ -7,6 +7,12 @@ import { mmkvStorage } from "./mmkv-storage";
 import { useUnfoldStore } from "./store";
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from "./api-config";
 import { logger } from "./logger";
+import {
+  assertSyncSessionCurrent,
+  captureSyncSession,
+  isSyncSessionCurrent,
+  registerSyncTransport,
+} from "./generation-session";
 
 /** Exported so full-reset can clear it — the migration is idempotent and re-runs after a wipe. */
 export const MIGRATION_KEY = "generation-migration-v1-complete";
@@ -87,16 +93,22 @@ function buildScripturesPayload(store: MigrationStore) {
 }
 
 async function postMigrationStep(
+  session: number,
   headers: Record<string, string>,
   path: string,
   body: unknown,
 ): Promise<boolean> {
+  if (!isSyncSessionCurrent(session)) return false;
+  const controller = new AbortController();
+  const unregister = registerSyncTransport(controller);
   try {
     const response = await fetch(`${PRIMARY_BACKEND_URL}${path}`, {
       method: "POST",
       headers,
       body: JSON.stringify(body),
+      signal: controller.signal,
     });
+    if (!isSyncSessionCurrent(session)) return false;
 
     if (!response.ok) {
       logger.warn(`[gen-migration] ${path} failed with status ${response.status}`);
@@ -105,8 +117,11 @@ async function postMigrationStep(
 
     return true;
   } catch (error) {
+    if (!isSyncSessionCurrent(session)) return false;
     logger.warn(`[gen-migration] ${path} request failed:`, error);
     return false;
+  } finally {
+    unregister();
   }
 }
 
@@ -114,8 +129,10 @@ export async function migrateGenerationDataToServer(): Promise<void> {
   // Check if already migrated
   if (mmkvStorage.getItem(MIGRATION_KEY) === "true") return;
 
+  const session = captureSyncSession();
   const store = useUnfoldStore.getState();
   const headers = await getAuthHeaders();
+  if (!isSyncSessionCurrent(session)) return;
 
   try {
     let migrationSucceeded = true;
@@ -126,9 +143,11 @@ export async function migrateGenerationDataToServer(): Promise<void> {
     );
 
     for (const devo of devotionals) {
+      if (!isSyncSessionCurrent(session)) return;
       // Push series arc
       if (devo.seriesArc) {
         const stepSucceeded = await postMigrationStep(
+          session,
           headers,
           "/api/jobs/migrate-arc",
           {
@@ -139,9 +158,11 @@ export async function migrateGenerationDataToServer(): Promise<void> {
         migrationSucceeded = migrationSucceeded && stepSucceeded;
       }
 
+      if (!isSyncSessionCurrent(session)) return;
       // Push progressive memory
       if (devo.progressiveMemory) {
         const stepSucceeded = await postMigrationStep(
+          session,
           headers,
           "/api/jobs/migrate-memory",
           {
@@ -153,10 +174,12 @@ export async function migrateGenerationDataToServer(): Promise<void> {
       }
     }
 
+    if (!isSyncSessionCurrent(session)) return;
     // Push used scriptures
     const scriptures = buildScripturesPayload(store);
     if (scriptures.length > 0) {
       const stepSucceeded = await postMigrationStep(
+        session,
         headers,
         "/api/jobs/migrate-scriptures",
         { scriptures },
@@ -164,10 +187,12 @@ export async function migrateGenerationDataToServer(): Promise<void> {
       migrationSucceeded = migrationSucceeded && stepSucceeded;
     }
 
+    if (!isSyncSessionCurrent(session)) return;
     // Push persona history
     const personas = store.seriesPersonaHistory ?? [];
     if (personas.length > 0) {
       const stepSucceeded = await postMigrationStep(
+        session,
         headers,
         "/api/jobs/migrate-personas",
         { personas },
@@ -175,15 +200,18 @@ export async function migrateGenerationDataToServer(): Promise<void> {
       migrationSucceeded = migrationSucceeded && stepSucceeded;
     }
 
+    if (!isSyncSessionCurrent(session)) return;
     if (!migrationSucceeded) {
       logger.warn("[gen-migration] Migration incomplete — will retry next launch");
       return;
     }
 
     // Mark migration complete
+    assertSyncSessionCurrent(session, 'generation migration');
     mmkvStorage.setItem(MIGRATION_KEY, "true");
     logger.log("[gen-migration] Migration complete");
   } catch (err) {
+    if (!isSyncSessionCurrent(session)) return;
     logger.warn("[gen-migration] Migration failed (will retry next launch):", err);
     // Don't mark complete — will retry on next app launch
   }

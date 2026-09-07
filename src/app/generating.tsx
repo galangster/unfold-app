@@ -41,6 +41,11 @@ import {
 } from '@/lib/inflight-initial-arc-watch';
 import { applyInitialArcResult, requireCanonicalDevotionalId, type InitialArcResult } from '@/lib/initial-arc-result';
 import {
+  captureSyncSession,
+  isGenerationSessionInvalidatedError,
+  isSyncSessionCurrent,
+} from '@/lib/generation-session';
+import {
   classifyPollFailure,
   countConsecutiveNetworkErrors,
   evaluateGenerationDeadline,
@@ -205,13 +210,24 @@ export default function GeneratingScreen() {
   // already marked for Today and does not start a poll loop on a screen
   // nobody is looking at.
   const leftForHomeRef = useRef(false);
+  const generationSessionRef = useRef(captureSyncSession());
+
+  const stopOwnedPolling = () => {
+    if (pollTimerRef.current) {
+      clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+    pollingRef.current = false;
+    pollRunRef.current += 1;
+  };
 
   // Persist the job the server just returned — submitted, retried or adopted.
   // After "Go home — we'll keep writing" the record carries the marker so
   // Today keeps it and watches it instead of bouncing back here. One writer,
   // so no path can drop the marker; startPolling refuses the loop once Today
-  // owns the watch.
+  // owns the watch. Reset invalidation must prevent that write.
   const recordJob = useCallback((jobId: string, devotionalId: string | undefined): void => {
+    if (!isSyncSessionCurrent(generationSessionRef.current)) return;
     writeInflightGenerationJob({
       jobId,
       devotionalId,
@@ -495,10 +511,18 @@ export default function GeneratingScreen() {
 
   // ========== GENERATION COMPLETE HANDLER ==========
 
-  const handleGenerationComplete = useCallback((result: InitialArcResult) => {
+  const handleGenerationComplete = useCallback((result: InitialArcResult, session = generationSessionRef.current) => {
+    if (!isSyncSessionCurrent(session)) return;
     // Store, scripture bookkeeping, in-flight record and session are landed by
     // the shared helper (Today lands the same job the same way after "Go home").
-    const { devotionalId, seriesTitle, day1 } = applyInitialArcResult(result, { user, devotionalLength });
+    let applied;
+    try {
+      applied = applyInitialArcResult(result, { user, devotionalLength, session });
+    } catch (err) {
+      if (isGenerationSessionInvalidatedError(err)) return;
+      throw err;
+    }
+    const { devotionalId, seriesTitle, day1 } = applied;
 
     // Update UI state
     setDevotionalTitle(seriesTitle);
@@ -519,6 +543,7 @@ export default function GeneratingScreen() {
   // ========== POLLING LOGIC ==========
 
   const startPolling = useCallback((jobId: string) => {
+    const session = generationSessionRef.current;
     // After "Go home — we'll keep writing" Today owns the watch. A job that
     // resolves on this unmounted screen — a submission, a retry, an adopted
     // job — has recorded itself for Today and must not poll here too.
@@ -526,6 +551,7 @@ export default function GeneratingScreen() {
       logger.log('[generating] Job resolved after the reader went home; Today owns the watch:', jobId);
       return;
     }
+    if (!isSyncSessionCurrent(session)) return;
     if (pollingRef.current) return;
     pollingRef.current = true;
     const run = ++pollRunRef.current;
@@ -544,6 +570,7 @@ export default function GeneratingScreen() {
       options: { keepInflight?: boolean } = {},
     ) => {
       pollingRef.current = false;
+      if (!isSyncSessionCurrent(session)) return;
       logger.error(`[generating] ${phase}:`, message);
       if (!options.keepInflight) clearInflightGenerationJob();
       failGenerationSession(message);
@@ -572,10 +599,11 @@ export default function GeneratingScreen() {
       assessDeadline();
 
       try {
-        const status = await pollJobStatus(jobId);
+        const status = await pollJobStatus(jobId, session);
         // Polling stopped (or restarted) while this request was in flight:
         // the response belongs to a chain that no longer exists.
         if (!pollingRef.current || pollRunRef.current !== run) return;
+        if (!isSyncSessionCurrent(session)) return;
         consecutiveNetworkErrorsRef.current = countConsecutiveNetworkErrors(consecutiveNetworkErrorsRef.current, true);
         const { outcome, consecutiveUnknown } = evaluateGenerationPoll({
           status: status.status,
@@ -592,7 +620,7 @@ export default function GeneratingScreen() {
           case 'complete':
             observedJobStateRef.current = 'complete';
             pollingRef.current = false;
-            handleGenerationComplete(outcome.result);
+            handleGenerationComplete(outcome.result, session);
             return;
 
           case 'invalid-result':
@@ -606,6 +634,7 @@ export default function GeneratingScreen() {
             // The server's verdict — the only thing that fails a job.
             observedJobStateRef.current = 'failed';
             pollingRef.current = false;
+            if (!isSyncSessionCurrent(session)) return;
             const errorMsg = outcome.error;
             logger.error('[generating] Server job failed:', errorMsg);
             clearInflightGenerationJob();
@@ -636,6 +665,7 @@ export default function GeneratingScreen() {
         }
       } catch (err) {
         if (!pollingRef.current || pollRunRef.current !== run) return;
+        if (isGenerationSessionInvalidatedError(err) || !isSyncSessionCurrent(session)) return;
         const errorMsg = err instanceof Error ? err.message : String(err);
         if (classifyPollFailure(err) === 'job-gone') {
           // The server answered and does not hold this job (404: a deleted
@@ -690,6 +720,7 @@ export default function GeneratingScreen() {
 
     if (jobSubmittedRef.current) return;
     jobSubmittedRef.current = true;
+    generationSessionRef.current = captureSyncSession();
 
     // Resume an in-flight job (app-kill recovery, or a record the reader once
     // left for Today — this screen owns the wait whenever it is on screen),
@@ -715,7 +746,7 @@ export default function GeneratingScreen() {
       setPendingJobId(inflight.jobId);
       pollStartTime.current = inflight.submittedAt;
       startPolling(inflight.jobId);
-      return;
+      return stopOwnedPolling;
     }
 
     if (entry.kind === 'stale-push') {
@@ -746,8 +777,10 @@ export default function GeneratingScreen() {
       setPendingJobId(entry.jobId);
       pollStartTime.current = Date.now();
       startPolling(entry.jobId);
-      return;
+      return stopOwnedPolling;
     }
+
+    const origin = generationSessionRef.current;
 
     const submitJob = async () => {
       try {
@@ -757,7 +790,10 @@ export default function GeneratingScreen() {
           dayNumber: 1,
           jobType: 'initial_arc',
           userContext: buildInitialArcUserContext(user),
+          session: origin,
         });
+
+        if (!isSyncSessionCurrent(origin)) return;
 
         const devotionalId = requireCanonicalDevotionalId(submittedDevotionalId, 'initial devotional job submission');
 
@@ -776,6 +812,7 @@ export default function GeneratingScreen() {
         pollStartTime.current = Date.now();
         startPolling(jobId);
       } catch (err) {
+        if (isGenerationSessionInvalidatedError(err) || !isSyncSessionCurrent(origin)) return;
         const failure = resolveGenerationSubmitFailure(err);
         if (failure.kind === 'adopt-existing') {
           // The server already has a job for this user/day. Adopt it instead of
@@ -791,15 +828,19 @@ export default function GeneratingScreen() {
                   devotionalId: sessionDevotionalId,
                   dayNumber: 1,
                   existingJobId,
+                  session: origin,
                 })
               : null;
+            if (!isSyncSessionCurrent(origin)) return;
             if (recovered) {
-              handleGenerationComplete(recovered);
+              handleGenerationComplete(recovered, origin);
               return;
             }
           } catch (recoverErr) {
+            if (isGenerationSessionInvalidatedError(recoverErr) || !isSyncSessionCurrent(origin)) return;
             logger.warn('[generating] Existing-job recovery failed; will poll instead:', recoverErr);
           }
+          if (!isSyncSessionCurrent(origin)) return;
           // Not ready yet (or no known devotionalId) — poll the existing job.
           recordJob(existingJobId, sessionDevotionalId ?? undefined);
           setPendingJobId(existingJobId);
@@ -823,14 +864,7 @@ export default function GeneratingScreen() {
 
     submitJob();
 
-    return () => {
-      // Cleanup polling timer on unmount
-      if (pollTimerRef.current) {
-        clearTimeout(pollTimerRef.current);
-        pollTimerRef.current = null;
-      }
-      pollingRef.current = false;
-    };
+    return stopOwnedPolling;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
@@ -849,12 +883,9 @@ export default function GeneratingScreen() {
     if (isGenerating) return;
     void logBugEvent('generation', 'generation-user-retry', { pendingJobId });
 
-    // Stop any existing polling
-    if (pollTimerRef.current) {
-      clearTimeout(pollTimerRef.current);
-      pollTimerRef.current = null;
-    }
-    pollingRef.current = false;
+    stopOwnedPolling();
+    const origin = captureSyncSession();
+    generationSessionRef.current = origin;
 
     setError(null);
     setIsReconnecting(true);
@@ -878,7 +909,8 @@ export default function GeneratingScreen() {
         startPolling(action.jobId);
       } else if (action.kind === 'retry-existing') {
         // Retry existing job on the server
-        const { jobId } = await retryJob(action.jobId);
+        const { jobId } = await retryJob(action.jobId, origin);
+        if (!isSyncSessionCurrent(origin)) return;
         logger.log('[generating] Job retried:', jobId);
         recordJob(jobId, useUnfoldStore.getState().generationSession.devotionalId ?? undefined);
         // The session sat on the failure while the job is running again.
@@ -906,7 +938,10 @@ export default function GeneratingScreen() {
             dayNumber: 1,
             jobType: 'initial_arc',
             userContext: buildInitialArcUserContext(user),
+            session: origin,
           });
+
+          if (!isSyncSessionCurrent(origin)) return;
 
           const devotionalId = requireCanonicalDevotionalId(submittedDevotionalId, 'retry initial devotional job submission');
           // Record before the session starts, as on first submission.
@@ -918,6 +953,7 @@ export default function GeneratingScreen() {
         }
       }
     } catch (err) {
+      if (isGenerationSessionInvalidatedError(err) || !isSyncSessionCurrent(origin)) return;
       const errorMessage = err instanceof Error ? err.message : String(err);
       logger.error('[generating] Retry failed:', errorMessage);
       // A failed retry request is not a verdict on the job: keep the record
@@ -934,12 +970,7 @@ export default function GeneratingScreen() {
   const handleRetryFromOnboarding = () => {
     if (isGenerating) return;
     void logBugEvent('generation', 'generation-restart-onboarding');
-    // Cleanup
-    if (pollTimerRef.current) {
-      clearTimeout(pollTimerRef.current);
-      pollTimerRef.current = null;
-    }
-    pollingRef.current = false;
+    stopOwnedPolling();
     // The job is abandoned, not finished: the record stays, marked superseded,
     // so the "We hit a snag" push iOS keeps for it cannot poll it back to life
     // and re-run the answers the reader just walked away from. The fresh
@@ -953,12 +984,7 @@ export default function GeneratingScreen() {
   const handleGoHome = () => {
     if (isGenerating) return;
     void logBugEvent('generation', 'generation-abandoned-go-home');
-    // Cleanup
-    if (pollTimerRef.current) {
-      clearTimeout(pollTimerRef.current);
-      pollTimerRef.current = null;
-    }
-    pollingRef.current = false;
+    stopOwnedPolling();
     const cleanup = resolveGoHomeCleanup({ pendingJobId, observedState: observedJobStateRef.current });
     if (cleanup === 'clear') {
       clearInflightGenerationJob();
@@ -983,6 +1009,7 @@ export default function GeneratingScreen() {
   // leave this screen.
   const handleLeaveForHome = () => {
     leftForHomeRef.current = true;
+    stopOwnedPolling();
     const record = markInflightJobLeftForHome();
     void logBugEvent('generation', 'generation-left-for-home', {
       jobId: record?.jobId ?? pendingJobId,

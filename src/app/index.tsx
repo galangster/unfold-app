@@ -90,8 +90,9 @@ const RevealChar = React.memo(function RevealChar({
   }));
 
   return (
-    <Animated.View style={containerStyle}>
+    <Animated.View accessible={false} style={containerStyle}>
       <Animated.Text
+        accessible={false}
         style={[
           {
             fontFamily: fontFamily ?? FontFamily.display,
@@ -158,8 +159,9 @@ const RevealWord = React.memo(function RevealWord({
   }));
 
   return (
-    <Animated.View style={containerStyle}>
+    <Animated.View accessible={false} style={containerStyle}>
       <Animated.Text
+        accessible={false}
         style={[
           {
             fontFamily: FontFamily.display,
@@ -430,13 +432,26 @@ export default function WelcomeScreen() {
 
               <View style={{ alignSelf: 'stretch', alignItems: 'center' }}>
                 {/* Welcome text — stays mounted at opacity 0 during cutscene to prevent layout shift */}
-                <Animated.View style={[{ alignSelf: 'stretch', alignItems: 'center' }, welcomeTextStyle]} pointerEvents={phase === 'welcome' ? 'auto' : 'none'}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'center', marginBottom: Spacing['5'] }}>
+                <Animated.View
+                  style={[{ alignSelf: 'stretch', alignItems: 'center' }, welcomeTextStyle]}
+                  pointerEvents={phase === 'welcome' ? 'auto' : 'none'}
+                  accessibilityElementsHidden={phase !== 'welcome'}
+                  importantForAccessibility={phase === 'welcome' ? 'yes' : 'no-hide-descendants'}
+                >
+                  <View
+                    accessible
+                    accessibilityLabel="Unfold"
+                    style={{ flexDirection: 'row', justifyContent: 'center', marginBottom: Spacing['5'] }}
+                  >
                     {titleChars.map((char, i) => (
                       <RevealChar key={`c-${i}`} char={char} animDelay={charDelays[i]} />
                     ))}
                   </View>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 5 }}>
+                  <View
+                    accessible
+                    accessibilityLabel="The world’s most personal Bible experience"
+                    style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 5 }}
+                  >
                     {subtitleWords.map((word, i) => {
                       if (word === '\n') return <View key={`br-${i}`} style={{ width: '100%', height: 0 }} />;
                       return <RevealWord key={`sw-${i}`} word={word} animDelay={subtitleWordDelays[i]} />;
@@ -512,6 +527,7 @@ export default function WelcomeScreen() {
               <TouchableOpacity
                 activeOpacity={0.7}
                 onPress={handleContinue}
+                accessibilityRole="button"
                 style={{ backgroundColor: colors.accent, paddingVertical: 18, borderRadius: 28, alignItems: 'center' }}
               >
                 <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 17, color: '#1C1710', letterSpacing: 0.3 }}>

@@ -49,6 +49,7 @@ import {
   settleInflightInitialArcWatch,
 } from '../initial-arc-result';
 import { extractBookFromReference } from '../devotional-service';
+import { captureSyncSession } from '../generation-session';
 import { mmkvStorage } from '../mmkv-storage';
 import { useUnfoldStore, type DevotionalDay, type UserProfile } from '../store';
 
@@ -108,7 +109,7 @@ beforeEach(() => {
 
 describe('applyInitialArcResult', () => {
   it('creates the devotional shell with day 1 and makes it current', () => {
-    const applied = applyInitialArcResult(result, { user, devotionalLength: 7 });
+    const applied = applyInitialArcResult(result, { user, devotionalLength: 7, session: captureSyncSession() });
 
     expect(applied).toEqual({ devotionalId: 'devo-1', seriesTitle: 'Learning to Trust Again', day1 });
     const state = useUnfoldStore.getState();
@@ -131,7 +132,7 @@ describe('applyInitialArcResult', () => {
   });
 
   it('falls back to the default title and the reader\'s series length', () => {
-    applyInitialArcResult({ devotionalId: 'devo-1', devotionalDay: day1 }, { user: null, devotionalLength: 7 });
+    applyInitialArcResult({ devotionalId: 'devo-1', devotionalDay: day1 }, { user: null, devotionalLength: 7, session: captureSyncSession() });
 
     const devotional = useUnfoldStore.getState().devotionals[0];
     expect(devotional.title).toBe(DEFAULT_SERIES_TITLE);
@@ -141,11 +142,11 @@ describe('applyInitialArcResult', () => {
   });
 
   it('only adds the day when the shell already exists, and never duplicates it', () => {
-    applyInitialArcResult(result, { user, devotionalLength: 7 });
+    applyInitialArcResult(result, { user, devotionalLength: 7, session: captureSyncSession() });
     useUnfoldStore.getState().updateDevotionalDays('devo-1', [], 'Renamed by sync');
 
-    applyInitialArcResult(result, { user, devotionalLength: 7 });
-    applyInitialArcResult(result, { user, devotionalLength: 7 });
+    applyInitialArcResult(result, { user, devotionalLength: 7, session: captureSyncSession() });
+    applyInitialArcResult(result, { user, devotionalLength: 7, session: captureSyncSession() });
 
     const state = useUnfoldStore.getState();
     expect(state.devotionals).toHaveLength(1);
@@ -154,7 +155,7 @@ describe('applyInitialArcResult', () => {
   });
 
   it('records the used scripture with its book', () => {
-    applyInitialArcResult(result, { user, devotionalLength: 7 });
+    applyInitialArcResult(result, { user, devotionalLength: 7, session: captureSyncSession() });
 
     expect(useUnfoldStore.getState().usedScriptures).toEqual([
       expect.objectContaining({ reference: 'Psalm 56:3-4', book: 'Psalm', devotionalId: 'devo-1' }),
@@ -163,7 +164,7 @@ describe('applyInitialArcResult', () => {
 
   it('keys a numbered book the way the scripture variance engine does', () => {
     const reference = '1 Corinthians 13:4-7';
-    applyInitialArcResult({ ...result, devotionalDay: { ...day1, scriptureReference: reference } }, { user, devotionalLength: 7 });
+    applyInitialArcResult({ ...result, devotionalDay: { ...day1, scriptureReference: reference } }, { user, devotionalLength: 7, session: captureSyncSession() });
 
     expect(extractBookFromReference(reference)).toBe('1 Corinthians');
     expect(useUnfoldStore.getState().usedScriptures).toEqual([
@@ -172,7 +173,7 @@ describe('applyInitialArcResult', () => {
   });
 
   it('removes the in-flight record and completes the session with the series title', () => {
-    applyInitialArcResult(result, { user, devotionalLength: 7 });
+    applyInitialArcResult(result, { user, devotionalLength: 7, session: captureSyncSession() });
 
     expect(mmkvStorage.removeItem).toHaveBeenCalledWith(INFLIGHT_GENERATION_JOB_KEY);
     expect(readInflightGenerationJob()).toBeNull();
@@ -184,7 +185,7 @@ describe('applyInitialArcResult', () => {
   });
 
   it('throws before touching the store when the result has no devotional id', () => {
-    expect(() => applyInitialArcResult({ devotionalDay: day1 }, { user, devotionalLength: 7 })).toThrow(
+    expect(() => applyInitialArcResult({ devotionalDay: day1 }, { user, devotionalLength: 7, session: captureSyncSession() })).toThrow(
       /did not return a canonical devotionalId/,
     );
     expect(useUnfoldStore.getState().devotionals).toHaveLength(0);
@@ -194,7 +195,7 @@ describe('applyInitialArcResult', () => {
 
 describe('settleInflightInitialArcWatch', () => {
   it('lands a completed job the way /generating does and logs the completion', () => {
-    settleInflightInitialArcWatch({ kind: 'complete', result: { ...result, devotionalDay: { ...day1, devotionalId: 'devo-1', id: 'devo-1:1' } } }, { jobId: 'job-1' });
+    settleInflightInitialArcWatch({ kind: 'complete', result: { ...result, devotionalDay: { ...day1, devotionalId: 'devo-1', id: 'devo-1:1' } } }, { jobId: 'job-1', session: captureSyncSession() });
 
     const state = useUnfoldStore.getState();
     expect(state.currentDevotionalId).toBe('devo-1');
@@ -211,7 +212,7 @@ describe('settleInflightInitialArcWatch', () => {
   it('clears the record and fails the session on a failed job', () => {
     settleInflightInitialArcWatch(
       { kind: 'failed', message: 'Model overloaded', phase: 'server-poll', canRetry: true },
-      { jobId: 'job-1' },
+      { jobId: 'job-1', session: captureSyncSession() },
     );
 
     expect(readInflightGenerationJob()).toBeNull();
@@ -221,7 +222,7 @@ describe('settleInflightInitialArcWatch', () => {
   });
 
   it('keeps the record and fails the session when the server could not be reached', () => {
-    settleInflightInitialArcWatch({ kind: 'unreachable', message: 'Unable to connect' }, { jobId: 'job-1' });
+    settleInflightInitialArcWatch({ kind: 'unreachable', message: 'Unable to connect' }, { jobId: 'job-1', session: captureSyncSession() });
 
     expect(readInflightGenerationJob()).not.toBeNull();
     expect(useUnfoldStore.getState().generationSession).toMatchObject({ status: 'error', error: 'Unable to connect' });
@@ -232,7 +233,7 @@ describe('settleInflightInitialArcWatch', () => {
   it('treats a result it cannot land as a failure instead of leaving the record live', () => {
     settleInflightInitialArcWatch(
       { kind: 'complete', result: { devotionalDay: { ...day1, devotionalId: '', id: '' }, devotionalId: '' } },
-      { jobId: 'job-1' },
+      { jobId: 'job-1', session: captureSyncSession() },
     );
 
     expect(readInflightGenerationJob()).toBeNull();
@@ -241,7 +242,7 @@ describe('settleInflightInitialArcWatch', () => {
   });
 
   it('leaves everything in place when the watch was cancelled', () => {
-    settleInflightInitialArcWatch({ kind: 'cancelled' }, { jobId: 'job-1' });
+    settleInflightInitialArcWatch({ kind: 'cancelled' }, { jobId: 'job-1', session: captureSyncSession() });
 
     expect(readInflightGenerationJob()).not.toBeNull();
     expect(useUnfoldStore.getState().generationSession.status).toBe('running');

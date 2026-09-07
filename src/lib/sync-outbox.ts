@@ -11,28 +11,45 @@
  *  - Dedup: table+id keyed; later clientUpdatedAt wins, and on an equal
  *    timestamp the later enqueue wins (writes are ms-resolution; a flush
  *    can put several writes to one record in the same millisecond).
- *  - Cap: 200 entries; oldest dropped when exceeded.
+ *  - Durable queue is uncapped. Drain posts at most 500 changes and 5 MiB
+ *    per request. Each initial snapshot is attempted once per cycle.
  *  - Never throws: drain resolves (not rejects) on network failure.
- *  - Server is authoritative on rejected/conflict — those are dropped, not
- *    retried forever. A conflict carries the server's row, which is applied
- *    locally (see applyConflictResults) so the two sides converge.
+ *  - Only accepted results and conflicts with object serverData clear a
+ *    submitted entry when the current snapshot equals the sent snapshot.
+ *    Rejected results, especially internal error, stay queued. A valid
+ *    conflict is applied locally after the outbox settles.
  */
 
 import { mmkvStorage, getDeviceId } from '@/lib/mmkv-storage';
 import { isEphemeralDeviceId } from '@/lib/device-id';
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from '@/lib/api-config';
-import { buildSyncPushBody } from '@/lib/sync-push-body';
+import {
+  createSyncPushBodyEnvelope,
+  selectEncodedSyncPushBatch,
+  type SyncPushBodyEnvelope,
+} from '@/lib/sync-push-body';
+import {
+  isValidConflictResult,
+  resolvingAcknowledgementPairs,
+  syncSnapshotsEqual,
+} from '@/lib/sync-acknowledgements';
 import type { SyncPushChange, SyncPushResult, SyncTable } from '@/lib/sync-types';
 // RS13-1: single owner — the key is defined in mmkv-recovery-outbox.ts (pure, no native deps)
 // and re-exported here so all consumers import from one place via sync-outbox.
 import { RECOVERY_OUTBOX_KEY } from '@/lib/mmkv-recovery-outbox';
+import {
+  captureSyncSession,
+  isSyncSessionCurrent,
+  registerSyncTransport,
+} from '@/lib/sync-session-fence';
 
 // Re-export the type so consumers can import from one place
 export type { SyncPushChange };
 
 // Re-export the canonical key so consumers don't need to know where it lives.
 export const OUTBOX_KEY = RECOVERY_OUTBOX_KEY;
-const OUTBOX_CAP = 200;
+const MAX_PUSH_CHANGES = 500;
+const MAX_PUSH_BODY_BYTES = 5 * 1024 * 1024;
 
 // mmkvStorage.getItem has a union return type (string | null | Promise<...>)
 // for the StateStorage contract, but our adapter is synchronous. Cast once here.
@@ -64,10 +81,10 @@ export function peekSyncOutbox(): SyncPushChange[] {
 /**
  * Replace the whole queue. Only the store migration uses this, to re-key
  * queued journal writes when entry ids became day-derived; ordinary writers
- * go through enqueueSyncChanges so the cap and the dedup apply.
+ * go through enqueueSyncChanges so dedup applies.
  */
 export function replaceSyncOutbox(changes: SyncPushChange[]): void {
-  writeOutbox(changes.slice(-OUTBOX_CAP));
+  writeOutbox(changes);
 }
 
 export function removeSyncChangesForRecords(records: Array<{ table: SyncTable; id: string }>): void {
@@ -90,9 +107,11 @@ export const MIN_DRAIN_INTERVAL_MS = 15_000;
 // (i.e. the POST returned ok). 0 means "never drained".
 let lastDrainCompletedAt = 0;
 
-// Timestamp (Date.now()) when entries were last enqueued.
-// Used to bypass the interval guard when fresh work arrived.
-let lastEnqueueAt = 0;
+// Monotonic enqueue revision. Marks that the queued snapshot changed.
+// A cycle captures this beside its immutable initial snapshot and records
+// that captured value on successful same-session completion.
+let enqueueRevision = 0;
+let lastAttemptedEnqueueRevision = 0;
 
 export function enqueueSyncChanges(changes: SyncPushChange[]): void {
   // FAP-LIB-1: never queue work minted under an ephemeral recovery identity.
@@ -121,17 +140,27 @@ export function enqueueSyncChanges(changes: SyncPushChange[]): void {
     }
   }
 
-  let merged = Array.from(map.values());
+  writeOutbox(Array.from(map.values()));
+  enqueueRevision += 1;
+}
 
-  // Cap: keep the newest OUTBOX_CAP entries by clientUpdatedAt
-  if (merged.length > OUTBOX_CAP) {
-    merged = merged
-      .sort((a, b) => (a.clientUpdatedAt < b.clientUpdatedAt ? 1 : -1))
-      .slice(0, OUTBOX_CAP);
-  }
-
-  writeOutbox(merged);
-  lastEnqueueAt = Date.now();
+function takeTransportBatch(
+  initial: readonly SyncPushChange[],
+  start: number,
+  liveByKey: ReadonlyMap<string, SyncPushChange>,
+  envelope: SyncPushBodyEnvelope,
+) {
+  return selectEncodedSyncPushBatch(
+    initial,
+    start,
+    (candidate) => {
+      const live = liveByKey.get(`${candidate.table}:${candidate.id}`);
+      return !!live && syncSnapshotsEqual(live, candidate);
+    },
+    envelope,
+    MAX_PUSH_CHANGES,
+    MAX_PUSH_BODY_BYTES,
+  );
 }
 
 /**
@@ -141,7 +170,8 @@ export function enqueueSyncChanges(changes: SyncPushChange[]): void {
 export function resetDrainStateForTesting(): void {
   inflight = null;
   lastDrainCompletedAt = 0;
-  lastEnqueueAt = 0;
+  enqueueRevision = 0;
+  lastAttemptedEnqueueRevision = 0;
 }
 
 /**
@@ -151,15 +181,8 @@ export function resetDrainStateForTesting(): void {
  * diverge for good. Feed it through the pull mappers — same LWW guard, so a
  * newer local change still pending in the outbox is left alone.
  */
-function applyConflictResults(results: Partial<SyncPushResult>[]): void {
-  const conflicts = results.filter(
-    (result): result is SyncPushResult =>
-      result.status === 'conflict' &&
-      typeof result.table === 'string' &&
-      typeof result.id === 'string' &&
-      typeof result.serverUpdatedAt === 'string' &&
-      !!result.serverData,
-  );
+function applyConflictResults(results: SyncPushResult[]): void {
+  const conflicts = results.filter(isValidConflictResult);
   if (conflicts.length === 0) return;
   try {
     // full-sync-pull imports the store, and the store reaches this module
@@ -174,7 +197,12 @@ function applyConflictResults(results: Partial<SyncPushResult>[]): void {
 }
 
 // Single-flight guard — concurrent drains collapse into one POST
-let inflight: Promise<void> | null = null;
+type InFlightDrain = {
+  session: number;
+  promise: Promise<void>;
+};
+
+let inflight: InFlightDrain | null = null;
 
 export function drainSyncOutbox(): Promise<void> {
   // FAP-LIB-1 (orphaned-pushes): never POST under an ephemeral recovery
@@ -184,71 +212,107 @@ export function drainSyncOutbox(): Promise<void> {
   // drained after a normal boot restores the real identity (RS2-1 merge).
   if (isEphemeralDeviceId(getDeviceId())) return Promise.resolve();
 
+  const session = captureSyncSession();
+  if (!isSyncSessionCurrent(session)) return Promise.resolve();
+
   // Min-interval guard (RS10-4): skip if a drain completed recently AND no
-  // new entries were enqueued since then. Bypassed by new enqueues so
-  // fresh offline work always gets a chance to drain promptly.
+  // new enqueue revision exists since that cycle's captured revision.
+  // Fresh work bypasses the 15-second wall-clock retry used for unchanged
+  // rejected snapshots.
   const now = Date.now();
   const intervalNotExpired = now - lastDrainCompletedAt < MIN_DRAIN_INTERVAL_MS;
-  const noNewEnqueueSinceDrain = lastEnqueueAt <= lastDrainCompletedAt;
-  if (lastDrainCompletedAt > 0 && intervalNotExpired && noNewEnqueueSinceDrain) {
+  const noNewEnqueueSinceLastAttempt = enqueueRevision <= lastAttemptedEnqueueRevision;
+  if (lastDrainCompletedAt > 0 && intervalNotExpired && noNewEnqueueSinceLastAttempt) {
     return Promise.resolve();
   }
 
-  if (inflight) return inflight;
+  if (inflight && inflight.session === session) return inflight.promise;
 
-  inflight = (async () => {
-    const changes = readOutbox();
-    if (changes.length === 0) return;
+  const promise = (async () => {
+    if (!isSyncSessionCurrent(session)) return;
+    const initial = readOutbox();
+    const capturedRevision = enqueueRevision;
+    if (initial.length === 0) return;
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15_000);
+    let timeoutId = setTimeout(() => controller.abort(), 15_000);
+    const unregister = registerSyncTransport(controller);
 
     try {
       const headers = await getAuthHeaders();
-      const response = await fetch(`${PRIMARY_BACKEND_URL}/api/sync/push`, {
-        method: 'POST',
-        headers,
-        body: buildSyncPushBody(changes),
-        signal: controller.signal,
-      });
+      if (!isSyncSessionCurrent(session)) return;
 
-      if (!response.ok) {
-        // Non-ok: keep the outbox; retry on next drain trigger
-        return;
+      const envelope = createSyncPushBodyEnvelope();
+      let offset = 0;
+      let completed = true;
+      while (offset < initial.length) {
+        if (!isSyncSessionCurrent(session)) {
+          completed = false;
+          break;
+        }
+
+        const liveByKey = new Map(
+          readOutbox().map((entry) => [`${entry.table}:${entry.id}`, entry] as const),
+        );
+        const { batch, next, body } = takeTransportBatch(initial, offset, liveByKey, envelope);
+        offset = next;
+        if (batch.length === 0) continue;
+
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => controller.abort(), 15_000);
+
+        const response = await fetch(`${PRIMARY_BACKEND_URL}/api/sync/push`, {
+          method: 'POST',
+          headers,
+          body,
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          completed = false;
+          break;
+        }
+
+        const payload = (await response.json().catch(() => null)) as {
+          results?: unknown[];
+        } | null;
+
+        if (!isSyncSessionCurrent(session)) {
+          completed = false;
+          break;
+        }
+
+        const resolving = resolvingAcknowledgementPairs(batch, payload?.results ?? []);
+        const resolvingByKey = new Map(
+          resolving.map((pair) => [`${pair.change.table}:${pair.change.id}`, pair] as const),
+        );
+        const remaining = readOutbox().filter((entry) => {
+          const pair = resolvingByKey.get(`${entry.table}:${entry.id}`);
+          return !pair || !syncSnapshotsEqual(entry, pair.change);
+        });
+        writeOutbox(remaining);
+        const conflictsToApply = resolving
+          .filter((pair) => isValidConflictResult(pair.result))
+          .filter((pair) => !remaining.some((entry) => (
+            entry.table === pair.change.table && entry.id === pair.change.id
+          )))
+          .map((pair) => pair.result);
+        applyConflictResults(conflictsToApply);
       }
-
-      const payload = (await response.json().catch(() => null)) as {
-        results?: Partial<SyncPushResult>[];
-      } | null;
-
-      // Server is authoritative: accepted | conflict | rejected all clear from
-      // the outbox. Two things must survive (REVM-1):
-      //  - changes the server didn't answer for (partial response), and
-      //  - anything enqueued while the POST was in flight. So: re-read the
-      //    outbox and remove exactly the answered snapshot entries — a
-      //    same-key change with a NEWER clientUpdatedAt stays queued.
-      const answeredCount = payload?.results?.length ?? 0;
-      const answered = changes.slice(0, answeredCount);
-      const answeredAt = new Map(
-        answered.map((c) => [`${c.table}:${c.id}`, c.clientUpdatedAt]),
-      );
-      const remaining = readOutbox().filter((c) => {
-        const sentAt = answeredAt.get(`${c.table}:${c.id}`);
-        return sentAt === undefined || c.clientUpdatedAt > sentAt;
-      });
-      writeOutbox(remaining);
-      // Mark successful completion for the interval guard (RS10-4).
-      lastDrainCompletedAt = Date.now();
-      // After the outbox is settled: the LWW guard reads what is still pending.
-      applyConflictResults(payload?.results ?? []);
+      if (completed && isSyncSessionCurrent(session)) {
+        lastAttemptedEnqueueRevision = capturedRevision;
+        lastDrainCompletedAt = Date.now();
+      }
     } catch {
       // Network error / timeout / abort — keep the outbox intact for retry
     } finally {
       clearTimeout(timeoutId);
+      unregister();
     }
   })().finally(() => {
-    inflight = null;
+    if (inflight?.promise === promise) inflight = null;
   });
 
-  return inflight;
+  inflight = { session, promise };
+  return promise;
 }

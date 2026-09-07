@@ -105,6 +105,7 @@ export function bibleReadingPositionSyncData(position: BibleReadingPosition): Re
     bookId: position.bookId,
     bookName: position.bookName,
     chapter: position.chapter,
+    verse: position.verse,
     translation: position.translation,
     lastReadAt: position.lastReadAt,
   });

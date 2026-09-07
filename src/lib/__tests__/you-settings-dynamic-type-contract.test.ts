@@ -13,6 +13,10 @@ const remindersSrc = fs.readFileSync(
   path.join(sourceRoot, 'components/settings/RemindersSection.tsx'),
   'utf-8',
 );
+const notificationsSrc = fs.readFileSync(
+  path.join(sourceRoot, 'lib/notifications.ts'),
+  'utf-8',
+);
 
 describe('Settings appearance rows Dynamic Type contract (RT-DYN-1/RT-DYN-2)', () => {
   it('defines the settings-row scale caps', () => {
@@ -21,17 +25,27 @@ describe('Settings appearance rows Dynamic Type contract (RT-DYN-1/RT-DYN-2)', (
   });
 
   it('caps both row labels and both chip groups', () => {
-    expect((appearanceSrc.match(/maxFontSizeMultiplier=\{SETTINGS_LABEL_MAX_SCALE\}/g) ?? []).length).toBe(2);
+    // Theme and Font size share PreferenceChipRow, which applies the label cap
+    // once. Both chip groups still set the chip cap at each control.
+    expect(appearanceSrc).toContain('function PreferenceChipRow');
+    expect(appearanceSrc).toContain('label="Theme"');
+    expect(appearanceSrc).toContain('label="Font size"');
+    expect((appearanceSrc.match(/maxFontSizeMultiplier=\{SETTINGS_LABEL_MAX_SCALE\}/g) ?? []).length).toBe(1);
     expect((appearanceSrc.match(/maxFontSizeMultiplier=\{SETTINGS_CHIP_MAX_SCALE\}/g) ?? []).length).toBe(2);
   });
 });
 
 describe('Settings daily reminder contracts (FE-01/FE-02/FE-09)', () => {
   it('narrows the daily reminder OFF action to the daily reminder identifier only', () => {
-    expect(remindersSrc).toContain("cancelNotificationById(NOTIFICATION_IDS.DAILY_REMINDER)");
+    expect(remindersSrc).toContain('commitDailyReminderSetting');
+    expect(remindersSrc).toContain('updateUser');
+    expect(remindersSrc).toContain('beginDailyReminderOperation');
     expect(remindersSrc).not.toContain('cancelAllReminders');
-    expect(remindersSrc).toContain('dailyReminderEnabled: false');
-    expect(remindersSrc).toContain('dailyReminderEnabled: true');
+    expect(notificationsSrc).toContain('dailyReminderEnabled: false');
+    expect(notificationsSrc).toContain('dailyReminderEnabled: true');
+    expect(notificationsSrc).toContain(
+      'cancelNotificationById(NOTIFICATION_IDS.DAILY_REMINDER, originatingSession, operation)',
+    );
   });
 
   it('derives the toggle from durable intent rather than reminderTime alone', () => {
