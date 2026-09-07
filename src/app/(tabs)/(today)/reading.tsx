@@ -67,6 +67,7 @@ import { isTransientGenerationError, toFriendlyRemainingDaysGenerationError } fr
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
 import { CompletionCelebration } from '@/components/CompletionCelebration';
+import { getCompletionDismissRoute } from '@/lib/completion-dismiss-route';
 // ShareDevotionalModal removed — pull quote share now uses /share-card route
 import { DevotionalContent } from '@/components/reading/DevotionalContent';
 import { StudyMethodSheet } from '@/components/reading/StudyMethodSheet';
@@ -2363,6 +2364,7 @@ export default function ReadingScreen() {
         visible={showCelebration}
         onDismiss={() => {
           setShowCelebration(false);
+          const dismissRoute = getCompletionDismissRoute(celebrationType);
           const pending = pendingReviewRef.current;
           pendingReviewRef.current = null;
           if (pending) {
@@ -2372,6 +2374,9 @@ export default function ReadingScreen() {
                 recordReviewPrompt(pending.totalDaysCompleted);
               }
             })();
+          }
+          if (dismissRoute) {
+            router.replace(dismissRoute);
           }
         }}
         type={celebrationType}

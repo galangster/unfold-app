@@ -29,6 +29,8 @@ export const STORE_PERSIST_MAX_WAIT_MS = 3000;
 export type DebouncedPersistStorage<S> = PersistStorage<S> & {
   /** Serialize + write any pending value immediately. Returns true if a write happened. */
   flushPendingWrites: () => boolean;
+  /** Serialize + await any pending write. Rejects when the storage write fails. */
+  flushPendingWritesAsync: () => Promise<boolean>;
   hasPendingWrites: () => boolean;
 };
 
@@ -42,6 +44,7 @@ export function createDebouncedJSONStorage<S>(
   let pending: { name: string; value: StorageValue<S> } | null = null;
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let maxWaitTimer: ReturnType<typeof setTimeout> | null = null;
+  let inFlightOperation: Promise<void> | null = null;
 
   // A pending persist window must not hold a Node process (Jest) open. On
   // React Native timers are plain numbers, so unref doesn't exist and this
@@ -59,12 +62,61 @@ export function createDebouncedJSONStorage<S>(
     maxWaitTimer = null;
   };
 
-  const writeNow = (): boolean => {
-    if (!pending) return false;
+  const takePendingWrite = (): { name: string; serialized: string } | null => {
+    if (!pending) return null;
     const { name, value } = pending;
     pending = null;
     clearTimers();
-    void inner.setItem(name, JSON.stringify(value));
+    return { name, serialized: JSON.stringify(value) };
+  };
+
+  const trackOperation = (operation: Promise<void>): Promise<void> => {
+    const tracked = operation.finally(() => {
+      if (inFlightOperation === tracked) inFlightOperation = null;
+    });
+    // Timer and synchronous flush callers cannot await an asynchronous adapter.
+    // Attach a handler here while preserving rejection for awaited callers.
+    void tracked.catch(() => {});
+    inFlightOperation = tracked;
+    return tracked;
+  };
+
+  const startOperation = (operation: () => unknown | Promise<unknown>): Promise<void> | null => {
+    if (inFlightOperation) {
+      const prior = inFlightOperation;
+      return trackOperation(
+        prior
+          .catch(() => {})
+          .then(operation)
+          .then(() => {}),
+      );
+    }
+
+    const result = operation();
+    if (result && typeof (result as PromiseLike<unknown>).then === 'function') {
+      return trackOperation(Promise.resolve(result).then(() => {}));
+    }
+    return null;
+  };
+
+  const startWrite = ({ name, serialized }: { name: string; serialized: string }): Promise<void> | null =>
+    startOperation(() => inner.setItem(name, serialized));
+
+  const writeNow = (): boolean => {
+    const write = takePendingWrite();
+    if (!write) return false;
+    startWrite(write);
+    return true;
+  };
+
+  const writeNowAsync = async (): Promise<boolean> => {
+    const write = takePendingWrite();
+    if (write) {
+      await startWrite(write);
+      return true;
+    }
+    if (!inFlightOperation) return false;
+    await inFlightOperation;
     return true;
   };
 
@@ -101,10 +153,11 @@ export function createDebouncedJSONStorage<S>(
         pending = null;
         clearTimers();
       }
-      void inner.removeItem(name);
+      startOperation(() => inner.removeItem(name));
     },
 
     flushPendingWrites: writeNow,
+    flushPendingWritesAsync: writeNowAsync,
     hasPendingWrites: () => pending !== null,
   };
 }
