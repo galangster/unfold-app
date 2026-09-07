@@ -19,10 +19,12 @@ export type SelectionFormattingState = {
 
 export function getNativeEditorToolbarInset({
   isKeyboardUp,
+  toolbarHeight = NOTEBOOK_TOOLBAR_TOTAL_HEIGHT,
 }: {
   isKeyboardUp: boolean;
+  toolbarHeight?: number;
 }): number {
-  return isKeyboardUp ? NOTEBOOK_TOOLBAR_TOTAL_HEIGHT : 0;
+  return isKeyboardUp ? toolbarHeight : 0;
 }
 
 export function shouldReuseSelectionFormattingState(

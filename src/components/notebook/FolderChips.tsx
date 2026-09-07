@@ -286,7 +286,6 @@ function FolderChip({ folderId, folder, label, color, isActive, hasChildren, onP
             },
           ]}
           numberOfLines={1}
-          maxFontSizeMultiplier={1.3}
         >
           {label}
         </Text>
@@ -319,7 +318,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   pill: {
-    minHeight: 32,
+    minHeight: 44,
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: Radius.lg,
@@ -330,6 +329,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   pillLabelTouchable: {
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,

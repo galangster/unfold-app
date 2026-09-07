@@ -239,7 +239,8 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
 
   @discardableResult
   func blur() -> Bool {
-    editor.resignFirstResponder()
+    editor.resignFocus()
+    return !editor.isFirstResponder()
   }
 
   /// Returns the current formatting state at the cursor / selection start.

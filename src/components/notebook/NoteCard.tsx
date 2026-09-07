@@ -11,15 +11,13 @@ import {
 import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
 import { Duration, Ease } from '@/constants/animations';
 import * as Haptics from 'expo-haptics';
-import { FontFamily, FontSize } from '@/constants/fonts';
-import { alpha } from '@/components/ui';
+import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
-import { Radius } from '@/constants/radius';
-import { Shadow } from '@/constants/shadows';
 import { Spacing } from '@/constants/spacing';
 import { ScriptureRefPill } from './ScriptureRefPill';
 import { stripHtml, isHtmlContent } from '@/lib/note-html';
 import { formatRelativeDate } from '@/lib/format-relative-date';
+import { formatJournalDay } from '@/lib/journal-month-groups';
 
 import { Note, NoteCategory } from '@/lib/store';
 
@@ -97,74 +95,54 @@ export const NoteCard = memo(function NoteCard({ note, onPress, onLongPress, ind
         accessibilityRole="button"
         accessibilityLabel={`${displayTitle}, ${categoryConfig.label}, ${relativeDate}${note.tags.length > 0 ? `, tags: ${note.tags.join(', ')}` : ''}`}
       >
-        <View
-          style={[
-            styles.card,
-            {
-              backgroundColor: colors.backgroundElevated,
-              borderColor: colors.border,
-            },
-            // Favorites stay quiet: the gold star carries the state; the
-            // card's hairline just warms so a scan can pick them out.
-            note.isFavorite && { borderColor: alpha(colors.accent, 0.28) },
-          ]}
-        >
-          {/* Row 1: Category icon + title + star */}
-          <View style={styles.titleRow}>
-            <View style={styles.titleContent}>
+        <View style={[styles.card, { borderBottomColor: colors.border }]}>
+          <View style={styles.dateColumn}>
+            <Text style={[styles.day, { color: colors.text }]}>{formatJournalDay(note.updatedAt)}</Text>
+          </View>
+
+          <View style={styles.content}>
+            <View style={styles.titleRow}>
               <Text
                 style={[styles.title, { color: colors.text }]}
-                numberOfLines={1}
+                numberOfLines={2}
               >
                 {displayTitle}
               </Text>
-            </View>
-
-            <View style={styles.titleRight}>
               {note.isFavorite && (
                 <StarIcon size={13} color={colors.accent} weight="fill" />
               )}
-              <CategoryIcon size={14} color={colors.textSubtle} weight="light" />
             </View>
-          </View>
 
-          {/* Row 2: Scripture reference pill (optional) */}
-          {note.scriptureRefs.length > 0 && (
-            <View style={styles.scriptureRow}>
-              <ScriptureRefPill reference={note.scriptureRefs[0]} />
-            </View>
-          )}
-
-          {/* Row 3: Preview text (2 lines max) */}
-          {previewText ? (
-            <Text
-              style={[styles.preview, { color: colors.textMuted }]}
-              numberOfLines={2}
-            >
-              {previewText}
-            </Text>
-          ) : null}
-
-          {/* Row 4: Metadata — relative date + inline tags */}
-          <View style={styles.metadataRow}>
-            <Text style={[styles.metadataText, { color: colors.textSubtle }]}>
-              {relativeDate}
-            </Text>
-
-            {visibleTags.map((tag) => (
-              <Text
-                key={tag}
-                style={[styles.tagText, { color: colors.accent, opacity: 0.7 }]}
-              >
-                #{tag}
-              </Text>
-            ))}
-
-            {extraTagCount > 0 && (
-              <Text style={[styles.metadataText, { color: colors.textSubtle }]}>
-                +{extraTagCount} more
-              </Text>
+            {note.scriptureRefs.length > 0 && (
+              <View style={styles.scriptureRow}>
+                <ScriptureRefPill reference={note.scriptureRefs[0]} />
+              </View>
             )}
+
+            {previewText ? (
+              <Text style={[styles.preview, { color: colors.textMuted }]} numberOfLines={2}>
+                {previewText}
+              </Text>
+            ) : null}
+
+            <View style={styles.metadataRow}>
+              <CategoryIcon size={13} color={colors.textSubtle} weight="light" />
+              <Text style={[styles.metadataText, { color: colors.textSubtle }]}>
+                {`${categoryConfig.label} · ${relativeDate}`}
+              </Text>
+
+              {visibleTags.map((tag) => (
+                <Text key={tag} style={[styles.tagText, { color: colors.accent }]}>
+                  #{tag}
+                </Text>
+              ))}
+
+              {extraTagCount > 0 && (
+                <Text style={[styles.metadataText, { color: colors.textSubtle }]}>
+                  +{extraTagCount} more
+                </Text>
+              )}
+            </View>
           </View>
         </View>
       </TouchableOpacity>
@@ -174,41 +152,47 @@ export const NoteCard = memo(function NoteCard({ note, onPress, onLongPress, ind
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: Radius.card,
-    padding: Spacing['4'],
-    marginBottom: 10,
-    borderWidth: 1,
-    // Card shadow (matches existing journal entry cards)
-    ...Shadow.sm,
+    minHeight: 112,
+    paddingVertical: Spacing['4'],
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing['3'],
+  },
+  dateColumn: {
+    width: 34,
+    alignItems: 'center',
+  },
+  day: {
+    fontFamily: FontFamily.display,
+    fontSize: 23,
+    lineHeight: 28,
+  },
+  content: {
+    flex: 1,
+    minWidth: 0,
   },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  titleContent: {
-    flex: 1,
-    marginRight: Spacing['2'],
+    marginBottom: Spacing['1'],
+    gap: Spacing['2'],
   },
   title: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: FontSize.sm,
-    lineHeight: 20,
-  },
-  titleRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing['2'],
+    flex: 1,
+    fontFamily: FontFamily.display,
+    fontSize: 18,
+    lineHeight: 23,
   },
   scriptureRow: {
     marginBottom: 6,
   },
   preview: {
     fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 19,
-    marginBottom: Spacing['2'],
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: Spacing['1.5'],
   },
   metadataRow: {
     flexDirection: 'row',
@@ -218,10 +202,12 @@ const styles = StyleSheet.create({
   },
   metadataText: {
     fontFamily: FontFamily.ui,
-    fontSize: 11,
+    fontSize: 12,
+    lineHeight: 18,
   },
   tagText: {
     fontFamily: FontFamily.ui,
-    fontSize: 11,
+    fontSize: 12,
+    lineHeight: 18,
   },
 });
