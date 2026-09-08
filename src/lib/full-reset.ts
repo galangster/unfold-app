@@ -63,12 +63,16 @@ import { cacheDirectory, deleteAsync, documentDirectory, readDirectoryAsync } fr
 import { OUTBOX_KEY } from '@/lib/sync-outbox';
 import { DEVOTIONAL_PULL_CURSOR_KEY } from '@/lib/devotional-pull-cursor';
 import { LAST_PULLED_AT_KEY } from '@/lib/full-sync-pull';
-import { MIGRATION_KEY as GENERATION_MIGRATION_KEY } from '@/lib/generation-migration';
+import {
+  ARC_RECONCILIATION_KEY,
+  MIGRATION_KEY as GENERATION_MIGRATION_KEY,
+} from '@/lib/generation-migration';
 import { STORE_KEY as ONBOARDING_SAMPLE_JOB_KEY } from '@/lib/onboarding-sample-job-store';
 import { STORE_KEY as ONBOARDING_DRAFT_KEY } from '@/lib/onboarding-draft-store';
 // A stale marker would silence the next abandonment report on this device.
 import { ABANDONED_MARKER_KEY as ONBOARDING_ABANDON_MARKER_KEY } from '@/lib/onboarding-telemetry';
 import { DYNAMIC_EXAMPLE_KEY } from '@/lib/generation-api';
+import { INITIAL_GENERATION_REQUEST_ID_KEY } from '@/lib/initial-generation-request';
 import { RATE_LIMIT_STORAGE_KEY } from '@/lib/rate-limit';
 import {
   beginLocalResetSession,
@@ -88,6 +92,7 @@ export const FULL_RESET_MMKV_KEYS: readonly string[] = [
   '@unfold_exclusive_offer_seen',
   '@unfold_onboarding_offer_seen',
   'inflight-generation-job',
+  INITIAL_GENERATION_REQUEST_ID_KEY,
   OUTBOX_KEY,
   // Devotional pull cursor is scoped to the device id; rotation below would
   // already invalidate it, but a wiped store must never carry a delta cursor.
@@ -97,6 +102,7 @@ export const FULL_RESET_MMKV_KEYS: readonly string[] = [
   // a stale onboarding sample job, and drop the cached prompt example.
   LAST_PULLED_AT_KEY,
   GENERATION_MIGRATION_KEY,
+  ARC_RECONCILIATION_KEY,
   ONBOARDING_SAMPLE_JOB_KEY,
   // A wiped install must start onboarding cold — never resume the erased
   // user's saved answers.

@@ -16,6 +16,7 @@ import {
 
 /** Exported so full-reset can clear it — the migration is idempotent and re-runs after a wipe. */
 export const MIGRATION_KEY = "generation-migration-v1-complete";
+export const ARC_RECONCILIATION_KEY = "generation-arc-reconciliation-v2";
 
 type MigrationStore = ReturnType<typeof useUnfoldStore.getState>;
 
@@ -125,39 +126,74 @@ async function postMigrationStep(
   }
 }
 
-export async function migrateGenerationDataToServer(): Promise<void> {
-  // Check if already migrated
-  if (mmkvStorage.getItem(MIGRATION_KEY) === "true") return;
+function readReconciledArcIds(): Set<string> {
+  const stored = mmkvStorage.getItem(ARC_RECONCILIATION_KEY) as string | null;
+  if (!stored) return new Set();
+  try {
+    const ids = JSON.parse(stored);
+    return new Set(Array.isArray(ids) ? ids.filter((id): id is string => typeof id === "string") : []);
+  } catch {
+    return new Set();
+  }
+}
 
+async function reconcileSeriesArcs(
+  session: number,
+  headers: Record<string, string>,
+  devotionals: MigrationStore["devotionals"],
+): Promise<boolean> {
+  const reconciled = readReconciledArcIds();
+  let allSucceeded = true;
+
+  for (const devotional of devotionals) {
+    if (!isSyncSessionCurrent(session)) return false;
+    if (devotional.generationMode !== "progressive" || !devotional.seriesArc || reconciled.has(devotional.id)) {
+      continue;
+    }
+
+    const succeeded = await postMigrationStep(
+      session,
+      headers,
+      "/api/jobs/migrate-arc",
+      { devotionalId: devotional.id, arc: devotional.seriesArc },
+    );
+    if (!isSyncSessionCurrent(session)) return false;
+    if (!succeeded) {
+      allSucceeded = false;
+      continue;
+    }
+
+    reconciled.add(devotional.id);
+    mmkvStorage.setItem(ARC_RECONCILIATION_KEY, JSON.stringify([...reconciled].sort()));
+  }
+
+  return allSucceeded;
+}
+
+export async function migrateGenerationDataToServer(): Promise<void> {
   const session = captureSyncSession();
   const store = useUnfoldStore.getState();
   const headers = await getAuthHeaders();
   if (!isSyncSessionCurrent(session)) return;
 
   try {
-    let migrationSucceeded = true;
-
     // Gather progressive devotionals to migrate
     const devotionals = store.devotionals.filter(
       (d) => d.generationMode === "progressive"
     );
+    const arcsSucceeded = await reconcileSeriesArcs(session, headers, devotionals);
+    if (!isSyncSessionCurrent(session)) return;
+
+    // The versioned arc receipt is per devotional. It must run even on devices
+    // whose legacy global migration marker was written after an ignored failure.
+    if (mmkvStorage.getItem(MIGRATION_KEY) === "true") {
+      if (!arcsSucceeded) logger.warn("[gen-migration] Arc reconciliation incomplete — will retry next launch");
+      return;
+    }
+
+    let migrationSucceeded = arcsSucceeded;
 
     for (const devo of devotionals) {
-      if (!isSyncSessionCurrent(session)) return;
-      // Push series arc
-      if (devo.seriesArc) {
-        const stepSucceeded = await postMigrationStep(
-          session,
-          headers,
-          "/api/jobs/migrate-arc",
-          {
-            devotionalId: devo.id,
-            arc: devo.seriesArc,
-          },
-        );
-        migrationSucceeded = migrationSucceeded && stepSucceeded;
-      }
-
       if (!isSyncSessionCurrent(session)) return;
       // Push progressive memory
       if (devo.progressiveMemory) {

@@ -32,6 +32,25 @@ export class ApiError extends Error {
   }
 }
 
+type ApiErrorBody = {
+  error?: { code?: string; message?: string };
+  existingJobId?: string | null;
+};
+
+async function responseApiError(
+  response: Response,
+  fallbackMessage: string,
+  fallbackCode: string,
+): Promise<ApiError> {
+  const body = (await response.json().catch(() => null)) as ApiErrorBody | null;
+  return new ApiError(
+    body?.error?.message ?? `${fallbackMessage}: ${response.status}`,
+    response.status,
+    body?.error?.code ?? fallbackCode,
+    body?.existingJobId,
+  );
+}
+
 /** Hermes-compatible fetch timeout (AbortSignal.timeout() not available) */
 async function fetchWithTimeout(
   url: string,
@@ -170,6 +189,7 @@ export function buildInitialArcUserContext(user: InitialArcUserSource): InitialA
 
 export async function submitGenerationJob(params: {
   devotionalId?: string;
+  requestId?: string;
   dayNumber: number;
   jobType: "initial_arc" | "day" | "onboarding";
   userContext?: InitialArcUserContext;
@@ -202,23 +222,14 @@ export async function submitGenerationJob(params: {
     'submit generation job',
   );
 
-  if (response.status === 409) {
-    const conflictBody = await response.json();
-    assertSyncSessionCurrent(session, 'submit generation job');
-    throw new ApiError(
-      conflictBody.error?.message ?? 'Already generated today',
-      409,
-      conflictBody.error?.code ?? 'ALREADY_GENERATED_TODAY',
-      conflictBody.existingJobId,
-    );
-  }
-
   if (!response.ok) {
-    const errorBody = await response.text().catch(() => "");
-    assertSyncSessionCurrent(session, 'submit generation job');
-    throw new Error(
-      `Submit job failed: ${response.status} — ${errorBody.slice(0, 200)}`
+    const error = await responseApiError(
+      response,
+      'Submit job failed',
+      response.status === 409 ? 'ALREADY_GENERATED_TODAY' : 'SUBMIT_FAILED',
     );
+    assertSyncSessionCurrent(session, 'submit generation job');
+    throw error;
   }
 
   const payload = await response.json();
@@ -273,11 +284,9 @@ export async function retryJob(
   );
 
   if (!response.ok) {
-    const body = await response.text().catch(() => "");
+    const error = await responseApiError(response, 'Retry job failed', 'RETRY_FAILED');
     assertSyncSessionCurrent(origin, 'retry generation job');
-    throw new Error(
-      `Retry job failed: ${response.status} — ${body.slice(0, 200)}`
-    );
+    throw error;
   }
 
   const payload = await response.json();

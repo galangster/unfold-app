@@ -1,9 +1,7 @@
 import type { Devotional, DevotionalDay } from '@/lib/store';
 import type { PremiumAccessPolicy } from './premium-access-policy';
-import { getLockedTodayDayNumber, getLatestReadDayNumberToday } from './devotional-day-access';
+import { getCalendarDayNumber, getLockedTodayDayNumber, getLatestReadDayNumberToday } from './devotional-day-access';
 import { getServerOwnedSeriesTotalDays } from './devotional-series-boundary';
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 function localDayKey(date: Date): string {
   return date.toDateString();
@@ -117,11 +115,8 @@ export function shouldPrepareCurrentDevotionalDay(
   if (dayExists) return false;
 
   if (devotional.seriesStartDate) {
-    const startDate = new Date(devotional.seriesStartDate);
-    const startDay = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const calendarDay = Math.floor((today.getTime() - startDay.getTime()) / DAY_MS) + 1;
-    if (devotional.currentDay > calendarDay) return false;
+    const calendarDay = getCalendarDayNumber(devotional, now);
+    if (calendarDay != null && devotional.currentDay > calendarDay) return false;
   }
 
   return true;

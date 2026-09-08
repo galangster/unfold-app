@@ -7,6 +7,7 @@ export interface GenerationResultPayload {
   totalDays?: number;
   arc?: SeriesArc;
   devotionalId?: string;
+  seriesStartDate?: string;
 }
 
 export type GeneratedDayWithIdentity = DevotionalDay & {

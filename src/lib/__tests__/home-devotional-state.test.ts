@@ -46,6 +46,16 @@ function devotional(overrides: Partial<Devotional> = {}): Devotional {
 }
 
 describe('home devotional state helpers', () => {
+  it('prepares the due day after a spring-forward boundary', () => {
+    const series = devotional({
+      currentDay: 3,
+      seriesStartDate: new Date(2026, 2, 7, 12, 0, 0).toISOString(),
+      days: [],
+    });
+
+    expect(shouldPrepareCurrentDevotionalDay(series, new Date(2026, 2, 9, 12, 0, 0))).toBe(true);
+  });
+
   it('finds the current devotional by id', () => {
     const current = devotional({ id: 'current' });
     expect(getCurrentDevotional([devotional({ id: 'other' }), current], 'current')).toBe(current);

@@ -204,6 +204,7 @@ describe('generation reconciliation', () => {
     });
 
     const response = await submitGenerationJob({
+      requestId: '11111111-1111-4111-8111-111111111111',
       dayNumber: 1,
       jobType: 'initial_arc',
     });
@@ -211,7 +212,32 @@ describe('generation reconciliation', () => {
     const submittedDevotionalId = response.devotionalId!;
 
     expect(submittedDevotionalId).toBe('server-owned-devo');
+    expect(JSON.parse(mockFetch.mock.calls[0][1].body)).toMatchObject({
+      requestId: '11111111-1111-4111-8111-111111111111',
+    });
     expect(JSON.parse(mockFetch.mock.calls[0][1].body)).not.toHaveProperty('devotionalId');
+  });
+
+  it('accepts a completed initial-arc dedup response with its canonical devotional id', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        jobId: 'job-complete',
+        status: 'complete',
+        devotionalId: 'server-owned-devo',
+        deduplicated: true,
+      }),
+    });
+
+    await expect(submitGenerationJob({
+      dayNumber: 1,
+      jobType: 'initial_arc',
+    })).resolves.toEqual(expect.objectContaining({
+      jobId: 'job-complete',
+      status: 'complete',
+      devotionalId: 'server-owned-devo',
+    }));
   });
 
   it('throws when neither backend nor local context can provide a canonical devotional id', () => {

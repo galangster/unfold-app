@@ -137,6 +137,10 @@ import {
   endLocalResetSession,
   resetSyncSessionFenceForTesting,
 } from '../generation-session';
+import {
+  INITIAL_GENERATION_REQUEST_ID_KEY,
+  readInitialGenerationRequestId,
+} from '../initial-generation-request';
 import { mmkvStorage } from '../mmkv-storage';
 import { useUnfoldStore, type UserProfile } from '../store';
 
@@ -207,6 +211,7 @@ beforeEach(() => {
   mockRetryJob.mockReset();
   mockSubmitGenerationJob.mockReset();
   mmkvStorage.removeItem(INFLIGHT_GENERATION_JOB_KEY);
+  mmkvStorage.removeItem(INITIAL_GENERATION_REQUEST_ID_KEY);
   useUnfoldStore.setState({
     devotionals: [],
     currentDevotionalId: null,
@@ -224,6 +229,36 @@ afterEach(async () => {
 });
 
 describe('regression: Jordan item 6 — Go home from /generating', () => {
+  it('reuses one request id when a lost initial POST response is retried', async () => {
+    mockSubmitGenerationJob
+      .mockRejectedValueOnce(new Error('Network request failed'))
+      .mockReturnValueOnce(new Promise(() => {}));
+
+    const tree = await renderScreen();
+    mounted.push(tree);
+
+    const firstRequestId = mockSubmitGenerationJob.mock.calls[0][0].requestId;
+    expect(firstRequestId).toBe(readInitialGenerationRequestId());
+
+    await press(tree, 'Try again');
+
+    expect(mockSubmitGenerationJob).toHaveBeenCalledTimes(2);
+    expect(mockSubmitGenerationJob.mock.calls[1][0].requestId).toBe(firstRequestId);
+  });
+
+  it('clears the request id when the reader starts over with new answers', async () => {
+    mockSubmitGenerationJob.mockRejectedValueOnce(new Error('Request rejected'));
+
+    const tree = await renderScreen();
+    mounted.push(tree);
+    expect(readInitialGenerationRequestId()).not.toBeNull();
+
+    await press(tree, 'Start over with new answers');
+
+    expect(readInitialGenerationRequestId()).toBeNull();
+    expect(mockReplace).toHaveBeenCalledWith('/onboarding');
+  });
+
   it('regression: Jordan item 6 — Go home marks the kept record so Today watches it instead of bouncing back to /generating', async () => {
     writeInflightGenerationJob({ jobId: 'job-1', devotionalId: 'devo-1', submittedAt: Date.now() - 30_000 });
     mockPollJobStatus.mockResolvedValue({ status: 'processing' });

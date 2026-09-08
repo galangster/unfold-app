@@ -542,6 +542,34 @@ describe('DevotionalCard daily recovery', () => {
     expect(tree.root.findAll((node: any) => textContent(node).includes('Preparing Day 2.')).length).toBeGreaterThan(0);
     expect(tree.root.findAll((node: any) => textContent(node).includes('almost ready')).length).toBe(0);
   });
+
+  it.each([
+    {
+      recovery: { status: 'blocked' as const, reason: 'day-not-ready' as const },
+      title: 'Day 2 isn’t available yet.',
+    },
+    {
+      recovery: { status: 'service-error' as const },
+      title: 'We couldn’t check Day 2.',
+    },
+  ])('shows $title as a server response with a check-again action', ({ recovery, title }) => {
+    const tree = renderInAct(
+      <DevotionalCard
+        state={{
+          ...baseState,
+          recovery: {
+            ...recovery,
+            onCheckAgain: jest.fn(async () => undefined),
+            onRetry: jest.fn(async () => undefined),
+          },
+        }}
+      />,
+    );
+
+    expect(tree.root.findAll((node: any) => textContent(node).includes(title)).length).toBeGreaterThan(0);
+    expect(tree.root.findAll((node: any) => textContent(node).includes('lost connection'))).toHaveLength(0);
+    expect(findByLabel(tree, 'Check Again').length).toBeGreaterThan(0);
+  });
 });
 
 function textContent(node: any): string {

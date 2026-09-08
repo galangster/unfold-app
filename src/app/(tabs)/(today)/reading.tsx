@@ -1,3 +1,4 @@
+import { getDailyGenerationNotice } from '@/lib/daily-generation-messages';
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useAutoHide } from '@/hooks/useAutoHide';
 import { View, Text, Dimensions, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet, TouchableOpacity, Keyboard, ScrollView, UIManager, type LayoutChangeEvent } from 'react-native';
@@ -1429,6 +1430,7 @@ export default function ReadingScreen() {
     );
     const usesDailyRecovery = isCanonicalProgressiveDevotional(currentDevotional);
     const dailyState = dailyGeneration.state;
+    const notice = getDailyGenerationNotice(dailyState, viewingDay);
     const isDailyChecking = usesDailyRecovery
       && (dailyState.status === 'checking' || isCheckingForSyncedDay);
     const isDailyRunning = usesDailyRecovery && (dailyState.status === 'running' || dailyState.status === 'slow');
@@ -1436,8 +1438,8 @@ export default function ReadingScreen() {
       && dailyState.status === 'failed'
       && dailyState.canRetry
       && dailyState.failureKind === 'job';
-    const dailyHeadline = dailyState.status === 'offline'
-      ? 'We lost the connection'
+    const dailyHeadline = notice
+      ? notice.title
       : dailyState.status === 'failed'
         ? dailyState.failureKind === 'job'
           ? 'We couldn’t prepare this reading'
@@ -1449,8 +1451,8 @@ export default function ReadingScreen() {
             : dailyState.status === 'checking'
               ? `Looking for Day ${viewingDay}...`
               : 'Reading not ready yet';
-    const dailyBody = dailyState.status === 'offline'
-      ? 'Your reading may still be preparing. Reconnect, then check again.'
+    const dailyBody = notice
+      ? notice.body
       : dailyState.status === 'failed'
         ? dailyState.failureKind === 'job'
           ? canRetryDailyJob

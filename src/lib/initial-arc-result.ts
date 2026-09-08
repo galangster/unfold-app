@@ -6,6 +6,7 @@
  */
 import { useUnfoldStore, type Devotional, type DevotionalDay, type SeriesArc, type UserProfile } from '@/lib/store';
 import { clearInflightGenerationJob } from '@/lib/inflight-generation-job';
+import { clearInitialGenerationRequestId } from '@/lib/initial-generation-request';
 import { extractBookFromReference } from '@/lib/devotional-service';
 import type { InflightInitialArcWatchOutcome } from '@/lib/inflight-initial-arc-watch';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
@@ -24,6 +25,7 @@ export interface InitialArcResult {
   totalDays?: number;
   arc?: SeriesArc;
   devotionalId?: string | null;
+  seriesStartDate?: string;
 }
 
 interface InitialArcResultContext {
@@ -69,15 +71,18 @@ export function applyInitialArcResult(
   if (existingDevotional) {
     store.addGeneratedDay(devotionalId, day1);
   } else {
-    const now = new Date().toISOString();
+    const serverAnchor = [result.seriesStartDate, day1.generatedAt].find(
+      (value): value is string => typeof value === 'string' && !Number.isNaN(new Date(value).getTime()),
+    );
+    const seriesStartDate = serverAnchor ?? new Date().toISOString();
     const newDevotional: Devotional = {
       id: devotionalId,
       title: seriesTitle,
       totalDays,
       currentDay: 1,
       days: [day1],
-      createdAt: now,
-      seriesStartDate: now,
+      createdAt: seriesStartDate,
+      seriesStartDate,
       userContext: {
         name: user?.name ?? '',
         aboutMe: user?.aboutMe ?? '',
@@ -107,6 +112,7 @@ export function applyInitialArcResult(
 
   // Generation succeeded — nothing is in flight any more.
   clearInflightGenerationJob();
+  clearInitialGenerationRequestId();
   store.completeGenerationSession({ title: seriesTitle });
 
   return { devotionalId, seriesTitle, day1 };
