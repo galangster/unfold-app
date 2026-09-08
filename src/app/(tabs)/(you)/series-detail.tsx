@@ -160,7 +160,14 @@ export default function SeriesDetailScreen() {
         pathname: '/(tabs)/(today)/reading',
         // Pass the id explicitly rather than relying on the store write above —
         // the reader honours ?devotionalId and the user may hold several series.
-        params: { devotionalId: devotional.id, dayNumber: String(dayNumber) },
+        params: {
+          devotionalId: devotional.id,
+          dayNumber: String(dayNumber),
+          // The mobile store tracks reader selection, not server-side series
+          // activity. Library detail entry therefore stays read-only even
+          // after selecting it changes currentDevotionalId.
+          readOnly: '1',
+        },
       });
     },
     [devotional, setCurrentDevotional, router],

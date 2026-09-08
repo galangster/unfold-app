@@ -38,8 +38,9 @@ describe('reading.tsx server-side generation migration', () => {
 
   it('routes missing canonical/progressive days through job recovery instead of direct generation', () => {
     expect(readingSource).toContain('isCanonicalProgressiveDevotional(currentDevotional)');
-    expect(readingSource).toContain('recovered-missing-day-from-completed-job');
-    expect(readingSource).toContain('queued-missing-day-canonical-job');
+    expect(readingSource).toContain('useGeneratedDayWatch({');
+    expect(readingSource).toContain('await dailyGeneration.retry()');
+    expect(readingSource).toContain('await dailyGeneration.checkAgain()');
   });
 
   it('routes visible reader content through the canonical render selector', () => {
@@ -67,8 +68,8 @@ describe('reading.tsx server-side generation migration', () => {
   });
 
   it('replaces local-only days with recovered canonical job results', () => {
-    expect(readingSource).toContain("updateDevotionalDays(currentDevotional.id, [recovered.devotionalDay], currentDevotional.title)");
-    expect(readingSource).toContain("updateDevotionalDays(currentDevotional.id, [recoveredFromExisting.devotionalDay], currentDevotional.title)");
+    expect(readingSource).toContain('updateDevotionalDays(devotionalId, [day], seriesTitle)');
+    expect(readingSource).toContain('onDay: applyWatchedDay');
     expect(readingSource).not.toContain('addGeneratedDay(currentDevotional.id, recovered.devotionalDay)');
   });
 

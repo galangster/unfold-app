@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useAutoHide } from '@/hooks/useAutoHide';
 import { View, Text, Dimensions, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet, TouchableOpacity, Keyboard, ScrollView, UIManager, type LayoutChangeEvent } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useIsFocused } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   useSharedValue,
@@ -38,7 +38,6 @@ import { useUnfoldStore, FONT_SIZE_VALUES } from '@/lib/store';
 import type { Highlight, Bookmark, DevotionalDay } from '@/lib/store';
 import { refreshDailyReminder } from '@/lib/notifications';
 import { continueGeneratingDays, isFullGenerationActive } from '@/lib/devotional-service';
-import { submitGenerationJob, recoverCompletedGenerationResult, ApiError } from '@/lib/generation-api';
 import { syncDevotionalDayRead } from '@/lib/devotional-read-sync';
 import { commitDevotionalPullCursor, pullDevotionalContent } from '@/lib/devotional-sync-pull';
 import { applyPulledDevotionalContent } from '@/lib/devotional-pulled-content';
@@ -194,7 +193,8 @@ function ReaderLoadingSkeleton({ colors }: { colors: any }) {
 
 export default function ReadingScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ dayNumber?: string; devotionalId?: string; highlightId?: string; bookmarkId?: string }>();
+  const isReadingFocused = useIsFocused();
+  const params = useLocalSearchParams<{ dayNumber?: string; devotionalId?: string; highlightId?: string; bookmarkId?: string; readOnly?: string }>();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
@@ -293,6 +293,7 @@ export default function ReadingScreen() {
   const [showScrollHint, setShowScrollHint] = useState(true);
   const [isRetrying, setIsRetrying] = useState(false);
   const [isCheckingForSyncedDay, setIsCheckingForSyncedDay] = useState(false);
+  const [dailySyncRecoveryKey, setDailySyncRecoveryKey] = useState<string | null>(null);
   // "Prepare Remaining Readings" is a secondary escape hatch — only worth
   // showing once the primary "Check for Day X" action has actually been
   // tried (or has failed).
@@ -1225,7 +1226,11 @@ export default function ReadingScreen() {
     if (!currentDevotional || currentDayData || isCheckingForSyncedDay) return false;
 
     const attemptKey = `${currentDevotional.id}:${viewingDay}`;
-    if (source === 'auto' && syncRecoveryAttemptRef.current[attemptKey]) return false;
+    const isProgressiveDay = isCanonicalProgressiveDevotional(currentDevotional);
+    if (source === 'auto' && syncRecoveryAttemptRef.current[attemptKey]) {
+      if (isProgressiveDay) setDailySyncRecoveryKey(attemptKey);
+      return false;
+    }
     if (source === 'auto') {
       syncRecoveryAttemptRef.current[attemptKey] = true;
     }
@@ -1273,96 +1278,10 @@ export default function ReadingScreen() {
         return true;
       }
 
-      if (isCanonicalProgressiveDevotional(currentDevotional)) {
-        const recovered = await recoverCompletedGenerationResult({
-          devotionalId: currentDevotional.id,
-          dayNumber: viewingDay,
-          session,
-        }).catch((err) => {
-          if (err instanceof SyncSessionInvalidatedError) throw err;
-          return null;
-        });
-
-        if (!isRecoveryCurrent()) {
-          return false;
-        }
-
-        if (recovered?.devotionalDay) {
-          updateDevotionalDays(currentDevotional.id, [recovered.devotionalDay], currentDevotional.title);
-          void logBugEvent('reading-sync-recovery', 'recovered-missing-day-from-completed-job', {
-            devotionalId: currentDevotional.id,
-            viewingDay,
-            source,
-          });
-          if (source === 'manual') {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          }
-          return true;
-        }
-
-        try {
-          if (!isRecoveryCurrent()) {
-            return false;
-          }
-          await submitGenerationJob({
-            devotionalId: currentDevotional.id,
-            dayNumber: viewingDay,
-            jobType: 'day',
-            session,
-          });
-          if (!isRecoveryCurrent()) {
-            return false;
-          }
-          void logBugEvent('reading-sync-recovery', 'queued-missing-day-canonical-job', {
-            devotionalId: currentDevotional.id,
-            viewingDay,
-            source,
-          });
-          if (source === 'manual') {
-            setRetryError('We’re preparing this reading. Check back in a moment.');
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          }
-          return true;
-        } catch (err) {
-          if (!isRecoveryCurrent()) {
-            return false;
-          }
-          if (err instanceof ApiError && err.status === 409) {
-            const recoveredFromExisting = await recoverCompletedGenerationResult({
-              devotionalId: currentDevotional.id,
-              dayNumber: viewingDay,
-              existingJobId: err.existingJobId,
-              session,
-            }).catch((recoverErr) => {
-              if (recoverErr instanceof SyncSessionInvalidatedError) throw recoverErr;
-              return null;
-            });
-
-            if (!isRecoveryCurrent()) {
-              return false;
-            }
-
-            if (recoveredFromExisting?.devotionalDay) {
-              updateDevotionalDays(currentDevotional.id, [recoveredFromExisting.devotionalDay], currentDevotional.title);
-              void logBugEvent('reading-sync-recovery', 'recovered-missing-day-from-existing-job', {
-                devotionalId: currentDevotional.id,
-                viewingDay,
-                source,
-              });
-              if (source === 'manual') {
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              }
-              return true;
-            }
-          }
-          throw err;
-        }
-      }
-
       if (!isRecoveryCurrent()) {
         return false;
       }
-      if (source === 'manual') {
+      if (source === 'manual' && !isProgressiveDay) {
         setRetryError('This reading is still being prepared. Try again in a moment, or prepare the next reading below.');
       }
       return false;
@@ -1382,21 +1301,19 @@ export default function ReadingScreen() {
       return false;
     } finally {
       if (readingMountedRef.current && isSyncSessionCurrent(session)) {
+        if (isProgressiveDay) setDailySyncRecoveryKey(attemptKey);
         setIsCheckingForSyncedDay(false);
       }
     }
   }, [currentDevotional, currentDayData, isCheckingForSyncedDay, updateDevotionalDays, viewingDay]);
 
   useEffect(() => {
-    if (!currentDevotional || currentDayData || isCheckingForSyncedDay) return;
+    if (!currentDevotional || currentDayData || isCheckingForSyncedDay || !isReadingFocused) return;
     void recoverSyncedDay('auto');
-  }, [currentDevotional, currentDayData, isCheckingForSyncedDay, recoverSyncedDay]);
+  }, [currentDevotional, currentDayData, isCheckingForSyncedDay, isReadingFocused, recoverSyncedDay]);
 
-  // The auto recovery above runs once per day: it pulls, then queues a day
-  // job if the server has nothing. After that the "isn't ready yet" screen
-  // sat until the reader tapped retry, because nothing watched the queued job
-  // finish. Keep checking while a due, in-series day is missing; the watch
-  // ends when the day lands or the reader moves on.
+  // Canonical progressive days use the same authoritative job recovery as
+  // Today. Legacy batch series keep the direct continuation path above.
   const seriesTitle = currentDevotional?.title;
   const applyWatchedDay = useCallback((devotionalId: string, day: DevotionalDay) => {
     updateDevotionalDays(devotionalId, [day], seriesTitle);
@@ -1409,10 +1326,17 @@ export default function ReadingScreen() {
     () => shouldWatchForGeneratedDay(currentDevotional, viewingDay),
     [currentDevotional, viewingDay],
   );
-  useGeneratedDayWatch({
+  const dailyRecoveryKey = currentDevotional ? `${currentDevotional.id}:${viewingDay}` : null;
+  const dailyGeneration = useGeneratedDayWatch({
     devotionalId: currentDevotional?.id,
     dayNumber: viewingDay,
-    enabled: shouldWatchViewingDay,
+    enabled: shouldWatchViewingDay
+      && isReadingFocused
+      && dailySyncRecoveryKey === dailyRecoveryKey,
+    canMutate: premiumPolicy === 'granted'
+      && params.readOnly !== '1'
+      && currentDevotional?.id === currentDevotionalId
+      && shouldWatchViewingDay,
     onDay: applyWatchedDay,
   });
 
@@ -1503,6 +1427,41 @@ export default function ReadingScreen() {
       currentDevotional,
       viewingDay,
     );
+    const usesDailyRecovery = isCanonicalProgressiveDevotional(currentDevotional);
+    const dailyState = dailyGeneration.state;
+    const isDailyChecking = usesDailyRecovery
+      && (dailyState.status === 'checking' || isCheckingForSyncedDay);
+    const isDailyRunning = usesDailyRecovery && (dailyState.status === 'running' || dailyState.status === 'slow');
+    const canRetryDailyJob = usesDailyRecovery
+      && dailyState.status === 'failed'
+      && dailyState.canRetry
+      && dailyState.failureKind === 'job';
+    const dailyHeadline = dailyState.status === 'offline'
+      ? 'We lost the connection'
+      : dailyState.status === 'failed'
+        ? dailyState.failureKind === 'job'
+          ? 'We couldn’t prepare this reading'
+          : 'We couldn’t match this reading'
+        : dailyState.status === 'slow'
+          ? `Still preparing Day ${viewingDay}`
+          : dailyState.status === 'running'
+            ? `Preparing Day ${viewingDay}`
+            : dailyState.status === 'checking'
+              ? `Looking for Day ${viewingDay}...`
+              : 'Reading not ready yet';
+    const dailyBody = dailyState.status === 'offline'
+      ? 'Your reading may still be preparing. Reconnect, then check again.'
+      : dailyState.status === 'failed'
+        ? dailyState.failureKind === 'job'
+          ? canRetryDailyJob
+            ? 'Your series is safe. Try this reading again when you’re ready.'
+            : 'Your series is safe. Check again for the latest reading status.'
+          : 'Check again so we can find the right reading for your series.'
+        : dailyState.status === 'slow'
+          ? 'This is taking longer than usual. You can leave and come back later.'
+          : dailyState.status === 'running'
+            ? 'We’ll keep working in the background. This reading will appear automatically.'
+            : `Day ${viewingDay} isn’t ready yet.\n${daysReady} day${daysReady !== 1 ? 's' : ''} ready so far.`;
 
     const handleRetryGeneration = async () => {
       try {
@@ -1531,102 +1490,38 @@ export default function ReadingScreen() {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
         try {
-          // Progressive/canonical mode: reconcile any completed server-side day before submitting another job
-          if (isCanonicalProgressiveDevotional(currentDevotional)) {
-            const recovered = await recoverCompletedGenerationResult({
-              devotionalId: currentDevotionalId!,
-              dayNumber: viewingDay,
-              session,
-            }).catch((err) => {
-              if (err instanceof SyncSessionInvalidatedError) throw err;
-              return null;
-            });
-
-            if (!isSyncSessionCurrent(session)) return;
-            if (recovered?.devotionalDay) {
-              updateDevotionalDays(currentDevotional.id, [recovered.devotionalDay], currentDevotional.title);
-              void logBugEvent('reading-generation', 'manual-retry-progressive-recovered', {
-                viewingDay,
-              });
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              return;
-            }
-
-            await submitGenerationJob({
-              devotionalId: currentDevotionalId!,
-              dayNumber: viewingDay,
-              jobType: 'day',
-              session,
-            });
-            if (!isSyncSessionCurrent(session)) return;
-            void logBugEvent('reading-generation', 'manual-retry-progressive-success', {
-              viewingDay,
-            });
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          } else {
-            // Batch mode: generate all remaining days
-            const targetTotalDays = Math.max(currentDevotional.totalDays, user.devotionalLength, viewingDay);
-            const fixedDevotional = { ...currentDevotional, totalDays: targetTotalDays };
-            const allDays = await continueGeneratingDays(
-              fixedDevotional,
-              {
-                spiritualSeeking: user.spiritualSeeking ?? '',
-                readingDuration: user.readingDuration,
-                bibleTranslation: user.bibleTranslation ?? 'BSB',
-              },
-              (day) => {
-                if (!isSyncSessionCurrent(session)) return;
-                const current = useUnfoldStore.getState().devotionals.find((d) => d.id === currentDevotional.id);
-                if (current) {
-                  const updated = [...current.days];
-                  if (!updated.some((d) => d.dayNumber === day.dayNumber)) {
-                    updated.push(day);
-                    updateDevotionalDays(currentDevotional.id, updated);
-                  }
+          const targetTotalDays = Math.max(currentDevotional.totalDays, user.devotionalLength, viewingDay);
+          const fixedDevotional = { ...currentDevotional, totalDays: targetTotalDays };
+          const allDays = await continueGeneratingDays(
+            fixedDevotional,
+            {
+              spiritualSeeking: user.spiritualSeeking ?? '',
+              readingDuration: user.readingDuration,
+              bibleTranslation: user.bibleTranslation ?? 'BSB',
+            },
+            (day) => {
+              if (!isSyncSessionCurrent(session)) return;
+              const current = useUnfoldStore.getState().devotionals.find((d) => d.id === currentDevotional.id);
+              if (current) {
+                const updated = [...current.days];
+                if (!updated.some((d) => d.dayNumber === day.dayNumber)) {
+                  updated.push(day);
+                  updateDevotionalDays(currentDevotional.id, updated);
                 }
-              },
-              session,
-            );
-            if (!isSyncSessionCurrent(session)) return;
-            updateDevotionalDays(currentDevotional.id, allDays, currentDevotional.title);
-            void logBugEvent('reading-generation', 'manual-retry-success', {
-              viewingDay,
-              totalDaysAfterRetry: allDays.length,
-            });
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          }
+              }
+            },
+            session,
+          );
+          if (!isSyncSessionCurrent(session)) return;
+          updateDevotionalDays(currentDevotional.id, allDays, currentDevotional.title);
+          void logBugEvent('reading-generation', 'manual-retry-success', {
+            viewingDay,
+            totalDaysAfterRetry: allDays.length,
+          });
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           // After generation, the store update triggers re-render automatically
         } catch (err) {
           if (err instanceof SyncSessionInvalidatedError || !isSyncSessionCurrent(session)) return;
-          if (
-            isCanonicalProgressiveDevotional(currentDevotional) &&
-            err instanceof ApiError &&
-            err.status === 409
-          ) {
-            let recovered;
-            try {
-              recovered = await recoverCompletedGenerationResult({
-                devotionalId: currentDevotionalId!,
-                dayNumber: viewingDay,
-                existingJobId: err.existingJobId,
-                session,
-              });
-            } catch (recoverErr) {
-              if (recoverErr instanceof SyncSessionInvalidatedError || !isSyncSessionCurrent(session)) return;
-              recovered = null;
-            }
-
-            if (!isSyncSessionCurrent(session)) return;
-            if (recovered?.devotionalDay) {
-              updateDevotionalDays(currentDevotional.id, [recovered.devotionalDay], currentDevotional.title);
-              void logBugEvent('reading-generation', 'manual-retry-progressive-recovered-409', {
-                viewingDay,
-              });
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              return;
-            }
-          }
-
           const msg = err instanceof Error ? err.message : 'Something went wrong';
           logger.error('[Reading] Retry generation failed:', msg);
           void logBugError('reading-generation', err, {
@@ -1687,7 +1582,13 @@ export default function ReadingScreen() {
                 marginBottom: 14,
               }}
             >
-              {isRetrying ? 'Preparing...' : isCheckingForSyncedDay ? 'Looking for Day ' + viewingDay + '...' : 'Reading not ready yet'}
+              {usesDailyRecovery
+                ? dailyHeadline
+                : isRetrying
+                  ? 'Preparing...'
+                  : isCheckingForSyncedDay
+                    ? 'Looking for Day ' + viewingDay + '...'
+                    : 'Reading not ready yet'}
             </Text>
 
             <Text
@@ -1699,12 +1600,14 @@ export default function ReadingScreen() {
                 lineHeight: 24,
               }}
             >
-              {isRetrying
+              {usesDailyRecovery
+                ? dailyBody
+                : isRetrying
                 ? 'Preparing the rest of this series.\nThis may take a moment.'
                 : `Day ${viewingDay} isn't ready yet.\n${daysReady} day${daysReady !== 1 ? 's' : ''} ready so far.`}
             </Text>
 
-            {isWaitingForConnection && !isRetrying && (
+            {!usesDailyRecovery && isWaitingForConnection && !isRetrying && (
               <Text
                 style={{
                   fontFamily: FontFamily.ui,
@@ -1718,7 +1621,7 @@ export default function ReadingScreen() {
               </Text>
             )}
 
-            {!isWaitingForConnection && autoRetrySecondsLeft !== null && !isRetrying && (
+            {!usesDailyRecovery && !isWaitingForConnection && autoRetrySecondsLeft !== null && !isRetrying && (
               <Text
                 style={{
                   fontFamily: FontFamily.ui,
@@ -1732,7 +1635,7 @@ export default function ReadingScreen() {
               </Text>
             )}
 
-            {isRetrying && (
+            {(isRetrying || isDailyChecking || isDailyRunning) && (
               <ActivityIndicator
                 color={colors.accent}
                 size="large"
@@ -1740,7 +1643,7 @@ export default function ReadingScreen() {
               />
             )}
 
-            {retryError && !isRetrying && (
+            {!usesDailyRecovery && retryError && !isRetrying && (
               <Text
                 style={{
                   fontFamily: FontFamily.ui,
@@ -1759,12 +1662,26 @@ export default function ReadingScreen() {
           {!isRetrying && (
             <View style={{ paddingHorizontal: Spacing['7'], paddingBottom: fallbackBottomPadding, gap: Spacing['3'] }}>
               <TouchableOpacity activeOpacity={0.7}
-                onPress={() => void recoverSyncedDay('manual')}
-                disabled={isCheckingForSyncedDay}
+                onPress={async () => {
+                  if (usesDailyRecovery) {
+                    if (canRetryDailyJob) {
+                      await dailyGeneration.retry();
+                    } else {
+                      const synced = await recoverSyncedDay('manual');
+                      if (!synced) await dailyGeneration.checkAgain();
+                    }
+                  } else {
+                    await recoverSyncedDay('manual');
+                  }
+                }}
+                disabled={usesDailyRecovery ? isDailyChecking : isCheckingForSyncedDay}
                 accessibilityRole="button"
-                accessibilityLabel={`Check for day ${viewingDay}`}
-                accessibilityHint="Fetch the latest devotional day from your account"
-                accessibilityState={{ disabled: isCheckingForSyncedDay }}
+                accessibilityLabel={canRetryDailyJob ? `Try preparing day ${viewingDay} again` : `Check for day ${viewingDay}`}
+                accessibilityHint={canRetryDailyJob ? 'Retries this failed reading job' : 'Checks the server for the latest devotional day'}
+                accessibilityState={{
+                  disabled: usesDailyRecovery ? isDailyChecking : isCheckingForSyncedDay,
+                  busy: usesDailyRecovery ? isDailyChecking : isCheckingForSyncedDay,
+                }}
                 style={{
                   backgroundColor: retryCtaButtonBg,
                   paddingVertical: 18,
@@ -1775,10 +1692,10 @@ export default function ReadingScreen() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: 10,
-                  opacity: isCheckingForSyncedDay ? 0.65 : 1,
+                  opacity: (usesDailyRecovery ? isDailyChecking : isCheckingForSyncedDay) ? 0.65 : 1,
                 }}
               >
-                {isCheckingForSyncedDay ? (
+                {(usesDailyRecovery ? isDailyChecking : isCheckingForSyncedDay) ? (
                   <ActivityIndicator color={colors.background} size="small" />
                 ) : (
                   <ArrowsClockwiseIcon size={16} color={btnText} weight="light" />
@@ -1790,14 +1707,18 @@ export default function ReadingScreen() {
                     color: btnText,
                   }}
                 >
-                  {isCheckingForSyncedDay ? 'Checking...' : `Check for Day ${viewingDay}`}
+                  {(usesDailyRecovery ? isDailyChecking : isCheckingForSyncedDay)
+                    ? 'Checking...'
+                    : canRetryDailyJob
+                      ? 'Try Again'
+                      : `Check for Day ${viewingDay}`}
                 </Text>
               </TouchableOpacity>
 
               {/* Generate button - secondary text-style escape hatch, only
                   offered once the primary check above has actually been
                   tried (or failed) so it doesn't compete for attention. */}
-              {(hasAttemptedSyncCheck || !!retryError) && (
+              {!usesDailyRecovery && (hasAttemptedSyncCheck || !!retryError) && (
                 <TouchableOpacity activeOpacity={0.6}
                   onPress={handleRetryGeneration}
                   disabled={isCheckingForSyncedDay}

@@ -61,13 +61,17 @@ async function fetchWithTimeout(
 
 export interface GenerationJobResponse {
   jobId: string;
-  status: "pending" | "processing" | "complete" | "failed";
+  status: "pending" | "processing" | "batched" | "complete" | "failed";
+  jobType?: "initial_arc" | "day" | "onboarding";
   devotionalId?: string;
+  dayNumber?: number;
   result?: GenerationResultPayload;
   error?: string;
   retryCount?: number;
+  manualRetries?: number;
   canRetry?: boolean;
   createdAt?: string;
+  startedAt?: string;
   completedAt?: string;
 }
 
@@ -278,6 +282,49 @@ export async function retryJob(
 
   const payload = await response.json();
   assertSyncSessionCurrent(origin, 'retry generation job');
+  return payload;
+}
+
+/**
+ * Discover the authoritative job for one progressive devotional day.
+ * The server prefers completed content, then an active job, then the latest
+ * failed job. A 404 means this owner has no matching day job.
+ */
+export async function findDayJob(
+  devotionalId: string,
+  dayNumber: number,
+  session?: number,
+): Promise<GenerationJobResponse | null> {
+  if (!Number.isInteger(dayNumber) || dayNumber < 1) {
+    throw new RangeError('dayNumber must be a positive integer');
+  }
+  const origin = resolveGenerationSession(session);
+  assertSyncSessionCurrent(origin, 'find day generation job');
+  const headers = await getAuthHeaders();
+  assertSyncSessionCurrent(origin, 'find day generation job');
+  const response = await fetchWithTimeout(
+    `${PRIMARY_BACKEND_URL}/api/jobs/find-day?devotionalId=${encodeURIComponent(devotionalId)}&dayNumber=${dayNumber}`,
+    { method: 'GET', headers },
+    10_000,
+    origin,
+    'find day generation job',
+  );
+  if (response.status === 404) {
+    assertSyncSessionCurrent(origin, 'find day generation job');
+    return null;
+  }
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as { error?: { code?: string; message?: string } } | null;
+    assertSyncSessionCurrent(origin, 'find day generation job');
+    const detail = body?.error?.message ? ` — ${body.error.message}` : '';
+    throw new ApiError(
+      `Find day job failed: ${response.status}${detail}`,
+      response.status,
+      body?.error?.code ?? 'FIND_DAY_JOB_FAILED',
+    );
+  }
+  const payload = await response.json();
+  assertSyncSessionCurrent(origin, 'find day generation job');
   return payload;
 }
 

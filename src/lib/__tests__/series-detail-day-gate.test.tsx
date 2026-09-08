@@ -66,11 +66,13 @@ jest.mock('expo-router', () => ({
 // Swappable so a test can render a different store state without re-requiring
 // the component (a second React copy breaks hooks).
 let mockDevotionals: Devotional[] = [mockSeries];
+let mockCurrentDevotionalId: string | null = null;
 
 jest.mock('@/lib/store', () => ({
   useUnfoldStore: (selector: (state: unknown) => unknown) =>
     selector({
       devotionals: mockDevotionals,
+      currentDevotionalId: mockCurrentDevotionalId,
       setCurrentDevotional: mockSetCurrentDevotional,
     }),
 }));
@@ -187,6 +189,7 @@ beforeEach(() => {
   mockPush.mockClear();
   mockSetCurrentDevotional.mockClear();
   mockDevotionals = [mockSeries];
+  mockCurrentDevotionalId = null;
 });
 
 describe('SeriesDetailScreen day gating', () => {
@@ -232,6 +235,25 @@ describe('SeriesDetailScreen day gating', () => {
     expect(target.params.dayNumber).toBe('1');
     // Whatever day the list navigates to, the reader must land on that same day.
     expect(resolveInitialReadingDayNumber(mockSeries, Number(target.params.dayNumber))).toBe(1);
+  });
+
+  it('keeps every library re-read read-only after selection changes the current pointer', () => {
+    const firstVisit = renderScreen();
+    const firstRow = findRowContaining(firstVisit, 'Day 1');
+    act(() => {
+      (firstRow!.props.onPress as () => void)();
+    });
+
+    mockCurrentDevotionalId = 'dino-series';
+    const secondVisit = renderScreen();
+    const secondRow = findRowContaining(secondVisit, 'Day 1');
+    act(() => {
+      (secondRow!.props.onPress as () => void)();
+    });
+
+    expect(mockPush).toHaveBeenCalledTimes(2);
+    expect(mockPush.mock.calls[0][0].params.readOnly).toBe('1');
+    expect(mockPush.mock.calls[1][0].params.readOnly).toBe('1');
   });
   it('does NOT claim "Tomorrow" when the next day has no canonical content', () => {
     // Same state, except Day 2's content never materialised (non-canonical id).

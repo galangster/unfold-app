@@ -15,7 +15,7 @@ jest.mock('../api-config', () => ({
   getAuthHeaders: jest.fn(async () => ({ 'X-Device-ID': 'test-device-id' })),
 }));
 
-import { ApiError, pollJobStatus } from '../generation-api';
+import { ApiError, findDayJob, pollJobStatus } from '../generation-api';
 import { classifyPollFailure } from '../generation-poll-outcome';
 
 type ErrorBody = { error?: { code?: string; message?: string } };
@@ -83,5 +83,38 @@ describe('pollJobStatus', () => {
     expect(err).toBeInstanceOf(ApiError);
     expect(err).toMatchObject({ status: 502, code: 'POLL_FAILED', message: 'Poll job failed: 502' });
     expect(classifyPollFailure(err)).toBe('unreachable');
+  });
+});
+
+describe('findDayJob', () => {
+  it('discovers a day job through the owner-scoped identity route', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        jobId: 'job-day-2',
+        jobType: 'day',
+        status: 'processing',
+        devotionalId: 'devotional/one',
+        dayNumber: 2,
+      }),
+    });
+
+    await expect(findDayJob('devotional/one', 2)).resolves.toMatchObject({ jobId: 'job-day-2' });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://backend.test/api/jobs/find-day?devotionalId=devotional%2Fone&dayNumber=2',
+      expect.objectContaining({ method: 'GET' }),
+    );
+  });
+
+  it('returns null when no day job exists', async () => {
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 404 });
+
+    await expect(findDayJob('devo-1', 2)).resolves.toBeNull();
+  });
+
+  it('rejects a non-positive day before making a request', async () => {
+    await expect(findDayJob('devo-1', 0)).rejects.toThrow('dayNumber must be a positive integer');
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

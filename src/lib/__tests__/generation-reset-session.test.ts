@@ -298,24 +298,9 @@ function extractFn(sourceText: string, name: string, kind: ts.ScriptKind = ts.Sc
   return found.getText(source).replace(/^export\s+/, '');
 }
 
-function extractVariableFn(sourceText: string, name: string): string {
-  const source = ts.createSourceFile('extract.tsx', sourceText, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-  let found: ts.Expression | undefined;
-  const walk = (node: ts.Node) => {
-    if (ts.isVariableDeclaration(node) && node.name.getText(source) === name && node.initializer) {
-      found = node.initializer;
-    }
-    ts.forEachChild(node, walk);
-  };
-  walk(source);
-  if (!found) throw new Error(`Missing ${name}`);
-  return found.getText(source);
-}
-
 const serviceSource = fs.readFileSync(path.join(__dirname, '../devotional-service.ts'), 'utf8');
 const fenceSource = fs.readFileSync(path.join(__dirname, '../sync-session-fence.ts'), 'utf8');
 const generationSource = fs.readFileSync(path.join(__dirname, '../generation-session.ts'), 'utf8');
-const readingSource = fs.readFileSync(path.join(__dirname, '../../app/(tabs)/(today)/reading.tsx'), 'utf8');
 
 function loadFenceAndGeneration() {
   const fence = compileBindings(fenceSource);
@@ -430,133 +415,5 @@ describe('actual continuation and retry after reset', () => {
     await expect(continueFn(sampleDevotional, sampleUser)).rejects.toThrow('permanent model failure');
     expect(reports).toHaveLength(1);
     expect(reports[0]).toEqual(expect.arrayContaining(['devotional-continuation']));
-  });
-});
-
-describe('reading 409 cancellation', () => {
-  class ApiError extends Error {
-    status = 409;
-    existingJobId = 'synthetic-old-job';
-    constructor() {
-      super('Already exists');
-    }
-  }
-
-  function compileRetry(bindings: Record<string, unknown>) {
-    return compileBindings(
-      `exports.run=${extractVariableFn(readingSource, 'handleRetryGeneration')}`,
-      bindings,
-    ).run as () => Promise<void>;
-  }
-
-  it('settles the UI callback after reset during 409 recovery and does not write', async () => {
-    const fence = compileBindings(fenceSource);
-    const noop = () => undefined;
-    const writes: unknown[] = [];
-    let rejectRecovery!: (error: Error) => void;
-    let recoverCalls = 0;
-
-    const retry = compileRetry({
-      ...fence,
-      user: {},
-      isRetrying: false,
-      isCheckingForSyncedDay: false,
-      isOnline: true,
-      currentDevotional: { id: 'synthetic-old', title: 'Synthetic old' },
-      currentDevotionalId: 'synthetic-old',
-      viewingDay: 2,
-      recoverSyncedDay: async () => false,
-      recoverCompletedGenerationResult: () => {
-        recoverCalls += 1;
-        if (recoverCalls === 1) return Promise.resolve(null);
-        return new Promise((_resolve, reject) => {
-          rejectRecovery = reject;
-        });
-      },
-      submitGenerationJob: async () => {
-        throw new ApiError();
-      },
-      isCanonicalProgressiveDevotional: () => true,
-      ApiError,
-      Haptics: {
-        impactAsync: noop,
-        notificationAsync: noop,
-        ImpactFeedbackStyle: { Medium: 1 },
-        NotificationFeedbackType: { Success: 1, Error: 2, Warning: 3 },
-      },
-      logBugEvent: noop,
-      logBugError: noop,
-      logger: { error: noop },
-      setIsRetrying: noop,
-      setRetryError: noop,
-      setIsWaitingForConnection: noop,
-      updateDevotionalDays: (...args: unknown[]) => writes.push(args),
-      toFriendlyRemainingDaysGenerationError: (message: string) => message,
-    });
-
-    const settlement = retry().then(
-      () => 'resolved' as const,
-      (error: Error) => error.name,
-    );
-    for (let i = 0; i < 20 && !rejectRecovery; i += 1) {
-      await new Promise<void>((resolve) => {
-        setImmediate(resolve);
-      });
-    }
-    expect(rejectRecovery).toEqual(expect.any(Function));
-
-    const token = (fence.beginLocalResetSession as () => number)();
-    (fence.endLocalResetSession as (token: number) => void)(token);
-    rejectRecovery(new (fence.SyncSessionInvalidatedError as new (action: string) => Error)('synthetic recovery'));
-
-    await expect(settlement).resolves.toBe('resolved');
-    expect(writes).toHaveLength(0);
-  });
-
-  it('still applies a current-session 409 recovery', async () => {
-    const fence = compileBindings(fenceSource);
-    const noop = () => undefined;
-    const writes: unknown[] = [];
-
-    const retry = compileRetry({
-      ...fence,
-      user: {},
-      isRetrying: false,
-      isCheckingForSyncedDay: false,
-      isOnline: true,
-      currentDevotional: { id: 'synthetic-old', title: 'Synthetic old' },
-      currentDevotionalId: 'synthetic-old',
-      viewingDay: 2,
-      recoverSyncedDay: async () => false,
-      recoverCompletedGenerationResult: async ({ existingJobId }: { existingJobId?: string }) => (
-        existingJobId
-          ? { devotionalDay: { dayNumber: 2, title: 'Recovered day' } }
-          : null
-      ),
-      submitGenerationJob: async () => {
-        throw new ApiError();
-      },
-      isCanonicalProgressiveDevotional: () => true,
-      ApiError,
-      Haptics: {
-        impactAsync: noop,
-        notificationAsync: noop,
-        ImpactFeedbackStyle: { Medium: 1 },
-        NotificationFeedbackType: { Success: 1, Error: 2, Warning: 3 },
-      },
-      logBugEvent: noop,
-      logBugError: noop,
-      logger: { error: noop },
-      setIsRetrying: noop,
-      setRetryError: noop,
-      setIsWaitingForConnection: noop,
-      updateDevotionalDays: (...args: unknown[]) => writes.push(args),
-      toFriendlyRemainingDaysGenerationError: (message: string) => message,
-    });
-
-    await expect(retry()).resolves.toBeUndefined();
-    expect(writes).toEqual([
-      ['synthetic-old', [{ dayNumber: 2, title: 'Recovered day' }], 'Synthetic old'],
-    ]);
   });
 });

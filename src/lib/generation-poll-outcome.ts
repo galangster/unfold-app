@@ -69,7 +69,7 @@ export function evaluateGenerationPoll(input: {
     };
   }
 
-  if (input.status === 'pending' || input.status === 'processing') {
+  if (input.status === 'pending' || input.status === 'processing' || input.status === 'batched') {
     return { outcome: { kind: 'waiting' }, consecutiveUnknown: 0 };
   }
 

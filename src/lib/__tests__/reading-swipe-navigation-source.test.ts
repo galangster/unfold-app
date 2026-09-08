@@ -5,6 +5,10 @@ const readingSource = readFileSync(
   join(__dirname, '../../app/(tabs)/(today)/reading.tsx'),
   'utf8',
 );
+const seriesDetailSource = readFileSync(
+  join(__dirname, '../../app/(tabs)/(you)/series-detail.tsx'),
+  'utf8',
+);
 
 describe('reading swipe navigation source contract', () => {
   it('opens the devotional scripture tap sheet instead of immediately routing parseable references to Bible', () => {
@@ -44,21 +48,33 @@ describe('reading swipe navigation source contract', () => {
     expect(lockedToastBlock).toContain('styles.toastText');
   });
 
-  it('makes "Check for Day X" the primary CTA and gates "Prepare Remaining Readings" behind an attempted check', () => {
-    const checkButtonBlock = readingSource.match(
-      /onPress=\{\(\) => void recoverSyncedDay\('manual'\)\}[\s\S]{0,1500}?<\/TouchableOpacity>/,
-    )?.[0] ?? '';
-    expect(checkButtonBlock).toContain('backgroundColor: retryCtaButtonBg');
-
+  it('uses authoritative day recovery for progressive series and keeps batch continuation separate', () => {
+    expect(readingSource).toContain('await dailyGeneration.retry()');
+    expect(readingSource).toContain('if (!synced) await dailyGeneration.checkAgain()');
+    expect(readingSource).toContain('backgroundColor: retryCtaButtonBg');
     expect(readingSource).toContain('setHasAttemptedSyncCheck(true)');
+    expect(readingSource).toContain('!usesDailyRecovery && (hasAttemptedSyncCheck || !!retryError)');
+    expect(readingSource).toContain('Prepare Remaining Readings');
+  });
 
-    const prepareGate = readingSource.match(
-      /\{\(hasAttemptedSyncCheck \|\| !!retryError\) && \([\s\S]{0,1400}?<\/TouchableOpacity>\s*\)\}/,
-    )?.[0] ?? '';
-    expect(prepareGate).toContain('Prepare Remaining Readings');
-    // Demoted to a text-style button — no filled background or border.
-    expect(prepareGate).not.toContain('backgroundColor: retryCtaButtonBg');
-    expect(prepareGate).not.toContain('borderColor');
+  it('pulls persisted day content before enabling progressive job discovery', () => {
+    expect(readingSource).toContain('dailySyncRecoveryKey === dailyRecoveryKey');
+    expect(readingSource).toMatch(
+      /const synced = await recoverSyncedDay\('manual'\);[\s\S]{0,120}if \(!synced\) await dailyGeneration\.checkAgain\(\)/,
+    );
+    expect(readingSource).toContain("pullDevotionalContent(currentDevotional.id, { forceFull: true })");
+  });
+
+  it('re-enables job discovery when revisiting a missing progressive day after its sync pull ran', () => {
+    expect(readingSource).toMatch(
+      /if \(source === 'auto' && syncRecoveryAttemptRef\.current\[attemptKey\]\) \{[\s\S]{0,160}setDailySyncRecoveryKey\(attemptKey\)/,
+    );
+  });
+
+  it('keeps an inactive library series read-only when its reader route becomes current', () => {
+    expect(seriesDetailSource).toContain("readOnly: '1'");
+    expect(seriesDetailSource).not.toContain('readOnly: isActiveSeries');
+    expect(readingSource).toContain("params.readOnly !== '1'");
   });
 
   it('does not keep re-applying the original dayNumber route param after a manual swipe changes days', () => {
