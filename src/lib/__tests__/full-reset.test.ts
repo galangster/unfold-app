@@ -191,12 +191,14 @@ describe('performFullLocalReset', () => {
       '@unfold_exclusive_offer_seen',
       '@unfold_onboarding_offer_seen',
       'inflight-generation-job',
+      'initial-generation-request-id',
       'unfold-sync-outbox-v1',
       // A wiped store must never keep a delta cursor for the Today-tab pull.
       'unfold-devotional-pull-cursor',
       // P3-4 item 3: previously survived a reset.
       'unfold-last-pulled-at',
       'generation-migration-v1-complete',
+      'generation-arc-reconciliation-v2',
       'onboarding-sample-job-v1',
       'active-dynamic-example',
     ];

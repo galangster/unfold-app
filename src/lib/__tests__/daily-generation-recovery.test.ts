@@ -236,6 +236,48 @@ describe('daily generation recovery', () => {
     expect(onDay).toHaveBeenCalledTimes(1);
   });
 
+  it('reports DAY_NOT_READY as a server pacing block, not connection loss', async () => {
+    const { controller, states } = setup({
+      submitGenerationJob: jest.fn(async () => {
+        throw new ApiError("Day 2 isn't ready yet.", 425, 'DAY_NOT_READY');
+      }),
+    });
+
+    await controller.start();
+
+    expect(states.at(-1)).toEqual({ status: 'blocked', reason: 'day-not-ready' });
+    expect(states).not.toContainEqual(expect.objectContaining({ status: 'offline' }));
+  });
+
+  it.each(['SERIES_ARCHIVED', 'SERIES_NOT_ACTIVE'])(
+    'reports %s as a read-only series block, not connection loss',
+    async (code) => {
+      const { controller, states } = setup({
+        submitGenerationJob: jest.fn(async () => {
+          throw new ApiError('Series mutation refused.', 409, code);
+        }),
+      });
+
+      await controller.start();
+
+      expect(states.at(-1)).toEqual({ status: 'blocked', reason: 'series-read-only' });
+      expect(states).not.toContainEqual(expect.objectContaining({ status: 'offline' }));
+    },
+  );
+
+  it('reports an HTTP service response separately from connection loss', async () => {
+    const { controller, states } = setup({
+      submitGenerationJob: jest.fn(async () => {
+        throw new ApiError('Service unavailable.', 503, 'UNAVAILABLE');
+      }),
+    });
+
+    await controller.start();
+
+    expect(states.at(-1)).toEqual({ status: 'service-error' });
+    expect(states).not.toContainEqual(expect.objectContaining({ status: 'offline' }));
+  });
+
   it.each(['pending', 'processing'] as const)(
     'keeps a slow %s job active without submitting another job',
     async (status) => {

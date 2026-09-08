@@ -131,6 +131,30 @@ describe('applyInitialArcResult', () => {
     expect(devotional?.seriesStartDate).toBeTruthy();
   });
 
+  it('keeps the server series anchor when a completed job is recovered days later', () => {
+    const recovered = {
+      ...result,
+      seriesStartDate: '2026-09-04T08:05:00.000Z',
+    };
+
+    applyInitialArcResult(recovered, { user, devotionalLength: 7, session: captureSyncSession() });
+
+    expect(useUnfoldStore.getState().devotionals[0]).toMatchObject({
+      createdAt: recovered.seriesStartDate,
+      seriesStartDate: recovered.seriesStartDate,
+    });
+  });
+
+  it('uses the generated day timestamp for completed jobs created before the series anchor response field', () => {
+    const generatedAt = '2026-09-04T08:04:00.000Z';
+    applyInitialArcResult(
+      { ...result, devotionalDay: { ...day1, generatedAt } },
+      { user, devotionalLength: 7, session: captureSyncSession() },
+    );
+
+    expect(useUnfoldStore.getState().devotionals[0].seriesStartDate).toBe(generatedAt);
+  });
+
   it('falls back to the default title and the reader\'s series length', () => {
     applyInitialArcResult({ devotionalId: 'devo-1', devotionalDay: day1 }, { user: null, devotionalLength: 7, session: captureSyncSession() });
 

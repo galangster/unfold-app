@@ -1,3 +1,4 @@
+import { getDailyGenerationNotice } from '@/lib/daily-generation-messages';
 /**
  * DevotionalCard — 9-state hero card for the home screen.
  *
@@ -471,7 +472,10 @@ function PreparingState({ state }: { state: Extract<DevotionalCardState, { type:
   const { colors } = useTheme();
   const { reducedMotion } = useAccessibleAnimation();
   const shimmerOpacity = useSharedValue(0.55);
-  const isRecoveryBlocked = state.recovery?.status === 'failed' || state.recovery?.status === 'offline';
+  const isRecoveryBlocked = state.recovery?.status === 'failed'
+    || state.recovery?.status === 'offline'
+    || state.recovery?.status === 'blocked'
+    || state.recovery?.status === 'service-error';
 
   useEffect(() => {
     if (isRecoveryBlocked) {
@@ -494,6 +498,7 @@ function PreparingState({ state }: { state: Extract<DevotionalCardState, { type:
 
   const shimmerStyle = useAnimatedStyle(() => ({ opacity: shimmerOpacity.value }));
   const recovery = state.recovery;
+  const notice = getDailyGenerationNotice(recovery, state.dayNumber);
   const isChecking = recovery?.status === 'checking';
   const isFailed = recovery?.status === 'failed';
   const canRetry = isFailed && recovery.canRetry && recovery.failureKind === 'job';
@@ -501,13 +506,15 @@ function PreparingState({ state }: { state: Extract<DevotionalCardState, { type:
     recovery.status === 'checking'
     || recovery.status === 'slow'
     || recovery.status === 'offline'
+    || recovery.status === 'blocked'
+    || recovery.status === 'service-error'
     || recovery.status === 'failed'
   ) ? {
       label: isChecking ? 'Checking...' : canRetry ? 'Try Again' : 'Check Again',
       onPress: canRetry ? recovery.onRetry : recovery.onCheckAgain,
     } : null;
-  const title = recovery?.status === 'offline'
-    ? 'We lost the connection.'
+  const title = notice
+    ? `${notice.title}.`
     : isFailed
       ? recovery.failureKind === 'job'
         ? `We couldn’t prepare Day ${state.dayNumber}.`
@@ -519,8 +526,8 @@ function PreparingState({ state }: { state: Extract<DevotionalCardState, { type:
           : recovery?.status === 'running'
             ? `Preparing Day ${state.dayNumber}.`
             : `Day ${state.dayNumber} is almost ready.`;
-  const subtitle = recovery?.status === 'offline'
-    ? 'Your reading may still be preparing. Reconnect, then check again.'
+  const subtitle = notice
+    ? notice.body
     : isFailed
       ? recovery.failureKind === 'job'
         ? canRetry

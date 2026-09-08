@@ -41,6 +41,10 @@ import {
 } from '@/lib/inflight-initial-arc-watch';
 import { applyInitialArcResult, requireCanonicalDevotionalId, type InitialArcResult } from '@/lib/initial-arc-result';
 import {
+  clearInitialGenerationRequestId,
+  ensureInitialGenerationRequestId,
+} from '@/lib/initial-generation-request';
+import {
   captureSyncSession,
   isGenerationSessionInvalidatedError,
   isSyncSessionCurrent,
@@ -787,6 +791,7 @@ export default function GeneratingScreen() {
         void logBugEvent('generation', 'server-generation-start', { jobType: 'initial_arc' });
 
         const { jobId, devotionalId: submittedDevotionalId } = await submitGenerationJob({
+          requestId: ensureInitialGenerationRequestId(),
           dayNumber: 1,
           jobType: 'initial_arc',
           userContext: buildInitialArcUserContext(user),
@@ -935,6 +940,7 @@ export default function GeneratingScreen() {
           // silently lose the personalization fields (review finding: this
           // branch was missed in the buildInitialArcUserContext refactor).
           const { jobId, devotionalId: submittedDevotionalId } = await submitGenerationJob({
+            requestId: ensureInitialGenerationRequestId(),
             dayNumber: 1,
             jobType: 'initial_arc',
             userContext: buildInitialArcUserContext(user),
@@ -976,6 +982,7 @@ export default function GeneratingScreen() {
     // and re-run the answers the reader just walked away from. The fresh
     // submission's own write replaces it.
     supersedeInflightGenerationJob(pendingJobId);
+    clearInitialGenerationRequestId();
     clearGenerationSession();
     setError(null);
     router.replace('/onboarding');

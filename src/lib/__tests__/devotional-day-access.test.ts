@@ -49,6 +49,14 @@ function devotional(overrides: Partial<Devotional> = {}): Devotional {
 }
 
 describe('devotional day access', () => {
+  it('counts local calendar dates across the spring-forward boundary', () => {
+    const series = devotional({
+      seriesStartDate: new Date(2026, 2, 7, 12, 0, 0).toISOString(),
+    });
+
+    expect(getCalendarDayNumber(series, new Date(2026, 2, 9, 12, 0, 0))).toBe(3);
+  });
+
   it('locks the reader and day menu to the day completed today when currentDay has advanced to tomorrow', () => {
     const series = devotional({
       currentDay: 6,

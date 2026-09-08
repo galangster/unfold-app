@@ -50,6 +50,7 @@ import { animateCardDismiss } from '@/lib/card-dismiss-animation';
 import { getBibleDbStatus, downloadBibleDb } from '@/lib/bible-db';
 import { commitDevotionalPullCursor, pullDevotionalContent } from '@/lib/devotional-sync-pull';
 import { applyPulledDevotionalContent } from '@/lib/devotional-pulled-content';
+import { clearInitialGenerationRequestId } from '@/lib/initial-generation-request';
 import { captureSyncSession, isSyncSessionCurrent } from '@/lib/sync-session-fence';
 import {
   getCurrentDevotional,
@@ -657,6 +658,7 @@ export default function HomeScreen() {
   }, [resumeContext, resumeDevotional, router, setCurrentDevotional]);
 
   const openNewSeriesDiscovery = () => {
+    clearInitialGenerationRequestId();
     router.push({
       pathname: '/onboarding',
       params: { startAt: 'themeType', flow: 'newSeries' },

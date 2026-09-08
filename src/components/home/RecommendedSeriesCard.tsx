@@ -20,6 +20,7 @@ import { useUnfoldStore } from '@/lib/store';
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from '@/lib/api-config';
 import { isQaToolsEnabled } from '@/lib/qa-tools';
 import { getQaTodayProfileMarker } from '@/lib/qa-today-marker';
+import { clearInitialGenerationRequestId } from '@/lib/initial-generation-request';
 
 interface Recommendation {
   theme: string;
@@ -112,6 +113,7 @@ export function RecommendedSeriesCard({
 
   const handleStartStudy = () => {
     if (!recommendation) return;
+    clearInitialGenerationRequestId();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     updateUser({
       selectedTheme: recommendation.theme as any,

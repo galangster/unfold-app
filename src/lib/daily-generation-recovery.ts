@@ -20,6 +20,8 @@ export type DailyGenerationRecoveryState =
   | { status: 'running' | 'slow'; jobId: string }
   | { status: 'failed'; jobId: string; canRetry: boolean; failureKind: 'job' | 'invalid-result' }
   | { status: 'offline'; jobId?: string }
+  | { status: 'blocked'; reason: 'day-not-ready' | 'series-read-only' }
+  | { status: 'service-error'; jobId?: string }
   | { status: 'complete'; jobId?: string };
 
 export interface DailyGenerationRecoveryDependencies {
@@ -113,6 +115,23 @@ export function createDailyGenerationRecovery(options: ControllerOptions): Daily
     publish({ status: 'offline', ...(jobId ? { jobId } : {}) });
   };
 
+  const markRequestFailure = (error: unknown, jobId?: string) => {
+    if (!isCurrent()) return;
+    if (!(error instanceof ApiError)) {
+      markConnectionLost(jobId);
+      return;
+    }
+    if (error.code === 'DAY_NOT_READY') {
+      publish({ status: 'blocked', reason: 'day-not-ready' });
+      return;
+    }
+    if (error.code === 'SERIES_ARCHIVED' || error.code === 'SERIES_NOT_ACTIVE') {
+      publish({ status: 'blocked', reason: 'series-read-only' });
+      return;
+    }
+    publish({ status: 'service-error', ...(jobId ? { jobId } : {}) });
+  };
+
   const markInvalid = (jobId: string) => {
     knownJobs.delete(identityKey);
     publish({
@@ -135,7 +154,7 @@ export function createDailyGenerationRecovery(options: ControllerOptions): Daily
           job = await deps.pollJobStatus(job.jobId, session);
         } catch (error) {
           if (isSessionCancellation(error) || !isCurrent()) return;
-          markConnectionLost(initialJob.jobId);
+          markRequestFailure(error, initialJob.jobId);
           return;
         }
         if (!isCurrent() || token !== pollToken) return;
@@ -171,9 +190,11 @@ export function createDailyGenerationRecovery(options: ControllerOptions): Daily
           return;
         } catch (pollError) {
           if (isSessionCancellation(pollError) || !isCurrent()) return;
+          markRequestFailure(pollError, job.jobId);
+          return;
         }
       }
-      markConnectionLost(job.jobId);
+      markRequestFailure(error, job.jobId);
     } finally {
       if (demandFlights.get(demandKey) === shared) demandFlights.delete(demandKey);
     }
@@ -296,7 +317,7 @@ export function createDailyGenerationRecovery(options: ControllerOptions): Daily
         } catch (error) {
           if (isSessionCancellation(error) || !isCurrent()) return;
           if (!(error instanceof ApiError) || (error.status !== 400 && error.status !== 404)) {
-            markConnectionLost(known.jobId);
+            markRequestFailure(error, known.jobId);
             return;
           }
           knownJobs.delete(identityKey);
@@ -329,11 +350,11 @@ export function createDailyGenerationRecovery(options: ControllerOptions): Daily
           await observe(adopted);
           return;
         }
-        markConnectionLost();
+        markRequestFailure(error);
       }
     } catch (error) {
       if (isSessionCancellation(error) || !isCurrent()) return;
-      markConnectionLost(currentState.status === 'running' || currentState.status === 'slow' ? currentState.jobId : undefined);
+      markRequestFailure(error, currentState.status === 'running' || currentState.status === 'slow' ? currentState.jobId : undefined);
     }
   };
 
@@ -378,7 +399,7 @@ export function createDailyGenerationRecovery(options: ControllerOptions): Daily
         await observe(next);
       } catch (error) {
         if (isSessionCancellation(error) || !isCurrent()) return;
-        markConnectionLost(failedJobId);
+        markRequestFailure(error, failedJobId);
       } finally {
         if (retryFlights.get(retryKey) === shared) retryFlights.delete(retryKey);
       }
