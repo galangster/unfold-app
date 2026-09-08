@@ -31,7 +31,7 @@ import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { getContentAwareMiddayMessage, getContentAwareEveningMessage } from '@/constants/check-in-messages';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { Duration, Ease } from '@/constants/animations';
-import { submitGenerationJob, recoverCompletedGenerationResult, pollJobStatus, ApiError } from '@/lib/generation-api';
+import { pollJobStatus } from '@/lib/generation-api';
 import { toFriendlyOnboardingGenerationError } from '@/lib/generation-errors';
 import {
   hasInflightSeriesLanded,
@@ -464,84 +464,13 @@ export default function HomeScreen() {
     shouldAutoPrepareCurrentDevotionalDay(currentDevotional, premiumPolicy)
   ), [currentDevotional, premiumPolicy]);
 
-  // Content discovery flow: check for server-generated content before submitting a new job.
-  // 1. Check if a completed job already exists on the server (e.g., from midnight cron)
-  // 2. If found, apply it directly — no generation needed
-  // 3. If not, submit a new generation job as a client-side fallback
-  // 4. If 409 (already generated), recover by fetching the existing job result
-  const autoGenAttemptedRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!isPreparingCurrentDay || !currentDevotional) return;
-
-    const devId = currentDevotional.id;
-    const dayNum = currentDevotional.currentDay;
-    const key = `${devId}-${dayNum}`;
-    if (autoGenAttemptedRef.current === key) return;
-
-    let cancelled = false;
-    const session = captureSyncSession();
-
-    (async () => {
-      try {
-        const recovered = await recoverCompletedGenerationResult({
-          devotionalId: devId,
-          dayNumber: dayNum,
-          session,
-        });
-        if (cancelled || !isSyncSessionCurrent(session)) return;
-
-        if (recovered?.devotionalDay) {
-          addGeneratedDay(devId, recovered.devotionalDay);
-          autoGenAttemptedRef.current = key;
-          logger.log('[home] Applied existing server content for day', dayNum);
-          return;
-        }
-
-        // Step 2: No content exists — submit generation job
-        const resp = await submitGenerationJob({
-          devotionalId: devId,
-          dayNumber: dayNum,
-          jobType: 'day',
-          session,
-        });
-        if (cancelled || !isSyncSessionCurrent(session)) return;
-        autoGenAttemptedRef.current = key;
-        logger.log('[home] Submitted generation job:', resp.jobId);
-      } catch (err) {
-        if (cancelled || !isSyncSessionCurrent(session)) return;
-
-        // Handle 409 with structured error — server already has this day's content
-        if (err instanceof ApiError && err.status === 409) {
-          const recovered = await recoverCompletedGenerationResult({
-            devotionalId: devId,
-            dayNumber: dayNum,
-            existingJobId: err.existingJobId,
-            session,
-          }).catch(() => null);
-          if (cancelled || !isSyncSessionCurrent(session)) return;
-          if (recovered?.devotionalDay) {
-            addGeneratedDay(devId, recovered.devotionalDay);
-            autoGenAttemptedRef.current = key;
-            return;
-          }
-        }
-        // Don't set autoGenAttemptedRef — allow retry on next render cycle
-        logger.warn('[home] Auto-generation failed, will retry:', err instanceof Error ? err.message : err);
-      }
-    })();
-
-    return () => { cancelled = true; };
-  }, [isPreparingCurrentDay, currentDevotional]);
-
-  // Keep looking for the day while the "preparing" card is up. Queuing the
-  // job above was fire-and-forget: the card stayed until the tab lost focus
-  // and regained it, because nothing here re-checked the server once the job
-  // finished. The watch ends when the day lands (isPreparingCurrentDay flips)
-  // or when the reader leaves the tab.
-  useGeneratedDayWatch({
+  const dailyGeneration = useGeneratedDayWatch({
     devotionalId: currentDevotional?.id,
     dayNumber: currentDevotional?.currentDay,
     enabled: isPreparingCurrentDay && isTodayFocused,
+    canMutate: premiumPolicy === 'granted'
+      && currentDevotional?.id === currentDevotionalId
+      && isPreparingCurrentDay,
     onDay: addGeneratedDay,
   });
 
@@ -1309,6 +1238,13 @@ export default function HomeScreen() {
     dayLabel: getReadingDayLabel(),
     isJourneyComplete,
     isPreparing: !hasReadToday && (isPreparingCurrentDay || (!currentDayData && !!currentDevotional && premiumPolicy !== 'denied')),
+    dailyRecovery: isPreparingCurrentDay
+      ? {
+          ...dailyGeneration.state,
+          onCheckAgain: dailyGeneration.checkAgain,
+          onRetry: dailyGeneration.retry,
+        }
+      : null,
     preparingInflightSeries: isPreparingInflightSeries
       ? { seriesTitle: resolvePreparingFirstSeriesTitle(generationSessionTitle) }
       : null,

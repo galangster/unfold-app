@@ -449,6 +449,101 @@ describe('DevotionalCard first-series-failed', () => {
   });
 });
 
+describe('DevotionalCard daily recovery', () => {
+  const baseState: Extract<DevotionalCardState, { type: 'preparing' }> = {
+    type: 'preparing',
+    progress: 0,
+    seriesTitle: 'Faith Foundations',
+    dayNumber: 2,
+    onCreateNew: noop,
+  };
+
+  it('shows a safe failed-job message and routes Try Again to the job retry', () => {
+    const onRetry = jest.fn(async () => undefined);
+    const tree = renderInAct(
+      <DevotionalCard
+        state={{
+          ...baseState,
+          recovery: {
+            status: 'failed',
+            jobId: 'job-1',
+            canRetry: true,
+            failureKind: 'job',
+            onCheckAgain: jest.fn(async () => undefined),
+            onRetry,
+          },
+        }}
+      />,
+    );
+
+    expect(tree.root.findAll((node: any) => textContent(node).includes('Your series is safe.')).length).toBeGreaterThan(0);
+    act(() => findByLabel(tree, 'Try Again')[0].props.onPress());
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers Check Again without retry copy when the server exhausted retries', () => {
+    const tree = renderInAct(
+      <DevotionalCard
+        state={{
+          ...baseState,
+          recovery: {
+            status: 'failed',
+            jobId: 'job-1',
+            canRetry: false,
+            failureKind: 'job',
+            onCheckAgain: jest.fn(async () => undefined),
+            onRetry: jest.fn(async () => undefined),
+          },
+        }}
+      />,
+    );
+
+    expect(findByLabel(tree, 'Check Again').length).toBeGreaterThan(0);
+    expect(tree.root.findAll((node: any) => textContent(node).includes('Try this reading again'))).toHaveLength(0);
+  });
+
+  it('keeps Check Again visible with disabled and busy feedback while checking', () => {
+    const tree = renderInAct(
+      <DevotionalCard
+        state={{
+          ...baseState,
+          recovery: {
+            status: 'checking',
+            operation: 'discover',
+            onCheckAgain: jest.fn(async () => undefined),
+            onRetry: jest.fn(async () => undefined),
+          },
+        }}
+      />,
+    );
+
+    const button = findByLabel(tree, 'Checking...')[0];
+    expect(button.props.disabled).toBe(true);
+    expect(button.props.accessibilityState).toEqual({ disabled: true, busy: true });
+    expect(tree.root.findAllByType(require('react-native').ActivityIndicator)).toHaveLength(1);
+    expect(tree.root.findAll((node: any) => textContent(node).includes('Looking for Day 2.')).length).toBeGreaterThan(0);
+  });
+
+  it('labels an active job as preparing without claiming it is almost ready', () => {
+    const tree = renderInAct(
+      <DevotionalCard
+        state={{
+          ...baseState,
+          recovery: {
+            status: 'running',
+            jobId: 'job-1',
+            onCheckAgain: jest.fn(async () => undefined),
+            onRetry: jest.fn(async () => undefined),
+          },
+        }}
+      />,
+    );
+
+    expect(tree.root.findAll((node: any) => textContent(node).includes('Preparing Day 2.')).length).toBeGreaterThan(0);
+    expect(tree.root.findAll((node: any) => textContent(node).includes('almost ready')).length).toBe(0);
+  });
+});
+
 function textContent(node: any): string {
   return node.children
     .map((child: any) => (typeof child === 'string' ? child : textContent(child)))

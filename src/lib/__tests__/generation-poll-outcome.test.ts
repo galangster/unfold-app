@@ -78,12 +78,16 @@ describe('evaluateGenerationPoll', () => {
     ).toEqual({ kind: 'failed', canRetry: true, error: 'Generation failed on server' });
   });
 
-  it('keeps waiting on pending / processing and resets the unknown counter', () => {
+  it('keeps waiting on pending, processing, and batched jobs and resets the unknown counter', () => {
     expect(evaluateGenerationPoll({ status: 'pending', priorConsecutiveUnknown: 2 })).toEqual({
       outcome: { kind: 'waiting' },
       consecutiveUnknown: 0,
     });
     expect(evaluateGenerationPoll({ status: 'processing', priorConsecutiveUnknown: 2 })).toEqual({
+      outcome: { kind: 'waiting' },
+      consecutiveUnknown: 0,
+    });
+    expect(evaluateGenerationPoll({ status: 'batched', priorConsecutiveUnknown: 2 })).toEqual({
       outcome: { kind: 'waiting' },
       consecutiveUnknown: 0,
     });

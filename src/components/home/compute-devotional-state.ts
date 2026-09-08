@@ -9,16 +9,21 @@
 import type { DevotionalDay, Devotional } from '@/lib/store';
 import type { PremiumAccessPolicy } from '@/lib/premium-access-policy';
 import type { ReflectionStatus } from '@/lib/reflection-status';
+import type { DailyGenerationRecoveryState } from '@/lib/daily-generation-recovery';
 
 export type { ReflectionStatus } from '@/lib/reflection-status';
 
 // ─── State discriminated union ──────────────────────────────────
 
 export type DayLabel = 'Overdue' | 'Today' | 'Tomorrow';
+export type DailyRecoveryCardState = DailyGenerationRecoveryState & {
+  onCheckAgain: () => Promise<void>;
+  onRetry: () => Promise<void>;
+};
 
 export type DevotionalCardState =
   | { type: 'empty'; onCreateNew: () => void }
-  | { type: 'preparing'; progress: number; seriesTitle: string; dayNumber: number; onCreateNew: () => void }
+  | { type: 'preparing'; progress: number; seriesTitle: string; dayNumber: number; onCreateNew: () => void; recovery?: DailyRecoveryCardState }
   | { type: 'first-series-failed'; message: string; onTryAgain: () => void; onDismiss: () => void }
   | {
       type: 'premium-paused';
@@ -100,6 +105,7 @@ export interface ComputeInput {
   dayLabel: DayLabel;
   isJourneyComplete: boolean;
   isPreparing: boolean;
+  dailyRecovery?: DailyRecoveryCardState | null;
   /**
    * A series the reader left /generating for ("Go home — we'll keep writing")
    * is still being written on the server and has not reached the store.
@@ -179,6 +185,7 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
     dayLabel,
     isJourneyComplete,
     isPreparing,
+    dailyRecovery = null,
     preparingInflightSeries = null,
     inflightSeriesFailed = null,
     premiumPolicy,
@@ -252,6 +259,7 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
       seriesTitle,
       dayNumber: currentDevotional.currentDay,
       onCreateNew,
+      ...(dailyRecovery ? { recovery: dailyRecovery } : {}),
     };
   }
 
@@ -264,6 +272,7 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
       seriesTitle,
       dayNumber: currentDevotional.currentDay,
       onCreateNew,
+      ...(dailyRecovery ? { recovery: dailyRecovery } : {}),
     };
   }
 
