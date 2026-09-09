@@ -3,6 +3,35 @@ const mockStore = new Map<string, string>();
 let mockDeviceId = 'old-device-id';
 /** Top-level entries of the cache directory as readDirectoryAsync reports them. */
 const mockCacheEntries: string[] = [];
+const mockVoiceFileDelete = jest.fn();
+const mockVoiceDirectoryDelete = jest.fn();
+
+jest.mock('expo-crypto', () => ({
+  CryptoDigestAlgorithm: { SHA256: 'SHA256' },
+  digest: jest.fn(),
+  randomUUID: jest.fn(),
+}));
+jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
+jest.mock('expo-file-system', () => {
+  class MockFile {
+    exists = true;
+    uri: string;
+    constructor(...parts: (string | { uri?: string })[]) {
+      this.uri = parts.map((part) => typeof part === 'string' ? part : part.uri ?? '').join('/');
+    }
+    delete() { mockVoiceFileDelete(this.uri); }
+  }
+  return {
+    File: MockFile,
+    Directory: class {
+      exists = true;
+      uri = 'file:///documents/voice-check-ins';
+      create = jest.fn();
+      delete() { mockVoiceDirectoryDelete(); }
+    },
+    Paths: { document: { uri: 'file:///documents' } },
+  };
+});
 
 jest.mock('expo-file-system/legacy', () => ({
   documentDirectory: 'file:///documents/',
@@ -201,6 +230,7 @@ describe('performFullLocalReset', () => {
       'generation-arc-reconciliation-v2',
       'onboarding-sample-job-v1',
       'active-dynamic-example',
+      '@unfold_voice_check_in_draft_v1',
     ];
     for (const key of required) {
       expect(FULL_RESET_MMKV_KEYS).toContain(key);
@@ -329,6 +359,23 @@ describe('performFullLocalReset', () => {
 
     expect(fenceDuringFirstAwait).toBe(true);
     expect(isLocalResetInProgress()).toBe(false);
+  });
+
+  it('deletes the persisted voice draft audio during a full reset', async () => {
+    mockStore.set('@unfold_voice_check_in_draft_v1', JSON.stringify({
+      version: 1,
+      idempotencyKey: 'draft-1',
+      audioUri: 'file:///documents/draft.m4a',
+      durationMs: 5_014,
+      capturedAt: '2026-09-08T12:00:00.000Z',
+      status: 'failed',
+    }));
+
+    await performFullLocalReset();
+
+    expect(mockVoiceFileDelete).toHaveBeenCalledWith('file:///documents/draft.m4a');
+    expect(mockVoiceDirectoryDelete).toHaveBeenCalledTimes(1);
+    expect(mockStore.has('@unfold_voice_check_in_draft_v1')).toBe(false);
   });
 
   it('asks the server to erase this device under the OLD identity, before rotating it', async () => {
