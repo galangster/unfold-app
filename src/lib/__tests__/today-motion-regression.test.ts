@@ -94,7 +94,7 @@ describe('Today tab motion guardrails', () => {
   });
 
   it('passes live route focus to the completed-day ambient canvas on first paint', () => {
-    expect(todayIndexSource).toContain("import { useRouter, useFocusEffect, useIsFocused } from 'expo-router';");
+    expect(todayIndexSource).toMatch(/import\s*\{[^}]*useIsFocused[^}]*\}\s*from 'expo-router';/);
     expect(todayIndexSource).toContain('const isTodayFocused = useIsFocused();');
     expect(todayIndexSource).not.toContain('const [isTodayFocused, setIsTodayFocused] = useState(false);');
     expect(todayIndexSource).toContain('screenFocused={isTodayFocused}');

@@ -38,6 +38,12 @@ jest.mock('expo-file-system/legacy', () => ({
   readDirectoryAsync: jest.fn(async () => []),
 }));
 
+jest.mock('../voice-check-ins', () => ({
+  VOICE_CHECK_IN_DRAFT_KEY: '@unfold_voice_check_in_draft_v1',
+  cancelVoiceCheckInUploads: jest.fn(),
+  clearVoiceCheckInLocalData: jest.fn(),
+}));
+
 jest.mock('../mmkv-storage', () => {
   const store = new Map<string, string>();
   let deviceId = 'synthetic-old';

@@ -213,6 +213,11 @@ async function setupMountedHook() {
     SERVER_ERASE_TIMEOUT_MS: 5,
     requestServerAccountErase: jest.fn(async () => ({ ok: true })),
   }));
+  jest.doMock('@/lib/voice-check-ins', () => ({
+    VOICE_CHECK_IN_DRAFT_KEY: '@unfold_voice_check_in_draft_v1',
+    cancelVoiceCheckInUploads: jest.fn(),
+    clearVoiceCheckInLocalData: jest.fn(),
+  }));
   jest.doMock('expo-file-system/legacy', () => ({
     documentDirectory: null,
     cacheDirectory: null,
@@ -319,6 +324,7 @@ afterEach(() => {
   jest.dontMock('@/lib/onboarding-telemetry');
   jest.dontMock('@/lib/generation-api');
   jest.dontMock('@/lib/rate-limit');
+  jest.dontMock('@/lib/voice-check-ins');
   jest.dontMock('@tanstack/react-query');
 });
 
