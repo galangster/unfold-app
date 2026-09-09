@@ -271,13 +271,17 @@ async function setupClient({
     jest.doMock('@/lib/onboarding-telemetry', () => ({ ABANDONED_MARKER_KEY: 'onboarding-abandon' }));
     jest.doMock('@/lib/generation-api', () => ({ DYNAMIC_EXAMPLE_KEY: 'active-dynamic-example' }));
     jest.doMock('@/lib/rate-limit', () => ({ RATE_LIMIT_STORAGE_KEY: '@unfold_rate_limits' }));
+    jest.doMock('@/lib/voice-check-ins', () => ({
+      VOICE_CHECK_IN_DRAFT_KEY: '@unfold_voice_check_in_draft_v1',
+      cancelVoiceCheckInUploads: jest.fn(),
+      clearVoiceCheckInLocalData: jest.fn(),
+    }));
   }
 
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const client = require('../revenuecatClient') as typeof import('../revenuecatClient');
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const fence = require('../sync-session-fence') as typeof import('../sync-session-fence');
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const reset = withReset
     ? jest.requireActual('../full-reset') as typeof import('../full-reset')
     : null;
@@ -337,6 +341,7 @@ afterEach(() => {
   jest.dontMock('@/lib/onboarding-telemetry');
   jest.dontMock('@/lib/generation-api');
   jest.dontMock('@/lib/rate-limit');
+  jest.dontMock('@/lib/voice-check-ins');
 });
 
 describe('MP-1 RevenueCat identity after reset', () => {

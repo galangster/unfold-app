@@ -79,6 +79,11 @@ import {
   endLocalResetSession,
   isLocalResetInProgress,
 } from '@/lib/sync-session-fence';
+import {
+  VOICE_CHECK_IN_DRAFT_KEY,
+  cancelVoiceCheckInUploads,
+  clearVoiceCheckInLocalData,
+} from '@/lib/voice-check-ins';
 
 /**
  * All MMKV keys that hold user-specific data and must be cleared on reset.
@@ -109,6 +114,7 @@ export const FULL_RESET_MMKV_KEYS: readonly string[] = [
   ONBOARDING_DRAFT_KEY,
   ONBOARDING_ABANDON_MARKER_KEY,
   DYNAMIC_EXAMPLE_KEY,
+  VOICE_CHECK_IN_DRAFT_KEY,
   // NOTE: 'unfold-trial-notification' is an MMKV INSTANCE id, not a key here — cleared via clearTrialNotificationMirror() below (REVM-8).
 ] as const;
 
@@ -216,6 +222,9 @@ export function performFullLocalReset(options: FullResetOptions = {}): Promise<F
   // synchronous turn so ordinary retries and store actions cannot reopen
   // the old target before rotation.
   const resetToken = beginLocalResetSession();
+  // Cancel before the first await. This prevents an upload callback from
+  // restoring voice data after the reset clears local ownership.
+  cancelVoiceCheckInUploads();
   invalidateRevenueCatIdentityReadiness();
   useUIState.getState().clearRevenueCatResolved();
   let tracked: Promise<FullResetResult>;
@@ -262,6 +271,10 @@ async function runFullLocalReset(options: FullResetOptions): Promise<FullResetRe
   // 2. Zustand store reset
   store.reset();
   useCompanionChatStore.getState().clearAllConversations();
+
+  // Voice audio is stored outside Zustand. Clear ownership before the MMKV sweep
+  // so a late upload callback cannot restore an erased draft.
+  clearVoiceCheckInLocalData();
 
   // 3. MMKV key wipe — enumerated keys, then prefixed families from the live key list
   for (const key of FULL_RESET_MMKV_KEYS) {

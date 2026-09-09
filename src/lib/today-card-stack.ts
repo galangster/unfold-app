@@ -1,6 +1,7 @@
 export const TODAY_STACK_CARD_KINDS = [
   'resume',
   'midday',
+  'voice-check-in',
   'evening',
   'bridge',
   'bridge-loading',

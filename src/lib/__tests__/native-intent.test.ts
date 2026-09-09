@@ -5,15 +5,42 @@
 jest.mock('@/lib/logger', () => ({
   logger: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
+jest.mock('@/lib/qa-tools', () => ({ isQaToolsEnabled: jest.fn(() => false) }));
 
 import { redirectSystemPath } from '../../app/+native-intent';
 import * as allowlist from '../deep-link-allowlist';
 import { logger } from '@/lib/logger';
+import { isQaToolsEnabled } from '@/lib/qa-tools';
 
 describe('redirectSystemPath', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.restoreAllMocks();
+    jest.mocked(isQaToolsEnabled).mockReturnValue(false);
+  });
+
+  it('admits only the exact voice preview route while QA and development gates are active', () => {
+    const path = 'unfold://dev/voice-check-in?state=review&theme=light';
+    expect(redirectSystemPath({ path, initial: false })).toBe('/');
+    jest.mocked(isQaToolsEnabled).mockReturnValue(true);
+    expect(redirectSystemPath({ path, initial: false })).toBe(path);
+    const realQaPath = 'unfold://dev/voice-check-in?transport=real&fixtureUrl=http%3A%2F%2F127.0.0.1%3A8789%2Ftest-fixture.m4a';
+    expect(redirectSystemPath({ path: realQaPath, initial: false })).toBe(realQaPath);
+    for (const invalid of [
+      'unfold://dev/voice-check-in/extra',
+      'unfold://dev/voice-check-in?state=unknown',
+      'unfold://dev/voice-check-in?theme=light&upload=1',
+      'unfold://dev/voice-check-in?fixtureUrl=http%3A%2F%2F127.0.0.1%3A8789%2Ftest.m4a',
+      'unfold://dev/voice-check-in?transport=real&fixtureUrl=https%3A%2F%2Fexample.com%2Ftest.m4a',
+      'unfold://dev/voice-check-in?transport=real&fixtureUrl=http%3A%2F%2F192.168.1.2%2Ftest.m4a',
+    ]) expect(redirectSystemPath({ path: invalid, initial: false })).toBe('/');
+    const originalDev = Reflect.get(global, '__DEV__');
+    Reflect.set(global, '__DEV__', false);
+    try {
+      expect(redirectSystemPath({ path, initial: false })).toBe('/');
+    } finally {
+      Reflect.set(global, '__DEV__', originalDev);
+    }
   });
 
   it('passes accepted URLs through untouched (widgets, initial and warm)', () => {

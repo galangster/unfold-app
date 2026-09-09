@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react'
 import { drainSyncOutbox } from '@/lib/sync-outbox';
 import { usePrevious } from '@/hooks/usePrevious';
 import { View, StyleSheet, Alert, type LayoutChangeEvent } from 'react-native';
-import { useRouter, useFocusEffect, useIsFocused } from 'expo-router';
+import { useRouter, useFocusEffect, useIsFocused, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -19,6 +19,7 @@ import { RippleLoader } from '@/components/RippleLoader';
 import { useUIState } from '@/lib/ui-state';
 import { StreakCelebration } from '@/components/StreakCelebration';
 import { CheckInSheet } from '@/components/CheckInSheet';
+import { VoiceCheckInSheet } from '@/components/voice-check-in/VoiceCheckInSheet';
 import { AmbientArtCanvas } from '@/components/home/AmbientArtCanvas';
 import { syncWidgets } from '@/lib/widget-bridge';
 import { generateBridge, type BridgeCheckIn } from '@/lib/bridge-service';
@@ -115,6 +116,7 @@ const REVEAL_RESUME_WINDOW_MS = 15_000;
 
 export default function HomeScreen() {
   const router = useRouter();
+  const routeParams = useLocalSearchParams<{ voiceCheckInPrototype?: string | string[]; voiceCheckInDemo?: string }>();
   const { colors } = useTheme();
   const { entering } = useAccessibleAnimation();
   const user = useUnfoldStore((s) => s.user);
@@ -239,9 +241,16 @@ export default function HomeScreen() {
 
   const [clockNow, setClockNow] = useState(() => new Date());
   const [showCheckInSheet, setShowCheckInSheet] = useState(false);
+  const [showVoiceCheckInSheet, setShowVoiceCheckInSheet] = useState(false);
+  const [voiceCheckInAutoStart, setVoiceCheckInAutoStart] = useState(false);
   const [showPremiumSheet, setShowPremiumSheet] = useState(false);
   const [stackPremiumFeature, setStackPremiumFeature] = useState<TodayPremiumFeature | null>(null);
   const { gate, showExclusiveOffer, dismissOffer } = useCreationGate();
+  const voiceCheckInPrototypeParam = Array.isArray(routeParams.voiceCheckInPrototype)
+    ? routeParams.voiceCheckInPrototype[0]
+    : routeParams.voiceCheckInPrototype;
+  const voiceCheckInsEnabled = process.env.EXPO_PUBLIC_ENABLE_VOICE_CHECK_INS === '1'
+    || (isQaToolsEnabled() && voiceCheckInPrototypeParam === '1');
 
   // Update clock-driven Today card visibility every minute — but only while
   // this screen is focused. Home stays mounted behind other tabs and the
@@ -694,6 +703,18 @@ export default function HomeScreen() {
     setShowCheckInSheet(true);
   }, [gate]);
 
+  const handleVoiceCheckIn = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setVoiceCheckInAutoStart(true);
+    setShowVoiceCheckInSheet(true);
+  }, []);
+
+  const handleVoiceCheckInHistory = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setVoiceCheckInAutoStart(false);
+    setShowVoiceCheckInSheet(true);
+  }, []);
+
   const handleCheckInComplete = (data: {
     mood: MoodLevel;
     moodLabel: string;
@@ -1048,6 +1069,35 @@ export default function HomeScreen() {
       });
     }
 
+    if (voiceCheckInsEnabled) {
+      cards.push({
+        id: 'today-stack-voice-check-in-prototype',
+        kind: 'voice-check-in',
+        priority: 450,
+        eyebrow: 'Companion note',
+        title: 'How’s your day going?',
+        body: 'Record, review, and choose when to send a voice check-in for transcription.',
+        actions: [
+          {
+            label: 'Record',
+            onPress: handleVoiceCheckIn,
+            accessibilityLabel: 'Record a voice check-in',
+            accessibilityHint: 'Starts recording after microphone permission',
+          },
+          {
+            label: 'Saved check-ins',
+            onPress: handleVoiceCheckInHistory,
+            accessibilityLabel: 'Review saved voice check-ins',
+            accessibilityHint: 'Opens saved transcripts without starting the microphone',
+            tone: 'secondary',
+          },
+        ],
+        accessibilityLabel: 'Voice check-in. How is your day going?',
+        accessibilityHint: 'Opens voice recording and saved check-ins',
+        testID: 'today-stack-card-voice-check-in-prototype',
+      });
+    }
+
     if (shouldShowEveningStackCard) {
       cards.push({
         id: 'today-stack-evening',
@@ -1215,6 +1265,7 @@ export default function HomeScreen() {
     handleDismissRememberThisCard,
     handleDismissResumeCard,
     handleEveningWindDown,
+    handleVoiceCheckIn,
     handlePremiumNudgeStackAction,
     handleSavedEchoPress,
     middayMessage,
@@ -1228,6 +1279,8 @@ export default function HomeScreen() {
     shouldShowEveningStackCard,
     shouldShowMiddayStackCard,
     validBridgeText,
+    voiceCheckInsEnabled,
+    handleVoiceCheckInHistory,
   ]);
 
   const hasOptionalTodayStack = todayStackCards.length > 0;
@@ -1381,6 +1434,16 @@ export default function HomeScreen() {
           chips={currentDayData?.checkInChips}
           devotionalId={currentDevotional.id}
           dayNumber={middayCheckInDay ?? currentDevotional.currentDay}
+        />
+      )}
+
+      {voiceCheckInsEnabled && (
+        <VoiceCheckInSheet
+          visible={showVoiceCheckInSheet}
+          onClose={() => setShowVoiceCheckInSheet(false)}
+          demoMode={isQaToolsEnabled() && routeParams.voiceCheckInDemo === '1'}
+          initialDemoPhase="recording"
+          autoStart={voiceCheckInAutoStart}
         />
       )}
 
