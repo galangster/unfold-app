@@ -67,7 +67,10 @@ describe('Today tab motion guardrails', () => {
     expect(todayPastDevotionalsSource).toContain("export { default } from '../(you)/past-devotionals';");
     expect(todaySeriesDetailSource).toContain("export { default } from '../(you)/series-detail';");
     expect(bentoGridSource).toContain("pathname: '/(tabs)/(today)/past-devotionals'");
-    expect(bentoGridSource).toContain("pathname: '/(tabs)/(today)/my-content'");
+    // The Saved tile opens Journal › Saved (highlight Phase C item 10); Library is no longer a Today destination.
+    expect(bentoGridSource).toContain("pathname: '/(tabs)/(journal)'");
+    expect(bentoGridSource).toContain("params: { segment: 'saved' }");
+    expect(bentoGridSource).not.toContain("pathname: '/(tabs)/(today)/my-content'");
     expect(bentoGridSource).not.toContain("pathname: '/(tabs)/(you)/past-devotionals'");
     expect(bentoGridSource).not.toContain("pathname: '/(tabs)/(you)/my-content'");
     expect(seriesCarouselSource).toContain("pathname: '/(tabs)/(today)/past-devotionals'");

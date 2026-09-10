@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView } from 'react-native';
 import { FlashList, type ListRenderItem } from '@shopify/flash-list';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -15,298 +15,46 @@ import Animated, {
   useReducedMotion,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { CaretLeftIcon, BookOpenIcon, HighlighterIcon, BookmarkSimpleIcon, PencilLineIcon, MagnifyingGlassIcon, XIcon } from '@/components/icons';
+import { CaretLeftIcon, HighlighterIcon, BookmarkSimpleIcon, PencilLineIcon, MagnifyingGlassIcon, XIcon } from '@/components/icons';
 import { useCrossTabBack } from '@/hooks/useCrossTabBack';
 import { useSavedHighlights, SavedItem, SavedItemSource } from '@/hooks/useSavedHighlights';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
-import { alpha } from '@/components/ui';
 import { useTheme } from '@/lib/theme';
-import { useUnfoldStore, BibleHighlight, Bookmark, Devotional, Highlight, HighlightColor, BibleHighlightColor, JournalEntry, HIGHLIGHT_COLOR_LABELS } from '@/lib/store';
-import { stripOuterQuotes } from '@/lib/cn';
+import { useUnfoldStore, BibleHighlight, Devotional, Highlight } from '@/lib/store';
+import { BookmarkRow, SavedRow } from '@/components/saved/SavedRows';
+import { toBookmarkSavedItem, type SavedBookmarkItem } from '@/lib/saved-items';
 
-type ThemeColors = ReturnType<typeof useTheme>['colors'];
 
-type HighlightKey = HighlightColor | BibleHighlightColor;
-
-const HIGHLIGHT_COLORS: Record<HighlightKey, { label: string; light: string; dark: string }> = {
-  yellow: { label: HIGHLIGHT_COLOR_LABELS.yellow, light: '#FFDC64', dark: '#C8A55C' },
-  green: { label: HIGHLIGHT_COLOR_LABELS.green, light: '#64C864', dark: '#6DAF7B' },
-  blue: { label: HIGHLIGHT_COLOR_LABELS.blue, light: '#6496FF', dark: '#5B9BD5' },
-  purple: { label: HIGHLIGHT_COLOR_LABELS.purple, light: '#B464C8', dark: '#9B8EC4' },
-  red: { label: HIGHLIGHT_COLOR_LABELS.red, light: '#FF6464', dark: '#D4828F' },
-};
-
-type Tab = 'journal' | 'highlights' | 'bookmarks';
+type Tab = 'highlights' | 'bookmarks';
 type HighlightTypeFilter = 'all' | 'notes' | 'highlights';
 type HighlightSourceFilter = 'all' | SavedItemSource;
 type HighlightChip = 'all' | 'notes' | 'highlights' | 'devotional' | 'bible';
 
-const VALID_TABS: Tab[] = ['journal', 'highlights', 'bookmarks'];
+const VALID_TABS: Tab[] = ['highlights', 'bookmarks'];
 const VALID_TYPES: HighlightTypeFilter[] = ['all', 'notes', 'highlights'];
 const VALID_SOURCES: HighlightSourceFilter[] = ['all', 'devotional', 'bible'];
 
 function getInitialTab(tab?: string): Tab {
-  return tab && (VALID_TABS as string[]).includes(tab) ? (tab as Tab) : 'journal';
+  return tab && (VALID_TABS as string[]).includes(tab) ? (tab as Tab) : 'highlights';
 }
 
 // ============================================================================
 // Virtualized rows
 //
-// All three tabs feed a single FlashList — user journals / saved items /
-// bookmarks are unbounded, and the old `.map`-inside-a-ScrollView mounted every
+// Both tabs feed a single FlashList — saved items and bookmarks are unbounded, and the old `.map`-inside-a-ScrollView mounted every
 // row on every render. Rows are discriminated by `kind`, pre-resolved in the
 // data memo (no store lookups inside a row), and each row component is
 // `memo`'d so recycling actually skips work.
 // ============================================================================
 
 type LibraryRow =
-  | { kind: 'journal'; key: string; entry: JournalEntry; seriesTitle: string }
   | { kind: 'saved'; key: string; item: SavedItem }
-  | {
-      kind: 'bookmark';
-      key: string;
-      bookmark: Bookmark;
-      label: string;
-      reference: string;
-      quote: string;
-    };
+  | { kind: 'bookmark'; key: string; item: SavedBookmarkItem };
 
 const LIST_CONTENT_STYLE = { padding: Spacing['5'] } as const;
-
-const JournalRow = memo(function JournalRow({
-  row,
-  colors,
-  onPress,
-}: {
-  row: Extract<LibraryRow, { kind: 'journal' }>;
-  colors: ThemeColors;
-  onPress: (entryId: string) => void;
-}) {
-  const { entry, seriesTitle } = row;
-  return (
-    <TouchableOpacity activeOpacity={0.7}
-      onPress={() => onPress(entry.id)}
-      style={{
-        backgroundColor: colors.inputBackground,
-        borderRadius: Radius.lg,
-        padding: Spacing['5'],
-        marginBottom: Spacing['3'],
-        opacity: 1,
-      }}
-    >
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing['2'], gap: Spacing['2'] }}>
-        <BookOpenIcon size={14} color={colors.accent} weight="light" />
-        <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.text }}>
-          {seriesTitle}
-        </Text>
-        <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textMuted }}>
-          · Day {entry.dayNumber}
-        </Text>
-      </View>
-      <Text
-        style={{
-          fontFamily: FontFamily.body,
-          fontSize: 15,
-          color: colors.textMuted,
-          lineHeight: 22,
-        }}
-        numberOfLines={3}
-      >
-        {entry.content}
-      </Text>
-    </TouchableOpacity>
-  );
-});
-
-const SavedRow = memo(function SavedRow({
-  row,
-  colors,
-  isDark,
-  onPress,
-}: {
-  row: Extract<LibraryRow, { kind: 'saved' }>;
-  colors: ThemeColors;
-  isDark: boolean;
-  onPress: (item: SavedItem) => void;
-}) {
-  const { item } = row;
-  const colorKey: HighlightKey = item.color ?? 'yellow';
-  const accent = HIGHLIGHT_COLORS[colorKey][isDark ? 'dark' : 'light'];
-
-  return (
-    <TouchableOpacity
-      activeOpacity={0.7}
-      onPress={() => onPress(item)}
-      style={{
-        backgroundColor: colors.inputBackground,
-        borderRadius: Radius.lg,
-        padding: 20,
-        marginBottom: 12,
-      }}
-      accessibilityRole="button"
-      // contextLabel carries the location — "Genesis 1:1 (BSB)" for a verse,
-      // the devotional title otherwise. It is drawn on the card but was left
-      // out of the label, so a screen reader announced the text with no way to
-      // tell which verse or devotional it came from.
-      accessibilityLabel={`${item.source === 'bible' ? 'Bible' : 'Devotional'} ${item.kind}, ${item.contextLabel}: ${item.note ?? item.text}`}
-    >
-      {item.kind === 'note' ? (
-        <>
-          <Text
-            style={{
-              fontFamily: FontFamily.body,
-              fontSize: FontSize.base,
-              color: colors.text,
-              lineHeight: 24,
-              marginBottom: Spacing['3'],
-            }}
-            numberOfLines={4}
-          >
-            {item.note}
-          </Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: Spacing['2'], marginBottom: Spacing['2'] }}>
-            <PencilLineIcon size={13} color={colors.accent} weight="light" />
-            <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.xs, color: colors.accent }}>
-              Note · {item.contextLabel}
-            </Text>
-            {item.color !== null && (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                <View
-                  style={{
-                    width: 7,
-                    height: 7,
-                    borderRadius: 3.5,
-                    backgroundColor: accent,
-                  }}
-                />
-                <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textSubtle }}>
-                  Highlighted verse
-                </Text>
-              </View>
-            )}
-          </View>
-          <Text
-            style={{
-              fontFamily: FontFamily.body,
-              fontSize: 14,
-              color: colors.textMuted,
-              lineHeight: 21,
-            }}
-            numberOfLines={2}
-          >
-            {item.text}
-          </Text>
-        </>
-      ) : (
-        <>
-          {/* Quoted text with inline highlight tint */}
-          <View
-            style={{
-              backgroundColor: alpha(accent, 0.08),
-              borderRadius: 6,
-              paddingHorizontal: 10,
-              paddingVertical: 8,
-              marginBottom: Spacing['3'],
-            }}
-          >
-            <Text
-              style={{
-                fontFamily: FontFamily.bodyItalic,
-                fontSize: FontSize.base,
-                color: colors.text,
-                lineHeight: 24,
-              }}
-            >
-              "{stripOuterQuotes(item.text)}"
-            </Text>
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing['2'] }}>
-            <View
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: 4,
-                backgroundColor: accent,
-              }}
-            />
-            <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textMuted }}>
-              {item.contextLabel}
-            </Text>
-          </View>
-        </>
-      )}
-    </TouchableOpacity>
-  );
-});
-
-const BookmarkRow = memo(function BookmarkRow({
-  row,
-  colors,
-  onPress,
-}: {
-  row: Extract<LibraryRow, { kind: 'bookmark' }>;
-  colors: ThemeColors;
-  onPress: (bookmark: Bookmark) => void;
-}) {
-  const { bookmark, label, reference, quote } = row;
-  return (
-    <TouchableOpacity activeOpacity={0.7}
-      onPress={() => onPress(bookmark)}
-      style={{
-        backgroundColor: colors.inputBackground,
-        borderRadius: Radius.lg,
-        padding: Spacing['5'],
-        marginBottom: Spacing['3'],
-        opacity: 1,
-      }}
-    >
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          marginBottom: Spacing['2'],
-          gap: Spacing['2'],
-        }}
-      >
-        <BookmarkSimpleIcon size={14} color={colors.accent} weight="fill" />
-        <Text
-          style={{
-            fontFamily: FontFamily.uiMedium,
-            fontSize: FontSize.xs,
-            color: colors.accent,
-            letterSpacing: 0.5,
-          }}
-        >
-          {label}
-        </Text>
-        <Text
-          style={{
-            fontFamily: FontFamily.uiMedium,
-            fontSize: FontSize.xs,
-            color: colors.textSubtle,
-            letterSpacing: 0.5,
-          }}
-        >
-          · {reference}
-        </Text>
-      </View>
-      <Text
-        style={{
-          fontFamily: FontFamily.bodyItalic,
-          fontSize: 15,
-          color: colors.text,
-          lineHeight: 22,
-        }}
-        numberOfLines={3}
-      >
-        "{quote}"
-      </Text>
-    </TouchableOpacity>
-  );
-});
 
 export default function MyContentScreen() {
   const router = useRouter();
@@ -361,23 +109,13 @@ export default function MyContentScreen() {
   );
 
   const bookmarks = useUnfoldStore((s) => s.bookmarks);
-  const journalEntries = useUnfoldStore((s) => s.journalEntries);
   const devotionals = useUnfoldStore((s) => s.devotionals);
-  const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
 
   const saved = useSavedHighlights();
 
   // Search
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-
-  const filteredJournal = useMemo(() => {
-    if (!searchQuery.trim()) return journalEntries;
-    const q = searchQuery.toLowerCase();
-    return journalEntries.filter(e =>
-      e.content?.toLowerCase().includes(q)
-    );
-  }, [journalEntries, searchQuery]);
 
   const highlightsForFilter = useMemo(() => {
     const byType =
@@ -454,44 +192,16 @@ export default function MyContentScreen() {
     });
   }, [router]);
 
-  const handleJournalPress = useCallback((entryId: string) => {
-    router.push({
-      pathname: '/(tabs)/(today)/journal-detail',
-      params: { entryId },
-    });
-  }, [router]);
-
-  const handleBookmarkPress = useCallback((bookmark: Bookmark) => {
+  const handleBookmarkPress = useCallback((item: SavedBookmarkItem) => {
     router.push({
       pathname: '/(tabs)/(today)/reading',
       params: {
-        devotionalId: bookmark.devotionalId,
-        dayNumber: bookmark.dayNumber.toString(),
-        bookmarkId: bookmark.id,
+        devotionalId: item.raw.devotionalId,
+        dayNumber: item.raw.dayNumber.toString(),
+        bookmarkId: item.raw.id,
       },
     });
   }, [router]);
-
-  const handleStartFirstEntry = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    // Navigate to the current reading day to open journal
-    const currentDevotional = devotionals.find(d => d.id === currentDevotionalId);
-    if (currentDevotional) {
-      router.push({
-        pathname: '/(tabs)/(today)/journal',
-        params: {
-          devotionalId: currentDevotionalId,
-          dayNumber: (currentDevotional.days.filter(d => d.isRead).sort((a, b) => b.dayNumber - a.dayNumber)[0]?.dayNumber ?? currentDevotional.currentDay).toString(),
-        },
-      });
-    }
-  }, [devotionals, currentDevotionalId, router]);
-
-  const journalCta = useMemo(() => ({
-    label: 'Start your first entry',
-    accessibilityLabel: 'Start your first journal entry',
-    onPress: handleStartFirstEntry,
-  }), [handleStartFirstEntry]);
 
   const devotionalById = useMemo(() => {
     const map = new Map<string, Devotional>();
@@ -503,14 +213,6 @@ export default function MyContentScreen() {
   // store lookups (series title, day metadata, quote fallbacks) are resolved
   // here so row components stay pure and memo-friendly.
   const rows = useMemo<LibraryRow[]>(() => {
-    if (activeTab === 'journal') {
-      return filteredJournal.map((entry) => ({
-        kind: 'journal' as const,
-        key: entry.id,
-        entry,
-        seriesTitle: devotionalById.get(entry.devotionalId)?.title || 'Untitled Series',
-      }));
-    }
     if (activeTab === 'highlights') {
       return filteredHighlights.map((item) => ({
         kind: 'saved' as const,
@@ -518,30 +220,21 @@ export default function MyContentScreen() {
         item,
       }));
     }
-    return filteredBookmarks.map((bookmark) => {
-      const devotional = devotionalById.get(bookmark.devotionalId);
-      const day = devotional?.days.find(d => d.dayNumber === bookmark.dayNumber);
-      return {
-        kind: 'bookmark' as const,
-        key: bookmark.id,
-        bookmark,
-        label: bookmark.dayTitle || day?.title || 'Saved Passage',
-        reference: day?.scriptureReference || bookmark.scriptureReference,
-        quote: stripOuterQuotes(bookmark.quotedText || (['Quote', 'Historical Context', 'Word Study'].includes(bookmark.scriptureReference) ? bookmark.scriptureText : null) || day?.quotableLine || day?.scriptureText || bookmark.scriptureText),
-      };
-    });
-  }, [activeTab, filteredJournal, filteredHighlights, filteredBookmarks, devotionalById]);
+    return filteredBookmarks.map((bookmark) => ({
+      kind: 'bookmark' as const,
+      key: bookmark.id,
+      item: toBookmarkSavedItem(bookmark, devotionalById.get(bookmark.devotionalId)),
+    }));
+  }, [activeTab, filteredHighlights, filteredBookmarks, devotionalById]);
 
   const renderRow = useCallback<ListRenderItem<LibraryRow>>(({ item }) => {
     switch (item.kind) {
-      case 'journal':
-        return <JournalRow row={item} colors={colors} onPress={handleJournalPress} />;
       case 'saved':
-        return <SavedRow row={item} colors={colors} isDark={isDark} onPress={handleHighlightPress} />;
+        return <SavedRow item={item.item} colors={colors} isDark={isDark} onPress={handleHighlightPress} />;
       case 'bookmark':
-        return <BookmarkRow row={item} colors={colors} onPress={handleBookmarkPress} />;
+        return <BookmarkRow item={item.item} colors={colors} onPress={handleBookmarkPress} />;
     }
-  }, [colors, isDark, handleJournalPress, handleHighlightPress, handleBookmarkPress]);
+  }, [colors, isDark, handleHighlightPress, handleBookmarkPress]);
 
   const keyExtractor = useCallback((item: LibraryRow) => item.key, []);
 
@@ -557,8 +250,9 @@ export default function MyContentScreen() {
   // (brief §3 #28). Display it as "Saved"; the chip keeps the only "Highlights"
   // label, now meaning highlight-type items only. The tab `id` stays
   // 'highlights' so deep-link routing (?tab=highlights) is unchanged.
+  // Reflections live on the Journal tab (Journal › Reflections); Library keeps
+  // only the reading-derived collections.
   const tabs: { id: Tab; label: string; count: number }[] = [
-    { id: 'journal', label: 'Journal', count: journalEntries.length },
     { id: 'highlights', label: 'Saved', count: saved.count.all },
     { id: 'bookmarks', label: 'Bookmarks', count: bookmarks.length },
   ];
@@ -636,14 +330,7 @@ export default function MyContentScreen() {
   ) : null;
 
   const listEmpty =
-    activeTab === 'journal' ? (
-      <EmptyState
-        icon={PencilLineIcon}
-        title="No journal entries yet."
-        subtitle="Reflect on your readings to capture your thoughts."
-        cta={journalCta}
-      />
-    ) : activeTab === 'highlights' ? (
+    activeTab === 'highlights' ? (
       <EmptyState
         icon={HighlighterIcon}
         title="No highlights yet."

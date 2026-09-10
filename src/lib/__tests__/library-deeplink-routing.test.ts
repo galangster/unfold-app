@@ -11,7 +11,7 @@ describe('My Library devotional deep-link routing', () => {
   it('passes bookmarkId from My Library bookmarks into the devotional reader', () => {
     const source = readSource('app/(tabs)/(you)/my-content.tsx');
 
-    expect(source).toContain('bookmarkId: bookmark.id');
+    expect(source).toContain('bookmarkId: item.raw.id');
   });
 
   it('routes reader preference library rows directly into the correct highlights filters', () => {

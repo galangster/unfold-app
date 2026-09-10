@@ -92,7 +92,7 @@ describe('PR4 My Library de-slop (#28)', () => {
 
     it('keeps the tab id (and therefore deep-link routing) unchanged', () => {
       // ?tab=highlights still resolves; only the display label moved.
-      expect(library).toContain("const VALID_TABS: Tab[] = ['journal', 'highlights', 'bookmarks'];");
+      expect(library).toContain("const VALID_TABS: Tab[] = ['highlights', 'bookmarks'];");
     });
   });
 
@@ -115,18 +115,14 @@ describe('PR4 My Library de-slop (#28)', () => {
       expect(library).not.toContain("backgroundColor: 'transparent',\n                    opacity: 1,");
     });
 
-    it('gives the Journal empty state a working CTA via the shared anatomy', () => {
-      expect(library).toContain("label: 'Start your first entry',");
-      expect(library).toContain("pathname: '/(tabs)/(today)/journal',");
-    });
-
     it('matches the quality-bar icon treatment (accent, light weight, dimmed)', () => {
       const emptyStateImpl = library.slice(library.indexOf('function EmptyState('));
       expect(emptyStateImpl).toContain('<Icon size={28} color={colors.accent} weight="light" style={{ opacity: 0.5 }} />');
     });
 
     it('keeps empty-state headlines in the display-serif quiet-period voice', () => {
-      expect(library).toContain('title="No journal entries yet."');
+      // Journal entries moved to Journal › Reflections (highlight Phase C item 10).
+      expect(library).not.toContain('title="No journal entries yet."');
       expect(library).toContain('title="No highlights yet."');
       expect(library).toContain('title="No bookmarks yet."');
     });

@@ -12,7 +12,7 @@ import {
   NativeScrollEvent,
   Share,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
@@ -59,6 +59,7 @@ import { FolderChips } from '@/components/notebook/FolderChips';
 import { CreateFolderSheet } from '@/components/notebook/CreateFolderSheet';
 import { MoveFolderSheet } from '@/components/notebook/MoveFolderSheet';
 import { UndoToast } from '@/components/UndoToast';
+import { SavedSegment, useSavedUndo } from '@/components/saved/SavedSegment';
 import { stripHtml, isHtmlContent } from '@/lib/note-html';
 import { formatRelativeDate } from '@/lib/format-relative-date';
 import { alpha, Sheet } from '@/components/ui';
@@ -74,7 +75,17 @@ import {
   type JournalMonthMarker,
 } from '@/lib/journal-month-groups';
 
-type Segment = 'reflections' | 'notebook';
+type Segment = 'reflections' | 'notebook' | 'saved';
+
+const SEGMENTS: { id: Segment; label: string }[] = [
+  { id: 'reflections', label: 'Reflections' },
+  { id: 'notebook', label: 'Notebook' },
+  { id: 'saved', label: 'Saved' },
+];
+
+function isSegment(value: unknown): value is Segment {
+  return SEGMENTS.some((segment) => segment.id === value);
+}
 
 const JOURNAL_SWIPE_ACTIVE_OFFSET = 18;
 
@@ -104,8 +115,8 @@ function SegmentedControl({ activeSegment, onSegmentChange }: SegmentedControlPr
   const { colors } = useTheme();
   const [containerWidth, setContainerWidth] = useState(0);
 
-  const activeIndex = activeSegment === 'reflections' ? 0 : 1;
-  const segmentWidth = containerWidth > 0 ? containerWidth / 2 : 0;
+  const activeIndex = Math.max(0, SEGMENTS.findIndex((segment) => segment.id === activeSegment));
+  const segmentWidth = containerWidth > 0 ? containerWidth / SEGMENTS.length : 0;
 
   const indicatorTranslateX = useSharedValue(activeIndex * segmentWidth);
 
@@ -137,7 +148,7 @@ function SegmentedControl({ activeSegment, onSegmentChange }: SegmentedControlPr
   useEffect(() => {
     if (containerWidth > 0 && containerWidthRef.current !== containerWidth) {
       containerWidthRef.current = containerWidth;
-      indicatorTranslateX.value = activeIndex * (containerWidth / 2);
+      indicatorTranslateX.value = activeIndex * (containerWidth / SEGMENTS.length);
     }
   }, [activeIndex, containerWidth, indicatorTranslateX]);
 
@@ -173,60 +184,32 @@ function SegmentedControl({ activeSegment, onSegmentChange }: SegmentedControlPr
         />
       )}
 
-      {/* Segments */}
-      <TouchableOpacity
-        onPress={() => handlePress('reflections')}
-        style={segStyles.segment}
-        activeOpacity={0.7}
-        accessibilityRole="tab"
-        accessibilityState={{ selected: activeSegment === 'reflections' }}
-        accessibilityLabel="Reflections tab, 1 of 2"
-      >
-        <Text
-          style={[
-            segStyles.segmentText,
-            {
-              fontFamily:
-                activeSegment === 'reflections'
-                  ? FontFamily.uiMedium
-                  : FontFamily.ui,
-              color:
-                activeSegment === 'reflections'
-                  ? colors.text
-                  : colors.textSubtle,
-            },
-          ]}
-        >
-          Reflections
-        </Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        onPress={() => handlePress('notebook')}
-        style={segStyles.segment}
-        activeOpacity={0.7}
-        accessibilityRole="tab"
-        accessibilityState={{ selected: activeSegment === 'notebook' }}
-        accessibilityLabel="Notebook tab, 2 of 2"
-      >
-        <Text
-          style={[
-            segStyles.segmentText,
-            {
-              fontFamily:
-                activeSegment === 'notebook'
-                  ? FontFamily.uiMedium
-                  : FontFamily.ui,
-              color:
-                activeSegment === 'notebook'
-                  ? colors.text
-                  : colors.textSubtle,
-            },
-          ]}
-        >
-          Notebook
-        </Text>
-      </TouchableOpacity>
+      {SEGMENTS.map((segment, index) => {
+        const isActive = activeSegment === segment.id;
+        return (
+          <TouchableOpacity
+            key={segment.id}
+            onPress={() => handlePress(segment.id)}
+            style={segStyles.segment}
+            activeOpacity={0.7}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: isActive }}
+            accessibilityLabel={`${segment.label} tab, ${index + 1} of ${SEGMENTS.length}`}
+          >
+            <Text
+              style={[
+                segStyles.segmentText,
+                {
+                  fontFamily: isActive ? FontFamily.uiMedium : FontFamily.ui,
+                  color: isActive ? colors.text : colors.textSubtle,
+                },
+              ]}
+            >
+              {segment.label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
     </View>
   );
 }
@@ -870,7 +853,18 @@ export default function JournalHubScreen() {
   const reorderFolders = useUnfoldStore((s) => s.reorderFolders);
 
   const getDescendantFolderIds = useUnfoldStore((s) => s.getDescendantFolderIds);
-  const [activeSegment, setActiveSegment] = useState<Segment>('reflections');
+  const params = useLocalSearchParams<{ segment?: string }>();
+  const [activeSegment, setActiveSegment] = useState<Segment>(() =>
+    isSegment(params.segment) ? params.segment : 'reflections',
+  );
+  // Repeat pushes (Today › Saved tile) re-select the segment.
+  useEffect(() => {
+    if (isSegment(params.segment)) setActiveSegment(params.segment);
+  }, [params.segment]);
+  const savedUndo = useSavedUndo();
+  const savedCount = useUnfoldStore(
+    (s) => s.highlights.length + s.bibleHighlights.length + s.bookmarks.length,
+  );
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
   const [currentParentId, setCurrentParentId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -1356,6 +1350,47 @@ export default function JournalHubScreen() {
     setActiveSegment('reflections');
   }, [activeSegment]);
 
+  // Segmented-control flings step one segment at a time in either direction.
+  const stepSegmentFromFling = useCallback(
+    (delta: 1 | -1) => {
+      const index = SEGMENTS.findIndex((segment) => segment.id === activeSegment);
+      const next = SEGMENTS[index + delta];
+      if (!next) return;
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      setActiveSegment(next.id);
+    },
+    [activeSegment],
+  );
+  const flingToNextSegment = useCallback(() => stepSegmentFromFling(1), [stepSegmentFromFling]);
+  const flingToPreviousSegment = useCallback(() => stepSegmentFromFling(-1), [stepSegmentFromFling]);
+
+  const savedSwipeX = useSharedValue(0);
+  // Saved rows own left swipe (Remove), so the segment gesture is right-only,
+  // like Notebook.
+  const savedSwipeGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetX([-JOURNAL_SWIPE_DIRECTION_LIMIT, JOURNAL_SWIPE_ACTIVE_OFFSET])
+        .failOffsetY([-JOURNAL_SWIPE_FAIL_OFFSET_Y, JOURNAL_SWIPE_FAIL_OFFSET_Y])
+        .onUpdate((e) => {
+          if (reducedMotion) return;
+          savedSwipeX.value = Math.max(0, Math.min(e.translationX, JOURNAL_SWIPE_MAX_TRANSLATE));
+        })
+        .onEnd((e) => {
+          const shouldSwitch =
+            e.translationX >= JOURNAL_SWIPE_THRESHOLD || e.velocityX >= JOURNAL_SWIPE_VELOCITY;
+          savedSwipeX.value = withTiming(0, JOURNAL_SWIPE_RESET_CONFIG);
+          if (shouldSwitch) runOnJS(switchToNotebookFromSwipe)();
+        })
+        .onFinalize(() => {
+          savedSwipeX.value = withTiming(0, JOURNAL_SWIPE_RESET_CONFIG);
+        }),
+    [reducedMotion, savedSwipeX, switchToNotebookFromSwipe],
+  );
+  const savedSwipeStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: savedSwipeX.value }],
+  }));
+
   const reflectionsSwipeGesture = useMemo(
     () =>
       Gesture.Pan()
@@ -1432,15 +1467,15 @@ export default function JournalHubScreen() {
         Gesture.Fling()
           .direction(Directions.LEFT)
           .onEnd(() => {
-            runOnJS(switchToNotebookFromSwipe)();
+            runOnJS(flingToNextSegment)();
           }),
         Gesture.Fling()
           .direction(Directions.RIGHT)
           .onEnd(() => {
-            runOnJS(switchToReflectionsFromSwipe)();
+            runOnJS(flingToPreviousSegment)();
           }),
       ),
-    [switchToNotebookFromSwipe, switchToReflectionsFromSwipe],
+    [flingToNextSegment, flingToPreviousSegment],
   );
 
   const reflectionsSwipeStyle = useAnimatedStyle(() => ({
@@ -1484,7 +1519,7 @@ export default function JournalHubScreen() {
 
   // Determine if search toggle should show
   const hasContent =
-    journalEntries.length > 0 || notes.length > 0;
+    journalEntries.length > 0 || notes.length > 0 || savedCount > 0;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -1494,7 +1529,13 @@ export default function JournalHubScreen() {
             wraps the list so segment swipes work over rows and header alike
             (never wrap a FlatList in a Pressable — this is a plain detector). */}
         <GestureDetector
-          gesture={activeSegment === 'notebook' ? notebookSwipeGesture : reflectionsSwipeGesture}
+          gesture={
+            activeSegment === 'notebook'
+              ? notebookSwipeGesture
+              : activeSegment === 'saved'
+                ? savedSwipeGesture
+                : reflectionsSwipeGesture
+          }
         >
         <FlatList
           data={activeSegment === 'notebook' ? filteredNotes : EMPTY_NOTES}
@@ -1592,10 +1633,12 @@ export default function JournalHubScreen() {
                   weight="light"
                 />
                 <TextInput
-                  accessibilityLabel="Search journal entries and notes"
+                  accessibilityLabel={
+                    activeSegment === 'saved' ? 'Search saved highlights, notes and bookmarks' : 'Search journal entries and notes'
+                  }
                   value={searchQuery}
                   onChangeText={setSearchQuery}
-                  placeholder="Search entries..."
+                  placeholder={activeSegment === 'saved' ? 'Search saved...' : 'Search entries...'}
                   placeholderTextColor={colors.textHint}
                   selectionColor={colors.accent}
                   cursorColor={colors.accent}
@@ -2022,6 +2065,18 @@ export default function JournalHubScreen() {
                   )}
               </Animated.View>
           )}
+
+          {/* ================================================================ */}
+          {/* SAVED TAB — highlights, Bible notes, bookmarks */}
+          {/* ================================================================ */}
+          {activeSegment === 'saved' && (
+            <Animated.View
+              entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
+              style={savedSwipeStyle}
+            >
+              <SavedSegment searchQuery={searchQuery} onRemove={savedUndo.remove} />
+            </Animated.View>
+          )}
             </>
           }
         />
@@ -2049,6 +2104,15 @@ export default function JournalHubScreen() {
           onUndo={handleUndoAction}
           onDismiss={handleUndoDismiss}
           duration={undoActions.length > 0 && undoActions[undoActions.length - 1]?.type === 'folder' ? 4000 : 3000}
+        />
+
+        {/* Undo toast for Saved removals (highlights, Bible notes, bookmarks) */}
+        <UndoToast
+          visible={savedUndo.visible}
+          message={savedUndo.message}
+          onUndo={savedUndo.undo}
+          onDismiss={savedUndo.dismiss}
+          duration={savedUndo.duration}
         />
 
         {/* Folder long-press actions sheet (#12 — branded, replaces OS Alert) */}

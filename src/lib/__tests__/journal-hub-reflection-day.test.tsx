@@ -18,6 +18,7 @@ const { act } = renderer;
 const mockPush = jest.fn();
 
 jest.mock('expo-router', () => ({
+  useLocalSearchParams: () => ({}),
   useRouter: () => ({
     push: (...args: unknown[]) => mockPush(...args),
     back: jest.fn(),
@@ -98,6 +99,10 @@ jest.mock('@/components/notebook/FolderChips', () => ({ FolderChips: () => null 
 jest.mock('@/components/notebook/CreateFolderSheet', () => ({ CreateFolderSheet: () => null }));
 jest.mock('@/components/notebook/MoveFolderSheet', () => ({ MoveFolderSheet: () => null }));
 jest.mock('@/components/UndoToast', () => ({ UndoToast: () => null }));
+jest.mock('@/components/saved/SavedSegment', () => ({
+  SavedSegment: () => null,
+  useSavedUndo: () => ({ visible: false, message: '', duration: 3000, remove: jest.fn(), undo: jest.fn(), dismiss: jest.fn() }),
+}));
 jest.mock('@/components/ExclusiveOfferSheet', () => ({ ExclusiveOfferSheet: () => null }));
 jest.mock('@/components/ui', () => ({ alpha: (color: string) => color, Sheet: () => null }));
 jest.mock('@/hooks/useCreationGate', () => ({
