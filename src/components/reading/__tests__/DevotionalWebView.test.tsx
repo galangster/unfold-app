@@ -247,7 +247,7 @@ describe('DevotionalWebView highlight interactions', () => {
     expect(script).toContain('Grace meets you');
   });
 
-  it('uses Bible-style saved highlights in light mode with a marker background', () => {
+  it('paints a felt-tip stroke behind saved highlights in light mode', () => {
     mockIsDark = false;
 
     let tree: any;
@@ -260,15 +260,15 @@ describe('DevotionalWebView highlight interactions', () => {
     const html = getWebViewProps(tree).source.html as string;
     const script = getWebViewProps(tree).injectedJavaScript as string;
 
-    expect(html).toContain('--hl-yellow-bg: rgba(255, 245, 112, 0.58);');
+    expect(html).toContain('--hl-yellow-bg: linear-gradient(100deg, rgba(255, 236, 80, 0.34), rgba(255, 236, 80, 0.72) 12%, rgba(255, 236, 80, 0.63) 88%, rgba(255, 236, 80, 0.30));');
     expect(html).toContain('--hl-yellow-color: currentColor;');
-    expect(html).toContain('mark.highlight-yellow { background: var(--hl-yellow-bg); color: var(--hl-yellow-color); }');
+    expect(html).toContain('mark.highlight-yellow { background-image: var(--hl-yellow-bg); color: var(--hl-yellow-color); }');
     // Colour comes from the stylesheet rule alone; no inline style to fight it.
     expect(script).not.toContain("style: 'background: var(--hl-'");
     expect(script).not.toContain('const isDark =');
   });
 
-  it('uses a translucent marker band in dark mode too, never colored text', () => {
+  it('paints the same stroke in dark mode too, never colored text', () => {
     mockIsDark = true;
 
     let tree: any;
@@ -281,10 +281,14 @@ describe('DevotionalWebView highlight interactions', () => {
     const html = getWebViewProps(tree).source.html as string;
     const script = getWebViewProps(tree).injectedJavaScript as string;
 
-    expect(html).toContain('--hl-yellow-bg: rgba(255, 232, 106, 0.30);');
+    expect(html).toContain('--hl-yellow-bg: linear-gradient(100deg, rgba(255, 232, 106, 0.16), rgba(255, 232, 106, 0.34) 12%, rgba(255, 232, 106, 0.30) 88%, rgba(255, 232, 106, 0.14));');
     expect(html).toContain('--hl-yellow-color: currentColor;');
-    expect(html).toContain('mark.highlight-yellow { background: var(--hl-yellow-bg); color: var(--hl-yellow-color); }');
-    // The band hugs each line box and keeps rounded ends across wraps.
+    expect(html).toContain('mark.highlight-yellow { background-image: var(--hl-yellow-bg); color: var(--hl-yellow-color); }');
+    // The stroke is sized to the glyphs, not the inline box, and keeps its
+    // felt-tip corners on every wrapped line.
+    expect(html).toContain('background-size: 100% 1.09em;');
+    expect(html).toContain('background-position: 0 0.24em;');
+    expect(html).toContain('border-radius: 0.55em 0.3em 0.5em 0.35em;');
     expect(html).toContain('box-decoration-break: clone;');
     expect(script).not.toContain('padding: 0; border-radius: 2px;');
   });
@@ -606,7 +610,7 @@ describe('DevotionalWebView Aa / theme updates without remounting', () => {
     expect(script).toContain('"--text":"#1A1A1A"');
     expect(script).toContain('"--muted":"#5A534E"');
     expect(script).toContain('"--toolbar-bg":"#ffffff"');
-    expect(script).toContain('"--hl-yellow-bg":"rgba(255, 245, 112, 0.58)"');
+    expect(script).toContain('"--hl-yellow-bg":"linear-gradient(100deg, rgba(255, 236, 80, 0.34), rgba(255, 236, 80, 0.72) 12%, rgba(255, 236, 80, 0.63) 88%, rgba(255, 236, 80, 0.30))"');
     expect(script).toContain('"--hl-yellow-color":"currentColor"');
     expect(script).toContain('"--body-font-size":"18px"');
 

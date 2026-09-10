@@ -78,16 +78,30 @@ const HIGHLIGHT_MENU_ITEMS = [
   { label: 'Copy', key: 'copy' },
 ];
 
-// Marker bands for saved highlights. Both themes use a translucent band
-// behind unchanged text (Apple Books / Kindle), never colored text: colored
-// text reads as a link, and a marker is what people expect a highlight to be.
-const HIGHLIGHT_COLORS: Record<HighlightColor, { label: string; light: string; dark: string }> = {
-  yellow: { label: HIGHLIGHT_COLOR_LABELS.yellow, light: 'rgba(255, 245, 112, 0.58)', dark: 'rgba(255, 232, 106, 0.30)' },
-  green: { label: HIGHLIGHT_COLOR_LABELS.green, light: 'rgba(190, 244, 128, 0.5)', dark: 'rgba(92, 255, 99, 0.24)' },
-  blue: { label: HIGHLIGHT_COLOR_LABELS.blue, light: 'rgba(170, 220, 255, 0.46)', dark: 'rgba(119, 183, 255, 0.28)' },
-  purple: { label: HIGHLIGHT_COLOR_LABELS.purple, light: 'rgba(214, 188, 255, 0.44)', dark: 'rgba(215, 168, 255, 0.28)' },
-  red: { label: HIGHLIGHT_COLOR_LABELS.red, light: 'rgba(255, 190, 190, 0.46)', dark: 'rgba(255, 122, 122, 0.28)' },
+// Highlighter stroke for saved highlights (chosen 2026-09-10 over a flat
+// marker, an underline wash and a pencil rule). Both themes paint a
+// translucent band behind unchanged text, never colored text, and the ink
+// is uneven like a felt tip: heavier through the middle, softer at both
+// ends. `rgb` is the ink; `peak` is its strongest alpha on that ground.
+const HIGHLIGHT_COLORS: Record<HighlightColor, { label: string; light: HighlightInk; dark: HighlightInk }> = {
+  yellow: { label: HIGHLIGHT_COLOR_LABELS.yellow, light: { rgb: '255, 236, 80', peak: 0.72 }, dark: { rgb: '255, 232, 106', peak: 0.34 } },
+  green: { label: HIGHLIGHT_COLOR_LABELS.green, light: { rgb: '180, 240, 120', peak: 0.62 }, dark: { rgb: '92, 255, 99', peak: 0.28 } },
+  blue: { label: HIGHLIGHT_COLOR_LABELS.blue, light: { rgb: '150, 210, 255', peak: 0.62 }, dark: { rgb: '119, 183, 255', peak: 0.32 } },
+  purple: { label: HIGHLIGHT_COLOR_LABELS.purple, light: { rgb: '214, 188, 255', peak: 0.56 }, dark: { rgb: '215, 168, 255', peak: 0.32 } },
+  red: { label: HIGHLIGHT_COLOR_LABELS.red, light: { rgb: '255, 180, 180', peak: 0.6 }, dark: { rgb: '255, 122, 122', peak: 0.32 } },
 };
+
+interface HighlightInk {
+  rgb: string;
+  peak: number;
+}
+
+/** The felt-tip gradient: soft entry, full ink by 12%, a shade lighter
+ *  through the body, soft exit. Used as `background-image` on the mark. */
+export function highlighterStroke({ rgb, peak }: HighlightInk): string {
+  const a = (f: number) => (peak * f).toFixed(2);
+  return `linear-gradient(100deg, rgba(${rgb}, ${a(0.47)}), rgba(${rgb}, ${a(1)}) 12%, rgba(${rgb}, ${a(0.87)}) 88%, rgba(${rgb}, ${a(0.42)}))`;
+}
 
 const HIGHLIGHT_COLOR_NAMES = Object.keys(HIGHLIGHT_COLORS) as (keyof typeof HIGHLIGHT_COLORS)[];
 
@@ -127,11 +141,11 @@ function buildThemeVars(fontSize: FontSize, accentColor: string, isDark: boolean
     '--toolbar-fg': isDark ? '#E8E4DC' : '#3A3532',
     '--scripture-underline': `${accentColor}60`,
   };
-  // Marker band in both themes; text keeps its own color. `currentColor`
+  // Stroke in both themes; text keeps its own color. `currentColor`
   // rather than `inherit` — CSS-wide keywords are not valid custom-property
   // values, and `color: currentColor` behaves exactly like `color: inherit`.
   HIGHLIGHT_COLOR_NAMES.forEach((color) => {
-    vars[`--hl-${color}-bg`] = isDark ? HIGHLIGHT_COLORS[color].dark : HIGHLIGHT_COLORS[color].light;
+    vars[`--hl-${color}-bg`] = highlighterStroke(isDark ? HIGHLIGHT_COLORS[color].dark : HIGHLIGHT_COLORS[color].light);
     vars[`--hl-${color}-color`] = 'currentColor';
   });
   return {
@@ -1309,23 +1323,32 @@ export function DevotionalWebView({
       user-select: text;
     }
     
-    /* Highlight colors — a marker band that hugs the line box. The small
-       vertical padding and cloned box-decoration make a wrapped highlight
-       read as one continuous sweep with rounded ends on every line. */
+    /* Highlighter stroke. The band is a background image sized to the
+       glyphs rather than to the font's inline box. Source Serif 4's box
+       reaches 1.04em above the baseline while its tallest letters stop at
+       0.75em and descenders end 0.24em below, so the band starts 0.24em
+       down and runs 1.09em: ~0.05em of ink above ascenders and below
+       descenders, centred on the letters instead of floating high.
+       Uneven corners and cloned box-decoration make a wrapped highlight read
+       as one felt-tip sweep with rounded ends on every line. */
     mark {
       color: inherit;
-      padding: 0.12em 0.08em;
-      margin: 0 -0.08em;
-      border-radius: 3px;
+      padding: 0 0.14em;
+      margin: 0 -0.14em;
+      border-radius: 0.55em 0.3em 0.5em 0.35em;
       -webkit-box-decoration-break: clone;
       box-decoration-break: clone;
+      background-color: transparent;
+      background-repeat: no-repeat;
+      background-size: 100% 1.09em;
+      background-position: 0 0.24em;
     }
     
-    mark.highlight-yellow { background: var(--hl-yellow-bg); color: var(--hl-yellow-color); }
-    mark.highlight-green { background: var(--hl-green-bg); color: var(--hl-green-color); }
-    mark.highlight-blue { background: var(--hl-blue-bg); color: var(--hl-blue-color); }
-    mark.highlight-purple { background: var(--hl-purple-bg); color: var(--hl-purple-color); }
-    mark.highlight-red { background: var(--hl-red-bg); color: var(--hl-red-color); }
+    mark.highlight-yellow { background-image: var(--hl-yellow-bg); color: var(--hl-yellow-color); }
+    mark.highlight-green { background-image: var(--hl-green-bg); color: var(--hl-green-color); }
+    mark.highlight-blue { background-image: var(--hl-blue-bg); color: var(--hl-blue-color); }
+    mark.highlight-purple { background-image: var(--hl-purple-bg); color: var(--hl-purple-color); }
+    mark.highlight-red { background-image: var(--hl-red-bg); color: var(--hl-red-color); }
 
     .target-highlight-flash {
       animation: targetHighlightFlash 1.8s ease-out;
