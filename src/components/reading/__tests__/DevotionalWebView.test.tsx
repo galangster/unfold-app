@@ -412,6 +412,21 @@ describe('DevotionalWebView highlight interactions', () => {
     });
     expect(mockInjectJavaScript.mock.calls[0][0]).toContain('__unfoldApplyInverse(');
     expect(mockInjectJavaScript.mock.calls[0][0]).toContain('10$20$1$rangy-highlight-yellow$');
+
+    // Reader Highlights sheet: locate a stored highlight in the live document
+    // through the page's locator, never by remounting with a new baked target.
+    expect(script).toContain('window.__unfoldLocateHighlight = locateHighlightPayload;');
+    mockInjectJavaScript.mockClear();
+    act(() => {
+      commandRef.current.scrollToHighlight({
+        id: 'h-9',
+        highlightedText: 'grace upon grace',
+        serializedRange: '10$20$1$rangy-highlight-yellow$',
+        color: 'yellow',
+      });
+    });
+    expect(mockInjectJavaScript.mock.calls[0][0]).toContain('__unfoldLocateHighlight(');
+    expect(mockInjectJavaScript.mock.calls[0][0]).toContain('"id":"h-9"');
   });
 
   it('uses editorial quote framing without side stripes or hardcoded Inter UI labels', () => {

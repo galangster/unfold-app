@@ -37,7 +37,7 @@ import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, FONT_SIZE_VALUES } from '@/lib/store';
 import { UndoToast } from '@/components/UndoToast';
-import type { Highlight, Bookmark, DevotionalDay } from '@/lib/store';
+import type { Highlight, Bookmark, DevotionalDay, JournalEntry } from '@/lib/store';
 import { refreshDailyReminder } from '@/lib/notifications';
 import { continueGeneratingDays, isFullGenerationActive } from '@/lib/devotional-service';
 import { syncDevotionalDayRead } from '@/lib/devotional-read-sync';
@@ -75,6 +75,8 @@ import type { DevotionalWebViewCommands, HighlightsChangedEvent } from '@/compon
 import { AnalyticsEvents, logEvent } from '@/lib/analytics';
 import { addAppBreadcrumb } from '@/lib/sentry';
 import { StudyMethodSheet } from '@/components/reading/StudyMethodSheet';
+import { ReaderOutlineSheet } from '@/components/reading/ReaderOutlineSheet';
+import type { ReaderSection } from '@/components/reading/DevotionalContent';
 import { createReviewPromptManager, type ReviewPromptManager } from '@/lib/review-prompt';
 import { useGlobalAudioPlayer } from '@/hooks/useGlobalAudioPlayer';
 import { useAudioPlayerState } from '@/lib/audio-player-state';
@@ -93,6 +95,8 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const AUTO_RETRY_MAX_ATTEMPTS = 3;
 const AUTO_RETRY_BASE_DELAY_MS = 15000;
 const LIBRARY_TARGET_TOP_INSET = 220;
+/** Section jumps land the heading near the top, under the reader chrome. */
+const SECTION_TARGET_TOP_INSET = 24;
 
 function parsePositiveInteger(value?: string | string[]): number | null {
   if (!value) return null;
@@ -289,6 +293,9 @@ export default function ReadingScreen() {
   const [audioToast, setAudioToast] = useState<{ visible: boolean; message: string } | null>(null);
   const [showReadingSettings, setShowReadingSettings] = useState(false);
   const [showPremiumSheet, setShowPremiumSheet] = useState(false);
+  const [showOutlineSheet, setShowOutlineSheet] = useState(false);
+  // Content y of each reader section, reported by DevotionalContent as it lays out.
+  const [sectionOffsets, setSectionOffsets] = useState<Partial<Record<ReaderSection, number>>>({});
   const [premiumFeature, setPremiumFeature] = useState<'audio' | 'series' | 'general'>('audio');
   const [isPreparingAudio, setIsPreparingAudio] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
@@ -462,6 +469,55 @@ export default function ReadingScreen() {
 
     return method !== 'none';
   }, []);
+
+  const currentDayEntries = useMemo(
+    () => journalEntries.filter((e) => e.devotionalId === effectiveDevotionalId && e.dayNumber === viewingDay),
+    [journalEntries, effectiveDevotionalId, viewingDay],
+  );
+
+  const availableSections = useMemo(
+    () => new Set(Object.keys(sectionOffsets) as ReaderSection[]),
+    [sectionOffsets],
+  );
+
+  const handleSectionLayout = useCallback((section: ReaderSection, contentY: number) => {
+    setSectionOffsets((prev) => (prev[section] === contentY ? prev : { ...prev, [section]: contentY }));
+  }, []);
+
+  const openJournalForDay = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push({
+      pathname: '/(tabs)/(today)/journal',
+      params: {
+        devotionalId: currentDevotionalId,
+        dayNumber: String(viewingDay),
+      },
+    });
+  }, [router, currentDevotionalId, viewingDay]);
+
+  const handleJumpToSection = useCallback((section: ReaderSection) => {
+    const y = sectionOffsets[section];
+    setShowOutlineSheet(false);
+    if (y === undefined) return;
+    Haptics.selectionAsync();
+    scrollReaderToY(Math.max(0, y - SECTION_TARGET_TOP_INSET));
+  }, [sectionOffsets, scrollReaderToY]);
+
+  const handleJumpToHighlight = useCallback((highlight: Highlight) => {
+    setShowOutlineSheet(false);
+    Haptics.selectionAsync();
+    highlightCommandRef.current?.scrollToHighlight(highlight);
+  }, []);
+
+  const handleOpenEntry = useCallback((entry: JournalEntry) => {
+    setShowOutlineSheet(false);
+    router.push({ pathname: '/(tabs)/(today)/journal-detail', params: { entryId: entry.id } });
+  }, [router]);
+
+  const handleWriteReflection = useCallback(() => {
+    setShowOutlineSheet(false);
+    openJournalForDay();
+  }, [openJournalForDay]);
 
   const handleTargetHighlightLocated = useCallback((contentY: number) => {
     const y = Math.max(0, contentY - LIBRARY_TARGET_TOP_INSET);
@@ -1877,22 +1933,16 @@ export default function ReadingScreen() {
 
               {/* Right: Journal + Reading Settings */}
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                {/* Journal button */}
+                {/* Contents / Highlights / Notes for this reading */}
                 <TouchableOpacity activeOpacity={0.7}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    router.push({
-                      pathname: '/(tabs)/(today)/journal',
-                      params: {
-                        devotionalId: currentDevotionalId,
-                        dayNumber: String(viewingDay),
-                      },
-                    });
+                    setShowOutlineSheet(true);
                   }}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   accessibilityRole="button"
-                  accessibilityLabel="Open journal"
-                  accessibilityHint="Write a reflection about today's reading"
+                  accessibilityLabel="Contents and highlights"
+                  accessibilityHint="Jump to a section, a highlight, or your reflections for this reading"
                   style={{ padding: Spacing['2'] }}
                 >
                   <BookOpenIcon
@@ -1960,6 +2010,7 @@ export default function ReadingScreen() {
                 existingHighlights={currentDayHighlights}
                 targetHighlight={targetHighlight}
                 onTargetHighlightLocated={handleTargetHighlightLocated}
+                onSectionLayout={handleSectionLayout}
                 targetBookmark={targetBookmark}
                 onTargetBookmarkLocated={handleTargetHighlightLocated}
                 scrollViewRef={scrollViewRef}
@@ -2428,6 +2479,19 @@ export default function ReadingScreen() {
       )}
 
       {/* Study Method Info Sheet */}
+      <ReaderOutlineSheet
+        visible={showOutlineSheet}
+        onClose={() => setShowOutlineSheet(false)}
+        day={currentDayData}
+        availableSections={availableSections}
+        highlights={currentDayHighlights}
+        entries={currentDayEntries}
+        onJumpToSection={handleJumpToSection}
+        onJumpToHighlight={handleJumpToHighlight}
+        onOpenEntry={handleOpenEntry}
+        onWriteReflection={handleWriteReflection}
+      />
+
       <StudyMethodSheet
         methodId={selectedStudyMethod}
         visible={studyMethodVisible}

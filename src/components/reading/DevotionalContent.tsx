@@ -29,6 +29,9 @@ import { InlineReflectionJournal } from './InlineReflectionJournal';
 import { getReflectionTypography } from '@/lib/reflection-typography';
 import { Typography } from '@/constants/typography';
 
+/** Jump targets for the reader Contents sheet, in document order. */
+export type ReaderSection = 'scripture' | 'devotional' | 'reflection' | 'act' | 'prayer';
+
 interface DevotionalContentProps {
   day: DevotionalDay;
   fontSize: FontSize;
@@ -55,6 +58,8 @@ interface DevotionalContentProps {
   focusAct?: boolean;
   onActLocated?: (contentY: number) => void;
   onActOutcome?: (outcome: 'done' | 'skipped') => void;
+  /** Content y of each section as it lays out (reader Contents sheet). */
+  onSectionLayout?: (section: ReaderSection, contentY: number) => void;
 }
 
 /**
@@ -111,14 +116,22 @@ export function DevotionalContent({
   focusAct,
   onActLocated,
   onActOutcome,
+  onSectionLayout,
 }: DevotionalContentProps) {
   const { colors, isDark } = useTheme();
   const actLocatedRef = useRef(false);
   const handleActLayout = useCallback((event: LayoutChangeEvent) => {
+    onSectionLayout?.('act', event.nativeEvent.layout.y);
     if (!focusAct || actLocatedRef.current) return;
     actLocatedRef.current = true;
     onActLocated?.(event.nativeEvent.layout.y);
-  }, [focusAct, onActLocated]);
+  }, [focusAct, onActLocated, onSectionLayout]);
+  const handleReflectionLayout = useCallback((event: LayoutChangeEvent) => {
+    onSectionLayout?.('reflection', event.nativeEvent.layout.y);
+  }, [onSectionLayout]);
+  const handlePrayerLayout = useCallback((event: LayoutChangeEvent) => {
+    onSectionLayout?.('prayer', event.nativeEvent.layout.y);
+  }, [onSectionLayout]);
   const fontSizes = FONT_SIZE_VALUES[fontSize];
   const reflectionTypography = getReflectionTypography(fontSize);
   const readingFont = useReadingFont();
@@ -167,7 +180,8 @@ export function DevotionalContent({
 
   const handleDevotionalWebViewLayout = useCallback((event: LayoutChangeEvent) => {
     devotionalWebViewTopRef.current = event.nativeEvent.layout.y;
-  }, []);
+    onSectionLayout?.('devotional', event.nativeEvent.layout.y);
+  }, [onSectionLayout]);
 
   const locateTopBookmark = useCallback((contentY: number) => {
     if (!targetBookmark || targetBookmarkIsWebViewContent) return;
@@ -179,8 +193,9 @@ export function DevotionalContent({
   const handleScriptureBlockLayout = useCallback((event: LayoutChangeEvent) => {
     const y = event.nativeEvent.layout.y;
     scriptureBlockTopRef.current = y;
+    onSectionLayout?.('scripture', y);
     locateTopBookmark(y);
-  }, [locateTopBookmark]);
+  }, [locateTopBookmark, onSectionLayout]);
 
   useEffect(() => {
     const scriptureBlockTop = scriptureBlockTopRef.current;
@@ -402,7 +417,7 @@ export function DevotionalContent({
 
       {/* Reflection Questions Section */}
       {day.reflectionQuestions && day.reflectionQuestions.length > 0 && (
-        <>
+        <View onLayout={handleReflectionLayout}>
           <SectionDivider color={colors.textMuted} style={{ marginTop: 48, marginBottom: 32 }} />
 
           {devotionalId && dayNumber && onOpenJournal ? (
@@ -448,7 +463,7 @@ export function DevotionalContent({
               ))}
             </View>
           )}
-        </>
+        </View>
       )}
 
       {/* Act Section — the day's one concrete same-day act */}
@@ -507,7 +522,7 @@ export function DevotionalContent({
 
       {/* Closing Prayer Section */}
       {day.closingPrayer && (
-        <View style={dcStyles.prayerSection}>
+        <View style={dcStyles.prayerSection} onLayout={handlePrayerLayout}>
           <SectionDivider color={colors.textMuted} style={{ marginTop: 0, marginBottom: 32 }} />
           <ReaderSectionHeader label="A Prayer" textColor={colors.text} />
           <Text
