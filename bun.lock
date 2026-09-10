@@ -157,7 +157,6 @@
     "@shopify/react-native-skia",
   ],
   "patchedDependencies": {
-    "react-native-webview@13.16.1": "patches/react-native-webview@13.16.1.patch",
     "expo-notifications@57.0.14": "patches/expo-notifications@57.0.14.patch",
     "@nandorojo/galeria@2.0.0-rc.4": "patches/@nandorojo%2Fgaleria@2.0.0-rc.4.patch",
     "phosphor-react-native@3.0.3": "patches/phosphor-react-native@3.0.3.patch",
