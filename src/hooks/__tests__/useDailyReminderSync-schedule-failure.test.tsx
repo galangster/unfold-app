@@ -26,9 +26,16 @@ const mockIsDailyReminderOriginCurrent = jest.fn(
 );
 
 const mockStoreState = {
-  user: { reminderTime: '8:00 AM', dailyReminderEnabled: true },
+  user: { reminderTime: '8:00 AM', dailyReminderEnabled: true } as {
+    reminderTime: string;
+    dailyReminderEnabled: boolean;
+    localDailyReminderScheduled?: boolean;
+  },
   devotionals: [] as { id: string }[],
   currentDevotionalId: null as string | null,
+  updateUser: (updates: Record<string, unknown>) => {
+    Object.assign(mockStoreState.user, updates);
+  },
 };
 
 let mockOperation = 0;
@@ -48,7 +55,10 @@ jest.mock('@/hooks/usePremiumAccessPolicy', () => ({
 
 jest.mock('@/lib/daily-reminder-content', () => ({
   buildDailyReminderFingerprint: () => 'unchanged-fingerprint',
+  getDailyReminderOwner: () => 'local',
 }));
+
+jest.mock('@/lib/analytics', () => ({ logEvent: jest.fn() }));
 
 jest.mock('@/lib/logger', () => ({
   logger: { log: jest.fn(), error: jest.fn() },

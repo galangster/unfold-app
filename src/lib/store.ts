@@ -173,6 +173,14 @@ export interface UserProfile {
   devotionalLength: 3 | 7 | 14 | 30;
   reminderTime: string;
   dailyReminderEnabled: boolean;
+  /** ISO time the backend last confirmed it holds this device's push token. */
+  pushRegisteredAt?: string;
+  /**
+   * Whether a local daily reminder is currently in the OS queue. Mirrored to
+   * the backend so it never double-notifies the morning slot and only takes
+   * it over when the client has handed it off.
+   */
+  localDailyReminderScheduled?: boolean;
   hasCompletedOnboarding: boolean;
   hasCompletedStyleOnboarding: boolean;
   isPremium: boolean;

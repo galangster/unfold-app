@@ -39,7 +39,9 @@ import {
 } from '@/lib/notifications';
 import { logger } from '@/lib/logger';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
-import { buildDailyReminderFingerprint } from '@/lib/daily-reminder-content';
+import { buildDailyReminderFingerprint, getDailyReminderOwner } from '@/lib/daily-reminder-content';
+import { logEvent } from '@/lib/analytics';
+import { getCurrentDevotional } from '@/lib/home-devotional-state';
 import { captureSyncSession } from '@/lib/sync-session-fence';
 
 const DEBOUNCE_MS = 750;
@@ -56,16 +58,27 @@ function useReminderFingerprint(premiumPolicy: ReturnType<typeof usePremiumAcces
   return useUnfoldStore((state) => {
     const reminderTime = state.user?.reminderTime ?? '';
     const dailyReminderEnabled = state.user?.dailyReminderEnabled ?? Boolean(reminderTime);
-    const currentDevotional =
-      state.devotionals.find((devotional) => devotional.id === state.currentDevotionalId) ?? null;
+    const currentDevotional = getCurrentDevotional(state.devotionals, state.currentDevotionalId);
 
     return buildDailyReminderFingerprint({
       reminderTime,
       dailyReminderEnabled,
       currentDevotional,
       premiumPolicy,
+      pushRegistered: Boolean(state.user?.pushRegisteredAt),
     });
   });
+}
+
+/**
+ * Mirrors "a local daily reminder sits in the OS queue" onto the profile so
+ * the backend knows whether the morning slot is taken. Only writes on change:
+ * the profile sync hook ships every user write to the server.
+ */
+function mirrorLocalReminderScheduled(scheduled: boolean): void {
+  const state = useUnfoldStore.getState();
+  if (!state.user || state.user.localDailyReminderScheduled === scheduled) return;
+  state.updateUser({ localDailyReminderScheduled: scheduled });
 }
 
 export function useDailyReminderSync() {
@@ -145,6 +158,7 @@ export function useDailyReminderSync() {
         if (!isDailyReminderOriginCurrent(originatingSession, originatingOperation)) {
           return;
         }
+        mirrorLocalReminderScheduled(false);
         lastAppliedRef.current = latestFingerprintRef.current;
         lastAppliedDayRef.current = todayStr;
         logger.log(`[useDailyReminderSync] Daily reminder disabled; cancelled daily reminder (reason=${reason})`);
@@ -157,7 +171,34 @@ export function useDailyReminderSync() {
         return;
       }
       if (!hasPermission) {
+        mirrorLocalReminderScheduled(false);
         logger.log('[useDailyReminderSync] No permission; skipping schedule');
+        return;
+      }
+
+      // Hand the morning slot to the server when it can reach this device
+      // and the next day is not on it yet: the server generates that day
+      // overnight and pushes its real quotable line at reminderTime. The
+      // local copy could only say "your next reading is waiting".
+      const owner = getDailyReminderOwner({
+        currentDevotional: getCurrentDevotional(state.devotionals, state.currentDevotionalId),
+        premiumPolicy: targetPremiumPolicy,
+        pushRegistered: Boolean(state.user?.pushRegisteredAt),
+      });
+      if (owner === 'server') {
+        await cancelNotificationById(
+          NOTIFICATION_IDS.DAILY_REMINDER,
+          originatingSession,
+          originatingOperation,
+        );
+        if (!isDailyReminderOriginCurrent(originatingSession, originatingOperation)) {
+          return;
+        }
+        mirrorLocalReminderScheduled(false);
+        lastAppliedRef.current = latestFingerprintRef.current;
+        lastAppliedDayRef.current = todayStr;
+        logEvent('notification_scheduled', { type: 'daily_reminder', owner: 'server' });
+        logger.log(`[useDailyReminderSync] Server owns the morning slot; local reminder cancelled (reason=${reason})`);
         return;
       }
 
@@ -166,8 +207,10 @@ export function useDailyReminderSync() {
         return;
       }
       if (scheduledId == null) {
+        mirrorLocalReminderScheduled(false);
         return;
       }
+      mirrorLocalReminderScheduled(true);
 
       // Post-schedule stale-check: if state changed during the await (e.g.
       // user tapped "Delete Everything" mid-flight and we just recreated a
@@ -183,6 +226,7 @@ export function useDailyReminderSync() {
           originatingSession,
           originatingOperation,
         );
+        mirrorLocalReminderScheduled(false);
         // Force another run to converge on the new state.
         pendingRef.current = true;
         logger.log('[useDailyReminderSync] State changed during schedule; cancelled and re-queuing');

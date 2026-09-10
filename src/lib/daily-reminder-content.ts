@@ -13,6 +13,41 @@ export interface DailyReminderFingerprintInput {
   dailyReminderEnabled?: boolean;
   currentDevotional: Devotional | null | undefined;
   premiumPolicy: PremiumAccessPolicy;
+  pushRegistered?: boolean;
+}
+
+export type DailyReminderOwner = 'local' | 'server';
+
+export interface DailyReminderOwnerInput {
+  currentDevotional: Devotional | null | undefined;
+  premiumPolicy: PremiumAccessPolicy;
+  /** The backend holds an Expo push token for this device. */
+  pushRegistered: boolean;
+}
+
+/**
+ * Who fires the morning reminder.
+ *
+ * The local DAILY trigger bakes its copy at schedule time. When the next day
+ * is not on the device yet (the normal bedtime state for a progressive
+ * series) that copy can only say "your next reading is waiting". The server
+ * generates that day overnight and knows its quotable line, so when it can
+ * reach the device it owns the slot and the client schedules nothing. Every
+ * other state keeps the local reminder: it is the only guaranteed channel,
+ * and its copy is specific whenever the day is already on device.
+ */
+export function getDailyReminderOwner({
+  currentDevotional,
+  premiumPolicy,
+  pushRegistered,
+}: DailyReminderOwnerInput): DailyReminderOwner {
+  if (!pushRegistered) return 'local';
+  if (premiumPolicy !== 'granted') return 'local';
+  if (!currentDevotional) return 'local';
+  if (getCurrentReminderDay(currentDevotional)) return 'local';
+  const nextDayNumber = Math.max(1, currentDevotional.currentDay || 1);
+  const inSeries = nextDayNumber <= getServerOwnedSeriesTotalDays(currentDevotional);
+  return inSeries ? 'server' : 'local';
 }
 
 export interface DailyReminderContent {
@@ -25,8 +60,22 @@ function getCurrentReminderDay(devotional: Devotional | null | undefined): Devot
   return devotional.days.find((day) => day.dayNumber === devotional.currentDay) ?? null;
 }
 
+// iOS shows about four lines of body when the reader expands a banner and
+// two when it is collapsed. 150 characters keeps a long "act" readable
+// without the OS cutting it mid-sentence.
+export const MAX_NOTIFICATION_BODY = 150;
+
+/** Trims and cuts notification copy at a word boundary with an ellipsis. */
+export function truncateNotificationBody(text: string, max = MAX_NOTIFICATION_BODY): string {
+  const trimmed = text.trim();
+  if (trimmed.length <= max) return trimmed;
+  const cut = trimmed.slice(0, max - 1);
+  const lastSpace = cut.lastIndexOf(' ');
+  return `${(lastSpace > max * 0.6 ? cut.slice(0, lastSpace) : cut).replace(/[,;:\s]+$/, '')}…`;
+}
+
 function truncateBody(text: string, maxLength = 100): string {
-  return text.length > maxLength ? `${text.substring(0, maxLength - 3)}...` : text;
+  return truncateNotificationBody(text, maxLength);
 }
 
 export function getDailyReminderContent({
@@ -113,6 +162,7 @@ export function buildDailyReminderFingerprint({
   dailyReminderEnabled = Boolean(reminderTime),
   currentDevotional,
   premiumPolicy,
+  pushRegistered = false,
 }: DailyReminderFingerprintInput): string {
   const currentDay = getCurrentReminderDay(currentDevotional);
 
@@ -122,6 +172,7 @@ export function buildDailyReminderFingerprint({
     dailyReminderEnabled ? 'enabled' : 'disabled',
     reminderTime ?? '',
     premiumPolicy,
+    pushRegistered ? 'push' : 'nopush',
     currentDevotional?.id ?? '',
     currentDevotional?.title ?? '',
     currentDevotional?.currentDay ?? '',

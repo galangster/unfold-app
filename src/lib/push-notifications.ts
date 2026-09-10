@@ -20,6 +20,12 @@ import { PRIMARY_BACKEND_URL, getAuthHeaders } from './api-config';
 import { logger } from '@/lib/logger';
 import { getDeviceId } from '@/lib/mmkv-storage';
 import { useUnfoldStore } from '@/lib/store';
+import { logEvent } from '@/lib/analytics';
+import {
+  NOTIFICATION_ACTIONS,
+  configureNotificationPresentation,
+  scheduleRemindLater,
+} from '@/lib/notifications';
 import {
   buildNotificationPreferenceRequestBody,
   buildPushRegistrationRequestBody,
@@ -105,14 +111,7 @@ async function hydrateLastNotificationResponse(): Promise<void> {
         return;
       }
 
-      const data = response.notification.request.content.data;
-      if (!data) return;
-
-      logger.log('[push] Notification tapped (cold start), data:', data);
-      notificationNavigationCoordinator.queueFromData(
-        data,
-        getNotificationResponseKey(response),
-      );
+      handleNotificationResponse(response, 'cold');
     } finally {
       if (shouldClearLastResponse) {
         await Notifications.clearLastNotificationResponseAsync();
@@ -139,6 +138,22 @@ async function hydrateLastNotificationResponse(): Promise<void> {
  * and 'failed' when the token fetch or the POST failed — the caller decides
  * whether the reader hears about it.
  */
+/**
+ * Persists "the backend holds this device's token" so the daily-reminder
+ * owner decision survives a cold start. A failure here never changes the
+ * registration result: the server has the token either way.
+ */
+function markPushRegistered(): void {
+  try {
+    const state = useUnfoldStore.getState();
+    if (state.user && !state.user.pushRegisteredAt) {
+      state.updateUser({ pushRegisteredAt: new Date().toISOString() });
+    }
+  } catch (error) {
+    logger.warn('[push] Could not persist push registration flag:', error);
+  }
+}
+
 export async function registerPushToken(): Promise<PushRegistrationResult> {
   // Push tokens are only available on physical devices
   if (!Device.isDevice) {
@@ -274,6 +289,7 @@ async function registerPushTokenForOwner(
 
     registeredOwner = owner;
     logger.log('[push] Push token registered with backend');
+    markPushRegistered();
     return 'registered';
   } catch (err) {
     if (!isPushRegistrationOwnerCurrent(owner)) {
@@ -319,6 +335,52 @@ export async function syncNotificationPreferences(): Promise<void> {
   }
 }
 
+/**
+ * One path for every tap, cold or warm: action buttons first, then the
+ * open event, then the route. Returns true when a route was queued.
+ */
+function handleNotificationResponse(
+  response: Notifications.NotificationResponse,
+  start: 'cold' | 'warm',
+): boolean {
+  const data = response.notification.request.content.data;
+  if (!data) return false;
+  if (handleNotificationAction(response)) return false;
+  logger.log(`[push] Notification tapped (${start}), data:`, data);
+  logNotificationOpened(response, start);
+  return notificationNavigationCoordinator.queueFromData(data, getNotificationResponseKey(response));
+}
+
+function notificationTypeOf(response: Notifications.NotificationResponse): string {
+  const type = response.notification.request.content.data?.type;
+  return typeof type === 'string' ? type : 'unknown';
+}
+
+function logNotificationOpened(response: Notifications.NotificationResponse, start: 'cold' | 'warm'): void {
+  const sentAt = response.notification.date;
+  const minutesToOpen = Number.isFinite(sentAt) && sentAt > 0
+    ? Math.max(0, Math.round((Date.now() - sentAt) / 60_000))
+    : undefined;
+  logEvent('notification_opened', {
+    type: notificationTypeOf(response),
+    action: response.actionIdentifier,
+    start,
+    ...(minutesToOpen !== undefined ? { minutesToOpen } : {}),
+  });
+}
+
+/**
+ * Handles an action-button tap. Returns true when the action consumed the
+ * response, so the caller must not navigate. "Read now" falls through to the
+ * normal tap route.
+ */
+function handleNotificationAction(response: Notifications.NotificationResponse): boolean {
+  if (response.actionIdentifier !== NOTIFICATION_ACTIONS.REMIND_LATER) return false;
+  logEvent('notification_action', { type: notificationTypeOf(response), action: 'remind_later' });
+  void scheduleRemindLater(response.notification.request.content);
+  return true;
+}
+
 export function setNotificationNavigationReady(ready: boolean): void {
   notificationNavigationCoordinator.setNavigationReady(ready);
 }
@@ -339,16 +401,13 @@ export function hasSettledInitialNotificationHydration(): boolean {
  * Returns a cleanup function to remove the listener.
  */
 export function setupNotificationListeners(): () => void {
+  // Channels and action-button categories must exist before anything fires.
+  void configureNotificationPresentation();
+
   // Warm start: listen for future taps
   const subscription =
     Notifications.addNotificationResponseReceivedListener((response) => {
-      const data = response.notification.request.content.data;
-      if (!data) return;
-      logger.log('[push] Notification tapped (warm), data:', data);
-      const queued = notificationNavigationCoordinator.queueFromData(
-        data,
-        getNotificationResponseKey(response),
-      );
+      const queued = handleNotificationResponse(response, 'warm');
       if (queued) {
         Notifications.clearLastNotificationResponseAsync().catch((error) => {
           logger.warn('[push] Failed to clear handled warm notification response:', error);

@@ -37,6 +37,9 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon, XIcon, HandIcon, FingerprintIcon, MoonIcon, CompassIcon, HeartIcon, EyeIcon, FireIcon, SparkleIcon, CloudRainIcon, ScalesIcon, CrosshairIcon, BookOpenIcon, UsersIcon, MusicNotesIcon, CrownIcon, LeafIcon, ChatCircleIcon, CalendarIcon, MagicWandIcon, SmileyIcon, GiftIcon, BinocularsIcon, CloudIcon, ShieldIcon, ShieldCheckIcon, SpeakerHighIcon, LockIcon, GavelIcon } from '@/components/icons';
 import { logger } from '@/lib/logger';
+import { requestNotificationPermissions } from '@/lib/notifications';
+import { registerPushToken } from '@/lib/push-notifications';
+import { logEvent } from '@/lib/analytics';
 import { requestReviewOncePerVersion } from '@/lib/review-prompt';
 
 import { useTheme } from '@/lib/theme';
@@ -938,6 +941,9 @@ export default function OnboardingScreen() {
 
   // Transition state for animations
   const isTransitioningRef = useRef(false);
+  // The reminder-time step is the in-context ask: the reader just chose when
+  // they want a nudge, so the OS permission dialog lands on a "yes".
+  const reminderPermissionAskedRef = useRef(false);
 
   // (data state declared earlier — before mirrorBackText useMemo)
 
@@ -1496,6 +1502,24 @@ export default function OnboardingScreen() {
   const handleNext = () => {
     // Prevent double-clicks during transitions
     if (isTransitioningRef.current) return;
+
+    if (step?.id === 'reminderTime' && !reminderPermissionAskedRef.current) {
+      reminderPermissionAskedRef.current = true;
+      // Hold the double-tap guard while the OS dialog is up, then advance
+      // through the normal path once it closes.
+      isTransitioningRef.current = true;
+      void requestNotificationPermissions()
+        .then((granted) => {
+          logEvent('notification_permission_answered', { source: 'onboarding_reminder_time', granted });
+          if (granted) void registerPushToken();
+        })
+        .catch((error) => logger.warn('[onboarding] reminder permission ask failed', error))
+        .finally(() => {
+          isTransitioningRef.current = false;
+          handleNext();
+        });
+      return;
+    }
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 

@@ -84,6 +84,7 @@ jest.mock('../store', () => ({
   useUnfoldStore: {
     getState: () => ({
       user: { reminderTime: '8:00 AM' },
+      updateUser: jest.fn(),
     }),
   },
 }));
