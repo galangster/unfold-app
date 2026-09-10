@@ -247,8 +247,11 @@ export function CompletionCelebration({
             {/* Series reflection summary */}
             {type === 'series' && seriesSummaryExcerpt && (
               <Animated.View style={[{ marginTop: Spacing['4'], maxWidth: SCREEN_WIDTH - Spacing['8'] * 2 }, subtitleStyle]}>
+                {/* No line clamp. Four lines holds ~170 characters at iPhone
+                    widths, but formatSeriesCompletionSummary allows 220, so the
+                    clamp re-truncated the reflection mid-word. The overlay is
+                    already inside a ScrollView, so long text scrolls instead. */}
                 <Text
-                  numberOfLines={4}
                   style={{
                     fontFamily: FontFamily.body,
                     fontSize: 16,
