@@ -16,8 +16,14 @@ export const HIGHLIGHT_COLORS: Record<HighlightKey, { light: string; dark: strin
  * reader's felt-tip stroke: a translucent band, never coloured text, with
  * lighter ink on a dark ground so the letters stay legible.
  */
+/** Solid swatch for a colour; unknown or missing colours (synced data) fall back to yellow. */
+export function highlightSwatch(color: string | null | undefined, isDark: boolean): string {
+  const entry = (color && HIGHLIGHT_COLORS[color as HighlightKey]) || HIGHLIGHT_COLORS.yellow;
+  return entry[isDark ? 'dark' : 'light'];
+}
+
 export function highlightBandColor(color: HighlightKey | null | undefined, isDark: boolean): string {
-  const hex = HIGHLIGHT_COLORS[color ?? 'yellow'][isDark ? 'dark' : 'light'];
+  const hex = highlightSwatch(color, isDark);
   const alpha = isDark ? 0.3 : 0.42;
   const channel = (i: number) => parseInt(hex.slice(i, i + 2), 16);
   return `rgba(${channel(1)}, ${channel(3)}, ${channel(5)}, ${alpha})`;

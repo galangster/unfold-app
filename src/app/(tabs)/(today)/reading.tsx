@@ -480,6 +480,10 @@ export default function ReadingScreen() {
     [sectionOffsets],
   );
 
+  useEffect(() => {
+    setSectionOffsets({});
+  }, [viewingDay, effectiveDevotionalId]);
+
   const handleSectionLayout = useCallback((section: ReaderSection, contentY: number) => {
     setSectionOffsets((prev) => (prev[section] === contentY ? prev : { ...prev, [section]: contentY }));
   }, []);
@@ -489,11 +493,11 @@ export default function ReadingScreen() {
     router.push({
       pathname: '/(tabs)/(today)/journal',
       params: {
-        devotionalId: currentDevotionalId,
+        devotionalId: effectiveDevotionalId ?? currentDevotionalId,
         dayNumber: String(viewingDay),
       },
     });
-  }, [router, currentDevotionalId, viewingDay]);
+  }, [router, effectiveDevotionalId, currentDevotionalId, viewingDay]);
 
   const handleJumpToSection = useCallback((section: ReaderSection) => {
     const y = sectionOffsets[section];
@@ -503,9 +507,13 @@ export default function ReadingScreen() {
     scrollReaderToY(Math.max(0, y - SECTION_TARGET_TOP_INSET));
   }, [sectionOffsets, scrollReaderToY]);
 
+  // A sheet-initiated jump scrolls once; the deep-link retry ladder in
+  // handleTargetHighlightLocated is for a document still laying out.
+  const sheetJumpPendingRef = useRef(false);
   const handleJumpToHighlight = useCallback((highlight: Highlight) => {
     setShowOutlineSheet(false);
     Haptics.selectionAsync();
+    sheetJumpPendingRef.current = true;
     highlightCommandRef.current?.scrollToHighlight(highlight);
   }, []);
 
@@ -521,12 +529,17 @@ export default function ReadingScreen() {
 
   const handleTargetHighlightLocated = useCallback((contentY: number) => {
     const y = Math.max(0, contentY - LIBRARY_TARGET_TOP_INSET);
+    if (sheetJumpPendingRef.current) {
+      sheetJumpPendingRef.current = false;
+      scrollReaderToY(y);
+      return;
+    }
     targetScrollRequestIdRef.current += 1;
     setTargetScrollRequest({
       id: targetScrollRequestIdRef.current,
       y,
     });
-  }, []);
+  }, [scrollReaderToY]);
 
   const handleReflectionInputFocus = useCallback((contentY: number) => {
     const y = Math.max(0, contentY - LIBRARY_TARGET_TOP_INSET);

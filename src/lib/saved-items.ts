@@ -191,13 +191,20 @@ function syncChangeFor(entry: SavedEntry, clientUpdatedAt: string): SyncPushChan
  * this drops that tombstone from the outbox and re-enqueues the record as an
  * upsert, mirroring `applyUndoActionsWithSync` for notes.
  */
+function stampEntry(entry: SavedEntry, updatedAt: string): SavedEntry {
+  // The local row must carry the same updatedAt as the upsert it enqueues,
+  // or the next pull sees the server copy as newer and re-applies it.
+  return { ...entry, updatedAt, raw: { ...entry.raw, updatedAt } } as SavedEntry;
+}
+
 export function undoSavedDeletions(
   state: SavedStoreSlice,
   actions: SavedUndoAction[],
   clientUpdatedAt = new Date().toISOString(),
 ): SavedStoreSlice {
-  const restored = applySavedUndo(state, actions);
-  const changes = actions.map(({ entry }) => syncChangeFor(entry, clientUpdatedAt));
+  const stamped = actions.map(({ entry }) => ({ entry: stampEntry(entry, clientUpdatedAt) }));
+  const restored = applySavedUndo(state, stamped);
+  const changes = stamped.map(({ entry }) => syncChangeFor(entry, clientUpdatedAt));
   if (changes.length > 0) {
     removeSyncChangesForRecords(changes.map(({ table, id }) => ({ table, id })));
     enqueueSyncChanges(changes);

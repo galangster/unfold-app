@@ -24,6 +24,11 @@ describe('pickRememberThis', () => {
     expect(picks).toEqual(new Set(['h1', 'b1']));
   });
 
+  it('skips a devotional highlight with no text', () => {
+    const empty = { ...devotionalHighlight, id: 'h-empty', highlightedText: '  ' } as unknown as Highlight;
+    expect(pickRememberThis([empty], [], '2026-09-10')).toBeNull();
+  });
+
   it('is stable for a given day', () => {
     const a = pickRememberThis([devotionalHighlight], [verse], '2026-09-10');
     const b = pickRememberThis([devotionalHighlight], [verse], '2026-09-10');
