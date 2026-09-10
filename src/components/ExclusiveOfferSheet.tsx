@@ -5,8 +5,12 @@
  * - 'onboarding': 50% OFF badge, purchases $rc_annual from default offering ($59.99/yr).
  * - 'churned': 25% OFF badge, fetches 'winback' offering and purchases its first package ($44.99/yr).
  *   This churned path is disabled by default for v1 via EXPO_PUBLIC_ENABLE_CHURNED_WINBACK_OFFER.
+ *   When the winback SKU is off sale RevenueCat still returns the offering with an
+ *   empty availablePackages, so the churned path falls back to $rc_annual and shows
+ *   that package's badge instead of the winback 25%.
  *
- * Shown once per trigger. User will not see this offer again.
+ * Shown once per trigger, and only burned once a real offer reaches the screen:
+ * a sheet that could not load a package leaves the one-time chance intact.
  */
 
 import { useState } from 'react';
@@ -38,9 +42,19 @@ import { logger } from '@/lib/logger';
 // Types
 // ---------------------------------------------------------------------------
 
+/**
+ * What the sheet reports back when it closes without granting premium.
+ * `offerShown` is true only when a purchasable package actually reached the
+ * screen, so hosts can burn their once-ever offer flag on a real presentation
+ * and leave it alone when the sheet only managed to render its failure state.
+ */
+export interface ExclusiveOfferDismissInfo {
+  offerShown: boolean;
+}
+
 interface ExclusiveOfferSheetProps {
   visible: boolean;
-  onDismiss: () => void;
+  onDismiss: (info?: ExclusiveOfferDismissInfo) => void;
   /**
    * Called instead of onDismiss when a purchase or restore INSIDE this sheet
    * grants premium. Onboarding passes the same callback its main CTA uses so a
@@ -72,7 +86,6 @@ export function ExclusiveOfferSheet({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const isOnboarding = context === 'onboarding';
-  const discountLabel = isOnboarding ? '50% OFF' : '25% OFF';
 
   // Fetch offerings
   const { data: offeringsResult, isLoading: isLoadingOfferings } = useQuery({
@@ -86,18 +99,38 @@ export function ExclusiveOfferSheet({
 
   const offerings = offeringsResult?.ok ? offeringsResult.data : null;
 
-  // Resolve the target package based on context
-  const targetPackage: PurchasesPackage | undefined = isOnboarding
-    ? offerings?.current?.availablePackages.find((pkg) => pkg.identifier === '$rc_annual')
-    : offerings?.all?.['winback']?.availablePackages?.[0];
+  const standardAnnualPackage = offerings?.current?.availablePackages.find(
+    (pkg) => pkg.identifier === '$rc_annual',
+  );
+  const winbackPackage = offerings?.all?.['winback']?.availablePackages?.[0];
+
+  // The churned path falls back to the standard annual package: pulling
+  // unfold_yearly_winback from sale leaves the winback offering present but
+  // empty, and without this fallback the sheet had nothing to sell and could
+  // only render its failure state.
+  const usingWinback = !isOnboarding && winbackPackage !== undefined;
+  const targetPackage: PurchasesPackage | undefined = usingWinback
+    ? winbackPackage
+    : standardAnnualPackage;
+
+  // The badge follows the package that is actually for sale. Advertising the
+  // winback 25% over a $rc_annual fallback would be a false discount claim.
+  const discountLabel = usingWinback ? '25% OFF' : '50% OFF';
 
   // Build price string
   const priceString = targetPackage
     ? `${targetPackage.product.priceString}/year`
     : null;
 
-  // Detect offering failure — loaded but target package missing
-  const offeringFailed = !isLoadingOfferings && offeringsResult && !targetPackage;
+  // No package, and none is still coming. react-query reports isLoading only
+  // while a fetch is genuinely in flight, so this one term covers a disabled,
+  // paused, errored or settled-but-empty query alike.
+  const offeringFailed = !targetPackage && !isLoadingOfferings;
+
+  // Every close routes through here so the host learns whether a purchasable
+  // offer was on screen. It takes no arguments on purpose: passed straight to
+  // onPress and onRequestClose, a React Native event would land in the info slot.
+  const handleDismiss = () => onDismiss({ offerShown: Boolean(targetPackage) });
 
   // Single exit for "premium is now active", shared by purchase and restore.
   // Hands off to onPurchaseSuccess when the caller supplied one so the host
@@ -111,7 +144,7 @@ export function ExclusiveOfferSheet({
       onPurchaseSuccess();
       return;
     }
-    onDismiss();
+    handleDismiss();
   };
 
   // Purchase mutation
@@ -179,8 +212,10 @@ export function ExclusiveOfferSheet({
     purchaseMutation.mutate(targetPackage);
   };
 
+  // Reached only from the failure state, so handleDismiss reports offerShown
+  // false and the host keeps the person's one shot at the offer.
   const handleFallbackPaywall = () => {
-    onDismiss();
+    handleDismiss();
     router.push('/paywall');
   };
 
@@ -200,7 +235,7 @@ export function ExclusiveOfferSheet({
       visible={visible}
       animationType="fade"
       transparent={false}
-      onRequestClose={onDismiss}
+      onRequestClose={handleDismiss}
     >
       <Animated.View
         entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
@@ -218,9 +253,9 @@ export function ExclusiveOfferSheet({
             <Gift size={32} color={colors.accent} weight="fill" />
           </View>
 
-          {/* Headline */}
+          {/* Headline — never claim an exclusive offer the sheet could not load */}
           <Text style={[styles.headline, { color: colors.text }]}>
-            Exclusive Offer
+            {offeringFailed ? 'Unfold Premium' : 'Exclusive Offer'}
           </Text>
 
           {/* Body text */}
@@ -228,10 +263,13 @@ export function ExclusiveOfferSheet({
             {bodyText}
           </Text>
 
-          {/* Urgency line */}
-          <Text style={[styles.urgencyText, { color: colors.textSubtle }]}>
-            You will not see this offer again.
-          </Text>
+          {/* Urgency line — the host leaves the one-time flag unburned when the
+              offer failed, so this promise would not hold */}
+          {!offeringFailed && (
+            <Text style={[styles.urgencyText, { color: colors.textSubtle }]}>
+              You will not see this offer again.
+            </Text>
+          )}
 
           {/* Plan pill — hidden when offering failed */}
           {!offeringFailed && (
@@ -244,12 +282,15 @@ export function ExclusiveOfferSheet({
                 },
               ]}
             >
-              {/* Discount badge */}
-              <View style={[styles.discountBadge, { backgroundColor: colors.accent }]}>
-                <Text style={[styles.discountBadgeText, { color: isDark ? '#0A0A0A' : '#FFFFFF' }]}>
-                  {discountLabel}
-                </Text>
-              </View>
+              {/* Discount badge — held back until a package resolves, so a churned
+                  sheet cannot flash the fallback 50% before the winback 25% lands */}
+              {targetPackage && (
+                <View style={[styles.discountBadge, { backgroundColor: colors.accent }]}>
+                  <Text style={[styles.discountBadgeText, { color: isDark ? '#0A0A0A' : '#FFFFFF' }]}>
+                    {discountLabel}
+                  </Text>
+                </View>
+              )}
 
               <View style={styles.planPillContent}>
                 <Text style={[styles.planLabel, { color: colors.text }]}>Yearly</Text>
@@ -294,7 +335,7 @@ export function ExclusiveOfferSheet({
           <TouchableOpacity
             activeOpacity={0.8}
             onPress={offeringFailed ? handleFallbackPaywall : handleAcceptOffer}
-            disabled={!offeringFailed && (isPurchasing || isLoadingOfferings || !targetPackage)}
+            disabled={isPurchasing || (!offeringFailed && !targetPackage)}
             accessibilityRole="button"
             accessibilityLabel={offeringFailed ? 'View Plans' : 'Accept Offer'}
             style={[
@@ -315,7 +356,7 @@ export function ExclusiveOfferSheet({
           {/* No thanks dismiss */}
           <TouchableOpacity
             activeOpacity={0.7}
-            onPress={onDismiss}
+            onPress={handleDismiss}
             disabled={isPurchasing}
             accessibilityRole="button"
             accessibilityLabel="No thanks"

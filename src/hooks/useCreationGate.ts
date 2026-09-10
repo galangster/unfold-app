@@ -3,6 +3,7 @@ import { Alert, AccessibilityInfo } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { mmkvStorage } from '@/lib/mmkv-storage';
+import type { ExclusiveOfferDismissInfo } from '@/components/ExclusiveOfferSheet';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import {
   getChurnedCreationGateAction,
@@ -56,8 +57,14 @@ export function useCreationGate() {
     return false;
   }, [policy, router, notifyPendingSubscriptionCheck]);
 
-  const dismissOffer = useCallback(() => {
-    mmkvStorage.setItem(EXCLUSIVE_OFFER_SEEN_KEY, 'true');
+  // Burn the once-ever offer only when the sheet actually put one on screen.
+  // Writing the flag unconditionally meant a sheet that failed to load a package
+  // — say, after the winback SKU leaves sale — spent the person's single chance
+  // the moment they tapped through to the full paywall.
+  const dismissOffer = useCallback((info?: ExclusiveOfferDismissInfo) => {
+    if (info?.offerShown) {
+      mmkvStorage.setItem(EXCLUSIVE_OFFER_SEEN_KEY, 'true');
+    }
     setShowExclusiveOffer(false);
   }, []);
 
