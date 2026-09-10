@@ -280,6 +280,11 @@ export function buildNotificationNavigationRoute(
     return { pathname: '/(tabs)/(today)/evening-wind-down' };
   }
 
+  // Lapse re-entry: the series is waiting on Today.
+  if (data?.type === 'lapse_reentry') {
+    return { pathname: '/(tabs)/(today)' };
+  }
+
   // The act reminder opens the day it came from, scrolled to the act.
   if (data?.type === 'act_reminder') {
     const devotionalId = readStringField(data, 'devotionalId');

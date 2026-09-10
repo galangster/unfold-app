@@ -176,6 +176,10 @@ describe('push notification helpers', () => {
       });
     });
 
+    it('routes a lapse re-entry push to Today', () => {
+      expect(buildNotificationNavigationRoute({ type: 'lapse_reentry' })).toEqual({ pathname: '/(tabs)/(today)' });
+    });
+
     it('routes an act reminder to its day, scrolled to the act', () => {
       expect(
         buildNotificationNavigationRoute({ type: 'act_reminder', devotionalId: 'dev-1', dayNumber: 4 }),

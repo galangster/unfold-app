@@ -13,7 +13,8 @@ import { localDayKey, localDayKeyFromIso } from './home-devotional-state';
 import { parseReminderClock } from './push-notification-helpers';
 import { QUIET_HOURS } from './quiet-hours';
 
-export type ActSlot = 'midday' | 'evening' | 'morning-next';
+export const ACT_SLOTS = ['midday', 'evening', 'morning-next'] as const;
+export type ActSlot = (typeof ACT_SLOTS)[number];
 
 export interface ActReminderData extends Record<string, unknown> {
   type: 'act_reminder';
