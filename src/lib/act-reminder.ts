@@ -10,7 +10,8 @@
 import type { Devotional, DevotionalDay } from './store';
 import { truncateNotificationBody } from './daily-reminder-content';
 import { localDayKey, localDayKeyFromIso } from './home-devotional-state';
-import { normalizePreferredNotificationTime, parseHhMm } from './push-notification-helpers';
+import { parseReminderClock } from './push-notification-helpers';
+import { QUIET_HOURS } from './quiet-hours';
 
 export type ActSlot = 'midday' | 'evening' | 'morning-next';
 
@@ -50,7 +51,7 @@ const DEFAULT_MORNING = { hour: 8, minute: 0 };
 const MIN_LEAD_MS = 15 * 60_000;
 /** A passed evening slot still gets a nudge this far out, until the cutoff. */
 const LATE_EVENING_DELAY_MS = 45 * 60_000;
-const LATE_EVENING_CUTOFF_HOUR = 22;
+const LATE_EVENING_CUTOFF_HOUR = QUIET_HOURS.startHour;
 
 const MORNING_NEXT_PATTERNS = [
   /\btomorrow\b/i,
@@ -82,14 +83,6 @@ export function inferActSlot(act: string, generatedSlot?: ActSlot | null): ActSl
   return 'evening';
 }
 
-/** Accepts "HH:mm" (check-in times) and "h:mm AM" (the profile reminder). */
-function parseClock(
-  value: string | null | undefined,
-  fallback: { hour: number; minute: number },
-): { hour: number; minute: number } {
-  const normalized = value ? normalizePreferredNotificationTime(value) : undefined;
-  return normalized ? parseHhMm(normalized, fallback) : fallback;
-}
 
 function atClock(base: Date, clock: { hour: number; minute: number }, dayOffset = 0): Date {
   const date = new Date(base);
@@ -143,9 +136,9 @@ export function buildActReminderPlan({
 
   const slot = inferActSlot(act, day.actSlot);
   const fireAt = getActReminderFireAt(slot, now, {
-    midday: parseClock(middayTime, DEFAULT_MIDDAY),
-    evening: parseClock(eveningTime, DEFAULT_EVENING),
-    morning: parseClock(morningTime, DEFAULT_MORNING),
+    midday: parseReminderClock(middayTime, DEFAULT_MIDDAY),
+    evening: parseReminderClock(eveningTime, DEFAULT_EVENING),
+    morning: parseReminderClock(morningTime, DEFAULT_MORNING),
   });
   if (!fireAt) return null;
 

@@ -181,6 +181,8 @@ export interface UserProfile {
    * it over when the client has handed it off.
    */
   localDailyReminderScheduled?: boolean;
+  /** A reminder-time suggestion the reader turned down ("h:mm AM"). */
+  reminderTimeSuggestionDismissed?: string;
   hasCompletedOnboarding: boolean;
   hasCompletedStyleOnboarding: boolean;
   isPremium: boolean;

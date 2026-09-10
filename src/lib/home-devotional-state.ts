@@ -53,6 +53,12 @@ export function getDaysReadToday(
     .sort((a, b) => b.dayNumber - a.dayNumber);
 }
 
+
+/** Whether any day of any devotional was finished during the local today. */
+export function hasReadAnyDayToday(devotionals: readonly Devotional[], now = new Date()): boolean {
+  return devotionals.some((devotional) => getDaysReadToday(devotional, now).length > 0);
+}
+
 export function getTodayCarryLine(
   devotionals: readonly Devotional[],
   currentDevotionalId: string | null | undefined,

@@ -39,9 +39,14 @@ import {
 } from '@/lib/notifications';
 import { logger } from '@/lib/logger';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
-import { buildDailyReminderFingerprint, getDailyReminderOwner } from '@/lib/daily-reminder-content';
+import {
+  buildDailyReminderFingerprint,
+  getDailyReminderOwner,
+  getDailyReminderTrigger,
+} from '@/lib/daily-reminder-content';
 import { logEvent } from '@/lib/analytics';
-import { getCurrentDevotional } from '@/lib/home-devotional-state';
+import { getCurrentDevotional, hasReadAnyDayToday } from '@/lib/home-devotional-state';
+import { parseReminderClock } from '@/lib/push-notification-helpers';
 import { captureSyncSession } from '@/lib/sync-session-fence';
 
 const DEBOUNCE_MS = 750;
@@ -66,6 +71,7 @@ function useReminderFingerprint(premiumPolicy: ReturnType<typeof usePremiumAcces
       currentDevotional,
       premiumPolicy,
       pushRegistered: Boolean(state.user?.pushRegisteredAt),
+      readToday: hasReadAnyDayToday(state.devotionals),
     });
   });
 }
@@ -202,7 +208,17 @@ export function useDailyReminderSync() {
         return;
       }
 
-      const scheduledId = await scheduleDailyReminder(reminderTime, originatingSession, originatingOperation);
+      // Already read today: skip today's fire with a one-shot for tomorrow.
+      const trigger = getDailyReminderTrigger({
+        readToday: hasReadAnyDayToday(state.devotionals),
+        clock: parseReminderClock(reminderTime),
+      });
+      const scheduledId = await scheduleDailyReminder(
+        reminderTime,
+        originatingSession,
+        originatingOperation,
+        trigger,
+      );
       if (!isDailyReminderOriginCurrent(originatingSession, originatingOperation)) {
         return;
       }

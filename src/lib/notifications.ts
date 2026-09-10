@@ -15,7 +15,8 @@ import {
   getTodayCarryLine,
 } from '@/lib/home-devotional-state';
 import { buildDevotionalReadyNotificationData, parseHhMm } from '@/lib/push-notification-helpers';
-import { getDailyReminderContent } from '@/lib/daily-reminder-content';
+import { getDailyReminderContent, type DailyReminderTrigger } from '@/lib/daily-reminder-content';
+import { deferPastQuietHours } from '@/lib/quiet-hours';
 import { logEvent } from '@/lib/analytics';
 import type { ActReminderPlan } from '@/lib/act-reminder';
 import { captureSyncSession, isSyncSessionCurrent } from '@/lib/sync-session-fence';
@@ -295,6 +296,9 @@ export async function scheduleRemindLater(
 ): Promise<boolean> {
   if (Platform.OS === 'web') return false;
   try {
+    // A snooze that would land in quiet hours waits for the morning.
+    const fireAt = deferPastQuietHours(new Date(Date.now() + seconds * 1000));
+    const delaySeconds = Math.max(60, Math.round((fireAt.getTime() - Date.now()) / 1000));
     await Notifications.cancelScheduledNotificationAsync(identifier);
     await Notifications.scheduleNotificationAsync({
       identifier,
@@ -307,11 +311,11 @@ export async function scheduleRemindLater(
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-        seconds,
+        seconds: delaySeconds,
         ...channel(NOTIFICATION_CHANNELS.READING),
       },
     });
-    logEvent('notification_scheduled', { type: 'remind_later', owner: 'local', seconds });
+    logEvent('notification_scheduled', { type: 'remind_later', owner: 'local', seconds: delaySeconds });
     return true;
   } catch (error) {
     logger.error('[Notifications] Failed to schedule remind-later:', error);
@@ -495,6 +499,7 @@ export async function scheduleDailyReminder(
   timeString: string,
   originatingSession: number = captureSyncSession(),
   originatingOperation?: number,
+  triggerOverride: DailyReminderTrigger = { kind: 'daily' },
 ): Promise<string | null> {
   if (Platform.OS === 'web') {
     logger.log('[Notifications] Not available on web');
@@ -538,12 +543,19 @@ export async function scheduleDailyReminder(
         sound: true,
         ...(data ? { data, categoryIdentifier: NOTIFICATION_CATEGORIES.DEVOTIONAL_READY } : {}),
       },
-      trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.DAILY,
-        hour: hours,
-        minute: minutes,
-        ...channel(NOTIFICATION_CHANNELS.READING),
-      },
+      trigger:
+        triggerOverride.kind === 'date'
+          ? {
+              type: Notifications.SchedulableTriggerInputTypes.DATE,
+              date: triggerOverride.date,
+              ...channel(NOTIFICATION_CHANNELS.READING),
+            }
+          : {
+              type: Notifications.SchedulableTriggerInputTypes.DAILY,
+              hour: hours,
+              minute: minutes,
+              ...channel(NOTIFICATION_CHANNELS.READING),
+            },
     });
 
     if (!isDailyReminderOriginCurrent(originatingSession, operation)) {
@@ -557,7 +569,12 @@ export async function scheduleDailyReminder(
     lastDailyReminderIdentifier = scheduled;
     logger.log(`[Notifications] Daily reminder scheduled for ${timeString} (${hours}:${minutes})`);
     logger.log(`[Notifications] Content: "${title}" — "${body.substring(0, 50)}..."`);
-    logEvent('notification_scheduled', { type: 'daily_reminder', owner: 'local', specific: Boolean(data) });
+    logEvent('notification_scheduled', {
+      type: 'daily_reminder',
+      owner: 'local',
+      specific: Boolean(data),
+      trigger: triggerOverride.kind,
+    });
     return scheduled;
   } catch (error) {
     logger.error('[Notifications] Failed to schedule:', error);
