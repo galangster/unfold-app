@@ -42,6 +42,16 @@ const TodayWidget = (
 ) => {
   'widget';
 
+  // App type, PostScript names (extension bundles these; see ExpoWidgetsTarget
+  // Info.plist UIAppFonts). Custom families ignore `weight`, so pick the face.
+  const F = {
+    display: 'PPEditorialNew-Light',
+    ui: 'Inter-Regular',
+    uiMedium: 'Inter-Medium',
+    uiSemi: 'Inter-SemiBold',
+    serif: 'SourceSerifPro-Regular',
+  };
+
   const streak = props.streakCount ?? 0;
   const hasRead = props.hasReadToday ?? false;
   const seriesTitle = props.devotionalTitle ?? 'Unfold';
@@ -112,7 +122,7 @@ const TodayWidget = (
         />
         <Text
           modifiers={[
-            font({ size: 30, weight: 'bold', design: 'rounded' }),
+            font({ family: F.display, size: 30 }),
             foregroundStyle(c.text),
             kerning(-0.5),
           ]}
@@ -121,7 +131,7 @@ const TodayWidget = (
         </Text>
         <Text
           modifiers={[
-            font({ size: 11, weight: 'medium' }),
+            font({ family: F.uiMedium, size: 11 }),
             foregroundStyle(hasRead ? c.accentSoft : c.t45),
           ]}
         >
@@ -133,7 +143,7 @@ const TodayWidget = (
         {total > 0 && (
           <Text
             modifiers={[
-              font({ size: 11, weight: 'medium' }),
+              font({ family: F.uiMedium, size: 11 }),
               foregroundStyle(c.t30),
             ]}
           >
@@ -158,7 +168,7 @@ const TodayWidget = (
       >
         <Text
           modifiers={[
-            font({ size: 11, weight: 'regular' }),
+            font({ family: F.ui, size: 11 }),
             foregroundStyle(c.t55),
           ]}
         >
@@ -167,7 +177,7 @@ const TodayWidget = (
 
         <Text
           modifiers={[
-            font({ size: 15, weight: 'semibold' }),
+            font({ family: F.display, size: 15 }),
             foregroundStyle(c.text),
             lineLimit(2),
             truncationMode('tail'),
@@ -180,7 +190,7 @@ const TodayWidget = (
         {scripture !== '' && (
           <Text
             modifiers={[
-              font({ size: 11, weight: 'regular', design: 'serif' }),
+              font({ family: F.serif, size: 11 }),
               foregroundStyle(c.t55),
               padding({ top: 2 }),
             ]}
@@ -194,7 +204,7 @@ const TodayWidget = (
         {quote !== '' && (
           <Text
             modifiers={[
-              font({ size: 11, weight: 'regular' }),
+              font({ family: F.ui, size: 11 }),
               foregroundStyle(c.t40),
               lineLimit(2),
               truncationMode('tail'),
@@ -213,7 +223,7 @@ const TodayWidget = (
           />
           <Text
             modifiers={[
-              font({ size: 11, weight: 'medium' }),
+              font({ family: F.uiMedium, size: 11 }),
               foregroundStyle(c.t35),
               padding({ leading: 2 }),
             ]}

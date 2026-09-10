@@ -29,6 +29,16 @@ type ReadingSessionProps = {
 const ReadingSession = (props: ReadingSessionProps): LiveActivityLayout => {
   'widget';
 
+  // App type, PostScript names (extension bundles these; see ExpoWidgetsTarget
+  // Info.plist UIAppFonts). Custom families ignore `weight`, so pick the face.
+  const F = {
+    display: 'PPEditorialNew-Light',
+    ui: 'Inter-Regular',
+    uiMedium: 'Inter-Medium',
+    uiSemi: 'Inter-SemiBold',
+    serif: 'SourceSerifPro-Regular',
+  };
+
   const title = props.devotionalTitle ?? 'Unfold';
   const dayTitle = props.dayTitle ?? 'Reading...';
   const day = props.dayNumber ?? 1;
@@ -56,7 +66,7 @@ const ReadingSession = (props: ReadingSessionProps): LiveActivityLayout => {
           <VStack>
             <Text
               modifiers={[
-                font({ size: 10, weight: 'semibold' }),
+                font({ family: F.uiSemi, size: 10 }),
                 foregroundStyle('#C8A55C'),
               ]}
             >
@@ -64,7 +74,7 @@ const ReadingSession = (props: ReadingSessionProps): LiveActivityLayout => {
             </Text>
             <Text
               modifiers={[
-                font({ size: 15, weight: 'semibold' }),
+                font({ family: F.display, size: 15 }),
                 foregroundStyle('#F5F0EB'),
               ]}
             >
@@ -72,7 +82,7 @@ const ReadingSession = (props: ReadingSessionProps): LiveActivityLayout => {
             </Text>
             <Text
               modifiers={[
-                font({ size: 11, weight: 'regular' }),
+                font({ family: F.ui, size: 11 }),
                 foregroundStyle('rgba(245,240,235,0.5)'),
               ]}
             >
@@ -90,7 +100,7 @@ const ReadingSession = (props: ReadingSessionProps): LiveActivityLayout => {
             />
             <Text
               modifiers={[
-                font({ size: 20, weight: 'bold', design: 'rounded' }),
+                font({ family: F.display, size: 20 }),
                 foregroundStyle('#F5F0EB'),
               ]}
             >
@@ -107,7 +117,7 @@ const ReadingSession = (props: ReadingSessionProps): LiveActivityLayout => {
         <HStack modifiers={[padding({ top: 4 })]}>
           <Text
             modifiers={[
-              font({ size: 10, weight: 'medium' }),
+              font({ family: F.uiMedium, size: 10 }),
               foregroundStyle('rgba(245,240,235,0.4)'),
             ]}
           >
@@ -122,7 +132,7 @@ const ReadingSession = (props: ReadingSessionProps): LiveActivityLayout => {
             />
             <Text
               modifiers={[
-                font({ size: 10, weight: 'semibold' }),
+                font({ family: F.uiSemi, size: 10 }),
                 foregroundStyle('#C8A55C'),
               ]}
             >
@@ -146,7 +156,7 @@ const ReadingSession = (props: ReadingSessionProps): LiveActivityLayout => {
     compactTrailing: (
       <Text
         modifiers={[
-          font({ size: 12, weight: 'semibold', design: 'rounded' }),
+          font({ family: F.display, size: 12 }),
           foregroundStyle('#F5F0EB'),
         ]}
       >
@@ -168,7 +178,7 @@ const ReadingSession = (props: ReadingSessionProps): LiveActivityLayout => {
       <VStack>
         <Text
           modifiers={[
-            font({ size: 13, weight: 'semibold' }),
+            font({ family: F.uiSemi, size: 13 }),
             foregroundStyle('#F5F0EB'),
           ]}
         >
@@ -191,7 +201,7 @@ const ReadingSession = (props: ReadingSessionProps): LiveActivityLayout => {
       <VStack>
         <Text
           modifiers={[
-            font({ size: 18, weight: 'bold', design: 'rounded' }),
+            font({ family: F.display, size: 18 }),
             foregroundStyle('#F5F0EB'),
           ]}
         >
@@ -199,7 +209,7 @@ const ReadingSession = (props: ReadingSessionProps): LiveActivityLayout => {
         </Text>
         <Text
           modifiers={[
-            font({ size: 10, weight: 'regular' }),
+            font({ family: F.ui, size: 10 }),
             foregroundStyle('rgba(245,240,235,0.4)'),
           ]}
         >
@@ -213,7 +223,7 @@ const ReadingSession = (props: ReadingSessionProps): LiveActivityLayout => {
       <HStack modifiers={[padding({ top: 4 })]}>
         <Text
           modifiers={[
-            font({ size: 11, weight: 'regular' }),
+            font({ family: F.ui, size: 11 }),
             foregroundStyle('rgba(245,240,235,0.5)'),
           ]}
         >
@@ -228,7 +238,7 @@ const ReadingSession = (props: ReadingSessionProps): LiveActivityLayout => {
           />
           <Text
             modifiers={[
-              font({ size: 11, weight: 'semibold' }),
+              font({ family: F.uiSemi, size: 11 }),
               foregroundStyle('#C8A55C'),
             ]}
           >

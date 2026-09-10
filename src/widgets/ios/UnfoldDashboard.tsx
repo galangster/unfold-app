@@ -57,6 +57,16 @@ const DashboardWidget = (
 ) => {
   'widget';
 
+  // App type, PostScript names (extension bundles these; see ExpoWidgetsTarget
+  // Info.plist UIAppFonts). Custom families ignore `weight`, so pick the face.
+  const F = {
+    display: 'PPEditorialNew-Light',
+    ui: 'Inter-Regular',
+    uiMedium: 'Inter-Medium',
+    uiSemi: 'Inter-SemiBold',
+    serif: 'SourceSerifPro-Regular',
+  };
+
   const streak = props.streakCount ?? 0;
   const hasRead = props.hasReadToday ?? false;
   const seriesTitle = props.devotionalTitle ?? 'Unfold';
@@ -132,7 +142,7 @@ const DashboardWidget = (
         <VStack alignment="leading" modifiers={[frame({ alignment: 'leading' })]}>
           <Text
             modifiers={[
-              font({ size: 11, weight: 'regular' }),
+              font({ family: F.ui, size: 11 }),
               foregroundStyle(c.t40),
             ]}
           >
@@ -140,7 +150,7 @@ const DashboardWidget = (
           </Text>
           <Text
             modifiers={[
-              font({ size: 17, weight: 'semibold' }),
+              font({ family: F.display, size: 17 }),
               foregroundStyle(c.text),
               lineLimit(1),
               truncationMode('tail'),
@@ -152,7 +162,7 @@ const DashboardWidget = (
           {total > 0 && (
             <Text
               modifiers={[
-                font({ size: 11, weight: 'regular' }),
+                font({ family: F.ui, size: 11 }),
                 foregroundStyle(c.t40),
                 padding({ top: 2 }),
               ]}
@@ -178,7 +188,7 @@ const DashboardWidget = (
           />
           <Text
             modifiers={[
-              font({ size: 22, weight: 'bold', design: 'rounded' }),
+              font({ family: F.display, size: 22 }),
               foregroundStyle(c.text),
               kerning(-0.5),
             ]}
@@ -201,7 +211,7 @@ const DashboardWidget = (
         >
           <Text
             modifiers={[
-              font({ size: 14, weight: 'regular', design: 'serif' }),
+              font({ family: F.serif, size: 14 }),
               foregroundStyle(c.t75),
               lineLimit(5),
               truncationMode('tail'),
@@ -213,7 +223,7 @@ const DashboardWidget = (
           {scripture !== '' && (
             <Text
               modifiers={[
-                font({ size: 11, weight: 'semibold' }),
+                font({ family: F.uiSemi, size: 11 }),
                 foregroundStyle(c.accent),
                 padding({ top: 6 }),
               ]}
@@ -232,7 +242,7 @@ const DashboardWidget = (
         >
           <Text
             modifiers={[
-              font({ size: 14, weight: 'regular', design: 'serif' }),
+              font({ family: F.serif, size: 14 }),
               foregroundStyle(c.t65),
               lineLimit(3),
               truncationMode('tail'),
@@ -264,7 +274,7 @@ const DashboardWidget = (
               <Image systemName={glyph} size={14} color={glyphColor} />
               <Text
                 modifiers={[
-                  font({ size: 10, weight: read || isToday ? 'semibold' : 'regular' }),
+                  font({ family: F.ui, size: 10 }),
                   foregroundStyle(labelColor),
                   padding({ top: 2 }),
                 ]}
@@ -288,7 +298,7 @@ const DashboardWidget = (
           />
           <Text
             modifiers={[
-              font({ size: 11, weight: 'medium' }),
+              font({ family: F.uiMedium, size: 11 }),
               foregroundStyle(c.t35),
               padding({ leading: 2 }),
             ]}
@@ -303,7 +313,7 @@ const DashboardWidget = (
           <HStack>
             <Text
               modifiers={[
-                font({ size: 11, weight: 'regular' }),
+                font({ family: F.ui, size: 11 }),
                 foregroundStyle(c.t30),
               ]}
             >
@@ -311,7 +321,7 @@ const DashboardWidget = (
             </Text>
             <Text
               modifiers={[
-                font({ size: 11, weight: 'medium' }),
+                font({ family: F.uiMedium, size: 11 }),
                 foregroundStyle(c.t45),
                 lineLimit(1),
                 truncationMode('tail'),

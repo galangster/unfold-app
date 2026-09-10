@@ -49,6 +49,16 @@ const StreakWidget = (
 ) => {
   'widget';
 
+  // App type, PostScript names (extension bundles these; see ExpoWidgetsTarget
+  // Info.plist UIAppFonts). Custom families ignore `weight`, so pick the face.
+  const F = {
+    display: 'PPEditorialNew-Light',
+    ui: 'Inter-Regular',
+    uiMedium: 'Inter-Medium',
+    uiSemi: 'Inter-SemiBold',
+    serif: 'SourceSerifPro-Regular',
+  };
+
   const streak = props.streakCount ?? 0;
   const hasRead = props.hasReadToday ?? false;
   const title = props.devotionalTitle ?? 'Start your series';
@@ -102,7 +112,7 @@ const StreakWidget = (
           />
           <Text
             modifiers={[
-              font({ size: 22, weight: 'bold', design: 'rounded' }),
+              font({ family: F.display, size: 22 }),
               foregroundStyle({ type: 'hierarchical', style: 'primary' }),
               kerning(-0.5),
               lineLimit(1),
@@ -142,7 +152,7 @@ const StreakWidget = (
           />
           <Text
             modifiers={[
-              font({ size: 11, weight: 'medium' }),
+              font({ family: F.uiMedium, size: 11 }),
               foregroundStyle(hasRead ? c.accent : c.textMuted),
               padding({ leading: 2 }),
             ]}
@@ -153,7 +163,7 @@ const StreakWidget = (
 
         <Text
           modifiers={[
-            font({ size: 40, weight: 'bold', design: 'rounded' }),
+            font({ family: F.display, size: 40 }),
             foregroundStyle(c.text),
             kerning(-1),
           ]}
@@ -169,7 +179,7 @@ const StreakWidget = (
         {total > 0 && (
           <Text
             modifiers={[
-              font({ size: 12, weight: 'medium' }),
+              font({ family: F.uiMedium, size: 12 }),
               foregroundStyle(c.textMuted),
             ]}
           >
@@ -179,7 +189,7 @@ const StreakWidget = (
 
         <Text
           modifiers={[
-            font({ size: 11, weight: 'regular' }),
+            font({ family: F.ui, size: 11 }),
             foregroundStyle(c.textSubtle),
             lineLimit(1),
             truncationMode('tail'),
