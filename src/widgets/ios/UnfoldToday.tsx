@@ -14,6 +14,7 @@ import {
   frame,
   padding,
   background,
+  containerBackground,
   opacity,
   lineLimit,
   truncationMode,
@@ -86,7 +87,10 @@ const TodayWidget = (
       modifiers={[
         padding({ all: 14 }),
         frame({ maxWidth: Infinity, maxHeight: Infinity }),
-        background(c.bg),
+        // containerBackground paints the whole widget container. A plain
+        // background() leaves the system material visible in the automatic
+        // content margins as a lighter/darker frame (QA 2026-09-09).
+        containerBackground(c.bg, 'widget'),
         accessibilityLabel(
           `Today's reading: ${dayTitle}. ${scripture !== '' ? scripture + '.' : ''} ${streak} day streak. ${minutes} minute read.`
         ),

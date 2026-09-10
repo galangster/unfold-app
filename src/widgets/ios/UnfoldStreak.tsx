@@ -25,6 +25,7 @@ import {
   frame,
   padding,
   background,
+  containerBackground,
   lineLimit,
   truncationMode,
   kerning,
@@ -121,7 +122,10 @@ const StreakWidget = (
       modifiers={[
         padding({ all: 14 }),
         frame({ maxWidth: Infinity, maxHeight: Infinity }),
-        background(c.bg),
+        // containerBackground paints the whole widget container. A plain
+        // background() leaves the system material visible in the automatic
+        // content margins as a lighter/darker frame (QA 2026-09-09).
+        containerBackground(c.bg, 'widget'),
         accessibilityLabel(
           `${streak} day reading streak. ${hasRead ? 'Read today.' : 'Not yet read today.'} ${total > 0 ? `Day ${day} of ${total}. ` : ''}${title}`
         ),

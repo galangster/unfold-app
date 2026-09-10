@@ -21,6 +21,7 @@ import {
   frame,
   padding,
   background,
+  containerBackground,
   opacity,
   lineLimit,
   truncationMode,
@@ -116,7 +117,10 @@ const DashboardWidget = (
       modifiers={[
         padding({ all: 16 }),
         frame({ maxWidth: Infinity, maxHeight: Infinity }),
-        background(c.bg),
+        // containerBackground paints the whole widget container. A plain
+        // background() leaves the system material visible in the automatic
+        // content margins as a lighter/darker frame (QA 2026-09-09).
+        containerBackground(c.bg, 'widget'),
         accessibilityLabel(
           `Unfold dashboard. ${dayTitle}. Day ${day} of ${total}. ${streak} day streak, ${hasRead ? 'read today' : 'not yet read today'}. ${weekBits.filter(Boolean).length} of 7 days read this week.${scripture !== '' ? ` ${scripture}.` : ''}`
         ),
