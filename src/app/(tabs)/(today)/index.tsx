@@ -10,6 +10,7 @@ import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { logger } from '@/lib/logger';
 import { isQaToolsEnabled } from '@/lib/qa-tools';
+import { isVoiceCheckInsEnabled } from '@/lib/voice-feature';
 import { useUnfoldStore, type MoodLevel } from '@/lib/store';
 import { requestReviewOncePerVersion } from '@/lib/review-prompt';
 import { useQuery } from '@tanstack/react-query';
@@ -249,7 +250,7 @@ export default function HomeScreen() {
   const voiceCheckInPrototypeParam = Array.isArray(routeParams.voiceCheckInPrototype)
     ? routeParams.voiceCheckInPrototype[0]
     : routeParams.voiceCheckInPrototype;
-  const voiceCheckInsEnabled = process.env.EXPO_PUBLIC_ENABLE_VOICE_CHECK_INS === '1'
+  const voiceCheckInsEnabled = isVoiceCheckInsEnabled()
     || (isQaToolsEnabled() && voiceCheckInPrototypeParam === '1');
 
   // Update clock-driven Today card visibility every minute — but only while

@@ -49,6 +49,9 @@ import { INPUT_LIMITS } from '@/lib/validation';
 import { TypewriterText } from '@/components/TypewriterText';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
+import { OnboardingVoiceAnswerSheet } from '@/components/onboarding/OnboardingVoiceAnswerSheet';
+import { VoiceAnswerButton } from '@/components/onboarding/VoiceAnswerButton';
+import { isVoiceCheckInsEnabled } from '@/lib/voice-feature';
 import { useUnfoldStore, type Devotional, UserProfile, BibleTranslation, ThemeCategory, DevotionalType, ACCENT_THEMES, WritingTone, ContentDepth, FaithBackground, LifeStage, RelationshipWithGod, BibleFrequency } from '@/lib/store';
 import { generateAdaptiveQuestion, generateDiagnosticQuestions, generateMirrorBackText, type MirrorBackContent } from '@/lib/devotional-service';
 import { THEME_CATEGORIES, DEVOTIONAL_TYPES, BIBLICAL_CHARACTERS, BIBLE_BOOKS_FOR_STUDY, ThemeCategoryInfo, DevotionalTypeInfo, getThemeById, getDevotionalTypeById } from '@/constants/devotional-types';
@@ -940,6 +943,8 @@ export default function OnboardingScreen() {
   
   // UI animation states
   const [showInput, setShowInput] = useState(false);
+  const [aboutMeVoiceVisible, setAboutMeVoiceVisible] = useState(false);
+  const aboutMeVoiceEnabled = isVoiceCheckInsEnabled();
   const [showListScrollHint, setShowListScrollHint] = useState(true);
   const inputOpacity = useSharedValue(0);
   const scrollViewRef = useRef<ScrollView>(null);
@@ -2685,7 +2690,7 @@ export default function OnboardingScreen() {
                 minHeight: isDiscoveryStep ? 60 : undefined,
               }}
               multiline
-              autoFocus={!isDiscoveryStep}
+              autoFocus={!isDiscoveryStep && step.id !== 'aboutMe'}
               maxLength={INPUT_LIMITS.LONG_TEXT.max}
               scrollEnabled
             />
@@ -2701,10 +2706,20 @@ export default function OnboardingScreen() {
               </Text>
             ) : null;
           })()}
-          <VoiceInputBar
-            value={data[step.id as keyof OnboardingData] as string}
-            onChangeText={(text) => setData((prev) => ({ ...prev, [step.id]: text }))}
-          />
+          {step.id === 'aboutMe' && aboutMeVoiceEnabled ? (
+            <VoiceAnswerButton
+              colors={colors}
+              onPress={() => {
+                Keyboard.dismiss();
+                setAboutMeVoiceVisible(true);
+              }}
+            />
+          ) : (
+            <VoiceInputBar
+              value={data[step.id as keyof OnboardingData] as string}
+              onChangeText={(text) => setData((prev) => ({ ...prev, [step.id]: text }))}
+            />
+          )}
           {/* Encouragement to share more */}
           {isDiscoveryStep && (
             <Text style={{
@@ -4311,6 +4326,21 @@ export default function OnboardingScreen() {
           </Animated.View>
         </View>
       </SafeAreaView>
+
+      {aboutMeVoiceEnabled ? (
+        <OnboardingVoiceAnswerSheet
+          autoStart
+          visible={aboutMeVoiceVisible}
+          existingText={data.aboutMe}
+          previewColors={colors}
+          previewIsDark
+          onClose={() => setAboutMeVoiceVisible(false)}
+          onAccept={(text) => {
+            setData((prev) => ({ ...prev, aboutMe: text }));
+            setAboutMeVoiceVisible(false);
+          }}
+        />
+      ) : null}
 
       {/* Premium upsell sheet for gated onboarding options */}
       <PremiumFeatureSheet
