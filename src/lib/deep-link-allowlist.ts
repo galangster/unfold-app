@@ -146,6 +146,7 @@ export const EXTERNAL_ROUTE_ALLOWLIST: Readonly<Record<string, RouteSchema>> = {
       dayNumber: int(1, MAX_DAY_NUMBER),
       highlightId: id(),
       bookmarkId: id(),
+      focus: oneOf(['act']),
     },
   },
   '/journal': JOURNAL_ROUTE,

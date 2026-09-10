@@ -243,6 +243,10 @@ export interface DevotionalDay {
   closingPrayer?: string;
   /** One concrete same-day act of obedience (named time window, observable). */
   act?: string;
+  /** When the act asks to be done; generation may set it, the client infers otherwise. */
+  actSlot?: 'midday' | 'evening' | 'morning-next';
+  /** How the reader answered the act reminder. Local-only for now. */
+  actOutcome?: 'done' | 'skipped';
   /** 6-12 word recall line for the afternoon; also used by the midday check-in notification. */
   carryLine?: string;
   // Phase 2: Midday check-in question + chips (generated with devotional)
@@ -572,6 +576,7 @@ interface UnfoldState {
   hasEverCreatedDevotional: boolean;
   isReturningUser: () => boolean;
   markDayAsRead: (devotionalId: string, dayNumber: number) => void;
+  setActOutcome: (devotionalId: string, dayNumber: number, outcome: 'done' | 'skipped') => void;
   markDayAsRevealed: (devotionalId: string, dayNumber: number) => void;
   advanceDay: (devotionalId: string) => void;
 
@@ -896,6 +901,32 @@ const unfoldPersistStorage = createDebouncedJSONStorage<PersistedUnfoldState>(
   instrumentPersistRead(mmkvStorage),
 );
 
+/**
+ * Patches one day of one devotional, stamping `updatedAt` on both so sync
+ * last-write-wins sees the change.
+ */
+function updateDay(
+  state: { devotionals: Devotional[] },
+  devotionalId: string,
+  dayNumber: number,
+  patch: (now: string) => Partial<DevotionalDay>,
+): { devotionals: Devotional[] } {
+  const now = new Date().toISOString();
+  return {
+    devotionals: state.devotionals.map((d) =>
+      d.id === devotionalId
+        ? {
+            ...d,
+            updatedAt: now,
+            days: d.days.map((day) =>
+              day.dayNumber === dayNumber ? { ...day, ...patch(now), updatedAt: now } : day
+            ),
+          }
+        : d
+    ),
+  };
+}
+
 export const useUnfoldStore = create<UnfoldState>()(
   persist(
     (set, get) => ({
@@ -1040,44 +1071,15 @@ export const useUnfoldStore = create<UnfoldState>()(
       isReturningUser: () => get().hasEverCreatedDevotional || get().devotionals.length > 0,
 
       markDayAsRead: (devotionalId, dayNumber) =>
-        set((state) => {
-          const now = new Date().toISOString();
-          return {
-            devotionals: state.devotionals.map((d) =>
-              d.id === devotionalId
-                ? {
-                    ...d,
-                    updatedAt: now,
-                    days: d.days.map((day) =>
-                      day.dayNumber === dayNumber
-                        ? { ...day, isRead: true, readAt: now, isRevealed: true, updatedAt: now }
-                        : day
-                    ),
-                  }
-                : d
-            ),
-          };
-        }),
+        set((state) =>
+          updateDay(state, devotionalId, dayNumber, (now) => ({ isRead: true, readAt: now, isRevealed: true })),
+        ),
+
+      setActOutcome: (devotionalId, dayNumber, outcome) =>
+        set((state) => updateDay(state, devotionalId, dayNumber, () => ({ actOutcome: outcome }))),
 
       markDayAsRevealed: (devotionalId, dayNumber) =>
-        set((state) => {
-          const now = new Date().toISOString();
-          return {
-            devotionals: state.devotionals.map((d) =>
-              d.id === devotionalId
-                ? {
-                    ...d,
-                    updatedAt: now,
-                    days: d.days.map((day) =>
-                      day.dayNumber === dayNumber
-                        ? { ...day, isRevealed: true, updatedAt: now }
-                        : day
-                    ),
-                  }
-                : d
-            ),
-          };
-        }),
+        set((state) => updateDay(state, devotionalId, dayNumber, () => ({ isRevealed: true }))),
 
       advanceDay: (devotionalId) =>
         set((state) => ({

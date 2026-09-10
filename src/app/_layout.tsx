@@ -18,6 +18,7 @@ import { ThemeProvider, useTheme } from '@/lib/theme';
 import { useRevenueCatSync } from '@/hooks/useRevenueCatSync';
 import { useCheckInNotifications } from '@/hooks/useCheckInNotifications';
 import { useDailyReminderSync } from '@/hooks/useDailyReminderSync';
+import { useActReminderSync } from '@/hooks/useActReminderSync';
 import { useStreakReconcile } from '@/hooks/useStreakReconcile';
 import { useUserProfileSync } from '@/hooks/useUserProfileSync';
 import { useFullSyncPull } from '@/hooks/useFullSyncPull';
@@ -120,6 +121,9 @@ function RootLayoutNav() {
   // Keep the 8am daily reminder payload fresh as devotional state changes.
   // Without this, the iOS/Android recurring trigger fires stale copy forever.
   useDailyReminderSync();
+
+  // One-shot reminder for the day's act at the moment the act names.
+  useActReminderSync();
 
   // Reconcile streak state on hydration + foreground so stale persisted values
   // don't survive missed days until the next reading completion.

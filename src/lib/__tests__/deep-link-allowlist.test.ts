@@ -84,6 +84,7 @@ describe('deep-link allowlist — legitimate producers', () => {
     expectAllowed('unfold://reading?dayNumber=4', '/reading');
     expectAllowed('unfold://reading?devotionalId=abc&dayNumber=2&highlightId=hl_1725000000000_ab12c', '/reading');
     expectAllowed('unfold://reading?devotionalId=abc&dayNumber=2&bookmarkId=bm_1725000000000_ab12c', '/reading');
+    expectAllowed('unfold://reading?devotionalId=abc&dayNumber=2&focus=act', '/reading');
     expectAllowed('unfold://(tabs)/(today)/journal?devotionalId=abc&dayNumber=2&focusQuestion=1', '/journal');
     expectAllowed('unfold://(tabs)/(journal)/entry?devotionalId=abc&dayNumber=2', '/entry');
     expectAllowed('unfold://(tabs)/(today)/journal-detail?entryId=journal-1725000000000-abc123xyz', '/journal-detail');

@@ -36,6 +36,7 @@ import { Shadow } from '@/constants/shadows';
 import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, FONT_SIZE_VALUES } from '@/lib/store';
+import { logEvent } from '@/lib/analytics';
 import type { Highlight, Bookmark, DevotionalDay } from '@/lib/store';
 import { refreshDailyReminder } from '@/lib/notifications';
 import { continueGeneratingDays, isFullGenerationActive } from '@/lib/devotional-service';
@@ -195,7 +196,7 @@ function ReaderLoadingSkeleton({ colors }: { colors: any }) {
 export default function ReadingScreen() {
   const router = useRouter();
   const isReadingFocused = useIsFocused();
-  const params = useLocalSearchParams<{ dayNumber?: string; devotionalId?: string; highlightId?: string; bookmarkId?: string; readOnly?: string }>();
+  const params = useLocalSearchParams<{ dayNumber?: string; devotionalId?: string; highlightId?: string; bookmarkId?: string; readOnly?: string; focus?: string }>();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
@@ -220,6 +221,7 @@ export default function ReadingScreen() {
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
   const setCurrentDevotional = useUnfoldStore((s) => s.setCurrentDevotional);
   const markDayAsRead = useUnfoldStore((s) => s.markDayAsRead);
+  const setActOutcome = useUnfoldStore((s) => s.setActOutcome);
   const advanceDay = useUnfoldStore((s) => s.advanceDay);
   const updateDevotionalDays = useUnfoldStore((s) => s.updateDevotionalDays);
   const setResumeContext = useUnfoldStore((s) => s.setResumeContext);
@@ -1957,6 +1959,13 @@ export default function ReadingScreen() {
                 onTargetBookmarkLocated={handleTargetHighlightLocated}
                 scrollViewRef={scrollViewRef}
                 onReflectionInputFocus={handleReflectionInputFocus}
+                focusAct={params.focus === 'act'}
+                onActLocated={handleTargetHighlightLocated}
+                onActOutcome={(outcome) => {
+                  if (!currentDevotionalId) return;
+                  setActOutcome(currentDevotionalId, viewingDay, outcome);
+                  logEvent('act_outcome', { outcome, source: 'reading' });
+                }}
                 onScriptureTap={(ref) => {
                   setScriptureSheetRef(ref);
                 }}
