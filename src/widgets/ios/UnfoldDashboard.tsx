@@ -125,7 +125,7 @@ const DashboardWidget = (
     >
       {/* Header row: series + day title left, streak right */}
       <HStack modifiers={[frame({ maxWidth: Infinity })]}>
-        <VStack modifiers={[frame({ alignment: 'leading' })]}>
+        <VStack alignment="leading" modifiers={[frame({ alignment: 'leading' })]}>
           <Text
             modifiers={[
               font({ size: 11, weight: 'regular' }),
@@ -189,6 +189,7 @@ const DashboardWidget = (
       {/* Scripture quote — the centerpiece */}
       {verse !== '' ? (
         <VStack
+          alignment="leading"
           modifiers={[
             frame({ maxWidth: Infinity, alignment: 'leading' }),
             padding({ top: 2, bottom: 4 }),
@@ -219,6 +220,7 @@ const DashboardWidget = (
         </VStack>
       ) : quote !== '' ? (
         <VStack
+          alignment="leading"
           modifiers={[
             frame({ maxWidth: Infinity, alignment: 'leading' }),
             padding({ top: 2, bottom: 4 }),

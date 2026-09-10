@@ -145,6 +145,7 @@ const TodayWidget = (
       {/* spacing=2: the default ~8pt stack gap overflows the 155pt-tall
           medium widget (iPhone SE / mini) once title and quote both wrap. */}
       <VStack
+        alignment="leading"
         spacing={2}
         modifiers={[
           padding({ leading: 10 }),

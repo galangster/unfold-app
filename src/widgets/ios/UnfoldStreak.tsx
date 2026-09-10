@@ -129,7 +129,7 @@ const StreakWidget = (
       ]}
     >
       {/* Streak number — hero element */}
-      <VStack modifiers={[frame({ maxWidth: Infinity, alignment: 'leading' })]}>
+      <VStack alignment="leading" modifiers={[frame({ maxWidth: Infinity, alignment: 'leading' })]}>
         <HStack>
           <Image
             systemName={hasRead ? 'flame.fill' : 'flame'}
@@ -161,7 +161,7 @@ const StreakWidget = (
       <Spacer />
 
       {/* Series progress — bottom section */}
-      <VStack modifiers={[frame({ maxWidth: Infinity, alignment: 'leading' })]}>
+      <VStack alignment="leading" modifiers={[frame({ maxWidth: Infinity, alignment: 'leading' })]}>
         {total > 0 && (
           <Text
             modifiers={[
