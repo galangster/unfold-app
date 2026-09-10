@@ -25,6 +25,8 @@ export type WidgetSharedProps = {
   quotableLine: string;
   readingMinutes: number;
   weeklyProgress: string;
+  /** 0 = Monday … 6 = Sunday, the slot in weeklyProgress that is `forDate`. */
+  weekTodayIndex: number;
   nextDayTitle: string;
 };
 
@@ -98,6 +100,7 @@ export function buildWidgetSharedProps(slice: WidgetStateSlice, forDate: Date): 
     quotableLine: currentDay?.quotableLine ?? '',
     readingMinutes: slice.readingDuration,
     weeklyProgress: getWeeklyProgress(slice.allDevotionals, forDate),
+    weekTodayIndex: (forDate.getDay() + 6) % 7,
     nextDayTitle: nextDay?.title ?? '',
   };
 }

@@ -9,14 +9,19 @@
 /* Begin PBXBuildFile section */
 		02174C9B09BA0491AAB9925A /* Unfold.icon in Resources */ = {isa = PBXBuildFile; fileRef = DEE41C89CD25EA0E34DF70C5 /* Unfold.icon */; };
 		0B6F890D6C6CF1BD7B1334D1 /* libPods-ExpoWidgetsTarget.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 0F7F18B6D62DFBAB9BDCBC74 /* libPods-ExpoWidgetsTarget.a */; };
+		0F91CA75AC07AE060A7BF27B /* Inter_600SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = AFC95A1267A8EBD2708BFE22 /* Inter_600SemiBold.ttf */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		17D3622C6EFC492DAAC0AD3B /* UnfoldStreak.swift in Sources */ = {isa = PBXBuildFile; fileRef = C08EE1452D3C4F80ADC8C74F /* UnfoldStreak.swift */; };
 		39FFBF4B432F4543B217D6F5 /* UnfoldDashboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 142F0F9CCFF54B3FB79FA235 /* UnfoldDashboard.swift */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
 		3F449D7905EC4FD5B3A03E30 /* UnfoldToday.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC363CA855E545F280046C7D /* UnfoldToday.swift */; };
 		5E7BEF7D3E717C6C778B8375 /* libPods-Unfold.a in Frameworks */ = {isa = PBXBuildFile; fileRef = B5BC424BC5876B37717D4691 /* libPods-Unfold.a */; };
+		8014A65F48D20630BF733973 /* Inter_500Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E2AFC549A8909546E158BD67 /* Inter_500Medium.ttf */; };
+		814E2E6AB170BD5A15DD6E70 /* Inter_400Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 1CCFE167BED62543186EDB3E /* Inter_400Regular.ttf */; };
 		93A1E4AC88E0FA08D65A6B54 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 901BD24C08FF14E2D7845EDF /* ExpoModulesProvider.swift */; };
+		99C6DDF650763E62261FD6B0 /* PPEditorialNew-Light.otf in Resources */ = {isa = PBXBuildFile; fileRef = 36B26E7F7CFA8CF160D76EDC /* PPEditorialNew-Light.otf */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
+		BEF646E999620B5573F97E8D /* SourceSerifPro_400Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D079C570946ABF34383A86BC /* SourceSerifPro_400Regular.ttf */; };
 		BFADA100D2267EA15CF76F42 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 33EEBCCC32EAA4417066DEDF /* PrivacyInfo.xcprivacy */; };
 		E4965658BE78DD24EC92469A /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51E33A9BEEDE7FF4072F8B17 /* ExpoModulesProvider.swift */; };
 		E63BE6E347E84A3898A30B07 /* ExpoWidgetsTarget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 334F1374FB8F4DD28C362129 /* ExpoWidgetsTarget.appex */; };
@@ -54,8 +59,10 @@
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = Unfold/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = Unfold/Info.plist; sourceTree = "<group>"; };
 		142F0F9CCFF54B3FB79FA235 /* UnfoldDashboard.swift */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 4; includeInIndex = 0; lastKnownFileType = sourcecode.swift; name = UnfoldDashboard.swift; path = UnfoldDashboard.swift; sourceTree = "<group>"; };
+		1CCFE167BED62543186EDB3E /* Inter_400Regular.ttf */ = {isa = PBXFileReference; includeInIndex = 1; name = Inter_400Regular.ttf; path = ../assets/fonts/Inter_400Regular.ttf; sourceTree = "<group>"; };
 		334F1374FB8F4DD28C362129 /* ExpoWidgetsTarget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = undefined; name = ExpoWidgetsTarget.appex; path = ExpoWidgetsTarget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		33EEBCCC32EAA4417066DEDF /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = Unfold/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		36B26E7F7CFA8CF160D76EDC /* PPEditorialNew-Light.otf */ = {isa = PBXFileReference; includeInIndex = 1; name = "PPEditorialNew-Light.otf"; path = "../assets/fonts/PPEditorialNew-Light.otf"; sourceTree = "<group>"; };
 		37D37689400F4C3DAA9D68ED /* Info.plist */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 4; includeInIndex = 0; lastKnownFileType = text.plist.xml; name = Info.plist; path = Info.plist; sourceTree = "<group>"; };
 		51E33A9BEEDE7FF4072F8B17 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-ExpoWidgetsTarget/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
 		662FE990F35846ECA088BEE1 /* ExpoWidgetsTarget.entitlements */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = ExpoWidgetsTarget.entitlements; path = ExpoWidgetsTarget.entitlements; sourceTree = "<group>"; };
@@ -65,13 +72,16 @@
 		998C332CB27F2DA5C20724B7 /* Pods-Unfold.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Unfold.release.xcconfig"; path = "Target Support Files/Pods-Unfold/Pods-Unfold.release.xcconfig"; sourceTree = "<group>"; };
 		A3A65B93C9BA2ABD097267B1 /* Pods-ExpoWidgetsTarget.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-ExpoWidgetsTarget.debug.xcconfig"; path = "Target Support Files/Pods-ExpoWidgetsTarget/Pods-ExpoWidgetsTarget.debug.xcconfig"; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = Unfold/SplashScreen.storyboard; sourceTree = "<group>"; };
+		AFC95A1267A8EBD2708BFE22 /* Inter_600SemiBold.ttf */ = {isa = PBXFileReference; includeInIndex = 1; name = Inter_600SemiBold.ttf; path = ../assets/fonts/Inter_600SemiBold.ttf; sourceTree = "<group>"; };
 		B5BC424BC5876B37717D4691 /* libPods-Unfold.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Unfold.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
 		C08EE1452D3C4F80ADC8C74F /* UnfoldStreak.swift */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 4; includeInIndex = 0; lastKnownFileType = sourcecode.swift; name = UnfoldStreak.swift; path = UnfoldStreak.swift; sourceTree = "<group>"; };
 		C6799072DF2288FECDEDE238 /* Pods-Unfold.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Unfold.debug.xcconfig"; path = "Target Support Files/Pods-Unfold/Pods-Unfold.debug.xcconfig"; sourceTree = "<group>"; };
 		CC363CA855E545F280046C7D /* UnfoldToday.swift */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 4; includeInIndex = 0; lastKnownFileType = sourcecode.swift; name = UnfoldToday.swift; path = UnfoldToday.swift; sourceTree = "<group>"; };
 		D00F79485C1748B3C2114791 /* Pods-ExpoWidgetsTarget.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-ExpoWidgetsTarget.release.xcconfig"; path = "Target Support Files/Pods-ExpoWidgetsTarget/Pods-ExpoWidgetsTarget.release.xcconfig"; sourceTree = "<group>"; };
+		D079C570946ABF34383A86BC /* SourceSerifPro_400Regular.ttf */ = {isa = PBXFileReference; includeInIndex = 1; name = SourceSerifPro_400Regular.ttf; path = ../assets/fonts/SourceSerifPro_400Regular.ttf; sourceTree = "<group>"; };
 		DEE41C89CD25EA0E34DF70C5 /* Unfold.icon */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.iconcomposer.icon; name = Unfold.icon; path = Unfold/Unfold.icon; sourceTree = "<group>"; };
+		E2AFC549A8909546E158BD67 /* Inter_500Medium.ttf */ = {isa = PBXFileReference; includeInIndex = 1; name = Inter_500Medium.ttf; path = ../assets/fonts/Inter_500Medium.ttf; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = Unfold/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* Unfold-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "Unfold-Bridging-Header.h"; path = "Unfold/Unfold-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -159,6 +169,7 @@
 				AF7DBCEA3DFD4A0797E83B03 /* ExpoWidgetsTarget */,
 				13667AF4EC31CC663861D438 /* Pods */,
 				EFEC91E514260CF63FC98468 /* ExpoModulesProviders */,
+				AA8F78225B71F3DB9348597A /* WidgetFonts */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -173,6 +184,18 @@
 			);
 			name = Products;
 			sourceTree = "<group>";
+		};
+		AA8F78225B71F3DB9348597A /* WidgetFonts */ = {
+			isa = PBXGroup;
+			children = (
+				36B26E7F7CFA8CF160D76EDC /* PPEditorialNew-Light.otf */,
+				1CCFE167BED62543186EDB3E /* Inter_400Regular.ttf */,
+				E2AFC549A8909546E158BD67 /* Inter_500Medium.ttf */,
+				AFC95A1267A8EBD2708BFE22 /* Inter_600SemiBold.ttf */,
+				D079C570946ABF34383A86BC /* SourceSerifPro_400Regular.ttf */,
+			);
+			name = WidgetFonts;
+			sourceTree = SOURCE_ROOT;
 		};
 		AF7DBCEA3DFD4A0797E83B03 /* ExpoWidgetsTarget */ = {
 			isa = PBXGroup;
@@ -253,6 +276,7 @@
 				904E3CAE4AE44D30B273126D /* Sources */,
 				8684466E1AA94E339BA2413B /* Frameworks */,
 				CE539C1190F8E0E7A5E96B77 /* [CP] Copy Pods Resources */,
+				D6B417810C2D3E9FCDAFBE1E /* Resources */,
 			);
 			buildRules = (
 			);
@@ -312,6 +336,18 @@
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
 				BFADA100D2267EA15CF76F42 /* PrivacyInfo.xcprivacy in Resources */,
 				02174C9B09BA0491AAB9925A /* Unfold.icon in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D6B417810C2D3E9FCDAFBE1E /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				99C6DDF650763E62261FD6B0 /* PPEditorialNew-Light.otf in Resources */,
+				814E2E6AB170BD5A15DD6E70 /* Inter_400Regular.ttf in Resources */,
+				8014A65F48D20630BF733973 /* Inter_500Medium.ttf in Resources */,
+				0F91CA75AC07AE060A7BF27B /* Inter_600SemiBold.ttf in Resources */,
+				BEF646E999620B5573F97E8D /* SourceSerifPro_400Regular.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

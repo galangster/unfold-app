@@ -14,6 +14,7 @@ import {
   frame,
   padding,
   background,
+  containerBackground,
   opacity,
   lineLimit,
   truncationMode,
@@ -40,6 +41,16 @@ const TodayWidget = (
   environment: WidgetEnvironment
 ) => {
   'widget';
+
+  // App type, PostScript names (extension bundles these; see ExpoWidgetsTarget
+  // Info.plist UIAppFonts). Custom families ignore `weight`, so pick the face.
+  const F = {
+    display: 'PPEditorialNew-Light',
+    ui: 'Inter-Regular',
+    uiMedium: 'Inter-Medium',
+    uiSemi: 'Inter-SemiBold',
+    serif: 'SourceSerifPro-Regular',
+  };
 
   const streak = props.streakCount ?? 0;
   const hasRead = props.hasReadToday ?? false;
@@ -71,11 +82,12 @@ const TodayWidget = (
     : {
         bg: '#0A0A0A',
         text: '#F5F0EB',
-        t55: 'rgba(245,240,235,0.55)',
-        t45: 'rgba(245,240,235,0.45)',
-        t40: 'rgba(245,240,235,0.4)',
-        t35: 'rgba(245,240,235,0.35)',
-        t30: 'rgba(245,240,235,0.3)',
+        // Floors raised 2026-09-09: nothing at ≤11pt sits below 0.5 ink.
+        t55: 'rgba(245,240,235,0.65)',
+        t45: 'rgba(245,240,235,0.6)',
+        t40: 'rgba(245,240,235,0.55)',
+        t35: 'rgba(245,240,235,0.5)',
+        t30: 'rgba(245,240,235,0.5)',
         accent: '#C8A55C',
         accentSoft: 'rgba(200,165,92,0.8)',
       };
@@ -85,7 +97,10 @@ const TodayWidget = (
       modifiers={[
         padding({ all: 14 }),
         frame({ maxWidth: Infinity, maxHeight: Infinity }),
-        background(c.bg),
+        // containerBackground paints the whole widget container. A plain
+        // background() leaves the system material visible in the automatic
+        // content margins as a lighter/darker frame (QA 2026-09-09).
+        containerBackground(c.bg, 'widget'),
         accessibilityLabel(
           `Today's reading: ${dayTitle}. ${scripture !== '' ? scripture + '.' : ''} ${streak} day streak. ${minutes} minute read.`
         ),
@@ -94,6 +109,7 @@ const TodayWidget = (
     >
       {/* Left column — streak + progress */}
       <VStack
+        spacing={2}
         modifiers={[
           frame({ width: 60, alignment: 'center' }),
           padding({ trailing: 4 }),
@@ -106,7 +122,7 @@ const TodayWidget = (
         />
         <Text
           modifiers={[
-            font({ size: 30, weight: 'bold', design: 'rounded' }),
+            font({ family: F.display, size: 30 }),
             foregroundStyle(c.text),
             kerning(-0.5),
           ]}
@@ -115,11 +131,11 @@ const TodayWidget = (
         </Text>
         <Text
           modifiers={[
-            font({ size: 10, weight: 'medium' }),
+            font({ family: F.uiMedium, size: 11 }),
             foregroundStyle(hasRead ? c.accentSoft : c.t45),
           ]}
         >
-          {hasRead ? 'streak' : 'read today'}
+          {hasRead ? 'day streak' : 'not read yet'}
         </Text>
 
         <Spacer />
@@ -127,7 +143,7 @@ const TodayWidget = (
         {total > 0 && (
           <Text
             modifiers={[
-              font({ size: 10, weight: 'medium' }),
+              font({ family: F.uiMedium, size: 11 }),
               foregroundStyle(c.t30),
             ]}
           >
@@ -137,10 +153,14 @@ const TodayWidget = (
       </VStack>
 
       {/* Divider — subtle but visible */}
-      <Divider modifiers={[opacity(0.12), padding({ top: 2, bottom: 2 })]} />
+      <Divider modifiers={[opacity(0.25), padding({ top: 2, bottom: 2 })]} />
 
       {/* Right column — today's reading */}
+      {/* spacing=2: the default ~8pt stack gap overflows the 155pt-tall
+          medium widget (iPhone SE / mini) once title and quote both wrap. */}
       <VStack
+        alignment="leading"
+        spacing={2}
         modifiers={[
           padding({ leading: 10 }),
           frame({ maxWidth: Infinity, alignment: 'leading' }),
@@ -148,7 +168,7 @@ const TodayWidget = (
       >
         <Text
           modifiers={[
-            font({ size: 11, weight: 'regular' }),
+            font({ family: F.ui, size: 11 }),
             foregroundStyle(c.t55),
           ]}
         >
@@ -157,7 +177,7 @@ const TodayWidget = (
 
         <Text
           modifiers={[
-            font({ size: 15, weight: 'semibold' }),
+            font({ family: F.display, size: 15 }),
             foregroundStyle(c.text),
             lineLimit(2),
             truncationMode('tail'),
@@ -170,7 +190,7 @@ const TodayWidget = (
         {scripture !== '' && (
           <Text
             modifiers={[
-              font({ size: 11, weight: 'regular', design: 'serif' }),
+              font({ family: F.serif, size: 11 }),
               foregroundStyle(c.t55),
               padding({ top: 2 }),
             ]}
@@ -184,18 +204,18 @@ const TodayWidget = (
         {quote !== '' && (
           <Text
             modifiers={[
-              font({ size: 11, weight: 'regular' }),
+              font({ family: F.ui, size: 11 }),
               foregroundStyle(c.t40),
               lineLimit(2),
               truncationMode('tail'),
               lineSpacing(2),
             ]}
           >
-            {'"'}{quote}{'"'}
+            {'\u201C'}{quote}{'\u201D'}
           </Text>
         )}
 
-        <HStack modifiers={[padding({ top: 4 })]}>
+        <HStack modifiers={[padding({ top: 2 })]}>
           <Image
             systemName="clock"
             size={10}
@@ -203,7 +223,7 @@ const TodayWidget = (
           />
           <Text
             modifiers={[
-              font({ size: 10, weight: 'medium' }),
+              font({ family: F.uiMedium, size: 11 }),
               foregroundStyle(c.t35),
               padding({ leading: 2 }),
             ]}
