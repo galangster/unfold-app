@@ -31,6 +31,9 @@ export interface DevotionalWebViewCommands {
   /** Apply the inverse of a reported change to the document. The resulting
    *  diff comes back through `onHighlightsChanged` with `silent: true`. */
   applyInverse: (change: Pick<HighlightsChangedEvent, 'added' | 'removed'>) => void;
+  /** Flash and report the y of a stored highlight in the live document
+   *  (reader Highlights sheet). Resolves through `onTargetHighlightLocated`. */
+  scrollToHighlight: (highlight: Highlight) => void;
 }
 
 interface DevotionalWebViewProps {
@@ -414,7 +417,7 @@ export function DevotionalWebView({
         }
       }
 
-      function locateTargetHighlight() {
+      function locateHighlightPayload(targetHighlight) {
         if (!targetHighlight) return;
         const targetText = normalizeText(targetHighlight.highlightedText);
         if (!targetText) return;
@@ -474,6 +477,13 @@ export function DevotionalWebView({
           y: rect.top + window.scrollY,
         }));
       }
+
+      function locateTargetHighlight() {
+        locateHighlightPayload(targetHighlight);
+      }
+      // Reader Highlights sheet: locate a highlight in the live document
+      // without remounting it with a new baked target.
+      window.__unfoldLocateHighlight = locateHighlightPayload;
 
       function locateTargetTextFallback(targetText) {
         try {
@@ -1859,6 +1869,19 @@ export function DevotionalWebView({
       applyInverse: (change) => {
         webViewRef.current?.injectJavaScript(
           `window.__unfoldApplyInverse && window.__unfoldApplyInverse(${JSON.stringify({ added: change.added, removed: change.removed })}); true;`,
+        );
+      },
+      scrollToHighlight: (highlight) => {
+        const payload = {
+          id: highlight.id,
+          highlightedText: highlight.highlightedText,
+          serializedRange: highlight.serializedRange,
+          color: highlight.color,
+          contextBefore: highlight.contextBefore,
+          contextAfter: highlight.contextAfter,
+        };
+        webViewRef.current?.injectJavaScript(
+          `window.__unfoldLocateHighlight && window.__unfoldLocateHighlight(${JSON.stringify(payload)}); true;`,
         );
       },
     };
