@@ -19,7 +19,7 @@
 
 import React, { useRef, useCallback, useState, memo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
-import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
+import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import * as Haptics from 'expo-haptics';
 import Animated, {
   useSharedValue,
@@ -262,12 +262,11 @@ export function AudioPlayerSheet() {
         mass: Spring.snappy.mass,
       }}
     >
-      <BottomSheetView style={styles.content}>
+      <BottomSheetScrollView contentContainerStyle={styles.content}>
         {/* Header row: Title + Speed pill */}
         <View style={styles.headerRow}>
           <View style={styles.titleGroup}>
             <Text
-              numberOfLines={1}
               style={[styles.titleText, { color: colors.text }]}
               accessibilityRole="header"
             >
@@ -282,7 +281,6 @@ export function AudioPlayerSheet() {
               </View>
             ) : seriesTitle ? (
               <Text
-                numberOfLines={1}
                 style={[styles.seriesText, { color: colors.textMuted }]}
               >
                 {seriesTitle}
@@ -362,7 +360,7 @@ export function AudioPlayerSheet() {
             <Text style={[styles.skipLabel, { color: colors.text }]}>10</Text>
           </TouchableOpacity>
         </View>
-      </BottomSheetView>
+      </BottomSheetScrollView>
     </BottomSheet>
   );
 }
@@ -397,6 +395,7 @@ const styles = StyleSheet.create({
     fontSize: FontSize.base,
   },
   seriesText: {
+    flexShrink: 1,
     fontFamily: FontFamily.ui,
     fontSize: FontSize.xs,
   },

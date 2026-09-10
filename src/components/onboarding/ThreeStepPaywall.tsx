@@ -5,10 +5,11 @@ import {
   Image as RNImage,
   TouchableOpacity,
   StyleSheet,
-  Dimensions,
   ActivityIndicator,
   Platform,
   Linking,
+  ScrollView,
+  useWindowDimensions,
 } from 'react-native';
 import type { LayoutChangeEvent } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
@@ -109,7 +110,6 @@ interface ThreeStepPaywallProps {
 // Constants
 // ---------------------------------------------------------------------------
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const TOTAL_PAGES_WITH_TRIAL = 3;
 const TOTAL_PAGES_NO_TRIAL = 2;
 
@@ -156,9 +156,6 @@ const REVIEWS = [
   },
 ] as const;
 
-const PRICING_GAP = Spacing['3'];
-const PRICING_BOX_WIDTH = (SCREEN_WIDTH - Spacing['6'] * 2 - PRICING_GAP) / 2;
-const STACK_CARD_WIDTH = SCREEN_WIDTH - Spacing['6'] * 2;
 const STACK_CARD_HEIGHT = 140;
 const STACK_OFFSET_Y = -8;
 const STACK_SCALE_STEP = 0.05;
@@ -223,6 +220,7 @@ function StackCard({
   dismissX,
   colors,
   total,
+  onHeight,
 }: {
   review: (typeof REVIEWS)[number];
   index: number;
@@ -230,17 +228,18 @@ function StackCard({
   dismissX: SharedValue<number>;
   colors: ColorTheme;
   total: number;
+  onHeight: (index: number, height: number) => void;
 }) {
+  const { width: screenWidth } = useWindowDimensions();
   const animStyle = useAnimatedStyle(() => {
     const active = activeIndex.value;
     const relativePos = ((index - active) % total + total) % total;
 
-    // How far the front card has been dragged (0 to -SCREEN_WIDTH)
-    const progress = Math.min(Math.abs(dismissX.value) / SCREEN_WIDTH, 1);
+    const progress = Math.min(Math.abs(dismissX.value) / screenWidth, 1);
 
     if (relativePos === 0) {
       // Front card -- follows swipe with rotation for natural feel
-      const rotate = (dismissX.value / SCREEN_WIDTH) * 12; // tilts up to 12deg
+      const rotate = (dismissX.value / screenWidth) * 12; // tilts up to 12deg
       return {
         zIndex: total,
         opacity: 1 - progress * 0.3,
@@ -293,10 +292,11 @@ function StackCard({
 
   return (
     <Animated.View
+      testID={`paywall-review-${index}`}
+      onLayout={(event) => onHeight(index, event.nativeEvent.layout.height)}
       style={[
         styles.stackCard,
         {
-          width: STACK_CARD_WIDTH,
           backgroundColor: colors.backgroundElevated,
           borderWidth: 1,
           borderColor: colors.border,
@@ -575,30 +575,9 @@ function ScreenTrialReminder({
   trialDays: number;
 }) {
   const reducedMotion = useReducedMotion();
-  const dragY = useSharedValue(0);
-
-  const dragGesture = Gesture.Pan()
-    .activeOffsetY([-8, 8])
-    .failOffsetX([-24, 24])
-    .shouldCancelWhenOutside(false)
-    .onUpdate((e) => {
-      'worklet';
-      dragY.value = computePaywallDragOffset(e.translationY);
-    })
-    .onFinalize(() => {
-      'worklet';
-      dragY.value = withSpring(0, DRAG_RETURN_SPRING);
-    });
-
-  const dragStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: dragY.value }],
-  }));
-
   return (
-    <View style={styles.screen2Root}>
-      <GestureDetector gesture={dragGesture}>
-        <View style={styles.screen2DragArea} collapsable={false}>
-          <Animated.View style={[styles.screen2Content, dragStyle]}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.screen2Root}>
+          <View style={styles.screen2Content}>
             {/* Lottie bell -- above headline for visual anchor */}
             <View style={styles.bellContainer}>
               <LottieView
@@ -644,10 +623,8 @@ function ScreenTrialReminder({
               You'll get a notification {trialDays <= 3 ? '1 day' : trialDays === 7 ? '2 days' : '1 day'} before
               your trial ends. No surprises, ever.
             </Text>
-          </Animated.View>
-        </View>
-      </GestureDetector>
-    </View>
+          </View>
+    </ScrollView>
   );
 }
 
@@ -672,6 +649,8 @@ function ScreenPricing({
   selectedPlan: 'yearly' | 'monthly';
   onSelectPlan: (plan: 'yearly' | 'monthly') => void;
 }) {
+  const { fontScale, width: screenWidth } = useWindowDimensions();
+  const planSizing = { flexBasis: 150 * fontScale, flexGrow: 1, flexShrink: 1, minWidth: 0 };
   const savings = monthlyRaw > 0 ? Math.round((1 - yearlyRaw / 12 / monthlyRaw) * 100) : 0;
   // Guideline 3.1.2(c): the billed amount ({yearlyPrice}/yr) must be the most
   // conspicuous pricing element on the card. The per-month equivalent may only
@@ -683,8 +662,20 @@ function ScreenPricing({
 
   // --- Stacked card carousel state ---
   const [activeReviewIndex, setActiveReviewIndex] = useState(0);
+  const [cardHeights, setCardHeights] = useState(() => REVIEWS.map(() => STACK_CARD_HEIGHT));
+  const stackHeight = Math.max(STACK_CARD_HEIGHT, ...cardHeights);
   const activeIndex = useSharedValue(0);
   const dismissX = useSharedValue(0);
+  const handleCardHeight = useCallback((index: number, height: number) => {
+    if (!Number.isFinite(height) || height <= 0) return;
+    const nextHeight = Math.ceil(height);
+    setCardHeights((current) => {
+      if (current[index] === nextHeight) return current;
+      const next = [...current];
+      next[index] = nextHeight;
+      return next;
+    });
+  }, []);
 
   const advanceCard = useCallback(() => {
     setActiveReviewIndex((prev) => (prev + 1) % REVIEWS.length);
@@ -692,6 +683,7 @@ function ScreenPricing({
 
   const swipeGesture = Gesture.Pan()
     .activeOffsetX([-12, 12])
+    .failOffsetY([-15, 15])
     .onUpdate((e) => {
       'worklet';
       dismissX.value = e.translationX;
@@ -701,7 +693,7 @@ function ScreenPricing({
       if (Math.abs(e.translationX) > Math.abs(SWIPE_THRESHOLD)) {
         // Dismiss: animate card off in the direction of swipe
         const direction = e.translationX < 0 ? -1 : 1;
-        dismissX.value = withTiming(direction * SCREEN_WIDTH, { duration: 200 }, () => {
+        dismissX.value = withTiming(direction * screenWidth, { duration: 200 }, () => {
           activeIndex.value = (activeIndex.value + 1) % REVIEWS.length;
           dismissX.value = 0;
           runOnJS(advanceCard)();
@@ -714,15 +706,21 @@ function ScreenPricing({
 
   const handleCardTap = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    dismissX.value = withTiming(-SCREEN_WIDTH, { duration: 200 }, () => {
+    dismissX.value = withTiming(-screenWidth, { duration: 200 }, () => {
       activeIndex.value = (activeIndex.value + 1) % REVIEWS.length;
       dismissX.value = 0;
       runOnJS(advanceCard)();
     });
-  }, [activeIndex, dismissX, advanceCard]);
+  }, [activeIndex, dismissX, advanceCard, screenWidth]);
 
   return (
-    <View style={styles.screen3Root}>
+    <ScrollView
+      testID="paywall-pricing-content"
+      style={styles.flex1}
+      contentContainerStyle={styles.screen3Content}
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+    >
       {/* Logo + headline. Using expo-image (not RN Image) so the bundled
           PNG paints synchronously with its tint applied — native Image
           has a brief async tint processing step on iOS that made the
@@ -759,9 +757,10 @@ function ScreenPricing({
       <View style={styles.stackCarouselWrapper}>
         <GestureDetector gesture={swipeGesture}>
           <TouchableOpacity
+            testID="paywall-review-stack"
             activeOpacity={1}
             onPress={handleCardTap}
-            style={styles.stackContainer}
+            style={[styles.stackContainer, { height: stackHeight }]}
           >
             {REVIEWS.map((review, i) => (
               <StackCard
@@ -772,6 +771,7 @@ function ScreenPricing({
                 dismissX={dismissX}
                 colors={colors}
                 total={REVIEWS.length}
+                onHeight={handleCardHeight}
               />
             ))}
           </TouchableOpacity>
@@ -784,7 +784,7 @@ function ScreenPricing({
         />
       </View>
 
-      {/* Pricing cards -- explicit equal widths */}
+      {/* Plans share a row when their text fits, then wrap as whole cards. */}
       <View style={styles.pricingRow}>
         {/* Monthly */}
         <TouchableOpacity
@@ -795,8 +795,8 @@ function ScreenPricing({
           accessibilityState={{ selected: selectedPlan === 'monthly', checked: selectedPlan === 'monthly' }}
           style={[
             styles.pricingCard,
+            planSizing,
             {
-              width: PRICING_BOX_WIDTH,
               backgroundColor: selectedPlan === 'monthly'
                 ? alpha(colors.accent, 0.16)
                 : colors.inputBackground,
@@ -854,7 +854,7 @@ function ScreenPricing({
         </TouchableOpacity>
 
         {/* Yearly -- with SAVE badge on top border */}
-        <View style={[styles.yearlyCardWrapper, { width: PRICING_BOX_WIDTH }]}>
+        <View style={[styles.yearlyCardWrapper, planSizing]}>
           {/* SAVE badge overlapping top border */}
           {savings > 0 && (
             <View
@@ -948,7 +948,7 @@ function ScreenPricing({
           </TouchableOpacity>
         </View>
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -1534,7 +1534,7 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
       />
 
       {/* Page content — fills space between onboarding header and bottom CTA */}
-      <View style={styles.flex1}>
+      <View style={[styles.flex1, styles.pageClip]}>
         <Animated.View
           key={currentPage}
           entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
@@ -1733,6 +1733,9 @@ const styles = StyleSheet.create({
   flex1: {
     flex: 1,
   },
+  pageClip: {
+    overflow: 'hidden',
+  },
 
   // ------- Screen 1 -------
   screen1Root: {
@@ -1768,21 +1771,14 @@ const styles = StyleSheet.create({
 
   // ------- Screen 2 -------
   screen2Root: {
-    flex: 1,
+    flexGrow: 1,
+    paddingVertical: Spacing['6'],
     paddingHorizontal: Spacing['6'],
     justifyContent: 'center',
     alignItems: 'center',
   },
-  screen2DragArea: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    minHeight: 1,
-  },
   screen2Content: {
     alignItems: 'center',
-    // Shift content up slightly from true center for optical balance
-    marginTop: -Spacing['10'],
   },
 
   // ------- Shared Headlines -------
@@ -1825,11 +1821,12 @@ const styles = StyleSheet.create({
   },
 
   // ------- Screen 3 -------
-  screen3Root: {
-    flex: 1,
+  screen3Content: {
+    flexGrow: 1,
     paddingHorizontal: Spacing['6'],
     paddingTop: Spacing['3'],
-    justifyContent: 'space-between',
+    paddingBottom: Spacing['4'],
+    gap: Spacing['5'],
   },
   screen3Header: {
     alignItems: 'center',
@@ -1855,7 +1852,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   stackContainer: {
-    width: STACK_CARD_WIDTH,
+    width: '100%',
     height: STACK_CARD_HEIGHT,
     position: 'relative',
   },
@@ -1883,7 +1880,9 @@ const styles = StyleSheet.create({
   // ------- Pricing -------
   pricingRow: {
     flexDirection: 'row',
-    gap: Spacing['3'],
+    flexWrap: 'wrap',
+    columnGap: Spacing['3'],
+    rowGap: Spacing['5'],
     marginBottom: Spacing['1'],
     alignItems: 'stretch',
   },
@@ -1892,6 +1891,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing['4'],
     paddingVertical: Spacing['4'],
     justifyContent: 'center',
+    minHeight: 44,
+    flexShrink: 0,
   },
   yearlyCardWrapper: {
     position: 'relative',
@@ -1935,6 +1936,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing['3'],
   },
   ctaButton: {
+    minHeight: 44,
     paddingVertical: Spacing['3.5'],
     borderRadius: Radius.md,
     alignItems: 'center',

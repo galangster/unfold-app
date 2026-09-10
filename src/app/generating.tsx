@@ -1227,7 +1227,7 @@ export default function GeneratingScreen() {
           {/* Rotating contemplative message -- swapped for reconnecting msg when
               auto-retrying, or for the soft "still writing" line once the job
               outlives the long-running threshold (never an error). */}
-          <View style={{ height: 28, justifyContent: 'center', marginBottom: Spacing['3'] }}>
+          <View style={{ minHeight: 28, alignSelf: 'stretch', justifyContent: 'center', marginBottom: Spacing['3'] }}>
             {isReconnecting ? (
               <Animated.Text
                 key="reconnecting"
@@ -1246,7 +1246,6 @@ export default function GeneratingScreen() {
                 key="long-running"
                 entering={entering(FadeIn.duration(600))}
                 accessibilityLiveRegion="polite"
-                numberOfLines={1}
                 style={{
                   fontFamily: FontFamily.bodyItalic,
                   fontSize: 17,

@@ -141,7 +141,7 @@ const styles = StyleSheet.create({
   monthTitle: { flex: 1, fontFamily: FontFamily.display, fontSize: 22, lineHeight: 28 },
   monthCount: { fontFamily: FontFamily.uiMedium, fontSize: 11, lineHeight: 18, letterSpacing: 0.35, textTransform: 'uppercase' },
   noteRow: { minHeight: 122, paddingVertical: Spacing['4'], borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: 'row', alignItems: 'flex-start', gap: Spacing['3'] },
-  dateColumn: { width: 34, alignItems: 'center' },
+  dateColumn: { minWidth: 34, alignItems: 'center' },
   day: { fontFamily: FontFamily.display, fontSize: 23, lineHeight: 28 },
   noteContent: { flex: 1, minWidth: 0 },
   noteTitle: { fontFamily: FontFamily.display, fontSize: 18, lineHeight: 23, marginBottom: Spacing['1'] },

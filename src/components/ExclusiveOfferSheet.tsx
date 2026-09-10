@@ -10,7 +10,7 @@
  */
 
 import { useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Modal, Linking } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Modal, Linking, ScrollView } from 'react-native';
 import { LEGAL_LINKS } from '@/lib/push-notification-helpers';
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
@@ -207,7 +207,7 @@ export function ExclusiveOfferSheet({
         style={[styles.root, { backgroundColor: colors.background }]}
       >
         {/* Scrollable content area */}
-        <View style={[styles.content, { paddingTop: insets.top + Spacing['12'] }]}>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.content, { paddingTop: insets.top + Spacing['6'], paddingBottom: Spacing['6'] }]}>
           {/* Gift icon */}
           <View
             style={[
@@ -286,7 +286,7 @@ export function ExclusiveOfferSheet({
               {errorMessage}
             </Text>
           )}
-        </View>
+        </ScrollView>
 
         {/* Bottom CTA area — pinned to bottom */}
         <View style={[styles.bottomArea, { paddingBottom: insets.bottom + Spacing['4'] }]}>
@@ -375,7 +375,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    flex: 1,
+    flexGrow: 1,
     paddingHorizontal: Spacing['6'],
     alignItems: 'center',
     justifyContent: 'center',
@@ -425,6 +425,8 @@ const styles = StyleSheet.create({
   planPillContent: {
     flex: 1,
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing['2'],
     alignItems: 'center',
     justifyContent: 'space-between',
   },

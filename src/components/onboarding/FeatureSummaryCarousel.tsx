@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState, memo } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Dimensions, Keyboard, Platform, useWindowDimensions } from 'react-native';
+import { useCallback, memo } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Dimensions, Keyboard } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeOut, runOnJS, useReducedMotion } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -59,32 +60,9 @@ export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
 }: Props) {
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
-  const { height: screenHeight } = useWindowDimensions();
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-
-  useEffect(() => {
-    const showSub = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-      (event) => setKeyboardHeight(event.endCoordinates.height)
-    );
-    const hideSub = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
-      () => setKeyboardHeight(0)
-    );
-
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
-  }, []);
-
   const page = ALL_PAGES[currentPage];
   const isLastPage = currentPage === ALL_PAGES.length - 1;
   const isCompanionPage = 'type' in page && (page as any).type === 'companion';
-  const companionKeyboardLift = isCompanionPage && keyboardHeight > 0
-    ? Math.min(Math.round(keyboardHeight * 0.48), screenHeight < 860 ? 170 : 190)
-    : 0;
-
   const handleContinue = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (isLastPage) {
@@ -106,6 +84,7 @@ export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
 
   const swipeGesture = Gesture.Pan()
     .activeOffsetX([-20, 20])
+    .failOffsetY([-15, 15])
     .onEnd((e) => {
       if (e.translationX < -SWIPE_THRESHOLD || e.velocityX < -SWIPE_VELOCITY) {
         runOnJS(handleSwipeLeft)();
@@ -123,12 +102,14 @@ export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
             key={currentPage}
             entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
             exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
-            style={[
-              StyleSheet.absoluteFill,
-              companionKeyboardLift > 0 ? { transform: [{ translateY: -companionKeyboardLift }] } : null,
-            ]}
+            style={StyleSheet.absoluteFill}
           >
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['8'] }}>
+            <KeyboardAwareScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['8'], paddingVertical: Spacing['6'] }}
+              keyboardShouldPersistTaps="handled"
+              bottomOffset={24}
+            >
               <View style={{ alignItems: 'center', gap: 36, alignSelf: 'stretch' }}>
                 {/* Animation or companion orb */}
                 <View>
@@ -175,7 +156,8 @@ export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
                             fontFamily: FontFamily.body,
                             fontSize: FontSize.lg,
                             color: colors.text,
-                            height: 54,
+                            minHeight: 54,
+                            paddingVertical: Spacing['3'],
                             paddingHorizontal: Spacing['5'],
                             backgroundColor: colors.inputBackground,
                             borderRadius: Radius.lg,
@@ -203,7 +185,7 @@ export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
                   )}
                 </View>
               </View>
-            </View>
+            </KeyboardAwareScrollView>
           </Animated.View>
         </View>
       </GestureDetector>

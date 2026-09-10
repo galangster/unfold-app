@@ -107,61 +107,63 @@ export function ShockStat({ colors, onReady }: ShockStatProps) {
   // t=4800   haptic + onReady
 
   return (
-    <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.slow).easing(Ease.out)} style={{ flex: 1 }}>
-      {/* 93% — top-left, desire */}
-      <View style={{
-        position: 'absolute',
-        top: '25%',
-        left: Spacing['6'],
-      }}>
-        <TypewriterNumber
-          text="93%"
-          startDelay={200}
-          fontSize={72}
-          colors={colors}
-        />
-        <Animated.Text
-          entering={reducedMotion ? undefined : FadeIn.delay(900).duration(Duration.slow).easing(Ease.out)}
-          style={{
-            fontFamily: FontFamily.body,
-            fontSize: 16,
-            color: colors.textMuted,
-            lineHeight: 24,
-            marginTop: Spacing['2'],
-            maxWidth: 260,
-          }}
-        >
-          of Christians want a deeper{'\n'}relationship with God.
-        </Animated.Text>
-      </View>
+    <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.slow).easing(Ease.out)} style={{ flexGrow: 1 }}>
+      <View
+        style={{
+          flexGrow: 1,
+          justifyContent: 'space-between',
+          paddingHorizontal: Spacing['6'],
+          paddingTop: Spacing['8'],
+          paddingBottom: Spacing['4'],
+          gap: Spacing['8'],
+        }}
+      >
+        {/* 93% — top-left, desire */}
+        <View>
+          <TypewriterNumber
+            text="93%"
+            startDelay={200}
+            fontSize={72}
+            colors={colors}
+          />
+          <Animated.Text
+            entering={reducedMotion ? undefined : FadeIn.delay(900).duration(Duration.slow).easing(Ease.out)}
+            style={{
+              fontFamily: FontFamily.body,
+              fontSize: 16,
+              color: colors.textMuted,
+              lineHeight: 24,
+              marginTop: Spacing['2'],
+              maxWidth: 260,
+            }}
+          >
+            of Christians want a deeper{'\n'}relationship with God.
+          </Animated.Text>
+        </View>
 
-      {/* 11% — bottom-right, reality (extra 1s pause after first stat) */}
-      <View style={{
-        position: 'absolute',
-        bottom: '25%',
-        right: Spacing['6'],
-        alignItems: 'flex-end',
-      }}>
-        <TypewriterNumber
-          text="11%"
-          startDelay={3000}
-          fontSize={72}
-          colors={colors}
-        />
-        <Animated.Text
-          entering={reducedMotion ? undefined : FadeIn.delay(3600).duration(Duration.slow).easing(Ease.out)}
-          style={{
-            fontFamily: FontFamily.body,
-            fontSize: 16,
-            color: colors.textMuted,
-            lineHeight: 24,
-            marginTop: Spacing['2'],
-            textAlign: 'right',
-            maxWidth: 260,
-          }}
-        >
-          read the Bible daily.
-        </Animated.Text>
+        {/* 11% — bottom-right, reality (extra 1s pause after first stat) */}
+        <View style={{ alignItems: 'flex-end' }}>
+          <TypewriterNumber
+            text="11%"
+            startDelay={3000}
+            fontSize={72}
+            colors={colors}
+          />
+          <Animated.Text
+            entering={reducedMotion ? undefined : FadeIn.delay(3600).duration(Duration.slow).easing(Ease.out)}
+            style={{
+              fontFamily: FontFamily.body,
+              fontSize: 16,
+              color: colors.textMuted,
+              lineHeight: 24,
+              marginTop: Spacing['2'],
+              textAlign: 'right',
+              maxWidth: 260,
+            }}
+          >
+            read the Bible daily.
+          </Animated.Text>
+        </View>
       </View>
     </Animated.View>
   );

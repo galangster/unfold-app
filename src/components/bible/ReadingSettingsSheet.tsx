@@ -1,4 +1,4 @@
-import { Text, TouchableOpacity, StyleSheet, View } from 'react-native';
+import { Text, TouchableOpacity, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { GearSixIcon } from '@/components/icons';
 import { ReaderBottomSheet } from '@/components/reader/ReaderBottomSheet';
@@ -39,7 +39,9 @@ export function ReadingSettingsSheet({
   onLockedFontPress = () => {},
 }: ReadingSettingsSheetProps) {
   const router = useRouter();
+  const { width, fontScale } = useWindowDimensions();
   const { colors, isDark } = useTheme();
+  const stackLineHeightOptions = width < 390 || fontScale >= 1.18;
   const settings = useUnfoldStore((state) => state.bibleReaderSettings);
   const themeMode = useUnfoldStore((state) => state.user?.themeMode ?? 'dark');
   const readingFont = useUnfoldStore((state) => state.user?.readingFont ?? 'source-serif');
@@ -81,7 +83,7 @@ export function ReadingSettingsSheet({
 
           <View style={styles.controlGroup}>
             <Text style={[styles.label, { color: colors.textSubtle }]}>Line height</Text>
-            <View style={styles.segmentRow}>
+            <View style={[styles.segmentRow, stackLineHeightOptions && styles.segmentRowStacked]}>
               {LINE_HEIGHT_OPTIONS.map((option) => {
                 const selected = settings.lineHeightMultiplier === option.value;
                 return (
@@ -190,7 +192,11 @@ const styles = StyleSheet.create({
   },
   segmentRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: Spacing['2'],
+  },
+  segmentRowStacked: {
+    flexDirection: 'column',
   },
   segmentRowCompact: {
     flexDirection: 'row',
@@ -198,16 +204,18 @@ const styles = StyleSheet.create({
   },
   segmentButton: {
     minHeight: 44,
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 0,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: Radius.card,
-    paddingHorizontal: Spacing['2'],
+    paddingHorizontal: Spacing['3'],
   },
   segmentText: {
     fontFamily: FontFamily.uiMedium,
     fontSize: FontSize.sm,
+    textAlign: 'center',
   },
   translationButton: {
     minHeight: 44,

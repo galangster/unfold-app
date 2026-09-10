@@ -3,7 +3,7 @@
  * Staggered fade-in animation per Storyboard A.
  */
 import { useEffect, useMemo } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { ScrollView, View, Text, TouchableOpacity } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -179,101 +179,116 @@ export function CompanionEmptyState({ onSelectStarter, todayTheme }: Props) {
   return (
     <Animated.View
       exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
-      style={{ flex: 1, justifyContent: 'center', paddingHorizontal: Spacing['6'] }}
+      style={{ flex: 1 }}
     >
-      {/* Companion icon */}
-      <FadeSlideIn delay={0} translateY={0}>
-        <View style={{ alignItems: 'center', marginBottom: Spacing['4'] }}>
-          <View
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          flexGrow: 1,
+          justifyContent: 'flex-start',
+          paddingHorizontal: Spacing['6'],
+          paddingTop: Spacing['4'],
+          paddingBottom: Spacing['6'],
+        }}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+      >
+        {/* Companion icon */}
+        <FadeSlideIn delay={0} translateY={0}>
+          <View style={{ alignItems: 'center', marginBottom: Spacing['4'] }}>
+            <View
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: Radius['2xl'],
+                backgroundColor: alpha(colors.accent, 0.15),
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <ChatCircleDotsIcon size={24} color={colors.accent} weight="light" />
+            </View>
+          </View>
+        </FadeSlideIn>
+
+        {/* Greeting */}
+        <FadeSlideIn delay={200} translateY={8}>
+          <Text
             style={{
-              width: 48,
-              height: 48,
-              borderRadius: Radius['2xl'],
-              backgroundColor: alpha(colors.accent, 0.15),
-              alignItems: 'center',
-              justifyContent: 'center',
+              fontFamily: FontFamily.display,
+              fontSize: 21,
+              color: colors.text,
+              textAlign: 'center',
+              maxWidth: 280,
+              alignSelf: 'center',
             }}
           >
-            <ChatCircleDotsIcon size={24} color={colors.accent} weight="light" />
-          </View>
-        </View>
-      </FadeSlideIn>
+            {greeting}
+          </Text>
+        </FadeSlideIn>
 
-      {/* Greeting */}
-      <FadeSlideIn delay={200} translateY={8}>
-        <Text
-          style={{
-            fontFamily: FontFamily.display,
-            fontSize: 21,
-            color: colors.text,
-            textAlign: 'center',
-            maxWidth: 280,
-            alignSelf: 'center',
-          }}
-        >
-          {greeting}
-        </Text>
-      </FadeSlideIn>
+        {/* Subtext */}
+        <FadeSlideIn delay={350} translateY={6}>
+          <Text
+            style={{
+              fontFamily: FontFamily.body,
+              fontSize: FontSize.base,
+              color: colors.textMuted,
+              textAlign: 'center',
+              maxWidth: 300,
+              alignSelf: 'center',
+              marginTop: Spacing['3'],
+              lineHeight: 24,
+            }}
+          >
+            Explore Scripture together, pray, or just talk through what’s on your mind.
+          </Text>
+        </FadeSlideIn>
 
-      {/* Subtext */}
-      <FadeSlideIn delay={350} translateY={6}>
-        <Text
-          style={{
-            fontFamily: FontFamily.body,
-            fontSize: FontSize.base,
-            color: colors.textMuted,
-            textAlign: 'center',
-            maxWidth: 300,
-            alignSelf: 'center',
-            marginTop: Spacing['3'],
-            lineHeight: 24,
-          }}
-        >
-          Explore Scripture together, pray, or just talk through what’s on your mind.
-        </Text>
-      </FadeSlideIn>
-
-      {/* Starter cards */}
-      <View style={{ marginTop: Spacing['8'], gap: 10 }}>
-        {cards.map((card, i) => {
-          const Icon = card.icon;
-          return (
-            <FadeSlideIn key={card.text} delay={500 + i * 80}>
-              <TouchableOpacity
-                activeOpacity={0.7}
-                onPress={() => onSelectStarter(card.text)}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  backgroundColor: colors.inputBackground,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  borderRadius: Radius.card,
-                  paddingHorizontal: Spacing['4'],
-                  paddingVertical: 14,
-                }}
-              >
-                <Icon
-                  size={20}
-                  color={colors.accent}
-                  weight="light"
-                  style={{ marginRight: Spacing['3'] }}
-                />
-                <Text
+        {/* Starter cards */}
+        <View style={{ marginTop: Spacing['8'], gap: 10 }}>
+          {cards.map((card, i) => {
+            const Icon = card.icon;
+            return (
+              <FadeSlideIn key={card.text} delay={500 + i * 80}>
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => onSelectStarter(card.text)}
                   style={{
-                    fontFamily: FontFamily.body,
-                    fontSize: FontSize.sm,
-                    color: colors.text,
-                    flex: 1,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: colors.inputBackground,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    borderRadius: Radius.card,
+                    paddingHorizontal: Spacing['4'],
+                    paddingVertical: 14,
+                    minHeight: 44,
                   }}
                 >
-                  {card.text}
-                </Text>
-              </TouchableOpacity>
-            </FadeSlideIn>
-          );
-        })}
-      </View>
+                  <Icon
+                    size={20}
+                    color={colors.accent}
+                    weight="light"
+                    style={{ marginRight: Spacing['3'] }}
+                  />
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.body,
+                      fontSize: FontSize.sm,
+                      color: colors.text,
+                      flex: 1,
+                    }}
+                  >
+                    {card.text}
+                  </Text>
+                </TouchableOpacity>
+              </FadeSlideIn>
+            );
+          })}
+        </View>
+      </ScrollView>
     </Animated.View>
   );
 }

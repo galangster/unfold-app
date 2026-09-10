@@ -188,7 +188,7 @@ export function Chip({
       style={[
         styles.base,
         {
-          height: config.height,
+          minHeight: config.height,
           paddingHorizontal: config.paddingHorizontal,
           paddingVertical: config.paddingVertical,
           ...variantStyles,
@@ -219,6 +219,7 @@ export function Chip({
       {/* Label */}
       <Text
         style={[
+          styles.label,
           {
             fontFamily,
             fontSize: config.fontSize,
@@ -226,7 +227,6 @@ export function Chip({
             letterSpacing: variant === 'reference' ? 0.3 : 0,
           },
         ]}
-        numberOfLines={1}
       >
         {label}
       </Text>
@@ -237,8 +237,8 @@ export function Chip({
           style={[
             styles.badge,
             {
-              width: config.badgeSize,
-              height: config.badgeSize,
+              minWidth: config.badgeSize,
+              minHeight: config.badgeSize,
               borderRadius: config.badgeSize / 2,
               backgroundColor: colors.accent,
             },
@@ -270,6 +270,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
+  },
+  label: {
+    flexShrink: 1,
   },
   disabled: {
     opacity: DISABLED_OPACITY,

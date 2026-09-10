@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
+  ScrollView,
   Text,
   Dimensions,
   StyleSheet,
@@ -1204,6 +1205,8 @@ export default function UnfoldedScreen() {
   const insets = useSafeAreaInsets();
   const [currentCard, setCurrentCard] = useState(0);
   const [paused, setPaused] = useState(false);
+  const [cardViewportHeight, setCardViewportHeight] = useState(0);
+  const [cardContentHeight, setCardContentHeight] = useState(0);
 
   // Store data
   const devotionals = useUnfoldStore((s) => s.devotionals);
@@ -1245,6 +1248,7 @@ export default function UnfoldedScreen() {
       isAnimating.current = true;
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       setCurrentCard(index);
+      setCardContentHeight(0);
       if (animTimerRef.current) clearTimeout(animTimerRef.current);
       animTimerRef.current = setTimeout(() => {
         isAnimating.current = false;
@@ -1277,6 +1281,7 @@ export default function UnfoldedScreen() {
   // Swipe left/right to navigate
   const swipeGesture = Gesture.Pan()
     .activeOffsetX([-20, 20])
+    .failOffsetY([-15, 15])
     .onUpdate((e) => {
       translateX.value = e.translationX;
     })
@@ -1372,6 +1377,25 @@ export default function UnfoldedScreen() {
   const bg = CARD_BACKGROUNDS[currentCard] ?? CARD_BACKGROUNDS[0];
   const cardDuration = CARD_DURATIONS[currentCard] ?? 6000;
   const emberColor = useMemo(() => CARD_ACCENTS[currentCard] ?? PALETTE.gold, [currentCard]);
+  const cardSurface = (
+  <Animated.View
+    style={[s.cardArea, swipeAnimStyle]}
+    accessible
+    accessibilityLabel={`Series recap, card ${currentCard + 1} of ${TOTAL_CARDS}`}
+    accessibilityActions={recapCardAccessibilityActions}
+    onAccessibilityAction={handleRecapAccessibilityAction}
+  >
+    <ScrollView
+      key={currentCard}
+      style={{ flex: 1 }}
+      contentContainerStyle={{ flexGrow: 1, paddingVertical: Spacing['6'] }}
+      onLayout={(event) => setCardViewportHeight(event.nativeEvent.layout.height)}
+      onContentSizeChange={(_, height) => setCardContentHeight(height)}
+    >
+      {renderCard()}
+    </ScrollView>
+  </Animated.View>
+  );
 
   return (
     <View style={s.screen}>
@@ -1402,7 +1426,7 @@ export default function UnfoldedScreen() {
             <StoryProgressBar
               current={currentCard}
               total={TOTAL_CARDS}
-              paused={paused}
+              paused={paused || cardContentHeight > cardViewportHeight + 1}
               duration={cardDuration}
               onSegmentComplete={handleSegmentComplete}
             />
@@ -1425,27 +1449,10 @@ export default function UnfoldedScreen() {
             accessibility actions that call the same goNext/goPrev used by
             touch. */}
         {currentCard === TOTAL_CARDS - 1 ? (
-          /* Last card: no gesture detector — Share button needs native touches */
-          <Animated.View
-            style={[s.cardArea, swipeAnimStyle]}
-            accessible
-            accessibilityLabel={`Series recap, card ${currentCard + 1} of ${TOTAL_CARDS}`}
-            accessibilityActions={recapCardAccessibilityActions}
-            onAccessibilityAction={handleRecapAccessibilityAction}
-          >
-            {renderCard()}
-          </Animated.View>
+          cardSurface
         ) : (
           <GestureDetector gesture={composedGesture}>
-            <Animated.View
-              style={[s.cardArea, swipeAnimStyle]}
-              accessible
-              accessibilityLabel={`Series recap, card ${currentCard + 1} of ${TOTAL_CARDS}`}
-              accessibilityActions={recapCardAccessibilityActions}
-              onAccessibilityAction={handleRecapAccessibilityAction}
-            >
-              {renderCard()}
-            </Animated.View>
+            {cardSurface}
           </GestureDetector>
         )}
       </View>
@@ -1508,7 +1515,7 @@ const s = StyleSheet.create({
     paddingHorizontal: Spacing['6'],
   },
   cardContent: {
-    flex: 1,
+    flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1846,7 +1853,7 @@ const s = StyleSheet.create({
 
   // ─── Closing Card (8) ───
   closingContainer: {
-    flex: 1,
+    flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Spacing['6'],

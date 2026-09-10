@@ -151,6 +151,7 @@ export function RemindersSection() {
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
+            columnGap: Spacing['3'],
             paddingVertical: 13,
             paddingHorizontal: Spacing['4'],
             borderBottomWidth: notificationsEnabled && isPremium ? 1 : 0,
@@ -161,6 +162,7 @@ export function RemindersSection() {
             style={{
               fontFamily: FontFamily.ui,
               fontSize: 15,
+              flexShrink: 1,
               color: colors.text,
             }}
           >
@@ -186,6 +188,7 @@ export function RemindersSection() {
               flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'space-between',
+            columnGap: Spacing['3'],
               paddingVertical: 13,
               paddingHorizontal: Spacing['4'],
             }}
@@ -194,6 +197,7 @@ export function RemindersSection() {
               style={{
                 fontFamily: FontFamily.ui,
                 fontSize: 15,
+                flexShrink: 1,
                 color: colors.text,
               }}
             >
@@ -223,6 +227,7 @@ export function RemindersSection() {
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
+            columnGap: Spacing['3'],
             paddingVertical: 13,
             paddingHorizontal: Spacing['4'],
             borderTopWidth: 1,
@@ -234,6 +239,7 @@ export function RemindersSection() {
               style={{
                 fontFamily: FontFamily.ui,
                 fontSize: 15,
+                flexShrink: 1,
                 color: colors.text,
               }}
             >
@@ -293,6 +299,7 @@ export function RemindersSection() {
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
+            columnGap: Spacing['3'],
             paddingVertical: 13,
             paddingHorizontal: Spacing['4'],
             borderTopWidth: 1,
@@ -304,6 +311,7 @@ export function RemindersSection() {
               style={{
                 fontFamily: FontFamily.ui,
                 fontSize: 15,
+                flexShrink: 1,
                 color: colors.text,
               }}
             >
@@ -379,6 +387,7 @@ export function RemindersSection() {
                   borderRadius: 10,
                   flexDirection: 'row',
                   justifyContent: 'space-between',
+            columnGap: Spacing['3'],
                   alignItems: 'center',
                 }}
               >

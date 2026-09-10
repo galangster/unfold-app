@@ -48,6 +48,7 @@ const SIZE_CONFIG = {
   lg: {
     height: 52,
     paddingHorizontal: Spacing[6], // 24
+    paddingVertical: Spacing[3], // 12
     iconSize: 20,
     radius: Radius.lg, // 16
     typography: Typography.uiLg,
@@ -55,6 +56,7 @@ const SIZE_CONFIG = {
   md: {
     height: 44,
     paddingHorizontal: Spacing[4], // 16
+    paddingVertical: Spacing[2], // 8
     iconSize: 18,
     radius: Radius.md, // 12
     typography: Typography.uiMd,
@@ -62,6 +64,7 @@ const SIZE_CONFIG = {
   sm: {
     height: 32,
     paddingHorizontal: Spacing[3], // 12
+    paddingVertical: Spacing[1], // 4
     iconSize: 14,
     radius: Radius.sm, // 8
     typography: Typography.uiSm,
@@ -205,9 +208,11 @@ export function Button({
       style={[
         styles.base,
         {
-          height: sizeConfig.height,
+          height: isIconOnly ? sizeConfig.height : undefined,
+          minHeight: isIconOnly ? undefined : sizeConfig.height,
           borderRadius: isIconOnly ? sizeConfig.height / 2 : sizeConfig.radius,
           paddingHorizontal: isIconOnly ? 0 : sizeConfig.paddingHorizontal,
+          paddingVertical: isIconOnly ? 0 : sizeConfig.paddingVertical,
           width: isIconOnly ? iconOnlySize : undefined,
           ...variantStyles,
         },
@@ -239,9 +244,9 @@ export function Button({
           <Text
             style={[
               sizeConfig.typography,
+              styles.label,
               { color: textColor },
             ]}
-            numberOfLines={1}
           >
             {label}
           </Text>
@@ -270,6 +275,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 1,
+  },
+  label: {
+    flexShrink: 1,
+    textAlign: 'center',
   },
   fullWidth: {
     alignSelf: 'stretch',

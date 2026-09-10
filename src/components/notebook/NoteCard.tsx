@@ -160,7 +160,7 @@ const styles = StyleSheet.create({
     gap: Spacing['3'],
   },
   dateColumn: {
-    width: 34,
+    minWidth: 34,
     alignItems: 'center',
   },
   day: {

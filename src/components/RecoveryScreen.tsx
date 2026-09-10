@@ -17,7 +17,7 @@
  * title/message rhythm and button) so the two calm full-screen states read as
  * one family.
  */
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View, ScrollView } from 'react-native';
 import type { ColorTheme } from '@/constants/colors';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
@@ -41,8 +41,9 @@ export interface RecoveryScreenProps {
 export function RecoveryScreen({ colors, variant = 'locked', onRetry }: RecoveryScreenProps) {
   const isReady = variant === 'ready';
   return (
-    <View
-      style={[styles.container, { backgroundColor: colors.background }]}
+    <ScrollView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      contentContainerStyle={styles.container}
       testID="storage-locked-screen"
     >
       <View style={styles.content}>
@@ -82,7 +83,7 @@ export function RecoveryScreen({ colors, variant = 'locked', onRetry }: Recovery
         </Pressable>
         )}
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -90,7 +91,7 @@ export function RecoveryScreen({ colors, variant = 'locked', onRetry }: Recovery
 // one visual language.
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: Spacing['6'],

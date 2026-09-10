@@ -1,5 +1,5 @@
-import { useEffect, useCallback, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet, Dimensions, TouchableOpacity, AccessibilityInfo } from 'react-native';
+import { useEffect, useCallback, useMemo, useRef, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, useWindowDimensions, TouchableOpacity, AccessibilityInfo } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
@@ -30,8 +30,6 @@ import { buildReadingRouteFromRevealParams } from '@/lib/push-notification-helpe
 import { resolveRevealTarget } from '@/lib/reveal-params';
 import { Typography } from '@/constants/typography';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-
 // Gesture thresholds
 const APPROACH_THRESHOLD = -40;
 const COMMIT_THRESHOLD = -120;
@@ -49,6 +47,10 @@ export default function RevealScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const reducedMotion = useReducedMotion();
+  const { height: screenHeight } = useWindowDimensions();
+  const [contentHeight, setContentHeight] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(0);
+  const contentOverflows = contentHeight > viewportHeight + 1;
 
   const { devotionalId, dayNumber, seriesTitle, dayTitle, totalDays } =
     useLocalSearchParams<{
@@ -222,9 +224,10 @@ export default function RevealScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   }, []);
 
-  const panGesture = useMemo(
-    () =>
+  const createPanGesture = useCallback(
+    (enabled: boolean) =>
       Gesture.Pan()
+        .enabled(enabled)
         .onBegin(() => {
           didTickApproach.value = 0;
           didTickCommit.value = 0;
@@ -248,7 +251,7 @@ export default function RevealScreen() {
         .onEnd((event) => {
           if (event.translationY < COMMIT_THRESHOLD) {
             // Past threshold — spring off screen, then navigate after curtain clears
-            translateY.value = withSpring(-SCREEN_HEIGHT, CURTAIN_SPRING, (finished) => {
+            translateY.value = withSpring(-screenHeight, CURTAIN_SPRING, (finished) => {
               if (finished) {
                 runOnJS(navigateToReading)();
               }
@@ -258,7 +261,15 @@ export default function RevealScreen() {
             translateY.value = withSpring(0, CURTAIN_SPRING);
           }
         }),
-    [navigateToReading, fireApproachHaptic, fireCommitHaptic],
+    [navigateToReading, fireApproachHaptic, fireCommitHaptic, didTickApproach, didTickCommit, translateY, screenHeight],
+  );
+  const panGesture = useMemo(
+    () => createPanGesture(!contentOverflows),
+    [createPanGesture, contentOverflows],
+  );
+  const promptPanGesture = useMemo(
+    () => createPanGesture(contentOverflows),
+    [createPanGesture, contentOverflows],
   );
 
   const curtainStyle = useAnimatedStyle(() => ({
@@ -277,12 +288,12 @@ export default function RevealScreen() {
       navigateToReading();
       return;
     }
-    translateY.value = withSpring(-SCREEN_HEIGHT, CURTAIN_SPRING, (finished) => {
+    translateY.value = withSpring(-screenHeight, CURTAIN_SPRING, (finished) => {
       if (finished) {
         runOnJS(navigateToReading)();
       }
     });
-  }, [reducedMotion, navigateToReading, translateY]);
+  }, [reducedMotion, navigateToReading, translateY, screenHeight]);
 
   const onScatterComplete = useCallback(() => {
     onTitleComplete();
@@ -295,7 +306,7 @@ export default function RevealScreen() {
 
   return (
     <GestureDetector gesture={panGesture}>
-      <Animated.View
+    <Animated.View
         entering={FadeIn.duration(600)}
         style={[
           styles.container,
@@ -317,7 +328,13 @@ export default function RevealScreen() {
         }}
       >
         {/* Main content — centered */}
-        <View style={styles.content}>
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={styles.content}
+          scrollEnabled={contentOverflows}
+          onLayout={(event) => setViewportHeight(event.nativeEvent.layout.height)}
+          onContentSizeChange={(_, height) => setContentHeight(height)}
+        >
           {/* Series title eyebrow */}
           <Animated.Text
             style={[
@@ -325,7 +342,6 @@ export default function RevealScreen() {
               { color: colors.textMuted },
               eyebrowStyle,
             ]}
-            numberOfLines={1}
             accessibilityRole="text"
           >
             {seriesTitle ?? 'Your series'}
@@ -354,11 +370,12 @@ export default function RevealScreen() {
           >
             {`Day ${dayNum} of ${total}`}
           </Animated.Text>
-        </View>
+        </ScrollView>
 
         {/* Swipe-up prompt — bottom of screen. textMuted (not textSubtle):
             the prompt rests at this colour once its one-shot fade finishes,
             and textSubtle sits at only ~3.5:1 over the dark ground. */}
+        <GestureDetector gesture={promptPanGesture}>
         <Animated.View style={[styles.swipePrompt, promptStyle]}>
           <Animated.View style={chevronStyle}>
             <CaretUp size={24} color={colors.textMuted} weight="light" />
@@ -396,7 +413,8 @@ export default function RevealScreen() {
             </Text>
           </TouchableOpacity>
         </Animated.View>
-      </Animated.View>
+        </GestureDetector>
+    </Animated.View>
     </GestureDetector>
   );
 }
@@ -408,7 +426,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
   },
   content: {
-    flex: 1,
+    flexGrow: 1,
+    paddingVertical: 24,
     justifyContent: 'center',
   },
   eyebrow: {

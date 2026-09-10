@@ -371,3 +371,67 @@ Grant premium first or the note surfaces stay locked.
 11. **Psalm 119** scrolls without jank; verse selection is responsive.
 12. **My Library** Journal/Saved/Bookmarks scroll smoothly, filter chips work,
     empty states render, `?tab=` deep links land on the right tab.
+
+
+## Large text and compact screens
+
+Every UI change must include native evidence at default and accessibility text sizes.
+A source check or Jest result does not prove text fits on a device.
+
+Use an isolated QA checkout, storage namespace, and Metro port with fictional data.
+Block remote requests from fixtures. Keep fixture routes and purchase mocks out of release source.
+Use one simulator and one UI writer at a time. Capture after navigation and animation settle.
+Save both the screenshot and accessibility tree. A matching label can still sit outside the viewport.
+
+### Required coverage
+
+| Viewport | Text setting | What to verify |
+| --- | --- | --- |
+| Compact iPhone, 375 × 667 points | Default and accessibility extra large | Full labels, vertical scrolling, reachable actions, keyboard access |
+| iPhone 15 Pro Max, 430 × 932 points | Default and accessibility extra large | The same flows, including theme changes and selected settings |
+| Narrow layout, 320 points | Layout helper tests; native device when supported | Selector reflow, long labels, counts, and horizontal overflow |
+| Tablet and Android | Their supported native configurations | Complete before claiming verification on those platforms |
+
+The app currently caps system text scaling at 1.8 in `src/app/_layout.tsx`.
+Some reading and preference controls have existing local limits.
+Record those limits in the receipt. Do not lower them to conceal a layout failure.
+Test changing system text size while the screen stays mounted.
+
+Check these flows before a UI release:
+
+- Welcome, every onboarding layout type, generation status, and commitment choices.
+- Paywall introduction, trial reminder, reviews, both plans, purchase errors, restore, legal links, and dismissal.
+- Today, series lists, day navigation, reading, reflection, and completion.
+- Bible search, chapter grid, reading preferences, highlights, notes, and download failure.
+- Companion empty and populated states, all suggestions, quota, composer, and keyboard.
+- Journal and Notebook lists, search, folders, swipe actions, note editing, and recovery from deletion.
+- Settings, reminder scheduling, check-in, voice review, audio controls, recap, and recovery screens.
+
+Use long names, long notes, multi-digit counts, and the longest option labels.
+Scroll to the final action and activate a harmless control. Check its selected or resulting state.
+For purchase screens, use fixture prices and existing purchase tests. Do not buy during visual QA.
+Record any untested platform, flow, or native-build boundary explicitly.
+
+### Layout rules
+
+- Keep body text and controls responsive to system text size.
+- Use minimum heights for text containers. Reserve fixed sizes for icons, media, and export canvases.
+- Let rows wrap, stack, or scroll horizontally. Keep the selected tab visible.
+- Use measured content heights for overlapping animated cards. Recalculate when text or width changes.
+- Bound scroll views to available space. Use `flexGrow` for content that can exceed the viewport.
+- Put dismissal gestures on handles. Let vertical content scrolling retain its gesture.
+- Use keyboard-aware scrolling or keyboard avoidance for forms. Keep Save and dismissal reachable.
+- Pause timed stories when their content requires scrolling.
+- Use live window dimensions or container measurements when layout depends on size.
+
+For a simulator owned by the current QA task:
+
+```bash
+flowdeck simulator content-size set accessibility-extra-large -S "<QA simulator>" --json
+flowdeck ui simulator screen --screenshot --output /absolute/path/large-text.png -S "<QA simulator>" --json
+flowdeck simulator content-size set large -S "<QA simulator>" --json
+```
+
+Retain the source hash, viewport, content size, theme, build identity, fixture scope, and proof paths.
+Run the existing typecheck, lint, and Jest gates after the final changes.
+A compatible Debug binary with Metro proves local native layout. It does not prove a release build or physical installation.

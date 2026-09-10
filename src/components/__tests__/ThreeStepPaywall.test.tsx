@@ -698,3 +698,48 @@ describe('ThreeStepPaywall Screen 1 phone mockup sizing', () => {
     expect(findByTestId(tree, 'paywall-mockup-fade')).toHaveLength(0);
   });
 });
+
+describe('ThreeStepPaywall testimonial layout changes', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockIsQaToolsEnabled.mockReturnValue(false);
+  });
+
+  it('reserves the tallest review, then releases space after text becomes smaller without changing the selected plan', async () => {
+    const tree = await render(baseProps());
+    await pressPrimaryCTA(tree);
+    await act(async () => {
+      findByLabel(tree, 'Monthly plan, $9.99 per month')[0].props.onPress();
+    });
+
+    const reviews = tree.root.findAll(
+      (node: any) => /^paywall-review-\d+$/.test(node.props?.testID ?? ''),
+      { deep: false },
+    );
+    const measureReviews = async (heights: number[]) => {
+      await act(async () => {
+        reviews.forEach((review: any, index: number) => {
+          review.props.onLayout({ nativeEvent: { layout: { x: 0, y: 0, width: 327, height: heights[index] } } });
+        });
+      });
+    };
+    const stackHeight = () => flatStyle(findByTestId(tree, 'paywall-review-stack')[0]).height;
+
+    expect(reviews.length).toBeGreaterThan(1);
+    const enlarged = reviews.map((_: unknown, index: number) => 260 + index * 40);
+    await measureReviews(enlarged);
+    expect(stackHeight()).toBe(Math.max(...enlarged));
+
+    await act(async () => {
+      reviews[0].props.onLayout({ nativeEvent: { layout: { x: 0, y: 0, width: 327, height: 180 } } });
+    });
+    expect(stackHeight()).toBe(Math.max(...enlarged));
+
+    const smaller = reviews.map((_: unknown, index: number) => 150 + index * 10);
+    await measureReviews(smaller);
+    expect(stackHeight()).toBe(Math.max(...smaller));
+    expect(findByLabel(tree, 'Monthly plan, $9.99 per month')[0].props.accessibilityState.checked).toBe(true);
+    expect(mockPurchasePackage).not.toHaveBeenCalled();
+    await act(async () => tree.unmount());
+  });
+});

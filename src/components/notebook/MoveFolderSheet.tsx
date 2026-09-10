@@ -617,7 +617,6 @@ function DraggableFolderRow({
               fontFamily: isSelected ? FontFamily.uiMedium : FontFamily.ui,
             },
           ]}
-          numberOfLines={1}
         >
           {folder.name}
         </Text>
@@ -690,6 +689,7 @@ const styles = StyleSheet.create({
   title: {
     fontFamily: FontFamily.uiSemiBold,
     fontSize: FontSize.lg,
+    lineHeight: 28,
     paddingHorizontal: Spacing['7'],
     marginBottom: Spacing['4'],
   },
@@ -706,11 +706,14 @@ const styles = StyleSheet.create({
     gap: Spacing['3'],
     paddingHorizontal: Spacing['4'],
     paddingVertical: 14,
+    minHeight: 44,
     borderRadius: 10,
   },
   folderName: {
     fontSize: 15,
+    lineHeight: 20,
     flex: 1,
+    flexShrink: 1,
   },
   folderColorDot: {
     width: 12,
@@ -751,11 +754,13 @@ const styles = StyleSheet.create({
   backButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexShrink: 1,
     gap: 4,
   },
   breadcrumbText: {
     fontFamily: FontFamily.uiMedium,
     fontSize: 13,
+    flexShrink: 1,
   },
   drillInButton: {
     padding: 6,

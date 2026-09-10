@@ -126,7 +126,6 @@ export function FolderChips({
                       { color: isLast ? colors.text : colors.textMuted },
                       isLast && { fontFamily: FontFamily.uiMedium },
                     ]}
-                    numberOfLines={1}
                   >
                     {crumb.name}
                   </Text>
@@ -349,6 +348,7 @@ const styles = StyleSheet.create({
   },
   breadcrumbRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     paddingHorizontal: Spacing['6'],
     paddingBottom: Spacing['2'],
@@ -362,5 +362,6 @@ const styles = StyleSheet.create({
   breadcrumbText: {
     fontFamily: FontFamily.ui,
     fontSize: FontSize.xs,
+    flexShrink: 1,
   },
 });

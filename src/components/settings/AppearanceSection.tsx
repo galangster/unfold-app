@@ -74,6 +74,7 @@ function PreferenceChipRow({
         flexDirection: stack ? 'column' : 'row',
         flexWrap: 'wrap',
         alignItems: stack ? 'stretch' : 'center',
+        minHeight: 44,
         padding: Spacing['4'],
         borderBottomWidth: bordered ? 1 : 0,
         borderBottomColor: borderColor,
@@ -84,6 +85,7 @@ function PreferenceChipRow({
         style={{
           fontFamily: FontFamily.ui,
           fontSize: 15,
+          lineHeight: 22,
           color: labelColor,
           flexGrow: 1,
           flexShrink: 0,
@@ -157,6 +159,7 @@ export function AppearanceSection({ onPremiumFeature }: AppearanceSectionProps) 
                 <View
                   style={{
                     backgroundColor: isSelected ? colors.text : colors.buttonBackground,
+                    minHeight: 44,
                     paddingVertical: Spacing['2'],
                     paddingHorizontal: Spacing['3'],
                     borderRadius: Radius.sm,
@@ -164,6 +167,7 @@ export function AppearanceSection({ onPremiumFeature }: AppearanceSectionProps) 
                     borderColor: isSelected ? colors.text : colors.border,
                     flexDirection: 'row',
                     alignItems: 'center',
+                    justifyContent: 'center',
                   }}
                 >
                   <Icon
@@ -460,6 +464,8 @@ export function AppearanceSection({ onPremiumFeature }: AppearanceSectionProps) 
                     user?.fontSize === size.value
                       ? colors.text
                       : colors.buttonBackground,
+                  minHeight: 44,
+                  justifyContent: 'center',
                   paddingVertical: Spacing['2'],
                   paddingHorizontal: Spacing['3.5'],
                   borderRadius: Radius.sm,
@@ -472,6 +478,7 @@ export function AppearanceSection({ onPremiumFeature }: AppearanceSectionProps) 
                   style={{
                     fontFamily: FontFamily.uiMedium,
                     fontSize: 13,
+                    lineHeight: 18,
                     color: user?.fontSize === size.value ? colors.background : colors.text,
                   }}
                 >
