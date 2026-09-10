@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   type SharedValue,
@@ -328,11 +328,11 @@ function CyclingStatusLines({
   }, [currentIndex, onAllComplete]);
 
   if (currentIndex < 0 || currentIndex >= STATUS_LINES.length) {
-    return <View style={{ height: 24 }} />;
+    return <View style={{ minHeight: 24 }} />;
   }
 
   return (
-    <View style={{ height: 24, marginTop: Spacing['4'], justifyContent: 'center' }}>
+    <View style={{ minHeight: 24, marginTop: Spacing['4'] }}>
       {visible && (
         <Animated.Text
           key={`status-${currentIndex}`}
@@ -743,7 +743,11 @@ export function DevotionalSegue({
   }));
 
   return (
-    <View style={[styles.container, { paddingHorizontal: Spacing['6'] }]}>
+    <ScrollView
+      style={styles.flex1}
+      contentContainerStyle={styles.container}
+      showsVerticalScrollIndicator={false}
+    >
       {/* Top spacer — smaller so content sits in upper-middle */}
       <View style={{ flex: 0.6 }} />
 
@@ -889,7 +893,7 @@ export function DevotionalSegue({
           </TouchableOpacity>
         </Animated.View>
       )}
-    </View>
+    </ScrollView>
   );
 }
 
@@ -897,7 +901,9 @@ export function DevotionalSegue({
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    flexGrow: 1,
+    paddingHorizontal: Spacing['6'],
+    paddingVertical: Spacing['4'],
   },
   flex1: {
     flex: 1,

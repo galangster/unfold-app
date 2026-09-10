@@ -5,6 +5,7 @@ import {
   Dimensions,
   TouchableOpacity,
   StyleSheet,
+  ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -1082,6 +1083,7 @@ export default function HowItWorksScreen() {
 
   const swipeGesture = Gesture.Pan()
     .activeOffsetX([-30, 30])
+    .failOffsetY([-15, 15])
     .onEnd((e) => {
       'worklet';
       if (e.translationX < -50) {
@@ -1098,7 +1100,7 @@ export default function HowItWorksScreen() {
     <View style={{ flex: 1, backgroundColor: 'transparent' }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
         {/* Header */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: Spacing['4'], paddingTop: Spacing['2'], height: 44 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: Spacing['4'], paddingTop: Spacing['2'], minHeight: 44 }}>
           {currentPage > 0 ? (
             <TouchableOpacity
               activeOpacity={0.7}
@@ -1129,7 +1131,7 @@ export default function HowItWorksScreen() {
               exiting={FadeOut.duration(Duration.fast)}
               style={StyleSheet.absoluteFill}
             >
-              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['8'] }}>
+              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['8'], paddingVertical: Spacing['6'] }}>
                 <View style={{ alignItems: 'center', gap: 36, alignSelf: 'stretch' }}>
                   <View>
                     <CardAnimation type={page.animation} accent={colors.accent} />
@@ -1149,7 +1151,7 @@ export default function HowItWorksScreen() {
                     />
                   </View>
                 </View>
-              </View>
+              </ScrollView>
             </Animated.View>
           </View>
         </GestureDetector>

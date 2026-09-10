@@ -431,7 +431,7 @@ export default function BibleHomeScreen() {
               backgroundColor: isDark ? '#1C1C1E' : colors.backgroundElevated,
             }]}
           >
-            <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
+            <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()} style={{ flexShrink: 1 }}>
               {/* Modal Header */}
               <View style={styles.chapterModalHeader}>
                 <Text style={[styles.chapterModalTitle, { color: colors.text, fontFamily: FontFamily.display }]}>
@@ -643,6 +643,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing['5'],
   },
   chapterModalTitle: {
+    flexShrink: 1,
     fontSize: 20,
   },
   closeButton: {
@@ -652,6 +653,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   chapterGridScroll: {
+    flexShrink: 1,
     maxHeight: 400,
   },
   chapterGrid: {
@@ -660,8 +662,10 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   chapterCell: {
-    width: 46,
-    height: 46,
+    minWidth: 46,
+    minHeight: 46,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',

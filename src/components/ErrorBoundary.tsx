@@ -1,5 +1,5 @@
 import { Component, Fragment, type ErrorInfo, type ReactNode } from 'react';
-import { Appearance, Pressable, StyleSheet, Text, View, type ColorSchemeName } from 'react-native';
+import { Appearance, Pressable, ScrollView, StyleSheet, Text, View, type ColorSchemeName } from 'react-native';
 import { logBugError } from '@/lib/bug-logger';
 import {
   clearBootCrashCount,
@@ -355,7 +355,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
     const colors = resolveBoundaryColors(readSystemColorScheme());
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]} testID="error-boundary-fallback">
+      <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={styles.container} testID="error-boundary-fallback">
         <View style={styles.content}>
           <Text style={[styles.logo, { color: colors.accent }]}>Unfold</Text>
           <View style={[styles.iconContainer, { backgroundColor: colors.inputBackground }]}>
@@ -363,14 +363,14 @@ export class ErrorBoundary extends Component<Props, State> {
           </View>
           {this.state.mode === 'recovery' ? this.renderRecovery(colors) : this.renderError(colors)}
         </View>
-      </View>
+      </ScrollView>
     );
   }
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: Spacing['6'],

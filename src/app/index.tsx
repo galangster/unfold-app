@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { useRouter, useSegments } from 'expo-router';
 import Animated, {
@@ -285,6 +285,7 @@ export default function WelcomeScreen() {
 
   const swipeGesture = Gesture.Pan()
     .activeOffsetX([-30, 30])
+    .failOffsetY([-15, 15])
     .onEnd((e) => {
       'worklet';
       if (e.translationX < -50) {
@@ -397,7 +398,7 @@ export default function WelcomeScreen() {
         {phase === 'features' && (
           <Animated.View
             entering={FadeIn.duration(300)}
-            style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: Spacing['4'], height: 44 }}
+            style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: Spacing['4'], minHeight: 44 }}
           >
             {featurePage > 0 ? (
               <TouchableOpacity
@@ -417,7 +418,7 @@ export default function WelcomeScreen() {
           </Animated.View>
         )}
 
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['8'] }}>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['8'], paddingVertical: Spacing['6'] }}>
           {/* Welcome + cutscene: icon + text (unmounts entirely in features phase) */}
           {phase !== 'features' && (
             <>
@@ -433,7 +434,7 @@ export default function WelcomeScreen() {
               <View style={{ alignSelf: 'stretch', alignItems: 'center' }}>
                 {/* Welcome text — stays mounted at opacity 0 during cutscene to prevent layout shift */}
                 <Animated.View
-                  style={[{ alignSelf: 'stretch', alignItems: 'center' }, welcomeTextStyle]}
+                  style={[{ alignSelf: 'stretch', alignItems: 'center' }, phase === 'cutscene' ? { position: 'absolute', top: 0, left: 0, right: 0 } : null, welcomeTextStyle]}
                   pointerEvents={phase === 'welcome' ? 'auto' : 'none'}
                   accessibilityElementsHidden={phase !== 'welcome'}
                   importantForAccessibility={phase === 'welcome' ? 'yes' : 'no-hide-descendants'}
@@ -459,9 +460,9 @@ export default function WelcomeScreen() {
                   </View>
                 </Animated.View>
 
-                {/* Cutscene text — absolutely positioned over welcome text */}
+                {/* Cutscene text reserves its full height, including enlarged text */}
                 {phase === 'cutscene' && (
-                  <Animated.View style={[{ position: 'absolute', top: 0, left: 0, right: 0 }, cutsceneTextStyle]}>
+                  <Animated.View style={[{ alignSelf: 'stretch' }, cutsceneTextStyle]}>
                     <Text
                       style={{
                         fontFamily: FontFamily.display,
@@ -494,14 +495,14 @@ export default function WelcomeScreen() {
 
           {/* Features carousel — normal flex layout, no icon above */}
           {phase === 'features' && (
-            <Animated.View style={[{ flex: 1, alignSelf: 'stretch' }, featuresStyle]}>
+            <Animated.View style={[{ flexGrow: 1, alignSelf: 'stretch' }, featuresStyle]}>
               <GestureDetector gesture={swipeGesture}>
-                <View style={{ flex: 1 }}>
+                <View style={{ flexGrow: 1 }}>
                   <Animated.View
                     key={featurePage}
                     entering={FadeIn.duration(Duration.normal)}
                     exiting={FadeOut.duration(Duration.fast)}
-                    style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}
+                    style={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center' }}
                   >
                     <View style={{ alignItems: 'center', gap: 36, alignSelf: 'stretch' }}>
                       <View style={{ transform: [{ scale: 1.2 }] }}>
@@ -517,7 +518,7 @@ export default function WelcomeScreen() {
               </GestureDetector>
             </Animated.View>
           )}
-        </View>
+        </ScrollView>
 
         {/* Bottom section — buttons + dots */}
         <View style={{ paddingHorizontal: Spacing['6'], paddingBottom: Spacing['4'] }}>

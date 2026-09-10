@@ -141,7 +141,7 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
           {
             backgroundColor: colors.inputBackground,
             borderColor: getBorderColor(),
-            minHeight: multiline ? 80 : undefined,
+            minHeight: multiline ? 80 : 48,
           },
           multiline && styles.multilineContainer,
         ]}
@@ -192,7 +192,7 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
       {(error || (showCount && maxLength)) && (
         <View style={styles.footer}>
           {error ? (
-            <Text style={[Typography.caption, { color: colors.error }]}>{error}</Text>
+            <Text style={[Typography.caption, styles.footerText, { color: colors.error }]}>{error}</Text>
           ) : (
             <View />
           )}
@@ -245,7 +245,13 @@ const styles = StyleSheet.create({
   footer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
     marginTop: Spacing['1'], // 4
     paddingHorizontal: Spacing['0.5'], // 2
+    gap: Spacing['2'],
+  },
+  footerText: {
+    flex: 1,
+    flexShrink: 1,
   },
 });

@@ -9,7 +9,7 @@
  */
 
 import { useRef, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal, Pressable, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, Pressable, ScrollView, Dimensions } from 'react-native';
 import Animated, {
   FadeIn,
   SlideInDown,
@@ -253,8 +253,7 @@ export function PremiumFeatureSheet({ visible, onClose, feature }: PremiumFeatur
           <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         </Animated.View>
 
-        {/* Sheet content — draggable */}
-        <GestureDetector gesture={panGesture}>
+        {/* The handle owns dismissal so the body can scroll. */}
           <Animated.View
             entering={reducedMotion ? undefined : SlideInDown.duration(Duration.normal).easing(Ease.out)}
             exiting={reducedMotion ? undefined : SlideOutDown.duration(Duration.fast).easing(Ease.out)}
@@ -265,11 +264,13 @@ export function PremiumFeatureSheet({ visible, onClose, feature }: PremiumFeatur
             ]}
           >
             {/* Handle indicator */}
-            <View style={pfStyles.handleRow}>
-              <View style={[pfStyles.handle, { backgroundColor: colors.borderStrong }]} />
-            </View>
+            <GestureDetector gesture={panGesture}>
+              <View style={pfStyles.handleRow}>
+                <View style={[pfStyles.handle, { backgroundColor: colors.borderStrong }]} />
+              </View>
+            </GestureDetector>
 
-            <View style={pfStyles.content}>
+            <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={pfStyles.content}>
               {/* Icon + headline */}
               <View style={pfStyles.centerContent}>
                 <View style={[pfStyles.iconContainer, { backgroundColor: `${colors.accent}14` }]}>
@@ -316,9 +317,8 @@ export function PremiumFeatureSheet({ visible, onClose, feature }: PremiumFeatur
                   Maybe later
                 </Text>
               </TouchableOpacity>
-            </View>
+            </ScrollView>
           </Animated.View>
-        </GestureDetector>
       </GestureHandlerRootView>
     </Modal>
   );
@@ -340,7 +340,7 @@ const pfStyles = StyleSheet.create({
     borderTopLeftRadius: Radius['2xl'],
     borderTopRightRadius: Radius['2xl'],
     paddingBottom: 34, // Safe area
-    maxHeight: '50%',
+    maxHeight: '85%',
   },
   handleRow: {
     alignItems: 'center',

@@ -5,8 +5,9 @@ import {
   TouchableOpacity,
   Modal,
   StyleSheet,
-  Dimensions,
+  useWindowDimensions,
   TextInput,
+  ScrollView,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
@@ -45,8 +46,6 @@ import { CHECKIN_CELEBRATION_MESSAGES } from '@/constants/check-in-messages';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
 import { alpha } from '@/components/ui';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const SHEET_HEIGHT = SCREEN_HEIGHT * 0.5;
 const TOTAL_STEPS = 3;
 
 type MoodValue = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
@@ -123,6 +122,8 @@ function MoodStep({
   colors: ReturnType<typeof useTheme>['colors'];
   isDark: boolean;
 }) {
+  const { fontScale } = useWindowDimensions();
+  const moodWidth = 76 * Math.max(1, Math.min(fontScale, 1.8));
   const [hoveredMood, setHoveredMood] = useState<MoodValue | null>(null);
   // Persists the tapped mood so it stays visually selected through the
   // 300ms auto-advance delay, instead of only highlighting during the
@@ -167,6 +168,7 @@ function MoodStep({
               }}
               style={[
                 styles.moodItem,
+                { width: moodWidth },
                 {
                   backgroundColor: isSelected
                     ? alpha(colors.text, isDark ? 0.08 : 0.04)
@@ -622,6 +624,8 @@ export function CheckInSheet({
   dayNumber: _dayNumber,
 }: CheckInSheetProps) {
   const { colors, isDark } = useTheme();
+  const { height: screenHeight, fontScale } = useWindowDimensions();
+  const sheetHeight = screenHeight * Math.min(0.85, 0.5 * Math.max(1, fontScale));
   const reducedMotion = useReducedMotion();
   const [currentStep, setCurrentStep] = useState(0);
   const [selectedMood, setSelectedMood] = useState<MoodValue | null>(null);
@@ -745,7 +749,7 @@ export function CheckInSheet({
             style={[
               styles.sheet,
               {
-                height: SHEET_HEIGHT,
+                height: sheetHeight,
                 backgroundColor: isDark
                   ? colors.backgroundElevated
                   : colors.backgroundPure,
@@ -796,7 +800,7 @@ export function CheckInSheet({
             </View>
 
             {/* Step content */}
-            <View style={styles.stepContainer}>
+            <ScrollView key={showCelebration ? 'celebration' : currentStep} style={{ flex: 1 }} contentContainerStyle={styles.stepContainer} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive">
               {showCelebration ? (
                 <CheckInCelebration colors={colors} onDismiss={handleClose} />
               ) : (
@@ -827,7 +831,7 @@ export function CheckInSheet({
                   )}
                 </>
               )}
-            </View>
+            </ScrollView>
           </Animated.View>
         )}
       </KeyboardAvoidingView>
@@ -901,12 +905,13 @@ const styles = StyleSheet.create({
 
   /* Step content */
   stepContainer: {
-    flex: 1,
+    flexGrow: 1,
+    paddingBottom: 24,
     paddingHorizontal: Spacing['6'],
     paddingTop: Spacing['2'],
   },
   stepContent: {
-    flex: 1,
+    flexGrow: 1,
   },
   stepTitle: {
     fontSize: 21,
@@ -934,6 +939,7 @@ const styles = StyleSheet.create({
     width: 76,
   },
   moodLabel: {
+    textAlign: 'center',
     fontSize: FontSize.xs,
     marginTop: Spacing['2'],
   },
@@ -970,7 +976,8 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   typeOwnInput: {
-    height: 44,
+    minHeight: 44,
+    paddingVertical: 10,
     borderRadius: Radius.md,
     borderWidth: 1,
     paddingHorizontal: 14,

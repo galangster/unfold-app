@@ -183,7 +183,7 @@ function SegmentedControl({ activeTab, onTabChange }: SegmentedControlProps) {
 
 const segStyles = StyleSheet.create({
   container: {
-    height: 36,
+    minHeight: 44,
     borderRadius: 18,
     borderWidth: 1,
     flexDirection: 'row',
@@ -195,7 +195,7 @@ const segStyles = StyleSheet.create({
     position: 'absolute',
     top: 2,
     left: 2,
-    height: 30,
+    bottom: 2,
     borderRadius: Radius.lg,
     borderWidth: 1,
     shadowOffset: { width: 0, height: 2 },
@@ -207,10 +207,13 @@ const segStyles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    height: '100%',
+    minHeight: 40,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
     zIndex: 1,
   },
   segmentText: {
+    textAlign: 'center',
     fontSize: FontSize.sm,
   },
 });
@@ -901,7 +904,7 @@ const searchStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing['2'],
-    height: 40,
+    minHeight: 44,
     borderRadius: Radius.lg,
     borderWidth: 1,
     paddingHorizontal: Spacing['3'],
@@ -910,7 +913,7 @@ const searchStyles = StyleSheet.create({
     flex: 1,
     fontFamily: FontFamily.body,
     fontSize: FontSize.sm,
-    paddingVertical: 0,
+    paddingVertical: 8,
   },
   cancelButton: {
     paddingVertical: Spacing['2'],

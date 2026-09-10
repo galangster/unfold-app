@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { BookBookmarkIcon, WifiHighIcon, WarningCircleIcon } from '@/components/icons';
 import { FontFamily, FontSize } from '@/constants/fonts';
@@ -74,7 +74,7 @@ export function DownloadBibleSheet({
   if (!visible) return null;
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.container}>
       <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).easing(Ease.out)} style={styles.content}>
         <BookBookmarkIcon size={56} color={colors.accent} weight="light" />
 
@@ -142,13 +142,14 @@ export function DownloadBibleSheet({
           </TouchableOpacity>
         )}
       </Animated.View>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    flexGrow: 1,
+    paddingVertical: 24,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Spacing['10'],
@@ -158,6 +159,7 @@ const styles = StyleSheet.create({
     gap: Spacing['3'],
   },
   title: {
+    textAlign: 'center',
     fontSize: FontSize['2xl'],
     marginTop: Spacing['2'],
   },
@@ -174,6 +176,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   sizeText: {
+    flexShrink: 1,
     fontFamily: FontFamily.ui,
     fontSize: 13,
   },
@@ -184,6 +187,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   errorText: {
+    flexShrink: 1,
     fontFamily: FontFamily.ui,
     fontSize: 13,
   },

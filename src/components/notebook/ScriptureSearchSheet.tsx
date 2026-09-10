@@ -493,6 +493,7 @@ const sheetStyles = StyleSheet.create({
   headerTitle: {
     fontFamily: FontFamily.uiSemiBold,
     fontSize: FontSize.lg,
+    flexShrink: 1,
   },
   inputContainer: {
     flexDirection: 'row',
@@ -500,7 +501,8 @@ const sheetStyles = StyleSheet.create({
     borderRadius: Radius.md,
     borderWidth: 1,
     paddingHorizontal: 14,
-    height: 48,
+    paddingVertical: 8,
+    minHeight: 48,
     marginBottom: Spacing['3'],
   },
   inputIcon: {
@@ -545,6 +547,7 @@ const sheetStyles = StyleSheet.create({
   stateText: {
     fontFamily: FontFamily.ui,
     fontSize: FontSize.sm,
+    flexShrink: 1,
   },
   previewCard: {
     borderWidth: StyleSheet.hairlineWidth,
@@ -568,6 +571,7 @@ const sheetStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    minHeight: 44,
     paddingVertical: 14,
     borderRadius: Radius.md,
   },

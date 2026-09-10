@@ -1749,7 +1749,7 @@ const styles = StyleSheet.create({
     top: 7,
     right: 5,
     minWidth: 14,
-    height: 14,
+    minHeight: 14,
     borderRadius: 7,
     paddingHorizontal: 3,
     alignItems: 'center',

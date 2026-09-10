@@ -22,6 +22,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
 } from 'react-native';
 import Animated, {
   FadeIn,
@@ -196,8 +197,7 @@ export function BibleNoteSheet({ highlight, onClose, onSave, onDelete }: BibleNo
           {/* Transparent dismiss area above the sheet */}
           <Pressable style={styles.dismissArea} onPress={handleDismiss} />
 
-          <GestureDetector gesture={panGesture}>
-            <Animated.View
+          <Animated.View
               entering={reducedMotion ? undefined : SlideInDown.duration(Duration.normal).easing(Ease.out)}
               exiting={reducedMotion ? undefined : SlideOutDown.duration(Duration.fast).easing(Ease.out)}
               testID="bible-note-sheet"
@@ -207,11 +207,13 @@ export function BibleNoteSheet({ highlight, onClose, onSave, onDelete }: BibleNo
                 sheetAnimatedStyle,
               ]}
             >
-            <View style={styles.handleRow}>
-              <View style={[styles.handle, { backgroundColor: colors.borderStrong }]} />
-            </View>
+            <GestureDetector gesture={panGesture}>
+              <View style={styles.handleRow}>
+                <View style={[styles.handle, { backgroundColor: colors.borderStrong }]} />
+              </View>
+            </GestureDetector>
 
-            <View style={styles.content}>
+            <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive">
               <Text style={[styles.reference, { color: colors.accent }]}>
                 {refStr} ({active.translation})
               </Text>
@@ -229,6 +231,7 @@ export function BibleNoteSheet({ highlight, onClose, onSave, onDelete }: BibleNo
                   selectionColor={colors.accent}
                   cursorColor={colors.accent}
                   multiline
+                  scrollEnabled={false}
                   autoFocus
                   maxLength={1000}
                   keyboardAppearance={isDark ? 'dark' : 'light'}
@@ -246,6 +249,8 @@ export function BibleNoteSheet({ highlight, onClose, onSave, onDelete }: BibleNo
                   {active.note?.trim() || 'No note yet.'}
                 </Text>
               )}
+
+            </ScrollView>
 
               <View style={styles.actionRow}>
                 <TouchableOpacity
@@ -280,9 +285,7 @@ export function BibleNoteSheet({ highlight, onClose, onSave, onDelete }: BibleNo
                   </TouchableOpacity>
                 )}
               </View>
-            </View>
-            </Animated.View>
-          </GestureDetector>
+          </Animated.View>
         </KeyboardAvoidingView>
       </GestureHandlerRootView>
     </Modal>
@@ -308,7 +311,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: Radius['2xl'],
     borderTopRightRadius: Radius['2xl'],
     paddingBottom: 34,
-    maxHeight: '60%',
+    maxHeight: '85%',
   },
   handleRow: {
     alignItems: 'center',
@@ -357,6 +360,8 @@ const styles = StyleSheet.create({
     marginBottom: Spacing['4'],
   },
   actionRow: {
+    paddingHorizontal: Spacing['6'],
+    paddingTop: Spacing['3'],
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing['3'],

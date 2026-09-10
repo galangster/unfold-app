@@ -1591,8 +1591,8 @@ const jStyles = StyleSheet.create({
     borderWidth: 1,
   },
   soapLetterBadge: {
-    width: 28,
-    height: 28,
+    minWidth: 28,
+    minHeight: 28,
     borderRadius: Radius.sm,
     alignItems: 'center',
     justifyContent: 'center',

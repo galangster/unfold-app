@@ -67,7 +67,7 @@ const styles = StyleSheet.create({
   },
   countPill: {
     minWidth: 24,
-    height: 24,
+    minHeight: 24,
     paddingHorizontal: Spacing['1.5'],
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: Radius.full,

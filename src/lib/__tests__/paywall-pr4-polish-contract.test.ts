@@ -185,9 +185,14 @@ describe('Screen 1 phone mockup fits the page instead of hard-cutting at the CTA
     expect(headlineBlock).toContain('maxFontSizeMultiplier={1.3}');
   });
 
-  it('routes both drag worklets through the shared rubber-band so the clearance covers the drag peak', () => {
+  it('routes the product mockup drag through the shared rubber-band so clearance covers the drag peak', () => {
+    const productPage = threeStep.slice(
+      threeStep.indexOf('function ScreenProductInAction('),
+      threeStep.indexOf('function ScreenTrialReminder('),
+    );
     expect(threeStep).toContain("computePaywallDragOffset,");
-    expect(threeStep.split('computePaywallDragOffset(e.translationY)')).toHaveLength(3);
+    expect(productPage).toContain('computePaywallDragOffset(e.translationY)');
+    // The trial reminder scrolls. Only the product mockup needs drag clearance.
     // The per-screen copies of MAX_DRAG and the inline formula are gone.
     expect(threeStep).not.toMatch(/const MAX_DRAG\b/);
     expect(threeStep).not.toContain('e.translationY * 0.4');

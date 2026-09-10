@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -50,7 +50,7 @@ export function CommitmentStep({ step, commitmentLevel, onSelect, onContinue, co
 
   if (step === 'choose') {
     return (
-      <View style={{ flex: 1, paddingHorizontal: Spacing['6'] }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, paddingHorizontal: Spacing['6'], paddingVertical: Spacing['4'] }}>
         {/* Top spacer */}
         <View style={{ flex: 1 }} />
 
@@ -102,13 +102,13 @@ export function CommitmentStep({ step, commitmentLevel, onSelect, onContinue, co
 
         {/* Bottom spacer */}
         <View style={{ flex: 1 }} />
-      </View>
+      </ScrollView>
     );
   }
 
   // 'affirm' mode
   return (
-    <View style={{ flex: 1, paddingHorizontal: Spacing['6'] }}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, paddingHorizontal: Spacing['6'], paddingVertical: Spacing['4'] }}>
       {/* Top spacer */}
       <View style={{ flex: 1 }} />
 
@@ -159,6 +159,6 @@ export function CommitmentStep({ step, commitmentLevel, onSelect, onContinue, co
           </Text>
         </TouchableOpacity>
       </Animated.View>
-    </View>
+    </ScrollView>
   );
 }

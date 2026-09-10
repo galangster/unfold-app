@@ -1487,7 +1487,7 @@ export default function NoteDetailScreen() {
             {currentDate}
           </Text>
           {currentFolder && (
-            <>
+            <View style={styles.metadataGroup}>
               <Text style={[styles.metadataDot, { color: colors.textHint }]}>
                 {'\u00B7'}
               </Text>
@@ -1504,15 +1504,15 @@ export default function NoteDetailScreen() {
               <Text style={[styles.metadataText, { color: colors.textHint }]}>
                 {currentFolder.name}
               </Text>
-            </>
+            </View>
           )}
           {isFavorite && (
-            <>
+            <View style={styles.metadataGroup}>
               <Text style={[styles.metadataDot, { color: colors.textHint }]}>
                 {'\u00B7'}
               </Text>
               <StarIcon size={12} color={colors.accent} weight="fill" />
-            </>
+            </View>
           )}
 
           <NoteDetailSaveIndicator
@@ -1958,17 +1958,26 @@ const styles = StyleSheet.create({
   },
   metadataRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: Spacing['1.5'],
     paddingHorizontal: Spacing['6'],
     marginTop: Spacing['2'],
     marginBottom: Spacing['1'],
   },
+  metadataGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 1,
+    maxWidth: '100%',
+    gap: Spacing['1.5'],
+  },
   metadataDot: {
     fontFamily: FontFamily.uiMedium,
     fontSize: 11,
   },
   metadataText: {
+    flexShrink: 1,
     fontFamily: FontFamily.uiMedium,
     fontSize: 11,
     letterSpacing: 0.2,

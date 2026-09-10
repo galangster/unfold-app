@@ -34,7 +34,7 @@ export function NoteDetailSaveIndicator({
   return (
     <View
       testID="note-detail-save-indicator-slot"
-      style={[styles.slot, { width: layout.slotWidth, minHeight: layout.slotMinHeight }]}
+      style={[styles.slot, { minWidth: layout.slotWidth, minHeight: layout.slotMinHeight }]}
     >
       {layout.showLabel && (
         <Animated.View
@@ -63,7 +63,6 @@ export function NoteDetailSaveIndicator({
 
 const styles = StyleSheet.create({
   slot: {
-    width: 56,
     minHeight: 16,
     alignItems: 'flex-end',
     justifyContent: 'center',

@@ -22,6 +22,7 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
   StyleSheet,
 } from 'react-native';
 import { GestureHandlerRootView, Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -156,28 +157,33 @@ export function Sheet({
           </Animated.View>
 
           {/* Sheet surface */}
-          <GestureDetector gesture={panGesture}>
-            <Animated.View
-              style={[
-                styles.sheet,
-                sheetAnimatedStyle,
-                {
-                  backgroundColor: colors.backgroundElevated,
-                  paddingBottom: insets.bottom + bottomPadding,
-                },
-              ]}
-            >
-              {/* Handle bar */}
+          <Animated.View
+            style={[
+              styles.sheet,
+              sheetAnimatedStyle,
+              {
+                backgroundColor: colors.backgroundElevated,
+                paddingBottom: insets.bottom + bottomPadding,
+                maxHeight: '90%',
+              },
+            ]}
+          >
+            {/* Handle bar */}
+            <GestureDetector gesture={panGesture}>
               <View style={styles.handleRow}>
                 <View style={[styles.handleBar, { backgroundColor: colors.borderStrong }]} />
               </View>
+            </GestureDetector>
 
-              {/* Content */}
-              <View style={[styles.content, { paddingHorizontal: contentPadding }]}>
-                {children}
-              </View>
-            </Animated.View>
-          </GestureDetector>
+            {/* Content — scrolls when large text exceeds the sheet */}
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              style={{ flexShrink: 1 }}
+              contentContainerStyle={[styles.content, { paddingHorizontal: contentPadding }]}
+            >
+              {children}
+            </ScrollView>
+          </Animated.View>
         </KeyboardAvoidingView>
       </GestureHandlerRootView>
     </Modal>
