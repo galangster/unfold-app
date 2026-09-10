@@ -28,7 +28,7 @@ Ask Nick for the premium-gating call (all colours free vs yellow-only everywhere
 
 ## Update 2026-09-09 (later session)
 - Item 8 done: `ScriptureVerseBlock.tsx` renders the local-DB passage verse by verse and writes `BibleHighlight` records via `planHighlightApplication`. Shared palette in `src/constants/bible-highlight-colors.ts`, verse map in `src/lib/bible-verse-highlight-map.ts`, `toSuperscript` in `src/lib/superscript.ts`.
-- Gate: tsc clean, eslint 0 errors, jest 252 suites green; `devotional-webview-font-scale.test.ts` fails to run on the base commit too (pre-existing). No `verify` script exists in `package.json`.
+- Gate: tsc clean, eslint 0 errors, jest 252 suites green; `devotional-webview-font-scale.test.ts` failed on the branch (not on `main`): Phase A added an `expo-clipboard` import and `HIGHLIGHT_COLOR_LABELS` to DevotionalWebView and the test's mocks lagged. Fixed in the test. No `verify` script exists in `package.json`.
 - Branch pushed; PR https://github.com/galangster/unfold-app/pull/81 open against `main`.
 - Item 9 still needs Nick's call. The new block mirrors the reader (yellow free, others locked). Simulator check of the verse block itself not yet done.
 

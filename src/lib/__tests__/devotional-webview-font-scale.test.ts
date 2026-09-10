@@ -7,11 +7,13 @@
 import { clampSystemFontScale } from '../../components/reading/DevotionalWebView';
 
 jest.mock('react-native-webview', () => ({ WebView: () => null }));
+jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(() => Promise.resolve(true)) }));
 jest.mock('expo-haptics', () => ({ impactAsync: jest.fn(), ImpactFeedbackStyle: { Light: 'light' } }));
 jest.mock('@/lib/theme', () => ({ useTheme: () => ({ colors: {}, isDark: false }) }));
 jest.mock('@/lib/useReadingFont', () => ({ useReadingFont: () => ({ body: 'System' }) }));
 jest.mock('@/lib/store', () => ({
   FONT_SIZE_VALUES: { md: { body: 17 } },
+  HIGHLIGHT_COLOR_LABELS: { yellow: 'Yellow', green: 'Green', blue: 'Blue', purple: 'Purple', red: 'Red' },
   useUnfoldStore: () => null,
 }));
 
