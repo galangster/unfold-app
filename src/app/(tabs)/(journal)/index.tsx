@@ -853,14 +853,19 @@ export default function JournalHubScreen() {
   const reorderFolders = useUnfoldStore((s) => s.reorderFolders);
 
   const getDescendantFolderIds = useUnfoldStore((s) => s.getDescendantFolderIds);
-  const params = useLocalSearchParams<{ segment?: string }>();
+  // `at` is a nonce from the Today › Saved tile so a repeat tap re-selects
+  // the segment even though the tab root stays mounted with the same params.
+  const params = useLocalSearchParams<{ segment?: string; at?: string }>();
   const [activeSegment, setActiveSegment] = useState<Segment>(() =>
     isSegment(params.segment) ? params.segment : 'reflections',
   );
-  // Repeat pushes (Today › Saved tile) re-select the segment.
   useEffect(() => {
     if (isSegment(params.segment)) setActiveSegment(params.segment);
-  }, [params.segment]);
+  }, [params.segment, params.at]);
+  // Search is per segment: a Notebook query must not empty the Saved list.
+  useEffect(() => {
+    setSearchQuery('');
+  }, [activeSegment]);
   const savedUndo = useSavedUndo();
   const savedCount = useUnfoldStore(
     (s) => s.highlights.length + s.bibleHighlights.length + s.bookmarks.length,
@@ -2108,7 +2113,7 @@ export default function JournalHubScreen() {
 
         {/* Undo toast for Saved removals (highlights, Bible notes, bookmarks) */}
         <UndoToast
-          visible={savedUndo.visible}
+          visible={savedUndo.visible && undoActions.length === 0}
           message={savedUndo.message}
           onUndo={savedUndo.undo}
           onDismiss={savedUndo.dismiss}

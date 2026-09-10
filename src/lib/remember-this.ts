@@ -16,7 +16,9 @@ export function pickRememberThis(
   dateKey: string,
 ): RememberThisPick | null {
   const pool: RememberThisPick[] = [
-    ...highlights.map((highlight) => ({ kind: 'devotional' as const, highlight })),
+    ...highlights
+      .filter((h) => h.highlightedText.trim().length > 0)
+      .map((highlight) => ({ kind: 'devotional' as const, highlight })),
     ...bibleHighlights
       .filter((h) => h.color !== null && h.text.trim().length > 0)
       .map((highlight) => ({ kind: 'bible' as const, highlight })),

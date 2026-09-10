@@ -6,7 +6,7 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { alpha } from '@/components/ui';
 import { useTheme } from '@/lib/theme';
-import { HIGHLIGHT_COLORS, type HighlightKey } from '@/lib/highlight-palette';
+import { highlightSwatch } from '@/lib/highlight-palette';
 import type { SavedItem } from '@/lib/saved-highlights';
 import type { SavedBookmarkItem } from '@/lib/saved-items';
 import { stripOuterQuotes } from '@/lib/cn';
@@ -41,8 +41,7 @@ export const SavedRow = memo(function SavedRow({
   onPress: (item: SavedItem) => void;
   accessibilityElementsHidden?: boolean;
 }) {
-  const colorKey: HighlightKey = item.color ?? 'yellow';
-  const accent = HIGHLIGHT_COLORS[colorKey][isDark ? 'dark' : 'light'];
+  const accent = highlightSwatch(item.color, isDark);
 
   return (
     <TouchableOpacity

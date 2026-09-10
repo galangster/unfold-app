@@ -107,9 +107,12 @@ describe('saved-items', () => {
     expect(restored.bookmarks.map((b) => b.id)).toEqual(['bm1']);
   });
 
-  it('drops the tombstone and re-enqueues an upsert for every restored record', () => {
+  it('drops the tombstone and re-enqueues an upsert for every restored record, stamped with the same updatedAt', () => {
     const removed = entries.filter((e) => e.id === 'h1' || e.id === 'b1');
-    undoSavedDeletions({ highlights: [], bibleHighlights: [], bookmarks: [] }, removed.map((entry) => ({ entry })), '2026-09-10T00:00:00.000Z');
+    const restored = undoSavedDeletions({ highlights: [], bibleHighlights: [], bookmarks: [] }, removed.map((entry) => ({ entry })), '2026-09-10T00:00:00.000Z');
+    // The local row and the enqueued upsert agree on updatedAt, or the next pull re-applies the server copy.
+    expect(restored.highlights[0].updatedAt).toBe('2026-09-10T00:00:00.000Z');
+    expect(restored.bibleHighlights[0].updatedAt).toBe('2026-09-10T00:00:00.000Z');
     expect(removeSyncChangesForRecords).toHaveBeenCalledWith([
       { table: 'bible_highlights', id: 'b1' },
       { table: 'highlights', id: 'h1' },

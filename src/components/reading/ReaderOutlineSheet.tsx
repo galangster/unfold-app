@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Sheet } from '@/components/ui';
@@ -8,7 +8,7 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { HIGHLIGHT_COLOR_LABELS, type DevotionalDay, type Highlight, type JournalEntry } from '@/lib/store';
-import { HIGHLIGHT_COLORS } from '@/components/saved/SavedRows';
+import { highlightSwatch } from '@/lib/highlight-palette';
 import { stripOuterQuotes } from '@/lib/cn';
 import { formatRelativeDate } from '@/lib/format-relative-date';
 import type { ReaderSection } from '@/components/reading/DevotionalContent';
@@ -63,11 +63,14 @@ export function ReaderOutlineSheet({
   const { colors, isDark } = useTheme();
   const [tab, setTab] = useState<OutlineTab>('contents');
 
-  // Reopen on Contents unless the reader has highlights, which is what the
-  // sheet exists to surface.
+  // Open on Highlights when the reading has any (what the sheet exists to
+  // surface), else Contents. Only on open: a count change while the sheet is
+  // up must not move the reader's tab.
+  const highlightCountRef = useRef(highlights.length);
+  highlightCountRef.current = highlights.length;
   useEffect(() => {
-    if (visible) setTab(highlights.length > 0 ? 'highlights' : 'contents');
-  }, [visible, highlights.length]);
+    if (visible) setTab(highlightCountRef.current > 0 ? 'highlights' : 'contents');
+  }, [visible]);
 
   const contents = useMemo(() => (day ? buildReaderContents(day) : []), [day]);
   const sortedHighlights = useMemo(
@@ -157,7 +160,7 @@ export function ReaderOutlineSheet({
           />
         ) : (
           sortedHighlights.map((h) => {
-            const ink = HIGHLIGHT_COLORS[h.color ?? 'yellow'][isDark ? 'dark' : 'light'];
+            const ink = highlightSwatch(h.color, isDark);
             return (
               <TouchableOpacity
                 key={h.id}

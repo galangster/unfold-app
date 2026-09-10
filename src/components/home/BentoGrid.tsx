@@ -46,7 +46,7 @@ export function BentoGrid() {
             activeOpacity={0.7}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.push({ pathname: item.pathname as any, params: item.params });
+              router.push({ pathname: item.pathname as any, params: { ...item.params, at: String(Date.now()) } });
             }}
             accessibilityRole="button"
             accessibilityLabel={`Open ${item.label}`}

@@ -74,7 +74,8 @@ export const SwipeToDeleteRow = memo(function SwipeToDeleteRow({
   const panGesture = useMemo(
     () =>
       Gesture.Pan()
-        .activeOffsetX([-10, 10])
+        // Left only: a right drag fails here so the Journal hub's segment pan can take it.
+        .activeOffsetX([-10, 100_000])
         .failOffsetY([-5, 5])
         .onStart(() => {
           contextX.value = translateX.value;
@@ -99,11 +100,14 @@ export const SwipeToDeleteRow = memo(function SwipeToDeleteRow({
 
   return (
     <View style={styles.outer} onLayout={(e) => setRowWidth(e.nativeEvent.layout.width)}>
+      {/* The row exposes Remove as a custom action, so the visual tray stays out of the a11y tree. */}
       <View
         style={[
           styles.tray,
           { bottom: cardGap, borderTopRightRadius: cardRadius, borderBottomRightRadius: cardRadius },
         ]}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
       >
         <Animated.View style={[styles.actions, { width: actionWidth }, actionStyle]}>
           <TouchableOpacity
