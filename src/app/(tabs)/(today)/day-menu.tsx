@@ -254,8 +254,8 @@ function DayRow({
         {/* Completion / lock indicator */}
         <View
           style={{
-            width: 28,
-            height: 28,
+            minWidth: 28,
+            minHeight: 28,
             borderRadius: Radius.card,
             backgroundColor: isDayRead ? colors.text : colors.inputBackground,
             justifyContent: 'center',

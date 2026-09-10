@@ -4,6 +4,7 @@
  */
 
 import { stripOuterQuotes } from '@/lib/cn';
+import { truncateNotificationBody } from '@/lib/daily-reminder-content';
 
 export const MIDDAY_MESSAGES: string[] = [
   "Hey — how’s today landing?",
@@ -301,12 +302,16 @@ export function getMessageForToday(messages: string[]): string {
 // Falls back to generic pool when devotional data is unavailable.
 // ============================================================================
 
-interface DayContext {
+export interface DayContext {
   title?: string;
   scriptureReference?: string;
   quotableLine?: string;
   checkInQuestion?: string;
+  act?: string;
+  eveningScriptureRef?: string;
+  companionNudge?: string;
 }
+
 
 const MIDDAY_CONTENT_TEMPLATES: ((ctx: DayContext) => string)[] = [
   (ctx) => `Still thinking about "${ctx.title}"?`,
@@ -372,4 +377,34 @@ export function getContentAwareEveningMessage(day?: DayContext | null): string {
     (Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000
   );
   return viable[dayOfYear % viable.length](day);
+}
+
+/**
+ * Body of the midday check-in notification. The companion nudge wins when
+ * generation produced one (it names something from the reader's own life),
+ * then the carry line of the day finished today, then the day's check-in
+ * question, then a template that names the day, then the generic pool.
+ */
+export function getMiddayCheckInBody(
+  day: DayContext | null | undefined,
+  carryLine?: string | null,
+): string {
+  const nudge = day?.companionNudge?.trim();
+  if (nudge) return truncateNotificationBody(nudge);
+  const carry = carryLine?.trim();
+  if (carry) return truncateNotificationBody(carry);
+  return truncateNotificationBody(getContentAwareMiddayMessage(day));
+}
+
+/**
+ * Body of the evening wind-down notification. The day's "act" is the one
+ * thing the devotional asked the reader to do later, so it leads. Then the
+ * evening scripture, then a template that names the day, then the pool.
+ */
+export function getEveningWindDownBody(day: DayContext | null | undefined): string {
+  const act = day?.act?.trim();
+  if (act) return truncateNotificationBody(act);
+  const ref = day?.eveningScriptureRef?.trim();
+  if (ref) return truncateNotificationBody(`Before rest, sit with ${ref} for a minute.`);
+  return truncateNotificationBody(getContentAwareEveningMessage(day));
 }

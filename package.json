@@ -1,6 +1,6 @@
 {
   "name": "unfold-app",
-  "version": "1.1.4",
+  "version": "1.1.7",
   "main": "index.ts",
   "trustedDependencies": [
     "@shopify/react-native-skia",
@@ -19,10 +19,13 @@
     "verify:smoke": "node scripts/verify-smoke.mjs",
     "verify:device": "node scripts/verify-device-flow.mjs",
     "verify:release": "node scripts/verify-release.mjs",
+    "capture:release-proof": "node scripts/capture-release-proof.mjs",
+    "test:release-proof": "node --test scripts/__tests__/release-proof.test.mjs",
     "verify:report": "node scripts/verify-report.mjs",
     "prepare:bible-db": "node scripts/prepare-bible-db.mjs",
     "test": "jest --passWithNoTests",
-    "test:e2e": "maestro test .maestro/"
+    "test:e2e": "maestro test .maestro/",
+    "eas-build-post-install": "node scripts/stamp-build-profile.mjs"
   },
   "dependencies": {
     "@10play/tentap-editor": "^1.0.1",
@@ -178,7 +181,8 @@
   },
   "patchedDependencies": {
     "@nandorojo/galeria@2.0.0-rc.4": "patches/@nandorojo%2Fgaleria@2.0.0-rc.4.patch",
-    "phosphor-react-native@3.0.3": "patches/phosphor-react-native@3.0.3.patch"
+    "phosphor-react-native@3.0.3": "patches/phosphor-react-native@3.0.3.patch",
+    "expo-notifications@57.0.14": "patches/expo-notifications@57.0.14.patch"
   },
   "expo": {
     "autolinking": {

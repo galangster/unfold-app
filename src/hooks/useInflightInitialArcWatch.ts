@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 
 import { pollJobStatus } from '@/lib/generation-api';
+import { captureSyncSession, isSyncSessionCurrent } from '@/lib/generation-session';
 import type { InflightGenerationJob } from '@/lib/inflight-generation-job';
 import { watchInflightInitialArc } from '@/lib/inflight-initial-arc-watch';
 import { settleInflightInitialArcWatch } from '@/lib/initial-arc-result';
@@ -31,16 +32,17 @@ export function useInflightInitialArcWatch({
     if (!enabled || !jobId || submittedAt == null) return;
 
     let cancelled = false;
+    const session = captureSyncSession();
     void watchInflightInitialArc({
       jobId,
-      fetchStatus: pollJobStatus,
+      fetchStatus: (id) => pollJobStatus(id, session),
       fallbackDevotionalId: devotionalId,
       startedAt: submittedAt,
-      isCancelled: () => cancelled,
+      isCancelled: () => cancelled || !isSyncSessionCurrent(session),
     })
       .then((outcome) => {
-        if (cancelled || outcome.kind === 'cancelled') return;
-        settleInflightInitialArcWatch(outcome, { jobId });
+        if (cancelled || !isSyncSessionCurrent(session) || outcome.kind === 'cancelled') return;
+        settleInflightInitialArcWatch(outcome, { jobId, session });
         onSettled?.();
       })
       .catch((err) => {

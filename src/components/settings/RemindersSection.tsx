@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { View, Text } from 'react-native';
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
@@ -9,11 +9,12 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
+import { suggestReminderTime } from '@/lib/reminder-time-suggestion';
+import { logEvent } from '@/lib/analytics';
 import {
-  scheduleDailyReminder,
-  cancelNotificationById,
-  NOTIFICATION_IDS,
+  commitDailyReminderSetting,
   areNotificationsEnabled,
+  beginDailyReminderOperation,
 } from '@/lib/notifications';
 import { formatReminderTime } from '@/lib/format-reminder-time';
 // NOTE: scheduleMiddayCheckIn / scheduleEveningWindDown / cancelMiddayCheckIn /
@@ -55,6 +56,30 @@ export function RemindersSection() {
 
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [showTimeSelector, setShowTimeSelector] = useState(false);
+  const devotionals = useUnfoldStore((s) => s.devotionals);
+  const suggestion = useMemo(
+    () =>
+      notificationsEnabled
+        ? suggestReminderTime({
+            devotionals,
+            currentReminderTime: user?.reminderTime,
+            dismissed: user?.reminderTimeSuggestionDismissed,
+          })
+        : null,
+    [notificationsEnabled, devotionals, user?.reminderTime, user?.reminderTimeSuggestionDismissed],
+  );
+  const handleAcceptSuggestion = () => {
+    if (!suggestion) return;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    updateUser({ reminderTime: suggestion.suggested, dailyReminderEnabled: true });
+    logEvent('reminder_time_suggestion', { action: 'accepted', sampleSize: suggestion.sampleSize });
+  };
+  const handleDismissSuggestion = () => {
+    if (!suggestion) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    updateUser({ reminderTimeSuggestionDismissed: suggestion.suggested });
+    logEvent('reminder_time_suggestion', { action: 'dismissed', sampleSize: suggestion.sampleSize });
+  };
 
   // Check notification status on mount
   useEffect(() => {
@@ -68,21 +93,14 @@ export function RemindersSection() {
 
   const handleToggleNotifications = async (value: boolean) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (value) {
-      const time = user?.reminderTime ?? '8:00 AM';
-      const result = await scheduleDailyReminder(time);
-      if (result) {
-        setNotificationsEnabled(true);
-        updateUser({ reminderTime: time, dailyReminderEnabled: true });
-        // Midday / evening check-in scheduling is owned by
-        // `useCheckInNotifications` — it will detect any permission change
-        // on the next foreground reconcile (or immediately, via its
-        // fingerprint watcher, if policy / enabled flags change here).
-      }
-    } else {
-      await cancelNotificationById(NOTIFICATION_IDS.DAILY_REMINDER);
-      setNotificationsEnabled(false);
-      updateUser({ dailyReminderEnabled: false });
+    const time = user?.reminderTime ?? '8:00 AM';
+    const applied = await commitDailyReminderSetting(value, time, updateUser);
+    if (applied) {
+      setNotificationsEnabled(value);
+      // Midday / evening check-in scheduling is owned by
+      // `useCheckInNotifications` — it will detect any permission change
+      // on the next foreground reconcile (or immediately, via its
+      // fingerprint watcher, if policy / enabled flags change here).
     }
   };
 
@@ -137,6 +155,9 @@ export function RemindersSection() {
     // useDailyReminderSync picks this up via the fingerprint and reschedules.
     // Do not call scheduleDailyReminder here — that created a dual scheduling
     // authority that raced with the centralized sync hook.
+    // Mark this write as the current daily owner so an older settings persist
+    // or in-flight 8:00 schedule cannot overwrite it before the 750ms debounce.
+    beginDailyReminderOperation();
     updateUser({ reminderTime: time, dailyReminderEnabled: true });
     setShowTimeSelector(false);
   };
@@ -156,6 +177,7 @@ export function RemindersSection() {
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
+            columnGap: Spacing['3'],
             paddingVertical: 13,
             paddingHorizontal: Spacing['4'],
             borderBottomWidth: notificationsEnabled && isPremium ? 1 : 0,
@@ -166,6 +188,7 @@ export function RemindersSection() {
             style={{
               fontFamily: FontFamily.ui,
               fontSize: 15,
+              flexShrink: 1,
               color: colors.text,
             }}
           >
@@ -191,6 +214,7 @@ export function RemindersSection() {
               flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'space-between',
+            columnGap: Spacing['3'],
               paddingVertical: 13,
               paddingHorizontal: Spacing['4'],
             }}
@@ -199,6 +223,7 @@ export function RemindersSection() {
               style={{
                 fontFamily: FontFamily.ui,
                 fontSize: 15,
+                flexShrink: 1,
                 color: colors.text,
               }}
             >
@@ -228,6 +253,7 @@ export function RemindersSection() {
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
+            columnGap: Spacing['3'],
             paddingVertical: 13,
             paddingHorizontal: Spacing['4'],
             borderTopWidth: 1,
@@ -239,6 +265,7 @@ export function RemindersSection() {
               style={{
                 fontFamily: FontFamily.ui,
                 fontSize: 15,
+                flexShrink: 1,
                 color: colors.text,
               }}
             >
@@ -298,6 +325,7 @@ export function RemindersSection() {
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
+            columnGap: Spacing['3'],
             paddingVertical: 13,
             paddingHorizontal: Spacing['4'],
             borderTopWidth: 1,
@@ -309,6 +337,7 @@ export function RemindersSection() {
               style={{
                 fontFamily: FontFamily.ui,
                 fontSize: 15,
+                flexShrink: 1,
                 color: colors.text,
               }}
             >
@@ -358,6 +387,32 @@ export function RemindersSection() {
         </TouchableOpacity>
       </View>
 
+      {suggestion && (
+        <View
+          accessibilityRole="summary"
+          style={{
+            marginTop: -Spacing['2'],
+            marginBottom: Spacing['6'],
+            paddingVertical: Spacing['3'],
+            paddingHorizontal: Spacing['4'],
+            borderRadius: 10,
+            backgroundColor: colors.inputBackground,
+          }}
+        >
+          <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.sm, color: colors.text }}>
+            You usually read around {suggestion.suggested}. Move your reminder there?
+          </Text>
+          <View style={{ flexDirection: 'row', columnGap: Spacing['4'], marginTop: Spacing['2'] }}>
+            <TouchableOpacity activeOpacity={0.7} onPress={handleAcceptSuggestion} accessibilityRole="button" accessibilityLabel={`Move reminder to ${suggestion.suggested}`}>
+              <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.sm, color: colors.accent }}>Move it</Text>
+            </TouchableOpacity>
+            <TouchableOpacity activeOpacity={0.7} onPress={handleDismissSuggestion} accessibilityRole="button" accessibilityLabel="Keep current reminder time">
+              <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.sm, color: colors.textMuted }}>Keep it</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
       {/* Time options (outside the card for cleaner expand) */}
       {showTimeSelector && (
         <Animated.View
@@ -384,6 +439,7 @@ export function RemindersSection() {
                   borderRadius: 10,
                   flexDirection: 'row',
                   justifyContent: 'space-between',
+            columnGap: Spacing['3'],
                   alignItems: 'center',
                 }}
               >

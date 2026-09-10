@@ -15,7 +15,7 @@ jest.mock('../api-config', () => ({
   getAuthHeaders: jest.fn(async () => ({ 'X-Device-ID': 'test-device-id' })),
 }));
 
-import { ApiError, pollJobStatus } from '../generation-api';
+import { ApiError, findDayJob, pollJobStatus, retryJob, submitGenerationJob } from '../generation-api';
 import { classifyPollFailure } from '../generation-poll-outcome';
 
 type ErrorBody = { error?: { code?: string; message?: string } };
@@ -83,5 +83,69 @@ describe('pollJobStatus', () => {
     expect(err).toBeInstanceOf(ApiError);
     expect(err).toMatchObject({ status: 502, code: 'POLL_FAILED', message: 'Poll job failed: 502' });
     expect(classifyPollFailure(err)).toBe('unreachable');
+  });
+});
+
+describe('findDayJob', () => {
+  it('discovers a day job through the owner-scoped identity route', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        jobId: 'job-day-2',
+        jobType: 'day',
+        status: 'processing',
+        devotionalId: 'devotional/one',
+        dayNumber: 2,
+      }),
+    });
+
+    await expect(findDayJob('devotional/one', 2)).resolves.toMatchObject({ jobId: 'job-day-2' });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://backend.test/api/jobs/find-day?devotionalId=devotional%2Fone&dayNumber=2',
+      expect.objectContaining({ method: 'GET' }),
+    );
+  });
+
+  it('returns null when no day job exists', async () => {
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 404 });
+
+    await expect(findDayJob('devo-1', 2)).resolves.toBeNull();
+  });
+
+  it('rejects a non-positive day before making a request', async () => {
+    await expect(findDayJob('devo-1', 0)).rejects.toThrow('dayNumber must be a positive integer');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('generation mutation errors', () => {
+  it('preserves a DAY_NOT_READY response instead of flattening it into a connection error', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(425, {
+      error: { code: 'DAY_NOT_READY', message: "Day 3 isn't ready yet." },
+    }));
+
+    const error = await submitGenerationJob({
+      devotionalId: 'devo-1',
+      dayNumber: 3,
+      jobType: 'day',
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({ status: 425, code: 'DAY_NOT_READY' });
+  });
+
+  it('preserves a SERIES_ARCHIVED retry response without exposing its raw body', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(409, {
+      error: { code: 'SERIES_ARCHIVED', message: 'This series has ended.' },
+    }));
+
+    const error = await retryJob('job-1').catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({ status: 409, code: 'SERIES_ARCHIVED' });
+    expect((error as Error).message).not.toContain(JSON.stringify({
+      error: { code: 'SERIES_ARCHIVED', message: 'This series has ended.' },
+    }));
   });
 });

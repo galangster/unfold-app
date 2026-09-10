@@ -9,6 +9,8 @@ const mockGetPermissionsAsync = jest.fn(async () => ({ status: 'granted' }));
 const mockRequestPermissionsAsync = jest.fn(async () => ({ status: 'granted' }));
 const mockSetNotificationHandler = jest.fn();
 
+const mockGetAllScheduledNotificationsAsync = jest.fn(async () => []);
+
 jest.mock('expo-notifications', () => ({
   __esModule: true,
   setNotificationHandler: mockSetNotificationHandler,
@@ -17,6 +19,7 @@ jest.mock('expo-notifications', () => ({
   scheduleNotificationAsync: mockScheduleNotificationAsync,
   cancelScheduledNotificationAsync: mockCancelScheduledNotificationAsync,
   cancelAllScheduledNotificationsAsync: mockCancelAllScheduledNotificationsAsync,
+  getAllScheduledNotificationsAsync: mockGetAllScheduledNotificationsAsync,
   SchedulableTriggerInputTypes: {
     DAILY: 'daily',
     TIME_INTERVAL: 'time_interval',
@@ -67,8 +70,14 @@ describe('notifications routing + cancellation', () => {
     mockScheduleNotificationAsync.mockClear();
     mockCancelScheduledNotificationAsync.mockClear();
     mockCancelAllScheduledNotificationsAsync.mockClear();
+    mockGetAllScheduledNotificationsAsync.mockClear();
+    mockGetAllScheduledNotificationsAsync.mockResolvedValue([]);
     mockGetPermissionsAsync.mockClear();
     mockRequestPermissionsAsync.mockClear();
+    const { resetSyncSessionFenceForTesting } = jest.requireActual('../sync-session-fence');
+    const { resetDailyReminderOwnershipForTesting } = jest.requireActual('../notifications');
+    resetSyncSessionFenceForTesting();
+    resetDailyReminderOwnershipForTesting();
   });
 
   it('schedules the daily reminder with devotional routing data for tap-through', async () => {
@@ -78,7 +87,7 @@ describe('notifications routing + cancellation', () => {
 
     expect(mockScheduleNotificationAsync).toHaveBeenCalledWith(
       expect.objectContaining({
-        identifier: 'unfold-daily-reminder',
+        identifier: 'unfold-daily-reminder:0:1',
         content: expect.objectContaining({
           sound: true,
           data: expect.objectContaining({
@@ -126,6 +135,8 @@ describe('notifications routing + cancellation', () => {
       'unfold-evening-winddown-fri',
       'unfold-evening-winddown-sat',
       'unfold-evening-winddown-sun',
+      'unfold-daily-reminder:0',
+      'unfold-daily-reminder:0:1',
     ]);
   });
 });

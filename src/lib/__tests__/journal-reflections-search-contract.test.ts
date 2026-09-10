@@ -15,8 +15,8 @@ describe('journal reflections search contract (WR-07)', () => {
   it('renders filteredEntries when searching on the reflections segment', () => {
     expect(source).toContain("const isSearchingReflections = activeSegment === 'reflections' && searchQuery.trim().length > 0;");
     expect(source).toContain('{isSearchingReflections && (');
-    expect(source).toContain('filteredEntries.map((entry)');
-    expect(source).toContain('No entries match');
+    expect(source).toContain('filteredEntries.map((entry, index)');
+    expect(source).toContain('No reflections match');
   });
 
   it('hides the browse sections while searching', () => {

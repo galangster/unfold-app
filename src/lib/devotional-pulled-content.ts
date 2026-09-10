@@ -1,12 +1,25 @@
 import type { Devotional, DevotionalDay } from './store';
 import type { PulledDevotionalContent } from './devotional-sync-pull';
 import { canonicalGeneratedDayId } from './devotional-canonical-days';
+import { assertSyncSessionCurrent } from './sync-session-fence';
 import { buildDevotionalSyncMetadataPatch } from './devotional-sync-metadata';
 import {
   clampCurrentDayToSeriesBoundary,
   filterDaysWithinSeriesBoundary,
   getServerOwnedSeriesTotalDays,
 } from './devotional-series-boundary';
+
+const pullSessions = new WeakMap<PulledDevotionalContent, number>();
+
+export function bindPulledDevotionalSession(pulled: PulledDevotionalContent, session: number): void {
+  pullSessions.set(pulled, session);
+}
+
+function assertBoundPulledSession(pulled: PulledDevotionalContent): void {
+  const session = pullSessions.get(pulled);
+  if (session === undefined) return;
+  assertSyncSessionCurrent(session, 'devotional apply');
+}
 
 function normalizePulledDaysForDevotional(
   devotionalId: string,
@@ -82,6 +95,7 @@ export function applyPulledDevotionalMetadataToDevotionals(
   devotionalId: string,
   pulled: PulledDevotionalContent,
 ): Devotional[] {
+  assertBoundPulledSession(pulled);
   if (!pulled.devotional) return devotionals;
 
   let didChange = false;
@@ -103,6 +117,7 @@ export function applyPulledDevotionalContentToDevotionals(
   devotionalId: string,
   pulled: PulledDevotionalContent,
 ): Devotional[] {
+  assertBoundPulledSession(pulled);
   const existing = devotionals.some((devotional) => devotional.id === devotionalId);
   if (existing) {
     return applyPulledDevotionalMetadataToDevotionals(devotionals, devotionalId, pulled);
@@ -123,6 +138,7 @@ export function applyPulledDevotionalContent({
   updateDevotionalDays: (devotionalId: string, days: DevotionalDay[], title?: string) => void;
   updateDevotionals: (updater: (devotionals: Devotional[]) => Devotional[]) => void;
 }): void {
+  assertBoundPulledSession(pulled);
   if (pulled.devotional || pulled.days.length > 0) {
     updateDevotionals((devotionals) =>
       applyPulledDevotionalContentToDevotionals(devotionals, devotionalId, pulled),

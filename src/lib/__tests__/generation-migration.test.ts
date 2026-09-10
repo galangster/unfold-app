@@ -1,7 +1,7 @@
 const mockFetch = jest.fn();
 global.fetch = mockFetch as unknown as typeof fetch;
 
-const mockGetItem = jest.fn(() => null);
+const mockGetItem = jest.fn((_: string): string | null => null);
 const mockSetItem = jest.fn();
 const mockGetState = jest.fn();
 const mockGetAuthHeaders = jest.fn().mockResolvedValue({ Authorization: 'Bearer test' });
@@ -176,6 +176,52 @@ describe('generation migration', () => {
     expect(mockLogger.log).toHaveBeenCalledWith('[gen-migration] Migration complete');
   });
 
+  it('reconciles a local arc even when the legacy global marker is already complete', async () => {
+    mockGetItem.mockImplementation((key: string) => (
+      key === 'generation-migration-v1-complete' ? 'true' : null
+    ));
+    const { migrateGenerationDataToServer } = loadSubject();
+
+    await migrateGenerationDataToServer();
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(mockFetch.mock.calls[0][0]).toBe('http://test/api/jobs/migrate-arc');
+    expect(mockSetItem).toHaveBeenCalledWith(
+      'generation-arc-reconciliation-v2',
+      JSON.stringify(['devo-1']),
+    );
+  });
+
+  it('keeps failed arc uploads pending while preserving acknowledgements for successful devotionals', async () => {
+    const stored = new Map<string, string>([['generation-migration-v1-complete', 'true']]);
+    mockGetItem.mockImplementation((key: string) => stored.get(key) ?? null);
+    mockSetItem.mockImplementation((key: string, value: string) => stored.set(key, value));
+    mockGetState.mockReturnValue({
+      devotionals: [
+        { id: 'devo-failed', generationMode: 'progressive', seriesArc: { title: 'Retry me' }, days: [] },
+        { id: 'devo-saved', generationMode: 'progressive', seriesArc: { title: 'Saved' }, days: [] },
+      ],
+      usedScriptures: [],
+      seriesPersonaHistory: [],
+    });
+    mockFetch
+      .mockResolvedValueOnce({ ok: false, status: 503 })
+      .mockResolvedValueOnce({ ok: true, status: 200 });
+    const { migrateGenerationDataToServer } = loadSubject();
+
+    await migrateGenerationDataToServer();
+
+    expect(JSON.parse(stored.get('generation-arc-reconciliation-v2')!)).toEqual(['devo-saved']);
+
+    mockFetch.mockReset();
+    mockFetch.mockResolvedValue({ ok: true, status: 200 });
+    await migrateGenerationDataToServer();
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(mockFetch.mock.calls[0][1].body)).toMatchObject({ devotionalId: 'devo-failed' });
+    expect(JSON.parse(stored.get('generation-arc-reconciliation-v2')!)).toEqual(['devo-failed', 'devo-saved']);
+  });
+
   it('does not mark migration complete when any required step fails', async () => {
     const { migrateGenerationDataToServer } = loadSubject();
 
@@ -188,7 +234,7 @@ describe('generation migration', () => {
     await migrateGenerationDataToServer();
 
     expect(mockFetch).toHaveBeenCalledTimes(4);
-    expect(mockSetItem).not.toHaveBeenCalled();
+    expect(mockSetItem).not.toHaveBeenCalledWith('generation-migration-v1-complete', 'true');
     expect(mockLogger.warn).toHaveBeenCalledWith('[gen-migration] /api/jobs/migrate-memory failed with status 500');
     expect(mockLogger.warn).toHaveBeenCalledWith('[gen-migration] Migration incomplete — will retry next launch');
   });
@@ -204,7 +250,7 @@ describe('generation migration', () => {
 
     await migrateGenerationDataToServer();
 
-    expect(mockSetItem).not.toHaveBeenCalled();
+    expect(mockSetItem).not.toHaveBeenCalledWith('generation-migration-v1-complete', 'true');
     expect(mockLogger.warn).toHaveBeenCalledWith('[gen-migration] /api/jobs/migrate-memory request failed:', expect.any(Error));
     expect(mockLogger.warn).toHaveBeenCalledWith('[gen-migration] Migration incomplete — will retry next launch');
   });
@@ -240,5 +286,30 @@ describe('generation migration', () => {
     expect(mockLogger.warn).toHaveBeenCalledWith(
       '[gen-migration] Skipping scripture without resolvable dayNumber: devo-1 Psalm 1:1',
     );
+  });
+
+  it('does not write the completion marker after reset invalidates the originating session', async () => {
+    const { ARC_RECONCILIATION_KEY, migrateGenerationDataToServer, MIGRATION_KEY } = loadSubject();
+    const {
+      beginLocalResetSession,
+      endLocalResetSession,
+    } = require('../sync-session-fence') as typeof import('../sync-session-fence');
+
+    let finishFirst: ((value: { ok: boolean; status: number }) => void) | undefined;
+    mockFetch.mockImplementation(() => new Promise((resolve) => {
+      finishFirst = resolve;
+    }));
+
+    const pending = migrateGenerationDataToServer();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const token = beginLocalResetSession();
+    endLocalResetSession(token);
+    finishFirst?.({ ok: true, status: 200 });
+    await pending;
+
+    expect(mockSetItem).not.toHaveBeenCalledWith(MIGRATION_KEY, 'true');
+    expect(mockSetItem).not.toHaveBeenCalledWith(ARC_RECONCILIATION_KEY, expect.any(String));
   });
 });

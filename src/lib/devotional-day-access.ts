@@ -20,9 +20,9 @@ export function getCalendarDayNumber(
   const startDate = new Date(devotional.seriesStartDate);
   if (Number.isNaN(startDate.getTime())) return null;
 
-  const startDay = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const dayNumber = Math.floor((today.getTime() - startDay.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+  const startDay = Date.UTC(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+  const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  const dayNumber = Math.floor((today - startDay) / (24 * 60 * 60 * 1000)) + 1;
 
   return Math.max(1, dayNumber);
 }

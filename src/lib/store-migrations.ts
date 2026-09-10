@@ -1,6 +1,7 @@
 import { logger } from './logger';
 import { canonicalGeneratedDayId } from './devotional-canonical-days';
-import { compositeId } from './sync-ids';
+import { compositeId, newId } from './sync-ids';
+import { bibleReadingCoordKey, isCollidingBibleReadingId } from './bible-reading-ids';
 import { normalizeSoapResponses } from './journal-entry-state';
 import { mergeJournalEntryDuplicates } from './journal-entry-merge';
 
@@ -64,6 +65,54 @@ function remapQueuedJournalWrites(): void {
     logger.log(`[store] Migration v41→42: re-keyed ${rewritten} queued journal write(s) to their day`);
   } catch (err) {
     reportMigrationFailure('v41→42 outbox', err);
+  }
+}
+
+/**
+ * Pending bible reading writes live in the outbox, not the persisted blob.
+ * Re-key colliding writes by book+chapter+translation so two v28 chapters
+ * that shared one compositeId do not steal each other's new id. Leave
+ * tombstones on their original id so a server-owned legacy row can still
+ * be deleted. Queued-only colliding writes get a new v4 so they can drain.
+ */
+function assignCoordReadingId(coordToNewId: Map<string, string>, coordKey: string | null): string {
+  const existing = coordKey ? coordToNewId.get(coordKey) : undefined;
+  if (existing) return existing;
+  const nextId = newId();
+  if (coordKey) coordToNewId.set(coordKey, nextId);
+  return nextId;
+}
+
+function remapQueuedBibleReadingWrites(coordToNewId: Map<string, string>): void {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const outbox = require('./sync-outbox') as typeof import('./sync-outbox');
+    const changes = outbox.peekSyncOutbox();
+    if (changes.length === 0) return;
+    let rewritten = 0;
+    const remapped = changes.map((change) => {
+      if (change.table !== 'bible_reading_positions' || change.deleted) return change;
+      const data = (change.data ?? {}) as { bookId?: unknown; chapter?: unknown; translation?: unknown };
+      const bookId = typeof data.bookId === 'number' ? data.bookId : undefined;
+      const translation = typeof data.translation === 'string' ? data.translation : undefined;
+      if (!isCollidingBibleReadingId(change.id, bookId, translation)) return change;
+      const coordKey = bibleReadingCoordKey(data.bookId, data.chapter, data.translation, change.id);
+      rewritten += 1;
+      return { ...change, id: assignCoordReadingId(coordToNewId, coordKey) };
+    });
+    if (rewritten === 0) return;
+    const byRecord = new Map<string, (typeof remapped)[number]>();
+    for (const change of remapped) {
+      const key = `${change.table}:${change.id}`;
+      const existing = byRecord.get(key);
+      if (!existing || (change.clientUpdatedAt ?? '') >= (existing.clientUpdatedAt ?? '')) {
+        byRecord.set(key, change);
+      }
+    }
+    outbox.replaceSyncOutbox([...byRecord.values()]);
+    logger.log(`[store] Migration v42→43: re-keyed ${rewritten} queued bible reading write(s)`);
+  } catch (err) {
+    reportMigrationFailure('v42→43 outbox', err);
   }
 }
 
@@ -711,6 +760,30 @@ if (version < 42) {
     }
   } catch (err) {
     reportMigrationFailure('v41→42', err);
+  }
+}
+
+// Migration from version 42 to 43: bible reading ids must be globally unique.
+// brp_book_chapter_translation and compositeId(book, translation) collide
+// across users on the server primary key. Convert those recipes to UUID v4.
+// Keep chapter history and order. Leave tombstones on the original id.
+if (version < 43) {
+  try {
+    const coordToNewId = new Map<string, string>();
+    const bibleReadingHistory = (state as any).bibleReadingHistory ?? [];
+    for (const pos of bibleReadingHistory) {
+      if (!pos) continue;
+      const previousId = typeof pos.id === 'string' ? pos.id : undefined;
+      if (!isCollidingBibleReadingId(previousId, pos.bookId, pos.translation)) continue;
+      pos.id = assignCoordReadingId(
+        coordToNewId,
+        bibleReadingCoordKey(pos.bookId, pos.chapter, pos.translation, previousId),
+      );
+    }
+    remapQueuedBibleReadingWrites(coordToNewId);
+    logger.log('[store] Migration v42→43: assigned globally unique bible reading ids');
+  } catch (err) {
+    reportMigrationFailure('v42→43', err);
   }
 }
 

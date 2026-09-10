@@ -1,5 +1,5 @@
-import { memo, useCallback, useMemo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
@@ -23,8 +23,6 @@ import { NoteCard } from './NoteCard';
 import type { Note } from '@/lib/store';
 
 const ACTION_WIDTH = 56;
-const TOTAL_ACTIONS_WIDTH = ACTION_WIDTH * 3;
-const SNAP_THRESHOLD = TOTAL_ACTIONS_WIDTH * 0.35;
 
 const EASE_OUT = Easing.out(Easing.cubic);
 const TIMING_CONFIG = { duration: Duration.normal, easing: EASE_OUT };
@@ -50,8 +48,22 @@ export const SwipeableNoteCard = memo(function SwipeableNoteCard({
   onDelete,
 }: SwipeableNoteCardProps) {
   const { colors, isDark } = useTheme();
+  const { fontScale } = useWindowDimensions();
+  const [rowWidth, setRowWidth] = useState(0);
+  // Match the global Dynamic Type ceiling in src/app/_layout.tsx (1.8).
+  const scale = Number.isFinite(fontScale) && fontScale > 0 ? fontScale : 1;
+  const preferredActionWidth = Math.round(ACTION_WIDTH * Math.max(1, Math.min(scale, 1.8)));
+  const actionWidth = rowWidth > 0 ? Math.min(preferredActionWidth, rowWidth / 3) : preferredActionWidth;
+  const totalActionsWidth = actionWidth * 3;
+  const snapThreshold = totalActionsWidth * 0.35;
   const translateX = useSharedValue(0);
   const contextX = useSharedValue(0);
+
+  useEffect(() => {
+    // An open tray must not retain the offset from the previous text or window size.
+    translateX.value = 0;
+    contextX.value = 0;
+  }, [totalActionsWidth, translateX, contextX]);
 
   const close = useCallback(() => {
     translateX.value = withTiming(0, TIMING_CONFIG);
@@ -112,19 +124,19 @@ export const SwipeableNoteCard = memo(function SwipeableNoteCard({
         })
         .onUpdate((e) => {
           const raw = contextX.value + e.translationX;
-          translateX.value = clamp(raw, -TOTAL_ACTIONS_WIDTH, 0);
+          translateX.value = clamp(raw, -totalActionsWidth, 0);
         })
         .onEnd((e) => {
-          const isOpen = translateX.value < -SNAP_THRESHOLD;
+          const isOpen = translateX.value < -snapThreshold;
           const isFlick = e.velocityX < -500;
 
           if (isOpen || isFlick) {
-            translateX.value = withTiming(-TOTAL_ACTIONS_WIDTH, TIMING_CONFIG);
+            translateX.value = withTiming(-totalActionsWidth, TIMING_CONFIG);
           } else {
             translateX.value = withTiming(0, TIMING_CONFIG);
           }
         }),
-    [contextX, translateX],
+    [contextX, translateX, snapThreshold, totalActionsWidth],
   );
 
   const contentStyle = useAnimatedStyle(() => ({
@@ -134,20 +146,20 @@ export const SwipeableNoteCard = memo(function SwipeableNoteCard({
   const actionsStyle = useAnimatedStyle(() => ({
     opacity: interpolate(
       Math.abs(translateX.value),
-      [0, TOTAL_ACTIONS_WIDTH * 0.4, TOTAL_ACTIONS_WIDTH],
+      [0, totalActionsWidth * 0.4, totalActionsWidth],
       [0, 0.7, 1],
     ),
   }));
 
   return (
-    <View style={styles.outerContainer}>
+    <View style={styles.outerContainer} onLayout={(event) => setRowWidth(event.nativeEvent.layout.width)}>
       {/* Action buttons — positioned inside the card area only */}
       <View style={styles.cardArea}>
-        <Animated.View style={[styles.actionsContainer, actionsStyle]}>
+        <Animated.View style={[styles.actionsContainer, { width: totalActionsWidth }, actionsStyle]}>
           <TouchableOpacity
             onPress={handleShare}
             activeOpacity={0.7}
-            style={styles.actionButton}
+            style={[styles.actionButton, { width: actionWidth }]}
             accessibilityRole="button"
             accessibilityLabel={`Share note ${note.title}`}
           >
@@ -160,7 +172,7 @@ export const SwipeableNoteCard = memo(function SwipeableNoteCard({
           <TouchableOpacity
             onPress={handleMove}
             activeOpacity={0.7}
-            style={styles.actionButton}
+            style={[styles.actionButton, { width: actionWidth }]}
             accessibilityRole="button"
             accessibilityLabel={`Move note ${note.title} to folder`}
           >
@@ -173,7 +185,7 @@ export const SwipeableNoteCard = memo(function SwipeableNoteCard({
           <TouchableOpacity
             onPress={handleDelete}
             activeOpacity={0.7}
-            style={styles.actionButton}
+            style={[styles.actionButton, { width: actionWidth }]}
             accessibilityRole="button"
             accessibilityLabel={`Delete note ${note.title}`}
           >
@@ -224,14 +236,12 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    width: TOTAL_ACTIONS_WIDTH,
-    paddingRight: 4,
   },
   actionButton: {
-    width: ACTION_WIDTH,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 5,
+    paddingVertical: 4,
   },
   actionCircle: {
     width: 36,
@@ -243,5 +253,8 @@ const styles = StyleSheet.create({
   actionLabel: {
     fontFamily: FontFamily.ui,
     fontSize: 10,
+    lineHeight: 13,
+    textAlign: 'center',
+    flexShrink: 1,
   },
 });

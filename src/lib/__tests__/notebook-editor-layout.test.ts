@@ -14,6 +14,11 @@ describe('notebook editor layout helpers', () => {
     expect(getNativeEditorToolbarInset({ isKeyboardUp: false })).toBe(0);
   });
 
+  it('uses the measured expanded toolbar height so the caret stays above it', () => {
+    expect(getNativeEditorToolbarInset({ isKeyboardUp: true, toolbarHeight: 184 })).toBe(184);
+    expect(getNativeEditorToolbarInset({ isKeyboardUp: false, toolbarHeight: 184 })).toBe(0);
+  });
+
   it('reuses previous selection state when only the range changed', () => {
     const prev = {
       bold: false,

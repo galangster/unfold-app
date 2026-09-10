@@ -16,19 +16,11 @@
  *   - Delete the profile photo (document directory) and the exported share
  *     cards / devotional workbook PDFs (cache directory)
  *   - Push an empty timeline to the iOS widgets (App Group data)
- *   - Log RevenueCat out best-effort so the next launch re-establishes the
- *     identity from the new device id
- *   - Rotate device identity LAST
- *
- * NOTE (RevenueCat identity, pre-existing): `configuredAppUserID` in
- * revenuecatClient.ts is module scope, set once when the SDK is configured at
- * launch, and rotateDeviceId() does not update it — it keeps the OLD
- * device-scoped id for the rest of the session. logoutUser() above only drops
- * the SDK's current user, so if the identity sync had failed this session,
- * `retryRevenueCatIdentitySync()` (fired by useRevenueCatSync on foreground
- * while `revenueCatResolved` is still false) can log the OLD identity back in
- * AFTER the reset. The next cold start establishes the new id. Entitlement
- * recovery for the user is Apple/Google restore-purchases either way.
+ *   - Raise the reset fence, then immediately invalidate RevenueCat readiness
+ *     and session entitlement resolution
+ *   - Log out best-effort, rotate the device id, then log in to the new
+ *     deterministic id. Ordinary RevenueCat use stays blocked until then
+ *   - Rotate device identity LAST, then establish the new RevenueCat target
  *
  * Unifies the previously split user path ((you)/index.tsx) and QA path
  * (debug-reset-beginning.tsx) — vault rule deterministic-twin-paths-must-
@@ -54,7 +46,12 @@ import { clearReviewPromptState } from '@/lib/review-prompt';
 import { clearPaywallDiagnosticsFile } from '@/lib/paywall-diagnostics';
 import { clearAudioCache } from '@/lib/tts-service';
 import { clearWidgets } from '@/lib/widget-bridge';
-import { logoutUser } from '@/lib/revenuecatClient';
+import {
+  establishRevenueCatIdentityForCurrentDevice,
+  invalidateRevenueCatIdentityReadiness,
+  logoutUser,
+} from '@/lib/revenuecatClient';
+import { useUIState } from '@/lib/ui-state';
 import {
   requestServerAccountErase,
   SERVER_ERASE_TIMEOUT_MS,
@@ -66,13 +63,27 @@ import { cacheDirectory, deleteAsync, documentDirectory, readDirectoryAsync } fr
 import { OUTBOX_KEY } from '@/lib/sync-outbox';
 import { DEVOTIONAL_PULL_CURSOR_KEY } from '@/lib/devotional-pull-cursor';
 import { LAST_PULLED_AT_KEY } from '@/lib/full-sync-pull';
-import { MIGRATION_KEY as GENERATION_MIGRATION_KEY } from '@/lib/generation-migration';
+import {
+  ARC_RECONCILIATION_KEY,
+  MIGRATION_KEY as GENERATION_MIGRATION_KEY,
+} from '@/lib/generation-migration';
 import { STORE_KEY as ONBOARDING_SAMPLE_JOB_KEY } from '@/lib/onboarding-sample-job-store';
 import { STORE_KEY as ONBOARDING_DRAFT_KEY } from '@/lib/onboarding-draft-store';
 // A stale marker would silence the next abandonment report on this device.
 import { ABANDONED_MARKER_KEY as ONBOARDING_ABANDON_MARKER_KEY } from '@/lib/onboarding-telemetry';
 import { DYNAMIC_EXAMPLE_KEY } from '@/lib/generation-api';
+import { INITIAL_GENERATION_REQUEST_ID_KEY } from '@/lib/initial-generation-request';
 import { RATE_LIMIT_STORAGE_KEY } from '@/lib/rate-limit';
+import {
+  beginLocalResetSession,
+  endLocalResetSession,
+  isLocalResetInProgress,
+} from '@/lib/sync-session-fence';
+import {
+  VOICE_CHECK_IN_DRAFT_KEY,
+  cancelVoiceCheckInUploads,
+  clearVoiceCheckInLocalData,
+} from '@/lib/voice-check-ins';
 
 /**
  * All MMKV keys that hold user-specific data and must be cleared on reset.
@@ -86,6 +97,7 @@ export const FULL_RESET_MMKV_KEYS: readonly string[] = [
   '@unfold_exclusive_offer_seen',
   '@unfold_onboarding_offer_seen',
   'inflight-generation-job',
+  INITIAL_GENERATION_REQUEST_ID_KEY,
   OUTBOX_KEY,
   // Devotional pull cursor is scoped to the device id; rotation below would
   // already invalidate it, but a wiped store must never carry a delta cursor.
@@ -95,12 +107,14 @@ export const FULL_RESET_MMKV_KEYS: readonly string[] = [
   // a stale onboarding sample job, and drop the cached prompt example.
   LAST_PULLED_AT_KEY,
   GENERATION_MIGRATION_KEY,
+  ARC_RECONCILIATION_KEY,
   ONBOARDING_SAMPLE_JOB_KEY,
   // A wiped install must start onboarding cold — never resume the erased
   // user's saved answers.
   ONBOARDING_DRAFT_KEY,
   ONBOARDING_ABANDON_MARKER_KEY,
   DYNAMIC_EXAMPLE_KEY,
+  VOICE_CHECK_IN_DRAFT_KEY,
   // NOTE: 'unfold-trial-notification' is an MMKV INSTANCE id, not a key here — cleared via clearTrialNotificationMirror() below (REVM-8).
 ] as const;
 
@@ -195,7 +209,42 @@ async function sweepExportedPersonalFiles(): Promise<void> {
   }
 }
 
-export async function performFullLocalReset(options: FullResetOptions = {}): Promise<FullResetResult> {
+let inFlightReset: Promise<FullResetResult> | null = null;
+
+export function performFullLocalReset(options: FullResetOptions = {}): Promise<FullResetResult> {
+  if (inFlightReset && isLocalResetInProgress()) {
+    return inFlightReset;
+  }
+
+  // Fence first, before any await. Identity still matches in-flight sync
+  // until step 12, so identity checks cannot stop those responses.
+  // RevenueCat readiness and entitlement resolution drop in the same
+  // synchronous turn so ordinary retries and store actions cannot reopen
+  // the old target before rotation.
+  const resetToken = beginLocalResetSession();
+  // Cancel before the first await. This prevents an upload callback from
+  // restoring voice data after the reset clears local ownership.
+  cancelVoiceCheckInUploads();
+  invalidateRevenueCatIdentityReadiness();
+  useUIState.getState().clearRevenueCatResolved();
+  let tracked: Promise<FullResetResult>;
+  try {
+    tracked = runFullLocalReset(options).finally(() => {
+      endLocalResetSession(resetToken);
+      if (inFlightReset === tracked) {
+        inFlightReset = null;
+      }
+    });
+  } catch (error) {
+    endLocalResetSession(resetToken);
+    inFlightReset = null;
+    throw error;
+  }
+  inFlightReset = tracked;
+  return tracked;
+}
+
+async function runFullLocalReset(options: FullResetOptions): Promise<FullResetResult> {
   // 0. Server erase under the OLD identity — MUST run before rotateDeviceId()
   //    (step 12): the current X-Device-ID is the only thing the server can
   //    match. Best-effort with a short timeout; never throws.
@@ -222,6 +271,10 @@ export async function performFullLocalReset(options: FullResetOptions = {}): Pro
   // 2. Zustand store reset
   store.reset();
   useCompanionChatStore.getState().clearAllConversations();
+
+  // Voice audio is stored outside Zustand. Clear ownership before the MMKV sweep
+  // so a late upload callback cannot restore an erased draft.
+  clearVoiceCheckInLocalData();
 
   // 3. MMKV key wipe — enumerated keys, then prefixed families from the live key list
   for (const key of FULL_RESET_MMKV_KEYS) {
@@ -274,9 +327,11 @@ export async function performFullLocalReset(options: FullResetOptions = {}): Pro
   //     the next syncWidgets(); push an empty timeline now.
   await bestEffort('clear widgets', clearWidgets);
 
-  // 11. RevenueCat — logoutUser() is already guarded (web / not configured /
-  //     SDK errors resolve to { ok: false }); the timeout keeps a hung SDK
-  //     from blocking the reset. The next launch logs in under the new id.
+  // 11. RevenueCat — readiness was already dropped at reset start.
+  //     logoutUser() does not wait for identity (Cocoa rejects logout when
+  //     the SDK is already anonymous). The timeout only stops waiting; the
+  //     native logout stays in the client's identity sequence. Configure is
+  //     never called again.
   await bestEffort('RevenueCat logout', () =>
     withTimeout(
       logoutUser(),
@@ -288,7 +343,17 @@ export async function performFullLocalReset(options: FullResetOptions = {}): Pro
   // 12. Rotate device identity LAST — server data (if the erase above did not
   //     confirm) becomes permanently unreachable from this install.
   rotateDeviceId();
-  logger.warn('[reset] Device identity rotated; RevenueCat identity refreshes on next launch');
+
+  // 13. Log in to the new deterministic id. The timeout only stops waiting;
+  //     the native login stays in the client's identity sequence. Ordinary
+  //     store actions stay non-ok until that sequence verifies the new target.
+  await bestEffort('RevenueCat identity', () =>
+    withTimeout(
+      establishRevenueCatIdentityForCurrentDevice(),
+      options.revenueCatLogoutTimeoutMs ?? REVENUECAT_LOGOUT_TIMEOUT_MS,
+      'RevenueCat identity',
+    ),
+  );
 
   return { serverErase };
 }

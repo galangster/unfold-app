@@ -27,7 +27,7 @@ function makePurchasesMock({
   logInImpl?: jest.Mock;
   getCustomerInfoImpl?: jest.Mock;
 } = {}) {
-  return {
+  const purchases = {
     LOG_LEVEL: { INFO: 'INFO', WARN: 'WARN', ERROR: 'ERROR' },
     configure: jest.fn(),
     setLogHandler: jest.fn(),
@@ -35,7 +35,10 @@ function makePurchasesMock({
     // Return an anonymous-style ID so synchronizeRevenueCatAppUserID does NOT
     // early-return (the device-derived ID will differ, forcing logIn to be called)
     getAppUserID: jest.fn(async () => '$RCAnonymousID:aabbccdd'),
-    logIn: logInImpl ?? jest.fn(async () => ({ created: false, customerInfo: emptyCustomerInfo })),
+    logIn: logInImpl ?? jest.fn(async (id: string) => {
+      purchases.getAppUserID.mockResolvedValue(id);
+      return { created: false, customerInfo: emptyCustomerInfo };
+    }),
     purchasePackage: jest.fn(),
     restorePurchases: jest.fn(),
     invalidateCustomerInfoCache: jest.fn(async () => undefined),
@@ -46,6 +49,7 @@ function makePurchasesMock({
     logOut: jest.fn(),
     checkTrialOrIntroductoryPriceEligibility: jest.fn(),
   };
+  return purchases;
 }
 
 async function setupWithFailingLogin() {
@@ -95,6 +99,8 @@ describe('retryRevenueCatIdentitySync', () => {
   it('identity failure is sticky until retried', async () => {
     const { client } = await setupWithFailingLogin();
 
+    expect(client.getRevenueCatSupportId()).toBeNull();
+
     // Baseline pin: failed identity → sdk_error
     const result = await client.getCustomerInfo();
     expect(result).toMatchObject({ ok: false, reason: 'sdk_error' });
@@ -103,9 +109,11 @@ describe('retryRevenueCatIdentitySync', () => {
   it('retryRevenueCatIdentitySync clears the sticky error', async () => {
     const { client, purchasesMock, logIn } = await setupWithFailingLogin();
 
-    // Flip logIn to succeed for the retry
-    logIn.mockResolvedValue({ created: false, customerInfo: emptyCustomerInfo });
-    // Set getCustomerInfo to return active info
+    // Flip logIn to succeed for the retry and keep getAppUserID in sync.
+    logIn.mockImplementation(async (id: string) => {
+      purchasesMock.getAppUserID.mockResolvedValue(id);
+      return { created: false, customerInfo: emptyCustomerInfo };
+    });
     purchasesMock.getCustomerInfo.mockResolvedValue(activeCustomerInfo);
 
     // RED: export does not exist yet
@@ -115,6 +123,7 @@ describe('retryRevenueCatIdentitySync', () => {
     // After retry, getCustomerInfo should succeed
     const result = await client.getCustomerInfo();
     expect(result).toMatchObject({ ok: true });
+    expect(client.getRevenueCatSupportId()).toBe('anon_11111111-1111-4111-8111-111111111111');
   });
 
   it('retry is single-flight', async () => {

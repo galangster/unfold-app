@@ -1,3 +1,4 @@
+import { getDailyGenerationNotice } from '@/lib/daily-generation-messages';
 /**
  * DevotionalCard — 9-state hero card for the home screen.
  *
@@ -8,7 +9,7 @@
  */
 
 import React, { useEffect, useMemo, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions, Platform } from 'react-native';
+import { ActivityIndicator, View, Text, TouchableOpacity, StyleSheet, useWindowDimensions, Platform } from 'react-native';
 import { BlurView } from 'expo-blur';
 import Animated, {
   FadeIn,
@@ -467,20 +468,20 @@ function PreparingProgressBar({ progress, colors }: { progress: number; colors: 
 
 // ─── Preparing state ────────────────────────────────────────────
 
-function PreparingState({
-  progress,
-  seriesTitle,
-  dayNumber,
-}: {
-  progress: number;
-  seriesTitle: string;
-  dayNumber: number;
-}) {
+function PreparingState({ state }: { state: Extract<DevotionalCardState, { type: 'preparing' }> }) {
   const { colors } = useTheme();
   const { reducedMotion } = useAccessibleAnimation();
   const shimmerOpacity = useSharedValue(0.55);
+  const isRecoveryBlocked = state.recovery?.status === 'failed'
+    || state.recovery?.status === 'offline'
+    || state.recovery?.status === 'blocked'
+    || state.recovery?.status === 'service-error';
 
   useEffect(() => {
+    if (isRecoveryBlocked) {
+      shimmerOpacity.value = 1;
+      return;
+    }
     if (reducedMotion) {
       shimmerOpacity.value = 0.78;
       return;
@@ -493,28 +494,91 @@ function PreparingState({
       true,
     );
     return () => cancelAnimation(shimmerOpacity);
-  }, [shimmerOpacity, reducedMotion]);
+  }, [shimmerOpacity, reducedMotion, isRecoveryBlocked]);
 
   const shimmerStyle = useAnimatedStyle(() => ({ opacity: shimmerOpacity.value }));
+  const recovery = state.recovery;
+  const notice = getDailyGenerationNotice(recovery, state.dayNumber);
+  const isChecking = recovery?.status === 'checking';
+  const isFailed = recovery?.status === 'failed';
+  const canRetry = isFailed && recovery.canRetry && recovery.failureKind === 'job';
+  const action = recovery && (
+    recovery.status === 'checking'
+    || recovery.status === 'slow'
+    || recovery.status === 'offline'
+    || recovery.status === 'blocked'
+    || recovery.status === 'service-error'
+    || recovery.status === 'failed'
+  ) ? {
+      label: isChecking ? 'Checking...' : canRetry ? 'Try Again' : 'Check Again',
+      onPress: canRetry ? recovery.onRetry : recovery.onCheckAgain,
+    } : null;
+  const title = notice
+    ? `${notice.title}.`
+    : isFailed
+      ? recovery.failureKind === 'job'
+        ? `We couldn’t prepare Day ${state.dayNumber}.`
+        : `We couldn’t match Day ${state.dayNumber}.`
+      : recovery?.status === 'slow'
+        ? `Day ${state.dayNumber} is still being prepared.`
+        : recovery?.status === 'checking'
+          ? `Looking for Day ${state.dayNumber}.`
+          : recovery?.status === 'running'
+            ? `Preparing Day ${state.dayNumber}.`
+            : `Day ${state.dayNumber} is almost ready.`;
+  const subtitle = notice
+    ? notice.body
+    : isFailed
+      ? recovery.failureKind === 'job'
+        ? canRetry
+          ? 'Your series is safe. Try this reading again when you’re ready.'
+          : 'Your series is safe. Check again for the latest reading status.'
+        : 'Check again so we can find the right reading for your series.'
+      : recovery?.status === 'slow'
+        ? `This is taking longer than usual. You can leave ${state.seriesTitle} here and come back later.`
+        : `We’re getting your next reading for ${state.seriesTitle}. It’ll appear here automatically.`;
 
   return (
     <View
-      accessible
-      accessibilityRole="text"
-      accessibilityLabel="Preparing your reading"
+      accessible={!action}
+      accessibilityRole={action ? undefined : 'text'}
+      accessibilityLabel={action ? undefined : title}
       style={styles.preparingContainer}
     >
       <View style={styles.preparingContent}>
 
         <Animated.Text style={[styles.preparingTitle, { color: colors.text }, shimmerStyle]}>
-          Day {dayNumber} is almost ready.
+          {title}
         </Animated.Text>
 
         <Text style={[styles.preparingSubtitle, { color: colors.textMuted }]}>
-          We’re getting your next reading for {seriesTitle}. It’ll appear here automatically.
+          {subtitle}
         </Text>
 
-        <PreparingProgressBar progress={progress} colors={{ accent: alpha(colors.accent, 0.58), border: alpha(colors.border, 0.45) }} />
+        {action ? (
+          <TouchableOpacity
+            activeOpacity={0.74}
+            onPress={() => void action.onPress()}
+            disabled={isChecking}
+            accessibilityRole="button"
+            accessibilityLabel={action.label}
+            accessibilityHint={canRetry ? 'Retries this failed reading job' : 'Checks the server for this reading'}
+            accessibilityState={{ disabled: isChecking, busy: isChecking }}
+            style={[
+              styles.preparingRecoveryButton,
+              {
+                backgroundColor: alpha(colors.accent, 0.1),
+                borderColor: alpha(colors.accent, 0.28),
+                opacity: isChecking ? 0.65 : 1,
+              },
+            ]}
+          >
+            {isChecking ? <ActivityIndicator size="small" color={colors.accent} /> : null}
+            <Text style={[styles.preparingRecoveryButtonText, { color: colors.text }]}>{action.label}</Text>
+          </TouchableOpacity>
+        ) : (
+          <PreparingProgressBar progress={state.progress} colors={{ accent: alpha(colors.accent, 0.58), border: alpha(colors.border, 0.45) }} />
+        )}
       </View>
     </View>
   );
@@ -935,11 +999,7 @@ export function DevotionalCard({ state, scrollY, inStack, isReturningUser }: Pro
     >
       {state.type === 'empty' && <EmptyState onCreateNew={state.onCreateNew} isReturningUser={isReturningUser} />}
       {state.type === 'preparing' && (
-        <PreparingState
-          progress={state.progress}
-          seriesTitle={state.seriesTitle}
-          dayNumber={state.dayNumber}
-        />
+        <PreparingState state={state} />
       )}
       {state.type === 'first-series-failed' && <FirstSeriesFailedState state={state} />}
       {state.type === 'premium-paused' && <PremiumPausedState state={state} />}
@@ -1405,6 +1465,22 @@ const styles = StyleSheet.create({
   preparingProgressFill: {
     height: '100%',
     borderRadius: 1,
+  },
+  preparingRecoveryButton: {
+    alignItems: 'center',
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: Spacing['2'],
+    justifyContent: 'center',
+    minHeight: 44,
+    paddingHorizontal: Spacing['5'],
+    paddingVertical: Spacing['2'],
+  },
+  preparingRecoveryButtonText: {
+    fontFamily: FontFamily.uiSemiBold,
+    fontSize: 14,
+    lineHeight: 20,
   },
 
   // Journey complete

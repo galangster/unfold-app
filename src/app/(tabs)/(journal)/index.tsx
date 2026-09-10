@@ -67,6 +67,12 @@ import { prepareJournalFolderDelete } from '@/lib/journal-folder-delete';
 import { undoJournalDeletions, type JournalUndoAction } from '@/lib/journal-undo';
 import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
 import { logger } from '@/lib/logger';
+import {
+  buildJournalMonthMarkers,
+  formatJournalDay,
+  sortJournalItemsByDateDescending,
+  type JournalMonthMarker,
+} from '@/lib/journal-month-groups';
 
 type Segment = 'reflections' | 'notebook';
 
@@ -99,7 +105,7 @@ function SegmentedControl({ activeSegment, onSegmentChange }: SegmentedControlPr
   const [containerWidth, setContainerWidth] = useState(0);
 
   const activeIndex = activeSegment === 'reflections' ? 0 : 1;
-  const segmentWidth = containerWidth > 0 ? (containerWidth - 4) / 2 : 0;
+  const segmentWidth = containerWidth > 0 ? containerWidth / 2 : 0;
 
   const indicatorTranslateX = useSharedValue(activeIndex * segmentWidth);
 
@@ -131,7 +137,7 @@ function SegmentedControl({ activeSegment, onSegmentChange }: SegmentedControlPr
   useEffect(() => {
     if (containerWidth > 0 && containerWidthRef.current !== containerWidth) {
       containerWidthRef.current = containerWidth;
-      indicatorTranslateX.value = activeIndex * ((containerWidth - 4) / 2);
+      indicatorTranslateX.value = activeIndex * (containerWidth / 2);
     }
   }, [activeIndex, containerWidth, indicatorTranslateX]);
 
@@ -149,7 +155,7 @@ function SegmentedControl({ activeSegment, onSegmentChange }: SegmentedControlPr
       style={[
         segStyles.container,
         {
-          backgroundColor: colors.inputBackground,
+          backgroundColor: 'transparent',
           borderColor: colors.border,
         },
       ]}
@@ -160,9 +166,7 @@ function SegmentedControl({ activeSegment, onSegmentChange }: SegmentedControlPr
           style={[
             segStyles.indicator,
             {
-              backgroundColor: colors.glassBackground,
-              borderColor: colors.glassBorder,
-              shadowColor: '#000',
+              backgroundColor: colors.accent,
             },
             indicatorStyle,
           ]}
@@ -192,7 +196,6 @@ function SegmentedControl({ activeSegment, onSegmentChange }: SegmentedControlPr
                   : colors.textSubtle,
             },
           ]}
-          maxFontSizeMultiplier={1.3}
         >
           Reflections
         </Text>
@@ -220,7 +223,6 @@ function SegmentedControl({ activeSegment, onSegmentChange }: SegmentedControlPr
                   : colors.textSubtle,
             },
           ]}
-          maxFontSizeMultiplier={1.3}
         >
           Notebook
         </Text>
@@ -231,34 +233,63 @@ function SegmentedControl({ activeSegment, onSegmentChange }: SegmentedControlPr
 
 const segStyles = StyleSheet.create({
   container: {
-    minHeight: 36,
-    borderRadius: 18,
-    borderWidth: 1,
+    minHeight: 44,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
     alignItems: 'center',
-    padding: Spacing['0.5'],
     position: 'relative',
   },
   indicator: {
     position: 'absolute',
-    top: 2,
-    left: 2,
-    height: 30,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    ...Shadow.sm,
+    bottom: 0,
+    left: 0,
+    height: 2,
+    borderRadius: 1,
   },
   segment: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 30,
+    minHeight: 44,
     zIndex: 1,
   },
   segmentText: {
-    fontSize: FontSize.sm,
+    fontSize: 14,
+    letterSpacing: 0.1,
   },
 });
+
+function JournalMonthHeader({ marker }: { marker: JournalMonthMarker }) {
+  const { colors } = useTheme();
+  return (
+    <View style={archiveStyles.monthHeader} accessibilityRole="header">
+      <Text style={[archiveStyles.monthTitle, { color: colors.text }]}>{marker.label}</Text>
+      <Text style={[archiveStyles.monthCount, { color: colors.textSubtle }]}>
+        {marker.countLabel}
+      </Text>
+    </View>
+  );
+}
+
+function JournalNoResults({ message, onClear }: { message: string; onClear: () => void }) {
+  const { colors } = useTheme();
+  return (
+    <View style={mainStyles.noResultsContainer}>
+      <MagnifyingGlassIcon size={24} color={colors.textSubtle} weight="light" />
+      <Text style={[archiveStyles.emptyTitle, { color: colors.text }]}>No matches</Text>
+      <Text style={[mainStyles.noResultsText, { color: colors.textMuted }]}>{message}</Text>
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel="Clear journal search"
+        activeOpacity={0.65}
+        onPress={onClear}
+        style={[archiveStyles.clearSearchAction, { borderColor: colors.border }]}
+      >
+        <Text style={[archiveStyles.clearSearchText, { color: colors.accent }]}>Clear search</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
 
 // ============================================================================
 // Notebook Empty State
@@ -1015,12 +1046,7 @@ export default function JournalHubScreen() {
     }
 
     // Sort by updatedAt descending
-    filtered.sort(
-      (a, b) =>
-        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-    );
-
-    return filtered;
+    return sortJournalItemsByDateDescending(filtered, (note) => note.updatedAt);
   }, [notes, activeFolderId, searchQuery, noteSearchText]);
 
   // ---- Verse notes matching Notebook search (read-only bridge rows) ----
@@ -1055,10 +1081,7 @@ export default function JournalHubScreen() {
 
   // ---- Reflections filtered entries ----
   const filteredEntries = useMemo(() => {
-    const sorted = [...journalEntries].sort(
-      (a, b) =>
-        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-    );
+    const sorted = sortJournalItemsByDateDescending(journalEntries, (entry) => entry.updatedAt);
     if (!searchQuery.trim()) return sorted;
     const query = searchQuery.toLowerCase().trim();
     return sorted.filter((entry) => {
@@ -1081,45 +1104,19 @@ export default function JournalHubScreen() {
     });
   }, [journalEntries, searchQuery, devotionals]);
 
+  const noteMonthMarkers = useMemo(
+    () => buildJournalMonthMarkers(filteredNotes, (note) => note.updatedAt),
+    [filteredNotes],
+  );
+
+  const reflectionMonthMarkers = useMemo(
+    () => buildJournalMonthMarkers(filteredEntries, (entry) => entry.updatedAt),
+    [filteredEntries],
+  );
+
   // WR-07: search on the Reflections segment renders filteredEntries in
   // place of the browse sections (mirrors Notebook's search collapse).
   const isSearchingReflections = activeSegment === 'reflections' && searchQuery.trim().length > 0;
-
-  // ---- Series with journal entries (for YOUR DEVOTIONALS section) ----
-  const seriesWithEntries = useMemo(() => {
-    // Group entries by devotionalId and compute stats
-    const seriesMap = new Map<string, { devotional: typeof devotionals[0]; entryCount: number; latestEntry: string; scriptures: string[] }>();
-    for (const entry of journalEntries) {
-      const existing = seriesMap.get(entry.devotionalId);
-      const devotional = devotionals.find((d) => d.id === entry.devotionalId);
-      if (!devotional) continue;
-
-      if (!existing) {
-        // Collect unique scripture references from this devotional's days
-        const scriptures = Array.from(
-          new Set(
-            devotional.days
-              .filter((d) => d.scriptureReference)
-              .map((d) => d.scriptureReference),
-          ),
-        ).slice(0, 3);
-        seriesMap.set(entry.devotionalId, {
-          devotional,
-          entryCount: 1,
-          latestEntry: entry.updatedAt,
-          scriptures,
-        });
-      } else {
-        existing.entryCount += 1;
-        if (new Date(entry.updatedAt).getTime() > new Date(existing.latestEntry).getTime()) {
-          existing.latestEntry = entry.updatedAt;
-        }
-      }
-    }
-
-    return Array.from(seriesMap.values())
-      .sort((a, b) => new Date(b.latestEntry).getTime() - new Date(a.latestEntry).getTime());
-  }, [journalEntries, devotionals]);
 
   // ---- Handlers ----
   const handleWriteToday = useCallback(() => {
@@ -1460,6 +1457,9 @@ export default function JournalHubScreen() {
   const renderNoteRow = useCallback(
     ({ item, index }: ListRenderItemInfo<Note>) => (
       <Animated.View style={[notebookSwipeStyle, mainStyles.notesListContainer]}>
+        {noteMonthMarkers[index] ? (
+          <JournalMonthHeader marker={noteMonthMarkers[index]} />
+        ) : null}
         <SwipeableNoteCard
           note={item}
           index={index}
@@ -1470,7 +1470,14 @@ export default function JournalHubScreen() {
         />
       </Animated.View>
     ),
-    [notebookSwipeStyle, handleNotePress, handleNoteShare, handleNoteMove, handleNoteDelete],
+    [
+      notebookSwipeStyle,
+      noteMonthMarkers,
+      handleNotePress,
+      handleNoteShare,
+      handleNoteMove,
+      handleNoteDelete,
+    ],
   );
 
   const noteKeyExtractor = useCallback((note: Note) => note.id, []);
@@ -1542,7 +1549,9 @@ export default function JournalHubScreen() {
                 }}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 activeOpacity={0.6}
-                style={{ padding: Spacing['2'] }}
+                style={mainStyles.headerAction}
+                accessibilityRole="button"
+                accessibilityLabel={showSearch ? 'Close journal search' : 'Search journal'}
               >
                 {showSearch ? (
                   <XIcon
@@ -1583,6 +1592,7 @@ export default function JournalHubScreen() {
                   weight="light"
                 />
                 <TextInput
+                  accessibilityLabel="Search journal entries and notes"
                   value={searchQuery}
                   onChangeText={setSearchQuery}
                   placeholder="Search entries..."
@@ -1619,57 +1629,54 @@ export default function JournalHubScreen() {
               {isSearchingReflections && (
                 <View style={{ paddingHorizontal: Spacing['6'], marginTop: Spacing['5'] }}>
                   {filteredEntries.length === 0 ? (
-                    <View style={mainStyles.noResultsContainer}>
-                      <Text style={[mainStyles.noResultsText, { color: colors.textMuted }]}>
-                        {`No entries match "${searchQuery}"`}
-                      </Text>
-                    </View>
+                    <JournalNoResults
+                      message={`No reflections match “${searchQuery}”.`}
+                      onClear={() => setSearchQuery('')}
+                    />
                   ) : (
-                    filteredEntries.map((entry) => {
+                    filteredEntries.map((entry, index) => {
                       const entryDevotional = devotionals.find((d) => d.id === entry.devotionalId);
                       const entryDay = entryDevotional?.days.find((d) => d.dayNumber === entry.dayNumber);
                       const preview = (entry.content || entry.questionResponses?.[0]?.response || '').replace(/<[^>]+>/g, '').trim();
                       return (
+                        <View key={entry.id}>
+                        {reflectionMonthMarkers[index] ? (
+                          <JournalMonthHeader marker={reflectionMonthMarkers[index]} />
+                        ) : null}
                         <TouchableOpacity
-                          key={entry.id}
                           activeOpacity={0.7}
                           accessibilityRole="button"
                           accessibilityLabel={`Reflection, day ${entry.dayNumber}${entryDevotional ? `, ${entryDevotional.title}` : ''}`}
                           onPress={() => router.push({ pathname: '/(tabs)/(today)/journal-detail', params: { entryId: entry.id } })}
                         >
                           <View
-                            style={{
-                              backgroundColor: colors.inputBackground,
-                              borderRadius: Radius.lg,
-                              borderWidth: 1,
-                              borderColor: colors.border,
-                              padding: Spacing['5'],
-                              marginBottom: Spacing['3'],
-                            }}
+                            style={[archiveStyles.entryRow, { borderBottomColor: colors.border }]}
                           >
-                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing['2'] }}>
-                              <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 11, letterSpacing: 0.4, textTransform: 'uppercase', color: colors.textHint }}>
-                                {`Day ${entry.dayNumber}`}
-                              </Text>
-                              <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 11, color: colors.textHint }}>
-                                {formatRelativeDate(entry.updatedAt)}
+                            <View style={archiveStyles.dateColumn}>
+                              <Text style={[archiveStyles.day, { color: colors.text }]}>
+                                {formatJournalDay(entry.updatedAt)}
                               </Text>
                             </View>
-                            {entryDay?.title || entryDevotional?.title ? (
+                            <View style={archiveStyles.entryContent}>
                               <Text
-                                numberOfLines={1}
-                                style={{ fontFamily: FontFamily.uiMedium, fontSize: 14, color: colors.text, marginBottom: Spacing['1.5'] }}
+                                numberOfLines={2}
+                                style={[archiveStyles.entryTitle, { color: colors.text }]}
                               >
-                                {entryDay?.title ?? entryDevotional?.title}
+                                {entryDay?.title ?? entryDevotional?.title ?? `Day ${entry.dayNumber}`}
                               </Text>
-                            ) : null}
                             {preview ? (
-                              <Text numberOfLines={2} style={{ fontFamily: FontFamily.body, fontSize: 14, lineHeight: 21, color: colors.textMuted }}>
+                              <Text numberOfLines={2} style={[archiveStyles.entryPreview, { color: colors.textMuted }]}>
                                 {preview}
                               </Text>
                             ) : null}
+                              <Text style={[archiveStyles.entryMeta, { color: colors.textSubtle }]}>
+                                {`Day ${entry.dayNumber} · ${formatRelativeDate(entry.updatedAt)}`}
+                              </Text>
+                            </View>
+                            <CaretRightIcon size={15} color={colors.textSubtle} weight="light" />
                           </View>
                         </TouchableOpacity>
+                        </View>
                       );
                     })
                   )}
@@ -1695,16 +1702,11 @@ export default function JournalHubScreen() {
                   >
                     <View
                       style={{
-                        backgroundColor: alpha(colors.accent, 0.05),
-                        borderRadius: Radius.xl,
-                        padding: Spacing['6'],
+                        backgroundColor: alpha(colors.accent, 0.035),
+                        borderRadius: Radius.md,
+                        padding: Spacing['4'],
                         borderWidth: 1,
-                        borderColor: alpha(colors.accent, 0.07),
-                        shadowColor: colors.accent,
-                        shadowOffset: { width: 0, height: 3 },
-                        shadowOpacity: 0.08,
-                        shadowRadius: 12,
-                        elevation: 3,
+                        borderColor: alpha(colors.accent, 0.14),
                       }}
                     >
                       <View
@@ -1765,7 +1767,8 @@ export default function JournalHubScreen() {
                       <Text
                         style={{
                           fontFamily: FontFamily.display,
-                          fontSize: 21,
+                          fontSize: 18,
+                          lineHeight: 23,
                           color: colors.text,
                           marginBottom: Spacing['1.5'],
                         }}
@@ -1869,187 +1872,71 @@ export default function JournalHubScreen() {
                   </Animated.View>
                 )}
 
-              {/* YOUR DEVOTIONALS — grouped by series */}
-              {!isSearchingReflections && (seriesWithEntries.length > 0 || !currentDevotional) && (
+              {/* Quiet Archive — individual written reflections in date order. */}
+              {!isSearchingReflections && filteredEntries.length > 0 && (
                 <Animated.View
                   entering={reducedMotion ? undefined : FadeIn.duration(Duration.slow).delay(90).easing(Ease.out)}
-                  style={{ paddingHorizontal: Spacing['6'], marginTop: Spacing['7'] }}
+                  style={archiveStyles.archiveSection}
                 >
-                  {seriesWithEntries.length > 0 ? (
-                    <>
-                      {/* Header row: YOUR DEVOTIONALS + View All */}
-                      <View
-                        style={{
-                          flexDirection: 'row',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          marginBottom: Spacing['4'],
-                        }}
-                      >
-                        <Text
-                          style={{
-                            fontFamily: FontFamily.uiMedium,
-                            fontSize: 11,
-                            color: colors.textSubtle,
-                            letterSpacing: 1,
-                          }}
-                        >
-                          YOUR DEVOTIONALS
-                        </Text>
+                  <View style={archiveStyles.archiveHeadingRow}>
+                    <Text style={[archiveStyles.archiveKicker, { color: colors.textSubtle }]}>WRITTEN REFLECTIONS</Text>
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      onPress={() => router.push('/(tabs)/(you)/past-devotionals')}
+                      accessibilityRole="link"
+                      accessibilityLabel="View all studies"
+                      style={archiveStyles.viewAllAction}
+                    >
+                      <Text style={[archiveStyles.viewAllText, { color: colors.accent }]}>View All</Text>
+                      <CaretRightIcon size={12} color={colors.accent} weight="bold" />
+                    </TouchableOpacity>
+                  </View>
+                  {filteredEntries.map((entry, index) => {
+                    const entryDevotional = devotionals.find((d) => d.id === entry.devotionalId);
+                    const entryDay = entryDevotional?.days.find((d) => d.dayNumber === entry.dayNumber);
+                    const preview = (entry.content || entry.questionResponses?.[0]?.response || '')
+                      .replace(/<[^>]+>/g, '')
+                      .trim();
+                    const marker = reflectionMonthMarkers[index];
+                    return (
+                      <View key={entry.id}>
+                        {marker ? <JournalMonthHeader marker={marker} /> : null}
                         <TouchableOpacity
-                          activeOpacity={0.7}
-                          onPress={() => {
-                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                            router.push('/(tabs)/(you)/past-devotionals');
-                          }}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                          accessibilityRole="link"
-                          accessibilityLabel="View all studies"
+                          activeOpacity={0.65}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Reflection, day ${entry.dayNumber}${entryDevotional ? `, ${entryDevotional.title}` : ''}`}
+                          onPress={() => router.push({ pathname: '/(tabs)/(today)/journal-detail', params: { entryId: entry.id } })}
                         >
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                            <Text
-                              style={{
-                                fontFamily: FontFamily.ui,
-                                fontSize: FontSize.sm,
-                                color: colors.accent,
-                              }}
-                            >
-                              View All
-                            </Text>
-                            <CaretRightIcon size={12} color={colors.accent} weight="bold" />
+                          <View style={[archiveStyles.entryRow, { borderBottomColor: colors.border }]}>
+                            <View style={archiveStyles.dateColumn}>
+                              <Text style={[archiveStyles.day, { color: colors.text }]}>{formatJournalDay(entry.updatedAt)}</Text>
+                            </View>
+                            <View style={archiveStyles.entryContent}>
+                              <Text numberOfLines={2} style={[archiveStyles.entryTitle, { color: colors.text }]}>
+                                {entryDay?.title ?? entryDevotional?.title ?? `Day ${entry.dayNumber}`}
+                              </Text>
+                              {preview ? (
+                                <Text numberOfLines={2} style={[archiveStyles.entryPreview, { color: colors.textMuted }]}>
+                                  {preview}
+                                </Text>
+                              ) : null}
+                              <Text style={[archiveStyles.entryMeta, { color: colors.textSubtle }]}>
+                                {`Day ${entry.dayNumber} · ${entryDevotional?.title ?? 'Reflection'}`}
+                              </Text>
+                            </View>
+                            <CaretRightIcon size={15} color={colors.textSubtle} weight="light" />
                           </View>
                         </TouchableOpacity>
                       </View>
-
-                      {/* Latest 4 series as simple rows */}
-                      {seriesWithEntries.slice(0, 4).map((series) => {
-                        // Find the latest journal entry's dayNumber for this devotional
-                        const latestJournalDay = journalEntries
-                          .filter((e) => e.devotionalId === series.devotional.id)
-                          .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0]?.dayNumber
-                          ?? series.devotional.currentDay;
-                        return (
-                        <TouchableOpacity
-                          key={series.devotional.id}
-                          onPress={() => {
-                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                            router.push({
-                              pathname: '/(tabs)/(you)/series-detail',
-                              params: {
-                                id: series.devotional.id,
-                                from: 'journal',
-                              },
-                            });
-                          }}
-                          activeOpacity={0.7}
-                          style={{ marginBottom: Spacing['4'] }}
-                          accessibilityRole="button"
-                          accessibilityLabel={`${series.devotional.title}, ${series.entryCount} entries`}
-                        >
-                          <Text
-                            style={{
-                              fontFamily: FontFamily.display,
-                              fontSize: 20,
-                              color: colors.text,
-                              lineHeight: 25,
-                              marginBottom: 2,
-                            }}
-                            numberOfLines={2}
-                          >
-                            {series.devotional.title}
-                          </Text>
-                          <Text
-                            style={{
-                              fontFamily: FontFamily.body,
-                              fontSize: FontSize.sm,
-                              color: colors.textMuted,
-                              lineHeight: 20,
-                            }}
-                            numberOfLines={1}
-                          >
-                            {series.entryCount} {series.entryCount === 1 ? 'entry' : 'entries'}
-                            {series.scriptures.length > 0
-                              ? ` \u00B7 ${series.scriptures.join(', ')}`
-                              : ''}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                      })}
-                    </>
-                  ) : (
-                    <View
-                      style={{
-                        borderRadius: Radius.lg,
-                        padding: Spacing['8'],
-                        alignItems: 'center',
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.display,
-                          fontSize: 21,
-                          color: colors.text,
-                          textAlign: 'center',
-                          marginBottom: Spacing['2'],
-                        }}
-                      >
-                        Your story is unfolding.
-                      </Text>
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.body,
-                          fontSize: 15,
-                          color: colors.textMuted,
-                          textAlign: 'center',
-                          lineHeight: 22,
-                          marginBottom: Spacing['6'],
-                        }}
-                      >
-                        Each day's reflection becomes a letter{'\n'}to your
-                        future self.
-                      </Text>
-                      <View
-                        style={{
-                          width: '100%',
-                          backgroundColor: colors.backgroundElevated,
-                          borderRadius: Radius.card,
-                          padding: 18,
-                          opacity: 0.5,
-                          borderWidth: 1,
-                          borderColor: colors.border,
-                          ...Shadow.sm,
-                        }}
-                      >
-                        <View
-                          style={{
-                            height: 10,
-                            width: '70%',
-                            backgroundColor: colors.border,
-                            borderRadius: 5,
-                            marginBottom: Spacing['2.5'],
-                          }}
-                        />
-                        <View
-                          style={{
-                            height: 10,
-                            width: '90%',
-                            backgroundColor: colors.border,
-                            borderRadius: 5,
-                            marginBottom: Spacing['2.5'],
-                          }}
-                        />
-                        <View
-                          style={{
-                            height: 10,
-                            width: '50%',
-                            backgroundColor: colors.border,
-                            borderRadius: 5,
-                          }}
-                        />
-                      </View>
-                    </View>
-                  )}
+                    );
+                  })}
                 </Animated.View>
+              )}
+              {!isSearchingReflections && filteredEntries.length === 0 && !currentDevotional && (
+                <View style={mainStyles.noResultsContainer}>
+                  <Text style={[archiveStyles.emptyTitle, { color: colors.text }]}>Your story is unfolding.</Text>
+                  <Text style={[mainStyles.noResultsText, { color: colors.textMuted }]}>Your written reflections will gather here by month.</Text>
+                </View>
               )}
               </Animated.View>
           )}
@@ -2118,19 +2005,17 @@ export default function JournalHubScreen() {
                       <View style={{ paddingHorizontal: Spacing['6'] }}>
                         <NotebookEmptyState onCreateNote={handleCreateNote} />
                       </View>
+                    ) : searchQuery.trim() ? (
+                      <JournalNoResults
+                        message={`No notes match “${searchQuery}”.`}
+                        onClear={() => setSearchQuery('')}
+                      />
                     ) : (
                       <View style={mainStyles.noResultsContainer}>
-                        <Text
-                          style={[
-                            mainStyles.noResultsText,
-                            { color: colors.textMuted },
-                          ]}
-                        >
-                          {searchQuery.trim()
-                            ? `No notes match "${searchQuery}"`
-                            : activeFolderId !== null
-                              ? 'No notes in this folder yet.\nLong-press a folder to add subfolders.'
-                              : 'No notes here yet.'}
+                        <Text style={[mainStyles.noResultsText, { color: colors.textMuted }]}>
+                          {activeFolderId !== null
+                            ? 'No notes in this folder yet.\nLong-press a folder to add subfolders.'
+                            : 'No notes here yet.'}
                         </Text>
                       </View>
                     )
@@ -2255,8 +2140,15 @@ const mainStyles = StyleSheet.create({
   },
   headerTitle: {
     fontFamily: FontFamily.display,
-    fontSize: 30,
-    letterSpacing: -0.15,
+    fontSize: 34,
+    lineHeight: 40,
+    letterSpacing: -0.25,
+  },
+  headerAction: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   searchContainer: {
     paddingHorizontal: Spacing['6'],
@@ -2295,10 +2187,120 @@ const mainStyles = StyleSheet.create({
     padding: Spacing['6'],
     alignItems: 'center',
     marginHorizontal: Spacing['6'],
+    gap: Spacing['2'],
   },
   noResultsText: {
     fontFamily: FontFamily.body,
     fontSize: 15,
     textAlign: 'center',
+  },
+});
+
+const archiveStyles = StyleSheet.create({
+  archiveSection: {
+    paddingHorizontal: Spacing['6'],
+    marginTop: Spacing['7'],
+  },
+  archiveHeadingRow: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  archiveKicker: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 11,
+    letterSpacing: 1.1,
+  },
+  viewAllAction: {
+    minHeight: 44,
+    minWidth: 72,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 3,
+  },
+  viewAllText: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: FontSize.sm,
+  },
+  monthHeader: {
+    minHeight: 48,
+    paddingTop: Spacing['5'],
+    paddingBottom: Spacing['2'],
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+  },
+  monthTitle: {
+    flex: 1,
+    fontFamily: FontFamily.display,
+    fontSize: 22,
+    lineHeight: 28,
+  },
+  monthCount: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 11,
+    lineHeight: 18,
+    letterSpacing: 0.35,
+    textTransform: 'uppercase',
+  },
+  entryRow: {
+    minHeight: 112,
+    paddingVertical: Spacing['4'],
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing['3'],
+  },
+  dateColumn: {
+    width: 34,
+    alignItems: 'center',
+  },
+  day: {
+    fontFamily: FontFamily.display,
+    fontSize: 23,
+    lineHeight: 28,
+  },
+  entryContent: {
+    flex: 1,
+    minWidth: 0,
+  },
+  entryTitle: {
+    fontFamily: FontFamily.display,
+    fontSize: 18,
+    lineHeight: 23,
+    marginBottom: Spacing['1'],
+  },
+  entryPreview: {
+    fontFamily: FontFamily.body,
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: Spacing['1.5'],
+  },
+  entryMeta: {
+    fontFamily: FontFamily.ui,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  emptyTitle: {
+    fontFamily: FontFamily.display,
+    fontSize: 22,
+    lineHeight: 28,
+    marginBottom: Spacing['2'],
+  },
+  clearSearchAction: {
+    minHeight: 44,
+    minWidth: 116,
+    marginTop: Spacing['3'],
+    paddingHorizontal: Spacing['4'],
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  clearSearchText: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 14,
+    lineHeight: 20,
   },
 });

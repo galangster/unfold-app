@@ -37,6 +37,9 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon, XIcon, HandIcon, FingerprintIcon, MoonIcon, CompassIcon, HeartIcon, EyeIcon, FireIcon, SparkleIcon, CloudRainIcon, ScalesIcon, CrosshairIcon, BookOpenIcon, UsersIcon, MusicNotesIcon, CrownIcon, LeafIcon, ChatCircleIcon, CalendarIcon, MagicWandIcon, SmileyIcon, GiftIcon, BinocularsIcon, CloudIcon, ShieldIcon, ShieldCheckIcon, SpeakerHighIcon, LockIcon, GavelIcon } from '@/components/icons';
 import { logger } from '@/lib/logger';
+import { requestNotificationPermissions } from '@/lib/notifications';
+import { registerPushToken } from '@/lib/push-notifications';
+import { logEvent } from '@/lib/analytics';
 import { requestReviewOncePerVersion } from '@/lib/review-prompt';
 
 import { useTheme } from '@/lib/theme';
@@ -49,6 +52,9 @@ import { INPUT_LIMITS } from '@/lib/validation';
 import { TypewriterText } from '@/components/TypewriterText';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
+import { OnboardingVoiceAnswerSheet } from '@/components/onboarding/OnboardingVoiceAnswerSheet';
+import { VoiceAnswerButton } from '@/components/onboarding/VoiceAnswerButton';
+import { isVoiceCheckInsEnabled } from '@/lib/voice-feature';
 import { useUnfoldStore, type Devotional, UserProfile, BibleTranslation, ThemeCategory, DevotionalType, ACCENT_THEMES, WritingTone, ContentDepth, FaithBackground, LifeStage, RelationshipWithGod, BibleFrequency } from '@/lib/store';
 import { generateAdaptiveQuestion, generateDiagnosticQuestions, generateMirrorBackText, type MirrorBackContent } from '@/lib/devotional-service';
 import { THEME_CATEGORIES, DEVOTIONAL_TYPES, BIBLICAL_CHARACTERS, BIBLE_BOOKS_FOR_STUDY, ThemeCategoryInfo, DevotionalTypeInfo, getThemeById, getDevotionalTypeById } from '@/constants/devotional-types';
@@ -72,6 +78,11 @@ import { Current } from '@/components/Current';
 import { ScatterTitle } from '@/components/ScatterTitle';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { submitGenerationJob } from '@/lib/generation-api';
+import {
+  captureSyncSession,
+  isSyncSessionCurrent,
+  SyncSessionInvalidatedError,
+} from '@/lib/generation-session';
 import { getDeviceId } from '@/lib/mmkv-storage';
 import {
   saveOnboardingSampleJob,
@@ -865,13 +876,23 @@ export default function OnboardingScreen() {
   const dataRef = useRef(data);
   dataRef.current = data;
 
+  const onboardingMountedRef = useRef(true);
+  useEffect(() => {
+    onboardingMountedRef.current = true;
+    return () => {
+      onboardingMountedRef.current = false;
+    };
+  }, []);
+  const ownsOnboardingWork = (session: number) =>
+    onboardingMountedRef.current && isSyncSessionCurrent(session);
+
   // Track if user is in theme sub-selection mode
   const [themeSelectionMode, setThemeSelectionMode] = useState<'none' | 'theme' | 'type'>('none');
-  
+
   // Track if we're preparing for discovery (generating adaptive questions)
   const [isPreparingDiscovery, setIsPreparingDiscovery] = useState(false);
   const [preparingQuip, setPreparingQuip] = useState('Contemplating...');
-  
+
   // AI-generated mirror-back content
   const [aiMirrorBack, setAiMirrorBack] = useState<MirrorBackContent | null>(null);
   const [isLoadingMirrorBack, setIsLoadingMirrorBack] = useState(false);
@@ -903,7 +924,7 @@ export default function OnboardingScreen() {
   const ripple1 = useSharedValue(0);
   const ripple2 = useSharedValue(0);
   const ripple3 = useSharedValue(0);
-  
+
   // Discovery chips — multi-select state per step
   const [selectedChips, setSelectedChips] = useState<Record<string, string[]>>({
     currentSituation: [],
@@ -920,11 +941,16 @@ export default function OnboardingScreen() {
 
   // Transition state for animations
   const isTransitioningRef = useRef(false);
-  
+  // The reminder-time step is the in-context ask: the reader just chose when
+  // they want a nudge, so the OS permission dialog lands on a "yes".
+  const reminderPermissionAskedRef = useRef(false);
+
   // (data state declared earlier — before mirrorBackText useMemo)
-  
+
   // UI animation states
   const [showInput, setShowInput] = useState(false);
+  const [aboutMeVoiceVisible, setAboutMeVoiceVisible] = useState(false);
+  const aboutMeVoiceEnabled = isVoiceCheckInsEnabled();
   const [showListScrollHint, setShowListScrollHint] = useState(true);
   const inputOpacity = useSharedValue(0);
   const scrollViewRef = useRef<ScrollView>(null);
@@ -1019,7 +1045,7 @@ export default function OnboardingScreen() {
     return () => subscription.remove();
   }, [draftAutosave]);
   const [featureSummaryPage, setFeatureSummaryPage] = useState(0);
-  
+
   // Animated styles
   const inputAnimatedStyle = useAnimatedStyle(() => ({
     opacity: inputOpacity.value,
@@ -1066,6 +1092,8 @@ export default function OnboardingScreen() {
   // Generate AI mirror-back when reaching that step
   useEffect(() => {
     if (currentStepId === 'mirrorBack' && !aiMirrorBack && !isLoadingMirrorBack) {
+      const session = captureSyncSession();
+      if (!ownsOnboardingWork(session)) return;
       setIsLoadingMirrorBack(true);
       generateMirrorBackText({
         selectedThemes: data.selectedThemes,
@@ -1079,8 +1107,9 @@ export default function OnboardingScreen() {
         relationshipWithGod: data.relationshipWithGod,
         growthGoals: data.growthGoals,
         obstacles: data.obstacles,
-      })
+      }, session)
         .then(({ content }) => {
+          if (!ownsOnboardingWork(session)) return;
           setAiMirrorBack(content);
           // Stored whenever a working read is shown, regardless of whether the
           // user later ratifies or corrects it.
@@ -1089,10 +1118,12 @@ export default function OnboardingScreen() {
           }
         })
         .catch((err) => {
+          if (err instanceof SyncSessionInvalidatedError || !ownsOnboardingWork(session)) return;
           logger.warn('[MirrorBack] Generation failed, using fallback:', err);
           setAiMirrorBack(mirrorBackContent);
         })
         .finally(() => {
+          if (!ownsOnboardingWork(session)) return;
           setIsLoadingMirrorBack(false);
         });
     }
@@ -1104,7 +1135,7 @@ export default function OnboardingScreen() {
   // returns null on any failure, with no legacy fallback.
   useEffect(() => {
     if (currentStepId !== 'diagnosticRound') return;
-    if (diagnosticQuestions !== null || isLoadingDiagnostic) return;
+    if (diagnosticQuestions !== null) return;
 
     const situation = data.currentSituation.trim();
     if (!situation) {
@@ -1112,10 +1143,12 @@ export default function OnboardingScreen() {
       return;
     }
 
-    // If the user backs out while the fetch is in flight, the resolution must
-    // become a no-op — the stale closure's advanceToNextStep would otherwise
-    // yank them forward from wherever they navigated to.
+    // Each visit owns its request. Leaving cancels this work so a later visit
+    // can start a replacement. The cancelled result must not apply questions,
+    // skip the step, or clear a newer entry's loading flag.
     let cancelled = false;
+    const session = captureSyncSession();
+    if (!ownsOnboardingWork(session)) return;
 
     setIsLoadingDiagnostic(true);
     generateDiagnosticQuestions({
@@ -1126,9 +1159,9 @@ export default function OnboardingScreen() {
       relationshipWithGod: data.relationshipWithGod,
       selectedThemes: data.selectedThemes,
       selectedType: data.selectedType,
-    })
+    }, session)
       .then((result) => {
-        if (cancelled) return;
+        if (cancelled || !ownsOnboardingWork(session)) return;
         if (result && result.questions.length > 0) {
           setDiagnosticIndex(0);
           setDiagnosticDraft('');
@@ -1137,11 +1170,12 @@ export default function OnboardingScreen() {
           advanceToNextStep();
         }
       })
-      .catch(() => {
-        if (cancelled) return;
+      .catch((err) => {
+        if (cancelled || err instanceof SyncSessionInvalidatedError || !ownsOnboardingWork(session)) return;
         advanceToNextStep();
       })
       .finally(() => {
+        if (cancelled || !ownsOnboardingWork(session)) return;
         setIsLoadingDiagnostic(false);
       });
 
@@ -1152,7 +1186,7 @@ export default function OnboardingScreen() {
 
   // Keyboard height tracking for scroll adjustment
   const [keyboardHeight, setKeyboardHeight] = useState(0);
-  
+
   // Filter steps based on what we already know
   const STEPS = useMemo(() => {
     // Dev: bypass all filtering to show every screen
@@ -1163,11 +1197,11 @@ export default function OnboardingScreen() {
       selectedType: data.selectedType,
     });
   }, [existingUser, data.selectedMainOption, data.selectedType, devShowAllSteps]);
-  
+
   // Find current step from filtered STEPS array
   const step = useMemo(() => STEPS.find((s) => s.id === currentStepId), [STEPS, currentStepId]);
   const baseStep = ALL_STEPS.find((s) => s.id === currentStepId);
-  
+
   // Helper to get the index of current step in STEPS array
   const currentStepIndex = useMemo(() => {
     return STEPS.findIndex((s) => s.id === currentStepId);
@@ -1200,7 +1234,7 @@ export default function OnboardingScreen() {
   }, [step, STEPS, currentStepId, themeSelectionMode, baseStep?.type]);
 
   const getStepIds = () => STEPS.map((s) => s.id);
-  
+
   // Get display text for current step (adaptive or default)
   const getStepQuestion = () => {
     if (!step) return '';
@@ -1224,11 +1258,11 @@ export default function OnboardingScreen() {
     const adapted = adaptedSteps[step.id];
     return adapted?.subtext ?? step.subtext;
   };
-  
+
   // Check if current step can proceed
   const canProceed = () => {
     if (!step) return false;
-    
+
     // For themeType step
     if (baseStep?.type === 'themeType') {
       if (themeSelectionMode === 'none') {
@@ -1241,12 +1275,12 @@ export default function OnboardingScreen() {
         return !!data.selectedType;
       }
     }
-    
+
     // For studySubject step
     if (baseStep?.type === 'studySubject') {
       return !!data.selectedStudySubject;
     }
-    
+
     // For multiSelect inputs — at least 1 pill selected
     if (step.type === 'multiSelect') {
       const arr = data[step.id as keyof OnboardingData];
@@ -1263,7 +1297,7 @@ export default function OnboardingScreen() {
         return value.trim().length > 0;
       }
     }
-    
+
     // For choice inputs
     if (step.type === 'choice' || step.type === 'timeChoice') {
       const value = data[step.id as keyof OnboardingData];
@@ -1277,7 +1311,7 @@ export default function OnboardingScreen() {
 
     return true;
   };
-  
+
   // Handle typewriter animation complete
   const handleTypewriterComplete = () => {
     setShowInput(true);
@@ -1468,7 +1502,25 @@ export default function OnboardingScreen() {
   const handleNext = () => {
     // Prevent double-clicks during transitions
     if (isTransitioningRef.current) return;
-    
+
+    if (step?.id === 'reminderTime' && !reminderPermissionAskedRef.current) {
+      reminderPermissionAskedRef.current = true;
+      // Hold the double-tap guard while the OS dialog is up, then advance
+      // through the normal path once it closes.
+      isTransitioningRef.current = true;
+      void requestNotificationPermissions()
+        .then((granted) => {
+          logEvent('notification_permission_answered', { source: 'onboarding_reminder_time', granted });
+          if (granted) void registerPushToken();
+        })
+        .catch((error) => logger.warn('[onboarding] reminder permission ask failed', error))
+        .finally(() => {
+          isTransitioningRef.current = false;
+          handleNext();
+        });
+      return;
+    }
+
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     // Handle theme type selection sub-modes
@@ -1564,13 +1616,17 @@ export default function OnboardingScreen() {
         // Accepted race (~30-45s): if a changed-context resubmit lands while the
         // original is pending/processing, backend dedupe can return its old jobId,
         // leaving this session on the stale sample.
-        submitGenerationJob(nextSampleGenerationRequest).then(({ jobId, devotionalId }) => {
+        const session = captureSyncSession();
+        const originatingDeviceId = getDeviceId();
+        submitGenerationJob({ ...nextSampleGenerationRequest, session }).then(({ jobId, devotionalId }) => {
+          if (!isSyncSessionCurrent(session)) return;
           onboardingJobIdRef.current = jobId;
           onboardingSubmittedDevotionalIdRef.current = devotionalId ?? null;
           onboardingSubmittedRequestRef.current = nextSampleGenerationRequest;
-          saveOnboardingSampleJob({ jobId, devotionalId: devotionalId ?? null, deviceId: getDeviceId() });
+          saveOnboardingSampleJob({ jobId, devotionalId: devotionalId ?? null, deviceId: originatingDeviceId });
           logger.log('[Onboarding] Sample generation triggered, jobId:', jobId);
         }).catch((err) => {
+          if (err instanceof SyncSessionInvalidatedError) return;
           logger.warn('[Onboarding] Background sample generation failed:', err);
         });
       }
@@ -1635,10 +1691,10 @@ export default function OnboardingScreen() {
     const currentIdx = STEPS.findIndex((s) => s.id === currentStepId);
     if (currentIdx > 0) {
       const prevStepId = STEPS[currentIdx - 1].id as StepId;
-      
+
       // Dismiss keyboard first to prevent layout shift
       Keyboard.dismiss();
-      
+
       LayoutAnimation.configureNext({
         duration: Duration.normal,
         create: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
@@ -1766,21 +1822,28 @@ export default function OnboardingScreen() {
       subtext: nextStepDef?.subtext ?? "Take your time.",
     };
 
+    const session = captureSyncSession();
+    if (!ownsOnboardingWork(session)) return;
+
     setIsLoadingAdaptive(true);
     try {
       const result = await generateAdaptiveQuestion(previousAnswers, fallbackQuestion, stepPosition, {
         growthGoals: data.growthGoals,
         obstacles: data.obstacles,
         relationshipWithGod: data.relationshipWithGod,
-      });
+      }, session);
+      if (!ownsOnboardingWork(session)) return;
       setAdaptedSteps((prev) => ({
         ...prev,
         [nextStepId]: { question: result.question, subtext: result.subtext, chips: result.chips },
       }));
-    } catch {
+    } catch (err) {
+      if (err instanceof SyncSessionInvalidatedError || !ownsOnboardingWork(session)) return;
       // Falls back to default step question (adaptedSteps won't have an entry)
     } finally {
-      setIsLoadingAdaptive(false);
+      if (ownsOnboardingWork(session)) {
+        setIsLoadingAdaptive(false);
+      }
     }
   };
 
@@ -1800,7 +1863,7 @@ export default function OnboardingScreen() {
     if (!adapted) return 'fallback';
     return 'ai';
   };
-  
+
   // Check if step is auto-advance (no Continue button needed)
   const isAutoAdvanceStep = (step: { type?: string } | null | undefined) => {
     if (!step) return false;
@@ -1814,38 +1877,40 @@ export default function OnboardingScreen() {
     // Screen 1: Hook question — chaos particles, scatter title, pulsing CTA
     if (step.type === 'hook') {
       return (
-        <TouchableOpacity
-          activeOpacity={1}
-          disabled={!screenReady}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            advanceToNextStep();
-          }}
-          style={{ flex: 1, paddingHorizontal: Spacing['6'] }}
-        >
-          {/* Heading — left-aligned, scatter letter animation */}
-          <View style={{ flex: 1, justifyContent: 'center' }}>
-            <ScatterTitle
-              text="Ever open your Bible and not know where to start?"
-              fontSize={32}
-              baseDelay={400}
-              stagger={60}
-              color={colors.text}
-              onComplete={() => setScreenReady(true)}
-            />
-
-            {/* Tap anywhere — always rendered to reserve space, opacity controlled */}
-            <View style={{ marginTop: Spacing['4'], opacity: screenReady ? 1 : 0 }}>
-              <PulsingText
-                text="Tap anywhere to continue"
-                style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.textMuted }}
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false}>
+          <TouchableOpacity
+            activeOpacity={1}
+            disabled={!screenReady}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              advanceToNextStep();
+            }}
+            style={{ flexGrow: 1, paddingHorizontal: Spacing['6'], paddingVertical: Spacing['4'] }}
+          >
+            {/* Heading — left-aligned, scatter letter animation */}
+            <View style={{ flexGrow: 1, justifyContent: 'center' }}>
+              <ScatterTitle
+                text="Ever open your Bible and not know where to start?"
+                fontSize={32}
+                baseDelay={400}
+                stagger={60}
+                color={colors.text}
+                onComplete={() => setScreenReady(true)}
               />
-            </View>
-          </View>
 
-          {/* Bottom spacer */}
-          <View style={{ paddingBottom: Spacing['8'] }} />
-        </TouchableOpacity>
+              {/* Tap anywhere — always rendered to reserve space, opacity controlled */}
+              <View style={{ marginTop: Spacing['4'], opacity: screenReady ? 1 : 0 }}>
+                <PulsingText
+                  text="Tap anywhere to continue"
+                  style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.textMuted }}
+                />
+              </View>
+            </View>
+
+            {/* Bottom spacer */}
+            <View style={{ paddingBottom: Spacing['8'] }} />
+          </TouchableOpacity>
+        </ScrollView>
       );
     }
 
@@ -1854,159 +1919,167 @@ export default function OnboardingScreen() {
     // Chaos slows during "..." then freezes with haptic on "still."
     if (step.type === 'solution') {
       return (
-        <TouchableOpacity
-          activeOpacity={1}
-          disabled={!screenReady}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            advanceToNextStep();
-          }}
-          style={{ flex: 1, paddingHorizontal: Spacing['6'] }}
-        >
-          <View style={{ flex: 1, justifyContent: 'center' }}>
-            <TypewriterText
-              text="All that noise. The searching. The not knowing. You just want to be... still."
-              style={{ ...Typography.onboardingHeadline, color: colors.text }}
-              charDelay={40}
-              delay={300}
-              lastWordColor={colors.accent}
-              lastWordPause={800}
-              onLastWordStart={() => {
-                // Pause starts — slow particles down as tension builds
-                chaosSpeed.value = withTiming(0.15, { duration: 1000, easing: Easing.out(Easing.cubic) });
-                // Freeze + haptic when "still." actually appears (after the pause + a beat)
-                setTimeout(() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-                  chaosSpeed.value = withTiming(0.02, { duration: 400, easing: Easing.out(Easing.cubic) });
-                }, 1800); // well after lastWordPause so "still." is fully visible when freeze hits
-              }}
-              onComplete={() => {
-                setShowStillWord(true);
-                setScreenReady(true);
-              }}
-            />
-
-            {/* Tap anywhere — always rendered to reserve space, opacity controlled */}
-            <View style={{ marginTop: Spacing['4'], opacity: screenReady ? 1 : 0 }}>
-              <PulsingText
-                text="Tap anywhere to continue"
-                style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.textMuted }}
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false}>
+          <TouchableOpacity
+            activeOpacity={1}
+            disabled={!screenReady}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              advanceToNextStep();
+            }}
+            style={{ flexGrow: 1, paddingHorizontal: Spacing['6'], paddingVertical: Spacing['4'] }}
+          >
+            <View style={{ flexGrow: 1, justifyContent: 'center' }}>
+              <TypewriterText
+                text="All that noise. The searching. The not knowing. You just want to be... still."
+                style={{ ...Typography.onboardingHeadline, color: colors.text }}
+                charDelay={40}
+                delay={300}
+                lastWordColor={colors.accent}
+                lastWordPause={800}
+                onLastWordStart={() => {
+                  // Pause starts — slow particles down as tension builds
+                  chaosSpeed.value = withTiming(0.15, { duration: 1000, easing: Easing.out(Easing.cubic) });
+                  // Freeze + haptic when "still." actually appears (after the pause + a beat)
+                  setTimeout(() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                    chaosSpeed.value = withTiming(0.02, { duration: 400, easing: Easing.out(Easing.cubic) });
+                  }, 1800); // well after lastWordPause so "still." is fully visible when freeze hits
+                }}
+                onComplete={() => {
+                  setShowStillWord(true);
+                  setScreenReady(true);
+                }}
               />
-            </View>
-          </View>
 
-        </TouchableOpacity>
+              {/* Tap anywhere — always rendered to reserve space, opacity controlled */}
+              <View style={{ marginTop: Spacing['4'], opacity: screenReady ? 1 : 0 }}>
+                <PulsingText
+                  text="Tap anywhere to continue"
+                  style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.textMuted }}
+                />
+              </View>
+            </View>
+
+          </TouchableOpacity>
+        </ScrollView>
       );
     }
 
     // Screen 3: Unfold intro — the answer. Particles rise. Gradient fades in.
     if (step.type === 'unfoldIntro') {
       return (
-        <TouchableOpacity
-          activeOpacity={1}
-          disabled={!screenReady}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            advanceToNextStep();
-          }}
-          style={{ flex: 1, paddingHorizontal: Spacing['6'] }}
-        >
-          <View style={{ flex: 1, justifyContent: 'center' }}>
-            <TypewriterText
-              text="That's why we built Unfold. God's word, written into your story — so every time you open it, you're already home."
-              style={{ ...Typography.onboardingHeadline, color: colors.text }}
-              charDelay={35}
-              delay={400}
-              highlightWord="Unfold"
-              highlightColor={colors.accent}
-              onComplete={() => setScreenReady(true)}
-            />
-
-            {/* Tap anywhere — always rendered to reserve space, opacity controlled */}
-            <View style={{ marginTop: Spacing['4'], opacity: screenReady ? 1 : 0 }}>
-              <PulsingText
-                text="Tap anywhere to continue"
-                style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.textMuted }}
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false}>
+          <TouchableOpacity
+            activeOpacity={1}
+            disabled={!screenReady}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              advanceToNextStep();
+            }}
+            style={{ flexGrow: 1, paddingHorizontal: Spacing['6'], paddingVertical: Spacing['4'] }}
+          >
+            <View style={{ flexGrow: 1, justifyContent: 'center' }}>
+              <TypewriterText
+                text="That's why we built Unfold. God's word, written into your story — so every time you open it, you're already home."
+                style={{ ...Typography.onboardingHeadline, color: colors.text }}
+                charDelay={35}
+                delay={400}
+                highlightWord="Unfold"
+                highlightColor={colors.accent}
+                onComplete={() => setScreenReady(true)}
               />
-            </View>
-          </View>
 
-        </TouchableOpacity>
+              {/* Tap anywhere — always rendered to reserve space, opacity controlled */}
+              <View style={{ marginTop: Spacing['4'], opacity: screenReady ? 1 : 0 }}>
+                <PulsingText
+                  text="Tap anywhere to continue"
+                  style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.textMuted }}
+                />
+              </View>
+            </View>
+
+          </TouchableOpacity>
+        </ScrollView>
       );
     }
 
     if (step.type === 'purchaseConfirmation') {
       return (
-        <TouchableOpacity
-          activeOpacity={1}
-          disabled={!screenReady}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            advanceToNextStep();
-          }}
-          style={{ flex: 1, paddingHorizontal: Spacing['6'] }}
-        >
-          <EmberSystem
-            variant="ambient"
-            direction="both"
-            count={16}
-            intensity={0.7}
-            exclusionZones={ONBOARDING_WELCOME_TEXT_EXCLUSION}
-          />
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-            <ExpoImage
-              source={require('../../assets/icon-paywall.png')}
-              style={{ width: 42, height: 42, opacity: 0.92, marginBottom: Spacing['6'] }}
-              contentFit="contain"
-              tintColor={colors.accent}
-              cachePolicy="memory-disk"
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false}>
+          <TouchableOpacity
+            activeOpacity={1}
+            disabled={!screenReady}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              advanceToNextStep();
+            }}
+            style={{ flexGrow: 1, paddingHorizontal: Spacing['6'], paddingVertical: Spacing['4'] }}
+          >
+            <EmberSystem
+              variant="ambient"
+              direction="both"
+              count={16}
+              intensity={0.7}
+              exclusionZones={ONBOARDING_WELCOME_TEXT_EXCLUSION}
             />
-
-            <TypewriterText
-              text="Welcome to Unfold Premium. Now let's shape a devotional journey around where you are right now."
-              style={{ fontSize: 28, lineHeight: 37, letterSpacing: -0.15, color: colors.text, textAlign: 'center', fontFamily: FontFamily.display }}
-              charDelay={34}
-              delay={350}
-              highlightWord="Unfold"
-              highlightColor={colors.accent}
-              onComplete={() => setScreenReady(true)}
-            />
-
-            <View style={{ marginTop: Spacing['4'], opacity: screenReady ? 1 : 0 }}>
-              <PulsingText
-                text="Tap anywhere to continue"
-                style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.textMuted }}
+            <View style={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center' }}>
+              <ExpoImage
+                source={require('../../assets/icon-paywall.png')}
+                style={{ width: 42, height: 42, opacity: 0.92, marginBottom: Spacing['6'] }}
+                contentFit="contain"
+                tintColor={colors.accent}
+                cachePolicy="memory-disk"
               />
+
+              <TypewriterText
+                text="Welcome to Unfold Premium. Now let's shape a devotional journey around where you are right now."
+                style={{ fontSize: 28, lineHeight: 37, letterSpacing: -0.15, color: colors.text, textAlign: 'center', fontFamily: FontFamily.display }}
+                charDelay={34}
+                delay={350}
+                highlightWord="Unfold"
+                highlightColor={colors.accent}
+                onComplete={() => setScreenReady(true)}
+              />
+
+              <View style={{ marginTop: Spacing['4'], opacity: screenReady ? 1 : 0 }}>
+                <PulsingText
+                  text="Tap anywhere to continue"
+                  style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.textMuted }}
+                />
+              </View>
             </View>
-          </View>
-        </TouchableOpacity>
+          </TouchableOpacity>
+        </ScrollView>
       );
     }
 
     // Screen 9: Shock stat — pure problem, sit in it
     if (step.type === 'shockStat') {
       return (
-        <TouchableOpacity
-          activeOpacity={1}
-          disabled={!screenReady}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            advanceToNextStep();
-          }}
-          style={{ flex: 1 }}
-        >
-          <ShockStat
-            colors={colors}
-            onReady={() => setScreenReady(true)}
-          />
-
-          <View style={{ paddingBottom: Spacing['8'], paddingHorizontal: Spacing['6'], opacity: screenReady ? 1 : 0 }}>
-            <PulsingText
-              text="Tap anywhere to continue"
-              style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.textMuted }}
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false}>
+          <TouchableOpacity
+            activeOpacity={1}
+            disabled={!screenReady}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              advanceToNextStep();
+            }}
+            style={{ flexGrow: 1 }}
+          >
+            <ShockStat
+              colors={colors}
+              onReady={() => setScreenReady(true)}
             />
-          </View>
-        </TouchableOpacity>
+
+            <View style={{ paddingBottom: Spacing['8'], paddingHorizontal: Spacing['6'], opacity: screenReady ? 1 : 0 }}>
+              <PulsingText
+                text="Tap anywhere to continue"
+                style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.textMuted }}
+              />
+            </View>
+          </TouchableOpacity>
+        </ScrollView>
       );
     }
 
@@ -2014,87 +2087,98 @@ export default function OnboardingScreen() {
     if (step.type === 'growthGraph') {
       const userName = data.name || existingUser?.name || '';
       return (
-        <TouchableOpacity
-          activeOpacity={1}
-          disabled={!screenReady}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            advanceToNextStep();
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{
+            flexGrow: 1,
+            paddingHorizontal: Spacing['6'],
+            paddingTop: Spacing['4'],
+            paddingBottom: Spacing['8'],
           }}
-          style={{ flex: 1, justifyContent: 'center', paddingHorizontal: Spacing['6'] }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
-          {/* Personal pivot — first time the app uses their name */}
-          <Animated.Text
-            entering={FadeIn.duration(800)}
-            style={{
-              ...Typography.onboardingHeadline,
-              color: colors.text,
-              marginBottom: Spacing['2'],
+          <TouchableOpacity
+            activeOpacity={1}
+            disabled={!screenReady}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              advanceToNextStep();
             }}
           >
-            For you{userName ? `, ${userName}` : ''}, that changes today.
-          </Animated.Text>
-
-          <Animated.Text
-            entering={FadeIn.delay(600).duration(600)}
-            style={{
-              fontFamily: FontFamily.body,
-              fontSize: 16,
-              color: colors.textMuted,
-              lineHeight: 24,
-              marginBottom: Spacing['8'],
-            }}
-          >
-            Unfold writes devotionals around your life — every day more personal than the last.
-          </Animated.Text>
-
-          {/* Growth graph — draws after copy lands */}
-          <Animated.View entering={FadeIn.delay(1400).duration(400)}>
-            <GrowthGraph
-              colors={colors}
-              animationDelay={600}
-              onDrawComplete={() => {
-                setTimeout(() => setScreenReady(true), 1800);
+            {/* Personal pivot — first time the app uses their name */}
+            <Animated.Text
+              entering={FadeIn.duration(800)}
+              style={{
+                ...Typography.onboardingHeadline,
+                color: colors.text,
+                marginBottom: Spacing['2'],
               }}
-            />
-          </Animated.View>
+            >
+              For you{userName ? `, ${userName}` : ''}, that changes today.
+            </Animated.Text>
 
-          {/* Graph narration copy */}
-          <Animated.Text
-            entering={FadeIn.delay(3200).duration(600)}
-            style={{
-              fontFamily: FontFamily.bodyItalic,
-              fontSize: 17,
-              color: colors.text,
-              lineHeight: 26,
-              marginTop: Spacing['6'],
-            }}
-          >
-            Day 1, it's good. Day 7, it knows your story. Day 30, it feels like it was written by someone who's been walking beside you the whole time.
-          </Animated.Text>
+            <Animated.Text
+              entering={FadeIn.delay(600).duration(600)}
+              style={{
+                fontFamily: FontFamily.body,
+                fontSize: 16,
+                color: colors.textMuted,
+                lineHeight: 24,
+                marginBottom: Spacing['8'],
+              }}
+            >
+              Unfold writes devotionals around your life — every day more personal than the last.
+            </Animated.Text>
 
-          {/* Closer */}
-          <Animated.Text
-            entering={FadeIn.delay(3800).duration(600)}
-            style={{
-              fontFamily: FontFamily.body,
-              fontSize: 14,
-              color: colors.textMuted,
-              lineHeight: 22,
-              marginTop: Spacing['3'],
-            }}
-          >
-            This is the first adaptive Bible app in the world. Unfold is the only one that grows with you.
-          </Animated.Text>
+            {/* Growth graph — draws after copy lands */}
+            <Animated.View entering={FadeIn.delay(1400).duration(400)}>
+              <GrowthGraph
+                colors={colors}
+                animationDelay={600}
+                onDrawComplete={() => {
+                  setTimeout(() => setScreenReady(true), 1800);
+                }}
+              />
+            </Animated.View>
 
-          {/* Tap anywhere */}
-          <Animated.View entering={FadeIn.delay(4400).duration(400)} style={{ marginTop: Spacing['8'] }}>
-            <PulsingText
-              text="Tap anywhere to continue"
-              style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.textMuted }}
-            />
-          </Animated.View>
-        </TouchableOpacity>
+            {/* Graph narration copy */}
+            <Animated.Text
+              entering={FadeIn.delay(3200).duration(600)}
+              style={{
+                fontFamily: FontFamily.bodyItalic,
+                fontSize: 17,
+                color: colors.text,
+                lineHeight: 26,
+                marginTop: Spacing['6'],
+              }}
+            >
+              Day 1, it's good. Day 7, it knows your story. Day 30, it feels like it was written by someone who's been walking beside you the whole time.
+            </Animated.Text>
+
+            {/* Closer */}
+            <Animated.Text
+              entering={FadeIn.delay(3800).duration(600)}
+              style={{
+                fontFamily: FontFamily.body,
+                fontSize: 14,
+                color: colors.textMuted,
+                lineHeight: 22,
+                marginTop: Spacing['3'],
+              }}
+            >
+              This is the first adaptive Bible app in the world. Unfold is the only one that grows with you.
+            </Animated.Text>
+
+            {/* Tap anywhere */}
+            <Animated.View entering={FadeIn.delay(4400).duration(400)} style={{ marginTop: Spacing['8'] }}>
+              <PulsingText
+                text="Tap anywhere to continue"
+                style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.textMuted }}
+              />
+            </Animated.View>
+          </TouchableOpacity>
+        </ScrollView>
       );
     }
 
@@ -2102,7 +2186,7 @@ export default function OnboardingScreen() {
       // Handle theme type selection
       if (themeSelectionMode === 'none') {
         const selectedMode = data.selectedMainOption;
-        
+
         return (
           <View style={{ gap: Spacing['0'] }}>
             {/* Theme/Topic option */}
@@ -2248,7 +2332,7 @@ export default function OnboardingScreen() {
                   : `Select up to 3 themes (${data.selectedThemes.length}/3)`}
               </Text>
             </View>
-            
+
             <ScrollView
               ref={scrollViewRef}
               showsVerticalScrollIndicator={false}
@@ -2361,7 +2445,7 @@ export default function OnboardingScreen() {
                   const isSelected = data.selectedType === type.id;
                   const Icon = iconMap[type.id] || <BookOpenIcon size={20} color={colors.textMuted} weight="regular" />;
                   const needsSubject = TYPES_WITH_SUBJECT_SELECTION.includes(type.id);
-                  
+
                   return (
                     <TouchableOpacity activeOpacity={1}
                       key={type.id}
@@ -2651,7 +2735,7 @@ export default function OnboardingScreen() {
                 minHeight: isDiscoveryStep ? 60 : undefined,
               }}
               multiline
-              autoFocus={!isDiscoveryStep}
+              autoFocus={!isDiscoveryStep && step.id !== 'aboutMe'}
               maxLength={INPUT_LIMITS.LONG_TEXT.max}
               scrollEnabled
             />
@@ -2667,10 +2751,20 @@ export default function OnboardingScreen() {
               </Text>
             ) : null;
           })()}
-          <VoiceInputBar
-            value={data[step.id as keyof OnboardingData] as string}
-            onChangeText={(text) => setData((prev) => ({ ...prev, [step.id]: text }))}
-          />
+          {step.id === 'aboutMe' && aboutMeVoiceEnabled ? (
+            <VoiceAnswerButton
+              colors={colors}
+              onPress={() => {
+                Keyboard.dismiss();
+                setAboutMeVoiceVisible(true);
+              }}
+            />
+          ) : (
+            <VoiceInputBar
+              value={data[step.id as keyof OnboardingData] as string}
+              onChangeText={(text) => setData((prev) => ({ ...prev, [step.id]: text }))}
+            />
+          )}
           {/* Encouragement to share more */}
           {isDiscoveryStep && (
             <Text style={{
@@ -3528,15 +3622,23 @@ export default function OnboardingScreen() {
           jobId={onboardingJobIdRef.current}
           devotionalId={onboardingSubmittedDevotionalIdRef.current}
           submitFallback={async () => {
+            const session = captureSyncSession();
+            const originatingDeviceId = getDeviceId();
             const fallbackRequest = buildOnboardingSampleGenerationRequest({
               answers: data,
               existingUser,
             });
-            const { jobId, devotionalId } = await submitGenerationJob(fallbackRequest);
+            const { jobId, devotionalId } = await submitGenerationJob({
+              ...fallbackRequest,
+              session,
+            });
+            if (!isSyncSessionCurrent(session)) {
+              throw new SyncSessionInvalidatedError('onboarding sample submit');
+            }
             onboardingJobIdRef.current = jobId;
             onboardingSubmittedDevotionalIdRef.current = devotionalId ?? null;
             onboardingSubmittedRequestRef.current = fallbackRequest;
-            saveOnboardingSampleJob({ jobId, devotionalId: devotionalId ?? null, deviceId: getDeviceId() });
+            saveOnboardingSampleJob({ jobId, devotionalId: devotionalId ?? null, deviceId: originatingDeviceId });
             return { jobId, devotionalId };
           }}
           onDevotionalReady={(result) => {
@@ -3747,6 +3849,9 @@ export default function OnboardingScreen() {
                 const isSelected = data.faithBackground === opt.value;
                 return (
                   <TouchableOpacity key={opt.value} activeOpacity={1}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: isSelected }}
+                    accessibilityLabel={`${opt.label}, ${opt.description}`}
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       setData((prev) => ({ ...prev, faithBackground: opt.value }));
@@ -3785,6 +3890,9 @@ export default function OnboardingScreen() {
                 const isSelected = data.lifeStage === opt.value;
                 return (
                   <TouchableOpacity key={opt.value} activeOpacity={1}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: isSelected }}
+                    accessibilityLabel={`${opt.label}, ${opt.description}`}
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       setData((prev) => ({ ...prev, lifeStage: opt.value }));
@@ -3841,6 +3949,10 @@ export default function OnboardingScreen() {
                 const isSelected = data.tone === opt.value;
                 return (
                   <TouchableOpacity key={opt.value} activeOpacity={1}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: isSelected }}
+                    accessibilityLabel={`${opt.label}, ${opt.description}`}
+                    accessibilityHint={opt.example}
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       setData((prev) => ({ ...prev, tone: opt.value }));
@@ -3881,6 +3993,9 @@ export default function OnboardingScreen() {
                 const isSelected = data.depth === opt.value;
                 return (
                   <TouchableOpacity key={opt.value} activeOpacity={1}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: isSelected }}
+                    accessibilityLabel={`${opt.label}, ${opt.description}`}
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       setData((prev) => ({ ...prev, depth: opt.value }));
@@ -4083,7 +4198,7 @@ export default function OnboardingScreen() {
             ) : (
               <View style={{ width: 40, height: 40 }} />
             )}
-            
+
             {/* Primary advance affordance — one vocabulary across onboarding: an
                 accent-filled pill that reads as clearly enabled (never grey chrome).
                 Only rendered once a step can proceed; self-navigating and cinematic
@@ -4095,7 +4210,7 @@ export default function OnboardingScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={isLastStep ? 'Create' : 'Continue'}
                 style={{
-                  height: 36,
+                  minHeight: 44,
                   justifyContent: 'center',
                   alignItems: 'center',
                   paddingHorizontal: Spacing['4'],
@@ -4257,6 +4372,21 @@ export default function OnboardingScreen() {
         </View>
       </SafeAreaView>
 
+      {aboutMeVoiceEnabled ? (
+        <OnboardingVoiceAnswerSheet
+          autoStart
+          visible={aboutMeVoiceVisible}
+          existingText={data.aboutMe}
+          previewColors={colors}
+          previewIsDark
+          onClose={() => setAboutMeVoiceVisible(false)}
+          onAccept={(text) => {
+            setData((prev) => ({ ...prev, aboutMe: text }));
+            setAboutMeVoiceVisible(false);
+          }}
+        />
+      ) : null}
+
       {/* Premium upsell sheet for gated onboarding options */}
       <PremiumFeatureSheet
         visible={!!premiumGateFeature}
@@ -4274,7 +4404,7 @@ export default function OnboardingScreen() {
               bottom: 50,
               right: 16,
               width: 36,
-              height: 36,
+              minHeight: 44,
               borderRadius: 18,
               backgroundColor: 'rgba(200, 165, 92, 0.3)',
               alignItems: 'center',
@@ -4373,8 +4503,8 @@ const obStyles = StyleSheet.create({
     fontSize: FontSize.sm,
   },
   selectionOrderBadge: {
-    width: 18,
-    height: 18,
+    minWidth: 18,
+    minHeight: 18,
     borderRadius: 9,
     justifyContent: 'center',
     alignItems: 'center',

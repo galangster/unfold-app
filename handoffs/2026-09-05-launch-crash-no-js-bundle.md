@@ -34,3 +34,39 @@ Not iPad-specific. Every build from **255 to 260** shipped without JavaScript an
 2. `eas build --profile production` from `app/mobile` → build 261 (1.1.4). Before submitting anything, install 261 from TestFlight on an iPhone and, if available, an iPad, and cold-launch it.
 3. In App Store Connect: cancel submission `e7fdda05` (1.1.3), create version 1.1.4, attach build 261, reuse the 1.1.3 metadata with "What's New" updated, submit. Reply to App Review on the 1.1.3 thread is optional; the new submission is the answer.
 4. `node scripts/set-testflight-changelog.mjs 261`.
+
+## Sentry hardening
+
+Branch `feat/sentry-hardening`, 2026-09-05. Build 259 crashed before JavaScript ran and Sentry saw nothing, because the native SDK was only ever started from JavaScript. What is captured now, where, and what stays off — so the privacy decisions can be audited.
+
+### Captured natively — `ios/Unfold/AppDelegate.swift`
+
+Release builds only (`#if !DEBUG`), started before React Native is created.
+
+- Crashes before or without JavaScript: a missing `main.jsbundle`, a native module crash, an uncaught NSException, a signal. Written to disk at crash time, sent on the next launch.
+- App hangs (Cocoa default), watchdog terminations (OOM, `0x8badf00d`), and release-health sessions (crash-free rate per release).
+- App-start and frame measurements in hybrid mode, handed to JavaScript. No native transactions.
+- Same DSN as `EXPO_PUBLIC_SENTRY_DSN` in the production profile of `eas.json`; environment `production`; release `CFBundleShortVersionString`, dist `CFBundleVersion` — the values JavaScript reports.
+- JavaScript attaches to this instance (`autoInitializeNativeSdk: false` whenever `__DEV__` is false on iOS) instead of restarting it. Debug builds have no native start; there JavaScript starts native itself, as before.
+
+### Captured in JavaScript — `src/lib/sentry.ts`
+
+- Handled errors (`captureAppError`), fatal JavaScript errors (global handler → `logBugError`), render errors caught by `ErrorBoundary` (once, `logBugError` → `captureAppError`, with the component stack as `extra.componentStack`, up to 4000 characters), funnel events.
+- Backend 5xx responses as events (`enableCaptureFailedRequests`), for `https://api.unfoldapp.co` only. The event keeps the endpoint path, verb and status code; headers, cookies and the query string are dropped.
+- Breadcrumbs: `app.*` (message kept), `fetch`/`xhr` (endpoint path, verb, status; query and fragment cut), `navigation` (route names), `touch` (component name and source file; no labels, no message), `console` (dropped whole). Every breadcrumb passes `scrubBreadcrumb` before it reaches the scope, and the scope is what is synced to the native SDK — the trail on a native crash report is the scrubbed one.
+- Performance: `tracesSampleRate` 0.1 in production builds, 0 in every other build. App start, route changes (`reactNavigationIntegration`, fed expo-router's container ref from `src/app/_layout.tsx`), http spans to the backend, stalls, native frames. `sentry-trace` and `baggage` headers go to the backend host only (`tracePropagationTargets`). Transactions bypass `beforeSend`; `scrubTransaction` rebuilds them (identity, timing, op, query-less description, allowlisted attributes; no breadcrumbs, no request, no user beyond the hash).
+- `attachStacktrace: true`: message events and stackless errors get frames, rebuilt by `scrubFrame` (no locals, no paths, no source lines).
+- The root component is wrapped by `Sentry.wrap` (touch-event boundary and first-render profiler) only while reporting is on.
+
+### Stays off, on both sides
+
+`sendDefaultPii`; screenshots; view hierarchy; session replay (0 / 0); Sentry logs; user-interaction tracing (it labels spans with accessibility labels); Cocoa's automatic breadcrumbs (`ui.click` accessibility identifiers, screen navigation titles); native failed-request capture (it would duplicate the JavaScript one); any stable user identifier — the user is an 8-hex SHA-256 prefix of the device id, and none at all in a recovery session.
+
+### Pinned by tests
+
+- `src/lib/__tests__/sentry.test.ts`: the options, both scrubbers, `beforeSendTransaction`, backend-only targets, sample rate by build profile, the native-first decision.
+- `src/lib/__tests__/ios-native-sentry-init.test.ts`: the Swift file — start order, `#if !DEBUG`, DSN equal to the eas.json production value, privacy flags.
+
+### Not yet verified
+
+A Release build compiling `import Sentry` in the app target (Pods are not installed in the lane worktree; `swiftc -parse` passes). Confirm with the next EAS production build, or a local Release build, before anything is submitted. A `preview` (Release-configuration) build reports its native crashes under environment `production`, because the Swift file cannot read the EAS profile.

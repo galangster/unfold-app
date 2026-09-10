@@ -9,10 +9,8 @@ import {
   ListRenderItemInfo,
   View,
   Text,
-  Keyboard,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   TouchableOpacity,
   useWindowDimensions,
 } from 'react-native';
@@ -510,16 +508,11 @@ export default function CompanionScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Messages or empty state.
-          Empty state: Pressable wrapper dismisses keyboard on tap.
-          List state: FlatList uses keyboardShouldPersistTaps="always" +
-          keyboardDismissMode="on-drag"; wrapping the list in a Pressable
-          breaks the scroll responder after keyboard dismissal and swallows
-          taps inside messages. */}
+      {/* Each scroll container owns keyboard dismissal and touch handling. */}
       {isEmpty ? (
-        <Pressable onPress={Keyboard.dismiss} style={{ flex: 1 }}>
+        <View style={{ flex: 1, overflow: 'hidden' }}>
           <CompanionEmptyState onSelectStarter={handleSend} todayTheme={todayTheme} />
-        </Pressable>
+        </View>
       ) : (
         <View style={{ flex: 1 }}>
           <FlatList
@@ -617,8 +610,10 @@ export default function CompanionScreen() {
           }}
           style={{
             flexDirection: 'row',
+            flexShrink: 0,
             alignItems: 'center',
             justifyContent: 'center',
+            minHeight: 44,
             paddingVertical: 6,
             paddingHorizontal: Spacing['4'],
             gap: 6,

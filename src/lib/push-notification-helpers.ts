@@ -5,6 +5,32 @@ export const LEGAL_LINKS = {
   privacy: 'https://unfoldapp.co/privacy',
 } as const;
 
+// Parse "HH:mm" (24-hour) with graceful fallback. Mirrors the logic tested
+// in src/lib/__tests__/notifications-scheduling.test.ts. Returns the
+// fallback on any parse error or out-of-range values.
+export function parseHhMm(
+  time: string,
+  fallback: { hour: number; minute: number },
+): { hour: number; minute: number } {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(time.trim());
+  if (!match) return fallback;
+  const hour = parseInt(match[1], 10);
+  const minute = parseInt(match[2], 10);
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return fallback;
+  return { hour, minute };
+}
+
+export const DEFAULT_REMINDER_CLOCK = { hour: 8, minute: 0 } as const;
+
+/** "8:00 AM" or "08:00" → { hour, minute }, defaulting to 8:00 on bad input. */
+export function parseReminderClock(
+  time: string | null | undefined,
+  fallback: { hour: number; minute: number } = DEFAULT_REMINDER_CLOCK,
+): { hour: number; minute: number } {
+  const normalized = time ? normalizePreferredNotificationTime(time) : undefined;
+  return normalized ? parseHhMm(normalized, fallback) : fallback;
+}
+
 export function normalizePreferredNotificationTime(
   preferredNotificationTime?: string,
 ): string | undefined {
@@ -176,6 +202,8 @@ export type ReadingRoute = {
   params: {
     devotionalId: string;
     dayNumber: string;
+    /** Scroll the reader to a section on open. */
+    focus?: 'act';
   };
 };
 
@@ -197,6 +225,7 @@ export type GeneratingNotificationRoute = {
 
 export type NotificationNavigationRoute =
   | RevealNotificationRoute
+  | ReadingRoute
   | TodayNotificationRoute
   | EveningWindDownNotificationRoute
   | GeneratingNotificationRoute;
@@ -249,6 +278,22 @@ export function buildNotificationNavigationRoute(
 
   if (data?.type === 'evening-winddown' || data?.type === 'evening_winddown') {
     return { pathname: '/(tabs)/(today)/evening-wind-down' };
+  }
+
+  // Lapse re-entry: the series is waiting on Today.
+  if (data?.type === 'lapse_reentry') {
+    return { pathname: '/(tabs)/(today)' };
+  }
+
+  // The act reminder opens the day it came from, scrolled to the act.
+  if (data?.type === 'act_reminder') {
+    const devotionalId = readStringField(data, 'devotionalId');
+    const dayNumber = data.dayNumber;
+    if (!devotionalId || dayNumber == null) return null;
+    return {
+      pathname: '/(tabs)/(today)/reading',
+      params: { devotionalId, dayNumber: String(dayNumber), focus: 'act' },
+    };
   }
 
   // The server's "we hit a snag" push: the generating screen polls the job

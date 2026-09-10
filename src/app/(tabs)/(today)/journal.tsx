@@ -773,8 +773,10 @@ Their journal entry:
       clearTimeout(timeoutId);
       if (!response.ok) {
         const errBody = await response.text().catch(() => '');
+        // The body is already logged (__DEV__ only); keeping it out of the
+        // Error message keeps it out of Sentry's `exception.value`.
         logger.error('[Go Deeper] Backend error:', response.status, errBody);
-        throw new Error(`Backend ${response.status}: ${errBody.slice(0, 200)}`);
+        throw new Error(`Backend ${response.status}`);
       }
 
       const data = await response.json();
@@ -836,7 +838,7 @@ Their journal entry:
   const prayerRequests = existingEntry?.prayerRequests ?? [];
 
   return (
-    <TouchableOpacity activeOpacity={1} style={[jStyles.flex1, { backgroundColor: colors.background }]} onPress={Keyboard.dismiss}>
+    <TouchableOpacity accessible={false} activeOpacity={1} style={[jStyles.flex1, { backgroundColor: colors.background }]} onPress={Keyboard.dismiss}>
       <SafeAreaView style={jStyles.flex1} edges={['top']}>
           {/* Header */}
           <View style={jStyles.headerRow}>
@@ -1589,8 +1591,8 @@ const jStyles = StyleSheet.create({
     borderWidth: 1,
   },
   soapLetterBadge: {
-    width: 28,
-    height: 28,
+    minWidth: 28,
+    minHeight: 28,
     borderRadius: Radius.sm,
     alignItems: 'center',
     justifyContent: 'center',

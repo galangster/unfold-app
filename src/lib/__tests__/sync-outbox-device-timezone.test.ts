@@ -52,8 +52,19 @@ describe('sync outbox drain', () => {
     await drainSyncOutbox();
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    const body = JSON.parse((fetchMock.mock.calls[0] as unknown as [string, { body: string }])[1].body);
+    const raw = (fetchMock.mock.calls[0] as unknown as [string, { body: string }])[1].body;
+    const body = JSON.parse(raw);
     expect(body.changes).toHaveLength(1);
     expect(body.deviceTimezone).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone);
+    expect(Buffer.byteLength(raw, 'utf8')).toBe(Buffer.byteLength(JSON.stringify({
+      changes: [{
+        table: 'devotional_days',
+        id: 'day-1',
+        clientUpdatedAt: '2026-09-03T11:00:00.000Z',
+        data: { isRead: true },
+        deleted: false,
+      }],
+      deviceTimezone: body.deviceTimezone,
+    }), 'utf8'));
   });
 });

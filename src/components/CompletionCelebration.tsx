@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { View, Text, TouchableOpacity, Dimensions, StyleSheet, Modal } from 'react-native';
+import { View, Text, TouchableOpacity, Dimensions, Modal, ScrollView } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -193,24 +193,21 @@ export function CompletionCelebration({
 
   return (
     <Modal visible={visible} transparent animationType="none" statusBarTranslucent>
+      <Animated.View style={[{ flex: 1 }, overlayStyle]}>
+        <EmberSystem variant="celebration" motes active />
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, paddingVertical: Spacing['8'] }}>
       <TouchableOpacity
         activeOpacity={1}
-        style={StyleSheet.absoluteFill}
+        style={{ flexGrow: 1 }}
         onPress={onDismiss}
         accessibilityRole="button"
         accessibilityLabel="Continue"
         accessibilityHint="Tap anywhere to continue"
       >
-        <Animated.View style={[StyleSheet.absoluteFill, overlayStyle]}>
-
-          {/* Canonical celebration ember field + luminous motes. EmberSystem
-              owns reduce motion internally (designed radial still, not null). */}
-          <EmberSystem variant="celebration" motes active />
-
           {/* Content — left aligned */}
           <View
             style={{
-              flex: 1,
+              flexGrow: 1,
               justifyContent: 'center',
               alignItems: 'flex-start',
               paddingHorizontal: Spacing['8'],
@@ -270,8 +267,8 @@ export function CompletionCelebration({
           <Animated.View
             style={[
               {
-                position: 'absolute',
-                bottom: 80,
+                paddingTop: Spacing['8'],
+                paddingHorizontal: Spacing['6'],
                 alignSelf: 'center',
               },
               hintStyle,
@@ -287,8 +284,9 @@ export function CompletionCelebration({
               Tap anywhere to continue
             </Text>
           </Animated.View>
-        </Animated.View>
       </TouchableOpacity>
+        </ScrollView>
+      </Animated.View>
     </Modal>
   );
 }

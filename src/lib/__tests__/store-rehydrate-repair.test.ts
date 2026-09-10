@@ -108,6 +108,26 @@ describe('repairRehydratedState', () => {
     }
   });
 
+  it('accepts a valid signed-out user state', () => {
+    const state = makeValidState();
+    state.user = null;
+
+    const { repairedKeys } = repairRehydratedState(state, initialState);
+
+    expect(repairedKeys).toEqual([]);
+    expect(state.user).toBeNull();
+  });
+
+  it('repairs a non-null primitive user state', () => {
+    const state = makeValidState();
+    state.user = 'invalid';
+
+    const { repairedKeys } = repairRehydratedState(state, initialState);
+
+    expect(repairedKeys).toEqual(['user']);
+    expect(state.user).toBeNull();
+  });
+
   it('invalid generationSession resets only generationSession', () => {
     const state = makeValidState();
     state.generationSession = null;

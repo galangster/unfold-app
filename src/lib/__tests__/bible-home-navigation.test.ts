@@ -13,6 +13,10 @@ jest.mock('expo-haptics', () => ({
   impactAsync: jest.fn(),
   ImpactFeedbackStyle: { Light: 'light' },
 }));
+jest.mock('@react-native-segmented-control/segmented-control', () => ({
+  __esModule: true,
+  default: () => null,
+}));
 jest.mock('react-native-mmkv', () => ({
   MMKV: jest.fn().mockImplementation(() => ({
     getBoolean: jest.fn(() => false),
@@ -68,15 +72,24 @@ describe('resolveBibleHomeNavigation', () => {
     expect(
       resolveBibleHomeNavigation({
         hasSeenHome: false,
-        lastPosition: { bookId: 43, chapter: 3 },
+        lastPosition: { bookId: 43, chapter: 3, verse: 16 },
       }),
-    ).toEqual({ action: 'navigate', bookId: 43, chapter: 3 });
+    ).toEqual({ action: 'navigate', bookId: 43, chapter: 3, verse: 16 });
   });
 
   it('navigates to Genesis 1 on the very first ever open with no saved position', () => {
     expect(
       resolveBibleHomeNavigation({ hasSeenHome: false, lastPosition: null }),
-    ).toEqual({ action: 'navigate', bookId: 1, chapter: 1 });
+    ).toEqual({ action: 'navigate', bookId: 1, chapter: 1, verse: 1 });
+  });
+
+  it('starts at verse one for an old saved position without a verse', () => {
+    expect(
+      resolveBibleHomeNavigation({
+        hasSeenHome: false,
+        lastPosition: { bookId: 24, chapter: 16 },
+      }),
+    ).toEqual({ action: 'navigate', bookId: 24, chapter: 16, verse: 1 });
   });
 
   it('shows the home for a returning user even with a saved position', () => {

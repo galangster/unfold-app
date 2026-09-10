@@ -20,6 +20,7 @@ import {
   getServerOwnedSeriesTotalDays,
 } from './devotional-series-boundary';
 import { newId } from './sync-ids';
+import { allocateBibleReadingId } from './bible-reading-ids';
 import { canonicalJournalEntryId } from './journal-entry-merge';
 import type { NudgeType, NudgeImpression } from './nudges';
 import { NUDGE_INITIAL_STATE } from './nudges';
@@ -145,6 +146,7 @@ export interface BibleReadingPosition {
   bookId: number;
   bookName: string;
   chapter: number;
+  verse?: number;
   translation: string;
   lastReadAt: string;
   id?: string; // Added for sync — composite from bookId:translation
@@ -171,6 +173,16 @@ export interface UserProfile {
   devotionalLength: 3 | 7 | 14 | 30;
   reminderTime: string;
   dailyReminderEnabled: boolean;
+  /** ISO time the backend last confirmed it holds this device's push token. */
+  pushRegisteredAt?: string;
+  /**
+   * Whether a local daily reminder is currently in the OS queue. Mirrored to
+   * the backend so it never double-notifies the morning slot and only takes
+   * it over when the client has handed it off.
+   */
+  localDailyReminderScheduled?: boolean;
+  /** A reminder-time suggestion the reader turned down ("h:mm AM"). */
+  reminderTimeSuggestionDismissed?: string;
   hasCompletedOnboarding: boolean;
   hasCompletedStyleOnboarding: boolean;
   isPremium: boolean;
@@ -233,6 +245,12 @@ export interface DevotionalDay {
   closingPrayer?: string;
   /** One concrete same-day act of obedience (named time window, observable). */
   act?: string;
+  /** When the act asks to be done; generation may set it, the client infers otherwise. */
+  actSlot?: import('./act-reminder').ActSlot;
+  /** One generated line for the afternoon that names something from the reader's life. */
+  companionNudge?: string;
+  /** How the reader answered the act reminder. Local-only for now. */
+  actOutcome?: 'done' | 'skipped';
   /** 6-12 word recall line for the afternoon; also used by the midday check-in notification. */
   carryLine?: string;
   // Phase 2: Midday check-in question + chips (generated with devotional)
@@ -597,6 +615,7 @@ interface UnfoldState {
   hasEverCreatedDevotional: boolean;
   isReturningUser: () => boolean;
   markDayAsRead: (devotionalId: string, dayNumber: number) => void;
+  setActOutcome: (devotionalId: string, dayNumber: number, outcome: 'done' | 'skipped') => void;
   markDayAsRevealed: (devotionalId: string, dayNumber: number) => void;
   advanceDay: (devotionalId: string) => void;
 
@@ -925,6 +944,32 @@ const unfoldPersistStorage = createDebouncedJSONStorage<PersistedUnfoldState>(
   instrumentPersistRead(mmkvStorage),
 );
 
+/**
+ * Patches one day of one devotional, stamping `updatedAt` on both so sync
+ * last-write-wins sees the change.
+ */
+function updateDay(
+  state: { devotionals: Devotional[] },
+  devotionalId: string,
+  dayNumber: number,
+  patch: (now: string) => Partial<DevotionalDay>,
+): { devotionals: Devotional[] } {
+  const now = new Date().toISOString();
+  return {
+    devotionals: state.devotionals.map((d) =>
+      d.id === devotionalId
+        ? {
+            ...d,
+            updatedAt: now,
+            days: d.days.map((day) =>
+              day.dayNumber === dayNumber ? { ...day, ...patch(now), updatedAt: now } : day
+            ),
+          }
+        : d
+    ),
+  };
+}
+
 export const useUnfoldStore = create<UnfoldState>()(
   persist(
     (set, get) => ({
@@ -1069,44 +1114,15 @@ export const useUnfoldStore = create<UnfoldState>()(
       isReturningUser: () => get().hasEverCreatedDevotional || get().devotionals.length > 0,
 
       markDayAsRead: (devotionalId, dayNumber) =>
-        set((state) => {
-          const now = new Date().toISOString();
-          return {
-            devotionals: state.devotionals.map((d) =>
-              d.id === devotionalId
-                ? {
-                    ...d,
-                    updatedAt: now,
-                    days: d.days.map((day) =>
-                      day.dayNumber === dayNumber
-                        ? { ...day, isRead: true, readAt: now, isRevealed: true, updatedAt: now }
-                        : day
-                    ),
-                  }
-                : d
-            ),
-          };
-        }),
+        set((state) =>
+          updateDay(state, devotionalId, dayNumber, (now) => ({ isRead: true, readAt: now, isRevealed: true })),
+        ),
+
+      setActOutcome: (devotionalId, dayNumber, outcome) =>
+        set((state) => updateDay(state, devotionalId, dayNumber, () => ({ actOutcome: outcome }))),
 
       markDayAsRevealed: (devotionalId, dayNumber) =>
-        set((state) => {
-          const now = new Date().toISOString();
-          return {
-            devotionals: state.devotionals.map((d) =>
-              d.id === devotionalId
-                ? {
-                    ...d,
-                    updatedAt: now,
-                    days: d.days.map((day) =>
-                      day.dayNumber === dayNumber
-                        ? { ...day, isRevealed: true, updatedAt: now }
-                        : day
-                    ),
-                  }
-                : d
-            ),
-          };
-        }),
+        set((state) => updateDay(state, devotionalId, dayNumber, () => ({ isRevealed: true }))),
 
       advanceDay: (devotionalId) =>
         set((state) => ({
@@ -1828,7 +1844,7 @@ export const useUnfoldStore = create<UnfoldState>()(
           const now = new Date().toISOString();
           const newEntry: BibleReadingPosition = {
             ...position,
-            id: position.id ?? `brp_${position.bookId}_${position.chapter}_${position.translation}`,
+            id: allocateBibleReadingId(position, state.bibleReadingHistory),
             lastReadAt: now,
             updatedAt: now,
           };
@@ -2087,7 +2103,7 @@ export const useUnfoldStore = create<UnfoldState>()(
     {
       name: 'unfold-storage',
       storage: unfoldPersistStorage,
-      version: 42, // v42: one journal entry per day, under a deterministic id
+      version: 43, // v43: globally unique bible reading position ids
       // WR-23: drop session-scoped flags from the persisted blob.
       partialize: (state): PersistedUnfoldState => {
         const { nudgeShownThisSession, streakJustReset, ...persisted } = state;
@@ -2193,6 +2209,9 @@ AppState.addEventListener('change', (status) => {
 /** Test/maintenance hook: force any pending coalesced persist write to disk. */
 export const flushUnfoldStorePersist = () => unfoldPersistStorage.flushPendingWrites();
 
+/** Await the concrete storage write before presenting a durable-save confirmation. */
+export const flushUnfoldStorePersistAsync = () => unfoldPersistStorage.flushPendingWritesAsync();
+
 // Hydration tracking — components can check if persisted state has been loaded
 export const useHasHydrated = () => {
   const [hasHydrated, setHasHydrated] = useState(useUnfoldStore.persist.hasHydrated());
@@ -2204,4 +2223,3 @@ export const useHasHydrated = () => {
 
   return hasHydrated;
 };
-

@@ -1,12 +1,25 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
-import { useUnfoldStore, type Devotional } from './store';
+import { useUnfoldStore, type Devotional, type UserProfile } from './store';
 import { getEffectivePremiumAccessPolicy } from './premium-state';
 import { logger } from '@/lib/logger';
-import { getMessageForToday, MIDDAY_MESSAGES, EVENING_MESSAGES } from '@/constants/check-in-messages';
-import { getTodayCarryLine } from '@/lib/home-devotional-state';
-import { buildDevotionalReadyNotificationData } from '@/lib/push-notification-helpers';
-import { getDailyReminderContent } from '@/lib/daily-reminder-content';
+import {
+  getEveningWindDownBody,
+  getMiddayCheckInBody,
+  type DayContext,
+} from '@/constants/check-in-messages';
+import {
+  getCurrentDevotional,
+  getDaysReadToday,
+  getHomeDevotionalDayData,
+  getTodayCarryLine,
+} from '@/lib/home-devotional-state';
+import { buildDevotionalReadyNotificationData, parseHhMm } from '@/lib/push-notification-helpers';
+import { getDailyReminderContent, type DailyReminderTrigger } from '@/lib/daily-reminder-content';
+import { deferPastQuietHours } from '@/lib/quiet-hours';
+import { logEvent } from '@/lib/analytics';
+import type { ActReminderPlan } from '@/lib/act-reminder';
+import { captureSyncSession, isSyncSessionCurrent } from '@/lib/sync-session-fence';
 
 // Notification identifiers for targeted cancel/reschedule.
 //
@@ -24,6 +37,102 @@ export const NOTIFICATION_IDS = {
   MIDDAY_CHECKIN: 'unfold-midday-checkin',
   EVENING_WINDDOWN: 'unfold-evening-winddown',
 } as const;
+
+const DAILY_REMINDER_ID_SEPARATOR = ':';
+
+// Last identifier this process successfully committed for the current owner.
+// Cross-launch leftovers also use the legacy fixed id or a session-scoped id.
+let lastDailyReminderIdentifier: string | null = null;
+
+// Distinguishes newer daily work from older work in the same reset session.
+// Session epoch alone cannot: two in-flight 8:00 / 9:00 schedules share a session.
+let dailyOperationEpoch = 0;
+
+export function dailyReminderIdentifierForSession(session: number): string {
+  return `${NOTIFICATION_IDS.DAILY_REMINDER}${DAILY_REMINDER_ID_SEPARATOR}${session}`;
+}
+
+function dailyReminderIdentifierForOperation(session: number, operation: number): string {
+  return `${dailyReminderIdentifierForSession(session)}${DAILY_REMINDER_ID_SEPARATOR}${operation}`;
+}
+
+function isDailyReminderFamilyIdentifier(identifier: string): boolean {
+  return (
+    identifier === NOTIFICATION_IDS.DAILY_REMINDER ||
+    identifier.startsWith(`${NOTIFICATION_IDS.DAILY_REMINDER}${DAILY_REMINDER_ID_SEPARATOR}`)
+  );
+}
+
+export function beginDailyReminderOperation(): number {
+  dailyOperationEpoch += 1;
+  return dailyOperationEpoch;
+}
+
+export function isDailyReminderOriginCurrent(session: number, operation: number): boolean {
+  return isSyncSessionCurrent(session) && operation === dailyOperationEpoch;
+}
+
+function claimDailyReminderOperation(
+  originatingSession: number,
+  originatingOperation?: number,
+): number | null {
+  if (originatingOperation !== undefined) {
+    return isDailyReminderOriginCurrent(originatingSession, originatingOperation)
+      ? originatingOperation
+      : null;
+  }
+  if (!isSyncSessionCurrent(originatingSession)) {
+    return null;
+  }
+  return beginDailyReminderOperation();
+}
+
+async function cancelOwnedDailyReminderIdentifiers(
+  session: number,
+  operation: number,
+): Promise<void> {
+  const extras = new Set<string>();
+  extras.add(dailyReminderIdentifierForSession(session));
+  extras.add(dailyReminderIdentifierForOperation(session, operation));
+  const ownedAtStart = lastDailyReminderIdentifier;
+  if (ownedAtStart) {
+    extras.add(ownedAtStart);
+  }
+  try {
+    const pending = await Notifications.getAllScheduledNotificationsAsync();
+    if (!isDailyReminderOriginCurrent(session, operation)) {
+      return;
+    }
+    for (const request of pending) {
+      if (isDailyReminderFamilyIdentifier(request.identifier)) {
+        extras.add(request.identifier);
+      }
+    }
+  } catch {
+    if (!isDailyReminderOriginCurrent(session, operation)) {
+      return;
+    }
+    // Listing is best-effort. Literal + session-scoped cancels still run.
+  }
+  if (!isDailyReminderOriginCurrent(session, operation)) {
+    return;
+  }
+  extras.delete(NOTIFICATION_IDS.DAILY_REMINDER);
+  await Promise.all(
+    [...extras].map((identifier) => Notifications.cancelScheduledNotificationAsync(identifier)),
+  );
+  if (!isDailyReminderOriginCurrent(session, operation)) {
+    return;
+  }
+  if (lastDailyReminderIdentifier === ownedAtStart) {
+    lastDailyReminderIdentifier = null;
+  }
+}
+
+export function resetDailyReminderOwnershipForTesting(): void {
+  lastDailyReminderIdentifier = null;
+  dailyOperationEpoch = 0;
+}
 
 // Day keys used across the store + UI + notifications layers.
 // Order matters: WEEKLY ops are emitted in this order regardless of how the
@@ -52,20 +161,6 @@ type ScheduleOp =
   | { kind: 'daily'; id: string; hour: number; minute: number }
   | { kind: 'weekly'; id: string; weekday: number; hour: number; minute: number };
 
-// Parse "HH:mm" (24-hour) with graceful fallback. Mirrors the logic tested
-// in src/lib/__tests__/notifications-scheduling.test.ts. Returns the
-// fallback on any parse error or out-of-range values.
-function parseHhMm(
-  time: string,
-  fallback: { hour: number; minute: number },
-): { hour: number; minute: number } {
-  const match = /^(\d{1,2}):(\d{2})$/.exec(time.trim());
-  if (!match) return fallback;
-  const hour = parseInt(match[1], 10);
-  const minute = parseInt(match[2], 10);
-  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return fallback;
-  return { hour, minute };
-}
 
 /**
  * Pure decision function for check-in scheduling. Given an identifier base,
@@ -118,6 +213,180 @@ function getAllCheckInIdentifiers(idBase: string): string[] {
 const MIDDAY_FALLBACK = { hour: 12, minute: 30 };
 const EVENING_FALLBACK = { hour: 20, minute: 30 };
 
+// Android channels. Readers can mute check-ins without losing the reading
+// reminder. The server sends `channelId: 'reading'` on its pushes too.
+export const NOTIFICATION_CHANNELS = {
+  READING: 'reading',
+  CHECK_INS: 'check-ins',
+} as const;
+
+// Categories give the banner action buttons. The identifier matches the
+// server's `categoryId` on day-ready pushes so both paths get the buttons.
+export const NOTIFICATION_CATEGORIES = {
+  DEVOTIONAL_READY: 'devotional_ready',
+  ACT_REMINDER: 'act_reminder',
+} as const;
+
+export const NOTIFICATION_ACTIONS = {
+  READ_NOW: 'read_now',
+  REMIND_LATER: 'remind_later',
+  ACT_DONE: 'act_done',
+  ACT_LATER: 'act_later',
+} as const;
+
+/** One act reminder is ever pending; the day it belongs to rides in `data`. */
+export const ACT_REMINDER_NOTIFICATION_ID = 'unfold-act-reminder';
+export const ACT_LATER_DELAY_SECONDS = 60 * 60;
+export const ACT_LATER_NOTIFICATION_ID = 'unfold-act-later';
+
+export const REMIND_LATER_NOTIFICATION_ID = 'unfold-remind-later';
+export const REMIND_LATER_DELAY_SECONDS = 3 * 60 * 60;
+
+/** Trigger fields that route an Android notification to a channel. */
+function channel(channelId: string): { channelId?: string } {
+  return Platform.OS === 'android' ? { channelId } : {};
+}
+
+/**
+ * Registers the Android channels and the action-button categories. Safe to
+ * call on every launch; both calls are idempotent upserts in the OS.
+ */
+export async function configureNotificationPresentation(): Promise<void> {
+  if (Platform.OS === 'web') return;
+  try {
+    const work: Promise<unknown>[] = [
+      Notifications.setNotificationCategoryAsync(NOTIFICATION_CATEGORIES.DEVOTIONAL_READY, [
+        { identifier: NOTIFICATION_ACTIONS.READ_NOW, buttonTitle: 'Read now' },
+        { identifier: NOTIFICATION_ACTIONS.REMIND_LATER, buttonTitle: 'Remind me in 3 hours' },
+      ]),
+      Notifications.setNotificationCategoryAsync(NOTIFICATION_CATEGORIES.ACT_REMINDER, [
+        { identifier: NOTIFICATION_ACTIONS.ACT_DONE, buttonTitle: 'I did it' },
+        { identifier: NOTIFICATION_ACTIONS.ACT_LATER, buttonTitle: 'Remind me in an hour' },
+      ]),
+    ];
+    if (Platform.OS === 'android') {
+      work.push(
+        Notifications.setNotificationChannelAsync(NOTIFICATION_CHANNELS.READING, {
+          name: 'Daily reading',
+          importance: Notifications.AndroidImportance.HIGH,
+          vibrationPattern: [0, 250, 250, 250],
+        }),
+        Notifications.setNotificationChannelAsync(NOTIFICATION_CHANNELS.CHECK_INS, {
+          name: 'Check-ins',
+          importance: Notifications.AndroidImportance.DEFAULT,
+        }),
+      );
+    }
+    await Promise.all(work);
+  } catch (error) {
+    logger.warn('[Notifications] Failed to configure channels/categories:', error);
+  }
+}
+
+/**
+ * Re-queues a tapped notification's content as a one-shot a while out. The
+ * "Remind me later" actions. One pending per identifier.
+ */
+export async function scheduleRemindLater(
+  content: Pick<Notifications.NotificationContent, 'title' | 'body' | 'data' | 'categoryIdentifier'>,
+  {
+    seconds = REMIND_LATER_DELAY_SECONDS,
+    identifier = REMIND_LATER_NOTIFICATION_ID,
+  }: { seconds?: number; identifier?: string } = {},
+): Promise<boolean> {
+  if (Platform.OS === 'web') return false;
+  try {
+    // A snooze that would land in quiet hours waits for the morning.
+    const fireAt = deferPastQuietHours(new Date(Date.now() + seconds * 1000));
+    const delaySeconds = Math.max(60, Math.round((fireAt.getTime() - Date.now()) / 1000));
+    await Notifications.cancelScheduledNotificationAsync(identifier);
+    await Notifications.scheduleNotificationAsync({
+      identifier,
+      content: {
+        title: content.title ?? 'Your reading is waiting',
+        body: content.body ?? '',
+        sound: true,
+        ...(content.data ? { data: content.data } : {}),
+        ...(content.categoryIdentifier ? { categoryIdentifier: content.categoryIdentifier } : {}),
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: delaySeconds,
+        ...channel(NOTIFICATION_CHANNELS.READING),
+      },
+    });
+    logEvent('notification_scheduled', { type: 'remind_later', owner: 'local', seconds: delaySeconds });
+    return true;
+  } catch (error) {
+    logger.error('[Notifications] Failed to schedule remind-later:', error);
+    return false;
+  }
+}
+
+/**
+ * Schedules the one-shot act reminder from a plan. The owner hook cancels
+ * before every write, so this only schedules.
+ */
+export async function scheduleActReminder(plan: ActReminderPlan): Promise<string | null> {
+  if (Platform.OS === 'web') return null;
+  try {
+    const id = await Notifications.scheduleNotificationAsync({
+      identifier: ACT_REMINDER_NOTIFICATION_ID,
+      content: {
+        title: plan.title,
+        body: plan.body,
+        sound: true,
+        data: plan.data,
+        categoryIdentifier: NOTIFICATION_CATEGORIES.ACT_REMINDER,
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        date: plan.fireAt,
+        ...channel(NOTIFICATION_CHANNELS.READING),
+      },
+    });
+    logEvent('notification_scheduled', { type: 'act_reminder', owner: 'local', slot: plan.slot });
+    logger.log(`[Notifications] Act reminder scheduled (${plan.slot}) for ${plan.fireAt.toISOString()} (id=${id})`);
+    return id;
+  } catch (error) {
+    logger.error('[Notifications] Failed to schedule act reminder:', error);
+    return null;
+  }
+}
+
+/** Cancels the pending act reminder. Only one is ever scheduled. */
+export async function cancelActReminder(): Promise<void> {
+  if (Platform.OS === 'web') return;
+  await Notifications.cancelScheduledNotificationAsync(ACT_REMINDER_NOTIFICATION_ID);
+}
+
+/**
+ * The day whose content should follow the reader into this afternoon and
+ * evening: the day they finished today, else the day Home is showing.
+ */
+function getTodayDayContext(devotional: Devotional | null | undefined, now = new Date()): DayContext | null {
+  const day = getDaysReadToday(devotional, now)[0] ?? getHomeDevotionalDayData(devotional, now);
+  if (!day) return null;
+  return {
+    title: day.title,
+    scriptureReference: day.scriptureReference,
+    quotableLine: day.quotableLine,
+    checkInQuestion: day.checkInQuestion,
+    act: day.act,
+    eveningScriptureRef: day.eveningScriptureRef,
+    companionNudge: day.companionNudge,
+  };
+}
+
+/**
+ * Today's content only rides on today's trigger; a line baked onto another
+ * weekday would be stale by the time it fired. (expo WEEKLY weekday:
+ * 1=Sunday … 7=Saturday.)
+ */
+function firesToday(op: ScheduleOp, now = new Date()): boolean {
+  return op.kind === 'daily' || op.weekday === now.getDay() + 1;
+}
+
 // Configure how notifications appear when the app is in the foreground
 // This is critical for showing notifications when the user is in the app
 Notifications.setNotificationHandler({
@@ -160,10 +429,29 @@ export async function areNotificationsEnabled(): Promise<boolean> {
   return status === 'granted';
 }
 
-// Cancel a specific scheduled notification by its identifier
-export async function cancelNotificationById(identifier: string): Promise<void> {
+// Cancel a specific scheduled notification by its identifier.
+// Callers that await and then cancel must pass the originating reset session.
+// Daily wrappers that already own an operation must pass it so a stale call
+// cannot expand into a newer same-session request or begin a fresh operation.
+// Public daily cancel claims ownership before the first native await so a
+// delayed literal cancel cannot later steal ownership from a newer request.
+export async function cancelNotificationById(
+  identifier: string,
+  originatingSession: number = captureSyncSession(),
+  originatingOperation?: number,
+): Promise<void> {
   if (Platform.OS === 'web') return;
+  const dailyOperation =
+    identifier === NOTIFICATION_IDS.DAILY_REMINDER
+      ? claimDailyReminderOperation(originatingSession, originatingOperation)
+      : null;
   await Notifications.cancelScheduledNotificationAsync(identifier);
+  if (
+    dailyOperation !== null &&
+    isDailyReminderOriginCurrent(originatingSession, dailyOperation)
+  ) {
+    await cancelOwnedDailyReminderIdentifiers(originatingSession, dailyOperation);
+  }
   logger.log(`[Notifications] Cancelled notification: ${identifier}`);
 }
 
@@ -204,17 +492,39 @@ function getCurrentDevotionalNotificationData(): ReturnType<typeof buildDevotion
   return buildDevotionalReadyNotificationData(currentDevotional, currentDevotional.currentDay);
 }
 
-// Schedule a daily reminder notification
-export async function scheduleDailyReminder(timeString: string): Promise<string | null> {
+// Schedule a daily reminder notification.
+// Wrappers that already awaited must pass the originating reset session and
+// daily operation so a stale call cannot capture a fresh session/operation
+// and write after reset or a newer same-session request.
+export async function scheduleDailyReminder(
+  timeString: string,
+  originatingSession: number = captureSyncSession(),
+  originatingOperation?: number,
+  triggerOverride: DailyReminderTrigger = { kind: 'daily' },
+): Promise<string | null> {
   if (Platform.OS === 'web') {
     logger.log('[Notifications] Not available on web');
     return null;
   }
 
-  // Cancel only the daily reminder (not midday/evening)
-  await cancelNotificationById(NOTIFICATION_IDS.DAILY_REMINDER);
+  const operation = claimDailyReminderOperation(originatingSession, originatingOperation);
+  if (operation === null) {
+    logger.log('[Notifications] Daily reminder skipped — originating owner is not current');
+    return null;
+  }
+
+  // Cancel only the daily reminder family (not midday/evening)
+  await cancelNotificationById(NOTIFICATION_IDS.DAILY_REMINDER, originatingSession, operation);
+  if (!isDailyReminderOriginCurrent(originatingSession, operation)) {
+    logger.log('[Notifications] Daily reminder abandoned after cancel — originating owner is not current');
+    return null;
+  }
 
   const hasPermission = await requestNotificationPermissions();
+  if (!isDailyReminderOriginCurrent(originatingSession, operation)) {
+    logger.log('[Notifications] Daily reminder abandoned after permission — originating owner is not current');
+    return null;
+  }
   if (!hasPermission) {
     logger.log('[Notifications] Permission not granted');
     return null;
@@ -223,30 +533,95 @@ export async function scheduleDailyReminder(timeString: string): Promise<string 
   const { hours, minutes } = parseTimeString(timeString);
   const { title, body } = getNotificationContent();
   const data = getCurrentDevotionalNotificationData();
+  const identifier = dailyReminderIdentifierForOperation(originatingSession, operation);
 
   try {
-    const identifier = await Notifications.scheduleNotificationAsync({
-      identifier: NOTIFICATION_IDS.DAILY_REMINDER,
+    const scheduled = await Notifications.scheduleNotificationAsync({
+      identifier,
       content: {
         title,
         body,
         sound: true,
-        ...(data ? { data } : {}),
+        ...(data ? { data, categoryIdentifier: NOTIFICATION_CATEGORIES.DEVOTIONAL_READY } : {}),
       },
-      trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.DAILY,
-        hour: hours,
-        minute: minutes,
-      },
+      trigger:
+        triggerOverride.kind === 'date'
+          ? {
+              type: Notifications.SchedulableTriggerInputTypes.DATE,
+              date: triggerOverride.date,
+              ...channel(NOTIFICATION_CHANNELS.READING),
+            }
+          : {
+              type: Notifications.SchedulableTriggerInputTypes.DAILY,
+              hour: hours,
+              minute: minutes,
+              ...channel(NOTIFICATION_CHANNELS.READING),
+            },
     });
 
+    if (!isDailyReminderOriginCurrent(originatingSession, operation)) {
+      // Apple replaces a pending request that reuses the same identifier.
+      // This attempt uses its own operation id so a newer request survives.
+      await Notifications.cancelScheduledNotificationAsync(identifier);
+      logger.log('[Notifications] Late daily schedule discarded — originating owner is not current');
+      return null;
+    }
+
+    lastDailyReminderIdentifier = scheduled;
     logger.log(`[Notifications] Daily reminder scheduled for ${timeString} (${hours}:${minutes})`);
     logger.log(`[Notifications] Content: "${title}" — "${body.substring(0, 50)}..."`);
-    return identifier;
+    logEvent('notification_scheduled', {
+      type: 'daily_reminder',
+      owner: 'local',
+      specific: Boolean(data),
+      trigger: triggerOverride.kind,
+    });
+    return scheduled;
   } catch (error) {
     logger.error('[Notifications] Failed to schedule:', error);
     return null;
   }
+}
+
+/**
+ * Settings toggle follow-up. Captures the originating reset session and daily
+ * operation before permission / native work so a stale settings call cannot
+ * restore erased preferences after reset or overwrite a newer same-session
+ * time selection written before the owner debounce starts.
+ */
+export async function commitDailyReminderSetting(
+  enabled: boolean,
+  timeString: string,
+  persistPreference: (updates: Partial<UserProfile>) => void,
+): Promise<boolean> {
+  const originatingSession = captureSyncSession();
+  if (!isSyncSessionCurrent(originatingSession)) {
+    return false;
+  }
+  const originatingOperation = beginDailyReminderOperation();
+  if (enabled) {
+    const result = await scheduleDailyReminder(
+      timeString,
+      originatingSession,
+      originatingOperation,
+    );
+    if (!result || !isDailyReminderOriginCurrent(originatingSession, originatingOperation)) {
+      return false;
+    }
+    persistPreference({ reminderTime: timeString, dailyReminderEnabled: true });
+    return true;
+  }
+
+  await cancelNotificationById(
+    NOTIFICATION_IDS.DAILY_REMINDER,
+    originatingSession,
+    originatingOperation,
+  );
+  if (!isDailyReminderOriginCurrent(originatingSession, originatingOperation)) {
+    return false;
+  }
+  persistPreference({ dailyReminderEnabled: false });
+  return true;
 }
 
 // Cancel all Unfold reminders (daily + midday + evening) by ID
@@ -522,25 +897,19 @@ export async function scheduleMiddayCheckIn(): Promise<string[]> {
   }
 
   // Prefer the carry line from the day the reader completed today — the
-  // devotional following them into their afternoon. Falls back to rotating
-  // generic copy when they haven't read today. Weekly ops only use it for
-  // today's weekday; a line scheduled onto another weekday would be stale
-  // by the time it fired. (expo WEEKLY weekday: 1=Sunday … 7=Saturday.)
-  const todayCarryLine = getTodayCarryLine(
-    store.devotionals,
-    store.currentDevotionalId,
+  // devotional following them into their afternoon — then the day's own
+  // check-in question, then generic copy.
+  const currentDevotional = getCurrentDevotional(store.devotionals, store.currentDevotionalId);
+  const todayBody = getMiddayCheckInBody(
+    getTodayDayContext(currentDevotional),
+    getTodayCarryLine(store.devotionals, store.currentDevotionalId),
   );
-  const expoWeekdayToday = new Date().getDay() + 1;
+  const genericBody = getMiddayCheckInBody(null, null);
 
   const scheduled: string[] = [];
   for (const op of ops) {
     try {
-      const carryLineApplies =
-        op.kind === 'daily' || op.weekday === expoWeekdayToday;
-      const body =
-        carryLineApplies && todayCarryLine
-          ? todayCarryLine
-          : getMessageForToday(MIDDAY_MESSAGES);
+      const body = firesToday(op) ? todayBody : genericBody;
       if (op.kind === 'daily') {
         const id = await Notifications.scheduleNotificationAsync({
           identifier: op.id,
@@ -554,6 +923,7 @@ export async function scheduleMiddayCheckIn(): Promise<string[]> {
             type: Notifications.SchedulableTriggerInputTypes.DAILY,
             hour: op.hour,
             minute: op.minute,
+            ...channel(NOTIFICATION_CHANNELS.CHECK_INS),
           },
         });
         scheduled.push(id);
@@ -572,6 +942,7 @@ export async function scheduleMiddayCheckIn(): Promise<string[]> {
             weekday: op.weekday,
             hour: op.hour,
             minute: op.minute,
+            ...channel(NOTIFICATION_CHANNELS.CHECK_INS),
           },
         });
         scheduled.push(id);
@@ -582,6 +953,9 @@ export async function scheduleMiddayCheckIn(): Promise<string[]> {
     }
   }
 
+  if (scheduled.length > 0) {
+    logEvent('notification_scheduled', { type: 'midday_checkin', owner: 'local', count: scheduled.length });
+  }
   return scheduled;
 }
 
@@ -633,10 +1007,17 @@ export async function scheduleEveningWindDown(): Promise<string[]> {
     return [];
   }
 
+  // The day's "act" leads: it is the one thing the devotional asked the
+  // reader to do later. Then the evening scripture, then generic copy.
+  const todayBody = getEveningWindDownBody(
+    getTodayDayContext(getCurrentDevotional(store.devotionals, store.currentDevotionalId)),
+  );
+  const genericBody = getEveningWindDownBody(null);
+
   const scheduled: string[] = [];
   for (const op of ops) {
     try {
-      const body = getMessageForToday(EVENING_MESSAGES);
+      const body = firesToday(op) ? todayBody : genericBody;
       if (op.kind === 'daily') {
         const id = await Notifications.scheduleNotificationAsync({
           identifier: op.id,
@@ -650,6 +1031,7 @@ export async function scheduleEveningWindDown(): Promise<string[]> {
             type: Notifications.SchedulableTriggerInputTypes.DAILY,
             hour: op.hour,
             minute: op.minute,
+            ...channel(NOTIFICATION_CHANNELS.CHECK_INS),
           },
         });
         scheduled.push(id);
@@ -668,6 +1050,7 @@ export async function scheduleEveningWindDown(): Promise<string[]> {
             weekday: op.weekday,
             hour: op.hour,
             minute: op.minute,
+            ...channel(NOTIFICATION_CHANNELS.CHECK_INS),
           },
         });
         scheduled.push(id);
@@ -678,6 +1061,9 @@ export async function scheduleEveningWindDown(): Promise<string[]> {
     }
   }
 
+  if (scheduled.length > 0) {
+    logEvent('notification_scheduled', { type: 'evening_winddown', owner: 'local', count: scheduled.length });
+  }
   return scheduled;
 }
 
@@ -708,9 +1094,14 @@ export async function cancelEveningWindDown(): Promise<void> {
 // Refresh daily reminder with new content (call when day advances)
 // This re-schedules the notification with the latest teaser content
 export async function refreshDailyReminder(): Promise<boolean> {
+  const originatingSession = captureSyncSession();
   if (Platform.OS === 'web') {
     return false;
   }
+  if (!isSyncSessionCurrent(originatingSession)) {
+    return false;
+  }
+  const originatingOperation = beginDailyReminderOperation();
 
   // Get the user's reminder time from the store
   const state = useUnfoldStore.getState();
@@ -723,12 +1114,20 @@ export async function refreshDailyReminder(): Promise<boolean> {
 
   // Check if we have permission before refreshing
   const hasPermission = await areNotificationsEnabled();
+  if (!isDailyReminderOriginCurrent(originatingSession, originatingOperation)) {
+    return false;
+  }
   if (!hasPermission) {
     logger.log('[Notifications] No permission, skipping refresh');
     return false;
   }
 
-  // Re-schedule with new content
-  const result = await scheduleDailyReminder(reminderTime);
+  // Re-schedule with the originating session and operation — do not begin a
+  // new daily operation after the permission wait.
+  const result = await scheduleDailyReminder(
+    reminderTime,
+    originatingSession,
+    originatingOperation,
+  );
   return result !== null;
 }

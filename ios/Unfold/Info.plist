@@ -21,7 +21,7 @@
     <key>CFBundlePackageType</key>
     <string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.1.4</string>
+    <string>1.1.7</string>
     <key>CFBundleSignature</key>
     <string>????</string>
     <key>CFBundleURLTypes</key>
@@ -148,5 +148,7 @@
     <string>Automatic</string>
     <key>UIViewControllerBasedStatusBarAppearance</key>
     <false/>
+    <key>UNFOLDBuildProfile</key>
+    <string>$(EAS_BUILD_PROFILE)</string>
   </dict>
 </plist>

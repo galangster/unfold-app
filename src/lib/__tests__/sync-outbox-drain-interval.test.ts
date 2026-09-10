@@ -109,7 +109,7 @@ describe('drainSyncOutbox interval guard (RS10-4)', () => {
     await drainSyncOutbox(); // Drain 1
     expect(mockFetch.mock.calls.length).toBe(1);
 
-    // Advance time by 1ms so enqueue's lastEnqueueAt > lastDrainCompletedAt
+    // Fresh enqueue increments the revision and bypasses the interval.
     nowMs += 1;
     // New entry enqueued after the completed drain → bypass interval
     enqueueSyncChanges([makeChange('d2', '2026-06-10T00:01:00Z')]);

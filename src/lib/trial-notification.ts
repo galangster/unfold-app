@@ -15,8 +15,10 @@
  * - If the entitlement is anything else (missing, NORMAL, INTRO, PREPAID) or
  *   the trial is already within its final 2 days, any pending notification is
  *   cancelled.
- * - Uses a fixed notification identifier so cancellation is reliable across
- *   app launches without needing to persist anything.
+ * - Each native schedule uses an identifier unique to its trial operation.
+ *   Late cleanup cancels only that identifier. Cancellation still removes the
+ *   legacy fixed id, session-scoped leftovers, and other pending family
+ *   members found by enumeration so cleanup works across launches.
  * - Also mirrors the scheduled state in a dedicated MMKV instance for debug /
  *   observability.
  */
@@ -32,6 +34,7 @@ import {
   isRevenueCatEnabled,
 } from '@/lib/revenuecatClient';
 import { getSharedEncryptionKey } from '@/lib/mmkv-storage';
+import { captureSyncSession, isSyncSessionCurrent } from '@/lib/sync-session-fence';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -39,8 +42,60 @@ import { getSharedEncryptionKey } from '@/lib/mmkv-storage';
 
 const LOG_PREFIX = '[TrialNotification]';
 
-/** Stable identifier so we can cancel/replace reliably. */
+/** Legacy fixed id plus session/operation descendants. */
 const TRIAL_NOTIFICATION_ID = 'unfold-trial-ending';
+const TRIAL_NOTIFICATION_ID_SEPARATOR = ':';
+
+function trialEndingIdentifierForSession(session: number): string {
+  return `${TRIAL_NOTIFICATION_ID}${TRIAL_NOTIFICATION_ID_SEPARATOR}${session}`;
+}
+
+function trialEndingIdentifierForOperation(session: number, operation: number): string {
+  return `${trialEndingIdentifierForSession(session)}${TRIAL_NOTIFICATION_ID_SEPARATOR}${operation}`;
+}
+
+function isTrialEndingFamilyIdentifier(identifier: string): boolean {
+  return (
+    identifier === TRIAL_NOTIFICATION_ID ||
+    identifier.startsWith(`${TRIAL_NOTIFICATION_ID}${TRIAL_NOTIFICATION_ID_SEPARATOR}`)
+  );
+}
+
+// Last identifier this process successfully committed for the current owner.
+// Cross-launch leftovers also use the legacy fixed id or a session-scoped id.
+let lastTrialEndingIdentifier: string | null = null;
+
+// Distinguishes newer trial work from older work in the same reset session.
+let trialOperationEpoch = 0;
+
+function beginTrialEndingOperation(): number {
+  trialOperationEpoch += 1;
+  return trialOperationEpoch;
+}
+
+function isTrialEndingOriginCurrent(session: number, operation: number): boolean {
+  return isSyncSessionCurrent(session) && operation === trialOperationEpoch;
+}
+
+function claimTrialEndingOperation(
+  originatingSession: number,
+  originatingOperation?: number,
+): number | null {
+  if (originatingOperation !== undefined) {
+    return isTrialEndingOriginCurrent(originatingSession, originatingOperation)
+      ? originatingOperation
+      : null;
+  }
+  if (!isSyncSessionCurrent(originatingSession)) {
+    return null;
+  }
+  return beginTrialEndingOperation();
+}
+
+export function resetTrialNotificationOwnershipForTesting(): void {
+  lastTrialEndingIdentifier = null;
+  trialOperationEpoch = 0;
+}
 
 /** RevenueCat entitlement identifier for the premium tier. */
 const PREMIUM_ENTITLEMENT = 'Unfold Premium';
@@ -98,17 +153,64 @@ function storeScheduledId(id: string, scheduledFor: Date): void {
 /**
  * Cancel any pending trial-ending notification.
  *
- * Safe to call repeatedly — no-op if nothing is scheduled. Uses the stable
- * identifier so cancellation works across app launches.
+ * Safe to call repeatedly — no-op if nothing is scheduled. Direct calls start
+ * a trial operation. Internal callers must pass the originating operation so
+ * they cannot mint a new owner after an await. Cleanup still targets the
+ * legacy identifier and other pending family members across launches.
  */
-export async function cancelTrialEndingNotification(): Promise<void> {
+export async function cancelTrialEndingNotification(
+  originatingSession: number = captureSyncSession(),
+  originatingOperation?: number,
+): Promise<void> {
+  const operation = claimTrialEndingOperation(originatingSession, originatingOperation);
+  if (operation === null) {
+    logger.log(`${LOG_PREFIX} Cancel skipped — originating owner is not current`);
+    return;
+  }
+
   if (isUnsupportedPlatform()) {
     clearStoredId();
+    lastTrialEndingIdentifier = null;
+    return;
+  }
+
+  const identifiers = new Set<string>([
+    TRIAL_NOTIFICATION_ID,
+    trialEndingIdentifierForSession(originatingSession),
+    trialEndingIdentifierForOperation(originatingSession, operation),
+  ]);
+  const storedIdAtStart = trialNotificationStore.getString(MMKV_SCHEDULED_ID_KEY);
+  if (storedIdAtStart) {
+    identifiers.add(storedIdAtStart);
+  }
+  const ownedAtStart = lastTrialEndingIdentifier;
+  if (ownedAtStart) {
+    identifiers.add(ownedAtStart);
+  }
+  try {
+    const pending = await Notifications.getAllScheduledNotificationsAsync();
+    if (!isTrialEndingOriginCurrent(originatingSession, operation)) {
+      return;
+    }
+    for (const request of pending) {
+      if (isTrialEndingFamilyIdentifier(request.identifier)) {
+        identifiers.add(request.identifier);
+      }
+    }
+  } catch {
+    // Listing is best-effort. Known identifiers still cancel.
+  }
+
+  if (!isTrialEndingOriginCurrent(originatingSession, operation)) {
     return;
   }
 
   try {
-    await Notifications.cancelScheduledNotificationAsync(TRIAL_NOTIFICATION_ID);
+    await Promise.all(
+      [...identifiers].map((identifier) =>
+        Notifications.cancelScheduledNotificationAsync(identifier),
+      ),
+    );
     logger.log(`${LOG_PREFIX} Cancelled pending trial-ending notification`);
   } catch (error) {
     // expo-notifications does not throw for unknown identifiers on iOS, but
@@ -116,7 +218,15 @@ export async function cancelTrialEndingNotification(): Promise<void> {
     logger.log(`${LOG_PREFIX} Cancel attempt ignored:`, error);
   }
 
-  clearStoredId();
+  if (!isTrialEndingOriginCurrent(originatingSession, operation)) {
+    return;
+  }
+  if (trialNotificationStore.getString(MMKV_SCHEDULED_ID_KEY) === storedIdAtStart) {
+    clearStoredId();
+  }
+  if (lastTrialEndingIdentifier === ownedAtStart) {
+    lastTrialEndingIdentifier = null;
+  }
 }
 
 /**
@@ -127,8 +237,16 @@ export async function cancelTrialEndingNotification(): Promise<void> {
  */
 export async function scheduleTrialEndingNotification(
   customerInfo: CustomerInfo,
+  originatingSession: number = captureSyncSession(),
+  originatingOperation?: number,
 ): Promise<string | null> {
   if (isUnsupportedPlatform()) {
+    return null;
+  }
+
+  const operation = claimTrialEndingOperation(originatingSession, originatingOperation);
+  if (operation === null) {
+    logger.log(`${LOG_PREFIX} Skipped: originating owner is not current`);
     return null;
   }
 
@@ -137,13 +255,13 @@ export async function scheduleTrialEndingNotification(
   // Not in a trial — make sure nothing is queued and bail out.
   if (!entitlement || entitlement.periodType !== 'TRIAL') {
     logger.log(`${LOG_PREFIX} Skipped: entitlement is not a trial`);
-    await cancelTrialEndingNotification();
+    await cancelTrialEndingNotification(originatingSession, operation);
     return null;
   }
 
   if (!entitlement.expirationDate) {
     logger.log(`${LOG_PREFIX} Skipped: trial has no expirationDate`);
-    await cancelTrialEndingNotification();
+    await cancelTrialEndingNotification(originatingSession, operation);
     return null;
   }
 
@@ -153,7 +271,7 @@ export async function scheduleTrialEndingNotification(
       `${LOG_PREFIX} Skipped: could not parse expirationDate`,
       entitlement.expirationDate,
     );
-    await cancelTrialEndingNotification();
+    await cancelTrialEndingNotification(originatingSession, operation);
     return null;
   }
 
@@ -166,11 +284,15 @@ export async function scheduleTrialEndingNotification(
         `(trial ends ${entitlement.expirationDate})`,
     );
     // No point leaving a stale schedule around.
-    await cancelTrialEndingNotification();
+    await cancelTrialEndingNotification(originatingSession, operation);
     return null;
   }
 
   const hasPermission = await hasNotificationPermission();
+  if (!isTrialEndingOriginCurrent(originatingSession, operation)) {
+    logger.log(`${LOG_PREFIX} Abandoned after permission — originating owner is not current`);
+    return null;
+  }
   if (!hasPermission) {
     logger.log(`${LOG_PREFIX} Skipped: notification permission not granted`);
     // Can't schedule — also clean up any stored state so we don't lie about it.
@@ -178,20 +300,21 @@ export async function scheduleTrialEndingNotification(
     return null;
   }
 
-  // Always cancel the previous schedule before creating a new one. Scheduling
-  // with the same identifier replaces the existing request on iOS, but we
-  // cancel explicitly to keep Android behavior deterministic too.
-  try {
-    await Notifications.cancelScheduledNotificationAsync(TRIAL_NOTIFICATION_ID);
-  } catch {
-    // Ignore — nothing was scheduled.
+  // Cancel previous family members before creating this operation's request.
+  // The new request uses its own identifier, so a late older completion can
+  // cancel only that older identifier and cannot replace this one.
+  await cancelTrialEndingNotification(originatingSession, operation);
+  if (!isTrialEndingOriginCurrent(originatingSession, operation)) {
+    logger.log(`${LOG_PREFIX} Abandoned after cancel — originating owner is not current`);
+    return null;
   }
 
   const reminderDate = new Date(reminderMs);
+  const identifier = trialEndingIdentifierForOperation(originatingSession, operation);
 
   try {
-    const identifier = await Notifications.scheduleNotificationAsync({
-      identifier: TRIAL_NOTIFICATION_ID,
+    const scheduled = await Notifications.scheduleNotificationAsync({
+      identifier,
       content: {
         title: 'Your Unfold trial ends in 2 days',
         body: "Your devotionals, journal, and everything you've built is waiting. Don't lose your progress.",
@@ -204,15 +327,24 @@ export async function scheduleTrialEndingNotification(
       },
     });
 
-    storeScheduledId(identifier, reminderDate);
+    if (!isTrialEndingOriginCurrent(originatingSession, operation)) {
+      await Notifications.cancelScheduledNotificationAsync(identifier);
+      logger.log(`${LOG_PREFIX} Late schedule discarded — originating owner is not current`);
+      return null;
+    }
+
+    storeScheduledId(scheduled, reminderDate);
+    lastTrialEndingIdentifier = scheduled;
     logger.log(
       `${LOG_PREFIX} Scheduled for ${reminderDate.toISOString()} ` +
         `(trial ends ${entitlement.expirationDate})`,
     );
-    return identifier;
+    return scheduled;
   } catch (error) {
     logger.error(`${LOG_PREFIX} Failed to schedule trial-ending notification:`, error);
-    clearStoredId();
+    if (isTrialEndingOriginCurrent(originatingSession, operation)) {
+      clearStoredId();
+    }
     return null;
   }
 }
@@ -279,16 +411,24 @@ export async function debugFireTrialEndingNotification(
  * (e.g., web, missing API keys) — it no-ops.
  */
 export async function syncTrialEndingNotification(): Promise<void> {
+  const originatingSession = captureSyncSession();
   if (isUnsupportedPlatform()) return;
+  if (!isSyncSessionCurrent(originatingSession)) return;
+
+  const originatingOperation = beginTrialEndingOperation();
 
   if (!isRevenueCatEnabled()) {
     // Without RevenueCat we cannot know the trial state — make sure there's
     // nothing stale left over and bail.
-    await cancelTrialEndingNotification();
+    await cancelTrialEndingNotification(originatingSession, originatingOperation);
     return;
   }
 
   const customerInfoResult = await getCustomerInfo();
+  if (!isTrialEndingOriginCurrent(originatingSession, originatingOperation)) {
+    logger.log(`${LOG_PREFIX} Sync abandoned after customer info — originating owner is not current`);
+    return;
+  }
   if (!customerInfoResult.ok) {
     logger.log(
       `${LOG_PREFIX} Sync skipped: getCustomerInfo failed (${customerInfoResult.reason})`,
@@ -296,7 +436,11 @@ export async function syncTrialEndingNotification(): Promise<void> {
     return;
   }
 
-  await scheduleTrialEndingNotification(customerInfoResult.data);
+  await scheduleTrialEndingNotification(
+    customerInfoResult.data,
+    originatingSession,
+    originatingOperation,
+  );
 }
 
 /**

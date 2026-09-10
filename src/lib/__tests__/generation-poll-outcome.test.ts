@@ -37,13 +37,18 @@ describe('evaluateGenerationPoll', () => {
   it('returns complete with a reconciled result when the job is done', () => {
     const { outcome } = evaluateGenerationPoll({
       status: 'complete',
-      result: { devotionalDay: day, devotionalId: 'dev-1' },
+      result: {
+        devotionalDay: day,
+        devotionalId: 'dev-1',
+        seriesStartDate: '2026-09-04T08:05:00.000Z',
+      },
       priorConsecutiveUnknown: 0,
     });
     expect(outcome.kind).toBe('complete');
     if (outcome.kind === 'complete') {
       expect(outcome.result.devotionalId).toBe('dev-1');
       expect(outcome.result.devotionalDay.dayNumber).toBe(1);
+      expect(outcome.result.seriesStartDate).toBe('2026-09-04T08:05:00.000Z');
     }
   });
 
@@ -78,12 +83,16 @@ describe('evaluateGenerationPoll', () => {
     ).toEqual({ kind: 'failed', canRetry: true, error: 'Generation failed on server' });
   });
 
-  it('keeps waiting on pending / processing and resets the unknown counter', () => {
+  it('keeps waiting on pending, processing, and batched jobs and resets the unknown counter', () => {
     expect(evaluateGenerationPoll({ status: 'pending', priorConsecutiveUnknown: 2 })).toEqual({
       outcome: { kind: 'waiting' },
       consecutiveUnknown: 0,
     });
     expect(evaluateGenerationPoll({ status: 'processing', priorConsecutiveUnknown: 2 })).toEqual({
+      outcome: { kind: 'waiting' },
+      consecutiveUnknown: 0,
+    });
+    expect(evaluateGenerationPoll({ status: 'batched', priorConsecutiveUnknown: 2 })).toEqual({
       outcome: { kind: 'waiting' },
       consecutiveUnknown: 0,
     });
@@ -118,6 +127,19 @@ describe('resolveGenerationSubmitFailure', () => {
     });
     const apiErr = new ApiError('bad', 500, 'SERVER_ERROR');
     expect(resolveGenerationSubmitFailure(apiErr)).toEqual({ kind: 'fail', message: 'bad' });
+  });
+
+  it('never adopts a canonical devotional id conflict without an owned job id', () => {
+    const error = new ApiError(
+      'That devotional id is unavailable.',
+      409,
+      'DEVOTIONAL_ID_UNAVAILABLE',
+    );
+
+    expect(resolveGenerationSubmitFailure(error)).toEqual({
+      kind: 'fail',
+      message: 'That devotional id is unavailable.',
+    });
   });
 });
 

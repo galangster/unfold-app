@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react'
 import { drainSyncOutbox } from '@/lib/sync-outbox';
 import { usePrevious } from '@/hooks/usePrevious';
 import { View, StyleSheet, Alert, type LayoutChangeEvent } from 'react-native';
-import { useRouter, useFocusEffect, useIsFocused } from 'expo-router';
+import { useRouter, useFocusEffect, useIsFocused, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -10,6 +10,7 @@ import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { logger } from '@/lib/logger';
 import { isQaToolsEnabled } from '@/lib/qa-tools';
+import { isVoiceCheckInsEnabled } from '@/lib/voice-feature';
 import { useUnfoldStore, type MoodLevel } from '@/lib/store';
 import { requestReviewOncePerVersion } from '@/lib/review-prompt';
 import { useQuery } from '@tanstack/react-query';
@@ -19,6 +20,7 @@ import { RippleLoader } from '@/components/RippleLoader';
 import { useUIState } from '@/lib/ui-state';
 import { StreakCelebration } from '@/components/StreakCelebration';
 import { CheckInSheet } from '@/components/CheckInSheet';
+import { VoiceCheckInSheet } from '@/components/voice-check-in/VoiceCheckInSheet';
 import { AmbientArtCanvas } from '@/components/home/AmbientArtCanvas';
 import { syncWidgets } from '@/lib/widget-bridge';
 import { generateBridge, type BridgeCheckIn } from '@/lib/bridge-service';
@@ -31,7 +33,7 @@ import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { getContentAwareMiddayMessage, getContentAwareEveningMessage } from '@/constants/check-in-messages';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { Duration, Ease } from '@/constants/animations';
-import { submitGenerationJob, recoverCompletedGenerationResult, pollJobStatus, ApiError } from '@/lib/generation-api';
+import { pollJobStatus } from '@/lib/generation-api';
 import { toFriendlyOnboardingGenerationError } from '@/lib/generation-errors';
 import {
   hasInflightSeriesLanded,
@@ -50,6 +52,8 @@ import { animateCardDismiss } from '@/lib/card-dismiss-animation';
 import { getBibleDbStatus, downloadBibleDb } from '@/lib/bible-db';
 import { commitDevotionalPullCursor, pullDevotionalContent } from '@/lib/devotional-sync-pull';
 import { applyPulledDevotionalContent } from '@/lib/devotional-pulled-content';
+import { clearInitialGenerationRequestId } from '@/lib/initial-generation-request';
+import { captureSyncSession, isSyncSessionCurrent } from '@/lib/sync-session-fence';
 import {
   getCurrentDevotional,
   getHomeDevotionalDayData,
@@ -113,6 +117,7 @@ const REVEAL_RESUME_WINDOW_MS = 15_000;
 
 export default function HomeScreen() {
   const router = useRouter();
+  const routeParams = useLocalSearchParams<{ voiceCheckInPrototype?: string | string[]; voiceCheckInDemo?: string }>();
   const { colors } = useTheme();
   const { entering } = useAccessibleAnimation();
   const user = useUnfoldStore((s) => s.user);
@@ -237,9 +242,16 @@ export default function HomeScreen() {
 
   const [clockNow, setClockNow] = useState(() => new Date());
   const [showCheckInSheet, setShowCheckInSheet] = useState(false);
+  const [showVoiceCheckInSheet, setShowVoiceCheckInSheet] = useState(false);
+  const [voiceCheckInAutoStart, setVoiceCheckInAutoStart] = useState(false);
   const [showPremiumSheet, setShowPremiumSheet] = useState(false);
   const [stackPremiumFeature, setStackPremiumFeature] = useState<TodayPremiumFeature | null>(null);
   const { gate, showExclusiveOffer, dismissOffer } = useCreationGate();
+  const voiceCheckInPrototypeParam = Array.isArray(routeParams.voiceCheckInPrototype)
+    ? routeParams.voiceCheckInPrototype[0]
+    : routeParams.voiceCheckInPrototype;
+  const voiceCheckInsEnabled = isVoiceCheckInsEnabled()
+    || (isQaToolsEnabled() && voiceCheckInPrototypeParam === '1');
 
   // Update clock-driven Today card visibility every minute — but only while
   // this screen is focused. Home stays mounted behind other tabs and the
@@ -309,10 +321,11 @@ export default function HomeScreen() {
     setInflightSeries(null);
     const { jobId, devotionalId } = decision.job;
     let cancelled = false;
+    const session = captureSyncSession();
     void (async () => {
       let poll: InitialArcPollResult;
       try {
-        poll = { status: await pollJobStatus(jobId) };
+        poll = { status: await pollJobStatus(jobId, session) };
       } catch (err) {
         poll = { error: err };
         logger.warn(
@@ -322,7 +335,7 @@ export default function HomeScreen() {
           err instanceof Error ? err.message : err,
         );
       }
-      if (cancelled) return;
+      if (cancelled || !isSyncSessionCurrent(session)) return;
       const resume = resolveInflightResume(poll);
       if (resume === 'resume') {
         const serverStatus = 'status' in poll ? poll.status.status : null;
@@ -342,7 +355,7 @@ export default function HomeScreen() {
           elapsedMs: 0,
           fallbackDevotionalId: devotionalId,
         });
-        if (step.kind === 'settled') settleInflightInitialArcWatch(step.outcome, { jobId });
+        if (step.kind === 'settled') settleInflightInitialArcWatch(step.outcome, { jobId, session });
       }
     })();
     return () => {
@@ -400,8 +413,9 @@ export default function HomeScreen() {
       let cancelled = false;
       void (async () => {
         try {
+          const session = captureSyncSession();
           const pulled = await pullDevotionalContent(devotionalId);
-          if (cancelled) return;
+          if (cancelled || !isSyncSessionCurrent(session)) return;
 
           applyPulledDevotionalContent({
             devotionalId,
@@ -461,80 +475,13 @@ export default function HomeScreen() {
     shouldAutoPrepareCurrentDevotionalDay(currentDevotional, premiumPolicy)
   ), [currentDevotional, premiumPolicy]);
 
-  // Content discovery flow: check for server-generated content before submitting a new job.
-  // 1. Check if a completed job already exists on the server (e.g., from midnight cron)
-  // 2. If found, apply it directly — no generation needed
-  // 3. If not, submit a new generation job as a client-side fallback
-  // 4. If 409 (already generated), recover by fetching the existing job result
-  const autoGenAttemptedRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!isPreparingCurrentDay || !currentDevotional) return;
-
-    const devId = currentDevotional.id;
-    const dayNum = currentDevotional.currentDay;
-    const key = `${devId}-${dayNum}`;
-    if (autoGenAttemptedRef.current === key) return;
-
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const recovered = await recoverCompletedGenerationResult({
-          devotionalId: devId,
-          dayNumber: dayNum,
-        });
-        if (cancelled) return;
-
-        if (recovered?.devotionalDay) {
-          addGeneratedDay(devId, recovered.devotionalDay);
-          autoGenAttemptedRef.current = key;
-          logger.log('[home] Applied existing server content for day', dayNum);
-          return;
-        }
-
-        // Step 2: No content exists — submit generation job
-        const resp = await submitGenerationJob({
-          devotionalId: devId,
-          dayNumber: dayNum,
-          jobType: 'day',
-        });
-        if (cancelled) return;
-        autoGenAttemptedRef.current = key;
-        logger.log('[home] Submitted generation job:', resp.jobId);
-      } catch (err) {
-        if (cancelled) return;
-
-        // Handle 409 with structured error — server already has this day's content
-        if (err instanceof ApiError && err.status === 409) {
-          const recovered = await recoverCompletedGenerationResult({
-            devotionalId: devId,
-            dayNumber: dayNum,
-            existingJobId: err.existingJobId,
-          }).catch(() => null);
-          if (cancelled) return;
-          if (recovered?.devotionalDay) {
-            addGeneratedDay(devId, recovered.devotionalDay);
-            autoGenAttemptedRef.current = key;
-            return;
-          }
-        }
-        // Don't set autoGenAttemptedRef — allow retry on next render cycle
-        logger.warn('[home] Auto-generation failed, will retry:', err instanceof Error ? err.message : err);
-      }
-    })();
-
-    return () => { cancelled = true; };
-  }, [isPreparingCurrentDay, currentDevotional]);
-
-  // Keep looking for the day while the "preparing" card is up. Queuing the
-  // job above was fire-and-forget: the card stayed until the tab lost focus
-  // and regained it, because nothing here re-checked the server once the job
-  // finished. The watch ends when the day lands (isPreparingCurrentDay flips)
-  // or when the reader leaves the tab.
-  useGeneratedDayWatch({
+  const dailyGeneration = useGeneratedDayWatch({
     devotionalId: currentDevotional?.id,
     dayNumber: currentDevotional?.currentDay,
     enabled: isPreparingCurrentDay && isTodayFocused,
+    canMutate: premiumPolicy === 'granted'
+      && currentDevotional?.id === currentDevotionalId
+      && isPreparingCurrentDay,
     onDay: addGeneratedDay,
   });
 
@@ -721,6 +668,7 @@ export default function HomeScreen() {
   }, [resumeContext, resumeDevotional, router, setCurrentDevotional]);
 
   const openNewSeriesDiscovery = () => {
+    clearInitialGenerationRequestId();
     router.push({
       pathname: '/onboarding',
       params: { startAt: 'themeType', flow: 'newSeries' },
@@ -755,6 +703,18 @@ export default function HomeScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setShowCheckInSheet(true);
   }, [gate]);
+
+  const handleVoiceCheckIn = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setVoiceCheckInAutoStart(true);
+    setShowVoiceCheckInSheet(true);
+  }, []);
+
+  const handleVoiceCheckInHistory = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setVoiceCheckInAutoStart(false);
+    setShowVoiceCheckInSheet(true);
+  }, []);
 
   const handleCheckInComplete = (data: {
     mood: MoodLevel;
@@ -1110,6 +1070,35 @@ export default function HomeScreen() {
       });
     }
 
+    if (voiceCheckInsEnabled) {
+      cards.push({
+        id: 'today-stack-voice-check-in-prototype',
+        kind: 'voice-check-in',
+        priority: 450,
+        eyebrow: 'Companion note',
+        title: 'How’s your day going?',
+        body: 'Record, review, and choose when to send a voice check-in for transcription.',
+        actions: [
+          {
+            label: 'Record',
+            onPress: handleVoiceCheckIn,
+            accessibilityLabel: 'Record a voice check-in',
+            accessibilityHint: 'Starts recording after microphone permission',
+          },
+          {
+            label: 'Saved check-ins',
+            onPress: handleVoiceCheckInHistory,
+            accessibilityLabel: 'Review saved voice check-ins',
+            accessibilityHint: 'Opens saved transcripts without starting the microphone',
+            tone: 'secondary',
+          },
+        ],
+        accessibilityLabel: 'Voice check-in. How is your day going?',
+        accessibilityHint: 'Opens voice recording and saved check-ins',
+        testID: 'today-stack-card-voice-check-in-prototype',
+      });
+    }
+
     if (shouldShowEveningStackCard) {
       cards.push({
         id: 'today-stack-evening',
@@ -1277,6 +1266,7 @@ export default function HomeScreen() {
     handleDismissRememberThisCard,
     handleDismissResumeCard,
     handleEveningWindDown,
+    handleVoiceCheckIn,
     handlePremiumNudgeStackAction,
     handleSavedEchoPress,
     middayMessage,
@@ -1290,6 +1280,8 @@ export default function HomeScreen() {
     shouldShowEveningStackCard,
     shouldShowMiddayStackCard,
     validBridgeText,
+    voiceCheckInsEnabled,
+    handleVoiceCheckInHistory,
   ]);
 
   const hasOptionalTodayStack = todayStackCards.length > 0;
@@ -1302,6 +1294,13 @@ export default function HomeScreen() {
     dayLabel: getReadingDayLabel(),
     isJourneyComplete,
     isPreparing: !hasReadToday && (isPreparingCurrentDay || (!currentDayData && !!currentDevotional && premiumPolicy !== 'denied')),
+    dailyRecovery: isPreparingCurrentDay
+      ? {
+          ...dailyGeneration.state,
+          onCheckAgain: dailyGeneration.checkAgain,
+          onRetry: dailyGeneration.retry,
+        }
+      : null,
     preparingInflightSeries: isPreparingInflightSeries
       ? { seriesTitle: resolvePreparingFirstSeriesTitle(generationSessionTitle) }
       : null,
@@ -1436,6 +1435,16 @@ export default function HomeScreen() {
           chips={currentDayData?.checkInChips}
           devotionalId={currentDevotional.id}
           dayNumber={middayCheckInDay ?? currentDevotional.currentDay}
+        />
+      )}
+
+      {voiceCheckInsEnabled && (
+        <VoiceCheckInSheet
+          visible={showVoiceCheckInSheet}
+          onClose={() => setShowVoiceCheckInSheet(false)}
+          demoMode={isQaToolsEnabled() && routeParams.voiceCheckInDemo === '1'}
+          initialDemoPhase="recording"
+          autoStart={voiceCheckInAutoStart}
         />
       )}
 

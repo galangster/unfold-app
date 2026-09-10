@@ -6,10 +6,16 @@
  */
 import { useUnfoldStore, type Devotional, type DevotionalDay, type SeriesArc, type UserProfile } from '@/lib/store';
 import { clearInflightGenerationJob } from '@/lib/inflight-generation-job';
+import { clearInitialGenerationRequestId } from '@/lib/initial-generation-request';
 import { extractBookFromReference } from '@/lib/devotional-service';
 import type { InflightInitialArcWatchOutcome } from '@/lib/inflight-initial-arc-watch';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
+import {
+  assertSyncSessionCurrent,
+  isGenerationSessionInvalidatedError,
+  isSyncSessionCurrent,
+} from '@/lib/generation-session';
 
 export const DEFAULT_SERIES_TITLE = 'Your Devotional';
 
@@ -19,11 +25,14 @@ export interface InitialArcResult {
   totalDays?: number;
   arc?: SeriesArc;
   devotionalId?: string | null;
+  seriesStartDate?: string;
 }
 
 interface InitialArcResultContext {
   user: UserProfile | null | undefined;
   devotionalLength: number;
+  /** Originating reset session. Required so a late apply cannot recapture. */
+  session: number;
 }
 
 interface AppliedInitialArcResult {
@@ -48,8 +57,9 @@ export function requireCanonicalDevotionalId(devotionalId?: string | null, conte
  */
 export function applyInitialArcResult(
   result: InitialArcResult,
-  { user, devotionalLength }: InitialArcResultContext,
+  { user, devotionalLength, session }: InitialArcResultContext,
 ): AppliedInitialArcResult {
+  assertSyncSessionCurrent(session, 'apply initial arc');
   const devotionalId = requireCanonicalDevotionalId(result.devotionalId);
   const seriesTitle = result.seriesTitle ?? DEFAULT_SERIES_TITLE;
   const totalDays = result.totalDays ?? devotionalLength;
@@ -61,15 +71,18 @@ export function applyInitialArcResult(
   if (existingDevotional) {
     store.addGeneratedDay(devotionalId, day1);
   } else {
-    const now = new Date().toISOString();
+    const serverAnchor = [result.seriesStartDate, day1.generatedAt].find(
+      (value): value is string => typeof value === 'string' && !Number.isNaN(new Date(value).getTime()),
+    );
+    const seriesStartDate = serverAnchor ?? new Date().toISOString();
     const newDevotional: Devotional = {
       id: devotionalId,
       title: seriesTitle,
       totalDays,
       currentDay: 1,
       days: [day1],
-      createdAt: now,
-      seriesStartDate: now,
+      createdAt: seriesStartDate,
+      seriesStartDate,
       userContext: {
         name: user?.name ?? '',
         aboutMe: user?.aboutMe ?? '',
@@ -99,6 +112,7 @@ export function applyInitialArcResult(
 
   // Generation succeeded — nothing is in flight any more.
   clearInflightGenerationJob();
+  clearInitialGenerationRequestId();
   store.completeGenerationSession({ title: seriesTitle });
 
   return { devotionalId, seriesTitle, day1 };
@@ -114,9 +128,10 @@ export function applyInitialArcResult(
  */
 export function settleInflightInitialArcWatch(
   outcome: InflightInitialArcWatchOutcome,
-  { jobId }: { jobId: string },
+  { jobId, session }: { jobId: string; session: number },
 ): void {
   if (outcome.kind === 'cancelled') return;
+  if (!isSyncSessionCurrent(session)) return;
 
   const store = useUnfoldStore.getState();
 
@@ -126,6 +141,7 @@ export function settleInflightInitialArcWatch(
       const applied = applyInitialArcResult(outcome.result, {
         user,
         devotionalLength: user?.devotionalLength ?? 7,
+        session,
       });
       void logBugEvent('generation', 'server-generation-complete', {
         devotionalId: applied.devotionalId,
@@ -134,6 +150,9 @@ export function settleInflightInitialArcWatch(
         landedOn: 'today',
       });
     } catch (err) {
+      if (isGenerationSessionInvalidatedError(err) || !isSyncSessionCurrent(session)) {
+        return;
+      }
       const message = err instanceof Error ? err.message : String(err);
       logger.error('[home] Could not land the finished first series:', message);
       clearInflightGenerationJob();
@@ -144,12 +163,14 @@ export function settleInflightInitialArcWatch(
   }
 
   if (outcome.kind === 'unreachable') {
+    if (!isSyncSessionCurrent(session)) return;
     logger.warn('[home] server-poll-unreachable:', outcome.message);
     store.failGenerationSession(outcome.message);
     void logBugError('generation', new Error(outcome.message), { jobId, phase: 'server-poll-unreachable' });
     return;
   }
 
+  if (!isSyncSessionCurrent(session)) return;
   logger.error(`[home] ${outcome.phase}:`, outcome.message);
   clearInflightGenerationJob();
   store.failGenerationSession(outcome.message);

@@ -50,7 +50,9 @@ export function useCreationGate() {
       return false;
     }
 
-    router.push('/paywall');
+    // NAVIGATE reuses the active paywall route under Expo Router 57.0.16.
+    // PUSH would append a new key for every denied Journal text event.
+    router.navigate('/paywall');
     return false;
   }, [policy, router, notifyPendingSubscriptionCheck]);
 

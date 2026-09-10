@@ -8,7 +8,7 @@
  * edit is pending. This drives the REAL NoteDetailScreen (iOS/native path).
  */
 import React from 'react';
-import { TextInput } from 'react-native';
+import { Keyboard, TextInput } from 'react-native';
 
 // react-test-renderer types are not installed in this app; keep this aligned
 // with the existing component-test pattern.
@@ -17,6 +17,9 @@ const { act } = renderer;
 
 (globalThis as any).__noteParams = { noteId: 'note-1' };
 (globalThis as any).__editorMounts = [] as string[];
+(globalThis as any).__noteKeyboard = { keyboardHeight: 320, isKeyboardUp: false };
+(globalThis as any).__toggleBold = jest.fn();
+(globalThis as any).__blurEditor = jest.fn().mockResolvedValue(undefined);
 
 jest.mock('expo-router', () => {
   const ReactActual = require('react');
@@ -96,11 +99,12 @@ jest.mock('unfold-editor', () => {
     ReactActual.useImperativeHandle(ref, () => ({
       getHtml: () => new Promise(() => {}),
       focus: async () => {},
-      blur: async () => {},
+      blur: (globalThis as any).__blurEditor,
       getSelectionState: async () => ({
         bold: false, italic: false, underline: false, strikethrough: false, code: false,
         hasLink: false, linkUrl: null, blockType: 'p', listType: null, start: 0, end: 0,
       }),
+      toggleBold: (globalThis as any).__toggleBold,
     }));
     ReactActual.useEffect(() => {
       (globalThis as any).__editorMounts.push(props.initialHtml);
@@ -134,7 +138,7 @@ jest.mock('@10play/tentap-editor', () => {
   return {
     useEditorBridge: () => editor,
     useBridgeState: () => ({ isReady: false }),
-    useKeyboard: () => ({ keyboardHeight: 0, isKeyboardUp: false }),
+    useKeyboard: () => (globalThis as any).__noteKeyboard,
     RichText: () => null,
     TenTapStartKit: [],
     TaskListBridge: {},
@@ -233,6 +237,9 @@ describe('note-detail: an external version of the open note', () => {
   beforeEach(() => {
     jest.useFakeTimers();
     (globalThis as any).__editorMounts = [];
+    (globalThis as any).__noteKeyboard = { keyboardHeight: 320, isKeyboardUp: false };
+    (globalThis as any).__toggleBold.mockClear();
+    (globalThis as any).__blurEditor.mockClear();
     useUnfoldStore.getState().reset();
     useUnfoldStore.setState({ notes: [NOTE] });
   });
@@ -280,6 +287,43 @@ describe('note-detail: an external version of the open note', () => {
     act(() => { jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 200); });
     expect(useUnfoldStore.getState().notes[0].content).toBe('<p>own edit</p>');
     expect(editorMounts()).toHaveLength(1);
+    act(() => tree.unmount());
+  });
+
+  it('keeps the editor mounted while Formatting opens and applies Bold to its selection', () => {
+    (globalThis as any).__noteKeyboard = { keyboardHeight: 320, isKeyboardUp: true };
+    let tree: any;
+    act(() => { tree = renderer.create(<NoteDetailScreen />); });
+
+    const formatting = tree.root.findByProps({ accessibilityLabel: 'Formatting' });
+    act(() => formatting.props.onPress());
+    expect(editorMounts()).toHaveLength(1);
+
+    const toolbar = tree.root.findByProps({ testID: 'note-editor-toolbar' });
+    act(() => toolbar.props.onLayout({ nativeEvent: { layout: { height: 184 } } }));
+    expect(editorNode(tree).props.keyboardToolbarHeight).toBe(184);
+
+    const bold = tree.root.findByProps({ accessibilityLabel: 'Bold' });
+    act(() => bold.props.onPress());
+    expect((globalThis as any).__toggleBold).toHaveBeenCalledTimes(1);
+    expect(editorMounts()).toHaveLength(1);
+    act(() => tree.unmount());
+  });
+
+  it('awaits the native editor blur before dismissing the keyboard', async () => {
+    (globalThis as any).__noteKeyboard = { keyboardHeight: 320, isKeyboardUp: true };
+    const dismiss = jest.spyOn(Keyboard, 'dismiss').mockImplementation(() => {});
+    let tree: any;
+    act(() => { tree = renderer.create(<NoteDetailScreen />); });
+
+    const done = tree.root.findByProps({ accessibilityLabel: 'Done editing' });
+    await act(async () => { await done.props.onPress(); });
+
+    expect((globalThis as any).__blurEditor).toHaveBeenCalledTimes(1);
+    expect(dismiss).toHaveBeenCalledTimes(1);
+    expect((globalThis as any).__blurEditor.mock.invocationCallOrder[0])
+      .toBeLessThan(dismiss.mock.invocationCallOrder[0]);
+    dismiss.mockRestore();
     act(() => tree.unmount());
   });
 });

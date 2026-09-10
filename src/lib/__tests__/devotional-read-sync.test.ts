@@ -17,6 +17,12 @@ jest.mock('../mmkv-storage', () => {
 });
 
 import { buildDevotionalReadSyncChanges, syncDevotionalDayRead } from '@/lib/devotional-read-sync';
+const { peekSyncOutbox, resetDrainStateForTesting } = jest.requireActual('@/lib/sync-outbox') as typeof import('@/lib/sync-outbox');
+const {
+  beginLocalResetSession,
+  endLocalResetSession,
+  resetSyncSessionFenceForTesting,
+} = jest.requireActual('@/lib/sync-session-fence') as typeof import('@/lib/sync-session-fence');
 import type { Devotional, DevotionalDay } from '@/lib/store';
 
 const day: DevotionalDay = {
@@ -147,6 +153,11 @@ describe('buildDevotionalReadSyncChanges', () => {
 describe('syncDevotionalDayRead', () => {
   const originalFetch = global.fetch;
 
+  beforeEach(() => {
+    resetDrainStateForTesting();
+    resetSyncSessionFenceForTesting();
+  });
+
   afterEach(() => {
     global.fetch = originalFetch;
   });
@@ -165,5 +176,28 @@ describe('syncDevotionalDayRead', () => {
     const body = JSON.parse((fetchMock.mock.calls[0] as unknown as [string, { body: string }])[1].body);
     expect(body.changes).toHaveLength(2);
     expect(body.deviceTimezone).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  });
+
+  it('does not enqueue a delayed read-sync failure after the captured session is reset', async () => {
+    let rejectPush!: (reason: Error) => void;
+    global.fetch = jest.fn(
+      () => new Promise<never>((_resolve, reject) => {
+        rejectPush = reject;
+      }),
+    ) as unknown as typeof fetch;
+
+    const pending = syncDevotionalDayRead({
+      devotional,
+      day,
+      readAt: '2026-04-25T12:00:00.000Z',
+    }).catch(() => undefined);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    const resetToken = beginLocalResetSession();
+    endLocalResetSession(resetToken);
+    rejectPush(new Error('offline'));
+    await pending;
+
+    expect(peekSyncOutbox()).toHaveLength(0);
   });
 });

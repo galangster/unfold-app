@@ -5,6 +5,7 @@ import { mmkvStorage } from './mmkv-storage';
 import { logger } from './logger';
 import { useUnfoldStore } from './store';
 import { peekSyncOutbox } from './sync-outbox';
+import { newId } from './sync-ids';
 import { normalizeJournalMode, normalizeSoapResponses } from './journal-entry-state';
 import { mergeJournalEntryDuplicates } from './journal-entry-merge';
 import type {
@@ -25,6 +26,14 @@ import type {
 import { useCompanionChatStore } from './companion-chat-store';
 import type { CompanionMessage, Conversation } from './companion-chat-store';
 import type { SyncPullResponse, SyncPulledRecord, SyncPushResult, SyncTable } from './sync-types';
+import {
+  assertSyncSessionCurrent,
+  captureSyncSession,
+  isLocalResetInProgress,
+  isSyncSessionCurrent,
+  registerSyncTransport,
+  SyncSessionInvalidatedError,
+} from './sync-session-fence';
 
 export const LAST_PULLED_AT_KEY = 'unfold-last-pulled-at';
 
@@ -55,6 +64,11 @@ function asNumber(value: unknown): number | undefined {
   return undefined;
 }
 
+function asPositiveInteger(value: unknown): number | undefined {
+  const parsed = asNumber(value);
+  return parsed !== undefined && Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+}
+
 function asBoolean(value: unknown): boolean | undefined {
   return typeof value === 'boolean' ? value : undefined;
 }
@@ -73,6 +87,23 @@ function pendingClientUpdatedAtsByRecord(): PendingClientUpdatedAtByRecord {
   const pending = new Map<string, string>();
   for (const change of peekSyncOutbox()) {
     const key = pendingKey(change.table, change.id);
+    const existing = pending.get(key);
+    if (!existing || change.clientUpdatedAt > existing) {
+      pending.set(key, change.clientUpdatedAt);
+    }
+  }
+  return pending;
+}
+
+function pendingBibleReadingByChapter(): Map<string, string> {
+  const pending = new Map<string, string>();
+  for (const change of peekSyncOutbox()) {
+    if (change.table !== 'bible_reading_positions' || change.deleted) continue;
+    const data = asRecord(change.data);
+    const bookId = asNumber(data.bookId);
+    const chapter = asNumber(data.chapter);
+    if (!bookId || !chapter) continue;
+    const key = `${bookId}:${chapter}`;
     const existing = pending.get(key);
     if (!existing || change.clientUpdatedAt > existing) {
       pending.set(key, change.clientUpdatedAt);
@@ -238,6 +269,143 @@ function mapBibleHighlight(record: SyncPulledRecord): BibleHighlight | null {
   };
 }
 
+function bibleReadingChapterKey(row: { bookId: number; chapter: number }): string {
+  return `${row.bookId}:${row.chapter}`;
+}
+
+function bibleReadingContentClock(row: { updatedAt?: string; createdAt?: string } | undefined): string {
+  return localUpdatedAt(row) ?? '';
+}
+
+function bibleReadingTime(row: BibleReadingPosition): string {
+  return row.lastReadAt || row.updatedAt || '';
+}
+
+function pendingBibleReadingWriteIsNewer(
+  record: SyncPulledRecord,
+  pendingByRecord: PendingClientUpdatedAtByRecord,
+): boolean {
+  const pendingClientUpdatedAt = pendingByRecord.get(pendingKey('bible_reading_positions', record.id));
+  const remoteClientUpdatedAt = recordClientUpdatedAt(record);
+  return Boolean(pendingClientUpdatedAt && (!remoteClientUpdatedAt || pendingClientUpdatedAt > remoteClientUpdatedAt));
+}
+
+function newestBibleReadingRow(rows: BibleReadingPosition[]): BibleReadingPosition | undefined {
+  return rows.reduce<BibleReadingPosition | undefined>((best, row) => {
+    if (!best) return row;
+    return bibleReadingContentClock(row) > bibleReadingContentClock(best) ? row : best;
+  }, undefined);
+}
+
+function coalesceBibleReadingChapters(items: BibleReadingPosition[]): BibleReadingPosition[] {
+  const winners = new Map<string, BibleReadingPosition>();
+  for (const item of items) {
+    const key = bibleReadingChapterKey(item);
+    const existing = winners.get(key);
+    if (!existing || bibleReadingContentClock(item) > bibleReadingContentClock(existing)) {
+      winners.set(key, item);
+    }
+  }
+  return [...winners.values()];
+}
+
+function uniquifyBibleReadingIds(
+  items: BibleReadingPosition[],
+  keep: BibleReadingPosition | undefined,
+): BibleReadingPosition[] {
+  const used = new Set<string>();
+  if (keep?.id) used.add(keep.id);
+  return items.map((item) => {
+    if (item === keep) return item;
+    if (item.id && !used.has(item.id)) {
+      used.add(item.id);
+      return item;
+    }
+    const nextId = newId();
+    used.add(nextId);
+    return { ...item, id: nextId };
+  });
+}
+
+function finalizeBibleReadingHistory(
+  items: BibleReadingPosition[],
+  keep: BibleReadingPosition | undefined,
+): BibleReadingPosition[] {
+  const coalesced = coalesceBibleReadingChapters(items);
+  const keepRow = keep
+    ? coalesced.find((item) => item === keep)
+    : undefined;
+  return uniquifyBibleReadingIds(coalesced, keepRow)
+    .sort((left, right) => {
+      const rightTime = bibleReadingTime(right);
+      const leftTime = bibleReadingTime(left);
+      if (rightTime > leftTime) return 1;
+      if (rightTime < leftTime) return -1;
+      return 0;
+    })
+    .slice(0, 100);
+}
+
+function upsertBibleReadingHistory(
+  items: BibleReadingPosition[],
+  record: SyncPulledRecord,
+  pendingByRecord: PendingClientUpdatedAtByRecord,
+  pendingByChapter: Map<string, string>,
+): BibleReadingPosition[] {
+  if (record.deleted) {
+    const existing = newestBibleReadingRow(items.filter((item) => item.id === record.id));
+    if (!shouldApply(record, existing, 'bible_reading_positions', pendingByRecord)) return items;
+    return items.filter((item) => item.id !== record.id);
+  }
+
+  const mapped = mapBibleReadingPosition(record);
+  if (!mapped?.id) return items;
+
+  if (pendingBibleReadingWriteIsNewer(record, pendingByRecord)) return items;
+
+  const pendingChapterAt = pendingByChapter.get(`${mapped.bookId}:${mapped.chapter}`);
+  const remoteClientUpdatedAt = recordClientUpdatedAt(record);
+  if (pendingChapterAt && (!remoteClientUpdatedAt || pendingChapterAt > remoteClientUpdatedAt)) {
+    return items;
+  }
+
+  const incomingClock = recordUpdatedAt(record);
+  const sameIdWinner = newestBibleReadingRow(items.filter((item) => item.id === mapped.id));
+  const sameIdClock = bibleReadingContentClock(sameIdWinner);
+  if (sameIdWinner && sameIdClock && incomingClock < sameIdClock) {
+    return items;
+  }
+  if (
+    sameIdWinner
+    && sameIdClock
+    && incomingClock === sameIdClock
+    && (sameIdWinner.bookId !== mapped.bookId || sameIdWinner.chapter !== mapped.chapter)
+  ) {
+    return items;
+  }
+
+  const destWinner = newestBibleReadingRow(
+    items.filter((item) => item.bookId === mapped.bookId && item.chapter === mapped.chapter),
+  );
+  const destClock = bibleReadingContentClock(destWinner);
+
+  if (destWinner && destClock && incomingClock < destClock) {
+    return items;
+  }
+
+  if (destWinner && destClock && incomingClock === destClock) {
+    if (destWinner.translation !== mapped.translation) return items;
+    if (destWinner.id === mapped.id) return items;
+    const incomingRow = { ...destWinner, id: mapped.id };
+    return finalizeBibleReadingHistory(
+      items.map((item) => (item === destWinner ? incomingRow : item)),
+      incomingRow,
+    );
+  }
+
+  return finalizeBibleReadingHistory([mapped, ...items], mapped);
+}
+
 function mapBibleReadingPosition(record: SyncPulledRecord): BibleReadingPosition | null {
   const row = asRecord(record.data);
   const bookId = asNumber(row.bookId);
@@ -248,6 +416,7 @@ function mapBibleReadingPosition(record: SyncPulledRecord): BibleReadingPosition
     bookId,
     bookName: asString(row.bookName) ?? '',
     chapter,
+    verse: asPositiveInteger(row.verse),
     translation: asString(row.translation) ?? 'BSB',
     lastReadAt: asString(row.lastReadAt) ?? recordUpdatedAt(record),
     updatedAt: recordUpdatedAt(record),
@@ -462,6 +631,7 @@ function mapMessage(record: SyncPulledRecord): (CompanionMessage & { conversatio
 function applyMainStoreChanges(payload: SyncPullResponse): void {
   const changes = payload.changes;
   const pendingByRecord = pendingClientUpdatedAtsByRecord();
+  const pendingByChapter = pendingBibleReadingByChapter();
   useUnfoldStore.setState((state) => {
     let devotionals = state.devotionals;
     for (const record of changes.devotionals ?? []) {
@@ -520,7 +690,7 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
         state.bibleHighlights
       ),
       bibleReadingHistory: (changes.bible_reading_positions ?? []).reduce(
-        (items, record) => upsertRecord(items, record, 'bible_reading_positions', pendingByRecord, mapBibleReadingPosition),
+        (items, record) => upsertBibleReadingHistory(items, record, pendingByRecord, pendingByChapter),
         state.bibleReadingHistory
       ),
       checkIns: (changes.check_ins ?? []).reduce(
@@ -630,40 +800,82 @@ export function applyServerConflictRecords(results: SyncPushResult[]): void {
 }
 
 export async function pullAllUserData(options: PullAllUserDataOptions = {}): Promise<SyncPullResponse> {
+  const session = captureSyncSession();
+  assertSyncSessionCurrent(session, 'sync pull');
   const lastPulledAt = options.full ? null : syncGet(LAST_PULLED_AT_KEY);
   const headers = await getAuthHeaders();
-  const response = await fetch(`${PRIMARY_BACKEND_URL}/api/sync/pull`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ lastPulledAt }),
-  });
+  assertSyncSessionCurrent(session, 'sync pull');
 
-  if (!response.ok) {
-    const body = await response.text().catch(() => '');
-    throw new Error(`Sync pull failed: ${response.status} ${body.slice(0, 120)}`);
+  const controller = new AbortController();
+  const unregister = registerSyncTransport(controller);
+  try {
+    const response = await fetch(`${PRIMARY_BACKEND_URL}/api/sync/pull`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ lastPulledAt }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      // See devotional-sync-pull.ts: the body is diagnostics, not an error
+      // message, because `scrubException` lets an exception value through.
+      logger.warn('[sync/pull-all] pull failed', response.status, body.slice(0, 120));
+      throw new Error(`Sync pull failed: ${response.status}`);
+    }
+
+    const payload = await response.json() as SyncPullResponse;
+    assertSyncSessionCurrent(session, 'sync pull');
+    applyPulledUserData(payload);
+    mmkvStorage.setItem(LAST_PULLED_AT_KEY, payload.timestamp);
+    return payload;
+  } catch (error) {
+    if (!isSyncSessionCurrent(session)) {
+      throw new SyncSessionInvalidatedError('sync pull');
+    }
+    throw error;
+  } finally {
+    unregister();
   }
-
-  const payload = await response.json() as SyncPullResponse;
-  applyPulledUserData(payload);
-  mmkvStorage.setItem(LAST_PULLED_AT_KEY, payload.timestamp);
-  return payload;
 }
 
-let pullInFlight: Promise<void> | null = null;
+type InFlightPull = {
+  session: number;
+  promise: Promise<void>;
+};
+
+let pullInFlight: InFlightPull | null = null;
 
 export function triggerUserDataPull(reason: string, options: PullAllUserDataOptions = {}): Promise<void> {
-  if (pullInFlight) return pullInFlight;
-  pullInFlight = pullAllUserData(options)
+  if (isLocalResetInProgress()) {
+    return Promise.resolve();
+  }
+  const session = captureSyncSession();
+  if (pullInFlight && pullInFlight.session === session) {
+    return pullInFlight.promise;
+  }
+  const promise = pullAllUserData(options)
     .then((payload) => {
       logger.log(`[sync/pull-all] ${reason} applied timestamp=${payload.timestamp}`);
     })
     .catch((error) => {
+      if (error instanceof SyncSessionInvalidatedError) {
+        logger.log(`[sync/pull-all] ${reason} discarded after session change`);
+        return;
+      }
       logger.warn(`[sync/pull-all] ${reason} failed`, error);
     })
     .finally(() => {
-      pullInFlight = null;
+      if (pullInFlight?.promise === promise) {
+        pullInFlight = null;
+      }
     });
-  return pullInFlight;
+  pullInFlight = { session, promise };
+  return promise;
+}
+
+export function resetUserDataPullForTesting(): void {
+  pullInFlight = null;
 }
 
 export function registerUserDataPullOnReconnect(): () => void {

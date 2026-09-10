@@ -40,7 +40,8 @@ jest.mock('../mmkv-storage', () => {
 
 import { mmkvStorage } from '../mmkv-storage';
 import { useUnfoldStore } from '../store';
-import { drainSyncOutbox, OUTBOX_KEY, peekSyncOutbox, resetDrainStateForTesting } from '../sync-outbox';
+const fullSyncPull = jest.requireActual('../full-sync-pull') as typeof import('../full-sync-pull');
+const { drainSyncOutbox, enqueueSyncChanges, OUTBOX_KEY, peekSyncOutbox, resetDrainStateForTesting } = jest.requireActual('../sync-outbox') as typeof import('../sync-outbox');
 
 const T0 = new Date('2026-09-01T12:00:00.000Z');
 const at = (offsetMs: number) => new Date(T0.getTime() + offsetMs).toISOString();
@@ -72,6 +73,22 @@ function serverNoteRow(id: string, content: string, clientUpdatedAt: string, del
     updatedAt: clientUpdatedAt,
     clientUpdatedAt,
     deletedAt,
+  };
+}
+
+function serverBiblePositionRow(id: string, clientUpdatedAt: string) {
+  return {
+    id,
+    clerkUserId: 'user-1',
+    bookId: 43,
+    bookName: 'John',
+    chapter: 3,
+    translation: 'BSB',
+    lastReadAt: clientUpdatedAt,
+    createdAt: at(0),
+    updatedAt: clientUpdatedAt,
+    clientUpdatedAt,
+    deletedAt: null,
   };
 }
 
@@ -143,7 +160,7 @@ describe('push conflict → server version', () => {
     expect(peekSyncOutbox()).toHaveLength(0);
   });
 
-  it('ignores accepted/rejected results and conflicts without serverData', async () => {
+  it('retains a conflict without serverData and does not apply it', async () => {
     const id = addNote('<p>mine</p>');
     mockPushResponse(() => [
       { table: 'notes', id, status: 'conflict', serverUpdatedAt: at(30_000) },
@@ -152,6 +169,139 @@ describe('push conflict → server version', () => {
     await drainSyncOutbox();
 
     expect(useUnfoldStore.getState().notes.find((n) => n.id === id)?.content).toBe('<p>mine</p>');
+    expect(peekSyncOutbox()).toEqual([expect.objectContaining({ table: 'notes', id })]);
+  });
+
+  it('does not apply an explicit non-composite remapped conflict', async () => {
+    const id = addNote('<p>mine</p>');
+    const serverData = serverNoteRow('server-note-a', '<p>B remapped</p>', at(30_000));
+    mockPushResponse(() => [{
+      table: 'notes',
+      requestedId: id,
+      id: 'server-note-a',
+      status: 'conflict',
+      serverUpdatedAt: serverData.updatedAt,
+      serverData,
+    }]);
+
+    await drainSyncOutbox();
+
+    expect(useUnfoldStore.getState().notes.find((n) => n.id === id)?.content).toBe('<p>mine</p>');
+    expect(useUnfoldStore.getState().notes.some((item) => item.id === 'server-note-a')).toBe(false);
+    expect(peekSyncOutbox()).toEqual([expect.objectContaining({ table: 'notes', id })]);
+  });
+
+  it('does not apply a remapped conflict while newer work remains under the requested id', async () => {
+    const requestedId = 'client-position-b';
+    enqueueSyncChanges([{
+      table: 'bible_reading_positions',
+      id: requestedId,
+      clientUpdatedAt: at(0),
+      deleted: false,
+      data: { schemaVersion: 1, book: 'John' },
+    }]);
+    mockPushResponse(() => {
+      jest.setSystemTime(new Date(T0.getTime() + 60_000));
+      enqueueSyncChanges([{
+        table: 'bible_reading_positions',
+        id: requestedId,
+        clientUpdatedAt: at(60_000),
+        deleted: false,
+        data: { schemaVersion: 1, book: 'John', verse: 3 },
+      }]);
+      const serverData = serverBiblePositionRow('server-position-a', at(30_000));
+      return [{
+        table: 'bible_reading_positions',
+        requestedId,
+        id: serverData.id,
+        status: 'conflict',
+        serverUpdatedAt: serverData.updatedAt,
+        serverData,
+      }];
+    });
+
+    const applyConflicts = jest.spyOn(fullSyncPull, 'applyServerConflictRecords');
+    await drainSyncOutbox();
+
+    expect(applyConflicts).not.toHaveBeenCalled();
+    expect(peekSyncOutbox()).toEqual([
+      expect.objectContaining({
+        table: 'bible_reading_positions',
+        id: requestedId,
+        clientUpdatedAt: at(60_000),
+      }),
+    ]);
+    expect(useUnfoldStore.getState().bibleReadingHistory.some((item) => item.id === 'server-position-a')).toBe(false);
+    applyConflicts.mockRestore();
+  });
+
+  it('applies a remapped composite conflict when no newer requested-id work remains', async () => {
+    const requestedId = 'client-position-b';
+    const serverData = serverBiblePositionRow('server-position-a', at(30_000));
+    enqueueSyncChanges([{
+      table: 'bible_reading_positions',
+      id: requestedId,
+      clientUpdatedAt: at(0),
+      deleted: false,
+      data: { schemaVersion: 1, bookId: 43, chapter: 1 },
+    }]);
+    mockPushResponse(() => [{
+      table: 'bible_reading_positions',
+      requestedId,
+      id: serverData.id,
+      status: 'conflict',
+      serverUpdatedAt: serverData.updatedAt,
+      serverData,
+    }]);
+
+    await drainSyncOutbox();
+
     expect(peekSyncOutbox()).toHaveLength(0);
+    const applied = useUnfoldStore.getState().bibleReadingHistory.find((item) => item.id === 'server-position-a');
+    expect(applied).toEqual(expect.objectContaining({
+      id: 'server-position-a',
+      bookId: 43,
+      bookName: 'John',
+      chapter: 3,
+      translation: 'BSB',
+    }));
+  });
+
+  it('does not apply a remapped conflict when equal-timestamp requested-id work remains', async () => {
+    const requestedId = 'client-position-b';
+    const submitted = {
+      table: 'bible_reading_positions' as const,
+      id: requestedId,
+      clientUpdatedAt: at(0),
+      deleted: false,
+      data: { schemaVersion: 1, bookId: 43, chapter: 1 },
+    };
+    const replacement = {
+      ...submitted,
+      data: { schemaVersion: 1, bookId: 43, chapter: 5 },
+    };
+    enqueueSyncChanges([submitted]);
+    mockPushResponse(() => {
+      enqueueSyncChanges([replacement]);
+      const serverData = serverBiblePositionRow('server-position-a', at(30_000));
+      return [{
+        table: 'bible_reading_positions',
+        requestedId,
+        id: serverData.id,
+        status: 'conflict',
+        serverUpdatedAt: serverData.updatedAt,
+        serverData,
+      }];
+    });
+
+    const applyConflicts = jest.spyOn(fullSyncPull, 'applyServerConflictRecords');
+    await drainSyncOutbox();
+
+    expect(applyConflicts).not.toHaveBeenCalled();
+    expect(peekSyncOutbox()).toEqual([
+      expect.objectContaining({ id: requestedId, data: replacement.data }),
+    ]);
+    expect(useUnfoldStore.getState().bibleReadingHistory.some((item) => item.id === 'server-position-a')).toBe(false);
+    applyConflicts.mockRestore();
   });
 });

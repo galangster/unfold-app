@@ -1,5 +1,5 @@
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity } from 'react-native';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, TextInput, TouchableOpacity, ScrollView } from 'react-native';
 import { FlashList, type ListRenderItem } from '@shopify/flash-list';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -317,9 +317,22 @@ export default function MyContentScreen() {
   const isHomeEntry = params.from === 'home';
 
   const [activeTab, setActiveTab] = useState<Tab>(() => getInitialTab(params.tab));
+  const tabBarRef = useRef<ScrollView>(null);
+  const tabOffsets = useRef<Partial<Record<Tab, number>>>({});
   const [highlightTypeFilter, setHighlightTypeFilter] = useState<HighlightTypeFilter>('all');
   const [highlightSourceFilter, setHighlightSourceFilter] = useState<HighlightSourceFilter>('all');
   const [suppressInitialContentMotion, setSuppressInitialContentMotion] = useState(isHomeEntry);
+
+  const revealTab = useCallback((tab: Tab, animated: boolean) => {
+    const offset = tabOffsets.current[tab];
+    if (offset !== undefined) {
+      tabBarRef.current?.scrollTo({ x: Math.max(0, offset - Spacing['5']), animated });
+    }
+  }, []);
+
+  useEffect(() => {
+    revealTab(activeTab, !reducedMotion);
+  }, [activeTab, reducedMotion, revealTab]);
 
   useEffect(() => {
     if (!isHomeEntry) return;
@@ -735,12 +748,22 @@ export default function MyContentScreen() {
         </Animated.View>
       )}
 
-      {/* Elegant Tab Bar */}
-      <View
-        style={{
-          flexDirection: 'row',
+      {/* Preserve the native scroll ref; these tabs use only inline styles. */}
+      <ScrollView
+        cssInterop={false}
+        ref={tabBarRef}
+        horizontal
+        onContentSizeChange={() => revealTab(activeTab, false)}
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{
+          flexGrow: 1,
+          alignItems: 'center',
           paddingHorizontal: Spacing['5'],
           paddingBottom: Spacing['4'],
+          gap: Spacing['2'],
+        }}
+        style={{
+          flexGrow: 0,
           borderBottomWidth: 1,
           borderBottomColor: colors.border,
         }}
@@ -751,12 +774,18 @@ export default function MyContentScreen() {
             <TouchableOpacity activeOpacity={0.7}
               key={tab.id}
               onPress={() => handleTabPress(tab.id)}
+              onLayout={({ nativeEvent }) => {
+                tabOffsets.current[tab.id] = nativeEvent.layout.x;
+                if (isActive) revealTab(tab.id, false);
+              }}
               accessibilityRole="tab"
               accessibilityState={{ selected: isActive }}
               accessibilityLabel={`${tab.label}, ${tab.count} ${tab.count === 1 ? 'item' : 'items'}, ${index + 1} of ${tabs.length}`}
               style={{
-                flex: 1,
+                flexShrink: 0,
                 alignItems: 'center',
+                justifyContent: 'center',
+                minHeight: 44,
                 paddingVertical: Spacing['3'],
               }}
             >
@@ -776,6 +805,7 @@ export default function MyContentScreen() {
                     fontFamily: isActive ? FontFamily.uiSemiBold : FontFamily.ui,
                     fontSize: 13,
                     color: isActive ? colors.text : colors.textMuted,
+                    flexShrink: 0,
                   }}
                 >
                   {tab.label}
@@ -783,7 +813,7 @@ export default function MyContentScreen() {
                 <View
                   style={{
                     minWidth: 18,
-                    height: 18,
+                    minHeight: 18,
                     borderRadius: 9,
                     backgroundColor: isActive ? colors.accent : colors.border,
                     alignItems: 'center',
@@ -805,7 +835,7 @@ export default function MyContentScreen() {
             </TouchableOpacity>
           );
         })}
-      </View>
+      </ScrollView>
 
       {/* Tab Content — one FlashList over the active tab's rows. */}
       <Animated.View key={activeTab} entering={libraryContentEntering} style={{ flex: 1 }}>

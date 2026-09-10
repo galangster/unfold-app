@@ -84,6 +84,157 @@ describe('createDebouncedJSONStorage (WR-23)', () => {
     expect(storage.flushPendingWrites()).toBe(false);
   });
 
+  it('flushPendingWritesAsync waits for the concrete storage write', async () => {
+    let resolveWrite: (() => void) | undefined;
+    const inner: StateStorage = {
+      getItem: jest.fn(() => null),
+      setItem: jest.fn(() => new Promise<void>((resolve) => { resolveWrite = resolve; })),
+      removeItem: jest.fn(),
+    };
+    const storage = createDebouncedJSONStorage<Stored>(inner);
+
+    storage.setItem('k', value({ count: 11 }));
+    let settled = false;
+    const flushed = storage.flushPendingWritesAsync().then((result) => {
+      settled = true;
+      return result;
+    });
+
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    expect(storage.hasPendingWrites()).toBe(false);
+
+    resolveWrite?.();
+    await expect(flushed).resolves.toBe(true);
+    expect(settled).toBe(true);
+  });
+
+  it('joins a write already started by a synchronous flush', async () => {
+    let resolveWrite: (() => void) | undefined;
+    const inner: StateStorage = {
+      getItem: jest.fn(() => null),
+      setItem: jest.fn(() => new Promise<void>((resolve) => { resolveWrite = resolve; })),
+      removeItem: jest.fn(),
+    };
+    const storage = createDebouncedJSONStorage<Stored>(inner);
+
+    storage.setItem('k', value({ count: 21 }));
+    expect(storage.flushPendingWrites()).toBe(true);
+
+    let joined = false;
+    const flush = storage.flushPendingWritesAsync().then((result) => {
+      joined = true;
+      return result;
+    });
+    await Promise.resolve();
+    expect(joined).toBe(false);
+
+    resolveWrite?.();
+    await expect(flush).resolves.toBe(true);
+    expect(joined).toBe(true);
+  });
+
+  it('orders consecutive writes and waits for the latest value', async () => {
+    const resolvers: (() => void)[] = [];
+    const inner: StateStorage = {
+      getItem: jest.fn(() => null),
+      setItem: jest.fn(() => new Promise<void>((resolve) => { resolvers.push(resolve); })),
+      removeItem: jest.fn(),
+    };
+    const storage = createDebouncedJSONStorage<Stored>(inner);
+
+    storage.setItem('k', value({ count: 31 }));
+    const first = storage.flushPendingWritesAsync();
+    storage.setItem('k', value({ count: 32 }));
+    const second = storage.flushPendingWritesAsync();
+
+    expect(inner.setItem).toHaveBeenCalledTimes(1);
+    resolvers[0]();
+    await first;
+    await Promise.resolve();
+    expect(inner.setItem).toHaveBeenCalledTimes(2);
+
+    resolvers[1]();
+    await expect(second).resolves.toBe(true);
+    expect(JSON.parse((inner.setItem as jest.Mock).mock.calls[1][1])).toEqual(value({ count: 32 }));
+  });
+
+  it('flushPendingWritesAsync reports a concrete storage failure', async () => {
+    const inner: StateStorage = {
+      getItem: jest.fn(() => null),
+      setItem: jest.fn(() => Promise.reject(new Error('write failed'))),
+      removeItem: jest.fn(),
+    };
+    const storage = createDebouncedJSONStorage<Stored>(inner);
+
+    storage.setItem('k', value({ count: 12 }));
+
+    await expect(storage.flushPendingWritesAsync()).rejects.toThrow('write failed');
+  });
+
+  it('allows a later full-state write after an earlier failure', async () => {
+    const inner: StateStorage = {
+      getItem: jest.fn(() => null),
+      setItem: jest
+        .fn()
+        .mockRejectedValueOnce(new Error('first write failed'))
+        .mockResolvedValueOnce(undefined),
+      removeItem: jest.fn(),
+    };
+    const storage = createDebouncedJSONStorage<Stored>(inner);
+
+    storage.setItem('k', value({ count: 41 }));
+    await expect(storage.flushPendingWritesAsync()).rejects.toThrow('first write failed');
+
+    storage.setItem('k', value({ count: 42 }));
+    await expect(storage.flushPendingWritesAsync()).resolves.toBe(true);
+    expect(inner.setItem).toHaveBeenCalledTimes(2);
+  });
+
+  it('orders removal after an in-flight write so deleted data cannot return', async () => {
+    let resolveWrite: (() => void) | undefined;
+    const inner: StateStorage = {
+      getItem: jest.fn(() => null),
+      setItem: jest.fn(() => new Promise<void>((resolve) => { resolveWrite = resolve; })),
+      removeItem: jest.fn(),
+    };
+    const storage = createDebouncedJSONStorage<Stored>(inner);
+
+    storage.setItem('k', value({ count: 51 }));
+    storage.flushPendingWrites();
+    storage.removeItem('k');
+
+    expect(inner.removeItem).not.toHaveBeenCalled();
+    resolveWrite?.();
+    await expect(storage.flushPendingWritesAsync()).resolves.toBe(true);
+    expect(inner.removeItem).toHaveBeenCalledWith('k');
+    expect((inner.setItem as jest.Mock).mock.invocationCallOrder[0]).toBeLessThan(
+      (inner.removeItem as jest.Mock).mock.invocationCallOrder[0],
+    );
+  });
+
+  it('orders a new write after an in-flight removal', async () => {
+    let resolveRemoval: (() => void) | undefined;
+    const inner: StateStorage = {
+      getItem: jest.fn(() => null),
+      setItem: jest.fn(),
+      removeItem: jest.fn(() => new Promise<void>((resolve) => { resolveRemoval = resolve; })),
+    };
+    const storage = createDebouncedJSONStorage<Stored>(inner);
+
+    storage.removeItem('k');
+    storage.setItem('k', value({ count: 52 }));
+    const flushed = storage.flushPendingWritesAsync();
+
+    expect(inner.setItem).not.toHaveBeenCalled();
+    resolveRemoval?.();
+    await expect(flushed).resolves.toBe(true);
+    expect(inner.setItem).toHaveBeenCalledTimes(1);
+    expect((inner.removeItem as jest.Mock).mock.invocationCallOrder[0]).toBeLessThan(
+      (inner.setItem as jest.Mock).mock.invocationCallOrder[0],
+    );
+  });
+
   it('getItem serves the pending value inside the debounce window', () => {
     const { inner } = makeInner();
     const storage = createDebouncedJSONStorage<Stored>(inner);

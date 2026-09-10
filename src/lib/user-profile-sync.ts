@@ -1,9 +1,16 @@
 import { getAuthHeaders, PRIMARY_BACKEND_URL } from './api-config';
-import { getDeviceId } from './mmkv-storage';
 import { logger } from './logger';
+import { getDeviceId } from './mmkv-storage';
+import type { UserProfile } from './store';
 import { enqueueSyncChanges } from './sync-outbox';
 import { buildSyncPushBody } from './sync-push-body';
-import type { UserProfile } from './store';
+import {
+  assertSyncSessionCurrent,
+  captureSyncSession,
+  isSyncSessionCurrent,
+  registerSyncTransport,
+  SyncSessionInvalidatedError,
+} from './sync-session-fence';
 
 export type UserProfileSyncChange = {
   table: 'users';
@@ -30,6 +37,7 @@ export function buildUserProfileSyncData(user: UserProfile): Record<string, unkn
     devotionalLength: user.devotionalLength,
     reminderTime: user.reminderTime,
     dailyReminderEnabled: user.dailyReminderEnabled,
+    localDailyReminderScheduled: user.localDailyReminderScheduled,
     bibleTranslation: user.bibleTranslation,
     fontSize: user.fontSize,
     themeMode: user.themeMode,
@@ -77,13 +85,21 @@ export async function syncUserProfileToBackend(
   user: UserProfile,
   clientUpdatedAt = new Date().toISOString()
 ): Promise<void> {
+  const session = captureSyncSession();
+  assertSyncSessionCurrent(session, 'user profile sync');
   const change = buildUserProfileSyncChange(user, clientUpdatedAt);
 
+  const controller = new AbortController();
+  const unregister = registerSyncTransport(controller);
   try {
+    const headers = await getAuthHeaders();
+    assertSyncSessionCurrent(session, 'user profile sync');
+
     const response = await fetch(`${PRIMARY_BACKEND_URL}/api/sync/push`, {
       method: 'POST',
-      headers: await getAuthHeaders(),
+      headers,
       body: buildSyncPushBody([change]),
+      signal: controller.signal,
     });
 
     if (!response.ok) {
@@ -93,6 +109,7 @@ export async function syncUserProfileToBackend(
     const payload = await response.json().catch(() => null) as {
       results?: Array<{ status?: string; reason?: string }>;
     } | null;
+    assertSyncSessionCurrent(session, 'user profile sync');
     const result = payload?.results?.[0];
     if (result?.status && result.status !== 'accepted') {
       throw new Error(`User profile sync ${result.status}${result.reason ? `: ${result.reason}` : ''}`);
@@ -100,7 +117,14 @@ export async function syncUserProfileToBackend(
 
     logger.log('[user-sync] Profile synced to backend');
   } catch (error) {
+    if (!isSyncSessionCurrent(session)) {
+      throw error instanceof SyncSessionInvalidatedError
+        ? error
+        : new SyncSessionInvalidatedError('user profile sync');
+    }
     enqueueSyncChanges([change]);
     throw error;
+  } finally {
+    unregister();
   }
 }

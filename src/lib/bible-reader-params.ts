@@ -12,6 +12,12 @@ import { BIBLE_BOOKS } from '@/lib/bible-constants';
 
 type RouteParam = string | string[] | undefined;
 
+type SavedBiblePosition = {
+  bookId: number;
+  chapter: number;
+  verse?: number;
+};
+
 export const MIN_BOOK_ID = 1;
 export const MAX_BOOK_ID = BIBLE_BOOKS.length;
 /** Psalm 119 — static ceiling used before the chapter has loaded. */
@@ -67,4 +73,88 @@ export function resolveTargetVerse(
     return lastVerse > 0 ? Math.min(parsed, lastVerse) : parsed;
   }
   return Math.min(parsed, MAX_VERSE_NUMBER);
+}
+
+/**
+ * Pick the saved semantic verse anchor for a newly loaded chapter. Older
+ * reading-history rows have no verse and keep the previous chapter-start
+ * behavior.
+ */
+export function resolveInitialVerseAnchor(params: {
+  bookId: number;
+  chapter: number;
+  history: readonly SavedBiblePosition[];
+}): number | null {
+  const saved = params.history.find(
+    (position) => position.bookId === params.bookId && position.chapter === params.chapter,
+  );
+  return resolveTargetVerse(saved?.verse === undefined ? undefined : String(saved.verse), undefined);
+}
+
+/** Keep the current chapter anchor when settings trigger a position rewrite. */
+export function resolveRecordedVerseAnchor(params: {
+  entryVerse: number;
+  currentVerse?: number;
+  verses: readonly { verse: number }[] | null | undefined;
+}): number {
+  return resolveTargetVerse(String(params.currentVerse ?? params.entryVerse), params.verses) ?? 1;
+}
+
+/** Restore the semantic verse only when the same chapter's rendered content changes. */
+export function resolveTranslationRefreshVerse(params: {
+  hadPreviousContent: boolean;
+  previousChapterKey: string;
+  chapterKey: string;
+  persistedPosition: { chapterKey: string; verse: number } | null;
+}): number | null {
+  if (!params.hadPreviousContent || params.previousChapterKey !== params.chapterKey) return null;
+  if (params.persistedPosition?.chapterKey !== params.chapterKey) return null;
+  return params.persistedPosition.verse;
+}
+
+export type BibleVerseScrollTarget = {
+  verse: number;
+  source: 'explicit' | 'saved';
+};
+
+/**
+ * Resolve one scroll target for the current render. A later explicit target
+ * remains valid after the saved chapter-entry fallback has been consumed.
+ */
+export function resolveVerseScrollTarget(params: {
+  routeVerse?: RouteParam;
+  explicitVerseConsumed?: boolean;
+  savedVerse: number | null;
+  savedVerseConsumed: boolean;
+  verses: readonly { verse: number }[] | null | undefined;
+}): BibleVerseScrollTarget | null {
+  const explicitVerse = resolveTargetVerse(params.routeVerse, params.verses);
+  if (explicitVerse !== null && !params.explicitVerseConsumed) {
+    return { verse: explicitVerse, source: 'explicit' };
+  }
+  if (params.savedVerseConsumed || params.savedVerse === null) return null;
+
+  const savedVerse = resolveTargetVerse(String(params.savedVerse), params.verses);
+  return savedVerse === null ? null : { verse: savedVerse, source: 'saved' };
+}
+
+/** Find the first verse visible below the fixed reader header. */
+export function findVisibleVerseAnchor(
+  layouts: Readonly<Record<number, number>>,
+  contentOffsetY: number,
+  headerOffset: number,
+): number | null {
+  const ordered = Object.entries(layouts)
+    .map(([verse, y]) => ({ verse: Number(verse), y }))
+    .filter(({ verse, y }) => Number.isInteger(verse) && verse > 0 && Number.isFinite(y))
+    .sort((left, right) => left.y - right.y);
+  if (ordered.length === 0) return null;
+
+  const visibleTop = Math.max(0, contentOffsetY + headerOffset);
+  let anchor = ordered[0].verse;
+  for (const entry of ordered) {
+    if (entry.y > visibleTop) break;
+    anchor = entry.verse;
+  }
+  return anchor;
 }

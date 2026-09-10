@@ -341,13 +341,14 @@ const styles = StyleSheet.create({
   title: {
     fontFamily: FontFamily.uiSemiBold,
     fontSize: FontSize.lg,
+    flexShrink: 1,
   },
   input: {
     fontFamily: FontFamily.ui,
     fontSize: FontSize.base,
     paddingHorizontal: Spacing['4'],
     paddingVertical: CREATE_FOLDER_INPUT_LAYOUT.paddingVertical,
-    height: CREATE_FOLDER_INPUT_LAYOUT.height,
+    minHeight: CREATE_FOLDER_INPUT_LAYOUT.height,
     borderRadius: Radius.md,
     marginBottom: Spacing['4'],
   },

@@ -596,8 +596,8 @@ const smStyles = StyleSheet.create({
     gap: Spacing['3'],
   },
   stepNumber: {
-    width: 22,
-    height: 22,
+    minWidth: 22,
+    minHeight: 22,
     borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',

@@ -132,6 +132,15 @@ import {
   resolveTodayInflightAction,
   writeInflightGenerationJob,
 } from '../inflight-generation-job';
+import {
+  beginLocalResetSession,
+  endLocalResetSession,
+  resetSyncSessionFenceForTesting,
+} from '../generation-session';
+import {
+  INITIAL_GENERATION_REQUEST_ID_KEY,
+  readInitialGenerationRequestId,
+} from '../initial-generation-request';
 import { mmkvStorage } from '../mmkv-storage';
 import { useUnfoldStore, type UserProfile } from '../store';
 
@@ -196,11 +205,13 @@ const mounted: Tree[] = [];
 beforeEach(() => {
   jest.useFakeTimers();
   jest.clearAllMocks();
+  resetSyncSessionFenceForTesting();
   mockReplace.mockReset();
   mockPollJobStatus.mockReset();
   mockRetryJob.mockReset();
   mockSubmitGenerationJob.mockReset();
   mmkvStorage.removeItem(INFLIGHT_GENERATION_JOB_KEY);
+  mmkvStorage.removeItem(INITIAL_GENERATION_REQUEST_ID_KEY);
   useUnfoldStore.setState({
     devotionals: [],
     currentDevotionalId: null,
@@ -218,6 +229,36 @@ afterEach(async () => {
 });
 
 describe('regression: Jordan item 6 — Go home from /generating', () => {
+  it('reuses one request id when a lost initial POST response is retried', async () => {
+    mockSubmitGenerationJob
+      .mockRejectedValueOnce(new Error('Network request failed'))
+      .mockReturnValueOnce(new Promise(() => {}));
+
+    const tree = await renderScreen();
+    mounted.push(tree);
+
+    const firstRequestId = mockSubmitGenerationJob.mock.calls[0][0].requestId;
+    expect(firstRequestId).toBe(readInitialGenerationRequestId());
+
+    await press(tree, 'Try again');
+
+    expect(mockSubmitGenerationJob).toHaveBeenCalledTimes(2);
+    expect(mockSubmitGenerationJob.mock.calls[1][0].requestId).toBe(firstRequestId);
+  });
+
+  it('clears the request id when the reader starts over with new answers', async () => {
+    mockSubmitGenerationJob.mockRejectedValueOnce(new Error('Request rejected'));
+
+    const tree = await renderScreen();
+    mounted.push(tree);
+    expect(readInitialGenerationRequestId()).not.toBeNull();
+
+    await press(tree, 'Start over with new answers');
+
+    expect(readInitialGenerationRequestId()).toBeNull();
+    expect(mockReplace).toHaveBeenCalledWith('/onboarding');
+  });
+
   it('regression: Jordan item 6 — Go home marks the kept record so Today watches it instead of bouncing back to /generating', async () => {
     writeInflightGenerationJob({ jobId: 'job-1', devotionalId: 'devo-1', submittedAt: Date.now() - 30_000 });
     mockPollJobStatus.mockResolvedValue({ status: 'processing' });
@@ -225,7 +266,7 @@ describe('regression: Jordan item 6 — Go home from /generating', () => {
     const tree = await renderScreen();
     mounted.push(tree);
     // Resumed the record: the screen is on the ripple, polling the server.
-    expect(mockPollJobStatus).toHaveBeenCalledWith('job-1');
+    expect(mockPollJobStatus).toHaveBeenCalledWith('job-1', expect.any(Number));
 
     await press(tree, GO_HOME_LABEL);
 
@@ -261,7 +302,7 @@ describe('regression: Jordan item 6 — Go home from /generating', () => {
     const retry = deferred<{ jobId: string }>();
     mockRetryJob.mockReturnValue(retry.promise);
     await press(tree, 'Try again');
-    expect(mockRetryJob).toHaveBeenCalledWith('job-1');
+    expect(mockRetryJob).toHaveBeenCalledWith('job-1', expect.any(Number));
     expect(readInflightGenerationJob()).toBeNull();
 
     await press(tree, GO_HOME_LABEL);
@@ -284,6 +325,98 @@ describe('regression: Jordan item 6 — Go home from /generating', () => {
       job: expect.objectContaining({ jobId: 'job-2', leftForHome: true }),
     });
     // Today owns the watch: the unmounted screen does not start polling job-2.
-    expect(mockPollJobStatus).not.toHaveBeenCalledWith('job-2');
+    expect(mockPollJobStatus).not.toHaveBeenCalledWith('job-2', expect.any(Number));
+  });
+
+  it('stops a resumed poll on unmount so a late completion cannot land', async () => {
+    writeInflightGenerationJob({ jobId: 'job-1', devotionalId: 'devo-1', submittedAt: Date.now() - 30_000 });
+    const poll = deferred<{
+      status: string;
+      result: { devotionalId: string; seriesTitle: string; totalDays: number; devotionalDay: { dayNumber: number; title: string } };
+    }>();
+    mockPollJobStatus.mockReturnValue(poll.promise);
+
+    const tree = await renderScreen();
+    mounted.push(tree);
+    expect(mockPollJobStatus).toHaveBeenCalledWith('job-1', expect.any(Number));
+
+    await act(async () => {
+      tree.unmount();
+    });
+    mounted.pop();
+
+    await act(async () => {
+      poll.resolve({
+        status: 'complete',
+        result: {
+          devotionalId: 'devo-1',
+          seriesTitle: 'Late title',
+          totalDays: 3,
+          devotionalDay: { dayNumber: 1, title: 'Late day' },
+        },
+      });
+    });
+    await flush();
+
+    expect(useUnfoldStore.getState().devotionals).toHaveLength(0);
+    expect(useUnfoldStore.getState().generationSession.status).toBe('running');
+  });
+
+  it('lets a same-session Go home keep a late first submission for Today', async () => {
+    const submit = deferred<{ jobId: string; devotionalId: string }>();
+    mockSubmitGenerationJob.mockReturnValue(submit.promise);
+
+    const tree = await renderScreen();
+    mounted.push(tree);
+    expect(mockSubmitGenerationJob).toHaveBeenCalled();
+
+    await press(tree, GO_HOME_LABEL);
+
+    await act(async () => {
+      submit.resolve({ jobId: 'job-late', devotionalId: 'devo-late' });
+    });
+    await flush();
+
+    const read = readInflightGenerationJob();
+    expect(read).toEqual(expect.objectContaining({
+      jobId: 'job-late',
+      devotionalId: 'devo-late',
+      leftForHome: true,
+    }));
+    expect(resolveTodayInflightAction(read, 'running')).toEqual({
+      action: 'watch-on-today',
+      job: expect.objectContaining({ jobId: 'job-late', leftForHome: true }),
+    });
+  });
+
+  it('does not apply a resumed completion after reset invalidates the originating session', async () => {
+    writeInflightGenerationJob({ jobId: 'job-1', devotionalId: 'devo-1', submittedAt: Date.now() - 30_000 });
+    const poll = deferred<{
+      status: string;
+      result: { devotionalId: string; seriesTitle: string; totalDays: number; devotionalDay: { dayNumber: number; title: string } };
+    }>();
+    mockPollJobStatus.mockReturnValue(poll.promise);
+
+    const tree = await renderScreen();
+    mounted.push(tree);
+
+    const token = beginLocalResetSession();
+    endLocalResetSession(token);
+
+    await act(async () => {
+      poll.resolve({
+        status: 'complete',
+        result: {
+          devotionalId: 'devo-1',
+          seriesTitle: 'Stale title',
+          totalDays: 3,
+          devotionalDay: { dayNumber: 1, title: 'Stale day' },
+        },
+      });
+    });
+    await flush();
+
+    expect(useUnfoldStore.getState().devotionals).toHaveLength(0);
+    expect(useUnfoldStore.getState().generationSession.status).not.toBe('complete');
   });
 });

@@ -1,10 +1,7 @@
 import {
   shouldWatchForGeneratedDay,
-  watchForGeneratedDay,
 } from '../generated-day-watch';
 import type { Devotional, DevotionalDay } from '../store';
-
-const immediate = async () => {};
 
 function day(dayNumber: number, devotionalId = 'devo-1'): DevotionalDay {
   return {
@@ -34,63 +31,6 @@ function devotional(overrides: Partial<Devotional> = {}): Devotional {
     ...overrides,
   };
 }
-
-describe('watchForGeneratedDay', () => {
-  it('resolves with the first non-empty fetch result', async () => {
-    const fetchDay = jest
-      .fn<Promise<string | null>, []>()
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce('day');
-
-    await expect(watchForGeneratedDay(fetchDay, { sleep: immediate })).resolves.toBe('day');
-    expect(fetchDay).toHaveBeenCalledTimes(3);
-  });
-
-  it('keeps polling through a failing fetch', async () => {
-    const fetchDay = jest
-      .fn<Promise<string | null>, []>()
-      .mockRejectedValueOnce(new Error('network'))
-      .mockResolvedValueOnce('day');
-
-    await expect(watchForGeneratedDay(fetchDay, { sleep: immediate })).resolves.toBe('day');
-    expect(fetchDay).toHaveBeenCalledTimes(2);
-  });
-
-  it('gives up after the attempt budget', async () => {
-    const fetchDay = jest.fn<Promise<string | null>, []>().mockResolvedValue(null);
-
-    await expect(watchForGeneratedDay(fetchDay, { sleep: immediate, maxAttempts: 4 })).resolves.toBeNull();
-    expect(fetchDay).toHaveBeenCalledTimes(4);
-  });
-
-  it('stops without fetching once cancelled', async () => {
-    let cancelled = false;
-    const fetchDay = jest.fn<Promise<string | null>, []>().mockResolvedValue(null);
-    const sleep = async () => {
-      cancelled = true;
-    };
-
-    await expect(
-      watchForGeneratedDay(fetchDay, { sleep, isCancelled: () => cancelled }),
-    ).resolves.toBeNull();
-    expect(fetchDay).not.toHaveBeenCalled();
-  });
-
-  it('waits the interval before the first fetch so a just-queued job has time to start', async () => {
-    const order: string[] = [];
-    const sleep = async () => {
-      order.push('sleep');
-    };
-    const fetchDay = async () => {
-      order.push('fetch');
-      return 'day';
-    };
-
-    await watchForGeneratedDay(fetchDay, { sleep });
-    expect(order).toEqual(['sleep', 'fetch']);
-  });
-});
 
 describe('shouldWatchForGeneratedDay', () => {
   const now = new Date(2026, 8, 3, 9, 0, 0); // Sep 3 — calendar day 3 of a Sep 1 series

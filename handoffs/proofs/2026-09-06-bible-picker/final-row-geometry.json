@@ -1,0 +1,24 @@
+{
+  "capture": "extra-extra-extra-large",
+  "screenWidthPoints": 402,
+  "oldTestament": {
+    "referenceRow": [
+      { "label": "Haggai", "x": 16, "width": 182 },
+      { "label": "Zechariah", "x": 204, "width": 182 }
+    ],
+    "finalRow": [
+      { "label": "Malachi", "x": 16, "width": 182 }
+    ]
+  },
+  "newTestament": {
+    "referenceRow": [
+      { "label": "3 John", "x": 16, "width": 182 },
+      { "label": "Jude", "x": 204, "width": 182 }
+    ],
+    "finalRow": [
+      { "label": "Revelation", "x": 16, "width": 182 }
+    ]
+  },
+  "source": "FlowDeck accessibility tree",
+  "note": "Existing Debug Unfold app connected to Metro 8083. This is not App Store build 262 proof."
+}
