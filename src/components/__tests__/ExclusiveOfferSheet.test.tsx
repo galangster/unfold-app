@@ -3,9 +3,16 @@
  * purchase completed inside it only closed the sheet, so a person who paid
  * during onboarding stayed on the paywall. A grant must reach the host's
  * onPurchaseSuccess; a plain dismissal must keep the old behaviour.
+ *
+ * The churned/winback half had no cover at all. It now pins down the three
+ * dormant faults that flag would have shipped: no fallback when the winback SKU
+ * is off sale, a failure path that still burned the once-ever offer under
+ * offer-shaped copy, and a failure state that stayed unreachable so the sheet
+ * spun forever.
  */
 
 import React from 'react';
+import { ActivityIndicator } from 'react-native';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ExclusiveOfferSheet } from '../ExclusiveOfferSheet';
@@ -17,6 +24,10 @@ const mockGetOfferings = jest.fn();
 const mockPurchasePackage = jest.fn();
 const mockRestorePurchases = jest.fn();
 const mockUpdateUser = jest.fn();
+const mockRouterPush = jest.fn();
+
+// Flipped per test to exercise the query-disabled dead end.
+let mockRevenueCatEnabled = true;
 
 // A real QueryClient keeps cache timers alive past the test and stops the Jest
 // worker exiting. These fakes run the same queryFn/mutationFn -> onSuccess path
@@ -32,13 +43,24 @@ jest.mock('@tanstack/react-query', () => {
       queryFn: () => Promise<unknown>;
       enabled?: boolean;
     }) => {
-      const [state, setState] = ReactModule.useState({ data: undefined, isLoading: true });
+      // react-query v5 leaves a disabled query pending with isLoading false, and
+      // clears isLoading on rejection too. The sheet's failure state keys off
+      // exactly that, so the fake has to reproduce both.
+      const [state, setState] = ReactModule.useState(() => ({
+        data: undefined,
+        isLoading: enabled !== false,
+      }));
       ReactModule.useEffect(() => {
         if (enabled === false) return undefined;
         let cancelled = false;
-        Promise.resolve(queryFn()).then((data: unknown) => {
-          if (!cancelled) setState({ data, isLoading: false });
-        });
+        Promise.resolve(queryFn()).then(
+          (data: unknown) => {
+            if (!cancelled) setState({ data, isLoading: false });
+          },
+          () => {
+            if (!cancelled) setState({ data: undefined, isLoading: false });
+          },
+        );
         return () => {
           cancelled = true;
         };
@@ -75,7 +97,7 @@ jest.mock('@/lib/revenuecatClient', () => ({
   getOfferings: (...args: unknown[]) => mockGetOfferings(...args),
   purchasePackage: (...args: unknown[]) => mockPurchasePackage(...args),
   restorePurchases: (...args: unknown[]) => mockRestorePurchases(...args),
-  isRevenueCatEnabled: () => true,
+  isRevenueCatEnabled: () => mockRevenueCatEnabled,
 }));
 
 jest.mock('@/lib/store', () => ({
@@ -152,7 +174,9 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 
-jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
+jest.mock('expo-router', () => ({
+  useRouter: () => ({ push: (...args: unknown[]) => mockRouterPush(...args) }),
+}));
 
 jest.mock('expo-haptics', () => ({
   impactAsync: jest.fn(),
@@ -166,9 +190,41 @@ const ANNUAL_PACKAGE = {
   product: { priceString: '$59.99' },
 };
 
+// The winback SKU sells through its own offering, one price below the standard
+// annual. Same package identifier — the churned branch takes availablePackages[0],
+// not a name — so only the price tells the two apart on screen.
+const WINBACK_PACKAGE = {
+  identifier: '$rc_annual',
+  product: { priceString: '$44.99' },
+};
+
 const OFFERINGS_OK = {
   ok: true as const,
   data: { current: { availablePackages: [ANNUAL_PACKAGE] }, all: {} },
+};
+
+const OFFERINGS_WITH_WINBACK = {
+  ok: true as const,
+  data: {
+    current: { availablePackages: [ANNUAL_PACKAGE] },
+    all: { winback: { availablePackages: [WINBACK_PACKAGE] } },
+  },
+};
+
+// What RevenueCat returns once unfold_yearly_winback is pulled from sale: the
+// offering survives, its package list does not.
+const OFFERINGS_EMPTY_WINBACK = {
+  ok: true as const,
+  data: {
+    current: { availablePackages: [ANNUAL_PACKAGE] },
+    all: { winback: { availablePackages: [] } },
+  },
+};
+
+// Nothing purchasable anywhere — the only genuine failure state left.
+const OFFERINGS_NOTHING = {
+  ok: true as const,
+  data: { current: null, all: { winback: { availablePackages: [] } } },
 };
 
 function premiumCustomerInfo() {
@@ -197,20 +253,36 @@ async function waitFor(check: () => boolean, label: string) {
 // Unmounted in afterEach so nothing survives into the next test.
 const mounted: any[] = [];
 
+function textOf(tree: any) {
+  return JSON.stringify(tree.toJSON());
+}
+
+async function mountSheet(props: {
+  onDismiss: jest.Mock;
+  onPurchaseSuccess?: jest.Mock;
+  context?: 'onboarding' | 'churned';
+}) {
+  const { context = 'onboarding', ...rest } = props;
+  let tree: any;
+  await act(async () => {
+    tree = renderer.create(<ExclusiveOfferSheet visible context={context} {...rest} />);
+  });
+  mounted.push(tree);
+  return tree;
+}
+
 async function renderSheet(props: {
   onDismiss: jest.Mock;
   onPurchaseSuccess?: jest.Mock;
+  context?: 'onboarding' | 'churned';
+  expectPrice?: string;
 }) {
-  let tree: any;
-  await act(async () => {
-    tree = renderer.create(<ExclusiveOfferSheet visible context="onboarding" {...props} />);
-  });
-  // Wait until the offerings query resolved the target package — the CTA is a
-  // no-op until it exists, which silently passed empty assertions before.
-  mounted.push(tree);
+  const { expectPrice = '$59.99', ...rest } = props;
+  const tree = await mountSheet(rest);
+  // The CTA is a no-op until the query resolves a package, so wait for its price.
   await waitFor(
-    () => JSON.stringify(tree.toJSON()).includes('$59.99'),
-    'offerings to resolve the annual package',
+    () => textOf(tree).includes(expectPrice),
+    `offerings to resolve the package priced ${expectPrice}`,
   );
   return tree;
 }
@@ -226,20 +298,21 @@ function pressByLabel(tree: any, label: string) {
   });
 }
 
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockRevenueCatEnabled = true;
+  mockGetOfferings.mockResolvedValue(OFFERINGS_OK);
+});
+
+afterEach(async () => {
+  await act(async () => {
+    for (const tree of mounted.splice(0)) {
+      tree.unmount();
+    }
+  });
+});
+
 describe('ExclusiveOfferSheet purchase outcomes', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    mockGetOfferings.mockResolvedValue(OFFERINGS_OK);
-  });
-
-  afterEach(async () => {
-    await act(async () => {
-      for (const tree of mounted.splice(0)) {
-        tree.unmount();
-      }
-    });
-  });
-
   it('calls onPurchaseSuccess when a purchase inside the sheet grants premium', async () => {
     mockPurchasePackage.mockResolvedValue(premiumCustomerInfo());
     const onDismiss = jest.fn();
@@ -291,6 +364,115 @@ describe('ExclusiveOfferSheet purchase outcomes', () => {
     await waitFor(() => onDismiss.mock.calls.length > 0, 'purchase to settle');
 
     expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('ExclusiveOfferSheet churned winback path', () => {
+  beforeEach(() => {
+    mockGetOfferings.mockResolvedValue(OFFERINGS_WITH_WINBACK);
+  });
+
+  it('sells the winback package at its own price and badge while the SKU is live', async () => {
+    mockPurchasePackage.mockResolvedValue(premiumCustomerInfo());
+    const onDismiss = jest.fn();
+
+    const tree = await renderSheet({ onDismiss, context: 'churned', expectPrice: '$44.99' });
+
+    expect(textOf(tree)).toContain('25% OFF');
+    expect(textOf(tree)).not.toContain('50% OFF');
+
+    await pressByLabel(tree, 'Accept Offer');
+    await waitFor(() => mockPurchasePackage.mock.calls.length > 0, 'purchase to be attempted');
+    expect(mockPurchasePackage).toHaveBeenCalledWith(WINBACK_PACKAGE);
+  });
+
+  it('reports a shown offer when the person declines a real one', async () => {
+    const onDismiss = jest.fn();
+
+    const tree = await renderSheet({ onDismiss, context: 'churned', expectPrice: '$44.99' });
+    await pressByLabel(tree, 'No thanks');
+
+    expect(onDismiss).toHaveBeenCalledWith({ offerShown: true });
+  });
+
+  it('falls back to the standard annual package when the winback offering is empty', async () => {
+    // Pulling unfold_yearly_winback from sale leaves the offering in place with
+    // nothing in it. Without the fallback the sheet rendered only its failure
+    // state, so a churned person was shown no offer at all.
+    mockGetOfferings.mockResolvedValue(OFFERINGS_EMPTY_WINBACK);
+    mockPurchasePackage.mockResolvedValue(premiumCustomerInfo());
+    const onDismiss = jest.fn();
+
+    const tree = await renderSheet({ onDismiss, context: 'churned', expectPrice: '$59.99' });
+
+    expect(textOf(tree)).not.toContain('View Plans');
+    // The badge has to follow the package on sale, not the context.
+    expect(textOf(tree)).toContain('50% OFF');
+    expect(textOf(tree)).not.toContain('25% OFF');
+
+    await pressByLabel(tree, 'Accept Offer');
+    await waitFor(() => mockPurchasePackage.mock.calls.length > 0, 'purchase to be attempted');
+    expect(mockPurchasePackage).toHaveBeenCalledWith(ANNUAL_PACKAGE);
+  });
+});
+
+describe('ExclusiveOfferSheet offering-failure state', () => {
+  beforeEach(() => {
+    mockGetOfferings.mockResolvedValue(OFFERINGS_NOTHING);
+  });
+
+  async function renderFailedSheet(onDismiss: jest.Mock) {
+    const tree = await mountSheet({ onDismiss, context: 'churned' });
+    await waitFor(() => textOf(tree).includes('View Plans'), 'the failure state to be reachable');
+    return tree;
+  }
+
+  it('drops the offer copy when there is no offer to make', async () => {
+    const tree = await renderFailedSheet(jest.fn());
+    const rendered = textOf(tree);
+
+    expect(rendered).not.toContain('Exclusive Offer');
+    expect(rendered).not.toContain('You will not see this offer again.');
+    expect(rendered).not.toContain('25% OFF');
+    expect(rendered).not.toContain('50% OFF');
+    expect(rendered).toContain('Unfold Premium');
+  });
+
+  it('leaves the once-ever offer unburned when it routes to the full paywall', async () => {
+    // "View Plans" on a sheet that never made an offer used to spend the
+    // person's single chance at it forever.
+    const onDismiss = jest.fn();
+    const tree = await renderFailedSheet(onDismiss);
+
+    await pressByLabel(tree, 'View Plans');
+
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+    expect(onDismiss).toHaveBeenCalledWith({ offerShown: false });
+    expect(mockRouterPush).toHaveBeenCalledWith('/paywall');
+  });
+
+  it('escapes instead of spinning when the offerings query never runs', async () => {
+    // The old check read `offeringsResult`, which is undefined for a disabled
+    // query — falsy, so the sheet spun on an ActivityIndicator with the CTA
+    // disabled and no escape hatch.
+    mockRevenueCatEnabled = false;
+    const onDismiss = jest.fn();
+
+    const tree = await mountSheet({ onDismiss, context: 'churned' });
+
+    expect(mockGetOfferings).not.toHaveBeenCalled();
+    expect(textOf(tree)).toContain('View Plans');
+    expect(tree.root.findAllByType(ActivityIndicator)).toHaveLength(0);
+  });
+
+  it('escapes when the offerings query fails outright', async () => {
+    mockGetOfferings.mockRejectedValue(new Error('offerings unavailable'));
+    const onDismiss = jest.fn();
+
+    const tree = await mountSheet({ onDismiss, context: 'churned' });
+    await waitFor(() => textOf(tree).includes('View Plans'), 'the failed query to surface an escape');
+
+    expect(tree.root.findAllByType(ActivityIndicator)).toHaveLength(0);
   });
 });
 

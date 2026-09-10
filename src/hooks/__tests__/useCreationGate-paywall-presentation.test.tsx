@@ -103,6 +103,39 @@ describe('useCreationGate paywall presentation', () => {
     expect(mockPush).not.toHaveBeenCalled();
   });
 
+  it('burns the once-ever offer only when the sheet actually showed one', async () => {
+    const { dismissOffer } = await renderGate();
+
+    await act(async () => {
+      dismissOffer({ offerShown: true });
+    });
+
+    expect(mockSetItem).toHaveBeenCalledWith('@unfold_exclusive_offer_seen', 'true');
+  });
+
+  it('leaves the once-ever offer intact when the sheet never made one', async () => {
+    // The sheet reports offerShown: false when it could only render its failure
+    // state. Writing the flag anyway spent the person's single chance on a
+    // "View Plans" tap that showed them no offer.
+    const { dismissOffer } = await renderGate();
+
+    await act(async () => {
+      dismissOffer({ offerShown: false });
+    });
+
+    expect(mockSetItem).not.toHaveBeenCalled();
+  });
+
+  it('leaves the once-ever offer intact for a caller that reports no outcome', async () => {
+    const { dismissOffer } = await renderGate();
+
+    await act(async () => {
+      dismissOffer();
+    });
+
+    expect(mockSetItem).not.toHaveBeenCalled();
+  });
+
   it('keeps the exclusive-offer branch ahead of paywall navigation', () => {
     const src = fs.readFileSync(path.join(__dirname, '../useCreationGate.ts'), 'utf8');
     const exclusiveIdx = src.indexOf("if (action === 'exclusive-offer')");
