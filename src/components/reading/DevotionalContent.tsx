@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RefObject } from 'react';
+import type React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, type LayoutChangeEvent, type ScrollView } from 'react-native';
 import { BookOpenIcon, BookmarkSimpleIcon, CaretRightIcon } from '@/components/icons';
 import Animated, {
@@ -17,10 +18,11 @@ import { useTheme } from '@/lib/theme';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { useReadingFont } from '@/lib/useReadingFont';
-import { DevotionalDay, FONT_SIZE_VALUES, FontSize, Highlight, HighlightColor, Bookmark } from '@/lib/store';
+import { DevotionalDay, FONT_SIZE_VALUES, FontSize, Highlight, Bookmark } from '@/lib/store';
 import { preventOrphan, stripOuterQuotes } from '@/lib/cn';
 import { fetchVerseLocal, fetchVerse } from '@/lib/bible-api';
 import { DevotionalWebView } from './DevotionalWebView';
+import type { DevotionalWebViewCommands, HighlightsChangedEvent } from './DevotionalWebView';
 import { InlineReflectionJournal } from './InlineReflectionJournal';
 import { getReflectionTypography } from '@/lib/reflection-typography';
 import { Typography } from '@/constants/typography';
@@ -31,8 +33,9 @@ interface DevotionalContentProps {
   titleSharedTransitionTag?: string;
   isBookmarked?: boolean;
   onToggleBookmark?: () => void;
-  onQuoteSelected?: (quote: { text: string; context: string }) => void;
-  onHighlightRemoved?: (event: { text: string; color: HighlightColor; context: string }) => void;
+  onHighlightsChanged?: (event: HighlightsChangedEvent) => void;
+  onHighlightFailed?: () => void;
+  highlightCommandRef?: React.MutableRefObject<DevotionalWebViewCommands | null>;
   existingHighlights?: Highlight[];
   targetHighlight?: Highlight | null;
   onTargetHighlightLocated?: (contentY: number) => void;
@@ -82,8 +85,9 @@ export function DevotionalContent({
   titleSharedTransitionTag,
   isBookmarked,
   onToggleBookmark,
-  onQuoteSelected,
-  onHighlightRemoved,
+  onHighlightsChanged,
+  onHighlightFailed,
+  highlightCommandRef,
   existingHighlights,
   targetHighlight,
   onTargetHighlightLocated,
@@ -315,8 +319,9 @@ export function DevotionalContent({
         <DevotionalWebView
           day={day}
           fontSize={fontSize}
-          onQuoteSelected={onQuoteSelected}
-          onHighlightRemoved={onHighlightRemoved}
+          onHighlightsChanged={onHighlightsChanged}
+          onHighlightFailed={onHighlightFailed}
+          commandRef={highlightCommandRef}
           existingHighlights={existingHighlights}
           targetHighlight={targetHighlight}
           onTargetHighlightLocated={handleTargetHighlightLocated}

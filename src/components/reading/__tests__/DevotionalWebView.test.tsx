@@ -25,6 +25,8 @@ jest.mock('react-native-webview', () => {
   return { WebView };
 });
 
+jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(() => Promise.resolve(true)) }));
+
 jest.mock('expo-haptics', () => ({
   ImpactFeedbackStyle: { Light: 'Light' },
   selectionAsync: jest.fn(),
@@ -53,6 +55,7 @@ jest.mock('@/lib/useReadingFont', () => ({
 }));
 
 jest.mock('@/lib/store', () => ({
+  HIGHLIGHT_COLOR_LABELS: { yellow: 'General', green: 'Growth', blue: 'Prayer', purple: 'Questions', red: 'Important' },
   FONT_SIZE_VALUES: {
     small: { body: 15 },
     medium: { body: 18 },
@@ -260,11 +263,12 @@ describe('DevotionalWebView highlight interactions', () => {
     expect(html).toContain('--hl-yellow-bg: rgba(255, 245, 112, 0.58);');
     expect(html).toContain('--hl-yellow-color: currentColor;');
     expect(html).toContain('mark.highlight-yellow { background: var(--hl-yellow-bg); color: var(--hl-yellow-color); }');
-    expect(script).toContain("style: 'background: var(--hl-' + color + '-bg); color: var(--hl-' + color + '-color);");
+    // Colour comes from the stylesheet rule alone; no inline style to fight it.
+    expect(script).not.toContain("style: 'background: var(--hl-'");
     expect(script).not.toContain('const isDark =');
   });
 
-  it('uses Bible-style saved highlights in dark mode with vibrant text instead of a block', () => {
+  it('uses a translucent marker band in dark mode too, never colored text', () => {
     mockIsDark = true;
 
     let tree: any;
@@ -277,11 +281,100 @@ describe('DevotionalWebView highlight interactions', () => {
     const html = getWebViewProps(tree).source.html as string;
     const script = getWebViewProps(tree).injectedJavaScript as string;
 
-    expect(html).toContain('--hl-yellow-bg: transparent;');
-    expect(html).toContain('--hl-yellow-color: #FFE86A;');
+    expect(html).toContain('--hl-yellow-bg: rgba(255, 232, 106, 0.30);');
+    expect(html).toContain('--hl-yellow-color: currentColor;');
     expect(html).toContain('mark.highlight-yellow { background: var(--hl-yellow-bg); color: var(--hl-yellow-color); }');
-    expect(script).toContain("style: 'background: var(--hl-' + color + '-bg); color: var(--hl-' + color + '-color);");
-    expect(script).not.toContain("dark: 'rgba(200, 165, 92, 0.22)'");
+    // The band hugs each line box and keeps rounded ends across wraps.
+    expect(html).toContain('box-decoration-break: clone;');
+    expect(script).not.toContain('padding: 0; border-radius: 2px;');
+  });
+
+  it('names every colour in the picker with the same label My Library uses', () => {
+    let tree: any;
+    act(() => {
+      tree = renderer.create(<DevotionalWebView day={day} fontSize="medium" />);
+    });
+    const html = getWebViewProps(tree).source.html as string;
+    for (const label of ['General', 'Growth', 'Prayer', 'Questions', 'Important']) {
+      expect(html).toContain(`<span class="lbl"><span>${label}</span></span>`);
+    }
+    expect(html).toContain('aria-label="Highlight Prayer"');
+  });
+
+  it('adds Highlight to the system selection menu and only then opens the picker', () => {
+    let tree: any;
+    act(() => {
+      tree = renderer.create(<DevotionalWebView day={day} fontSize="medium" />);
+    });
+    const props = getWebViewProps(tree);
+    const script = props.injectedJavaScript as string;
+
+    expect(props.menuItems).toEqual([
+      { label: 'Highlight', key: 'highlight' },
+      { label: 'Copy', key: 'copy' },
+    ]);
+    // The selection listener only snapshots; it never shows the picker itself.
+    expect(script).toContain('window.__unfoldShowHighlightPicker = function');
+    expect(script).not.toContain('newText.length > 5');
+
+    mockInjectJavaScript.mockClear();
+    act(() => {
+      props.onCustomMenuSelection({ nativeEvent: { label: 'Highlight', key: 'highlight', selectedText: 'grace' } });
+    });
+    expect(mockInjectJavaScript).toHaveBeenCalledTimes(1);
+    expect(mockInjectJavaScript.mock.calls[0][0]).toContain('__unfoldShowHighlightPicker("grace")');
+
+    mockInjectJavaScript.mockClear();
+    act(() => {
+      props.onCustomMenuSelection({ nativeEvent: { label: 'Copy', key: 'copy', selectedText: ' grace ' } });
+    });
+    expect(mockInjectJavaScript).not.toHaveBeenCalled();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    expect(require('expo-clipboard').setStringAsync).toHaveBeenCalledWith('grace');
+  });
+
+  it('reports document diffs, failures, and replays undo through the command ref', () => {
+    const onHighlightsChanged = jest.fn();
+    const onHighlightFailed = jest.fn();
+    const commandRef = { current: null as any };
+    let tree: any;
+    act(() => {
+      tree = renderer.create(
+        <DevotionalWebView
+          day={day}
+          fontSize="medium"
+          onHighlightsChanged={onHighlightsChanged}
+          onHighlightFailed={onHighlightFailed}
+          commandRef={commandRef}
+        />,
+      );
+    });
+    const props = getWebViewProps(tree);
+    const script = props.injectedJavaScript as string;
+
+    // Create, remove, recolor and undo all go through one diff protocol.
+    expect(script).toContain("postHighlightsChanged('create', before, primarySerial, false)");
+    expect(script).toContain("postHighlightsChanged('remove', before, '', false)");
+    expect(script).toContain("postHighlightsChanged('recolor', before, primarySerial, false)");
+    expect(script).toContain("postHighlightsChanged('undo', before, '', true)");
+    // Nothing applied on the page ⇒ nothing stored: a failure is reported instead.
+    expect(script).toContain("type: 'HIGHLIGHT_FAILED'");
+    expect(script).not.toContain("type: 'QUOTE_SELECTED'");
+
+    const added = [{ serial: '10$20$1$rangy-highlight-yellow$', text: 'grace upon', color: 'yellow', context: 'x' }];
+    act(() => {
+      props.onMessage({ nativeEvent: { data: JSON.stringify({ type: 'HIGHLIGHTS_CHANGED', reason: 'create', added, removed: [], primarySerial: added[0].serial, silent: false }) } });
+      props.onMessage({ nativeEvent: { data: JSON.stringify({ type: 'HIGHLIGHT_FAILED', text: 'x' }) } });
+    });
+    expect(onHighlightsChanged).toHaveBeenCalledWith({ reason: 'create', added, removed: [], primarySerial: added[0].serial, silent: false });
+    expect(onHighlightFailed).toHaveBeenCalledTimes(1);
+
+    mockInjectJavaScript.mockClear();
+    act(() => {
+      commandRef.current.applyInverse({ added, removed: [] });
+    });
+    expect(mockInjectJavaScript.mock.calls[0][0]).toContain('__unfoldApplyInverse(');
+    expect(mockInjectJavaScript.mock.calls[0][0]).toContain('10$20$1$rangy-highlight-yellow$');
   });
 
   it('uses editorial quote framing without side stripes or hardcoded Inter UI labels', () => {
