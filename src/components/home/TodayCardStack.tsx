@@ -31,6 +31,7 @@ import {
 } from '@/lib/today-card-stack-motion';
 import type { ColorTheme } from '@/constants/colors';
 import { smartQuotes } from '@/lib/smart-quotes';
+import { highlightBandColor, type HighlightKey } from '@/lib/highlight-palette';
 import { balanceHeadline } from '@/lib/balance-headline';
 import { Typography } from '@/constants/typography';
 
@@ -52,6 +53,8 @@ export interface TodayCardStackCard extends TodayStackCardItem {
    * mid-clause (de-slop #15).
    */
   bodyNumberOfLines?: number;
+  /** A saved highlight quoted above `body`, drawn with the reader's marker band. */
+  bodyQuote?: { text: string; color: HighlightKey | null };
   actionLabel?: string;
   actions?: TodayCardStackAction[];
   onPress?: () => void;
@@ -99,6 +102,7 @@ function StackDismissButton({ card, colors }: { card: TodayCardStackCard; colors
 }
 
 function TopCardBody({ card, colors }: { card: TodayCardStackCard; colors: ColorTheme }) {
+  const { isDark } = useTheme();
   const body = (
     <View style={[styles.content, card.onDismiss && styles.contentDismissible]}>
       <Text style={[styles.title, { color: colors.text }]} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE} numberOfLines={2}>
@@ -108,6 +112,18 @@ function TopCardBody({ card, colors }: { card: TodayCardStackCard; colors: Color
       {card.eyebrow ? (
         <Text style={[styles.cardMeta, { color: colors.textMuted }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
           {card.eyebrow}
+        </Text>
+      ) : null}
+
+      {card.bodyQuote ? (
+        <Text
+          style={[styles.body, styles.bodyQuote, { color: colors.text }]}
+          maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}
+          numberOfLines={card.bodyNumberOfLines}
+        >
+          <Text style={{ backgroundColor: highlightBandColor(card.bodyQuote.color, isDark) }}>
+            {smartQuotes(`“${card.bodyQuote.text}”`)}
+          </Text>
         </Text>
       ) : null}
 
@@ -474,6 +490,12 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.body,
     fontSize: FontSize.sm,
     lineHeight: 20,
+  },
+  bodyQuote: {
+    fontFamily: FontFamily.bodyItalic,
+    fontSize: FontSize.base,
+    lineHeight: 24,
+    marginBottom: Spacing['1'],
   },
   actionPill: {
     alignItems: 'center',

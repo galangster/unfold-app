@@ -6,22 +6,14 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { alpha } from '@/components/ui';
 import { useTheme } from '@/lib/theme';
-import { HIGHLIGHT_COLOR_LABELS, type BibleHighlightColor, type HighlightColor } from '@/lib/store';
+import { HIGHLIGHT_COLORS, type HighlightKey } from '@/lib/highlight-palette';
 import type { SavedItem } from '@/lib/saved-highlights';
 import type { SavedBookmarkItem } from '@/lib/saved-items';
 import { stripOuterQuotes } from '@/lib/cn';
 
 type ThemeColors = ReturnType<typeof useTheme>['colors'];
 
-export type HighlightKey = HighlightColor | BibleHighlightColor;
-
-export const HIGHLIGHT_COLORS: Record<HighlightKey, { label: string; light: string; dark: string }> = {
-  yellow: { label: HIGHLIGHT_COLOR_LABELS.yellow, light: '#FFDC64', dark: '#C8A55C' },
-  green: { label: HIGHLIGHT_COLOR_LABELS.green, light: '#64C864', dark: '#6DAF7B' },
-  blue: { label: HIGHLIGHT_COLOR_LABELS.blue, light: '#6496FF', dark: '#5B9BD5' },
-  purple: { label: HIGHLIGHT_COLOR_LABELS.purple, light: '#B464C8', dark: '#9B8EC4' },
-  red: { label: HIGHLIGHT_COLOR_LABELS.red, light: '#FF6464', dark: '#D4828F' },
-};
+export { HIGHLIGHT_COLORS, type HighlightKey } from '@/lib/highlight-palette';
 
 /** Card radius shared with the swipe-action tray so the tray clips to the card. */
 export const SAVED_CARD_RADIUS = Radius.lg;

@@ -124,14 +124,6 @@ jest.mock('expo-router', () => ({
 
 const mockSetDismissedRememberThisCardDate = jest.fn();
 const mockStoreState = {
-  getRandomHighlight: jest.fn(() => ({
-    id: 'highlight-1',
-    devotionalId: 'devotional-1',
-    devotionalTitle: 'Quiet Path Series',
-    dayNumber: 1,
-    highlightedText: 'The next faithful step is enough for today.',
-    color: 'yellow',
-  })),
   setCurrentDevotional: jest.fn(),
   devotionals: [{ id: 'devotional-1', title: 'Quiet Path Series' }],
   dismissedRememberThisCardDate: null as string | null,
@@ -143,7 +135,6 @@ jest.mock('@/lib/store', () => ({
 }));
 
 import { ContextSlot } from '../ContextSlot';
-import { RememberThisCard } from '../RememberThisCard';
 import { TodayCardStack, type TodayCardStackCard } from '../TodayCardStack';
 import { PremiumNudgeCard } from '../../PremiumNudgeCard';
 import type { ColorTheme } from '@/constants/colors';
@@ -287,15 +278,6 @@ describe('dismissible Today/Home surfaces', () => {
     } else {
       expect(blurLayers).toHaveLength(0);
     }
-  });
-
-  it('hides the saved echo for today when its circled X is tapped', () => {
-    const tree = renderInAct(<RememberThisCard />);
-
-    pressByLabel(tree, 'Dismiss saved echo');
-
-    expect(mockSetDismissedRememberThisCardDate).toHaveBeenCalledTimes(1);
-    expect(mockSetDismissedRememberThisCardDate).toHaveBeenCalledWith(new Date().toLocaleDateString('en-CA'));
   });
 
   it('runs the premium nudge dismiss flow when its circled X is tapped', () => {
