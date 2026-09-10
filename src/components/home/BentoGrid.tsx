@@ -25,10 +25,12 @@ export function BentoGrid() {
     {
       label: 'Past Devotionals',
       pathname: '/(tabs)/(today)/past-devotionals',
+      params: { from: 'home' },
     },
     {
-      label: 'My Library',
-      pathname: '/(tabs)/(today)/my-content',
+      label: 'Saved',
+      pathname: '/(tabs)/(journal)',
+      params: { segment: 'saved' },
     },
   ];
 
@@ -44,7 +46,7 @@ export function BentoGrid() {
             activeOpacity={0.7}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.push({ pathname: item.pathname as any, params: { from: 'home' } });
+              router.push({ pathname: item.pathname as any, params: item.params });
             }}
             accessibilityRole="button"
             accessibilityLabel={`Open ${item.label}`}

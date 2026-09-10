@@ -84,7 +84,7 @@ const SCRIPT_PREFIX = /^\s*(?:javascript|data|vbscript):/i;
 /** Mirror of the FROM_TO_ROUTE keys in src/hooks/useCrossTabBack.ts. */
 const CROSS_TAB_FROM = ['home', 'journal', 'bible', 'you'] as const;
 /** Mirrors VALID_TABS / VALID_TYPES / VALID_SOURCES in src/app/(tabs)/(you)/my-content.tsx. */
-const MY_CONTENT_TABS = ['journal', 'highlights', 'bookmarks'] as const;
+const MY_CONTENT_TABS = ['highlights', 'bookmarks'] as const;
 const MY_CONTENT_TYPES = ['all', 'notes', 'highlights'] as const;
 const MY_CONTENT_SOURCES = ['all', 'devotional', 'bible'] as const;
 
