@@ -31,3 +31,8 @@ Ask Nick for the premium-gating call (all colours free vs yellow-only everywhere
 - Gate: tsc clean, eslint 0 errors, jest 252 suites green; `devotional-webview-font-scale.test.ts` fails to run on the base commit too (pre-existing). No `verify` script exists in `package.json`.
 - Branch pushed; PR https://github.com/galangster/unfold-app/pull/81 open against `main`.
 - Item 9 still needs Nick's call. The new block mirrors the reader (yellow free, others locked). Simulator check of the verse block itself not yet done.
+
+## Item 9 resolved 2026-09-09 (agent call, Nick said "do what you think is best")
+Keep both shipped behaviours. Devotional WebView highlights were never gated on `main` and stay all-colours-free. Bible highlights keep yellow-free / others premium; the paywall copy sells extra colours as a Bible-study feature. The new scripture verse block writes Bible highlights, so it inherits the Bible gate. No code change. Reverse by editing `isHighlightColorFree` callers only.
+
+Simulator proof (iPhone 17 Pro, dark, KJV): verse tap → tan selection mark with dark text → colour row; yellow → verse renders yellow; `unfold://reader?bookId=23&chapter=40` shows Isaiah 40:31 highlighted yellow.
