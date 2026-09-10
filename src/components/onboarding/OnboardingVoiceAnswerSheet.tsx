@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  AppState,
   ActivityIndicator,
+  AppState,
   Keyboard,
   KeyboardAvoidingView,
   Modal,
@@ -33,7 +33,6 @@ import {
   CheckIcon,
   MicrophoneIcon,
   PauseIcon,
-  PencilSimpleIcon,
   PlayIcon,
   StopCircleIcon,
   TrashIcon,
@@ -48,20 +47,18 @@ import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { pauseForVoiceInput, resumeAfterVoiceInput } from '@/hooks/useGlobalAudioPlayer';
 import {
-  VOICE_CHECK_IN_MAX_DURATION_MS,
-  VoiceCheckInApiError,
-  createVoiceCheckInDraft,
-  deleteVoiceCheckIn,
-  discardVoiceCheckInDraft,
-  editVoiceCheckIn,
-  listVoiceCheckIns,
-  readVoiceCheckInDraft,
-  retryPendingVoiceAudioCleanup,
-  sendVoiceCheckInDraft,
-  type SavedVoiceCheckIn,
-  type VoiceCheckInDraft,
-} from '@/lib/voice-check-ins';
+  composeOnboardingVoiceDraft,
+  ONBOARDING_VOICE_ANSWER_MAX_LENGTH,
+  voiceAnswerAcceptance,
+  voiceAnswerCountLabel,
+} from '@/lib/onboarding-voice-answer';
 import {
+  deleteLocalVoiceAudio,
+  transcribeVoiceInput,
+  VoiceInputApiError,
+} from '@/lib/voice-input';
+import {
+  VOICE_RECORDING_MAX_DURATION_MS,
   VOICE_RECORDING_OPTIONS,
   VOICE_WAVEFORM_BARS,
   buildWaveform,
@@ -69,22 +66,31 @@ import {
   meterToLevel,
 } from '@/lib/voice-recording';
 
-export type VoiceCheckInPhase = 'idle' | 'recording' | 'review' | 'saved' | 'error';
-type VoiceCheckInErrorKind = 'microphone' | 'recording' | 'send';
+export type OnboardingVoiceAnswerPhase =
+  | 'idle'
+  | 'recording'
+  | 'review'
+  | 'transcribing'
+  | 'transcript'
+  | 'error';
 
-interface VoiceCheckInSheetProps {
+type OnboardingVoiceErrorKind = 'microphone' | 'recording' | 'transcribe';
+
+export interface OnboardingVoiceAnswerSheetProps {
   visible: boolean;
-  onClose: () => void;
   autoStart?: boolean;
+  onClose: () => void;
+  existingText: string;
+  onAccept: (text: string) => void;
   demoMode?: boolean;
-  initialDemoPhase?: VoiceCheckInPhase;
+  initialDemoPhase?: OnboardingVoiceAnswerPhase;
+  demoTranscript?: string;
   previewColors?: ColorTheme;
   previewIsDark?: boolean;
-  draftRefreshKey?: number;
 }
 
-const DEMO_DURATION_MS = 28_000;
-const DEMO_TRANSCRIPT = 'Work was a lot today. I finally got outside for a walk, and I felt a little more like myself.';
+const DEMO_DURATION_MS = 24_000;
+const DEMO_TRANSCRIPT = 'I am a parent figuring out how to stay present, and I want my mornings to start more quietly.';
 const WAVEFORM_BARS = VOICE_WAVEFORM_BARS;
 
 function RoundIconButton({
@@ -116,128 +122,145 @@ function RoundIconButton({
   );
 }
 
-export function VoiceCheckInSheet({
+export function OnboardingVoiceAnswerSheet({
   visible,
-  onClose,
   autoStart = false,
+  onClose,
+  existingText,
+  onAccept,
   demoMode = false,
   initialDemoPhase = 'idle',
+  demoTranscript = DEMO_TRANSCRIPT,
   previewColors,
   previewIsDark,
-  draftRefreshKey = 0,
-}: VoiceCheckInSheetProps) {
+}: OnboardingVoiceAnswerSheetProps) {
   const theme = useTheme();
   const colors = previewColors ?? theme.colors;
   const isDark = previewIsDark ?? theme.isDark;
   const reducedMotion = useReducedMotion();
-  const { height: windowHeight } = useWindowDimensions();
+  const { height: windowHeight, fontScale } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const [phase, setPhase] = useState<VoiceCheckInPhase>(demoMode ? initialDemoPhase : 'idle');
+
+  const [phase, setPhase] = useState<OnboardingVoiceAnswerPhase>(demoMode ? initialDemoPhase : 'idle');
   const [audioUri, setAudioUri] = useState<string | null>(null);
-  const [recordedDurationMs, setRecordedDurationMs] = useState(demoMode ? DEMO_DURATION_MS : 0);
-  const [demoElapsedMs, setDemoElapsedMs] = useState(initialDemoPhase === 'recording' ? 13_000 : 0);
+  const [recordedDurationMs, setRecordedDurationMs] = useState(demoMode && initialDemoPhase !== 'idle' ? DEMO_DURATION_MS : 0);
+  const [demoElapsedMs, setDemoElapsedMs] = useState(initialDemoPhase === 'recording' ? 11_000 : 0);
   const [demoPlaybackMs, setDemoPlaybackMs] = useState(0);
   const [demoPlaying, setDemoPlaying] = useState(false);
-  const [showTranscript, setShowTranscript] = useState(false);
-  const [transcript, setTranscript] = useState(demoMode && initialDemoPhase !== 'idle' ? DEMO_TRANSCRIPT : '');
-  const [errorMessage, setErrorMessage] = useState('Your recording is still here. Try sending it again.');
-  const [errorKind, setErrorKind] = useState<VoiceCheckInErrorKind>('send');
-  const [draft, setDraft] = useState<VoiceCheckInDraft | null>(null);
-  const [savedCheckIns, setSavedCheckIns] = useState<SavedVoiceCheckIn[]>([]);
-  const [selectedCheckIn, setSelectedCheckIn] = useState<SavedVoiceCheckIn | null>(null);
-  const [isEditingTranscript, setIsEditingTranscript] = useState(false);
-  const [historyExpanded, setHistoryExpanded] = useState(false);
+  const [draft, setDraft] = useState(() => (
+    demoMode && (initialDemoPhase === 'transcript' || initialDemoPhase === 'error')
+      ? composeOnboardingVoiceDraft(existingText, demoTranscript)
+      : ''
+  ));
+  const [errorMessage, setErrorMessage] = useState('Your recording is still on this device. Try again.');
+  const [errorKind, setErrorKind] = useState<OnboardingVoiceErrorKind>('transcribe');
   const [isBusy, setIsBusy] = useState(false);
+
   const busyRef = useRef(false);
   const isClosingRef = useRef(false);
   const mountedRef = useRef(true);
+  const autoStartedRef = useRef(false);
   const visibleRef = useRef(visible);
-  const wasVisibleRef = useRef(visible);
+  const generationRef = useRef(0);
+  const transcribeControllerRef = useRef<AbortController | null>(null);
+  const audioUriRef = useRef<string | null>(null);
   const narrationWasPlayingRef = useRef(false);
+  const acceptedRef = useRef(false);
+  const wasVisibleRef = useRef(false);
   visibleRef.current = visible;
+  audioUriRef.current = audioUri;
 
-  const recorder = useAudioRecorder(VOICE_RECORDING_OPTIONS);
+  const recorder = useAudioRecorder({ ...VOICE_RECORDING_OPTIONS, directory: 'cache' });
   const recorderState = useAudioRecorderState(recorder, 100);
   const player = useAudioPlayer(null, { updateInterval: 100, keepAudioSessionActive: false });
   const playerStatus = useAudioPlayerStatus(player);
 
-  const refreshHistory = useCallback(async () => {
-    if (demoMode) return;
-    try {
-      setSavedCheckIns(await listVoiceCheckIns());
-    } catch {
-      // Recording and local draft recovery stay available when history cannot load.
-    }
-  }, [demoMode]);
+  const invalidateAsync = useCallback(() => {
+    generationRef.current += 1;
+    transcribeControllerRef.current?.abort();
+    transcribeControllerRef.current = null;
+  }, []);
 
-  useEffect(() => {
-    if (demoMode || !visible) return;
-    narrationWasPlayingRef.current = pauseForVoiceInput();
-    retryPendingVoiceAudioCleanup();
-    const localDraft = readVoiceCheckInDraft();
-    setDraft(localDraft);
-    if (localDraft) {
-      setAudioUri(localDraft.audioUri);
-      setRecordedDurationMs(localDraft.durationMs);
-      player.replace(localDraft.audioUri);
-      setPhase(localDraft.status === 'failed' ? 'error' : 'review');
-      if (localDraft.status === 'failed') {
-        setErrorKind('send');
-        setErrorMessage('Your recording is still on this device. Try sending it again.');
-      }
-    } else {
-      setPhase('idle');
-      setSelectedCheckIn(null);
-    }
-    void refreshHistory();
-  }, [demoMode, draftRefreshKey, player, refreshHistory, visible]);
-
-  useEffect(() => {
-    if (visible || demoMode) return;
+  const restoreNarration = useCallback(() => {
     const shouldResume = narrationWasPlayingRef.current;
     narrationWasPlayingRef.current = false;
     void resumeAfterVoiceInput(shouldResume);
-  }, [demoMode, visible]);
+  }, []);
 
-  useEffect(() => () => {
-    if (narrationWasPlayingRef.current) {
-      void resumeAfterVoiceInput(true);
-      narrationWasPlayingRef.current = false;
-    }
+  const resetSession = useCallback((nextPhase: OnboardingVoiceAnswerPhase = 'idle') => {
+    setPhase(nextPhase);
+    audioUriRef.current = null;
+    setAudioUri(null);
+    setRecordedDurationMs(0);
+    setDemoElapsedMs(0);
+    setDemoPlaybackMs(0);
+    setDemoPlaying(false);
+    setDraft('');
+    setErrorMessage('');
+    setIsBusy(false);
+    busyRef.current = false;
   }, []);
 
   useEffect(() => {
-    if (!demoMode) return;
-    setPhase(initialDemoPhase);
-    setDemoElapsedMs(initialDemoPhase === 'recording' ? 13_000 : 0);
-    setRecordedDurationMs(initialDemoPhase === 'idle' ? 0 : DEMO_DURATION_MS);
-    setTranscript(initialDemoPhase === 'idle' ? '' : DEMO_TRANSCRIPT);
-    setShowTranscript(false);
-    setDemoPlaybackMs(0);
-    setDemoPlaying(false);
-    setErrorMessage('Your recording is still here. Try sending it again.');
-  }, [demoMode, initialDemoPhase]);
+    const justOpened = visible && !wasVisibleRef.current;
+    wasVisibleRef.current = visible;
+    if (!justOpened) return;
+    acceptedRef.current = false;
+    narrationWasPlayingRef.current = pauseForVoiceInput();
+    if (demoMode) {
+      setPhase(initialDemoPhase);
+      setDemoElapsedMs(initialDemoPhase === 'recording' ? 11_000 : 0);
+      setRecordedDurationMs(initialDemoPhase === 'idle' ? 0 : DEMO_DURATION_MS);
+      setDraft(
+        initialDemoPhase === 'transcript' || initialDemoPhase === 'error'
+          ? composeOnboardingVoiceDraft(existingText, demoTranscript)
+          : '',
+      );
+      setDemoPlaybackMs(0);
+      setDemoPlaying(false);
+      setErrorKind('transcribe');
+      setErrorMessage('Your recording is still on this device. Try again.');
+      return;
+    }
+    setPhase('idle');
+    setAudioUri(null);
+    setRecordedDurationMs(0);
+    setDraft('');
+    setErrorMessage('');
+  }, [demoMode, demoTranscript, existingText, initialDemoPhase, visible]);
+
+  useEffect(() => {
+    if (visible) return;
+    autoStartedRef.current = false;
+    restoreNarration();
+  }, [restoreNarration, visible]);
+
+  useEffect(() => () => {
+    invalidateAsync();
+    if (narrationWasPlayingRef.current) restoreNarration();
+    if (!acceptedRef.current) deleteLocalVoiceAudio(audioUriRef.current);
+  }, [invalidateAsync, restoreNarration]);
 
   useEffect(() => {
     mountedRef.current = true;
     const stopForLifecycle = async () => {
       if (!recorder.isRecording) return;
+      const generation = generationRef.current;
       const durationMs = recorder.getStatus().durationMillis;
       try {
         await recorder.stop();
         await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
-        if (!mountedRef.current) return;
+        if (!mountedRef.current || generation !== generationRef.current) return;
         const uri = recorder.uri;
         if (uri) {
-          const localDraft = createVoiceCheckInDraft(uri, Math.max(1_000, durationMs));
-          setDraft(localDraft);
+          audioUriRef.current = uri;
           setAudioUri(uri);
           setRecordedDurationMs(Math.max(1_000, durationMs));
           player.replace(uri);
           setPhase('review');
         }
       } catch {
-        if (!mountedRef.current) return;
+        if (!mountedRef.current || generation !== generationRef.current) return;
         setErrorKind('recording');
         setErrorMessage('Recording stopped when the app became inactive, but its local file could not be prepared.');
         setPhase('error');
@@ -249,8 +272,6 @@ export function VoiceCheckInSheet({
     return () => {
       mountedRef.current = false;
       subscription.remove();
-      // useAudioRecorder releases its native recorder on unmount before this cleanup.
-      // Accessing that released shared object throws, even for a microphone-off demo.
       void setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
     };
   }, [player, recorder]);
@@ -291,8 +312,9 @@ export function VoiceCheckInSheet({
     : meterToLevel(recorderState.metering);
   const waveform = useMemo(
     () => buildWaveform(phase === 'recording' ? meterLevel : 0.56, Math.floor((phase === 'recording' ? activeDurationMs : playbackMs) / 100)),
-    [activeDurationMs, meterLevel, phase, playbackMs]
+    [activeDurationMs, meterLevel, phase, playbackMs],
   );
+  const acceptance = voiceAnswerAcceptance(draft);
 
   const startRecording = useCallback(async () => {
     if (busyRef.current) return;
@@ -302,7 +324,7 @@ export function VoiceCheckInSheet({
     if (demoMode) {
       setDemoElapsedMs(0);
       setRecordedDurationMs(0);
-      setTranscript('');
+      setDraft('');
       setPhase('recording');
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       busyRef.current = false;
@@ -310,15 +332,17 @@ export function VoiceCheckInSheet({
       return;
     }
 
+    const generation = generationRef.current;
     try {
       const permission = await requestRecordingPermissionsAsync();
       if (!permission.granted) {
+        if (!mountedRef.current || generation !== generationRef.current || !visibleRef.current) return;
         setErrorKind('microphone');
-        setErrorMessage('Microphone access is off. Enable it in Settings, then try again.');
+        setErrorMessage('Microphone access is off. You can still type your answer.');
         setPhase('error');
         return;
       }
-      if (!visibleRef.current) return;
+      if (!visibleRef.current || generation !== generationRef.current) return;
       await setAudioModeAsync({
         allowsRecording: true,
         playsInSilentMode: true,
@@ -326,38 +350,40 @@ export function VoiceCheckInSheet({
         shouldRouteThroughEarpiece: false,
       });
       await recorder.prepareToRecordAsync();
-      if (!mountedRef.current || !visibleRef.current || AppState.currentState !== 'active') {
+      if (!mountedRef.current || !visibleRef.current || generation !== generationRef.current || AppState.currentState !== 'active') {
         await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
         return;
       }
       recorder.record();
       setAudioUri(null);
       setRecordedDurationMs(0);
-      setTranscript('');
+      setDraft('');
       setPhase('recording');
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch {
+      if (!mountedRef.current || generation !== generationRef.current) return;
       setErrorKind('microphone');
-      setErrorMessage('The microphone could not start. Your previous draft was not changed.');
+      setErrorMessage('The microphone could not start. You can still type your answer.');
       setPhase('error');
     } finally {
-      busyRef.current = false;
-      setIsBusy(false);
+      if (mountedRef.current && generation === generationRef.current) {
+        busyRef.current = false;
+        setIsBusy(false);
+      }
     }
   }, [demoMode, recorder]);
 
   useEffect(() => {
-    const justOpened = visible && !wasVisibleRef.current;
-    wasVisibleRef.current = visible;
-    if (!justOpened || !autoStart || phase !== 'idle' || recordedDurationMs > 0 || audioUri) return;
-    if (!demoMode && readVoiceCheckInDraft()) return;
+    if (!visible || !autoStart || demoMode || phase !== 'idle' || autoStartedRef.current) return;
+    autoStartedRef.current = true;
     void startRecording();
-  }, [audioUri, autoStart, demoMode, phase, recordedDurationMs, startRecording, visible]);
+  }, [autoStart, demoMode, phase, startRecording, visible]);
 
   const stopRecording = useCallback(async () => {
     if (phase !== 'recording' || busyRef.current) return;
     busyRef.current = true;
     setIsBusy(true);
+    const generation = generationRef.current;
     try {
       if (demoMode) {
         setRecordedDurationMs(Math.max(1_000, demoElapsedMs));
@@ -366,27 +392,34 @@ export function VoiceCheckInSheet({
         await recorder.stop();
         const uri = recorder.uri ?? recorderState.url;
         if (!uri) throw new Error('Recording URI unavailable');
-        const localDraft = createVoiceCheckInDraft(uri, Math.max(1_000, durationMs));
-        setDraft(localDraft);
+        if (!mountedRef.current || generation !== generationRef.current || isClosingRef.current) {
+          deleteLocalVoiceAudio(uri);
+          return;
+        }
+        audioUriRef.current = uri;
         setAudioUri(uri);
         setRecordedDurationMs(Math.max(1_000, durationMs));
         player.replace(uri);
         await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
       }
+      if (!mountedRef.current || generation !== generationRef.current) return;
       setPhase('review');
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch {
+      if (!mountedRef.current || generation !== generationRef.current) return;
       setErrorKind('recording');
       setErrorMessage('The recording stopped, but its local file could not be prepared. Try recording again.');
       setPhase('error');
     } finally {
-      busyRef.current = false;
-      setIsBusy(false);
+      if (mountedRef.current && generation === generationRef.current) {
+        busyRef.current = false;
+        setIsBusy(false);
+      }
     }
   }, [demoElapsedMs, demoMode, phase, player, recorder, recorderState.durationMillis, recorderState.url]);
 
   useEffect(() => {
-    if (phase !== 'recording' || demoMode || recorderState.durationMillis < VOICE_CHECK_IN_MAX_DURATION_MS) return;
+    if (phase !== 'recording' || demoMode || recorderState.durationMillis < VOICE_RECORDING_MAX_DURATION_MS) return;
     void stopRecording();
   }, [demoMode, phase, recorderState.durationMillis, stopRecording]);
 
@@ -405,200 +438,133 @@ export function VoiceCheckInSheet({
   }, [demoMode, player, playerStatus.currentTime, playerStatus.didJustFinish, playerStatus.duration, playerStatus.playing]);
 
   const discard = useCallback(async () => {
+    if (busyRef.current) return;
+    invalidateAsync();
     try {
       if (!demoMode && recorderState.isRecording) await recorder.stop();
       player.pause();
     } catch {
-      // The explicit reset still clears the prototype state if a stale file cannot be removed.
+      // Reset still clears local state if a stale file cannot be removed.
     } finally {
-      if (!demoMode) discardVoiceCheckInDraft(true);
+      if (!demoMode) deleteLocalVoiceAudio(audioUriRef.current);
     }
     Keyboard.dismiss();
-    setPhase('idle');
-    setAudioUri(null);
-    setRecordedDurationMs(0);
-    setDemoElapsedMs(0);
-    setDemoPlaybackMs(0);
-    setDemoPlaying(false);
-    setTranscript('');
-    setDraft(null);
-    setShowTranscript(false);
-    setErrorMessage('');
+    resetSession('idle');
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, [demoMode, player, recorder, recorderState.isRecording]);
+  }, [demoMode, invalidateAsync, player, recorder, recorderState.isRecording, resetSession]);
 
-  const sendCheckIn = useCallback(async () => {
-    if (busyRef.current) return;
+  const transcribe = useCallback(async () => {
+    if (busyRef.current || phase === 'transcribing') return;
     Keyboard.dismiss();
     if (demoMode) {
-      setPhase('saved');
+      setDraft(composeOnboardingVoiceDraft(existingText, demoTranscript));
+      setPhase('transcript');
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       return;
     }
-
-    const localDraft = draft ?? readVoiceCheckInDraft();
-    if (!audioUri || !localDraft) {
-      setErrorKind('send');
-      setErrorMessage('The local recording file is missing. Record another check-in to continue.');
+    if (!audioUri) {
+      setErrorKind('transcribe');
+      setErrorMessage('The local recording file is missing. Record another answer to continue.');
       setPhase('error');
       return;
     }
 
     busyRef.current = true;
     setIsBusy(true);
+    setPhase('transcribing');
+    const generation = generationRef.current;
+    const controller = new AbortController();
+    transcribeControllerRef.current = controller;
     try {
       player.pause();
-      const saved = await sendVoiceCheckInDraft(localDraft);
-      setDraft(null);
-      setAudioUri(null);
-      setSelectedCheckIn(saved);
-      setTranscript(saved.transcript);
-      setSavedCheckIns((current) => [saved, ...current.filter((item) => item.id !== saved.id)]);
-      setPhase('saved');
+      const transcript = await transcribeVoiceInput(audioUri, recordedDurationMs, controller.signal);
+      if (!mountedRef.current || generation !== generationRef.current || !visibleRef.current) return;
+      setDraft(composeOnboardingVoiceDraft(existingText, transcript));
+      setPhase('transcript');
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
-      setDraft(readVoiceCheckInDraft());
-      setErrorKind('send');
-      setErrorMessage(error instanceof VoiceCheckInApiError
-        ? error.message.toLowerCase().includes('still on this device')
-          ? error.message
-          : `${error.message} Your recording is still on this device.`
-        : 'Your recording is still on this device. Check your connection and try again.');
+      if (!mountedRef.current || generation !== generationRef.current || !visibleRef.current) return;
+      setErrorKind('transcribe');
+      setErrorMessage(error instanceof VoiceInputApiError
+        ? error.message
+        : 'The recording could not be transcribed. Your recording is still on this device.');
       setPhase('error');
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
-      busyRef.current = false;
-      setIsBusy(false);
+      if (transcribeControllerRef.current === controller) transcribeControllerRef.current = null;
+      if (mountedRef.current && generation === generationRef.current) {
+        busyRef.current = false;
+        setIsBusy(false);
+      }
     }
-  }, [audioUri, demoMode, draft, player]);
+  }, [audioUri, demoMode, demoTranscript, existingText, phase, player, recordedDurationMs]);
 
-  const saveTranscriptEdit = useCallback(async () => {
-    if (!selectedCheckIn || !transcript.trim() || busyRef.current) return;
-    busyRef.current = true;
-    setIsBusy(true);
-    try {
-      const updated = await editVoiceCheckIn(selectedCheckIn.id, transcript.trim());
-      setSelectedCheckIn(updated);
-      setSavedCheckIns((current) => current.map((item) => item.id === updated.id ? updated : item));
-      setIsEditingTranscript(false);
-      Keyboard.dismiss();
-    } catch {
-      setErrorKind('send');
-      setErrorMessage('The transcript could not be updated. Your saved check-in is unchanged.');
-      setPhase('error');
-    } finally {
-      busyRef.current = false;
-      setIsBusy(false);
-    }
-  }, [selectedCheckIn, transcript]);
-
-  const removeSavedCheckIn = useCallback(async () => {
-    if (!selectedCheckIn || busyRef.current) return;
-    busyRef.current = true;
-    setIsBusy(true);
-    try {
-      await deleteVoiceCheckIn(selectedCheckIn.id);
-      setSavedCheckIns((current) => current.filter((item) => item.id !== selectedCheckIn.id));
-      setSelectedCheckIn(null);
-      setTranscript('');
-      setIsEditingTranscript(false);
-      setPhase('idle');
-    } catch {
-      setErrorKind('send');
-      setErrorMessage('The saved check-in could not be deleted. Try again.');
-      setPhase('error');
-    } finally {
-      busyRef.current = false;
-      setIsBusy(false);
-    }
-  }, [selectedCheckIn]);
+  const acceptAnswer = useCallback(() => {
+    if (busyRef.current || !voiceAnswerAcceptance(draft).canAccept) return;
+    Keyboard.dismiss();
+    acceptedRef.current = true;
+    if (!demoMode) deleteLocalVoiceAudio(audioUriRef.current);
+    const accepted = draft;
+    invalidateAsync();
+    resetSession('idle');
+    onAccept(accepted);
+    onClose();
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, [demoMode, draft, invalidateAsync, onAccept, onClose, resetSession]);
 
   const retryAfterError = useCallback(() => {
-    if (selectedCheckIn) {
-      setPhase('saved');
-    } else if (recordedDurationMs > 0 || demoMode) {
+    if (recordedDurationMs > 0 || audioUri || demoMode) {
       setPhase('review');
     } else {
       setPhase('idle');
     }
     setErrorMessage('');
-  }, [demoMode, recordedDurationMs, selectedCheckIn]);
+  }, [audioUri, demoMode, recordedDurationMs]);
 
   const closeSheet = useCallback(async () => {
-    if (isClosingRef.current || isBusy) return;
+    if (isClosingRef.current) return;
     isClosingRef.current = true;
+    invalidateAsync();
     Keyboard.dismiss();
     if (phase === 'recording') await stopRecording();
+    else if (!demoMode && recorder.isRecording) {
+      try { await recorder.stop(); } catch { /* closing still removes the local file below */ }
+      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
+    }
+    if (!demoMode) {
+      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
+    }
     if (isPlaying) {
       if (demoMode) setDemoPlaying(false);
       else player.pause();
     }
-    if (phase === 'saved') {
-      setPhase('idle');
-      setSelectedCheckIn(null);
-      setIsEditingTranscript(false);
-      setAudioUri(null);
-      setRecordedDurationMs(0);
-      setTranscript('');
-      setShowTranscript(false);
-      setDemoPlaybackMs(0);
-    }
+    if (!demoMode && !acceptedRef.current) deleteLocalVoiceAudio(audioUriRef.current);
+    resetSession('idle');
     onClose();
     isClosingRef.current = false;
-  }, [demoMode, isBusy, isPlaying, onClose, phase, player, stopRecording]);
+  }, [demoMode, invalidateAsync, isPlaying, onClose, phase, player, recorder, resetSession, stopRecording]);
 
   const renderIdle = () => (
     <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(180)} style={styles.stateContent}>
       <View style={[styles.micWell, { backgroundColor: alpha(colors.accent, 0.12), borderColor: alpha(colors.accent, 0.24) }]}>
         <MicrophoneIcon size={28} color={colors.accent} weight="regular" />
       </View>
-      <Text style={[styles.title, { color: colors.text }]}>How’s your day going?</Text>
-      <Text style={[styles.body, { color: colors.textMuted }]}>Share a little of your day. It doesn’t need to come out perfectly.</Text>
+      <Text style={[styles.title, { color: colors.text }]}>Record your answer</Text>
+      <Text style={[styles.body, { color: colors.textMuted }]}>
+        Speak a little about yourself. You can review the text before it is added.
+      </Text>
       <TouchableOpacity
         activeOpacity={0.76}
         disabled={isBusy}
         onPress={() => void startRecording()}
         accessibilityRole="button"
-        accessibilityLabel={demoMode ? 'Start demo recording' : 'Start voice check-in recording'}
+        accessibilityLabel={demoMode ? 'Start demo recording' : 'Start recording your answer'}
         accessibilityHint={demoMode ? 'Starts a microphone-free preview' : 'Requests microphone access and starts recording'}
         style={[styles.primaryButton, { backgroundColor: colors.accent, opacity: isBusy ? 0.55 : 1 }]}
       >
         <MicrophoneIcon size={18} color={colors.background} weight="fill" />
         <Text style={[styles.primaryButtonText, { color: colors.background }]}>Start recording</Text>
       </TouchableOpacity>
-      {!demoMode && savedCheckIns.length > 0 ? (
-        <View style={styles.historyBlock}>
-          <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>RECENT CHECK-INS</Text>
-          {savedCheckIns.slice(0, historyExpanded ? 25 : 3).map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              activeOpacity={0.72}
-              accessibilityRole="button"
-              accessibilityLabel={`Open voice check-in from ${new Date(item.capturedAt).toLocaleDateString()}`}
-              onPress={() => {
-                setSelectedCheckIn(item);
-                setTranscript(item.transcript);
-                setIsEditingTranscript(false);
-                setPhase('saved');
-              }}
-              style={[styles.historyRow, { borderColor: colors.border }]}
-            >
-              <Text numberOfLines={1} style={[styles.historyText, { color: colors.text }]}>{item.transcript}</Text>
-              <Text style={[styles.historyDate, { color: colors.textMuted }]}>{new Date(item.capturedAt).toLocaleDateString()}</Text>
-            </TouchableOpacity>
-          ))}
-          {savedCheckIns.length > 3 ? (
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel={historyExpanded ? 'Show fewer saved check-ins' : 'Show all saved check-ins'}
-              onPress={() => setHistoryExpanded((value) => !value)}
-              style={styles.textButton}
-            >
-              <Text style={[styles.textButtonLabel, { color: colors.accent }]}>{historyExpanded ? 'Show less' : `Show all ${savedCheckIns.length}`}</Text>
-            </TouchableOpacity>
-          ) : null}
-        </View>
-      ) : null}
     </Animated.View>
   );
 
@@ -675,41 +641,11 @@ export function VoiceCheckInSheet({
           <Text style={[styles.playbackTime, { color: colors.textMuted }]}>{formatRecordingTime(recordedDurationMs)}</Text>
         </Pressable>
 
-        {demoMode && showTranscript ? (
-          <View style={styles.transcriptBlock}>
-            <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>{demoMode ? 'TRANSCRIPT' : 'OPTIONAL NOTE'}</Text>
-            <TextInput
-              value={transcript}
-              onChangeText={setTranscript}
-              placeholder="Add a few words about what you said…"
-              placeholderTextColor={colors.textHint}
-              selectionColor={colors.accent}
-              cursorColor={colors.accent}
-              multiline
-              autoFocus
-              keyboardAppearance={isDark ? 'dark' : 'light'}
-              style={[styles.transcriptInput, { color: colors.text, backgroundColor: colors.inputBackground, borderColor: colors.borderFocused }]}
-            />
-          </View>
-        ) : demoMode ? (
-          <TouchableOpacity
-            activeOpacity={0.72}
-            accessibilityRole="button"
-            accessibilityLabel={demoMode ? 'Edit transcript' : 'Add a note'}
-            accessibilityHint="Opens the keyboard and a text field"
-            onPress={() => setShowTranscript(true)}
-            style={styles.transcriptLink}
-          >
-            <PencilSimpleIcon size={16} color={colors.textMuted} weight="regular" />
-            <Text style={[styles.transcriptLinkText, { color: colors.textMuted }]}>{demoMode ? 'Edit transcript' : 'Add a note'}</Text>
-          </TouchableOpacity>
-        ) : null}
+        <Text style={[styles.disclosure, { color: colors.textMuted }]}>
+          Tap Transcribe to send this recording to OpenAI for transcription. You can edit the text before using it.
+        </Text>
 
-        {!demoMode ? (
-          <Text style={[styles.disclosure, { color: colors.textMuted }]}>When you send, OpenAI turns your recording into text. The saved text can guide Companion and future readings.</Text>
-        ) : null}
-
-        <View style={styles.reviewActions}>
+        <View style={[styles.reviewActions, fontScale > 1.3 && styles.stackedActions]}>
           <TouchableOpacity
             activeOpacity={0.72}
             accessibilityRole="button"
@@ -725,81 +661,97 @@ export function VoiceCheckInSheet({
             activeOpacity={0.76}
             disabled={isBusy}
             accessibilityRole="button"
-            accessibilityLabel="Send voice check-in"
-            accessibilityHint={demoMode ? 'Simulates a saved check-in' : 'Uploads the recording for transcription'}
-            onPress={() => void sendCheckIn()}
+            accessibilityLabel="Transcribe recording"
+            accessibilityHint={demoMode ? 'Shows a preview transcript' : 'Sends the recording to turn it into text'}
+            onPress={() => void transcribe()}
             style={[styles.sendButton, { backgroundColor: colors.accent, opacity: isBusy ? 0.55 : 1 }]}
           >
             {isBusy ? <ActivityIndicator size="small" color={colors.background} /> : <CheckIcon size={17} color={colors.background} weight="bold" />}
-            <Text style={[styles.sendButtonText, { color: colors.background }]}>{isBusy ? 'Saving your check-in…' : 'Send'}</Text>
+            <Text style={[styles.sendButtonText, { color: colors.background }]}>Transcribe</Text>
           </TouchableOpacity>
         </View>
       </Animated.View>
     );
   };
 
-  const renderSaved = () => (
+  const renderTranscribing = () => (
     <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(180)} style={styles.stateContent}>
-      <View style={[styles.resultIcon, { backgroundColor: alpha(colors.success, 0.12), borderColor: alpha(colors.success, 0.24) }]}>
-        <CheckIcon size={28} color={colors.success} weight="bold" />
-      </View>
-      <Text style={[styles.title, { color: colors.text }]}>{demoMode ? 'Simulated save complete' : 'Check-in saved'}</Text>
+      <ActivityIndicator size="large" color={colors.accent} />
+      <Text style={[styles.title, { color: colors.text }]}>Transcribing</Text>
       <Text style={[styles.body, { color: colors.textMuted }]}>
-        {demoMode
-          ? 'Demo mode did not create a file or upload anything.'
-          : 'Your transcript is saved. You can review, edit, or delete it below.'}
+        Turning your recording into text. This usually takes a few seconds.
       </Text>
-      {!demoMode && selectedCheckIn ? (
-        <View style={styles.transcriptBlock}>
-          <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>TRANSCRIPT · {new Date(selectedCheckIn.capturedAt).toLocaleDateString()}</Text>
-          {isEditingTranscript ? (
-            <TextInput
-              value={transcript}
-              onChangeText={setTranscript}
-              multiline
-              keyboardAppearance={isDark ? 'dark' : 'light'}
-              selectionColor={colors.accent}
-              cursorColor={colors.accent}
-              style={[styles.transcriptInput, { color: colors.text, backgroundColor: colors.inputBackground, borderColor: colors.borderFocused }]}
-            />
-          ) : (
-            <Text style={[styles.savedTranscript, { color: colors.text }]}>{selectedCheckIn.transcript}</Text>
-          )}
-          <View style={styles.savedActions}>
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel={isEditingTranscript ? 'Save transcript changes' : 'Edit saved transcript'}
-              disabled={isBusy}
-              onPress={() => isEditingTranscript ? void saveTranscriptEdit() : setIsEditingTranscript(true)}
-              style={[styles.secondaryButton, { borderColor: colors.border }]}
-            >
-              <PencilSimpleIcon size={16} color={colors.textMuted} weight="regular" />
-              <Text style={[styles.secondaryButtonText, { color: colors.textMuted }]}>{isEditingTranscript ? 'Save changes' : 'Edit'}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel="Delete saved voice check-in"
-              accessibilityHint="Deletes this transcript from future context"
-              disabled={isBusy}
-              onPress={() => void removeSavedCheckIn()}
-              style={[styles.secondaryButton, { borderColor: colors.border }]}
-            >
-              <TrashIcon size={16} color={colors.error} weight="regular" />
-              <Text style={[styles.secondaryButtonText, { color: colors.error }]}>Delete</Text>
-            </TouchableOpacity>
-          </View>
-          <Text style={[styles.retentionNote, { color: colors.textHint }]}>Deleting removes this transcript from future Companion and reading context. It does not change text already generated.</Text>
-        </View>
-      ) : null}
-      <TouchableOpacity
-        activeOpacity={0.76}
-        accessibilityRole="button"
-        accessibilityLabel="Close saved check-in"
-        onPress={() => void closeSheet()}
-        style={[styles.primaryButton, { backgroundColor: colors.accent }]}
-      >
-        <Text style={[styles.primaryButtonText, { color: colors.background }]}>Done</Text>
-      </TouchableOpacity>
+    </Animated.View>
+  );
+
+  const renderTranscript = () => (
+    <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(180)} style={styles.stateContent}>
+      <Text style={[styles.kicker, { color: colors.textMuted }]}>REVIEW THE TEXT</Text>
+      <Text style={[styles.body, { color: colors.textMuted }]}>
+        Edit anything that needs a correction. This is not added until you use it.
+      </Text>
+      <View style={styles.transcriptBlock}>
+        <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>ANSWER</Text>
+        <TextInput
+          value={draft}
+          accessibilityLabel="Your answer"
+          onChangeText={setDraft}
+          multiline
+          scrollEnabled
+          keyboardAppearance={isDark ? 'dark' : 'light'}
+          selectionColor={colors.accent}
+          cursorColor={colors.accent}
+          style={[styles.transcriptInput, {
+            color: colors.text,
+            backgroundColor: colors.inputBackground,
+            borderColor: acceptance.overLimit ? colors.error : colors.borderFocused,
+          }]}
+        />
+        <Text
+          accessibilityRole="text"
+          style={[styles.countLabel, { color: acceptance.overLimit ? colors.error : colors.textMuted }]}
+        >
+          {voiceAnswerCountLabel(acceptance.count, ONBOARDING_VOICE_ANSWER_MAX_LENGTH)}
+        </Text>
+        {acceptance.empty ? (
+          <Text accessibilityRole="alert" style={[styles.limitNote, { color: colors.textMuted }]}>
+            Add at least one word before using this answer.
+          </Text>
+        ) : null}
+        {acceptance.overLimit ? (
+          <Text accessibilityRole="alert" style={[styles.limitNote, { color: colors.error }]}>
+            This answer is over the {ONBOARDING_VOICE_ANSWER_MAX_LENGTH}-character limit. Shorten it to use it.
+          </Text>
+        ) : null}
+      </View>
+      <View style={[styles.reviewActions, fontScale > 1.3 && styles.stackedActions]}>
+        <TouchableOpacity
+          activeOpacity={0.72}
+          accessibilityRole="button"
+          accessibilityLabel="Discard recording"
+          onPress={() => void discard()}
+          style={[styles.secondaryButton, { borderColor: colors.border }]}
+        >
+          <TrashIcon size={17} color={colors.textMuted} weight="regular" />
+          <Text style={[styles.secondaryButtonText, { color: colors.textMuted }]}>Discard</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          activeOpacity={0.76}
+          disabled={!acceptance.canAccept}
+          accessibilityRole="button"
+          accessibilityLabel="Use this answer"
+          accessibilityState={{ disabled: !acceptance.canAccept }}
+          accessibilityHint="Adds the reviewed text to Tell us about yourself"
+          onPress={acceptAnswer}
+          style={[styles.sendButton, {
+            backgroundColor: colors.accent,
+            opacity: acceptance.canAccept ? 1 : 0.45,
+          }]}
+        >
+          <CheckIcon size={17} color={colors.background} weight="bold" />
+          <Text style={[styles.sendButtonText, { color: colors.background }]}>Use this answer</Text>
+        </TouchableOpacity>
+      </View>
     </Animated.View>
   );
 
@@ -813,19 +765,19 @@ export function VoiceCheckInSheet({
           ? 'Microphone unavailable'
           : errorKind === 'recording'
             ? 'Recording interrupted'
-            : 'Couldn’t send check-in'}
+            : 'Couldn’t transcribe'}
       </Text>
       <Text accessibilityRole="alert" style={[styles.body, { color: colors.textMuted }]}>{errorMessage}</Text>
       <TouchableOpacity
         activeOpacity={0.76}
         accessibilityRole="button"
-        accessibilityLabel={errorKind === 'send' ? 'Try sending again' : 'Return to voice check-in'}
+        accessibilityLabel={recordedDurationMs > 0 || audioUri ? 'Review recording and retry' : 'Return to voice answer'}
         onPress={retryAfterError}
         style={[styles.primaryButton, { backgroundColor: colors.accent }]}
       >
         <ArrowCounterClockwiseIcon size={18} color={colors.background} weight="bold" />
         <Text style={[styles.primaryButtonText, { color: colors.background }]}>
-          {recordedDurationMs > 0 ? 'Review & retry' : 'Try again'}
+          {recordedDurationMs > 0 || audioUri ? 'Review & retry' : 'Try again'}
         </Text>
       </TouchableOpacity>
       <TouchableOpacity
@@ -845,7 +797,7 @@ export function VoiceCheckInSheet({
       <View style={styles.modalRoot}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Close voice check-in"
+          accessibilityLabel="Close voice answer"
           onPress={() => void closeSheet()}
           style={[styles.backdrop, { backgroundColor: alpha('#000000', isDark ? 0.46 : 0.28) }]}
         />
@@ -865,14 +817,14 @@ export function VoiceCheckInSheet({
           >
             <View style={styles.sheetHeader}>
               <View>
-                <Text style={[styles.sheetEyebrow, { color: colors.textMuted }]}>VOICE CHECK-IN</Text>
+                <Text style={[styles.sheetEyebrow, { color: colors.textMuted }]}>ABOUT YOU</Text>
                 {demoMode ? (
                   <Text style={[styles.demoLabel, { color: colors.accent }]}>DEMO · MICROPHONE OFF</Text>
                 ) : null}
               </View>
               <RoundIconButton
-                label="Close voice check-in"
-                hint="Keeps the current draft available while this screen stays open"
+                label="Close voice answer"
+                hint="Leaves the typed answer unchanged"
                 onPress={() => void closeSheet()}
                 color={colors.text}
                 backgroundColor={alpha(colors.text, 0.06)}
@@ -891,11 +843,14 @@ export function VoiceCheckInSheet({
               {phase === 'idle' && renderIdle()}
               {phase === 'recording' && renderRecording()}
               {phase === 'review' && renderReview()}
-              {phase === 'saved' && renderSaved()}
+              {phase === 'transcribing' && renderTranscribing()}
+              {phase === 'transcript' && renderTranscript()}
               {phase === 'error' && renderError()}
 
               <Text style={[styles.privacyLine, { color: colors.textHint }]}>
-                {demoMode ? 'Demo · microphone and network off' : 'Audio removed after saving · transcript stays until you delete it'}
+                {demoMode
+                  ? 'Demo · microphone and network off'
+                  : 'Audio is removed after you use or discard this answer'}
               </Text>
             </ScrollView>
           </Animated.View>
@@ -999,19 +954,12 @@ const styles = StyleSheet.create({
   reviewWaveform: { flex: 1, height: 42, flexDirection: 'row', alignItems: 'center', gap: 2 },
   playbackTime: { fontFamily: FontFamily.mono, fontSize: FontSize.xs, fontVariant: ['tabular-nums'] },
   transcriptBlock: { width: '100%', gap: Spacing['2'] },
-  historyBlock: { width: '100%', gap: Spacing['2'], marginTop: Spacing['2'] },
-  historyRow: { width: '100%', minHeight: 48, borderTopWidth: StyleSheet.hairlineWidth, flexDirection: 'row', alignItems: 'center', gap: Spacing['3'], paddingVertical: Spacing['2'] },
-  historyText: { flex: 1, fontFamily: FontFamily.body, fontSize: FontSize.sm },
-  historyDate: { fontFamily: FontFamily.uiMedium, fontSize: FontSize.xs },
   disclosure: { fontFamily: FontFamily.body, fontSize: FontSize.xs, lineHeight: 18, textAlign: 'center', maxWidth: 320 },
-  savedTranscript: { fontFamily: FontFamily.body, fontSize: FontSize.sm, lineHeight: 21, padding: Spacing['3'] },
-  savedActions: { flexDirection: 'row', gap: Spacing['2'] },
-  retentionNote: { fontFamily: FontFamily.body, fontSize: 11, lineHeight: 16 },
   fieldLabel: { fontFamily: FontFamily.uiSemiBold, fontSize: 10, letterSpacing: 1 },
   transcriptInput: {
     width: '100%',
-    minHeight: 92,
-    maxHeight: 132,
+    minHeight: 120,
+    maxHeight: 220,
     borderRadius: Radius.md,
     borderWidth: 1,
     paddingHorizontal: Spacing['3'],
@@ -1021,9 +969,10 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     textAlignVertical: 'top',
   },
-  transcriptLink: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing['2'] },
-  transcriptLinkText: { fontFamily: FontFamily.uiMedium, fontSize: FontSize.sm },
+  countLabel: { fontFamily: FontFamily.mono, fontSize: FontSize.xs, textAlign: 'right', fontVariant: ['tabular-nums'] },
+  limitNote: { fontFamily: FontFamily.body, fontSize: FontSize.xs, lineHeight: 18 },
   reviewActions: { width: '100%', flexDirection: 'row', gap: Spacing['2'] },
+  stackedActions: { flexDirection: 'column' },
   secondaryButton: {
     minHeight: 50,
     paddingHorizontal: Spacing['4'],

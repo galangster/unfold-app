@@ -26,6 +26,8 @@ describe('redirectSystemPath', () => {
     expect(redirectSystemPath({ path, initial: false })).toBe(path);
     const realQaPath = 'unfold://dev/voice-check-in?transport=real&fixtureUrl=http%3A%2F%2F127.0.0.1%3A8789%2Ftest-fixture.m4a';
     expect(redirectSystemPath({ path: realQaPath, initial: false })).toBe(realQaPath);
+    const onboardingPreview = 'unfold://dev/onboarding-voice-answer?state=transcript&existing=typed';
+    expect(redirectSystemPath({ path: onboardingPreview, initial: false })).toBe(onboardingPreview);
     for (const invalid of [
       'unfold://dev/voice-check-in/extra',
       'unfold://dev/voice-check-in?state=unknown',
@@ -33,6 +35,8 @@ describe('redirectSystemPath', () => {
       'unfold://dev/voice-check-in?fixtureUrl=http%3A%2F%2F127.0.0.1%3A8789%2Ftest.m4a',
       'unfold://dev/voice-check-in?transport=real&fixtureUrl=https%3A%2F%2Fexample.com%2Ftest.m4a',
       'unfold://dev/voice-check-in?transport=real&fixtureUrl=http%3A%2F%2F192.168.1.2%2Ftest.m4a',
+      'unfold://dev/onboarding-voice-answer?state=unknown',
+      'unfold://dev/onboarding-voice-answer?existing=secret-text',
     ]) expect(redirectSystemPath({ path: invalid, initial: false })).toBe('/');
     const originalDev = Reflect.get(global, '__DEV__');
     Reflect.set(global, '__DEV__', false);

@@ -40,6 +40,17 @@ export function redirectSystemPath({ path, initial }: { path: string; initial: b
         });
       if (validPreview) return path;
     }
+    if (__DEV__ && isQaToolsEnabled() && path.startsWith('unfold://dev/onboarding-voice-answer')) {
+      const preview = new URL(path);
+      const keys = [...preview.searchParams.keys()];
+      const validPreview = preview.hostname === 'dev' && preview.pathname === '/onboarding-voice-answer'
+        && new Set(keys).size === keys.length
+        && [...preview.searchParams].every(([key, value]) => {
+          if (key === 'state') return ['idle', 'recording', 'review', 'transcribing', 'transcript', 'error'].includes(value);
+          return key === 'existing' && ['typed', 'overLimit'].includes(value);
+        });
+      if (validPreview) return path;
+    }
     const decision = resolveExternalDeepLink(path);
     if (decision.allowed) return path;
 
