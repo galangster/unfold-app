@@ -34,4 +34,26 @@ describe('formatSeriesCompletionSummary', () => {
     expect(result!.length).toBeLessThanOrEqual(221);
     expect(result!.endsWith('…')).toBe(true);
   });
+
+  it('prefers a whole opening sentence over an ellipsis when the pair is too long', () => {
+    const first =
+      'Over seven days you moved from the chaos of the storm to the stillness of a daily prayer, and you did not look away once from the hard parts of it.';
+    const last =
+      'The series is finished now, but the practice of sitting with Him in the quiet is only just beginning for you.';
+    expect(`${first} ${last}`.length).toBeGreaterThan(220);
+
+    const result = formatSeriesCompletionSummary(`${first} ${last}`);
+
+    expect(result).toBe(first);
+    expect(result!.endsWith('…')).toBe(false);
+  });
+
+  it('never ends mid-word when it must ellipsis-trim', () => {
+    const result = formatSeriesCompletionSummary(`${'unbroken '.repeat(40)}sentence with no stops`);
+
+    expect(result!.endsWith('…')).toBe(true);
+    // The character before the ellipsis closes a word, never splits one.
+    expect(result!.slice(0, -1)).toMatch(/\w$/);
+    expect(`${result!.slice(0, -1)} `).toContain('unbroken ');
+  });
 });

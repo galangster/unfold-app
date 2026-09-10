@@ -1,5 +1,4 @@
 const MAX_COMPLETION_SUMMARY_CHARS = 220;
-const MAX_COMPLETION_SUMMARY_SENTENCES = 2;
 
 function normalizeSummaryText(summary: string): string {
   return summary.replace(/\s+/g, ' ').trim();
@@ -54,6 +53,11 @@ export function formatSeriesCompletionSummary(summary?: string | null): string |
     return firstAndLast;
   }
 
-  const leadingExcerpt = sentences.slice(0, MAX_COMPLETION_SUMMARY_SENTENCES).join(' ').trim();
-  return trimAtWordBoundary(leadingExcerpt || normalized, MAX_COMPLETION_SUMMARY_CHARS);
+  // A finished sentence reads as a finished thought. Prefer the opening
+  // sentence whole over a pair clipped mid-air with an ellipsis.
+  if (first.length <= MAX_COMPLETION_SUMMARY_CHARS) {
+    return first;
+  }
+
+  return trimAtWordBoundary(first, MAX_COMPLETION_SUMMARY_CHARS);
 }
