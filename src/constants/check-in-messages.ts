@@ -309,6 +309,7 @@ export interface DayContext {
   checkInQuestion?: string;
   act?: string;
   eveningScriptureRef?: string;
+  companionNudge?: string;
 }
 
 
@@ -379,15 +380,17 @@ export function getContentAwareEveningMessage(day?: DayContext | null): string {
 }
 
 /**
- * Body of the midday check-in notification. The carry line the reader
- * finished today wins (the devotional following them into the afternoon),
- * then the day's own check-in question, then a template that names the
- * day, then the generic pool.
+ * Body of the midday check-in notification. The companion nudge wins when
+ * generation produced one (it names something from the reader's own life),
+ * then the carry line of the day finished today, then the day's check-in
+ * question, then a template that names the day, then the generic pool.
  */
 export function getMiddayCheckInBody(
   day: DayContext | null | undefined,
   carryLine?: string | null,
 ): string {
+  const nudge = day?.companionNudge?.trim();
+  if (nudge) return truncateNotificationBody(nudge);
   const carry = carryLine?.trim();
   if (carry) return truncateNotificationBody(carry);
   return truncateNotificationBody(getContentAwareMiddayMessage(day));

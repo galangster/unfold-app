@@ -43,6 +43,15 @@ describe('getEveningWindDownBody', () => {
 });
 
 describe('getMiddayCheckInBody', () => {
+  it('leads with the companion nudge when generation produced one', () => {
+    expect(
+      getMiddayCheckInBody(
+        { companionNudge: 'Before Thursday\'s interview, remember whose name you carry.', checkInQuestion: 'Q?' },
+        'Carry line',
+      ),
+    ).toBe('Before Thursday\'s interview, remember whose name you carry.');
+  });
+
   it('prefers the carry line from the day finished today', () => {
     expect(getMiddayCheckInBody({ checkInQuestion: 'Where did you notice grace?' }, 'Carry this: you are already home.')).toBe(
       'Carry this: you are already home.',

@@ -1,4 +1,5 @@
 import * as Application from 'expo-application';
+import { ACT_SLOTS, type ActSlot } from '@/lib/act-reminder';
 
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from './api-config';
 import {
@@ -46,6 +47,10 @@ export type PulledDevotionalContent = {
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function asActSlot(value: unknown): ActSlot | undefined {
+  return (ACT_SLOTS as readonly string[]).includes(value as string) ? (value as ActSlot) : undefined;
 }
 
 function asString(value: unknown): string | undefined {
@@ -115,6 +120,8 @@ function mapPulledDevotionalDay(record: SyncPulledRecord): DevotionalDay | null 
     wordStudy,
     closingPrayer: asString(content.closingPrayer),
     act: asString(content.act),
+    actSlot: asActSlot(content.actSlot),
+    companionNudge: asString(content.companionNudge),
     carryLine: asString(content.carryLine),
     checkInQuestion: asString(content.checkInQuestion),
     checkInChips: asStringArray(content.checkInChips),

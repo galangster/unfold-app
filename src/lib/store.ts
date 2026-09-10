@@ -246,7 +246,9 @@ export interface DevotionalDay {
   /** One concrete same-day act of obedience (named time window, observable). */
   act?: string;
   /** When the act asks to be done; generation may set it, the client infers otherwise. */
-  actSlot?: 'midday' | 'evening' | 'morning-next';
+  actSlot?: import('./act-reminder').ActSlot;
+  /** One generated line for the afternoon that names something from the reader's life. */
+  companionNudge?: string;
   /** How the reader answered the act reminder. Local-only for now. */
   actOutcome?: 'done' | 'skipped';
   /** 6-12 word recall line for the afternoon; also used by the midday check-in notification. */

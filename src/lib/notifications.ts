@@ -374,6 +374,7 @@ function getTodayDayContext(devotional: Devotional | null | undefined, now = new
     checkInQuestion: day.checkInQuestion,
     act: day.act,
     eveningScriptureRef: day.eveningScriptureRef,
+    companionNudge: day.companionNudge,
   };
 }
 
