@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useRef, useMemo, useState } from 'react';
+import * as Clipboard from 'expo-clipboard';
 import { View, StyleSheet, Dimensions, PixelRatio } from 'react-native';
 import { WebView } from 'react-native-webview';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/lib/theme';
 import { useReadingFont } from '@/lib/useReadingFont';
-import { FONT_SIZE_VALUES, FontSize, DevotionalDay, Highlight, HighlightColor, Bookmark, useUnfoldStore } from '@/lib/store';
+import { FONT_SIZE_VALUES, FontSize, DevotionalDay, Highlight, HighlightColor, Bookmark, HIGHLIGHT_COLOR_LABELS, useUnfoldStore } from '@/lib/store';
+import type { LiveHighlight } from '@/lib/store';
 import { parseScriptureReferences } from '@/lib/scripture-parser';
 import { logger } from '@/lib/logger';
 import { stripOuterQuotes } from '@/lib/cn';
@@ -12,25 +14,35 @@ import { isStructuredWordStudy, normalizeWordStudy } from '@/lib/word-study';
 import { DISPLAY_SERIF_WOFF2_BASE64 } from '@/lib/display-font-base64';
 import { RANGY_BUNDLE } from './rangy-bundle';
 
-interface Quote {
-  text: string;
-  context: string;
-  serializedRange?: string;
-  color?: HighlightColor;
+/** The document is the source of truth: every mutation reports the diff of
+ *  live highlights before and after, and the store reconciles from it. */
+export interface HighlightsChangedEvent {
+  reason: 'create' | 'remove' | 'recolor' | 'undo' | 'heal';
+  removed: LiveHighlight[];
+  added: LiveHighlight[];
+  /** Serial of the highlight the person acted on (create / recolor). */
+  primarySerial: string;
+  /** True for undo replays — reconcile the store, show no toast. */
+  silent: boolean;
 }
 
-interface HighlightRemovedEvent {
-  text: string;
-  color: HighlightColor;
-  context: string;
-  serializedRange?: string;
+/** Imperative handle for the reader screen (undo). */
+export interface DevotionalWebViewCommands {
+  /** Apply the inverse of a reported change to the document. The resulting
+   *  diff comes back through `onHighlightsChanged` with `silent: true`. */
+  applyInverse: (change: Pick<HighlightsChangedEvent, 'added' | 'removed'>) => void;
 }
 
 interface DevotionalWebViewProps {
   day: DevotionalDay;
   fontSize: FontSize;
-  onQuoteSelected?: (quote: Quote) => void;
-  onHighlightRemoved?: (event: HighlightRemovedEvent) => void;
+  onHighlightsChanged?: (event: HighlightsChangedEvent) => void;
+  /** The selection could not be turned into a highlight (nothing stored). */
+  onHighlightFailed?: () => void;
+  /** Stored highlights whose text no longer exists in this document. They
+   *  stay in the store; the reader just cannot show them. */
+  onHighlightsLost?: (serials: string[]) => void;
+  commandRef?: React.MutableRefObject<DevotionalWebViewCommands | null>;
   existingHighlights?: Highlight[];
   targetHighlight?: Highlight | null;
   onTargetHighlightLocated?: (y: number) => void;
@@ -61,15 +73,52 @@ export function clampSystemFontScale(scale: number): number {
  *  memo below and re-injecting script into the WebView for free. */
 const NO_HIGHLIGHTS: Highlight[] = [];
 
-// Color definitions for saved highlights. Match the Bible reader semantics:
-// light mode uses a marker-style background; dark mode uses vibrant text color.
-const HIGHLIGHT_COLORS = {
-  yellow: { light: 'rgba(255, 245, 112, 0.58)', textDark: '#FFE86A' },
-  green: { light: 'rgba(190, 244, 128, 0.5)', textDark: '#5CFF63' },
-  blue: { light: 'rgba(170, 220, 255, 0.46)', textDark: '#77B7FF' },
-  purple: { light: 'rgba(214, 188, 255, 0.44)', textDark: '#D7A8FF' },
-  red: { light: 'rgba(255, 190, 190, 0.46)', textDark: '#FF7A7A' },
+/** Custom entries REPLACE the system text-selection menu (react-native-webview
+ *  semantics), so Copy is re-added by hand. Highlight opens the named colour
+ *  picker; the picker never appears on its own, so nothing competes with it. */
+const HIGHLIGHT_MENU_ITEMS = [
+  { label: 'Highlight', key: 'highlight' },
+  { label: 'Copy', key: 'copy' },
+];
+
+// Highlighter stroke for saved highlights (chosen 2026-09-10 over a flat
+// marker, an underline wash and a pencil rule). Both themes paint a
+// translucent band behind unchanged text, never colored text, and the ink
+// is uneven like a felt tip: heavier through the middle, softer at both
+// ends. `rgb` is the ink; `peak` is its strongest alpha on that ground.
+const HIGHLIGHT_COLORS: Record<HighlightColor, { label: string; light: HighlightInk; dark: HighlightInk }> = {
+  yellow: { label: HIGHLIGHT_COLOR_LABELS.yellow, light: { rgb: '255, 236, 80', peak: 0.72 }, dark: { rgb: '255, 232, 106', peak: 0.34 } },
+  green: { label: HIGHLIGHT_COLOR_LABELS.green, light: { rgb: '180, 240, 120', peak: 0.62 }, dark: { rgb: '92, 255, 99', peak: 0.28 } },
+  blue: { label: HIGHLIGHT_COLOR_LABELS.blue, light: { rgb: '150, 210, 255', peak: 0.62 }, dark: { rgb: '119, 183, 255', peak: 0.32 } },
+  purple: { label: HIGHLIGHT_COLOR_LABELS.purple, light: { rgb: '214, 188, 255', peak: 0.56 }, dark: { rgb: '215, 168, 255', peak: 0.32 } },
+  red: { label: HIGHLIGHT_COLOR_LABELS.red, light: { rgb: '255, 180, 180', peak: 0.6 }, dark: { rgb: '255, 122, 122', peak: 0.32 } },
 };
+
+interface HighlightInk {
+  rgb: string;
+  peak: number;
+}
+
+/** Where the stroke sits for each reading face, in em. Measured 2026-09-10
+ *  from the fonts' own metrics: `top` = font-box ascent − tallest ascender
+ *  − 0.05; `height` = ascender + descender + 0.10. Anchored to the letters,
+ *  not to the font box, which is what made the old band float high. */
+export const HIGHLIGHT_STROKE_FIT: Record<string, { top: number; height: number }> = {
+  'Source Serif 4': { top: 0.24, height: 1.09 },
+  'EB Garamond': { top: 0.25, height: 1.1 },
+  Lora: { top: 0.2, height: 1.13 },
+  Inter: { top: 0.16, height: 1.08 },
+  'Crimson Text': { top: 0.22, height: 1.0 },
+  Merriweather: { top: 0.1, height: 1.2 },
+  Georgia: { top: 0.2, height: 1.1 },
+};
+
+/** The felt-tip gradient: soft entry, full ink by 12%, a shade lighter
+ *  through the body, soft exit. Used as `background-image` on the mark. */
+export function highlighterStroke({ rgb, peak }: HighlightInk): string {
+  const a = (f: number) => (peak * f).toFixed(2);
+  return `linear-gradient(100deg, rgba(${rgb}, ${a(0.47)}), rgba(${rgb}, ${a(1)}) 12%, rgba(${rgb}, ${a(0.87)}) 88%, rgba(${rgb}, ${a(0.42)}))`;
+}
 
 const HIGHLIGHT_COLOR_NAMES = Object.keys(HIGHLIGHT_COLORS) as (keyof typeof HIGHLIGHT_COLORS)[];
 
@@ -106,15 +155,15 @@ function buildThemeVars(fontSize: FontSize, accentColor: string, isDark: boolean
     '--box-bg': isDark ? '#1F1F1F' : '#EDE8E0', // warmer, visible surface separation
     '--box-border': isDark ? 'rgba(245,240,235,0.07)' : 'rgba(0,0,0,0.06)',
     '--toolbar-bg': isDark ? '#2a2a2a' : '#ffffff',
+    '--toolbar-fg': isDark ? '#E8E4DC' : '#3A3532',
     '--scripture-underline': `${accentColor}60`,
   };
-  // Saved highlights keep the Bible reader semantics: marker background in
-  // light mode, vibrant text in dark mode. `currentColor` rather than
-  // `inherit` — CSS-wide keywords are not valid custom-property values, and
-  // `color: currentColor` is defined to behave exactly like `color: inherit`.
+  // Stroke in both themes; text keeps its own color. `currentColor`
+  // rather than `inherit` — CSS-wide keywords are not valid custom-property
+  // values, and `color: currentColor` behaves exactly like `color: inherit`.
   HIGHLIGHT_COLOR_NAMES.forEach((color) => {
-    vars[`--hl-${color}-bg`] = isDark ? 'transparent' : HIGHLIGHT_COLORS[color].light;
-    vars[`--hl-${color}-color`] = isDark ? HIGHLIGHT_COLORS[color].textDark : 'currentColor';
+    vars[`--hl-${color}-bg`] = highlighterStroke(isDark ? HIGHLIGHT_COLORS[color].dark : HIGHLIGHT_COLORS[color].light);
+    vars[`--hl-${color}-color`] = 'currentColor';
   });
   return {
     declarations: Object.entries(vars).map(([name, value]) => `${name}: ${value};`).join(' '),
@@ -157,8 +206,10 @@ let nextDocumentId = 0;
 export function DevotionalWebView({
   day,
   fontSize,
-  onQuoteSelected,
-  onHighlightRemoved,
+  onHighlightsChanged,
+  onHighlightFailed,
+  onHighlightsLost,
+  commandRef,
   existingHighlights = NO_HIGHLIGHTS,
   targetHighlight,
   onTargetHighlightLocated,
@@ -201,6 +252,14 @@ export function DevotionalWebView({
         allSerializedRanges.push(h.serializedRange);
       }
     });
+    // What each stored highlight is supposed to say, so the document can
+    // check the restored spans and re-anchor any that drifted.
+    const storedHighlights = existingHighlights.map((h) => ({
+      serial: h.serializedRange || '',
+      text: h.highlightedText || '',
+      color: h.color || 'yellow',
+      before: h.contextBefore || '',
+    }));
     const targetHighlightPayload = targetHighlight
       ? {
           id: targetHighlight.id,
@@ -249,7 +308,6 @@ export function DevotionalWebView({
           const applier = rangy.createClassApplier('rangy-highlight-' + color, {
             elementTagName: 'mark',
             elementProperties: {
-              style: 'background: var(--hl-' + color + '-bg); color: var(--hl-' + color + '-color); padding: 0; border-radius: 2px;',
               className: 'highlight-' + color
             }
           });
@@ -299,6 +357,13 @@ export function DevotionalWebView({
           }
         }
         
+        // Self-heal: offsets are a hint, the text is the truth. Any stored
+        // highlight whose restored span no longer reads as its text (the
+        // devotional was regenerated or re-pulled) is re-anchored by
+        // searching for the text; one that cannot be found is reported,
+        // never deleted.
+        healHighlights(${JSON.stringify(storedHighlights)});
+
         // Report height after highlights applied
         setTimeout(reportHeight, 100);
         setTimeout(locateTargetHighlight, 150);
@@ -321,7 +386,7 @@ export function DevotionalWebView({
       }
 
       function normalizeText(value) {
-        return String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
+        return String(value || '').replace(/\\s+/g, ' ').trim().toLowerCase();
       }
 
       function serializedEntries(value) {
@@ -558,9 +623,6 @@ export function DevotionalWebView({
         isEditMode = false;
         editingMark = null;
         editingColor = '';
-        editingText = '';
-        editingContext = '';
-        editingSerializedRange = '';
 
         setTimeout(function() {
           // If the toolbar was re-shown during the fade, leave its classes alone
@@ -576,12 +638,6 @@ export function DevotionalWebView({
       let isEditMode = false;
       let editingMark = null;
       let editingColor = '';
-      let editingText = '';
-      let editingContext = '';
-      // Rangy serialized range of the highlight being edited — used as the
-      // canonical key for matching against the store-side highlights. More
-      // reliable than text+color+context because it encodes exact char offsets.
-      let editingSerializedRange = '';
 
       // Build a single-highlight serialized string matching rangy's format:
       //   "start$end$id$className$containerElementId"
@@ -593,6 +649,208 @@ export function DevotionalWebView({
         var cid = hl.containerElementId || '';
         return cr.start + '$' + cr.end + '$' + hl.id + '$' + hl.classApplier.className + '$' + cid;
       }
+
+      // ---- Document-is-truth protocol -------------------------------------
+      // Every mutation (create, remove, recolor, undo) is reported to RN as
+      // the DIFF between the highlighter's state before and after: rangy's
+      // exclusive mode merges same-color neighbours and trims other-color
+      // neighbours, so the set of live highlights can change in ways the
+      // single "new highlight" never captured. RN reconciles its store from
+      // this diff, so what is stored always matches what is on the page.
+      function colorOf(hl) {
+        return String(hl.classApplier.className).replace('rangy-highlight-', '');
+      }
+
+      // Serial + object only; text is read lazily for the few highlights
+      // that actually changed (a removed highlight's range still resolves
+      // against the document after unapply, so its text stays readable).
+      function snapshotHighlights() {
+        var out = [];
+        var hs = (window.rangyHighlighter && window.rangyHighlighter.highlights) || [];
+        for (var i = 0; i < hs.length; i++) out.push({ serial: getRangySerial(hs[i]), hl: hs[i] });
+        return out;
+      }
+
+      function findBySerial(serial) {
+        var hs = (window.rangyHighlighter && window.rangyHighlighter.highlights) || [];
+        for (var i = 0; i < hs.length; i++) {
+          if (getRangySerial(hs[i]) === serial) return hs[i];
+        }
+        return null;
+      }
+
+      function describe(entry, withContext) {
+        var text = '';
+        try { text = entry.hl.getText(); } catch (_) {}
+        var row = { serial: entry.serial, text: text, color: colorOf(entry.hl) };
+        if (withContext) row.context = contextFor(entry.hl, text);
+        return row;
+      }
+
+      function contextFor(hl, text) {
+        try {
+          var els = hl.getHighlightElements();
+          var parent = els && els[0] && els[0].parentElement;
+          var t = (parent && parent.textContent) || '';
+          var idx = t.indexOf(text);
+          if (idx < 0) return t.substring(0, 150);
+          return t.substring(Math.max(0, idx - 50), idx + text.length + 50);
+        } catch (_) {
+          return '';
+        }
+      }
+
+      // keepSerials: spans unapplied from the page whose records must stay
+      // in the store (a lost highlight waiting for its text to come back).
+      function postHighlightsChanged(reason, before, primarySerial, silent, keepSerials) {
+        var after = snapshotHighlights();
+        var keep = {};
+        (keepSerials || []).forEach(function(k) { keep[k] = true; });
+        var beforeBySerial = {};
+        var afterBySerial = {};
+        before.forEach(function(h) { beforeBySerial[h.serial] = h; });
+        after.forEach(function(h) { afterBySerial[h.serial] = h; });
+        var removed = [];
+        var added = [];
+        before.forEach(function(h) { if (!afterBySerial[h.serial] && !keep[h.serial]) removed.push(describe(h, false)); });
+        after.forEach(function(h) { if (!beforeBySerial[h.serial]) added.push(describe(h, true)); });
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'HIGHLIGHTS_CHANGED',
+          reason: reason,
+          removed: removed,
+          added: added,
+          primarySerial: primarySerial || '',
+          silent: !!silent
+        }));
+      }
+
+      // Re-apply a serialized highlight through rangy's character-range API.
+      // (deserialize() REPLACES the whole highlight set, so it cannot be used
+      // to put one highlight back.)
+      function restoreSerial(serial) {
+        var parts = String(serial || '').split('$');
+        if (parts.length < 4 || !window.rangyHighlighter) return;
+        var start = parseInt(parts[0], 10);
+        var end = parseInt(parts[1], 10);
+        var className = parts[3];
+        var containerId = parts[4] || null;
+        if (!(end > start)) return;
+        var converter = window.rangyHighlighter.converter;
+        var container = containerId ? document.getElementById(containerId) : document.body;
+        var range = converter.characterRangeToRange(document, { start: start, end: end }, container);
+        var charRange = converter.rangeToCharacterRange(range, container);
+        window.rangyHighlighter.highlightCharacterRanges(className, [charRange], {
+          containerElementId: containerId,
+          exclusive: true
+        });
+      }
+
+      function normalizeWs(s) { return String(s || '').replace(/\\s+/g, ' ').trim(); }
+
+      // Character offsets in the article text for every occurrence of the
+      // stored text; when there are several, the one whose neighbourhood
+      // shares the most words with the stored context wins. The search stops
+      // at the picker so a highlight can never re-anchor onto a swatch label.
+      function articleTextLength() {
+        var tb = document.getElementById('highlight-toolbar');
+        if (!tb) return (document.body.textContent || '').length;
+        var r = document.createRange();
+        r.setStart(document.body, 0);
+        r.setEndBefore(tb);
+        return r.toString().length;
+      }
+
+      function locateStoredText(text, before) {
+        var body = (document.body.textContent || '').substring(0, articleTextLength());
+        var needle = normalizeWs(text);
+        if (!needle) return -1;
+        var hits = [];
+        var from = 0;
+        while (hits.length < 50) {
+          var i = body.indexOf(needle, from);
+          if (i < 0) break;
+          hits.push(i);
+          from = i + 1;
+        }
+        if (hits.length <= 1) return hits.length ? hits[0] : -1;
+        var words = normalizeWs(before).toLowerCase().split(' ').filter(function(w) { return w.length > 3; });
+        var best = hits[0], bestScore = -1;
+        hits.forEach(function(i) {
+          var window = body.substring(Math.max(0, i - 120), i + needle.length + 120).toLowerCase();
+          var score = 0;
+          words.forEach(function(w) { if (window.indexOf(w) >= 0) score++; });
+          if (score > bestScore) { bestScore = score; best = i; }
+        });
+        return best;
+      }
+
+      // Two passes: first decide every stored highlight's fate and unapply
+      // the ones that drifted, then re-anchor. Re-anchoring while stale
+      // neighbours are still applied lets rangy trim them into new spans.
+      function healHighlights(stored) {
+        if (!window.rangyHighlighter || !stored || !stored.length) return;
+        var liveByPos = {};
+        window.rangyHighlighter.highlights.forEach(function(h) {
+          liveByPos[h.characterRange.start + '-' + h.characterRange.end] = h;
+        });
+        var before = snapshotHighlights();
+        var lost = [];
+        var relocate = [];
+        var stale = [];
+        stored.forEach(function(s) {
+          var parts = String(s.serial || '').split('$');
+          var live = parts.length >= 2 ? liveByPos[parts[0] + '-' + parts[1]] : null;
+          var liveText = '';
+          if (live) { try { liveText = normalizeWs(live.getText()); } catch (_) {} }
+          if (live && liveText === normalizeWs(s.text)) return;
+          if (live) stale.push(live);
+          var idx = locateStoredText(s.text, s.before);
+          if (idx < 0) {
+            // A mark on the wrong words is worse than none; the record itself
+            // stays in the store for a device that still has the old text.
+            lost.push(s.serial);
+          } else {
+            relocate.push({ idx: idx, len: normalizeWs(s.text).length, color: s.color || 'yellow', serial: s.serial });
+          }
+        });
+        if (stale.length) { try { window.rangyHighlighter.removeHighlights(stale); } catch (_) {} }
+        var healedCount = 0;
+        relocate.forEach(function(r) {
+          try {
+            var converter = window.rangyHighlighter.converter;
+            var range = converter.characterRangeToRange(document, { start: r.idx, end: r.idx + r.len }, document.body);
+            var charRange = converter.rangeToCharacterRange(range, document.body);
+            window.rangyHighlighter.highlightCharacterRanges('rangy-highlight-' + r.color, [charRange], { exclusive: true });
+            healedCount++;
+          } catch (err) {
+            lost.push(r.serial);
+          }
+        });
+        if (healedCount > 0 || stale.length > 0) postHighlightsChanged('heal', before, '', true, lost);
+        if (lost.length > 0) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'HIGHLIGHTS_LOST', serials: lost }));
+        }
+      }
+
+      // Undo from RN: given the forward change, apply its inverse and report
+      // the resulting diff silently (no second toast).
+      window.__unfoldApplyInverse = function(change) {
+        if (!window.rangyHighlighter) return;
+        var before = snapshotHighlights();
+        try {
+          var toRemove = [];
+          ((change && change.added) || []).forEach(function(a) {
+            var hl = findBySerial(a.serial);
+            if (hl) toRemove.push(hl);
+          });
+          if (toRemove.length) window.rangyHighlighter.removeHighlights(toRemove);
+          ((change && change.removed) || []).forEach(function(r) { restoreSerial(r.serial); });
+        } catch (err) {
+          console.log('Undo failed:', err);
+        }
+        hideToolbar();
+        postHighlightsChanged('undo', before, '', true);
+      };
 
       function positionToolbarOverEl(el) {
         if (!el) return;
@@ -607,29 +865,6 @@ export function DevotionalWebView({
         isEditMode = true;
         editingMark = markEl;
         editingColor = color;
-        editingText = markEl.textContent || '';
-        // Capture the rangy serialized form of this highlight for canonical
-        // matching against the store on the RN side.
-        try {
-          var rangyHl = window.rangyHighlighter && window.rangyHighlighter.getHighlightForElement
-            ? window.rangyHighlighter.getHighlightForElement(markEl)
-            : null;
-          editingSerializedRange = getRangySerial(rangyHl);
-        } catch (_) {
-          editingSerializedRange = '';
-        }
-        // Capture ~100 chars of parent context around the mark as a fallback
-        // tiebreaker for store-side matching when serializedRange is missing.
-        const parent = markEl.parentElement;
-        const parentText = (parent && parent.textContent) || '';
-        const markStart = parentText.indexOf(editingText);
-        if (markStart >= 0) {
-          const ctxStart = Math.max(0, markStart - 50);
-          const ctxEnd = Math.min(parentText.length, markStart + editingText.length + 50);
-          editingContext = parentText.substring(ctxStart, ctxEnd);
-        } else {
-          editingContext = editingText.substring(0, 100);
-        }
 
         // Mark matching color button, hide others via .edit-mode class
         document.querySelectorAll('.color-btn').forEach(function(b) {
@@ -645,10 +880,7 @@ export function DevotionalWebView({
 
       function removeEditHighlight() {
         if (!editingMark) return;
-        const removedText = editingText;
-        const removedColor = editingColor;
-        const removedContext = editingContext;
-        const removedSerializedRange = editingSerializedRange;
+        var before = snapshotHighlights();
 
         try {
           if (window.rangyHighlighter && window.rangyHighlighter.getHighlightForElement) {
@@ -670,15 +902,8 @@ export function DevotionalWebView({
         } catch (err) {}
 
         window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'HAPTIC_IMPACT' }));
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'HIGHLIGHT_REMOVED',
-          text: removedText,
-          color: removedColor,
-          context: removedContext,
-          serializedRange: removedSerializedRange
-        }));
-
         hideToolbar();
+        postHighlightsChanged('remove', before, '', false);
       }
 
       // Change the color of an existing highlight in place. Uses rangy's own
@@ -686,65 +911,33 @@ export function DevotionalWebView({
       // detached when the mark is unwrapped.
       function recolorEditHighlight(newColor) {
         if (!editingMark || !window.rangyHighlighter) return;
-        const removedText = editingText;
-        const removedColor = editingColor;
-        const removedContext = editingContext;
-        const removedSerializedRange = editingSerializedRange;
-
-        var serializedHighlight = '';
+        var before = snapshotHighlights();
+        var primarySerial = '';
         try {
           var rangyHl = window.rangyHighlighter.getHighlightForElement(editingMark);
           if (rangyHl) {
             var charRange = rangyHl.characterRange;
             var containerElementId = rangyHl.containerElementId;
-
-            // Remove the old highlight
             window.rangyHighlighter.removeHighlights([rangyHl]);
-
-            // Re-highlight the same character range with the new color
-            var beforeSerialized = '';
-            try { beforeSerialized = window.rangyHighlighter.serialize(); } catch(_) {}
-
-            window.rangyHighlighter.highlightCharacterRanges(
+            var created = window.rangyHighlighter.highlightCharacterRanges(
               'rangy-highlight-' + newColor,
               [charRange],
               { containerElementId: containerElementId, exclusive: true }
             );
-
-            var afterSerialized = window.rangyHighlighter.serialize();
-            if (beforeSerialized) {
-              var beforeParts = beforeSerialized.split('|');
-              var afterParts = afterSerialized.split('|');
-              var newParts = afterParts.slice(beforeParts.length);
-              serializedHighlight = newParts.length > 0 ? newParts.join('|') : afterSerialized;
-            } else {
-              serializedHighlight = afterSerialized;
-            }
+            if (created && created.length) primarySerial = getRangySerial(created[created.length - 1]);
           }
         } catch (err) {}
 
         window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'HAPTIC_IMPACT' }));
-        // Remove the old highlight from the store
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'HIGHLIGHT_REMOVED',
-          text: removedText,
-          color: removedColor,
-          context: removedContext,
-          serializedRange: removedSerializedRange
-        }));
-        // Add the new highlight to the store
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'QUOTE_SELECTED',
-          text: removedText,
-          context: removedContext,
-          highlightApplied: true,
-          serializedRange: serializedHighlight,
-          color: newColor
-        }));
-
         hideToolbar();
+        postHighlightsChanged('recolor', before, primarySerial, false);
       }
 
+      // The picker never competes with the system Copy / Look Up menu. A
+      // selection only refreshes a snapshot; the picker opens when the person
+      // taps the native "Highlight" menu item (RN injects
+      // __unfoldShowHighlightPicker). Any length counts — one word is the most
+      // common highlight.
       function checkSelection() {
         // Edit mode is a tap-driven flow, not a selection-driven one.
         // Selection will be empty while the edit toolbar is up, and we
@@ -755,20 +948,34 @@ export function DevotionalWebView({
         const selection = window.getSelection();
         const newText = selection ? selection.toString().trim() : '';
 
-        if (newText.length > 5 && newText !== selectedText) {
+        if (newText.length > 0) {
+          var moved = newText !== selectedText;
           selectedText = newText;
           try {
             selectionRange = selection.getRangeAt(0).cloneRange();
           } catch(e) {
             selectionRange = null;
           }
-          positionToolbar();
-          showToolbar();
-        } else if (newText.length <= 5) {
-          selectedText = '';
+          // Selection handles dragged while the picker is open: follow them.
+          if (toolbarShown && moved) positionToolbar();
+        } else if (toolbarShown) {
           hideToolbar();
         }
       }
+
+      window.__unfoldShowHighlightPicker = function(nativeSelectedText) {
+        if (isEditMode || !selectionRange) return;
+        var selection = window.getSelection();
+        if (selection && !selection.toString().trim()) {
+          // The native menu tap can collapse the selection before we run;
+          // put the snapshot back so rangy highlights the right span.
+          if (!selectedText) selectedText = String(nativeSelectedText || '').trim();
+          try { selection.removeAllRanges(); selection.addRange(selectionRange); } catch (_) {}
+        }
+        if (!selectedText) return;
+        positionToolbar();
+        showToolbar();
+      };
 
       // Listen for selection changes (primary mechanism on iOS)
       document.addEventListener('selectionchange', function() {
@@ -840,8 +1047,8 @@ export function DevotionalWebView({
           context = element && element.textContent ? element.textContent.substring(0, 150) : '';
         }
 
-        var highlightApplied = false;
-        var serializedHighlight = '';
+        var before = snapshotHighlights();
+        var primarySerial = '';
 
         try {
           var selection = window.getSelection();
@@ -849,43 +1056,27 @@ export function DevotionalWebView({
             selection.removeAllRanges();
             selection.addRange(snapRange);
           }
-
-          // Capture serialization BEFORE to extract only the new highlight
-          var beforeSerialized = '';
-          try { beforeSerialized = window.rangyHighlighter.serialize(); } catch(_) {}
-
-          window.rangyHighlighter.highlightSelection('rangy-highlight-' + color, { exclusive: true });
-          highlightApplied = true;
-
-          // Extract only the newly added highlight entry from serialization
-          // rangy serializes all highlights as pipe-separated entries
-          var afterSerialized = window.rangyHighlighter.serialize();
-          if (beforeSerialized) {
-            // New entries are appended after existing ones
-            var beforeParts = beforeSerialized.split('|');
-            var afterParts = afterSerialized.split('|');
-            var newParts = afterParts.slice(beforeParts.length);
-            serializedHighlight = newParts.length > 0 ? newParts.join('|') : afterSerialized;
-          } else {
-            serializedHighlight = afterSerialized;
-          }
+          // Returns the highlights that were newly applied: the one the user
+          // asked for, plus any other-color neighbours rangy trimmed. The
+          // user's own is the one covering the selection, i.e. the last.
+          var created = window.rangyHighlighter.highlightSelection('rangy-highlight-' + color, { exclusive: true });
+          if (created && created.length) primarySerial = getRangySerial(created[created.length - 1]);
         } catch (err) {
           console.log('Highlight failed:', err);
         }
 
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'QUOTE_SELECTED',
-          text: snapText,
-          context: context,
-          highlightApplied: highlightApplied,
-          serializedRange: serializedHighlight,
-          color: color
-        }));
-
         window.getSelection().removeAllRanges();
         hideToolbar();
         selectedText = '';
+        selectionRange = null;
         btn._snap = null;
+
+        if (!primarySerial) {
+          // Nothing landed on the page, so nothing goes in the store.
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'HIGHLIGHT_FAILED', text: snapText, context: context }));
+          return;
+        }
+        postHighlightsChanged('create', before, primarySerial, false);
       }
 
       document.querySelectorAll('.color-btn').forEach(function(btn) {
@@ -950,7 +1141,7 @@ export function DevotionalWebView({
 
         // Don't interfere mid-selection
         var sel = window.getSelection();
-        if (sel && sel.toString().trim().length > 5) return;
+        if (sel && sel.toString().trim().length > 0) return;
 
         var mark = e.target.closest('mark[class*="highlight-"]');
         if (mark) {
@@ -1028,6 +1219,7 @@ export function DevotionalWebView({
     };
 
     const webFont = getWebFontName(readingFont.body);
+    const strokeFit = HIGHLIGHT_STROKE_FIT[webFont] ?? HIGHLIGHT_STROKE_FIT.Georgia;
     const uiFontStack = "-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif";
     const displayFontStack = "'PP Editorial New', Georgia, serif";
 
@@ -1256,18 +1448,32 @@ export function DevotionalWebView({
       user-select: text;
     }
     
-    /* Highlight colors */
+    /* Highlighter stroke. The band is a background image sized to the
+       glyphs rather than to the font's inline box. Source Serif 4's box
+       reaches 1.04em above the baseline while its tallest letters stop at
+       0.75em and descenders end 0.24em below, so the band starts 0.24em
+       down and runs 1.09em: ~0.05em of ink above ascenders and below
+       descenders, centred on the letters instead of floating high.
+       Uneven corners and cloned box-decoration make a wrapped highlight read
+       as one felt-tip sweep with rounded ends on every line. */
     mark {
       color: inherit;
-      padding: 0;
-      border-radius: 2px;
+      padding: 0 0.14em;
+      margin: 0 -0.14em;
+      border-radius: 0.55em 0.3em 0.5em 0.35em;
+      -webkit-box-decoration-break: clone;
+      box-decoration-break: clone;
+      background-color: transparent;
+      background-repeat: no-repeat;
+      background-size: 100% ${strokeFit.height}em;
+      background-position: 0 ${strokeFit.top}em;
     }
     
-    mark.highlight-yellow { background: var(--hl-yellow-bg); color: var(--hl-yellow-color); }
-    mark.highlight-green { background: var(--hl-green-bg); color: var(--hl-green-color); }
-    mark.highlight-blue { background: var(--hl-blue-bg); color: var(--hl-blue-color); }
-    mark.highlight-purple { background: var(--hl-purple-bg); color: var(--hl-purple-color); }
-    mark.highlight-red { background: var(--hl-red-bg); color: var(--hl-red-color); }
+    mark.highlight-yellow { background-image: var(--hl-yellow-bg); color: var(--hl-yellow-color); }
+    mark.highlight-green { background-image: var(--hl-green-bg); color: var(--hl-green-color); }
+    mark.highlight-blue { background-image: var(--hl-blue-bg); color: var(--hl-blue-color); }
+    mark.highlight-purple { background-image: var(--hl-purple-bg); color: var(--hl-purple-color); }
+    mark.highlight-red { background-image: var(--hl-red-bg); color: var(--hl-red-color); }
 
     .target-highlight-flash {
       animation: targetHighlightFlash 1.8s ease-out;
@@ -1456,7 +1662,7 @@ export function DevotionalWebView({
       border-radius: 24px;
       padding: 8px 12px;
       display: flex;
-      gap: 8px;
+      gap: 4px;
       box-shadow: 0 4px 20px rgba(0,0,0,0.3);
       z-index: 10000;
       opacity: 0;
@@ -1464,7 +1670,7 @@ export function DevotionalWebView({
       transition: opacity 0.2s, transform 0.2s;
       transform: translateY(10px);
       left: 50%;
-      margin-left: -100px;
+      margin-left: -142px;
       -webkit-touch-callout: none !important;
       -webkit-user-select: none;
       user-select: none;
@@ -1476,39 +1682,63 @@ export function DevotionalWebView({
       transform: translateY(0);
     }
     
+    /* Each swatch is a named choice: dot + the same label My Library uses. */
     .color-btn {
-      width: 32px;
-      height: 32px;
-      border-radius: 16px;
-      border: 2.5px solid transparent;
+      width: 52px;
+      padding: 2px 0 0;
+      background: none;
+      border: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
       cursor: pointer;
-      transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
       -webkit-touch-callout: none !important;
       -webkit-user-select: none;
       user-select: none;
       outline: none;
       -webkit-appearance: none;
     }
+    .color-btn .dot {
+      width: 28px;
+      height: 28px;
+      border-radius: 14px;
+      border: 2.5px solid transparent;
+      transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+      pointer-events: none;
+    }
+    .color-btn .lbl {
+      font-family: -apple-system, system-ui, sans-serif;
+      font-size: 10px;
+      line-height: 1;
+      letter-spacing: 0.02em;
+      color: var(--toolbar-fg);
+      pointer-events: none;
+    }
 
-    .color-btn:active {
+    .color-btn:active .dot {
       transform: scale(0.96);
       border-color: rgba(255,255,255,0.9);
       box-shadow: 0 0 0 2px rgba(255,255,255,0.3);
     }
-    
-    .color-btn.yellow { background: linear-gradient(135deg, #FFE066, #FFD43B); }
-    .color-btn.green { background: linear-gradient(135deg, #69DB7C, #51CF66); }
-    .color-btn.blue { background: linear-gradient(135deg, #74C0FC, #4DABF7); }
-    .color-btn.purple { background: linear-gradient(135deg, #E599F7, #DA77F2); }
-    .color-btn.red { background: linear-gradient(135deg, #FF8787, #FF6B6B); }
+
+    .color-btn.yellow .dot { background: linear-gradient(135deg, #FFE066, #FFD43B); }
+    .color-btn.green .dot { background: linear-gradient(135deg, #69DB7C, #51CF66); }
+    .color-btn.blue .dot { background: linear-gradient(135deg, #74C0FC, #4DABF7); }
+    .color-btn.purple .dot { background: linear-gradient(135deg, #E599F7, #DA77F2); }
+    .color-btn.red .dot { background: linear-gradient(135deg, #FF8787, #FF6B6B); }
 
     /* Edit mode — tapping an existing highlight shows the full color menu
        with an X on the current color. Tapping the X removes the highlight;
        tapping a different color changes it to that color. */
-    .color-btn.remove-mode {
+    .color-btn.remove-mode .dot {
       position: relative;
     }
-    .color-btn.remove-mode::after {
+    .color-btn.remove-mode .lbl::before {
+      content: 'Remove';
+    }
+    .color-btn.remove-mode .lbl span { display: none; }
+    .color-btn.remove-mode .dot::after {
       content: '×';
       position: absolute;
       top: 50%;
@@ -1542,11 +1772,7 @@ export function DevotionalWebView({
   
   <!-- Highlight color toolbar -->
   <div id="highlight-toolbar">
-    <button class="color-btn yellow" data-color="yellow" aria-label="Highlight yellow"></button>
-    <button class="color-btn green" data-color="green" aria-label="Highlight green"></button>
-    <button class="color-btn blue" data-color="blue" aria-label="Highlight blue"></button>
-    <button class="color-btn purple" data-color="purple" aria-label="Highlight purple"></button>
-    <button class="color-btn red" data-color="red" aria-label="Highlight red"></button>
+    ${HIGHLIGHT_COLOR_NAMES.map((color) => `<button class="color-btn ${color}" data-color="${color}" aria-label="Highlight ${HIGHLIGHT_COLORS[color].label}"><span class="dot"></span><span class="lbl"><span>${HIGHLIGHT_COLORS[color].label}</span></span></button>`).join('\n    ')}
   </div>
 </body>
 </html>
@@ -1615,23 +1841,47 @@ export function DevotionalWebView({
     pushThemeVars(themeVars);
   }, [themeVars, pushThemeVars]);
 
+  const handleCustomMenuSelection = useCallback((event: { nativeEvent: { key: string; selectedText: string } }) => {
+    if (event.nativeEvent.key === 'copy') {
+      const text = (event.nativeEvent.selectedText || '').trim();
+      if (text) void Clipboard.setStringAsync(text);
+      return;
+    }
+    if (event.nativeEvent.key !== 'highlight') return;
+    webViewRef.current?.injectJavaScript(
+      `window.__unfoldShowHighlightPicker && window.__unfoldShowHighlightPicker(${JSON.stringify(event.nativeEvent.selectedText || '')}); true;`,
+    );
+  }, []);
+
+  useEffect(() => {
+    if (!commandRef) return;
+    commandRef.current = {
+      applyInverse: (change) => {
+        webViewRef.current?.injectJavaScript(
+          `window.__unfoldApplyInverse && window.__unfoldApplyInverse(${JSON.stringify({ added: change.added, removed: change.removed })}); true;`,
+        );
+      },
+    };
+    return () => {
+      commandRef.current = null;
+    };
+  }, [commandRef]);
+
   const handleMessage = (event: any) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
-      if (data.type === 'QUOTE_SELECTED' && onQuoteSelected) {
-        onQuoteSelected({
-          text: data.text,
-          context: data.context,
-          serializedRange: data.serializedRange,
-          color: data.color,
+      if (data.type === 'HIGHLIGHTS_CHANGED' && onHighlightsChanged) {
+        onHighlightsChanged({
+          reason: data.reason,
+          removed: Array.isArray(data.removed) ? data.removed : [],
+          added: Array.isArray(data.added) ? data.added : [],
+          primarySerial: typeof data.primarySerial === 'string' ? data.primarySerial : '',
+          silent: !!data.silent,
         });
-      } else if (data.type === 'HIGHLIGHT_REMOVED' && onHighlightRemoved) {
-        onHighlightRemoved({
-          text: data.text,
-          color: data.color as HighlightColor,
-          context: data.context,
-          serializedRange: data.serializedRange,
-        });
+      } else if (data.type === 'HIGHLIGHT_FAILED') {
+        onHighlightFailed?.();
+      } else if (data.type === 'HIGHLIGHTS_LOST') {
+        onHighlightsLost?.(Array.isArray(data.serials) ? data.serials : []);
       } else if (data.type === 'SCRIPTURE_TAP' && onScriptureTap) {
         onScriptureTap(data.reference);
       } else if (data.type === 'HEIGHT_CHANGE') {
@@ -1709,6 +1959,8 @@ export function DevotionalWebView({
         scrollEnabled={false}
         showsVerticalScrollIndicator={false}
         onMessage={handleMessage}
+        menuItems={HIGHLIGHT_MENU_ITEMS}
+        onCustomMenuSelection={handleCustomMenuSelection}
         originWhitelist={['about:blank', 'data:']}
         injectedJavaScript={injectedJavaScript}
         androidLayerType="hardware"

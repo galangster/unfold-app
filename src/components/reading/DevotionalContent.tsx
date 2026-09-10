@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RefObject } from 'react';
+import type React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, type LayoutChangeEvent, type ScrollView } from 'react-native';
 import { BookOpenIcon, BookmarkSimpleIcon, CaretRightIcon } from '@/components/icons';
 import Animated, {
@@ -17,10 +18,13 @@ import { useTheme } from '@/lib/theme';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { useReadingFont } from '@/lib/useReadingFont';
-import { DevotionalDay, FONT_SIZE_VALUES, FontSize, Highlight, HighlightColor, Bookmark } from '@/lib/store';
+import { DevotionalDay, FONT_SIZE_VALUES, FontSize, Highlight, Bookmark, useUnfoldStore } from '@/lib/store';
 import { preventOrphan, stripOuterQuotes } from '@/lib/cn';
-import { fetchVerseLocal, fetchVerse } from '@/lib/bible-api';
+import { fetchVerseLocal, fetchVerse, type VerseResult } from '@/lib/bible-api';
+import type { BibleTranslation } from '@/lib/bible-db';
+import { ScriptureVerseBlock } from './ScriptureVerseBlock';
 import { DevotionalWebView } from './DevotionalWebView';
+import type { DevotionalWebViewCommands, HighlightsChangedEvent } from './DevotionalWebView';
 import { InlineReflectionJournal } from './InlineReflectionJournal';
 import { getReflectionTypography } from '@/lib/reflection-typography';
 import { Typography } from '@/constants/typography';
@@ -31,8 +35,10 @@ interface DevotionalContentProps {
   titleSharedTransitionTag?: string;
   isBookmarked?: boolean;
   onToggleBookmark?: () => void;
-  onQuoteSelected?: (quote: { text: string; context: string }) => void;
-  onHighlightRemoved?: (event: { text: string; color: HighlightColor; context: string }) => void;
+  onHighlightsChanged?: (event: HighlightsChangedEvent) => void;
+  onHighlightFailed?: () => void;
+  onHighlightsLost?: (serials: string[]) => void;
+  highlightCommandRef?: React.MutableRefObject<DevotionalWebViewCommands | null>;
   existingHighlights?: Highlight[];
   targetHighlight?: Highlight | null;
   onTargetHighlightLocated?: (contentY: number) => void;
@@ -86,8 +92,10 @@ export function DevotionalContent({
   titleSharedTransitionTag,
   isBookmarked,
   onToggleBookmark,
-  onQuoteSelected,
-  onHighlightRemoved,
+  onHighlightsChanged,
+  onHighlightFailed,
+  onHighlightsLost,
+  highlightCommandRef,
   existingHighlights,
   targetHighlight,
   onTargetHighlightLocated,
@@ -115,18 +123,22 @@ export function DevotionalContent({
   const reflectionTypography = getReflectionTypography(fontSize);
   const readingFont = useReadingFont();
 
-  // Fetch scripture with verse numbers from local DB, fallback to remote API
-  const [versedScripture, setVersedScripture] = useState<string | null>(null);
+  // Fetch scripture with verse numbers from local DB, fallback to remote API.
+  // The local result carries a per-verse `passage`, which makes the block
+  // highlightable by verse in the reader's translation.
+  const translation = useUnfoldStore((s) => s.bibleReaderSettings.translation) as BibleTranslation;
+  const [versedScripture, setVersedScripture] = useState<VerseResult | null>(null);
   useEffect(() => {
     if (!day.scriptureReference) return;
-    fetchVerseLocal(day.scriptureReference).then(async (result) => {
+    let cancelled = false;
+    fetchVerseLocal(day.scriptureReference, translation).then(async (result) => {
       if (result?.text) {
-        setVersedScripture(result.text);
+        if (!cancelled) setVersedScripture(result);
       } else {
         // Fallback to remote API when Bible DB not downloaded
         try {
           const remote = await fetchVerse(day.scriptureReference, 'web');
-          if (remote?.text) setVersedScripture(remote.text);
+          if (remote?.text && !cancelled) setVersedScripture(remote);
         } catch {
           // Silently fall back to AI text
         }
@@ -134,9 +146,17 @@ export function DevotionalContent({
     }).catch(() => {
       // Silently fall back to AI text
     });
-  }, [day.scriptureReference]);
+    return () => { cancelled = true; };
+  }, [day.scriptureReference, translation]);
 
-  const displayScripture = versedScripture ?? day.scriptureText;
+  const displayScripture = versedScripture?.text ?? day.scriptureText;
+  const passage = versedScripture?.passage;
+  const scriptureTextStyle = {
+    fontFamily: readingFont.bodyItalic,
+    fontSize: fontSizes.scripture,
+    color: isDark ? colors.text : colors.textMuted,
+    lineHeight: fontSizes.scripture * 1.75,
+  };
   const scriptureBlockTopRef = useRef<number | null>(null);
   const devotionalWebViewTopRef = useRef(0);
   const locatedTopBookmarkRef = useRef<string | null>(null);
@@ -306,19 +326,15 @@ export function DevotionalContent({
           )}
         </View>
 
-        {/* Scripture text — fontSize is dynamic */}
-        <Text
-          style={{
-            fontFamily: readingFont.bodyItalic,
-            fontSize: fontSizes.scripture,
-            color: isDark ? colors.text : colors.textMuted,
-            lineHeight: fontSizes.scripture * 1.75,
-            textAlign: 'left',
-            minHeight: displayScripture ? 'auto' : 60,
-          }}
-        >
-          {displayScripture ? `\u201C${preventOrphan(stripOuterQuotes(displayScripture))}\u201D` : `Scripture text not available for ${day.scriptureReference || 'this passage'}.`}
-        </Text>
+        {/* Scripture text — fontSize is dynamic. Verse-by-verse when the
+            local Bible DB supplied the passage, so each verse is highlightable. */}
+        {passage ? (
+          <ScriptureVerseBlock passage={passage} textStyle={scriptureTextStyle} mutedColor={colors.textMuted} isDark={isDark} />
+        ) : (
+          <Text style={[scriptureTextStyle, { textAlign: 'left', minHeight: displayScripture ? 'auto' : 60 }]}>
+            {displayScripture ? `\u201C${preventOrphan(stripOuterQuotes(displayScripture))}\u201D` : `Scripture text not available for ${day.scriptureReference || 'this passage'}.`}
+          </Text>
+        )}
       </View>
 
       {/* Section divider: scripture -> body */}
@@ -328,8 +344,10 @@ export function DevotionalContent({
         <DevotionalWebView
           day={day}
           fontSize={fontSize}
-          onQuoteSelected={onQuoteSelected}
-          onHighlightRemoved={onHighlightRemoved}
+          onHighlightsChanged={onHighlightsChanged}
+          onHighlightFailed={onHighlightFailed}
+          onHighlightsLost={onHighlightsLost}
+          commandRef={highlightCommandRef}
           existingHighlights={existingHighlights}
           targetHighlight={targetHighlight}
           onTargetHighlightLocated={handleTargetHighlightLocated}

@@ -24,7 +24,7 @@ import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
 import { alpha } from '@/components/ui';
 import { useTheme } from '@/lib/theme';
-import { useUnfoldStore, BibleHighlight, Bookmark, Devotional, Highlight, HighlightColor, BibleHighlightColor, JournalEntry } from '@/lib/store';
+import { useUnfoldStore, BibleHighlight, Bookmark, Devotional, Highlight, HighlightColor, BibleHighlightColor, JournalEntry, HIGHLIGHT_COLOR_LABELS } from '@/lib/store';
 import { stripOuterQuotes } from '@/lib/cn';
 
 type ThemeColors = ReturnType<typeof useTheme>['colors'];
@@ -32,11 +32,11 @@ type ThemeColors = ReturnType<typeof useTheme>['colors'];
 type HighlightKey = HighlightColor | BibleHighlightColor;
 
 const HIGHLIGHT_COLORS: Record<HighlightKey, { label: string; light: string; dark: string }> = {
-  yellow: { label: 'General', light: '#FFDC64', dark: '#C8A55C' },
-  green: { label: 'Growth', light: '#64C864', dark: '#6DAF7B' },
-  blue: { label: 'Prayer', light: '#6496FF', dark: '#5B9BD5' },
-  purple: { label: 'Questions', light: '#B464C8', dark: '#9B8EC4' },
-  red: { label: 'Important', light: '#FF6464', dark: '#D4828F' },
+  yellow: { label: HIGHLIGHT_COLOR_LABELS.yellow, light: '#FFDC64', dark: '#C8A55C' },
+  green: { label: HIGHLIGHT_COLOR_LABELS.green, light: '#64C864', dark: '#6DAF7B' },
+  blue: { label: HIGHLIGHT_COLOR_LABELS.blue, light: '#6496FF', dark: '#5B9BD5' },
+  purple: { label: HIGHLIGHT_COLOR_LABELS.purple, light: '#B464C8', dark: '#9B8EC4' },
+  red: { label: HIGHLIGHT_COLOR_LABELS.red, light: '#FF6464', dark: '#D4828F' },
 };
 
 type Tab = 'journal' | 'highlights' | 'bookmarks';

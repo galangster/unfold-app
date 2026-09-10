@@ -36,7 +36,7 @@ import { Shadow } from '@/constants/shadows';
 import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, FONT_SIZE_VALUES } from '@/lib/store';
-import { logEvent } from '@/lib/analytics';
+import { UndoToast } from '@/components/UndoToast';
 import type { Highlight, Bookmark, DevotionalDay } from '@/lib/store';
 import { refreshDailyReminder } from '@/lib/notifications';
 import { continueGeneratingDays, isFullGenerationActive } from '@/lib/devotional-service';
@@ -71,6 +71,9 @@ import { CompletionCelebration } from '@/components/CompletionCelebration';
 import { getCompletionDismissRoute } from '@/lib/completion-dismiss-route';
 // ShareDevotionalModal removed — pull quote share now uses /share-card route
 import { DevotionalContent } from '@/components/reading/DevotionalContent';
+import type { DevotionalWebViewCommands, HighlightsChangedEvent } from '@/components/reading/DevotionalWebView';
+import { AnalyticsEvents, logEvent } from '@/lib/analytics';
+import { addAppBreadcrumb } from '@/lib/sentry';
 import { StudyMethodSheet } from '@/components/reading/StudyMethodSheet';
 import { createReviewPromptManager, type ReviewPromptManager } from '@/lib/review-prompt';
 import { useGlobalAudioPlayer } from '@/hooks/useGlobalAudioPlayer';
@@ -229,8 +232,7 @@ export default function ReadingScreen() {
   const user = useUnfoldStore((s) => s.user);
   const addBookmark = useUnfoldStore((s) => s.addBookmark);
   const removeBookmark = useUnfoldStore((s) => s.removeBookmark);
-  const addHighlight = useUnfoldStore((s) => s.addHighlight);
-  const removeHighlight = useUnfoldStore((s) => s.removeHighlight);
+  const reconcileDayHighlights = useUnfoldStore((s) => s.reconcileDayHighlights);
   const bookmarks = useUnfoldStore((s) => s.bookmarks);
   const highlights = useUnfoldStore((s) => s.highlights);
   const journalEntries = useUnfoldStore((s) => s.journalEntries);
@@ -311,6 +313,11 @@ export default function ReadingScreen() {
   const [isOnline, setIsOnline] = useState(true);
   const [isWaitingForConnection, setIsWaitingForConnection] = useState(false);
   const [bookmarkToast, setBookmarkToast] = useState(false);
+  // Highlight feedback with a one-tap Undo. The document is the source of
+  // truth: Undo replays the inverse change into the WebView and the store
+  // follows through the silent HIGHLIGHTS_CHANGED that comes back.
+  const [highlightToast, setHighlightToast] = useState<{ message: string; undo: () => void } | null>(null);
+  const highlightCommandRef = useRef<DevotionalWebViewCommands | null>(null);
   const [lockedDayToast, setLockedDayToast] = useState(false);
   const [selectedStudyMethod, setSelectedStudyMethod] = useState<string | undefined>(undefined);
   const [targetScrollRequest, setTargetScrollRequest] = useState<{ id: number; y: number } | null>(null);
@@ -765,55 +772,51 @@ export default function ReadingScreen() {
     setStudyMethodVisible(true);
   }, []);
 
-  const handleQuoteSelected = useCallback((quote: { text: string; context: string; serializedRange?: string; color?: string }) => {
+  const handleHighlightsChanged = useCallback((event: HighlightsChangedEvent) => {
     if (!currentDevotionalId || !currentDevotional || !currentDayData) return;
 
-    addHighlight({
-      devotionalId: currentDevotionalId,
-      devotionalTitle: currentDevotional.title,
-      dayNumber: viewingDay,
-      dayTitle: currentDayData.title,
-      highlightedText: quote.text,
-      serializedRange: quote.serializedRange,
-      color: (quote.color as import('@/lib/store').HighlightColor) || 'yellow',
-      contextBefore: quote.context.substring(0, 100),
-    });
+    reconcileDayHighlights(
+      { devotionalId: currentDevotionalId, devotionalTitle: currentDevotional.title, dayNumber: viewingDay, dayTitle: currentDayData.title },
+      event.removed,
+      event.added,
+    );
 
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  }, [currentDevotionalId, currentDevotional, viewingDay, currentDayData, addHighlight]);
-
-  const handleHighlightRemoved = useCallback((event: { text: string; color: string; context: string; serializedRange?: string }) => {
-    if (!currentDevotionalId) return;
-
-    // Extract position key "start-end-className" from a rangy serialized range.
-    // Format: "start$end$id$className$containerElementId". Ignoring the id
-    // field makes matching robust across sessions.
-    const posKey = (serialized?: string): string | null => {
-      if (!serialized) return null;
-      const parts = serialized.split('$');
-      if (parts.length < 4) return null;
-      return `${parts[0]}-${parts[1]}-${parts[3]}`;
-    };
-
-    const eventPosKey = posKey(event.serializedRange);
-
-    // Remove ALL entries that match this position. There may be duplicates
-    // in the store from earlier sessions where deserialize was broken and the
-    // user re-created the same highlight multiple times. One tap should
-    // clean them all up, otherwise a "removed" highlight comes back on reload.
-    const matches = currentDayHighlights.filter((h) => {
-      if (event.serializedRange && h.serializedRange === event.serializedRange) return true;
-      if (eventPosKey && posKey(h.serializedRange) === eventPosKey) return true;
-      // Legacy text+color match for highlights missing serializedRange
-      if (!h.serializedRange && h.highlightedText === event.text && h.color === event.color) return true;
-      return false;
-    });
-
-    if (matches.length > 0) {
-      matches.forEach((m) => removeHighlight(m.id));
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    if (event.silent) {
+      const name = event.reason === 'heal' ? AnalyticsEvents.HIGHLIGHT_HEALED : AnalyticsEvents.HIGHLIGHT_UNDONE;
+      logEvent(name, { added: event.added.length, removed: event.removed.length });
+      if (event.reason === 'heal') addAppBreadcrumb('highlights', 'Re-anchored highlights after text change', { devotionalId: currentDevotionalId ?? '', day: viewingDay, count: event.added.length });
+      return;
     }
-  }, [currentDevotionalId, currentDayHighlights, removeHighlight]);
+
+    const primary = event.added.find((a) => a.serial === event.primarySerial);
+    if (event.reason === 'remove') {
+      logEvent(AnalyticsEvents.HIGHLIGHT_REMOVED, { removed: event.removed.length });
+    } else {
+      logEvent(AnalyticsEvents.HIGHLIGHT_CREATED, { color: primary?.color ?? 'yellow', chars: primary?.text.length ?? 0, recolor: event.reason === 'recolor' });
+    }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    const message = { create: 'Highlighted', remove: 'Highlight removed', recolor: 'Color changed', undo: '', heal: '' }[event.reason];
+    setHighlightToast({
+      message,
+      undo: () => {
+        highlightCommandRef.current?.applyInverse({ added: event.added, removed: event.removed });
+        setHighlightToast(null);
+      },
+    });
+  }, [currentDevotionalId, currentDevotional, viewingDay, currentDayData, reconcileDayHighlights]);
+
+  const handleHighlightsLost = useCallback((serials: string[]) => {
+    if (!currentDevotionalId) return;
+    logEvent(AnalyticsEvents.HIGHLIGHT_LOST, { count: serials.length });
+    addAppBreadcrumb('highlights', 'Stored highlight text not found in document', { devotionalId: currentDevotionalId ?? '', day: viewingDay, count: serials.length });
+  }, [currentDevotionalId, viewingDay]);
+
+  const handleHighlightFailed = useCallback(() => {
+    logEvent(AnalyticsEvents.HIGHLIGHT_FAILED);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    setAudioToast({ visible: true, message: 'Couldn’t highlight that. Try selecting it again.' });
+    setTimeout(() => setAudioToast(null), 3000);
+  }, []);
 
   const contentStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }],
@@ -1950,8 +1953,10 @@ export default function ReadingScreen() {
                 isBookmarked={isCurrentDayBookmarked}
                 onToggleBookmark={handleToggleBookmark}
                 onStudyMethodPress={handleStudyMethodPress}
-                onQuoteSelected={handleQuoteSelected}
-                onHighlightRemoved={handleHighlightRemoved}
+                onHighlightsChanged={handleHighlightsChanged}
+                onHighlightFailed={handleHighlightFailed}
+                onHighlightsLost={handleHighlightsLost}
+                highlightCommandRef={highlightCommandRef}
                 existingHighlights={currentDayHighlights}
                 targetHighlight={targetHighlight}
                 onTargetHighlightLocated={handleTargetHighlightLocated}
@@ -2382,6 +2387,15 @@ export default function ReadingScreen() {
           setPremiumFeature('general');
           setShowPremiumSheet(true);
         }}
+      />
+
+      {/* Highlight feedback toast with Undo */}
+      <UndoToast
+        visible={!!highlightToast}
+        message={highlightToast?.message ?? ''}
+        onUndo={highlightToast?.undo ?? (() => {})}
+        onDismiss={() => setHighlightToast(null)}
+        duration={5000}
       />
 
       {/* Bookmark saved toast — entire toast is tappable */}

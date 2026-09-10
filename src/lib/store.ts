@@ -380,6 +380,41 @@ export interface Bookmark {
 // Highlight colors for categorization
 export type HighlightColor = 'yellow' | 'green' | 'blue' | 'purple' | 'red';
 
+/** The one place a colour gets its name. The reader picker and My Library
+ *  both read from here so they never disagree. */
+export const HIGHLIGHT_COLOR_LABELS: Record<HighlightColor, string> = {
+  yellow: 'General',
+  green: 'Growth',
+  blue: 'Prayer',
+  purple: 'Questions',
+  red: 'Important',
+};
+
+/** Position key for a rangy serial `start$end$id$className$containerId`.
+ *  Ignores the per-session rangy id so the same span matches across
+ *  sessions. Null for a missing or malformed serial. */
+export function highlightPosKey(serialized?: string): string | null {
+  if (!serialized) return null;
+  const parts = serialized.split('$');
+  if (parts.length < 4) return null;
+  return `${parts[0]}-${parts[1]}-${parts[3]}`;
+}
+
+/** A highlight as the reader document reports it (rangy serial + text). */
+export interface LiveHighlight {
+  serial: string;
+  text: string;
+  color: HighlightColor;
+  context?: string;
+}
+
+export interface HighlightDayMeta {
+  devotionalId: string;
+  devotionalTitle: string;
+  dayNumber: number;
+  dayTitle: string;
+}
+
 // Highlights for saved quotes from devotional text
 export interface Highlight {
   id: string;
@@ -606,6 +641,10 @@ interface UnfoldState {
   highlights: Highlight[];
   addHighlight: (highlight: Omit<Highlight, 'id' | 'createdAt'>) => void;
   removeHighlight: (id: string) => void;
+  /** Apply a document diff for one day in a single write: drop the records
+   *  whose span (or, for range-less legacy records, text + colour) was
+   *  removed, add the new spans, dedupe by position. */
+  reconcileDayHighlights: (meta: HighlightDayMeta, removed: LiveHighlight[], added: LiveHighlight[]) => void;
   getRandomHighlight: () => Highlight | null;
 
   // Bookmarks
@@ -1332,18 +1371,12 @@ export const useUnfoldStore = create<UnfoldState>()(
           // (or legacy text+color on the same day) already exists, don't add
           // a duplicate. Prevents store bloat when the user re-highlights the
           // same text or when a sync retry replays a creation event.
-          const posKey = (serialized?: string): string | null => {
-            if (!serialized) return null;
-            const parts = serialized.split('$');
-            if (parts.length < 4) return null;
-            return `${parts[0]}-${parts[1]}-${parts[3]}`;
-          };
-          const newPosKey = posKey(highlight.serializedRange);
+          const newPosKey = highlightPosKey(highlight.serializedRange);
           const existing = state.highlights.find((h) => {
             if (h.devotionalId !== highlight.devotionalId) return false;
             if (h.dayNumber !== highlight.dayNumber) return false;
             if (highlight.serializedRange && h.serializedRange === highlight.serializedRange) return true;
-            if (newPosKey && posKey(h.serializedRange) === newPosKey) return true;
+            if (newPosKey && highlightPosKey(h.serializedRange) === newPosKey) return true;
             if (!highlight.serializedRange && h.highlightedText === highlight.highlightedText && h.color === highlight.color) return true;
             return false;
           });
@@ -1359,6 +1392,48 @@ export const useUnfoldStore = create<UnfoldState>()(
           };
         });
       },
+
+      reconcileDayHighlights: (meta, removed, added) =>
+        set((state) => {
+          const now = new Date().toISOString();
+          const isDay = (h: Highlight) => h.devotionalId === meta.devotionalId && h.dayNumber === meta.dayNumber;
+          const removedKeys = new Set(removed.map((r) => highlightPosKey(r.serial)).filter(Boolean) as string[]);
+          const matchesRemoved = (h: Highlight) => {
+            const key = highlightPosKey(h.serializedRange);
+            if (key) return removedKeys.has(key);
+            // Ghosts and legacy records have no usable range; match on text.
+            return removed.some((r) => r.text === h.highlightedText && r.color === h.color);
+          };
+          const kept: Highlight[] = [];
+          for (const h of state.highlights) {
+            if (isDay(h) && matchesRemoved(h)) {
+              enqueuePersonalDataSyncChange('highlights', h.id, devotionalHighlightSyncData(h), now, true);
+            } else {
+              kept.push(h);
+            }
+          }
+          const keptKeys = new Set(kept.filter(isDay).map((h) => highlightPosKey(h.serializedRange)));
+          const created: Highlight[] = [];
+          for (const a of added) {
+            const key = highlightPosKey(a.serial);
+            if (key && keptKeys.has(key)) continue;
+            if (key) keptKeys.add(key);
+            const record: Highlight = {
+              ...meta,
+              id: `hl_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+              highlightedText: a.text,
+              serializedRange: a.serial,
+              color: a.color || 'yellow',
+              contextBefore: (a.context || '').substring(0, 100),
+              createdAt: now,
+              updatedAt: now,
+            };
+            enqueuePersonalDataSyncChange('highlights', record.id, devotionalHighlightSyncData(record), now);
+            created.push(record);
+          }
+          if (created.length === 0 && kept.length === state.highlights.length) return state;
+          return { highlights: [...created, ...kept] };
+        }),
 
       removeHighlight: (id) =>
         set((state) => {
@@ -2087,12 +2162,7 @@ export const useUnfoldStore = create<UnfoldState>()(
             // devotional+day+position (start-end-className), keeping the
             // earliest entry.
             if (Array.isArray(state.highlights) && state.highlights.length > 0) {
-              const posKey = (serialized?: string): string | null => {
-                if (!serialized) return null;
-                const parts = serialized.split('$');
-                if (parts.length < 4) return null;
-                return `${parts[0]}-${parts[1]}-${parts[3]}`;
-              };
+              const posKey = highlightPosKey;
               const seen = new Set<string>();
               const deduped: typeof state.highlights = [];
               // Iterate oldest-first so the earliest created entry wins
