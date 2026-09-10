@@ -39,24 +39,29 @@ export function getCurrentDevotional(
  * carries no line — callers fall back to the rotating generic copy, so a
  * stale line is never shown on a day the reader didn't actually read.
  */
+/**
+ * Days the reader finished today, latest day number first.
+ */
+export function getDaysReadToday(
+  devotional: Devotional | null | undefined,
+  now = new Date(),
+): DevotionalDay[] {
+  if (!devotional) return [];
+  const todayKey = localDayKey(now);
+  return devotional.days
+    .filter((day) => day.isRead && localDayKeyFromIso(day.readAt) === todayKey)
+    .sort((a, b) => b.dayNumber - a.dayNumber);
+}
+
 export function getTodayCarryLine(
   devotionals: readonly Devotional[],
   currentDevotionalId: string | null | undefined,
   now = new Date(),
 ): string | null {
   const devotional = getCurrentDevotional(devotionals, currentDevotionalId);
-  if (!devotional) return null;
-  const todayKey = localDayKey(now);
-  const readToday = devotional.days
-    .filter(
-      (day) =>
-        day.isRead &&
-        typeof day.carryLine === 'string' &&
-        day.carryLine.trim().length > 0 &&
-        localDayKeyFromIso(day.readAt) === todayKey,
-    )
-    .sort((a, b) => b.dayNumber - a.dayNumber);
-  const line = readToday[0]?.carryLine?.trim();
+  const line = getDaysReadToday(devotional, now)
+    .find((day) => typeof day.carryLine === 'string' && day.carryLine.trim().length > 0)
+    ?.carryLine?.trim();
   return line || null;
 }
 

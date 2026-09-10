@@ -3,10 +3,20 @@ import { Platform } from 'react-native';
 import { useUnfoldStore, type Devotional, type UserProfile } from './store';
 import { getEffectivePremiumAccessPolicy } from './premium-state';
 import { logger } from '@/lib/logger';
-import { getMessageForToday, MIDDAY_MESSAGES, EVENING_MESSAGES } from '@/constants/check-in-messages';
-import { getTodayCarryLine } from '@/lib/home-devotional-state';
+import {
+  getEveningWindDownBody,
+  getMiddayCheckInBody,
+  type DayContext,
+} from '@/constants/check-in-messages';
+import {
+  getCurrentDevotional,
+  getDaysReadToday,
+  getHomeDevotionalDayData,
+  getTodayCarryLine,
+} from '@/lib/home-devotional-state';
 import { buildDevotionalReadyNotificationData } from '@/lib/push-notification-helpers';
 import { getDailyReminderContent } from '@/lib/daily-reminder-content';
+import { logEvent } from '@/lib/analytics';
 import { captureSyncSession, isSyncSessionCurrent } from '@/lib/sync-session-fence';
 
 // Notification identifiers for targeted cancel/reschedule.
@@ -215,6 +225,122 @@ function getAllCheckInIdentifiers(idBase: string): string[] {
 const MIDDAY_FALLBACK = { hour: 12, minute: 30 };
 const EVENING_FALLBACK = { hour: 20, minute: 30 };
 
+// Android channels. Readers can mute check-ins without losing the reading
+// reminder. The server sends `channelId: 'reading'` on its pushes too.
+export const NOTIFICATION_CHANNELS = {
+  READING: 'reading',
+  CHECK_INS: 'check-ins',
+} as const;
+
+// Categories give the banner action buttons. The identifier matches the
+// server's `categoryId` on day-ready pushes so both paths get the buttons.
+export const NOTIFICATION_CATEGORIES = {
+  DEVOTIONAL_READY: 'devotional_ready',
+} as const;
+
+export const NOTIFICATION_ACTIONS = {
+  READ_NOW: 'read_now',
+  REMIND_LATER: 'remind_later',
+} as const;
+
+export const REMIND_LATER_NOTIFICATION_ID = 'unfold-remind-later';
+export const REMIND_LATER_DELAY_SECONDS = 3 * 60 * 60;
+
+/** Trigger fields that route an Android notification to a channel. */
+function channel(channelId: string): { channelId?: string } {
+  return Platform.OS === 'android' ? { channelId } : {};
+}
+
+/**
+ * Registers the Android channels and the action-button categories. Safe to
+ * call on every launch; both calls are idempotent upserts in the OS.
+ */
+export async function configureNotificationPresentation(): Promise<void> {
+  if (Platform.OS === 'web') return;
+  try {
+    const work: Promise<unknown>[] = [
+      Notifications.setNotificationCategoryAsync(NOTIFICATION_CATEGORIES.DEVOTIONAL_READY, [
+        { identifier: NOTIFICATION_ACTIONS.READ_NOW, buttonTitle: 'Read now' },
+        { identifier: NOTIFICATION_ACTIONS.REMIND_LATER, buttonTitle: 'Remind me in 3 hours' },
+      ]),
+    ];
+    if (Platform.OS === 'android') {
+      work.push(
+        Notifications.setNotificationChannelAsync(NOTIFICATION_CHANNELS.READING, {
+          name: 'Daily reading',
+          importance: Notifications.AndroidImportance.HIGH,
+          vibrationPattern: [0, 250, 250, 250],
+        }),
+        Notifications.setNotificationChannelAsync(NOTIFICATION_CHANNELS.CHECK_INS, {
+          name: 'Check-ins',
+          importance: Notifications.AndroidImportance.DEFAULT,
+        }),
+      );
+    }
+    await Promise.all(work);
+  } catch (error) {
+    logger.warn('[Notifications] Failed to configure channels/categories:', error);
+  }
+}
+
+/**
+ * Re-queues a tapped notification's content as a one-shot a few hours out.
+ * The "Remind me in 3 hours" action. One pending at a time.
+ */
+export async function scheduleRemindLater(
+  content: Pick<Notifications.NotificationContent, 'title' | 'body' | 'data'>,
+): Promise<boolean> {
+  if (Platform.OS === 'web') return false;
+  try {
+    await Notifications.cancelScheduledNotificationAsync(REMIND_LATER_NOTIFICATION_ID);
+    await Notifications.scheduleNotificationAsync({
+      identifier: REMIND_LATER_NOTIFICATION_ID,
+      content: {
+        title: content.title ?? 'Your reading is waiting',
+        body: content.body ?? '',
+        sound: true,
+        ...(content.data ? { data: content.data } : {}),
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: REMIND_LATER_DELAY_SECONDS,
+        ...channel(NOTIFICATION_CHANNELS.READING),
+      },
+    });
+    logEvent('notification_scheduled', { type: 'remind_later', owner: 'local' });
+    return true;
+  } catch (error) {
+    logger.error('[Notifications] Failed to schedule remind-later:', error);
+    return false;
+  }
+}
+
+/**
+ * The day whose content should follow the reader into this afternoon and
+ * evening: the day they finished today, else the day Home is showing.
+ */
+function getTodayDayContext(devotional: Devotional | null | undefined, now = new Date()): DayContext | null {
+  const day = getDaysReadToday(devotional, now)[0] ?? getHomeDevotionalDayData(devotional, now);
+  if (!day) return null;
+  return {
+    title: day.title,
+    scriptureReference: day.scriptureReference,
+    quotableLine: day.quotableLine,
+    checkInQuestion: day.checkInQuestion,
+    act: day.act,
+    eveningScriptureRef: day.eveningScriptureRef,
+  };
+}
+
+/**
+ * Today's content only rides on today's trigger; a line baked onto another
+ * weekday would be stale by the time it fired. (expo WEEKLY weekday:
+ * 1=Sunday … 7=Saturday.)
+ */
+function firesToday(op: ScheduleOp, now = new Date()): boolean {
+  return op.kind === 'daily' || op.weekday === now.getDay() + 1;
+}
+
 // Configure how notifications appear when the app is in the foreground
 // This is critical for showing notifications when the user is in the app
 Notifications.setNotificationHandler({
@@ -369,12 +495,13 @@ export async function scheduleDailyReminder(
         title,
         body,
         sound: true,
-        ...(data ? { data } : {}),
+        ...(data ? { data, categoryIdentifier: NOTIFICATION_CATEGORIES.DEVOTIONAL_READY } : {}),
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DAILY,
         hour: hours,
         minute: minutes,
+        ...channel(NOTIFICATION_CHANNELS.READING),
       },
     });
 
@@ -389,6 +516,7 @@ export async function scheduleDailyReminder(
     lastDailyReminderIdentifier = scheduled;
     logger.log(`[Notifications] Daily reminder scheduled for ${timeString} (${hours}:${minutes})`);
     logger.log(`[Notifications] Content: "${title}" — "${body.substring(0, 50)}..."`);
+    logEvent('notification_scheduled', { type: 'daily_reminder', owner: 'local', specific: Boolean(data) });
     return scheduled;
   } catch (error) {
     logger.error('[Notifications] Failed to schedule:', error);
@@ -710,25 +838,19 @@ export async function scheduleMiddayCheckIn(): Promise<string[]> {
   }
 
   // Prefer the carry line from the day the reader completed today — the
-  // devotional following them into their afternoon. Falls back to rotating
-  // generic copy when they haven't read today. Weekly ops only use it for
-  // today's weekday; a line scheduled onto another weekday would be stale
-  // by the time it fired. (expo WEEKLY weekday: 1=Sunday … 7=Saturday.)
-  const todayCarryLine = getTodayCarryLine(
-    store.devotionals,
-    store.currentDevotionalId,
+  // devotional following them into their afternoon — then the day's own
+  // check-in question, then generic copy.
+  const currentDevotional = getCurrentDevotional(store.devotionals, store.currentDevotionalId);
+  const todayBody = getMiddayCheckInBody(
+    getTodayDayContext(currentDevotional),
+    getTodayCarryLine(store.devotionals, store.currentDevotionalId),
   );
-  const expoWeekdayToday = new Date().getDay() + 1;
+  const genericBody = getMiddayCheckInBody(null, null);
 
   const scheduled: string[] = [];
   for (const op of ops) {
     try {
-      const carryLineApplies =
-        op.kind === 'daily' || op.weekday === expoWeekdayToday;
-      const body =
-        carryLineApplies && todayCarryLine
-          ? todayCarryLine
-          : getMessageForToday(MIDDAY_MESSAGES);
+      const body = firesToday(op) ? todayBody : genericBody;
       if (op.kind === 'daily') {
         const id = await Notifications.scheduleNotificationAsync({
           identifier: op.id,
@@ -742,6 +864,7 @@ export async function scheduleMiddayCheckIn(): Promise<string[]> {
             type: Notifications.SchedulableTriggerInputTypes.DAILY,
             hour: op.hour,
             minute: op.minute,
+            ...channel(NOTIFICATION_CHANNELS.CHECK_INS),
           },
         });
         scheduled.push(id);
@@ -760,6 +883,7 @@ export async function scheduleMiddayCheckIn(): Promise<string[]> {
             weekday: op.weekday,
             hour: op.hour,
             minute: op.minute,
+            ...channel(NOTIFICATION_CHANNELS.CHECK_INS),
           },
         });
         scheduled.push(id);
@@ -770,6 +894,9 @@ export async function scheduleMiddayCheckIn(): Promise<string[]> {
     }
   }
 
+  if (scheduled.length > 0) {
+    logEvent('notification_scheduled', { type: 'midday_checkin', owner: 'local', count: scheduled.length });
+  }
   return scheduled;
 }
 
@@ -821,10 +948,17 @@ export async function scheduleEveningWindDown(): Promise<string[]> {
     return [];
   }
 
+  // The day's "act" leads: it is the one thing the devotional asked the
+  // reader to do later. Then the evening scripture, then generic copy.
+  const todayBody = getEveningWindDownBody(
+    getTodayDayContext(getCurrentDevotional(store.devotionals, store.currentDevotionalId)),
+  );
+  const genericBody = getEveningWindDownBody(null);
+
   const scheduled: string[] = [];
   for (const op of ops) {
     try {
-      const body = getMessageForToday(EVENING_MESSAGES);
+      const body = firesToday(op) ? todayBody : genericBody;
       if (op.kind === 'daily') {
         const id = await Notifications.scheduleNotificationAsync({
           identifier: op.id,
@@ -838,6 +972,7 @@ export async function scheduleEveningWindDown(): Promise<string[]> {
             type: Notifications.SchedulableTriggerInputTypes.DAILY,
             hour: op.hour,
             minute: op.minute,
+            ...channel(NOTIFICATION_CHANNELS.CHECK_INS),
           },
         });
         scheduled.push(id);
@@ -856,6 +991,7 @@ export async function scheduleEveningWindDown(): Promise<string[]> {
             weekday: op.weekday,
             hour: op.hour,
             minute: op.minute,
+            ...channel(NOTIFICATION_CHANNELS.CHECK_INS),
           },
         });
         scheduled.push(id);
@@ -866,6 +1002,9 @@ export async function scheduleEveningWindDown(): Promise<string[]> {
     }
   }
 
+  if (scheduled.length > 0) {
+    logEvent('notification_scheduled', { type: 'evening_winddown', owner: 'local', count: scheduled.length });
+  }
   return scheduled;
 }
 
