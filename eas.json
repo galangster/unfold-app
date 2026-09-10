@@ -36,7 +36,8 @@
       "ios": {
         "distribution": "store"
       },
-      "environment": "preview"
+      "environment": "preview",
+      "credentialsSource": "remote"
     },
     "production": {
       "autoIncrement": true,
