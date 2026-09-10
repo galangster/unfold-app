@@ -1,0 +1,49 @@
+diff --git a/apple/RNCWebViewImpl.m b/apple/RNCWebViewImpl.m
+index 7f5c24d6e2cfb26eddbc513bf17a81c24a7273e2..be8fc0c73a06ec0f6c02fb5c98dff8326c7906f5 100644
+--- a/apple/RNCWebViewImpl.m
++++ b/apple/RNCWebViewImpl.m
+@@ -91,14 +91,17 @@ NSString *const CUSTOM_SELECTOR = @"_CUSTOM_SELECTOR_";
+       return [super canPerformAction:action withSender:sender];
+   }
+ 
++  // Unfold: custom menuItems replace the system menu, but keep the system
++  // Look Up / Translate items alongside them (patch-package).
++  NSString *actionName = [self stringFromAction:action];
++  if ([actionName isEqualToString:@"lookup"] || [actionName isEqualToString:@"translate"]) {
++      return [super canPerformAction:action withSender:sender];
++  }
++
+   return NO;
+ }
+ - (void)buildMenuWithBuilder:(id<UIMenuBuilder>)builder API_AVAILABLE(ios(13.0))  {
+-    if (@available(iOS 16.0, *)) {
+-      if(self.menuItems){
+-        [builder removeMenuForIdentifier:UIMenuLookup];
+-      }
+-    }
++    // Unfold: the Look Up menu stays so Look Up / Translate survive custom menuItems.
+     [super buildMenuWithBuilder:builder];
+ }
+ #else // TARGET_OS_OSX
+@@ -292,7 +295,7 @@ RCTAutoInsetsProtocol>
+ 
+ - (UIMenu *)editMenuInteraction:(UIEditMenuInteraction *)interaction menuForConfiguration:(UIEditMenuConfiguration *)configuration suggestedActions:(NSArray<UIMenuElement *> *)suggestedActions API_AVAILABLE(ios(16.0))
+ {
+-  NSMutableArray<UICommand *> *menuItems = [NSMutableArray new];
++  NSMutableArray<UIMenuElement *> *menuItems = [NSMutableArray new];
+   for(NSDictionary *menuItem in self.menuItems) {
+     NSString *menuItemLabel = [RCTConvert NSString:menuItem[@"label"]];
+     NSString *menuItemKey = [RCTConvert NSString:menuItem[@"key"]];
+@@ -303,6 +306,12 @@ RCTAutoInsetsProtocol>
+                                         propertyList:nil];
+     [menuItems addObject:command];
+   }
++  // Unfold: append the system Look Up group (Look Up, Translate) after the custom items.
++  for (UIMenuElement *element in suggestedActions) {
++    if ([element isKindOfClass:[UIMenu class]] && [((UIMenu *)element).identifier isEqualToString:UIMenuLookup]) {
++      [menuItems addObject:element];
++    }
++  }
+   UIMenu *menu = [UIMenu menuWithChildren:menuItems];
+   return menu;
+ }
