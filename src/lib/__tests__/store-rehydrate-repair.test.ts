@@ -117,4 +117,19 @@ describe('repairRehydratedState', () => {
     expect(repairedKeys).toEqual(['generationSession']);
     expect(state.generationSession).toEqual(initialState.generationSession);
   });
+
+  it('drops malformed highlight records but keeps the valid ones', () => {
+    const good = { id: 'hl_1', devotionalId: 'dev-1', dayNumber: 1, highlightedText: 'grace', createdAt: '2026-09-10T00:00:00.000Z' };
+    const goodBible = { id: 'bh_1', bookId: 1, chapter: 1, verseStart: 1, verseEnd: 2, text: 'In the beginning', color: 'yellow', translation: 'bsb', createdAt: '2026-09-10T00:00:00.000Z' };
+    const state: any = {
+      devotionals: [], journalEntries: [], bookmarks: [], usedScriptures: [], checkIns: [], notes: [], folders: [], bibleReadingHistory: [],
+      highlights: [good, { id: 'hl_2', devotionalId: 'dev-1', dayNumber: 1, highlightedText: 'no date' }, null, 'junk'],
+      bibleHighlights: [goodBible, { id: 'bh_2', bookId: '1', chapter: 1, verseStart: 1, verseEnd: 1, createdAt: 'x' }],
+      generationSession: {}, user: {},
+    };
+    const { repairedKeys } = repairRehydratedState(state, { highlights: [], bibleHighlights: [] } as any);
+    expect(repairedKeys.sort()).toEqual(['bibleHighlights', 'highlights']);
+    expect(state.highlights).toEqual([good]);
+    expect(state.bibleHighlights).toEqual([goodBible]);
+  });
 });

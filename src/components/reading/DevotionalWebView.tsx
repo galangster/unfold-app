@@ -17,7 +17,7 @@ import { RANGY_BUNDLE } from './rangy-bundle';
 /** The document is the source of truth: every mutation reports the diff of
  *  live highlights before and after, and the store reconciles from it. */
 export interface HighlightsChangedEvent {
-  reason: 'create' | 'remove' | 'recolor' | 'undo';
+  reason: 'create' | 'remove' | 'recolor' | 'undo' | 'heal';
   removed: LiveHighlight[];
   added: LiveHighlight[];
   /** Serial of the highlight the person acted on (create / recolor). */
@@ -39,6 +39,9 @@ interface DevotionalWebViewProps {
   onHighlightsChanged?: (event: HighlightsChangedEvent) => void;
   /** The selection could not be turned into a highlight (nothing stored). */
   onHighlightFailed?: () => void;
+  /** Stored highlights whose text no longer exists in this document. They
+   *  stay in the store; the reader just cannot show them. */
+  onHighlightsLost?: (serials: string[]) => void;
   commandRef?: React.MutableRefObject<DevotionalWebViewCommands | null>;
   existingHighlights?: Highlight[];
   targetHighlight?: Highlight | null;
@@ -95,6 +98,20 @@ interface HighlightInk {
   rgb: string;
   peak: number;
 }
+
+/** Where the stroke sits for each reading face, in em. Measured 2026-09-10
+ *  from the fonts' own metrics: `top` = font-box ascent − tallest ascender
+ *  − 0.05; `height` = ascender + descender + 0.10. Anchored to the letters,
+ *  not to the font box, which is what made the old band float high. */
+export const HIGHLIGHT_STROKE_FIT: Record<string, { top: number; height: number }> = {
+  'Source Serif 4': { top: 0.24, height: 1.09 },
+  'EB Garamond': { top: 0.25, height: 1.1 },
+  Lora: { top: 0.2, height: 1.13 },
+  Inter: { top: 0.16, height: 1.08 },
+  'Crimson Text': { top: 0.22, height: 1.0 },
+  Merriweather: { top: 0.1, height: 1.2 },
+  Georgia: { top: 0.2, height: 1.1 },
+};
 
 /** The felt-tip gradient: soft entry, full ink by 12%, a shade lighter
  *  through the body, soft exit. Used as `background-image` on the mark. */
@@ -191,6 +208,7 @@ export function DevotionalWebView({
   fontSize,
   onHighlightsChanged,
   onHighlightFailed,
+  onHighlightsLost,
   commandRef,
   existingHighlights = NO_HIGHLIGHTS,
   targetHighlight,
@@ -234,6 +252,14 @@ export function DevotionalWebView({
         allSerializedRanges.push(h.serializedRange);
       }
     });
+    // What each stored highlight is supposed to say, so the document can
+    // check the restored spans and re-anchor any that drifted.
+    const storedHighlights = existingHighlights.map((h) => ({
+      serial: h.serializedRange || '',
+      text: h.highlightedText || '',
+      color: h.color || 'yellow',
+      before: h.contextBefore || '',
+    }));
     const targetHighlightPayload = targetHighlight
       ? {
           id: targetHighlight.id,
@@ -331,6 +357,13 @@ export function DevotionalWebView({
           }
         }
         
+        // Self-heal: offsets are a hint, the text is the truth. Any stored
+        // highlight whose restored span no longer reads as its text (the
+        // devotional was regenerated or re-pulled) is re-anchored by
+        // searching for the text; one that cannot be found is reported,
+        // never deleted.
+        healHighlights(${JSON.stringify(storedHighlights)});
+
         // Report height after highlights applied
         setTimeout(reportHeight, 100);
         setTimeout(locateTargetHighlight, 150);
@@ -353,7 +386,7 @@ export function DevotionalWebView({
       }
 
       function normalizeText(value) {
-        return String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
+        return String(value || '').replace(/\\s+/g, ' ').trim().toLowerCase();
       }
 
       function serializedEntries(value) {
@@ -667,15 +700,19 @@ export function DevotionalWebView({
         }
       }
 
-      function postHighlightsChanged(reason, before, primarySerial, silent) {
+      // keepSerials: spans unapplied from the page whose records must stay
+      // in the store (a lost highlight waiting for its text to come back).
+      function postHighlightsChanged(reason, before, primarySerial, silent, keepSerials) {
         var after = snapshotHighlights();
+        var keep = {};
+        (keepSerials || []).forEach(function(k) { keep[k] = true; });
         var beforeBySerial = {};
         var afterBySerial = {};
         before.forEach(function(h) { beforeBySerial[h.serial] = h; });
         after.forEach(function(h) { afterBySerial[h.serial] = h; });
         var removed = [];
         var added = [];
-        before.forEach(function(h) { if (!afterBySerial[h.serial]) removed.push(describe(h, false)); });
+        before.forEach(function(h) { if (!afterBySerial[h.serial] && !keep[h.serial]) removed.push(describe(h, false)); });
         after.forEach(function(h) { if (!beforeBySerial[h.serial]) added.push(describe(h, true)); });
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'HIGHLIGHTS_CHANGED',
@@ -706,6 +743,93 @@ export function DevotionalWebView({
           containerElementId: containerId,
           exclusive: true
         });
+      }
+
+      function normalizeWs(s) { return String(s || '').replace(/\\s+/g, ' ').trim(); }
+
+      // Character offsets in the article text for every occurrence of the
+      // stored text; when there are several, the one whose neighbourhood
+      // shares the most words with the stored context wins. The search stops
+      // at the picker so a highlight can never re-anchor onto a swatch label.
+      function articleTextLength() {
+        var tb = document.getElementById('highlight-toolbar');
+        if (!tb) return (document.body.textContent || '').length;
+        var r = document.createRange();
+        r.setStart(document.body, 0);
+        r.setEndBefore(tb);
+        return r.toString().length;
+      }
+
+      function locateStoredText(text, before) {
+        var body = (document.body.textContent || '').substring(0, articleTextLength());
+        var needle = normalizeWs(text);
+        if (!needle) return -1;
+        var hits = [];
+        var from = 0;
+        while (hits.length < 50) {
+          var i = body.indexOf(needle, from);
+          if (i < 0) break;
+          hits.push(i);
+          from = i + 1;
+        }
+        if (hits.length <= 1) return hits.length ? hits[0] : -1;
+        var words = normalizeWs(before).toLowerCase().split(' ').filter(function(w) { return w.length > 3; });
+        var best = hits[0], bestScore = -1;
+        hits.forEach(function(i) {
+          var window = body.substring(Math.max(0, i - 120), i + needle.length + 120).toLowerCase();
+          var score = 0;
+          words.forEach(function(w) { if (window.indexOf(w) >= 0) score++; });
+          if (score > bestScore) { bestScore = score; best = i; }
+        });
+        return best;
+      }
+
+      // Two passes: first decide every stored highlight's fate and unapply
+      // the ones that drifted, then re-anchor. Re-anchoring while stale
+      // neighbours are still applied lets rangy trim them into new spans.
+      function healHighlights(stored) {
+        if (!window.rangyHighlighter || !stored || !stored.length) return;
+        var liveByPos = {};
+        window.rangyHighlighter.highlights.forEach(function(h) {
+          liveByPos[h.characterRange.start + '-' + h.characterRange.end] = h;
+        });
+        var before = snapshotHighlights();
+        var lost = [];
+        var relocate = [];
+        var stale = [];
+        stored.forEach(function(s) {
+          var parts = String(s.serial || '').split('$');
+          var live = parts.length >= 2 ? liveByPos[parts[0] + '-' + parts[1]] : null;
+          var liveText = '';
+          if (live) { try { liveText = normalizeWs(live.getText()); } catch (_) {} }
+          if (live && liveText === normalizeWs(s.text)) return;
+          if (live) stale.push(live);
+          var idx = locateStoredText(s.text, s.before);
+          if (idx < 0) {
+            // A mark on the wrong words is worse than none; the record itself
+            // stays in the store for a device that still has the old text.
+            lost.push(s.serial);
+          } else {
+            relocate.push({ idx: idx, len: normalizeWs(s.text).length, color: s.color || 'yellow', serial: s.serial });
+          }
+        });
+        if (stale.length) { try { window.rangyHighlighter.removeHighlights(stale); } catch (_) {} }
+        var healedCount = 0;
+        relocate.forEach(function(r) {
+          try {
+            var converter = window.rangyHighlighter.converter;
+            var range = converter.characterRangeToRange(document, { start: r.idx, end: r.idx + r.len }, document.body);
+            var charRange = converter.rangeToCharacterRange(range, document.body);
+            window.rangyHighlighter.highlightCharacterRanges('rangy-highlight-' + r.color, [charRange], { exclusive: true });
+            healedCount++;
+          } catch (err) {
+            lost.push(r.serial);
+          }
+        });
+        if (healedCount > 0 || stale.length > 0) postHighlightsChanged('heal', before, '', true, lost);
+        if (lost.length > 0) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'HIGHLIGHTS_LOST', serials: lost }));
+        }
       }
 
       // Undo from RN: given the forward change, apply its inverse and report
@@ -1095,6 +1219,7 @@ export function DevotionalWebView({
     };
 
     const webFont = getWebFontName(readingFont.body);
+    const strokeFit = HIGHLIGHT_STROKE_FIT[webFont] ?? HIGHLIGHT_STROKE_FIT.Georgia;
     const uiFontStack = "-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif";
     const displayFontStack = "'PP Editorial New', Georgia, serif";
 
@@ -1340,8 +1465,8 @@ export function DevotionalWebView({
       box-decoration-break: clone;
       background-color: transparent;
       background-repeat: no-repeat;
-      background-size: 100% 1.09em;
-      background-position: 0 0.24em;
+      background-size: 100% ${strokeFit.height}em;
+      background-position: 0 ${strokeFit.top}em;
     }
     
     mark.highlight-yellow { background-image: var(--hl-yellow-bg); color: var(--hl-yellow-color); }
@@ -1755,6 +1880,8 @@ export function DevotionalWebView({
         });
       } else if (data.type === 'HIGHLIGHT_FAILED') {
         onHighlightFailed?.();
+      } else if (data.type === 'HIGHLIGHTS_LOST') {
+        onHighlightsLost?.(Array.isArray(data.serials) ? data.serials : []);
       } else if (data.type === 'SCRIPTURE_TAP' && onScriptureTap) {
         onScriptureTap(data.reference);
       } else if (data.type === 'HEIGHT_CHANGE') {

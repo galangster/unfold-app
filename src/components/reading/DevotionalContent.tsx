@@ -35,6 +35,7 @@ interface DevotionalContentProps {
   onToggleBookmark?: () => void;
   onHighlightsChanged?: (event: HighlightsChangedEvent) => void;
   onHighlightFailed?: () => void;
+  onHighlightsLost?: (serials: string[]) => void;
   highlightCommandRef?: React.MutableRefObject<DevotionalWebViewCommands | null>;
   existingHighlights?: Highlight[];
   targetHighlight?: Highlight | null;
@@ -87,6 +88,7 @@ export function DevotionalContent({
   onToggleBookmark,
   onHighlightsChanged,
   onHighlightFailed,
+  onHighlightsLost,
   highlightCommandRef,
   existingHighlights,
   targetHighlight,
@@ -321,6 +323,7 @@ export function DevotionalContent({
           fontSize={fontSize}
           onHighlightsChanged={onHighlightsChanged}
           onHighlightFailed={onHighlightFailed}
+          onHighlightsLost={onHighlightsLost}
           commandRef={highlightCommandRef}
           existingHighlights={existingHighlights}
           targetHighlight={targetHighlight}

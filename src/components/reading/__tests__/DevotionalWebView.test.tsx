@@ -286,11 +286,44 @@ describe('DevotionalWebView highlight interactions', () => {
     expect(html).toContain('mark.highlight-yellow { background-image: var(--hl-yellow-bg); color: var(--hl-yellow-color); }');
     // The stroke is sized to the glyphs, not the inline box, and keeps its
     // felt-tip corners on every wrapped line.
-    expect(html).toContain('background-size: 100% 1.09em;');
-    expect(html).toContain('background-position: 0 0.24em;');
     expect(html).toContain('border-radius: 0.55em 0.3em 0.5em 0.35em;');
     expect(html).toContain('box-decoration-break: clone;');
     expect(script).not.toContain('padding: 0; border-radius: 2px;');
+  });
+
+  it('re-anchors restored highlights by their text and reports the ones it cannot find', () => {
+    const onHighlightsLost = jest.fn();
+    let tree: any;
+    act(() => {
+      tree = renderer.create(
+        <DevotionalWebView day={day} fontSize="medium" existingHighlights={[targetHighlight]} onHighlightsLost={onHighlightsLost} />,
+      );
+    });
+    const props = getWebViewProps(tree);
+    const script = props.injectedJavaScript as string;
+
+    // The document gets the text each stored span must read, runs the heal
+    // pass after deserialize, and reports a silent diff for re-anchored spans.
+    expect(script).toContain('"text":"Grace meets you","color":"yellow","before":"The next faithful step is enough for today."');
+    expect(script.indexOf('healHighlights(')).toBeGreaterThan(script.indexOf('highlighter.deserialize(combined)'));
+    expect(script).toContain("postHighlightsChanged('heal', before, '', true, lost)");
+    expect(script).toContain("type: 'HIGHLIGHTS_LOST'");
+
+    act(() => {
+      props.onMessage({ nativeEvent: { data: JSON.stringify({ type: 'HIGHLIGHTS_LOST', serials: ['1$5$1$rangy-highlight-yellow$'] }) } });
+    });
+    expect(onHighlightsLost).toHaveBeenCalledWith(['1$5$1$rangy-highlight-yellow$']);
+  });
+
+  it('fits the stroke to the reading face in use', () => {
+    let tree: any;
+    act(() => {
+      tree = renderer.create(<DevotionalWebView day={day} fontSize="medium" />);
+    });
+    const html = getWebViewProps(tree).source.html as string;
+    // Source Serif 4 is the mocked reading font.
+    expect(html).toContain('background-size: 100% 1.09em;');
+    expect(html).toContain('background-position: 0 0.24em;');
   });
 
   it('names every colour in the picker with the same label My Library uses', () => {

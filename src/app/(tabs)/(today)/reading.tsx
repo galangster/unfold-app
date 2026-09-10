@@ -67,6 +67,7 @@ import { CompletionCelebration } from '@/components/CompletionCelebration';
 import { DevotionalContent } from '@/components/reading/DevotionalContent';
 import type { DevotionalWebViewCommands, HighlightsChangedEvent } from '@/components/reading/DevotionalWebView';
 import { AnalyticsEvents, logEvent } from '@/lib/analytics';
+import { addAppBreadcrumb } from '@/lib/sentry';
 import { StudyMethodSheet } from '@/components/reading/StudyMethodSheet';
 import { createReviewPromptManager, type ReviewPromptManager } from '@/lib/review-prompt';
 import { useGlobalAudioPlayer } from '@/hooks/useGlobalAudioPlayer';
@@ -764,7 +765,9 @@ export default function ReadingScreen() {
     );
 
     if (event.silent) {
-      logEvent(AnalyticsEvents.HIGHLIGHT_UNDONE, { added: event.added.length, removed: event.removed.length });
+      const name = event.reason === 'heal' ? AnalyticsEvents.HIGHLIGHT_HEALED : AnalyticsEvents.HIGHLIGHT_UNDONE;
+      logEvent(name, { added: event.added.length, removed: event.removed.length });
+      if (event.reason === 'heal') addAppBreadcrumb('highlights', 'Re-anchored highlights after text change', { devotionalId: currentDevotionalId ?? '', day: viewingDay, count: event.added.length });
       return;
     }
 
@@ -775,7 +778,7 @@ export default function ReadingScreen() {
       logEvent(AnalyticsEvents.HIGHLIGHT_CREATED, { color: primary?.color ?? 'yellow', chars: primary?.text.length ?? 0, recolor: event.reason === 'recolor' });
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    const message = { create: 'Highlighted', remove: 'Highlight removed', recolor: 'Color changed', undo: '' }[event.reason];
+    const message = { create: 'Highlighted', remove: 'Highlight removed', recolor: 'Color changed', undo: '', heal: '' }[event.reason];
     setHighlightToast({
       message,
       undo: () => {
@@ -784,6 +787,12 @@ export default function ReadingScreen() {
       },
     });
   }, [currentDevotionalId, currentDevotional, viewingDay, currentDayData, reconcileDayHighlights]);
+
+  const handleHighlightsLost = useCallback((serials: string[]) => {
+    if (!currentDevotionalId) return;
+    logEvent(AnalyticsEvents.HIGHLIGHT_LOST, { count: serials.length });
+    addAppBreadcrumb('highlights', 'Stored highlight text not found in document', { devotionalId: currentDevotionalId ?? '', day: viewingDay, count: serials.length });
+  }, [currentDevotionalId, viewingDay]);
 
   const handleHighlightFailed = useCallback(() => {
     logEvent(AnalyticsEvents.HIGHLIGHT_FAILED);
@@ -1927,6 +1936,7 @@ export default function ReadingScreen() {
                 onStudyMethodPress={handleStudyMethodPress}
                 onHighlightsChanged={handleHighlightsChanged}
                 onHighlightFailed={handleHighlightFailed}
+                onHighlightsLost={handleHighlightsLost}
                 highlightCommandRef={highlightCommandRef}
                 existingHighlights={currentDayHighlights}
                 targetHighlight={targetHighlight}

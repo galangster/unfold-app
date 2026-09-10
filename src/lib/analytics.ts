@@ -39,6 +39,8 @@ export const AnalyticsEvents = {
   HIGHLIGHT_REMOVED: 'highlight_removed',
   HIGHLIGHT_UNDONE: 'highlight_undone',
   HIGHLIGHT_FAILED: 'highlight_failed',
+  HIGHLIGHT_HEALED: 'highlight_healed',
+  HIGHLIGHT_LOST: 'highlight_lost',
   BOOKMARK_ADDED: 'bookmark_added',
   BOOKMARK_REMOVED: 'bookmark_removed',
   
