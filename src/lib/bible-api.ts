@@ -15,8 +15,17 @@ import { getVerseByReference, getBibleDbStatus, type BibleTranslation } from '@/
 import { PRIMARY_BACKEND_URL, getAuthHeaders, sanitizeForPrompt } from '@/lib/api-config';
 import { checkRateLimit, incrementRateLimit } from '@/lib/rate-limit';
 import { getSharedEncryptionKey } from '@/lib/mmkv-storage';
+import { toSuperscript } from '@/lib/superscript';
 
 // ---------- Types ----------
+
+export interface VersePassage {
+  bookId: number;
+  bookName: string;
+  chapter: number;
+  translation: BibleTranslation;
+  verses: { verse: number; text: string }[];
+}
 
 export interface VerseResult {
   /** The canonical reference string, e.g. "John 3:16" */
@@ -25,6 +34,11 @@ export interface VerseResult {
   text: string;
   /** Translation abbreviation, e.g. "web" or "kjv" */
   translation: string;
+  /**
+   * Per-verse structure, present only for local-DB results. Lets a surface
+   * render the passage verse by verse and address Bible highlights by verse.
+   */
+  passage?: VersePassage;
 }
 
 /** Shape of the bible-api.com JSON response */
@@ -63,18 +77,6 @@ const DEFAULT_TRANSLATION = 'web';
 const FETCH_TIMEOUT_MS = 10_000;
 const CACHE_KEY_PREFIX = 'verse';
 const COMMENTARY_CACHE_PREFIX = 'commentary';
-// ---------- Helpers ----------
-
-const SUPERSCRIPT_DIGITS = ['⁰', '¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹'] as const;
-
-/** Convert a number to Unicode superscript characters for inline verse markers. */
-function toSuperscript(n: number): string {
-  return String(n)
-    .split('')
-    .map((d) => SUPERSCRIPT_DIGITS[parseInt(d, 10)]!)
-    .join('');
-}
-
 // ---------- Cache ----------
 
 /**
@@ -268,6 +270,13 @@ export async function fetchVerseLocal(
     reference: refStr,
     text,
     translation,
+    passage: {
+      bookId: parsed.bookId,
+      bookName,
+      chapter: parsed.chapter,
+      translation,
+      verses: verses.map((v) => ({ verse: v.verse, text: v.text.trim() })),
+    },
   };
 }
 
