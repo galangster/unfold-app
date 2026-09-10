@@ -1,5 +1,5 @@
 import type { DevotionalDay } from '@/lib/store';
-import { buildReaderContents } from '../ReaderOutlineSheet';
+import { buildReaderContents } from '@/lib/reader-contents';
 
 const day = {
   dayNumber: 2,

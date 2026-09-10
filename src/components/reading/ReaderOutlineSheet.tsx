@@ -12,6 +12,7 @@ import { HIGHLIGHT_COLORS } from '@/components/saved/SavedRows';
 import { stripOuterQuotes } from '@/lib/cn';
 import { formatRelativeDate } from '@/lib/format-relative-date';
 import type { ReaderSection } from '@/components/reading/DevotionalContent';
+import { buildReaderContents } from '@/lib/reader-contents';
 
 type OutlineTab = 'contents' | 'highlights' | 'notes';
 
@@ -33,19 +34,6 @@ interface ReaderOutlineSheetProps {
   onJumpToHighlight: (highlight: Highlight) => void;
   onOpenEntry: (entry: JournalEntry) => void;
   onWriteReflection: () => void;
-}
-
-export function buildReaderContents(day: DevotionalDay): { section: ReaderSection; label: string; detail?: string }[] {
-  const rows: { section: ReaderSection; label: string; detail?: string }[] = [
-    { section: 'scripture', label: 'Scripture', detail: day.scriptureReference },
-    { section: 'devotional', label: 'Devotional', detail: day.title },
-  ];
-  if (day.reflectionQuestions && day.reflectionQuestions.length > 0) {
-    rows.push({ section: 'reflection', label: 'For Reflection', detail: `${day.reflectionQuestions.length} ${day.reflectionQuestions.length === 1 ? 'question' : 'questions'}` });
-  }
-  if (day.act) rows.push({ section: 'act', label: 'Today', detail: 'One act for today' });
-  if (day.closingPrayer) rows.push({ section: 'prayer', label: 'A Prayer' });
-  return rows;
 }
 
 function entryPreview(entry: JournalEntry): string {
