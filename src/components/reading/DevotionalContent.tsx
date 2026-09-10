@@ -45,6 +45,10 @@ interface DevotionalContentProps {
   onStudyMethodPress?: (methodId: string) => void;
   scrollViewRef?: RefObject<ScrollView | null>;
   onReflectionInputFocus?: (contentY: number) => void;
+  /** Scroll to the act section once it lays out (act reminder tap). */
+  focusAct?: boolean;
+  onActLocated?: (contentY: number) => void;
+  onActOutcome?: (outcome: 'done' | 'skipped') => void;
 }
 
 /**
@@ -96,8 +100,17 @@ export function DevotionalContent({
   onStudyMethodPress,
   scrollViewRef,
   onReflectionInputFocus,
+  focusAct,
+  onActLocated,
+  onActOutcome,
 }: DevotionalContentProps) {
   const { colors, isDark } = useTheme();
+  const actLocatedRef = useRef(false);
+  const handleActLayout = useCallback((event: LayoutChangeEvent) => {
+    if (!focusAct || actLocatedRef.current) return;
+    actLocatedRef.current = true;
+    onActLocated?.(event.nativeEvent.layout.y);
+  }, [focusAct, onActLocated]);
   const fontSizes = FONT_SIZE_VALUES[fontSize];
   const reflectionTypography = getReflectionTypography(fontSize);
   const readingFont = useReadingFont();
@@ -422,7 +435,7 @@ export function DevotionalContent({
 
       {/* Act Section — the day's one concrete same-day act */}
       {day.act && (
-        <View>
+        <View onLayout={handleActLayout}>
           <SectionDivider color={colors.textMuted} style={{ marginTop: 48, marginBottom: 32 }} />
           <ReaderSectionHeader label="Today" textColor={colors.text} />
           <Text
@@ -437,6 +450,40 @@ export function DevotionalContent({
           >
             {preventOrphan(day.act)}
           </Text>
+          {day.isRead && onActOutcome && (
+            day.actOutcome ? (
+              <Text style={[dcStyles.actOutcomeNote, { color: colors.textMuted }]}>
+                {day.actOutcome === 'done' ? 'Done. Well held.' : 'Set aside for now.'}
+              </Text>
+            ) : (
+              <View style={dcStyles.actOutcomeRow}>
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel="I did it"
+                  onPress={() => {
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                    onActOutcome('done');
+                  }}
+                  style={[dcStyles.actOutcomeButton, { borderColor: colors.accent, backgroundColor: colors.accent }]}
+                >
+                  <Text style={[dcStyles.actOutcomeButtonText, { color: colors.background }]}>I did it</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel="Not today"
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    onActOutcome('skipped');
+                  }}
+                  style={[dcStyles.actOutcomeButton, { borderColor: colors.border }]}
+                >
+                  <Text style={[dcStyles.actOutcomeButtonText, { color: colors.textMuted }]}>Not today</Text>
+                </TouchableOpacity>
+              </View>
+            )
+          )}
         </View>
       )}
 
@@ -481,6 +528,28 @@ export function DevotionalContent({
 }
 
 const dcStyles = StyleSheet.create({
+  actOutcomeRow: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingHorizontal: 16,
+    marginTop: 20,
+  },
+  actOutcomeButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  actOutcomeButtonText: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: FontSizeTokens.sm,
+  },
+  actOutcomeNote: {
+    fontFamily: FontFamily.ui,
+    fontSize: FontSizeTokens.sm,
+    paddingHorizontal: 16,
+    marginTop: 16,
+  },
   dividerContainer: {
     flexDirection: 'row',
     alignItems: 'center',

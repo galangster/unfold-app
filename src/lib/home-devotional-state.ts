@@ -3,11 +3,11 @@ import type { PremiumAccessPolicy } from './premium-access-policy';
 import { getCalendarDayNumber, getLockedTodayDayNumber, getLatestReadDayNumberToday } from './devotional-day-access';
 import { getServerOwnedSeriesTotalDays } from './devotional-series-boundary';
 
-function localDayKey(date: Date): string {
+export function localDayKey(date: Date): string {
   return date.toDateString();
 }
 
-function localDayKeyFromIso(value: string | null | undefined): string | null {
+export function localDayKeyFromIso(value: string | null | undefined): string | null {
   if (!value) return null;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;

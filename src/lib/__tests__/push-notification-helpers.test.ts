@@ -176,6 +176,16 @@ describe('push notification helpers', () => {
       });
     });
 
+    it('routes an act reminder to its day, scrolled to the act', () => {
+      expect(
+        buildNotificationNavigationRoute({ type: 'act_reminder', devotionalId: 'dev-1', dayNumber: 4 }),
+      ).toEqual({
+        pathname: '/(tabs)/(today)/reading',
+        params: { devotionalId: 'dev-1', dayNumber: '4', focus: 'act' },
+      });
+      expect(buildNotificationNavigationRoute({ type: 'act_reminder', dayNumber: 4 })).toBeNull();
+    });
+
     it('routes local evening wind-down notifications to the evening flow', () => {
       expect(buildNotificationNavigationRoute({ type: 'evening-winddown' })).toEqual({
         pathname: '/(tabs)/(today)/evening-wind-down',

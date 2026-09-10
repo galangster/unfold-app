@@ -22,6 +22,8 @@ import { getDeviceId } from '@/lib/mmkv-storage';
 import { useUnfoldStore } from '@/lib/store';
 import { logEvent } from '@/lib/analytics';
 import {
+  ACT_LATER_DELAY_SECONDS,
+  ACT_LATER_NOTIFICATION_ID,
   NOTIFICATION_ACTIONS,
   configureNotificationPresentation,
   scheduleRemindLater,
@@ -375,10 +377,31 @@ function logNotificationOpened(response: Notifications.NotificationResponse, sta
  * normal tap route.
  */
 function handleNotificationAction(response: Notifications.NotificationResponse): boolean {
-  if (response.actionIdentifier !== NOTIFICATION_ACTIONS.REMIND_LATER) return false;
-  logEvent('notification_action', { type: notificationTypeOf(response), action: 'remind_later' });
-  void scheduleRemindLater(response.notification.request.content);
-  return true;
+  const { actionIdentifier } = response;
+  const content = response.notification.request.content;
+  const type = notificationTypeOf(response);
+  switch (actionIdentifier) {
+    case NOTIFICATION_ACTIONS.REMIND_LATER:
+      logEvent('notification_action', { type, action: 'remind_later' });
+      void scheduleRemindLater(content);
+      return true;
+    case NOTIFICATION_ACTIONS.ACT_LATER:
+      logEvent('notification_action', { type, action: 'act_later' });
+      void scheduleRemindLater(content, { seconds: ACT_LATER_DELAY_SECONDS, identifier: ACT_LATER_NOTIFICATION_ID });
+      return true;
+    case NOTIFICATION_ACTIONS.ACT_DONE: {
+      const data = content.data as { devotionalId?: unknown; dayNumber?: unknown } | null;
+      const devotionalId = typeof data?.devotionalId === 'string' ? data.devotionalId : null;
+      const dayNumber = Number(data?.dayNumber);
+      if (devotionalId && Number.isInteger(dayNumber)) {
+        useUnfoldStore.getState().setActOutcome(devotionalId, dayNumber, 'done');
+      }
+      logEvent('act_outcome', { outcome: 'done', source: 'notification_action' });
+      return true;
+    }
+    default:
+      return false;
+  }
 }
 
 export function setNotificationNavigationReady(ready: boolean): void {

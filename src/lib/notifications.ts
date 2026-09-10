@@ -14,9 +14,10 @@ import {
   getHomeDevotionalDayData,
   getTodayCarryLine,
 } from '@/lib/home-devotional-state';
-import { buildDevotionalReadyNotificationData } from '@/lib/push-notification-helpers';
+import { buildDevotionalReadyNotificationData, parseHhMm } from '@/lib/push-notification-helpers';
 import { getDailyReminderContent } from '@/lib/daily-reminder-content';
 import { logEvent } from '@/lib/analytics';
+import type { ActReminderPlan } from '@/lib/act-reminder';
 import { captureSyncSession, isSyncSessionCurrent } from '@/lib/sync-session-fence';
 
 // Notification identifiers for targeted cancel/reschedule.
@@ -159,20 +160,6 @@ type ScheduleOp =
   | { kind: 'daily'; id: string; hour: number; minute: number }
   | { kind: 'weekly'; id: string; weekday: number; hour: number; minute: number };
 
-// Parse "HH:mm" (24-hour) with graceful fallback. Mirrors the logic tested
-// in src/lib/__tests__/notifications-scheduling.test.ts. Returns the
-// fallback on any parse error or out-of-range values.
-function parseHhMm(
-  time: string,
-  fallback: { hour: number; minute: number },
-): { hour: number; minute: number } {
-  const match = /^(\d{1,2}):(\d{2})$/.exec(time.trim());
-  if (!match) return fallback;
-  const hour = parseInt(match[1], 10);
-  const minute = parseInt(match[2], 10);
-  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return fallback;
-  return { hour, minute };
-}
 
 /**
  * Pure decision function for check-in scheduling. Given an identifier base,
@@ -236,12 +223,20 @@ export const NOTIFICATION_CHANNELS = {
 // server's `categoryId` on day-ready pushes so both paths get the buttons.
 export const NOTIFICATION_CATEGORIES = {
   DEVOTIONAL_READY: 'devotional_ready',
+  ACT_REMINDER: 'act_reminder',
 } as const;
 
 export const NOTIFICATION_ACTIONS = {
   READ_NOW: 'read_now',
   REMIND_LATER: 'remind_later',
+  ACT_DONE: 'act_done',
+  ACT_LATER: 'act_later',
 } as const;
+
+/** One act reminder is ever pending; the day it belongs to rides in `data`. */
+export const ACT_REMINDER_NOTIFICATION_ID = 'unfold-act-reminder';
+export const ACT_LATER_DELAY_SECONDS = 60 * 60;
+export const ACT_LATER_NOTIFICATION_ID = 'unfold-act-later';
 
 export const REMIND_LATER_NOTIFICATION_ID = 'unfold-remind-later';
 export const REMIND_LATER_DELAY_SECONDS = 3 * 60 * 60;
@@ -262,6 +257,10 @@ export async function configureNotificationPresentation(): Promise<void> {
       Notifications.setNotificationCategoryAsync(NOTIFICATION_CATEGORIES.DEVOTIONAL_READY, [
         { identifier: NOTIFICATION_ACTIONS.READ_NOW, buttonTitle: 'Read now' },
         { identifier: NOTIFICATION_ACTIONS.REMIND_LATER, buttonTitle: 'Remind me in 3 hours' },
+      ]),
+      Notifications.setNotificationCategoryAsync(NOTIFICATION_CATEGORIES.ACT_REMINDER, [
+        { identifier: NOTIFICATION_ACTIONS.ACT_DONE, buttonTitle: 'I did it' },
+        { identifier: NOTIFICATION_ACTIONS.ACT_LATER, buttonTitle: 'Remind me in an hour' },
       ]),
     ];
     if (Platform.OS === 'android') {
@@ -284,35 +283,77 @@ export async function configureNotificationPresentation(): Promise<void> {
 }
 
 /**
- * Re-queues a tapped notification's content as a one-shot a few hours out.
- * The "Remind me in 3 hours" action. One pending at a time.
+ * Re-queues a tapped notification's content as a one-shot a while out. The
+ * "Remind me later" actions. One pending per identifier.
  */
 export async function scheduleRemindLater(
-  content: Pick<Notifications.NotificationContent, 'title' | 'body' | 'data'>,
+  content: Pick<Notifications.NotificationContent, 'title' | 'body' | 'data' | 'categoryIdentifier'>,
+  {
+    seconds = REMIND_LATER_DELAY_SECONDS,
+    identifier = REMIND_LATER_NOTIFICATION_ID,
+  }: { seconds?: number; identifier?: string } = {},
 ): Promise<boolean> {
   if (Platform.OS === 'web') return false;
   try {
-    await Notifications.cancelScheduledNotificationAsync(REMIND_LATER_NOTIFICATION_ID);
+    await Notifications.cancelScheduledNotificationAsync(identifier);
     await Notifications.scheduleNotificationAsync({
-      identifier: REMIND_LATER_NOTIFICATION_ID,
+      identifier,
       content: {
         title: content.title ?? 'Your reading is waiting',
         body: content.body ?? '',
         sound: true,
         ...(content.data ? { data: content.data } : {}),
+        ...(content.categoryIdentifier ? { categoryIdentifier: content.categoryIdentifier } : {}),
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-        seconds: REMIND_LATER_DELAY_SECONDS,
+        seconds,
         ...channel(NOTIFICATION_CHANNELS.READING),
       },
     });
-    logEvent('notification_scheduled', { type: 'remind_later', owner: 'local' });
+    logEvent('notification_scheduled', { type: 'remind_later', owner: 'local', seconds });
     return true;
   } catch (error) {
     logger.error('[Notifications] Failed to schedule remind-later:', error);
     return false;
   }
+}
+
+/**
+ * Schedules the one-shot act reminder from a plan. The owner hook cancels
+ * before every write, so this only schedules.
+ */
+export async function scheduleActReminder(plan: ActReminderPlan): Promise<string | null> {
+  if (Platform.OS === 'web') return null;
+  try {
+    const id = await Notifications.scheduleNotificationAsync({
+      identifier: ACT_REMINDER_NOTIFICATION_ID,
+      content: {
+        title: plan.title,
+        body: plan.body,
+        sound: true,
+        data: plan.data,
+        categoryIdentifier: NOTIFICATION_CATEGORIES.ACT_REMINDER,
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        date: plan.fireAt,
+        ...channel(NOTIFICATION_CHANNELS.READING),
+      },
+    });
+    logEvent('notification_scheduled', { type: 'act_reminder', owner: 'local', slot: plan.slot });
+    logger.log(`[Notifications] Act reminder scheduled (${plan.slot}) for ${plan.fireAt.toISOString()} (id=${id})`);
+    return id;
+  } catch (error) {
+    logger.error('[Notifications] Failed to schedule act reminder:', error);
+    return null;
+  }
+}
+
+/** Cancels the pending act reminder. Only one is ever scheduled. */
+export async function cancelActReminder(): Promise<void> {
+  if (Platform.OS === 'web') return;
+  await Notifications.cancelScheduledNotificationAsync(ACT_REMINDER_NOTIFICATION_ID);
 }
 
 /**
