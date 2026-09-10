@@ -100,6 +100,7 @@ import { BentoGrid } from '@/components/home/BentoGrid';
 import { SeriesCarousel } from '@/components/home/SeriesCarousel';
 import { CompactStreakRow } from '@/components/home/CompactStreakRow';
 import { stripOuterQuotes } from '@/lib/cn';
+import { pickRememberThis, rememberThisQuote, rememberThisSource } from '@/lib/remember-this';
 
 function formatResumeRelativeTime(iso?: string): string {
   if (!iso) return 'Saved just now';
@@ -145,6 +146,7 @@ export default function HomeScreen() {
   const dismissedBridgeCardDate = useUnfoldStore((s) => s.dismissedBridgeCardDate);
   const dismissedRememberThisCardDate = useUnfoldStore((s) => s.dismissedRememberThisCardDate);
   const highlights = useUnfoldStore((s) => s.highlights);
+  const bibleHighlights = useUnfoldStore((s) => s.bibleHighlights);
   const setDismissedMiddayCardDate = useUnfoldStore((s) => s.setDismissedMiddayCardDate);
   const setDismissedEveningCardDate = useUnfoldStore((s) => s.setDismissedEveningCardDate);
   const setDismissedBridgeCardDate = useUnfoldStore((s) => s.setDismissedBridgeCardDate);
@@ -781,18 +783,16 @@ export default function HomeScreen() {
   const hasDismissedEveningCardToday = dismissedEveningCardDate === todayDate;
   const hasDismissedBridgeCardToday = !qaContextSlot && dismissedBridgeCardDate === todayDate;
 
-  const rememberedHighlight = useMemo(() => {
+  // Item 12 (highlights audit H9): the card draws from Bible highlights too.
+  const rememberedPick = useMemo(() => {
     if (dismissedRememberThisCardDate === todayDate) return null;
-    if (highlights.length === 0) return null;
-    const seed = todayDate.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
-    return highlights[seed % highlights.length];
-  }, [dismissedRememberThisCardDate, highlights, todayDate]);
+    return pickRememberThis(highlights, bibleHighlights, todayDate);
+  }, [dismissedRememberThisCardDate, highlights, bibleHighlights, todayDate]);
 
-  const rememberedHighlightSourceTitle = useMemo(() => {
-    if (!rememberedHighlight) return 'Untitled Series';
-    const devotional = devotionals.find((d) => d.id === rememberedHighlight.devotionalId);
-    return devotional?.title || rememberedHighlight.devotionalTitle || 'Untitled Series';
-  }, [devotionals, rememberedHighlight]);
+  const rememberedSource = useMemo(
+    () => (rememberedPick ? rememberThisSource(rememberedPick, devotionals) : ''),
+    [devotionals, rememberedPick],
+  );
 
   const handleDay1ReviewOption = useCallback(async (option: 'love' | 'okay' | 'not-for-me') => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -988,18 +988,27 @@ export default function HomeScreen() {
   }, [setDismissedBridgeCardDate, todayDate]);
 
   const handleSavedEchoPress = useCallback(() => {
-    if (!rememberedHighlight) return;
+    if (!rememberedPick) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setCurrentDevotional(rememberedHighlight.devotionalId);
+    if (rememberedPick.kind === 'bible') {
+      const h = rememberedPick.highlight;
+      router.push({
+        pathname: '/(tabs)/(bible)/reader',
+        params: { bookId: String(h.bookId), chapter: String(h.chapter), verse: String(h.verseStart) },
+      });
+      return;
+    }
+    const h = rememberedPick.highlight;
+    setCurrentDevotional(h.devotionalId);
     router.push({
       pathname: '/(tabs)/(today)/reading',
       params: {
-        devotionalId: rememberedHighlight.devotionalId,
-        dayNumber: rememberedHighlight.dayNumber.toString(),
-        highlightId: rememberedHighlight.id,
+        devotionalId: h.devotionalId,
+        dayNumber: h.dayNumber.toString(),
+        highlightId: h.id,
       },
     });
-  }, [rememberedHighlight, router, setCurrentDevotional]);
+  }, [rememberedPick, router, setCurrentDevotional]);
 
   const handleDismissRememberThisCard = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1171,22 +1180,24 @@ export default function HomeScreen() {
       });
     }
 
-    if (rememberedHighlight) {
+    if (rememberedPick) {
+      const quote = stripOuterQuotes(rememberThisQuote(rememberedPick));
       cards.push({
-        id: `today-stack-remember-this-${rememberedHighlight.id}`,
+        id: `today-stack-remember-this-${rememberedPick.highlight.id}`,
         kind: 'remember-this',
         priority: 80,
         eyebrow: 'Saved echo',
         title: 'A line worth carrying',
         // Quoted highlight is genuinely variable-length — keep a real-overflow
         // clamp (de-slop #15: authored copy wraps; only true overflow clamps).
-        body: `“${stripOuterQuotes(rememberedHighlight.highlightedText)}” — Day ${rememberedHighlight.dayNumber} · ${rememberedHighlightSourceTitle}`,
+        bodyQuote: { text: quote, color: rememberedPick.highlight.color ?? null },
+        body: rememberedSource,
         bodyNumberOfLines: 3,
         actionLabel: 'Open highlight',
         onPress: handleSavedEchoPress,
         onDismiss: handleDismissRememberThisCard,
-        accessibilityLabel: `Saved highlight from Day ${rememberedHighlight.dayNumber}: ${rememberedHighlight.highlightedText}`,
-        accessibilityHint: 'Opens the reading at this highlighted passage',
+        accessibilityLabel: `Saved highlight from ${rememberedSource}: ${quote}`,
+        accessibilityHint: rememberedPick.kind === 'bible' ? 'Opens the Bible at this verse' : 'Opens the reading at this highlighted passage',
         dismissAccessibilityLabel: 'Dismiss saved echo stack card',
         dismissAccessibilityHint: 'Hides this saved echo card for today without deleting the highlight',
         testID: 'today-stack-card-remember-this',
@@ -1271,8 +1282,8 @@ export default function HomeScreen() {
     handleSavedEchoPress,
     middayMessage,
     premiumNudge,
-    rememberedHighlight,
-    rememberedHighlightSourceTitle,
+    rememberedPick,
+    rememberedSource,
     resumeProps,
     shouldShowBridgeLoadingStackCard,
     shouldShowBridgeStackCard,

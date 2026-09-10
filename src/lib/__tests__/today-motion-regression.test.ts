@@ -19,7 +19,6 @@ describe('Today tab motion guardrails', () => {
   const todayCompanionBubbleSource = readSource('components/home/TodayCompanionBubble.tsx');
   const bridgeShimmerSource = readSource('components/home/BridgeShimmer.tsx');
   const notificationCardSource = readSource('components/home/NotificationCard.tsx');
-  const rememberThisCardSource = readSource('components/home/RememberThisCard.tsx');
   const todayIndexSource = readSource('app/(tabs)/(today)/index.tsx');
   const todayCardStackSource = readSource('components/home/TodayCardStack.tsx');
   const crossTabBackSource = readSource('hooks/useCrossTabBack.ts');
@@ -92,7 +91,6 @@ describe('Today tab motion guardrails', () => {
     expect(contextSlotSource).not.toContain('resumeArt');
     expect(notificationCardSource).not.toContain('artLayer');
     expect(dailyBridgeCardSource).not.toContain('artLayer');
-    expect(rememberThisCardSource).not.toContain('decorativeLayer');
     expect(todayIndexSource).not.toContain('day1ReviewArt');
   });
 

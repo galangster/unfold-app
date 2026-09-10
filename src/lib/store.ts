@@ -645,7 +645,6 @@ interface UnfoldState {
    *  whose span (or, for range-less legacy records, text + colour) was
    *  removed, add the new spans, dedupe by position. */
   reconcileDayHighlights: (meta: HighlightDayMeta, removed: LiveHighlight[], added: LiveHighlight[]) => void;
-  getRandomHighlight: () => Highlight | null;
 
   // Bookmarks
   bookmarks: Bookmark[];
@@ -1442,14 +1441,6 @@ export const useUnfoldStore = create<UnfoldState>()(
           return { highlights: state.highlights.filter((h) => h.id !== id) };
         }),
 
-      getRandomHighlight: () => {
-        const highlights = get().highlights;
-        if (highlights.length === 0) return null;
-        const today = new Date().toISOString().split('T')[0];
-        const seed = today.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
-        const index = seed % highlights.length;
-        return highlights[index];
-      },
 
       // Generation session actions
       startGenerationSession: ({ devotionalId, totalDays }) =>
