@@ -3761,11 +3761,11 @@ SPEC CHECKSUMS:
   ExpoVideo: b1d9a325ddcd4f3ed8ccb374c01b688e98bc6a04
   ExpoVideoThumbnails: 0a7d37113fe51af5c302461ad0344dc529161316
   ExpoWebBrowser: 9b98d939d5f1c5dd8f523f0a0683056fb1204434
-  ExpoWidgets: 23773dbabefbe88db567336dfc99d7322ea14bae
+  ExpoWidgets: 5da16001e6c1c824e513ffc04a2db61b32d74afa
   EXUpdatesInterface: 92d2aa5194b6fb93ca8ab749db75665cb28b2e60
   FBLazyVector: 3c3be9a019176b5699455f7f66c5444b78a411c6
   Galeria: 8c40b795c085be6ba9ff40277830fa6ac15ddf10
-  hermes-engine: 107d140529dc2ea45b97ce179dd226574f605728
+  hermes-engine: dd89c3cadabcde4aae041bf6541f17d157648936
   ImageColors: e12eb73e29bc1feaa3c228db8c174a1b25acb59d
   libavif: 5f8e715bea24debec477006f21ef9e95432e254d
   libdav1d: 23581a4d8ec811ff171ed5e2e05cd27bad64c39f
