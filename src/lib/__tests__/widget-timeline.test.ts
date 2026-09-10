@@ -95,6 +95,13 @@ describe('buildWidgetSharedProps', () => {
     expect(p.dayNumber).toBe(0);
     expect(p.totalDays).toBe(0);
     expect(p.weeklyProgress).toBe('0,0,0,0,0,0,0');
+    // Wed Jun 10 2026 → Monday-based index 2
+    expect(p.weekTodayIndex).toBe(2);
+  });
+
+  it('weekTodayIndex maps Sunday to the last slot', () => {
+    const p = buildWidgetSharedProps(slice(), new Date(2026, 5, 14, 14, 0)); // Sun Jun 14
+    expect(p.weekTodayIndex).toBe(6);
   });
 });
 

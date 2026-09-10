@@ -10,7 +10,15 @@
  * Keep palettes and URLs inside the function body.
  */
 import { createWidget, type WidgetEnvironment } from 'expo-widgets';
-import { Text, VStack, HStack, ZStack, Image, Spacer } from '@expo/ui/swift-ui';
+import {
+  Text,
+  VStack,
+  HStack,
+  ZStack,
+  Image,
+  Spacer,
+  AccessoryWidgetBackground,
+} from '@expo/ui/swift-ui';
 import {
   font,
   foregroundStyle,
@@ -20,6 +28,7 @@ import {
   lineLimit,
   truncationMode,
   kerning,
+  minimumScaleFactor,
   accessibilityLabel,
   widgetURL,
 } from '@expo/ui/swift-ui/modifiers';
@@ -64,36 +73,44 @@ const StreakWidget = (
     : {
         bg: '#0A0A0A',
         text: '#F5F0EB',
-        textMuted: 'rgba(245,240,235,0.5)',
-        textSubtle: 'rgba(245,240,235,0.35)',
+        textMuted: 'rgba(245,240,235,0.6)',
+        textSubtle: 'rgba(245,240,235,0.5)',
         accent: '#C8A55C',
       };
 
   if (environment.widgetFamily === 'accessoryCircular') {
-    // Lock screen circular — use hierarchical styles for system tinting
+    // Lock screen circular — the number is the hero, flame is the label.
+    // Hierarchical styles so the system can tint/vibrant-render it.
     return (
       <ZStack
         modifiers={[
-          accessibilityLabel(`${streak} day streak`),
+          accessibilityLabel(
+            `${streak} day streak. ${hasRead ? 'Read today.' : 'Not yet read today.'}`
+          ),
           widgetURL(deepLink),
         ]}
       >
-        <Image
-          systemName={hasRead ? 'flame.fill' : 'flame'}
-          size={18}
-          modifiers={[
-            foregroundStyle({ type: 'hierarchical', style: 'primary' }),
-          ]}
-        />
-        <Text
-          modifiers={[
-            font({ size: 9, weight: 'semibold' }),
-            foregroundStyle({ type: 'hierarchical', style: 'secondary' }),
-            padding({ top: 24 }),
-          ]}
-        >
-          {streak}
-        </Text>
+        <AccessoryWidgetBackground />
+        <VStack spacing={0}>
+          <Image
+            systemName={hasRead ? 'flame.fill' : 'flame'}
+            size={11}
+            modifiers={[
+              foregroundStyle({ type: 'hierarchical', style: 'secondary' }),
+            ]}
+          />
+          <Text
+            modifiers={[
+              font({ size: 22, weight: 'bold', design: 'rounded' }),
+              foregroundStyle({ type: 'hierarchical', style: 'primary' }),
+              kerning(-0.5),
+              lineLimit(1),
+              minimumScaleFactor(0.6),
+            ]}
+          >
+            {streak}
+          </Text>
+        </VStack>
       </ZStack>
     );
   }
@@ -106,7 +123,7 @@ const StreakWidget = (
         frame({ maxWidth: Infinity, maxHeight: Infinity }),
         background(c.bg),
         accessibilityLabel(
-          `${streak} day reading streak. ${hasRead ? 'Read today.' : 'Not yet read today.'}`
+          `${streak} day reading streak. ${hasRead ? 'Read today.' : 'Not yet read today.'} ${total > 0 ? `Day ${day} of ${total}. ` : ''}${title}`
         ),
         widgetURL(deepLink),
       ]}
@@ -126,7 +143,7 @@ const StreakWidget = (
               padding({ leading: 2 }),
             ]}
           >
-            {hasRead ? 'day streak' : 'read today'}
+            {hasRead ? 'day streak' : 'not read yet'}
           </Text>
         </HStack>
 

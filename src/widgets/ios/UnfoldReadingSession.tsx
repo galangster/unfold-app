@@ -5,11 +5,14 @@
  * and progress through the reading.
  */
 import { createLiveActivity, type LiveActivityLayout } from 'expo-widgets';
-import { Text, VStack, HStack, Image, Spacer } from '@expo/ui/swift-ui';
+import { Text, VStack, HStack, Image, Spacer, ProgressView } from '@expo/ui/swift-ui';
 import {
   font,
   foregroundStyle,
   padding,
+  frame,
+  tint,
+  activityBackgroundTint,
 } from '@expo/ui/swift-ui/modifiers';
 
 type ReadingSessionProps = {
@@ -38,9 +41,17 @@ const ReadingSession = (props: ReadingSessionProps): LiveActivityLayout => {
   const progressPercent = totalMin > 0 ? Math.min(Math.round((elapsed / totalMin) * 100), 100) : 0;
 
   return {
-    // Lock Screen banner
+    // Lock Screen banner. The palette is fixed dark ink, so pin the banner
+    // background too — the default system material is light on light
+    // wallpapers and the text vanished (widget audit 2026-09-09).
     banner: (
-      <VStack modifiers={[padding({ all: 14 })]}>
+      <VStack
+        modifiers={[
+          padding({ all: 14 }),
+          frame({ maxWidth: Infinity }),
+          activityBackgroundTint('#0A0A0A'),
+        ]}
+      >
         <HStack>
           <VStack>
             <Text
@@ -89,7 +100,11 @@ const ReadingSession = (props: ReadingSessionProps): LiveActivityLayout => {
         </HStack>
 
         {/* Progress indicator */}
-        <HStack modifiers={[padding({ top: 8 })]}>
+        <ProgressView
+          value={progressPercent / 100}
+          modifiers={[tint('#C8A55C'), padding({ top: 8 })]}
+        />
+        <HStack modifiers={[padding({ top: 4 })]}>
           <Text
             modifiers={[
               font({ size: 10, weight: 'medium' }),
@@ -142,7 +157,7 @@ const ReadingSession = (props: ReadingSessionProps): LiveActivityLayout => {
     // Dynamic Island — minimal (when multiple activities active)
     minimal: (
       <Image
-        systemName="book.fill"
+        systemName={isListening ? 'waveform' : 'book.fill'}
         size={10}
         color="#C8A55C"
       />

@@ -71,11 +71,12 @@ const TodayWidget = (
     : {
         bg: '#0A0A0A',
         text: '#F5F0EB',
-        t55: 'rgba(245,240,235,0.55)',
-        t45: 'rgba(245,240,235,0.45)',
-        t40: 'rgba(245,240,235,0.4)',
-        t35: 'rgba(245,240,235,0.35)',
-        t30: 'rgba(245,240,235,0.3)',
+        // Floors raised 2026-09-09: nothing at ≤11pt sits below 0.5 ink.
+        t55: 'rgba(245,240,235,0.65)',
+        t45: 'rgba(245,240,235,0.6)',
+        t40: 'rgba(245,240,235,0.55)',
+        t35: 'rgba(245,240,235,0.5)',
+        t30: 'rgba(245,240,235,0.5)',
         accent: '#C8A55C',
         accentSoft: 'rgba(200,165,92,0.8)',
       };
@@ -94,6 +95,7 @@ const TodayWidget = (
     >
       {/* Left column — streak + progress */}
       <VStack
+        spacing={2}
         modifiers={[
           frame({ width: 60, alignment: 'center' }),
           padding({ trailing: 4 }),
@@ -115,11 +117,11 @@ const TodayWidget = (
         </Text>
         <Text
           modifiers={[
-            font({ size: 10, weight: 'medium' }),
+            font({ size: 11, weight: 'medium' }),
             foregroundStyle(hasRead ? c.accentSoft : c.t45),
           ]}
         >
-          {hasRead ? 'streak' : 'read today'}
+          {hasRead ? 'day streak' : 'not read yet'}
         </Text>
 
         <Spacer />
@@ -127,7 +129,7 @@ const TodayWidget = (
         {total > 0 && (
           <Text
             modifiers={[
-              font({ size: 10, weight: 'medium' }),
+              font({ size: 11, weight: 'medium' }),
               foregroundStyle(c.t30),
             ]}
           >
@@ -137,10 +139,13 @@ const TodayWidget = (
       </VStack>
 
       {/* Divider — subtle but visible */}
-      <Divider modifiers={[opacity(0.12), padding({ top: 2, bottom: 2 })]} />
+      <Divider modifiers={[opacity(0.25), padding({ top: 2, bottom: 2 })]} />
 
       {/* Right column — today's reading */}
+      {/* spacing=2: the default ~8pt stack gap overflows the 155pt-tall
+          medium widget (iPhone SE / mini) once title and quote both wrap. */}
       <VStack
+        spacing={2}
         modifiers={[
           padding({ leading: 10 }),
           frame({ maxWidth: Infinity, alignment: 'leading' }),
@@ -191,11 +196,11 @@ const TodayWidget = (
               lineSpacing(2),
             ]}
           >
-            {'"'}{quote}{'"'}
+            {'\u201C'}{quote}{'\u201D'}
           </Text>
         )}
 
-        <HStack modifiers={[padding({ top: 4 })]}>
+        <HStack modifiers={[padding({ top: 2 })]}>
           <Image
             systemName="clock"
             size={10}
@@ -203,7 +208,7 @@ const TodayWidget = (
           />
           <Text
             modifiers={[
-              font({ size: 10, weight: 'medium' }),
+              font({ size: 11, weight: 'medium' }),
               foregroundStyle(c.t35),
               padding({ leading: 2 }),
             ]}

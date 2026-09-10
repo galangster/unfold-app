@@ -45,6 +45,8 @@ type DashboardWidgetProps = {
   readingMinutes: number;
   /** Comma-separated: 1 = read, 0 = not read, for the 7 days M-Su */
   weeklyProgress: string;
+  /** 0 = Monday … 6 = Sunday. Which dot in weeklyProgress is today. */
+  weekTodayIndex: number;
   nextDayTitle: string;
 };
 
@@ -66,6 +68,7 @@ const DashboardWidget = (
   const minutes = props.readingMinutes ?? 5;
   const weekly = props.weeklyProgress ?? '0,0,0,0,0,0,0';
   const nextTitle = props.nextDayTitle ?? '';
+  const todayIndex = props.weekTodayIndex ?? -1;
 
   const weekDays = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
   const weekBits = weekly.split(',').map((d: string) => d === '1');
@@ -94,14 +97,15 @@ const DashboardWidget = (
     : {
         bg: '#0A0A0A',
         text: '#F5F0EB',
-        t75: 'rgba(245,240,235,0.75)',
-        t65: 'rgba(245,240,235,0.65)',
-        t45: 'rgba(245,240,235,0.45)',
-        t40: 'rgba(245,240,235,0.4)',
-        t35: 'rgba(245,240,235,0.35)',
-        t30: 'rgba(245,240,235,0.3)',
-        t25: 'rgba(245,240,235,0.25)',
-        t15: 'rgba(245,240,235,0.15)',
+        // Floors raised 2026-09-09: nothing at ≤11pt sits below 0.5 ink.
+        t75: 'rgba(245,240,235,0.8)',
+        t65: 'rgba(245,240,235,0.7)',
+        t45: 'rgba(245,240,235,0.6)',
+        t40: 'rgba(245,240,235,0.55)',
+        t35: 'rgba(245,240,235,0.5)',
+        t30: 'rgba(245,240,235,0.5)',
+        t25: 'rgba(245,240,235,0.45)',
+        t15: 'rgba(245,240,235,0.2)',
         accent: '#C8A55C',
         accentSoft: 'rgba(200,165,92,0.7)',
         accentFill: 'rgba(200,165,92,0.1)',
@@ -114,7 +118,7 @@ const DashboardWidget = (
         frame({ maxWidth: Infinity, maxHeight: Infinity }),
         background(c.bg),
         accessibilityLabel(
-          `Unfold dashboard. ${dayTitle}. Day ${day} of ${total}. ${streak} day streak. ${scripture !== '' ? scripture : ''}`
+          `Unfold dashboard. ${dayTitle}. Day ${day} of ${total}. ${streak} day streak, ${hasRead ? 'read today' : 'not yet read today'}. ${weekBits.filter(Boolean).length} of 7 days read this week.${scripture !== '' ? ` ${scripture}.` : ''}`
         ),
         widgetURL(deepLink),
       ]}
@@ -180,7 +184,7 @@ const DashboardWidget = (
         </VStack>
       </HStack>
 
-      <Divider modifiers={[opacity(0.08), padding({ top: 10, bottom: 10 })]} />
+      <Divider modifiers={[opacity(0.3), padding({ top: 10, bottom: 10 })]} />
 
       {/* Scripture quote — the centerpiece */}
       {verse !== '' ? (
@@ -194,7 +198,7 @@ const DashboardWidget = (
             modifiers={[
               font({ size: 14, weight: 'regular', design: 'serif' }),
               foregroundStyle(c.t75),
-              lineLimit(4),
+              lineLimit(5),
               truncationMode('tail'),
               lineSpacing(3),
             ]}
@@ -229,7 +233,7 @@ const DashboardWidget = (
               lineSpacing(3),
             ]}
           >
-            {'"'}{quote}{'"'}
+            {'\u201C'}{quote}{'\u201D'}
           </Text>
         </VStack>
       ) : null}
@@ -243,32 +247,30 @@ const DashboardWidget = (
           padding({ top: 4, bottom: 4 }),
         ]}
       >
-        {weekDays.map((dayLabel: string, i: number) => (
-          <VStack
-            key={dayLabel + i}
-            modifiers={[
-              frame({ maxWidth: Infinity }),
-            ]}
-          >
-            <Image
-              systemName={weekBits[i] ? 'checkmark.circle.fill' : 'circle'}
-              size={14}
-              color={weekBits[i] ? c.accent : c.t15}
-            />
-            <Text
-              modifiers={[
-                font({ size: 10, weight: weekBits[i] ? 'medium' : 'regular' }),
-                foregroundStyle(weekBits[i] ? c.accentSoft : c.t25),
-                padding({ top: 2 }),
-              ]}
-            >
-              {dayLabel}
-            </Text>
-          </VStack>
-        ))}
+        {weekDays.map((dayLabel: string, i: number) => {
+          const read = weekBits[i];
+          const isToday = i === todayIndex;
+          const glyph = read ? 'checkmark.circle.fill' : isToday ? 'circle.dotted' : 'circle';
+          const glyphColor = read ? c.accent : isToday ? c.accentSoft : c.t15;
+          const labelColor = read ? c.accentSoft : isToday ? c.text : c.t25;
+          return (
+            <VStack key={dayLabel + i} modifiers={[frame({ maxWidth: Infinity })]}>
+              <Image systemName={glyph} size={14} color={glyphColor} />
+              <Text
+                modifiers={[
+                  font({ size: 10, weight: read || isToday ? 'semibold' : 'regular' }),
+                  foregroundStyle(labelColor),
+                  padding({ top: 2 }),
+                ]}
+              >
+                {dayLabel}
+              </Text>
+            </VStack>
+          );
+        })}
       </HStack>
 
-      <Divider modifiers={[opacity(0.08), padding({ top: 6, bottom: 8 })]} />
+      <Divider modifiers={[opacity(0.3), padding({ top: 6, bottom: 8 })]} />
 
       {/* Footer: reading time + next reading */}
       <HStack modifiers={[frame({ maxWidth: Infinity })]}>
