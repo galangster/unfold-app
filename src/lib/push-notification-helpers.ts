@@ -20,6 +20,17 @@ export function parseHhMm(
   return { hour, minute };
 }
 
+export const DEFAULT_REMINDER_CLOCK = { hour: 8, minute: 0 } as const;
+
+/** "8:00 AM" or "08:00" → { hour, minute }, defaulting to 8:00 on bad input. */
+export function parseReminderClock(
+  time: string | null | undefined,
+  fallback: { hour: number; minute: number } = DEFAULT_REMINDER_CLOCK,
+): { hour: number; minute: number } {
+  const normalized = time ? normalizePreferredNotificationTime(time) : undefined;
+  return normalized ? parseHhMm(normalized, fallback) : fallback;
+}
+
 export function normalizePreferredNotificationTime(
   preferredNotificationTime?: string,
 ): string | undefined {

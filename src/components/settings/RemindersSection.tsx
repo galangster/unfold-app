@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { View, Text } from 'react-native';
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
@@ -9,6 +9,8 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
+import { suggestReminderTime } from '@/lib/reminder-time-suggestion';
+import { logEvent } from '@/lib/analytics';
 import {
   commitDailyReminderSetting,
   areNotificationsEnabled,
@@ -54,6 +56,30 @@ export function RemindersSection() {
 
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [showTimeSelector, setShowTimeSelector] = useState(false);
+  const devotionals = useUnfoldStore((s) => s.devotionals);
+  const suggestion = useMemo(
+    () =>
+      notificationsEnabled
+        ? suggestReminderTime({
+            devotionals,
+            currentReminderTime: user?.reminderTime,
+            dismissed: user?.reminderTimeSuggestionDismissed,
+          })
+        : null,
+    [notificationsEnabled, devotionals, user?.reminderTime, user?.reminderTimeSuggestionDismissed],
+  );
+  const handleAcceptSuggestion = () => {
+    if (!suggestion) return;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    updateUser({ reminderTime: suggestion.suggested, dailyReminderEnabled: true });
+    logEvent('reminder_time_suggestion', { action: 'accepted', sampleSize: suggestion.sampleSize });
+  };
+  const handleDismissSuggestion = () => {
+    if (!suggestion) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    updateUser({ reminderTimeSuggestionDismissed: suggestion.suggested });
+    logEvent('reminder_time_suggestion', { action: 'dismissed', sampleSize: suggestion.sampleSize });
+  };
 
   // Check notification status on mount
   useEffect(() => {
@@ -360,6 +386,32 @@ export function RemindersSection() {
           )}
         </TouchableOpacity>
       </View>
+
+      {suggestion && (
+        <View
+          accessibilityRole="summary"
+          style={{
+            marginTop: -Spacing['2'],
+            marginBottom: Spacing['6'],
+            paddingVertical: Spacing['3'],
+            paddingHorizontal: Spacing['4'],
+            borderRadius: 10,
+            backgroundColor: colors.inputBackground,
+          }}
+        >
+          <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.sm, color: colors.text }}>
+            You usually read around {suggestion.suggested}. Move your reminder there?
+          </Text>
+          <View style={{ flexDirection: 'row', columnGap: Spacing['4'], marginTop: Spacing['2'] }}>
+            <TouchableOpacity activeOpacity={0.7} onPress={handleAcceptSuggestion} accessibilityRole="button" accessibilityLabel={`Move reminder to ${suggestion.suggested}`}>
+              <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.sm, color: colors.accent }}>Move it</Text>
+            </TouchableOpacity>
+            <TouchableOpacity activeOpacity={0.7} onPress={handleDismissSuggestion} accessibilityRole="button" accessibilityLabel="Keep current reminder time">
+              <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.sm, color: colors.textMuted }}>Keep it</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
 
       {/* Time options (outside the card for cleaner expand) */}
       {showTimeSelector && (

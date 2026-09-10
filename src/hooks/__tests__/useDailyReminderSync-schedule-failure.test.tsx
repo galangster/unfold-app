@@ -56,6 +56,7 @@ jest.mock('@/hooks/usePremiumAccessPolicy', () => ({
 jest.mock('@/lib/daily-reminder-content', () => ({
   buildDailyReminderFingerprint: () => 'unchanged-fingerprint',
   getDailyReminderOwner: () => 'local',
+  getDailyReminderTrigger: () => ({ kind: 'daily' }),
 }));
 
 jest.mock('@/lib/analytics', () => ({ logEvent: jest.fn() }));

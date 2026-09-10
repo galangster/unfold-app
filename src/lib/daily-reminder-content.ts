@@ -14,9 +14,40 @@ export interface DailyReminderFingerprintInput {
   currentDevotional: Devotional | null | undefined;
   premiumPolicy: PremiumAccessPolicy;
   pushRegistered?: boolean;
+  /** A read today changes the trigger (see getDailyReminderTrigger). */
+  readToday?: boolean;
 }
 
 export type DailyReminderOwner = 'local' | 'server';
+
+export type DailyReminderTrigger =
+  | { kind: 'daily' }
+  | { kind: 'date'; date: Date };
+
+/**
+ * A DAILY trigger cannot skip one occurrence. When the reader has already
+ * read today and today's fire time is still ahead, the reminder would
+ * announce tomorrow's reading on a day they already finished. Schedule a
+ * one-shot for tomorrow instead; the next foreground sync (any open of the
+ * app) restores the DAILY floor.
+ */
+export function getDailyReminderTrigger({
+  readToday,
+  clock,
+  now = new Date(),
+}: {
+  readToday: boolean;
+  clock: { hour: number; minute: number };
+  now?: Date;
+}): DailyReminderTrigger {
+  if (!readToday) return { kind: 'daily' };
+  const todayFire = new Date(now);
+  todayFire.setHours(clock.hour, clock.minute, 0, 0);
+  if (todayFire <= now) return { kind: 'daily' };
+  const tomorrow = new Date(todayFire);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  return { kind: 'date', date: tomorrow };
+}
 
 export interface DailyReminderOwnerInput {
   currentDevotional: Devotional | null | undefined;
@@ -163,6 +194,7 @@ export function buildDailyReminderFingerprint({
   currentDevotional,
   premiumPolicy,
   pushRegistered = false,
+  readToday = false,
 }: DailyReminderFingerprintInput): string {
   const currentDay = getCurrentReminderDay(currentDevotional);
 
@@ -173,6 +205,7 @@ export function buildDailyReminderFingerprint({
     reminderTime ?? '',
     premiumPolicy,
     pushRegistered ? 'push' : 'nopush',
+    readToday ? 'read-today' : '',
     currentDevotional?.id ?? '',
     currentDevotional?.title ?? '',
     currentDevotional?.currentDay ?? '',
