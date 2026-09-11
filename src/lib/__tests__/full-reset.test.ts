@@ -241,6 +241,11 @@ describe('performFullLocalReset', () => {
     expect(FULL_RESET_MMKV_KEYS).not.toContain('unfold-trial-notification');
   });
 
+  it('D13 includes the auto-trial intent key and the completion marker', () => {
+    expect(FULL_RESET_MMKV_KEYS).toContain('auto-trial-series-intent-v1');
+    expect(FULL_RESET_MMKV_KEYS).toContain('onboarding-completed-reported-v1');
+  });
+
   it('sweeps every rate-limit key by prefix through the live key list and leaves other keys', async () => {
     expect(FULL_RESET_MMKV_KEY_PREFIXES).toContain('@unfold_rate_limits_');
     mockStore.set('@unfold_rate_limits_companion', '{"count":3}');

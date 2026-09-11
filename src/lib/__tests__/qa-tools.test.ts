@@ -8,7 +8,8 @@ const mockConstants: { expoConfig: { extra?: unknown } | null } = { expoConfig: 
 
 jest.mock('expo-constants', () => ({ __esModule: true, default: mockConstants }));
 
-import { isQaToolsEnabled } from '../qa-tools';
+import { isQaToolsEnabled, shouldRenderQaChrome } from '../qa-tools';
+import { useUIState } from '../ui-state';
 
 describe('QA/debug route guard', () => {
   const devGlobal = globalThis as typeof globalThis & { __DEV__: boolean };
@@ -33,6 +34,14 @@ describe('QA/debug route guard', () => {
       process.env.EXPO_PUBLIC_ENABLE_QA_TOOLS = originalFlag;
     }
     mockConstants.expoConfig = { extra: {} };
+    useUIState.getState().setQaCaptureMode(false);
+  });
+
+  it('hides QA chrome while capture mode is on', () => {
+    arrange('development', true, undefined);
+    expect(shouldRenderQaChrome()).toBe(true);
+    useUIState.getState().setQaCaptureMode(true);
+    expect(shouldRenderQaChrome()).toBe(false);
   });
 
   it('blocks QA tools in production by default', () => {

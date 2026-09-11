@@ -117,6 +117,17 @@ const ALLOWED_DATA_STRING_KEYS: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * Extra string keys allowed on flat event tags only. They never widen the
+ * breadcrumb or extra scrubber: `entry` and `copy` collide with journal
+ * navigation params, so allowing them there would leak journal text.
+ */
+const APP_EVENT_TAG_STRING_KEYS: ReadonlySet<string> = new Set([
+  'outcome', 'age_bucket', 'entry', 'surface', 'purchase_source',
+  'claim', 'copy', 'trigger', 'opened_from', 'completeness',
+  'gate_action', 'pick_source', 'prior_status',
+]);
+
+/**
  * Per-section allowlists for `event.contexts`. A section that is not named
  * here is dropped whole, and inside a section only these keys may carry a
  * string. The split matters: `name` is legitimate under `os` and `runtime`
@@ -234,7 +245,7 @@ function scrubTags(tags: unknown): Record<string, string | number | boolean> | u
   for (const [key, value] of Object.entries(tags as Record<string, unknown>)) {
     if (typeof value === 'number' && Number.isFinite(value)) out[key] = value;
     else if (typeof value === 'boolean') out[key] = value;
-    else if (typeof value === 'string' && ALLOWED_DATA_STRING_KEYS.has(key)) out[key] = truncate(value);
+    else if (typeof value === 'string' && (ALLOWED_DATA_STRING_KEYS.has(key) || APP_EVENT_TAG_STRING_KEYS.has(key))) out[key] = truncate(value);
   }
   return emptyToUndefined(out);
 }
@@ -687,9 +698,17 @@ export function addAppBreadcrumb(
 export function captureAppEvent(name: string, data?: Record<string, string | number | boolean>): void {
   if (!enabled || sentryModule === null) return;
   try {
+    const tags: Record<string, string | number | boolean> = {};
+    if (data) {
+      for (const [key, value] of Object.entries(data)) {
+        if (key === 'source') continue;
+        tags[key] = value;
+      }
+    }
+    tags.source = APP_EVENT_SOURCE;
     sentryModule.captureMessage(name, {
       level: 'info',
-      tags: { source: APP_EVENT_SOURCE },
+      tags,
       extra: data ?? {},
     });
   } catch {
