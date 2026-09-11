@@ -13,6 +13,7 @@ import { stripOuterQuotes } from '@/lib/cn';
 import { isStructuredWordStudy, normalizeWordStudy } from '@/lib/word-study';
 import { DISPLAY_SERIF_WOFF2_BASE64 } from '@/lib/display-font-base64';
 import { RANGY_BUNDLE } from './rangy-bundle';
+import { highlightInk, highlighterStroke, strokeFitFor, webFontNameFor } from '@/constants/bible-highlight-colors';
 
 /** The document is the source of truth: every mutation reports the diff of
  *  live highlights before and after, and the store reconciles from it. */
@@ -84,46 +85,7 @@ const HIGHLIGHT_MENU_ITEMS = [
   { label: 'Copy', key: 'copy' },
 ];
 
-// Highlighter stroke for saved highlights (chosen 2026-09-10 over a flat
-// marker, an underline wash and a pencil rule). Both themes paint a
-// translucent band behind unchanged text, never colored text, and the ink
-// is uneven like a felt tip: heavier through the middle, softer at both
-// ends. `rgb` is the ink; `peak` is its strongest alpha on that ground.
-const HIGHLIGHT_COLORS: Record<HighlightColor, { label: string; light: HighlightInk; dark: HighlightInk }> = {
-  yellow: { label: HIGHLIGHT_COLOR_LABELS.yellow, light: { rgb: '255, 236, 80', peak: 0.72 }, dark: { rgb: '255, 232, 106', peak: 0.34 } },
-  green: { label: HIGHLIGHT_COLOR_LABELS.green, light: { rgb: '180, 240, 120', peak: 0.62 }, dark: { rgb: '92, 255, 99', peak: 0.28 } },
-  blue: { label: HIGHLIGHT_COLOR_LABELS.blue, light: { rgb: '150, 210, 255', peak: 0.62 }, dark: { rgb: '119, 183, 255', peak: 0.32 } },
-  purple: { label: HIGHLIGHT_COLOR_LABELS.purple, light: { rgb: '214, 188, 255', peak: 0.56 }, dark: { rgb: '215, 168, 255', peak: 0.32 } },
-  red: { label: HIGHLIGHT_COLOR_LABELS.red, light: { rgb: '255, 180, 180', peak: 0.6 }, dark: { rgb: '255, 122, 122', peak: 0.32 } },
-};
-
-interface HighlightInk {
-  rgb: string;
-  peak: number;
-}
-
-/** Where the stroke sits for each reading face, in em. Measured 2026-09-10
- *  from the fonts' own metrics: `top` = font-box ascent − tallest ascender
- *  − 0.05; `height` = ascender + descender + 0.10. Anchored to the letters,
- *  not to the font box, which is what made the old band float high. */
-export const HIGHLIGHT_STROKE_FIT: Record<string, { top: number; height: number }> = {
-  'Source Serif 4': { top: 0.24, height: 1.09 },
-  'EB Garamond': { top: 0.25, height: 1.1 },
-  Lora: { top: 0.2, height: 1.13 },
-  Inter: { top: 0.16, height: 1.08 },
-  'Crimson Text': { top: 0.22, height: 1.0 },
-  Merriweather: { top: 0.1, height: 1.2 },
-  Georgia: { top: 0.2, height: 1.1 },
-};
-
-/** The felt-tip gradient: soft entry, full ink by 12%, a shade lighter
- *  through the body, soft exit. Used as `background-image` on the mark. */
-export function highlighterStroke({ rgb, peak }: HighlightInk): string {
-  const a = (f: number) => (peak * f).toFixed(2);
-  return `linear-gradient(100deg, rgba(${rgb}, ${a(0.47)}), rgba(${rgb}, ${a(1)}) 12%, rgba(${rgb}, ${a(0.87)}) 88%, rgba(${rgb}, ${a(0.42)}))`;
-}
-
-const HIGHLIGHT_COLOR_NAMES = Object.keys(HIGHLIGHT_COLORS) as (keyof typeof HIGHLIGHT_COLORS)[];
+const HIGHLIGHT_COLOR_NAMES = Object.keys(HIGHLIGHT_COLOR_LABELS) as HighlightColor[];
 
 /** Everything the document derives from the Aa font size and the theme,
  *  expressed as CSS custom properties on the root element. They are baked
@@ -165,7 +127,7 @@ function buildThemeVars(fontSize: FontSize, accentColor: string, isDark: boolean
   // rather than `inherit` — CSS-wide keywords are not valid custom-property
   // values, and `color: currentColor` behaves exactly like `color: inherit`.
   HIGHLIGHT_COLOR_NAMES.forEach((color) => {
-    vars[`--hl-${color}-bg`] = highlighterStroke(isDark ? HIGHLIGHT_COLORS[color].dark : HIGHLIGHT_COLORS[color].light);
+    vars[`--hl-${color}-bg`] = highlighterStroke(highlightInk(color, isDark));
     vars[`--hl-${color}-color`] = 'currentColor';
   });
   return {
@@ -1216,20 +1178,8 @@ export function DevotionalWebView({
   // properties on the <html> start tag, added by webViewDocument below) so
   // this markup only changes with the content or the reading font family.
   const documentMarkup = useMemo(() => {
-    const getWebFontName = (nativeFont: string) => {
-      const fontMap: Record<string, string> = {
-        'SourceSerifPro_400Regular': 'Source Serif 4',
-        'EBGaramond_400Regular': 'EB Garamond',
-        'Lora_400Regular': 'Lora',
-        'Inter_400Regular': 'Inter',
-        'CrimsonText_400Regular': 'Crimson Text',
-        'Merriweather_400Regular': 'Merriweather',
-      };
-      return fontMap[readingFont.body] || 'Georgia';
-    };
-
-    const webFont = getWebFontName(readingFont.body);
-    const strokeFit = HIGHLIGHT_STROKE_FIT[webFont] ?? HIGHLIGHT_STROKE_FIT.Georgia;
+    const webFont = webFontNameFor(readingFont.body);
+    const strokeFit = strokeFitFor(readingFont.body);
     const uiFontStack = "-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif";
     const displayFontStack = "'PP Editorial New', Georgia, serif";
 
@@ -1782,7 +1732,7 @@ export function DevotionalWebView({
   
   <!-- Highlight color toolbar -->
   <div id="highlight-toolbar">
-    ${HIGHLIGHT_COLOR_NAMES.map((color) => `<button class="color-btn ${color}" data-color="${color}" aria-label="Highlight ${HIGHLIGHT_COLORS[color].label}"><span class="dot"></span><span class="lbl"><span>${HIGHLIGHT_COLORS[color].label}</span></span></button>`).join('\n    ')}
+    ${HIGHLIGHT_COLOR_NAMES.map((color) => `<button class="color-btn ${color}" data-color="${color}" aria-label="Highlight ${HIGHLIGHT_COLOR_LABELS[color]}"><span class="dot"></span><span class="lbl"><span>${HIGHLIGHT_COLOR_LABELS[color]}</span></span></button>`).join('\n    ')}
   </div>
 </body>
 </html>

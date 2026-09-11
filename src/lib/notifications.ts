@@ -1025,7 +1025,7 @@ export async function scheduleMiddayCheckIn(clock?: CheckInClock): Promise<strin
       scheduled.push(
         await scheduleCheckInOp(
           op,
-          { title: 'Quick check-in', body, dataType: 'midday-checkin' },
+          { title: 'Your midday check-in is ready', body, dataType: 'midday-checkin' },
           'Midday check-in',
         ),
       );
@@ -1105,7 +1105,7 @@ export async function scheduleEveningWindDown(clock?: CheckInClock): Promise<str
       scheduled.push(
         await scheduleCheckInOp(
           op,
-          { title: 'One last thing', body, dataType: 'evening-winddown' },
+          { title: 'Your evening prayer is ready', body, dataType: 'evening-winddown' },
           'Evening wind-down',
         ),
       );

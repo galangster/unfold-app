@@ -115,8 +115,9 @@ export function ReadDevotionalStep({
         contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom + Spacing['8'], 40) }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Devotional content with horizontal padding */}
-        <View style={{ paddingHorizontal: Spacing['6'] }}>
+        {/* Devotional content. The top padding separates the title from the
+            onboarding progress line above it. */}
+        <View style={{ paddingHorizontal: Spacing['6'], paddingTop: Spacing['8'] }}>
           <DevotionalContent
             day={devotionalDay}
             fontSize="medium"

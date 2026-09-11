@@ -39,7 +39,8 @@ describe('Bible reader verse measurement source contract', () => {
   });
 
   it('still renders overlay rects only from render state, never from the ref', () => {
-    expect(readerSource).toContain('{hasOverlay && overlayBg && textLines.map((line, i) => (');
+    expect(readerSource).toContain('{isSelected && textLines.map((line, i) => (');
+    expect(readerSource).toContain('{!isSelected && stroke && textLines.map((line, i) => (');
     expect(readerSource).not.toContain('measuredLinesRef.current.map(');
   });
 
