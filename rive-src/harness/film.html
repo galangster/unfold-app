@@ -30,5 +30,41 @@ window.film=async(file,accent,surface,times,dt=1/60)=>{
   sm.delete(); ab.delete(); f.delete(); $('#status').textContent=file+' done'; return rep;
 };
 window.save=async(name)=>{const cs=[...document.querySelectorAll('#strip canvas')];const big=document.createElement('canvas');big.width=390*cs.length+8*(cs.length-1);big.height=844;const x=big.getContext('2d');x.fillStyle='#444';x.fillRect(0,0,big.width,big.height);cs.forEach((c,i)=>x.drawImage(c,i*398,0));const res=await fetch('/save?name='+encodeURIComponent(name),{method:'POST',body:big.toDataURL('image/png')});return await res.text();};
+
+// record(file, accent, surface, seconds, fps): drives the scene by hand and records the canvas to webm.
+window.record=async(file,accent,surface,seconds=30,fps=30)=>{
+  const bytes=new Uint8Array(await (await fetch('riv/'+file,{cache:'no-store'})).arrayBuffer());
+  const f=await rive.load(bytes); const ab=f.defaultArtboard(); const sm=new rive.StateMachineInstance(ab.stateMachineByName('State Machine 1'),ab);
+  const vm=f.defaultArtboardViewModel(ab); const vmi=vm.defaultInstance(); ab.bindViewModelInstance(vmi); sm.bindViewModelInstance(vmi);
+  const set=(names,val)=>{const [r,g,b,a]=hex(val);names.forEach(n=>{try{const p=vmi.color(n);if(p)p.argb(a,r,g,b)}catch(e){}})};
+  set(ACC,accent);set(BG,surface);set(MS,surface+'00');set(ME,surface+'FF');
+  const draw=()=>{renderer.clear();renderer.save();renderer.align(rive.Fit.cover,rive.Alignment.center,{minX:0,minY:0,maxX:390,maxY:844},ab.bounds);ab.draw(renderer);renderer.restore();renderer.flush();};
+  const stream=c.captureStream(0); const track=stream.getVideoTracks()[0];
+  const rec=new MediaRecorder(stream,{mimeType:'video/webm;codecs=vp9',videoBitsPerSecond:6_000_000}); const chunks=[]; rec.ondataavailable=e=>chunks.push(e.data);
+  const done=new Promise(r=>rec.onstop=r); rec.start();
+  const dt=1/fps; const n=seconds*fps;
+  for(let i=0;i<n;i++){ sm.advance(dt); ab.advance(dt); draw(); track.requestFrame(); await new Promise(r=>setTimeout(r,1000/fps)); }
+  rec.stop(); await done; sm.delete(); ab.delete(); f.delete();
+  const blob=new Blob(chunks,{type:'video/webm'}); const buf=await blob.arrayBuffer();
+  const res=await fetch('/savebin?name='+encodeURIComponent(file.replace('.riv','')+'-'+(surface.toLowerCase()==='#0a0a0a'?'dark':'light')+'.webm'),{method:'POST',body:buf});
+  return await res.text();
+};
+
+// frames(): dump a JPEG sequence by manual stepping (no timers, works in a hidden pane). Progress in window.prog.
+window.prog={};
+window.frames=async(file,accent,surface,tag,seconds=20,fps=30)=>{
+  const bytes=new Uint8Array(await (await fetch('riv/'+file,{cache:'no-store'})).arrayBuffer());
+  const f=await rive.load(bytes); const ab=f.defaultArtboard(); const sm=new rive.StateMachineInstance(ab.stateMachineByName('State Machine 1'),ab);
+  const vm=f.defaultArtboardViewModel(ab); const vmi=vm.defaultInstance(); ab.bindViewModelInstance(vmi); sm.bindViewModelInstance(vmi);
+  const set=(names,val)=>{const [r,g,b,a]=hex(val);names.forEach(n=>{try{const p=vmi.color(n);if(p)p.argb(a,r,g,b)}catch(e){}})};
+  set(ACC,accent);set(BG,surface);set(MS,surface+'00');set(ME,surface+'FF');
+  const draw=()=>{renderer.clear();renderer.save();renderer.align(rive.Fit.cover,rive.Alignment.center,{minX:0,minY:0,maxX:390,maxY:844},ab.bounds);ab.draw(renderer);renderer.restore();renderer.flush();};
+  const n=seconds*fps, dt=1/fps; const o=document.createElement('canvas'); o.width=390;o.height=844; const ctx=o.getContext('2d');
+  for(let i=0;i<n;i++){ sm.advance(dt); ab.advance(dt); draw(); ctx.drawImage(c,0,0);
+    const blob=await new Promise(r=>o.toBlob(r,'image/jpeg',0.92));
+    await fetch('/frame?clip='+encodeURIComponent(tag)+'&i='+String(i).padStart(5,'0'),{method:'POST',body:blob}); window.prog[tag]=i+1; }
+  sm.delete(); ab.delete(); f.delete(); return n;
+};
+window.recordAll=async(list)=>{ for(const [file,accent,surface,tag] of list){ try{ await window.frames(file,accent,surface,tag);}catch(e){ window.prog[tag]='ERR '+e; } } window.prog.done=true; };
 window.ready=true;
 </script>

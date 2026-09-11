@@ -67,3 +67,20 @@ the reference strips, not against the text contract.
 ## Owner feedback log
 
 - 2026-09-11, Nick: "single lines at varying thicknesses look good", "make sure any new art feels right at home with the current art". Applied to clouds v3: closed silhouettes replaced by one open calligraphic line per cloud, weight varied by stacking trimmed heavier strokes on the same path.
+
+## Scene set for review (2026-09-11)
+
+Built with `rive-src/lib/unfold_rml.py` and `rive-src/build-all.sh`. Not wired into the app until Nick QAs the videos.
+
+| Scene | Idea | Reference it borrows from | Audit rounds |
+|---|---|---|---|
+| clouds | three tapered single-line clouds, wisps, motes | Nick's "single lines at varying thickness" | 5 |
+| orbit | concentric hairline orbits with planets, faint bokeh | Endel Spatial Orbit | 3 |
+| ripples | staggered expanding rings from a pulsing drop, still water lines | Endel Relax rings | 4 |
+| breath | nine stacked wave lines swaying out of phase, hero line tapered | Endel Relax card | 2 |
+| moon | tapered crescent with halo, twinkling stars, rare shooting star | shipped campfire glow | 2 |
+| mountains | three ridge lines in opacity tiers, drifting mist, low sun | shipped tree tiers | 2 |
+| constellation | nearest-neighbour star chain, breathing group, rare streak | Endel Focus grid dots | 2 |
+| grass | eleven single-arc blades in one wind, drifting seeds | shipped wind-leaves | 5 |
+
+Lessons logged during the rounds: a cycle's end keyframe must sit one frame before the next cycle's start or the runtime drops one and the element sticks; rare events use `burst`, not a short `lifecycle`; cubic handle angles on open paths are the usual cause of kinks, so prefer two-vertex arcs.
