@@ -11,7 +11,8 @@ import { MMKV } from 'react-native-mmkv';
 import { CaretRightIcon, CaretLeftIcon, GearSixIcon, XIcon, BookOpenIcon, HighlighterCircleIcon, NotePencilIcon, NotepadIcon, UploadSimpleIcon, LockSimpleIcon } from '@/components/icons';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
-import { HIGHLIGHT_BG, HIGHLIGHT_TEXT_DARK, HIGHLIGHT_COLORS } from '@/constants/bible-highlight-colors';
+import { LinearGradient } from 'expo-linear-gradient';
+import { HIGHLIGHT_COLORS, highlighterStrokeGradientFor, strokeFitFor } from '@/constants/bible-highlight-colors';
 import { buildVerseColorMap } from '@/lib/bible-verse-highlight-map';
 import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
@@ -38,6 +39,7 @@ import { isRedLetterVerse } from '@/lib/red-letter-verses';
 import { getSectionHeadings } from '@/lib/bible-section-headings';
 import {
   BIBLE_SELECTED_OVERLAY_BG,
+  getBibleHighlightStrokeStyle,
   getBibleTextOverlayStyle,
   nextBibleTabBarStateAfterActions,
   type BibleTextLine,
@@ -239,15 +241,14 @@ const VerseItem = React.memo(function VerseItem({
     [contentKey, onLayout, verseNum],
   );
 
-  const hasOverlay = isSelected || (!!highlightColor && !isDark);
+  const hasOverlay = isSelected || !!highlightColor;
 
   // Selection: subtle text-line mark, not a chunky inverted block.
   const selectionBg = isDark ? BIBLE_SELECTED_OVERLAY_BG.dark : BIBLE_SELECTED_OVERLAY_BG.light;
 
-  // Highlight bg
-  const hlBg = highlightColor
-    ? (isDark ? HIGHLIGHT_BG[highlightColor].dark : HIGHLIGHT_BG[highlightColor].light)
-    : undefined;
+  // Saved highlight: the felt-tip stroke, same ink as the devotional.
+  const stroke = highlightColor ? highlighterStrokeGradientFor(highlightColor, isDark) : undefined;
+  const strokeFit = strokeFitFor(fontFamily);
 
   // Flash highlight color — white glow on dark, subtle gray on light
   const flashBg = isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.10)';
@@ -255,9 +256,7 @@ const VerseItem = React.memo(function VerseItem({
   // Red-letter: bright warm red for Jesus's words
   const redLetterColor = isDark ? '#F56B5E' : '#C0392B';
   const selectedTextColor = isSelected ? (isDark ? '#221B12' : '#FFFDF8') : undefined;
-  const savedHighlightTextColor = highlightColor && isDark ? HIGHLIGHT_TEXT_DARK[highlightColor] : undefined;
-  const displayText = selectedTextColor ?? savedHighlightTextColor ?? (isRedLetter ? redLetterColor : textColor);
-  const overlayBg = isSelected ? selectionBg : hlBg;
+  const displayText = selectedTextColor ?? (isRedLetter ? redLetterColor : textColor);
 
   const handleTextLayout = useCallback((e: any) => {
     const lines = e.nativeEvent.lines;
@@ -317,14 +316,27 @@ const VerseItem = React.memo(function VerseItem({
           pointerEvents="none"
         />
 
-        {/* Per-line highlight / selection rectangles (behind text) */}
-        {hasOverlay && overlayBg && textLines.map((line, i) => (
+        {/* Per-line selection rectangles (behind text) */}
+        {isSelected && textLines.map((line, i) => (
           <View
             key={i}
             style={[
-              getBibleTextOverlayStyle(line, isSelected ? (isDark ? 'selectedDark' : 'selectedLight') : 'saved'),
-              { backgroundColor: overlayBg },
+              getBibleTextOverlayStyle(line, isDark ? 'selectedDark' : 'selectedLight'),
+              { backgroundColor: selectionBg },
             ]}
+          />
+        ))}
+
+        {/* Per-line highlighter stroke (behind text); selection paints over it */}
+        {!isSelected && stroke && textLines.map((line, i) => (
+          <LinearGradient
+            key={i}
+            colors={stroke.colors}
+            locations={stroke.locations}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0.18 }} // ≈ the CSS stroke's 100deg
+            pointerEvents="none"
+            style={getBibleHighlightStrokeStyle(line, fontSize, strokeFit)}
           />
         ))}
 

@@ -13,7 +13,7 @@ import * as Haptics from 'expo-haptics';
 import { LockSimpleIcon, XIcon } from '@/components/icons';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
-import { HIGHLIGHT_BG, HIGHLIGHT_COLORS, HIGHLIGHT_TEXT_DARK, SELECTED_VERSE_TEXT } from '@/constants/bible-highlight-colors';
+import { HIGHLIGHT_COLORS, SELECTED_VERSE_TEXT, highlightInk, highlighterFlatBand } from '@/constants/bible-highlight-colors';
 import { Spacing } from '@/constants/spacing';
 import type { VersePassage } from '@/lib/bible-api';
 import { toSuperscript } from '@/lib/superscript';
@@ -114,12 +114,14 @@ export function ScriptureVerseBlock({ passage, textStyle, mutedColor, isDark }: 
         {passage.verses.map((v, i) => {
           const isSelected = selected.has(v.verse);
           const hl = colorMap[v.verse];
+          // Nested Text spans take one flat colour, so this is the stroke's
+          // body ink in both themes; text keeps its own colour.
           const backgroundColor = isSelected
             ? selectionBg
             : hl
-              ? (isDark ? HIGHLIGHT_BG[hl].dark : HIGHLIGHT_BG[hl].light)
+              ? highlighterFlatBand(highlightInk(hl, isDark))
               : undefined;
-          const color = isSelected ? selectedText : hl && isDark ? HIGHLIGHT_TEXT_DARK[hl] : textColor;
+          const color = isSelected ? selectedText : textColor;
           const last = i === passage.verses.length - 1;
           return (
             <Text
