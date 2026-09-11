@@ -914,7 +914,7 @@ export async function scheduleMiddayCheckIn(): Promise<string[]> {
         const id = await Notifications.scheduleNotificationAsync({
           identifier: op.id,
           content: {
-            title: 'Quick check-in',
+            title: 'Your midday check-in is ready',
             body,
             sound: true,
             data: { type: 'midday-checkin' },
@@ -932,7 +932,7 @@ export async function scheduleMiddayCheckIn(): Promise<string[]> {
         const id = await Notifications.scheduleNotificationAsync({
           identifier: op.id,
           content: {
-            title: 'Quick check-in',
+            title: 'Your midday check-in is ready',
             body,
             sound: true,
             data: { type: 'midday-checkin' },
@@ -1022,7 +1022,7 @@ export async function scheduleEveningWindDown(): Promise<string[]> {
         const id = await Notifications.scheduleNotificationAsync({
           identifier: op.id,
           content: {
-            title: 'One last thing',
+            title: 'Your evening prayer is ready',
             body,
             sound: true,
             data: { type: 'evening-winddown' },
@@ -1040,7 +1040,7 @@ export async function scheduleEveningWindDown(): Promise<string[]> {
         const id = await Notifications.scheduleNotificationAsync({
           identifier: op.id,
           content: {
-            title: 'One last thing',
+            title: 'Your evening prayer is ready',
             body,
             sound: true,
             data: { type: 'evening-winddown' },
