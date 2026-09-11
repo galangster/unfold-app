@@ -5,6 +5,7 @@ export const REMOTE_CONFIG_TIMEOUT_MS = 4_000;
 export const REMOTE_CONFIG_MIN_REFETCH_MS = 5 * 60_000;
 export const REMOTE_CONFIG_ERROR_RETRY_MS = 30_000;
 export const REMOTE_CONFIG_MAX_AGE_MS = 60 * 60_000;
+export const REMOTE_CONFIG_PURCHASE_WAIT_MS = 3_000;
 
 export interface RemoteConfigV1 {
   version: 1;
@@ -133,6 +134,39 @@ export async function refreshRemoteConfig(o?: {
     return await pending;
   } finally {
     if (inflight === pending) inflight = null;
+  }
+}
+
+function isFreshOk(nowMs: number): boolean {
+  return state.status === 'ok' && nowMs - state.fetchedAtMs <= REMOTE_CONFIG_MAX_AGE_MS;
+}
+
+export async function awaitRemoteConfigSettled(
+  timeoutMs = REMOTE_CONFIG_PURCHASE_WAIT_MS,
+  o?: {
+    nowMs?: number;
+    fetchImpl?: ConfigFetch;
+  },
+): Promise<RemoteConfigState> {
+  const nowMs = o?.nowMs ?? Date.now();
+  if (isFreshOk(nowMs)) return state;
+
+  const force = state.status === 'error'
+    && nowMs - state.failedAtMs < REMOTE_CONFIG_ERROR_RETRY_MS;
+  const pending = refreshRemoteConfig({
+    force,
+    nowMs,
+    fetchImpl: o?.fetchImpl,
+  });
+  const stateBefore = state;
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<RemoteConfigState>((resolve) => {
+    timeoutId = setTimeout(() => resolve(stateBefore), timeoutMs);
+  });
+  try {
+    return await Promise.race([pending, timeout]);
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
   }
 }
 

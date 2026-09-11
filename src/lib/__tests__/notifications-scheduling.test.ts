@@ -139,8 +139,9 @@ function buildCheckInSchedule(
       minute,
     });
   }
-  if (skipKey && skipDay && dayTimes[skipKey] != null) {
-    const { hour, minute } = parseHhMm(defaultTime, fallback);
+  const resumeTime = skipKey ? dayTimes[skipKey] : null;
+  if (skipKey && skipDay && resumeTime != null) {
+    const { hour, minute } = parseHhMm(resumeTime, fallback);
     const resume = new Date(skipDay.getTime());
     resume.setDate(resume.getDate() + 7);
     resume.setHours(hour, minute, 0, 0);
@@ -519,6 +520,46 @@ describe('I5 buildCheckInSchedule — skip date', () => {
     );
     expect(ops.some((op) => op.kind === 'date')).toBe(false);
     expect(ops.map((op) => op.id)).not.toContain('unfold-midday-checkin-wed');
+  });
+
+  it('per-day mode with Wednesday at 13:15 and a Day 3 skip on Wednesday resumes at 13:15', () => {
+    const byDay = {
+      Mon: '12:30',
+      Tue: '12:30',
+      Wed: '13:15',
+      Thu: '12:30',
+      Fri: '12:30',
+      Sat: '12:30',
+      Sun: '12:30',
+    };
+    const ops = buildCheckInSchedule(
+      MIDDAY_ID_BASE,
+      '12:30',
+      byDay,
+      MIDDAY_FALLBACK,
+      { localDate: skipInTwoDays, now: nowMonday },
+    );
+    expect(ops.some((op) => op.id === 'unfold-midday-checkin-wed')).toBe(false);
+    const resume = ops.find((op) => op.kind === 'date');
+    expect(resume).toMatchObject({ kind: 'date', id: 'unfold-midday-checkin-resume' });
+    if (resume && resume.kind === 'date') {
+      expect(resume.date).toEqual(new Date(2026, 0, 14, 13, 15, 0, 0));
+    }
+  });
+
+  it('uniform mode skip still resumes at the default time', () => {
+    const ops = buildCheckInSchedule(
+      MIDDAY_ID_BASE,
+      '12:30',
+      null,
+      MIDDAY_FALLBACK,
+      { localDate: skipInTwoDays, now: nowMonday },
+    );
+    const resume = ops.find((op) => op.kind === 'date');
+    expect(resume).toMatchObject({ kind: 'date', id: 'unfold-midday-checkin-resume' });
+    if (resume && resume.kind === 'date') {
+      expect(resume.date).toEqual(new Date(2026, 0, 14, 12, 30, 0, 0));
+    }
   });
 
   it('past or > 6 days: today\'s output', () => {

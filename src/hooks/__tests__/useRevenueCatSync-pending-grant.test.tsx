@@ -66,6 +66,7 @@ jest.mock('@/lib/revenuecatClient', () => ({
 }));
 jest.mock('@/lib/auto-trial-exit', () => ({
   resolveLaterEntryExit: (...args: unknown[]) => mockResolveLaterEntryExit(...args),
+  resolveVerifiedEntitlementExit: (...args: unknown[]) => mockHandleVerifiedEntitlementExit(...args),
   handleVerifiedEntitlementExit: (...args: unknown[]) => mockHandleVerifiedEntitlementExit(...args),
 }));
 jest.mock('@/lib/notification-ask', () => ({
@@ -114,6 +115,7 @@ function HookProbe() {
 async function renderHook() {
   await act(async () => {
     renderer.create(<HookProbe />);
+    await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
   });

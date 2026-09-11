@@ -140,7 +140,7 @@ import { stripOuterQuotes } from '@/lib/cn';
 import { Typography } from '@/constants/typography';
 import { useOnboardingDarkColors } from '@/hooks/useOnboardingDarkColors';
 import {
-  handleVerifiedEntitlementExit,
+  resolveVerifiedEntitlementExit,
   type VerifiedEntitlementExit,
 } from '@/lib/auto-trial-exit';
 import {
@@ -149,14 +149,12 @@ import {
   readAutoTrialIntent,
   transitionAutoTrialIntent,
 } from '@/lib/auto-trial-intent';
-import { getDeviceTimezone } from '@/lib/device-timezone';
-import { isSimulatedTrialCustomerInfo } from '@/lib/trial-facts';
 import { runOnboardingCompletion } from '@/lib/onboarding-completion';
 import { runOnboardingPurchaseSuccess } from '@/lib/onboarding-purchase-success';
 import { runReminderTimeCommit } from '@/lib/reminder-time-commit';
 import { askNotificationPermissionInContext } from '@/lib/notification-ask';
 import { getPurchaseConfirmationCopy } from '@/lib/purchase-confirmation-copy';
-import { refreshRemoteConfig, readAutoTrialSwitchSnapshot } from '@/lib/remote-config';
+import { refreshRemoteConfig } from '@/lib/remote-config';
 import { trialLabelToDays } from '@/lib/trial-reminder-copy';
 
 // Ember exclusion zones (normalized to the ember layer's container) — keep
@@ -1560,35 +1558,24 @@ export default function OnboardingScreen() {
     inputOpacity.value = 0;
   }, [STEPS, currentStepId, inputOpacity, completeOnboarding]);
 
-  const handleOnboardingPurchaseSuccess = useCallback((exit: VerifiedEntitlementExit) => {
-    runOnboardingPurchaseSuccess({
+  const handleOnboardingPurchaseSuccess = useCallback(async (exit: VerifiedEntitlementExit) => {
+    if (onboardingDeviceIdRef.current === null) {
+      onboardingDeviceIdRef.current = getDeviceId();
+    }
+    const deviceId = onboardingDeviceIdRef.current;
+    const decision = await resolveVerifiedEntitlementExit({
       exit,
-      ensureDeviceId: () => {
-        if (onboardingDeviceIdRef.current === null) {
-          onboardingDeviceIdRef.current = getDeviceId();
-        }
-      },
-      decide: (verifiedExit) => {
-        const nowMs = Date.now();
-        const state = useUnfoldStore.getState();
-        return handleVerifiedEntitlementExit({
-          exit: verifiedExit,
-          surface: 'onboarding_paywall',
-          deviceId: onboardingDeviceIdRef.current ?? getDeviceId(),
-          nowMs,
-          platform: Platform.OS,
-          timeZone: getDeviceTimezone() ?? '',
-          switchSnapshot: readAutoTrialSwitchSnapshot(nowMs, Platform.OS),
-          profile: existingUser
-            ? { hasCompletedOnboarding: existingUser.hasCompletedOnboarding === true }
-            : null,
-          devotionalIds: (state.devotionals ?? []).map((devotional) => devotional.id),
-          simulated: isSimulatedTrialCustomerInfo(verifiedExit.customerInfo),
-        });
-      },
+      surface: 'onboarding_paywall',
+      deviceId,
+      profile: existingUser
+        ? { hasCompletedOnboarding: existingUser.hasCompletedOnboarding === true }
+        : null,
+    });
+    runOnboardingPurchaseSuccess({
+      decision,
       saveDraft: () => {
         saveOnboardingDraft({
-          deviceId: onboardingDeviceIdRef.current ?? getDeviceId(),
+          deviceId,
           stepId: 'purchaseConfirmation',
           data: dataRef.current,
           purchasedDuringOnboarding: true,

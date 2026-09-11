@@ -14,7 +14,12 @@ import { isEphemeralDeviceId } from '@/lib/device-id';
 import { getDeviceTimezone } from '@/lib/device-timezone';
 import { getDeviceId } from '@/lib/mmkv-storage';
 import { isQaToolsEnabled } from '@/lib/qa-tools';
-import { readAutoTrialSwitchSnapshot, type AutoTrialSwitchSnapshot } from '@/lib/remote-config';
+import {
+  awaitRemoteConfigSettled,
+  readAutoTrialSwitchSnapshot,
+  REMOTE_CONFIG_PURCHASE_WAIT_MS,
+  type AutoTrialSwitchSnapshot,
+} from '@/lib/remote-config';
 import { captureAppError } from '@/lib/sentry';
 import { useUnfoldStore } from '@/lib/store';
 import {
@@ -139,7 +144,7 @@ function emitExitTelemetry(
   }
 }
 
-export function handleVerifiedEntitlementExit(i: {
+export type VerifiedEntitlementExitInput = {
   exit: VerifiedEntitlementExit;
   surface: AutoTrialSurface;
   deviceId: string;
@@ -151,7 +156,69 @@ export function handleVerifiedEntitlementExit(i: {
   devotionalIds: readonly string[];
   simulated?: boolean;
   storage?: IntentStorage;
-}): VerifiedExitDecision {
+};
+
+type ResolveVerifiedEntitlementExitInput = Omit<
+  VerifiedEntitlementExitInput,
+  | 'switchSnapshot'
+  | 'deviceId'
+  | 'nowMs'
+  | 'platform'
+  | 'timeZone'
+  | 'profile'
+  | 'devotionalIds'
+  | 'simulated'
+> & {
+  deviceId?: string;
+  nowMs?: number;
+  platform?: string;
+  timeZone?: string;
+  profile?: { hasCompletedOnboarding: boolean } | null;
+  devotionalIds?: readonly string[];
+  simulated?: boolean;
+  configTimeoutMs?: number;
+  fetchImpl?: (url: string, init?: RequestInit) => Promise<Response>;
+};
+
+function resolveExitInput(
+  i: ResolveVerifiedEntitlementExitInput,
+): Omit<VerifiedEntitlementExitInput, 'switchSnapshot'> {
+  const needsStore = i.profile === undefined || i.devotionalIds === undefined;
+  const state = needsStore ? useUnfoldStore.getState() : undefined;
+  return {
+    exit: i.exit,
+    surface: i.surface,
+    deviceId: i.deviceId ?? getDeviceId(),
+    nowMs: i.nowMs ?? Date.now(),
+    platform: i.platform ?? Platform.OS,
+    timeZone: i.timeZone ?? getDeviceTimezone() ?? '',
+    profile: i.profile !== undefined
+      ? i.profile
+      : state?.user
+        ? { hasCompletedOnboarding: state.user.hasCompletedOnboarding === true }
+        : null,
+    devotionalIds: i.devotionalIds
+      ?? (state?.devotionals ?? []).map((devotional) => devotional.id),
+    simulated: i.simulated ?? isSimulatedTrialCustomerInfo(i.exit.customerInfo),
+    storage: i.storage,
+  };
+}
+
+export async function resolveVerifiedEntitlementExit(
+  i: ResolveVerifiedEntitlementExitInput,
+): Promise<VerifiedExitDecision> {
+  const input = resolveExitInput(i);
+  const settled = await awaitRemoteConfigSettled(
+    i.configTimeoutMs ?? REMOTE_CONFIG_PURCHASE_WAIT_MS,
+    { nowMs: input.nowMs, fetchImpl: i.fetchImpl },
+  );
+  return handleVerifiedEntitlementExit({
+    ...input,
+    switchSnapshot: readAutoTrialSwitchSnapshot(input.nowMs, input.platform, settled),
+  });
+}
+
+export function handleVerifiedEntitlementExit(i: VerifiedEntitlementExitInput): VerifiedExitDecision {
   const entry = entryFromSurface(i.surface);
   let attemptedRequestId: string | null = null;
   try {
@@ -252,28 +319,12 @@ export function handleVerifiedEntitlementExit(i: {
   }
 }
 
-export function resolveLaterEntryExit(
+export async function resolveLaterEntryExit(
   exit: VerifiedEntitlementExit,
   surface: 'paywall_route' | 'churned_sheet',
-): VerifiedExitDecision {
+): Promise<VerifiedExitDecision> {
   try {
-    const state = useUnfoldStore.getState();
-    const nowMs = Date.now();
-    const platform = Platform.OS;
-    return handleVerifiedEntitlementExit({
-      exit,
-      surface,
-      deviceId: getDeviceId(),
-      nowMs,
-      platform,
-      timeZone: getDeviceTimezone() ?? '',
-      switchSnapshot: readAutoTrialSwitchSnapshot(nowMs, platform),
-      profile: state.user
-        ? { hasCompletedOnboarding: state.user.hasCompletedOnboarding === true }
-        : null,
-      devotionalIds: (state.devotionals ?? []).map((devotional) => devotional.id),
-      simulated: isSimulatedTrialCustomerInfo(exit.customerInfo),
-    });
+    return await resolveVerifiedEntitlementExit({ exit, surface });
   } catch (error) {
     reportInternalError(error);
     return { kind: 'fallback', reason: 'internal_error' };

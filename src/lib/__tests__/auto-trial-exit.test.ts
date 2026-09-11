@@ -1,8 +1,12 @@
 /* eslint-disable import/first */
-const mockIsQaToolsEnabled = jest.fn(() => true);
-const mockTrackTrialStarted = jest.fn();
-const mockTrackAutoTrialSkipped = jest.fn();
-const mockCaptureAppError = jest.fn();
+import {
+  mockCaptureAppError,
+  mockIsQaToolsEnabled,
+  mockTrackAutoTrialSkipped,
+  mockTrackTrialStarted,
+} from './fixtures/auto-trial-exit-mocks';
+import { NOW_MS, entitlement, exitInput, info } from './fixtures/auto-trial-exit-input';
+
 const mockGetDeviceId = jest.fn(() => 'device-1');
 const mockStoreGetState = jest.fn();
 
@@ -31,16 +35,16 @@ jest.mock('../remote-config', () => ({
     fetchedAtMs: 1_700_000_000_000,
     reason: 'on',
   })),
+  awaitRemoteConfigSettled: jest.fn(async () => ({ status: 'ok' })),
+  REMOTE_CONFIG_PURCHASE_WAIT_MS: 3_000,
 }));
 jest.mock('../store', () => ({
   useUnfoldStore: { getState: () => mockStoreGetState() },
 }));
 
-import type { CustomerInfo } from 'react-native-purchases';
 import {
   handleVerifiedEntitlementExit,
   resolveLaterEntryExit,
-  type AutoTrialSurface,
 } from '../auto-trial-exit';
 import {
   type AutoTrialIntentV1,
@@ -48,32 +52,6 @@ import {
 import { DAY_MS, QA_SIMULATED_TRIAL_APP_USER_ID } from '../trial-facts';
 import type { AutoTrialSwitchSnapshot } from '../remote-config';
 import { memoryIntentStorage } from './fixtures/memory-intent-storage';
-
-const NOW_MS = 1_700_000_000_000;
-
-function entitlement(overrides: Record<string, unknown> = {}) {
-  const purchasedAtMs = NOW_MS - 30_000;
-  return {
-    periodType: 'TRIAL',
-    store: 'APP_STORE',
-    ownershipType: 'PURCHASED',
-    productIdentifier: 'unfold_premium_yearly',
-    isSandbox: true,
-    latestPurchaseDateMillis: purchasedAtMs,
-    expirationDateMillis: purchasedAtMs + 3 * DAY_MS,
-    ...overrides,
-  };
-}
-
-function info(active: Record<string, unknown> | null, originalAppUserId = 'user-1'): CustomerInfo {
-  return {
-    originalAppUserId,
-    entitlements: {
-      active: active ? { 'Unfold Premium': active } : {},
-      all: active ? { 'Unfold Premium': active } : {},
-    },
-  } as unknown as CustomerInfo;
-}
 
 const ON_SNAPSHOT: AutoTrialSwitchSnapshot = {
   enabled: true,
@@ -84,16 +62,8 @@ const ON_SNAPSHOT: AutoTrialSwitchSnapshot = {
 
 function exitArgs(overrides: Record<string, unknown> = {}) {
   return {
-    exit: { source: 'purchase' as const, customerInfo: info(entitlement()) },
-    surface: 'onboarding_paywall' as AutoTrialSurface,
-    deviceId: 'device-1',
-    nowMs: NOW_MS,
-    platform: 'ios',
-    timeZone: 'America/Chicago',
+    ...exitInput(),
     switchSnapshot: ON_SNAPSHOT,
-    profile: { hasCompletedOnboarding: false },
-    devotionalIds: [] as string[],
-    storage: memoryIntentStorage(),
     ...overrides,
   };
 }
@@ -273,7 +243,7 @@ describe('F1 precedence', () => {
     }
   });
 
-  it('returns internal_error when setItem throws and when later-entry store reads throw', () => {
+  it('returns internal_error when setItem throws and when later-entry store reads throw', async () => {
     const storage = memoryIntentStorage();
     (storage.setItem as jest.Mock).mockImplementation(() => {
       throw new Error('disk');
@@ -288,7 +258,7 @@ describe('F1 precedence', () => {
     mockStoreGetState.mockImplementation(() => {
       throw new Error('store down');
     });
-    expect(resolveLaterEntryExit(
+    expect(await resolveLaterEntryExit(
       { source: 'purchase', customerInfo: info(entitlement()) },
       'paywall_route',
     )).toEqual({ kind: 'fallback', reason: 'internal_error' });
@@ -398,7 +368,7 @@ describe('resolveLaterEntryExit guards', () => {
     mockGetDeviceId.mockReturnValue('device-1');
   });
 
-  it('returns no_completed_profile and has_real_series from the live store', () => {
+  it('returns no_completed_profile and has_real_series from the live store', async () => {
     const now = Date.now();
     const customerInfo = info(entitlement({
       latestPurchaseDateMillis: now - 30_000,
@@ -408,7 +378,7 @@ describe('resolveLaterEntryExit guards', () => {
       user: { hasCompletedOnboarding: false },
       devotionals: [],
     });
-    expect(resolveLaterEntryExit(
+    expect(await resolveLaterEntryExit(
       { source: 'purchase', customerInfo },
       'paywall_route',
     )).toEqual({ kind: 'fallback', reason: 'no_completed_profile' });
@@ -417,7 +387,7 @@ describe('resolveLaterEntryExit guards', () => {
       user: { hasCompletedOnboarding: true },
       devotionals: [{ id: 'real-series-1' }],
     });
-    expect(resolveLaterEntryExit(
+    expect(await resolveLaterEntryExit(
       { source: 'purchase', customerInfo },
       'churned_sheet',
     )).toEqual({ kind: 'fallback', reason: 'has_real_series' });

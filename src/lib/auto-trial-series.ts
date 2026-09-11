@@ -2,7 +2,9 @@ import type { Devotional, NextPick } from '@/lib/store';
 
 export type { NextPick };
 
-export function isAutoTrialSeries(d?: Devotional | null): boolean {
+export function isAutoTrialSeries(
+  d?: { seriesArc?: { seriesKind?: unknown } | null } | null,
+): boolean {
   return d?.seriesArc?.seriesKind === 'auto_trial';
 }
 

@@ -233,8 +233,11 @@ export function buildCheckInSchedule(
       minute,
     });
   }
-  if (skipKey && skipDay && dayTimes[skipKey] != null) {
-    const { hour, minute } = parseHhMm(defaultTime, fallback);
+  const resumeTime = skipKey ? dayTimes[skipKey] : null;
+  if (skipKey && skipDay && resumeTime != null) {
+    const { hour, minute } = parseHhMm(resumeTime, fallback);
+    // One-off covers skipDay+7. After the skip window ends, the next full
+    // schedule run emits the weekly trigger for that weekday again.
     ops.push(resumeDateOp(idBase, skipDay, hour, minute));
   }
   return ops;

@@ -640,8 +640,17 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
   const pendingByChapter = pendingBibleReadingByChapter();
   useUnfoldStore.setState((state) => {
     let devotionals = state.devotionals;
-    const hasAutoTrialSeries = devotionals.some(isAutoTrialSeries);
-    for (const record of changes.devotionals ?? []) {
+    const incomingDevotionals = changes.devotionals ?? [];
+    const hasAutoTrialSeries = devotionals.some(isAutoTrialSeries)
+      || incomingDevotionals.some((record) => {
+        if (record.deleted) return false;
+        const current = devotionals.find((item) => item.id === record.id);
+        if (!shouldApply(record, current, 'devotionals', pendingByRecord)) return false;
+        return isAutoTrialSeries({
+          seriesArc: asRecord(asRecord(record.data).seriesArc),
+        });
+      });
+    for (const record of incomingDevotionals) {
       const current = devotionals.find((item) => item.id === record.id);
       // Tombstones are LWW-gated like every other row (WR-25): a pending local
       // write or a newer local row must not be wiped by a stale delete.
