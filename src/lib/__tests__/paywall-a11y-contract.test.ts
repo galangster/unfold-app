@@ -22,7 +22,7 @@ describe('paywall close button (RT-PAYWALL-1)', () => {
     expect(pressableBlock).toContain('onPress={handleClose}');
     // §3.2/K13: the close control is also blocked while a purchase waits for
     // its entitlement grant, so the guard now reads isPurchasing || pending.
-    expect(pressableBlock).toContain('disabled={isPurchasing || entitlementPendingMessage !== null}');
+    expect(pressableBlock).toContain('disabled={exitDisabled}');
   });
 });
 

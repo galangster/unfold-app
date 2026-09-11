@@ -172,6 +172,7 @@ jest.mock('@/lib/qa-tools', () => ({
   shouldRenderQaChrome: () => mockShouldRenderQaChrome(),
 }));
 jest.mock('@/lib/qa-simulated-trial', () => ({
+  QA_TRIAL_LENGTH_OPTIONS: [{ label: '3 days', trialLengthMs: 259_200_000 }],
   simulateTrialPurchase: (...args: unknown[]) => mockSimulateTrialPurchase(...args),
 }));
 jest.mock('@/lib/ui-state', () => ({

@@ -142,7 +142,6 @@ import { useOnboardingDarkColors } from '@/hooks/useOnboardingDarkColors';
 import {
   handleVerifiedEntitlementExit,
   type VerifiedEntitlementExit,
-  type VerifiedExitDecision,
 } from '@/lib/auto-trial-exit';
 import {
   applyAutoTrialProfileOverrides,
@@ -153,35 +152,12 @@ import {
 import { getDeviceTimezone } from '@/lib/device-timezone';
 import { isSimulatedTrialCustomerInfo } from '@/lib/trial-facts';
 import { runOnboardingCompletion } from '@/lib/onboarding-completion';
+import { runOnboardingPurchaseSuccess } from '@/lib/onboarding-purchase-success';
 import { runReminderTimeCommit } from '@/lib/reminder-time-commit';
 import { askNotificationPermissionInContext } from '@/lib/notification-ask';
 import { getPurchaseConfirmationCopy } from '@/lib/purchase-confirmation-copy';
 import { refreshRemoteConfig, readAutoTrialSwitchSnapshot } from '@/lib/remote-config';
 import { trialLabelToDays } from '@/lib/trial-reminder-copy';
-
-export function runOnboardingPurchaseSuccess(i: {
-  exit: VerifiedEntitlementExit;
-  ensureDeviceId(): void;
-  decide(exit: VerifiedEntitlementExit): VerifiedExitDecision;
-  saveDraft(): void;
-  setPurchased(): void;
-  setAutoTrialMode(active: boolean): void;
-  markPremium(): void;
-  advance(): void;
-}): void {
-  i.ensureDeviceId();
-  let decision: VerifiedExitDecision = { kind: 'fallback', reason: 'internal_error' };
-  try {
-    decision = i.decide(i.exit);
-  } catch {
-    decision = { kind: 'fallback', reason: 'internal_error' };
-  }
-  i.saveDraft();
-  i.setPurchased();
-  i.setAutoTrialMode(decision.kind === 'auto');
-  i.markPremium();
-  i.advance();
-}
 
 // Ember exclusion zones (normalized to the ember layer's container) — keep
 // the quiet layers legible: welcome letter copy + "Tap anywhere", and the
@@ -659,15 +635,21 @@ export default function OnboardingScreen() {
   });
   const [autoTrialMode, setAutoTrialMode] = useState(() => {
     const nowMs = Date.now();
-    let intent = readAutoTrialIntent();
+    const intent = readAutoTrialIntent();
     if (intent && isAutoTrialIntentExpired(intent, nowMs)) {
-      transitionAutoTrialIntent('abandoned', { abandonReason: 'trial_expired_before_submit' }, { nowMs });
-      intent = readAutoTrialIntent();
+      return false;
     }
     return restoredDraft?.purchasedDuringOnboarding === true
       && intent?.status === 'purchased'
       && intent.entry === 'onboarding';
   });
+  useEffect(() => {
+    const nowMs = Date.now();
+    const intent = readAutoTrialIntent();
+    if (intent && isAutoTrialIntentExpired(intent, nowMs)) {
+      transitionAutoTrialIntent('abandoned', { abandonReason: 'trial_expired_before_submit' }, { nowMs });
+    }
+  }, []);
   const onboardingDeviceIdRef = useRef<string | null>(null);
 
   // Companion naming state (saved to store on continue)
@@ -1460,10 +1442,6 @@ export default function OnboardingScreen() {
   }, [draftAutosave]);
 
   const navigateCompletion = useCallback((target: '/generating' | '/(tabs)/(today)' | { pathname: '/series-reveal'; params: { intentId: string } }) => {
-    if (typeof target === 'string') {
-      router.replace(target);
-      return;
-    }
     router.replace(target);
   }, [router]);
 
@@ -1554,9 +1532,7 @@ export default function OnboardingScreen() {
     saveOnboardingData,
   ]);
 
-  const completeOnboarding = useCallback(() => {
-    void proceedToGeneration();
-  }, [proceedToGeneration]);
+  const completeOnboarding = proceedToGeneration;
 
   // Advance to next step
   const advanceToNextStep = useCallback(() => {

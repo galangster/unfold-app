@@ -122,7 +122,7 @@ jest.mock('@/components/ui', () => ({ alpha: (c: string) => c }));
 
 import type { CustomerInfo } from 'react-native-purchases';
 import type { VerifiedEntitlementExit, VerifiedExitDecision } from '@/lib/auto-trial-exit';
-import { runOnboardingPurchaseSuccess } from '@/app/onboarding';
+import { runOnboardingPurchaseSuccess } from '@/lib/onboarding-purchase-success';
 
 const EXIT: VerifiedEntitlementExit = {
   source: 'purchase',
@@ -178,22 +178,21 @@ describe('F10 onboarding purchase exit', () => {
     expect(advanceToNextStep).toHaveBeenCalledTimes(1);
   });
 
-  it('still writes the confirmation draft, marks premium, and advances once when the decision dependency throws', () => {
+  it('still writes the confirmation draft, marks premium, and advances once when the decision is fail-closed', () => {
     const saveOnboardingDraft = jest.fn();
     const updateUser = jest.fn();
     const advanceToNextStep = jest.fn();
+    const setAutoTrialMode = jest.fn();
 
     runOnboardingPurchaseSuccess({
       exit: EXIT,
       ensureDeviceId: () => undefined,
-      decide: () => {
-        throw new Error('decision dependency failed');
-      },
+      decide: () => ({ kind: 'fallback', reason: 'internal_error' }),
       saveDraft: () => {
         saveOnboardingDraft();
       },
       setPurchased: () => undefined,
-      setAutoTrialMode: () => undefined,
+      setAutoTrialMode,
       markPremium: () => {
         updateUser({ isPremium: true });
       },
@@ -203,6 +202,7 @@ describe('F10 onboarding purchase exit', () => {
     });
 
     expect(saveOnboardingDraft).toHaveBeenCalledTimes(1);
+    expect(setAutoTrialMode).toHaveBeenCalledWith(false);
     expect(updateUser).toHaveBeenCalledTimes(1);
     expect(updateUser).toHaveBeenCalledWith({ isPremium: true });
     expect(advanceToNextStep).toHaveBeenCalledTimes(1);

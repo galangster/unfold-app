@@ -48,7 +48,7 @@ import { requestLaterEntryNotifyAsk } from '@/lib/notification-ask';
 import { refreshRemoteConfig } from '@/lib/remote-config';
 import { getTrialPaywallTimeline, trialLabelToDays } from '@/lib/trial-reminder-copy';
 import { MIDDAY_FALLBACK } from '@/lib/notifications';
-import { useUIState } from '@/lib/ui-state';
+import { usePendingPaywallGrantOnUnmount } from '@/hooks/usePendingPaywallGrantOnUnmount';
 import type { CustomerInfo, PurchasesPackage } from 'react-native-purchases';
 import Purchases from 'react-native-purchases';
 import { useUnfoldStore } from '@/lib/store';
@@ -156,6 +156,13 @@ export default function PaywallScreen() {
     setIsRetryingOfferings(false);
   }, []);
 
+  usePendingPaywallGrantOnUnmount({
+    surface: 'paywall_route',
+    entry: 'later',
+    armedRef: lateGrantArmedRef,
+    advancedRef,
+  });
+
   useEffect(() => {
     const session = lifecycleSessionRef.current;
     session.mounted = true;
@@ -171,13 +178,6 @@ export default function PaywallScreen() {
       session.mounted = false;
       waitAbortRef.current?.abort();
       unsubscribeIdentity();
-      if (lateGrantArmedRef.current && !advancedRef.current) {
-        useUIState.getState().setPendingPaywallGrant({
-          surface: 'paywall_route',
-          entry: 'later',
-          setAtMs: Date.now(),
-        });
-      }
     };
   }, [clearStaleWaitUi]);
 
@@ -205,14 +205,17 @@ export default function PaywallScreen() {
         queryClient.invalidateQueries({ queryKey: ['revenuecat'] });
         let intentId: string | null = null;
         if (!isFromOnboarding) {
+          // resolveLaterEntryExit is fail-closed, but a throw here must never
+          // strand a paying user on the paywall (F6), so guard the call.
+          let decision: ReturnType<typeof resolveLaterEntryExit> = { kind: 'fallback', reason: 'internal_error' };
           try {
-            const decision = resolveLaterEntryExit(exit, 'paywall_route');
-            if (decision.kind === 'auto') {
-              intentId = decision.intent.intentId;
-            } else {
-              void requestLaterEntryNotifyAsk(exit.customerInfo);
-            }
+            decision = resolveLaterEntryExit(exit, 'paywall_route');
           } catch {
+            // fall through to the setup flow
+          }
+          if (decision.kind === 'auto') {
+            intentId = decision.intent.intentId;
+          } else {
             void requestLaterEntryNotifyAsk(exit.customerInfo);
           }
         }
@@ -557,8 +560,11 @@ export default function PaywallScreen() {
     },
   });
 
+  const isPurchasing = purchaseMutation.isPending || restoreMutation.isPending || isRetryingOfferings;
+  const exitDisabled = isPurchasing || entitlementPendingMessage !== null;
+
   const handleClose = () => {
-    if (isPurchasing || entitlementPendingMessage !== null) return;
+    if (exitDisabled) return;
 
     const session = lifecycleSessionRef.current;
     waitAbortRef.current?.abort();
@@ -573,7 +579,7 @@ export default function PaywallScreen() {
     if (!isPaywallLifecycleCurrent(lifecycleSessionRef.current, generation)) {
       return;
     }
-    if (isPurchasing || entitlementPendingMessage !== null) {
+    if (exitDisabled) {
       void recordPaywallDiagnosticLazy('paywall.subscribe_tap_ignored', () => ({
         selectedPlan,
         reason: isPurchasing ? 'already_purchasing' : 'waiting_for_entitlement',
@@ -677,7 +683,6 @@ export default function PaywallScreen() {
     restoreMutation.mutate({ generation });
   };
 
-  const isPurchasing = purchaseMutation.isPending || restoreMutation.isPending || isRetryingOfferings;
   const isWaitingForEntitlement = entitlementPendingMessage !== null;
   const isSubscribeDisabled = isPurchasing || !offeringsReady || isWaitingForEntitlement;
 
@@ -705,11 +710,11 @@ export default function PaywallScreen() {
     setTimelineNowMs(Date.now());
   }, []));
   const selectedTrialDays = trialLabelToDays(selectedTrialDuration);
-  const trialTimeline = getTrialPaywallTimeline({
+  const trialTimeline = useMemo(() => getTrialPaywallTimeline({
     trialDays: selectedTrialDays,
     nowMs: timelineNowMs,
     middaySlot: MIDDAY_FALLBACK,
-  });
+  }), [selectedTrialDays, timelineNowMs]);
 
   const disclosureText = getPaywallRenewalDisclosure({
     offeringsReady,
@@ -778,10 +783,10 @@ export default function PaywallScreen() {
           by insets.top, which floated it ~80pt below the sheet's top edge. */}
       <Pressable
         onPress={handleClose}
-        disabled={isPurchasing || entitlementPendingMessage !== null}
+        disabled={exitDisabled}
         accessibilityLabel="Close"
         accessibilityRole="button"
-        accessibilityState={{ disabled: isPurchasing || entitlementPendingMessage !== null }}
+        accessibilityState={{ disabled: exitDisabled }}
         hitSlop={8}
         style={{
           position: 'absolute',
@@ -1348,8 +1353,8 @@ export default function PaywallScreen() {
               <TouchableOpacity
                 activeOpacity={0.6}
                 onPress={handleClose}
-                disabled={isPurchasing || entitlementPendingMessage !== null}
-                accessibilityState={{ disabled: isPurchasing || entitlementPendingMessage !== null }}
+                disabled={exitDisabled}
+                accessibilityState={{ disabled: exitDisabled }}
                 hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
                 style={{ padding: 6 }}
               >

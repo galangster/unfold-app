@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef, memo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef, memo } from 'react';
 import {
   View,
   Text,
@@ -58,10 +58,10 @@ import type { ExclusionZone } from '@/lib/ember-system';
 import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
 import { mmkvStorage } from '@/lib/mmkv-storage';
 import { shouldRenderQaChrome } from '@/lib/qa-tools';
-import { simulateTrialPurchase } from '@/lib/qa-simulated-trial';
+import { QA_TRIAL_LENGTH_OPTIONS, simulateTrialPurchase } from '@/lib/qa-simulated-trial';
 import { getTrialPaywallTimeline } from '@/lib/trial-reminder-copy';
 import { MIDDAY_FALLBACK } from '@/lib/notifications';
-import { useUIState } from '@/lib/ui-state';
+import { usePendingPaywallGrantOnUnmount } from '@/hooks/usePendingPaywallGrantOnUnmount';
 import type { VerifiedEntitlementExit } from '@/lib/auto-trial-exit';
 import { getPerMonthEquivalent } from '@/lib/paywall-pricing';
 import {
@@ -581,14 +581,13 @@ function ScreenTrialReminder({
   trialDays: number | null;
 }) {
   const reducedMotion = useReducedMotion();
-  const lead = getTrialPaywallTimeline({
+  const nowMs = useRef(Date.now()).current;
+  const lead = useMemo(() => getTrialPaywallTimeline({
     trialDays,
-    nowMs: Date.now(),
+    nowMs,
     middaySlot: MIDDAY_FALLBACK,
-  }).reminderLeadLabel;
-  const reminderLine = lead
-    ? `You'll get a notification ${lead} before your trial ends. No surprises, ever.`
-    : 'You\'ll get a notification before your trial ends. No surprises, ever.';
+  }).reminderLeadLabel, [trialDays, nowMs]);
+  const reminderLine = `You'll get a notification${lead ? ` ${lead}` : ''} before your trial ends. No surprises, ever.`;
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.screen2Root}>
           <View style={styles.screen2Content}>
@@ -1366,17 +1365,12 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
   // person has paid, so this state gets neutral styling and no error haptic.
   const [entitlementPendingMessage, setEntitlementPendingMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-    return () => {
-      if (lateGrantArmedRef.current && !advancedRef.current) {
-        useUIState.getState().setPendingPaywallGrant({
-          surface: 'onboarding_paywall',
-          entry: 'onboarding',
-          setAtMs: Date.now(),
-        });
-      }
-    };
-  }, []);
+  usePendingPaywallGrantOnUnmount({
+    surface: 'onboarding_paywall',
+    entry: 'onboarding',
+    armedRef: lateGrantArmedRef,
+    advancedRef,
+  });
 
   const advanceOnce = useCallback((exit: VerifiedEntitlementExit): boolean => {
     if (advancedRef.current) return false;
@@ -1666,7 +1660,7 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 simulateTrialPurchase({
-                  trialLengthMs: 259_200_000,
+                  trialLengthMs: QA_TRIAL_LENGTH_OPTIONS[0].trialLengthMs,
                   handle: (exit) => {
                     advanceOnce(exit);
                   },

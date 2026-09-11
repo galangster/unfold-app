@@ -8,7 +8,7 @@
  * paywall can display instantly when opened (no "loading plans" spinner).
  */
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { AppState, Platform } from 'react-native';
 import type { CustomerInfo } from 'react-native-purchases';
 import { useQueryClient } from '@tanstack/react-query';
@@ -76,6 +76,10 @@ export function useRevenueCatSync() {
   const updateUser = useUnfoldStore((s) => s.updateUser);
   const queryClient = useQueryClient();
   const router = useRouter();
+  const routerRef = useRef(router);
+  useEffect(() => {
+    routerRef.current = router;
+  });
 
   useEffect(() => {
     // Only sync if RevenueCat is configured
@@ -97,19 +101,22 @@ export function useRevenueCatSync() {
     const applyCustomerInfo = (customerInfo: CustomerInfo) => {
       if (didCancel) return;
       if (isLocalResetInProgress()) return;
+      const ui = useUIState.getState();
+      const store = useUnfoldStore.getState();
+      const nowMs = Date.now();
       const hasSubscription = Boolean(customerInfo.entitlements.active?.['Unfold Premium']);
       updateUser({ isPremium: hasSubscription });
       // Any first-hand answer from RevenueCat counts as resolved for this
       // session — even a "no subscription" answer.
-      useUIState.getState().setRevenueCatResolved();
+      ui.setRevenueCatResolved();
       // Re-sync the trial-ending local notification whenever entitlements
       // change (purchase, restore, lapse). Fire-and-forget.
       void syncTrialEndingNotification();
       if (!hasSubscription) return;
-      const marker = useUIState.getState().pendingPaywallGrant;
+      const marker = ui.pendingPaywallGrant;
       if (!marker) return;
-      useUIState.getState().setPendingPaywallGrant(null);
-      if (Date.now() - marker.setAtMs > NEW_TRIAL_MAX_AGE_MS) return;
+      ui.setPendingPaywallGrant(null);
+      if (nowMs - marker.setAtMs > NEW_TRIAL_MAX_AGE_MS) return;
 
       const exit: VerifiedEntitlementExit = { source: 'lateGrant', customerInfo };
       const decision = marker.entry === 'later'
@@ -121,20 +128,20 @@ export function useRevenueCatSync() {
           exit,
           surface: 'onboarding_paywall',
           deviceId: getDeviceId(),
-          nowMs: Date.now(),
+          nowMs,
           platform: Platform.OS,
           timeZone: getDeviceTimezone() ?? '',
-          switchSnapshot: readAutoTrialSwitchSnapshot(Date.now(), Platform.OS),
-          profile: useUnfoldStore.getState().user
-            ? { hasCompletedOnboarding: useUnfoldStore.getState().user?.hasCompletedOnboarding === true }
+          switchSnapshot: readAutoTrialSwitchSnapshot(nowMs, Platform.OS),
+          profile: store.user
+            ? { hasCompletedOnboarding: store.user?.hasCompletedOnboarding === true }
             : null,
-          devotionalIds: (useUnfoldStore.getState().devotionals ?? []).map((devotional) => devotional.id),
+          devotionalIds: (store.devotionals ?? []).map((devotional) => devotional.id),
           simulated: isSimulatedTrialCustomerInfo(customerInfo),
         });
 
       if (decision.kind === 'auto') {
-        if (useUnfoldStore.getState().user?.hasCompletedOnboarding === true) {
-          router.push({ pathname: '/series-reveal', params: { intentId: decision.intent.intentId } });
+        if (store.user?.hasCompletedOnboarding === true) {
+          routerRef.current.push({ pathname: '/series-reveal', params: { intentId: decision.intent.intentId } });
         }
         return;
       }
@@ -236,5 +243,5 @@ export function useRevenueCatSync() {
       listenerGuard.dispose();
       appStateSub.remove();
     };
-  }, [updateUser, queryClient, router]);
+  }, [updateUser, queryClient]);
 }
