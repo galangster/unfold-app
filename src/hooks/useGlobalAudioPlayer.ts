@@ -54,6 +54,12 @@ let statusSubscription: EventSubscription | null = null;
 let watchdogTimer: ReturnType<typeof setTimeout> | null = null;
 /** Track whether the audio session has been configured (lazy init). */
 let audioSessionConfigured = false;
+/**
+ * Bumped on every startAudio/stopAudio. The deferred start body checks it
+ * after each await so an older start cannot destroy or replace the player a
+ * newer start (or a stop) already owns.
+ */
+let startGeneration = 0;
 
 /**
  * Tear down the singleton: remove listener, release native resources, null out.
@@ -245,6 +251,7 @@ export function useGlobalAudioPlayer() {
   const startAudio = useCallback(
     (uri: string, metadata: DevotionalAudioMetadata) => {
       clearCascadeTimers();
+      const generation = ++startGeneration;
 
       // Update store first (sets tier to sheet, isLoading, etc.)
       useAudioPlayerState.getState().startAudio(uri, metadata);
@@ -257,18 +264,22 @@ export function useGlobalAudioPlayer() {
       // setTimeout(0) ensures React has time to commit the loading state to screen first.
       setTimeout(async () => {
         try {
+          if (generation !== startGeneration) return;
           // Lazily configure the audio session on first playback
           await ensureAudioSession();
+          if (generation !== startGeneration) return;
 
           // Yield again before the heaviest call
           await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+          if (generation !== startGeneration) return;
 
           // Destroy any existing player
           destroyPlayer();
 
           // createAudioPlayer is a synchronous JSI call — but with the UI
           // already showing the loading state, the brief block is acceptable.
-          globalPlayer = createAudioPlayer({ uri }, { updateInterval: 1000 });
+          const player = createAudioPlayer({ uri }, { updateInterval: 1000 });
+          globalPlayer = player;
           logger.log('[AudioPlayer] Created player with source');
 
           // Attach status listener
@@ -283,7 +294,8 @@ export function useGlobalAudioPlayer() {
 
           // Defer play() to next frame — gives native player time to initialize
           requestAnimationFrame(() => {
-            if (!globalPlayer) return;
+            // A newer start may have replaced the player since this was queued.
+            if (globalPlayer !== player) return;
             try {
               globalPlayer.play();
               logger.log('[AudioPlayer] play() called');
@@ -295,7 +307,7 @@ export function useGlobalAudioPlayer() {
 
           // Lock screen controls — defer to avoid blocking
           setTimeout(() => {
-            if (!globalPlayer) return;
+            if (globalPlayer !== player) return;
             try {
               globalPlayer.setActiveForLockScreen(true, {
                 title: metadata.title,
@@ -329,6 +341,7 @@ export function useGlobalAudioPlayer() {
 
   const stopAudio = useCallback(() => {
     clearCascadeTimers();
+    startGeneration += 1;
 
     if (globalPlayer) {
       try {

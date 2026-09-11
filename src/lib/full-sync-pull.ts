@@ -642,12 +642,14 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
     let devotionals = state.devotionals;
     const hasAutoTrialSeries = devotionals.some(isAutoTrialSeries);
     for (const record of changes.devotionals ?? []) {
+      const current = devotionals.find((item) => item.id === record.id);
+      // Tombstones are LWW-gated like every other row (WR-25): a pending local
+      // write or a newer local row must not be wiped by a stale delete.
+      if (!shouldApply(record, current, 'devotionals', pendingByRecord)) continue;
       if (record.deleted) {
         devotionals = devotionals.filter((item) => item.id !== record.id);
         continue;
       }
-      const current = devotionals.find((item) => item.id === record.id);
-      if (!shouldApply(record, current, 'devotionals', pendingByRecord)) continue;
       const mapped = mapDevotional(record, current);
       if (!mapped) continue;
       if (current) {
@@ -664,10 +666,12 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
       if (!devotionalId) continue;
       devotionals = devotionals.map((devotional) => {
         if (devotional.id !== devotionalId) return devotional;
+        const existing = devotional.days.find(
+          (item) => item.id === record.id || (day ? item.id === day.id || item.dayNumber === day.dayNumber : false),
+        );
+        if (!shouldApply(record, existing, 'devotional_days', pendingByRecord)) return devotional;
         if (record.deleted) return { ...devotional, days: devotional.days.filter((item) => item.id !== record.id) };
         if (!day) return devotional;
-        const existing = devotional.days.find((item) => item.id === day.id || item.dayNumber === day.dayNumber);
-        if (!shouldApply(record, existing, 'devotional_days', pendingByRecord)) return devotional;
         const days = existing
           ? devotional.days.map((item) => (item.id === existing.id || item.dayNumber === day.dayNumber ? day : item))
           : [...devotional.days, day];
@@ -740,14 +744,14 @@ function applyCompanionChanges(payload: SyncPullResponse): void {
     let conversations = state.conversations;
 
     for (const record of conversationRecords) {
-      if (record.deleted) {
-        conversations = conversations.filter((item) => item.id !== record.id);
-        continue;
-      }
       const current = conversations.find((item) => item.id === record.id);
       // Conversation.createdAt is a number timestamp — narrow to the string
       // updatedAt the LWW compare understands (the old inline compare did too).
       if (!shouldApply(record, current ? { updatedAt: current.updatedAt } : undefined, 'companion_conversations', pendingByRecord)) continue;
+      if (record.deleted) {
+        conversations = conversations.filter((item) => item.id !== record.id);
+        continue;
+      }
       const mapped = mapConversation(record, current);
       if (!mapped) continue;
       conversations = current
@@ -761,11 +765,11 @@ function applyCompanionChanges(payload: SyncPullResponse): void {
       if (!conversationId) continue;
       conversations = conversations.map((conversation) => {
         if (conversation.id !== conversationId) return conversation;
+        const existing = (conversation.messages ?? []).find((item) => item.id === record.id);
+        if (!shouldApply(record, existing, 'companion_messages', pendingByRecord)) return conversation;
         if (record.deleted) return { ...conversation, messages: (conversation.messages ?? []).filter((item) => item.id !== record.id) };
         if (!message) return conversation;
         const { conversationId: _conversationId, ...cleanMessage } = message;
-        const existing = (conversation.messages ?? []).find((item) => item.id === message.id);
-        if (!shouldApply(record, existing, 'companion_messages', pendingByRecord)) return conversation;
         const messages = existing
           ? (conversation.messages ?? []).map((item) => (item.id === message.id ? cleanMessage : item))
           : [...(conversation.messages ?? []), cleanMessage];

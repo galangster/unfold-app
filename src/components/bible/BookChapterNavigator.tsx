@@ -37,6 +37,7 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { useBibleSearch } from '@/hooks/useBibleSearch';
 import { getChapterVerseCount } from '@/lib/bible-db';
+import { useLatestRequest } from '@/hooks/useLatestRequest';
 import type { BibleTranslation } from '@/lib/bible-db';
 import {
   BOOK_PICKER_GRID_GAP,
@@ -137,6 +138,12 @@ export function BookChapterNavigator({
   const { width: windowWidth, fontScale } = useWindowDimensions();
 
   const [mode, setMode] = useState<NavigatorMode>('books');
+
+  // The navigator stays mounted while hidden and the tabs switch mode
+  // directly, so a lookup still in flight when the user leaves chapter
+  // selection (close, tab, Back) must not reopen the verse grid later.
+  const chapterRequest = useLatestRequest();
+  useEffect(() => chapterRequest.invalidate(), [chapterRequest, visible, mode]);
   const [selectedBook, setSelectedBook] = useState<BibleBookInfo | null>(null);
   const [selectedChapter, setSelectedChapter] = useState<number>(0);
   const [verseCount, setVerseCount] = useState<number>(0);
@@ -243,13 +250,22 @@ export function BookChapterNavigator({
       if (!selectedBook) return;
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       Keyboard.dismiss();
-      // Pre-fetch verse count before switching mode to avoid loading flash
-      const count = await getChapterVerseCount(selectedBook.id, chapter, translation as BibleTranslation);
+      // Pre-fetch verse count before switching mode to avoid loading flash.
+      // Only the latest tap may commit: two quick taps resolve in any order,
+      // and a lookup that fails must not open an empty verse grid.
+      const isCurrent = chapterRequest.begin();
+      let count: number;
+      try {
+        count = await getChapterVerseCount(selectedBook.id, chapter, translation as BibleTranslation);
+      } catch {
+        return;
+      }
+      if (!isCurrent()) return;
       setSelectedChapter(chapter);
       setVerseCount(count);
       setMode('verses');
     },
-    [selectedBook, translation],
+    [chapterRequest, selectedBook, translation],
   );
 
   const handleVerseSelect = useCallback(

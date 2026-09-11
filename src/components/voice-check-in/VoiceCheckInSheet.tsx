@@ -310,6 +310,7 @@ export function VoiceCheckInSheet({
       return;
     }
 
+    let recordingModeArmed = false;
     try {
       const permission = await requestRecordingPermissionsAsync();
       if (!permission.granted) {
@@ -325,6 +326,7 @@ export function VoiceCheckInSheet({
         shouldPlayInBackground: false,
         shouldRouteThroughEarpiece: false,
       });
+      recordingModeArmed = true;
       await recorder.prepareToRecordAsync();
       if (!mountedRef.current || !visibleRef.current || AppState.currentState !== 'active') {
         await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
@@ -337,6 +339,11 @@ export function VoiceCheckInSheet({
       setPhase('recording');
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch {
+      // The shared audio session was switched to record mode above; a failed
+      // prepare/record must hand it back or narration stays muted.
+      if (recordingModeArmed) {
+        await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
+      }
       setErrorKind('microphone');
       setErrorMessage('The microphone could not start. Your previous draft was not changed.');
       setPhase('error');

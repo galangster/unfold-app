@@ -28,6 +28,8 @@ import { applyStreakRead, getWeekStart, reconcileStreakState } from './streak-he
 import { getEffectivePremiumAccessPolicy } from './premium-state';
 import { canEarnPremiumMilestone } from './premium-access-policy';
 import { repairRehydratedState } from './store-rehydrate-repair';
+import { enqueueSyncChanges } from './sync-outbox';
+import type { SyncTable } from './sync-types';
 import type { WordStudy } from './word-study';
 import { flushCheckInToServer } from './check-in-flush';
 import { isOnboardingSampleDevotionalId } from './auto-trial-series';
@@ -35,6 +37,7 @@ import {
   bibleHighlightSyncData,
   bibleReadingPositionSyncData,
   bookmarkSyncData,
+  buildPersonalDataSyncChange,
   checkInSyncData,
   devotionalHighlightSyncData,
   enqueuePersonalDataSyncChange,
@@ -1041,16 +1044,39 @@ export const useUnfoldStore = create<UnfoldState>()(
         }),
 
       removeDevotional: (devotionalId) =>
-        set((state) => ({
-          devotionals: state.devotionals.filter((d) => d.id !== devotionalId),
-          currentDevotionalId:
-            state.currentDevotionalId === devotionalId ? null : state.currentDevotionalId,
-          // Clean up all associated data
-          journalEntries: state.journalEntries.filter((j) => j.devotionalId !== devotionalId),
-          checkIns: state.checkIns.filter((c) => c.devotionalId !== devotionalId),
-          highlights: state.highlights.filter((h) => h.devotionalId !== devotionalId),
-          bookmarks: state.bookmarks.filter((b) => b.devotionalId !== devotionalId),
-        })),
+        set((state) => {
+          // The UI promises "This cannot be undone", so the server rows must
+          // die with the local ones. Without tombstones a later pull (second
+          // device, reinstall, account restore) resurrects the series and the
+          // journal text under it.
+          const devotional = state.devotionals.find((d) => d.id === devotionalId);
+          const now = new Date().toISOString();
+          // A delete carries no data: buildPersonalDataSyncChange drops it for
+          // tombstones, so the sibling pattern of passing *SyncData(row) here
+          // would only be discarded.
+          const tombstone = (table: SyncTable, id: string) =>
+            buildPersonalDataSyncChange(table, id, {}, now, true);
+          const ownedBy = <T extends { id: string; devotionalId: string }>(rows: T[]) =>
+            rows.filter((row) => row.devotionalId === devotionalId);
+          enqueueSyncChanges([
+            ...(devotional ? [tombstone('devotionals', devotionalId)] : []),
+            ...(devotional?.days ?? []).flatMap((day) => (day.id ? [tombstone('devotional_days', day.id)] : [])),
+            ...ownedBy(state.journalEntries).map((row) => tombstone('journal_entries', row.id)),
+            ...ownedBy(state.checkIns).map((row) => tombstone('check_ins', row.id)),
+            ...ownedBy(state.highlights).map((row) => tombstone('highlights', row.id)),
+            ...ownedBy(state.bookmarks).map((row) => tombstone('bookmarks', row.id)),
+          ]);
+          return {
+            devotionals: state.devotionals.filter((d) => d.id !== devotionalId),
+            currentDevotionalId:
+              state.currentDevotionalId === devotionalId ? null : state.currentDevotionalId,
+            // Clean up all associated data
+            journalEntries: state.journalEntries.filter((j) => j.devotionalId !== devotionalId),
+            checkIns: state.checkIns.filter((c) => c.devotionalId !== devotionalId),
+            highlights: state.highlights.filter((h) => h.devotionalId !== devotionalId),
+            bookmarks: state.bookmarks.filter((b) => b.devotionalId !== devotionalId),
+          };
+        }),
 
       retireOnboardingSamples: ({ keepId }) =>
         set((state) => {

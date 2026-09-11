@@ -68,6 +68,7 @@ import { parseScriptureReferences } from '@/lib/scripture-parser';
 import { referenceToRoute } from '@/lib/bible-constants';
 import type { ScriptureRef } from '@/lib/store';
 import { logger } from '@/lib/logger';
+import { useLatestRequest } from '@/hooks/useLatestRequest';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -108,9 +109,15 @@ export function ScriptureSearchSheet({
   const [searchState, setSearchState] = useState<SearchState>('idle');
   const [verseResult, setVerseResult] = useState<VerseResult | null>(null);
   const [parsedRef, setParsedRef] = useState<ScriptureRef | null>(null);
+  // Only the latest lookup may write results: the debounce cancels timers,
+  // not in-flight fetches.
+  const searchRequest = useLatestRequest();
 
   // Spring in when sheet opens, reset state
   useEffect(() => {
+    // The sheet stays mounted while hidden; a lookup still in flight at close
+    // must not repopulate the next open.
+    searchRequest.invalidate();
     if (visible) {
       dismissing.current = false;
       setQuery('');
@@ -124,7 +131,7 @@ export function ScriptureSearchSheet({
       }, 350);
       return () => clearTimeout(focusTimer);
     }
-  }, [visible, translateY]);
+  }, [searchRequest, visible, translateY]);
 
   // Cleanup debounce timer on unmount
   useEffect(() => {
@@ -170,6 +177,7 @@ export function ScriptureSearchSheet({
    * Tries local DB first (BSB), then falls back to the API.
    */
   const fetchVerseText = useCallback(async (reference: string) => {
+    const isCurrent = searchRequest.begin();
     setSearchState('searching');
     setVerseResult(null);
     setParsedRef(null);
@@ -179,6 +187,7 @@ export function ScriptureSearchSheet({
       if (!result) {
         result = await fetchVerse(reference);
       }
+      if (!isCurrent()) return;
 
       if (result) {
         setVerseResult(result);
@@ -197,16 +206,20 @@ export function ScriptureSearchSheet({
         setSearchState('not-found');
       }
     } catch (err) {
+      if (!isCurrent()) return;
       logger.error('[ScriptureSearch] Fetch error:', err);
       setSearchState('error');
     }
-  }, []);
+  }, [searchRequest]);
 
   const handleQueryChange = useCallback(
     (text: string) => {
       setQuery(text);
       if (debounceRef.current) clearTimeout(debounceRef.current);
 
+      // Any keystroke supersedes the lookup in flight, not just the next
+      // debounce tick: a stale verse must not surface during the 500ms wait.
+      searchRequest.invalidate();
       if (!text.trim()) {
         setSearchState('idle');
         setVerseResult(null);
@@ -230,7 +243,7 @@ export function ScriptureSearchSheet({
         }
       }, 500);
     },
-    [fetchVerseText]
+    [fetchVerseText, searchRequest]
   );
 
   const handlePillPress = useCallback(

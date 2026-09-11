@@ -131,6 +131,7 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoSt
   // Use refs to avoid stale closures in event callbacks
   const instanceId = useRef<symbol>(Symbol('voiceInput'));
   const isRecordingRef = useRef(false);
+  const mountedRef = useRef(true);
   const userStoppedRef = useRef(false); // distinguishes user-stop vs silence-stop
   const committedSegmentsRef = useRef('');
   const finalTranscriptRef = useRef('');
@@ -230,7 +231,9 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoSt
 
   // ── Lifecycle ────────────────────────────────────────────
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
       clearTimer();
       if (activeRecorder === instanceId.current) {
         activeRecorder = null;
@@ -246,6 +249,9 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoSt
   // ── Start ────────────────────────────────────────────────
   const startRecording = useCallback(async () => {
     const { granted } = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+    // The permission prompt can outlive this field: an unmounted bar must not
+    // claim the recognizer, start it, or leak the elapsed-time interval.
+    if (!mountedRef.current) return;
     if (!granted) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       onPermissionDenied?.();
