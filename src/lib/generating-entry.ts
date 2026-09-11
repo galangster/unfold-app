@@ -69,18 +69,21 @@ export function resolveGeneratingEntry({
   if (autoTrialIntent) {
     const { status, intentId, jobId, devotionalId } = autoTrialIntent;
     const skipFailedHandoff = status === 'failed' && Boolean(initialGenerationRequestId);
-    if (!skipFailedHandoff && (status === 'purchased' || status === 'failed')) {
-      return { kind: 'auto-trial-handoff', intentId };
-    }
-    if (!skipFailedHandoff && (status === 'submitted' || status === 'landed')) {
-      const pushedJobId = firstParam(params?.jobId);
-      const pushedDevotionalId = firstParam(params?.devotionalId);
-      const namesOtherJob = pushedJobId != null
-        && pushedJobId !== jobId
-        && inflight?.jobId !== jobId
-        && pushedDevotionalId !== devotionalId;
-      if (!namesOtherJob) {
+    if (!skipFailedHandoff) {
+      if (status === 'purchased' || status === 'failed') {
         return { kind: 'auto-trial-handoff', intentId };
+      }
+      if (status === 'submitted' || status === 'landed') {
+        const pushedJobId = firstParam(params?.jobId);
+        const pushedDevotionalId = firstParam(params?.devotionalId);
+        // Same series still matches when the push names a different job id.
+        const matchesIntent = pushedJobId == null
+          || pushedJobId === jobId
+          || inflight?.jobId === jobId
+          || pushedDevotionalId === devotionalId;
+        if (matchesIntent) {
+          return { kind: 'auto-trial-handoff', intentId };
+        }
       }
     }
   }

@@ -105,6 +105,15 @@ const FAILURE_REASONS: ReadonlySet<SeriesRevealFailureReason> = new Set([
   'bad_request',
 ]);
 
+type SeriesRevealDeclinedReason = Extract<SeriesRevealState, { kind: 'declined' }>['reason'];
+
+const DECLINED_REASONS: ReadonlySet<SeriesRevealDeclinedReason> = new Set([
+  'switch_off',
+  'platform',
+  'trial_length',
+  'trial_expired',
+]);
+
 function reasonFromFailureCode(code: string | null): SeriesRevealFailureReason {
   if (!code) return 'max_retries';
   const normalized = code.toLowerCase();
@@ -119,22 +128,17 @@ function networkErrorsOf(state: SeriesRevealState): number {
   return state.kind === 'generating' ? state.consecutiveNetworkErrors : 0;
 }
 
-function declinedReasonFromCode(
-  code: string | null,
-): 'switch_off' | 'platform' | 'trial_length' | 'trial_expired' | null {
-  if (
-    code === 'trial_expired'
-    || code === 'platform'
-    || code === 'trial_length'
-    || code === 'switch_off'
-  ) {
-    return code;
+function declinedReasonFromCode(code: string | null): SeriesRevealDeclinedReason | null {
+  if (code && DECLINED_REASONS.has(code as SeriesRevealDeclinedReason)) {
+    return code as SeriesRevealDeclinedReason;
   }
   return null;
 }
 
-export function canRetrySeriesReveal(state: SeriesRevealState, nowMs: number): boolean {
-  if (state.kind === 'retry_exhausted') return false;
+export function canRetrySeriesReveal(
+  state: SeriesRevealState,
+  nowMs: number,
+): state is Extract<SeriesRevealState, { kind: 'failed' }> {
   if (state.kind !== 'failed') return false;
   if (state.reason === 'rate_limited' && state.retryAtMs != null && nowMs < state.retryAtMs) {
     return false;
@@ -285,10 +289,7 @@ function reduceTryAgain(
   state: SeriesRevealState,
   nowMs: number,
 ): { state: SeriesRevealState; effects: SeriesRevealEffect[] } {
-  if (state.kind !== 'failed') return keep(state);
-  if (state.reason === 'rate_limited' && state.retryAtMs != null && nowMs < state.retryAtMs) {
-    return keep(state);
-  }
+  if (!canRetrySeriesReveal(state, nowMs)) return keep(state);
   if (state.reason === 'job_failed') {
     if (!state.jobId) return keep(state);
     return {

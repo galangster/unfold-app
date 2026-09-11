@@ -264,13 +264,7 @@ export function useAutoTrialGeneration(intentId: string | null): {
                   ? String((pulled.devotional as { title?: string }).title ?? '')
                   : undefined,
               };
-              applyInitialArcResult(lastCompleteRef.current, {
-                user: useUnfoldStore.getState().user,
-                devotionalLength: intent.trialDays,
-                session: captureSyncSession(),
-              });
-              settleLandedAutoTrialSeries(intent, intent.devotionalId);
-              apply({ type: 'landed', devotionalId: intent.devotionalId });
+              runEffectsRef.current([{ type: 'land' }]);
               return;
             }
           } catch {
@@ -333,9 +327,8 @@ export function useAutoTrialGeneration(intentId: string | null): {
             session: captureSyncSession(),
           });
         }
-        const latest = readAutoTrialIntent() ?? intent;
-        if (latest?.devotionalId) {
-          settleLandedAutoTrialSeries(latest, latest.devotionalId);
+        if (intent?.devotionalId) {
+          settleLandedAutoTrialSeries(intent, intent.devotionalId);
         }
         const landedId = payload?.devotionalId ?? intent?.devotionalId;
         if (landedId) apply({ type: 'landed', devotionalId: landedId });
