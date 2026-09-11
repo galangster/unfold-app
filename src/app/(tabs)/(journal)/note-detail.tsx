@@ -283,7 +283,7 @@ export default function NoteDetailScreen() {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
 
-  const { isPremium, gate, showExclusiveOffer, dismissOffer } = useCreationGate();
+  const { isPremium, gate, showExclusiveOffer, dismissOffer, handleOfferVerifiedExit } = useCreationGate();
 
   // Store selectors
   const user = useUnfoldStore((s) => s.user);
@@ -1824,6 +1824,8 @@ export default function NoteDetailScreen() {
       <ExclusiveOfferSheet
         visible={showExclusiveOffer}
         onDismiss={dismissOffer}
+        onPurchaseSuccess={handleOfferVerifiedExit}
+        surface="churned_sheet"
         context="churned"
       />
     </View>
