@@ -1,0 +1,30 @@
+{
+  "switch_off": {
+    "error": {
+      "code": "AUTO_TRIAL_UNAVAILABLE",
+      "message": "Auto trial series is turned off.",
+      "reason": "switch_off"
+    }
+  },
+  "platform": {
+    "error": {
+      "code": "AUTO_TRIAL_UNAVAILABLE",
+      "message": "Auto trial series is not available on this platform.",
+      "reason": "platform"
+    }
+  },
+  "trial_length": {
+    "error": {
+      "code": "AUTO_TRIAL_UNAVAILABLE",
+      "message": "Auto trial length exceeds the allowed maximum.",
+      "reason": "trial_length"
+    }
+  },
+  "trial_expired": {
+    "error": {
+      "code": "AUTO_TRIAL_UNAVAILABLE",
+      "message": "Auto trial has expired.",
+      "reason": "trial_expired"
+    }
+  }
+}
