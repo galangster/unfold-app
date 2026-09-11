@@ -9,6 +9,7 @@
 import type { AutoTrialEntry, AutoTrialSurface } from "./auto-trial-exit";
 import type { AutoTrialIntentV1 } from "./auto-trial-intent";
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from "./api-config";
+import { authenticatedFetch } from "./device-credential";
 import { reconcileGenerationResultIdentity, type GeneratedDayWithIdentity, type GenerationResultPayload } from './generation-reconciliation';
 import type { AllowedTrialDays } from "./trial-facts";
 import {
@@ -69,7 +70,7 @@ async function fetchWithTimeout(
   const unregister = registerSyncTransport(controller);
   const timer = setTimeout(() => controller.abort(), ms);
   try {
-    const response = await fetch(url, { ...options, signal: controller.signal });
+    const response = await authenticatedFetch(url, { ...options, signal: controller.signal });
     assertSyncSessionCurrent(session, action);
     return response;
   } catch (error) {

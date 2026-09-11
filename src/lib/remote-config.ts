@@ -1,4 +1,5 @@
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from '@/lib/api-config';
+import { authenticatedFetch } from '@/lib/device-credential';
 import type { AllowedTrialDays } from '@/lib/trial-facts';
 
 export const REMOTE_CONFIG_TIMEOUT_MS = 4_000;
@@ -128,7 +129,7 @@ export async function refreshRemoteConfig(o?: {
   if (shouldSkip(nowMs, o?.force)) return state;
   if (inflight) return inflight;
 
-  const pending = fetchConfig(nowMs, o?.fetchImpl ?? fetch);
+  const pending = fetchConfig(nowMs, o?.fetchImpl ?? authenticatedFetch);
   inflight = pending;
   try {
     return await pending;

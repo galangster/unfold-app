@@ -2,6 +2,7 @@ import * as Application from 'expo-application';
 import { ACT_SLOTS, type ActSlot } from '@/lib/act-reminder';
 
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from './api-config';
+import { authenticatedFetch } from './device-credential';
 import { asNextPick, asTrimmedString } from './auto-trial-series';
 import {
   DEVOTIONAL_PULL_CURSOR_KEY,
@@ -260,7 +261,7 @@ export async function pullDevotionalContent(
   const controller = new AbortController();
   const unregister = registerSyncTransport(controller);
   try {
-    const response = await fetch(`${PRIMARY_BACKEND_URL}/api/sync/pull`, {
+    const response = await authenticatedFetch(`${PRIMARY_BACKEND_URL}/api/sync/pull`, {
       method: 'POST',
       headers,
       body: JSON.stringify({ lastPulledAt: decision.lastPulledAt }),

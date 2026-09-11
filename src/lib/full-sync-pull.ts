@@ -1,6 +1,7 @@
 import NetInfo from '@react-native-community/netinfo';
 
 import { getAuthHeaders, PRIMARY_BACKEND_URL } from './api-config';
+import { authenticatedFetch } from './device-credential';
 import { asNextPick, asTrimmedString, isAutoTrialSeries, shouldInsertPulledDevotional } from './auto-trial-series';
 import { mmkvStorage } from './mmkv-storage';
 import { logger } from './logger';
@@ -832,7 +833,7 @@ export async function pullAllUserData(options: PullAllUserDataOptions = {}): Pro
   const controller = new AbortController();
   const unregister = registerSyncTransport(controller);
   try {
-    const response = await fetch(`${PRIMARY_BACKEND_URL}/api/sync/pull`, {
+    const response = await authenticatedFetch(`${PRIMARY_BACKEND_URL}/api/sync/pull`, {
       method: 'POST',
       headers,
       body: JSON.stringify({ lastPulledAt }),

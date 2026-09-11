@@ -13,6 +13,7 @@ import { useFonts } from 'expo-font';
 import { Colors } from '@/constants/colors';
 import { LaterEntryNotifySheet } from '@/components/onboarding/LaterEntryNotifySheet';
 import { onNotificationPermissionMaybeChanged } from '@/lib/notification-ask';
+import { ensureDeviceCredential } from '@/lib/device-credential';
 import { refreshRemoteConfig } from '@/lib/remote-config';
 import * as SecureStore from 'expo-secure-store';
 import { RecoveryScreen } from '@/components/RecoveryScreen';
@@ -143,17 +144,19 @@ function RootLayoutNav() {
   // reach the server when connectivity returns.
   useSyncOutboxDrain();
 
-  // Register push token with backend (anonymous, keyed by X-Device-ID).
+  // Warm the device credential so registration starts before the first
+  // authenticated request; getAuthHeaders also registers on a cache miss, so
+  // no caller can run ahead of it. Registration never blocks first render.
   // Also re-attempts on foreground so the POST succeeds after any earlier
   // failure (network down at cold start, permission granted during session).
-  // The session-dedupe flag in registerPushToken makes foreground retries free
-  // after the first successful POST.
   useEffect(() => {
+    void ensureDeviceCredential();
     void refreshRemoteConfig();
     void onNotificationPermissionMaybeChanged();
     registerPushToken();
     const sub = AppState.addEventListener('change', (s) => {
       if (s === 'active') {
+        void ensureDeviceCredential();
         void refreshRemoteConfig();
         void onNotificationPermissionMaybeChanged();
         void registerPushToken();

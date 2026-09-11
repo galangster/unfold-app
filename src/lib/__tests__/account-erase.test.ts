@@ -12,6 +12,13 @@ jest.mock('../logger', () => ({
   logger: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
 
+// Registration is covered in device-credential.test.ts; keep this suite on the
+// erase contract, so getAuthHeaders never reaches the network here.
+jest.mock('../device-credential', () => ({
+  ...jest.requireActual('../device-credential'),
+  ensureDeviceCredential: jest.fn(async () => null),
+}));
+
 import { requestServerAccountErase, SERVER_ERASE_TIMEOUT_MS } from '../account-erase';
 import { PRIMARY_BACKEND_URL } from '../api-config';
 

@@ -18,6 +18,7 @@
  * error of the two, so only the status decides.
  */
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from '@/lib/api-config';
+import { authenticatedFetch } from '@/lib/device-credential';
 import { getDeviceId } from '@/lib/mmkv-storage';
 import { isEphemeralDeviceId } from '@/lib/device-id';
 import { logger } from '@/lib/logger';
@@ -52,7 +53,7 @@ export async function requestServerAccountErase({
 
   try {
     const headers = await getAuthHeaders();
-    const response = await fetch(`${PRIMARY_BACKEND_URL}/api/users/me`, {
+    const response = await authenticatedFetch(`${PRIMARY_BACKEND_URL}/api/users/me`, {
       method: 'DELETE',
       headers,
       signal: controller.signal,

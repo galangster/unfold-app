@@ -1,4 +1,5 @@
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from './api-config';
+import { authenticatedFetch } from './device-credential';
 import { buildReadOnlyCanonicalDayData, canonicalGeneratedDayId } from './devotional-canonical-days';
 import { buildSyncPushBody } from './sync-push-body';
 import { isCanonicalProgressiveDevotional } from './reading-generation-policy';
@@ -102,7 +103,7 @@ export async function syncDevotionalDayRead(params: {
     const headers = await getAuthHeaders();
     assertSyncSessionCurrent(session, 'devotional read sync');
 
-    const response = await fetch(`${PRIMARY_BACKEND_URL}/api/sync/push`, {
+    const response = await authenticatedFetch(`${PRIMARY_BACKEND_URL}/api/sync/push`, {
       method: 'POST',
       headers,
       body: buildSyncPushBody(changes),
