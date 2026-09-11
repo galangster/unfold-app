@@ -278,7 +278,8 @@ export function useGlobalAudioPlayer() {
 
           // createAudioPlayer is a synchronous JSI call — but with the UI
           // already showing the loading state, the brief block is acceptable.
-          globalPlayer = createAudioPlayer({ uri }, { updateInterval: 1000 });
+          const player = createAudioPlayer({ uri }, { updateInterval: 1000 });
+          globalPlayer = player;
           logger.log('[AudioPlayer] Created player with source');
 
           // Attach status listener
@@ -293,7 +294,8 @@ export function useGlobalAudioPlayer() {
 
           // Defer play() to next frame — gives native player time to initialize
           requestAnimationFrame(() => {
-            if (!globalPlayer) return;
+            // A newer start may have replaced the player since this was queued.
+            if (globalPlayer !== player) return;
             try {
               globalPlayer.play();
               logger.log('[AudioPlayer] play() called');
@@ -305,7 +307,7 @@ export function useGlobalAudioPlayer() {
 
           // Lock screen controls — defer to avoid blocking
           setTimeout(() => {
-            if (!globalPlayer) return;
+            if (globalPlayer !== player) return;
             try {
               globalPlayer.setActiveForLockScreen(true, {
                 title: metadata.title,

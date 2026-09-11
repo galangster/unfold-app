@@ -12,8 +12,9 @@ import Animated, {
   cancelAnimation,
 } from 'react-native-reanimated';
 import { Duration } from '@/constants/animations';
+import { Colors } from '@/constants/colors';
 
-const GOLD = '#C8A55C';
+const GOLD = Colors.accent;
 
 export function StoryProgressBar({
   current,
@@ -63,6 +64,11 @@ function ProgressFill({
   const startTimeRef = useRef(0);
   const elapsedRef = useRef(0);
 
+  // Read by the start effect without being one of its deps, so a pause toggle
+  // never restarts the segment.
+  const pausedRef = useRef(paused);
+  pausedRef.current = paused;
+
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
       clearTimeout(timerRef.current);
@@ -87,6 +93,14 @@ function ProgressFill({
       // Last card (no auto-advance) — fill bar immediately
       width.value = withTiming(100, { duration: 400, easing: Easing.out(Easing.cubic) });
       return;
+    }
+
+    // A segment that becomes active while the recap is paused (an
+    // overflowing card, a held press) waits for the resume effect below.
+    if (pausedRef.current) {
+      width.value = 0;
+      startTimeRef.current = Date.now();
+      return clearTimer;
     }
 
     // Start fill animation and auto-advance timer

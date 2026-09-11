@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -18,6 +18,7 @@ import { Spacing } from '@/constants/spacing';
 import { alpha } from '@/components/ui';
 import { AnalyticsEvents, logEvent } from '@/lib/analytics';
 import { useTheme } from '@/lib/theme';
+import { useLatestRequest } from '@/hooks/useLatestRequest';
 import { Typography } from '@/constants/typography';
 import {
   fetchScriptureExplanation,
@@ -117,13 +118,13 @@ export function ScriptureExplainSheet({
     [hasDevotionalContext, source, translation, verseCount],
   );
 
-  // Monotonic request token: only the latest open/retry may write state, so a
-  // slow explanation for a previous passage cannot land under the current one.
-  const requestIdRef = useRef(0);
+  // Only the latest open/retry may write state, so a slow explanation for a
+  // previous passage cannot land under the current one.
+  const request = useLatestRequest();
 
   const loadExplanation = useCallback(async () => {
     if (!visible) return;
-    const requestId = ++requestIdRef.current;
+    const isCurrent = request.begin();
 
     const trimmedReference = reference.trim();
     const trimmedPassageText = passageText.trim();
@@ -154,12 +155,12 @@ export function ScriptureExplainSheet({
         ...(devotionalContext ? { devotionalContext } : {}),
       });
 
-      if (requestId !== requestIdRef.current) return;
+      if (!isCurrent()) return;
       setResponse(result);
       setStatus('success');
       void logEvent(AnalyticsEvents.SCRIPTURE_EXPLAIN_COMPLETED, analyticsParams);
     } catch (error) {
-      if (requestId !== requestIdRef.current) return;
+      if (!isCurrent()) return;
       const code = getErrorCode(error) as ScriptureExplainApiErrorCode;
       setErrorCode(code);
       setStatus('error');
@@ -168,11 +169,10 @@ export function ScriptureExplainSheet({
         error_code: code,
       });
     }
-  }, [analyticsParams, devotionalContext, passageText, reference, source, translation, visible]);
+  }, [analyticsParams, devotionalContext, passageText, reference, request, source, translation, visible]);
 
   useEffect(() => {
     if (!visible) {
-      requestIdRef.current += 1;
       setStatus('idle');
       setResponse(null);
       setErrorCode(null);
@@ -180,13 +180,9 @@ export function ScriptureExplainSheet({
     }
 
     void loadExplanation();
-
-    return () => {
-      // Invalidate the in-flight request when the passage changes or the
-      // sheet closes; the next effect run issues a fresh token.
-      requestIdRef.current += 1;
-    };
-  }, [loadExplanation, visible]);
+    // A passage change or close supersedes the request in flight.
+    return request.invalidate;
+  }, [loadExplanation, request, visible]);
 
   if (!visible) return null;
 

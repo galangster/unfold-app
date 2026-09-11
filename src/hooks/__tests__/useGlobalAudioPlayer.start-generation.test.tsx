@@ -74,6 +74,38 @@ describe('useGlobalAudioPlayer start generation (Greptile A9)', () => {
     expect(player.play).toHaveBeenCalled();
   });
 
+  it('keeps deferred lock-screen metadata on the player it was created for', async () => {
+    let actions!: ReturnType<typeof useGlobalAudioPlayer>;
+    function Probe() {
+      actions = useGlobalAudioPlayer();
+      return null;
+    }
+    await act(async () => {
+      renderer.create(<Probe />);
+    });
+
+    // First start completes creation; a second start replaces the player
+    // inside the first start's 100ms lock-screen deferral.
+    await act(async () => {
+      actions.startAudio('file:///first.mp3', { ...metadata, title: 'First' });
+      await jest.advanceTimersByTimeAsync(50);
+    });
+    expect(mockCreateAudioPlayer).toHaveBeenCalledTimes(1);
+    const first = mockCreateAudioPlayer.mock.results[0].value;
+    await act(async () => {
+      actions.startAudio('file:///second.mp3', { ...metadata, title: 'Second' });
+      await jest.advanceTimersByTimeAsync(400);
+    });
+    expect(mockCreateAudioPlayer).toHaveBeenCalledTimes(2);
+    const second = mockCreateAudioPlayer.mock.results[1].value;
+
+    expect(first.setActiveForLockScreen).not.toHaveBeenCalled();
+    const lockCalls = second.setActiveForLockScreen.mock.calls;
+    expect(lockCalls).toHaveLength(1);
+    expect(lockCalls[0][1]).toMatchObject({ title: 'Second' });
+    expect(second.play).toHaveBeenCalledTimes(1);
+  });
+
   it('does not create a player when stopAudio runs before the deferred start body', async () => {
     let actions!: ReturnType<typeof useGlobalAudioPlayer>;
     function Probe() {

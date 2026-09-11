@@ -88,6 +88,61 @@ describe('BookChapterNavigator chapter selection (Greptile A7)', () => {
     expect(countVerseButtons(tree!.root)).toBe(36);
   });
 
+  it('drops a chapter lookup that resolves after the navigator closed', async () => {
+    let resolveCount: (count: number) => void = () => undefined;
+    mockGetChapterVerseCount.mockImplementation(() => new Promise<number>((resolve) => { resolveCount = resolve; }));
+    const props = { currentBookId: 43, currentChapter: 1, translation: 'BSB', onSelect: jest.fn(), onClose: jest.fn() };
+
+    let tree: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderer.create(<BookChapterNavigator visible {...props} />);
+    });
+    await act(async () => {
+      pressable(tree!.root, 'John, current book').props.onPress();
+    });
+    await act(async () => {
+      void pressable(tree!.root, 'Chapter 3').props.onPress();
+    });
+    await act(async () => {
+      tree!.update(<BookChapterNavigator visible={false} {...props} />);
+    });
+    await act(async () => {
+      tree!.update(<BookChapterNavigator visible {...props} />);
+    });
+    await act(async () => {
+      resolveCount(36);
+      await Promise.resolve();
+    });
+    expect(countVerseButtons(tree!.root)).toBe(0);
+  });
+
+  it('drops a chapter lookup when the user switches to the Book tab first', async () => {
+    let resolveCount: (count: number) => void = () => undefined;
+    mockGetChapterVerseCount.mockImplementation(() => new Promise<number>((resolve) => { resolveCount = resolve; }));
+
+    let tree: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderer.create(
+        <BookChapterNavigator visible currentBookId={43} currentChapter={1} translation="BSB" onSelect={jest.fn()} onClose={jest.fn()} />,
+      );
+    });
+    await act(async () => {
+      pressable(tree!.root, 'John, current book').props.onPress();
+    });
+    await act(async () => {
+      void pressable(tree!.root, 'Chapter 3').props.onPress();
+    });
+    await act(async () => {
+      pressable(tree!.root, 'Book tab').props.onPress();
+    });
+    await act(async () => {
+      resolveCount(36);
+      await Promise.resolve();
+    });
+    expect(countVerseButtons(tree!.root)).toBe(0);
+    expect(pressable(tree!.root, 'John, current book')).toBeDefined();
+  });
+
   it('stays on the chapter grid when the verse-count lookup fails', async () => {
     mockGetChapterVerseCount.mockRejectedValue(new Error('db closed'));
 

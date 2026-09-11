@@ -121,4 +121,54 @@ describe('ScriptureSearchSheet stale lookups (Greptile A6)', () => {
     expect(text).toContain('FRESH PSALM TEXT');
     expect(text).not.toContain('STALE JOHN TEXT');
   });
+
+  it('drops a lookup that resolves while a newer query is still inside the debounce window', async () => {
+    const deferred: Array<(value: unknown) => void> = [];
+    mockFetchVerseLocal.mockImplementation(() => new Promise((resolve) => { deferred.push(resolve); }));
+
+    let tree: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderer.create(<ScriptureSearchSheet visible onClose={jest.fn()} onInsert={jest.fn()} />);
+    });
+    const input = tree!.root.findByType(TextInput);
+    await act(async () => {
+      input.props.onChangeText('John 3:16');
+      jest.advanceTimersByTime(600);
+    });
+    await act(async () => {
+      input.props.onChangeText('Psalm 23:1');
+      jest.advanceTimersByTime(100); // still debouncing
+    });
+    await act(async () => {
+      deferred[0]({ reference: 'John 3:16', text: 'STALE JOHN TEXT', translation: 'BSB' });
+      await Promise.resolve();
+    });
+    expect(collectText(tree!.toJSON()).join(' ')).not.toContain('STALE JOHN TEXT');
+  });
+
+  it('drops a lookup that resolves after the sheet closed and reopened', async () => {
+    const deferred: Array<(value: unknown) => void> = [];
+    mockFetchVerseLocal.mockImplementation(() => new Promise((resolve) => { deferred.push(resolve); }));
+
+    let tree: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderer.create(<ScriptureSearchSheet visible onClose={jest.fn()} onInsert={jest.fn()} />);
+    });
+    const input = tree!.root.findByType(TextInput);
+    await act(async () => {
+      input.props.onChangeText('John 3:16');
+      jest.advanceTimersByTime(600);
+    });
+    await act(async () => {
+      tree!.update(<ScriptureSearchSheet visible={false} onClose={jest.fn()} onInsert={jest.fn()} />);
+    });
+    await act(async () => {
+      tree!.update(<ScriptureSearchSheet visible onClose={jest.fn()} onInsert={jest.fn()} />);
+    });
+    await act(async () => {
+      deferred[0]({ reference: 'John 3:16', text: 'STALE JOHN TEXT', translation: 'BSB' });
+      await Promise.resolve();
+    });
+    expect(collectText(tree!.toJSON()).join(' ')).not.toContain('STALE JOHN TEXT');
+  });
 });

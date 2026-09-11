@@ -40,6 +40,30 @@ describe('StoryProgressBar timers (Greptile A13)', () => {
     expect(onSegmentComplete).toHaveBeenCalledTimes(1);
   });
 
+  it('does not run a timer for a segment that becomes active while already paused', () => {
+    const onSegmentComplete = jest.fn();
+    let tree: renderer.ReactTestRenderer;
+    act(() => {
+      tree = renderer.create(<StoryProgressBar current={0} total={3} paused duration={1000} onSegmentComplete={onSegmentComplete} />);
+    });
+    // Advance to the next card while still paused (an overflowing card).
+    act(() => {
+      tree!.update(<StoryProgressBar current={1} total={3} paused duration={1000} onSegmentComplete={onSegmentComplete} />);
+    });
+    act(() => {
+      jest.advanceTimersByTime(3000);
+    });
+    expect(onSegmentComplete).not.toHaveBeenCalled();
+
+    act(() => {
+      tree!.update(<StoryProgressBar current={1} total={3} paused={false} duration={1000} onSegmentComplete={onSegmentComplete} />);
+    });
+    act(() => {
+      jest.advanceTimersByTime(1000);
+    });
+    expect(onSegmentComplete).toHaveBeenCalledTimes(1);
+  });
+
   it('does not complete a segment that was paused before its timer fired', () => {
     const onSegmentComplete = jest.fn();
     let tree: renderer.ReactTestRenderer;

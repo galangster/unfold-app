@@ -37,6 +37,7 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { useBibleSearch } from '@/hooks/useBibleSearch';
 import { getChapterVerseCount } from '@/lib/bible-db';
+import { useLatestRequest } from '@/hooks/useLatestRequest';
 import type { BibleTranslation } from '@/lib/bible-db';
 import {
   BOOK_PICKER_GRID_GAP,
@@ -138,7 +139,11 @@ export function BookChapterNavigator({
 
   const [mode, setMode] = useState<NavigatorMode>('books');
 
-  const chapterRequestRef = useRef(0);
+  // The navigator stays mounted while hidden and the tabs switch mode
+  // directly, so a lookup still in flight when the user leaves chapter
+  // selection (close, tab, Back) must not reopen the verse grid later.
+  const chapterRequest = useLatestRequest();
+  useEffect(() => chapterRequest.invalidate(), [chapterRequest, visible, mode]);
   const [selectedBook, setSelectedBook] = useState<BibleBookInfo | null>(null);
   const [selectedChapter, setSelectedChapter] = useState<number>(0);
   const [verseCount, setVerseCount] = useState<number>(0);
@@ -248,19 +253,19 @@ export function BookChapterNavigator({
       // Pre-fetch verse count before switching mode to avoid loading flash.
       // Only the latest tap may commit: two quick taps resolve in any order,
       // and a lookup that fails must not open an empty verse grid.
-      const requestId = ++chapterRequestRef.current;
+      const isCurrent = chapterRequest.begin();
       let count: number;
       try {
         count = await getChapterVerseCount(selectedBook.id, chapter, translation as BibleTranslation);
       } catch {
         return;
       }
-      if (requestId !== chapterRequestRef.current) return;
+      if (!isCurrent()) return;
       setSelectedChapter(chapter);
       setVerseCount(count);
       setMode('verses');
     },
-    [selectedBook, translation],
+    [chapterRequest, selectedBook, translation],
   );
 
   const handleVerseSelect = useCallback(
@@ -275,7 +280,6 @@ export function BookChapterNavigator({
 
   const handleBack = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    chapterRequestRef.current += 1;
     if (mode === 'verses') {
       setMode('chapters');
       setVerseCount(0);
