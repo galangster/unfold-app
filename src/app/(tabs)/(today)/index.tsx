@@ -217,28 +217,24 @@ export function applyTodayAutoTrialFocus(i: {
   };
 }
 
+/** Abandons purchased or failed auto-trial intents before the user starts a new series. */
 export function abandonPurchasedIntentBeforeNewSeries(i: {
   nowMs: number;
   storage?: IntentStorage;
 }): void {
   const current = readAutoTrialIntent(i.storage);
-  if (current?.status === 'purchased') {
-    transitionAutoTrialIntent(
-      'abandoned',
-      { abandonReason: 'superseded_by_user_series' },
-      { nowMs: i.nowMs },
-      i.storage,
-    );
-    return;
-  }
-  if (current?.status === 'failed') {
-    transitionAutoTrialIntent(
-      'abandoned',
-      { abandonReason: 'user_setup_fallback' },
-      { nowMs: i.nowMs },
-      i.storage,
-    );
-  }
+  const reason = current?.status === 'purchased'
+    ? 'superseded_by_user_series'
+    : current?.status === 'failed'
+      ? 'user_setup_fallback'
+      : null;
+  if (!reason) return;
+  transitionAutoTrialIntent(
+    'abandoned',
+    { abandonReason: reason },
+    { nowMs: i.nowMs },
+    i.storage,
+  );
 }
 
 export default function HomeScreen() {

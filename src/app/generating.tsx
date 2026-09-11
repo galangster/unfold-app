@@ -129,6 +129,18 @@ function autoTrialErrorMessage(state: Extract<SeriesRevealState, { kind: 'failed
   return 'Generation failed on server';
 }
 
+function resolveEntryNow(params: { jobId?: string; devotionalId?: string }) {
+  const { generationSession, devotionals } = useUnfoldStore.getState();
+  return resolveGeneratingEntry({
+    inflight: readInflightGenerationJob(),
+    params: { jobId: params.jobId, devotionalId: params.devotionalId },
+    sessionDevotionalId: generationSession.devotionalId,
+    landedDevotionalIds: devotionals.map((row) => row.id),
+    autoTrialIntent: readAutoTrialIntent(),
+    initialGenerationRequestId: readInitialGenerationRequestId(),
+  });
+}
+
 export default function GeneratingScreen() {
   const router = useRouter();
   const navigation = useNavigation();
@@ -159,7 +171,7 @@ export default function GeneratingScreen() {
   const [isComplete, setIsComplete] = useState(false);
   const [devotionalTitle, setDevotionalTitle] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [canRetry, setCanRetry] = useState(true);
+  const [canRetryJob, setCanRetry] = useState(true);
 
   // Job polling state
   const [pendingJobId, setPendingJobId] = useState<string | null>(null);
@@ -228,19 +240,15 @@ export default function GeneratingScreen() {
   const [currentSeriesTitle, setCurrentSeriesTitle] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(true);
   const [autoTrialHandoffId] = useState(() => {
-    const entry = resolveGeneratingEntry({
-      inflight: readInflightGenerationJob(),
-      params: { jobId: params.jobId, devotionalId: params.devotionalId },
-      sessionDevotionalId: useUnfoldStore.getState().generationSession.devotionalId,
-      landedDevotionalIds: useUnfoldStore.getState().devotionals.map((row) => row.id),
-      autoTrialIntent: readAutoTrialIntent(),
-      initialGenerationRequestId: readInitialGenerationRequestId(),
-    });
+    const entry = resolveEntryNow(params);
     return entry.kind === 'auto-trial-handoff' ? entry.intentId : null;
   });
   const auto = useAutoTrialGeneration(autoTrialHandoffId);
   const autoState = auto.state;
   const autoSetUpSeries = auto.setUpSeries;
+  const canRetry = autoTrialHandoffId
+    ? canRetrySeriesReveal(autoState, Date.now())
+    : canRetryJob;
   useEffect(() => {
     if (!autoTrialHandoffId) return;
     if (autoState.kind === 'revealed') {
@@ -258,14 +266,12 @@ export default function GeneratingScreen() {
     if (autoState.kind === 'failed') {
       setIsComplete(false);
       setIsGenerating(false);
-      setCanRetry(canRetrySeriesReveal(autoState, Date.now()));
       setError(autoTrialErrorMessage(autoState));
       return;
     }
     if (autoState.kind === 'retry_exhausted') {
       setIsComplete(false);
       setIsGenerating(false);
-      setCanRetry(false);
       setError(autoTrialErrorMessage(autoState));
       return;
     }
@@ -747,15 +753,7 @@ export default function GeneratingScreen() {
     if (autoTrialHandoffId) {
       return;
     }
-    const { generationSession, devotionals } = useUnfoldStore.getState();
-    const entry = resolveGeneratingEntry({
-      inflight: readInflightGenerationJob(),
-      params: { jobId: params.jobId, devotionalId: params.devotionalId },
-      sessionDevotionalId: generationSession.devotionalId,
-      landedDevotionalIds: devotionals.map((devotional) => devotional.id),
-      autoTrialIntent: readAutoTrialIntent(),
-      initialGenerationRequestId: readInitialGenerationRequestId(),
-    });
+    const entry = resolveEntryNow(params);
     if (entry.kind === 'resume') {
       const { inflight } = entry;
       logger.log('[generating] Resuming inflight job from MMKV:', inflight.jobId);
