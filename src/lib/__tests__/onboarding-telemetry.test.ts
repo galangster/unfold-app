@@ -10,6 +10,7 @@
 jest.mock('@/lib/sentry', () => ({
   addAppBreadcrumb: jest.fn(),
   captureAppEvent: jest.fn(),
+  captureAppSignal: jest.fn(),
 }));
 
 jest.mock('../mmkv-storage', () => {
@@ -46,11 +47,12 @@ import {
   trackOnboardingStarted,
   trackOnboardingStep,
 } from '../onboarding-telemetry';
-import { addAppBreadcrumb, captureAppEvent } from '@/lib/sentry';
+import { addAppBreadcrumb, captureAppEvent, captureAppSignal } from '@/lib/sentry';
 import { clearOnboardingDraft } from '../onboarding-draft-store';
 import { mmkvStorage } from '../mmkv-storage';
 
 const capture = captureAppEvent as jest.Mock;
+const signal = captureAppSignal as jest.Mock;
 const breadcrumb = addAppBreadcrumb as jest.Mock;
 
 const HOUR = 60 * 60 * 1000;
@@ -69,8 +71,9 @@ describe('the incident signal', () => {
     // that would have caught the P0 in hours instead of by a support message.
     expect(reportAbandonedOnboarding('threeStepPaywall', 8 * HOUR)).toBe(true);
 
-    expect(capture).toHaveBeenCalledTimes(1);
-    expect(capture).toHaveBeenCalledWith(ONBOARDING_ABANDONED_EVENT, {
+    expect(signal).toHaveBeenCalledTimes(1);
+    expect(capture).not.toHaveBeenCalled();
+    expect(signal).toHaveBeenCalledWith(ONBOARDING_ABANDONED_EVENT, {
       step: 'threeStepPaywall',
       age_bucket: '6h',
     });
@@ -80,16 +83,18 @@ describe('the incident signal', () => {
 describe('reportAbandonedOnboarding threshold', () => {
   it('reports a draft older than six hours', () => {
     expect(reportAbandonedOnboarding('aboutMe', ONBOARDING_ABANDONED_THRESHOLD_MS)).toBe(true);
-    expect(capture).toHaveBeenCalledWith(ONBOARDING_ABANDONED_EVENT, {
+    expect(signal).toHaveBeenCalledWith(ONBOARDING_ABANDONED_EVENT, {
       step: 'aboutMe',
       age_bucket: '6h',
     });
+    expect(capture).not.toHaveBeenCalled();
   });
 
   it('reports nothing for a draft younger than the threshold', () => {
     // Someone who paused for coffee is still mid-flow, not abandoned.
     expect(reportAbandonedOnboarding('keyPeople', ONBOARDING_ABANDONED_THRESHOLD_MS - 1)).toBe(false);
     expect(capture).not.toHaveBeenCalled();
+    expect(signal).not.toHaveBeenCalled();
     expect(breadcrumb).not.toHaveBeenCalled();
     // A draft below the threshold must not burn the once-per-draft marker.
     expect(mmkvStorage.getItem(ABANDONED_MARKER_KEY)).toBeNull();
@@ -97,6 +102,7 @@ describe('reportAbandonedOnboarding threshold', () => {
 
   it('reports nothing when the clock ran backwards between launches', () => {
     expect(reportAbandonedOnboarding('threeStepPaywall', -3 * DAY)).toBe(false);
+    expect(signal).not.toHaveBeenCalled();
     expect(capture).not.toHaveBeenCalled();
   });
 });
@@ -106,9 +112,10 @@ describe('reportAbandonedOnboarding fires at most once per draft', () => {
     expect(reportAbandonedOnboarding('threeStepPaywall', 2 * DAY)).toBe(true);
     expect(reportAbandonedOnboarding('threeStepPaywall', 2 * DAY + HOUR)).toBe(false);
 
-    // One stranded person must read as one event. Reporting every launch would
+    // One stranded person must read as one issue. Reporting every launch would
     // turn a single user into fifty rows and bury the shape of the problem.
-    expect(capture).toHaveBeenCalledTimes(1);
+    expect(signal).toHaveBeenCalledTimes(1);
+    expect(capture).not.toHaveBeenCalled();
   });
 
   it('reports again once the marker is cleared with the draft', () => {
@@ -118,11 +125,12 @@ describe('reportAbandonedOnboarding fires at most once per draft', () => {
     expect(mmkvStorage.getItem(ABANDONED_MARKER_KEY)).toBeNull();
 
     expect(reportAbandonedOnboarding('name', 9 * HOUR)).toBe(true);
-    expect(capture).toHaveBeenCalledTimes(2);
-    expect(capture).toHaveBeenLastCalledWith(ONBOARDING_ABANDONED_EVENT, {
+    expect(signal).toHaveBeenCalledTimes(2);
+    expect(signal).toHaveBeenLastCalledWith(ONBOARDING_ABANDONED_EVENT, {
       step: 'name',
       age_bucket: '6h',
     });
+    expect(capture).not.toHaveBeenCalled();
   });
 
   it('reports again after a completion path clears the draft', () => {
@@ -136,7 +144,8 @@ describe('reportAbandonedOnboarding fires at most once per draft', () => {
     expect(mmkvStorage.getItem(ABANDONED_MARKER_KEY)).toBeNull();
 
     expect(reportAbandonedOnboarding('name', 9 * HOUR)).toBe(true);
-    expect(capture).toHaveBeenCalledTimes(2);
+    expect(signal).toHaveBeenCalledTimes(2);
+    expect(capture).not.toHaveBeenCalled();
   });
 
   it('still reports when the marker read throws', () => {
@@ -253,7 +262,7 @@ describe('privacy', () => {
     trackOnboardingCompleted('generated', FIRST_RUN);
     trackOnboardingCompleted('deferred', FIRST_RUN);
 
-    const payloads = JSON.stringify([capture.mock.calls, breadcrumb.mock.calls]);
+    const payloads = JSON.stringify([capture.mock.calls, signal.mock.calls, breadcrumb.mock.calls]);
     for (const content of userContent) {
       expect(payloads).not.toContain(content);
     }
@@ -268,7 +277,7 @@ describe('privacy', () => {
     const allowedKeys = new Set(['step', 'age_bucket', 'outcome']);
     const allowedBuckets = new Set(['under6h', '6h', '24h', '3d', '7d', 'longer']);
 
-    for (const [, data] of capture.mock.calls as [string, Record<string, string>][]) {
+    for (const [, data] of [...capture.mock.calls, ...signal.mock.calls] as [string, Record<string, string>][]) {
       for (const [key, value] of Object.entries(data ?? {})) {
         expect(allowedKeys.has(key)).toBe(true);
         if (key === 'age_bucket') expect(allowedBuckets.has(value)).toBe(true);

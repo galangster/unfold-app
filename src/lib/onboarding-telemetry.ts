@@ -10,9 +10,9 @@
  * to report it.
  *
  * A crash reporter cannot catch a bug whose only symptom is that nothing
- * happens. A funnel can. `reportAbandonedOnboarding` below is the signal: a
- * cluster of abandonments on one step id is the alarm that says a release
- * stranded people there.
+ * happens. A funnel can. Started, resumed, and completed are Sentry logs.
+ * `reportAbandonedOnboarding` is the issue: a cluster of abandonments on one
+ * step id is the alarm that says a release stranded people there.
  *
  * PRIVACY. This app holds journal entries about people's spiritual struggles
  * and their family members' real names. Nothing a person typed ever leaves
@@ -25,7 +25,7 @@
  * store in this codebase uses, so it unit-tests directly — the same reason
  * creation-gate-policy.ts and onboarding-welcome-back-copy.ts live in lib.
  */
-import { addAppBreadcrumb, captureAppEvent } from '@/lib/sentry';
+import { addAppBreadcrumb, captureAppEvent, captureAppSignal } from '@/lib/sentry';
 import { mmkvStorage } from './mmkv-storage';
 
 /** Breadcrumb category for every onboarding trail entry. */
@@ -122,7 +122,7 @@ export function sanitizeStepId(stepId: string): string {
   return typeof stepId === 'string' && KNOWN_STEP_IDS.has(stepId) ? stepId : 'unknown';
 }
 
-/** Someone reached the first step that asks for anything. Start of the funnel. */
+/** First asking step. A Sentry log, not an issue. */
 export function trackOnboardingStarted(stepId: string): void {
   const step = sanitizeStepId(stepId);
   addAppBreadcrumb(ONBOARDING_BREADCRUMB_CATEGORY, 'started', { step });
@@ -140,8 +140,9 @@ export function trackOnboardingStep(stepId: string): void {
 
 /**
  * A draft was restored and the person is carrying on from where they stopped.
- * Paired with the abandonment event this closes the loop: how many of the
- * people we reported as abandoned actually came back, and from which step.
+ * A Sentry log, not an issue. Paired with the abandonment issue this closes
+ * the loop: how many of the people we reported as abandoned actually came
+ * back, and from which step.
  */
 export function trackOnboardingResumed(fromStepId: string, ageMs: number): void {
   const step = sanitizeStepId(fromStepId);
@@ -151,11 +152,11 @@ export function trackOnboardingResumed(fromStepId: string, ageMs: number): void 
 }
 
 /**
- * Onboarding finished. `generated` is the paid path through
- * `proceedToGeneration`; `deferred` is "I'll decide later" on the paywall,
- * which completes the profile and lands on Today without starting a
- * generation. Both are completions, and the split is the whole point of
- * recording the outcome.
+ * Onboarding finished. A Sentry log, not an issue. `generated` is the paid
+ * path through `proceedToGeneration`; `deferred` is "I'll decide later" on
+ * the paywall, which completes the profile and lands on Today without
+ * starting a generation. Both are completions, and the split is the whole
+ * point of recording the outcome.
  */
 export function trackOnboardingCompleted(
   outcome: 'generated' | 'deferred' | 'auto_trial',
@@ -211,14 +212,14 @@ export function clearAbandonedOnboardingMarker(): void {
 /**
  * THE SIGNAL. On launch, a draft older than the threshold means someone started
  * setting themselves up and never came back. Report which step they stopped on
- * and roughly how long ago.
+ * and roughly how long ago. This is the Sentry issue; milestones are logs.
  *
- * This is the event that would have caught the P0 in hours: a run of
+ * This is the issue that would have caught the P0 in hours: a run of
  * `onboarding_abandoned` carrying `step: threeStepPaywall` says, without any
  * exception ever being thrown, that the paywall is where people are being lost.
  *
  * Fires at most once per draft (see ABANDONED_MARKER_KEY). Returns whether an
- * event was sent, which is what the tests assert on.
+ * issue was sent, which is what the tests assert on.
  */
 export function reportAbandonedOnboarding(draftStepId: string, ageMs: number): boolean {
   const ageBucket = bucketOnboardingAge(ageMs);
@@ -229,7 +230,7 @@ export function reportAbandonedOnboarding(draftStepId: string, ageMs: number): b
 
   const step = sanitizeStepId(draftStepId);
   addAppBreadcrumb(ONBOARDING_BREADCRUMB_CATEGORY, 'abandoned', { step, age_bucket: ageBucket });
-  captureAppEvent(ONBOARDING_ABANDONED_EVENT, { step, age_bucket: ageBucket });
+  captureAppSignal(ONBOARDING_ABANDONED_EVENT, { step, age_bucket: ageBucket });
 
   try {
     // Step and bucket only — the marker is read back by nothing but the guard

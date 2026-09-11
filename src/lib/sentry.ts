@@ -21,6 +21,9 @@
  *     needs) but nothing else does;
  *   - `console` breadcrumbs are dropped whole, because the app logs user
  *     content through `logger`;
+ *   - Sentry Logs skip `beforeSend`, so `beforeSendLog` rebuilds each log
+ *     from the same allowlists and drops console-originated logs the way
+ *     `scrubBreadcrumb` drops console breadcrumbs;
  *   - a URL (http breadcrumbs, failed-request events, spans) survives only
  *     with its query string and fragment cut off;
  *   - error and transaction events carry no `user`; native release-health
@@ -89,6 +92,23 @@ const APP_BREADCRUMB_PREFIX = 'app.';
 
 /** Sentry's own category for captured console output. Never forwarded. */
 const CONSOLE_BREADCRUMB_CATEGORY = 'console';
+
+/** Origin the ConsoleLogs integration stamps on captured `console` output. */
+const CONSOLE_LOG_ORIGIN = 'auto.log.console';
+
+/**
+ * Attributes the SDK stamps on every log from its own options before
+ * `beforeSendLog` runs. Provenance, never user content: carried so logs can be
+ * filtered by release and environment the way events are.
+ */
+/**
+ * A log message is an event NAME, never free text: a snake_case identifier,
+ * 64 characters or fewer. Anything else is dropped whole in `beforeSendLog`,
+ * so a future caller cannot push user-derived text through `logger`.
+ */
+const APP_EVENT_NAME_PATTERN = /^[a-z][a-z0-9_]{0,63}$/;
+
+const SDK_LOG_ATTRIBUTE_KEYS = ['sentry.release', 'sentry.environment', 'sentry.sdk.name', 'sentry.sdk.version'] as const;
 
 /**
  * Field names whose STRING value may leave the device, for the free-form bags
@@ -429,6 +449,40 @@ function scrubEvent(event: ErrorEvent): ErrorEvent {
   };
 }
 
+type AppLog = {
+  level: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal';
+  message: unknown;
+  attributes?: Record<string, unknown>;
+  severityNumber?: number;
+};
+
+/**
+ * Rebuild a Sentry log. Logs never pass `beforeSend`, so this is the only
+ * chance to apply the same allowlist and truncation the event path uses.
+ * Console-originated logs are dropped whole — the app writes user content
+ * through `console` in development.
+ */
+function scrubLog(log: AppLog): {
+  level: AppLog['level'];
+  message: string;
+  attributes?: Record<string, string | number | boolean>;
+  severityNumber?: number;
+} | null {
+  if (log.attributes?.['sentry.origin'] === CONSOLE_LOG_ORIGIN) return null;
+  if (typeof log.message !== 'string' || !APP_EVENT_NAME_PATTERN.test(log.message)) return null;
+  const attributes = scrubTags(log.attributes) ?? {};
+  for (const key of SDK_LOG_ATTRIBUTE_KEYS) {
+    const value = log.attributes?.[key];
+    if (typeof value === 'string') attributes[key] = truncate(value);
+  }
+  return {
+    level: log.level,
+    message: log.message,
+    attributes: emptyToUndefined(attributes),
+    severityNumber: typeof log.severityNumber === 'number' ? log.severityNumber : undefined,
+  };
+}
+
 type SpanJSON = NonNullable<TransactionEvent['spans']>[number];
 
 /**
@@ -610,7 +664,9 @@ export function initSentry(): void {
       // not suppress it. Their absence is what keeps it out;
       // `src/lib/__tests__/sentry.test.ts` asserts the absence.
       enableUserInteractionTracing: false,
-      enableLogs: false,
+      // Funnel milestones are Sentry Logs, not issues. Logs skip
+      // `beforeSend`, so `beforeSendLog` below is the privacy gate.
+      enableLogs: true,
 
       // A backend 5xx is filed as an event (`scrubEvent` keeps the endpoint
       // and status, drops headers and query). Only the backend: a third
@@ -654,6 +710,7 @@ export function initSentry(): void {
       // `enableNetworkBreadcrumbs` (default YES) and record `http.query` raw.
       beforeBreadcrumb: (breadcrumb) => scrubBreadcrumb(breadcrumb),
       beforeSendTransaction: (event) => scrubTransaction(event),
+      beforeSendLog: (log) => scrubLog(log),
     });
     enabled = true;
   } catch {
@@ -699,16 +756,31 @@ export function addAppBreadcrumb(
   }
 }
 
-/** Record a funnel milestone (an onboarding step reached, a flow completed). */
+/** Force `source=app_event` last so a caller cannot override the tag. */
+function appEventTags(
+  data?: Record<string, string | number | boolean>,
+): Record<string, string | number | boolean> {
+  const { source: _callerSource, ...rest } = data ?? {};
+  return { ...rest, source: APP_EVENT_SOURCE };
+}
+
+/** Record a funnel milestone as a Sentry log. This does not create an issue. */
 export function captureAppEvent(name: string, data?: Record<string, string | number | boolean>): void {
   if (!enabled || sentryModule === null) return;
   try {
-    // Drop any caller-supplied `source` so ours is the last key (spec §10.1).
-    const { source: _callerSource, ...rest } = data ?? {};
-    const tags = { ...rest, source: APP_EVENT_SOURCE };
+    sentryModule.logger.info(name, appEventTags(data));
+  } catch {
+    // Ignored, as above.
+  }
+}
+
+/** Record an alarm as a Sentry issue. Warning-level `captureMessage`. */
+export function captureAppSignal(name: string, data?: Record<string, string | number | boolean>): void {
+  if (!enabled || sentryModule === null) return;
+  try {
     sentryModule.captureMessage(name, {
-      level: 'info',
-      tags,
+      level: 'warning',
+      tags: appEventTags(data),
       extra: data ?? {},
     });
   } catch {

@@ -17,6 +17,7 @@ const mockSetUser = jest.fn();
 const mockCaptureException = jest.fn();
 const mockAddBreadcrumb = jest.fn();
 const mockCaptureMessage = jest.fn();
+const mockLoggerInfo = jest.fn();
 const mockRegisterNavigationContainer = jest.fn();
 const mockNavigationIntegration = {
   name: 'ReactNavigation',
@@ -32,6 +33,7 @@ jest.mock('@sentry/react-native', () => ({
   captureException: mockCaptureException,
   addBreadcrumb: mockAddBreadcrumb,
   captureMessage: mockCaptureMessage,
+  logger: { info: (...args: unknown[]) => mockLoggerInfo(...args) },
   reactNavigationIntegration: (...args: unknown[]) => mockReactNavigationIntegration(...args),
   httpClientIntegration: (options: unknown) => mockHttpClientIntegration(options),
   wrap: (component: unknown, ...rest: unknown[]) => mockWrap(component, ...rest),
@@ -56,6 +58,7 @@ type InitOptions = {
   beforeSend: (event: Record<string, unknown>) => Record<string, unknown> | null;
   beforeBreadcrumb: (crumb: Record<string, unknown>) => Record<string, unknown> | null;
   beforeSendTransaction: (event: Record<string, unknown>) => Record<string, unknown> | null;
+  beforeSendLog: (log: Record<string, unknown>) => Record<string, unknown> | null;
   [key: string]: unknown;
 };
 
@@ -125,6 +128,7 @@ function everythingSentToSentry(): string {
     mockCaptureException.mock.calls,
     mockAddBreadcrumb.mock.calls,
     mockCaptureMessage.mock.calls,
+    mockLoggerInfo.mock.calls,
   ]);
 }
 
@@ -155,12 +159,14 @@ describe('without a DSN', () => {
     sentry.captureAppError('onboarding', new Error('answers discarded'), { step: 'name' });
     sentry.addAppBreadcrumb('onboarding', 'step advanced', { step: 'name' });
     sentry.captureAppEvent('onboarding_completed', { steps: 7 });
+    sentry.captureAppSignal('onboarding_abandoned', { step: 'name' });
 
     expect(mockInit).not.toHaveBeenCalled();
     expect(mockSetUser).not.toHaveBeenCalled();
     expect(mockCaptureException).not.toHaveBeenCalled();
     expect(mockAddBreadcrumb).not.toHaveBeenCalled();
     expect(mockCaptureMessage).not.toHaveBeenCalled();
+    expect(mockLoggerInfo).not.toHaveBeenCalled();
   });
 
   it('stays disabled when the DSN is present but blank', () => {
@@ -202,7 +208,7 @@ describe('initSentry', () => {
     expect(options.sendDefaultPii).toBe(false);
     expect(options.attachScreenshot).toBe(false);
     expect(options.attachViewHierarchy).toBe(false);
-    expect(options.enableLogs).toBe(false);
+    expect(options.enableLogs).toBe(true);
     expect(options.enableUserInteractionTracing).toBe(false);
     expect(options.enableAutoPerformanceTracing).toBe(true);
     expect(options.attachStacktrace).toBe(true);
@@ -210,6 +216,7 @@ describe('initSentry', () => {
     expect(typeof options.beforeSend).toBe('function');
     expect(typeof options.beforeBreadcrumb).toBe('function');
     expect(typeof options.beforeSendTransaction).toBe('function');
+    expect(typeof options.beforeSendLog).toBe('function');
     // Cocoa's automatic breadcrumbs and session tracking are governed in
     // AppDelegate.swift now; nothing native-only is smuggled through the JS
     // options any more. Session tracking stays enabled there.
@@ -870,6 +877,7 @@ describe('capture helpers', () => {
     sentry.captureAppError('onboarding', error, { step: 'reflection', answer: JOURNAL_TEXT });
     sentry.addAppBreadcrumb('onboarding', 'step advanced', { step: 'reflection' });
     sentry.captureAppEvent('onboarding_completed', { steps: 7 });
+    sentry.captureAppSignal('onboarding_abandoned', { step: 'name' });
 
     expect(mockCaptureException).toHaveBeenCalledWith(error, {
       tags: { source: 'onboarding' },
@@ -881,10 +889,14 @@ describe('capture helpers', () => {
       data: { step: 'reflection' },
       level: 'info',
     });
-    expect(mockCaptureMessage).toHaveBeenCalledWith('onboarding_completed', {
-      level: 'info',
-      tags: { steps: 7, source: 'app_event' },
-      extra: { steps: 7 },
+    expect(mockLoggerInfo).toHaveBeenCalledWith('onboarding_completed', {
+      steps: 7,
+      source: 'app_event',
+    });
+    expect(mockCaptureMessage).toHaveBeenCalledWith('onboarding_abandoned', {
+      level: 'warning',
+      tags: { step: 'name', source: 'app_event' },
+      extra: { step: 'name' },
     });
 
     // The unscrubbed journal text above only ever reaches the SDK, which routes
@@ -911,56 +923,92 @@ describe('K1 captureAppEvent allowlist', () => {
       secret_title: 'My Series',
     });
 
-    expect(mockCaptureMessage).toHaveBeenCalledWith('trial_started', {
-      level: 'info',
-      tags: {
-        outcome: 'auto_trial',
-        entry: 'onboarding',
-        surface: 'onboarding_paywall',
-        purchase_source: 'lateGrant',
-        age_bucket: '6h',
-        trial_days: 3,
-        auto_trial: true,
-        secret_title: 'My Series',
-        source: 'app_event',
-      },
-      extra: {
-        outcome: 'auto_trial',
-        entry: 'onboarding',
-        surface: 'onboarding_paywall',
-        purchase_source: 'lateGrant',
-        age_bucket: '6h',
-        trial_days: 3,
-        auto_trial: true,
-        source: 'x',
-        secret_title: 'My Series',
-      },
+    expect(mockCaptureMessage).not.toHaveBeenCalled();
+    expect(mockLoggerInfo).toHaveBeenCalledWith('trial_started', {
+      outcome: 'auto_trial',
+      entry: 'onboarding',
+      surface: 'onboarding_paywall',
+      purchase_source: 'lateGrant',
+      age_bucket: '6h',
+      trial_days: 3,
+      auto_trial: true,
+      secret_title: 'My Series',
+      source: 'app_event',
     });
 
-    const payload = mockCaptureMessage.mock.calls.at(-1)?.[1] as {
-      tags: Record<string, unknown>;
-      extra: Record<string, unknown>;
-    };
-    expect(Object.keys(payload.tags).at(-1)).toBe('source');
-    expect(payload.tags.source).toBe('app_event');
+    const attributes = mockLoggerInfo.mock.calls.at(-1)?.[1] as Record<string, unknown>;
+    expect(Object.keys(attributes).at(-1)).toBe('source');
+    expect(attributes.source).toBe('app_event');
 
-    const scrubbed = initOptions().beforeSend({
-      tags: payload.tags,
-      extra: payload.extra,
-    }) as { tags: Record<string, unknown>; extra: Record<string, unknown> };
+    const scrubbed = initOptions().beforeSendLog({
+      level: 'info',
+      message: 'trial_started',
+      attributes,
+    }) as { attributes: Record<string, unknown> };
 
-    expect(scrubbed.tags.source).toBe('app_event');
-    expect(scrubbed.tags.outcome).toBe('auto_trial');
-    expect(scrubbed.tags.entry).toBe('onboarding');
-    expect(scrubbed.tags.surface).toBe('onboarding_paywall');
-    expect(scrubbed.tags.purchase_source).toBe('lateGrant');
-    expect(scrubbed.tags.age_bucket).toBe('6h');
-    expect(scrubbed.tags.trial_days).toBe(3);
-    expect(scrubbed.tags.auto_trial).toBe(true);
-    expect(scrubbed.tags.secret_title).toBeUndefined();
-    expect(scrubbed.extra.trial_days).toBe(3);
-    expect(scrubbed.extra.auto_trial).toBe(true);
-    expect(scrubbed.extra.secret_title).toBeUndefined();
+    expect(scrubbed.attributes.source).toBe('app_event');
+    expect(scrubbed.attributes.outcome).toBe('auto_trial');
+    expect(scrubbed.attributes.entry).toBe('onboarding');
+    expect(scrubbed.attributes.surface).toBe('onboarding_paywall');
+    expect(scrubbed.attributes.purchase_source).toBe('lateGrant');
+    expect(scrubbed.attributes.age_bucket).toBe('6h');
+    expect(scrubbed.attributes.trial_days).toBe(3);
+    expect(scrubbed.attributes.auto_trial).toBe(true);
+    expect(scrubbed.attributes.secret_title).toBeUndefined();
+  });
+});
+
+describe('beforeSendLog', () => {
+  it('drops a log attribute that fails the allowlist', () => {
+    bootEnabled();
+
+    const scrubbed = initOptions().beforeSendLog({
+      level: 'info',
+      message: 'onboarding_started',
+      attributes: { step: 'name', answer: JOURNAL_TEXT, source: 'app_event' },
+    }) as { attributes: Record<string, unknown> };
+
+    expect(scrubbed.attributes).toEqual({ step: 'name', source: 'app_event' });
+    expect(JSON.stringify(scrubbed)).not.toContain(JOURNAL_TEXT);
+  });
+
+  it('drops a log whose message is not an event name', () => {
+    bootEnabled();
+
+    const beforeSendLog = initOptions().beforeSendLog;
+    expect(beforeSendLog({ level: 'info', message: JOURNAL_TEXT, attributes: {} })).toBeNull();
+    expect(beforeSendLog({ level: 'info', message: 'Onboarding Started', attributes: {} })).toBeNull();
+    expect(beforeSendLog({ level: 'info', message: 42, attributes: {} })).toBeNull();
+    expect(beforeSendLog({ level: 'info', message: 'onboarding_started', attributes: {} })).not.toBeNull();
+  });
+
+  it('carries the SDK release and environment stamps and drops console-origin logs', () => {
+    bootEnabled();
+
+    const scrubbed = initOptions().beforeSendLog({
+      level: 'info',
+      message: 'onboarding_started',
+      attributes: {
+        step: 'name',
+        'sentry.release': 'com.unfoldapp.ios@1.1.8+279',
+        'sentry.environment': 'production',
+        'sentry.sdk.name': 'sentry.javascript.react-native',
+        'sentry.sdk.version': '7.11.0',
+        'sentry.origin': 'manual',
+      },
+    }) as { attributes: Record<string, unknown> };
+
+    expect(scrubbed.attributes['sentry.release']).toBe('com.unfoldapp.ios@1.1.8+279');
+    expect(scrubbed.attributes['sentry.environment']).toBe('production');
+    expect(scrubbed.attributes['sentry.sdk.version']).toBe('7.11.0');
+
+    expect(
+      initOptions().beforeSendLog({
+        level: 'info',
+        message: JOURNAL_TEXT,
+        attributes: { 'sentry.origin': 'auto.log.console' },
+      }),
+    ).toBeNull();
   });
 });
 
