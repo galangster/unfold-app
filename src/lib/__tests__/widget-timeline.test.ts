@@ -79,6 +79,23 @@ describe('getWeeklyProgress (M-Su bits)', () => {
     expect(getWeeklyProgress([d], sundayNight)).toBe('0,0,0,0,0,0,1');
     expect(getWeeklyProgress([d], getNextMidnight(sundayNight))).toBe('0,0,0,0,0,0,0');
   });
+
+  it('Sat/Sun then Monday reads give 0,0,0,0,0,1,1 then 1,0,0,0,0,0,0', () => {
+    const saturday = new Date(2026, 5, 13, 10, 0);
+    const sunday = new Date(2026, 5, 14, 10, 0);
+    const monday = new Date(2026, 5, 15, 10, 0);
+    const weekend = devo([
+      day({ dayNumber: 1, readAt: saturday.toISOString() }),
+      day({ dayNumber: 2, readAt: sunday.toISOString() }),
+    ]);
+    expect(getWeeklyProgress([weekend], sunday)).toBe('0,0,0,0,0,1,1');
+    const withMonday = devo([
+      day({ dayNumber: 1, readAt: saturday.toISOString() }),
+      day({ dayNumber: 2, readAt: sunday.toISOString() }),
+      day({ dayNumber: 3, readAt: monday.toISOString() }),
+    ]);
+    expect(getWeeklyProgress([withMonday], monday)).toBe('1,0,0,0,0,0,0');
+  });
 });
 
 describe('buildWidgetSharedProps', () => {
@@ -102,6 +119,15 @@ describe('buildWidgetSharedProps', () => {
   it('weekTodayIndex maps Sunday to the last slot', () => {
     const p = buildWidgetSharedProps(slice(), new Date(2026, 5, 14, 14, 0)); // Sun Jun 14
     expect(p.weekTodayIndex).toBe(6);
+  });
+
+  it('uses the series boundary for totalDays', () => {
+    const d = devo([day()], {
+      totalDays: 7,
+      seriesArc: { totalDaysPlanned: 3 },
+    });
+    const p = buildWidgetSharedProps(slice({ currentDevotional: d }), new Date(2026, 5, 10, 14, 0));
+    expect(p.totalDays).toBe(3);
   });
 });
 

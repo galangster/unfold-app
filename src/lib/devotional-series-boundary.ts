@@ -38,6 +38,12 @@ export function getServerOwnedSeriesTotalDays(
   return isPositiveInteger(devotional.totalDays) ? devotional.totalDays : 0;
 }
 
+export function getWidgetSeriesTotalDays(
+  devotional: SeriesBoundaryInput | null | undefined,
+): number {
+  return getServerOwnedSeriesTotalDays(devotional) || 7;
+}
+
 export function clampCurrentDayToSeriesBoundary(
   currentDay: number,
   devotional: SeriesBoundaryInput | null | undefined,

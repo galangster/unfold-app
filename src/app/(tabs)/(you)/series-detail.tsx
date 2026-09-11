@@ -30,11 +30,14 @@ import { Duration, Ease } from '@/constants/animations';
 import { Typography } from '@/constants/typography';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
+import { isAutoTrialSeries } from '@/lib/auto-trial-series';
 import {
   getTodayReaderDayNumber,
   isDevotionalDaySelectable,
 } from '@/lib/devotional-day-access';
 import { selectRenderableDevotionalDay } from '@/lib/devotional-canonical-days';
+import { SeriesPath } from '@/components/home/SeriesPath';
+import { buildSeriesPath, countReadDaysWithinBoundary } from '@/lib/series-path';
 import { alpha } from '@/components/ui';
 
 // ── Sealed letter tease lines for locked days ──────────────────
@@ -116,6 +119,7 @@ export default function SeriesDetailScreen() {
   const reducedMotion = useReducedMotion();
   const { handleBack } = useCrossTabBack();
   const devotionals = useUnfoldStore((s) => s.devotionals);
+  const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
   const setCurrentDevotional = useUnfoldStore((s) => s.setCurrentDevotional);
 
   const devotional = useMemo(
@@ -149,6 +153,19 @@ export default function SeriesDetailScreen() {
   const todayReaderDayNumber = useMemo(
     () => (devotional ? getTodayReaderDayNumber(devotional, now) : 1),
     [devotional, now],
+  );
+
+  const seriesPath = useMemo(
+    () => (devotional
+      ? buildSeriesPath(devotional, now, {
+          isCurrentSeries: devotional.id === currentDevotionalId,
+        })
+      : []),
+    [devotional, now, currentDevotionalId],
+  );
+  const readDaysWithinBoundary = useMemo(
+    () => (devotional ? countReadDaysWithinBoundary(devotional) : 0),
+    [devotional, now, currentDevotionalId],
   );
 
   const handleDayPress = useCallback(
@@ -196,6 +213,7 @@ export default function SeriesDetailScreen() {
   }
 
   const createdDate = format(new Date(devotional.createdAt), 'MMM d, yyyy');
+  const autoTrial = isAutoTrialSeries(devotional);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -247,6 +265,26 @@ export default function SeriesDetailScreen() {
               </Text>
             </View>
           </Animated.View>
+
+          {autoTrial ? (
+            <SeriesPath
+              nodes={seriesPath}
+              variant="compact"
+            />
+          ) : null}
+
+          {autoTrial && readDaysWithinBoundary >= 1 ? (
+            <TouchableOpacity
+              onPress={() => router.push({
+                pathname: '/keepsake',
+                params: { devotionalId: devotional.id },
+              })}
+              accessibilityRole="button"
+              accessibilityLabel="Keepsake"
+            >
+              <Text style={[styles.progressLabel, { color: colors.text }]}>Keepsake</Text>
+            </TouchableOpacity>
+          ) : null}
 
           {/* Day list — grouped under named movements when the arc has them */}
           <View style={styles.dayList}>

@@ -2,6 +2,7 @@ import * as Application from 'expo-application';
 import { ACT_SLOTS, type ActSlot } from '@/lib/act-reminder';
 
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from './api-config';
+import { asNextPick, asTrimmedString } from './auto-trial-series';
 import {
   DEVOTIONAL_PULL_CURSOR_KEY,
   DEVOTIONAL_PULL_CURSOR_SCHEMA,
@@ -99,6 +100,7 @@ function mapPulledDevotionalDay(record: SyncPulledRecord): DevotionalDay | null 
   const quotes = Array.isArray(content.quotes) ? content.quotes as DevotionalDay['quotes'] : undefined;
   const crossReferences = Array.isArray(content.crossReferences) ? content.crossReferences as DevotionalDay['crossReferences'] : undefined;
   const wordStudy = normalizeWordStudy(content.wordStudy);
+  const nextPickLine = asTrimmedString(content.nextPickLine ?? row.nextPickLine);
 
   return {
     ...content,
@@ -112,6 +114,9 @@ function mapPulledDevotionalDay(record: SyncPulledRecord): DevotionalDay | null 
     quotableLine,
     isRead: asBoolean(row.isRead) ?? asBoolean(content.isRead) ?? false,
     readAt: asString(row.readAt) ?? asString(content.readAt),
+    shapedByCheckIn: content.shapedByCheckIn === true ? true : undefined,
+    nextPick: asNextPick(content.nextPick),
+    nextPickLine,
     isRevealed: asBoolean(content.isRevealed),
     quotes,
     crossReferences,

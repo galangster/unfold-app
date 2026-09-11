@@ -14,6 +14,12 @@ export function shouldShowShapedByCheckInChip(d: Devotional, day: DevotionalDay)
   return isAutoTrialSeries(d) && day.dayNumber === 2 && day.shapedByCheckIn === true;
 }
 
+export function asTrimmedString(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
 export function asNextPick(v: unknown): NextPick | undefined {
   if (v === null || typeof v !== 'object') return undefined;
   const row = v as Record<string, unknown>;
@@ -29,4 +35,11 @@ export function asNextPick(v: unknown): NextPick | undefined {
     suggestedLength: row.suggestedLength,
     line: row.line,
   };
+}
+
+export function shouldInsertPulledDevotional(
+  mapped: Pick<Devotional, 'id'>,
+  hasAutoTrialSeries: boolean,
+): boolean {
+  return !(isOnboardingSampleDevotionalId(mapped.id) && hasAutoTrialSeries);
 }
