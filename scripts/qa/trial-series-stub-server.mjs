@@ -61,7 +61,7 @@ const server = createServer((req, res) => {
 
   const jobMatch = path.match(/^\/api\/jobs\/([^/]+)(?:\/retry)?$/);
   if (jobMatch && (req.method === 'GET' || req.method === 'POST')) {
-    json(res, req.method === 'POST' ? 200 : 200, jobReply(decodeURIComponent(jobMatch[1])));
+    json(res, 200, jobReply(decodeURIComponent(jobMatch[1])));
     return;
   }
 

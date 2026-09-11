@@ -17,6 +17,14 @@ import { scheduleDevotionalReadyTapTestNotification } from '@/lib/notifications'
 import { buildDevotionalSeed } from '@/lib/dev-seed';
 import { SettingsSectionHeader } from './SettingsSectionHeader';
 
+const QA_ROW_STYLE = {
+  padding: Spacing['4'],
+  borderRadius: Radius.md,
+  backgroundColor: 'rgba(200, 165, 92, 0.1)',
+  alignItems: 'center' as const,
+  marginBottom: Spacing['3'],
+};
+
 /** Internal QA affordances for notification/reveal verification builds. */
 export function QaToolsSection() {
   const router = useRouter();
@@ -274,13 +282,7 @@ export function QaToolsSection() {
             ],
           );
         }}
-        style={{
-          padding: Spacing['4'],
-          borderRadius: Radius.md,
-          backgroundColor: 'rgba(200, 165, 92, 0.1)',
-          alignItems: 'center',
-          marginBottom: Spacing['3'],
-        }}
+        style={QA_ROW_STYLE}
       >
         <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 14, color: colors.accent }}>
           Simulate Trial Purchase (Dev)

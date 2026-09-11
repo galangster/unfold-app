@@ -1,17 +1,14 @@
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { LogBox } from 'react-native';
 
 import type { OnboardingData } from '@/app/onboarding';
-import {
-  AUTO_TRIAL_INTENT_KEY,
-  createAutoTrialIntent,
-  transitionAutoTrialIntent,
-} from '@/lib/auto-trial-intent';
+import { AUTO_TRIAL_INTENT_KEY } from '@/lib/auto-trial-intent';
 import {
   assertTrialSeriesFixtureEnvironment,
   buildTrialSeriesSeed,
   isTrialSeriesFixtureState,
+  TRIAL_SERIES_FIXTURE_PERSONA,
   type TrialSeriesFixtureState,
   type TrialSeriesSeed,
 } from '@/lib/dev-seed';
@@ -30,15 +27,13 @@ function firstParam(value: string | string[] | undefined): string | undefined {
 
 function fictionalOnboardingData(trialDays: AllowedTrialDays): OnboardingData {
   return {
-    name: 'Riven Hale',
+    ...TRIAL_SERIES_FIXTURE_PERSONA,
     bibleTranslation: 'BSB',
-    aboutMe: 'A fictional reader used only for fixture captures.',
     faithBackground: 'growing',
     lifeStage: 'building',
     tone: 'warm',
     depth: 'balanced',
     selectedThemes: [],
-    currentSituation: 'Walking a short series through an ordinary week.',
     diagnosticAnswers: [],
     spiritualSeeking: 'Wanting a quieter morning.',
     upcomingEvent: { label: '', date: '' },
@@ -59,11 +54,8 @@ function fixtureUser(i: {
   theme?: 'dark' | 'light';
 }): UserProfile {
   return {
-    name: 'Riven Hale',
-    aboutMe: 'A fictional reader used only for fixture captures.',
+    ...TRIAL_SERIES_FIXTURE_PERSONA,
     personaTraits: [],
-    currentSituation: 'Walking a short series through an ordinary week.',
-    emotionalState: 'Steady',
     faithImpact: '',
     spiritualSeeking: 'Wanting a quieter morning.',
     readingDuration: 15,
@@ -88,48 +80,12 @@ function fixtureUser(i: {
   };
 }
 
-function writeIntentFromSeed(seed: TrialSeriesSeed, now: Date): void {
-  mmkvStorage.removeItem(AUTO_TRIAL_INTENT_KEY);
-  if (!seed.intent) return;
-  createAutoTrialIntent({
-    deviceId: getDeviceId(),
-    entry: seed.intent.entry,
-    surface: seed.intent.surface,
-    source: seed.intent.source,
-    simulated: true,
-    trialDays: seed.intent.trialDays,
-    purchasedAt: seed.intent.purchasedAt,
-    expiresAt: seed.intent.expiresAt,
-    timeZone: seed.intent.timeZone,
-    isSandbox: true,
-    productIdentifier: seed.intent.productIdentifier,
-    switchFetchedAt: seed.intent.switchFetchedAt,
-    nowMs: now.getTime(),
-  });
-  const nowMs = now.getTime();
-  if (seed.intent.status === 'purchased') return;
-  if (seed.intent.status === 'failed') {
-    transitionAutoTrialIntent('failed', {
-      failureCode: seed.intent.failureCode ?? 'max_retries',
-    }, { nowMs });
+function writeIntentFromSeed(seed: TrialSeriesSeed): void {
+  if (!seed.intent) {
+    mmkvStorage.removeItem(AUTO_TRIAL_INTENT_KEY);
     return;
   }
-  transitionAutoTrialIntent('submitted', {
-    ...(seed.intent.jobId ? { jobId: seed.intent.jobId } : {}),
-    ...(seed.intent.devotionalId ? { devotionalId: seed.intent.devotionalId } : {}),
-  }, { nowMs });
-  if (seed.intent.status === 'submitted') return;
-  transitionAutoTrialIntent('landed', {
-    ...(seed.intent.devotionalId ? { devotionalId: seed.intent.devotionalId } : {}),
-  }, { nowMs });
-  if (seed.intent.status === 'landed') return;
-  if (seed.intent.status === 'revealed') {
-    transitionAutoTrialIntent('revealed', {}, { nowMs });
-    return;
-  }
-  if (seed.intent.status === 'completed') {
-    transitionAutoTrialIntent('completed', {}, { nowMs });
-  }
+  mmkvStorage.setItem(AUTO_TRIAL_INTENT_KEY, JSON.stringify(seed.intent));
 }
 
 export function applyTrialSeriesSeed(i: {
@@ -143,22 +99,25 @@ export function applyTrialSeriesSeed(i: {
     ?? seed.devotional?.totalDays
     ?? roundTrialDays(QA_TRIAL_LENGTH_OPTIONS[0].trialLengthMs);
   if (trialDays == null) throw new Error('Trial fixture length is not an allowed trial.');
-  const store = useUnfoldStore.getState();
-  store.setUser(fixtureUser({
-    completed: i.state !== 'confirmation',
-    trialDays,
-    theme: i.theme,
-  }));
+  const nowIso = new Date().toISOString();
   useUnfoldStore.setState({
-    devotionals: [],
-    currentDevotionalId: null,
+    user: fixtureUser({
+      completed: i.state !== 'confirmation',
+      trialDays,
+      theme: i.theme,
+    }),
+    userUpdatedAt: nowIso,
+    devotionals: seed.devotional ? [{ ...seed.devotional, updatedAt: nowIso }] : [],
+    currentDevotionalId: seed.devotional?.id ?? null,
+    generationSession: {
+      status: 'idle',
+      devotionalId: null,
+      totalDays: 0,
+      generatedDayNumbers: [],
+    },
+    ...(seed.devotional ? { hasEverCreatedDevotional: true } : {}),
   });
-  store.clearGenerationSession();
-  if (seed.devotional) {
-    store.addDevotional(seed.devotional);
-    store.setCurrentDevotional(seed.devotional.id);
-  }
-  writeIntentFromSeed(seed, i.now);
+  writeIntentFromSeed(seed);
   clearInflightGenerationJob();
   if (i.state === 'reveal-generating' || i.state === 'reveal-failed') {
     const jobId = seed.intent?.jobId;
@@ -190,9 +149,11 @@ export default function TrialSeriesFixtureRoute() {
   const state = firstParam(params.state);
   const theme = firstParam(params.theme);
   const enabled = isQaToolsEnabled();
+  const appliedRef = useRef(false);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || appliedRef.current) return;
+    appliedRef.current = true;
     LogBox.ignoreAllLogs(true);
     useUIState.getState().setQaCaptureMode(true);
     if (!isTrialSeriesFixtureState(state)) {

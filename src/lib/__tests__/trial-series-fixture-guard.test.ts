@@ -96,4 +96,15 @@ describe('L7 trial series fixture guard', () => {
     expect(useUnfoldStore.getState().currentDevotionalId).toBe(seed.devotional?.id);
     expect(useUnfoldStore.getState().devotionals).toHaveLength(1);
   });
+
+  it('writes the terminal intent record once', () => {
+    backend.PRIMARY_BACKEND_URL = 'http://127.0.0.1:8797';
+    const now = new Date(2026, 8, 11, 15, 30, 0);
+    for (const state of ['confirmation', 'reveal-exhausted', 'today-day1', 'series-complete'] as const) {
+      const seed = applyTrialSeriesSeed({ state, now });
+      expect(JSON.parse((mmkvStorage.getItem(AUTO_TRIAL_INTENT_KEY) as string | null)!)).toEqual(seed.intent);
+    }
+    applyTrialSeriesSeed({ state: 'later-entry-notify', now });
+    expect(mmkvStorage.getItem(AUTO_TRIAL_INTENT_KEY)).toBeNull();
+  });
 });
