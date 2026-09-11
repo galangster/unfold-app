@@ -37,10 +37,14 @@ jest.mock('../home-devotional-state', () => ({
   getTodayCarryLine: () => '',
 }));
 
-jest.mock('../push-notification-helpers', () => ({
-  buildDevotionalReadyNotificationData: jest.fn(),
-  parseHhMm: () => ({ hour: 8, minute: 0 }),
-}));
+jest.mock('../push-notification-helpers', () => {
+  const actual = jest.requireActual('../push-notification-helpers') as typeof import('../push-notification-helpers');
+  return {
+    buildDevotionalReadyNotificationData: jest.fn(),
+    parseHhMm: () => ({ hour: 8, minute: 0 }),
+    pushNamesAutoTrialIntent: actual.pushNamesAutoTrialIntent,
+  };
+});
 
 jest.mock('../daily-reminder-content', () => ({
   getDailyReminderContent: () => ({ title: 't', body: 'b' }),

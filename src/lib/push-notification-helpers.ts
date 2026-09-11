@@ -277,6 +277,19 @@ function isLiveAutoTrialStatus(status: AutoTrialIntentV1['status']): boolean {
   return status === 'purchased' || status === 'submitted' || status === 'landed' || status === 'failed';
 }
 
+export function pushNamesAutoTrialIntent(
+  data: Record<string, unknown> | null | undefined,
+  intent: Pick<AutoTrialIntentV1, 'jobId' | 'devotionalId'> | null | undefined,
+): boolean {
+  if (!data || !intent) return false;
+  const dataDevotionalId = readStringField(data, 'devotionalId');
+  const dataJobId = readStringField(data, 'jobId');
+  return (
+    (dataDevotionalId != null && dataDevotionalId === intent.devotionalId)
+    || (dataJobId != null && dataJobId === intent.jobId)
+  );
+}
+
 export function buildNotificationNavigationRoute(
   data: Record<string, unknown> | null | undefined,
   autoTrialIntent?: AutoTrialIntentV1 | null,
@@ -286,12 +299,7 @@ export function buildNotificationNavigationRoute(
     && isLiveAutoTrialStatus(autoTrialIntent.status)
     && (data?.type === 'devotional_ready' || data?.type === 'generation_failed')
   ) {
-    const dataDevotionalId = readStringField(data, 'devotionalId');
-    const dataJobId = readStringField(data, 'jobId');
-    if (
-      (dataDevotionalId != null && dataDevotionalId === autoTrialIntent.devotionalId)
-      || (dataJobId != null && dataJobId === autoTrialIntent.jobId)
-    ) {
+    if (pushNamesAutoTrialIntent(data, autoTrialIntent)) {
       return { pathname: '/series-reveal', params: { intentId: autoTrialIntent.intentId } };
     }
   }

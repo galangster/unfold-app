@@ -64,7 +64,8 @@ jest.mock('expo-router', () => ({
 }));
 
 import { act, create } from 'react-test-renderer';
-import { useAutoTrialGeneration } from '../useAutoTrialGeneration';
+import { nextPollDelayMs, useAutoTrialGeneration } from '../useAutoTrialGeneration';
+import { POLL_DELAY_INITIAL_MS } from '@/lib/generation-poll-outcome';
 import {
   createAutoTrialIntent,
   markAutoTrialIntentDismissed,
@@ -176,5 +177,16 @@ describe('H13 useAutoTrialGeneration unmount', () => {
     });
     expect(mockRetry).toHaveBeenCalledWith('job-1');
     expect(readInflightGenerationJob()?.jobId).toBe('job-1');
+  });
+});
+
+describe('nextPollDelayMs', () => {
+  it('waits at least the base poll interval for a healthy waiting job', () => {
+    expect(nextPollDelayMs(0, {
+      unreachable: false,
+      generating: true,
+      consecutiveNetworkErrors: 0,
+      hasCompletedResult: false,
+    })).toBeGreaterThanOrEqual(POLL_DELAY_INITIAL_MS);
   });
 });

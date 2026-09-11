@@ -8,6 +8,7 @@ import {
   readAutoTrialIntent,
   settleLandedAutoTrialSeries,
   transitionAutoTrialIntent,
+  type AutoTrialIntentV1,
 } from '@/lib/auto-trial-intent';
 import {
   trackAutoTrialFailed,
@@ -26,6 +27,8 @@ import {
   classifyPollFailure,
   evaluateGenerationPoll,
   getNextPollDelayMs,
+  resolveGoHomeCleanup,
+  type ObservedJobState,
 } from '@/lib/generation-poll-outcome';
 import { captureSyncSession } from '@/lib/generation-session';
 import {
@@ -46,16 +49,60 @@ import {
   type SeriesRevealEvent,
   type SeriesRevealState,
 } from '@/lib/series-reveal-machine';
-import { flushUnfoldStorePersistAsync, useUnfoldStore } from '@/lib/store';
+import { flushUnfoldStorePersistAsync, useUnfoldStore, type Devotional } from '@/lib/store';
 import { useUIState } from '@/lib/ui-state';
 import { syncUserProfileToBackend } from '@/lib/user-profile-sync';
 
 export const PROFILE_PUSH_CAP_MS = 5_000;
 
-function day1LandedFor(devotionalId: string | null): boolean {
+export function nextPollDelayMs(
+  elapsedMs: number,
+  input: {
+    unreachable: boolean;
+    generating: boolean;
+    consecutiveNetworkErrors: number;
+    hasCompletedResult: boolean;
+  },
+): number {
+  if (input.unreachable) return getNextPollDelayMs(elapsedMs) * 2;
+  if (input.generating && input.consecutiveNetworkErrors === 0 && !input.hasCompletedResult) {
+    return getNextPollDelayMs(elapsedMs);
+  }
+  return getNextPollDelayMs(elapsedMs);
+}
+
+function day1LandedFor(
+  devotionalId: string | null,
+  devotionals: readonly Devotional[],
+): boolean {
   if (!devotionalId) return false;
-  const series = useUnfoldStore.getState().devotionals.find((row) => row.id === devotionalId);
+  const series = devotionals.find((row) => row.id === devotionalId);
   return Boolean(series?.days.some((day) => day.dayNumber === 1));
+}
+
+function recordInflight(jobId: string, intent: AutoTrialIntentV1): void {
+  writeInflightGenerationJob({
+    jobId,
+    ...(intent.devotionalId ? { devotionalId: intent.devotionalId } : {}),
+    submittedAt: Date.now(),
+    leftForHome: intent.dismissedAt != null,
+  });
+}
+
+function jobIdOf(state: SeriesRevealState): string | null {
+  if (state.kind === 'generating' || state.kind === 'failed' || state.kind === 'retry_exhausted') {
+    return state.jobId;
+  }
+  return null;
+}
+
+function observedJobStateOf(state: SeriesRevealState): ObservedJobState {
+  if (state.kind === 'generating') return 'alive';
+  if (state.kind === 'revealed') return 'complete';
+  if (state.kind === 'retry_exhausted') {
+    return state.reason === 'invalid_result' ? 'invalid-result' : 'failed';
+  }
+  return 'unobserved';
 }
 
 function submitErrorFields(err: unknown): {
@@ -99,7 +146,6 @@ export function useAutoTrialGeneration(intentId: string): {
   const router = useRouter();
   const [state, setState] = useState<SeriesRevealState>({ kind: 'resolving' });
   const stateRef = useRef(state);
-  stateRef.current = state;
   const mountedRef = useRef(true);
   const isExitingRef = useRef(false);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -109,6 +155,9 @@ export function useAutoTrialGeneration(intentId: string): {
   const revealedOnceRef = useRef(false);
 
   const runEffectsRef = useRef<(effects: SeriesRevealEffect[]) => void>(() => undefined);
+  // The first poll after mount runs at once so a settled job resolves without
+  // a visible wait; later polls follow the backoff schedule.
+  const hasPolledRef = useRef(false);
 
   const apply = useCallback((event: SeriesRevealEvent) => {
     const next = reduceSeriesReveal(stateRef.current, event);
@@ -119,22 +168,19 @@ export function useAutoTrialGeneration(intentId: string): {
   }, []);
 
   const persistAcceptedSubmit = useCallback((
+    intent: AutoTrialIntentV1,
     jobId: string,
     devotionalId: string | null,
     claim: 'created' | 'repointed' | 'existing' | 'resumed' | null,
   ) => {
-    const intent = readAutoTrialIntent();
-    if (!intent) return;
     transitionAutoTrialIntent(
       'submitted',
       { jobId, ...(devotionalId ? { devotionalId } : {}) },
       { nowMs: Date.now() },
     );
-    writeInflightGenerationJob({
-      jobId,
+    recordInflight(jobId, {
+      ...intent,
       ...(devotionalId ? { devotionalId } : {}),
-      submittedAt: Date.now(),
-      leftForHome: intent.dismissedAt != null,
     });
     try {
       trackAutoTrialSubmitted({
@@ -148,8 +194,7 @@ export function useAutoTrialGeneration(intentId: string): {
     }
   }, []);
 
-  const doSubmit = useCallback(async () => {
-    const intent = readAutoTrialIntent();
+  const doSubmit = useCallback(async (intent: AutoTrialIntentV1 | null) => {
     if (!intent) return;
     const nowMs = Date.now();
     if (isAutoTrialIntentExpired(intent, nowMs)) {
@@ -195,7 +240,7 @@ export function useAutoTrialGeneration(intentId: string): {
         devotionalId?: string | null;
         autoTrialClaim?: 'created' | 'repointed' | 'existing' | 'resumed';
       };
-      persistAcceptedSubmit(reply.jobId, reply.devotionalId ?? null, reply.autoTrialClaim ?? null);
+      persistAcceptedSubmit(intent, reply.jobId, reply.devotionalId ?? null, reply.autoTrialClaim ?? null);
       if (!mountedRef.current) return;
       apply({
         type: 'submit_ok',
@@ -205,11 +250,11 @@ export function useAutoTrialGeneration(intentId: string): {
       });
     } catch (err) {
       if (!mountedRef.current && !(err instanceof Error)) return;
-      apply({ type: 'submit_error', ...submitErrorFields(err) });
+      apply({ type: 'submit_error', ...submitErrorFields(err), nowMs: Date.now() });
     }
   }, [apply, persistAcceptedSubmit]);
 
-  const doPoll = useCallback(async (jobId: string) => {
+  const doPoll = useCallback(async (jobId: string, intent: AutoTrialIntentV1 | null) => {
     try {
       const response = await pollJobStatus(jobId);
       const evaluated = evaluateGenerationPoll({
@@ -217,7 +262,7 @@ export function useAutoTrialGeneration(intentId: string): {
         result: response.result,
         error: response.error,
         canRetry: response.canRetry,
-        fallbackDevotionalId: readAutoTrialIntent()?.devotionalId,
+        fallbackDevotionalId: intent?.devotionalId,
         dayNumber: 1,
         priorConsecutiveUnknown: 0,
       });
@@ -228,7 +273,6 @@ export function useAutoTrialGeneration(intentId: string): {
       apply({ type: 'poll', outcome: evaluated.outcome });
     } catch (err) {
       if (classifyPollFailure(err) === 'job-gone') {
-        const intent = readAutoTrialIntent();
         if (intent?.devotionalId) {
           try {
             const pulled = await pullDevotionalContent(intent.devotionalId);
@@ -261,17 +305,11 @@ export function useAutoTrialGeneration(intentId: string): {
     }
   }, [apply]);
 
-  const doRetry = useCallback(async (jobId: string) => {
+  const doRetry = useCallback(async (jobId: string, intent: AutoTrialIntentV1 | null) => {
     try {
       await retryJob(jobId);
-      const intent = readAutoTrialIntent();
       if (!readInflightGenerationJob() && intent) {
-        writeInflightGenerationJob({
-          jobId,
-          ...(intent.devotionalId ? { devotionalId: intent.devotionalId } : {}),
-          submittedAt: Date.now(),
-          leftForHome: intent.dismissedAt != null,
-        });
+        recordInflight(jobId, intent);
       }
       if (mountedRef.current) apply({ type: 'poll', outcome: { kind: 'waiting' } });
     } catch (err) {
@@ -281,26 +319,30 @@ export function useAutoTrialGeneration(intentId: string): {
   }, [apply]);
 
   const runEffects = useCallback((effects: SeriesRevealEffect[]) => {
+    let intent = readAutoTrialIntent();
     for (const effect of effects) {
       if (effect.type === 'submit') {
-        void doSubmit();
+        void doSubmit(intent);
       } else if (effect.type === 'poll') {
         const elapsed = Date.now() - pollStartRef.current;
-        const delay = lastUnreachableRef.current
-          ? getNextPollDelayMs(elapsed) * 2
-          : stateRef.current.kind === 'generating' && stateRef.current.consecutiveNetworkErrors === 0
-            && !lastCompleteRef.current
-            ? 0
-            : getNextPollDelayMs(elapsed);
+        const current = stateRef.current;
+        const delay = hasPolledRef.current
+          ? nextPollDelayMs(elapsed, {
+              unreachable: lastUnreachableRef.current,
+              generating: current.kind === 'generating',
+              consecutiveNetworkErrors: current.kind === 'generating' ? current.consecutiveNetworkErrors : 0,
+              hasCompletedResult: lastCompleteRef.current != null,
+            })
+          : 0;
+        hasPolledRef.current = true;
         lastUnreachableRef.current = false;
         if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
         pollTimerRef.current = setTimeout(() => {
-          void doPoll(effect.jobId);
+          void doPoll(effect.jobId, intent);
         }, delay);
       } else if (effect.type === 'retry_job') {
-        void doRetry(effect.jobId);
+        void doRetry(effect.jobId, intent);
       } else if (effect.type === 'land') {
-        const intent = readAutoTrialIntent();
         const payload = lastCompleteRef.current;
         const user = useUnfoldStore.getState().user;
         if (payload) {
@@ -320,6 +362,7 @@ export function useAutoTrialGeneration(intentId: string): {
           { abandonReason: effect.reason, failureCode: effect.to === 'failed' ? 'failed' : undefined },
           { nowMs: Date.now() },
         );
+        intent = readAutoTrialIntent();
       } else if (effect.type === 'redirect') {
         if (effect.to === '/(tabs)/(today)') router.replace('/(tabs)/(today)' as never);
         else if (effect.to === '/onboarding') router.replace('/onboarding' as never);
@@ -334,7 +377,13 @@ export function useAutoTrialGeneration(intentId: string): {
     }
   }, [apply, doPoll, doRetry, doSubmit, router]);
 
-  runEffectsRef.current = runEffects;
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+
+  useEffect(() => {
+    runEffectsRef.current = runEffects;
+  }, [runEffects]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -348,9 +397,11 @@ export function useAutoTrialGeneration(intentId: string): {
   useEffect(() => {
     const intent = readAutoTrialIntent();
     const inflight = readInflightGenerationJob();
+    const store = useUnfoldStore.getState();
+    const ui = useUIState.getState();
     if (intent && intent.intentId === intentId) {
-      useUIState.getState().setAutoTrialRevealGuardKey(buildRevealGuardKey(intent, inflight));
-      useUIState.getState().setSeriesRevealMountedIntentId(intent.intentId);
+      ui.setAutoTrialRevealGuardKey(buildRevealGuardKey(intent, inflight));
+      ui.setSeriesRevealMountedIntentId(intent.intentId);
     } else {
       try {
         trackAutoTrialFailed({
@@ -369,13 +420,13 @@ export function useAutoTrialGeneration(intentId: string): {
       type: 'mounted',
       intent,
       paramIntentId: intentId,
-      hasCompletedOnboarding: useUnfoldStore.getState().user?.hasCompletedOnboarding === true,
-      day1Landed: day1LandedFor(intent?.devotionalId ?? null),
+      hasCompletedOnboarding: store.user?.hasCompletedOnboarding === true,
+      day1Landed: day1LandedFor(intent?.devotionalId ?? null, store.devotionals),
       expired: intent ? isAutoTrialIntentExpired(intent, nowMs) : false,
       supersededByUserSeries: intent
         ? hasSupersedingUserSeries({
             intent,
-            devotionalIds: useUnfoldStore.getState().devotionals.map((row) => row.id),
+            devotionalIds: store.devotionals.map((row) => row.id),
             inflightJob: inflight,
           })
         : false,
@@ -396,63 +447,52 @@ export function useAutoTrialGeneration(intentId: string): {
     }
   }, [state]);
 
+  const beginExit = (run: () => void) => {
+    if (isExitingRef.current) return;
+    isExitingRef.current = true;
+    void maybeExitAsk();
+    run();
+  };
+
   const tryAgain = useCallback(() => {
     apply({ type: 'try_again', nowMs: Date.now() });
   }, [apply]);
 
   const goToToday = useCallback(() => {
-    if (isExitingRef.current) return;
-    isExitingRef.current = true;
-    void (async () => {
-      // Fire the one-time exit ask and leave at once; the OS prompt overlays
-      // the next screen and registration finishes in the background (§9.4).
-      void maybeExitAsk();
+    beginExit(() => {
       const current = stateRef.current;
+      const nowMs = Date.now();
       if (current.kind === 'retry_exhausted') {
-        transitionAutoTrialIntent('abandoned', { abandonReason: 'user_left_after_failure' }, { nowMs: Date.now() });
-        clearInflightGenerationJob();
-      } else {
-        if (
-          (current.kind === 'generating' && current.jobId)
-          || (current.kind === 'failed' && current.jobId)
-        ) {
-          markInflightJobLeftForHome();
-        }
-        if (current.kind === 'generating' || current.kind === 'failed') {
-          markAutoTrialIntentDismissed({ nowMs: Date.now() });
-        }
+        transitionAutoTrialIntent('abandoned', { abandonReason: 'user_left_after_failure' }, { nowMs });
+      } else if (current.kind === 'generating' || current.kind === 'failed') {
+        markAutoTrialIntentDismissed({ nowMs });
       }
-      router.replace('/(tabs)/(today)' as never);
-    })();
-  }, [router]);
+      const cleanup = resolveGoHomeCleanup({
+        pendingJobId: jobIdOf(current),
+        observedState: observedJobStateOf(current),
+      });
+      if (cleanup === 'clear') clearInflightGenerationJob();
+      else markInflightJobLeftForHome();
+      apply({ type: 'go_to_today' });
+    });
+  }, [apply]);
 
   const setUpSeries = useCallback(() => {
-    if (isExitingRef.current) return;
-    isExitingRef.current = true;
-    void (async () => {
-      // Fire the one-time exit ask and leave at once; the OS prompt overlays
-      // the next screen and registration finishes in the background (§9.4).
-      void maybeExitAsk();
-      transitionAutoTrialIntent('abandoned', { abandonReason: 'user_setup_fallback' }, { nowMs: Date.now() });
+    beginExit(() => {
       clearInitialGenerationRequestId();
       clearInflightGenerationJob();
-      router.replace({ pathname: '/onboarding', params: { startAt: 'themeType', flow: 'newSeries' } } as never);
-    })();
-  }, [router]);
+      apply({ type: 'set_up_series' });
+    });
+  }, [apply]);
 
   const beginDayOne = useCallback(() => {
-    if (isExitingRef.current) return;
-    isExitingRef.current = true;
-    void (async () => {
-      // Fire the one-time exit ask and leave at once; the OS prompt overlays
-      // the next screen and registration finishes in the background (§9.4).
-      void maybeExitAsk();
+    beginExit(() => {
       const intent = readAutoTrialIntent();
       router.replace({
         pathname: '/(tabs)/(today)/reading',
         params: { devotionalId: intent?.devotionalId ?? '' },
       } as never);
-    })();
+    });
   }, [router]);
 
   return { state, tryAgain, goToToday, setUpSeries, beginDayOne };

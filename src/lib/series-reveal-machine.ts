@@ -36,7 +36,7 @@ export type SeriesRevealEvent =
     }
   | { type: 'submit_blocked'; reason: 'expired' | 'superseded' }
   | { type: 'submit_ok'; jobId: string; devotionalId: string; claim: 'created' | 'repointed' | 'existing' | 'resumed' | null }
-  | { type: 'submit_error'; status: number | null; code: string | null; existingJobId: string | null }
+  | { type: 'submit_error'; status: number | null; code: string | null; existingJobId: string | null; nowMs: number }
   | { type: 'poll'; outcome: GenerationPollOutcome }
   | { type: 'job_gone' }
   | { type: 'unreachable' }
@@ -94,18 +94,29 @@ function currentJob(state: SeriesRevealState): { jobId: string | null; devotiona
   return { jobId: null, devotionalId: null };
 }
 
+const FAILURE_REASONS: ReadonlySet<SeriesRevealFailureReason> = new Set([
+  'submit_failed',
+  'rate_limited',
+  'unreachable',
+  'unknown_status',
+  'job_failed',
+  'invalid_result',
+  'max_retries',
+  'bad_request',
+]);
+
 function reasonFromFailureCode(code: string | null): SeriesRevealFailureReason {
   if (!code) return 'max_retries';
   const normalized = code.toLowerCase();
-  if (normalized === 'bad_request') return 'bad_request';
-  if (normalized === 'invalid_result') return 'invalid_result';
-  if (normalized === 'max_retries_exceeded' || normalized === 'max_retries') return 'max_retries';
-  if (normalized === 'submit_failed') return 'submit_failed';
-  if (normalized === 'job_failed') return 'job_failed';
-  if (normalized === 'unreachable') return 'unreachable';
-  if (normalized === 'unknown_status') return 'unknown_status';
-  if (normalized === 'rate_limited') return 'rate_limited';
+  if (normalized === 'max_retries_exceeded') return 'max_retries';
+  if (FAILURE_REASONS.has(normalized as SeriesRevealFailureReason)) {
+    return normalized as SeriesRevealFailureReason;
+  }
   return 'max_retries';
+}
+
+function networkErrorsOf(state: SeriesRevealState): number {
+  return state.kind === 'generating' ? state.consecutiveNetworkErrors : 0;
 }
 
 function declinedReasonFromCode(
@@ -214,7 +225,7 @@ function reduceSubmitError(
     };
   }
   if (event.status === 429) {
-    return { state: failed(ids.jobId, 'rate_limited', Date.now() + 60_000), effects: [] };
+    return { state: failed(ids.jobId, 'rate_limited', event.nowMs + 60_000), effects: [] };
   }
   if (event.status === 400) {
     return { state: exhausted(ids.jobId, 'bad_request'), effects: FAILED_CLEARS };
@@ -228,10 +239,7 @@ function reducePoll(
 ): { state: SeriesRevealState; effects: SeriesRevealEffect[] } {
   const ids = currentJob(state);
   if (outcome.kind === 'waiting' || outcome.kind === 'unknown-retry') {
-    const nextErrors = countConsecutiveNetworkErrors(
-      state.kind === 'generating' ? state.consecutiveNetworkErrors : 0,
-      true,
-    );
+    const nextErrors = countConsecutiveNetworkErrors(networkErrorsOf(state), true);
     if (!ids.jobId) return keep(state);
     return {
       state: generating(ids.jobId, ids.devotionalId, nextErrors),
@@ -324,11 +332,11 @@ export function reduceSeriesReveal(
     if (s.kind === 'generating' && s.jobId != null) {
       return { state: generating(null, s.devotionalId, 0), effects: [{ type: 'submit' }] };
     }
-    return { state: failed(s.kind === 'generating' ? s.jobId : currentJob(s).jobId, 'submit_failed'), effects: [] };
+    return { state: failed(currentJob(s).jobId, 'submit_failed'), effects: [] };
   }
 
   if (e.type === 'unreachable') {
-    const prior = s.kind === 'generating' ? s.consecutiveNetworkErrors : 0;
+    const prior = networkErrorsOf(s);
     const nextErrors = countConsecutiveNetworkErrors(prior, false);
     const ids = currentJob(s);
     if (evaluateGenerationDeadline({ elapsedMs: 0, consecutiveNetworkErrors: nextErrors }) === 'network-error') {

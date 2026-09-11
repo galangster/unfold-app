@@ -266,6 +266,7 @@ describe('H2 reduceSeriesReveal events', () => {
       status: 409,
       code: 'ALREADY_GENERATED_TODAY',
       existingJobId: JOB_ID,
+      nowMs: 1,
     });
     expect(result.state).toMatchObject({ kind: 'generating', jobId: JOB_ID });
     expect(result.effects).toEqual([
@@ -286,6 +287,7 @@ describe('H2 reduceSeriesReveal events', () => {
       status: 409,
       code: 'trial_expired',
       existingJobId: null,
+      nowMs: 1,
     });
     expect(result.state).toEqual({ kind: 'declined', reason: 'trial_expired' });
     expect(result.effects).toEqual([
@@ -305,6 +307,7 @@ describe('H2 reduceSeriesReveal events', () => {
       status: 409,
       code: 'switch_off',
       existingJobId: null,
+      nowMs: 1,
     });
     expect(result.state).toEqual({ kind: 'declined', reason: 'switch_off' });
     expect(result.effects).toEqual([
@@ -314,7 +317,6 @@ describe('H2 reduceSeriesReveal events', () => {
 
   it('rate-limits 429 for 60 seconds', () => {
     const now = 1_800_000_000_000;
-    jest.spyOn(Date, 'now').mockReturnValue(now);
     const from: SeriesRevealState = {
       kind: 'generating',
       jobId: null,
@@ -326,6 +328,7 @@ describe('H2 reduceSeriesReveal events', () => {
       status: 429,
       code: null,
       existingJobId: null,
+      nowMs: now,
     });
     expect(result.state).toEqual({
       kind: 'failed',
@@ -333,8 +336,6 @@ describe('H2 reduceSeriesReveal events', () => {
       reason: 'rate_limited',
       retryAtMs: now + 60_000,
     });
-    (Date.now as jest.Mock).mockRestore?.();
-    jest.restoreAllMocks();
   });
 
   it('exhausts 400 with transition failed and both clears', () => {
@@ -349,6 +350,7 @@ describe('H2 reduceSeriesReveal events', () => {
       status: 400,
       code: 'BAD_REQUEST',
       existingJobId: null,
+      nowMs: 1,
     });
     expect(result.state).toEqual({
       kind: 'retry_exhausted',
@@ -374,6 +376,7 @@ describe('H2 reduceSeriesReveal events', () => {
       status: 503,
       code: null,
       existingJobId: null,
+      nowMs: 1,
     });
     expect(result.state).toEqual({
       kind: 'failed',
@@ -584,7 +587,7 @@ describe('H2 reduceSeriesReveal events', () => {
 
   it('includes inflight and session clears on every transition failed', () => {
     const cases: SeriesRevealEvent[] = [
-      { type: 'submit_error', status: 400, code: null, existingJobId: null },
+      { type: 'submit_error', status: 400, code: null, existingJobId: null, nowMs: 1 },
       { type: 'poll', outcome: { kind: 'failed', canRetry: false, error: 'x' } },
       { type: 'poll', outcome: { kind: 'invalid-result' } },
       { type: 'retry_error', code: 'MAX_RETRIES_EXCEEDED' },

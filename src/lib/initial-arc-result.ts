@@ -182,9 +182,10 @@ export function settleInflightInitialArcWatch(
   store.failGenerationSession(outcome.message);
   void logBugError('generation', new Error(outcome.message), { jobId, phase: outcome.phase });
 
-  const writeFailed =
-    (outcome.kind === 'failed' && outcome.phase === 'server-poll' && outcome.canRetry === false)
-    || (outcome.kind === 'failed' && outcome.phase === 'server-poll-invalid-result');
+  const writeFailed = outcome.kind === 'failed' && (
+    (outcome.phase === 'server-poll' && outcome.canRetry === false)
+    || outcome.phase === 'server-poll-invalid-result'
+  );
   if (!writeFailed) return;
   const intent = readAutoTrialIntent();
   if (intent?.status !== 'submitted' || intent.jobId !== jobId) return;

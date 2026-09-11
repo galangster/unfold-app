@@ -14,7 +14,11 @@ import {
   getHomeDevotionalDayData,
   getTodayCarryLine,
 } from '@/lib/home-devotional-state';
-import { buildDevotionalReadyNotificationData, parseHhMm } from '@/lib/push-notification-helpers';
+import {
+  buildDevotionalReadyNotificationData,
+  parseHhMm,
+  pushNamesAutoTrialIntent,
+} from '@/lib/push-notification-helpers';
 import { getDailyReminderContent, type DailyReminderTrigger } from '@/lib/daily-reminder-content';
 import { deferPastQuietHours } from '@/lib/quiet-hours';
 import { logEvent } from '@/lib/analytics';
@@ -442,10 +446,7 @@ Notifications.setNotificationHandler({
       intent
       && mountedId === intent.intentId
       && (type === 'devotional_ready' || type === 'generation_failed')
-      && (
-        (typeof data?.devotionalId === 'string' && data.devotionalId === intent.devotionalId)
-        || (typeof data?.jobId === 'string' && data.jobId === intent.jobId)
-      ),
+      && pushNamesAutoTrialIntent(data, intent)
     );
     return {
       shouldShowAlert: !namesIntentJob,
