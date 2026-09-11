@@ -78,4 +78,31 @@ describe('redirectSystemPath', () => {
     expect(redirectSystemPath({ path: 'unfold://paywall', initial: true })).toBe('/');
     expect(logger.warn).toHaveBeenCalledTimes(1);
   });
+
+  it('L6 admits a valid trial-series fixture and rewrites bad params', () => {
+    const valid = 'unfold://dev/trial-series?state=today-day1&theme=dark';
+    expect(redirectSystemPath({ path: valid, initial: false })).toBe('/');
+    jest.mocked(isQaToolsEnabled).mockReturnValue(true);
+    expect(redirectSystemPath({ path: valid, initial: false })).toBe(valid);
+    expect(redirectSystemPath({
+      path: 'unfold://dev/trial-series?state=today-day2-read',
+      initial: true,
+    })).toBe('unfold://dev/trial-series?state=today-day2-read');
+    for (const invalid of [
+      'unfold://dev/trial-series?state=keepsake',
+      'unfold://dev/trial-series?state=today-day1&extra=1',
+      'unfold://dev/trial-series?state=today-day1&state=today-day3',
+      'unfold://dev/trial-series/extra?state=today-day1',
+      'unfold://dev/trial-series?theme=dark',
+    ]) {
+      expect(redirectSystemPath({ path: invalid, initial: false })).toBe('/');
+    }
+    const originalDev = Reflect.get(global, '__DEV__');
+    Reflect.set(global, '__DEV__', false);
+    try {
+      expect(redirectSystemPath({ path: valid, initial: false })).toBe('/');
+    } finally {
+      Reflect.set(global, '__DEV__', originalDev);
+    }
+  });
 });
