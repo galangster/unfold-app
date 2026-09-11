@@ -736,7 +736,6 @@ function JourneyCompleteState({
   );
 }
 
-
 // ─── Main card (shared by unread / complete-today / tomorrow-locked) ──
 
 interface MainCardProps {

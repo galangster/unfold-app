@@ -138,12 +138,6 @@ jest.mock('@/lib/mmkv-storage', () => ({
 import { computeDevotionalState, type ComputeInput } from '@/components/home/compute-devotional-state';
 import { DevotionalCard } from '@/components/home/DevotionalCard';
 import { canonicalGeneratedDayId } from '@/lib/devotional-canonical-days';
-import { shouldShowTodayAutoTrialNotify } from '@/app/(tabs)/(today)/index';
-import {
-  buildPlannedSeriesPath,
-  buildSeriesPath,
-} from '@/lib/series-path';
-import type { AutoTrialIntentV1 } from '@/lib/auto-trial-intent';
 import type { Devotional, DevotionalDay, NextPick } from '@/lib/store';
 
 jest.mock('expo-store-review', () => ({
@@ -220,7 +214,6 @@ const todaySource = readFileSync(
 
 const ID = 'auto-1';
 const monday = new Date(2026, 5, 8, 18, 0, 0);
-const tuesday = new Date(2026, 5, 9, 10, 0, 0);
 
 function day(n: number, over: Partial<DevotionalDay> = {}): DevotionalDay {
   return {
@@ -302,25 +295,13 @@ function input(over: Partial<ComputeInput> = {}): ComputeInput {
   };
 }
 
-function states(nodes: { state: string }[]) {
-  return nodes.map((node) => node.state);
-}
-
 describe('J14 Today auto-trial card', () => {
-  it('renders the S4 3-day fixture rows with the expected type and nodes', () => {
-    const planned = buildPlannedSeriesPath(3);
-    expect(states(planned)).toEqual(['preparing', 'locked', 'locked']);
+  it('renders the S4 3-day fixture rows with the expected type', () => {
     expect(computeDevotionalState(input({
       currentDevotional: null,
       currentDayData: null,
       preparingInflightSeries: { seriesTitle: 'Trial Series' },
-      autoTrial: {
-        path: planned,
-        daysRead: 0,
-        keepsakeAvailable: false,
-        onOpenKeepsake: noop,
-        nextPick: null,
-      },
+      autoTrialActive: true,
     })).type).toBe('preparing');
 
     expect(computeDevotionalState(input({
@@ -330,42 +311,24 @@ describe('J14 Today auto-trial card', () => {
     })).type).toBe('first-series-failed');
 
     const day1 = autoSeries({ days: [day(1)], currentDay: 1 });
-    const day1Path = buildSeriesPath(day1, monday, { isCurrentSeries: true });
-    expect(states(day1Path)).toEqual(['today', 'locked', 'locked']);
     expect(computeDevotionalState(input({
       currentDevotional: day1,
       currentDayData: day1.days[0],
-      autoTrial: {
-        path: day1Path,
-        daysRead: 0,
-        keepsakeAvailable: false,
-        onOpenKeepsake: noop,
-        nextPick: null,
-      },
+      autoTrialActive: true,
     })).type).toBe('unread');
 
     const day1Read = autoSeries({
       currentDay: 2,
       days: [day(1, { isRead: true, readAt: monday.toISOString() })],
     });
-    const eveningPath = buildSeriesPath(day1Read, monday, { isCurrentSeries: true });
-    expect(states(eveningPath)).toEqual(['read', 'tomorrow', 'locked']);
-    expect(eveningPath[1]?.contentReady).toBe(false);
-    const eveningState = computeDevotionalState(input({
+    expect(computeDevotionalState(input({
       currentDevotional: day1Read,
       currentDayData: day1Read.days[0],
       hasReadToday: true,
       dayLabel: 'Today',
       daysCompleted: 1,
-      autoTrial: {
-        path: eveningPath,
-        daysRead: 1,
-        keepsakeAvailable: true,
-        onOpenKeepsake: noop,
-        nextPick: null,
-      },
-    }));
-    expect(eveningState.type).toBe('complete-today');
+      autoTrialActive: true,
+    })).type).toBe('complete-today');
 
     const day2Locked = autoSeries({
       currentDay: 2,
@@ -374,42 +337,25 @@ describe('J14 Today auto-trial card', () => {
         day(2, { isRevealed: true }),
       ],
     });
-    const lockedPath = buildSeriesPath(day2Locked, monday, { isCurrentSeries: true });
-    expect(states(lockedPath)).toEqual(['read', 'tomorrow', 'locked']);
-    expect(lockedPath[1]?.contentReady).toBe(true);
     expect(computeDevotionalState(input({
       currentDevotional: day2Locked,
       currentDayData: day2Locked.days[1],
       hasReadToday: true,
       dayLabel: 'Tomorrow',
       daysCompleted: 1,
-      autoTrial: {
-        path: lockedPath,
-        daysRead: 1,
-        keepsakeAvailable: true,
-        onOpenKeepsake: noop,
-        nextPick: null,
-      },
+      autoTrialActive: true,
     })).type).toBe('tomorrow-locked');
 
     const day2Missing = autoSeries({
       currentDay: 2,
       days: [day(1, { isRead: true, readAt: monday.toISOString() })],
     });
-    const recoveryPath = buildSeriesPath(day2Missing, tuesday, { isCurrentSeries: true });
-    expect(states(recoveryPath)).toEqual(['read', 'preparing', 'locked']);
     expect(computeDevotionalState(input({
       currentDevotional: day2Missing,
       currentDayData: null,
       isPreparing: true,
       daysCompleted: 1,
-      autoTrial: {
-        path: recoveryPath,
-        daysRead: 1,
-        keepsakeAvailable: true,
-        onOpenKeepsake: noop,
-        nextPick: null,
-      },
+      autoTrialActive: true,
     })).type).toBe('preparing');
 
     const day2Sealed = autoSeries({
@@ -419,19 +365,11 @@ describe('J14 Today auto-trial card', () => {
         day(2, { isRevealed: false }),
       ],
     });
-    const revealPath = buildSeriesPath(day2Sealed, tuesday, { isCurrentSeries: true });
-    expect(states(revealPath)).toEqual(['read', 'today', 'locked']);
     expect(computeDevotionalState(input({
       currentDevotional: day2Sealed,
       currentDayData: day2Sealed.days[1],
       daysCompleted: 1,
-      autoTrial: {
-        path: revealPath,
-        daysRead: 1,
-        keepsakeAvailable: true,
-        onOpenKeepsake: noop,
-        nextPick: null,
-      },
+      autoTrialActive: true,
     })).type).toBe('reveal-ready');
 
     const day2Open = autoSeries({
@@ -441,19 +379,11 @@ describe('J14 Today auto-trial card', () => {
         day(2, { isRevealed: true }),
       ],
     });
-    const openPath = buildSeriesPath(day2Open, tuesday, { isCurrentSeries: true });
-    expect(states(openPath)).toEqual(['read', 'today', 'locked']);
     expect(computeDevotionalState(input({
       currentDevotional: day2Open,
       currentDayData: day2Open.days[1],
       daysCompleted: 1,
-      autoTrial: {
-        path: openPath,
-        daysRead: 1,
-        keepsakeAvailable: true,
-        onOpenKeepsake: noop,
-        nextPick: null,
-      },
+      autoTrialActive: true,
     })).type).toBe('unread');
 
     const complete = autoSeries({
@@ -464,44 +394,27 @@ describe('J14 Today auto-trial card', () => {
         day(3, { isRead: true, nextPick }),
       ],
     });
-    const completePath = buildSeriesPath(complete, tuesday, { isCurrentSeries: true });
-    expect(states(completePath)).toEqual(['read', 'read', 'read']);
     expect(computeDevotionalState(input({
       currentDevotional: complete,
       currentDayData: null,
       isJourneyComplete: true,
       premiumPolicy: 'denied',
       daysCompleted: 3,
-      autoTrial: {
-        path: completePath,
-        daysRead: 3,
-        keepsakeAvailable: true,
-        onOpenKeepsake: noop,
-        nextPick,
-      },
+      autoTrialActive: true,
     })).type).toBe('journey-complete');
 
     const lapsed = autoSeries({
       currentDay: 3,
       days: [day(1, { isRead: true }), day(2, { isRead: true })],
     });
-    const lapsedPath = buildSeriesPath(lapsed, tuesday, { isCurrentSeries: true });
     expect(computeDevotionalState(input({
       currentDevotional: lapsed,
       currentDayData: null,
       premiumPolicy: 'denied',
       daysCompleted: 2,
-      autoTrial: {
-        path: lapsedPath,
-        daysRead: 2,
-        keepsakeAvailable: true,
-        onOpenKeepsake: noop,
-        nextPick: null,
-      },
+      autoTrialActive: true,
     })).type).toBe('premium-paused');
 
-    // OI-36: reading access after a lapse is UNVERIFIED. Card type only.
-    const wednesday = new Date(2026, 5, 10, 10, 0, 0);
     const lapsedUnread = autoSeries({
       currentDay: 3,
       days: [
@@ -510,20 +423,12 @@ describe('J14 Today auto-trial card', () => {
         day(3, { isRevealed: true }),
       ],
     });
-    const lapsedUnreadPath = buildSeriesPath(lapsedUnread, wednesday, { isCurrentSeries: true });
-    expect(states(lapsedUnreadPath)).toEqual(['read', 'read', 'today']);
     expect(computeDevotionalState(input({
       currentDevotional: lapsedUnread,
       currentDayData: lapsedUnread.days[2],
       premiumPolicy: 'denied',
       daysCompleted: 2,
-      autoTrial: {
-        path: lapsedUnreadPath,
-        daysRead: 2,
-        keepsakeAvailable: true,
-        onOpenKeepsake: noop,
-        nextPick: null,
-      },
+      autoTrialActive: true,
     })).type).toBe('unread');
   });
 
@@ -533,25 +438,13 @@ describe('J14 Today auto-trial card', () => {
       isJourneyComplete: true,
       premiumPolicy: 'denied',
       daysCompleted: 3,
-      autoTrial: {
-        path: buildPlannedSeriesPath(3),
-        daysRead: 3,
-        keepsakeAvailable: true,
-        onOpenKeepsake: jest.fn(),
-        nextPick,
-      },
+      autoTrialActive: true,
     }));
     const pausedState = computeDevotionalState(input({
       currentDayData: null,
       premiumPolicy: 'denied',
       daysCompleted: 2,
-      autoTrial: {
-        path: buildPlannedSeriesPath(3),
-        daysRead: 2,
-        keepsakeAvailable: true,
-        onOpenKeepsake: jest.fn(),
-        nextPick: null,
-      },
+      autoTrialActive: true,
     }));
     expect(completeState.type).toBe('journey-complete');
     expect(pausedState.type).toBe('premium-paused');
@@ -567,23 +460,7 @@ describe('J14 Today auto-trial card', () => {
     expect(pausedTree.root.findAllByProps({ accessibilityLabel: 'Open keepsake' })).toHaveLength(0);
   });
 
-  it('keeps later-entry notify logic and does not mount a Today notify card', () => {
-    const liveIntent = { status: 'revealed' } as AutoTrialIntentV1;
-    expect(shouldShowTodayAutoTrialNotify({
-      autoTrialActive: true,
-      intent: liveIntent,
-      permission: 'undetermined',
-    })).toBe(true);
-    expect(shouldShowTodayAutoTrialNotify({
-      autoTrialActive: true,
-      intent: liveIntent,
-      permission: 'granted',
-    })).toBe(false);
-    expect(shouldShowTodayAutoTrialNotify({
-      autoTrialActive: true,
-      intent: { status: 'completed' } as AutoTrialIntentV1,
-      permission: 'undetermined',
-    })).toBe(false);
+  it('does not mount a Today notify card', () => {
     expect(todaySource).not.toContain('AutoTrialNotifyCard');
     expect(todaySource).not.toContain('notify={showAutoTrialNotify');
   });

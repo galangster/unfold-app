@@ -131,7 +131,6 @@ jest.mock('@/lib/store', () => ({
 
 import {
   applyTodayAutoTrialFocus,
-  resolveAutoTrialRetryNavigation,
   abandonPurchasedIntentBeforeNewSeries,
 } from '@/app/(tabs)/(today)/index';
 import {
@@ -404,19 +403,6 @@ describe('H7 Today auto-trial focus', () => {
   });
 
   it('routes auto today-failed retry to generating for submitted and failed', () => {
-    expect(resolveAutoTrialRetryNavigation({
-      intent: intent({ status: 'submitted', intentId: INTENT_ID, devotionalId: 'auto-1' }),
-      sessionDevotionalId: 'auto-1',
-    })).toEqual({ kind: 'generating' });
-    expect(resolveAutoTrialRetryNavigation({
-      intent: intent({ status: 'failed', intentId: INTENT_ID, devotionalId: 'auto-1' }),
-      sessionDevotionalId: 'auto-1',
-    })).toEqual({ kind: 'generating' });
-    expect(resolveAutoTrialRetryNavigation({
-      intent: intent({ status: 'failed', devotionalId: 'auto-1' }),
-      sessionDevotionalId: 'other',
-    })).toEqual({ kind: 'generating' });
-
     const retry = todaySource.slice(
       todaySource.indexOf('const handleRetryInflightSeries'),
       todaySource.indexOf('const handleDismissInflightSeriesFailure'),

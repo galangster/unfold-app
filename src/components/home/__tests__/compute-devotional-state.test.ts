@@ -1,6 +1,5 @@
 import { computeDevotionalState, findMostRecentlyReadDay, type ComputeInput } from '../compute-devotional-state';
-import type { SeriesPathNode } from '@/lib/series-path';
-import type { DevotionalDay, Devotional, NextPick } from '@/lib/store';
+import type { DevotionalDay, Devotional } from '@/lib/store';
 
 // ─── Fixtures ───────────────────────────────────────────────────
 
@@ -671,52 +670,6 @@ describe('computeDevotionalState — inflightSeriesFailed', () => {
   });
 });
 
-const pathNodes: SeriesPathNode[] = [
-  {
-    dayNumber: 1,
-    state: 'read',
-    title: 'Begin',
-    shapedByCheckIn: false,
-    contentReady: true,
-    dateWord: null,
-  },
-  {
-    dayNumber: 2,
-    state: 'read',
-    title: 'Continue',
-    shapedByCheckIn: false,
-    contentReady: true,
-    dateWord: null,
-  },
-  {
-    dayNumber: 3,
-    state: 'read',
-    title: 'Close',
-    shapedByCheckIn: false,
-    contentReady: true,
-    dateWord: null,
-  },
-];
-
-const nextPick: NextPick = {
-  theme: 'trust',
-  themeName: 'Learning to Trust',
-  type: 'theme',
-  suggestedLength: 7,
-  line: 'A quieter study on trust.',
-};
-
-function autoTrialInput(overrides: Partial<NonNullable<ComputeInput['autoTrial']>> = {}) {
-  return {
-    path: pathNodes,
-    daysRead: 3,
-    keepsakeAvailable: true,
-    onOpenKeepsake: noop,
-    nextPick,
-    ...overrides,
-  };
-}
-
 describe('J2 auto trial compute-devotional-state', () => {
   it('returns journey-complete when auto complete, denied, and no day data', () => {
     const onCreateNew = jest.fn();
@@ -729,7 +682,7 @@ describe('J2 auto trial compute-devotional-state', () => {
       totalDays: 3,
       progress: 100,
       onCreateNew,
-      autoTrial: autoTrialInput({ daysRead: 3 }),
+      autoTrialActive: true,
     });
 
     expect(state.type).toBe('journey-complete');
@@ -742,11 +695,6 @@ describe('J2 auto trial compute-devotional-state', () => {
   it('returns premium-paused when auto is incomplete and denied', () => {
     const onOpenBible = jest.fn();
     const onRenewPremium = jest.fn();
-    const pausedPath: SeriesPathNode[] = [
-      pathNodes[0],
-      pathNodes[1],
-      { ...pathNodes[2], state: 'preparing', contentReady: false },
-    ];
     const state = computeDevotionalState({
       ...baseInput,
       currentDayData: null,
@@ -756,12 +704,7 @@ describe('J2 auto trial compute-devotional-state', () => {
       totalDays: 3,
       onOpenBible,
       onRenewPremium,
-      autoTrial: autoTrialInput({
-        path: pausedPath,
-        daysRead: 2,
-        keepsakeAvailable: true,
-        nextPick: null,
-      }),
+      autoTrialActive: true,
     });
 
     expect(state.type).toBe('premium-paused');
@@ -780,7 +723,7 @@ describe('J2 auto trial compute-devotional-state', () => {
       currentDayData: null,
       isPreparing: true,
       premiumPolicy: 'unknown',
-      autoTrial: autoTrialInput({ daysRead: 1, keepsakeAvailable: true, nextPick: null }),
+      autoTrialActive: true,
     });
 
     expect(state.type).toBe('preparing');
@@ -821,7 +764,7 @@ describe('J2 auto trial compute-devotional-state', () => {
 
     const autoUnread = computeDevotionalState({
       ...baseInput,
-      autoTrial: autoTrialInput({ daysRead: 0, keepsakeAvailable: false, nextPick: null }),
+      autoTrialActive: true,
     });
     expect(autoUnread.type).toBe('unread');
     if (autoUnread.type === 'unread') {

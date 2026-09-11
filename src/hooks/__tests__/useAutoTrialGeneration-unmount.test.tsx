@@ -53,11 +53,6 @@ jest.mock('@/lib/devotional-sync-pull', () => ({
   pullDevotionalContent: jest.fn(async () => ({ days: [], timestamp: 't' })),
 }));
 
-jest.mock('@/lib/notification-ask', () => ({
-  askNotificationPermissionInContext: jest.fn(async () => 'granted'),
-  readNotificationPermissionState: jest.fn(async () => 'granted'),
-}));
-
 jest.mock('expo-router', () => ({
   useRouter: () => ({ replace: jest.fn(), push: jest.fn() }),
   router: { replace: jest.fn(), push: jest.fn() },
@@ -100,6 +95,7 @@ function seedPurchased() {
   });
 }
 
+// Spec row 13 (H6 asks once on exit) belonged to the retired reveal screen.
 describe('H13 useAutoTrialGeneration unmount', () => {
   beforeEach(() => {
     jest.clearAllMocks();

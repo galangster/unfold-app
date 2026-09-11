@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, TouchableOpacity, AppState, AppStateStatus, AccessibilityInfo, ScrollView, StyleSheet, ActivityIndicator, Linking } from 'react-native';
 import { useRouter, useNavigation, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -121,34 +121,11 @@ const RIPPLE_COUNT = 3;
 const RIPPLE_STAGGER = 900;
 const MESSAGE_CYCLE_MS = 3800;
 
-type AutoTrialGenerationApi = ReturnType<typeof useAutoTrialGeneration>;
-
-function AutoTrialGenerationController({
-  intentId,
-  onState,
-}: {
-  intentId: string;
-  onState: (api: AutoTrialGenerationApi) => void;
-}) {
-  const api = useAutoTrialGeneration(intentId);
-  useEffect(() => {
-    onState(api);
-  }, [api, onState]);
-  return null;
-}
-
-function wrapGeneratingScreen(intentId: string | null, onState: (api: AutoTrialGenerationApi) => void, screen: ReactNode) {
-  return (
-    <>
-      {intentId ? <AutoTrialGenerationController intentId={intentId} onState={onState} /> : null}
-      {screen}
-    </>
-  );
-}
-
-function autoTrialErrorMessage(state: Extract<SeriesRevealState, { kind: 'failed' | 'retry_exhausted' | 'declined' }>): string {
-  if (state.kind === 'failed' && state.reason === 'unreachable') return INITIAL_ARC_UNREACHABLE_MESSAGE;
-  return 'Something went wrong. Please try again.';
+function autoTrialErrorMessage(state: Extract<SeriesRevealState, { kind: 'failed' | 'retry_exhausted' }>): string {
+  if (state.reason === 'unreachable') return INITIAL_ARC_UNREACHABLE_MESSAGE;
+  if (state.reason === 'invalid_result') return INITIAL_ARC_INVALID_RESULT_MESSAGE;
+  if (state.reason === 'unknown_status') return INITIAL_ARC_UNKNOWN_STATUS_MESSAGE;
+  return 'Generation failed on server';
 }
 
 export default function GeneratingScreen() {
@@ -249,37 +226,7 @@ export default function GeneratingScreen() {
 
   const [currentSeriesTitle, setCurrentSeriesTitle] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(true);
-  const autoApiRef = useRef<AutoTrialGenerationApi | null>(null);
-  const applyAutoTrialState = useCallback((api: AutoTrialGenerationApi) => {
-    autoApiRef.current = api;
-    const { state } = api;
-    if (state.kind === 'revealed') {
-      const landed = useUnfoldStore.getState().devotionals.find((row) => row.id === state.devotionalId);
-      setDevotionalTitle(landed?.title ?? DEFAULT_SERIES_TITLE);
-      setIsComplete(true);
-      setIsGenerating(false);
-      setError(null);
-      return;
-    }
-    if (state.kind === 'failed') {
-      setIsComplete(false);
-      setIsGenerating(false);
-      setCanRetry(true);
-      setError(autoTrialErrorMessage(state));
-      return;
-    }
-    if (state.kind === 'retry_exhausted' || state.kind === 'declined') {
-      setIsComplete(false);
-      setIsGenerating(false);
-      setCanRetry(false);
-      setError(autoTrialErrorMessage(state));
-      return;
-    }
-    setIsComplete(false);
-    setIsGenerating(true);
-    setError(null);
-  }, []);
-  const autoTrialHandoffId = (() => {
+  const [autoTrialHandoffId] = useState(() => {
     const entry = resolveGeneratingEntry({
       inflight: readInflightGenerationJob(),
       params: { jobId: params.jobId, devotionalId: params.devotionalId },
@@ -288,7 +235,42 @@ export default function GeneratingScreen() {
       autoTrialIntent: readAutoTrialIntent(),
     });
     return entry.kind === 'auto-trial-handoff' ? entry.intentId : null;
-  })();
+  });
+  const auto = useAutoTrialGeneration(autoTrialHandoffId);
+  const autoState = auto.state;
+  const autoSetUpSeries = auto.setUpSeries;
+  useEffect(() => {
+    if (!autoTrialHandoffId) return;
+    if (autoState.kind === 'revealed') {
+      const landed = useUnfoldStore.getState().devotionals.find((row) => row.id === autoState.devotionalId);
+      setDevotionalTitle(landed?.title ?? DEFAULT_SERIES_TITLE);
+      setIsComplete(true);
+      setIsGenerating(false);
+      setError(null);
+      return;
+    }
+    if (autoState.kind === 'declined') {
+      autoSetUpSeries();
+      return;
+    }
+    if (autoState.kind === 'failed') {
+      setIsComplete(false);
+      setIsGenerating(false);
+      setCanRetry(true);
+      setError(autoTrialErrorMessage(autoState));
+      return;
+    }
+    if (autoState.kind === 'retry_exhausted') {
+      setIsComplete(false);
+      setIsGenerating(false);
+      setCanRetry(false);
+      setError(autoTrialErrorMessage(autoState));
+      return;
+    }
+    setIsComplete(false);
+    setIsGenerating(true);
+    setError(null);
+  }, [autoSetUpSeries, autoState, autoTrialHandoffId]);
   const notificationPromptTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Prevent swipe-back during generation; re-enable on error.
@@ -760,6 +742,9 @@ export default function GeneratingScreen() {
     // A push is judged stale against the generation session and the series
     // already in the store, never against currentDevotionalId: onboarding's
     // sample and a finished journey are "current" too, and read as moved on.
+    if (autoTrialHandoffId) {
+      return;
+    }
     const { generationSession, devotionals } = useUnfoldStore.getState();
     const entry = resolveGeneratingEntry({
       inflight: readInflightGenerationJob(),
@@ -768,9 +753,6 @@ export default function GeneratingScreen() {
       landedDevotionalIds: devotionals.map((devotional) => devotional.id),
       autoTrialIntent: readAutoTrialIntent(),
     });
-    if (entry.kind === 'auto-trial-handoff') {
-      return;
-    }
     if (entry.kind === 'resume') {
       const { inflight } = entry;
       logger.log('[generating] Resuming inflight job from MMKV:', inflight.jobId);
@@ -907,22 +889,14 @@ export default function GeneratingScreen() {
 
   const [isNavigating, setIsNavigating] = useState(false);
 
-  const handleBeginReading = () => {
-    if (autoApiRef.current) {
-      autoApiRef.current.beginDayOne();
-      return;
-    }
+  const legacyBeginDayOne = () => {
     if (isNavigating) return;
     setIsNavigating(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     router.replace('/(tabs)/(today)/reading');
   };
 
-  const handleRetry = async () => {
-    if (autoApiRef.current) {
-      autoApiRef.current.tryAgain();
-      return;
-    }
+  const legacyTryAgain = async () => {
     if (isGenerating) return;
     void logBugEvent('generation', 'generation-user-retry', { pendingJobId });
 
@@ -1011,11 +985,7 @@ export default function GeneratingScreen() {
     }
   };
 
-  const handleRetryFromOnboarding = () => {
-    if (autoApiRef.current) {
-      autoApiRef.current.setUpSeries();
-      return;
-    }
+  const legacySetUpSeries = () => {
     if (isGenerating) return;
     void logBugEvent('generation', 'generation-restart-onboarding');
     stopOwnedPolling();
@@ -1030,11 +1000,7 @@ export default function GeneratingScreen() {
     router.replace('/onboarding');
   };
 
-  const handleGoHome = () => {
-    if (autoApiRef.current) {
-      autoApiRef.current.goToToday();
-      return;
-    }
+  const legacyGoToToday = () => {
     if (isGenerating) return;
     void logBugEvent('generation', 'generation-abandoned-go-home');
     stopOwnedPolling();
@@ -1060,11 +1026,7 @@ export default function GeneratingScreen() {
   // preparing card and watches it instead of bouncing back here. Nothing is
   // awaited and no permission prompt sits on this path: the tap must always
   // leave this screen.
-  const handleLeaveForHome = () => {
-    if (autoApiRef.current) {
-      autoApiRef.current.goToToday();
-      return;
-    }
+  const legacyLeaveForHome = () => {
     leftForHomeRef.current = true;
     stopOwnedPolling();
     const record = markInflightJobLeftForHome();
@@ -1077,12 +1039,31 @@ export default function GeneratingScreen() {
     router.replace('/(tabs)/(today)');
   };
 
+  const actions = autoTrialHandoffId ? {
+    beginDayOne: auto.beginDayOne,
+    tryAgain: auto.tryAgain,
+    setUpSeries: auto.setUpSeries,
+    goToToday: auto.goToToday,
+    leaveForHome: auto.goToToday,
+  } : {
+    beginDayOne: legacyBeginDayOne,
+    tryAgain: legacyTryAgain,
+    setUpSeries: legacySetUpSeries,
+    goToToday: legacyGoToToday,
+    leaveForHome: legacyLeaveForHome,
+  };
+  const handleBeginReading = actions.beginDayOne;
+  const handleRetry = actions.tryAgain;
+  const handleRetryFromOnboarding = actions.setUpSeries;
+  const handleGoHome = actions.goToToday;
+  const handleLeaveForHome = actions.leaveForHome;
+
   // ========== RENDER: ERROR STATE ==========
 
   if (error) {
     const displayError = toFriendlyOnboardingGenerationError(error);
     const isConnectionError = displayError.toLowerCase().includes('connection');
-    return wrapGeneratingScreen(autoTrialHandoffId, applyAutoTrialState, (
+    return (
       <View style={genStyles.transparentFlex}>
         <SafeAreaView style={genStyles.errorSafeArea}>
           {/* Error icon */}
@@ -1141,13 +1122,13 @@ export default function GeneratingScreen() {
           </TouchableOpacity>
         </SafeAreaView>
       </View>
-    ));
+    );
   }
 
   // ========== RENDER: COMPLETE STATE ==========
 
   if (isComplete) {
-    return wrapGeneratingScreen(autoTrialHandoffId, applyAutoTrialState, (
+    return (
       <View style={{ flex: 1, backgroundColor: 'transparent' }}>
         <SafeAreaView style={{ flex: 1, justifyContent: 'space-between' }} edges={['top', 'bottom']}>
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'flex-start', paddingHorizontal: Spacing['8'] }}>
@@ -1233,12 +1214,12 @@ export default function GeneratingScreen() {
           </View>
         </SafeAreaView>
       </View>
-    ));
+    );
   }
 
   // ========== RENDER: LOADING / GENERATING STATE ==========
 
-  return wrapGeneratingScreen(autoTrialHandoffId, applyAutoTrialState, (
+  return (
     <View style={{ flex: 1, backgroundColor: 'transparent' }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
         <ScrollView
@@ -1758,7 +1739,7 @@ export default function GeneratingScreen() {
         </ScrollView>
       </SafeAreaView>
     </View>
-  ));
+  );
 }
 
 const genStyles = StyleSheet.create({

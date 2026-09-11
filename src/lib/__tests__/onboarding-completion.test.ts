@@ -102,7 +102,7 @@ describe('G4 onboarding completion order and guard', () => {
     const { order, deps } = createDeps();
     const state = { started: false };
 
-    await expect(runOnboardingCompletion(state, 'auto_trial', INTENT, deps)).resolves.toBe(true);
+    await expect(runOnboardingCompletion(state, 'auto_trial', deps)).resolves.toBe(true);
 
     expect(order).toEqual([
       'retireDraftAutosave',
@@ -120,7 +120,7 @@ describe('G4 onboarding completion order and guard', () => {
   it('navigates generated to /generating and deferred to Today after adding the sample', async () => {
     const generated = createDeps();
     await expect(
-      runOnboardingCompletion({ started: false }, 'generated', null, generated.deps),
+      runOnboardingCompletion({ started: false }, 'generated', generated.deps),
     ).resolves.toBe(true);
     expect(generated.order).toEqual([
       'retireDraftAutosave',
@@ -134,7 +134,7 @@ describe('G4 onboarding completion order and guard', () => {
 
     const deferred = createDeps();
     await expect(
-      runOnboardingCompletion({ started: false }, 'deferred', null, deferred.deps),
+      runOnboardingCompletion({ started: false }, 'deferred', deferred.deps),
     ).resolves.toBe(true);
     expect(deferred.order).toEqual([
       'retireDraftAutosave',
@@ -152,9 +152,9 @@ describe('G4 onboarding completion order and guard', () => {
     const { order, deps } = createDeps();
     const state = { started: false };
 
-    await expect(runOnboardingCompletion(state, 'auto_trial', INTENT, deps)).resolves.toBe(true);
+    await expect(runOnboardingCompletion(state, 'auto_trial', deps)).resolves.toBe(true);
     const afterFirst = [...order];
-    await expect(runOnboardingCompletion(state, 'auto_trial', INTENT, deps)).resolves.toBe(false);
+    await expect(runOnboardingCompletion(state, 'auto_trial', deps)).resolves.toBe(false);
     expect(order).toEqual(afterFirst);
   });
 });

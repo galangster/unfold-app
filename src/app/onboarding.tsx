@@ -1450,7 +1450,7 @@ export default function OnboardingScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const intent = readAutoTrialIntent();
     const mode = autoTrialMode && intent?.status === 'purchased' ? 'auto_trial' : 'generated';
-    void runOnboardingCompletion(completionStateRef.current, mode, intent, {
+    void runOnboardingCompletion(completionStateRef.current, mode, {
       retireDraftAutosave,
       clearSampleJob: () => {
         clearOnboardingSampleJob();
@@ -1483,7 +1483,7 @@ export default function OnboardingScreen() {
    * for a completed user and asks only what is still missing.
    */
   const handleDecideLater = useCallback(() => {
-    void runOnboardingCompletion(completionStateRef.current, 'deferred', null, {
+    void runOnboardingCompletion(completionStateRef.current, 'deferred', {
       retireDraftAutosave,
       clearSampleJob: () => {
         clearOnboardingSampleJob();

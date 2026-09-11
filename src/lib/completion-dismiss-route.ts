@@ -6,8 +6,6 @@ export type CompletionDismissTarget =
 
 export function getCompletionDismissRoute(
   type: CompletionType,
-  _ctx?: { autoTrialDevotionalId?: string | null },
 ): CompletionDismissTarget {
-  if (type === 'day') return '/(tabs)/(today)';
-  return null;
+  return type === 'day' ? '/(tabs)/(today)' : null;
 }

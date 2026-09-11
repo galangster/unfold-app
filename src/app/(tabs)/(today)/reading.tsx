@@ -69,7 +69,6 @@ import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
 import { CompletionCelebration } from '@/components/CompletionCelebration';
 import { getCompletionDismissRoute } from '@/lib/completion-dismiss-route';
-import { isAutoTrialSeries } from '@/lib/auto-trial-series';
 import { readAutoTrialIntent, transitionAutoTrialIntent } from '@/lib/auto-trial-intent';
 import { trackAutoTrialCompleted } from '@/lib/auto-trial-telemetry';
 // ShareDevotionalModal removed — pull quote share now uses /share-card route
@@ -2389,10 +2388,7 @@ export default function ReadingScreen() {
         visible={showCelebration}
         onDismiss={() => {
           setShowCelebration(false);
-          const autoTrialDevotionalId = currentDevotional && isAutoTrialSeries(currentDevotional)
-            ? currentDevotional.id
-            : null;
-          const dismissRoute = getCompletionDismissRoute(celebrationType, { autoTrialDevotionalId });
+          const dismissRoute = getCompletionDismissRoute(celebrationType);
           const pending = pendingReviewRef.current;
           pendingReviewRef.current = null;
           if (pending) {

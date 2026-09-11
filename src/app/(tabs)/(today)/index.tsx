@@ -54,7 +54,6 @@ import {
   type IntentStorage,
 } from '@/lib/auto-trial-intent';
 import { isAutoTrialSeries } from '@/lib/auto-trial-series';
-import { type NotificationPermissionState } from '@/lib/notification-ask';
 import { getDeviceId } from '@/lib/mmkv-storage';
 import { getServerOwnedSeriesTotalDays } from '@/lib/devotional-series-boundary';
 import { countReadDaysWithinBoundary } from '@/lib/series-path';
@@ -130,16 +129,6 @@ function formatResumeRelativeTime(iso?: string): string {
 }
 
 const REVEAL_RESUME_WINDOW_MS = 15_000;
-
-export function shouldShowTodayAutoTrialNotify(i: {
-  autoTrialActive: boolean;
-  intent: Pick<AutoTrialIntentV1, 'status'> | null;
-  permission: NotificationPermissionState;
-}): boolean {
-  if (!i.autoTrialActive || !i.intent) return false;
-  if (i.intent.status === 'completed' || i.intent.status === 'abandoned') return false;
-  return i.permission === 'undetermined';
-}
 
 export function applyTodayAutoTrialFocus(i: {
   intent: AutoTrialIntentV1 | null;
@@ -226,13 +215,6 @@ export function applyTodayAutoTrialFocus(i: {
     resumeGenerating: inflightDecision.action === 'resume-on-generating',
     settleIntent,
   };
-}
-
-export function resolveAutoTrialRetryNavigation(_i: {
-  intent: AutoTrialIntentV1 | null;
-  sessionDevotionalId: string | null | undefined;
-}): { kind: 'generating' } {
-  return { kind: 'generating' };
 }
 
 export function abandonPurchasedIntentBeforeNewSeries(i: {
@@ -1001,7 +983,6 @@ export default function HomeScreen() {
   );
   const autoTrialActive = isAutoTrialSeries(currentDevotional) || inflightMatchesAuto;
   const storedNextPick = currentDevotional?.days?.find((row) => row.dayNumber === totalDays)?.nextPick ?? null;
-  const autoTrialInput = autoTrialActive ? {} : null;
   const homeDayData = getHomeDevotionalDayData(currentDevotional);
   const activeCurrentDayData = currentDevotional?.days.find((day) => day.dayNumber === currentDevotional.currentDay) ?? null;
   const isCurrentDevotionalComplete = currentDevotional ? totalDays > 0 && daysCompleted === totalDays : false;
@@ -1511,7 +1492,7 @@ export default function HomeScreen() {
     reflectionStatus: currentDayReflectionStatus,
     freeWriteDraft: currentDayFreeWriteDraft,
     onSaveFreeWrite: handleSaveFreeWrite,
-    autoTrial: autoTrialInput,
+    autoTrialActive,
   });
 
   // During reveal → reading transition, render a centered ripple loader to
@@ -1533,10 +1514,6 @@ export default function HomeScreen() {
     );
   }
 
-  // The ambient art has no trial-specific scenes (spec S4/S7 keep everyday
-  // surfaces quiet), so the trial states reuse their closest existing scene.
-  const ambientStateType = devotionalState.type;
-
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Layer 0: Ambient art — one completed-day ambience owner. The
@@ -1544,7 +1521,7 @@ export default function HomeScreen() {
       <AmbientArtCanvas
         streakLevel={streakCurrent}
         hasReadToday={hasReadToday}
-        stateType={ambientStateType}
+        stateType={devotionalState.type}
         screenFocused={isTodayFocused}
         completionAmbienceKey={completionAmbienceKey}
       />

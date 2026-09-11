@@ -135,7 +135,7 @@ export interface ComputeInput {
   reflectionStatus?: ReflectionStatus;
   freeWriteDraft?: string;
   onSaveFreeWrite?: (dayNumber: number, text: string) => void;
-  autoTrial?: Record<string, unknown> | null;
+  autoTrialActive?: boolean;
 }
 
 // ─── State machine ──────────────────────────────────────────────
@@ -204,7 +204,7 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
     reflectionStatus = 'empty',
     freeWriteDraft = '',
     onSaveFreeWrite = () => {},
-    autoTrial = null,
+    autoTrialActive = false,
   } = input;
 
   // 0. A series the reader is waiting on from Today. It is not in the store,
@@ -233,7 +233,10 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
   const seriesTitle = currentDevotional.title;
 
   // Auto trial: journey-complete wins over premium-denied (TS-6).
-  if (autoTrial && isJourneyComplete) {
+  if (
+    isJourneyComplete
+    && (autoTrialActive || hasReadToday || currentDayData != null || premiumPolicy !== 'denied')
+  ) {
     return { type: 'journey-complete', seriesTitle, onCreateNew };
   }
 
@@ -248,12 +251,6 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
       onOpenBible,
       onRenewPremium,
     };
-  }
-
-  // 3. Entire series finished. This must win over missing-data/preparing
-  // states because a completed progressive series may have currentDay = totalDays + 1.
-  if (isJourneyComplete) {
-    return { type: 'journey-complete', seriesTitle, onCreateNew };
   }
 
   // 4. Content is still being generated or no day data available.
