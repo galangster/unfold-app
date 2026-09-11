@@ -180,6 +180,10 @@ describe('full user-data sync', () => {
     serveSync({
       push: (changes) => ({ results: acceptedLegacyResults(changes) }),
     });
+    // addCheckIn now flushes the outbox at once (spec §6.3, J5). That drain
+    // may have consumed the enqueue revision, so clear the min-interval guard
+    // before the explicit drain this test controls.
+    resetDrainStateForTesting();
     await drainSyncOutbox();
     expect(peekSyncOutbox()).toHaveLength(0);
 
@@ -216,6 +220,10 @@ describe('full user-data sync', () => {
     serveSync({
       push: (changes) => ({ results: acceptedLegacyResults(changes) }),
     });
+    // addCheckIn now flushes the outbox at once (spec §6.3, J5). That drain
+    // may have consumed the enqueue revision, so clear the min-interval guard
+    // before the explicit drain this test controls.
+    resetDrainStateForTesting();
     await drainSyncOutbox();
     expect(peekSyncOutbox()).toHaveLength(0);
 
@@ -294,6 +302,10 @@ describe('full user-data sync', () => {
     serveSync({
       push: (changes) => ({ results: acceptedLegacyResults(changes) }),
     });
+    // addCheckIn now flushes the outbox at once (spec §6.3, J5). That drain
+    // may have consumed the enqueue revision, so clear the min-interval guard
+    // before the explicit drain this test controls.
+    resetDrainStateForTesting();
     await drainSyncOutbox();
     expect(peekSyncOutbox()).toHaveLength(0);
 

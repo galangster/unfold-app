@@ -15,4 +15,8 @@ if ('EXPO_PUBLIC_ENABLE_QA_TOOLS' in productionEnv) {
   throw new Error('[cvl] production build must not define EXPO_PUBLIC_ENABLE_QA_TOOLS');
 }
 
+if ('EXPO_PUBLIC_REVENUECAT_TEST_KEY' in productionEnv) {
+  throw new Error('[cvl] production build must not define EXPO_PUBLIC_REVENUECAT_TEST_KEY');
+}
+
 console.log('[cvl] profile safety PASS');

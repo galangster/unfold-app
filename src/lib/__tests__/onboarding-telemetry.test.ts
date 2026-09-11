@@ -33,6 +33,7 @@ import {
   ONBOARDING_ABANDONED_EVENT,
   ONBOARDING_ABANDONED_THRESHOLD_MS,
   ONBOARDING_COMPLETED_EVENT,
+  ONBOARDING_COMPLETED_MARKER_KEY,
   ONBOARDING_RESUMED_EVENT,
   ONBOARDING_STARTED_EVENT,
   ONBOARDING_STEP_IDS,
@@ -57,6 +58,7 @@ const DAY = 24 * HOUR;
 
 beforeEach(() => {
   clearAbandonedOnboardingMarker();
+  mmkvStorage.removeItem(ONBOARDING_COMPLETED_MARKER_KEY);
   jest.clearAllMocks();
 });
 
@@ -201,6 +203,34 @@ describe('funnel events', () => {
   });
 });
 
+describe('K2 completion marker', () => {
+  it('emits once on first run, writes the marker, and rejects a second call', () => {
+    expect(trackOnboardingCompleted('generated')).toBe(true);
+    expect(capture).toHaveBeenCalledTimes(1);
+    expect(mmkvStorage.getItem(ONBOARDING_COMPLETED_MARKER_KEY)).toBe('generated');
+    expect(trackOnboardingCompleted('deferred')).toBe(false);
+    expect(capture).toHaveBeenCalledTimes(1);
+  });
+
+  it('emits nothing when isFirstRun is false', () => {
+    expect(trackOnboardingCompleted('generated', { isFirstRun: false })).toBe(false);
+    expect(capture).not.toHaveBeenCalled();
+    expect(mmkvStorage.getItem(ONBOARDING_COMPLETED_MARKER_KEY)).toBeNull();
+  });
+
+  it('accepts auto_trial', () => {
+    expect(trackOnboardingCompleted('auto_trial')).toBe(true);
+    expect(capture).toHaveBeenCalledWith(ONBOARDING_COMPLETED_EVENT, { outcome: 'auto_trial' });
+  });
+
+  it('emits again after the full-reset key is cleared', () => {
+    expect(trackOnboardingCompleted('generated')).toBe(true);
+    mmkvStorage.removeItem(ONBOARDING_COMPLETED_MARKER_KEY);
+    expect(trackOnboardingCompleted('deferred')).toBe(true);
+    expect(capture).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('privacy', () => {
   // Realistic shapes of what this app actually holds: a person's name, a family
   // member's name, and free text about a spiritual struggle.
@@ -241,7 +271,7 @@ describe('privacy', () => {
       for (const [key, value] of Object.entries(data ?? {})) {
         expect(allowedKeys.has(key)).toBe(true);
         if (key === 'age_bucket') expect(allowedBuckets.has(value)).toBe(true);
-        if (key === 'outcome') expect(['generated', 'deferred']).toContain(value);
+        if (key === 'outcome') expect(['generated', 'deferred', 'auto_trial']).toContain(value);
         // Only a step this app actually has, or the safe fallback.
         if (key === 'step') expect([...ONBOARDING_STEP_IDS, 'unknown']).toContain(value);
       }

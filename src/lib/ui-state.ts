@@ -1,5 +1,12 @@
 import { create } from 'zustand';
+import type { AutoTrialEntry, AutoTrialSurface } from '@/lib/auto-trial-exit';
 import type { TodayCompletionAmbience } from '@/lib/today-ambient-rive';
+
+export interface PendingPaywallGrant {
+  surface: AutoTrialSurface;
+  entry: AutoTrialEntry;
+  setAtMs: number;
+}
 
 /** Ephemeral UI state — not persisted, used for cross-component animation coordination */
 export const useUIState = create<{
@@ -38,6 +45,20 @@ export const useUIState = create<{
       preview/screenshot a specific scene. Ignored in production. Not persisted. */
   qaAmbienceOverride: TodayCompletionAmbience | null;
   setQaAmbienceOverride: (value: TodayCompletionAmbience | null) => void;
+  notificationPermissionEpoch: number;
+  bumpNotificationPermissionEpoch: () => void;
+  trialNoticeEpoch: number;
+  bumpTrialNoticeEpoch: () => void;
+  qaCaptureMode: boolean;
+  setQaCaptureMode: (value: boolean) => void;
+  autoTrialRevealGuardKey: string | null;
+  setAutoTrialRevealGuardKey: (value: string | null) => void;
+  seriesRevealMountedIntentId: string | null;
+  setSeriesRevealMountedIntentId: (value: string | null) => void;
+  laterEntryNotifyAskPending: boolean;
+  setLaterEntryNotifyAskPending: (value: boolean) => void;
+  pendingPaywallGrant: PendingPaywallGrant | null;
+  setPendingPaywallGrant: (value: PendingPaywallGrant | null) => void;
 }>((set) => ({
   tabBarHidden: false,
   tabBarHideMode: 'slide',
@@ -53,4 +74,22 @@ export const useUIState = create<{
   clearRevenueCatResolved: () => set({ revenueCatResolved: false }),
   qaAmbienceOverride: null,
   setQaAmbienceOverride: (value) => set({ qaAmbienceOverride: value }),
+  notificationPermissionEpoch: 0,
+  bumpNotificationPermissionEpoch: () => set((state) => ({
+    notificationPermissionEpoch: state.notificationPermissionEpoch + 1,
+  })),
+  trialNoticeEpoch: 0,
+  bumpTrialNoticeEpoch: () => set((state) => ({
+    trialNoticeEpoch: state.trialNoticeEpoch + 1,
+  })),
+  qaCaptureMode: false,
+  setQaCaptureMode: (value) => set({ qaCaptureMode: value }),
+  autoTrialRevealGuardKey: null,
+  setAutoTrialRevealGuardKey: (value) => set({ autoTrialRevealGuardKey: value }),
+  seriesRevealMountedIntentId: null,
+  setSeriesRevealMountedIntentId: (value) => set({ seriesRevealMountedIntentId: value }),
+  laterEntryNotifyAskPending: false,
+  setLaterEntryNotifyAskPending: (value) => set({ laterEntryNotifyAskPending: value }),
+  pendingPaywallGrant: null,
+  setPendingPaywallGrant: (value) => set({ pendingPaywallGrant: value }),
 }));
