@@ -17,3 +17,13 @@ export function isQaToolsEnabled(): boolean {
 export function shouldRenderQaChrome(): boolean {
   return isQaToolsEnabled() && !useUIState.getState().qaCaptureMode;
 }
+
+export function isLocalFixtureEnvironment(backendUrl: string): boolean {
+  let host = '';
+  try {
+    host = new URL(backendUrl).hostname;
+  } catch {
+    return false;
+  }
+  return isQaToolsEnabled() && (host === '127.0.0.1' || host === 'localhost');
+}

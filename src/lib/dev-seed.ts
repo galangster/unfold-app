@@ -1,28 +1,27 @@
 import type { Href } from 'expo-router';
 import { PRIMARY_BACKEND_URL } from '@/lib/backend-url';
 import type { AutoTrialIntentV1 } from '@/lib/auto-trial-intent';
+import { isLocalFixtureEnvironment } from '@/lib/qa-tools';
 import type { Devotional, DevotionalDay } from '@/lib/store';
 import { roundTrialDays, type AllowedTrialDays } from '@/lib/trial-facts';
 import { canonicalGeneratedDayId } from './devotional-canonical-days';
+import type { TrialSeriesFixtureState } from './trial-series-fixtures';
 
-export const TRIAL_SERIES_FIXTURE_STATES = [
-  'reveal-generating',
-  'reveal-failed',
-  'reveal-exhausted',
-  'confirmation',
-  'later-entry-notify',
-  'today-day1',
-  'today-day2',
-  'today-day2-read',
-  'today-day3',
-  'today-lapsed-before-day3',
-  'series-complete',
-] as const;
-
-export type TrialSeriesFixtureState = (typeof TRIAL_SERIES_FIXTURE_STATES)[number];
+export {
+  TRIAL_SERIES_FIXTURE_STATES,
+  isTrialSeriesFixtureState,
+  type TrialSeriesFixtureState,
+} from './trial-series-fixtures';
 
 export const TRIAL_SERIES_FIXTURE_GUARD_MESSAGE =
   'Trial series fixtures require the isolated local environment.';
+
+export const TRIAL_SERIES_FIXTURE_PERSONA = {
+  name: 'Riven Hale',
+  aboutMe: 'A fictional reader used only for fixture captures.',
+  currentSituation: 'Walking a short series through an ordinary week.',
+  emotionalState: 'Steady',
+} as const;
 
 const QA_DEVOTIONAL_ID = 'qa-auto-trial-series';
 const QA_JOB_GENERATING = 'qa-fixture-generating';
@@ -32,18 +31,27 @@ const QA_INTENT_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
 const QA_REQUEST_ID = '11111111-2222-4333-8444-555555555555';
 const TRIAL_LENGTH_MS = 259_200_000;
 
-const DAY_OFFSET: Partial<Record<TrialSeriesFixtureState, number>> = {
-  'today-day1': 0,
-  'today-day2': 1,
-  'today-day2-read': 1,
-  'today-day3': 2,
-  'today-lapsed-before-day3': 2,
-  'series-complete': 2,
+const REVEAL_SEEDS: Partial<Record<TrialSeriesFixtureState, {
+  status: AutoTrialIntentV1['status'];
+  jobId: string;
+}>> = {
+  'reveal-generating': { status: 'submitted', jobId: QA_JOB_GENERATING },
+  'reveal-failed': { status: 'submitted', jobId: QA_JOB_FAILED },
+  'reveal-exhausted': { status: 'failed', jobId: QA_JOB_FAILED },
 };
 
-export function isTrialSeriesFixtureState(value: string | undefined): value is TrialSeriesFixtureState {
-  return value != null && (TRIAL_SERIES_FIXTURE_STATES as readonly string[]).includes(value);
-}
+const FIXTURE_PLAN: Partial<Record<TrialSeriesFixtureState, {
+  dayOffset: number;
+  readThroughDay: 0 | 1 | 2 | 3;
+  includeDay3: boolean;
+}>> = {
+  'today-day1': { dayOffset: 0, readThroughDay: 0, includeDay3: true },
+  'today-day2': { dayOffset: 1, readThroughDay: 1, includeDay3: true },
+  'today-day2-read': { dayOffset: 1, readThroughDay: 2, includeDay3: true },
+  'today-day3': { dayOffset: 2, readThroughDay: 2, includeDay3: true },
+  'today-lapsed-before-day3': { dayOffset: 2, readThroughDay: 2, includeDay3: false },
+  'series-complete': { dayOffset: 2, readThroughDay: 3, includeDay3: true },
+};
 
 export function buildDevotionalSeed({
   devotionalId = 'seeded-qa-devotional',
@@ -233,6 +241,7 @@ function buildSeriesDevotional(
   readThroughDay: 0 | 1 | 2 | 3,
   includeDay3: boolean,
   trialDays: AllowedTrialDays,
+  devotionalId = QA_DEVOTIONAL_ID,
 ): Devotional {
   const nowIso = now.toISOString();
   const start = atLocalNoon(now, dayOffset);
@@ -241,12 +250,11 @@ function buildSeriesDevotional(
   for (const dayNumber of [1, 2, 3] as const) {
     if (dayNumber > lastDay) continue;
     const readAt = dayNumber <= readThroughDay ? readAtForDay(now, dayOffset, dayNumber) : undefined;
-    days.push(fictionalDay(QA_DEVOTIONAL_ID, dayNumber, nowIso, readAt));
+    days.push(fictionalDay(devotionalId, dayNumber, nowIso, readAt));
   }
-  const unread = Array.from({ length: trialDays }, (_, index) => index + 1)
-    .find((dayNumber) => !days.some((day) => day.dayNumber === dayNumber && day.isRead));
+  const unread = days.find((day) => !day.isRead)?.dayNumber;
   return {
-    id: QA_DEVOTIONAL_ID,
+    id: devotionalId,
     title: 'Ordinary Hours',
     totalDays: trialDays,
     currentDay: unread ?? trialDays,
@@ -255,10 +263,7 @@ function buildSeriesDevotional(
     seriesStartDate: start.toISOString(),
     generationMode: 'progressive',
     userContext: {
-      name: 'Riven Hale',
-      aboutMe: 'A fictional reader used only for fixture captures.',
-      currentSituation: 'Walking a short series through an ordinary week.',
-      emotionalState: 'Steady',
+      ...TRIAL_SERIES_FIXTURE_PERSONA,
     },
     seriesArc: {
       totalDaysPlanned: trialDays,
@@ -290,23 +295,10 @@ export function buildTrialSeriesSeed(i: {
   const today: Href = '/(tabs)/(today)';
   const generating: Href = '/generating';
 
-  if (i.state === 'reveal-generating') {
+  const reveal = REVEAL_SEEDS[i.state];
+  if (reveal) {
     return {
-      intent: { ...baseIntent(i.now, trialDays, 'submitted'), jobId: QA_JOB_GENERATING },
-      uiFlags: {},
-      target: generating,
-    };
-  }
-  if (i.state === 'reveal-failed') {
-    return {
-      intent: { ...baseIntent(i.now, trialDays, 'submitted'), jobId: QA_JOB_FAILED },
-      uiFlags: {},
-      target: generating,
-    };
-  }
-  if (i.state === 'reveal-exhausted') {
-    return {
-      intent: { ...baseIntent(i.now, trialDays, 'failed'), jobId: QA_JOB_FAILED },
+      intent: { ...baseIntent(i.now, trialDays, reveal.status), jobId: reveal.jobId },
       uiFlags: {},
       target: generating,
     };
@@ -325,23 +317,15 @@ export function buildTrialSeriesSeed(i: {
     };
   }
 
-  const dayOffset = DAY_OFFSET[i.state] ?? 0;
-  const includeDay3 = i.state !== 'today-lapsed-before-day3';
-  const readThroughDay: 0 | 1 | 2 | 3 = i.state === 'today-day1'
-    ? 0
-    : i.state === 'today-day2'
-      ? 1
-      : i.state === 'series-complete'
-        ? 3
-        : 2;
-  const devotional = buildSeriesDevotional(i.now, dayOffset, readThroughDay, includeDay3, trialDays);
-  if (i.devotionalId) {
-    devotional.id = i.devotionalId;
-    for (const day of devotional.days) {
-      day.devotionalId = i.devotionalId;
-      day.id = canonicalGeneratedDayId(i.devotionalId, day.dayNumber);
-    }
-  }
+  const plan = FIXTURE_PLAN[i.state] ?? { dayOffset: 0, readThroughDay: 2, includeDay3: true };
+  const devotional = buildSeriesDevotional(
+    i.now,
+    plan.dayOffset,
+    plan.readThroughDay,
+    plan.includeDay3,
+    trialDays,
+    i.devotionalId ?? QA_DEVOTIONAL_ID,
+  );
   const intent = {
     ...baseIntent(
       i.now,
@@ -360,13 +344,7 @@ export function buildTrialSeriesSeed(i: {
 }
 
 export function assertTrialSeriesFixtureEnvironment(backendUrl = PRIMARY_BACKEND_URL): void {
-  let host = '';
-  try {
-    host = new URL(backendUrl).hostname;
-  } catch {
-    throw new Error(TRIAL_SERIES_FIXTURE_GUARD_MESSAGE);
-  }
-  if (!__DEV__ || (host !== '127.0.0.1' && host !== 'localhost')) {
+  if (!isLocalFixtureEnvironment(backendUrl)) {
     throw new Error(TRIAL_SERIES_FIXTURE_GUARD_MESSAGE);
   }
 }
