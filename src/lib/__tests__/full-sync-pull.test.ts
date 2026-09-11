@@ -33,7 +33,8 @@ jest.mock('../mmkv-storage', () => {
 import { useUnfoldStore } from '../store';
 import { applyPulledUserData, LAST_PULLED_AT_KEY, pullAllUserData } from '../full-sync-pull';
 import { persistNoteSnapshot } from '../note-detail-editor';
-import { drainSyncOutbox, peekSyncOutbox, resetDrainStateForTesting } from '../sync-outbox';
+import { drainSyncOutbox, peekSyncOutbox, replaceSyncOutbox, resetDrainStateForTesting } from '../sync-outbox';
+import { useCompanionChatStore } from '../companion-chat-store';
 import { mmkvStorage } from '../mmkv-storage';
 import type { SyncPushChange, SyncTable } from '../sync-types';
 
@@ -286,6 +287,89 @@ describe('full user-data sync', () => {
     expect(note).toBeDefined();
     expect(note?.content).toBe('<p>Fresh writing</p>');
     expect(peekSyncOutbox().length).toBeGreaterThan(0);
+  });
+
+  it('rejects a pulled devotional tombstone while a local series write is still un-pushed (Greptile A1)', async () => {
+    useUnfoldStore.setState({
+      devotionals: [{
+        id: 'devotional-1',
+        title: 'Series',
+        days: [{ id: 'day-1', dayNumber: 1, title: 'Day 1', scriptureReference: 'John 1:1', scriptureText: '', reflection: '', prayer: '', isRead: false }],
+        createdAt: '2026-06-01T00:00:00.000Z',
+        updatedAt: '2026-06-01T00:00:00.000Z',
+      } as never],
+    });
+    const pendingAt = new Date(Date.now() + 120_000).toISOString();
+    replaceSyncOutbox([
+      { table: 'devotionals', id: 'devotional-1', data: { currentDay: 2 }, clientUpdatedAt: pendingAt, deleted: false },
+      { table: 'devotional_days', id: 'day-1', data: { isRead: true }, clientUpdatedAt: pendingAt, deleted: false },
+    ]);
+
+    const tombstoneAt = new Date(Date.now() + 60_000).toISOString();
+    applyPulledUserData({
+      timestamp: tombstoneAt,
+      changes: {
+        devotionals: [{ id: 'devotional-1', data: { clientUpdatedAt: tombstoneAt }, updatedAt: tombstoneAt, deleted: true }],
+        devotional_days: [{ id: 'day-1', data: { devotionalId: 'devotional-1', clientUpdatedAt: tombstoneAt }, updatedAt: tombstoneAt, deleted: true }],
+      },
+    });
+
+    const kept = useUnfoldStore.getState().devotionals.find((d) => d.id === 'devotional-1');
+    expect(kept).toBeDefined();
+    expect(kept?.days.map((d) => d.id)).toEqual(['day-1']);
+  });
+
+  it('applies a pulled devotional tombstone that is newer than the local row (Greptile A1)', async () => {
+    useUnfoldStore.setState({
+      devotionals: [{
+        id: 'devotional-1',
+        title: 'Series',
+        days: [],
+        createdAt: '2026-06-01T00:00:00.000Z',
+        updatedAt: '2026-06-01T00:00:00.000Z',
+      } as never],
+    });
+    const tombstoneAt = new Date(Date.now() + 60_000).toISOString();
+    applyPulledUserData({
+      timestamp: tombstoneAt,
+      changes: {
+        devotionals: [{ id: 'devotional-1', data: { clientUpdatedAt: tombstoneAt }, updatedAt: tombstoneAt, deleted: true }],
+      },
+    });
+    expect(useUnfoldStore.getState().devotionals).toHaveLength(0);
+  });
+
+  it('rejects a pulled conversation tombstone while a local message is still un-pushed (Greptile A1)', async () => {
+    useCompanionChatStore.setState({
+      conversations: [{
+        id: 'conv-1',
+        messages: [{ id: 'msg-1', role: 'user', content: 'unsent', timestamp: Date.now(), status: 'sent', updatedAt: '2026-06-01T00:00:00.000Z' }],
+        createdAt: Date.now(),
+        lastMessageAt: Date.now(),
+        title: null,
+        topicTags: [],
+        archived: false,
+        updatedAt: '2026-06-01T00:00:00.000Z',
+      } as never],
+    });
+    const pendingAt = new Date(Date.now() + 120_000).toISOString();
+    replaceSyncOutbox([
+      { table: 'companion_conversations', id: 'conv-1', data: { title: 'Renamed' }, clientUpdatedAt: pendingAt, deleted: false },
+      { table: 'companion_messages', id: 'msg-1', data: { content: 'unsent' }, clientUpdatedAt: pendingAt, deleted: false },
+    ]);
+
+    const tombstoneAt = new Date(Date.now() + 60_000).toISOString();
+    applyPulledUserData({
+      timestamp: tombstoneAt,
+      changes: {
+        companion_conversations: [{ id: 'conv-1', data: { clientUpdatedAt: tombstoneAt }, updatedAt: tombstoneAt, deleted: true }],
+        companion_messages: [{ id: 'msg-1', data: { conversationId: 'conv-1', clientUpdatedAt: tombstoneAt }, updatedAt: tombstoneAt, deleted: true }],
+      },
+    });
+
+    const conversation = useCompanionChatStore.getState().conversations.find((c) => c.id === 'conv-1');
+    expect(conversation).toBeDefined();
+    expect(conversation?.messages.map((m) => m.id)).toEqual(['msg-1']);
   });
 
   it('resurrects an open note when a pulled tombstone lands before the next save', async () => {
