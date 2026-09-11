@@ -3,7 +3,7 @@ import { View, Text, ActivityIndicator, Linking, ScrollView, Platform, Pressable
 import { Image as ExpoImage } from 'expo-image';
 import { LEGAL_LINKS } from '@/lib/push-notification-helpers';
 import { TouchableOpacity } from 'react-native-gesture-handler';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useFocusEffect, useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -39,9 +39,16 @@ import {
   resolveEntitlementWaitCompletion,
   resolveOnboardingPurchaseAdvance,
   resolvePaywallCompletionNavigation,
+  resolveRestoreExitSource,
   resolveRestoreOutcome,
   type PaywallLifecycleSession,
 } from '@/lib/paywall-guardrails';
+import { resolveLaterEntryExit, type VerifiedEntitlementExit } from '@/lib/auto-trial-exit';
+import { requestLaterEntryNotifyAsk } from '@/lib/notification-ask';
+import { refreshRemoteConfig } from '@/lib/remote-config';
+import { getTrialPaywallTimeline, trialLabelToDays } from '@/lib/trial-reminder-copy';
+import { MIDDAY_FALLBACK } from '@/lib/notifications';
+import { usePendingPaywallGrantOnUnmount } from '@/hooks/usePendingPaywallGrantOnUnmount';
 import type { CustomerInfo, PurchasesPackage } from 'react-native-purchases';
 import Purchases from 'react-native-purchases';
 import { useUnfoldStore } from '@/lib/store';
@@ -109,15 +116,21 @@ export default function PaywallScreen() {
   const updateUser = useUnfoldStore((s) => s.updateUser);
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
 
-  const completePaywallFlow = () => {
+  const completePaywallFlow = (autoTrialIntentId: string | null = null) => {
     const navigation = resolvePaywallCompletionNavigation({
       isEarlyOnboarding,
       isFromOnboarding,
       currentDevotionalId,
+      autoTrialIntentId,
     });
 
     if (navigation.action === 'back') {
       router.back();
+      return;
+    }
+
+    if (navigation.href === '/series-reveal') {
+      router.replace({ pathname: '/series-reveal', params: navigation.params });
       return;
     }
 
@@ -131,6 +144,7 @@ export default function PaywallScreen() {
     generation: 0,
   });
   const advancedRef = useRef(false);
+  const lateGrantArmedRef = useRef(false);
   const waitAbortRef = useRef<AbortController | null>(null);
   const [entitlementPendingMessage, setEntitlementPendingMessage] = useState<string | null>(null);
   const [subscribeError, setSubscribeError] = useState('');
@@ -141,6 +155,13 @@ export default function PaywallScreen() {
     setSubscribeError('');
     setIsRetryingOfferings(false);
   }, []);
+
+  usePendingPaywallGrantOnUnmount({
+    surface: 'paywall_route',
+    entry: 'later',
+    armedRef: lateGrantArmedRef,
+    advancedRef,
+  });
 
   useEffect(() => {
     const session = lifecycleSessionRef.current;
@@ -160,10 +181,13 @@ export default function PaywallScreen() {
     };
   }, [clearStaleWaitUi]);
 
+  useEffect(() => {
+    void refreshRemoteConfig();
+  }, []);
+
   const advanceOnce = useCallback((
     generation: number,
-    customerInfo?: CustomerInfo,
-    source: 'purchase' | 'restore' = 'purchase',
+    exit: VerifiedEntitlementExit,
   ) => {
     const session = lifecycleSessionRef.current;
     if (!session.mounted) return false;
@@ -175,21 +199,35 @@ export default function PaywallScreen() {
     finishVerifiedPaywallFlow({
       complete: () => {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        if (customerInfo) {
-          void recordPaywallDiagnosticLazy(`paywall.${source}.entitlement_active`, () => ({
-            customerInfo: summarizeCustomerInfo(customerInfo),
-          }));
-        }
+        void recordPaywallDiagnosticLazy(`paywall.${exit.source}.entitlement_active`, () => ({
+          customerInfo: summarizeCustomerInfo(exit.customerInfo),
+        }));
         queryClient.invalidateQueries({ queryKey: ['revenuecat'] });
-        completePaywallFlowRef.current();
+        let intentId: string | null = null;
+        if (!isFromOnboarding) {
+          // resolveLaterEntryExit is fail-closed, but a throw here must never
+          // strand a paying user on the paywall (F6), so guard the call.
+          let decision: ReturnType<typeof resolveLaterEntryExit> = { kind: 'fallback', reason: 'internal_error' };
+          try {
+            decision = resolveLaterEntryExit(exit, 'paywall_route');
+          } catch {
+            // fall through to the setup flow
+          }
+          if (decision.kind === 'auto') {
+            intentId = decision.intent.intentId;
+          } else {
+            void requestLaterEntryNotifyAsk(exit.customerInfo);
+          }
+        }
+        completePaywallFlowRef.current(intentId);
       },
-      syncOptionalWork: syncTrialEndingNotification,
+      syncOptionalWork: () => syncTrialEndingNotification(exit.customerInfo),
       onOptionalWorkError: (error) => {
         logger.log('[Paywall] trial notification sync failed after verified payment:', error);
       },
     });
     return true;
-  }, [updateUser, queryClient]);
+  }, [isFromOnboarding, updateUser, queryClient]);
 
   useEffect(() => {
     if (entitlementPendingMessage === null) return;
@@ -209,7 +247,7 @@ export default function PaywallScreen() {
       });
       if (decision === 'ignore') return;
       if (decision === 'advance' && customerInfo) {
-        advanceOnce(generation, customerInfo);
+        advanceOnce(generation, { source: 'lateGrant', customerInfo });
         return;
       }
       setEntitlementPendingMessage(null);
@@ -414,7 +452,7 @@ export default function PaywallScreen() {
               JSON.stringify(Object.keys(activeEntitlements ?? {})),
               'hasPremium: true',
             );
-            advanceOnce(variables.generation, result.data);
+            advanceOnce(variables.generation, { source: 'purchase', customerInfo: result.data });
           }
           return;
         case 'noop':
@@ -428,6 +466,7 @@ export default function PaywallScreen() {
           return;
         }
         case 'wait_for_entitlement':
+          lateGrantArmedRef.current = true;
           logger.log('[Paywall] Purchase completed without active Premium; waiting for entitlement');
           void recordPaywallDiagnosticLazy('paywall.purchase.wait_for_entitlement', () => ({
             message: decision.message,
@@ -482,7 +521,10 @@ export default function PaywallScreen() {
 
       const outcome = resolveRestoreOutcome(result);
       if (outcome.kind === 'success' && result.ok) {
-        advanceOnce(variables.generation, result.data, 'restore');
+        advanceOnce(variables.generation, {
+          source: resolveRestoreExitSource(lateGrantArmedRef.current),
+          customerInfo: result.data,
+        });
         return;
       }
 
@@ -518,8 +560,11 @@ export default function PaywallScreen() {
     },
   });
 
+  const isPurchasing = purchaseMutation.isPending || restoreMutation.isPending || isRetryingOfferings;
+  const exitDisabled = isPurchasing || entitlementPendingMessage !== null;
+
   const handleClose = () => {
-    if (isPurchasing) return;
+    if (exitDisabled) return;
 
     const session = lifecycleSessionRef.current;
     waitAbortRef.current?.abort();
@@ -534,7 +579,7 @@ export default function PaywallScreen() {
     if (!isPaywallLifecycleCurrent(lifecycleSessionRef.current, generation)) {
       return;
     }
-    if (isPurchasing || entitlementPendingMessage !== null) {
+    if (exitDisabled) {
       void recordPaywallDiagnosticLazy('paywall.subscribe_tap_ignored', () => ({
         selectedPlan,
         reason: isPurchasing ? 'already_purchasing' : 'waiting_for_entitlement',
@@ -638,7 +683,6 @@ export default function PaywallScreen() {
     restoreMutation.mutate({ generation });
   };
 
-  const isPurchasing = purchaseMutation.isPending || restoreMutation.isPending || isRetryingOfferings;
   const isWaitingForEntitlement = entitlementPendingMessage !== null;
   const isSubscribeDisabled = isPurchasing || !offeringsReady || isWaitingForEntitlement;
 
@@ -661,11 +705,23 @@ export default function PaywallScreen() {
 
   // Renewal disclosure (App Review 3.1.2) — null until offerings resolve so we
   // never render a price built from empty/stale priceStrings.
+  const [timelineNowMs, setTimelineNowMs] = useState(() => Date.now());
+  useFocusEffect(useCallback(() => {
+    setTimelineNowMs(Date.now());
+  }, []));
+  const selectedTrialDays = trialLabelToDays(selectedTrialDuration);
+  const trialTimeline = useMemo(() => getTrialPaywallTimeline({
+    trialDays: selectedTrialDays,
+    nowMs: timelineNowMs,
+    middaySlot: MIDDAY_FALLBACK,
+  }), [selectedTrialDays, timelineNowMs]);
+
   const disclosureText = getPaywallRenewalDisclosure({
     offeringsReady,
     selectedPlan,
     hasFreeTrial: isTrialEligible, // RC-verified for the SELECTED plan (see isTrialEligible)
-    trialDays: parseInt(selectedTrialDuration, 10) || 3,
+    trialDays: selectedTrialDays ?? 0,
+    trialLabel: selectedTrialDuration,
     yearlyPrice,
     monthlyPrice,
   });
@@ -698,7 +754,7 @@ export default function PaywallScreen() {
   // Free vs premium comparison rows
   const comparison = [
     { label: 'Devotional series', free: '1 active', premium: 'Unlimited' },
-    { label: 'Series length', free: '7 days', premium: 'Up to 30 days' },
+    { label: 'Series length', free: 'A one-day sample', premium: '3 to 30 days' },
     { label: 'AI Companion', free: false, premium: 'Daily check-ins + chat' },
     { label: 'Study methods', free: 'Basic', premium: '40+ methods' },
     { label: 'Journal prompts', free: false, premium: true },
@@ -727,10 +783,10 @@ export default function PaywallScreen() {
           by insets.top, which floated it ~80pt below the sheet's top edge. */}
       <Pressable
         onPress={handleClose}
-        disabled={isPurchasing}
+        disabled={exitDisabled}
         accessibilityLabel="Close"
         accessibilityRole="button"
-        accessibilityState={{ disabled: isPurchasing }}
+        accessibilityState={{ disabled: exitDisabled }}
         hitSlop={8}
         style={{
           position: 'absolute',
@@ -956,7 +1012,9 @@ export default function PaywallScreen() {
                   <View style={{ width: 32, height: 32, borderRadius: Radius.lg, backgroundColor: `${colors.accent}12`, justifyContent: 'center', alignItems: 'center', marginBottom: 8 }}>
                     <BellIcon size={16} color={colors.textMuted} weight="light" />
                   </View>
-                  <Text style={{ fontFamily: FontFamily.uiSemiBold, fontSize: 11, color: colors.text, marginBottom: 2 }}>Day {parseInt(selectedTrialDuration) - 2 || 12}</Text>
+                  {trialTimeline.reminderDay != null ? (
+                    <Text style={{ fontFamily: FontFamily.uiSemiBold, fontSize: 11, color: colors.text, marginBottom: 2 }}>Day {trialTimeline.reminderDay}</Text>
+                  ) : null}
                   <Text style={{ fontFamily: FontFamily.ui, fontSize: 10, color: colors.textMuted, textAlign: 'center' }}>We’ll remind{'\n'}you</Text>
                 </View>
                 {/* Connector */}
@@ -968,7 +1026,9 @@ export default function PaywallScreen() {
                   <View style={{ width: 32, height: 32, borderRadius: Radius.lg, backgroundColor: `${colors.accent}12`, justifyContent: 'center', alignItems: 'center', marginBottom: 8 }}>
                     <CreditCardIcon size={16} color={colors.textMuted} weight="light" />
                   </View>
-                  <Text style={{ fontFamily: FontFamily.uiSemiBold, fontSize: 11, color: colors.text, marginBottom: 2 }}>Day {parseInt(selectedTrialDuration) || 14}</Text>
+                  {trialTimeline.chargeDay != null ? (
+                    <Text style={{ fontFamily: FontFamily.uiSemiBold, fontSize: 11, color: colors.text, marginBottom: 2 }}>Day {trialTimeline.chargeDay}</Text>
+                  ) : null}
                   <Text style={{ fontFamily: FontFamily.ui, fontSize: 10, color: colors.textMuted, textAlign: 'center' }}>First charge{'\n'}Cancel anytime</Text>
                 </View>
               </View>
@@ -1293,6 +1353,8 @@ export default function PaywallScreen() {
               <TouchableOpacity
                 activeOpacity={0.6}
                 onPress={handleClose}
+                disabled={exitDisabled}
+                accessibilityState={{ disabled: exitDisabled }}
                 hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
                 style={{ padding: 6 }}
               >
@@ -1371,6 +1433,12 @@ export default function PaywallScreen() {
           mmkvStorage.setItem('@unfold_onboarding_offer_seen', 'true');
           setShowExclusiveOffer(false);
         }}
+        onPurchaseSuccess={(exit) => {
+          mmkvStorage.setItem('@unfold_onboarding_offer_seen', 'true');
+          setShowExclusiveOffer(false);
+          advanceOnce(lifecycleSessionRef.current.generation, exit);
+        }}
+        surface="paywall_route"
         context="onboarding"
       />
     </View>

@@ -10,7 +10,8 @@ export type PaywallOutcome =
 
 export type PaywallCompletionNavigation =
   | { action: 'back' }
-  | { action: 'replace'; href: '/(tabs)/(today)' | '/generating' };
+  | { action: 'replace'; href: '/(tabs)/(today)' | '/generating' }
+  | { action: 'replace'; href: '/series-reveal'; params: { intentId: string } };
 
 const UNFOLD_PREMIUM_ENTITLEMENT = 'Unfold Premium';
 
@@ -33,11 +34,17 @@ export function resolvePaywallCompletionNavigation({
   isEarlyOnboarding,
   isFromOnboarding,
   currentDevotionalId,
+  autoTrialIntentId,
 }: {
   isEarlyOnboarding: boolean;
   isFromOnboarding: boolean;
   currentDevotionalId: string | null | undefined;
+  autoTrialIntentId: string | null;
 }): PaywallCompletionNavigation {
+  if (autoTrialIntentId) {
+    return { action: 'replace', href: '/series-reveal', params: { intentId: autoTrialIntentId } };
+  }
+
   if (isEarlyOnboarding) {
     return { action: 'back' };
   }

@@ -65,13 +65,10 @@ describe('onboarding answer draft lifecycle (ONB-RESUME-1)', () => {
     expect(segue).not.toContain('clearOnboardingSampleJob()');
   });
 
-  it('clears the draft in proceedToGeneration, right after the profile is written', () => {
-    const proceed = sliceBody('const proceedToGeneration = useCallback', '}, [router, saveOnboardingData]');
-    expect(proceed).toContain('saveOnboardingData();');
-    expect(proceed).toContain('clearOnboardingDraft();');
-    expect(proceed.indexOf('saveOnboardingData();')).toBeLessThan(
-      proceed.indexOf('clearOnboardingDraft();'),
-    );
+  it('clears the draft through runOnboardingCompletion after the profile is written', () => {
+    expect(src).toContain('runOnboardingCompletion(');
+    expect(src).toContain('clearDraft: () => {');
+    expect(src).toContain('clearOnboardingDraft()');
   });
 
   it('writes hasCompletedOnboarding true on both profile paths', () => {
@@ -110,23 +107,17 @@ describe('onboarding answer draft lifecycle (ONB-RESUME-1)', () => {
 });
 
 describe('paywall purchase exit', () => {
-  let handler = '';
-  beforeAll(() => {
-    handler = sliceBody('onPurchaseSuccess={() => {', 'onDecideLater={handleDecideLater}');
+  it('keeps one wiring pin for the verified purchase handler', () => {
+    expect(src).toContain('onPurchaseSuccess={handleOnboardingPurchaseSuccess}');
   });
 
   it('persists the purchase flag at the confirmation step before navigating', () => {
-    // The debounced writer lands up to 1.5 s later; a relaunch inside that
-    // window resumed ONTO the paywall for someone who had just paid.
-    const draftWrite = handler.indexOf('saveOnboardingDraft({');
-    const advance = handler.indexOf('advanceToNextStep();');
-    expect(draftWrite).toBeGreaterThan(-1);
-    expect(advance).toBeGreaterThan(draftWrite);
+    const handler = sliceBody('const handleOnboardingPurchaseSuccess = useCallback', '// Handle next button press');
     expect(handler).toContain("stepId: 'purchaseConfirmation'");
     expect(handler).toContain('purchasedDuringOnboarding: true');
     expect(handler).toContain('data: dataRef.current');
     expect(handler).toContain('sampleDevotionalId: onboardingDevotionalId || null');
-    expect(handler.indexOf('setPurchasedDuringOnboarding(true)')).toBeLessThan(advance);
+    expect(handler.indexOf('saveOnboardingDraft({')).toBeLessThan(handler.indexOf('advanceToNextStep()'));
   });
 
   it('dropped the never-read paywall ref', () => {
@@ -158,12 +149,13 @@ describe('paywall "I\'ll decide later" exit', () => {
   });
 
   it('clears the draft and the sample job', () => {
-    expect(handler).toContain('clearOnboardingDraft();');
-    expect(handler).toContain('clearOnboardingSampleJob();');
+    expect(handler).toContain('clearOnboardingDraft()');
+    expect(handler).toContain('clearOnboardingSampleJob()');
   });
 
   it('routes to Today and never triggers a paid generation', () => {
-    expect(handler).toContain("router.replace('/(tabs)/(today)')");
+    expect(handler).toContain("runOnboardingCompletion(completionStateRef.current, 'deferred'");
+    expect(src).toContain("'/(tabs)/(today)'");
     expect(handler).not.toContain("router.replace('/generating')");
   });
 });

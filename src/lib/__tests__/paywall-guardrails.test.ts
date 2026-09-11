@@ -45,6 +45,7 @@ describe('paywall guardrails', () => {
           isEarlyOnboarding: true,
           isFromOnboarding: true,
           currentDevotionalId: 'devotional-1',
+          autoTrialIntentId: null,
         }),
       ).toEqual({ action: 'back' });
     });
@@ -55,6 +56,7 @@ describe('paywall guardrails', () => {
           isEarlyOnboarding: false,
           isFromOnboarding: true,
           currentDevotionalId: 'devotional-1',
+          autoTrialIntentId: null,
         }),
       ).toEqual({ action: 'replace', href: '/(tabs)/(today)' });
     });
@@ -65,6 +67,7 @@ describe('paywall guardrails', () => {
           isEarlyOnboarding: false,
           isFromOnboarding: true,
           currentDevotionalId: null,
+          autoTrialIntentId: null,
         }),
       ).toEqual({ action: 'replace', href: '/generating' });
     });
@@ -75,6 +78,67 @@ describe('paywall guardrails', () => {
           isEarlyOnboarding: false,
           isFromOnboarding: false,
           currentDevotionalId: 'devotional-1',
+          autoTrialIntentId: null,
+        }),
+      ).toEqual({ action: 'back' });
+    });
+  });
+
+  describe('F8 autoTrialIntentId wins every other completion rule', () => {
+    const reveal = {
+      action: 'replace' as const,
+      href: '/series-reveal' as const,
+      params: { intentId: 'intent-1' },
+    };
+
+    it('replaces to series-reveal before early-onboarding back', () => {
+      expect(
+        resolvePaywallCompletionNavigation({
+          isEarlyOnboarding: true,
+          isFromOnboarding: true,
+          currentDevotionalId: 'devotional-1',
+          autoTrialIntentId: 'intent-1',
+        }),
+      ).toEqual(reveal);
+    });
+
+    it('replaces to series-reveal before onboarding Today and generating', () => {
+      expect(
+        resolvePaywallCompletionNavigation({
+          isEarlyOnboarding: false,
+          isFromOnboarding: true,
+          currentDevotionalId: 'devotional-1',
+          autoTrialIntentId: 'intent-1',
+        }),
+      ).toEqual(reveal);
+      expect(
+        resolvePaywallCompletionNavigation({
+          isEarlyOnboarding: false,
+          isFromOnboarding: true,
+          currentDevotionalId: null,
+          autoTrialIntentId: 'intent-1',
+        }),
+      ).toEqual(reveal);
+    });
+
+    it('replaces to series-reveal before a later-entry back', () => {
+      expect(
+        resolvePaywallCompletionNavigation({
+          isEarlyOnboarding: false,
+          isFromOnboarding: false,
+          currentDevotionalId: 'devotional-1',
+          autoTrialIntentId: 'intent-1',
+        }),
+      ).toEqual(reveal);
+    });
+
+    it('keeps existing cases when autoTrialIntentId is null', () => {
+      expect(
+        resolvePaywallCompletionNavigation({
+          isEarlyOnboarding: false,
+          isFromOnboarding: false,
+          currentDevotionalId: 'devotional-1',
+          autoTrialIntentId: null,
         }),
       ).toEqual({ action: 'back' });
     });

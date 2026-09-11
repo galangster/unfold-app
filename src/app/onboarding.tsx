@@ -37,13 +37,9 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon, XIcon, HandIcon, FingerprintIcon, MoonIcon, CompassIcon, HeartIcon, EyeIcon, FireIcon, SparkleIcon, CloudRainIcon, ScalesIcon, CrosshairIcon, BookOpenIcon, UsersIcon, MusicNotesIcon, CrownIcon, LeafIcon, ChatCircleIcon, CalendarIcon, MagicWandIcon, SmileyIcon, GiftIcon, BinocularsIcon, CloudIcon, ShieldIcon, ShieldCheckIcon, SpeakerHighIcon, LockIcon, GavelIcon } from '@/components/icons';
 import { logger } from '@/lib/logger';
-import { requestNotificationPermissions } from '@/lib/notifications';
-import { registerPushToken } from '@/lib/push-notifications';
-import { logEvent } from '@/lib/analytics';
 import { requestReviewOncePerVersion } from '@/lib/review-prompt';
 
 import { useTheme } from '@/lib/theme';
-import { DarkColors, createThemedColors } from '@/constants/colors';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
@@ -55,7 +51,7 @@ import { VoiceInputBar } from '@/components/VoiceInputBar';
 import { OnboardingVoiceAnswerSheet } from '@/components/onboarding/OnboardingVoiceAnswerSheet';
 import { VoiceAnswerButton } from '@/components/onboarding/VoiceAnswerButton';
 import { isVoiceCheckInsEnabled } from '@/lib/voice-feature';
-import { useUnfoldStore, type Devotional, UserProfile, BibleTranslation, ThemeCategory, DevotionalType, ACCENT_THEMES, WritingTone, ContentDepth, FaithBackground, LifeStage, RelationshipWithGod, BibleFrequency } from '@/lib/store';
+import { useUnfoldStore, flushUnfoldStorePersistAsync, type Devotional, UserProfile, BibleTranslation, ThemeCategory, DevotionalType, WritingTone, ContentDepth, FaithBackground, LifeStage, RelationshipWithGod, BibleFrequency } from '@/lib/store';
 import { generateAdaptiveQuestion, generateDiagnosticQuestions, generateMirrorBackText, type MirrorBackContent } from '@/lib/devotional-service';
 import { THEME_CATEGORIES, DEVOTIONAL_TYPES, BIBLICAL_CHARACTERS, BIBLE_BOOKS_FOR_STUDY, ThemeCategoryInfo, DevotionalTypeInfo, getThemeById, getDevotionalTypeById } from '@/constants/devotional-types';
 import {
@@ -107,6 +103,7 @@ import {
   formatDateOnlyForDisplay,
   getContextualSituationChips,
   getFilteredOnboardingSteps,
+  resolveOnboardingBackTarget,
   getOnboardingStepLayoutMode,
   QUICK_DATE_CHIPS,
   resolveOnboardingResumeStep,
@@ -141,6 +138,26 @@ import { WelcomeBackStep } from '@/components/onboarding/WelcomeBackStep';
 import { isUsableSampleDevotionalDay } from '@/lib/onboarding-sample-day-shape';
 import { stripOuterQuotes } from '@/lib/cn';
 import { Typography } from '@/constants/typography';
+import { useOnboardingDarkColors } from '@/hooks/useOnboardingDarkColors';
+import {
+  handleVerifiedEntitlementExit,
+  type VerifiedEntitlementExit,
+} from '@/lib/auto-trial-exit';
+import {
+  applyAutoTrialProfileOverrides,
+  isAutoTrialIntentExpired,
+  readAutoTrialIntent,
+  transitionAutoTrialIntent,
+} from '@/lib/auto-trial-intent';
+import { getDeviceTimezone } from '@/lib/device-timezone';
+import { isSimulatedTrialCustomerInfo } from '@/lib/trial-facts';
+import { runOnboardingCompletion } from '@/lib/onboarding-completion';
+import { runOnboardingPurchaseSuccess } from '@/lib/onboarding-purchase-success';
+import { runReminderTimeCommit } from '@/lib/reminder-time-commit';
+import { askNotificationPermissionInContext } from '@/lib/notification-ask';
+import { getPurchaseConfirmationCopy } from '@/lib/purchase-confirmation-copy';
+import { refreshRemoteConfig, readAutoTrialSwitchSnapshot } from '@/lib/remote-config';
+import { trialLabelToDays } from '@/lib/trial-reminder-copy';
 
 // Ember exclusion zones (normalized to the ember layer's container) — keep
 // the quiet layers legible: welcome letter copy + "Tap anywhere", and the
@@ -595,16 +612,7 @@ export default function OnboardingScreen() {
   const { startAt } = useLocalSearchParams<{ startAt?: string | string[] }>();
   const requestedStartStepId = Array.isArray(startAt) ? startAt[0] : startAt;
   const { colors: _themeColors, isDark: _themeIsDark } = useTheme();
-  const accentThemeId = useUnfoldStore((s) => s.user?.accentTheme ?? 'gold');
-
-  // IMPORTANT: Onboarding always has a dark (#0A0A0A) background regardless of
-  // the user's light/dark mode setting. Force dark-mode colors so text and UI
-  // elements remain visible against the dark backdrop.
-  const colors = useMemo(() => {
-    const accentTheme = ACCENT_THEMES.find((t) => t.id === accentThemeId);
-    const accent = accentTheme ? accentTheme.dark : DarkColors.accent;
-    return createThemedColors(DarkColors, accent);
-  }, [accentThemeId]);
+  const colors = useOnboardingDarkColors();
   const isDark = true;
   const reducedMotion = useReducedMotion();
   const queryClient = useQueryClient();
@@ -625,6 +633,23 @@ export default function OnboardingScreen() {
     if (existingUser?.hasCompletedOnboarding) return null;
     return getOnboardingDraft({ deviceId: getDeviceId() });
   });
+  const [autoTrialMode, setAutoTrialMode] = useState(() => {
+    const nowMs = Date.now();
+    const intent = readAutoTrialIntent();
+    if (intent && isAutoTrialIntentExpired(intent, nowMs)) {
+      return false;
+    }
+    return restoredDraft?.purchasedDuringOnboarding === true
+      && intent?.status === 'purchased'
+      && intent.entry === 'onboarding';
+  });
+  useEffect(() => {
+    const nowMs = Date.now();
+    const intent = readAutoTrialIntent();
+    if (intent && isAutoTrialIntentExpired(intent, nowMs)) {
+      transitionAutoTrialIntent('abandoned', { abandonReason: 'trial_expired_before_submit' }, { nowMs });
+    }
+  }, []);
   const onboardingDeviceIdRef = useRef<string | null>(null);
 
   // Companion naming state (saved to store on continue)
@@ -768,7 +793,9 @@ export default function OnboardingScreen() {
   const [currentStepId, setCurrentStepId] = useState<StepId>(() => {
     // One filter pass for both decisions below — it was being computed here and
     // again inside getInitialOnboardingStepId.
-    const filteredStepIds = getFilteredOnboardingSteps(ALL_STEPS, existingUser, undefined).map(
+    const filteredStepIds = getFilteredOnboardingSteps(ALL_STEPS, existingUser, {
+      autoTrialActive: autoTrialMode,
+    }).map(
       (step) => step.id,
     );
     // An explicit ?startAt= wins over a draft, for dev tools and deep links.
@@ -989,7 +1016,15 @@ export default function OnboardingScreen() {
   // Answers are read from dataRef at write time, so a write scheduled before a
   // keystroke still persists the latest ones. The step and purchase flags come
   // from the closure and are dependencies below.
+  const draftRetiredRef = useRef(false);
+  const completionStateRef = useRef({ started: false });
+
+  useEffect(() => {
+    void refreshRemoteConfig();
+  }, []);
+
   const writeOnboardingDraft = useCallback(() => {
+    if (draftRetiredRef.current) return;
     if (!shouldPersistOnboardingDraft(currentStepId)) return;
     if (onboardingDeviceIdRef.current === null) {
       onboardingDeviceIdRef.current = getDeviceId();
@@ -1195,8 +1230,9 @@ export default function OnboardingScreen() {
     return getFilteredOnboardingSteps(ALL_STEPS, existingUser, {
       selectedMainOption: data.selectedMainOption,
       selectedType: data.selectedType,
+      autoTrialActive: autoTrialMode,
     });
-  }, [existingUser, data.selectedMainOption, data.selectedType, devShowAllSteps]);
+  }, [existingUser, data.selectedMainOption, data.selectedType, autoTrialMode, devShowAllSteps]);
 
   // Find current step from filtered STEPS array
   const step = useMemo(() => STEPS.find((s) => s.id === currentStepId), [STEPS, currentStepId]);
@@ -1400,21 +1436,41 @@ export default function OnboardingScreen() {
     }
   }, [data, existingUser, updateUser, setUser, purchasedDuringOnboarding]);
 
-  // Complete onboarding: save data + navigate to generating screen
+  const retireDraftAutosave = useCallback(() => {
+    draftRetiredRef.current = true;
+    draftAutosave.cancel();
+  }, [draftAutosave]);
+
+  const navigateCompletion = useCallback((target: '/generating' | '/(tabs)/(today)' | { pathname: '/series-reveal'; params: { intentId: string } }) => {
+    router.replace(target);
+  }, [router]);
+
+  // Complete onboarding: save data + navigate through runOnboardingCompletion.
   const proceedToGeneration = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    // Onboarding is finishing — the sample job (if any) is done with; clear the
-    // persisted record so a future onboarding can't resume a stale job.
-    clearOnboardingSampleJob();
-    saveOnboardingData();
-    // The answers now live on the user profile — the draft has nothing left to
-    // protect, and a stale one would route the next launch back into onboarding.
-    clearOnboardingDraft();
-    // The draft is gone, so the abandonment marker must go with it or it would
-    // silence the signal for whoever onboards on this device next.
-    trackOnboardingCompleted('generated');
-    router.replace('/generating');
-  }, [router, saveOnboardingData]);
+    const intent = readAutoTrialIntent();
+    const mode = autoTrialMode && intent?.status === 'purchased' ? 'auto_trial' : 'generated';
+    void runOnboardingCompletion(completionStateRef.current, mode, intent, {
+      retireDraftAutosave,
+      clearSampleJob: () => {
+        clearOnboardingSampleJob();
+      },
+      applyProfileOverrides: () => {
+        dataRef.current = applyAutoTrialProfileOverrides(dataRef.current, readAutoTrialIntent());
+      },
+      saveProfile: () => {
+        saveOnboardingData();
+      },
+      flushStoreAsync: async () => {
+        await flushUnfoldStorePersistAsync();
+      },
+      clearDraft: () => {
+        clearOnboardingDraft();
+      },
+      trackCompleted: (outcome) => trackOnboardingCompleted(outcome, { isFirstRun: true }),
+      navigate: navigateCompletion,
+    });
+  }, [autoTrialMode, navigateCompletion, retireDraftAutosave, saveOnboardingData]);
 
   /**
    * "I'll decide later" on the three-step paywall.
@@ -1427,49 +1483,56 @@ export default function OnboardingScreen() {
    * for a completed user and asks only what is still missing.
    */
   const handleDecideLater = useCallback(() => {
-    // The paywall control fires its own haptic before calling this.
-    // No purchase override — the record lands with hasCompletedOnboarding true
-    // and isPremium false. readingDuration, devotionalLength and reminderTime
-    // all carry defaults in `data`, so no profile field is left missing.
-    saveOnboardingData();
+    void runOnboardingCompletion(completionStateRef.current, 'deferred', null, {
+      retireDraftAutosave,
+      clearSampleJob: () => {
+        clearOnboardingSampleJob();
+      },
+      applyProfileOverrides: () => undefined,
+      saveProfile: () => {
+        saveOnboardingData();
+      },
+      addDeferredSample: () => {
+        if (onboardingDevotionalDay && onboardingDevotionalId) {
+          const createdAt = new Date().toISOString();
+          const answers = dataRef.current;
+          addDevotional({
+            id: onboardingDevotionalId,
+            title: 'Your First Devotional',
+            totalDays: 1,
+            currentDay: 1,
+            days: [{ ...onboardingDevotionalDay, dayNumber: 1, isRead: false }],
+            createdAt,
+            seriesStartDate: createdAt,
+            userContext: {
+              name: answers.name,
+              aboutMe: answers.aboutMe,
+              currentSituation: answers.currentSituation,
+              emotionalState: '',
+            },
+            generationMode: 'progressive',
+          } as Devotional);
+        }
+      },
+      flushStoreAsync: async () => {
+        await flushUnfoldStorePersistAsync();
+      },
+      clearDraft: () => {
+        clearOnboardingDraft();
+      },
+      trackCompleted: (outcome) => trackOnboardingCompleted(outcome, { isFirstRun: true }),
+      navigate: navigateCompletion,
+    });
+  }, [
+    addDevotional,
+    navigateCompletion,
+    onboardingDevotionalDay,
+    onboardingDevotionalId,
+    retireDraftAutosave,
+    saveOnboardingData,
+  ]);
 
-    // Today must not open empty: the sample they already read is real content.
-    if (onboardingDevotionalDay && onboardingDevotionalId) {
-      const createdAt = new Date().toISOString();
-      const answers = dataRef.current;
-      addDevotional({
-        id: onboardingDevotionalId,
-        title: 'Your First Devotional',
-        totalDays: 1,
-        currentDay: 1,
-        days: [{ ...onboardingDevotionalDay, dayNumber: 1, isRead: false }],
-        createdAt,
-        // Same instant as createdAt — a missing seriesStartDate mis-numbers days.
-        seriesStartDate: createdAt,
-        userContext: {
-          name: answers.name,
-          aboutMe: answers.aboutMe,
-          currentSituation: answers.currentSituation,
-          emotionalState: '',
-        },
-        generationMode: 'progressive',
-      } as Devotional);
-    }
-
-    clearOnboardingDraft();
-    clearOnboardingSampleJob();
-    // Completed, but deliberately unpaid. The split between the two outcomes is
-    // the point of recording one at all.
-    trackOnboardingCompleted('deferred');
-
-    // Never '/generating': that would start a paid series for someone who has
-    // deliberately not paid.
-    router.replace('/(tabs)/(today)');
-  }, [saveOnboardingData, onboardingDevotionalDay, onboardingDevotionalId, addDevotional, router]);
-
-  const completeOnboarding = useCallback(() => {
-    proceedToGeneration();
-  }, [proceedToGeneration]);
+  const completeOnboarding = proceedToGeneration;
 
   // Advance to next step
   const advanceToNextStep = useCallback(() => {
@@ -1497,6 +1560,54 @@ export default function OnboardingScreen() {
     inputOpacity.value = 0;
   }, [STEPS, currentStepId, inputOpacity, completeOnboarding]);
 
+  const handleOnboardingPurchaseSuccess = useCallback((exit: VerifiedEntitlementExit) => {
+    runOnboardingPurchaseSuccess({
+      exit,
+      ensureDeviceId: () => {
+        if (onboardingDeviceIdRef.current === null) {
+          onboardingDeviceIdRef.current = getDeviceId();
+        }
+      },
+      decide: (verifiedExit) => {
+        const nowMs = Date.now();
+        const state = useUnfoldStore.getState();
+        return handleVerifiedEntitlementExit({
+          exit: verifiedExit,
+          surface: 'onboarding_paywall',
+          deviceId: onboardingDeviceIdRef.current ?? getDeviceId(),
+          nowMs,
+          platform: Platform.OS,
+          timeZone: getDeviceTimezone() ?? '',
+          switchSnapshot: readAutoTrialSwitchSnapshot(nowMs, Platform.OS),
+          profile: existingUser
+            ? { hasCompletedOnboarding: existingUser.hasCompletedOnboarding === true }
+            : null,
+          devotionalIds: (state.devotionals ?? []).map((devotional) => devotional.id),
+          simulated: isSimulatedTrialCustomerInfo(verifiedExit.customerInfo),
+        });
+      },
+      saveDraft: () => {
+        saveOnboardingDraft({
+          deviceId: onboardingDeviceIdRef.current ?? getDeviceId(),
+          stepId: 'purchaseConfirmation',
+          data: dataRef.current,
+          purchasedDuringOnboarding: true,
+          sampleDevotionalId: onboardingDevotionalId || null,
+        });
+      },
+      setPurchased: () => {
+        setPurchasedDuringOnboarding(true);
+      },
+      setAutoTrialMode,
+      markPremium: () => {
+        updateUser({ isPremium: true });
+      },
+      advance: () => {
+        advanceToNextStep();
+      },
+    });
+  }, [advanceToNextStep, existingUser, onboardingDevotionalId, updateUser]);
+
 
   // Handle next button press
   const handleNext = () => {
@@ -1505,14 +1616,11 @@ export default function OnboardingScreen() {
 
     if (step?.id === 'reminderTime' && !reminderPermissionAskedRef.current) {
       reminderPermissionAskedRef.current = true;
-      // Hold the double-tap guard while the OS dialog is up, then advance
-      // through the normal path once it closes.
       isTransitioningRef.current = true;
-      void requestNotificationPermissions()
-        .then((granted) => {
-          logEvent('notification_permission_answered', { source: 'onboarding_reminder_time', granted });
-          if (granted) void registerPushToken();
-        })
+      void askNotificationPermissionInContext({
+        trigger: 'reminder_time',
+        registration: 'background',
+      })
         .catch((error) => logger.warn('[onboarding] reminder permission ask failed', error))
         .finally(() => {
           isTransitioningRef.current = false;
@@ -1687,10 +1795,12 @@ export default function OnboardingScreen() {
       return;
     }
 
-    // Find current index and navigate to previous step by ID
-    const currentIdx = STEPS.findIndex((s) => s.id === currentStepId);
-    if (currentIdx > 0) {
-      const prevStepId = STEPS[currentIdx - 1].id as StepId;
+    const prevStepId = resolveOnboardingBackTarget({
+      stepIds: STEPS.map((s) => s.id),
+      currentStepId,
+      purchasedDuringOnboarding,
+    }) as StepId | null;
+    if (prevStepId) {
 
       // Dismiss keyboard first to prevent layout shift
       Keyboard.dismiss();
@@ -2005,6 +2115,8 @@ export default function OnboardingScreen() {
     }
 
     if (step.type === 'purchaseConfirmation') {
+      // DG-1: visual treatment pending 07-design-final.md
+      const confirmation = getPurchaseConfirmationCopy(autoTrialMode ? 'auto_trial' : 'setup');
       return (
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false}>
           <TouchableOpacity
@@ -2033,11 +2145,11 @@ export default function OnboardingScreen() {
               />
 
               <TypewriterText
-                text="Welcome to Unfold Premium. Now let's shape a devotional journey around where you are right now."
+                text={confirmation.text}
                 style={{ fontSize: 28, lineHeight: 37, letterSpacing: -0.15, color: colors.text, textAlign: 'center', fontFamily: FontFamily.display }}
                 charDelay={34}
                 delay={350}
-                highlightWord="Unfold"
+                highlightWord={confirmation.highlightWord}
                 highlightColor={colors.accent}
                 onComplete={() => setScreenReady(true)}
               />
@@ -3271,6 +3383,37 @@ export default function OnboardingScreen() {
                     setPremiumGateFeature(step.id === 'readingDuration' ? 'readingDuration' : 'devotionalLength');
                     return;
                   }
+                  if (step.id === 'reminderTime') {
+                    void runReminderTimeCommit({
+                      isTransitioning: () => isTransitioningRef.current,
+                      setTransitioning: (value) => {
+                        isTransitioningRef.current = value;
+                      },
+                      select: () => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setData((prev) => ({ ...prev, reminderTime: String(option.value) }));
+                      },
+                      settleDelayMs: 300,
+                      askPermissionOnce: async () => {
+                        if (reminderPermissionAskedRef.current) return;
+                        reminderPermissionAskedRef.current = true;
+                        await askNotificationPermissionInContext({
+                          trigger: 'reminder_time',
+                          registration: 'background',
+                        });
+                      },
+                      advance: () => {
+                        Keyboard.dismiss();
+                        setShowInput(false);
+                        inputOpacity.value = 0;
+                        advanceToNextStep();
+                      },
+                      wait: (ms) => new Promise((resolve) => {
+                        setTimeout(resolve, ms);
+                      }),
+                    });
+                    return;
+                  }
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   setData((prev) => ({ ...prev, [step.id]: option.value }));
                   // Auto-advance after a brief delay so user sees their selection
@@ -4038,14 +4181,7 @@ export default function OnboardingScreen() {
       const mPrice = monthlyPkg?.product.priceString ?? '';
       const mRaw = monthlyPkg?.product.price ?? 0;
       const yRaw = yearlyPackage?.product.price ?? 0;
-      const tDays = (() => {
-        const intro = yearlyPackage?.product.introPrice;
-        if (!intro || intro.price !== 0) return 3;
-        const unit = intro.periodUnit.toLowerCase();
-        if (unit === 'day') return intro.periodNumberOfUnits;
-        if (unit === 'week') return intro.periodNumberOfUnits * 7;
-        return 3;
-      })();
+      const tDays = trialLabelToDays(yearlyTrialDuration);
       // Offerings are ready when both packages resolved from RC (not loading and not absent)
       const offeringsReady = !isLoadingOfferings && !!yearlyPackage && !!monthlyPkg;
 
@@ -4064,28 +4200,7 @@ export default function OnboardingScreen() {
           hasFreeTrial={yearlyHasFreeTrial}
           offeringsReady={offeringsReady}
           onRetryOfferings={() => { void queryClient.invalidateQueries({ queryKey: ['revenuecat', 'offerings'] }); }}
-          onPurchaseSuccess={() => {
-            // Persist before navigating. The debounced draft writer lands up
-            // to 1.5 s later, and a relaunch inside that window resumed ONTO
-            // the paywall for someone who had just paid. ThreeStepPaywall
-            // calls this only on a verified entitlement, so a failed purchase
-            // can never skip the paywall on the next launch.
-            if (onboardingDeviceIdRef.current === null) {
-              onboardingDeviceIdRef.current = getDeviceId();
-            }
-            saveOnboardingDraft({
-              deviceId: onboardingDeviceIdRef.current,
-              stepId: 'purchaseConfirmation',
-              data: dataRef.current,
-              purchasedDuringOnboarding: true,
-              sampleDevotionalId: onboardingDevotionalId || null,
-            });
-            setPurchasedDuringOnboarding(true);
-            // Dropped while no user record exists yet (see store.updateUser);
-            // the draft flag above carries premium until saveOnboardingData.
-            updateUser({ isPremium: true });
-            advanceToNextStep();
-          }}
+          onPurchaseSuccess={handleOnboardingPurchaseSuccess}
           onDecideLater={handleDecideLater}
           onSkip={() => {
             setCurrentStepId('themeType');
