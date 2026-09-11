@@ -80,6 +80,7 @@ import { NOTIFY_NOTE_COPY, NotifyNote } from '@/components/generating/NotifyNote
 import { useAutoTrialGeneration } from '@/hooks/useAutoTrialGeneration';
 import { readAutoTrialIntent } from '@/lib/auto-trial-intent';
 import { resolveGeneratingEntry } from '@/lib/generating-entry';
+import { resolveGeneratingPalette } from '@/lib/generating-palette';
 import { canRetrySeriesReveal, type SeriesRevealState } from '@/lib/series-reveal-machine';
 import { askNotificationPermissionInContext } from '@/lib/notification-ask';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
@@ -146,21 +147,10 @@ export default function GeneratingScreen() {
   const navigation = useNavigation();
   // Set only by a tapped generation_failed push, which names the job that died.
   const params = useLocalSearchParams<{ jobId?: string; devotionalId?: string }>();
-  const { colors: themeColors } = useTheme();
+  const { colors: themeColors, isDark } = useTheme();
   const { reducedMotion, entering, exiting } = useAccessibleAnimation();
 
-  const colors = {
-    ...themeColors,
-    background: '#0A0A0A',
-    cardBackground: '#111214',
-    inputBackground: '#111214',
-    border: '#24262B',
-    text: '#F5F5F7',
-    textMuted: '#A0A6B1',
-    textSubtle: '#7D8592',
-    buttonBackground: themeColors.accent,
-    buttonBackgroundPressed: themeColors.accent,
-  };
+  const colors = resolveGeneratingPalette(themeColors, isDark);
 
   const user = useUnfoldStore((s) => s.user);
   const startGenerationSession = useUnfoldStore((s) => s.startGenerationSession);
