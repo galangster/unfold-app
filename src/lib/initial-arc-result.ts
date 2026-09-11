@@ -101,7 +101,7 @@ export function applyInitialArcResult(
   }
 
   const intent = readAutoTrialIntent();
-  if (intent && intent.devotionalId === devotionalId && result.arc?.seriesKind === 'auto_trial') {
+  if (intent && intent.devotionalId === devotionalId) {
     settleLandedAutoTrialSeries(intent, devotionalId);
   }
 

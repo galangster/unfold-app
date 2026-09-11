@@ -353,7 +353,16 @@ describe('H8 applyInitialArcResult auto-trial settle', () => {
     expect(readAutoTrialIntent()?.status).toBe('submitted');
   });
 
-  it('retires samples only for seriesKind auto_trial', () => {
+  it('settles a matching intent when the payload has no seriesKind', () => {
+    seedSubmittedIntent();
+    applyInitialArcResult(
+      { devotionalId: 'devo-1', devotionalDay: day1, seriesTitle: 'Pulled Day 1' },
+      { user, devotionalLength: 3, session: captureSyncSession() },
+    );
+    expect(readAutoTrialIntent()?.status).toBe('landed');
+  });
+
+  it('retires samples when a matching auto intent lands', () => {
     seedSubmittedIntent();
     const sample = {
       id: 'onboarding-sample-anon_x',
@@ -371,13 +380,6 @@ describe('H8 applyInitialArcResult auto-trial settle', () => {
     };
     useUnfoldStore.setState({ devotionals: [sample], currentDevotionalId: sample.id });
     applyInitialArcResult(result, { user, devotionalLength: 3, session: captureSyncSession() });
-    expect(useUnfoldStore.getState().devotionals.some((row) => row.id === sample.id)).toBe(true);
-
-    seedSubmittedIntent();
-    applyInitialArcResult(
-      { ...result, arc: { ...result.arc, seriesKind: 'auto_trial' } },
-      { user, devotionalLength: 3, session: captureSyncSession() },
-    );
     expect(useUnfoldStore.getState().devotionals.some((row) => row.id === sample.id)).toBe(false);
   });
 });

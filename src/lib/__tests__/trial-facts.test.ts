@@ -16,7 +16,11 @@ type MutuallyAssignable<A, B> = [A] extends [B] ? ([B] extends [A] ? true : fals
 
 const allowedTrialDaysAssignability: MutuallyAssignable<
   AllowedTrialDays,
-  OnboardingData['devotionalLength']
+  3 | 7
+> = true;
+const onboardingLengthStillWider: MutuallyAssignable<
+  OnboardingData['devotionalLength'],
+  3 | 7 | 14 | 30
 > = true;
 
 function entitlement(overrides: Record<string, unknown> = {}) {
@@ -314,7 +318,8 @@ describe('D2 reject precedence', () => {
 });
 
 describe('D6 AllowedTrialDays', () => {
-  it('is mutually assignable with OnboardingData.devotionalLength', () => {
+  it('is 3 | 7 after OI-2 and leaves series length on the wider onboarding union', () => {
     expect(allowedTrialDaysAssignability).toBe(true);
+    expect(onboardingLengthStillWider).toBe(true);
   });
 });

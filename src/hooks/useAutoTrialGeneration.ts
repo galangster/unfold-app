@@ -192,9 +192,6 @@ export function useAutoTrialGeneration(intentId: string | null): {
       apply({ type: 'submit_blocked', reason: 'superseded' });
       return;
     }
-    if (store.user && store.user.devotionalLength !== intent.trialDays) {
-      store.updateUser({ devotionalLength: intent.trialDays });
-    }
     await flushUnfoldStorePersistAsync();
     const flushed = useUnfoldStore.getState();
     if (flushed.user) {
@@ -231,7 +228,7 @@ export function useAutoTrialGeneration(intentId: string | null): {
         claim: reply.autoTrialClaim ?? null,
       });
     } catch (err) {
-      if (!mountedRef.current && !(err instanceof Error)) return;
+      if (!mountedRef.current) return;
       apply({ type: 'submit_error', ...submitErrorFields(err), nowMs: Date.now() });
     }
   }, [apply, persistAcceptedSubmit]);
@@ -272,6 +269,7 @@ export function useAutoTrialGeneration(intentId: string | null): {
                 devotionalLength: intent.trialDays,
                 session: captureSyncSession(),
               });
+              settleLandedAutoTrialSeries(intent, intent.devotionalId);
               apply({ type: 'landed', devotionalId: intent.devotionalId });
               return;
             }
@@ -320,6 +318,7 @@ export function useAutoTrialGeneration(intentId: string | null): {
         lastUnreachableRef.current = false;
         if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
         pollTimerRef.current = setTimeout(() => {
+          if (!mountedRef.current) return;
           void doPoll(effect.jobId, intent);
         }, delay);
       } else if (effect.type === 'retry_job') {
@@ -333,8 +332,10 @@ export function useAutoTrialGeneration(intentId: string | null): {
             devotionalLength: intent?.trialDays ?? user?.devotionalLength ?? 3,
             session: captureSyncSession(),
           });
-        } else if (intent?.devotionalId) {
-          settleLandedAutoTrialSeries(intent, intent.devotionalId);
+        }
+        const latest = readAutoTrialIntent() ?? intent;
+        if (latest?.devotionalId) {
+          settleLandedAutoTrialSeries(latest, latest.devotionalId);
         }
         const landedId = payload?.devotionalId ?? intent?.devotionalId;
         if (landedId) apply({ type: 'landed', devotionalId: landedId });

@@ -206,6 +206,8 @@ describe('D7 strict parse', () => {
   it('returns null for version 2, trialDays 5, unknown status, non-UUID requestId, missing expiresAt, and bad JSON', () => {
     expect(parseAutoTrialIntent(JSON.stringify({ ...validIntent(), version: 2 }))).toBeNull();
     expect(parseAutoTrialIntent(JSON.stringify({ ...validIntent(), trialDays: 5 }))).toBeNull();
+    expect(parseAutoTrialIntent(JSON.stringify({ ...validIntent(), trialDays: 14 }))).toBeNull();
+    expect(parseAutoTrialIntent(JSON.stringify({ ...validIntent(), trialDays: 30 }))).toBeNull();
     expect(parseAutoTrialIntent(JSON.stringify({ ...validIntent(), status: 'queued' }))).toBeNull();
     expect(parseAutoTrialIntent(JSON.stringify({ ...validIntent(), requestId: 'not-a-uuid' }))).toBeNull();
     const missingExpires = validIntent() as unknown as Record<string, unknown>;

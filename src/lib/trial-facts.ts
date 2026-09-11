@@ -6,7 +6,7 @@ export const NEW_TRIAL_MAX_AGE_MS = 15 * 60_000;
 export const NEW_TRIAL_FUTURE_SKEW_MS = 5 * 60_000;
 export const QA_SIMULATED_TRIAL_APP_USER_ID = 'qa-simulated-trial';
 
-export type AllowedTrialDays = 3 | 7 | 14 | 30;
+export type AllowedTrialDays = 3 | 7;
 export type EntitlementExitSource = 'purchase' | 'offer' | 'restore' | 'lateGrant';
 export type TrialFactsRejectReason =
   | 'no_entitlement'

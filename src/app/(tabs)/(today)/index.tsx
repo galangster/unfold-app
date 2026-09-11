@@ -222,13 +222,23 @@ export function abandonPurchasedIntentBeforeNewSeries(i: {
   storage?: IntentStorage;
 }): void {
   const current = readAutoTrialIntent(i.storage);
-  if (current?.status !== 'purchased') return;
-  transitionAutoTrialIntent(
-    'abandoned',
-    { abandonReason: 'superseded_by_user_series' },
-    { nowMs: i.nowMs },
-    i.storage,
-  );
+  if (current?.status === 'purchased') {
+    transitionAutoTrialIntent(
+      'abandoned',
+      { abandonReason: 'superseded_by_user_series' },
+      { nowMs: i.nowMs },
+      i.storage,
+    );
+    return;
+  }
+  if (current?.status === 'failed') {
+    transitionAutoTrialIntent(
+      'abandoned',
+      { abandonReason: 'user_setup_fallback' },
+      { nowMs: i.nowMs },
+      i.storage,
+    );
+  }
 }
 
 export default function HomeScreen() {

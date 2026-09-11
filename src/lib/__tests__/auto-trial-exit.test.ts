@@ -335,6 +335,24 @@ describe('F3 telemetry', () => {
     expect(first.kind).toBe('auto');
   });
 
+  it('emits non-auto trial_started when a prior intent blocks a new verified exit', () => {
+    const storage = memoryIntentStorage();
+    const first = handleVerifiedEntitlementExit(exitArgs({ storage }));
+    expect(first.kind).toBe('auto');
+    const stored = JSON.parse(storage.raw() ?? '{}') as AutoTrialIntentV1;
+    stored.status = 'completed';
+    storage.setItem('auto-trial-series-intent-v1', JSON.stringify(stored));
+    mockTrackTrialStarted.mockClear();
+    mockTrackAutoTrialSkipped.mockClear();
+    const again = handleVerifiedEntitlementExit(exitArgs({ storage }));
+    expect(again).toEqual({ kind: 'fallback', reason: 'intent_exists' });
+    expect(mockTrackAutoTrialSkipped).toHaveBeenCalledTimes(1);
+    expect(mockTrackTrialStarted).toHaveBeenCalledWith(expect.objectContaining({
+      auto_trial: false,
+      purchase_source: 'purchase',
+    }));
+  });
+
   it('emits skipped plus at most one trial_started false for eligible fallbacks, never for restore', () => {
     const skipped = handleVerifiedEntitlementExit(exitArgs({
       storage: memoryIntentStorage(),

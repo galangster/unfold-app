@@ -111,7 +111,7 @@ const STATUSES = new Set<AutoTrialIntentStatus>([
   'abandoned',
 ]);
 
-const TRIAL_DAYS = new Set<AllowedTrialDays>([3, 7, 14, 30]);
+const TRIAL_DAYS = new Set<AllowedTrialDays>([3, 7]);
 const ENTRIES = new Set<AutoTrialEntry>(['onboarding', 'later']);
 const SURFACES = new Set<AutoTrialSurface>(['onboarding_paywall', 'paywall_route', 'churned_sheet']);
 const SOURCES = new Set<AutoTrialIntentV1['source']>(['purchase', 'offer', 'lateGrant']);

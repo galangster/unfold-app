@@ -43,6 +43,7 @@ import { applyInitialArcResult, DEFAULT_SERIES_TITLE, requireCanonicalDevotional
 import {
   clearInitialGenerationRequestId,
   ensureInitialGenerationRequestId,
+  readInitialGenerationRequestId,
 } from '@/lib/initial-generation-request';
 import {
   captureSyncSession,
@@ -79,7 +80,7 @@ import { NOTIFY_NOTE_COPY, NotifyNote } from '@/components/generating/NotifyNote
 import { useAutoTrialGeneration } from '@/hooks/useAutoTrialGeneration';
 import { readAutoTrialIntent } from '@/lib/auto-trial-intent';
 import { resolveGeneratingEntry } from '@/lib/generating-entry';
-import type { SeriesRevealState } from '@/lib/series-reveal-machine';
+import { canRetrySeriesReveal, type SeriesRevealState } from '@/lib/series-reveal-machine';
 import { askNotificationPermissionInContext } from '@/lib/notification-ask';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
@@ -233,6 +234,7 @@ export default function GeneratingScreen() {
       sessionDevotionalId: useUnfoldStore.getState().generationSession.devotionalId,
       landedDevotionalIds: useUnfoldStore.getState().devotionals.map((row) => row.id),
       autoTrialIntent: readAutoTrialIntent(),
+      initialGenerationRequestId: readInitialGenerationRequestId(),
     });
     return entry.kind === 'auto-trial-handoff' ? entry.intentId : null;
   });
@@ -256,7 +258,7 @@ export default function GeneratingScreen() {
     if (autoState.kind === 'failed') {
       setIsComplete(false);
       setIsGenerating(false);
-      setCanRetry(true);
+      setCanRetry(canRetrySeriesReveal(autoState, Date.now()));
       setError(autoTrialErrorMessage(autoState));
       return;
     }
@@ -752,6 +754,7 @@ export default function GeneratingScreen() {
       sessionDevotionalId: generationSession.devotionalId,
       landedDevotionalIds: devotionals.map((devotional) => devotional.id),
       autoTrialIntent: readAutoTrialIntent(),
+      initialGenerationRequestId: readInitialGenerationRequestId(),
     });
     if (entry.kind === 'resume') {
       const { inflight } = entry;

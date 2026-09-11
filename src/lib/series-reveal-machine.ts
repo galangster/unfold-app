@@ -121,11 +121,25 @@ function networkErrorsOf(state: SeriesRevealState): number {
 
 function declinedReasonFromCode(
   code: string | null,
-): 'switch_off' | 'platform' | 'trial_length' | 'trial_expired' {
-  if (code === 'trial_expired' || code === 'platform' || code === 'trial_length' || code === 'switch_off') {
+): 'switch_off' | 'platform' | 'trial_length' | 'trial_expired' | null {
+  if (
+    code === 'trial_expired'
+    || code === 'platform'
+    || code === 'trial_length'
+    || code === 'switch_off'
+  ) {
     return code;
   }
-  return 'switch_off';
+  return null;
+}
+
+export function canRetrySeriesReveal(state: SeriesRevealState, nowMs: number): boolean {
+  if (state.kind === 'retry_exhausted') return false;
+  if (state.kind !== 'failed') return false;
+  if (state.reason === 'rate_limited' && state.retryAtMs != null && nowMs < state.retryAtMs) {
+    return false;
+  }
+  return true;
 }
 
 function keep(state: SeriesRevealState): { state: SeriesRevealState; effects: SeriesRevealEffect[] } {
@@ -215,14 +229,17 @@ function reduceSubmitError(
   }
   if (event.status === 409) {
     const reason = declinedReasonFromCode(event.code);
-    return {
-      state: { kind: 'declined', reason },
-      effects: [{
-        type: 'transition',
-        to: 'abandoned',
-        reason: reason === 'trial_expired' ? 'trial_expired_before_submit' : 'server_unavailable',
-      }],
-    };
+    if (reason) {
+      return {
+        state: { kind: 'declined', reason },
+        effects: [{
+          type: 'transition',
+          to: 'abandoned',
+          reason: reason === 'trial_expired' ? 'trial_expired_before_submit' : 'server_unavailable',
+        }],
+      };
+    }
+    return { state: failed(ids.jobId, 'submit_failed'), effects: [] };
   }
   if (event.status === 429) {
     return { state: failed(ids.jobId, 'rate_limited', event.nowMs + 60_000), effects: [] };

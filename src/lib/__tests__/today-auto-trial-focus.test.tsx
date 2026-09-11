@@ -139,6 +139,7 @@ import {
   transitionAutoTrialIntent,
   type AutoTrialIntentV1,
 } from '@/lib/auto-trial-intent';
+import { resolveGeneratingEntry } from '@/lib/generating-entry';
 import {
 
   resolveTodayInflightAction,
@@ -374,6 +375,43 @@ describe('H7 Today auto-trial focus', () => {
     });
   });
 
+  it('keeps auto-trial-handoff after mark_landed settle clears the inflight record', () => {
+    const inflight: InflightGenerationJob = {
+      jobId: 'job-1',
+      devotionalId: 'auto-1',
+      submittedAt: Date.parse('2026-09-10T16:00:00.000Z'),
+    };
+    const submitted = intent({
+      status: 'submitted',
+      jobId: 'job-1',
+      devotionalId: 'auto-1',
+    });
+    const focus = applyTodayAutoTrialFocus({
+      intent: submitted,
+      deviceId: 'device-1',
+      nowMs: Date.parse('2026-09-10T17:00:00.000Z'),
+      hasCompletedOnboarding: true,
+      landedDevotionalIds: ['auto-1'],
+      inflightJob: inflight,
+      revealGuardKey: null,
+      generationSessionStatus: 'running',
+    });
+
+    expect(focus.launchAction).toEqual({ action: 'mark_landed', then: 'open_reveal' });
+    expect(focus.settleIntent).toEqual(submitted);
+    expect(focus.navigation).toEqual({ pathname: '/generating' });
+
+    const landed = { ...submitted, status: 'landed' as const };
+    const entry = resolveGeneratingEntry({
+      inflight: null,
+      params: null,
+      sessionDevotionalId: null,
+      autoTrialIntent: landed,
+    });
+    expect(entry).toEqual({ kind: 'auto-trial-handoff', intentId: INTENT_ID });
+    expect(entry).not.toEqual({ kind: 'submit' });
+  });
+
   it('never resumes an unmarked auto record on /generating', () => {
     const autoJob: InflightGenerationJob = {
       jobId: 'job-1',
@@ -443,5 +481,28 @@ describe('H7 Today auto-trial focus', () => {
     );
     expect(discovery).toContain("pathname: '/onboarding'");
     expect(transitionAutoTrialIntent).toEqual(expect.any(Function));
+  });
+
+  it('abandons a failed intent before opening new-series onboarding', () => {
+    const storage = new Map<string, string>();
+    const failed = intent({ status: 'failed', jobId: 'job-1', failedAt: '2026-09-10T16:00:00.000Z' });
+    storage.set('auto-trial-series-intent-v1', JSON.stringify(failed));
+    const fakeStorage = {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        storage.set(key, value);
+      },
+      removeItem: (key: string) => {
+        storage.delete(key);
+      },
+    };
+
+    abandonPurchasedIntentBeforeNewSeries({
+      nowMs: Date.parse('2026-09-10T17:00:00.000Z'),
+      storage: fakeStorage,
+    });
+    const next = JSON.parse(storage.get('auto-trial-series-intent-v1') ?? '{}') as AutoTrialIntentV1;
+    expect(next.status).toBe('abandoned');
+    expect(next.abandonReason).toBe('user_setup_fallback');
   });
 });
