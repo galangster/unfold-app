@@ -93,7 +93,7 @@ describe('F7 useCreationGate handleOfferVerifiedExit', () => {
     const { handleOfferVerifiedExit } = await renderGate();
 
     await act(async () => {
-      handleOfferVerifiedExit(EXIT);
+      await handleOfferVerifiedExit(EXIT);
     });
 
     expect(mockSetItem).toHaveBeenCalledWith('@unfold_exclusive_offer_seen', 'true');
@@ -111,7 +111,7 @@ describe('F7 useCreationGate handleOfferVerifiedExit', () => {
     const { handleOfferVerifiedExit } = await renderGate();
 
     await act(async () => {
-      handleOfferVerifiedExit(EXIT);
+      await handleOfferVerifiedExit(EXIT);
     });
 
     expect(mockSetItem).toHaveBeenCalledWith('@unfold_exclusive_offer_seen', 'true');

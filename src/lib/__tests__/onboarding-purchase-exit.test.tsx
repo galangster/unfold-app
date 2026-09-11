@@ -89,6 +89,7 @@ jest.mock('@/lib/generation-session', () => ({
 }));
 jest.mock('@/lib/remote-config', () => ({
   refreshRemoteConfig: jest.fn(),
+  awaitRemoteConfigSettled: jest.fn(async () => ({ status: 'ok' })),
   readAutoTrialSwitchSnapshot: () => ({ enabled: true, maxTrialDays: 7, fetchedAtMs: 1, reason: 'ok' }),
 }));
 jest.mock('@/components/onboarding/OnboardingVoiceAnswerSheet', () => ({ OnboardingVoiceAnswerSheet: () => null }));

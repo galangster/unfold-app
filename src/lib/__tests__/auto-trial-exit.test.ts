@@ -31,6 +31,8 @@ jest.mock('../remote-config', () => ({
     fetchedAtMs: 1_700_000_000_000,
     reason: 'on',
   })),
+  awaitRemoteConfigSettled: jest.fn(async () => ({ status: 'ok' })),
+  REMOTE_CONFIG_PURCHASE_WAIT_MS: 3_000,
 }));
 jest.mock('../store', () => ({
   useUnfoldStore: { getState: () => mockStoreGetState() },
@@ -273,7 +275,7 @@ describe('F1 precedence', () => {
     }
   });
 
-  it('returns internal_error when setItem throws and when later-entry store reads throw', () => {
+  it('returns internal_error when setItem throws and when later-entry store reads throw', async () => {
     const storage = memoryIntentStorage();
     (storage.setItem as jest.Mock).mockImplementation(() => {
       throw new Error('disk');
@@ -288,7 +290,7 @@ describe('F1 precedence', () => {
     mockStoreGetState.mockImplementation(() => {
       throw new Error('store down');
     });
-    expect(resolveLaterEntryExit(
+    expect(await resolveLaterEntryExit(
       { source: 'purchase', customerInfo: info(entitlement()) },
       'paywall_route',
     )).toEqual({ kind: 'fallback', reason: 'internal_error' });
@@ -398,7 +400,7 @@ describe('resolveLaterEntryExit guards', () => {
     mockGetDeviceId.mockReturnValue('device-1');
   });
 
-  it('returns no_completed_profile and has_real_series from the live store', () => {
+  it('returns no_completed_profile and has_real_series from the live store', async () => {
     const now = Date.now();
     const customerInfo = info(entitlement({
       latestPurchaseDateMillis: now - 30_000,
@@ -408,7 +410,7 @@ describe('resolveLaterEntryExit guards', () => {
       user: { hasCompletedOnboarding: false },
       devotionals: [],
     });
-    expect(resolveLaterEntryExit(
+    expect(await resolveLaterEntryExit(
       { source: 'purchase', customerInfo },
       'paywall_route',
     )).toEqual({ kind: 'fallback', reason: 'no_completed_profile' });
@@ -417,7 +419,7 @@ describe('resolveLaterEntryExit guards', () => {
       user: { hasCompletedOnboarding: true },
       devotionals: [{ id: 'real-series-1' }],
     });
-    expect(resolveLaterEntryExit(
+    expect(await resolveLaterEntryExit(
       { source: 'purchase', customerInfo },
       'churned_sheet',
     )).toEqual({ kind: 'fallback', reason: 'has_real_series' });

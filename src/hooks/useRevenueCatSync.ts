@@ -16,14 +16,13 @@ import { useRouter } from 'expo-router';
 import { useUnfoldStore } from '@/lib/store';
 import { useUIState } from '@/lib/ui-state';
 import {
-  handleVerifiedEntitlementExit,
   resolveLaterEntryExit,
+  resolveVerifiedEntitlementExit,
   type VerifiedEntitlementExit,
 } from '@/lib/auto-trial-exit';
 import { NEW_TRIAL_MAX_AGE_MS, isSimulatedTrialCustomerInfo } from '@/lib/trial-facts';
 import { getDeviceId } from '@/lib/mmkv-storage';
 import { getDeviceTimezone } from '@/lib/device-timezone';
-import { readAutoTrialSwitchSnapshot } from '@/lib/remote-config';
 import { requestLaterEntryNotifyAsk } from '@/lib/notification-ask';
 import {
   addCustomerInfoUpdateListener,
@@ -119,33 +118,35 @@ export function useRevenueCatSync() {
       if (nowMs - marker.setAtMs > NEW_TRIAL_MAX_AGE_MS) return;
 
       const exit: VerifiedEntitlementExit = { source: 'lateGrant', customerInfo };
-      const decision = marker.entry === 'later'
-        ? resolveLaterEntryExit(
-          exit,
-          marker.surface === 'churned_sheet' ? 'churned_sheet' : 'paywall_route',
-        )
-        : handleVerifiedEntitlementExit({
-          exit,
-          surface: 'onboarding_paywall',
-          deviceId: getDeviceId(),
-          nowMs,
-          platform: Platform.OS,
-          timeZone: getDeviceTimezone() ?? '',
-          switchSnapshot: readAutoTrialSwitchSnapshot(nowMs, Platform.OS),
-          profile: store.user
-            ? { hasCompletedOnboarding: store.user?.hasCompletedOnboarding === true }
-            : null,
-          devotionalIds: (store.devotionals ?? []).map((devotional) => devotional.id),
-          simulated: isSimulatedTrialCustomerInfo(customerInfo),
-        });
-
-      if (decision.kind === 'auto') {
-        if (store.user?.hasCompletedOnboarding === true) {
-          routerRef.current.push('/generating');
+      void (async () => {
+        if (didCancel) return;
+        const decision = marker.entry === 'later'
+          ? await resolveLaterEntryExit(
+            exit,
+            marker.surface === 'churned_sheet' ? 'churned_sheet' : 'paywall_route',
+          )
+          : await resolveVerifiedEntitlementExit({
+            exit,
+            surface: 'onboarding_paywall',
+            deviceId: getDeviceId(),
+            nowMs,
+            platform: Platform.OS,
+            timeZone: getDeviceTimezone() ?? '',
+            profile: store.user
+              ? { hasCompletedOnboarding: store.user?.hasCompletedOnboarding === true }
+              : null,
+            devotionalIds: (store.devotionals ?? []).map((devotional) => devotional.id),
+            simulated: isSimulatedTrialCustomerInfo(customerInfo),
+          });
+        if (didCancel) return;
+        if (decision.kind === 'auto') {
+          if (store.user?.hasCompletedOnboarding === true) {
+            routerRef.current.push('/generating');
+          }
+          return;
         }
-        return;
-      }
-      void requestLaterEntryNotifyAsk(customerInfo);
+        void requestLaterEntryNotifyAsk(customerInfo);
+      })();
     };
 
     // Fetch current subscription status on launch. This waits for the

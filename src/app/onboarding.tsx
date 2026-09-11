@@ -140,7 +140,7 @@ import { stripOuterQuotes } from '@/lib/cn';
 import { Typography } from '@/constants/typography';
 import { useOnboardingDarkColors } from '@/hooks/useOnboardingDarkColors';
 import {
-  handleVerifiedEntitlementExit,
+  resolveVerifiedEntitlementExit,
   type VerifiedEntitlementExit,
 } from '@/lib/auto-trial-exit';
 import {
@@ -156,7 +156,7 @@ import { runOnboardingPurchaseSuccess } from '@/lib/onboarding-purchase-success'
 import { runReminderTimeCommit } from '@/lib/reminder-time-commit';
 import { askNotificationPermissionInContext } from '@/lib/notification-ask';
 import { getPurchaseConfirmationCopy } from '@/lib/purchase-confirmation-copy';
-import { refreshRemoteConfig, readAutoTrialSwitchSnapshot } from '@/lib/remote-config';
+import { refreshRemoteConfig } from '@/lib/remote-config';
 import { trialLabelToDays } from '@/lib/trial-reminder-copy';
 
 // Ember exclusion zones (normalized to the ember layer's container) — keep
@@ -1561,51 +1561,54 @@ export default function OnboardingScreen() {
   }, [STEPS, currentStepId, inputOpacity, completeOnboarding]);
 
   const handleOnboardingPurchaseSuccess = useCallback((exit: VerifiedEntitlementExit) => {
-    runOnboardingPurchaseSuccess({
-      exit,
-      ensureDeviceId: () => {
-        if (onboardingDeviceIdRef.current === null) {
-          onboardingDeviceIdRef.current = getDeviceId();
-        }
-      },
-      decide: (verifiedExit) => {
-        const nowMs = Date.now();
-        const state = useUnfoldStore.getState();
-        return handleVerifiedEntitlementExit({
-          exit: verifiedExit,
-          surface: 'onboarding_paywall',
-          deviceId: onboardingDeviceIdRef.current ?? getDeviceId(),
-          nowMs,
-          platform: Platform.OS,
-          timeZone: getDeviceTimezone() ?? '',
-          switchSnapshot: readAutoTrialSwitchSnapshot(nowMs, Platform.OS),
-          profile: existingUser
-            ? { hasCompletedOnboarding: existingUser.hasCompletedOnboarding === true }
-            : null,
-          devotionalIds: (state.devotionals ?? []).map((devotional) => devotional.id),
-          simulated: isSimulatedTrialCustomerInfo(verifiedExit.customerInfo),
-        });
-      },
-      saveDraft: () => {
-        saveOnboardingDraft({
-          deviceId: onboardingDeviceIdRef.current ?? getDeviceId(),
-          stepId: 'purchaseConfirmation',
-          data: dataRef.current,
-          purchasedDuringOnboarding: true,
-          sampleDevotionalId: onboardingDevotionalId || null,
-        });
-      },
-      setPurchased: () => {
-        setPurchasedDuringOnboarding(true);
-      },
-      setAutoTrialMode,
-      markPremium: () => {
-        updateUser({ isPremium: true });
-      },
-      advance: () => {
-        advanceToNextStep();
-      },
-    });
+    void (async () => {
+      if (onboardingDeviceIdRef.current === null) {
+        onboardingDeviceIdRef.current = getDeviceId();
+      }
+      const nowMs = Date.now();
+      const state = useUnfoldStore.getState();
+      const decision = await resolveVerifiedEntitlementExit({
+        exit,
+        surface: 'onboarding_paywall',
+        deviceId: onboardingDeviceIdRef.current ?? getDeviceId(),
+        nowMs,
+        platform: Platform.OS,
+        timeZone: getDeviceTimezone() ?? '',
+        profile: existingUser
+          ? { hasCompletedOnboarding: existingUser.hasCompletedOnboarding === true }
+          : null,
+        devotionalIds: (state.devotionals ?? []).map((devotional) => devotional.id),
+        simulated: isSimulatedTrialCustomerInfo(exit.customerInfo),
+      });
+      runOnboardingPurchaseSuccess({
+        exit,
+        ensureDeviceId: () => {
+          if (onboardingDeviceIdRef.current === null) {
+            onboardingDeviceIdRef.current = getDeviceId();
+          }
+        },
+        decide: () => decision,
+        saveDraft: () => {
+          saveOnboardingDraft({
+            deviceId: onboardingDeviceIdRef.current ?? getDeviceId(),
+            stepId: 'purchaseConfirmation',
+            data: dataRef.current,
+            purchasedDuringOnboarding: true,
+            sampleDevotionalId: onboardingDevotionalId || null,
+          });
+        },
+        setPurchased: () => {
+          setPurchasedDuringOnboarding(true);
+        },
+        setAutoTrialMode,
+        markPremium: () => {
+          updateUser({ isPremium: true });
+        },
+        advance: () => {
+          advanceToNextStep();
+        },
+      });
+    })();
   }, [advanceToNextStep, existingUser, onboardingDevotionalId, updateUser]);
 
 

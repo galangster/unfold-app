@@ -138,6 +138,7 @@ jest.mock('@/lib/mmkv-storage', () => ({
 }));
 jest.mock('@/lib/remote-config', () => ({
   refreshRemoteConfig: jest.fn(async () => undefined),
+  awaitRemoteConfigSettled: jest.fn(async () => ({ status: 'ok' })),
   readAutoTrialSwitchSnapshot: () => ({ enabled: true, maxTrialDays: 7, fetchedAtMs: 1, reason: 'ok' }),
 }));
 jest.mock('@/lib/device-timezone', () => ({ getDeviceTimezone: () => 'America/Chicago' }));

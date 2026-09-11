@@ -263,16 +263,17 @@ export function QaToolsSection() {
             [
               ...QA_TRIAL_LENGTH_OPTIONS.map((option) => ({
                 text: option.label,
-                onPress: () => {
+                    onPress: () => {
                   const result = simulateTrialPurchase({
                     trialLengthMs: option.trialLengthMs,
                     handle: (exit) => {
-                      const decision = resolveLaterEntryExit(exit, 'paywall_route');
-                      if (decision.kind === 'auto') {
-                        router.push('/generating');
-                        return;
-                      }
-                      Alert.alert('Fallback', decision.reason);
+                      void resolveLaterEntryExit(exit, 'paywall_route').then((decision) => {
+                        if (decision.kind === 'auto') {
+                          router.push('/generating');
+                          return;
+                        }
+                        Alert.alert('Fallback', decision.reason);
+                      });
                     },
                   });
                   if (!result.ok) Alert.alert('Fallback', result.reason);

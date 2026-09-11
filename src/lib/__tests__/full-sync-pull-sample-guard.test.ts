@@ -94,6 +94,38 @@ describe('J12 full-sync sample guard', () => {
     expect(useUnfoldStore.getState().devotionals.map((item) => item.id)).toEqual([SAMPLE_ID]);
   });
 
+  it('does not insert a stale sample when the same pull also carries an auto-trial series', () => {
+    applyPulledUserData({
+      timestamp: '2026-07-01T12:00:00.000Z',
+      changes: {
+        devotionals: [
+          sampleRecord(),
+          {
+            id: 'auto-1',
+            updatedAt: '2026-07-01T12:00:00.000Z',
+            deleted: false,
+            data: {
+              title: 'Auto',
+              totalDays: 3,
+              currentDay: 1,
+              createdAt: '2026-07-01T00:00:00.000Z',
+              seriesArc: {
+                totalDaysPlanned: 3,
+                overarchingTheme: 'theme',
+                narrativeShape: 'shape',
+                dayHints: [],
+                isOpenEnded: false,
+                createdAt: '2026-07-01T00:00:00.000Z',
+                seriesKind: 'auto_trial',
+              },
+            },
+          },
+        ],
+      },
+    });
+    expect(useUnfoldStore.getState().devotionals.map((item) => item.id)).toEqual(['auto-1']);
+  });
+
   it('removes a deleted sample', () => {
     useUnfoldStore.setState({
       devotionals: [{

@@ -71,9 +71,9 @@ export function useCreationGate() {
     setShowExclusiveOffer(false);
   }, []);
 
-  const handleOfferVerifiedExit = useCallback((exit: VerifiedEntitlementExit) => {
+  const handleOfferVerifiedExit = useCallback(async (exit: VerifiedEntitlementExit) => {
     dismissOffer({ offerShown: true });
-    const decision = resolveLaterEntryExit(exit, 'churned_sheet');
+    const decision = await resolveLaterEntryExit(exit, 'churned_sheet');
     if (decision.kind === 'auto') {
       // This hook navigates (never pushes); the presentation contract test pins it.
       router.navigate('/generating');

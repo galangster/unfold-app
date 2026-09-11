@@ -14,7 +14,13 @@ import { isEphemeralDeviceId } from '@/lib/device-id';
 import { getDeviceTimezone } from '@/lib/device-timezone';
 import { getDeviceId } from '@/lib/mmkv-storage';
 import { isQaToolsEnabled } from '@/lib/qa-tools';
-import { readAutoTrialSwitchSnapshot, type AutoTrialSwitchSnapshot } from '@/lib/remote-config';
+import {
+  awaitRemoteConfigSettled,
+  readAutoTrialSwitchSnapshot,
+  REMOTE_CONFIG_PURCHASE_WAIT_MS,
+  type AutoTrialSwitchSnapshot,
+  type RemoteConfigState,
+} from '@/lib/remote-config';
 import { captureAppError } from '@/lib/sentry';
 import { useUnfoldStore } from '@/lib/store';
 import {
@@ -139,7 +145,7 @@ function emitExitTelemetry(
   }
 }
 
-export function handleVerifiedEntitlementExit(i: {
+export type VerifiedEntitlementExitInput = {
   exit: VerifiedEntitlementExit;
   surface: AutoTrialSurface;
   deviceId: string;
@@ -151,7 +157,34 @@ export function handleVerifiedEntitlementExit(i: {
   devotionalIds: readonly string[];
   simulated?: boolean;
   storage?: IntentStorage;
-}): VerifiedExitDecision {
+};
+
+export async function resolveVerifiedEntitlementExit(
+  i: Omit<VerifiedEntitlementExitInput, 'switchSnapshot'> & {
+    configTimeoutMs?: number;
+    fetchImpl?: (url: string, init?: RequestInit) => Promise<Response>;
+  },
+): Promise<VerifiedExitDecision> {
+  const settled: RemoteConfigState = await awaitRemoteConfigSettled(
+    i.configTimeoutMs ?? REMOTE_CONFIG_PURCHASE_WAIT_MS,
+    { nowMs: i.nowMs, fetchImpl: i.fetchImpl },
+  );
+  return handleVerifiedEntitlementExit({
+    exit: i.exit,
+    surface: i.surface,
+    deviceId: i.deviceId,
+    nowMs: i.nowMs,
+    platform: i.platform,
+    timeZone: i.timeZone,
+    switchSnapshot: readAutoTrialSwitchSnapshot(i.nowMs, i.platform, settled),
+    profile: i.profile,
+    devotionalIds: i.devotionalIds,
+    simulated: i.simulated,
+    storage: i.storage,
+  });
+}
+
+export function handleVerifiedEntitlementExit(i: VerifiedEntitlementExitInput): VerifiedExitDecision {
   const entry = entryFromSurface(i.surface);
   let attemptedRequestId: string | null = null;
   try {
@@ -252,22 +285,21 @@ export function handleVerifiedEntitlementExit(i: {
   }
 }
 
-export function resolveLaterEntryExit(
+export async function resolveLaterEntryExit(
   exit: VerifiedEntitlementExit,
   surface: 'paywall_route' | 'churned_sheet',
-): VerifiedExitDecision {
+): Promise<VerifiedExitDecision> {
   try {
     const state = useUnfoldStore.getState();
     const nowMs = Date.now();
     const platform = Platform.OS;
-    return handleVerifiedEntitlementExit({
+    return await resolveVerifiedEntitlementExit({
       exit,
       surface,
       deviceId: getDeviceId(),
       nowMs,
       platform,
       timeZone: getDeviceTimezone() ?? '',
-      switchSnapshot: readAutoTrialSwitchSnapshot(nowMs, platform),
       profile: state.user
         ? { hasCompletedOnboarding: state.user.hasCompletedOnboarding === true }
         : null,
