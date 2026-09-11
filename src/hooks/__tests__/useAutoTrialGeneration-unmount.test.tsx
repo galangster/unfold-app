@@ -102,6 +102,7 @@ function seedPurchased() {
 describe('H13 useAutoTrialGeneration unmount', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.spyOn(Date, 'now').mockReturnValue(NOW);
     (mmkvStorage as { __store?: Map<string, string> }).__store?.clear();
     useUnfoldStore.setState({
       user: {
@@ -116,6 +117,10 @@ describe('H13 useAutoTrialGeneration unmount', () => {
       devotionals: [],
     });
     mockPoll.mockResolvedValue({ status: 'pending' });
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   it('keeps an accepted submit after unmount and sets leftForHome from dismissedAt', async () => {

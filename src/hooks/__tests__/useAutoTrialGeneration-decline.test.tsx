@@ -108,6 +108,7 @@ async function flush() {
 describe('useAutoTrialGeneration AUTO_TRIAL_UNAVAILABLE', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.spyOn(Date, 'now').mockReturnValue(NOW);
     (mmkvStorage as { __store?: Map<string, string> }).__store?.clear();
     mockReplace.mockReset();
     useUnfoldStore.setState({
@@ -123,6 +124,10 @@ describe('useAutoTrialGeneration AUTO_TRIAL_UNAVAILABLE', () => {
       devotionals: [],
     });
     mockPoll.mockResolvedValue({ status: 'pending' });
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   it.each([
