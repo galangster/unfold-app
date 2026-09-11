@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { trackAutoTrialKeepsakeOpened } from '@/lib/auto-trial-telemetry';
@@ -15,18 +15,19 @@ export default function KeepsakeScreen() {
   const highlights = useUnfoldStore((state) => state.highlights);
   const checkIns = useUnfoldStore((state) => state.checkIns);
   const emittedOpen = useRef(false);
-  const devotional = devotionals.find((item) => item.id === devotionalId);
-  const keepsake = devotional
-    ? buildSeriesKeepsake({ devotional, highlights, checkIns })
-    : null;
-  const unavailable = !keepsake || keepsake.daysRead === 0;
+  const keepsake = useMemo(() => {
+    const devotional = devotionals.find((item) => item.id === devotionalId);
+    return devotional
+      ? buildSeriesKeepsake({ devotional, highlights, checkIns })
+      : null;
+  }, [devotionals, devotionalId, highlights, checkIns]);
 
   useEffect(() => {
-    if (unavailable) {
+    if (!keepsake || keepsake.daysRead === 0) {
       router.replace('/(tabs)/(today)');
       return;
     }
-    if (emittedOpen.current || !keepsake) return;
+    if (emittedOpen.current) return;
     emittedOpen.current = true;
     const opened_from = openedFrom === 'celebration' || openedFrom === 'today'
       ? openedFrom
@@ -35,9 +36,9 @@ export default function KeepsakeScreen() {
       opened_from,
       completeness: keepsake.completeness,
     });
-  }, [unavailable, openedFrom, keepsake, router]);
+  }, [keepsake, openedFrom, router]);
 
-  if (unavailable || !keepsake) return null;
+  if (!keepsake || keepsake.daysRead === 0) return null;
 
   // DG-1: visual treatment pending 07-design-final.md
   return (

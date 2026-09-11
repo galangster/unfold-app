@@ -1,7 +1,7 @@
 import NetInfo from '@react-native-community/netinfo';
 
 import { getAuthHeaders, PRIMARY_BACKEND_URL } from './api-config';
-import { asNextPick, isAutoTrialSeries, isOnboardingSampleDevotionalId } from './auto-trial-series';
+import { asNextPick, asTrimmedString, isAutoTrialSeries, shouldInsertPulledDevotional } from './auto-trial-series';
 import { mmkvStorage } from './mmkv-storage';
 import { logger } from './logger';
 import { useUnfoldStore } from './store';
@@ -576,10 +576,7 @@ function mapDevotionalDay(record: SyncPulledRecord): DevotionalDay | null {
   const quotableLine = asString(row.quotableLine) ?? asString(content.quotableLine);
   if (!devotionalId || !dayNumber || !title || !scriptureReference || !scriptureText || !bodyText || !quotableLine) return null;
 
-  const nextPickLineRaw = content.nextPickLine ?? row.nextPickLine;
-  const nextPickLine = typeof nextPickLineRaw === 'string' && nextPickLineRaw.trim().length > 0
-    ? nextPickLineRaw.trim()
-    : undefined;
+  const nextPickLine = asTrimmedString(content.nextPickLine ?? row.nextPickLine);
 
   return {
     ...content,
@@ -643,6 +640,7 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
   const pendingByChapter = pendingBibleReadingByChapter();
   useUnfoldStore.setState((state) => {
     let devotionals = state.devotionals;
+    const hasAutoTrialSeries = devotionals.some(isAutoTrialSeries);
     for (const record of changes.devotionals ?? []) {
       if (record.deleted) {
         devotionals = devotionals.filter((item) => item.id !== record.id);
@@ -656,9 +654,7 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
         devotionals = devotionals.map((item) => (item.id === record.id ? mapped : item));
         continue;
       }
-      if (isOnboardingSampleDevotionalId(mapped.id) && devotionals.some((item) => isAutoTrialSeries(item))) {
-        continue;
-      }
+      if (!shouldInsertPulledDevotional(mapped, hasAutoTrialSeries)) continue;
       devotionals = [mapped, ...devotionals];
     }
 

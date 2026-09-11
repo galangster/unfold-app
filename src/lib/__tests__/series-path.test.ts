@@ -248,8 +248,7 @@ describe('J1 series path', () => {
   });
 
   it('builds a planned path of preparing then locked nodes', () => {
-    const now = new Date(2026, 5, 8, 12, 0, 0);
-    const nodes = buildPlannedSeriesPath(3, now);
+    const nodes = buildPlannedSeriesPath(3);
     expect(states(nodes)).toEqual(['preparing', 'locked', 'locked']);
   });
 });

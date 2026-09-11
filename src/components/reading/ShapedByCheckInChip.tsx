@@ -2,15 +2,10 @@ import { useEffect } from 'react';
 import { Text, View } from 'react-native';
 import { shouldShowShapedByCheckInChip } from '@/lib/auto-trial-series';
 import { trackAutoTrialDay2ChipShown } from '@/lib/auto-trial-telemetry';
+import { formatDateOnly } from '@/lib/onboarding-step-helpers';
 import type { Devotional, DevotionalDay } from '@/lib/store';
 
 let lastShownLocalDate: string | null = null;
-
-function localDateKey(now: Date): string {
-  const month = `${now.getMonth() + 1}`.padStart(2, '0');
-  const day = `${now.getDate()}`.padStart(2, '0');
-  return `${now.getFullYear()}-${month}-${day}`;
-}
 
 export function ShapedByCheckInChip({
   devotional,
@@ -23,7 +18,7 @@ export function ShapedByCheckInChip({
 
   useEffect(() => {
     if (!visible) return;
-    const today = localDateKey(new Date());
+    const today = formatDateOnly(new Date());
     if (lastShownLocalDate === today) return;
     lastShownLocalDate = today;
     trackAutoTrialDay2ChipShown();

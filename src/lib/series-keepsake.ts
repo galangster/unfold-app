@@ -1,5 +1,5 @@
-import { countReadDaysWithinBoundary } from '@/lib/series-path';
-import { getServerOwnedSeriesTotalDays } from '@/lib/devotional-series-boundary';
+import { filterDaysWithinSeriesBoundary, getServerOwnedSeriesTotalDays } from '@/lib/devotional-series-boundary';
+import { countReadDaysWithinBoundary, isSeriesComplete } from '@/lib/series-path';
 import type { CheckIn, Devotional, DevotionalDay, Highlight } from '@/lib/store';
 
 export interface SeriesKeepsake {
@@ -20,7 +20,18 @@ function withinBoundary(dayNumber: number, totalDays: number): boolean {
 }
 
 function newestByCreatedAt<T extends { createdAt: string }>(items: T[]): T | undefined {
-  return [...items].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0];
+  return items.reduce<{ item: T; at: number } | undefined>((best, item) => {
+    const at = Date.parse(item.createdAt);
+    if (!best || at > best.at) return { item, at };
+    return best;
+  }, undefined)?.item;
+}
+
+function maxByDayNumber<T extends { dayNumber: number }>(items: T[]): T | undefined {
+  return items.reduce<T | undefined>(
+    (best, item) => (!best || item.dayNumber > best.dayNumber ? item : best),
+    undefined,
+  );
 }
 
 function selectLine(
@@ -35,9 +46,9 @@ function selectLine(
     return { text: highlight.highlightedText.trim(), dayNumber: highlight.dayNumber, source: 'highlight' };
   }
 
-  const quotable = days
-    .filter((day) => day.isRead && withinBoundary(day.dayNumber, totalDays) && day.quotableLine.trim().length > 0)
-    .sort((a, b) => b.dayNumber - a.dayNumber)[0];
+  const quotable = maxByDayNumber(
+    days.filter((day) => day.isRead && day.quotableLine.trim().length > 0),
+  );
   if (!quotable) return null;
   return { text: quotable.quotableLine.trim(), dayNumber: quotable.dayNumber, source: 'quotable' };
 }
@@ -64,12 +75,12 @@ function selectWords(checkIns: CheckIn[], totalDays: number): SeriesKeepsake['wo
   return { text: chip.chipAnswer.trim(), dayNumber: chip.dayNumber, source: 'chip' };
 }
 
-function selectAct(days: DevotionalDay[], totalDays: number): SeriesKeepsake['act'] {
+function selectAct(days: DevotionalDay[]): SeriesKeepsake['act'] {
   const withAct = days.filter((day) => (
-    day.isRead && withinBoundary(day.dayNumber, totalDays) && (day.act ?? '').trim().length > 0
+    day.isRead && (day.act ?? '').trim().length > 0
   ));
   const done = withAct.filter((day) => day.actOutcome === 'done');
-  const pick = [...(done.length > 0 ? done : withAct)].sort((a, b) => b.dayNumber - a.dayNumber)[0];
+  const pick = maxByDayNumber(done.length > 0 ? done : withAct);
   if (!pick?.act) return null;
   return {
     text: pick.act.trim(),
@@ -92,25 +103,27 @@ export function buildSeriesKeepsake(i: {
 }): SeriesKeepsake {
   const totalDays = getServerOwnedSeriesTotalDays(i.devotional);
   const daysRead = countReadDaysWithinBoundary(i.devotional);
-  const isSeriesComplete = totalDays > 0 && daysRead >= totalDays;
-  const days = (i.devotional.days ?? []).filter((day) => withinBoundary(day.dayNumber, totalDays));
+  const seriesComplete = isSeriesComplete(i.devotional);
+  const days = filterDaysWithinSeriesBoundary(i.devotional.days ?? [], i.devotional);
   const highlights = i.highlights.filter((item) => item.devotionalId === i.devotional.id);
   const checkIns = i.checkIns.filter((item) => item.devotionalId === i.devotional.id);
   const finalDay = days.find((day) => day.dayNumber === totalDays);
   const line = selectLine(highlights, days, totalDays);
   const words = selectWords(checkIns, totalDays);
-  const act = selectAct(days, totalDays);
+  const act = selectAct(days);
 
   return {
     devotionalId: i.devotional.id,
     seriesTitle: i.devotional.title,
     totalDays,
     daysRead,
-    isSeriesComplete,
+    isSeriesComplete: seriesComplete,
     line,
     words,
     act,
-    nextPickLine: isSeriesComplete ? finalDay?.nextPick?.line ?? null : null,
+    nextPickLine: seriesComplete
+      ? finalDay?.nextPickLine ?? finalDay?.nextPick?.line ?? null
+      : null,
     completeness: completenessOf({ line, words, act }),
   };
 }

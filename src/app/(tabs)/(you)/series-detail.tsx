@@ -155,6 +155,19 @@ export default function SeriesDetailScreen() {
     [devotional, now],
   );
 
+  const seriesPath = useMemo(
+    () => (devotional
+      ? buildSeriesPath(devotional, now, {
+          isCurrentSeries: devotional.id === currentDevotionalId,
+        })
+      : []),
+    [devotional, now, currentDevotionalId],
+  );
+  const readDaysWithinBoundary = useMemo(
+    () => (devotional ? countReadDaysWithinBoundary(devotional) : 0),
+    [devotional, now, currentDevotionalId],
+  );
+
   const handleDayPress = useCallback(
     (dayNumber: number) => {
       if (!devotional) return;
@@ -200,6 +213,7 @@ export default function SeriesDetailScreen() {
   }
 
   const createdDate = format(new Date(devotional.createdAt), 'MMM d, yyyy');
+  const autoTrial = isAutoTrialSeries(devotional);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -252,16 +266,14 @@ export default function SeriesDetailScreen() {
             </View>
           </Animated.View>
 
-          {devotional && isAutoTrialSeries(devotional) ? (
+          {autoTrial ? (
             <SeriesPath
-              nodes={buildSeriesPath(devotional, now, {
-                isCurrentSeries: devotional.id === currentDevotionalId,
-              })}
+              nodes={seriesPath}
               variant="compact"
             />
           ) : null}
 
-          {devotional && isAutoTrialSeries(devotional) && countReadDaysWithinBoundary(devotional) >= 1 ? (
+          {autoTrial && readDaysWithinBoundary >= 1 ? (
             <TouchableOpacity
               onPress={() => router.push({
                 pathname: '/keepsake',

@@ -13,7 +13,7 @@ import UnfoldDashboardWidget from '@/widgets/ios/UnfoldDashboard';
 import UnfoldReadingSessionActivity from '@/widgets/ios/UnfoldReadingSession';
 import { useUnfoldStore } from '@/lib/store';
 import type { LiveActivity } from 'expo-widgets';
-import { getServerOwnedSeriesTotalDays } from '@/lib/devotional-series-boundary';
+import { getServerOwnedSeriesTotalDays, getWidgetSeriesTotalDays } from '@/lib/devotional-series-boundary';
 import { buildWidgetTimelineEntries, getWeeklyProgress } from '@/lib/widget-timeline';
 import { hasReadTodayGlobal } from './home-devotional-state';
 
@@ -235,7 +235,7 @@ export function updateReadingSession(elapsedMinutes: number, isListening?: boole
       devotionalTitle: devotional?.title ?? 'Unfold',
       dayTitle: currentDay?.title ?? 'Reading...',
       dayNumber: devotional?.currentDay ?? 1,
-      totalDays: getServerOwnedSeriesTotalDays(devotional) || 7,
+      totalDays: getWidgetSeriesTotalDays(devotional),
       elapsedMinutes,
       totalMinutes: state.user?.readingDuration ?? 5,
       isListening: isListening ?? false,

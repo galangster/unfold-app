@@ -129,6 +129,30 @@ describe('J8 series keepsake', () => {
     expect(keepsake.nextPickLine).toBeNull();
   });
 
+  it('uses the day nextPickLine when present', () => {
+    const keepsake = buildSeriesKeepsake({
+      devotional: series({
+        days: [
+          day(1),
+          day(2),
+          day(3, {
+            nextPickLine: 'Keep going with a series on courage.',
+            nextPick: {
+              theme: 't',
+              themeName: 'Hope',
+              type: 'thematic',
+              suggestedLength: 7,
+              line: 'A 7-day series on hope.',
+            },
+          }),
+        ],
+      }),
+      highlights: [highlight()],
+      checkIns: [checkIn()],
+    });
+    expect(keepsake.nextPickLine).toBe('Keep going with a series on courage.');
+  });
+
   it('builds with no price keys or currency text, including under premium denied', () => {
     const keepsake = buildSeriesKeepsake({
       devotional: series(),

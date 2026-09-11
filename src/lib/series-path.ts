@@ -7,7 +7,7 @@ import {
   isDevotionalDaySelectable,
 } from '@/lib/devotional-day-access';
 import { getServerOwnedSeriesTotalDays } from '@/lib/devotional-series-boundary';
-import type { Devotional } from '@/lib/store';
+import type { Devotional, DevotionalDay } from '@/lib/store';
 
 export type SeriesPathNodeState = 'read' | 'today' | 'tomorrow' | 'preparing' | 'locked';
 
@@ -27,17 +27,17 @@ export function countReadDaysWithinBoundary(d: Devotional): number {
   )).length;
 }
 
-function isSeriesComplete(d: Devotional): boolean {
+export function isSeriesComplete(d: Devotional): boolean {
   const totalDays = getServerOwnedSeriesTotalDays(d);
   return totalDays > 0 && countReadDaysWithinBoundary(d) >= totalDays;
 }
 
-function dayRow(d: Devotional, n: number) {
-  return (d.days ?? []).find((day) => day.dayNumber === n);
-}
-
-function nodeTitle(d: Devotional, n: number): string | null {
-  const rowTitle = dayRow(d, n)?.title?.trim();
+function nodeTitle(
+  row: DevotionalDay | undefined,
+  d: Devotional,
+  n: number,
+): string | null {
+  const rowTitle = row?.title?.trim();
   if (rowTitle) return rowTitle;
   const hint = d.seriesArc?.dayHints?.find((item) => item.dayNumber === n);
   return hint?.dayTitle ?? null;
@@ -48,14 +48,15 @@ function nodeState(
   n: number,
   now: Date,
   opts: { isCurrentSeries: boolean },
+  row: DevotionalDay | undefined,
+  calendarDay: ReturnType<typeof getCalendarDayNumber>,
+  seriesComplete: boolean,
+  contentReady: boolean,
 ): SeriesPathNodeState {
-  const row = dayRow(d, n);
   if (row?.isRead) return 'read';
 
-  const calendarDay = getCalendarDayNumber(d, now);
   if (
     row &&
-    !row.isRead &&
     isDevotionalDaySelectable(d, n, now) &&
     n === getTodayReaderDayNumber(d, now)
   ) {
@@ -63,7 +64,6 @@ function nodeState(
   }
 
   if (
-    !row?.isRead &&
     n === d.currentDay &&
     calendarDay != null &&
     n > calendarDay
@@ -71,14 +71,13 @@ function nodeState(
     return 'tomorrow';
   }
 
-  const contentReady = selectRenderableDevotionalDay(d, n).status === 'ready';
   if (
     !contentReady &&
     n === d.currentDay &&
     calendarDay != null &&
     n <= calendarDay &&
     opts.isCurrentSeries &&
-    !isSeriesComplete(d)
+    !seriesComplete
   ) {
     return 'preparing';
   }
@@ -87,15 +86,13 @@ function nodeState(
 }
 
 function nodeDateWord(
-  d: Devotional,
   n: number,
   now: Date,
   state: SeriesPathNodeState,
   limit: number,
+  seriesStartDateValid: boolean,
 ): SeriesPathNode['dateWord'] {
-  if (!d.seriesStartDate) return null;
-  const startDate = new Date(d.seriesStartDate);
-  if (Number.isNaN(startDate.getTime())) return null;
+  if (!seriesStartDateValid) return null;
   if (state === 'read') return null;
 
   const offset = n - limit;
@@ -114,25 +111,43 @@ export function buildSeriesPath(
 ): SeriesPathNode[] {
   const totalDays = getServerOwnedSeriesTotalDays(devotional);
   const limit = getSelectableDayLimit(devotional, now);
+  const calendarDay = getCalendarDayNumber(devotional, now);
+  const seriesComplete = isSeriesComplete(devotional);
+  const seriesStartDateValid = Boolean(
+    devotional.seriesStartDate && !Number.isNaN(new Date(devotional.seriesStartDate).getTime()),
+  );
+  const daysByNumber = new Map(
+    (devotional.days ?? []).map((day) => [day.dayNumber, day] as const),
+  );
   const nodes: SeriesPathNode[] = [];
 
   for (let n = 1; n <= totalDays; n += 1) {
-    const state = nodeState(devotional, n, now, opts);
-    const row = dayRow(devotional, n);
+    const row = daysByNumber.get(n);
+    const contentReady = selectRenderableDevotionalDay(devotional, n).status === 'ready';
+    const state = nodeState(
+      devotional,
+      n,
+      now,
+      opts,
+      row,
+      calendarDay,
+      seriesComplete,
+      contentReady,
+    );
     nodes.push({
       dayNumber: n,
       state,
-      title: nodeTitle(devotional, n),
+      title: nodeTitle(row, devotional, n),
       shapedByCheckIn: row?.shapedByCheckIn === true,
-      contentReady: selectRenderableDevotionalDay(devotional, n).status === 'ready',
-      dateWord: nodeDateWord(devotional, n, now, state, limit),
+      contentReady,
+      dateWord: nodeDateWord(n, now, state, limit, seriesStartDateValid),
     });
   }
 
   return nodes;
 }
 
-export function buildPlannedSeriesPath(trialDays: AllowedTrialDays, _now: Date): SeriesPathNode[] {
+export function buildPlannedSeriesPath(trialDays: AllowedTrialDays): SeriesPathNode[] {
   return Array.from({ length: trialDays }, (_, index) => {
     const dayNumber = index + 1;
     return {

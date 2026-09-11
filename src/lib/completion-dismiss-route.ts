@@ -11,7 +11,7 @@ export function getCompletionDismissRoute(
 ): CompletionDismissTarget {
   if (type === 'day') return '/(tabs)/(today)';
   const autoTrialDevotionalId = ctx?.autoTrialDevotionalId;
-  if (type === 'series' && autoTrialDevotionalId) {
+  if (autoTrialDevotionalId) {
     return { pathname: '/keepsake', params: { devotionalId: autoTrialDevotionalId } };
   }
   return null;
