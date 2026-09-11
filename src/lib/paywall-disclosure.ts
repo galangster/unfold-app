@@ -1,3 +1,5 @@
+import { formatTrialFreePhrase } from '@/lib/trial-reminder-copy';
+
 /**
  * Renewal-disclosure copy for the paywall bottom CTA (RV-UI-3).
  *
@@ -13,12 +15,14 @@
  *    isTrialEligible).
  *  - Prices are RC's locale-aware priceStrings — never '$' wrapped around raw
  *    numbers (FAP-UI-2).
+ *  - Month and year labels print the label ("1 month free"), never a day count.
  */
 export function getPaywallRenewalDisclosure({
   offeringsReady,
   selectedPlan,
   hasFreeTrial,
   trialDays,
+  trialLabel,
   yearlyPrice,
   monthlyPrice,
 }: {
@@ -26,6 +30,7 @@ export function getPaywallRenewalDisclosure({
   selectedPlan: 'yearly' | 'monthly';
   hasFreeTrial: boolean;
   trialDays: number;
+  trialLabel?: string;
   yearlyPrice: string;
   monthlyPrice: string;
 }): string | null {
@@ -33,11 +38,11 @@ export function getPaywallRenewalDisclosure({
 
   if (selectedPlan === 'yearly') {
     return hasFreeTrial
-      ? `${trialDays} days free, then ${yearlyPrice}/yr. Cancel anytime.`
+      ? `${formatTrialFreePhrase(trialDays, trialLabel)}, then ${yearlyPrice}/yr. Cancel anytime.`
       : `${yearlyPrice}/yr. Cancel anytime.`;
   }
 
   return hasFreeTrial
-    ? `${trialDays} days free, then ${monthlyPrice}/mo. Cancel anytime.`
+    ? `${formatTrialFreePhrase(trialDays, trialLabel)}, then ${monthlyPrice}/mo. Cancel anytime.`
     : `${monthlyPrice}/mo. Cancel anytime.`;
 }

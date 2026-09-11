@@ -60,8 +60,10 @@ import {
   cancelEveningWindDown,
   areNotificationsEnabled,
 } from '@/lib/notifications';
+import { readTrialCheckInSkipDate } from '@/lib/trial-notification';
 import { logger } from '@/lib/logger';
 import { getCheckInNotificationGatePlan } from '@/lib/check-in-notification-sync-policy';
+import { useUIState } from '@/lib/ui-state';
 
 const DEBOUNCE_MS = 500;
 
@@ -105,6 +107,8 @@ function useCheckInFingerprint(): string {
   const todayCarryLine = useUnfoldStore(
     (s) => getTodayCarryLine(s.devotionals, s.currentDevotionalId) ?? '',
   );
+  const notificationPermissionEpoch = useUIState((s) => s.notificationPermissionEpoch);
+  const trialNoticeEpoch = useUIState((s) => s.trialNoticeEpoch);
 
   return JSON.stringify([
     policy,
@@ -116,6 +120,8 @@ function useCheckInFingerprint(): string {
     eveningByDay,
     hasCompletedOnboarding ? '1' : '0',
     todayCarryLine,
+    notificationPermissionEpoch,
+    trialNoticeEpoch,
   ]);
 }
 
@@ -219,14 +225,15 @@ export function useCheckInNotifications() {
         return;
       }
 
+      const clock = { localDate: readTrialCheckInSkipDate(), now: new Date() };
       if (middayEnabled) {
-        await scheduleMiddayCheckIn();
+        await scheduleMiddayCheckIn(clock);
       } else {
         await cancelMiddayCheckIn();
       }
 
       if (eveningEnabled) {
-        await scheduleEveningWindDown();
+        await scheduleEveningWindDown(clock);
       } else {
         await cancelEveningWindDown();
       }

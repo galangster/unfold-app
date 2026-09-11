@@ -48,6 +48,7 @@ import { logEvent } from '@/lib/analytics';
 import { getCurrentDevotional, hasReadAnyDayToday } from '@/lib/home-devotional-state';
 import { parseReminderClock } from '@/lib/push-notification-helpers';
 import { captureSyncSession } from '@/lib/sync-session-fence';
+import { useUIState } from '@/lib/ui-state';
 
 const DEBOUNCE_MS = 750;
 
@@ -60,19 +61,20 @@ const DEBOUNCE_MS = 750;
  * dependent fields here.
  */
 function useReminderFingerprint(premiumPolicy: ReturnType<typeof usePremiumAccessPolicy>): string {
+  const notificationPermissionEpoch = useUIState((s) => s.notificationPermissionEpoch);
   return useUnfoldStore((state) => {
     const reminderTime = state.user?.reminderTime ?? '';
     const dailyReminderEnabled = state.user?.dailyReminderEnabled ?? Boolean(reminderTime);
     const currentDevotional = getCurrentDevotional(state.devotionals, state.currentDevotionalId);
 
-    return buildDailyReminderFingerprint({
+    return `${buildDailyReminderFingerprint({
       reminderTime,
       dailyReminderEnabled,
       currentDevotional,
       premiumPolicy,
       pushRegistered: Boolean(state.user?.pushRegisteredAt),
       readToday: hasReadAnyDayToday(state.devotionals),
-    });
+    })}|${notificationPermissionEpoch}`;
   });
 }
 

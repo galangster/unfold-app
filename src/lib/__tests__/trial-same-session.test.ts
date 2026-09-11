@@ -233,8 +233,28 @@ function scheduledIds(): string[] {
   return [...nativeAdapter().schedules.keys()];
 }
 
+const ARMED_KEY = 'trial-ending-notice-armed-v1';
+
 function mirrorEntries(): [string, string][] {
   return [...trialMirrors().entries()];
+}
+
+function scheduleMirrorEntries(): [string, string][] {
+  return mirrorEntries().filter(
+    ([key]) => key === 'trial-ending-scheduled-id' || key === 'trial-ending-scheduled-for',
+  );
+}
+
+function expectArmedRecord(present: boolean): void {
+  const raw = trialMirrors().get(ARMED_KEY);
+  if (!present) {
+    expect(raw).toBeUndefined();
+    return;
+  }
+  expect(JSON.parse(raw ?? 'null')).toEqual({
+    expiresAtMs: expect.any(Number),
+    fireAtMs: expect.any(Number),
+  });
 }
 
 async function tick(): Promise<void> {
@@ -320,7 +340,8 @@ describe('NT-5 same-session reversed completion', () => {
     const mirrorBefore = mirrorEntries();
     expect(newer).toBeTruthy();
     expect(scheduledIds()).toEqual([newer]);
-    expect(mirrorBefore).toHaveLength(2);
+    expect(scheduleMirrorEntries()).toHaveLength(2);
+    expectArmedRecord(true);
     expect(newer).not.toBe('unfold-trial-ending');
     expect(newer).not.toMatch(/^unfold-trial-ending:\d+$/);
 
@@ -347,7 +368,8 @@ describe('NT-5 same-session reversed completion', () => {
     const newer = await scheduleTrialEndingNotification(trialInfo());
     const mirrorBefore = mirrorEntries();
     expect(newer).toBeTruthy();
-    expect(mirrorBefore).toHaveLength(2);
+    expect(scheduleMirrorEntries()).toHaveLength(2);
+    expectArmedRecord(true);
 
     gate.reject(new Error('synthetic native failure'));
     await expect(older).resolves.toBeNull();
@@ -471,7 +493,8 @@ describe('NT-5 late permission, enumeration, and cancel', () => {
     gate.resolve(nativeAdapter().defaultList());
     await older;
     expect(scheduledIds()).toEqual([newer]);
-    expect(mirrorEntries()).toHaveLength(2);
+    expect(scheduleMirrorEntries()).toHaveLength(2);
+    expectArmedRecord(true);
   });
 
   it('does not let a rejected cancellation listing delete or unown a newer request', async () => {
@@ -583,14 +606,16 @@ describe('NT-5 current controls', () => {
     expect(again).toBeTruthy();
     await expect(scheduleTrialEndingNotification(expiredTrialInfo())).resolves.toBeNull();
     expect(scheduledIds()).toEqual([]);
-    expect(mirrorEntries()).toEqual([]);
+    expect(scheduleMirrorEntries()).toEqual([]);
+    expectArmedRecord(false);
   });
 
   it('skips scheduling when permission is denied', async () => {
     nativeAdapter().permissionMode = 'denied';
     await expect(scheduleTrialEndingNotification(trialInfo())).resolves.toBeNull();
     expect(scheduledIds()).toEqual([]);
-    expect(mirrorEntries()).toEqual([]);
+    expect(scheduleMirrorEntries()).toEqual([]);
+    expectArmedRecord(false);
   });
 
   it('does nothing on an unsupported platform', async () => {
@@ -614,7 +639,8 @@ describe('NT-5 current controls', () => {
     });
     await cancelTrialEndingNotification();
     expect(scheduledIds()).toEqual([]);
-    expect(mirrorEntries()).toEqual([]);
+    expect(scheduleMirrorEntries()).toEqual([]);
+    expectArmedRecord(true);
   });
 
   it('lets a later direct cancel remove the current reminder', async () => {
@@ -622,18 +648,21 @@ describe('NT-5 current controls', () => {
     expect(scheduled).toBeTruthy();
     await cancelTrialEndingNotification();
     expect(scheduledIds()).toEqual([]);
-    expect(mirrorEntries()).toEqual([]);
+    expect(scheduleMirrorEntries()).toEqual([]);
+    expectArmedRecord(true);
   });
 
   it('syncs a current TRIAL from RevenueCat and cancels when disabled', async () => {
     await syncTrialEndingNotification();
     expect(scheduledIds()).toHaveLength(1);
-    expect(mirrorEntries()).toHaveLength(2);
+    expect(scheduleMirrorEntries()).toHaveLength(2);
+    expectArmedRecord(true);
 
     revenueCatHarness().enabled = false;
     await syncTrialEndingNotification();
     expect(scheduledIds()).toEqual([]);
-    expect(mirrorEntries()).toEqual([]);
+    expect(scheduleMirrorEntries()).toEqual([]);
+    expectArmedRecord(true);
   });
 
   it('still refuses trial work while a reset is in progress', async () => {

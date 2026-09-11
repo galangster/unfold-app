@@ -41,7 +41,8 @@
 
 type ScheduleOp =
   | { kind: 'daily'; id: string; hour: number; minute: number }
-  | { kind: 'weekly'; id: string; weekday: number; hour: number; minute: number };
+  | { kind: 'weekly'; id: string; weekday: number; hour: number; minute: number }
+  | { kind: 'date'; id: string; date: Date };
 
 // Apple weekday convention: Sun=1..Sat=7. Do not change.
 const WEEKDAY_NUMBER: Record<string, number> = {
@@ -86,21 +87,49 @@ function parseHhMm(time: string, fallback: { hour: number; minute: number }): { 
  *   - WEEKLY ops are emitted in Mon→Sun order regardless of how `byDay` is keyed
  *   - Bad time strings fall back to the caller-supplied `fallback` (12:30 for midday, 20:30 for evening)
  */
+const JS_DAY_TO_KEY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+
+function parseLocalYmd(localDate: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(localDate);
+  if (!match) return null;
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+}
+
+function skipIsInWindow(skipDay: Date, now: Date): boolean {
+  const todayUtc = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  const skipUtc = Date.UTC(skipDay.getFullYear(), skipDay.getMonth(), skipDay.getDate());
+  const d = Math.round((skipUtc - todayUtc) / 86_400_000);
+  return d >= 0 && d <= 6;
+}
+
 function buildCheckInSchedule(
   idBase: string,
   defaultTime: string,
   byDay: Record<string, string | null> | null,
   fallback: { hour: number; minute: number },
+  skip?: { localDate: string; now: Date },
 ): ScheduleOp[] {
-  if (byDay === null) {
+  const skipDay = skip ? parseLocalYmd(skip.localDate) : null;
+  const skipKey =
+    skipDay && skip && skipIsInWindow(skipDay, skip.now)
+      ? JS_DAY_TO_KEY[skipDay.getDay()]
+      : null;
+
+  if (byDay === null && !skipKey) {
     const { hour, minute } = parseHhMm(defaultTime, fallback);
     return [{ kind: 'daily', id: idBase, hour, minute }];
   }
 
+  const dayTimes: Record<string, string | null> =
+    byDay === null
+      ? Object.fromEntries(DAY_KEYS.map((day) => [day, defaultTime]))
+      : byDay;
+
   const ops: ScheduleOp[] = [];
   for (const day of DAY_KEYS) {
-    const value = byDay[day];
+    const value = dayTimes[day];
     if (value === undefined || value === null) continue;
+    if (day === skipKey) continue;
     const { hour, minute } = parseHhMm(value, fallback);
     ops.push({
       kind: 'weekly',
@@ -109,6 +138,13 @@ function buildCheckInSchedule(
       hour,
       minute,
     });
+  }
+  if (skipKey && skipDay && dayTimes[skipKey] != null) {
+    const { hour, minute } = parseHhMm(defaultTime, fallback);
+    const resume = new Date(skipDay.getTime());
+    resume.setDate(resume.getDate() + 7);
+    resume.setHours(hour, minute, 0, 0);
+    ops.push({ kind: 'date', id: `${idBase}-resume`, date: resume });
   }
   return ops;
 }
@@ -124,7 +160,7 @@ function buildCheckInSchedule(
  * identifier is a no-op in expo-notifications, so this is safe.
  */
 function getAllCheckInIdentifiers(idBase: string): string[] {
-  return [idBase, ...DAY_KEYS.map((d) => `${idBase}-${d.toLowerCase()}`)];
+  return [idBase, ...DAY_KEYS.map((d) => `${idBase}-${d.toLowerCase()}`), `${idBase}-resume`];
 }
 
 const MIDDAY_ID_BASE = 'unfold-midday-checkin';
@@ -382,12 +418,12 @@ describe('buildCheckInSchedule — time parsing edge cases', () => {
 });
 
 describe('getAllCheckInIdentifiers — cancel list generation', () => {
-  it('always returns exactly 8 identifiers (1 daily + 7 weekly)', () => {
-    expect(getAllCheckInIdentifiers(MIDDAY_ID_BASE)).toHaveLength(8);
-    expect(getAllCheckInIdentifiers(EVENING_ID_BASE)).toHaveLength(8);
+  it('always returns exactly 9 identifiers (1 daily + 7 weekly + resume)', () => {
+    expect(getAllCheckInIdentifiers(MIDDAY_ID_BASE)).toHaveLength(9);
+    expect(getAllCheckInIdentifiers(EVENING_ID_BASE)).toHaveLength(9);
   });
 
-  it('returns DAILY id first, then weekday ids in Mon→Sun order', () => {
+  it('returns DAILY id first, then weekday ids in Mon→Sun order, then resume', () => {
     expect(getAllCheckInIdentifiers(MIDDAY_ID_BASE)).toEqual([
       'unfold-midday-checkin',
       'unfold-midday-checkin-mon',
@@ -397,6 +433,7 @@ describe('getAllCheckInIdentifiers — cancel list generation', () => {
       'unfold-midday-checkin-fri',
       'unfold-midday-checkin-sat',
       'unfold-midday-checkin-sun',
+      'unfold-midday-checkin-resume',
     ]);
   });
 
@@ -405,8 +442,13 @@ describe('getAllCheckInIdentifiers — cancel list generation', () => {
     const evening = new Set(getAllCheckInIdentifiers(EVENING_ID_BASE));
     const intersection = [...midday].filter((id) => evening.has(id));
     expect(intersection).toEqual([]);
-    expect(midday.size).toBe(8);
-    expect(evening.size).toBe(8);
+    expect(midday.size).toBe(9);
+    expect(evening.size).toBe(9);
+  });
+
+  it('includes the -resume identifier', () => {
+    expect(getAllCheckInIdentifiers(MIDDAY_ID_BASE)).toContain('unfold-midday-checkin-resume');
+    expect(getAllCheckInIdentifiers(EVENING_ID_BASE)).toContain('unfold-evening-winddown-resume');
   });
 });
 
@@ -433,5 +475,65 @@ describe('buildCheckInSchedule — midday / evening parameterization', () => {
       'unfold-evening-winddown-wed',
       'unfold-evening-winddown-fri',
     ]);
+  });
+});
+
+describe('I5 buildCheckInSchedule — skip date', () => {
+  const nowMonday = new Date(2026, 0, 5, 10, 0, 0);
+  const skipInTwoDays = '2026-01-07';
+
+  it('uniform mode, skip in 2 days: 6 weekly ops plus -resume date op', () => {
+    const ops = buildCheckInSchedule(
+      MIDDAY_ID_BASE,
+      '12:30',
+      null,
+      MIDDAY_FALLBACK,
+      { localDate: skipInTwoDays, now: nowMonday },
+    );
+    expect(ops.filter((op) => op.kind === 'weekly')).toHaveLength(6);
+    expect(ops.some((op) => op.kind === 'daily')).toBe(false);
+    expect(ops.some((op) => op.id === 'unfold-midday-checkin-wed')).toBe(false);
+    const resume = ops.find((op) => op.kind === 'date');
+    expect(resume).toMatchObject({ kind: 'date', id: 'unfold-midday-checkin-resume' });
+    if (resume && resume.kind === 'date') {
+      expect(resume.date).toEqual(new Date(2026, 0, 14, 12, 30, 0, 0));
+    }
+  });
+
+  it('per-day mode with that weekday null: no date op', () => {
+    const byDay = {
+      Mon: '12:30',
+      Tue: '12:30',
+      Wed: null,
+      Thu: '12:30',
+      Fri: '12:30',
+      Sat: '12:30',
+      Sun: '12:30',
+    };
+    const ops = buildCheckInSchedule(
+      MIDDAY_ID_BASE,
+      '12:30',
+      byDay,
+      MIDDAY_FALLBACK,
+      { localDate: skipInTwoDays, now: nowMonday },
+    );
+    expect(ops.some((op) => op.kind === 'date')).toBe(false);
+    expect(ops.map((op) => op.id)).not.toContain('unfold-midday-checkin-wed');
+  });
+
+  it('past or > 6 days: today\'s output', () => {
+    const uniformToday = buildCheckInSchedule(MIDDAY_ID_BASE, '12:30', null, MIDDAY_FALLBACK);
+    expect(
+      buildCheckInSchedule(MIDDAY_ID_BASE, '12:30', null, MIDDAY_FALLBACK, {
+        localDate: '2026-01-01',
+        now: nowMonday,
+      }),
+    ).toEqual(uniformToday);
+    expect(
+      buildCheckInSchedule(MIDDAY_ID_BASE, '12:30', null, MIDDAY_FALLBACK, {
+        localDate: '2026-01-13',
+        now: nowMonday,
+      }),
+    ).toEqual(uniformToday);
   });
 });
