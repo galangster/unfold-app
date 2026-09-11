@@ -5,6 +5,7 @@
  * session bookkeeping, whichever screen sees the job finish.
  */
 import { useUnfoldStore, type Devotional, type DevotionalDay, type SeriesArc, type UserProfile } from '@/lib/store';
+import { readAutoTrialIntent, settleLandedAutoTrialSeries, transitionAutoTrialIntent } from '@/lib/auto-trial-intent';
 import { clearInflightGenerationJob } from '@/lib/inflight-generation-job';
 import { clearInitialGenerationRequestId } from '@/lib/initial-generation-request';
 import { extractBookFromReference } from '@/lib/devotional-service';
@@ -99,6 +100,11 @@ export function applyInitialArcResult(
     store.addDevotional(newDevotional);
   }
 
+  const intent = readAutoTrialIntent();
+  if (intent && intent.devotionalId === devotionalId && result.arc?.seriesKind === 'auto_trial') {
+    settleLandedAutoTrialSeries(intent, devotionalId);
+  }
+
   if (day1.scriptureReference) {
     // The same book key the scripture variance engine writes, so day 1's
     // reference counts against the books it avoids.
@@ -175,4 +181,13 @@ export function settleInflightInitialArcWatch(
   clearInflightGenerationJob();
   store.failGenerationSession(outcome.message);
   void logBugError('generation', new Error(outcome.message), { jobId, phase: outcome.phase });
+
+  const writeFailed = outcome.kind === 'failed' && (
+    (outcome.phase === 'server-poll' && outcome.canRetry === false)
+    || outcome.phase === 'server-poll-invalid-result'
+  );
+  if (!writeFailed) return;
+  const intent = readAutoTrialIntent();
+  if (intent?.status !== 'submitted' || intent.jobId !== jobId) return;
+  transitionAutoTrialIntent('failed', { failureCode: outcome.phase }, { nowMs: Date.now() });
 }

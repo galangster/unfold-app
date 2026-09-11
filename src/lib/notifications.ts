@@ -14,7 +14,11 @@ import {
   getHomeDevotionalDayData,
   getTodayCarryLine,
 } from '@/lib/home-devotional-state';
-import { buildDevotionalReadyNotificationData, parseHhMm } from '@/lib/push-notification-helpers';
+import {
+  buildDevotionalReadyNotificationData,
+  parseHhMm,
+  pushNamesAutoTrialIntent,
+} from '@/lib/push-notification-helpers';
 import { getDailyReminderContent, type DailyReminderTrigger } from '@/lib/daily-reminder-content';
 import { deferPastQuietHours } from '@/lib/quiet-hours';
 import { logEvent } from '@/lib/analytics';
@@ -22,6 +26,8 @@ import type { ActReminderPlan } from '@/lib/act-reminder';
 import { captureSyncSession, isSyncSessionCurrent } from '@/lib/sync-session-fence';
 import { localCalendarDays, parseLocalYmd } from '@/lib/trial-notice-plan';
 import { readTrialCheckInSkipDate } from '@/lib/trial-notification';
+import { readAutoTrialIntent } from '@/lib/auto-trial-intent';
+import { useUIState } from '@/lib/ui-state';
 
 // Notification identifiers for targeted cancel/reschedule.
 //
@@ -432,12 +438,22 @@ export function firesToday(op: ScheduleOp, now = new Date()): boolean {
 Notifications.setNotificationHandler({
   handleNotification: async (notification) => {
     logger.log('[Notifications] Received notification in foreground:', notification.request.content.title);
+    const data = notification.request.content.data as Record<string, unknown> | undefined;
+    const type = data?.type;
+    const intent = readAutoTrialIntent();
+    const mountedId = useUIState.getState().seriesRevealMountedIntentId;
+    const namesIntentJob = Boolean(
+      intent
+      && mountedId === intent.intentId
+      && (type === 'devotional_ready' || type === 'generation_failed')
+      && pushNamesAutoTrialIntent(data, intent)
+    );
     return {
-      shouldShowAlert: true,
+      shouldShowAlert: !namesIntentJob,
       shouldPlaySound: true,
       shouldSetBadge: false,
-      shouldShowBanner: true,
-      shouldShowList: true,
+      shouldShowBanner: !namesIntentJob,
+      shouldShowList: !namesIntentJob,
     };
   },
 });

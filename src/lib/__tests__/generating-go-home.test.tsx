@@ -53,6 +53,15 @@ jest.mock('@/lib/generation-api', () => ({
   buildInitialArcUserContext: jest.fn(() => ({})),
 }));
 
+const mockGetPermissionsAsync = jest.fn(async (..._args: unknown[]) => ({ status: 'granted' }));
+jest.mock('react-native-purchases', () => ({ __esModule: true, default: { getCustomerInfo: jest.fn(async () => ({ entitlements: { active: {} } })) } }));
+jest.mock('expo-notifications', () => ({
+  getPermissionsAsync: (...args: unknown[]) => mockGetPermissionsAsync(...args),
+  requestPermissionsAsync: jest.fn(),
+}));
+jest.mock('expo-file-system/legacy', () => ({ documentDirectory: '', cacheDirectory: '', readAsStringAsync: jest.fn(async () => ''), writeAsStringAsync: jest.fn(async () => undefined) }));
+jest.mock('expo-file-system', () => ({ File: jest.fn(), Paths: { cache: '' }, Directory: jest.fn() }));
+jest.mock('expo-application', () => ({ nativeApplicationVersion: '1.0.0', nativeBuildVersion: '1' }));
 jest.mock('@/lib/notifications', () => ({
   requestNotificationPermissions: jest.fn(async () => false),
   areNotificationsEnabled: jest.fn(async () => false),
@@ -212,6 +221,7 @@ beforeEach(() => {
   mockSubmitGenerationJob.mockReset();
   mmkvStorage.removeItem(INFLIGHT_GENERATION_JOB_KEY);
   mmkvStorage.removeItem(INITIAL_GENERATION_REQUEST_ID_KEY);
+  mmkvStorage.removeItem('auto-trial-series-intent-v1');
   useUnfoldStore.setState({
     devotionals: [],
     currentDevotionalId: null,
@@ -418,5 +428,35 @@ describe('regression: Jordan item 6 — Go home from /generating', () => {
 
     expect(useUnfoldStore.getState().devotionals).toHaveLength(0);
     expect(useUnfoldStore.getState().generationSession.status).not.toBe('complete');
+  });
+});
+
+describe('H10 generating auto-trial handoff', () => {
+  it('replaces to series-reveal before submit or a generation session write', async () => {
+    const { createAutoTrialIntent } = jest.requireActual('../auto-trial-intent') as typeof import('../auto-trial-intent');
+    const intent = createAutoTrialIntent({
+      deviceId: 'test-device-id',
+      entry: 'onboarding',
+      surface: 'onboarding_paywall',
+      source: 'purchase',
+      simulated: false,
+      trialDays: 3,
+      purchasedAt: '2026-09-08T17:00:00.000Z',
+      expiresAt: '2026-09-11T17:00:00.000Z',
+      timeZone: 'America/Chicago',
+      isSandbox: false,
+      productIdentifier: 'unfold_premium_yearly',
+      switchFetchedAt: '2026-09-08T17:00:00.000Z',
+      nowMs: 1_800_000_000_000,
+    });
+    const sessionBefore = useUnfoldStore.getState().generationSession;
+    const tree = await renderScreen();
+    mounted.push(tree);
+    expect(mockReplace).toHaveBeenCalledWith({
+      pathname: '/series-reveal',
+      params: { intentId: intent.intentId },
+    });
+    expect(mockSubmitGenerationJob).not.toHaveBeenCalled();
+    expect(useUnfoldStore.getState().generationSession).toEqual(sessionBefore);
   });
 });

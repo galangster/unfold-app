@@ -67,7 +67,6 @@ import {
 import { toFriendlyOnboardingGenerationError } from '@/lib/generation-errors';
 
 import {
-  requestNotificationPermissions,
   areNotificationsEnabled,
 } from '@/lib/notifications';
 import { registerPushToken } from '@/lib/push-notifications';
@@ -77,7 +76,9 @@ import {
   type NotifyControlState,
   type NotifyRequestOutcome,
 } from '@/lib/generating-notify-state';
+import { readAutoTrialIntent } from '@/lib/auto-trial-intent';
 import { resolveGeneratingEntry } from '@/lib/generating-entry';
+import { askNotificationPermissionInContext } from '@/lib/notification-ask';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
 import { Typography } from '@/constants/typography';
@@ -462,15 +463,18 @@ export default function GeneratingScreen() {
     setHasAskedPermission(true);
     setNotifyOutcome(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const granted = await requestNotificationPermissions();
+    setNotifyOutcome('pending');
+    const result = await askNotificationPermissionInContext({
+      trigger: 'generating',
+      registration: 'await',
+    });
+    const granted = result === 'granted' || result === 'registration_failed';
     setNotificationPermission(granted ? 'granted' : 'denied');
     setShowNotificationPrompt(false);
-    // Nothing promises a nudge until the token reaches the server. The
-    // registration can stall for tens of seconds on a bad network, and a
-    // reader told to step away during it would never get the push.
-    if (granted) setNotifyOutcome('pending');
-    const registration = granted ? await registerPushToken() : null;
-    setNotifyOutcome(resolveNotifyRequestOutcome({ granted, registration }));
+    setNotifyOutcome(resolveNotifyRequestOutcome({
+      granted,
+      registration: result === 'registration_failed' ? 'failed' : result === 'granted' ? 'registered' : null,
+    }));
   };
 
   const handleOpenNotificationSettings = () => {
@@ -740,7 +744,12 @@ export default function GeneratingScreen() {
       params: { jobId: params.jobId, devotionalId: params.devotionalId },
       sessionDevotionalId: generationSession.devotionalId,
       landedDevotionalIds: devotionals.map((devotional) => devotional.id),
+      autoTrialIntent: readAutoTrialIntent(),
     });
+    if (entry.kind === 'auto-trial-handoff') {
+      router.replace({ pathname: '/series-reveal', params: { intentId: entry.intentId } });
+      return;
+    }
     if (entry.kind === 'resume') {
       const { inflight } = entry;
       logger.log('[generating] Resuming inflight job from MMKV:', inflight.jobId);

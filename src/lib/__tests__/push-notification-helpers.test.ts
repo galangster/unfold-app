@@ -234,6 +234,39 @@ describe('push notification helpers', () => {
         buildNotificationNavigationRoute({ type: 'devotional_ready', devotionalId: 'd', dayNumber: 1 }),
       ).toMatchObject({ pathname: '/reveal', params: { devotionalId: 'd', dayNumber: '1' } });
     });
+
+    it('H11 routes a live auto-trial job to series-reveal', () => {
+      const intent = {
+        intentId: 'intent-1',
+        status: 'submitted',
+        jobId: 'job-auto',
+        devotionalId: 'dev-auto',
+      } as never;
+      expect(
+        buildNotificationNavigationRoute(
+          { type: 'devotional_ready', devotionalId: 'dev-auto', jobId: 'job-auto', dayNumber: 1 },
+          intent,
+        ),
+      ).toEqual({ pathname: '/series-reveal', params: { intentId: 'intent-1' } });
+      expect(
+        buildNotificationNavigationRoute(
+          { type: 'generation_failed', jobType: 'initial_arc', jobId: 'job-auto', devotionalId: 'dev-auto' },
+          intent,
+        ),
+      ).toEqual({ pathname: '/series-reveal', params: { intentId: 'intent-1' } });
+    });
+
+    it('H11 keeps today routes when there is no intent or the intent is terminal', () => {
+      expect(
+        buildNotificationNavigationRoute({ type: 'generation_failed', jobType: 'initial_arc', jobId: 'j', devotionalId: 'd' }),
+      ).toEqual({ pathname: '/generating', params: { jobId: 'j', devotionalId: 'd' } });
+      expect(
+        buildNotificationNavigationRoute(
+          { type: 'generation_failed', jobType: 'initial_arc', jobId: 'job-auto', devotionalId: 'dev-auto' },
+          { intentId: 'intent-1', status: 'completed', jobId: 'job-auto', devotionalId: 'dev-auto' } as never,
+        ),
+      ).toEqual({ pathname: '/generating', params: { jobId: 'job-auto', devotionalId: 'dev-auto' } });
+    });
   });
 
   describe('shouldHydrateNotificationResponse', () => {
@@ -476,6 +509,30 @@ describe('push notification helpers', () => {
           notificationKey: 'notif-1',
         }),
       );
+    });
+
+    it('H11 passes readAutoTrialIntent into the route builder', () => {
+      const replace = jest.fn();
+      const coordinator = createNotificationNavigationCoordinator({
+        replace,
+        readAutoTrialIntent: () => ({
+          intentId: 'intent-1',
+          status: 'submitted',
+          jobId: 'job-auto',
+          devotionalId: 'dev-auto',
+        } as never),
+      });
+      coordinator.setNavigationReady(true);
+      coordinator.queueFromData({
+        type: 'generation_failed',
+        jobType: 'initial_arc',
+        jobId: 'job-auto',
+        devotionalId: 'dev-auto',
+      });
+      expect(replace).toHaveBeenCalledWith({
+        pathname: '/series-reveal',
+        params: { intentId: 'intent-1' },
+      });
     });
   });
 });
