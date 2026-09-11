@@ -6,8 +6,11 @@
  *   2. pollJobStatus       — GET  /api/jobs/:jobId
  *   3. retryJob            — POST /api/jobs/:jobId/retry
  */
+import type { AutoTrialEntry, AutoTrialSurface } from "./auto-trial-exit";
+import type { AutoTrialIntentV1 } from "./auto-trial-intent";
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from "./api-config";
 import { reconcileGenerationResultIdentity, type GeneratedDayWithIdentity, type GenerationResultPayload } from './generation-reconciliation';
+import type { AllowedTrialDays } from "./trial-facts";
 import {
   assertSyncSessionCurrent,
   isSyncSessionCurrent,
@@ -92,6 +95,7 @@ export interface GenerationJobResponse {
   createdAt?: string;
   startedAt?: string;
   completedAt?: string;
+  autoTrialClaim?: 'created' | 'repointed' | 'existing' | 'resumed';
 }
 
 export type CanonicalGenerationResultPayload = Omit<GenerationResultPayload, 'devotionalDay' | 'devotionalId'> & {
@@ -133,6 +137,9 @@ export interface InitialArcUserContext {
   diagnosticAnswers?: { question: string; answer: string }[];
   workingRead?: string;
   userCorrection?: string;
+  bibleFrequency?: string;
+  aspiration?: string;
+  autoTrial?: AutoTrialInputV1;
 }
 
 /** Duck-typed source for buildInitialArcUserContext — kept independent of UserProfile to avoid a store.ts import. */
@@ -158,6 +165,8 @@ export interface InitialArcUserSource {
   diagnosticAnswers?: { question: string; answer: string }[];
   mirrorWorkingRead?: string;
   mirrorCorrection?: string;
+  bibleFrequency?: string;
+  aspiration?: string;
 }
 
 /** Builds the initial_arc submission's userContext from a user profile. Pure — safe to unit test. */
@@ -184,6 +193,53 @@ export function buildInitialArcUserContext(user: InitialArcUserSource): InitialA
     diagnosticAnswers: user.diagnosticAnswers,
     workingRead: user.mirrorWorkingRead,
     userCorrection: user.mirrorCorrection,
+    bibleFrequency: user.bibleFrequency,
+    aspiration: user.aspiration,
+  };
+}
+
+export interface AutoTrialInputV1 {
+  version: 1;
+  intentId: string;
+  trialDays: AllowedTrialDays;
+  purchasedAt: string;
+  expiresAt: string;
+  purchaseLocalDate: string;
+  timeZone: string;
+  platform: 'ios';
+  entry: AutoTrialEntry;
+  surface: AutoTrialSurface;
+  source: 'purchase' | 'offer' | 'lateGrant';
+  isSandbox: boolean;
+  simulated: boolean;
+}
+
+function toAutoTrialInput(intent: AutoTrialIntentV1): AutoTrialInputV1 {
+  return {
+    version: 1,
+    intentId: intent.intentId,
+    trialDays: intent.trialDays,
+    purchasedAt: intent.purchasedAt,
+    expiresAt: intent.expiresAt,
+    purchaseLocalDate: intent.purchaseLocalDate,
+    timeZone: intent.timeZone,
+    platform: 'ios',
+    entry: intent.entry,
+    surface: intent.surface,
+    source: intent.source,
+    isSandbox: intent.isSandbox,
+    simulated: intent.simulated,
+  };
+}
+
+export function buildAutoTrialUserContext(
+  user: InitialArcUserSource,
+  intent: AutoTrialIntentV1,
+): InitialArcUserContext {
+  return {
+    ...buildInitialArcUserContext(user),
+    devotionalLength: intent.trialDays,
+    autoTrial: toAutoTrialInput(intent),
   };
 }
 
