@@ -68,8 +68,10 @@ const DISPLAY_TEXT_MAX_SCALE = 1.18;
 const BODY_TEXT_MAX_SCALE = 1.28;
 const LABEL_TEXT_MAX_SCALE = 1.14;
 
+const HERO_TEXT_CAP = { maxWidth: `${HERO_GROUND.textMaxWidthPct}%` } as const;
+
 function heroCopyCap(active: boolean) {
-  return active ? { maxWidth: `${HERO_GROUND.textMaxWidthPct}%` as const } : undefined;
+  return active ? HERO_TEXT_CAP : undefined;
 }
 
 function formatHeroSeriesTitle(title: string): string {
@@ -327,7 +329,6 @@ function ReturningEmptyState({
           onChooseOther={onCreateNew}
           gateCreation={gateCreation}
           storedPick={storedPick}
-          renderFallback={() => null}
         />
       </View>
     </View>
@@ -617,11 +618,11 @@ function PreparingState({
             {state.seriesTitle} · Preparing
           </Text>
 
-          <Animated.Text style={[styles.preparingTitle, { color: colors.text, textAlign: 'left' }, textCap, shimmerStyle]}>
+          <Animated.Text style={[styles.preparingTitle, { color: colors.text }, textCap, shimmerStyle]}>
             {title}
           </Animated.Text>
 
-          <Text style={[styles.preparingSubtitle, { color: colors.textMuted, textAlign: 'left' }, textCap]}>
+          <Text style={[styles.preparingSubtitle, { color: colors.textMuted }, textCap]}>
             {subtitle}
           </Text>
 
@@ -738,9 +739,9 @@ function JourneyCompleteStateFallback({
         <Text style={[styles.heroSeriesEyebrow, { color: colors.textSubtle, textAlign: 'left' }]}>
           {seriesTitle} · Complete
         </Text>
-        <Text style={[styles.journeyCompleteTitle, { color: colors.text, textAlign: 'left' }, textCap]}>Carry the thread forward.</Text>
+        <Text style={[styles.journeyCompleteTitle, { color: colors.text }, textCap]}>Carry the thread forward.</Text>
 
-        <Text style={[styles.journeyCompleteSubtitle, { color: colors.textMuted, textAlign: 'left' }, textCap]}>
+        <Text style={[styles.journeyCompleteSubtitle, { color: colors.textMuted }, textCap]}>
           {seriesTitle} is complete. Rest with what God surfaced here, then begin another study when you’re ready.
         </Text>
       </HeroGround>
@@ -789,7 +790,6 @@ function JourneyCompleteState({
           onChooseOther={onCreateNew}
           gateCreation={gateCreation}
           storedPick={storedPick}
-          renderFallback={() => null}
         />
       </View>
     </View>
@@ -1414,15 +1414,6 @@ const styles = StyleSheet.create({
   },
 
   // Returning user empty state
-  returningCard: {
-    borderRadius: Radius.xl,
-    borderWidth: 1,
-    overflow: 'hidden',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 20,
-    elevation: 5,
-  },
   returningGlow: {
     borderRadius: Radius.xl,
   },
@@ -1439,9 +1430,6 @@ const styles = StyleSheet.create({
   heroFollowCard: {
     width: '100%',
     marginTop: Spacing['5'],
-  },
-  returningContent: {
-    padding: Spacing['7'],
   },
   returningTitle: {
     fontFamily: FontFamily.display,
@@ -1495,12 +1483,6 @@ const styles = StyleSheet.create({
     ...Typography.cardMeta,
     marginTop: 0,
     marginBottom: Spacing['4'],
-  },
-  premiumPausedActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: Spacing['3'],
   },
   premiumPausedPrimaryCta: {
     alignSelf: 'auto',
@@ -1639,21 +1621,6 @@ const styles = StyleSheet.create({
   },
   cardDisabled: {
     opacity: 0.5,
-  },
-  journeyCompleteCard: {
-    borderRadius: Radius.xl,
-    borderWidth: 1,
-    padding: Spacing['7'],
-    overflow: 'hidden',
-    position: 'relative',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.1,
-    shadowRadius: 24,
-    elevation: 5,
-  },
-  journeyCompleteContent: {
-    alignItems: 'flex-start',
-    zIndex: 2,
   },
   journeyCompleteTitle: {
     fontFamily: FontFamily.display,

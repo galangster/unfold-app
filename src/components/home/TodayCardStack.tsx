@@ -117,14 +117,28 @@ function TopCardBody({ card, colors }: { card: TodayCardStackCard; colors: Color
 
   const handleQuoteTextLayout = React.useCallback((event: NativeSyntheticEvent<TextLayoutEventData>) => {
     const lines = event.nativeEvent.lines;
-    if (lines?.length > 0) {
-      setQuoteLines(lines.map((line) => ({
-        x: line.x,
-        y: line.y,
-        width: line.width,
-        height: line.height,
-      })));
-    }
+    if (!(lines?.length > 0)) return;
+    const next = lines.map((line) => ({
+      x: line.x,
+      y: line.y,
+      width: line.width,
+      height: line.height,
+    }));
+    setQuoteLines((current) => {
+      if (
+        current.length === next.length
+        && current.every((line, index) => {
+          const other = next[index];
+          return line.x === other.x
+            && line.y === other.y
+            && line.width === other.width
+            && line.height === other.height;
+        })
+      ) {
+        return current;
+      }
+      return next;
+    });
   }, []);
 
   const quoteColor = card.bodyQuote?.color;
@@ -426,6 +440,8 @@ export function TodayCardStack({
       ]}
     >
       {Platform.OS === 'ios' ? (
+        // Own glass markup: this top card is an Animated.View driven by
+        // gestures, shadow, and z-index, so it cannot use GlassSurface.
         <BlurView
           pointerEvents="none"
           intensity={GLASS.blurIntensity[glassMode]}

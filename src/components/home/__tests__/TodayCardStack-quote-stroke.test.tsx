@@ -67,13 +67,6 @@ jest.mock('expo-haptics', () => ({
   ImpactFeedbackStyle: { Light: 'Light' },
 }));
 
-jest.mock('expo-blur', () => ({
-  BlurView: ({ children, ...props }: any) => {
-    const { View } = require('react-native');
-    return <View {...props}>{children}</View>;
-  },
-}));
-
 jest.mock('expo-linear-gradient', () => ({
   LinearGradient: ({ children, ...props }: any) => {
     const { View } = require('react-native');

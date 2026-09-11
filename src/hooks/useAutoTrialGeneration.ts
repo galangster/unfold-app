@@ -112,14 +112,11 @@ function submitErrorFields(err: unknown): {
     ? api.existingJobId
     : null;
   const rawCode = typeof api?.code === 'string' ? api.code : null;
-  const message = err instanceof Error ? err.message : '';
   const reasons = ['trial_expired', 'switch_off', 'platform', 'trial_length'] as const;
   const declineReason = rawCode === 'AUTO_TRIAL_UNAVAILABLE' && typeof api?.reason === 'string'
     ? api.reason
     : null;
-  const matched = reasons.find((reason) =>
-    declineReason === reason || rawCode === reason || message.includes(reason),
-  );
+  const matched = reasons.find((reason) => (declineReason ?? rawCode) === reason);
   return { status, code: matched ?? rawCode, existingJobId };
 }
 

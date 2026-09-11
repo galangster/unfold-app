@@ -29,7 +29,6 @@ export function NotifyNote({
   colors,
   text,
   icon,
-  centered: _centered = false,
   gap,
   children,
 }: {
@@ -37,8 +36,6 @@ export function NotifyNote({
   colors: NotifyNoteColors;
   text: string;
   icon?: ReactNode;
-  /** Kept for callers. The note is always start-aligned. */
-  centered?: boolean;
   gap?: number;
   children?: ReactNode;
 }) {

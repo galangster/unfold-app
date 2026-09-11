@@ -6,13 +6,6 @@ import { alpha } from '@/components/ui/utils/alpha';
 
 const renderer = require('react-test-renderer');
 
-jest.mock('expo-blur', () => ({
-  BlurView: ({ children, ...props }: { children?: React.ReactNode }) => {
-    const { View } = require('react-native');
-    return <View {...props}>{children}</View>;
-  },
-}));
-
 const themeState = {
   isDark: true,
   colors: {

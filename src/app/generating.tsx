@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { View, Text, TouchableOpacity, AppState, AppStateStatus, AccessibilityInfo, ScrollView, StyleSheet, ActivityIndicator, Linking } from 'react-native';
 import { useRouter, useNavigation, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -257,6 +257,10 @@ export default function GeneratingScreen() {
   });
   const auto = useAutoTrialGeneration(autoTrialHandoffId);
   const autoState = auto.state;
+  const autoReadyDays = useMemo(
+    () => (autoTrialHandoffId ? autoReadySeriesDays(autoState) : undefined),
+    [autoTrialHandoffId, autoState],
+  );
   const autoSetUpSeries = auto.setUpSeries;
   const canRetry = autoTrialHandoffId
     ? canRetrySeriesReveal(autoState, Date.now())
@@ -1127,7 +1131,7 @@ export default function GeneratingScreen() {
             accessibilityState={{ disabled: isGenerating }}
             accessibilityLabel="Go home"
             accessibilityRole="button"
-            style={[genStyles.startOverButton, { opacity: isGenerating ? 0.6 : 1, marginTop: Spacing['2'], justifyContent: 'flex-start', alignSelf: 'flex-start' }]}
+            style={[genStyles.startOverButton, genStyles.startAligned, { opacity: isGenerating ? 0.6 : 1, marginTop: Spacing['2'] }]}
           >
             <Text style={[genStyles.startOverText, { color: colors.textSubtle }]}>
               Go home
@@ -1153,7 +1157,7 @@ export default function GeneratingScreen() {
                   textAlign: 'left',
                 }}
               >
-                Your {(autoTrialHandoffId ? autoReadySeriesDays(autoState) : undefined) ?? user?.devotionalLength}-day series
+                Your {autoReadyDays ?? user?.devotionalLength}-day series
               </Text>
             </Animated.View>
 
@@ -1394,7 +1398,7 @@ export default function GeneratingScreen() {
                 </View>
               </View>
 
-              <View style={{ flexDirection: 'row', gap: Spacing['3'], marginTop: 14, justifyContent: 'flex-start', alignSelf: 'flex-start' }}>
+              <View style={[genStyles.startAligned, { flexDirection: 'row', gap: Spacing['3'], marginTop: 14 }]}>
                 <TouchableOpacity activeOpacity={0.7}
                   onPress={handleRequestNotifications}
                   accessibilityLabel="Notify me when ready"
@@ -1451,7 +1455,6 @@ export default function GeneratingScreen() {
             <NotifyNote
               entering={entering(FadeIn.duration(400).delay(300))}
               colors={colors}
-              centered
               icon={<ActivityIndicator size="small" color={colors.textSubtle} />}
               text={NOTIFY_NOTE_COPY.pending}
             />
@@ -1541,7 +1544,7 @@ export default function GeneratingScreen() {
           {isGenerating && !isComplete && (
             <Animated.View
               entering={entering(FadeIn.duration(600).delay(1200))}
-              style={{ marginTop: Spacing['8'], alignItems: 'flex-start', alignSelf: 'flex-start', justifyContent: 'flex-start', gap: Spacing['3'] }}
+              style={[genStyles.startAligned, { marginTop: Spacing['8'], alignItems: 'flex-start', gap: Spacing['3'] }]}
             >
               <TouchableOpacity
                 activeOpacity={0.7}
@@ -1795,6 +1798,10 @@ const genStyles = StyleSheet.create({
   startOverText: {
     fontFamily: FontFamily.ui,
     fontSize: FontSize.sm,
+  },
+  startAligned: {
+    justifyContent: 'flex-start',
+    alignSelf: 'flex-start',
   },
   rippleContainer: {
     width: 200,

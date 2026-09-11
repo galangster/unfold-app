@@ -134,10 +134,6 @@ jest.mock('@/hooks/useAccessibility', () => ({
   }),
 }));
 
-jest.mock('expo-blur', () => ({
-  BlurView: require('react-native').View,
-}));
-
 jest.mock('@/lib/theme', () => ({
   useTheme: () => ({
     isDark: true,

@@ -74,6 +74,11 @@ export function resolveGeneratingEntry({
       if (status === 'purchased' || status === 'failed') {
         return { kind: 'auto-trial-handoff', intentId };
       }
+      // A bare entry hands off only a purchased intent (fresh purchase from
+      // onboarding, paywall, offer sheet, RevenueCat sync, creation gate).
+      // submitted and landed need the autoTrialIntentId param that Today's
+      // reconcile, resume, and retry entries pass, or a pushed jobId.
+      // New-series entries stay bare on purpose.
       if (status === 'submitted' || status === 'landed') {
         const namedIntentId = firstParam(params?.autoTrialIntentId);
         if (namedIntentId === intentId) {

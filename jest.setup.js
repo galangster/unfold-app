@@ -15,6 +15,7 @@ jest.mock('expo-secure-store', () => ({
 // jest.mock. No createElement here: the CSS-interop Babel plugin would inject
 // an out-of-scope helper into the factory.
 jest.mock('expo-linear-gradient', () => ({ LinearGradient: require('react-native').View }));
+jest.mock('expo-blur', () => ({ BlurView: require('react-native').View }));
 jest.mock('@react-native-masked-view/masked-view', () => {
   const View = require('react-native').View;
   return { __esModule: true, default: View, MaskedView: View };
