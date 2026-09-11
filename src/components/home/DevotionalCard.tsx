@@ -34,9 +34,11 @@ import { Duration, Ease } from '@/constants/animations';
 import { BIBLE_STUDY_METHODS } from '@/constants/bible-study-methods';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
+import { GLASS, HERO_GROUND } from '@/constants/today-surfaces';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { RecommendedSeriesCard } from './RecommendedSeriesCard';
 import { InlineReflectComposer } from './InlineReflectComposer';
+import { HeroGround } from './HeroGround';
 import { useCompletedDayReflection } from './use-completed-day-reflection';
 import type { DevotionalCardState } from './compute-devotional-state';
 import type { NextPick } from '@/lib/store';
@@ -56,6 +58,7 @@ interface Props {
   isReturningUser?: boolean;
   gateCreation?: () => boolean;
   storedPick?: NextPick | null;
+  ambienceVisible?: boolean;
 }
 
 // ─── Character reveal for "Unfold" title (empty state) ──────────
@@ -64,6 +67,10 @@ const REVEAL_EASE = Easing.bezier(0.25, 0.1, 0.25, 1);
 const DISPLAY_TEXT_MAX_SCALE = 1.18;
 const BODY_TEXT_MAX_SCALE = 1.28;
 const LABEL_TEXT_MAX_SCALE = 1.14;
+
+function heroCopyCap(active: boolean) {
+  return active ? { maxWidth: `${HERO_GROUND.textMaxWidthPct}%` as const } : undefined;
+}
 
 function formatHeroSeriesTitle(title: string): string {
   const trimmed = title.trim();
@@ -181,9 +188,10 @@ function AnimatedProgressBar({ progress, colors }: { progress: number; colors: {
 
 // ─── Empty state ────────────────────────────────────────────────
 
-function FirstTimeEmptyState({ onCreateNew }: { onCreateNew: () => void }) {
+function FirstTimeEmptyState({ onCreateNew, ambienceVisible }: { onCreateNew: () => void; ambienceVisible: boolean }) {
   const { colors } = useTheme();
   const { entering } = useAccessibleAnimation();
+  const textCap = heroCopyCap(ambienceVisible);
 
   const titleChars = useMemo(() => 'Unfold'.split(''), []);
   const charOrder = useMemo(() => shuffleRevealOrder(titleChars.length), [titleChars.length]);
@@ -196,19 +204,21 @@ function FirstTimeEmptyState({ onCreateNew }: { onCreateNew: () => void }) {
 
   return (
     <View style={styles.emptyContainer}>
-      {/* Character-by-character "Unfold" reveal */}
-      <View style={styles.emptyTitleRow}>
-        {titleChars.map((char, i) => (
-          <RevealChar key={`c-${i}`} char={char} animDelay={charDelays[i]} />
-        ))}
-      </View>
+      <HeroGround active={ambienceVisible}>
+        {/* Character-by-character "Unfold" reveal */}
+        <View style={styles.emptyTitleRow}>
+          {titleChars.map((char, i) => (
+            <RevealChar key={`c-${i}`} char={char} animDelay={charDelays[i]} />
+          ))}
+        </View>
 
-      <Animated.Text
-        entering={entering(FadeIn.duration(Duration.normal).delay(titleEndTime).easing(Ease.out))}
-        style={[styles.emptySubtitle, { color: alpha(colors.accent, 0.72) }]}
-      >
-        Tell us what you’re walking{'\n'}through, and we’ll shape a study{'\n'}around it.
-      </Animated.Text>
+        <Animated.Text
+          entering={entering(FadeIn.duration(Duration.normal).delay(titleEndTime).easing(Ease.out))}
+          style={[styles.emptySubtitle, { color: alpha(colors.accent, 0.72) }, textCap]}
+        >
+          Tell us what you’re walking{'\n'}through, and we’ll shape a study{'\n'}around it.
+        </Animated.Text>
+      </HeroGround>
 
       <Animated.View entering={entering(FadeIn.duration(Duration.normal).delay(titleEndTime + 400).easing(Ease.out))}>
         <TouchableOpacity
@@ -243,11 +253,13 @@ function EmptyState({
   isReturningUser,
   gateCreation,
   storedPick,
+  ambienceVisible,
 }: {
   onCreateNew: () => void;
   isReturningUser?: boolean;
   gateCreation?: () => boolean;
   storedPick?: NextPick | null;
+  ambienceVisible: boolean;
 }) {
   if (isReturningUser) {
     return (
@@ -255,34 +267,31 @@ function EmptyState({
         onCreateNew={onCreateNew}
         gateCreation={gateCreation}
         storedPick={storedPick}
+        ambienceVisible={ambienceVisible}
       />
     );
   }
-  return <FirstTimeEmptyState onCreateNew={onCreateNew} />;
+  return <FirstTimeEmptyState onCreateNew={onCreateNew} ambienceVisible={ambienceVisible} />;
 }
 
 // ─── Returning user empty state ─────────────────────────────────
 
-function ReturningEmptyStateFallback({ onCreateNew }: { onCreateNew: () => void }) {
+function ReturningEmptyStateFallback({ onCreateNew, ambienceVisible }: { onCreateNew: () => void; ambienceVisible: boolean }) {
   const { colors } = useTheme();
   const { entering } = useAccessibleAnimation();
+  const textCap = heroCopyCap(ambienceVisible);
 
   return (
     <Animated.View
       entering={entering(FadeIn.duration(Duration.normal).delay(80).easing(Ease.out))}
-      style={[
-        styles.returningCard,
-        {
-          backgroundColor: alpha(colors.backgroundElevated, 0.72),
-          borderColor: alpha(colors.accent, 0.14),
-          shadowColor: colors.accent,
-        },
-      ]}
+      style={styles.heroStateBlock}
     >
-      <View style={styles.returningContent}>
-        <Text style={[styles.returningTitle, { color: colors.text }]}>Begin the next quiet chapter.</Text>
-        <Text style={[styles.returningSubtitle, { color: colors.textMuted }]}>Choose a new devotional thread for the season you’re in now.</Text>
+      <HeroGround active={ambienceVisible}>
+        <Text style={[styles.returningTitle, { color: colors.text, textAlign: 'left' }, textCap]}>Begin the next quiet chapter.</Text>
+        <Text style={[styles.returningSubtitle, { color: colors.textMuted, textAlign: 'left' }, textCap]}>Choose a new devotional thread for the season you’re in now.</Text>
+      </HeroGround>
 
+      <View style={styles.heroCtaRow}>
         <TouchableOpacity
           activeOpacity={0.72}
           onPress={onCreateNew}
@@ -302,19 +311,26 @@ function ReturningEmptyState({
   onCreateNew,
   gateCreation,
   storedPick,
+  ambienceVisible,
 }: {
   onCreateNew: () => void;
   gateCreation?: () => boolean;
   storedPick?: NextPick | null;
+  ambienceVisible: boolean;
 }) {
   return (
-    <RecommendedSeriesCard
-      variant="empty"
-      onChooseOther={onCreateNew}
-      gateCreation={gateCreation}
-      storedPick={storedPick}
-      renderFallback={() => <ReturningEmptyStateFallback onCreateNew={onCreateNew} />}
-    />
+    <View>
+      <ReturningEmptyStateFallback onCreateNew={onCreateNew} ambienceVisible={ambienceVisible} />
+      <View style={styles.heroFollowCard}>
+        <RecommendedSeriesCard
+          variant="empty"
+          onChooseOther={onCreateNew}
+          gateCreation={gateCreation}
+          storedPick={storedPick}
+          renderFallback={() => null}
+        />
+      </View>
+    </View>
   );
 }
 
@@ -325,27 +341,32 @@ function ReturningEmptyState({
  * writing" (Jordan, 1.1.0). Same card shell as the returning empty state so
  * the failure reads as a state of the same surface, not an alert.
  */
-function FirstSeriesFailedState({ state }: { state: Extract<DevotionalCardState, { type: 'first-series-failed' }> }) {
+function FirstSeriesFailedState({
+  state,
+  ambienceVisible,
+}: {
+  state: Extract<DevotionalCardState, { type: 'first-series-failed' }>;
+  ambienceVisible: boolean;
+}) {
   const { colors } = useTheme();
   const { entering } = useAccessibleAnimation();
+  const textCap = heroCopyCap(ambienceVisible);
 
   return (
     <Animated.View
       entering={entering(FadeIn.duration(Duration.normal).delay(80).easing(Ease.out))}
       testID="home-first-series-failed"
-      style={[
-        styles.returningCard,
-        {
-          backgroundColor: alpha(colors.backgroundElevated, 0.72),
-          borderColor: alpha(colors.accent, 0.14),
-          shadowColor: colors.accent,
-        },
-      ]}
+      style={styles.heroStateBlock}
     >
-      <View style={styles.returningContent}>
-        <Text style={[styles.returningTitle, { color: colors.text }]}>We couldn’t finish your devotional.</Text>
-        <Text style={[styles.returningSubtitle, { color: colors.textMuted }]}>{state.message}</Text>
+      <HeroGround active={ambienceVisible}>
+        <Text style={[styles.heroSeriesEyebrow, { color: colors.textSubtle, textAlign: 'left' }]}>
+          Needs attention
+        </Text>
+        <Text style={[styles.returningTitle, { color: colors.text, textAlign: 'left' }, textCap]}>We couldn’t finish your devotional.</Text>
+        <Text style={[styles.returningSubtitle, { color: colors.textMuted, textAlign: 'left' }, textCap]}>{state.message}</Text>
+      </HeroGround>
 
+      <View style={styles.heroCtaRow}>
         <TouchableOpacity
           activeOpacity={0.72}
           onPress={state.onTryAgain}
@@ -374,10 +395,18 @@ function FirstSeriesFailedState({ state }: { state: Extract<DevotionalCardState,
 
 // ─── Reveal-ready teaser card ──────────────────────────────────
 
-function RevealReadyState({ state }: { state: Extract<DevotionalCardState, { type: 'reveal-ready' }> }) {
+function RevealReadyState({
+  state,
+  ambienceVisible,
+}: {
+  state: Extract<DevotionalCardState, { type: 'reveal-ready' }>;
+  ambienceVisible: boolean;
+}) {
   const { colors, isDark } = useTheme();
   const { width, fontScale } = useWindowDimensions();
   const { entering } = useAccessibleAnimation();
+  const glassMode = isDark ? 'dark' : 'light';
+  const textCap = heroCopyCap(ambienceVisible);
   const isYesterday = state.dayLabel === 'Overdue';
   const isLargeTextHero = fontScale >= 1.18;
   const isCompactHero = width < 400 || isLargeTextHero;
@@ -393,39 +422,41 @@ function RevealReadyState({ state }: { state: Extract<DevotionalCardState, { typ
     <Animated.View entering={entering(FadeIn.duration(Duration.normal).easing(Ease.out))}>
       <View style={[styles.revealOpenHero, isCompactHero && styles.revealOpenHeroCompact, isVeryCompactHero && styles.revealOpenHeroVeryCompact]}>
         <View style={[styles.openHeroContent, isCompactHero && styles.openHeroContentCompact, isVeryCompactHero && styles.openHeroContentVeryCompact]}>
-          <Text
-            style={[styles.heroSeriesEyebrow, { color: colors.textSubtle }]}
-            numberOfLines={1}
-            maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}
-          >
-            {displaySeriesTitle}
-          </Text>
-
-          <Text style={[styles.heroDayMeta, { color: colors.accent }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
-            {statusLabel} · Day {state.dayNumber} of {state.totalDays}
-          </Text>
-
-          <Text
-            style={[styles.heroDayTitle, isCompactHero && styles.heroDayTitleCompact, isVeryCompactHero && styles.heroDayTitleVeryCompact, { color: colors.text }]}
-            numberOfLines={3}
-            maxFontSizeMultiplier={DISPLAY_TEXT_MAX_SCALE}
-          >
-            {titleWithPeriod(smartQuotes(state.dayData.title))}
-          </Text>
-
-          <View style={styles.heroQuoteBlock}>
-            <Text style={[styles.heroQuoteMark, { color: colors.accent }]}>“</Text>
+          <HeroGround active={ambienceVisible}>
             <Text
-              style={[styles.heroQuoteText, isCompactHero && styles.heroQuoteTextCompact, isVeryCompactHero && styles.heroQuoteTextVeryCompact, { color: colors.text }]}
-              numberOfLines={4}
+              style={[styles.heroSeriesEyebrow, { color: colors.textSubtle, textAlign: 'left' }]}
+              numberOfLines={1}
+              maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}
+            >
+              {displaySeriesTitle}
+            </Text>
+
+            <Text style={[styles.heroDayMeta, { color: colors.accent, textAlign: 'left' }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
+              {statusLabel} · Day {state.dayNumber} of {state.totalDays}
+            </Text>
+
+            <Text
+              style={[styles.heroDayTitle, isCompactHero && styles.heroDayTitleCompact, isVeryCompactHero && styles.heroDayTitleVeryCompact, { color: colors.text, textAlign: 'left' }, textCap]}
+              numberOfLines={3}
               maxFontSizeMultiplier={DISPLAY_TEXT_MAX_SCALE}
             >
-              {revealMessage}
+              {titleWithPeriod(smartQuotes(state.dayData.title))}
             </Text>
-            <Text style={[styles.revealOpenScripture, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}>
-              {scriptureReference}
-            </Text>
-          </View>
+
+            <View style={styles.heroQuoteBlock}>
+              <Text style={[styles.heroQuoteMark, { color: colors.accent }]}>“</Text>
+              <Text
+                style={[styles.heroQuoteText, isCompactHero && styles.heroQuoteTextCompact, isVeryCompactHero && styles.heroQuoteTextVeryCompact, { color: colors.text, textAlign: 'left' }, textCap]}
+                numberOfLines={4}
+                maxFontSizeMultiplier={DISPLAY_TEXT_MAX_SCALE}
+              >
+                {revealMessage}
+              </Text>
+              <Text style={[styles.revealOpenScripture, { color: colors.textMuted, textAlign: 'left' }, textCap]} numberOfLines={1} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}>
+                {scriptureReference}
+              </Text>
+            </View>
+          </HeroGround>
           <TouchableOpacity
             activeOpacity={0.74}
             onPress={state.onReveal}
@@ -437,15 +468,15 @@ function RevealReadyState({ state }: { state: Extract<DevotionalCardState, { typ
               {
                 borderColor: alpha(colors.accent, 0.24),
                 backgroundColor: Platform.OS === 'ios'
-                  ? alpha(colors.backgroundElevated, isDark ? 0.56 : 0.8)
-                  : alpha(colors.backgroundElevated, 0.9),
+                  ? alpha(colors.backgroundElevated, GLASS.tintAlpha[glassMode])
+                  : alpha(colors.backgroundElevated, GLASS.androidTintAlpha),
               },
             ]}
           >
             {Platform.OS === 'ios' && (
               <BlurView
-                intensity={isDark ? 28 : 18}
-                tint={isDark ? 'dark' : 'light'}
+                intensity={GLASS.blurIntensity[glassMode]}
+                tint={glassMode}
                 style={StyleSheet.absoluteFill}
               />
             )}
@@ -496,8 +527,15 @@ function PreparingProgressBar({ progress, colors }: { progress: number; colors: 
 
 // ─── Preparing state ────────────────────────────────────────────
 
-function PreparingState({ state }: { state: Extract<DevotionalCardState, { type: 'preparing' }> }) {
+function PreparingState({
+  state,
+  ambienceVisible,
+}: {
+  state: Extract<DevotionalCardState, { type: 'preparing' }>;
+  ambienceVisible: boolean;
+}) {
   const { colors } = useTheme();
+  const textCap = heroCopyCap(ambienceVisible);
   const { reducedMotion } = useAccessibleAnimation();
   const shimmerOpacity = useSharedValue(0.55);
   const isRecoveryBlocked = state.recovery?.status === 'failed'
@@ -571,42 +609,51 @@ function PreparingState({ state }: { state: Extract<DevotionalCardState, { type:
       accessible={!action}
       accessibilityRole={action ? undefined : 'text'}
       accessibilityLabel={action ? undefined : title}
-      style={styles.preparingContainer}
+      style={[styles.preparingContainer, styles.heroStateBlock]}
     >
       <View style={styles.preparingContent}>
+        <HeroGround active={ambienceVisible}>
+          <Text style={[styles.heroSeriesEyebrow, { color: colors.textSubtle, textAlign: 'left' }]}>
+            {state.seriesTitle} · Preparing
+          </Text>
 
-        <Animated.Text style={[styles.preparingTitle, { color: colors.text }, shimmerStyle]}>
-          {title}
-        </Animated.Text>
+          <Animated.Text style={[styles.preparingTitle, { color: colors.text, textAlign: 'left' }, textCap, shimmerStyle]}>
+            {title}
+          </Animated.Text>
 
-        <Text style={[styles.preparingSubtitle, { color: colors.textMuted }]}>
-          {subtitle}
-        </Text>
+          <Text style={[styles.preparingSubtitle, { color: colors.textMuted, textAlign: 'left' }, textCap]}>
+            {subtitle}
+          </Text>
+
+          {action ? null : (
+            <PreparingProgressBar progress={state.progress} colors={{ accent: alpha(colors.accent, 0.58), border: alpha(colors.border, 0.45) }} />
+          )}
+        </HeroGround>
 
         {action ? (
-          <TouchableOpacity
-            activeOpacity={0.74}
-            onPress={() => void action.onPress()}
-            disabled={isChecking}
-            accessibilityRole="button"
-            accessibilityLabel={action.label}
-            accessibilityHint={canRetry ? 'Retries this failed reading job' : 'Checks the server for this reading'}
-            accessibilityState={{ disabled: isChecking, busy: isChecking }}
-            style={[
-              styles.preparingRecoveryButton,
-              {
-                backgroundColor: alpha(colors.accent, 0.1),
-                borderColor: alpha(colors.accent, 0.28),
-                opacity: isChecking ? 0.65 : 1,
-              },
-            ]}
-          >
-            {isChecking ? <ActivityIndicator size="small" color={colors.accent} /> : null}
-            <Text style={[styles.preparingRecoveryButtonText, { color: colors.text }]}>{action.label}</Text>
-          </TouchableOpacity>
-        ) : (
-          <PreparingProgressBar progress={state.progress} colors={{ accent: alpha(colors.accent, 0.58), border: alpha(colors.border, 0.45) }} />
-        )}
+          <View style={styles.heroCtaRow}>
+            <TouchableOpacity
+              activeOpacity={0.74}
+              onPress={() => void action.onPress()}
+              disabled={isChecking}
+              accessibilityRole="button"
+              accessibilityLabel={action.label}
+              accessibilityHint={canRetry ? 'Retries this failed reading job' : 'Checks the server for this reading'}
+              accessibilityState={{ disabled: isChecking, busy: isChecking }}
+              style={[
+                styles.preparingRecoveryButton,
+                {
+                  backgroundColor: alpha(colors.accent, 0.1),
+                  borderColor: alpha(colors.accent, 0.28),
+                  opacity: isChecking ? 0.65 : 1,
+                },
+              ]}
+            >
+              {isChecking ? <ActivityIndicator size="small" color={colors.accent} /> : null}
+              <Text style={[styles.preparingRecoveryButtonText, { color: colors.text }]}>{action.label}</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -614,9 +661,16 @@ function PreparingState({ state }: { state: Extract<DevotionalCardState, { type:
 
 // ─── Premium paused state ───────────────────────────────────────
 
-function PremiumPausedState({ state }: { state: Extract<DevotionalCardState, { type: 'premium-paused' }> }) {
+function PremiumPausedState({
+  state,
+  ambienceVisible,
+}: {
+  state: Extract<DevotionalCardState, { type: 'premium-paused' }>;
+  ambienceVisible: boolean;
+}) {
   const { colors } = useTheme();
   const { entering } = useAccessibleAnimation();
+  const textCap = heroCopyCap(ambienceVisible);
   const progressLabel = state.totalDays > 0
     ? `${state.daysCompleted} of ${state.totalDays} days complete`
     : 'Your series is saved';
@@ -627,42 +681,38 @@ function PremiumPausedState({ state }: { state: Extract<DevotionalCardState, { t
       accessible
       accessibilityRole="summary"
       accessibilityLabel="Premium paused. Your personal series is saved."
-      style={[
-        styles.returningCard,
-        {
-          backgroundColor: alpha(colors.backgroundElevated, 0.72),
-          borderColor: alpha(colors.accent, 0.14),
-          shadowColor: colors.accent,
-        },
-      ]}
+      style={styles.heroStateBlock}
     >
-      <View style={styles.returningContent}>
-        <Text style={[styles.returningTitle, { color: colors.text }]}>Your series is waiting.</Text>
-        <Text style={[styles.returningSubtitle, { color: colors.textMuted }]}>New personal readings pause while Premium is inactive. You can still read scripture today, or renew Premium when you’re ready.</Text>
-        <Text style={[styles.premiumPausedProgress, { color: colors.textSubtle }]}>{progressLabel}</Text>
+      <HeroGround active={ambienceVisible}>
+        <Text style={[styles.heroSeriesEyebrow, { color: colors.textSubtle, textAlign: 'left' }]}>
+          {state.seriesTitle} · Paused
+        </Text>
+        <Text style={[styles.returningTitle, { color: colors.text, textAlign: 'left' }, textCap]}>Your series is waiting.</Text>
+        <Text style={[styles.returningSubtitle, { color: colors.textMuted, textAlign: 'left' }, textCap]}>New personal readings pause while Premium is inactive. You can still read scripture today, or renew Premium when you’re ready.</Text>
+        <Text style={[styles.premiumPausedProgress, { color: colors.textSubtle, textAlign: 'left' }]}>{progressLabel}</Text>
+      </HeroGround>
 
-        <View style={styles.premiumPausedActions}>
-          <TouchableOpacity
-            activeOpacity={0.74}
-            onPress={state.onOpenBible}
-            accessibilityRole="button"
-            accessibilityLabel="Open the Bible tab"
-            style={[styles.returningCta, styles.premiumPausedPrimaryCta, { borderColor: alpha(colors.accent, 0.28), backgroundColor: alpha(colors.accent, 0.12) }]}
-          >
-            <Text style={[styles.returningCtaText, { color: colors.text }]}>Open Bible</Text>
-            <Text style={[styles.returningCtaArrow, { color: colors.accent }]}>→</Text>
-          </TouchableOpacity>
+      <View style={styles.heroCtaRow}>
+        <TouchableOpacity
+          activeOpacity={0.74}
+          onPress={state.onOpenBible}
+          accessibilityRole="button"
+          accessibilityLabel="Open the Bible tab"
+          style={[styles.returningCta, styles.premiumPausedPrimaryCta, { borderColor: alpha(colors.accent, 0.28), backgroundColor: alpha(colors.accent, 0.12) }]}
+        >
+          <Text style={[styles.returningCtaText, { color: colors.text }]}>Open Bible</Text>
+          <Text style={[styles.returningCtaArrow, { color: colors.accent }]}>→</Text>
+        </TouchableOpacity>
 
-          <TouchableOpacity
-            activeOpacity={0.74}
-            onPress={state.onRenewPremium}
-            accessibilityRole="button"
-            accessibilityLabel="Renew Premium"
-            style={[styles.returningCta, styles.premiumPausedSecondaryCta, { borderColor: alpha(colors.accent, 0.18), backgroundColor: alpha(colors.accent, 0.045) }]}
-          >
-            <Text style={[styles.returningCtaText, { color: colors.accent }]}>Renew Premium</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          activeOpacity={0.74}
+          onPress={state.onRenewPremium}
+          accessibilityRole="button"
+          accessibilityLabel="Renew Premium"
+          style={[styles.returningCta, styles.premiumPausedSecondaryCta, { borderColor: alpha(colors.accent, 0.18), backgroundColor: alpha(colors.accent, 0.045) }]}
+        >
+          <Text style={[styles.returningCtaText, { color: colors.accent }]}>Renew Premium</Text>
+        </TouchableOpacity>
       </View>
     </Animated.View>
   );
@@ -673,30 +723,29 @@ function PremiumPausedState({ state }: { state: Extract<DevotionalCardState, { t
 function JourneyCompleteStateFallback({
   seriesTitle,
   onCreateNew,
+  ambienceVisible,
 }: {
   seriesTitle: string;
   onCreateNew: () => void;
+  ambienceVisible: boolean;
 }) {
   const { colors } = useTheme();
+  const textCap = heroCopyCap(ambienceVisible);
 
   return (
-    <View
-      style={[
-        styles.journeyCompleteCard,
-        {
-          backgroundColor: alpha(colors.backgroundElevated, 0.72),
-          borderColor: alpha(colors.accent, 0.14),
-          shadowColor: colors.accent,
-        },
-      ]}
-    >
-      <View style={styles.journeyCompleteContent}>
-        <Text style={[styles.journeyCompleteTitle, { color: colors.text }]}>Carry the thread forward.</Text>
+    <View style={styles.heroStateBlock}>
+      <HeroGround active={ambienceVisible}>
+        <Text style={[styles.heroSeriesEyebrow, { color: colors.textSubtle, textAlign: 'left' }]}>
+          {seriesTitle} · Complete
+        </Text>
+        <Text style={[styles.journeyCompleteTitle, { color: colors.text, textAlign: 'left' }, textCap]}>Carry the thread forward.</Text>
 
-        <Text style={[styles.journeyCompleteSubtitle, { color: colors.textMuted }]}>
+        <Text style={[styles.journeyCompleteSubtitle, { color: colors.textMuted, textAlign: 'left' }, textCap]}>
           {seriesTitle} is complete. Rest with what God surfaced here, then begin another study when you’re ready.
         </Text>
+      </HeroGround>
 
+      <View style={styles.heroCtaRow}>
         <TouchableOpacity
           activeOpacity={0.72}
           onPress={onCreateNew}
@@ -718,21 +767,32 @@ function JourneyCompleteState({
   onCreateNew,
   gateCreation,
   storedPick,
+  ambienceVisible,
 }: {
   seriesTitle: string;
   onCreateNew: () => void;
   gateCreation?: () => boolean;
   storedPick?: NextPick | null;
+  ambienceVisible: boolean;
 }) {
   return (
-    <RecommendedSeriesCard
-      variant="completion"
-      completedSeriesTitle={seriesTitle}
-      onChooseOther={onCreateNew}
-      gateCreation={gateCreation}
-      storedPick={storedPick}
-      renderFallback={() => <JourneyCompleteStateFallback seriesTitle={seriesTitle} onCreateNew={onCreateNew} />}
-    />
+    <View>
+      <JourneyCompleteStateFallback
+        seriesTitle={seriesTitle}
+        onCreateNew={onCreateNew}
+        ambienceVisible={ambienceVisible}
+      />
+      <View style={styles.heroFollowCard}>
+        <RecommendedSeriesCard
+          variant="completion"
+          completedSeriesTitle={seriesTitle}
+          onChooseOther={onCreateNew}
+          gateCreation={gateCreation}
+          storedPick={storedPick}
+          renderFallback={() => null}
+        />
+      </View>
+    </View>
   );
 }
 
@@ -740,10 +800,13 @@ function JourneyCompleteState({
 
 interface MainCardProps {
   state: Extract<DevotionalCardState, { type: 'unread' | 'complete-today' | 'tomorrow-locked' }>;
+  ambienceVisible: boolean;
 }
 
-function MainCard({ state }: MainCardProps) {
+function MainCard({ state, ambienceVisible }: MainCardProps) {
   const { colors, isDark } = useTheme();
+  const textCap = heroCopyCap(ambienceVisible);
+  const glassMode = isDark ? 'dark' : 'light';
   const { width, fontScale } = useWindowDimensions();
   const isLargeTextHero = fontScale >= 1.18;
   const isCompactHero = width < 400 || isLargeTextHero;
@@ -838,9 +901,10 @@ function MainCard({ state }: MainCardProps) {
     <Animated.View style={scaleStyle}>
       <View style={styles.heroTouchable}>
         <View style={[styles.openHero, isCompactHero && styles.openHeroCompact, isVeryCompactHero && styles.openHeroVeryCompact]}>
-          <View style={[styles.openHeroContent, isCompactHero && styles.openHeroContentCompact, isVeryCompactHero && styles.openHeroContentVeryCompact]}>
+          <View style={[styles.openHeroContent, isCompactHero && styles.openHeroContentCompact, isVeryCompactHero && styles.openHeroContentVeryCompact, { alignItems: 'flex-start' }]}>
+            <HeroGround active={ambienceVisible}>
             <Text
-              style={[styles.heroSeriesEyebrow, { color: colors.textSubtle }]}
+              style={[styles.heroSeriesEyebrow, { color: colors.textSubtle, textAlign: 'left' }]}
               numberOfLines={1}
               maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}
             >
@@ -858,16 +922,16 @@ function MainCard({ state }: MainCardProps) {
                     styles.completedStatusPill,
                     {
                       backgroundColor: Platform.OS === 'ios'
-                        ? alpha(colors.backgroundElevated, isDark ? 0.56 : 0.8)
-                        : alpha(colors.backgroundElevated, 0.9),
+                        ? alpha(colors.backgroundElevated, GLASS.tintAlpha[glassMode])
+                        : alpha(colors.backgroundElevated, GLASS.androidTintAlpha),
                       borderColor: alpha(colors.accent, 0.25),
                     },
                   ]}
                 >
                   {Platform.OS === 'ios' && (
                     <BlurView
-                      intensity={isDark ? 28 : 18}
-                      tint={isDark ? 'dark' : 'light'}
+                      intensity={GLASS.blurIntensity[glassMode]}
+                      tint={glassMode}
                       style={StyleSheet.absoluteFill}
                     />
                   )}
@@ -887,7 +951,7 @@ function MainCard({ state }: MainCardProps) {
             )}
 
             <Text
-              style={[styles.heroDayTitle, isCompactHero && styles.heroDayTitleCompact, isVeryCompactHero && styles.heroDayTitleVeryCompact, { color: colors.text }]}
+              style={[styles.heroDayTitle, isCompactHero && styles.heroDayTitleCompact, isVeryCompactHero && styles.heroDayTitleVeryCompact, { color: colors.text, textAlign: 'left' }, textCap]}
               numberOfLines={3}
               maxFontSizeMultiplier={DISPLAY_TEXT_MAX_SCALE}
             >
@@ -897,14 +961,14 @@ function MainCard({ state }: MainCardProps) {
             <View style={styles.heroQuoteBlock}>
               <Text style={[styles.heroQuoteMark, { color: colors.accent }]}>“</Text>
               <Text
-                style={[styles.heroQuoteText, isCompactHero && styles.heroQuoteTextCompact, isVeryCompactHero && styles.heroQuoteTextVeryCompact, { color: colors.text }]}
+                style={[styles.heroQuoteText, isCompactHero && styles.heroQuoteTextCompact, isVeryCompactHero && styles.heroQuoteTextVeryCompact, { color: colors.text, textAlign: 'left' }, textCap]}
                 numberOfLines={4}
                 maxFontSizeMultiplier={DISPLAY_TEXT_MAX_SCALE}
               >
                 {smartQuotes(devotionalLine)}
               </Text>
               {state.type === 'tomorrow-locked' && state.tomorrowTeaser ? (
-                <Text style={[styles.heroTomorrowTeaser, { color: colors.textMuted }]} numberOfLines={3} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}>
+                <Text style={[styles.heroTomorrowTeaser, { color: colors.textMuted, textAlign: 'left' }, textCap]} numberOfLines={3} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}>
                   Tomorrow’s thread: {smartQuotes(state.tomorrowTeaser)}
                 </Text>
               ) : null}
@@ -931,6 +995,7 @@ function MainCard({ state }: MainCardProps) {
                 <AnimatedProgressBar progress={progress} colors={colors} />
               </View>
             )}
+            </HeroGround>
 
             {showInlineComposer && composer ? (
               <View style={styles.heroComposerBlock}>
@@ -963,15 +1028,15 @@ function MainCard({ state }: MainCardProps) {
                 {
                   borderColor: alpha(colors.accent, hasCompletedToday ? 0.25 : 0.24),
                   backgroundColor: Platform.OS === 'ios'
-                    ? alpha(colors.backgroundElevated, isDark ? 0.56 : 0.8)
-                    : alpha(colors.backgroundElevated, 0.9),
+                    ? alpha(colors.backgroundElevated, GLASS.tintAlpha[glassMode])
+                    : alpha(colors.backgroundElevated, GLASS.androidTintAlpha),
                 },
               ]}
             >
               {Platform.OS === 'ios' && (
                 <BlurView
-                  intensity={isDark ? 28 : 18}
-                  tint={isDark ? 'dark' : 'light'}
+                  intensity={GLASS.blurIntensity[glassMode]}
+                  tint={glassMode}
                   style={StyleSheet.absoluteFill}
                 />
               )}
@@ -1030,6 +1095,7 @@ export function DevotionalCard({
   isReturningUser,
   gateCreation,
   storedPick,
+  ambienceVisible = false,
 }: Props) {
   const { entering } = useAccessibleAnimation();
 
@@ -1050,25 +1116,35 @@ export function DevotionalCard({
           isReturningUser={isReturningUser}
           gateCreation={gateCreation}
           storedPick={storedPick}
+          ambienceVisible={ambienceVisible}
         />
       )}
       {state.type === 'preparing' && (
-        <PreparingState state={state} />
+        <PreparingState state={state} ambienceVisible={ambienceVisible} />
       )}
-      {state.type === 'first-series-failed' && <FirstSeriesFailedState state={state} />}
-      {state.type === 'premium-paused' && <PremiumPausedState state={state} />}
+      {state.type === 'first-series-failed' && (
+        <FirstSeriesFailedState state={state} ambienceVisible={ambienceVisible} />
+      )}
+      {state.type === 'premium-paused' && (
+        <PremiumPausedState state={state} ambienceVisible={ambienceVisible} />
+      )}
       {state.type === 'journey-complete' && (
         <JourneyCompleteState
           seriesTitle={state.seriesTitle}
           onCreateNew={state.onCreateNew}
           gateCreation={gateCreation}
           storedPick={storedPick}
+          ambienceVisible={ambienceVisible}
         />
       )}
-      {state.type === 'reveal-ready' && <RevealReadyState state={state} />}
+      {state.type === 'reveal-ready' && (
+        <RevealReadyState state={state} ambienceVisible={ambienceVisible} />
+      )}
       {(state.type === 'unread' ||
         state.type === 'complete-today' ||
-        state.type === 'tomorrow-locked') && <MainCard state={state} />}
+        state.type === 'tomorrow-locked') && (
+        <MainCard state={state} ambienceVisible={ambienceVisible} />
+      )}
     </Animated.View>
   );
 }
@@ -1350,6 +1426,20 @@ const styles = StyleSheet.create({
   returningGlow: {
     borderRadius: Radius.xl,
   },
+  heroStateBlock: {
+    width: '100%',
+    alignItems: 'flex-start',
+  },
+  heroCtaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'flex-start',
+    gap: Spacing['3'],
+  },
+  heroFollowCard: {
+    width: '100%',
+    marginTop: Spacing['5'],
+  },
   returningContent: {
     padding: Spacing['7'],
   },
@@ -1403,8 +1493,8 @@ const styles = StyleSheet.create({
   },
   premiumPausedProgress: {
     ...Typography.cardMeta,
-    marginTop: -Spacing['4'],
-    marginBottom: Spacing['5'],
+    marginTop: 0,
+    marginBottom: Spacing['4'],
   },
   premiumPausedActions: {
     flexDirection: 'row',
@@ -1453,22 +1543,22 @@ const styles = StyleSheet.create({
   },
   preparingContent: {
     paddingVertical: Spacing['7'],
-    paddingHorizontal: Spacing['4'],
-    alignItems: 'center',
+    paddingHorizontal: 0,
+    alignItems: 'flex-start',
     zIndex: 2,
   },
   preparingTitle: {
     fontFamily: FontFamily.display,
     fontSize: 21,
     lineHeight: 27,
-    textAlign: 'center',
+    textAlign: 'left',
     marginBottom: Spacing['2'],
   },
   preparingSubtitle: {
     fontFamily: FontFamily.body,
     fontSize: 15,
     lineHeight: 23,
-    textAlign: 'center',
+    textAlign: 'left',
     marginBottom: Spacing['4'],
     maxWidth: 310,
   },
@@ -1562,23 +1652,23 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   journeyCompleteContent: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
     zIndex: 2,
   },
   journeyCompleteTitle: {
     fontFamily: FontFamily.display,
     fontSize: 25,
     letterSpacing: -0.15,
-    textAlign: 'center',
+    textAlign: 'left',
     marginBottom: Spacing['2'],
   },
   journeyCompleteSubtitle: {
     fontFamily: FontFamily.body,
     fontSize: 15,
-    textAlign: 'center',
+    textAlign: 'left',
     lineHeight: 23,
     marginBottom: Spacing['7'],
-    paddingHorizontal: Spacing['2'],
+    paddingHorizontal: 0,
   },
   journeyCompleteCta: {
     flexDirection: 'row',

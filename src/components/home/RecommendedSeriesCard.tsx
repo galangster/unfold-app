@@ -12,6 +12,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useTheme } from '@/lib/theme';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { alpha } from '@/components/ui';
+import { GlassSurface } from '@/components/ui/GlassSurface';
 import { FontFamily } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
@@ -195,18 +196,15 @@ export function RecommendedSeriesCard({
   if (loading) {
     return (
       <Animated.View entering={entering(FadeIn.duration(200).easing(Ease.out))}>
-        <View
+        <GlassSurface
           accessible
           accessibilityRole="progressbar"
           accessibilityLabel="Finding a recommended devotional series"
+          radius={Radius.xl}
           style={[
             styles.card,
             styles.loadingCard,
-            {
-              backgroundColor: alpha(colors.backgroundElevated, 0.7),
-              borderColor: alpha(colors.accent, 0.12),
-              shadowColor: colors.accent,
-            },
+            { shadowColor: colors.accent },
           ]}
         >
           <Text style={[styles.loadingTitle, { color: colors.text }]}>Finding your next thread.</Text>
@@ -228,7 +226,7 @@ export function RecommendedSeriesCard({
           </View>
 
           <ActivityIndicator color={colors.accent} size="small" style={styles.loadingSpinner} />
-        </View>
+        </GlassSurface>
       </Animated.View>
     );
   }
@@ -241,14 +239,11 @@ export function RecommendedSeriesCard({
 
   return (
     <Animated.View entering={entering(FadeIn.duration(Duration.normal).easing(Ease.out))}>
-      <View
+      <GlassSurface
+        radius={Radius.xl}
         style={[
           styles.card,
-          {
-            backgroundColor: alpha(colors.backgroundElevated, 0.72),
-            borderColor: alpha(colors.accent, 0.14),
-            shadowColor: colors.accent,
-          },
+          { shadowColor: colors.accent },
         ]}
       >
         <View style={styles.contentColumn}>
@@ -302,17 +297,14 @@ export function RecommendedSeriesCard({
             <Text style={[styles.secondaryText, { color: colors.textMuted }]}>Choose another direction</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </GlassSurface>
     </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: Radius.xl,
-    borderWidth: 1,
     padding: Spacing['6'],
-    overflow: 'hidden',
     position: 'relative',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.11,

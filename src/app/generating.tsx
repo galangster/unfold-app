@@ -78,9 +78,11 @@ import {
   type NotifyRequestOutcome,
 } from '@/lib/generating-notify-state';
 import { NOTIFY_NOTE_COPY, NotifyNote } from '@/components/generating/NotifyNote';
+import { GlassSurface } from '@/components/ui/GlassSurface';
 import { useAutoTrialGeneration } from '@/hooks/useAutoTrialGeneration';
 import { readAutoTrialIntent } from '@/lib/auto-trial-intent';
 import { resolveGeneratingEntry } from '@/lib/generating-entry';
+import { resolveGeneratingPalette } from '@/lib/generating-palette';
 import { canRetrySeriesReveal, type SeriesRevealState } from '@/lib/series-reveal-machine';
 import { askNotificationPermissionInContext } from '@/lib/notification-ask';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
@@ -167,21 +169,10 @@ export default function GeneratingScreen() {
     devotionalId?: string;
     autoTrialIntentId?: string;
   }>();
-  const { colors: themeColors } = useTheme();
+  const { colors: themeColors, isDark } = useTheme();
   const { reducedMotion, entering, exiting } = useAccessibleAnimation();
 
-  const colors = {
-    ...themeColors,
-    background: '#0A0A0A',
-    cardBackground: '#111214',
-    inputBackground: '#111214',
-    border: '#24262B',
-    text: '#F5F5F7',
-    textMuted: '#A0A6B1',
-    textSubtle: '#7D8592',
-    buttonBackground: themeColors.accent,
-    buttonBackgroundPressed: themeColors.accent,
-  };
+  const colors = resolveGeneratingPalette(themeColors, isDark);
 
   const user = useUnfoldStore((s) => s.user);
   const startGenerationSession = useUnfoldStore((s) => s.startGenerationSession);
@@ -1136,7 +1127,7 @@ export default function GeneratingScreen() {
             accessibilityState={{ disabled: isGenerating }}
             accessibilityLabel="Go home"
             accessibilityRole="button"
-            style={[genStyles.startOverButton, { opacity: isGenerating ? 0.6 : 1, marginTop: Spacing['2'] }]}
+            style={[genStyles.startOverButton, { opacity: isGenerating ? 0.6 : 1, marginTop: Spacing['2'], justifyContent: 'flex-start', alignSelf: 'flex-start' }]}
           >
             <Text style={[genStyles.startOverText, { color: colors.textSubtle }]}>
               Go home
@@ -1355,19 +1346,14 @@ export default function GeneratingScreen() {
               style={{
                 marginTop: 56,
                 width: '100%',
-                alignItems: 'center',
+                alignItems: 'flex-start',
               }}
             >
+              {/* No box (Nick, 2026-09-11): the note reads as a left-aligned row. */}
               <View
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  backgroundColor: colors.inputBackground,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  borderRadius: Radius.lg,
-                  paddingVertical: Spacing['4'],
-                  paddingHorizontal: Spacing['5'],
                   width: '100%',
                 }}
               >
@@ -1408,7 +1394,7 @@ export default function GeneratingScreen() {
                 </View>
               </View>
 
-              <View style={{ flexDirection: 'row', gap: Spacing['3'], marginTop: 14 }}>
+              <View style={{ flexDirection: 'row', gap: Spacing['3'], marginTop: 14, justifyContent: 'flex-start', alignSelf: 'flex-start' }}>
                 <TouchableOpacity activeOpacity={0.7}
                   onPress={handleRequestNotifications}
                   accessibilityLabel="Notify me when ready"
@@ -1479,12 +1465,7 @@ export default function GeneratingScreen() {
                 marginTop: Spacing['10'],
                 flexDirection: 'row',
                 alignItems: 'center',
-                paddingHorizontal: Spacing['4'],
-                paddingVertical: 10,
-                backgroundColor: colors.inputBackground,
-                borderRadius: Radius.xl,
-                borderWidth: 1,
-                borderColor: colors.border,
+                alignSelf: 'flex-start',
               }}
             >
               <BellIcon size={14} color={colors.accent} weight="light" />
@@ -1560,7 +1541,7 @@ export default function GeneratingScreen() {
           {isGenerating && !isComplete && (
             <Animated.View
               entering={entering(FadeIn.duration(600).delay(1200))}
-              style={{ marginTop: Spacing['8'], alignItems: 'center', gap: Spacing['3'] }}
+              style={{ marginTop: Spacing['8'], alignItems: 'flex-start', alignSelf: 'flex-start', justifyContent: 'flex-start', gap: Spacing['3'] }}
             >
               <TouchableOpacity
                 activeOpacity={0.7}
@@ -1617,7 +1598,7 @@ export default function GeneratingScreen() {
               style={{
                 marginTop: Spacing['12'],
                 width: '100%',
-                alignItems: 'center',
+                alignItems: 'flex-start',
               }}
             >
               {/* Label */}
@@ -1647,13 +1628,10 @@ export default function GeneratingScreen() {
               </View>
 
               {/* Preview card */}
-              <View
+              <GlassSurface
+                radius={Radius.lg}
                 style={{
                   width: '100%',
-                  backgroundColor: colors.cardBackground,
-                  borderRadius: Radius.lg,
-                  borderWidth: 1,
-                  borderColor: colors.border,
                   padding: Spacing['6'],
                 }}
               >
@@ -1739,7 +1717,7 @@ export default function GeneratingScreen() {
                     {SAMPLE_PREVIEW.reflectionQuestion}
                   </Text>
                 </View>
-              </View>
+              </GlassSurface>
 
               {/* Reassurance note below card */}
               <Animated.Text

@@ -1,7 +1,5 @@
 import React from 'react';
 import {
-  LayoutChangeEvent,
-  Platform,
   StyleProp,
   StyleSheet,
   Text,
@@ -9,18 +7,14 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
-import { BlurView } from 'expo-blur';
-import Svg, { Path } from 'react-native-svg';
 import { ArrowRightIcon, XIcon } from '@/components/icons';
 import * as Haptics from 'expo-haptics';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { CompanionOrb } from '@/components/CompanionOrb';
-import { alpha } from '@/components/ui';
-import { buildBubblePath } from '@/lib/bubble-path';
+import { GlassSurface } from '@/components/ui/GlassSurface';
 import { animateCardDismiss } from '@/lib/card-dismiss-animation';
-import { useTheme } from '@/lib/theme';
 import type { ColorTheme } from '@/constants/colors';
 import { Typography } from '@/constants/typography';
 
@@ -43,16 +37,6 @@ interface Props {
 
 const BODY_TEXT_MAX_SCALE = 1.28;
 const LABEL_TEXT_MAX_SCALE = 1.14;
-const BUBBLE_TAIL_WIDTH = 6;
-const BUBBLE_TAIL_HEIGHT = 14;
-const BUBBLE_TAIL_CENTER_Y = 18;
-const BUBBLE_STROKE_WIDTH = 1;
-const BUBBLE_RADIUS = {
-  topLeft: Radius.sm,
-  topRight: Radius.lg,
-  bottomRight: Radius.lg,
-  bottomLeft: Radius.lg,
-};
 
 export function TodayCompanionBubble({
   colors,
@@ -70,40 +54,6 @@ export function TodayCompanionBubble({
   dismissAccessibilityLabel,
   dismissAccessibilityHint,
 }: Props) {
-  const { isDark } = useTheme();
-  const [bubbleSize, setBubbleSize] = React.useState({ width: 0, height: 0 });
-  const bubbleColor = Platform.OS === 'ios'
-    ? alpha(colors.backgroundElevated, isDark ? 0.56 : 0.8)
-    : alpha(colors.backgroundElevated, 0.9);
-  const bubbleBorder = alpha(accentColor, 0.25);
-  const blurIntensity = isDark ? 28 : 18;
-  const bubblePath = React.useMemo(
-    () =>
-      bubbleSize.width > 0 && bubbleSize.height > 0
-        ? buildBubblePath({
-            width: bubbleSize.width,
-            height: bubbleSize.height,
-            radius: BUBBLE_RADIUS,
-            tail: {
-              edge: 'left',
-              centerY: BUBBLE_TAIL_CENTER_Y,
-              width: BUBBLE_TAIL_WIDTH,
-              height: BUBBLE_TAIL_HEIGHT,
-            },
-            strokeWidth: BUBBLE_STROKE_WIDTH,
-          })
-        : null,
-    [bubbleSize.height, bubbleSize.width],
-  );
-
-  const handleBubbleLayout = React.useCallback((event: LayoutChangeEvent) => {
-    const { width, height } = event.nativeEvent.layout;
-    setBubbleSize((previous) => {
-      if (Math.abs(previous.width - width) < 1 && Math.abs(previous.height - height) < 1) return previous;
-      return { width, height };
-    });
-  }, []);
-
   const handleDismiss = React.useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     animateCardDismiss();
@@ -125,35 +75,11 @@ export function TodayCompanionBubble({
   ) : null;
 
   const bubbleContent = (
-    <View style={[styles.bubble, onDismiss && styles.bubbleWithDismiss]} onLayout={handleBubbleLayout}>
-      {Platform.OS === 'ios' ? (
-        <View pointerEvents="none" testID="today-companion-glass-blur" style={styles.bubbleGlassClip}>
-          <BlurView
-            intensity={blurIntensity}
-            tint={isDark ? 'dark' : 'light'}
-            style={StyleSheet.absoluteFill}
-          />
-        </View>
-      ) : null}
-      {bubblePath ? (
-        <Svg
-          pointerEvents="none"
-          width={bubbleSize.width + BUBBLE_TAIL_WIDTH}
-          height={bubbleSize.height}
-          viewBox={`0 0 ${bubbleSize.width + BUBBLE_TAIL_WIDTH} ${bubbleSize.height}`}
-          style={[styles.bubbleShape, { left: -BUBBLE_TAIL_WIDTH }]}
-        >
-          <Path
-            d={bubblePath}
-            fill={bubbleColor}
-            stroke={bubbleBorder}
-            strokeWidth={BUBBLE_STROKE_WIDTH}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </Svg>
-      ) : null}
-
+    <GlassSurface
+      radius={Radius.lg}
+      blurTestID="today-companion-glass-blur"
+      style={[styles.bubble, onDismiss && styles.bubbleWithDismiss]}
+    >
       {children ?? (
         <Text style={[styles.text, { color: colors.text }]} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}>
           {text}
@@ -174,7 +100,7 @@ export function TodayCompanionBubble({
           <ArrowRightIcon size={13} color={accentColor} weight="light" />
         </View>
       ) : null}
-    </View>
+    </GlassSurface>
   );
 
   const content = (
@@ -257,26 +183,13 @@ const styles = StyleSheet.create({
   },
   bubble: {
     position: 'relative',
-    overflow: 'visible',
     alignSelf: 'flex-start',
     maxWidth: '100%',
     paddingVertical: Spacing['3'],
     paddingHorizontal: Spacing['3.5'],
   },
-  bubbleGlassClip: {
-    ...StyleSheet.absoluteFill,
-    borderTopLeftRadius: BUBBLE_RADIUS.topLeft,
-    borderTopRightRadius: BUBBLE_RADIUS.topRight,
-    borderBottomRightRadius: BUBBLE_RADIUS.bottomRight,
-    borderBottomLeftRadius: BUBBLE_RADIUS.bottomLeft,
-    overflow: 'hidden',
-  },
   bubbleWithDismiss: {
     paddingRight: Spacing['10'],
-  },
-  bubbleShape: {
-    position: 'absolute',
-    top: 0,
   },
   label: {
     ...Typography.cardMeta,

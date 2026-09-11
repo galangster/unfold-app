@@ -3,7 +3,6 @@ import { View, Text, StyleSheet } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { BellIcon } from '@/components/icons';
 import { FontFamily } from '@/constants/fonts';
-import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import type { NotifyControlState } from '@/lib/generating-notify-state';
 
@@ -22,7 +21,7 @@ export type NotifyNoteColors = {
 };
 
 /**
- * A bordered note under the notify control: an icon (the bell unless given)
+ * A boxless note under the notify control: an icon (the bell unless given)
  * beside muted copy, with optional content — the Settings link — below it.
  */
 export function NotifyNote({
@@ -30,7 +29,7 @@ export function NotifyNote({
   colors,
   text,
   icon,
-  centered = false,
+  centered: _centered = false,
   gap,
   children,
 }: {
@@ -38,7 +37,7 @@ export function NotifyNote({
   colors: NotifyNoteColors;
   text: string;
   icon?: ReactNode;
-  /** Centre the icon on the text (the spinner) instead of top-aligning it. */
+  /** Kept for callers. The note is always start-aligned. */
   centered?: boolean;
   gap?: number;
   children?: ReactNode;
@@ -46,14 +45,9 @@ export function NotifyNote({
   return (
     <Animated.View
       entering={entering}
-      style={{ marginTop: Spacing['10'], width: '100%', alignItems: 'center', ...(gap === undefined ? {} : { gap }) }}
+      style={{ marginTop: Spacing['10'], width: '100%', alignItems: 'flex-start', ...(gap === undefined ? {} : { gap }) }}
     >
-      <View
-        style={[
-          styles.notifyNote,
-          { ...(centered ? { alignItems: 'center' as const } : {}), backgroundColor: colors.inputBackground, borderColor: colors.border },
-        ]}
-      >
+      <View style={styles.notifyNote}>
         {icon ?? <BellIcon size={14} color={colors.textSubtle} weight="light" />}
         <Text style={[styles.notifyNoteText, { color: colors.textMuted }]}>{text}</Text>
       </View>
@@ -67,10 +61,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     width: '100%',
-    paddingHorizontal: Spacing['4'],
-    paddingVertical: 10,
-    borderRadius: Radius.xl,
-    borderWidth: 1,
   },
   notifyNoteText: {
     flex: 1,
@@ -78,5 +68,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     marginLeft: Spacing['2'],
+    textAlign: 'left',
   },
 });

@@ -122,6 +122,7 @@ jest.mock('@/lib/theme', () => ({
 }));
 
 import { TodayCardStack, type TodayCardStackCard } from '../TodayCardStack';
+import { GLASS } from '@/constants/today-surfaces';
 import { buildTodayCardStackModel, orderTodayStackCards } from '@/lib/today-card-stack';
 import { getTodayStackSwipeDismissal, hasTodayStackHorizontalIntent } from '@/lib/today-card-stack-motion';
 
@@ -222,6 +223,20 @@ describe('TodayCardStack fixture shell', () => {
     const tree = renderInAct(<TodayCardStack cards={[]} colors={mockTestColors} />);
 
     expect(tree.toJSON()).toBeNull();
+  });
+
+  it('uses GLASS tokens for the top-card blur and tint', () => {
+    const tree = renderInAct(<TodayCardStack cards={[fixtureCard()]} colors={mockTestColors} />);
+    const blur = tree.root.findByProps({ testID: 'today-card-stack-glass-blur' });
+    expect(blur.props.intensity).toBe(GLASS.blurIntensity.dark);
+    expect(blur.props.tint).toBe('dark');
+
+    const card = tree.root.findByProps({ testID: 'today-card-stack-top-card' });
+    const flat = Array.isArray(card.props.style)
+      ? Object.assign({}, ...card.props.style.filter(Boolean))
+      : card.props.style;
+    expect(flat.backgroundColor).toBe(`#181614:${GLASS.tintAlpha.dark}`);
+    expect(flat.borderColor).toBe(`#f5f0e8:${GLASS.borderAlpha.dark}`);
   });
 
   it('renders one top card without stack count or back silhouettes', () => {

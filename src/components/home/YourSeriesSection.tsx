@@ -11,6 +11,7 @@ import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
 import { useUnfoldStore, type Devotional } from '@/lib/store';
 import { Typography } from '@/constants/typography';
+import { GlassSurface } from '@/components/ui/GlassSurface';
 
 function SeriesCard({
   devotional,
@@ -31,15 +32,7 @@ function SeriesCard({
       accessibilityRole="button"
       accessibilityLabel={`${devotional.title}, Day ${devotional.currentDay} of ${devotional.totalDays}`}
     >
-      <View
-        style={[
-          styles.seriesCard,
-          {
-            backgroundColor: colors.inputBackground,
-            borderColor: colors.border,
-          },
-        ]}
-      >
+      <GlassSurface radius={Radius.md} style={styles.seriesCard}>
         <Text
           style={[styles.seriesTitle, { color: colors.text }]}
           numberOfLines={1}
@@ -65,7 +58,7 @@ function SeriesCard({
             ]}
           />
         </View>
-      </View>
+      </GlassSurface>
     </TouchableOpacity>
   );
 }
@@ -178,8 +171,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   seriesCard: {
-    borderRadius: Radius.md,
-    borderWidth: 1,
     padding: 14,
     marginBottom: Spacing['2'],
   },
