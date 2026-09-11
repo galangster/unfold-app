@@ -134,9 +134,22 @@ export function ScriptureTapSheet({
         ? () => fetchVerseLocal(reference, translation.toUpperCase() as 'BSB' | 'KJV')
             .then((local) => local ?? fetchVerse(reference, 'web'))
         : () => fetchVerse(reference, ['web', 'kjv'].includes(translation.toLowerCase()) ? translation.toLowerCase() : 'web');
+      // A reference change or close re-runs this effect; the previous fetch
+      // must not write its verse (or clear loading) under the new reference.
+      let cancelled = false;
       fetchFn()
-        .then((result) => setVerse(result))
-        .finally(() => setLoading(false));
+        .then((result) => {
+          if (!cancelled) setVerse(result);
+        })
+        .catch(() => {
+          if (!cancelled) setVerse(null);
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+      return () => {
+        cancelled = true;
+      };
     }
   }, [visible, reference, user?.bibleTranslation, dayTitle]);
 

@@ -63,7 +63,7 @@ describe('store.removeDevotional (Greptile A2)', () => {
         { id: 'journal-1', devotionalId: DEVOTIONAL_ID, dayNumber: 1, content: 'private', createdAt: 'x', updatedAt: 'x' },
         { id: 'journal-other', devotionalId: 'devotional-2', dayNumber: 1, content: 'keep', createdAt: 'x', updatedAt: 'x' },
       ],
-      checkIns: [{ id: 'checkin-1', devotionalId: DEVOTIONAL_ID, dayNumber: 1, mood: 3, moodLabel: 'Okay', createdAt: 'x' }],
+      checkIns: [{ id: 'checkin-1', devotionalId: DEVOTIONAL_ID, dayNumber: 1, mood: 3, moodLabel: 'Okay', timeOfDay: 'morning', createdAt: 'x' }],
       highlights: [{ id: 'highlight-1', devotionalId: DEVOTIONAL_ID } as never],
       bookmarks: [{ id: 'bookmark-1', devotionalId: DEVOTIONAL_ID } as never],
     });

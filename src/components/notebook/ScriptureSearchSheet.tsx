@@ -101,6 +101,7 @@ export function ScriptureSearchSheet({
   const insets = useSafeAreaInsets();
   const inputRef = useRef<TextInput>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const searchRequestRef = useRef(0);
   const translateY = useSharedValue(OFFSCREEN);
   const dismissing = useRef(false);
 
@@ -170,6 +171,9 @@ export function ScriptureSearchSheet({
    * Tries local DB first (BSB), then falls back to the API.
    */
   const fetchVerseText = useCallback(async (reference: string) => {
+    // Only the latest lookup may write results: the debounce cancels timers,
+    // not in-flight fetches, so an older reference could otherwise land last.
+    const requestId = ++searchRequestRef.current;
     setSearchState('searching');
     setVerseResult(null);
     setParsedRef(null);
@@ -179,6 +183,7 @@ export function ScriptureSearchSheet({
       if (!result) {
         result = await fetchVerse(reference);
       }
+      if (requestId !== searchRequestRef.current) return;
 
       if (result) {
         setVerseResult(result);
@@ -197,6 +202,7 @@ export function ScriptureSearchSheet({
         setSearchState('not-found');
       }
     } catch (err) {
+      if (requestId !== searchRequestRef.current) return;
       logger.error('[ScriptureSearch] Fetch error:', err);
       setSearchState('error');
     }
@@ -208,6 +214,7 @@ export function ScriptureSearchSheet({
       if (debounceRef.current) clearTimeout(debounceRef.current);
 
       if (!text.trim()) {
+        searchRequestRef.current += 1;
         setSearchState('idle');
         setVerseResult(null);
         setParsedRef(null);

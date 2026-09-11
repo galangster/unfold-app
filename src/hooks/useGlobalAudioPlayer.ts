@@ -54,6 +54,12 @@ let statusSubscription: EventSubscription | null = null;
 let watchdogTimer: ReturnType<typeof setTimeout> | null = null;
 /** Track whether the audio session has been configured (lazy init). */
 let audioSessionConfigured = false;
+/**
+ * Bumped on every startAudio/stopAudio. The deferred start body checks it
+ * after each await so an older start cannot destroy or replace the player a
+ * newer start (or a stop) already owns.
+ */
+let startGeneration = 0;
 
 /**
  * Tear down the singleton: remove listener, release native resources, null out.
@@ -245,6 +251,7 @@ export function useGlobalAudioPlayer() {
   const startAudio = useCallback(
     (uri: string, metadata: DevotionalAudioMetadata) => {
       clearCascadeTimers();
+      const generation = ++startGeneration;
 
       // Update store first (sets tier to sheet, isLoading, etc.)
       useAudioPlayerState.getState().startAudio(uri, metadata);
@@ -257,11 +264,14 @@ export function useGlobalAudioPlayer() {
       // setTimeout(0) ensures React has time to commit the loading state to screen first.
       setTimeout(async () => {
         try {
+          if (generation !== startGeneration) return;
           // Lazily configure the audio session on first playback
           await ensureAudioSession();
+          if (generation !== startGeneration) return;
 
           // Yield again before the heaviest call
           await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+          if (generation !== startGeneration) return;
 
           // Destroy any existing player
           destroyPlayer();
@@ -329,6 +339,7 @@ export function useGlobalAudioPlayer() {
 
   const stopAudio = useCallback(() => {
     clearCascadeTimers();
+    startGeneration += 1;
 
     if (globalPlayer) {
       try {

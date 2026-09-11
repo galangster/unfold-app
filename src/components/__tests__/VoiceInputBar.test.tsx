@@ -130,6 +130,31 @@ describe('VoiceInputBar', () => {
     jest.useRealTimers();
   });
 
+  it('does not start recognition when the bar unmounts during the permission prompt (Greptile A11)', async () => {
+    let grant: (value: { granted: boolean }) => void = () => undefined;
+    mockRequestPermissionsAsync.mockImplementation(() => new Promise<{ granted: boolean }>((resolve) => { grant = resolve; }));
+
+    let tree: any;
+    await act(async () => {
+      tree = renderer.create(<VoiceInputBar value="" onChangeText={jest.fn()} />);
+    });
+    await act(async () => {
+      void findPressablesByLabel(tree.root, 'Tap to speak')[0].props.onPress();
+    });
+    expect(mockRequestPermissionsAsync).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      tree.unmount();
+    });
+    await act(async () => {
+      grant({ granted: true });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockStart).not.toHaveBeenCalled();
+  });
+
   it('keeps finalized speech from before a silence restart when accepting dictation', async () => {
     const onChangeText = jest.fn();
     let tree: any;

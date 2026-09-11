@@ -137,6 +137,8 @@ export function BookChapterNavigator({
   const { width: windowWidth, fontScale } = useWindowDimensions();
 
   const [mode, setMode] = useState<NavigatorMode>('books');
+
+  const chapterRequestRef = useRef(0);
   const [selectedBook, setSelectedBook] = useState<BibleBookInfo | null>(null);
   const [selectedChapter, setSelectedChapter] = useState<number>(0);
   const [verseCount, setVerseCount] = useState<number>(0);
@@ -243,8 +245,17 @@ export function BookChapterNavigator({
       if (!selectedBook) return;
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       Keyboard.dismiss();
-      // Pre-fetch verse count before switching mode to avoid loading flash
-      const count = await getChapterVerseCount(selectedBook.id, chapter, translation as BibleTranslation);
+      // Pre-fetch verse count before switching mode to avoid loading flash.
+      // Only the latest tap may commit: two quick taps resolve in any order,
+      // and a lookup that fails must not open an empty verse grid.
+      const requestId = ++chapterRequestRef.current;
+      let count: number;
+      try {
+        count = await getChapterVerseCount(selectedBook.id, chapter, translation as BibleTranslation);
+      } catch {
+        return;
+      }
+      if (requestId !== chapterRequestRef.current) return;
       setSelectedChapter(chapter);
       setVerseCount(count);
       setMode('verses');
@@ -264,6 +275,7 @@ export function BookChapterNavigator({
 
   const handleBack = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    chapterRequestRef.current += 1;
     if (mode === 'verses') {
       setMode('chapters');
       setVerseCount(0);

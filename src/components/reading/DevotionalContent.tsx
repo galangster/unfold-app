@@ -142,6 +142,10 @@ export function DevotionalContent({
   const translation = useUnfoldStore((s) => s.bibleReaderSettings.translation) as BibleTranslation;
   const [versedScripture, setVersedScripture] = useState<VerseResult | null>(null);
   useEffect(() => {
+    // Drop the previous passage first: the cancelled flag below blocks a stale
+    // write, but without this reset the old verses render under the new
+    // reference until (and permanently if not) the new fetch resolves.
+    setVersedScripture(null);
     if (!day.scriptureReference) return;
     let cancelled = false;
     fetchVerseLocal(day.scriptureReference, translation).then(async (result) => {

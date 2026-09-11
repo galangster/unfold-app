@@ -191,6 +191,37 @@ describe('ScriptureExplainSheet', () => {
     }));
   }, 15000);
 
+  it('ignores a slow explanation for a previous passage after the reference changes (Greptile A4)', async () => {
+    const deferred: Array<(value: unknown) => void> = [];
+    mockFetchScriptureExplanation.mockImplementation(() => new Promise((resolve) => { deferred.push(resolve); }));
+
+    let tree: any;
+    await act(async () => {
+      tree = renderer.create(<ScriptureExplainSheet {...baseProps} />);
+      await Promise.resolve();
+    });
+    await act(async () => {
+      tree.update(<ScriptureExplainSheet {...baseProps} reference="John 3:16" passageText="For God so loved the world." />);
+      await Promise.resolve();
+    });
+    expect(deferred).toHaveLength(2);
+
+    // The first (stale) request resolves after the second one was issued.
+    await act(async () => {
+      deferred[0]({ ...successResponse, explanation: { ...successResponse.explanation, plainMeaning: 'STALE ROMANS' } });
+      await Promise.resolve();
+    });
+    expect(textContent(tree)).not.toContain('STALE ROMANS');
+    expect(textContent(tree)).toContain('Reading the passage...');
+
+    await act(async () => {
+      deferred[1]({ ...successResponse, reference: 'John 3:16', explanation: { ...successResponse.explanation, plainMeaning: 'FRESH JOHN' } });
+      await Promise.resolve();
+    });
+    expect(textContent(tree)).toContain('FRESH JOHN');
+    expect(textContent(tree)).not.toContain('STALE ROMANS');
+  });
+
   it('renders the successful explanation and logs analytics without raw scripture text', async () => {
     mockFetchScriptureExplanation.mockResolvedValue(successResponse);
 

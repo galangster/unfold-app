@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -117,8 +117,13 @@ export function ScriptureExplainSheet({
     [hasDevotionalContext, source, translation, verseCount],
   );
 
+  // Monotonic request token: only the latest open/retry may write state, so a
+  // slow explanation for a previous passage cannot land under the current one.
+  const requestIdRef = useRef(0);
+
   const loadExplanation = useCallback(async () => {
     if (!visible) return;
+    const requestId = ++requestIdRef.current;
 
     const trimmedReference = reference.trim();
     const trimmedPassageText = passageText.trim();
@@ -149,10 +154,12 @@ export function ScriptureExplainSheet({
         ...(devotionalContext ? { devotionalContext } : {}),
       });
 
+      if (requestId !== requestIdRef.current) return;
       setResponse(result);
       setStatus('success');
       void logEvent(AnalyticsEvents.SCRIPTURE_EXPLAIN_COMPLETED, analyticsParams);
     } catch (error) {
+      if (requestId !== requestIdRef.current) return;
       const code = getErrorCode(error) as ScriptureExplainApiErrorCode;
       setErrorCode(code);
       setStatus('error');
@@ -165,22 +172,19 @@ export function ScriptureExplainSheet({
 
   useEffect(() => {
     if (!visible) {
+      requestIdRef.current += 1;
       setStatus('idle');
       setResponse(null);
       setErrorCode(null);
       return;
     }
 
-    let cancelled = false;
-    const run = async () => {
-      await loadExplanation();
-      if (cancelled) return;
-    };
-
-    void run();
+    void loadExplanation();
 
     return () => {
-      cancelled = true;
+      // Invalidate the in-flight request when the passage changes or the
+      // sheet closes; the next effect run issues a fresh token.
+      requestIdRef.current += 1;
     };
   }, [loadExplanation, visible]);
 

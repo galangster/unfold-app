@@ -653,27 +653,47 @@ export function CheckInSheet({
     opacity: backdropOpacity.value,
   }));
 
+  // Auto-advance timer. Retained so a close/reopen inside the 300ms window
+  // (or an unmount) cannot advance the freshly reset sheet.
+  const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearAdvanceTimer = useCallback(() => {
+    if (advanceTimerRef.current) {
+      clearTimeout(advanceTimerRef.current);
+      advanceTimerRef.current = null;
+    }
+  }, []);
+  useEffect(() => clearAdvanceTimer, [clearAdvanceTimer]);
+
   // Reset state when the sheet opens
   useEffect(() => {
     if (visible) {
+      clearAdvanceTimer();
       setCurrentStep(0);
       setSelectedMood(null);
       setChipAnswer(undefined);
       setShowCelebration(false);
       completionDataRef.current = null;
     }
-  }, [visible]);
+  }, [clearAdvanceTimer, visible]);
+
+  const advanceAfterDelay = useCallback((step: number) => {
+    clearAdvanceTimer();
+    advanceTimerRef.current = setTimeout(() => {
+      advanceTimerRef.current = null;
+      setCurrentStep(step);
+    }, 300);
+  }, [clearAdvanceTimer]);
 
   const handleMoodSelect = useCallback((mood: MoodValue) => {
     setSelectedMood(mood);
     // Auto-advance after a short delay so user sees their selection
-    setTimeout(() => setCurrentStep(1), 300);
-  }, []);
+    advanceAfterDelay(1);
+  }, [advanceAfterDelay]);
 
   const handleChipAnswer = useCallback((chip: string) => {
     setChipAnswer(chip);
-    setTimeout(() => setCurrentStep(2), 300);
-  }, []);
+    advanceAfterDelay(2);
+  }, [advanceAfterDelay]);
 
   const handleBack = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

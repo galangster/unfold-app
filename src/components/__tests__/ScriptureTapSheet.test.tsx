@@ -198,6 +198,43 @@ describe('ScriptureTapSheet Explain CTA', () => {
     mockIsBookmarked.mockReturnValue(false);
   });
 
+  it('drops a slow verse fetch for a previous reference after the reference changes (Greptile A5)', async () => {
+    const deferred: Array<(value: unknown) => void> = [];
+    mockFetchVerseLocal.mockImplementation(() => new Promise((resolve) => { deferred.push(resolve); }));
+
+    const props = {
+      visible: true,
+      onClose: jest.fn(),
+      devotionalId: 'devotional-1',
+      dayNumber: 1,
+      dayTitle: 'Loved First',
+      devotionalTitle: 'The Gift',
+    };
+    let tree: any;
+    await act(async () => {
+      tree = renderer.create(<ScriptureTapSheet {...props} reference="John 3:16" />);
+      await Promise.resolve();
+    });
+    await act(async () => {
+      tree.update(<ScriptureTapSheet {...props} reference="John 1:1" />);
+      await Promise.resolve();
+    });
+    expect(deferred).toHaveLength(2);
+
+    await act(async () => {
+      deferred[0]({ reference: 'John 3:16', text: 'STALE VERSE TEXT', translation: 'BSB' });
+      await Promise.resolve();
+    });
+    expect(textContent(tree)).not.toContain('STALE VERSE TEXT');
+
+    await act(async () => {
+      deferred[1]({ reference: 'John 1:1', text: 'FRESH VERSE TEXT', translation: 'BSB' });
+      await Promise.resolve();
+    });
+    expect(textContent(tree)).toContain('FRESH VERSE TEXT');
+    expect(textContent(tree)).not.toContain('STALE VERSE TEXT');
+  });
+
   // CI-load flake: this async render+fetch assertion is clean in isolation but can exceed Jest's default timeout in the full parallel suite.
   it('loads verse text without automatically generating commentary and shows an explicit Explain CTA', async () => {
     let tree: any;
