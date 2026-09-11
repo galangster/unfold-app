@@ -2,6 +2,12 @@ import { create } from 'zustand';
 import type { AutoTrialEntry, AutoTrialSurface } from '@/lib/auto-trial-exit';
 import type { TodayCompletionAmbience } from '@/lib/today-ambient-rive';
 
+export interface PendingPaywallGrant {
+  surface: AutoTrialSurface;
+  entry: AutoTrialEntry;
+  setAtMs: number;
+}
+
 /** Ephemeral UI state — not persisted, used for cross-component animation coordination */
 export const useUIState = create<{
   tabBarHidden: boolean;
@@ -51,16 +57,8 @@ export const useUIState = create<{
   setSeriesRevealMountedIntentId: (value: string | null) => void;
   laterEntryNotifyAskPending: boolean;
   setLaterEntryNotifyAskPending: (value: boolean) => void;
-  pendingPaywallGrant: {
-    surface: AutoTrialSurface;
-    entry: AutoTrialEntry;
-    setAtMs: number;
-  } | null;
-  setPendingPaywallGrant: (value: {
-    surface: AutoTrialSurface;
-    entry: AutoTrialEntry;
-    setAtMs: number;
-  } | null) => void;
+  pendingPaywallGrant: PendingPaywallGrant | null;
+  setPendingPaywallGrant: (value: PendingPaywallGrant | null) => void;
 }>((set) => ({
   tabBarHidden: false,
   tabBarHideMode: 'slide',

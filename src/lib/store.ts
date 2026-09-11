@@ -30,6 +30,7 @@ import { canEarnPremiumMilestone } from './premium-access-policy';
 import { repairRehydratedState } from './store-rehydrate-repair';
 import type { WordStudy } from './word-study';
 import { flushCheckInToServer } from './check-in-flush';
+import { isOnboardingSampleDevotionalId } from './auto-trial-series';
 import {
   bibleHighlightSyncData,
   bibleReadingPositionSyncData,
@@ -1055,7 +1056,7 @@ export const useUnfoldStore = create<UnfoldState>()(
         set((state) => {
           const retiringIds = new Set(
             state.devotionals
-              .filter((d) => d.id.startsWith('onboarding-sample-') && d.id !== keepId)
+              .filter((d) => isOnboardingSampleDevotionalId(d.id) && d.id !== keepId)
               .map((d) => d.id),
           );
           if (retiringIds.size === 0) return state;

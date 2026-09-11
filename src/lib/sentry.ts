@@ -242,10 +242,15 @@ function emptyToUndefined<T extends object>(value: T): T | undefined {
 function scrubTags(tags: unknown): Record<string, string | number | boolean> | undefined {
   const out: Record<string, string | number | boolean> = {};
   if (tags === null || typeof tags !== 'object') return undefined;
-  for (const [key, value] of Object.entries(tags as Record<string, unknown>)) {
+  const bag = tags as Record<string, unknown>;
+  const isAppEvent = bag.source === APP_EVENT_SOURCE;
+  for (const [key, value] of Object.entries(bag)) {
     if (typeof value === 'number' && Number.isFinite(value)) out[key] = value;
     else if (typeof value === 'boolean') out[key] = value;
-    else if (typeof value === 'string' && (ALLOWED_DATA_STRING_KEYS.has(key) || APP_EVENT_TAG_STRING_KEYS.has(key))) out[key] = truncate(value);
+    else if (
+      typeof value === 'string' &&
+      (ALLOWED_DATA_STRING_KEYS.has(key) || (isAppEvent && APP_EVENT_TAG_STRING_KEYS.has(key)))
+    ) out[key] = truncate(value);
   }
   return emptyToUndefined(out);
 }
@@ -698,14 +703,9 @@ export function addAppBreadcrumb(
 export function captureAppEvent(name: string, data?: Record<string, string | number | boolean>): void {
   if (!enabled || sentryModule === null) return;
   try {
-    const tags: Record<string, string | number | boolean> = {};
-    if (data) {
-      for (const [key, value] of Object.entries(data)) {
-        if (key === 'source') continue;
-        tags[key] = value;
-      }
-    }
-    tags.source = APP_EVENT_SOURCE;
+    // Drop any caller-supplied `source` so ours is the last key (spec §10.1).
+    const { source: _callerSource, ...rest } = data ?? {};
+    const tags = { ...rest, source: APP_EVENT_SOURCE };
     sentryModule.captureMessage(name, {
       level: 'info',
       tags,
