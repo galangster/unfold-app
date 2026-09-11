@@ -172,3 +172,78 @@ describe('resolveGeneratingEntry', () => {
     ).toEqual({ kind: 'submit' });
   });
 });
+
+describe('H10 auto-trial-handoff', () => {
+  const autoJob = { jobId: 'job-auto', devotionalId: 'dev-auto', submittedAt: NOW - 60_000 };
+  const submitted = {
+    intentId: 'intent-1',
+    status: 'submitted' as const,
+    jobId: 'job-auto',
+    devotionalId: 'dev-auto',
+  };
+
+  it('hands off a matching inflight record, a matching push without a record, and no params with a matching record', () => {
+    expect(resolveGeneratingEntry({
+      inflight: autoJob,
+      params: { jobId: 'job-auto', devotionalId: 'dev-auto' },
+      sessionDevotionalId: null,
+      autoTrialIntent: submitted,
+    })).toEqual({ kind: 'auto-trial-handoff', intentId: 'intent-1' });
+
+    expect(resolveGeneratingEntry({
+      inflight: null,
+      params: { jobId: 'job-auto', devotionalId: 'dev-auto' },
+      sessionDevotionalId: null,
+      autoTrialIntent: submitted,
+    })).toEqual({ kind: 'auto-trial-handoff', intentId: 'intent-1' });
+
+    expect(resolveGeneratingEntry({
+      inflight: autoJob,
+      params: {},
+      sessionDevotionalId: null,
+      autoTrialIntent: submitted,
+    })).toEqual({ kind: 'auto-trial-handoff', intentId: 'intent-1' });
+  });
+
+  it('hands off purchased or failed intents with no params', () => {
+    expect(resolveGeneratingEntry({
+      inflight: null,
+      params: {},
+      sessionDevotionalId: null,
+      autoTrialIntent: { intentId: 'intent-1', status: 'purchased', jobId: null, devotionalId: null },
+    })).toEqual({ kind: 'auto-trial-handoff', intentId: 'intent-1' });
+    expect(resolveGeneratingEntry({
+      inflight: null,
+      params: {},
+      sessionDevotionalId: null,
+      autoTrialIntent: { intentId: 'intent-1', status: 'failed', jobId: 'job-auto', devotionalId: 'dev-auto' },
+    })).toEqual({ kind: 'auto-trial-handoff', intentId: 'intent-1' });
+  });
+
+  it('resolves abandoned, revealed, completed, and a non-auto jobId as today', () => {
+    expect(resolveGeneratingEntry({
+      inflight: null,
+      params: {},
+      sessionDevotionalId: null,
+      autoTrialIntent: { intentId: 'intent-1', status: 'abandoned', jobId: null, devotionalId: null },
+    })).toEqual({ kind: 'submit' });
+    expect(resolveGeneratingEntry({
+      inflight: liveRecord,
+      params: {},
+      sessionDevotionalId: null,
+      autoTrialIntent: { intentId: 'intent-1', status: 'revealed', jobId: 'job-auto', devotionalId: 'dev-auto' },
+    })).toEqual({ kind: 'resume', inflight: liveRecord });
+    expect(resolveGeneratingEntry({
+      inflight: null,
+      params: pushParams,
+      sessionDevotionalId: null,
+      autoTrialIntent: { intentId: 'intent-1', status: 'completed', jobId: 'job-auto', devotionalId: 'dev-auto' },
+    })).toEqual({ kind: 'poll-from-push', jobId: 'job-failed', devotionalId: 'dev-failed' });
+    expect(resolveGeneratingEntry({
+      inflight: liveRecord,
+      params: { jobId: 'job-other' },
+      sessionDevotionalId: null,
+      autoTrialIntent: submitted,
+    })).toEqual({ kind: 'stale-push', jobId: 'job-other' });
+  });
+});

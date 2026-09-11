@@ -2,6 +2,8 @@ jest.mock('react-native', () => ({
   Platform: { OS: 'ios' },
 }));
 
+// notifications.ts now reads the auto-trial intent; keep MMKV out of this suite.
+jest.mock('@/lib/auto-trial-intent', () => ({ readAutoTrialIntent: jest.fn(() => null) }));
 jest.mock('@/lib/trial-notification', () => ({
   readTrialCheckInSkipDate: jest.fn(() => null),
 }));

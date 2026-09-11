@@ -37,6 +37,11 @@ jest.mock('../mmkv-storage', () => {
   };
 });
 
+import {
+  createAutoTrialIntent,
+  readAutoTrialIntent,
+  transitionAutoTrialIntent,
+} from '../auto-trial-intent';
 import { logBugError, logBugEvent } from '../bug-logger';
 import {
   INFLIGHT_GENERATION_JOB_KEY,
@@ -271,5 +276,151 @@ describe('settleInflightInitialArcWatch', () => {
     expect(readInflightGenerationJob()).not.toBeNull();
     expect(useUnfoldStore.getState().generationSession.status).toBe('running');
     expect(logBugError).not.toHaveBeenCalled();
+  });
+});
+
+function seedSubmittedIntent() {
+  const created = createAutoTrialIntent({
+    deviceId: 'test-device-id',
+    entry: 'onboarding',
+    surface: 'onboarding_paywall',
+    source: 'purchase',
+    simulated: false,
+    trialDays: 3,
+    purchasedAt: '2026-09-08T17:00:00.000Z',
+    expiresAt: '2026-09-11T17:00:00.000Z',
+    timeZone: 'America/Chicago',
+    isSandbox: false,
+    productIdentifier: 'unfold_premium_yearly',
+    switchFetchedAt: '2026-09-08T17:00:00.000Z',
+    nowMs: NOW,
+  });
+  return transitionAutoTrialIntent(
+    'submitted',
+    { jobId: 'job-1', devotionalId: 'devo-1' },
+    { nowMs: NOW },
+  ) ?? created;
+}
+
+describe('H8 applyInitialArcResult auto-trial settle', () => {
+  beforeEach(() => {
+    mmkvStorage.removeItem('auto-trial-series-intent-v1');
+  });
+
+  it('settles the matching id in the existing-shell branch', () => {
+    seedSubmittedIntent();
+    useUnfoldStore.setState({
+      devotionals: [{
+        id: 'devo-1',
+        title: 'Shell',
+        totalDays: 3,
+        currentDay: 1,
+        days: [],
+        createdAt: '2026-09-08T17:00:00.000Z',
+        seriesStartDate: '2026-09-08T17:00:00.000Z',
+        userContext: { name: '', aboutMe: '', currentSituation: '', emotionalState: '' },
+        themeCategory: 'trust',
+        devotionalType: 'personal',
+        generationMode: 'progressive',
+        progressiveMemory: { fullDays: [], summaries: [], narrative: null },
+      }],
+      currentDevotionalId: 'other',
+    });
+    applyInitialArcResult(
+      { ...result, arc: { ...result.arc, seriesKind: 'auto_trial' } },
+      { user, devotionalLength: 3, session: captureSyncSession() },
+    );
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe('devo-1');
+    expect(readAutoTrialIntent()?.status).toBe('landed');
+  });
+
+  it('settles the matching id in the else branch', () => {
+    seedSubmittedIntent();
+    applyInitialArcResult(
+      { ...result, arc: { ...result.arc, seriesKind: 'auto_trial' } },
+      { user, devotionalLength: 3, session: captureSyncSession() },
+    );
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe('devo-1');
+    expect(readAutoTrialIntent()?.status).toBe('landed');
+  });
+
+  it('does not settle a mismatched id', () => {
+    seedSubmittedIntent();
+    applyInitialArcResult(
+      { ...result, devotionalId: 'devo-other', arc: { ...result.arc, seriesKind: 'auto_trial' } },
+      { user, devotionalLength: 3, session: captureSyncSession() },
+    );
+    expect(readAutoTrialIntent()?.status).toBe('submitted');
+  });
+
+  it('retires samples only for seriesKind auto_trial', () => {
+    seedSubmittedIntent();
+    const sample = {
+      id: 'onboarding-sample-anon_x',
+      title: 'Sample',
+      totalDays: 1,
+      currentDay: 1,
+      days: [day1],
+      createdAt: '2026-09-08T17:00:00.000Z',
+      seriesStartDate: '2026-09-08T17:00:00.000Z',
+      userContext: { name: '', aboutMe: '', currentSituation: '', emotionalState: '' },
+      themeCategory: 'trust' as const,
+      devotionalType: 'personal' as const,
+      generationMode: 'progressive' as const,
+      progressiveMemory: { fullDays: [], summaries: [], narrative: null },
+    };
+    useUnfoldStore.setState({ devotionals: [sample], currentDevotionalId: sample.id });
+    applyInitialArcResult(result, { user, devotionalLength: 3, session: captureSyncSession() });
+    expect(useUnfoldStore.getState().devotionals.some((row) => row.id === sample.id)).toBe(true);
+
+    seedSubmittedIntent();
+    applyInitialArcResult(
+      { ...result, arc: { ...result.arc, seriesKind: 'auto_trial' } },
+      { user, devotionalLength: 3, session: captureSyncSession() },
+    );
+    expect(useUnfoldStore.getState().devotionals.some((row) => row.id === sample.id)).toBe(false);
+  });
+});
+
+describe('H8 settleInflightInitialArcWatch intent writes', () => {
+  beforeEach(() => {
+    mmkvStorage.removeItem('auto-trial-series-intent-v1');
+    seedSubmittedIntent();
+  });
+
+  it('writes failed for server-poll with canRetry false', () => {
+    settleInflightInitialArcWatch(
+      { kind: 'failed', message: 'done', phase: 'server-poll', canRetry: false },
+      { jobId: 'job-1', session: captureSyncSession() },
+    );
+    expect(readAutoTrialIntent()?.status).toBe('failed');
+    expect(readInflightGenerationJob()).toBeNull();
+  });
+
+  it('writes failed for server-poll-invalid-result', () => {
+    settleInflightInitialArcWatch(
+      { kind: 'failed', message: 'bad', phase: 'server-poll-invalid-result', canRetry: true },
+      { jobId: 'job-1', session: captureSyncSession() },
+    );
+    expect(readAutoTrialIntent()?.status).toBe('failed');
+    expect(readInflightGenerationJob()).toBeNull();
+  });
+
+  it('leaves submitted and drops the record when canRetry is true', () => {
+    settleInflightInitialArcWatch(
+      { kind: 'failed', message: 'retry', phase: 'server-poll', canRetry: true },
+      { jobId: 'job-1', session: captureSyncSession() },
+    );
+    expect(readAutoTrialIntent()?.status).toBe('submitted');
+    expect(readInflightGenerationJob()).toBeNull();
+  });
+
+  it('leaves submitted and drops the record when the job is gone', () => {
+    settleInflightInitialArcWatch(
+      { kind: 'failed', message: 'gone', phase: 'server-poll-not-found', canRetry: false },
+      { jobId: 'job-1', session: captureSyncSession() },
+    );
+    expect(readAutoTrialIntent()?.status).toBe('submitted');
+    expect(readInflightGenerationJob()).toBeNull();
   });
 });

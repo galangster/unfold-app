@@ -5,6 +5,7 @@
  * record itself is read and written by `inflight-generation-job.ts` — one
  * module, one key, no expiry: the server decides a job's fate, never a clock.
  */
+import type { AutoTrialIntentV1 } from './auto-trial-intent';
 import type { InflightGenerationJob } from './inflight-generation-job';
 import { firstParam } from './reveal-params';
 
@@ -19,7 +20,8 @@ export type GeneratingEntry =
   | { kind: 'poll-from-push'; jobId: string; devotionalId: string | null }
   /** The push names a job the reader has moved past; Today reconciles. */
   | { kind: 'stale-push'; jobId: string }
-  | { kind: 'submit' };
+  | { kind: 'submit' }
+  | { kind: 'auto-trial-handoff'; intentId: string };
 
 /**
  * A push that names a job is checked against what the reader has now. The
@@ -51,6 +53,7 @@ export function resolveGeneratingEntry({
   params,
   sessionDevotionalId,
   landedDevotionalIds = [],
+  autoTrialIntent = null,
 }: {
   inflight: InflightGenerationJob | null;
   params: GeneratingRouteParams | null | undefined;
@@ -58,7 +61,26 @@ export function resolveGeneratingEntry({
   sessionDevotionalId: string | null | undefined;
   /** Ids of the series already in the store; a pushed series among them has landed. */
   landedDevotionalIds?: readonly string[];
+  autoTrialIntent?: Pick<AutoTrialIntentV1, 'intentId' | 'status' | 'jobId' | 'devotionalId'> | null;
 }): GeneratingEntry {
+  if (autoTrialIntent) {
+    const { status, intentId, jobId, devotionalId } = autoTrialIntent;
+    if (status === 'purchased' || status === 'failed') {
+      return { kind: 'auto-trial-handoff', intentId };
+    }
+    if (status === 'submitted' || status === 'landed') {
+      const pushedJobId = firstParam(params?.jobId);
+      const pushedDevotionalId = firstParam(params?.devotionalId);
+      if (
+        (pushedJobId != null && pushedJobId === jobId)
+        || (pushedDevotionalId != null && pushedDevotionalId === devotionalId)
+        || inflight?.jobId === jobId
+      ) {
+        return { kind: 'auto-trial-handoff', intentId };
+      }
+    }
+  }
+
   const pushedJobId = firstParam(params?.jobId);
   if (!pushedJobId) {
     return inflight && !inflight.superseded ? { kind: 'resume', inflight } : { kind: 'submit' };
