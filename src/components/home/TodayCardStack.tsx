@@ -1,6 +1,7 @@
 import React from 'react';
-import { LayoutChangeEvent, Platform, StyleProp, StyleSheet, Text, TouchableOpacity, View, ViewStyle } from 'react-native';
+import { LayoutChangeEvent, NativeSyntheticEvent, Platform, StyleProp, StyleSheet, Text, TextLayoutEventData, TouchableOpacity, View, ViewStyle } from 'react-native';
 import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -31,9 +32,12 @@ import {
 } from '@/lib/today-card-stack-motion';
 import type { ColorTheme } from '@/constants/colors';
 import { smartQuotes } from '@/lib/smart-quotes';
-import { highlightBandColor, type HighlightKey } from '@/lib/highlight-palette';
+import { type HighlightKey } from '@/lib/highlight-palette';
 import { balanceHeadline } from '@/lib/balance-headline';
 import { Typography } from '@/constants/typography';
+import { HIGHLIGHT_INK, highlighterStrokeGradientFor, strokeFitFor } from '@/constants/bible-highlight-colors';
+import { getBibleHighlightStrokeStyle, type BibleTextLine } from '@/lib/bible-reader-visuals';
+import type { BibleHighlightColor } from '@/lib/store';
 
 export interface TodayCardStackAction {
   label: string;
@@ -53,7 +57,7 @@ export interface TodayCardStackCard extends TodayStackCardItem {
    * mid-clause (de-slop #15).
    */
   bodyNumberOfLines?: number;
-  /** A saved highlight quoted above `body`, drawn with the reader's marker band. */
+  /** A saved highlight quoted above `body`, drawn with the reader's felt-tip stroke. */
   bodyQuote?: { text: string; color: HighlightKey | null };
   actionLabel?: string;
   actions?: TodayCardStackAction[];
@@ -103,6 +107,31 @@ function StackDismissButton({ card, colors }: { card: TodayCardStackCard; colors
 
 function TopCardBody({ card, colors }: { card: TodayCardStackCard; colors: ColorTheme }) {
   const { isDark } = useTheme();
+  const quoteText = card.bodyQuote?.text;
+  const [quoteLines, setQuoteLines] = React.useState<BibleTextLine[]>([]);
+
+  React.useEffect(() => {
+    setQuoteLines([]);
+  }, [quoteText]);
+
+  const handleQuoteTextLayout = React.useCallback((event: NativeSyntheticEvent<TextLayoutEventData>) => {
+    const lines = event.nativeEvent.lines;
+    if (lines?.length > 0) {
+      setQuoteLines(lines.map((line) => ({
+        x: line.x,
+        y: line.y,
+        width: line.width,
+        height: line.height,
+      })));
+    }
+  }, []);
+
+  const quoteColor = card.bodyQuote?.color;
+  const quoteStrokeKey: BibleHighlightColor = quoteColor && quoteColor in HIGHLIGHT_INK ? quoteColor : 'yellow';
+  const quoteStroke = highlighterStrokeGradientFor(quoteStrokeKey, isDark);
+  const quoteFontSize = FontSize.base;
+  const quoteStrokeFit = strokeFitFor(FontFamily.bodyItalic);
+
   const body = (
     <View style={[styles.content, card.onDismiss && styles.contentDismissible]}>
       <Text style={[styles.title, { color: colors.text }]} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE} numberOfLines={2}>
@@ -116,15 +145,28 @@ function TopCardBody({ card, colors }: { card: TodayCardStackCard; colors: Color
       ) : null}
 
       {card.bodyQuote ? (
-        <Text
-          style={[styles.body, styles.bodyQuote, { color: colors.text }]}
-          maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}
-          numberOfLines={card.bodyNumberOfLines}
-        >
-          <Text style={{ backgroundColor: highlightBandColor(card.bodyQuote.color, isDark) }}>
+        <View style={{ position: 'relative' }}>
+          {quoteLines.map((line, index) => (
+            <LinearGradient
+              key={index}
+              colors={quoteStroke.colors}
+              locations={quoteStroke.locations}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0.18 }}
+              pointerEvents="none"
+              testID="today-quote-stroke-line"
+              style={getBibleHighlightStrokeStyle(line, quoteFontSize, quoteStrokeFit)}
+            />
+          ))}
+          <Text
+            style={[styles.body, styles.bodyQuote, { color: colors.text }]}
+            maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}
+            numberOfLines={card.bodyNumberOfLines}
+            onTextLayout={handleQuoteTextLayout}
+          >
             {smartQuotes(`“${card.bodyQuote.text}”`)}
           </Text>
-        </Text>
+        </View>
       ) : null}
 
       {card.body ? (
