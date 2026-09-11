@@ -4,11 +4,11 @@
  * theme, reason text, and quick-start CTA.
  */
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useTheme } from '@/lib/theme';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { alpha } from '@/components/ui';
@@ -21,6 +21,11 @@ import { PRIMARY_BACKEND_URL, getAuthHeaders } from '@/lib/api-config';
 import { isQaToolsEnabled } from '@/lib/qa-tools';
 import { getQaTodayProfileMarker } from '@/lib/qa-today-marker';
 import { clearInitialGenerationRequestId } from '@/lib/initial-generation-request';
+import { trackAutoTrialPickStartTapped } from '@/lib/auto-trial-telemetry';
+import { getChurnedCreationGateAction } from '@/lib/creation-gate-policy';
+import { mmkvStorage } from '@/lib/mmkv-storage';
+import type { NextPick } from '@/lib/store';
+import type { PremiumAccessPolicy } from '@/lib/premium-access-policy';
 
 interface Recommendation {
   theme: string;
@@ -38,6 +43,19 @@ interface RecommendedSeriesCardProps {
   completedSeriesTitle?: string;
   /** Optional fallback rendered when the recommendation fetch fails */
   renderFallback?: () => ReactNode;
+  gateCreation?: () => boolean;
+  storedPick?: NextPick | null;
+  premiumPolicy?: PremiumAccessPolicy;
+}
+
+function toRecommendation(pick: NextPick): Recommendation {
+  return {
+    theme: pick.theme,
+    themeName: pick.themeName,
+    type: pick.type,
+    reason: pick.line,
+    suggestedLength: pick.suggestedLength,
+  };
 }
 
 function formatRecommendationType(type: string) {
@@ -62,12 +80,25 @@ export function RecommendedSeriesCard({
   onChooseOther,
   completedSeriesTitle,
   renderFallback,
+  gateCreation = () => true,
+  storedPick,
+  premiumPolicy = 'granted',
 }: RecommendedSeriesCardProps) {
   const { colors } = useTheme();
   const { entering } = useAccessibleAnimation();
   const router = useRouter();
   const user = useUnfoldStore((s) => s.user);
   const updateUser = useUnfoldStore((s) => s.updateUser);
+  const startingRef = useRef(false);
+
+  useFocusEffect(useCallback(() => {
+    startingRef.current = false;
+  }, []));
+
+  const storedRecommendation = useMemo(
+    () => (storedPick ? toRecommendation(storedPick) : null),
+    [storedPick],
+  );
 
   const qaRecommendation = useMemo(() => (
     isQaToolsEnabled() && user?.aboutMe === QA_TODAY_PROFILE_MARKER
@@ -75,11 +106,20 @@ export function RecommendedSeriesCard({
       : null
   ), [user?.aboutMe]);
 
-  const [recommendation, setRecommendation] = useState<Recommendation | null>(qaRecommendation);
-  const [loading, setLoading] = useState(!qaRecommendation);
+  const [recommendation, setRecommendation] = useState<Recommendation | null>(
+    storedRecommendation ?? qaRecommendation,
+  );
+  const [loading, setLoading] = useState(!storedRecommendation && !qaRecommendation);
   const [error, setError] = useState(false);
 
   useEffect(() => {
+    if (storedRecommendation) {
+      setRecommendation(storedRecommendation);
+      setLoading(false);
+      setError(false);
+      return;
+    }
+
     if (qaRecommendation) {
       setRecommendation(qaRecommendation);
       setLoading(false);
@@ -109,10 +149,29 @@ export function RecommendedSeriesCard({
 
     fetchRecommendation();
     return () => { cancelled = true; };
-  }, [qaRecommendation]);
+  }, [qaRecommendation, storedRecommendation]);
 
   const handleStartStudy = () => {
+    if (startingRef.current) return;
     if (!recommendation) return;
+    startingRef.current = true;
+    const allowed = gateCreation();
+    if (storedPick !== undefined) {
+      const gateAction = allowed
+        ? 'allow'
+        : getChurnedCreationGateAction({
+          policy: premiumPolicy,
+          hasSeenExclusiveOffer: mmkvStorage.getItem('@unfold_exclusive_offer_seen') === 'true',
+        });
+      trackAutoTrialPickStartTapped({
+        gate_action: allowed ? 'allow' : gateAction,
+        pick_source: storedRecommendation ? 'stored' : 'fetched',
+      });
+    }
+    if (!allowed) {
+      startingRef.current = false;
+      return;
+    }
     clearInitialGenerationRequestId();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     updateUser({
@@ -121,7 +180,7 @@ export function RecommendedSeriesCard({
       selectedStudySubject: recommendation.subject,
       devotionalLength: recommendation.suggestedLength as any,
     });
-    router.push('/generating');
+    router.navigate('/generating');
   };
 
   if (error || (!loading && !recommendation)) {

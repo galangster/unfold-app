@@ -69,6 +69,10 @@ import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
 import { CompletionCelebration } from '@/components/CompletionCelebration';
 import { getCompletionDismissRoute } from '@/lib/completion-dismiss-route';
+import { isAutoTrialSeries } from '@/lib/auto-trial-series';
+import { readAutoTrialIntent, transitionAutoTrialIntent } from '@/lib/auto-trial-intent';
+import { trackAutoTrialCompleted } from '@/lib/auto-trial-telemetry';
+import { ShapedByCheckInChip } from '@/components/reading/ShapedByCheckInChip';
 // ShareDevotionalModal removed — pull quote share now uses /share-card route
 import { DevotionalContent } from '@/components/reading/DevotionalContent';
 import type { DevotionalWebViewCommands, HighlightsChangedEvent } from '@/components/reading/DevotionalWebView';
@@ -198,6 +202,22 @@ function ReaderLoadingSkeleton({ colors }: { colors: any }) {
       <ReaderSkeletonBlock width="64%" height={15} color={block} pulse={pulse} marginBottom={0} />
     </View>
   );
+}
+
+export function maybeCompleteAutoTrialOnLastDay(i: {
+  completingLastDay: boolean;
+  devotionalId: string | null | undefined;
+  nowMs: number;
+}): void {
+  if (!i.completingLastDay || !i.devotionalId) return;
+  const current = readAutoTrialIntent();
+  if (!current || current.devotionalId !== i.devotionalId) return;
+  const next = transitionAutoTrialIntent('completed', {}, { nowMs: i.nowMs });
+  if (!next) return;
+  trackAutoTrialCompleted({
+    entry: current.entry,
+    trial_days: current.trialDays,
+  });
 }
 
 export default function ReadingScreen() {
@@ -1007,6 +1027,11 @@ export default function ReadingScreen() {
         useUnfoldStore.getState().justCompletedSeriesTitle = null; // clear first
         useUnfoldStore.setState({ justCompletedSeriesTitle: currentDevotional.title });
       }
+      maybeCompleteAutoTrialOnLastDay({
+        completingLastDay,
+        devotionalId: currentDevotionalId,
+        nowMs: Date.now(),
+      });
 
       // Announce completion to screen reader
       const announcement = completingLastDay
@@ -1907,7 +1932,7 @@ export default function ReadingScreen() {
                 }}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 accessibilityRole="button"
-                accessibilityLabel={`Day ${viewingDay} of ${currentDevotional.totalDays}`}
+                accessibilityLabel={`Day ${viewingDay} of ${totalDays}`}
                 accessibilityHint="Opens day selector menu"
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
               >
@@ -1918,8 +1943,14 @@ export default function ReadingScreen() {
                     color: colors.text,
                   }}
                 >
-                  Day {viewingDay} of {currentDevotional.totalDays}
+                  Day {viewingDay} of {totalDays}
                 </Text>
+                {currentDayData ? (
+                  <ShapedByCheckInChip
+                    devotional={currentDevotional}
+                    day={currentDayData}
+                  />
+                ) : null}
                 {viewingDay === todayReaderDayNumber && (
                   <View
                     style={{
@@ -2365,7 +2396,10 @@ export default function ReadingScreen() {
         visible={showCelebration}
         onDismiss={() => {
           setShowCelebration(false);
-          const dismissRoute = getCompletionDismissRoute(celebrationType);
+          const autoTrialDevotionalId = currentDevotional && isAutoTrialSeries(currentDevotional)
+            ? currentDevotional.id
+            : null;
+          const dismissRoute = getCompletionDismissRoute(celebrationType, { autoTrialDevotionalId });
           const pending = pendingReviewRef.current;
           pendingReviewRef.current = null;
           if (pending) {

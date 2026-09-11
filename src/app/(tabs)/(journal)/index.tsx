@@ -843,7 +843,7 @@ export default function JournalHubScreen() {
   const deletedNotesCount = useUnfoldStore((s) => s.deletedNotes.length);
   const deleteNote = useUnfoldStore((s) => s.deleteNote);
 
-  const { gate, showExclusiveOffer, dismissOffer } = useCreationGate();
+  const { gate, showExclusiveOffer, dismissOffer, handleOfferVerifiedExit } = useCreationGate();
 
   const folders = useUnfoldStore((s) => s.folders);
   const addFolder = useUnfoldStore((s) => s.addFolder);
@@ -2190,6 +2190,8 @@ export default function JournalHubScreen() {
         <ExclusiveOfferSheet
           visible={showExclusiveOffer}
           onDismiss={dismissOffer}
+          onPurchaseSuccess={handleOfferVerifiedExit}
+          surface="churned_sheet"
           context="churned"
         />
 

@@ -1,5 +1,6 @@
 import { computeDevotionalState, findMostRecentlyReadDay, type ComputeInput } from '../compute-devotional-state';
-import type { DevotionalDay, Devotional } from '@/lib/store';
+import type { SeriesPathNode } from '@/lib/series-path';
+import type { DevotionalDay, Devotional, NextPick } from '@/lib/store';
 
 // ─── Fixtures ───────────────────────────────────────────────────
 
@@ -667,5 +668,173 @@ describe('computeDevotionalState — inflightSeriesFailed', () => {
     });
 
     expect(state).toEqual({ type: 'first-series-failed', ...failed });
+  });
+});
+
+const pathNodes: SeriesPathNode[] = [
+  {
+    dayNumber: 1,
+    state: 'read',
+    title: 'Begin',
+    shapedByCheckIn: false,
+    contentReady: true,
+    dateWord: null,
+  },
+  {
+    dayNumber: 2,
+    state: 'read',
+    title: 'Continue',
+    shapedByCheckIn: false,
+    contentReady: true,
+    dateWord: null,
+  },
+  {
+    dayNumber: 3,
+    state: 'read',
+    title: 'Close',
+    shapedByCheckIn: false,
+    contentReady: true,
+    dateWord: null,
+  },
+];
+
+const nextPick: NextPick = {
+  theme: 'trust',
+  themeName: 'Learning to Trust',
+  type: 'theme',
+  suggestedLength: 7,
+  line: 'A quieter study on trust.',
+};
+
+function autoTrialInput(overrides: Partial<NonNullable<ComputeInput['autoTrial']>> = {}) {
+  return {
+    path: pathNodes,
+    daysRead: 3,
+    keepsakeAvailable: true,
+    onOpenKeepsake: noop,
+    nextPick,
+    ...overrides,
+  };
+}
+
+describe('J2 auto trial compute-devotional-state', () => {
+  it('returns trial-journey-complete when auto complete, denied, and no day data', () => {
+    const onOpenKeepsake = jest.fn();
+    const onCreateNew = jest.fn();
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDayData: null,
+      isJourneyComplete: true,
+      premiumPolicy: 'denied',
+      daysCompleted: 3,
+      totalDays: 3,
+      progress: 100,
+      onCreateNew,
+      autoTrial: autoTrialInput({ onOpenKeepsake, daysRead: 3 }),
+    });
+
+    expect(state.type).toBe('trial-journey-complete');
+    if (state.type === 'trial-journey-complete') {
+      expect(state.seriesTitle).toBe('Faith Foundations');
+      expect(state.path).toBe(pathNodes);
+      expect(state.onOpenKeepsake).toBe(onOpenKeepsake);
+      expect(state.nextPick).toEqual(nextPick);
+      expect(state.onChooseOther).toBe(onCreateNew);
+    }
+  });
+
+  it('returns trial-paused with keepsakeAvailable when auto is incomplete and denied', () => {
+    const onOpenKeepsake = jest.fn();
+    const onOpenBible = jest.fn();
+    const onRenewPremium = jest.fn();
+    const pausedPath: SeriesPathNode[] = [
+      pathNodes[0],
+      pathNodes[1],
+      { ...pathNodes[2], state: 'preparing', contentReady: false },
+    ];
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDayData: null,
+      isJourneyComplete: false,
+      premiumPolicy: 'denied',
+      daysCompleted: 2,
+      totalDays: 3,
+      onOpenBible,
+      onRenewPremium,
+      autoTrial: autoTrialInput({
+        path: pausedPath,
+        daysRead: 2,
+        keepsakeAvailable: true,
+        onOpenKeepsake,
+        nextPick: null,
+      }),
+    });
+
+    expect(state.type).toBe('trial-paused');
+    if (state.type === 'trial-paused') {
+      expect(state.seriesTitle).toBe('Faith Foundations');
+      expect(state.path).toBe(pausedPath);
+      expect(state.daysCompleted).toBe(2);
+      expect(state.totalDays).toBe(3);
+      expect(state.keepsakeAvailable).toBe(true);
+      expect(state.onOpenKeepsake).toBe(onOpenKeepsake);
+      expect(state.onOpenBible).toBe(onOpenBible);
+      expect(state.onRenewPremium).toBe(onRenewPremium);
+    }
+  });
+
+  it('never pauses when premium policy is unknown, even with autoTrial', () => {
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDayData: null,
+      isPreparing: true,
+      premiumPolicy: 'unknown',
+      autoTrial: autoTrialInput({ daysRead: 1, keepsakeAvailable: true, nextPick: null }),
+    });
+
+    expect(state.type).toBe('preparing');
+    expect(state.type).not.toBe('trial-paused');
+  });
+
+  it('keeps non-trial fixtures on premium-paused when complete is false', () => {
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDayData: null,
+      isPreparing: true,
+      premiumPolicy: 'denied',
+      daysCompleted: 6,
+    });
+
+    expect(state.type).toBe('premium-paused');
+  });
+
+  it('keeps non-trial journey-complete behind premium-paused when denied and no day data', () => {
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDayData: null,
+      isJourneyComplete: true,
+      premiumPolicy: 'denied',
+      daysCompleted: 7,
+      totalDays: 7,
+    });
+
+    expect(state.type).toBe('premium-paused');
+  });
+
+  it('attaches path only when autoTrial is set', () => {
+    const unread = computeDevotionalState(baseInput);
+    expect(unread.type).toBe('unread');
+    if (unread.type === 'unread') {
+      expect(unread.path).toBeUndefined();
+    }
+
+    const autoUnread = computeDevotionalState({
+      ...baseInput,
+      autoTrial: autoTrialInput({ daysRead: 0, keepsakeAvailable: false, nextPick: null }),
+    });
+    expect(autoUnread.type).toBe('unread');
+    if (autoUnread.type === 'unread') {
+      expect(autoUnread.path).toBe(pathNodes);
+    }
   });
 });

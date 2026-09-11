@@ -190,7 +190,7 @@ export default function JournalScreen() {
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const premiumPolicy = usePremiumAccessPolicy();
   const isPremium = premiumPolicy === 'granted';
-  const { gate, showExclusiveOffer, dismissOffer } = useCreationGate();
+  const { gate, showExclusiveOffer, dismissOffer, handleOfferVerifiedExit } = useCreationGate();
   // Subscribe to journalEntries for reactive updates (prayer toggles, etc.)
   const journalEntries = useUnfoldStore((s) => s.journalEntries);
 
@@ -1388,7 +1388,13 @@ Their journal entry:
         onClose={() => setShowPremiumSheet(false)}
         feature="journal"
       />
-      <ExclusiveOfferSheet visible={showExclusiveOffer} onDismiss={dismissOffer} context="churned" />
+      <ExclusiveOfferSheet
+        visible={showExclusiveOffer}
+        onDismiss={dismissOffer}
+        onPurchaseSuccess={handleOfferVerifiedExit}
+        surface="churned_sheet"
+        context="churned"
+      />
     </TouchableOpacity>
   );
 }
