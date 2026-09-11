@@ -144,19 +144,16 @@ function RootLayoutNav() {
   // reach the server when connectivity returns.
   useSyncOutboxDrain();
 
-  // Load any stored device credential and register if needed, before the
-  // first authenticated request from this effect. Registration is network I/O
-  // and must not block first render; a failure just omits the header and
-  // retries on the next foreground.
+  // Warm the device credential so registration starts before the first
+  // authenticated request; getAuthHeaders also registers on a cache miss, so
+  // no caller can run ahead of it. Registration never blocks first render.
+  // Also re-attempts on foreground so the POST succeeds after any earlier
+  // failure (network down at cold start, permission granted during session).
   useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      await ensureDeviceCredential();
-      if (cancelled) return;
-      void refreshRemoteConfig();
-      void onNotificationPermissionMaybeChanged();
-      registerPushToken();
-    })();
+    void ensureDeviceCredential();
+    void refreshRemoteConfig();
+    void onNotificationPermissionMaybeChanged();
+    registerPushToken();
     const sub = AppState.addEventListener('change', (s) => {
       if (s === 'active') {
         void ensureDeviceCredential();
@@ -165,10 +162,7 @@ function RootLayoutNav() {
         void registerPushToken();
       }
     });
-    return () => {
-      cancelled = true;
-      sub.remove();
-    };
+    return () => sub.remove();
   }, []);
 
   // Keep backend-side devotional-ready push timing aligned with the user's

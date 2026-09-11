@@ -42,6 +42,7 @@ jest.mock('expo-file-system/legacy', () => ({
 }));
 
 jest.mock('../device-credential', () => ({
+  ensureDeviceCredential: jest.fn(async () => null),
   clearDeviceCredential: () => mockClearDeviceCredential(),
   getCachedDeviceCredential: () => null,
   authenticatedFetch: (url: string, init?: RequestInit) => fetch(url, init),

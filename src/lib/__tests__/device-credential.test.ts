@@ -145,6 +145,96 @@ describe('device credential', () => {
   });
 });
 
+describe('credential recovery', () => {
+  it('getAuthHeaders registers on a cache miss and includes the new credential', async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({ credential: 'cred-boot' }));
+    const headers = await getAuthHeaders();
+    expect(headers['X-Device-Credential']).toBe('cred-boot');
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`${PRIMARY_BACKEND_URL}/api/devices/register`);
+    const sent = init.headers as Record<string, string>;
+    expect(sent['X-Device-ID']).toBe('device-1');
+    expect(sent['User-Agent']).toContain('Unfold/');
+    expect(sent['X-Device-Credential']).toBeUndefined();
+  });
+
+  it('retries the request once with the recovered credential', async () => {
+    mockFetch.mockImplementation((url: string, init?: RequestInit) => {
+      if (String(url).includes('/api/devices/register')) {
+        return Promise.resolve(jsonResponse({ credential: 'cred-new' }));
+      }
+      const sent = new Headers(init?.headers);
+      if (sent.get('X-Device-Credential') === 'cred-new') {
+        return Promise.resolve(jsonResponse({ ok: true }));
+      }
+      return Promise.resolve(jsonResponse({ error: 'device_credential_invalid' }, 401));
+    });
+
+    const response = await authenticatedFetch(`${PRIMARY_BACKEND_URL}/api/users/me`, {
+      method: 'DELETE',
+      headers: { 'X-Device-ID': 'device-1', 'X-Device-Credential': 'cred-stale' },
+    });
+
+    expect(response.status).toBe(200);
+    const eraseCalls = mockFetch.mock.calls.filter(([url]: [string]) =>
+      String(url).includes('/api/users/me'),
+    );
+    expect(eraseCalls).toHaveLength(2);
+    expect(getCachedDeviceCredential()).toBe('cred-new');
+  });
+
+  it('stops waiting for recovery when the caller aborts', async () => {
+    const controller = new AbortController();
+    mockFetch.mockImplementation((url: string) => {
+      if (String(url).includes('/api/devices/register')) {
+        return new Promise<Response>(() => {});
+      }
+      return Promise.resolve(jsonResponse({ error: 'device_credential_required' }, 401));
+    });
+
+    const pending = authenticatedFetch(`${PRIMARY_BACKEND_URL}/api/sync/pull`, {
+      signal: controller.signal,
+    });
+    controller.abort();
+    const response = await pending;
+
+    expect(response.status).toBe(401);
+    const pullCalls = mockFetch.mock.calls.filter(([url]: [string]) =>
+      String(url).includes('/api/sync/pull'),
+    );
+    expect(pullCalls).toHaveLength(1);
+  });
+
+  it('discards a registration that finishes after the credential was cleared', async () => {
+    let resolveRegister: ((value: Response) => void) | undefined;
+    mockFetch.mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveRegister = resolve;
+        }),
+    );
+
+    const pending = ensureDeviceCredential();
+    for (let i = 0; i < 50 && mockFetch.mock.calls.length === 0; i += 1) {
+      await Promise.resolve();
+    }
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+
+    await clearDeviceCredential();
+    mockDeviceId = 'device-2';
+    resolveRegister?.(jsonResponse({ credential: 'cred-stale' }));
+
+    await expect(pending).resolves.toBeNull();
+    expect(getCachedDeviceCredential('device-2')).toBeNull();
+    expect(setItemAsync).not.toHaveBeenCalled();
+
+    mockFetch.mockResolvedValueOnce(jsonResponse({ credential: 'cred-fresh' }));
+    await expect(ensureDeviceCredential()).resolves.toBe('cred-fresh');
+    expect(getCachedDeviceCredential('device-2')).toBe('cred-fresh');
+  });
+});
+
 describe('clearDeviceCredential', () => {
   it('removes the stored record and the cache', async () => {
     mockFetch.mockResolvedValueOnce(jsonResponse({ credential: 'cred-clear' }));

@@ -11,10 +11,6 @@ import { isEphemeralDeviceId } from '@/lib/device-id';
 import { logger } from '@/lib/logger';
 import { getDeviceId } from '@/lib/mmkv-storage';
 
-function currentDeviceId(): string {
-  return getDeviceId();
-}
-
 export const DEVICE_CREDENTIAL_STORE_KEY = 'unfold-device-credential';
 const REGISTER_TIMEOUT_MS = 8_000;
 
@@ -35,10 +31,12 @@ type DeviceCredentialRecord = {
 let cache: DeviceCredentialRecord | null = null;
 let loadPromise: Promise<void> | null = null;
 let ensureInFlight: Promise<string | null> | null = null;
-let recoveryInFlight: Promise<void> | null = null;
+let recoveryInFlight: Promise<string | null> | null = null;
+// Bumped by every clear, so registration work started before it never persists.
+let epoch = 0;
 
 export function getCachedDeviceCredential(
-  deviceId: string = currentDeviceId(),
+  deviceId: string = getDeviceId(),
 ): string | null {
   if (!cache || cache.deviceId !== deviceId) return null;
   return cache.credential;
@@ -57,13 +55,19 @@ function parseStoredRecord(raw: string): DeviceCredentialRecord | null {
   }
 }
 
-async function persistRecord(record: DeviceCredentialRecord): Promise<void> {
+/** Persist unless a clear or a device-id rotation happened since the work began. */
+async function persistRecord(
+  record: DeviceCredentialRecord,
+  startedEpoch: number,
+): Promise<boolean> {
+  if (startedEpoch !== epoch || record.deviceId !== getDeviceId()) return false;
   cache = record;
   await SecureStore.setItemAsync(
     DEVICE_CREDENTIAL_STORE_KEY,
     JSON.stringify(record),
     KEYCHAIN_WRITE_OPTIONS,
   );
+  return true;
 }
 
 export function loadDeviceCredential(): Promise<void> {
@@ -72,7 +76,7 @@ export function loadDeviceCredential(): Promise<void> {
       const raw = await SecureStore.getItemAsync(DEVICE_CREDENTIAL_STORE_KEY);
       if (!raw) return;
       const record = parseStoredRecord(raw);
-      if (!record || record.deviceId !== currentDeviceId()) {
+      if (!record || record.deviceId !== getDeviceId()) {
         await SecureStore.deleteItemAsync(DEVICE_CREDENTIAL_STORE_KEY);
         return;
       }
@@ -85,53 +89,51 @@ export function loadDeviceCredential(): Promise<void> {
 }
 
 async function registerDeviceCredential(): Promise<string | null> {
-  const deviceId = currentDeviceId();
-  if (isEphemeralDeviceId(deviceId)) return null;
-
+  const startedEpoch = epoch;
+  const deviceId = getDeviceId();
   // Lazy: api-config imports this module, so a static import would be a cycle.
-  // getAuthHeaders carries the User-Agent the Cloudflare allowlist expects.
+  // Base headers only: getAuthHeaders would wait on this very registration.
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { getAuthHeaders } = require('@/lib/api-config') as typeof import('@/lib/api-config');
+  const { getBaseHeaders } = require('@/lib/api-config') as typeof import('@/lib/api-config');
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REGISTER_TIMEOUT_MS);
-  let response: Response;
   try {
-    response = await fetch(`${PRIMARY_BACKEND_URL}/api/devices/register`, {
+    const response = await fetch(`${PRIMARY_BACKEND_URL}/api/devices/register`, {
       method: 'POST',
-      headers: await getAuthHeaders(),
+      headers: getBaseHeaders(deviceId),
       body: JSON.stringify({ deviceId }),
       signal: controller.signal,
     });
+    if (!response.ok) {
+      logger.warn('[device-credential] registration failed', response.status);
+      return null;
+    }
+    const body: unknown = await response.json();
+    const credential =
+      body && typeof body === 'object' && 'credential' in body
+        ? (body as { credential?: unknown }).credential
+        : null;
+    if (typeof credential !== 'string' || credential.length === 0) return null;
+    if (!(await persistRecord({ deviceId, credential }, startedEpoch))) return null;
+    return credential;
   } finally {
     clearTimeout(timeout);
   }
-
-  if (!response.ok) {
-    logger.warn('[device-credential] registration failed', response.status);
-    return null;
-  }
-
-  const body: unknown = await response.json();
-  const credential =
-    body && typeof body === 'object' && 'credential' in body
-      ? (body as { credential?: unknown }).credential
-      : null;
-  if (typeof credential !== 'string' || credential.length === 0) return null;
-
-  await persistRecord({ deviceId, credential });
-  return credential;
 }
 
+/** The cached credential, or one registration shared by every concurrent caller. */
 export async function ensureDeviceCredential(): Promise<string | null> {
   try {
     await loadDeviceCredential();
-    if (isEphemeralDeviceId(currentDeviceId())) return null;
-    const cached = getCachedDeviceCredential();
+    const deviceId = getDeviceId();
+    if (isEphemeralDeviceId(deviceId)) return null;
+    const cached = getCachedDeviceCredential(deviceId);
     if (cached) return cached;
     if (!ensureInFlight) {
-      ensureInFlight = registerDeviceCredential().finally(() => {
-        ensureInFlight = null;
+      const pending: Promise<string | null> = registerDeviceCredential().finally(() => {
+        if (ensureInFlight === pending) ensureInFlight = null;
       });
+      ensureInFlight = pending;
     }
     return await ensureInFlight;
   } catch {
@@ -139,8 +141,11 @@ export async function ensureDeviceCredential(): Promise<string | null> {
   }
 }
 
+/** Forget the credential; any registration still in flight will not persist. */
 export async function clearDeviceCredential(): Promise<void> {
+  epoch += 1;
   cache = null;
+  ensureInFlight = null;
   try {
     await SecureStore.deleteItemAsync(DEVICE_CREDENTIAL_STORE_KEY);
   } catch {
@@ -159,33 +164,61 @@ async function isDeviceCredentialAuthError(response: Response): Promise<boolean>
   }
 }
 
-async function recoverDeviceCredentialIfUnauthorized(
-  response: Response,
-): Promise<void> {
-  try {
-    if (response.status !== 401) return;
-    if (!(await isDeviceCredentialAuthError(response))) return;
-    if (!recoveryInFlight) {
-      recoveryInFlight = (async () => {
-        await clearDeviceCredential();
-        await ensureDeviceCredential();
-      })().finally(() => {
-        recoveryInFlight = null;
-      });
-    }
-    await recoveryInFlight;
-  } catch {
-    // Callers still receive the original 401.
+/** Drop the rejected credential and register a fresh one. One recovery at a time. */
+function recoverDeviceCredential(): Promise<string | null> {
+  if (!recoveryInFlight) {
+    const pending: Promise<string | null> = (async () => {
+      await clearDeviceCredential();
+      return ensureDeviceCredential();
+    })().finally(() => {
+      if (recoveryInFlight === pending) recoveryInFlight = null;
+    });
+    recoveryInFlight = pending;
   }
+  return recoveryInFlight;
 }
 
+/** Resolve with the value, or with null as soon as the caller's signal aborts. */
+function untilAborted<T>(
+  pending: Promise<T>,
+  signal: AbortSignal | null | undefined,
+): Promise<T | null> {
+  if (!signal) return pending.catch(() => null);
+  if (signal.aborted) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    const onAbort = () => resolve(null);
+    signal.addEventListener('abort', onAbort, { once: true });
+    pending.then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(value);
+      },
+      () => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(null);
+      },
+    );
+  });
+}
+
+/**
+ * fetch that heals a credential 401: recover once, bounded by the caller's
+ * signal, then retry the request once with the new credential. Any other
+ * outcome returns the original response.
+ */
 export async function authenticatedFetch(
   url: string,
   init?: RequestInit,
 ): Promise<Response> {
   const response = await fetch(url, init);
-  await recoverDeviceCredentialIfUnauthorized(response);
-  return response;
+  if (response.status !== 401 || !(await isDeviceCredentialAuthError(response))) {
+    return response;
+  }
+  const credential = await untilAborted(recoverDeviceCredential(), init?.signal);
+  if (!credential || init?.signal?.aborted) return response;
+  const headers = new Headers(init?.headers);
+  headers.set('X-Device-Credential', credential);
+  return fetch(url, { ...init, headers });
 }
 
 export function resetDeviceCredentialForTesting(): void {
@@ -193,4 +226,5 @@ export function resetDeviceCredentialForTesting(): void {
   loadPromise = null;
   ensureInFlight = null;
   recoveryInFlight = null;
+  epoch = 0;
 }

@@ -6,7 +6,7 @@
  */
 import { Platform } from 'react-native';
 import { PRIMARY_BACKEND_URL } from '@/lib/backend-url';
-import { getCachedDeviceCredential } from '@/lib/device-credential';
+import { ensureDeviceCredential, getCachedDeviceCredential } from '@/lib/device-credential';
 import { getDeviceId } from '@/lib/mmkv-storage';
 
 // Custom User-Agent for Cloudflare WAF allowlisting
@@ -26,14 +26,24 @@ export function getBackendCandidates(): string[] {
 // Request headers — anonymous, keyed by X-Device-ID (+ cached credential)
 // ---------------------------------------------------------------------------
 
-export async function getAuthHeaders(): Promise<Record<string, string>> {
-  const deviceId = getDeviceId();
-  const headers: Record<string, string> = {
+/** Headers every backend request carries, before any credential. */
+export function getBaseHeaders(deviceId: string = getDeviceId()): Record<string, string> {
+  return {
     'Content-Type': 'application/json',
     'User-Agent': APP_USER_AGENT,
     'X-Device-ID': deviceId,
   };
-  const credential = getCachedDeviceCredential(deviceId);
+}
+
+/**
+ * Base headers plus X-Device-Credential. A cache miss registers first (one
+ * in-flight registration, bounded by its timeout), so the first authenticated
+ * request after install or reset already carries the credential.
+ */
+export async function getAuthHeaders(): Promise<Record<string, string>> {
+  const deviceId = getDeviceId();
+  const headers = getBaseHeaders(deviceId);
+  const credential = getCachedDeviceCredential(deviceId) ?? (await ensureDeviceCredential());
   if (credential) {
     headers['X-Device-Credential'] = credential;
   }
