@@ -56,6 +56,21 @@ jest.mock('expo-notifications', () => ({
   clearLastNotificationResponseAsync: jest.fn(async () => undefined),
 }));
 
+jest.mock('expo-file-system/legacy', () => ({
+  documentDirectory: 'file:///documents/',
+  cacheDirectory: 'file:///cache/',
+  deleteAsync: jest.fn(async () => undefined),
+  readDirectoryAsync: jest.fn(async () => []),
+}));
+
+jest.mock('@/lib/trial-notification', () => ({
+  readTrialCheckInSkipDate: jest.fn(() => null),
+}));
+
+jest.mock('../paywall-diagnostics', () => ({
+  clearPaywallDiagnosticsFile: jest.fn(async () => undefined),
+}));
+
 jest.mock('../mmkv-storage', () => {
   let deviceId = 'synthetic-old';
   return {

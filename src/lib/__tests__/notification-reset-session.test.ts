@@ -371,11 +371,35 @@ function writeSelectedReminderTime(time: string): void {
   useUnfoldStore.getState().updateUser({ reminderTime: time, dailyReminderEnabled: true });
 }
 
-function trialMirrorKeys(): string[] {
+const ARMED_KEY = 'trial-ending-notice-armed-v1';
+
+function trialMirrors(): Map<string, string> {
   const mirrors = (globalThis as typeof globalThis & {
     __nt1Mirrors: Map<string, Map<string, string>>;
   }).__nt1Mirrors;
-  return [...(mirrors.get('unfold-trial-notification')?.keys() ?? [])];
+  return mirrors.get('unfold-trial-notification') ?? new Map();
+}
+
+function trialMirrorKeys(): string[] {
+  return [...trialMirrors().keys()];
+}
+
+function scheduleMirrorKeys(): string[] {
+  return trialMirrorKeys().filter(
+    (key) => key === 'trial-ending-scheduled-id' || key === 'trial-ending-scheduled-for',
+  );
+}
+
+function expectArmedRecord(present: boolean): void {
+  const raw = trialMirrors().get(ARMED_KEY);
+  if (!present) {
+    expect(raw).toBeUndefined();
+    return;
+  }
+  expect(JSON.parse(raw ?? 'null')).toEqual({
+    expiresAtMs: expect.any(Number),
+    fireAtMs: expect.any(Number),
+  });
 }
 
 function seedUser(overrides: Partial<StoreUser> = {}): StoreUser {
@@ -619,7 +643,8 @@ describe('NT-1 trial reminder reset session', () => {
     const mirrorBefore = trialMirrorKeys();
     expect(newer).toBeTruthy();
     expect(scheduledIds()).toEqual([newer]);
-    expect(mirrorBefore.length).toBe(2);
+    expect(scheduleMirrorKeys()).toHaveLength(2);
+    expectArmedRecord(true);
 
     gate.resolve();
     await expect(old).resolves.toBeNull();
@@ -646,7 +671,8 @@ describe('NT-1 trial reminder reset session', () => {
     const newer = await scheduleTrialEndingNotification(trialInfo());
     const mirrorBefore = trialMirrorKeys();
     expect(newer).toBeTruthy();
-    expect(mirrorBefore.length).toBe(2);
+    expect(scheduleMirrorKeys()).toHaveLength(2);
+    expectArmedRecord(true);
 
     gate.reject(new Error('synthetic native failure'));
     await expect(old).resolves.toBeNull();
@@ -1109,7 +1135,8 @@ describe('NT-1 normal daily and trial controls', () => {
     expect(first).toBeTruthy();
     expect(second).toBeTruthy();
     expect(scheduledIds()).toEqual([second]);
-    expect(trialMirrorKeys()).toHaveLength(2);
+    expect(scheduleMirrorKeys()).toHaveLength(2);
+    expectArmedRecord(true);
 
     nativeAdapter().defaultSchedule({
       identifier: 'unfold-trial-ending',
@@ -1117,14 +1144,16 @@ describe('NT-1 normal daily and trial controls', () => {
     });
     await cancelTrialEndingNotification();
     expect(scheduledIds()).toEqual([]);
-    expect(trialMirrorKeys()).toEqual([]);
+    expect(scheduleMirrorKeys()).toEqual([]);
+    expectArmedRecord(true);
   });
 
   it('skips trial scheduling when permission is denied and clears only the current mirror', async () => {
     nativeAdapter().permissionMode = 'denied';
     await expect(scheduleTrialEndingNotification(trialInfo())).resolves.toBeNull();
     expect(scheduledIds()).toEqual([]);
-    expect(trialMirrorKeys()).toEqual([]);
+    expect(scheduleMirrorKeys()).toEqual([]);
+    expectArmedRecord(false);
   });
 
   it('returns null when the native trial schedule fails and clears the current mirror', async () => {
@@ -1149,7 +1178,8 @@ describe('NT-1 normal daily and trial controls', () => {
     expect(scheduled).toBeTruthy();
     await expect(scheduleTrialEndingNotification(expiredTrialInfo())).resolves.toBeNull();
     expect(scheduledIds()).toEqual([]);
-    expect(trialMirrorKeys()).toEqual([]);
+    expect(scheduleMirrorKeys()).toEqual([]);
+    expectArmedRecord(false);
   });
 
   it('clears the trial mirror without depending on later reset work', () => {

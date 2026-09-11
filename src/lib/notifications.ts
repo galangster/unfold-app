@@ -20,6 +20,8 @@ import { deferPastQuietHours } from '@/lib/quiet-hours';
 import { logEvent } from '@/lib/analytics';
 import type { ActReminderPlan } from '@/lib/act-reminder';
 import { captureSyncSession, isSyncSessionCurrent } from '@/lib/sync-session-fence';
+import { localCalendarDays, parseLocalYmd } from '@/lib/trial-notice-plan';
+import { readTrialCheckInSkipDate } from '@/lib/trial-notification';
 
 // Notification identifiers for targeted cancel/reschedule.
 //
@@ -157,10 +159,24 @@ const WEEKDAY_NUMBER: Record<CheckInDayKey, number> = {
 // Discriminated schedule op. The pure decision function emits these; the
 // live schedule functions loop them and call the appropriate
 // scheduleNotificationAsync trigger type.
-type ScheduleOp =
+export type ScheduleOp =
   | { kind: 'daily'; id: string; hour: number; minute: number }
-  | { kind: 'weekly'; id: string; weekday: number; hour: number; minute: number };
+  | { kind: 'weekly'; id: string; weekday: number; hour: number; minute: number }
+  | { kind: 'date'; id: string; date: Date };
 
+const JS_DAY_TO_KEY: CheckInDayKey[] = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function skipIsInWindow(skipDay: Date, now: Date): boolean {
+  const d = localCalendarDays(now, skipDay);
+  return d >= 0 && d <= 6;
+}
+
+function resumeDateOp(idBase: string, skipDay: Date, hour: number, minute: number): ScheduleOp {
+  const resume = new Date(skipDay.getTime());
+  resume.setDate(resume.getDate() + 7);
+  resume.setHours(hour, minute, 0, 0);
+  return { kind: 'date', id: `${idBase}-resume`, date: resume };
+}
 
 /**
  * Pure decision function for check-in scheduling. Given an identifier base,
@@ -172,22 +188,36 @@ type ScheduleOp =
  *   - `byDay !== null`  → up to 7 WEEKLY ops, one per populated non-null day
  *   - Empty map or all-null map → empty array (no notifications scheduled)
  *   - Output is always in Mon→Sun order for deterministic tests
+ *   - `skip` in today..+6 days drops that weekday and adds a `-resume` date op
  */
-function buildCheckInSchedule(
+export function buildCheckInSchedule(
   idBase: string,
   defaultTime: string,
   byDay: Record<string, string | null> | null,
   fallback: { hour: number; minute: number },
+  skip?: { localDate: string; now: Date },
 ): ScheduleOp[] {
-  if (byDay === null) {
+  const skipDay = skip ? parseLocalYmd(skip.localDate) : null;
+  const skipKey =
+    skipDay && skip && skipIsInWindow(skipDay, skip.now)
+      ? JS_DAY_TO_KEY[skipDay.getDay()]
+      : null;
+
+  if (byDay === null && !skipKey) {
     const { hour, minute } = parseHhMm(defaultTime, fallback);
     return [{ kind: 'daily', id: idBase, hour, minute }];
   }
 
+  const dayTimes: Record<string, string | null> =
+    byDay === null
+      ? Object.fromEntries(CHECKIN_DAY_KEYS.map((day) => [day, defaultTime]))
+      : byDay;
+
   const ops: ScheduleOp[] = [];
   for (const day of CHECKIN_DAY_KEYS) {
-    const value = byDay[day];
+    const value = dayTimes[day];
     if (value === undefined || value === null) continue;
+    if (day === skipKey) continue;
     const { hour, minute } = parseHhMm(value, fallback);
     ops.push({
       kind: 'weekly',
@@ -197,20 +227,28 @@ function buildCheckInSchedule(
       minute,
     });
   }
+  if (skipKey && skipDay && dayTimes[skipKey] != null) {
+    const { hour, minute } = parseHhMm(defaultTime, fallback);
+    ops.push(resumeDateOp(idBase, skipDay, hour, minute));
+  }
   return ops;
 }
 
 /**
- * All identifiers that belong to a given check-in (1 DAILY + 7 WEEKLY).
+ * All identifiers that belong to a given check-in (1 DAILY + 7 WEEKLY + resume).
  * Cancel functions call this and clear every id on every run so that mode
  * transitions (uniform ↔ per-day, enable ↔ disable) never leave orphan
  * triggers in the OS queue. Cancelling a nonexistent id is a no-op.
  */
-function getAllCheckInIdentifiers(idBase: string): string[] {
-  return [idBase, ...CHECKIN_DAY_KEYS.map((d) => `${idBase}-${d.toLowerCase()}`)];
+export function getAllCheckInIdentifiers(idBase: string): string[] {
+  return [
+    idBase,
+    ...CHECKIN_DAY_KEYS.map((d) => `${idBase}-${d.toLowerCase()}`),
+    `${idBase}-resume`,
+  ];
 }
 
-const MIDDAY_FALLBACK = { hour: 12, minute: 30 };
+export const MIDDAY_FALLBACK = { hour: 12, minute: 30 };
 const EVENING_FALLBACK = { hour: 20, minute: 30 };
 
 // Android channels. Readers can mute check-ins without losing the reading
@@ -383,8 +421,10 @@ function getTodayDayContext(devotional: Devotional | null | undefined, now = new
  * weekday would be stale by the time it fired. (expo WEEKLY weekday:
  * 1=Sunday … 7=Saturday.)
  */
-function firesToday(op: ScheduleOp, now = new Date()): boolean {
-  return op.kind === 'daily' || op.weekday === now.getDay() + 1;
+export function firesToday(op: ScheduleOp, now = new Date()): boolean {
+  if (op.kind === 'daily') return true;
+  if (op.kind === 'date') return localCalendarDays(op.date, now) === 0;
+  return op.weekday === now.getDay() + 1;
 }
 
 // Configure how notifications appear when the app is in the foreground
@@ -831,6 +871,59 @@ export async function scheduleDevotionalReadyTapTestNotification(
   }
 }
 
+type CheckInClock = { localDate: string | null; now: Date };
+
+async function scheduleCheckInOp(
+  op: ScheduleOp,
+  content: { title: string; body: string; dataType: string },
+  logNoun: string,
+): Promise<string> {
+  const extras = channel(NOTIFICATION_CHANNELS.CHECK_INS);
+  const trigger: Notifications.NotificationTriggerInput =
+    op.kind === 'daily'
+      ? {
+          type: Notifications.SchedulableTriggerInputTypes.DAILY,
+          hour: op.hour,
+          minute: op.minute,
+          ...extras,
+        }
+      : op.kind === 'weekly'
+        ? {
+            type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
+            weekday: op.weekday,
+            hour: op.hour,
+            minute: op.minute,
+            ...extras,
+          }
+        : {
+            type: Notifications.SchedulableTriggerInputTypes.DATE,
+            date: op.date,
+            ...extras,
+          };
+  const id = await Notifications.scheduleNotificationAsync({
+    identifier: op.id,
+    content: {
+      title: content.title,
+      body: content.body,
+      sound: true,
+      data: { type: content.dataType },
+    },
+    trigger,
+  });
+  if (op.kind === 'daily') {
+    logger.log(
+      `[Notifications] ${logNoun} scheduled DAILY for ${op.hour}:${op.minute.toString().padStart(2, '0')} (id=${id})`,
+    );
+  } else if (op.kind === 'weekly') {
+    logger.log(
+      `[Notifications] ${logNoun} scheduled WEEKLY weekday=${op.weekday} ${op.hour}:${op.minute.toString().padStart(2, '0')} (id=${id})`,
+    );
+  } else {
+    logger.log(`[Notifications] ${logNoun} scheduled DATE ${op.date.toISOString()} (id=${id})`);
+  }
+  return id;
+}
+
 // Schedule midday check-in notification (Phase 2).
 //
 // Two scheduling modes based on the store's `middayCheckInByDay` field:
@@ -857,7 +950,7 @@ export async function scheduleDevotionalReadyTapTestNotification(
 // Returns an array of the identifiers that were actually scheduled (0-7
 // items; empty array is a valid, no-error outcome when the user has every
 // day set to skip).
-export async function scheduleMiddayCheckIn(): Promise<string[]> {
+export async function scheduleMiddayCheckIn(clock?: CheckInClock): Promise<string[]> {
   if (Platform.OS === 'web') return [];
 
   // Tri-state premium gate at the OS boundary. Fail closed on `unknown`
@@ -882,11 +975,14 @@ export async function scheduleMiddayCheckIn(): Promise<string[]> {
   const store = useUnfoldStore.getState();
   const timeStr = store.middayCheckInTime || '12:30';
   const byDay = store.middayCheckInByDay ?? null;
+  const now = clock?.now ?? new Date();
+  const skipDate = clock ? clock.localDate : readTrialCheckInSkipDate();
   const ops = buildCheckInSchedule(
     NOTIFICATION_IDS.MIDDAY_CHECKIN,
     timeStr,
     byDay,
     MIDDAY_FALLBACK,
+    skipDate ? { localDate: skipDate, now } : undefined,
   );
 
   // Per-day with every day skipped is a valid no-op — don't treat it as
@@ -909,45 +1005,14 @@ export async function scheduleMiddayCheckIn(): Promise<string[]> {
   const scheduled: string[] = [];
   for (const op of ops) {
     try {
-      const body = firesToday(op) ? todayBody : genericBody;
-      if (op.kind === 'daily') {
-        const id = await Notifications.scheduleNotificationAsync({
-          identifier: op.id,
-          content: {
-            title: 'Quick check-in',
-            body,
-            sound: true,
-            data: { type: 'midday-checkin' },
-          },
-          trigger: {
-            type: Notifications.SchedulableTriggerInputTypes.DAILY,
-            hour: op.hour,
-            minute: op.minute,
-            ...channel(NOTIFICATION_CHANNELS.CHECK_INS),
-          },
-        });
-        scheduled.push(id);
-        logger.log(`[Notifications] Midday check-in scheduled DAILY for ${op.hour}:${op.minute.toString().padStart(2, '0')} (id=${id})`);
-      } else {
-        const id = await Notifications.scheduleNotificationAsync({
-          identifier: op.id,
-          content: {
-            title: 'Quick check-in',
-            body,
-            sound: true,
-            data: { type: 'midday-checkin' },
-          },
-          trigger: {
-            type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
-            weekday: op.weekday,
-            hour: op.hour,
-            minute: op.minute,
-            ...channel(NOTIFICATION_CHANNELS.CHECK_INS),
-          },
-        });
-        scheduled.push(id);
-        logger.log(`[Notifications] Midday check-in scheduled WEEKLY weekday=${op.weekday} ${op.hour}:${op.minute.toString().padStart(2, '0')} (id=${id})`);
-      }
+      const body = firesToday(op, now) ? todayBody : genericBody;
+      scheduled.push(
+        await scheduleCheckInOp(
+          op,
+          { title: 'Quick check-in', body, dataType: 'midday-checkin' },
+          'Midday check-in',
+        ),
+      );
     } catch (error) {
       logger.error(`[Notifications] Failed to schedule midday op ${op.id}:`, error);
     }
@@ -974,7 +1039,7 @@ export async function scheduleMiddayCheckIn(): Promise<string[]> {
 // is a thin mirror: same cancel-then-write pattern, same tri-state gate,
 // same per-day / uniform branching, just with evening identifiers, content,
 // and 20:30 fallback.
-export async function scheduleEveningWindDown(): Promise<string[]> {
+export async function scheduleEveningWindDown(clock?: CheckInClock): Promise<string[]> {
   if (Platform.OS === 'web') return [];
 
   // Tri-state premium gate at the OS boundary. Fail closed on anything
@@ -995,11 +1060,14 @@ export async function scheduleEveningWindDown(): Promise<string[]> {
   const store = useUnfoldStore.getState();
   const timeStr = store.eveningWindDownTime || '20:30';
   const byDay = store.eveningWindDownByDay ?? null;
+  const now = clock?.now ?? new Date();
+  const skipDate = clock ? clock.localDate : readTrialCheckInSkipDate();
   const ops = buildCheckInSchedule(
     NOTIFICATION_IDS.EVENING_WINDDOWN,
     timeStr,
     byDay,
     EVENING_FALLBACK,
+    skipDate ? { localDate: skipDate, now } : undefined,
   );
 
   if (ops.length === 0) {
@@ -1017,45 +1085,14 @@ export async function scheduleEveningWindDown(): Promise<string[]> {
   const scheduled: string[] = [];
   for (const op of ops) {
     try {
-      const body = firesToday(op) ? todayBody : genericBody;
-      if (op.kind === 'daily') {
-        const id = await Notifications.scheduleNotificationAsync({
-          identifier: op.id,
-          content: {
-            title: 'One last thing',
-            body,
-            sound: true,
-            data: { type: 'evening-winddown' },
-          },
-          trigger: {
-            type: Notifications.SchedulableTriggerInputTypes.DAILY,
-            hour: op.hour,
-            minute: op.minute,
-            ...channel(NOTIFICATION_CHANNELS.CHECK_INS),
-          },
-        });
-        scheduled.push(id);
-        logger.log(`[Notifications] Evening wind-down scheduled DAILY for ${op.hour}:${op.minute.toString().padStart(2, '0')} (id=${id})`);
-      } else {
-        const id = await Notifications.scheduleNotificationAsync({
-          identifier: op.id,
-          content: {
-            title: 'One last thing',
-            body,
-            sound: true,
-            data: { type: 'evening-winddown' },
-          },
-          trigger: {
-            type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
-            weekday: op.weekday,
-            hour: op.hour,
-            minute: op.minute,
-            ...channel(NOTIFICATION_CHANNELS.CHECK_INS),
-          },
-        });
-        scheduled.push(id);
-        logger.log(`[Notifications] Evening wind-down scheduled WEEKLY weekday=${op.weekday} ${op.hour}:${op.minute.toString().padStart(2, '0')} (id=${id})`);
-      }
+      const body = firesToday(op, now) ? todayBody : genericBody;
+      scheduled.push(
+        await scheduleCheckInOp(
+          op,
+          { title: 'One last thing', body, dataType: 'evening-winddown' },
+          'Evening wind-down',
+        ),
+      );
     } catch (error) {
       logger.error(`[Notifications] Failed to schedule evening op ${op.id}:`, error);
     }

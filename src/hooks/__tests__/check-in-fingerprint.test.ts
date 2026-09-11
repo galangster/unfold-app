@@ -56,6 +56,8 @@ interface FingerprintInputs {
   middayByDay: ByDay;
   eveningByDay: ByDay;
   hasCompletedOnboarding: boolean;
+  notificationPermissionEpoch: number;
+  trialNoticeEpoch: number;
 }
 
 function buildFingerprint(inputs: FingerprintInputs): string {
@@ -69,6 +71,8 @@ function buildFingerprint(inputs: FingerprintInputs): string {
     inputs.middayByDay,
     inputs.eveningByDay,
     inputs.hasCompletedOnboarding ? '1' : '0',
+    inputs.notificationPermissionEpoch,
+    inputs.trialNoticeEpoch,
   ]);
 }
 
@@ -81,6 +85,8 @@ const baseline: FingerprintInputs = {
   middayByDay: null,
   eveningByDay: null,
   hasCompletedOnboarding: true,
+  notificationPermissionEpoch: 0,
+  trialNoticeEpoch: 0,
 };
 
 describe('useCheckInFingerprint — invariants', () => {
@@ -181,6 +187,18 @@ describe('useCheckInFingerprint — invariants', () => {
         ...baseline,
         eveningByDay: { Mon: '20:30', Tue: '20:30', Wed: '20:30', Thu: '20:30', Fri: '20:30', Sat: '20:30', Sun: '20:30' },
       });
+      expect(a).not.toBe(b);
+    });
+
+    it('changes when notificationPermissionEpoch bumps', () => {
+      const a = buildFingerprint(baseline);
+      const b = buildFingerprint({ ...baseline, notificationPermissionEpoch: 1 });
+      expect(a).not.toBe(b);
+    });
+
+    it('changes when trialNoticeEpoch bumps', () => {
+      const a = buildFingerprint(baseline);
+      const b = buildFingerprint({ ...baseline, trialNoticeEpoch: 1 });
       expect(a).not.toBe(b);
     });
 
