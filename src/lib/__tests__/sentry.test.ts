@@ -972,6 +972,16 @@ describe('beforeSendLog', () => {
     expect(JSON.stringify(scrubbed)).not.toContain(JOURNAL_TEXT);
   });
 
+  it('drops a log whose message is not an event name', () => {
+    bootEnabled();
+
+    const beforeSendLog = initOptions().beforeSendLog;
+    expect(beforeSendLog({ level: 'info', message: JOURNAL_TEXT, attributes: {} })).toBeNull();
+    expect(beforeSendLog({ level: 'info', message: 'Onboarding Started', attributes: {} })).toBeNull();
+    expect(beforeSendLog({ level: 'info', message: 42, attributes: {} })).toBeNull();
+    expect(beforeSendLog({ level: 'info', message: 'onboarding_started', attributes: {} })).not.toBeNull();
+  });
+
   it('carries the SDK release and environment stamps and drops console-origin logs', () => {
     bootEnabled();
 

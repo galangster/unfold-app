@@ -101,6 +101,13 @@ const CONSOLE_LOG_ORIGIN = 'auto.log.console';
  * `beforeSendLog` runs. Provenance, never user content: carried so logs can be
  * filtered by release and environment the way events are.
  */
+/**
+ * A log message is an event NAME, never free text: a snake_case identifier,
+ * 64 characters or fewer. Anything else is dropped whole in `beforeSendLog`,
+ * so a future caller cannot push user-derived text through `logger`.
+ */
+const APP_EVENT_NAME_PATTERN = /^[a-z][a-z0-9_]{0,63}$/;
+
 const SDK_LOG_ATTRIBUTE_KEYS = ['sentry.release', 'sentry.environment', 'sentry.sdk.name', 'sentry.sdk.version'] as const;
 
 /**
@@ -462,6 +469,7 @@ function scrubLog(log: AppLog): {
   severityNumber?: number;
 } | null {
   if (log.attributes?.['sentry.origin'] === CONSOLE_LOG_ORIGIN) return null;
+  if (typeof log.message !== 'string' || !APP_EVENT_NAME_PATTERN.test(log.message)) return null;
   const attributes = scrubTags(log.attributes) ?? {};
   for (const key of SDK_LOG_ATTRIBUTE_KEYS) {
     const value = log.attributes?.[key];
@@ -469,7 +477,7 @@ function scrubLog(log: AppLog): {
   }
   return {
     level: log.level,
-    message: typeof log.message === 'string' ? truncate(log.message) : '',
+    message: log.message,
     attributes: emptyToUndefined(attributes),
     severityNumber: typeof log.severityNumber === 'number' ? log.severityNumber : undefined,
   };
