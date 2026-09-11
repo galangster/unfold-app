@@ -1,8 +1,12 @@
 /* eslint-disable import/first */
-const mockIsQaToolsEnabled = jest.fn(() => true);
-const mockTrackTrialStarted = jest.fn();
-const mockTrackAutoTrialSkipped = jest.fn();
-const mockCaptureAppError = jest.fn();
+import {
+  mockCaptureAppError,
+  mockIsQaToolsEnabled,
+  mockTrackAutoTrialSkipped,
+  mockTrackTrialStarted,
+} from './fixtures/auto-trial-exit-mocks';
+import { NOW_MS, entitlement, exitInput, info } from './fixtures/auto-trial-exit-input';
+
 const mockGetDeviceId = jest.fn(() => 'device-1');
 const mockStoreGetState = jest.fn();
 
@@ -38,11 +42,9 @@ jest.mock('../store', () => ({
   useUnfoldStore: { getState: () => mockStoreGetState() },
 }));
 
-import type { CustomerInfo } from 'react-native-purchases';
 import {
   handleVerifiedEntitlementExit,
   resolveLaterEntryExit,
-  type AutoTrialSurface,
 } from '../auto-trial-exit';
 import {
   type AutoTrialIntentV1,
@@ -50,32 +52,6 @@ import {
 import { DAY_MS, QA_SIMULATED_TRIAL_APP_USER_ID } from '../trial-facts';
 import type { AutoTrialSwitchSnapshot } from '../remote-config';
 import { memoryIntentStorage } from './fixtures/memory-intent-storage';
-
-const NOW_MS = 1_700_000_000_000;
-
-function entitlement(overrides: Record<string, unknown> = {}) {
-  const purchasedAtMs = NOW_MS - 30_000;
-  return {
-    periodType: 'TRIAL',
-    store: 'APP_STORE',
-    ownershipType: 'PURCHASED',
-    productIdentifier: 'unfold_premium_yearly',
-    isSandbox: true,
-    latestPurchaseDateMillis: purchasedAtMs,
-    expirationDateMillis: purchasedAtMs + 3 * DAY_MS,
-    ...overrides,
-  };
-}
-
-function info(active: Record<string, unknown> | null, originalAppUserId = 'user-1'): CustomerInfo {
-  return {
-    originalAppUserId,
-    entitlements: {
-      active: active ? { 'Unfold Premium': active } : {},
-      all: active ? { 'Unfold Premium': active } : {},
-    },
-  } as unknown as CustomerInfo;
-}
 
 const ON_SNAPSHOT: AutoTrialSwitchSnapshot = {
   enabled: true,
@@ -86,16 +62,8 @@ const ON_SNAPSHOT: AutoTrialSwitchSnapshot = {
 
 function exitArgs(overrides: Record<string, unknown> = {}) {
   return {
-    exit: { source: 'purchase' as const, customerInfo: info(entitlement()) },
-    surface: 'onboarding_paywall' as AutoTrialSurface,
-    deviceId: 'device-1',
-    nowMs: NOW_MS,
-    platform: 'ios',
-    timeZone: 'America/Chicago',
+    ...exitInput(),
     switchSnapshot: ON_SNAPSHOT,
-    profile: { hasCompletedOnboarding: false },
-    devotionalIds: [] as string[],
-    storage: memoryIntentStorage(),
     ...overrides,
   };
 }

@@ -180,7 +180,7 @@ export default function PaywallScreen() {
     void refreshRemoteConfig();
   }, []);
 
-  const advanceOnce = useCallback((
+  const advanceOnce = useCallback(async (
     generation: number,
     exit: VerifiedEntitlementExit,
   ) => {
@@ -191,38 +191,36 @@ export default function PaywallScreen() {
     advancedRef.current = true;
     setEntitlementPendingMessage(null);
     updateUser({ isPremium: true });
-    void (async () => {
-      let intentId: string | null = null;
-      if (!isFromOnboarding) {
-        // resolveLaterEntryExit is fail-closed, but a throw here must never
-        // strand a paying user on the paywall (F6), so guard the call.
-        let decision: VerifiedExitDecision = { kind: 'fallback', reason: 'internal_error' };
-        try {
-          decision = await resolveLaterEntryExit(exit, 'paywall_route');
-        } catch {
-          // fall through to the setup flow
-        }
-        if (decision.kind === 'auto') {
-          intentId = decision.intent.intentId;
-        } else {
-          void requestLaterEntryNotifyAsk(exit.customerInfo);
-        }
+    let intentId: string | null = null;
+    if (!isFromOnboarding) {
+      // resolveLaterEntryExit is fail-closed, but a throw here must never
+      // strand a paying user on the paywall (F6), so guard the call.
+      let decision: VerifiedExitDecision = { kind: 'fallback', reason: 'internal_error' };
+      try {
+        decision = await resolveLaterEntryExit(exit, 'paywall_route');
+      } catch {
+        // fall through to the setup flow
       }
-      finishVerifiedPaywallFlow({
-        complete: () => {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          void recordPaywallDiagnosticLazy(`paywall.${exit.source}.entitlement_active`, () => ({
-            customerInfo: summarizeCustomerInfo(exit.customerInfo),
-          }));
-          queryClient.invalidateQueries({ queryKey: ['revenuecat'] });
-          completePaywallFlowRef.current(intentId);
-        },
-        syncOptionalWork: () => syncTrialEndingNotification(exit.customerInfo),
-        onOptionalWorkError: (error) => {
-          logger.log('[Paywall] trial notification sync failed after verified payment:', error);
-        },
-      });
-    })();
+      if (decision.kind === 'auto') {
+        intentId = decision.intent.intentId;
+      } else {
+        void requestLaterEntryNotifyAsk(exit.customerInfo);
+      }
+    }
+    finishVerifiedPaywallFlow({
+      complete: () => {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        void recordPaywallDiagnosticLazy(`paywall.${exit.source}.entitlement_active`, () => ({
+          customerInfo: summarizeCustomerInfo(exit.customerInfo),
+        }));
+        queryClient.invalidateQueries({ queryKey: ['revenuecat'] });
+        completePaywallFlowRef.current(intentId);
+      },
+      syncOptionalWork: () => syncTrialEndingNotification(exit.customerInfo),
+      onOptionalWorkError: (error) => {
+        logger.log('[Paywall] trial notification sync failed after verified payment:', error);
+      },
+    });
     return true;
   }, [isFromOnboarding, updateUser, queryClient]);
 
@@ -244,7 +242,7 @@ export default function PaywallScreen() {
       });
       if (decision === 'ignore') return;
       if (decision === 'advance' && customerInfo) {
-        advanceOnce(generation, { source: 'lateGrant', customerInfo });
+        void advanceOnce(generation, { source: 'lateGrant', customerInfo });
         return;
       }
       setEntitlementPendingMessage(null);
@@ -449,7 +447,7 @@ export default function PaywallScreen() {
               JSON.stringify(Object.keys(activeEntitlements ?? {})),
               'hasPremium: true',
             );
-            advanceOnce(variables.generation, { source: 'purchase', customerInfo: result.data });
+            void advanceOnce(variables.generation, { source: 'purchase', customerInfo: result.data });
           }
           return;
         case 'noop':
@@ -518,7 +516,7 @@ export default function PaywallScreen() {
 
       const outcome = resolveRestoreOutcome(result);
       if (outcome.kind === 'success' && result.ok) {
-        advanceOnce(variables.generation, {
+        void advanceOnce(variables.generation, {
           source: resolveRestoreExitSource(lateGrantArmedRef.current),
           customerInfo: result.data,
         });
@@ -1433,7 +1431,7 @@ export default function PaywallScreen() {
         onPurchaseSuccess={(exit) => {
           mmkvStorage.setItem('@unfold_onboarding_offer_seen', 'true');
           setShowExclusiveOffer(false);
-          advanceOnce(lifecycleSessionRef.current.generation, exit);
+          void advanceOnce(lifecycleSessionRef.current.generation, exit);
         }}
         surface="paywall_route"
         context="onboarding"

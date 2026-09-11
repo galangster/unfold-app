@@ -121,16 +121,8 @@ jest.mock('@/components/PremiumFeatureSheet', () => ({ PremiumFeatureSheet: () =
 jest.mock('@/components/icons', () => new Proxy({}, { get: () => () => null }));
 jest.mock('@/components/ui', () => ({ alpha: (c: string) => c }));
 
-import type { CustomerInfo } from 'react-native-purchases';
-import type { VerifiedEntitlementExit, VerifiedExitDecision } from '@/lib/auto-trial-exit';
+import type { VerifiedExitDecision } from '@/lib/auto-trial-exit';
 import { runOnboardingPurchaseSuccess } from '@/lib/onboarding-purchase-success';
-
-const EXIT: VerifiedEntitlementExit = {
-  source: 'purchase',
-  customerInfo: {
-    entitlements: { active: { 'Unfold Premium': { identifier: 'Unfold Premium' } } },
-  } as unknown as CustomerInfo,
-};
 
 const AUTO = {
   kind: 'auto',
@@ -151,13 +143,9 @@ describe('F10 onboarding purchase exit', () => {
       order.push('advanceToNextStep');
     });
 
+    createAutoTrialIntent();
     const result = runOnboardingPurchaseSuccess({
-      exit: EXIT,
-      ensureDeviceId: () => undefined,
-      decide: () => {
-        createAutoTrialIntent();
-        return AUTO;
-      },
+      decision: AUTO,
       saveDraft: () => {
         saveOnboardingDraft();
       },
@@ -186,9 +174,7 @@ describe('F10 onboarding purchase exit', () => {
     const setAutoTrialMode = jest.fn();
 
     runOnboardingPurchaseSuccess({
-      exit: EXIT,
-      ensureDeviceId: () => undefined,
-      decide: () => ({ kind: 'fallback', reason: 'internal_error' }),
+      decision: { kind: 'fallback', reason: 'internal_error' },
       saveDraft: () => {
         saveOnboardingDraft();
       },

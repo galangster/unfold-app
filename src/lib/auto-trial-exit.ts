@@ -19,7 +19,6 @@ import {
   readAutoTrialSwitchSnapshot,
   REMOTE_CONFIG_PURCHASE_WAIT_MS,
   type AutoTrialSwitchSnapshot,
-  type RemoteConfigState,
 } from '@/lib/remote-config';
 import { captureAppError } from '@/lib/sentry';
 import { useUnfoldStore } from '@/lib/store';
@@ -159,28 +158,63 @@ export type VerifiedEntitlementExitInput = {
   storage?: IntentStorage;
 };
 
-export async function resolveVerifiedEntitlementExit(
-  i: Omit<VerifiedEntitlementExitInput, 'switchSnapshot'> & {
-    configTimeoutMs?: number;
-    fetchImpl?: (url: string, init?: RequestInit) => Promise<Response>;
-  },
-): Promise<VerifiedExitDecision> {
-  const settled: RemoteConfigState = await awaitRemoteConfigSettled(
-    i.configTimeoutMs ?? REMOTE_CONFIG_PURCHASE_WAIT_MS,
-    { nowMs: i.nowMs, fetchImpl: i.fetchImpl },
-  );
-  return handleVerifiedEntitlementExit({
+type ResolveVerifiedEntitlementExitInput = Omit<
+  VerifiedEntitlementExitInput,
+  | 'switchSnapshot'
+  | 'deviceId'
+  | 'nowMs'
+  | 'platform'
+  | 'timeZone'
+  | 'profile'
+  | 'devotionalIds'
+  | 'simulated'
+> & {
+  deviceId?: string;
+  nowMs?: number;
+  platform?: string;
+  timeZone?: string;
+  profile?: { hasCompletedOnboarding: boolean } | null;
+  devotionalIds?: readonly string[];
+  simulated?: boolean;
+  configTimeoutMs?: number;
+  fetchImpl?: (url: string, init?: RequestInit) => Promise<Response>;
+};
+
+function resolveExitInput(
+  i: ResolveVerifiedEntitlementExitInput,
+): Omit<VerifiedEntitlementExitInput, 'switchSnapshot'> {
+  const needsStore = i.profile === undefined || i.devotionalIds === undefined;
+  const state = needsStore ? useUnfoldStore.getState() : undefined;
+  return {
     exit: i.exit,
     surface: i.surface,
-    deviceId: i.deviceId,
-    nowMs: i.nowMs,
-    platform: i.platform,
-    timeZone: i.timeZone,
-    switchSnapshot: readAutoTrialSwitchSnapshot(i.nowMs, i.platform, settled),
-    profile: i.profile,
-    devotionalIds: i.devotionalIds,
-    simulated: i.simulated,
+    deviceId: i.deviceId ?? getDeviceId(),
+    nowMs: i.nowMs ?? Date.now(),
+    platform: i.platform ?? Platform.OS,
+    timeZone: i.timeZone ?? getDeviceTimezone() ?? '',
+    profile: i.profile !== undefined
+      ? i.profile
+      : state?.user
+        ? { hasCompletedOnboarding: state.user.hasCompletedOnboarding === true }
+        : null,
+    devotionalIds: i.devotionalIds
+      ?? (state?.devotionals ?? []).map((devotional) => devotional.id),
+    simulated: i.simulated ?? isSimulatedTrialCustomerInfo(i.exit.customerInfo),
     storage: i.storage,
+  };
+}
+
+export async function resolveVerifiedEntitlementExit(
+  i: ResolveVerifiedEntitlementExitInput,
+): Promise<VerifiedExitDecision> {
+  const input = resolveExitInput(i);
+  const settled = await awaitRemoteConfigSettled(
+    i.configTimeoutMs ?? REMOTE_CONFIG_PURCHASE_WAIT_MS,
+    { nowMs: input.nowMs, fetchImpl: i.fetchImpl },
+  );
+  return handleVerifiedEntitlementExit({
+    ...input,
+    switchSnapshot: readAutoTrialSwitchSnapshot(input.nowMs, input.platform, settled),
   });
 }
 
@@ -290,22 +324,7 @@ export async function resolveLaterEntryExit(
   surface: 'paywall_route' | 'churned_sheet',
 ): Promise<VerifiedExitDecision> {
   try {
-    const state = useUnfoldStore.getState();
-    const nowMs = Date.now();
-    const platform = Platform.OS;
-    return await resolveVerifiedEntitlementExit({
-      exit,
-      surface,
-      deviceId: getDeviceId(),
-      nowMs,
-      platform,
-      timeZone: getDeviceTimezone() ?? '',
-      profile: state.user
-        ? { hasCompletedOnboarding: state.user.hasCompletedOnboarding === true }
-        : null,
-      devotionalIds: (state.devotionals ?? []).map((devotional) => devotional.id),
-      simulated: isSimulatedTrialCustomerInfo(exit.customerInfo),
-    });
+    return await resolveVerifiedEntitlementExit({ exit, surface });
   } catch (error) {
     reportInternalError(error);
     return { kind: 'fallback', reason: 'internal_error' };

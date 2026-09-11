@@ -1,13 +1,16 @@
 /* eslint-disable import/first */
+import {
+  mockCaptureAppError,
+  mockIsQaToolsEnabled,
+  mockTrackAutoTrialSkipped,
+  mockTrackTrialStarted,
+} from './fixtures/auto-trial-exit-mocks';
+import { NOW_MS, exitInput } from './fixtures/auto-trial-exit-input';
+
 jest.mock('../api-config', () => ({
   PRIMARY_BACKEND_URL: 'https://example.test',
   getAuthHeaders: jest.fn(async () => ({ 'Content-Type': 'application/json' })),
 }));
-
-const mockIsQaToolsEnabled = jest.fn(() => true);
-const mockTrackTrialStarted = jest.fn();
-const mockTrackAutoTrialSkipped = jest.fn();
-const mockCaptureAppError = jest.fn();
 
 jest.mock('../qa-tools', () => ({ isQaToolsEnabled: () => mockIsQaToolsEnabled() }));
 jest.mock('../auto-trial-telemetry', () => ({
@@ -29,10 +32,9 @@ jest.mock('../mmkv-storage', () => ({
 }));
 
 jest.mock('../store', () => ({
-  useUnfoldStore: { getState: () => mockStoreGetState() },
+  useUnfoldStore: { getState: () => ({ user: null, devotionals: [] }) },
 }));
 
-import type { CustomerInfo } from 'react-native-purchases';
 import { resolveVerifiedEntitlementExit } from '../auto-trial-exit';
 import {
   readAutoTrialSwitchSnapshot,
@@ -40,10 +42,7 @@ import {
   resetRemoteConfigForTesting,
   type RemoteConfigV1,
 } from '../remote-config';
-import { DAY_MS } from '../trial-facts';
-import { memoryIntentStorage } from './fixtures/memory-intent-storage';
 
-const NOW_MS = 1_700_000_000_000;
 const VALID_BODY: RemoteConfigV1 = {
   version: 1,
   autoTrialSeries: { enabled: true, platforms: ['ios'], maxTrialDays: 7 },
@@ -58,29 +57,6 @@ function jsonResponse(body: unknown, status = 200) {
   } as Response;
 }
 
-function entitlement() {
-  const purchasedAtMs = NOW_MS - 30_000;
-  return {
-    periodType: 'TRIAL',
-    store: 'APP_STORE',
-    ownershipType: 'PURCHASED',
-    productIdentifier: 'unfold_premium_yearly',
-    isSandbox: true,
-    latestPurchaseDateMillis: purchasedAtMs,
-    expirationDateMillis: purchasedAtMs + 3 * DAY_MS,
-  };
-}
-
-function info(active: Record<string, unknown>): CustomerInfo {
-  return {
-    originalAppUserId: 'user-1',
-    entitlements: {
-      active: { 'Unfold Premium': active },
-      all: { 'Unfold Premium': active },
-    },
-  } as unknown as CustomerInfo;
-}
-
 function hangingFetch() {
   let release!: (value: Response) => void;
   const fetchImpl = jest.fn(() => new Promise<Response>((resolve) => {
@@ -91,21 +67,6 @@ function hangingFetch() {
     release(body: unknown) {
       release(jsonResponse(body));
     },
-  };
-}
-
-function exitInput(overrides: Record<string, unknown> = {}) {
-  return {
-    exit: { source: 'purchase' as const, customerInfo: info(entitlement()) },
-    surface: 'onboarding_paywall' as const,
-    deviceId: 'device-1',
-    nowMs: NOW_MS,
-    platform: 'ios',
-    timeZone: 'America/Chicago',
-    profile: { hasCompletedOnboarding: false },
-    devotionalIds: [] as string[],
-    storage: memoryIntentStorage(),
-    ...overrides,
   };
 }
 

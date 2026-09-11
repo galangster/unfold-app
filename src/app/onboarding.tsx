@@ -149,8 +149,6 @@ import {
   readAutoTrialIntent,
   transitionAutoTrialIntent,
 } from '@/lib/auto-trial-intent';
-import { getDeviceTimezone } from '@/lib/device-timezone';
-import { isSimulatedTrialCustomerInfo } from '@/lib/trial-facts';
 import { runOnboardingCompletion } from '@/lib/onboarding-completion';
 import { runOnboardingPurchaseSuccess } from '@/lib/onboarding-purchase-success';
 import { runReminderTimeCommit } from '@/lib/reminder-time-commit';
@@ -1560,55 +1558,41 @@ export default function OnboardingScreen() {
     inputOpacity.value = 0;
   }, [STEPS, currentStepId, inputOpacity, completeOnboarding]);
 
-  const handleOnboardingPurchaseSuccess = useCallback((exit: VerifiedEntitlementExit) => {
-    void (async () => {
-      if (onboardingDeviceIdRef.current === null) {
-        onboardingDeviceIdRef.current = getDeviceId();
-      }
-      const nowMs = Date.now();
-      const state = useUnfoldStore.getState();
-      const decision = await resolveVerifiedEntitlementExit({
-        exit,
-        surface: 'onboarding_paywall',
-        deviceId: onboardingDeviceIdRef.current ?? getDeviceId(),
-        nowMs,
-        platform: Platform.OS,
-        timeZone: getDeviceTimezone() ?? '',
-        profile: existingUser
-          ? { hasCompletedOnboarding: existingUser.hasCompletedOnboarding === true }
-          : null,
-        devotionalIds: (state.devotionals ?? []).map((devotional) => devotional.id),
-        simulated: isSimulatedTrialCustomerInfo(exit.customerInfo),
-      });
-      runOnboardingPurchaseSuccess({
-        exit,
-        ensureDeviceId: () => {
-          if (onboardingDeviceIdRef.current === null) {
-            onboardingDeviceIdRef.current = getDeviceId();
-          }
-        },
-        decide: () => decision,
-        saveDraft: () => {
-          saveOnboardingDraft({
-            deviceId: onboardingDeviceIdRef.current ?? getDeviceId(),
-            stepId: 'purchaseConfirmation',
-            data: dataRef.current,
-            purchasedDuringOnboarding: true,
-            sampleDevotionalId: onboardingDevotionalId || null,
-          });
-        },
-        setPurchased: () => {
-          setPurchasedDuringOnboarding(true);
-        },
-        setAutoTrialMode,
-        markPremium: () => {
-          updateUser({ isPremium: true });
-        },
-        advance: () => {
-          advanceToNextStep();
-        },
-      });
-    })();
+  const handleOnboardingPurchaseSuccess = useCallback(async (exit: VerifiedEntitlementExit) => {
+    if (onboardingDeviceIdRef.current === null) {
+      onboardingDeviceIdRef.current = getDeviceId();
+    }
+    const deviceId = onboardingDeviceIdRef.current;
+    const decision = await resolveVerifiedEntitlementExit({
+      exit,
+      surface: 'onboarding_paywall',
+      deviceId,
+      profile: existingUser
+        ? { hasCompletedOnboarding: existingUser.hasCompletedOnboarding === true }
+        : null,
+    });
+    runOnboardingPurchaseSuccess({
+      decision,
+      saveDraft: () => {
+        saveOnboardingDraft({
+          deviceId,
+          stepId: 'purchaseConfirmation',
+          data: dataRef.current,
+          purchasedDuringOnboarding: true,
+          sampleDevotionalId: onboardingDevotionalId || null,
+        });
+      },
+      setPurchased: () => {
+        setPurchasedDuringOnboarding(true);
+      },
+      setAutoTrialMode,
+      markPremium: () => {
+        updateUser({ isPremium: true });
+      },
+      advance: () => {
+        advanceToNextStep();
+      },
+    });
   }, [advanceToNextStep, existingUser, onboardingDevotionalId, updateUser]);
 
 

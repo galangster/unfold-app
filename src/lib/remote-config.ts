@@ -153,7 +153,7 @@ export async function awaitRemoteConfigSettled(
 
   const force = state.status === 'error'
     && nowMs - state.failedAtMs < REMOTE_CONFIG_ERROR_RETRY_MS;
-  const pending = inflight ?? refreshRemoteConfig({
+  const pending = refreshRemoteConfig({
     force,
     nowMs,
     fetchImpl: o?.fetchImpl,

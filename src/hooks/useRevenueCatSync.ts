@@ -9,7 +9,7 @@
  */
 
 import { useEffect, useRef } from 'react';
-import { AppState, Platform } from 'react-native';
+import { AppState } from 'react-native';
 import type { CustomerInfo } from 'react-native-purchases';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
@@ -20,9 +20,7 @@ import {
   resolveVerifiedEntitlementExit,
   type VerifiedEntitlementExit,
 } from '@/lib/auto-trial-exit';
-import { NEW_TRIAL_MAX_AGE_MS, isSimulatedTrialCustomerInfo } from '@/lib/trial-facts';
-import { getDeviceId } from '@/lib/mmkv-storage';
-import { getDeviceTimezone } from '@/lib/device-timezone';
+import { NEW_TRIAL_MAX_AGE_MS } from '@/lib/trial-facts';
 import { requestLaterEntryNotifyAsk } from '@/lib/notification-ask';
 import {
   addCustomerInfoUpdateListener,
@@ -97,7 +95,7 @@ export function useRevenueCatSync() {
 
     let didCancel = false;
 
-    const applyCustomerInfo = (customerInfo: CustomerInfo) => {
+    const applyCustomerInfo = async (customerInfo: CustomerInfo) => {
       if (didCancel) return;
       if (isLocalResetInProgress()) return;
       const ui = useUIState.getState();
@@ -118,35 +116,29 @@ export function useRevenueCatSync() {
       if (nowMs - marker.setAtMs > NEW_TRIAL_MAX_AGE_MS) return;
 
       const exit: VerifiedEntitlementExit = { source: 'lateGrant', customerInfo };
-      void (async () => {
-        if (didCancel) return;
-        const decision = marker.entry === 'later'
-          ? await resolveLaterEntryExit(
-            exit,
-            marker.surface === 'churned_sheet' ? 'churned_sheet' : 'paywall_route',
-          )
-          : await resolveVerifiedEntitlementExit({
-            exit,
-            surface: 'onboarding_paywall',
-            deviceId: getDeviceId(),
-            nowMs,
-            platform: Platform.OS,
-            timeZone: getDeviceTimezone() ?? '',
-            profile: store.user
-              ? { hasCompletedOnboarding: store.user?.hasCompletedOnboarding === true }
-              : null,
-            devotionalIds: (store.devotionals ?? []).map((devotional) => devotional.id),
-            simulated: isSimulatedTrialCustomerInfo(customerInfo),
-          });
-        if (didCancel) return;
-        if (decision.kind === 'auto') {
-          if (store.user?.hasCompletedOnboarding === true) {
-            routerRef.current.push('/generating');
-          }
-          return;
+      if (didCancel) return;
+      const decision = marker.entry === 'later'
+        ? await resolveLaterEntryExit(
+          exit,
+          marker.surface === 'churned_sheet' ? 'churned_sheet' : 'paywall_route',
+        )
+        : await resolveVerifiedEntitlementExit({
+          exit,
+          surface: 'onboarding_paywall',
+          nowMs,
+          profile: store.user
+            ? { hasCompletedOnboarding: store.user?.hasCompletedOnboarding === true }
+            : null,
+          devotionalIds: (store.devotionals ?? []).map((devotional) => devotional.id),
+        });
+      if (didCancel) return;
+      if (decision.kind === 'auto') {
+        if (store.user?.hasCompletedOnboarding === true) {
+          routerRef.current.push('/generating');
         }
-        void requestLaterEntryNotifyAsk(customerInfo);
-      })();
+        return;
+      }
+      void requestLaterEntryNotifyAsk(customerInfo);
     };
 
     // Fetch current subscription status on launch. This waits for the
@@ -155,7 +147,7 @@ export function useRevenueCatSync() {
     getCustomerInfo()
       .then((result) => {
         if (result.ok) {
-          applyCustomerInfo(result.data);
+          void applyCustomerInfo(result.data);
           return;
         }
         logger.log('[RevenueCat] Initial customer info sync returned non-ok result:', result.reason);
@@ -208,7 +200,7 @@ export function useRevenueCatSync() {
       void (async () => {
         await retryRevenueCatIdentitySync();
         const result = await getCustomerInfo();
-        if (result.ok) applyCustomerInfo(result.data);
+        if (result.ok) void applyCustomerInfo(result.data);
         void listenerGuard.ensure();
       })();
     });
@@ -230,7 +222,7 @@ export function useRevenueCatSync() {
         if (didCancel || generation !== refreshGeneration) return;
         const result = await getCustomerInfo();
         if (didCancel || generation !== refreshGeneration) return;
-        if (result.ok) applyCustomerInfo(result.data);
+        if (result.ok) void applyCustomerInfo(result.data);
         void listenerGuard.ensure();
       }).catch(() => {
         // Fail closed until the current identity reports.
