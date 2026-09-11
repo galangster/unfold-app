@@ -141,7 +141,7 @@ export function useRevenueCatSync() {
 
       if (decision.kind === 'auto') {
         if (store.user?.hasCompletedOnboarding === true) {
-          routerRef.current.push({ pathname: '/series-reveal', params: { intentId: decision.intent.intentId } });
+          routerRef.current.push('/generating');
         }
         return;
       }

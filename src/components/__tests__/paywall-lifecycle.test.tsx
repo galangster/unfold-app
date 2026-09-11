@@ -670,7 +670,7 @@ describe('F6 /paywall auto-trial exits', () => {
     await armed.unmount();
   });
 
-  it('replaces to series-reveal on an auto decision and asks on fallback', async () => {
+  it('replaces to generating on an auto decision and asks on fallback', async () => {
     mockPurchasePackage.mockResolvedValue({ ok: true, data: entitledCustomerInfo });
     mockResolveLaterEntryExit.mockReturnValue({
       kind: 'auto',
@@ -679,10 +679,7 @@ describe('F6 /paywall auto-trial exits', () => {
     } as never);
     const auto = await renderPaywall();
     await press(auto.tree, 'Unlock Unfold Premium');
-    expect(mockReplace).toHaveBeenCalledWith({
-      pathname: '/series-reveal',
-      params: { intentId: 'intent-auto' },
-    });
+    expect(mockReplace).toHaveBeenCalledWith('/generating');
     expect(mockRequestLaterEntryNotifyAsk).not.toHaveBeenCalled();
     await auto.unmount();
 

@@ -10,7 +10,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { AppState, Platform, Text as RNText, TextInput as RNTextInput, View } from 'react-native';
 import { useFonts } from 'expo-font';
 
-import { Colors, DarkColors } from '@/constants/colors';
+import { Colors } from '@/constants/colors';
 import { LaterEntryNotifySheet } from '@/components/onboarding/LaterEntryNotifySheet';
 import { onNotificationPermissionMaybeChanged } from '@/lib/notification-ask';
 import { refreshRemoteConfig } from '@/lib/remote-config';
@@ -239,21 +239,6 @@ function RootLayoutNav() {
         />
         <Stack.Screen
           name="reveal"
-          options={{
-            animation: 'fade',
-            gestureEnabled: false,
-          }}
-        />
-        <Stack.Screen
-          name="series-reveal"
-          options={{
-            animation: 'fade',
-            gestureEnabled: false,
-            contentStyle: { backgroundColor: DarkColors.background },
-          }}
-        />
-        <Stack.Screen
-          name="keepsake"
           options={{
             animation: 'fade',
             gestureEnabled: false,

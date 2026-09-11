@@ -87,11 +87,10 @@ describe('paywall guardrails', () => {
   describe('F8 autoTrialIntentId wins every other completion rule', () => {
     const reveal = {
       action: 'replace' as const,
-      href: '/series-reveal' as const,
-      params: { intentId: 'intent-1' },
+      href: '/generating' as const,
     };
 
-    it('replaces to series-reveal before early-onboarding back', () => {
+    it('replaces to generating before early-onboarding back', () => {
       expect(
         resolvePaywallCompletionNavigation({
           isEarlyOnboarding: true,
@@ -102,7 +101,7 @@ describe('paywall guardrails', () => {
       ).toEqual(reveal);
     });
 
-    it('replaces to series-reveal before onboarding Today and generating', () => {
+    it('replaces to generating before onboarding Today and generating', () => {
       expect(
         resolvePaywallCompletionNavigation({
           isEarlyOnboarding: false,
@@ -121,7 +120,7 @@ describe('paywall guardrails', () => {
       ).toEqual(reveal);
     });
 
-    it('replaces to series-reveal before a later-entry back', () => {
+    it('replaces to generating before a later-entry back', () => {
       expect(
         resolvePaywallCompletionNavigation({
           isEarlyOnboarding: false,

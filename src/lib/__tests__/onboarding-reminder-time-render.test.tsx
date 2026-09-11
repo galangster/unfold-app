@@ -342,7 +342,7 @@ describe('G7 onboarding reminderTime render', () => {
     await unmount();
   });
 
-  it('replaces /series-reveal with the purchased intent id', async () => {
+  it('replaces /generating after a purchased auto-trial intent', async () => {
     seedDraft();
     mockMmkvStore.set(AUTO_TRIAL_INTENT_KEY, JSON.stringify(purchasedIntent()));
     const { tree, unmount } = await renderOnboarding();
@@ -353,10 +353,7 @@ describe('G7 onboarding reminderTime render', () => {
 
     expect(mockRequestPermissionsAsync).toHaveBeenCalledTimes(1);
     expect(mockReplace).toHaveBeenCalledTimes(1);
-    expect(mockReplace).toHaveBeenCalledWith({
-      pathname: '/series-reveal',
-      params: { intentId: INTENT_ID },
-    });
+    expect(mockReplace).toHaveBeenCalledWith('/generating');
     await unmount();
   });
 

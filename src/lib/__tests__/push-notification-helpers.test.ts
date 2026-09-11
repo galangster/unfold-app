@@ -235,7 +235,7 @@ describe('push notification helpers', () => {
       ).toMatchObject({ pathname: '/reveal', params: { devotionalId: 'd', dayNumber: '1' } });
     });
 
-    it('H11 routes a live auto-trial job to series-reveal', () => {
+    it('H11 routes a live auto-trial job to generating', () => {
       const intent = {
         intentId: 'intent-1',
         status: 'submitted',
@@ -247,13 +247,13 @@ describe('push notification helpers', () => {
           { type: 'devotional_ready', devotionalId: 'dev-auto', jobId: 'job-auto', dayNumber: 1 },
           intent,
         ),
-      ).toEqual({ pathname: '/series-reveal', params: { intentId: 'intent-1' } });
+      ).toEqual({ pathname: '/generating', params: { jobId: 'job-auto', devotionalId: 'dev-auto' } });
       expect(
         buildNotificationNavigationRoute(
           { type: 'generation_failed', jobType: 'initial_arc', jobId: 'job-auto', devotionalId: 'dev-auto' },
           intent,
         ),
-      ).toEqual({ pathname: '/series-reveal', params: { intentId: 'intent-1' } });
+      ).toEqual({ pathname: '/generating', params: { jobId: 'job-auto', devotionalId: 'dev-auto' } });
     });
 
     it('H11 keeps today routes when there is no intent or the intent is terminal', () => {
@@ -530,8 +530,8 @@ describe('push notification helpers', () => {
         devotionalId: 'dev-auto',
       });
       expect(replace).toHaveBeenCalledWith({
-        pathname: '/series-reveal',
-        params: { intentId: 'intent-1' },
+        pathname: '/generating',
+        params: { jobId: 'job-auto', devotionalId: 'dev-auto' },
       });
     });
   });

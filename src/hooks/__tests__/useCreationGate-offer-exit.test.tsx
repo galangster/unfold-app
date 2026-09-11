@@ -98,10 +98,7 @@ describe('F7 useCreationGate handleOfferVerifiedExit', () => {
 
     expect(mockSetItem).toHaveBeenCalledWith('@unfold_exclusive_offer_seen', 'true');
     expect(mockResolveLaterEntryExit).toHaveBeenCalledWith(EXIT, 'churned_sheet');
-    expect(mockNavigate).toHaveBeenCalledWith({
-      pathname: '/series-reveal',
-      params: { intentId: 'intent-auto' },
-    });
+    expect(mockNavigate).toHaveBeenCalledWith('/generating');
     expect(mockRequestLaterEntryNotifyAsk).not.toHaveBeenCalled();
   });
 

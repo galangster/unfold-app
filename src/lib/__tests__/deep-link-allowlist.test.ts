@@ -135,10 +135,10 @@ describe('deep-link allowlist — rejections', () => {
     expectRejected('unfold://unfolded', 'blocked-route');
     expectRejected('unfold:///unfolded', 'blocked-route');
     expectRejected('unfold://generating', 'blocked-route');
-    expectRejected('unfold://series-reveal', 'blocked-route');
-    expectRejected('unfold://keepsake', 'blocked-route');
-    expectRejected('unfold:///series-reveal?intentId=abc', 'blocked-route');
-    expectRejected('unfold://keepsake?devotionalId=abc', 'blocked-route');
+    expectRejected('unfold://series-reveal', 'unknown-route');
+    expectRejected('unfold://keepsake', 'unknown-route');
+    expectRejected('unfold:///series-reveal?intentId=abc', 'unknown-route');
+    expectRejected('unfold://keepsake?devotionalId=abc', 'unknown-route');
     expectRejected('unfold://(tabs)/(today)/day-menu?devotionalId=abc&currentDay=1', 'blocked-route');
     for (const route of EXTERNAL_ROUTE_BLOCKLIST) {
       expect(EXTERNAL_ROUTE_ALLOWLIST).not.toHaveProperty(route);

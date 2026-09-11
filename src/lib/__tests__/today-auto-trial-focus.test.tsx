@@ -131,7 +131,6 @@ jest.mock('@/lib/store', () => ({
 
 import {
   applyTodayAutoTrialFocus,
-  resolveAutoTrialRetryNavigation,
   abandonPurchasedIntentBeforeNewSeries,
 } from '@/app/(tabs)/(today)/index';
 import {
@@ -289,8 +288,7 @@ describe('H7 Today auto-trial focus', () => {
     expect(result.launchAction).toEqual({ action: 'open_reveal', intentId: INTENT_ID });
     expect(result.skipResolver).toBe(true);
     expect(result.navigation).toEqual({
-      pathname: '/series-reveal',
-      params: { intentId: INTENT_ID },
+      pathname: '/generating',
     });
     expect(resolveInflight).not.toHaveBeenCalled();
   });
@@ -340,8 +338,7 @@ describe('H7 Today auto-trial focus', () => {
       generationSessionStatus: 'idle',
     });
     expect(fresh.navigation).toEqual({
-      pathname: '/series-reveal',
-      params: { intentId: INTENT_ID },
+      pathname: '/generating',
     });
   });
 
@@ -373,8 +370,7 @@ describe('H7 Today auto-trial focus', () => {
       revealGuardKey: null,
     }).action).toBe('open_reveal');
     expect(result.navigation).toEqual({
-      pathname: '/series-reveal',
-      params: { intentId: INTENT_ID },
+      pathname: '/generating',
     });
   });
 
@@ -406,26 +402,13 @@ describe('H7 Today auto-trial focus', () => {
     expect(result.resumeGenerating).toBe(false);
   });
 
-  it('routes auto today-failed retry to series-reveal for submitted and failed', () => {
-    expect(resolveAutoTrialRetryNavigation({
-      intent: intent({ status: 'submitted', intentId: INTENT_ID, devotionalId: 'auto-1' }),
-      sessionDevotionalId: 'auto-1',
-    })).toEqual({ kind: 'series-reveal', intentId: INTENT_ID });
-    expect(resolveAutoTrialRetryNavigation({
-      intent: intent({ status: 'failed', intentId: INTENT_ID, devotionalId: 'auto-1' }),
-      sessionDevotionalId: 'auto-1',
-    })).toEqual({ kind: 'series-reveal', intentId: INTENT_ID });
-    expect(resolveAutoTrialRetryNavigation({
-      intent: intent({ status: 'failed', devotionalId: 'auto-1' }),
-      sessionDevotionalId: 'other',
-    })).toEqual({ kind: 'generating' });
-
+  it('routes auto today-failed retry to generating for submitted and failed', () => {
     const retry = todaySource.slice(
       todaySource.indexOf('const handleRetryInflightSeries'),
       todaySource.indexOf('const handleDismissInflightSeriesFailure'),
     );
-    expect(retry).toContain('clearGenerationSession()');
-    expect(retry).toContain("pathname: '/series-reveal'");
+    expect(retry).toContain("router.replace('/generating')");
+    expect(retry).not.toContain("pathname: '/series-reveal'");
     expect(retry).not.toContain('submitGenerationJob');
   });
 

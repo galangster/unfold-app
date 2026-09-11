@@ -40,10 +40,6 @@ import {
 import { applyInitialArcResult, type InitialArcResult } from '@/lib/initial-arc-result';
 import { clearInitialGenerationRequestId } from '@/lib/initial-generation-request';
 import {
-  askNotificationPermissionInContext,
-  readNotificationPermissionState,
-} from '@/lib/notification-ask';
-import {
   reduceSeriesReveal,
   type SeriesRevealEffect,
   type SeriesRevealEvent,
@@ -122,21 +118,7 @@ function submitErrorFields(err: unknown): {
   return { status, code: matched ?? rawCode, existingJobId };
 }
 
-async function maybeExitAsk(): Promise<void> {
-  try {
-    const permission = await readNotificationPermissionState();
-    if (permission === 'undetermined') {
-      await askNotificationPermissionInContext({
-        trigger: 'series_reveal',
-        registration: 'background',
-      });
-    }
-  } catch {
-    // The OS ask never throws to the caller.
-  }
-}
-
-export function useAutoTrialGeneration(intentId: string): {
+export function useAutoTrialGeneration(intentId: string | null): {
   state: SeriesRevealState;
   tryAgain(): void;
   goToToday(): void;
@@ -381,9 +363,10 @@ export function useAutoTrialGeneration(intentId: string): {
     stateRef.current = state;
   }, [state]);
 
-  useEffect(() => {
-    runEffectsRef.current = runEffects;
-  }, [runEffects]);
+  // Assigned during render on purpose: the mount effect below dispatches the
+  // machine's first effects through this ref, and an effect-time assignment
+  // can run after it and drop the submit.
+  runEffectsRef.current = runEffects;
 
   useEffect(() => {
     mountedRef.current = true;
@@ -395,6 +378,7 @@ export function useAutoTrialGeneration(intentId: string): {
   }, []);
 
   useEffect(() => {
+    if (intentId == null) return;
     const intent = readAutoTrialIntent();
     const inflight = readInflightGenerationJob();
     const store = useUnfoldStore.getState();
@@ -450,7 +434,6 @@ export function useAutoTrialGeneration(intentId: string): {
   const beginExit = (run: () => void) => {
     if (isExitingRef.current) return;
     isExitingRef.current = true;
-    void maybeExitAsk();
     run();
   };
 

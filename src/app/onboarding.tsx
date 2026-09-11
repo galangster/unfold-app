@@ -1441,7 +1441,7 @@ export default function OnboardingScreen() {
     draftAutosave.cancel();
   }, [draftAutosave]);
 
-  const navigateCompletion = useCallback((target: '/generating' | '/(tabs)/(today)' | { pathname: '/series-reveal'; params: { intentId: string } }) => {
+  const navigateCompletion = useCallback((target: '/generating' | '/(tabs)/(today)') => {
     router.replace(target);
   }, [router]);
 
@@ -1450,7 +1450,7 @@ export default function OnboardingScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const intent = readAutoTrialIntent();
     const mode = autoTrialMode && intent?.status === 'purchased' ? 'auto_trial' : 'generated';
-    void runOnboardingCompletion(completionStateRef.current, mode, intent, {
+    void runOnboardingCompletion(completionStateRef.current, mode, {
       retireDraftAutosave,
       clearSampleJob: () => {
         clearOnboardingSampleJob();
@@ -1483,7 +1483,7 @@ export default function OnboardingScreen() {
    * for a completed user and asks only what is still missing.
    */
   const handleDecideLater = useCallback(() => {
-    void runOnboardingCompletion(completionStateRef.current, 'deferred', null, {
+    void runOnboardingCompletion(completionStateRef.current, 'deferred', {
       retireDraftAutosave,
       clearSampleJob: () => {
         clearOnboardingSampleJob();
@@ -2115,7 +2115,6 @@ export default function OnboardingScreen() {
     }
 
     if (step.type === 'purchaseConfirmation') {
-      // DG-1: visual treatment pending 07-design-final.md
       const confirmation = getPurchaseConfirmationCopy(autoTrialMode ? 'auto_trial' : 'setup');
       return (
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false}>

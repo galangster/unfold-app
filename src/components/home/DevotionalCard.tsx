@@ -3,7 +3,7 @@ import { getDailyGenerationNotice } from '@/lib/daily-generation-messages';
  * DevotionalCard — 9-state hero card for the home screen.
  *
  * Renders based on a DevotionalCardState discriminated union:
- *   empty | preparing | first-series-failed | premium-paused | reveal-ready | unread | complete-today | tomorrow-locked | journey-complete | trial-journey-complete | trial-paused
+ *   empty | preparing | first-series-failed | premium-paused | reveal-ready | unread | complete-today | tomorrow-locked | journey-complete
  *
  * Extracted from (tabs)/(today)/index.tsx for single-responsibility and testability.
  */
@@ -36,13 +36,10 @@ import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { RecommendedSeriesCard } from './RecommendedSeriesCard';
-import { SeriesPath } from './SeriesPath';
 import { InlineReflectComposer } from './InlineReflectComposer';
 import { useCompletedDayReflection } from './use-completed-day-reflection';
 import type { DevotionalCardState } from './compute-devotional-state';
 import type { NextPick } from '@/lib/store';
-import type { NotificationPermissionState } from '@/lib/notification-ask';
-import { AutoTrialNotifyCard, type AutoTrialNotifyPhase } from '@/components/onboarding/AutoTrialNotifyCard';
 import { smartQuotes } from '@/lib/smart-quotes';
 import { titleWithPeriod } from '@/lib/display-title';
 import { stripOuterQuotes } from '@/lib/cn';
@@ -59,12 +56,6 @@ interface Props {
   isReturningUser?: boolean;
   gateCreation?: () => boolean;
   storedPick?: NextPick | null;
-  notify?: {
-    permission: NotificationPermissionState;
-    phase: AutoTrialNotifyPhase;
-    onAsk: () => void;
-    onOpenSettings: () => void;
-  } | null;
 }
 
 // ─── Character reveal for "Unfold" title (empty state) ──────────
@@ -435,8 +426,6 @@ function RevealReadyState({ state }: { state: Extract<DevotionalCardState, { typ
               {scriptureReference}
             </Text>
           </View>
-          {state.path ? <SeriesPath nodes={state.path} variant="compact" /> : null}
-
           <TouchableOpacity
             activeOpacity={0.74}
             onPress={state.onReveal}
@@ -618,7 +607,6 @@ function PreparingState({ state }: { state: Extract<DevotionalCardState, { type:
         ) : (
           <PreparingProgressBar progress={state.progress} colors={{ accent: alpha(colors.accent, 0.58), border: alpha(colors.border, 0.45) }} />
         )}
-        {state.path ? <SeriesPath nodes={state.path} variant="compact" /> : null}
       </View>
     </View>
   );
@@ -745,97 +733,6 @@ function JourneyCompleteState({
       storedPick={storedPick}
       renderFallback={() => <JourneyCompleteStateFallback seriesTitle={seriesTitle} onCreateNew={onCreateNew} />}
     />
-  );
-}
-
-function TrialJourneyCompleteState({
-  state,
-  gateCreation,
-  storedPick,
-}: {
-  state: Extract<DevotionalCardState, { type: 'trial-journey-complete' }>;
-  gateCreation?: () => boolean;
-  storedPick?: NextPick | null;
-}) {
-  const { colors } = useTheme();
-  return (
-    <View>
-      {/* DG-1: visual treatment pending 07-design-final.md */}
-      <SeriesPath nodes={state.path} variant="compact" />
-      <Text style={{ color: colors.text }}>{state.seriesTitle}</Text>
-      <TouchableOpacity
-        accessibilityRole="button"
-        accessibilityLabel="Open keepsake"
-        onPress={state.onOpenKeepsake}
-      >
-        <Text style={{ color: colors.text }}>Open keepsake</Text>
-      </TouchableOpacity>
-      <RecommendedSeriesCard
-        variant="completion"
-        completedSeriesTitle={state.seriesTitle}
-        onChooseOther={state.onChooseOther}
-        gateCreation={gateCreation}
-        storedPick={storedPick ?? state.nextPick}
-        renderFallback={() => (
-          <JourneyCompleteStateFallback
-            seriesTitle={state.seriesTitle}
-            onCreateNew={state.onChooseOther}
-          />
-        )}
-      />
-    </View>
-  );
-}
-
-function TrialPausedState({
-  state,
-  gateCreation,
-  storedPick,
-}: {
-  state: Extract<DevotionalCardState, { type: 'trial-paused' }>;
-  gateCreation?: () => boolean;
-  storedPick?: NextPick | null;
-}) {
-  const { colors } = useTheme();
-  return (
-    <View>
-      {/* DG-1: visual treatment pending 07-design-final.md */}
-      <SeriesPath nodes={state.path} variant="compact" />
-      <Text style={{ color: colors.text }}>{state.seriesTitle}</Text>
-      <Text style={{ color: colors.textMuted }}>
-        {state.daysCompleted} of {state.totalDays} completed
-      </Text>
-      {state.keepsakeAvailable ? (
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel="Open keepsake"
-          onPress={state.onOpenKeepsake}
-        >
-          <Text style={{ color: colors.text }}>Open keepsake</Text>
-        </TouchableOpacity>
-      ) : null}
-      <TouchableOpacity
-        accessibilityRole="button"
-        accessibilityLabel="Open Bible"
-        onPress={state.onOpenBible}
-      >
-        <Text style={{ color: colors.text }}>Open Bible</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        accessibilityRole="button"
-        accessibilityLabel="Renew Premium"
-        onPress={state.onRenewPremium}
-      >
-        <Text style={{ color: colors.text }}>Renew Premium</Text>
-      </TouchableOpacity>
-      <RecommendedSeriesCard
-        variant="completion"
-        completedSeriesTitle={state.seriesTitle}
-        onChooseOther={state.onRenewPremium}
-        gateCreation={gateCreation}
-        storedPick={storedPick}
-      />
-    </View>
   );
 }
 
@@ -1031,11 +928,7 @@ function MainCard({ state }: MainCardProps) {
                     {Math.round(progress)}%
                   </Text>
                 </View>
-                {'path' in state && state.path ? (
-                  <SeriesPath nodes={state.path} variant="compact" />
-                ) : (
-                  <AnimatedProgressBar progress={progress} colors={colors} />
-                )}
+                <AnimatedProgressBar progress={progress} colors={colors} />
               </View>
             )}
 
@@ -1137,7 +1030,6 @@ export function DevotionalCard({
   isReturningUser,
   gateCreation,
   storedPick,
-  notify,
 }: Props) {
   const { entering } = useAccessibleAnimation();
 
@@ -1152,14 +1044,6 @@ export function DevotionalCard({
       entering={entering(FadeIn.delay(100).duration(Duration.normal).easing(Ease.out))}
       style={[inStack ? styles.rootInStack : styles.root, parallaxStyle]}
     >
-      {notify ? (
-        <AutoTrialNotifyCard
-          permission={notify.permission}
-          phase={notify.phase}
-          onAsk={notify.onAsk}
-          onOpenSettings={notify.onOpenSettings}
-        />
-      ) : null}
       {state.type === 'empty' && (
         <EmptyState
           onCreateNew={state.onCreateNew}
@@ -1177,20 +1061,6 @@ export function DevotionalCard({
         <JourneyCompleteState
           seriesTitle={state.seriesTitle}
           onCreateNew={state.onCreateNew}
-          gateCreation={gateCreation}
-          storedPick={storedPick}
-        />
-      )}
-      {state.type === 'trial-journey-complete' && (
-        <TrialJourneyCompleteState
-          state={state}
-          gateCreation={gateCreation}
-          storedPick={storedPick}
-        />
-      )}
-      {state.type === 'trial-paused' && (
-        <TrialPausedState
-          state={state}
           gateCreation={gateCreation}
           storedPick={storedPick}
         />

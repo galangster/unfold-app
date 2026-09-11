@@ -1,4 +1,4 @@
-import type { Devotional, DevotionalDay, NextPick } from '@/lib/store';
+import type { Devotional, NextPick } from '@/lib/store';
 
 export type { NextPick };
 
@@ -8,10 +8,6 @@ export function isAutoTrialSeries(d?: Devotional | null): boolean {
 
 export function isOnboardingSampleDevotionalId(id?: string | null): boolean {
   return typeof id === 'string' && id.startsWith('onboarding-sample-');
-}
-
-export function shouldShowShapedByCheckInChip(d: Devotional, day: DevotionalDay): boolean {
-  return isAutoTrialSeries(d) && day.dayNumber === 2 && day.shapedByCheckIn === true;
 }
 
 export function asTrimmedString(value: unknown): string | undefined {

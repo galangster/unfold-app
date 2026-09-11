@@ -151,10 +151,7 @@ describe('F9 useRevenueCatSync pending grant', () => {
       customerInfo: TRIAL_INFO,
     });
     expect(mockPendingPaywallGrant).toBeNull();
-    expect(mockPush).toHaveBeenCalledWith({
-      pathname: '/series-reveal',
-      params: { intentId: 'intent-1' },
-    });
+    expect(mockPush).toHaveBeenCalledWith('/generating');
   });
 
   it('clears a marker older than 15 minutes with no decision', async () => {

@@ -51,6 +51,7 @@ jest.mock('@/lib/generation-api', () => ({
   retryJob: (...args: unknown[]) => mockRetryJob(...args),
   recoverCompletedGenerationResult: jest.fn(async () => null),
   buildInitialArcUserContext: jest.fn(() => ({})),
+  buildAutoTrialUserContext: jest.fn(() => ({})),
 }));
 
 const mockGetPermissionsAsync = jest.fn(async (..._args: unknown[]) => ({ status: 'granted' }));
@@ -152,6 +153,7 @@ import {
 } from '../initial-generation-request';
 import { mmkvStorage } from '../mmkv-storage';
 import { useUnfoldStore, type UserProfile } from '../store';
+import { useUIState } from '@/lib/ui-state';
 
 const GO_HOME_LABEL = 'Go home while your devotional is prepared';
 
@@ -222,6 +224,9 @@ beforeEach(() => {
   mmkvStorage.removeItem(INFLIGHT_GENERATION_JOB_KEY);
   mmkvStorage.removeItem(INITIAL_GENERATION_REQUEST_ID_KEY);
   mmkvStorage.removeItem('auto-trial-series-intent-v1');
+  // The reveal guard is session state; an earlier test's key must not mark this mount as a repeat.
+  useUIState.getState().setAutoTrialRevealGuardKey(null);
+  useUIState.getState().setSeriesRevealMountedIntentId(null);
   useUnfoldStore.setState({
     devotionals: [],
     currentDevotionalId: null,
@@ -432,9 +437,52 @@ describe('regression: Jordan item 6 — Go home from /generating', () => {
 });
 
 describe('H10 generating auto-trial handoff', () => {
-  it('replaces to series-reveal before submit or a generation session write', async () => {
+  it('routes a declined auto claim to series setup instead of the error card', async () => {
     const { createAutoTrialIntent } = jest.requireActual('../auto-trial-intent') as typeof import('../auto-trial-intent');
-    const intent = createAutoTrialIntent({
+    createAutoTrialIntent({
+      deviceId: 'test-device-id',
+      entry: 'onboarding',
+      surface: 'onboarding_paywall',
+      source: 'purchase',
+      simulated: false,
+      trialDays: 3,
+      purchasedAt: '2026-09-08T17:00:00.000Z',
+      expiresAt: '2026-09-11T17:00:00.000Z',
+      timeZone: 'America/Chicago',
+      isSandbox: false,
+      productIdentifier: 'unfold_premium_yearly',
+      switchFetchedAt: '2026-09-08T17:00:00.000Z',
+      nowMs: Date.parse('2026-09-10T17:00:00.000Z'),
+    });
+    useUnfoldStore.setState({
+      user: { ...user, hasCompletedOnboarding: true } as UserProfile,
+    });
+    mockSubmitGenerationJob.mockRejectedValue({ status: 409, code: 'switch_off', message: 'switch_off' });
+    const tree = await renderScreen();
+    mounted.push(tree);
+    // submit rejection -> declined -> setUpSeries -> redirect spans several
+    // microtask turns and a React effect flush; settle fully before asserting.
+    // The hook races the profile push against PROFILE_PUSH_CAP_MS under fake
+    // timers, so advance the clock until the redirect lands (bounded).
+    for (let i = 0; i < 30 && mockReplace.mock.calls.length === 0; i += 1) {
+      await act(async () => {
+        jest.advanceTimersByTime(1_000);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+    }
+    expect(mockReplace).toHaveBeenCalledWith({
+      pathname: '/onboarding',
+      params: { startAt: 'themeType', flow: 'newSeries' },
+    });
+    expect(tree.root.findAll((n) => (
+      typeof n.props?.children === 'string' && n.props.children.includes('Something went')
+    ))).toHaveLength(0);
+  });
+
+  it('keeps auto-trial on generating without the screen submit or a generation session write', async () => {
+    const { createAutoTrialIntent } = jest.requireActual('../auto-trial-intent') as typeof import('../auto-trial-intent');
+    createAutoTrialIntent({
       deviceId: 'test-device-id',
       entry: 'onboarding',
       surface: 'onboarding_paywall',
@@ -452,11 +500,7 @@ describe('H10 generating auto-trial handoff', () => {
     const sessionBefore = useUnfoldStore.getState().generationSession;
     const tree = await renderScreen();
     mounted.push(tree);
-    expect(mockReplace).toHaveBeenCalledWith({
-      pathname: '/series-reveal',
-      params: { intentId: intent.intentId },
-    });
-    expect(mockSubmitGenerationJob).not.toHaveBeenCalled();
+    expect(mockReplace).not.toHaveBeenCalledWith(expect.objectContaining({ pathname: '/series-reveal' }));
     expect(useUnfoldStore.getState().generationSession).toEqual(sessionBefore);
   });
 });

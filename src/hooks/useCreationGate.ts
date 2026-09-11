@@ -76,10 +76,7 @@ export function useCreationGate() {
     const decision = resolveLaterEntryExit(exit, 'churned_sheet');
     if (decision.kind === 'auto') {
       // This hook navigates (never pushes); the presentation contract test pins it.
-      router.navigate({
-        pathname: '/series-reveal',
-        params: { intentId: decision.intent.intentId },
-      });
+      router.navigate('/generating');
       return;
     }
     void requestLaterEntryNotifyAsk(exit.customerInfo);

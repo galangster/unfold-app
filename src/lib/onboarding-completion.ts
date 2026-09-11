@@ -1,16 +1,12 @@
-import type { AutoTrialIntentV1 } from '@/lib/auto-trial-intent';
-
 export type OnboardingCompletionMode = 'auto_trial' | 'generated' | 'deferred';
 
 export type CompletionTarget =
   | '/generating'
-  | '/(tabs)/(today)'
-  | { pathname: '/series-reveal'; params: { intentId: string } };
+  | '/(tabs)/(today)';
 
 export async function runOnboardingCompletion(
   state: { started: boolean },
   mode: OnboardingCompletionMode,
-  intent: AutoTrialIntentV1 | null,
   deps: {
     retireDraftAutosave(): void;
     clearSampleJob(): void;
@@ -26,21 +22,7 @@ export async function runOnboardingCompletion(
   if (state.started) return false;
   state.started = true;
 
-  let target: CompletionTarget;
-  switch (mode) {
-    case 'auto_trial':
-      target = {
-        pathname: '/series-reveal',
-        params: { intentId: intent?.intentId ?? '' },
-      };
-      break;
-    case 'generated':
-      target = '/generating';
-      break;
-    case 'deferred':
-      target = '/(tabs)/(today)';
-      break;
-  }
+  const target: CompletionTarget = mode === 'deferred' ? '/(tabs)/(today)' : '/generating';
 
   deps.retireDraftAutosave();
   deps.clearSampleJob();

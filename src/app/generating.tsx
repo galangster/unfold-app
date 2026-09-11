@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, type ComponentProps, type ReactNode } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, TouchableOpacity, AppState, AppStateStatus, AccessibilityInfo, ScrollView, StyleSheet, ActivityIndicator, Linking } from 'react-native';
 import { useRouter, useNavigation, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -39,7 +39,7 @@ import {
   INITIAL_ARC_UNKNOWN_STATUS_MESSAGE,
   INITIAL_ARC_UNREACHABLE_MESSAGE,
 } from '@/lib/inflight-initial-arc-watch';
-import { applyInitialArcResult, requireCanonicalDevotionalId, type InitialArcResult } from '@/lib/initial-arc-result';
+import { applyInitialArcResult, DEFAULT_SERIES_TITLE, requireCanonicalDevotionalId, type InitialArcResult } from '@/lib/initial-arc-result';
 import {
   clearInitialGenerationRequestId,
   ensureInitialGenerationRequestId,
@@ -73,11 +73,13 @@ import { registerPushToken } from '@/lib/push-notifications';
 import {
   getNotifyControlState,
   resolveNotifyRequestOutcome,
-  type NotifyControlState,
   type NotifyRequestOutcome,
 } from '@/lib/generating-notify-state';
+import { NOTIFY_NOTE_COPY, NotifyNote } from '@/components/generating/NotifyNote';
+import { useAutoTrialGeneration } from '@/hooks/useAutoTrialGeneration';
 import { readAutoTrialIntent } from '@/lib/auto-trial-intent';
 import { resolveGeneratingEntry } from '@/lib/generating-entry';
+import type { SeriesRevealState } from '@/lib/series-reveal-machine';
 import { askNotificationPermissionInContext } from '@/lib/notification-ask';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
@@ -119,54 +121,11 @@ const RIPPLE_COUNT = 3;
 const RIPPLE_STAGGER = 900;
 const MESSAGE_CYCLE_MS = 3800;
 
-/** Copy for the nudge notes under the notify control: one tree, three states. */
-const NOTIFY_NOTE_COPY: Record<Extract<NotifyControlState, 'pending' | 'denied' | 'registration-failed'>, string> = {
-  pending: 'Setting up your nudge\u2026',
-  denied: 'Notifications are off for Unfold. Turn them on in Settings and we\u2019ll nudge you when it\u2019s\u00A0ready.',
-  'registration-failed': 'We couldn\u2019t set up the nudge. Check your connection and tap Notify me\u00A0again.',
-};
-
-type NotifyNoteColors = { inputBackground: string; border: string; textMuted: string; textSubtle: string };
-
-/**
- * A bordered note under the notify control: an icon (the bell unless given)
- * beside muted copy, with optional content — the Settings link — below it.
- */
-function NotifyNote({
-  entering,
-  colors,
-  text,
-  icon,
-  centered = false,
-  gap,
-  children,
-}: {
-  entering: ComponentProps<typeof Animated.View>['entering'];
-  colors: NotifyNoteColors;
-  text: string;
-  icon?: ReactNode;
-  /** Centre the icon on the text (the spinner) instead of top-aligning it. */
-  centered?: boolean;
-  gap?: number;
-  children?: ReactNode;
-}) {
-  return (
-    <Animated.View
-      entering={entering}
-      style={{ marginTop: Spacing['10'], width: '100%', alignItems: 'center', ...(gap === undefined ? {} : { gap }) }}
-    >
-      <View
-        style={[
-          genStyles.notifyNote,
-          { ...(centered ? { alignItems: 'center' as const } : {}), backgroundColor: colors.inputBackground, borderColor: colors.border },
-        ]}
-      >
-        {icon ?? <BellIcon size={14} color={colors.textSubtle} weight="light" />}
-        <Text style={[genStyles.notifyNoteText, { color: colors.textMuted }]}>{text}</Text>
-      </View>
-      {children}
-    </Animated.View>
-  );
+function autoTrialErrorMessage(state: Extract<SeriesRevealState, { kind: 'failed' | 'retry_exhausted' }>): string {
+  if (state.reason === 'unreachable') return INITIAL_ARC_UNREACHABLE_MESSAGE;
+  if (state.reason === 'invalid_result') return INITIAL_ARC_INVALID_RESULT_MESSAGE;
+  if (state.reason === 'unknown_status') return INITIAL_ARC_UNKNOWN_STATUS_MESSAGE;
+  return 'Generation failed on server';
 }
 
 export default function GeneratingScreen() {
@@ -267,6 +226,51 @@ export default function GeneratingScreen() {
 
   const [currentSeriesTitle, setCurrentSeriesTitle] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(true);
+  const [autoTrialHandoffId] = useState(() => {
+    const entry = resolveGeneratingEntry({
+      inflight: readInflightGenerationJob(),
+      params: { jobId: params.jobId, devotionalId: params.devotionalId },
+      sessionDevotionalId: useUnfoldStore.getState().generationSession.devotionalId,
+      landedDevotionalIds: useUnfoldStore.getState().devotionals.map((row) => row.id),
+      autoTrialIntent: readAutoTrialIntent(),
+    });
+    return entry.kind === 'auto-trial-handoff' ? entry.intentId : null;
+  });
+  const auto = useAutoTrialGeneration(autoTrialHandoffId);
+  const autoState = auto.state;
+  const autoSetUpSeries = auto.setUpSeries;
+  useEffect(() => {
+    if (!autoTrialHandoffId) return;
+    if (autoState.kind === 'revealed') {
+      const landed = useUnfoldStore.getState().devotionals.find((row) => row.id === autoState.devotionalId);
+      setDevotionalTitle(landed?.title ?? DEFAULT_SERIES_TITLE);
+      setIsComplete(true);
+      setIsGenerating(false);
+      setError(null);
+      return;
+    }
+    if (autoState.kind === 'declined') {
+      autoSetUpSeries();
+      return;
+    }
+    if (autoState.kind === 'failed') {
+      setIsComplete(false);
+      setIsGenerating(false);
+      setCanRetry(true);
+      setError(autoTrialErrorMessage(autoState));
+      return;
+    }
+    if (autoState.kind === 'retry_exhausted') {
+      setIsComplete(false);
+      setIsGenerating(false);
+      setCanRetry(false);
+      setError(autoTrialErrorMessage(autoState));
+      return;
+    }
+    setIsComplete(false);
+    setIsGenerating(true);
+    setError(null);
+  }, [autoSetUpSeries, autoState, autoTrialHandoffId]);
   const notificationPromptTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Prevent swipe-back during generation; re-enable on error.
@@ -738,6 +742,9 @@ export default function GeneratingScreen() {
     // A push is judged stale against the generation session and the series
     // already in the store, never against currentDevotionalId: onboarding's
     // sample and a finished journey are "current" too, and read as moved on.
+    if (autoTrialHandoffId) {
+      return;
+    }
     const { generationSession, devotionals } = useUnfoldStore.getState();
     const entry = resolveGeneratingEntry({
       inflight: readInflightGenerationJob(),
@@ -746,10 +753,6 @@ export default function GeneratingScreen() {
       landedDevotionalIds: devotionals.map((devotional) => devotional.id),
       autoTrialIntent: readAutoTrialIntent(),
     });
-    if (entry.kind === 'auto-trial-handoff') {
-      router.replace({ pathname: '/series-reveal', params: { intentId: entry.intentId } });
-      return;
-    }
     if (entry.kind === 'resume') {
       const { inflight } = entry;
       logger.log('[generating] Resuming inflight job from MMKV:', inflight.jobId);
@@ -886,14 +889,14 @@ export default function GeneratingScreen() {
 
   const [isNavigating, setIsNavigating] = useState(false);
 
-  const handleBeginReading = () => {
+  const legacyBeginDayOne = () => {
     if (isNavigating) return;
     setIsNavigating(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     router.replace('/(tabs)/(today)/reading');
   };
 
-  const handleRetry = async () => {
+  const legacyTryAgain = async () => {
     if (isGenerating) return;
     void logBugEvent('generation', 'generation-user-retry', { pendingJobId });
 
@@ -982,7 +985,7 @@ export default function GeneratingScreen() {
     }
   };
 
-  const handleRetryFromOnboarding = () => {
+  const legacySetUpSeries = () => {
     if (isGenerating) return;
     void logBugEvent('generation', 'generation-restart-onboarding');
     stopOwnedPolling();
@@ -997,7 +1000,7 @@ export default function GeneratingScreen() {
     router.replace('/onboarding');
   };
 
-  const handleGoHome = () => {
+  const legacyGoToToday = () => {
     if (isGenerating) return;
     void logBugEvent('generation', 'generation-abandoned-go-home');
     stopOwnedPolling();
@@ -1023,7 +1026,7 @@ export default function GeneratingScreen() {
   // preparing card and watches it instead of bouncing back here. Nothing is
   // awaited and no permission prompt sits on this path: the tap must always
   // leave this screen.
-  const handleLeaveForHome = () => {
+  const legacyLeaveForHome = () => {
     leftForHomeRef.current = true;
     stopOwnedPolling();
     const record = markInflightJobLeftForHome();
@@ -1035,6 +1038,25 @@ export default function GeneratingScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.replace('/(tabs)/(today)');
   };
+
+  const actions = autoTrialHandoffId ? {
+    beginDayOne: auto.beginDayOne,
+    tryAgain: auto.tryAgain,
+    setUpSeries: auto.setUpSeries,
+    goToToday: auto.goToToday,
+    leaveForHome: auto.goToToday,
+  } : {
+    beginDayOne: legacyBeginDayOne,
+    tryAgain: legacyTryAgain,
+    setUpSeries: legacySetUpSeries,
+    goToToday: legacyGoToToday,
+    leaveForHome: legacyLeaveForHome,
+  };
+  const handleBeginReading = actions.beginDayOne;
+  const handleRetry = actions.tryAgain;
+  const handleRetryFromOnboarding = actions.setUpSeries;
+  const handleGoHome = actions.goToToday;
+  const handleLeaveForHome = actions.leaveForHome;
 
   // ========== RENDER: ERROR STATE ==========
 
@@ -1724,22 +1746,6 @@ const genStyles = StyleSheet.create({
   transparentFlex: {
     flex: 1,
     backgroundColor: 'transparent',
-  },
-  notifyNote: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    width: '100%',
-    paddingHorizontal: Spacing['4'],
-    paddingVertical: 10,
-    borderRadius: Radius.xl,
-    borderWidth: 1,
-  },
-  notifyNoteText: {
-    flex: 1,
-    fontFamily: FontFamily.ui,
-    fontSize: 13,
-    lineHeight: 18,
-    marginLeft: Spacing['2'],
   },
   errorSafeArea: {
     flex: 1,

@@ -206,10 +206,9 @@ describe('J16 series-detail auto trial', () => {
     mockCurrentDevotionalId = 'auto-1';
     mockDevotionals = [autoCurrentDay2()];
     const tree = renderScreen();
-    const path = tree.root.findAllByProps({ testID: 'series-path' })[0] as {
-      props: { accessibilityLabel?: string };
-    };
-    expect(path).toBeDefined();
-    expect(path.props.accessibilityLabel).toBe('Day 1 read. Day 2 preparing. Day 3 locked.');
+    // Nick's 2026-09-11 ruling: an auto series renders like a normal series.
+    // No drawn path; the existing progress row carries the read count.
+    expect(tree.root.findAllByProps({ testID: 'series-path' })).toHaveLength(0);
+    expect(allRenderedText(tree)).toMatch(/completed/);
   });
 });
