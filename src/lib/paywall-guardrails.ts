@@ -72,6 +72,10 @@ export function resolvePurchaseOutcome(
   return { kind: 'success' };
 }
 
+export function resolveRestoreExitSource(lateGrantArmed: boolean): 'lateGrant' | 'restore' {
+  return lateGrantArmed ? 'lateGrant' : 'restore';
+}
+
 export function resolveRestoreOutcome(
   result: MinimalRevenueCatResult,
 ): PaywallOutcome {

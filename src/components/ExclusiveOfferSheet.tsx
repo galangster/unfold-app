@@ -13,7 +13,7 @@
  * a sheet that could not load a package leaves the one-time chance intact.
  */
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, Modal, Linking, ScrollView } from 'react-native';
 import { LEGAL_LINKS } from '@/lib/push-notification-helpers';
 import { TouchableOpacity } from 'react-native-gesture-handler';
@@ -22,6 +22,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query';
+import type { AutoTrialSurface, VerifiedEntitlementExit } from '@/lib/auto-trial-exit';
+import { resolveRestoreExitSource } from '@/lib/paywall-guardrails';
 import {
   getOfferings,
   purchasePackage,
@@ -31,6 +33,7 @@ import {
 import type { PurchasesPackage } from 'react-native-purchases';
 import { useUnfoldStore } from '@/lib/store';
 import { useTheme } from '@/lib/theme';
+import { useUIState } from '@/lib/ui-state';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
@@ -62,7 +65,8 @@ interface ExclusiveOfferSheetProps {
    * on the paywall. Optional: callers that only need to close fall back to
    * onDismiss, which is the pre-existing behaviour.
    */
-  onPurchaseSuccess?: () => void;
+  onPurchaseSuccess?: (exit: VerifiedEntitlementExit) => void;
+  surface?: AutoTrialSurface;
   context: 'onboarding' | 'churned';
 }
 
@@ -74,6 +78,7 @@ export function ExclusiveOfferSheet({
   visible,
   onDismiss,
   onPurchaseSuccess,
+  surface,
   context,
 }: ExclusiveOfferSheetProps) {
   const { colors, isDark } = useTheme();
@@ -82,6 +87,7 @@ export function ExclusiveOfferSheet({
   const router = useRouter();
   const queryClient = useQueryClient();
   const updateUser = useUnfoldStore((s) => s.updateUser);
+  const lateGrantArmedRef = useRef(false);
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -130,18 +136,27 @@ export function ExclusiveOfferSheet({
   // Every close routes through here so the host learns whether a purchasable
   // offer was on screen. It takes no arguments on purpose: passed straight to
   // onPress and onRequestClose, a React Native event would land in the info slot.
-  const handleDismiss = () => onDismiss({ offerShown: Boolean(targetPackage) });
+  const handleDismiss = () => {
+    if (lateGrantArmedRef.current && surface) {
+      useUIState.getState().setPendingPaywallGrant({
+        surface,
+        entry: surface === 'onboarding_paywall' ? 'onboarding' : 'later',
+        setAtMs: Date.now(),
+      });
+    }
+    onDismiss({ offerShown: Boolean(targetPackage) });
+  };
 
   // Single exit for "premium is now active", shared by purchase and restore.
   // Hands off to onPurchaseSuccess when the caller supplied one so the host
   // flow can advance; otherwise it just closes, as it always did.
-  const handleEntitlementGranted = () => {
+  const handleEntitlementGranted = (exit: VerifiedEntitlementExit) => {
     updateUser({ isPremium: true });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     queryClient.invalidateQueries({ queryKey: ['revenuecat'] });
     setErrorMessage(null);
     if (onPurchaseSuccess) {
-      onPurchaseSuccess();
+      onPurchaseSuccess(exit);
       return;
     }
     handleDismiss();
@@ -159,11 +174,12 @@ export function ExclusiveOfferSheet({
           'hasPremium:', hasPremium,
         );
         if (!hasPremium) {
+          lateGrantArmedRef.current = true;
           setErrorMessage('Purchase completed but premium was not activated. Please tap Restore.');
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
           return;
         }
-        handleEntitlementGranted();
+        handleEntitlementGranted({ source: 'offer', customerInfo: result.data });
       } else if (result.reason === 'user_cancelled') {
         return;
       } else {
@@ -186,7 +202,10 @@ export function ExclusiveOfferSheet({
       if (result.ok) {
         const hasPremium = Boolean(result.data.entitlements.active?.['Unfold Premium']);
         if (hasPremium) {
-          handleEntitlementGranted();
+          handleEntitlementGranted({
+            source: resolveRestoreExitSource(lateGrantArmedRef.current),
+            customerInfo: result.data,
+          });
         } else {
           setErrorMessage('No active subscription found.');
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);

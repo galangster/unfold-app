@@ -2,13 +2,16 @@ import { useCallback, useRef, useState } from 'react';
 import { Alert, AccessibilityInfo } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import { mmkvStorage } from '@/lib/mmkv-storage';
 import type { ExclusiveOfferDismissInfo } from '@/components/ExclusiveOfferSheet';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
+import type { VerifiedEntitlementExit } from '@/lib/auto-trial-exit';
+import { resolveLaterEntryExit } from '@/lib/auto-trial-exit';
+import { requestLaterEntryNotifyAsk } from '@/lib/notification-ask';
 import {
   getChurnedCreationGateAction,
   shouldEmitPendingFeedback,
 } from '@/lib/creation-gate-policy';
+import { mmkvStorage } from '@/lib/mmkv-storage';
 
 const EXCLUSIVE_OFFER_SEEN_KEY = '@unfold_exclusive_offer_seen';
 
@@ -68,11 +71,26 @@ export function useCreationGate() {
     setShowExclusiveOffer(false);
   }, []);
 
+  const handleOfferVerifiedExit = useCallback((exit: VerifiedEntitlementExit) => {
+    dismissOffer({ offerShown: true });
+    const decision = resolveLaterEntryExit(exit, 'churned_sheet');
+    if (decision.kind === 'auto') {
+      // This hook navigates (never pushes); the presentation contract test pins it.
+      router.navigate({
+        pathname: '/series-reveal',
+        params: { intentId: decision.intent.intentId },
+      });
+      return;
+    }
+    void requestLaterEntryNotifyAsk(exit.customerInfo);
+  }, [dismissOffer, router]);
+
   return {
     policy,
     isPremium,
     gate,
     showExclusiveOffer,
     dismissOffer,
+    handleOfferVerifiedExit,
   };
 }

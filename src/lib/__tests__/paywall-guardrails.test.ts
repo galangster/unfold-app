@@ -5,6 +5,7 @@ import {
   resolveOnboardingPurchaseAdvance,
   resolvePaywallCompletionNavigation,
   resolvePurchaseOutcome,
+  resolveRestoreExitSource,
   resolveRestoreOutcome,
   runGuardedPaywallFlow,
   PAYWALL_ENTITLEMENT_PENDING_MESSAGE,
@@ -344,6 +345,13 @@ describe('paywall guardrails', () => {
       // No error surfaced by the guard on success (run owns non-throwing branches).
       expect(setError).not.toHaveBeenCalled();
       expect(setLoading).toHaveBeenCalledWith(false);
+    });
+  });
+
+  describe('resolveRestoreExitSource', () => {
+    it('returns lateGrant when the mount armed a pending grant, otherwise restore', () => {
+      expect(resolveRestoreExitSource(true)).toBe('lateGrant');
+      expect(resolveRestoreExitSource(false)).toBe('restore');
     });
   });
 });
