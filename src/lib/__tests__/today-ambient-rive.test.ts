@@ -43,6 +43,7 @@ describe('today completed ambience gating', () => {
     expect(TODAY_COMPLETION_AMBIENCE_OPTIONS).toContain('ember');
     expect(TODAY_COMPLETION_AMBIENCE_OPTIONS).toContain('campfire-rive');
     expect(TODAY_COMPLETION_AMBIENCE_OPTIONS).toContain('canopy-lights-rive');
+    expect(TODAY_COMPLETION_AMBIENCE_OPTIONS).toContain('clouds-rive');
     expect(TODAY_COMPLETION_AMBIENCE_OPTIONS).toContain('doors-rive');
     expect(TODAY_COMPLETION_AMBIENCE_OPTIONS).toContain('tree-rive');
     expect(TODAY_COMPLETION_AMBIENCE_OPTIONS).toContain('waterfall-rive');
