@@ -1441,7 +1441,7 @@ export default function OnboardingScreen() {
     draftAutosave.cancel();
   }, [draftAutosave]);
 
-  const navigateCompletion = useCallback((target: '/generating' | '/(tabs)/(today)' | { pathname: '/series-reveal'; params: { intentId: string } }) => {
+  const navigateCompletion = useCallback((target: '/generating' | '/(tabs)/(today)') => {
     router.replace(target);
   }, [router]);
 
@@ -2115,7 +2115,6 @@ export default function OnboardingScreen() {
     }
 
     if (step.type === 'purchaseConfirmation') {
-      // DG-1: visual treatment pending 07-design-final.md
       const confirmation = getPurchaseConfirmationCopy(autoTrialMode ? 'auto_trial' : 'setup');
       return (
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false}>

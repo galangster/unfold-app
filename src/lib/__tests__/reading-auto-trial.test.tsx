@@ -42,7 +42,6 @@ jest.mock('@/components/CompletionCelebration', () => ({ CompletionCelebration: 
 jest.mock('@/components/reading/DevotionalContent', () => ({ DevotionalContent: () => null }));
 jest.mock('@/components/reading/StudyMethodSheet', () => ({ StudyMethodSheet: () => null }));
 jest.mock('@/components/reading/ReaderOutlineSheet', () => ({ ReaderOutlineSheet: () => null }));
-jest.mock('@/components/reading/ShapedByCheckInChip', () => ({ ShapedByCheckInChip: () => null }));
 jest.mock('@/components/ScriptureTapSheet', () => ({ ScriptureTapSheet: () => null }));
 jest.mock('@/components/reading/DevotionalReaderPreferencesSheet', () => ({
   DevotionalReaderPreferencesSheet: () => null,
@@ -288,16 +287,16 @@ describe('SG-10 reading auto trial', () => {
     expect(transitionAutoTrialIntent).not.toHaveBeenCalled();
   });
 
-  it('uses the boundary header total and the shaped-by chip', () => {
+  it('uses the boundary header total and no Day 2 chip', () => {
     expect(readingSource).toContain('const totalDays = currentDevotional ? getServerOwnedSeriesTotalDays(currentDevotional) || 1 : 1;');
     expect(readingSource).toContain('Day {viewingDay} of {totalDays}');
     expect(readingSource).not.toContain('Day {viewingDay} of {currentDevotional.totalDays}');
     expect(readingSource).toContain('accessibilityLabel={`Day ${viewingDay} of ${totalDays}`}');
-    expect(readingSource).toContain('<ShapedByCheckInChip');
+    expect(readingSource).not.toContain('<ShapedByCheckInChip');
     expect(readingSource).toContain('maybeCompleteAutoTrialOnLastDay');
   });
 
-  it('dismisses a completed auto series through the keepsake route', () => {
+  it('dismisses a completed auto series through the series-complete route', () => {
     expect(readingSource).toContain('getCompletionDismissRoute(celebrationType, { autoTrialDevotionalId })');
   });
 

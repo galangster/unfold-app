@@ -137,7 +137,6 @@ jest.mock('@/lib/mmkv-storage', () => ({
 
 import { computeDevotionalState, type ComputeInput } from '@/components/home/compute-devotional-state';
 import { DevotionalCard } from '@/components/home/DevotionalCard';
-import { AutoTrialNotifyCard } from '@/components/onboarding/AutoTrialNotifyCard';
 import { canonicalGeneratedDayId } from '@/lib/devotional-canonical-days';
 import { shouldShowTodayAutoTrialNotify } from '@/app/(tabs)/(today)/index';
 import {
@@ -480,7 +479,7 @@ describe('J14 Today auto-trial card', () => {
         onOpenKeepsake: noop,
         nextPick,
       },
-    })).type).toBe('trial-journey-complete');
+    })).type).toBe('journey-complete');
 
     const lapsed = autoSeries({
       currentDay: 3,
@@ -499,7 +498,7 @@ describe('J14 Today auto-trial card', () => {
         onOpenKeepsake: noop,
         nextPick: null,
       },
-    })).type).toBe('trial-paused');
+    })).type).toBe('premium-paused');
 
     // OI-36: reading access after a lapse is UNVERIFIED. Card type only.
     const wednesday = new Date(2026, 5, 10, 10, 0, 0);
@@ -528,8 +527,7 @@ describe('J14 Today auto-trial card', () => {
     })).type).toBe('unread');
   });
 
-  it('shows the keepsake entry on both trial states', async () => {
-    const onOpenKeepsake = jest.fn();
+  it('uses journey-complete and premium-paused without keepsake chrome', async () => {
     const completeState = computeDevotionalState(input({
       currentDayData: null,
       isJourneyComplete: true,
@@ -539,7 +537,7 @@ describe('J14 Today auto-trial card', () => {
         path: buildPlannedSeriesPath(3),
         daysRead: 3,
         keepsakeAvailable: true,
-        onOpenKeepsake,
+        onOpenKeepsake: jest.fn(),
         nextPick,
       },
     }));
@@ -551,10 +549,12 @@ describe('J14 Today auto-trial card', () => {
         path: buildPlannedSeriesPath(3),
         daysRead: 2,
         keepsakeAvailable: true,
-        onOpenKeepsake,
+        onOpenKeepsake: jest.fn(),
         nextPick: null,
       },
     }));
+    expect(completeState.type).toBe('journey-complete');
+    expect(pausedState.type).toBe('premium-paused');
 
     let completeTree!: ReturnType<typeof renderer.create>;
     let pausedTree!: ReturnType<typeof renderer.create>;
@@ -563,14 +563,11 @@ describe('J14 Today auto-trial card', () => {
       pausedTree = renderer.create(<DevotionalCard state={pausedState} />);
     });
 
-    const completeKeep = completeTree.root.findByProps({ accessibilityLabel: 'Open keepsake' });
-    const pausedKeep = pausedTree.root.findByProps({ accessibilityLabel: 'Open keepsake' });
-    act(() => completeKeep.props.onPress());
-    act(() => pausedKeep.props.onPress());
-    expect(onOpenKeepsake).toHaveBeenCalledTimes(2);
+    expect(completeTree.root.findAllByProps({ accessibilityLabel: 'Open keepsake' })).toHaveLength(0);
+    expect(pausedTree.root.findAllByProps({ accessibilityLabel: 'Open keepsake' })).toHaveLength(0);
   });
 
-  it('renders the S4 notify card for an undetermined auto intent and hides it when granted', async () => {
+  it('keeps later-entry notify logic and does not mount a Today notify card', () => {
     const liveIntent = { status: 'revealed' } as AutoTrialIntentV1;
     expect(shouldShowTodayAutoTrialNotify({
       autoTrialActive: true,
@@ -587,32 +584,8 @@ describe('J14 Today auto-trial card', () => {
       intent: { status: 'completed' } as AutoTrialIntentV1,
       permission: 'undetermined',
     })).toBe(false);
-
-    let shown!: ReturnType<typeof renderer.create>;
-    let hidden!: ReturnType<typeof renderer.create>;
-    await act(async () => {
-      shown = renderer.create(
-        <AutoTrialNotifyCard
-          permission="undetermined"
-          phase="idle"
-          onAsk={jest.fn()}
-          onOpenSettings={jest.fn()}
-        />,
-      );
-      hidden = renderer.create(
-        <AutoTrialNotifyCard
-          permission="granted"
-          phase="idle"
-          onAsk={jest.fn()}
-          onOpenSettings={jest.fn()}
-        />,
-      );
-    });
-    const notifyHosts = shown.root
-      .findAllByProps({ accessibilityLabel: 'Notify me' })
-      .filter((node: { type: unknown }) => typeof node.type === 'string');
-    expect(notifyHosts).toHaveLength(1);
-    expect(hidden.toJSON()).toBeNull();
+    expect(todaySource).not.toContain('AutoTrialNotifyCard');
+    expect(todaySource).not.toContain('notify={showAutoTrialNotify');
   });
 
   it('leaves the Today demoMode QA prop unchanged', () => {

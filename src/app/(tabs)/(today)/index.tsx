@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { drainSyncOutbox } from '@/lib/sync-outbox';
 import { usePrevious } from '@/hooks/usePrevious';
-import { AppState, Linking, View, StyleSheet, Alert, type LayoutChangeEvent } from 'react-native';
+import { View, StyleSheet, Alert, type LayoutChangeEvent } from 'react-native';
 import { useRouter, useFocusEffect, useIsFocused, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
@@ -54,15 +54,10 @@ import {
   type IntentStorage,
 } from '@/lib/auto-trial-intent';
 import { isAutoTrialSeries } from '@/lib/auto-trial-series';
-import {
-  askNotificationPermissionInContext,
-  readNotificationPermissionState,
-  type NotificationPermissionState,
-} from '@/lib/notification-ask';
+import { type NotificationPermissionState } from '@/lib/notification-ask';
 import { getDeviceId } from '@/lib/mmkv-storage';
 import { getServerOwnedSeriesTotalDays } from '@/lib/devotional-series-boundary';
-import { buildPlannedSeriesPath, buildSeriesPath, countReadDaysWithinBoundary } from '@/lib/series-path';
-import { type AutoTrialNotifyPhase } from '@/components/onboarding/AutoTrialNotifyCard';
+import { countReadDaysWithinBoundary } from '@/lib/series-path';
 import { classifyInitialArcPoll, type InitialArcPollResult } from '@/lib/inflight-initial-arc-watch';
 import { classifyPollFailure } from '@/lib/generation-poll-outcome';
 import { settleInflightInitialArcWatch } from '@/lib/initial-arc-result';
@@ -163,7 +158,7 @@ export function applyTodayAutoTrialFocus(i: {
   | {
       launchAction: AutoTrialLaunchAction;
       skipResolver: true;
-      navigation: { pathname: '/series-reveal'; params: { intentId: string } };
+      navigation: { pathname: '/generating' };
       inflightDecision: null;
       resumeGenerating: false;
       settleIntent: AutoTrialIntentV1 | null;
@@ -190,7 +185,7 @@ export function applyTodayAutoTrialFocus(i: {
     return {
       launchAction,
       skipResolver: true,
-      navigation: { pathname: '/series-reveal', params: { intentId: launchAction.intentId } },
+      navigation: { pathname: '/generating' },
       inflightDecision: null,
       resumeGenerating: false,
       settleIntent: null,
@@ -205,7 +200,7 @@ export function applyTodayAutoTrialFocus(i: {
     return {
       launchAction,
       skipResolver: true,
-      navigation: { pathname: '/series-reveal', params: { intentId: i.intent.intentId } },
+      navigation: { pathname: '/generating' },
       inflightDecision: null,
       resumeGenerating: false,
       settleIntent,
@@ -233,18 +228,10 @@ export function applyTodayAutoTrialFocus(i: {
   };
 }
 
-export function resolveAutoTrialRetryNavigation(i: {
+export function resolveAutoTrialRetryNavigation(_i: {
   intent: AutoTrialIntentV1 | null;
   sessionDevotionalId: string | null | undefined;
-}): { kind: 'series-reveal'; intentId: string } | { kind: 'generating' } {
-  if (
-    i.intent
-    && (i.intent.status === 'submitted' || i.intent.status === 'failed')
-    && i.intent.devotionalId
-    && i.intent.devotionalId === i.sessionDevotionalId
-  ) {
-    return { kind: 'series-reveal', intentId: i.intent.intentId };
-  }
+}): { kind: 'generating' } {
   return { kind: 'generating' };
 }
 
@@ -448,18 +435,7 @@ export default function HomeScreen() {
   const clearGenerationSession = useUnfoldStore((s) => s.clearGenerationSession);
   const [inflightSeries, setInflightSeries] = useState<InflightGenerationJob | null>(null);
   const [autoIntent, setAutoIntent] = useState<AutoTrialIntentV1 | null>(readAutoTrialIntent);
-  const [notifyPermission, setNotifyPermission] = useState<NotificationPermissionState>('denied');
-  const [notifyPhase, setNotifyPhase] = useState<AutoTrialNotifyPhase>('idle');
   const landedDevotionalIdsKey = devotionals.map((row) => row.id).join('\0');
-  useEffect(() => {
-    void readNotificationPermissionState().then(setNotifyPermission);
-    const sub = AppState.addEventListener('change', (next) => {
-      if (next === 'active') {
-        void readNotificationPermissionState().then(setNotifyPermission);
-      }
-    });
-    return () => sub.remove();
-  }, []);
 
   useEffect(() => {
     if (!isTodayFocused) return;
@@ -565,17 +541,8 @@ export default function HomeScreen() {
   // same answers.
   const handleRetryInflightSeries = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const target = resolveAutoTrialRetryNavigation({
-      intent: readAutoTrialIntent(),
-      sessionDevotionalId: generationSessionDevotionalId,
-    });
-    if (target.kind === 'series-reveal') {
-      clearGenerationSession();
-      router.push({ pathname: '/series-reveal', params: { intentId: target.intentId } });
-      return;
-    }
     router.replace('/generating');
-  }, [router, generationSessionDevotionalId, clearGenerationSession]);
+  }, [router]);
   const handleDismissInflightSeriesFailure = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     clearGenerationSession();
@@ -1034,28 +1001,7 @@ export default function HomeScreen() {
   );
   const autoTrialActive = isAutoTrialSeries(currentDevotional) || inflightMatchesAuto;
   const storedNextPick = currentDevotional?.days?.find((row) => row.dayNumber === totalDays)?.nextPick ?? null;
-  const onOpenKeepsake = useCallback(() => {
-    if (!currentDevotional) return;
-    router.push({ pathname: '/keepsake', params: { devotionalId: currentDevotional.id } });
-  }, [currentDevotional, router]);
-  const autoTrialInput = useMemo(() => (
-    autoTrialActive
-      ? {
-        path: currentDevotional && isAutoTrialSeries(currentDevotional)
-          ? buildSeriesPath(currentDevotional, clockNow, { isCurrentSeries: true })
-          : (autoIntent ? buildPlannedSeriesPath(autoIntent.trialDays) : []),
-        daysRead: daysCompleted,
-        keepsakeAvailable: daysCompleted >= 1,
-        onOpenKeepsake,
-        nextPick: storedNextPick,
-      }
-      : null
-  ), [autoIntent, autoTrialActive, clockNow, currentDevotional, daysCompleted, onOpenKeepsake, storedNextPick]);
-  const showAutoTrialNotify = shouldShowTodayAutoTrialNotify({
-    autoTrialActive,
-    intent: autoIntent,
-    permission: notifyPermission,
-  });
+  const autoTrialInput = autoTrialActive ? {} : null;
   const homeDayData = getHomeDevotionalDayData(currentDevotional);
   const activeCurrentDayData = currentDevotional?.days.find((day) => day.dayNumber === currentDevotional.currentDay) ?? null;
   const isCurrentDevotionalComplete = currentDevotional ? totalDays > 0 && daysCompleted === totalDays : false;
@@ -1589,12 +1535,7 @@ export default function HomeScreen() {
 
   // The ambient art has no trial-specific scenes (spec S4/S7 keep everyday
   // surfaces quiet), so the trial states reuse their closest existing scene.
-  const ambientStateType =
-    devotionalState.type === 'trial-journey-complete'
-      ? 'journey-complete'
-      : devotionalState.type === 'trial-paused'
-        ? 'premium-paused'
-        : devotionalState.type;
+  const ambientStateType = devotionalState.type;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -1635,35 +1576,6 @@ export default function HomeScreen() {
                 isReturningUser={isReturningUser && !isQaPreparingLoadingPreview}
                 gateCreation={gate}
                 storedPick={autoTrialActive ? storedNextPick : undefined}
-                notify={showAutoTrialNotify
-                  ? {
-                    permission: notifyPermission,
-                    phase: notifyPhase,
-                    onAsk: () => {
-                      setNotifyPhase('requesting');
-                      void askNotificationPermissionInContext({
-                        trigger: 'series_reveal',
-                        registration: 'await',
-                      }).then((result) => {
-                        if (result === 'granted') {
-                          setNotifyPermission('granted');
-                          setNotifyPhase('idle');
-                          return;
-                        }
-                        if (result === 'registration_failed') {
-                          setNotifyPermission('granted');
-                          setNotifyPhase('registration_failed');
-                          return;
-                        }
-                        setNotifyPermission('denied');
-                        setNotifyPhase('idle');
-                      });
-                    },
-                    onOpenSettings: () => {
-                      void Linking.openSettings();
-                    },
-                  }
-                  : null}
               />
             </Animated.View>
           </View>

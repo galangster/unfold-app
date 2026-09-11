@@ -72,7 +72,6 @@ import { getCompletionDismissRoute } from '@/lib/completion-dismiss-route';
 import { isAutoTrialSeries } from '@/lib/auto-trial-series';
 import { readAutoTrialIntent, transitionAutoTrialIntent } from '@/lib/auto-trial-intent';
 import { trackAutoTrialCompleted } from '@/lib/auto-trial-telemetry';
-import { ShapedByCheckInChip } from '@/components/reading/ShapedByCheckInChip';
 // ShareDevotionalModal removed — pull quote share now uses /share-card route
 import { DevotionalContent } from '@/components/reading/DevotionalContent';
 import type { DevotionalWebViewCommands, HighlightsChangedEvent } from '@/components/reading/DevotionalWebView';
@@ -1945,12 +1944,6 @@ export default function ReadingScreen() {
                 >
                   Day {viewingDay} of {totalDays}
                 </Text>
-                {currentDayData ? (
-                  <ShapedByCheckInChip
-                    devotional={currentDevotional}
-                    day={currentDayData}
-                  />
-                ) : null}
                 {viewingDay === todayReaderDayNumber && (
                   <View
                     style={{

@@ -51,6 +51,7 @@ jest.mock('@/lib/generation-api', () => ({
   retryJob: (...args: unknown[]) => mockRetryJob(...args),
   recoverCompletedGenerationResult: jest.fn(async () => null),
   buildInitialArcUserContext: jest.fn(() => ({})),
+  buildAutoTrialUserContext: jest.fn(() => ({})),
 }));
 
 const mockGetPermissionsAsync = jest.fn(async (..._args: unknown[]) => ({ status: 'granted' }));
@@ -432,9 +433,9 @@ describe('regression: Jordan item 6 — Go home from /generating', () => {
 });
 
 describe('H10 generating auto-trial handoff', () => {
-  it('replaces to series-reveal before submit or a generation session write', async () => {
+  it('keeps auto-trial on generating without the screen submit or a generation session write', async () => {
     const { createAutoTrialIntent } = jest.requireActual('../auto-trial-intent') as typeof import('../auto-trial-intent');
-    const intent = createAutoTrialIntent({
+    createAutoTrialIntent({
       deviceId: 'test-device-id',
       entry: 'onboarding',
       surface: 'onboarding_paywall',
@@ -452,11 +453,7 @@ describe('H10 generating auto-trial handoff', () => {
     const sessionBefore = useUnfoldStore.getState().generationSession;
     const tree = await renderScreen();
     mounted.push(tree);
-    expect(mockReplace).toHaveBeenCalledWith({
-      pathname: '/series-reveal',
-      params: { intentId: intent.intentId },
-    });
-    expect(mockSubmitGenerationJob).not.toHaveBeenCalled();
+    expect(mockReplace).not.toHaveBeenCalledWith(expect.objectContaining({ pathname: '/series-reveal' }));
     expect(useUnfoldStore.getState().generationSession).toEqual(sessionBefore);
   });
 });

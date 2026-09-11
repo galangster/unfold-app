@@ -4,13 +4,12 @@ export type OnboardingCompletionMode = 'auto_trial' | 'generated' | 'deferred';
 
 export type CompletionTarget =
   | '/generating'
-  | '/(tabs)/(today)'
-  | { pathname: '/series-reveal'; params: { intentId: string } };
+  | '/(tabs)/(today)';
 
 export async function runOnboardingCompletion(
   state: { started: boolean },
   mode: OnboardingCompletionMode,
-  intent: AutoTrialIntentV1 | null,
+  _intent: AutoTrialIntentV1 | null,
   deps: {
     retireDraftAutosave(): void;
     clearSampleJob(): void;
@@ -29,10 +28,7 @@ export async function runOnboardingCompletion(
   let target: CompletionTarget;
   switch (mode) {
     case 'auto_trial':
-      target = {
-        pathname: '/series-reveal',
-        params: { intentId: intent?.intentId ?? '' },
-      };
+      target = '/generating';
       break;
     case 'generated':
       target = '/generating';

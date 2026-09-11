@@ -224,18 +224,12 @@ export type GeneratingNotificationRoute = {
   };
 };
 
-export interface SeriesRevealNotificationRoute {
-  pathname: '/series-reveal';
-  params: { intentId: string };
-}
-
 export type NotificationNavigationRoute =
   | RevealNotificationRoute
   | ReadingRoute
   | TodayNotificationRoute
   | EveningWindDownNotificationRoute
-  | GeneratingNotificationRoute
-  | SeriesRevealNotificationRoute;
+  | GeneratingNotificationRoute;
 
 export function buildRevealNotificationRoute(
   data: Record<string, unknown> | null | undefined,
@@ -300,7 +294,13 @@ export function buildNotificationNavigationRoute(
     && (data?.type === 'devotional_ready' || data?.type === 'generation_failed')
   ) {
     if (pushNamesAutoTrialIntent(data, autoTrialIntent)) {
-      return { pathname: '/series-reveal', params: { intentId: autoTrialIntent.intentId } };
+      return {
+        pathname: '/generating',
+        params: {
+          ...(autoTrialIntent.jobId ? { jobId: autoTrialIntent.jobId } : {}),
+          ...(autoTrialIntent.devotionalId ? { devotionalId: autoTrialIntent.devotionalId } : {}),
+        },
+      };
     }
   }
 

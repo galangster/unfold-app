@@ -9,11 +9,8 @@ describe('getCompletionDismissRoute', () => {
     expect(getCompletionDismissRoute('series')).toBeNull();
   });
 
-  it('routes a series completion with an auto trial id to keepsake', () => {
-    expect(getCompletionDismissRoute('series', { autoTrialDevotionalId: 'auto-1' })).toEqual({
-      pathname: '/keepsake',
-      params: { devotionalId: 'auto-1' },
-    });
+  it('keeps an auto-trial series completion in the reader', () => {
+    expect(getCompletionDismissRoute('series', { autoTrialDevotionalId: 'auto-1' })).toBeNull();
   });
 
   it('returns Today for a day completion even when an auto trial id is present', () => {

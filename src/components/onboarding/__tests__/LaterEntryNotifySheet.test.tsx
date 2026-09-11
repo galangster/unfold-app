@@ -37,6 +37,30 @@ jest.mock('@/lib/auto-trial-telemetry', () => ({
   trackNotificationPermissionAnswered: jest.fn(),
 }));
 
+jest.mock('react-native-reanimated', () => {
+  const { View } = require('react-native');
+  return {
+    __esModule: true,
+    default: { View },
+    FadeIn: {},
+  };
+});
+
+jest.mock('@/components/icons', () => ({
+  BellIcon: () => null,
+}));
+
+jest.mock('@/lib/theme', () => ({
+  useTheme: () => ({
+    colors: {
+      backgroundElevated: '#111214',
+      border: '#24262B',
+      textMuted: '#A0A6B1',
+      textSubtle: '#7D8592',
+    },
+  }),
+}));
+
 jest.mock('expo-haptics', () => ({
   impactAsync: jest.fn(),
   notificationAsync: jest.fn(),

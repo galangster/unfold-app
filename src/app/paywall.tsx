@@ -129,11 +129,6 @@ export default function PaywallScreen() {
       return;
     }
 
-    if (navigation.href === '/series-reveal') {
-      router.replace({ pathname: '/series-reveal', params: navigation.params });
-      return;
-    }
-
     router.replace(navigation.href);
   };
 

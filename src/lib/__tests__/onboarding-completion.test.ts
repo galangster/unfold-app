@@ -112,7 +112,7 @@ describe('G4 onboarding completion order and guard', () => {
       'flushStoreAsync',
       'clearDraft',
       'trackCompleted:auto_trial',
-      'navigate:{"pathname":"/series-reveal","params":{"intentId":"aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"}}',
+      'navigate:"/generating"',
     ]);
     expect(state.started).toBe(true);
   });
