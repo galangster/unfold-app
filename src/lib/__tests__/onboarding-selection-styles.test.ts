@@ -50,8 +50,7 @@ describe('onboarding selection styling', () => {
     expect(paywallSource).toContain('backgroundColor: selectedPlan === \'monthly\' ? alpha(colors.accent, 0.16)');
     expect(threeStepPaywallSource).toContain('backgroundColor: selectedPlan === \'yearly\'');
     expect(threeStepPaywallSource).toContain('? alpha(colors.accent, 0.16)');
-    expect(threeStepPaywallSource).toContain('isQaToolsEnabled() && currentPage === totalPages - 1');
-    expect(threeStepPaywallSource).toContain('Continue for QA');
+    expect(threeStepPaywallSource).toContain('shouldRenderQaChrome()');
     expect(threeStepPaywallSource).toContain('onSkip();');
   });
 });

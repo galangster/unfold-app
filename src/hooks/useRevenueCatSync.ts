@@ -9,11 +9,22 @@
  */
 
 import { useEffect } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import type { CustomerInfo } from 'react-native-purchases';
 import { useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'expo-router';
 import { useUnfoldStore } from '@/lib/store';
 import { useUIState } from '@/lib/ui-state';
+import {
+  handleVerifiedEntitlementExit,
+  resolveLaterEntryExit,
+  type VerifiedEntitlementExit,
+} from '@/lib/auto-trial-exit';
+import { NEW_TRIAL_MAX_AGE_MS, isSimulatedTrialCustomerInfo } from '@/lib/trial-facts';
+import { getDeviceId } from '@/lib/mmkv-storage';
+import { getDeviceTimezone } from '@/lib/device-timezone';
+import { readAutoTrialSwitchSnapshot } from '@/lib/remote-config';
+import { requestLaterEntryNotifyAsk } from '@/lib/notification-ask';
 import {
   addCustomerInfoUpdateListener,
   getCustomerInfo,
@@ -64,6 +75,7 @@ function waitForCurrentIdentityDelivery(isCancelled: () => boolean): {
 export function useRevenueCatSync() {
   const updateUser = useUnfoldStore((s) => s.updateUser);
   const queryClient = useQueryClient();
+  const router = useRouter();
 
   useEffect(() => {
     // Only sync if RevenueCat is configured
@@ -93,6 +105,40 @@ export function useRevenueCatSync() {
       // Re-sync the trial-ending local notification whenever entitlements
       // change (purchase, restore, lapse). Fire-and-forget.
       void syncTrialEndingNotification();
+      if (!hasSubscription) return;
+      const marker = useUIState.getState().pendingPaywallGrant;
+      if (!marker) return;
+      useUIState.getState().setPendingPaywallGrant(null);
+      if (Date.now() - marker.setAtMs > NEW_TRIAL_MAX_AGE_MS) return;
+
+      const exit: VerifiedEntitlementExit = { source: 'lateGrant', customerInfo };
+      const decision = marker.entry === 'later'
+        ? resolveLaterEntryExit(
+          exit,
+          marker.surface === 'churned_sheet' ? 'churned_sheet' : 'paywall_route',
+        )
+        : handleVerifiedEntitlementExit({
+          exit,
+          surface: 'onboarding_paywall',
+          deviceId: getDeviceId(),
+          nowMs: Date.now(),
+          platform: Platform.OS,
+          timeZone: getDeviceTimezone() ?? '',
+          switchSnapshot: readAutoTrialSwitchSnapshot(Date.now(), Platform.OS),
+          profile: useUnfoldStore.getState().user
+            ? { hasCompletedOnboarding: useUnfoldStore.getState().user?.hasCompletedOnboarding === true }
+            : null,
+          devotionalIds: (useUnfoldStore.getState().devotionals ?? []).map((devotional) => devotional.id),
+          simulated: isSimulatedTrialCustomerInfo(customerInfo),
+        });
+
+      if (decision.kind === 'auto') {
+        if (useUnfoldStore.getState().user?.hasCompletedOnboarding === true) {
+          router.push({ pathname: '/series-reveal', params: { intentId: decision.intent.intentId } });
+        }
+        return;
+      }
+      void requestLaterEntryNotifyAsk(customerInfo);
     };
 
     // Fetch current subscription status on launch. This waits for the
@@ -190,5 +236,5 @@ export function useRevenueCatSync() {
       listenerGuard.dispose();
       appStateSub.remove();
     };
-  }, [updateUser, queryClient]);
+  }, [updateUser, queryClient, router]);
 }

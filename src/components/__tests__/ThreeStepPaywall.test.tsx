@@ -18,6 +18,9 @@ const renderer = require('react-test-renderer');
 const { act } = renderer;
 
 const mockIsQaToolsEnabled = jest.fn(() => false);
+const mockShouldRenderQaChrome = jest.fn(() => false);
+const mockSimulateTrialPurchase = jest.fn();
+const mockSetPendingPaywallGrant = jest.fn();
 
 jest.mock('react-native-reanimated', () => {
   const { View } = require('react-native');
@@ -101,6 +104,8 @@ jest.mock('expo-haptics', () => ({
   NotificationFeedbackType: { Success: 'success', Warning: 'warning', Error: 'error' },
 }));
 
+jest.mock('@react-native-community/netinfo', () => ({ addEventListener: jest.fn(() => jest.fn()) }));
+jest.mock('@/lib/notifications', () => ({ MIDDAY_FALLBACK: { hour: 12, minute: 30 } }));
 jest.mock('expo-image', () => ({ Image: 'ExpoImage' }));
 jest.mock('expo-linear-gradient', () => ({ LinearGradient: 'LinearGradient' }));
 jest.mock('lottie-react-native', () => ({ __esModule: true, default: 'LottieView' }));
@@ -122,7 +127,13 @@ jest.mock('expo-video', () => ({
 }));
 
 jest.mock('@/components/EmberSystem', () => ({ EmberSystem: () => null }));
-jest.mock('@/components/ExclusiveOfferSheet', () => ({ ExclusiveOfferSheet: () => null }));
+let offerSheetProps: { onPurchaseSuccess?: (exit: { source: string; customerInfo: unknown }) => void } | null = null;
+jest.mock('@/components/ExclusiveOfferSheet', () => ({
+  ExclusiveOfferSheet: (props: { onPurchaseSuccess?: (exit: { source: string; customerInfo: unknown }) => void }) => {
+    offerSheetProps = props;
+    return null;
+  },
+}));
 jest.mock('@/components/icons', () => ({ CheckIcon: () => null }));
 
 // @/components/ui re-exports Button -> theme -> expo-system-ui (untransformed
@@ -138,7 +149,7 @@ jest.mock('@tanstack/react-query', () => ({
 const mockPurchasePackage = jest.fn();
 const mockRestorePurchases = jest.fn();
 const mockWaitForUnfoldPremiumEntitlement = jest.fn();
-const mockSyncTrialEndingNotification = jest.fn(() => Promise.resolve());
+const mockSyncTrialEndingNotification = jest.fn((..._args: unknown[]) => Promise.resolve());
 
 jest.mock('@/lib/revenuecatClient', () => ({
   POST_PURCHASE_ENTITLEMENT_WAIT_MS: 10_000,
@@ -149,14 +160,25 @@ jest.mock('@/lib/revenuecatClient', () => ({
 }));
 
 jest.mock('@/lib/trial-notification', () => ({
-  syncTrialEndingNotification: () => mockSyncTrialEndingNotification(),
+  syncTrialEndingNotification: (...args: unknown[]) => mockSyncTrialEndingNotification(...args),
 }));
 
 jest.mock('@/lib/mmkv-storage', () => ({
   mmkvStorage: { getItem: jest.fn(() => null), setItem: jest.fn(), removeItem: jest.fn() },
 }));
 
-jest.mock('@/lib/qa-tools', () => ({ isQaToolsEnabled: () => mockIsQaToolsEnabled() }));
+jest.mock('@/lib/qa-tools', () => ({
+  isQaToolsEnabled: () => mockIsQaToolsEnabled(),
+  shouldRenderQaChrome: () => mockShouldRenderQaChrome(),
+}));
+jest.mock('@/lib/qa-simulated-trial', () => ({
+  simulateTrialPurchase: (...args: unknown[]) => mockSimulateTrialPurchase(...args),
+}));
+jest.mock('@/lib/ui-state', () => ({
+  useUIState: {
+    getState: () => ({ setPendingPaywallGrant: mockSetPendingPaywallGrant }),
+  },
+}));
 
 jest.mock('@/lib/push-notification-helpers', () => ({
   LEGAL_LINKS: { terms: 'https://example.test/terms', privacy: 'https://example.test/privacy' },
@@ -173,6 +195,17 @@ import {
 } from '@/lib/paywall-guardrails';
 // eslint-disable-next-line import/first -- same ordering constraint as above.
 import * as Haptics from 'expo-haptics';
+
+const mockGetPermissionsAsync = jest.fn(async (..._args: unknown[]) => ({ status: 'granted' }));
+jest.mock('expo-notifications', () => ({
+  getPermissionsAsync: (...args: unknown[]) => mockGetPermissionsAsync(...args),
+  requestPermissionsAsync: jest.fn(async () => ({ status: 'granted' })),
+  scheduleNotificationAsync: jest.fn(async () => 'id'),
+  cancelScheduledNotificationAsync: jest.fn(async () => undefined),
+  getAllScheduledNotificationsAsync: jest.fn(async () => []),
+  setNotificationHandler: jest.fn(),
+}));
+
 
 const colors = {
   accent: '#C8A55C',
@@ -295,6 +328,7 @@ describe('ThreeStepPaywall purchase advances exactly once', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockIsQaToolsEnabled.mockReturnValue(false);
+    mockShouldRenderQaChrome.mockReturnValue(false);
     mockWaitForUnfoldPremiumEntitlement.mockReturnValue(new Promise(() => {}));
     mockSyncTrialEndingNotification.mockResolvedValue(undefined);
   });
@@ -740,6 +774,197 @@ describe('ThreeStepPaywall testimonial layout changes', () => {
     expect(stackHeight()).toBe(Math.max(...smaller));
     expect(findByLabel(tree, 'Monthly plan, $9.99 per month')[0].props.accessibilityState.checked).toBe(true);
     expect(mockPurchasePackage).not.toHaveBeenCalled();
+    await act(async () => tree.unmount());
+  });
+});
+
+describe('F4 ThreeStepPaywall verified exits', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockIsQaToolsEnabled.mockReturnValue(false);
+    mockShouldRenderQaChrome.mockReturnValue(false);
+    mockWaitForUnfoldPremiumEntitlement.mockReturnValue(new Promise(() => {}));
+    mockSyncTrialEndingNotification.mockResolvedValue(undefined);
+    offerSheetProps = null;
+  });
+
+  async function renderOnFinalPage(overrides: Record<string, unknown> = {}) {
+    const props = baseProps({ yearlyPackage: { identifier: '$rc_annual' }, ...overrides });
+    const tree = await render(props);
+    await pressPrimaryCTA(tree);
+    return { tree, props };
+  }
+
+  it('sends purchase, lateGrant, restore, and offer exits once with the same CustomerInfo', async () => {
+    mockPurchasePackage.mockResolvedValue({ ok: true, data: entitledCustomerInfo });
+    const { tree, props } = await renderOnFinalPage();
+    await pressPrimaryCTA(tree);
+    expect(props.onPurchaseSuccess).toHaveBeenCalledTimes(1);
+    expect(props.onPurchaseSuccess).toHaveBeenCalledWith({
+      source: 'purchase',
+      customerInfo: entitledCustomerInfo,
+    });
+    expect(mockSyncTrialEndingNotification).toHaveBeenCalledWith(entitledCustomerInfo);
+
+    await act(async () => tree.unmount());
+
+    mockPurchasePackage.mockResolvedValue({ ok: true, data: unentitledCustomerInfo });
+    const wait = deferredEntitlementWait();
+    const late = await renderOnFinalPage();
+    await pressPrimaryCTA(late.tree);
+    await wait.resolve(entitledCustomerInfo);
+    expect(late.props.onPurchaseSuccess).toHaveBeenCalledWith({
+      source: 'lateGrant',
+      customerInfo: entitledCustomerInfo,
+    });
+    await act(async () => late.tree.unmount());
+
+    mockRestorePurchases.mockResolvedValue({ ok: true, data: entitledCustomerInfo });
+    const restored = await renderOnFinalPage();
+    await act(async () => {
+      findByLabel(restored.tree, 'Restore purchases')[0].props.onPress();
+    });
+    expect(restored.props.onPurchaseSuccess).toHaveBeenCalledWith({
+      source: 'restore',
+      customerInfo: entitledCustomerInfo,
+    });
+    await act(async () => restored.tree.unmount());
+
+    const offer = await renderOnFinalPage();
+    expect(offerSheetProps?.onPurchaseSuccess).toEqual(expect.any(Function));
+    await act(async () => {
+      offerSheetProps?.onPurchaseSuccess?.({
+        source: 'offer',
+        customerInfo: entitledCustomerInfo,
+      });
+    });
+    expect(offer.props.onPurchaseSuccess).toHaveBeenCalledWith({
+      source: 'offer',
+      customerInfo: entitledCustomerInfo,
+    });
+    await act(async () => offer.tree.unmount());
+  });
+
+  it('does not call onPurchaseSuccess a second time', async () => {
+    mockPurchasePackage.mockResolvedValue({ ok: true, data: entitledCustomerInfo });
+    mockRestorePurchases.mockResolvedValue({ ok: true, data: entitledCustomerInfo });
+    const { tree, props } = await renderOnFinalPage();
+    await pressPrimaryCTA(tree);
+    await act(async () => {
+      findByLabel(tree, 'Restore purchases')[0].props.onPress();
+    });
+    expect(props.onPurchaseSuccess).toHaveBeenCalledTimes(1);
+    await act(async () => tree.unmount());
+  });
+
+  it('syncs the trial notice with CustomerInfo even when the decision dependency throws', async () => {
+    mockPurchasePackage.mockResolvedValue({ ok: true, data: entitledCustomerInfo });
+    const { tree } = await renderOnFinalPage({
+      onPurchaseSuccess: () => {
+        throw new Error('decision dependency failed');
+      },
+    });
+    await pressPrimaryCTA(tree);
+    expect(mockSyncTrialEndingNotification).toHaveBeenCalledWith(entitledCustomerInfo);
+    await act(async () => tree.unmount());
+  });
+
+  it('treats Restore after a pending purchase or a given-up wait as lateGrant', async () => {
+    mockPurchasePackage.mockResolvedValue({ ok: true, data: unentitledCustomerInfo });
+    mockRestorePurchases.mockResolvedValue({ ok: true, data: entitledCustomerInfo });
+    const pending = deferredEntitlementWait();
+    const first = await renderOnFinalPage();
+    await pressPrimaryCTA(first.tree);
+    await act(async () => {
+      findByLabel(first.tree, 'Restore purchases')[0].props.onPress();
+    });
+    expect(first.props.onPurchaseSuccess).toHaveBeenCalledWith({
+      source: 'lateGrant',
+      customerInfo: entitledCustomerInfo,
+    });
+    await act(async () => first.tree.unmount());
+    void pending;
+
+    const timeoutWait = deferredEntitlementWait();
+    const second = await renderOnFinalPage();
+    await pressPrimaryCTA(second.tree);
+    await timeoutWait.resolve(null);
+    await act(async () => {
+      findByLabel(second.tree, 'Restore purchases')[0].props.onPress();
+    });
+    expect(second.props.onPurchaseSuccess).toHaveBeenCalledWith({
+      source: 'lateGrant',
+      customerInfo: entitledCustomerInfo,
+    });
+    await act(async () => second.tree.unmount());
+  });
+
+  it('disables Decide later while pending and writes pendingPaywallGrant on armed unmount', async () => {
+    mockPurchasePackage.mockResolvedValue({ ok: true, data: unentitledCustomerInfo });
+    deferredEntitlementWait();
+    const { tree, props } = await renderOnFinalPage();
+    await pressPrimaryCTA(tree);
+
+    const decide = findByLabel(tree, DECIDE_LATER_LABEL)[0];
+    expect(decide.props.disabled).toBe(true);
+    expect(decide.props.accessibilityState.disabled).toBe(true);
+    await act(async () => {
+      decide.props.onPress();
+    });
+    expect(props.onDecideLater).not.toHaveBeenCalled();
+
+    await act(async () => {
+      tree.unmount();
+    });
+    expect(mockSetPendingPaywallGrant).toHaveBeenCalledWith({
+      surface: 'onboarding_paywall',
+      entry: 'onboarding',
+      setAtMs: expect.any(Number),
+    });
+  });
+});
+
+describe('L4 ThreeStepPaywall QA simulate control (P5)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockIsQaToolsEnabled.mockReturnValue(false);
+    mockShouldRenderQaChrome.mockReturnValue(false);
+  });
+
+  it('renders no simulate control with QA off or capture mode on', async () => {
+    const tree = await render(baseProps());
+    await pressPrimaryCTA(tree);
+    expect(findByLabel(tree, 'Simulate trial purchase')).toHaveLength(0);
+
+    mockShouldRenderQaChrome.mockReturnValue(false);
+    const capture = await render(baseProps());
+    await pressPrimaryCTA(capture);
+    expect(findByLabel(capture, 'Simulate trial purchase')).toHaveLength(0);
+    await act(async () => {
+      tree.unmount();
+      capture.unmount();
+    });
+  });
+
+  it('advances once with source purchase when the simulate control is pressed', async () => {
+    mockShouldRenderQaChrome.mockReturnValue(true);
+    mockSimulateTrialPurchase.mockImplementation(({ handle }: { handle: (exit: unknown) => void }) => {
+      handle({ source: 'purchase', customerInfo: entitledCustomerInfo });
+      return { ok: true };
+    });
+    const props = baseProps({ yearlyPackage: { identifier: '$rc_annual' } });
+    const tree = await render(props);
+    await pressPrimaryCTA(tree);
+    const control = findByLabel(tree, 'Simulate trial purchase')[0];
+    expect(control).toBeTruthy();
+    await act(async () => {
+      control.props.onPress();
+    });
+    expect(props.onPurchaseSuccess).toHaveBeenCalledTimes(1);
+    expect(props.onPurchaseSuccess).toHaveBeenCalledWith({
+      source: 'purchase',
+      customerInfo: entitledCustomerInfo,
+    });
     await act(async () => tree.unmount());
   });
 });

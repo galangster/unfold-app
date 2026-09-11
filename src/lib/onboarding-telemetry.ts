@@ -159,7 +159,7 @@ export function trackOnboardingResumed(fromStepId: string, ageMs: number): void 
  */
 export function trackOnboardingCompleted(
   outcome: 'generated' | 'deferred' | 'auto_trial',
-  ctx: { isFirstRun: boolean } = { isFirstRun: true },
+  ctx: { isFirstRun: boolean },
 ): boolean {
   if (!ctx.isFirstRun) return false;
   try {
