@@ -1,6 +1,5 @@
 import { useMemo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
-import { BlurView } from 'expo-blur';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { SunIcon } from '@/components/icons';
 import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
 import { FontFamily, FontSize } from '@/constants/fonts';
@@ -10,6 +9,7 @@ import { Radius } from '@/constants/radius';
 import { Duration, Ease } from '@/constants/animations';
 import { Typography } from '@/constants/typography';
 import { alpha } from '@/components/ui';
+import { GlassSurface } from '@/components/ui/GlassSurface';
 import { useUnfoldStore, type Devotional } from '@/lib/store';
 
 interface DayData {
@@ -98,7 +98,7 @@ function generateDaysData(
 }
 
 export function StreakBox({ streakCount, hasReadToday = false, onPress }: StreakBoxProps) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const reducedMotion = useReducedMotion();
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const readDayKeys = useMemo(() => collectReadDayKeys(devotionals), [devotionals]);
@@ -117,25 +117,7 @@ export function StreakBox({ streakCount, hasReadToday = false, onPress }: Streak
         accessibilityRole="button"
         accessibilityLabel={`${streakCount} ${streakLabel} devotional rhythm. ${hasReadToday ? 'Today is complete.' : 'Today is not complete yet.'} Open streak settings`}
       >
-        <View
-          style={[
-            styles.card,
-            {
-              backgroundColor: Platform.OS === 'ios'
-                ? alpha(colors.backgroundElevated, isDark ? 0.56 : 0.8)
-                : alpha(colors.backgroundElevated, 0.9),
-              borderColor: alpha(colors.accent, 0.25),
-            },
-          ]}
-        >
-          {Platform.OS === 'ios' && (
-            <BlurView
-              intensity={isDark ? 28 : 18}
-              tint={isDark ? 'dark' : 'light'}
-              style={StyleSheet.absoluteFill}
-            />
-          )}
-
+        <GlassSurface radius={Radius.lg} style={styles.card}>
           <View style={styles.headerRow}>
             <View style={styles.headerLeft}>
               <View style={[styles.iconShell, { backgroundColor: alpha(colors.accent, streakCount > 0 ? 0.16 : 0.08) }]}>
@@ -191,7 +173,7 @@ export function StreakBox({ streakCount, hasReadToday = false, onPress }: Streak
               Shows your streak, not which days you read
             </Text>
           )}
-        </View>
+        </GlassSurface>
       </TouchableOpacity>
     </Animated.View>
   );
@@ -199,11 +181,8 @@ export function StreakBox({ streakCount, hasReadToday = false, onPress }: Streak
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
     paddingVertical: Spacing['4'],
     paddingHorizontal: Spacing['4'],
-    overflow: 'hidden',
   },
   headerRow: {
     flexDirection: 'row',

@@ -6,6 +6,7 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
+import { GlassSurface } from '@/components/ui/GlassSurface';
 import { createAutosaveController } from '@/lib/autosave-controller';
 import type { ReflectionStatus } from './compute-devotional-state';
 
@@ -83,31 +84,34 @@ export function InlineReflectComposer({
 
   return (
     <View>
-      <TextInput
-        value={text}
-        onChangeText={handleChange}
-        onFocus={() => setIsFocused(true)}
-        onBlur={handleBlur}
-        onContentSizeChange={(e) =>
-          setInputHeight(Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, e.nativeEvent.contentSize.height + 28)))
-        }
-        multiline
-        placeholder="What stayed with you today?"
-        placeholderTextColor={colors.textMuted}
-        keyboardAppearance={isDark ? 'dark' : 'light'}
-        testID="home-reflect-composer"
-        accessibilityLabel="Reflect on today's reading"
-        accessibilityHint="Type a short reflection. It saves automatically to your journal."
-        style={[
-          styles.input,
-          {
-            height: inputHeight,
-            color: colors.text,
-            backgroundColor: colors.inputBackground,
-            borderColor: isFocused ? alpha(colors.accent, 0.45) : colors.border,
-          },
-        ]}
-      />
+      <GlassSurface
+        radius={Radius.card}
+        style={isFocused ? { borderColor: alpha(colors.accent, 0.45) } : undefined}
+      >
+        <TextInput
+          value={text}
+          onChangeText={handleChange}
+          onFocus={() => setIsFocused(true)}
+          onBlur={handleBlur}
+          onContentSizeChange={(e) =>
+            setInputHeight(Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, e.nativeEvent.contentSize.height + 28)))
+          }
+          multiline
+          placeholder="What stayed with you today?"
+          placeholderTextColor={colors.textMuted}
+          keyboardAppearance={isDark ? 'dark' : 'light'}
+          testID="home-reflect-composer"
+          accessibilityLabel="Reflect on today's reading"
+          accessibilityHint="Type a short reflection. It saves automatically to your journal."
+          style={[
+            styles.input,
+            {
+              height: inputHeight,
+              color: colors.text,
+            },
+          ]}
+        />
+      </GlassSurface>
       <View style={styles.linksRow}>
         <TouchableOpacity
           activeOpacity={0.7}
@@ -141,8 +145,6 @@ export function InlineReflectComposer({
 
 const styles = StyleSheet.create({
   input: {
-    borderWidth: 1,
-    borderRadius: Radius.card,
     paddingHorizontal: Spacing['4'],
     paddingTop: 14,
     paddingBottom: 14,

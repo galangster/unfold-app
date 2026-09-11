@@ -22,6 +22,7 @@ import { Radius } from '@/constants/radius';
 import { Shadow } from '@/constants/shadows';
 import { Spacing } from '@/constants/spacing';
 import { alpha } from '@/components/ui';
+import { GLASS } from '@/constants/today-surfaces';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { useTheme } from '@/lib/theme';
 import { buildTodayCardStackModel, type TodayStackCardItem } from '@/lib/today-card-stack';
@@ -406,6 +407,7 @@ export function TodayCardStack({
 
   const enteringAnimation = reducedMotion ? undefined : entering(FadeIn.duration(ENTER_DURATION).easing(Ease.out));
   const exitingAnimation = reducedMotion ? undefined : exiting(FadeOut.duration(EXIT_DURATION).easing(Ease.out));
+  const glassMode = isDark ? 'dark' : 'light';
   const topCardContent = (
     <Animated.View
       onLayout={handleTopCardLayout}
@@ -414,9 +416,9 @@ export function TodayCardStack({
         styles.topCard,
         {
           backgroundColor: Platform.OS === 'ios'
-            ? alpha(colors.backgroundElevated, isDark ? 0.72 : 0.88)
-            : alpha(colors.backgroundElevated, 0.95),
-          borderColor: alpha(colors.accent, isDark ? 0.28 : 0.24),
+            ? alpha(colors.backgroundElevated, GLASS.tintAlpha[glassMode])
+            : alpha(colors.backgroundElevated, GLASS.androidTintAlpha),
+          borderColor: alpha(colors.text, GLASS.borderAlpha[glassMode]),
           shadowColor: colors.accent,
           zIndex: model.totalCount + 1,
         },
@@ -426,8 +428,8 @@ export function TodayCardStack({
       {Platform.OS === 'ios' ? (
         <BlurView
           pointerEvents="none"
-          intensity={isDark ? 44 : 28}
-          tint={isDark ? 'dark' : 'light'}
+          intensity={GLASS.blurIntensity[glassMode]}
+          tint={glassMode}
           style={[StyleSheet.absoluteFill, styles.cardBlur]}
           testID="today-card-stack-glass-blur"
         />

@@ -65,8 +65,16 @@ jest.mock('react-native-reanimated', () => {
   };
 });
 
+jest.mock('expo-blur', () => ({
+  BlurView: ({ children, ...props }: { children?: React.ReactNode }) => {
+    const { View } = require('react-native');
+    return <View {...props}>{children}</View>;
+  },
+}));
+
 jest.mock('@/lib/theme', () => ({
   useTheme: () => ({
+    isDark: true,
     colors: {
       accent: '#c8a55c',
       backgroundElevated: '#181614',

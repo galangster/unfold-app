@@ -1,6 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
-import { BlurView } from 'expo-blur';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -10,14 +9,14 @@ import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
-import { alpha } from '@/components/ui';
+import { GlassSurface } from '@/components/ui/GlassSurface';
 
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 
 const LABEL_TEXT_MAX_SCALE = 1.16;
 
 export function BentoGrid() {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const router = useRouter();
   const { entering } = useAccessibleAnimation();
 
@@ -51,31 +50,18 @@ export function BentoGrid() {
             accessibilityRole="button"
             accessibilityLabel={`Open ${item.label}`}
             accessibilityHint="Opens this section from the Today tab"
-            style={[
-              styles.box,
-              {
-                backgroundColor: Platform.OS === 'ios'
-                  ? alpha(colors.backgroundElevated, isDark ? 0.56 : 0.8)
-                  : alpha(colors.backgroundElevated, 0.9),
-                borderColor: alpha(colors.accent, 0.25),
-              },
-            ]}
+            style={styles.pressable}
           >
-            {Platform.OS === 'ios' && (
-              <BlurView
-                intensity={isDark ? 28 : 18}
-                tint={isDark ? 'dark' : 'light'}
-                style={StyleSheet.absoluteFill}
-              />
-            )}
-            <Text
-              style={[styles.label, { color: colors.text }]}
-              numberOfLines={2}
-              maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}
-            >
-              {item.label}
-            </Text>
-            <CaretRightIcon size={13} color={colors.textSubtle} weight="light" />
+            <GlassSurface radius={Radius.lg} style={styles.box}>
+              <Text
+                style={[styles.label, { color: colors.text }]}
+                numberOfLines={2}
+                maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}
+              >
+                {item.label}
+              </Text>
+              <CaretRightIcon size={13} color={colors.textSubtle} weight="light" />
+            </GlassSurface>
           </TouchableOpacity>
         ))}
       </View>
@@ -91,14 +77,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: Spacing['2'],
   },
+  pressable: {
+    flex: 1,
+  },
   box: {
     flex: 1,
     minHeight: 58,
     paddingVertical: Spacing['3'],
     paddingHorizontal: Spacing['3'],
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

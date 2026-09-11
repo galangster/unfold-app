@@ -83,6 +83,7 @@ import { getCalendarDayNumber } from '@/lib/devotional-day-access';
 import { useGeneratedDayWatch } from '@/hooks/useGeneratedDayWatch';
 import { getQaTodayProfileMarker } from '@/lib/qa-today-marker';
 import { getStreakDayKey, shouldCelebrateStreakDayFlip } from '@/lib/streak-helpers';
+import { shouldShowCompletedEmberAmbience } from '@/lib/today-ambient-rive';
 
 const QA_TODAY_PROFILE_MARKER = getQaTodayProfileMarker();
 const QA_TODAY_CONTEXT_SLOT_PREFIX = 'QA Today context slot:';
@@ -1559,6 +1560,10 @@ export default function HomeScreen() {
                 isReturningUser={isReturningUser && !isQaPreparingLoadingPreview}
                 gateCreation={gate}
                 storedPick={autoTrialActive ? storedNextPick : undefined}
+                ambienceVisible={shouldShowCompletedEmberAmbience({
+                  stateType: devotionalState.type,
+                  hasReadToday,
+                })}
               />
             </Animated.View>
           </View>
