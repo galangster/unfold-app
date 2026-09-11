@@ -11,6 +11,9 @@ import { AppState, Platform, Text as RNText, TextInput as RNTextInput, View } fr
 import { useFonts } from 'expo-font';
 
 import { Colors } from '@/constants/colors';
+import { LaterEntryNotifySheet } from '@/components/onboarding/LaterEntryNotifySheet';
+import { onNotificationPermissionMaybeChanged } from '@/lib/notification-ask';
+import { refreshRemoteConfig } from '@/lib/remote-config';
 import * as SecureStore from 'expo-secure-store';
 import { RecoveryScreen } from '@/components/RecoveryScreen';
 import { isRecoverySession } from '@/lib/mmkv-storage';
@@ -146,9 +149,15 @@ function RootLayoutNav() {
   // The session-dedupe flag in registerPushToken makes foreground retries free
   // after the first successful POST.
   useEffect(() => {
+    void refreshRemoteConfig();
+    void onNotificationPermissionMaybeChanged();
     registerPushToken();
     const sub = AppState.addEventListener('change', (s) => {
-      if (s === 'active') void registerPushToken();
+      if (s === 'active') {
+        void refreshRemoteConfig();
+        void onNotificationPermissionMaybeChanged();
+        void registerPushToken();
+      }
     });
     return () => sub.remove();
   }, []);
@@ -252,6 +261,7 @@ function RootLayoutNav() {
         />
         </Stack>
         <AudioPlayerOverlay />
+        <LaterEntryNotifySheet />
         <PrivacyShield />
       </View>
       <StatusBar style={isDark ? 'light' : 'dark'} />

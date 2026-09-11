@@ -1,5 +1,4 @@
 import type { BibleHighlightColor, HighlightColor } from '@/lib/store';
-import { HIGHLIGHT_INK, highlightInk, highlighterFlatBand } from '@/constants/bible-highlight-colors';
 
 export type HighlightKey = HighlightColor | BibleHighlightColor;
 
@@ -16,12 +15,4 @@ export const HIGHLIGHT_COLORS: Record<HighlightKey, { light: string; dark: strin
 export function highlightSwatch(color: string | null | undefined, isDark: boolean): string {
   const entry = (color && HIGHLIGHT_COLORS[color as HighlightKey]) || HIGHLIGHT_COLORS.yellow;
   return entry[isDark ? 'dark' : 'light'];
-}
-
-/** Marker band behind quoted highlight text on native surfaces: the body
- *  ink of the reader's felt-tip stroke, so a quoted line carries the same
- *  colour as the mark it came from. Unknown colours fall back to yellow. */
-export function highlightBandColor(color: HighlightKey | null | undefined, isDark: boolean): string {
-  const key: BibleHighlightColor = color && color in HIGHLIGHT_INK ? color : 'yellow';
-  return highlighterFlatBand(highlightInk(key, isDark));
 }

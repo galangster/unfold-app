@@ -180,6 +180,10 @@ describe('full user-data sync', () => {
     serveSync({
       push: (changes) => ({ results: acceptedLegacyResults(changes) }),
     });
+    // addCheckIn now flushes the outbox at once (spec §6.3, J5). That drain
+    // may have consumed the enqueue revision, so clear the min-interval guard
+    // before the explicit drain this test controls.
+    resetDrainStateForTesting();
     await drainSyncOutbox();
     expect(peekSyncOutbox()).toHaveLength(0);
 
@@ -216,6 +220,10 @@ describe('full user-data sync', () => {
     serveSync({
       push: (changes) => ({ results: acceptedLegacyResults(changes) }),
     });
+    // addCheckIn now flushes the outbox at once (spec §6.3, J5). That drain
+    // may have consumed the enqueue revision, so clear the min-interval guard
+    // before the explicit drain this test controls.
+    resetDrainStateForTesting();
     await drainSyncOutbox();
     expect(peekSyncOutbox()).toHaveLength(0);
 
@@ -294,6 +302,10 @@ describe('full user-data sync', () => {
     serveSync({
       push: (changes) => ({ results: acceptedLegacyResults(changes) }),
     });
+    // addCheckIn now flushes the outbox at once (spec §6.3, J5). That drain
+    // may have consumed the enqueue revision, so clear the min-interval guard
+    // before the explicit drain this test controls.
+    resetDrainStateForTesting();
     await drainSyncOutbox();
     expect(peekSyncOutbox()).toHaveLength(0);
 
@@ -479,5 +491,87 @@ describe('full user-data sync', () => {
       content: '<p>Pending local writing</p>',
       updatedAt: '2026-07-01T12:05:00.000Z',
     });
+  });
+});
+
+function seedMappedDevotional() {
+  useUnfoldStore.setState({
+    devotionals: [{
+      id: 'devotional-1',
+      title: 'Auto',
+      totalDays: 3,
+      currentDay: 2,
+      days: [],
+      createdAt: '2026-07-01T00:00:00.000Z',
+      userContext: { name: '', aboutMe: '', currentSituation: '', emotionalState: '' },
+      generationMode: 'progressive',
+      seriesArc: {
+        totalDaysPlanned: 3,
+        overarchingTheme: 'theme',
+        narrativeShape: 'shape',
+        dayHints: [],
+        isOpenEnded: false,
+        createdAt: '2026-07-01T00:00:00.000Z',
+        seriesKind: 'auto_trial',
+      },
+    }],
+  });
+}
+
+function pulledDay(content: Record<string, unknown>) {
+  return {
+    id: 'day-devotional-1-2',
+    updatedAt: '2026-07-01T12:00:00.000Z',
+    deleted: false,
+    data: {
+      devotionalId: 'devotional-1',
+      dayNumber: 2,
+      title: 'Day 2',
+      scriptureReference: 'John 1:1',
+      scriptureText: 'Text',
+      bodyText: 'Body',
+      quotableLine: 'Line',
+      content,
+    },
+  };
+}
+
+describe('J6 full-sync day mapper', () => {
+  it('keeps shapedByCheckIn only for boolean true and drops invalid nextPick', () => {
+    seedMappedDevotional();
+    applyPulledUserData({
+      timestamp: '2026-07-01T12:00:00.000Z',
+      changes: { devotional_days: [pulledDay({ shapedByCheckIn: true, nextPick: { theme: 't', themeName: 'n', type: 'x', suggestedLength: 7, line: 'Next' } })] },
+    });
+    expect(useUnfoldStore.getState().devotionals[0]?.days[0]?.shapedByCheckIn).toBe(true);
+    expect(useUnfoldStore.getState().devotionals[0]?.days[0]?.nextPick).toEqual({
+      theme: 't',
+      themeName: 'n',
+      type: 'x',
+      suggestedLength: 7,
+      line: 'Next',
+    });
+
+    applyPulledUserData({
+      timestamp: '2026-07-01T12:01:00.000Z',
+      changes: { devotional_days: [{
+        ...pulledDay({ shapedByCheckIn: 'true', nextPick: { theme: 't', themeName: 'n', type: 'x', suggestedLength: 30, line: 'Next' } }),
+        updatedAt: '2026-07-01T12:01:00.000Z',
+      }] },
+    });
+    const malformed = useUnfoldStore.getState().devotionals[0]?.days[0];
+    expect(malformed?.shapedByCheckIn).toBeUndefined();
+    expect(malformed?.nextPick).toBeUndefined();
+
+    applyPulledUserData({
+      timestamp: '2026-07-01T12:02:00.000Z',
+      changes: { devotional_days: [{
+        ...pulledDay({ shapedByCheckIn: false, nextPick: { theme: 't', themeName: 'n', type: 'x', suggestedLength: 7, line: '' } }),
+        updatedAt: '2026-07-01T12:02:00.000Z',
+      }] },
+    });
+    const emptyLine = useUnfoldStore.getState().devotionals[0]?.days[0];
+    expect(emptyLine?.shapedByCheckIn).toBeUndefined();
+    expect(emptyLine?.nextPick).toBeUndefined();
   });
 });

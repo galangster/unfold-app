@@ -380,6 +380,21 @@ A source check or Jest result does not prove text fits on a device.
 
 Use an isolated QA checkout, storage namespace, and Metro port with fictional data.
 Block remote requests from fixtures. Keep fixture routes and purchase mocks out of release source.
+
+**Exception (Nick, 2026-09-10, D13).**
+
+- What ships:
+  - `src/lib/qa-simulated-trial.ts`
+  - the "Simulate Trial Purchase (Dev)" row in Dev Tools
+  - the paywall QA control
+
+  Together they feed a fake trial CustomerInfo into the real purchase handler with source `purchase`.
+- The fixture route `src/app/dev/trial-series.tsx` ships under the same exception. Nick confirmed this on 2026-09-11 (OI-3).
+- Gate: all of them sit behind `isQaToolsEnabled()`. A production build profile can never enable them (`src/lib/build-profile.ts`, `resolveQaToolsEnabled`).
+- Proof: `qa-simulated-trial.test.ts`, `qa-simulated-trial-imports.test.ts`, and `bun run verify:profiles`.
+- One real sandbox purchase on a physical device still runs before release.
+- This exception covers nothing else. Any other purchase mock needs a new owner ruling.
+
 Use one simulator and one UI writer at a time. Capture after navigation and animation settle.
 Save both the screenshot and accessibility tree. A matching label can still sit outside the viewport.
 

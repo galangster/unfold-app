@@ -2,6 +2,19 @@ jest.mock('react-native', () => ({
   Platform: { OS: 'ios' },
 }));
 
+// notifications.ts now reads the auto-trial intent; keep MMKV out of this suite.
+jest.mock('@/lib/auto-trial-intent', () => ({ readAutoTrialIntent: jest.fn(() => null) }));
+jest.mock('@/lib/trial-notification', () => ({
+  readTrialCheckInSkipDate: jest.fn(() => null),
+}));
+
+jest.mock('expo-file-system/legacy', () => ({
+  documentDirectory: 'file:///documents/',
+  cacheDirectory: 'file:///cache/',
+  deleteAsync: jest.fn(async () => undefined),
+  readDirectoryAsync: jest.fn(async () => []),
+}));
+
 const mockScheduleNotificationAsync = jest.fn(async () => 'notif-id');
 const mockCancelScheduledNotificationAsync = jest.fn(async (_identifier: string) => {});
 const mockCancelAllScheduledNotificationsAsync = jest.fn(async () => {});
@@ -127,6 +140,7 @@ describe('notifications routing + cancellation', () => {
       'unfold-midday-checkin-fri',
       'unfold-midday-checkin-sat',
       'unfold-midday-checkin-sun',
+      'unfold-midday-checkin-resume',
       'unfold-evening-winddown',
       'unfold-evening-winddown-mon',
       'unfold-evening-winddown-tue',
@@ -135,6 +149,7 @@ describe('notifications routing + cancellation', () => {
       'unfold-evening-winddown-fri',
       'unfold-evening-winddown-sat',
       'unfold-evening-winddown-sun',
+      'unfold-evening-winddown-resume',
       'unfold-daily-reminder:0',
       'unfold-daily-reminder:0:1',
     ]);

@@ -157,6 +157,8 @@ async function setupMountedHook() {
       }),
     },
   }));
+  jest.doMock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
+  jest.doMock('@/lib/notification-ask', () => ({ requestLaterEntryNotifyAsk: jest.fn() }));
   jest.doMock('@/lib/logger', () => ({ logger: { log: jest.fn(), warn: jest.fn(), error: jest.fn() } }));
   jest.doMock('@/lib/mmkv-storage', () => ({
     getDeviceId: () => state.deviceId,

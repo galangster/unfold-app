@@ -152,7 +152,7 @@ export default function EveningWindDownScreen() {
   const addCheckIn = useUnfoldStore((s) => s.addCheckIn);
   const markEveningWindDownCompleted = useUnfoldStore((s) => s.markEveningWindDownCompleted);
 
-  const { gate, policy, showExclusiveOffer, dismissOffer } = useCreationGate();
+  const { gate, policy, showExclusiveOffer, dismissOffer, handleOfferVerifiedExit } = useCreationGate();
 
   // The Today card gates this screen before pushing it; a notification tap
   // pushes it directly, so the same check runs here before anything loads.
@@ -566,7 +566,13 @@ export default function EveningWindDownScreen() {
         onDismiss={handleDismissCelebration}
         message={celebrationMessage}
       />
-      <ExclusiveOfferSheet visible={showExclusiveOffer} onDismiss={dismissOffer} context="churned" />
+      <ExclusiveOfferSheet
+        visible={showExclusiveOffer}
+        onDismiss={dismissOffer}
+        onPurchaseSuccess={handleOfferVerifiedExit}
+        surface="churned_sheet"
+        context="churned"
+      />
     </View>
   );
 }

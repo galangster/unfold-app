@@ -7,6 +7,8 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { isQaToolsEnabled } from '@/lib/qa-tools';
+import { QA_TRIAL_LENGTH_OPTIONS, simulateTrialPurchase } from '@/lib/qa-simulated-trial';
+import { resolveLaterEntryExit } from '@/lib/auto-trial-exit';
 import { useUnfoldStore, ThemeMode } from '@/lib/store';
 import { debugFireTrialEndingNotification } from '@/lib/trial-notification';
 import { mmkvStorage } from '@/lib/mmkv-storage';
@@ -14,6 +16,14 @@ import { useUIState } from '@/lib/ui-state';
 import { scheduleDevotionalReadyTapTestNotification } from '@/lib/notifications';
 import { buildDevotionalSeed } from '@/lib/dev-seed';
 import { SettingsSectionHeader } from './SettingsSectionHeader';
+
+const QA_ROW_STYLE = {
+  padding: Spacing['4'],
+  borderRadius: Radius.md,
+  backgroundColor: 'rgba(200, 165, 92, 0.1)',
+  alignItems: 'center' as const,
+  marginBottom: Spacing['3'],
+};
 
 /** Internal QA affordances for notification/reveal verification builds. */
 export function QaToolsSection() {
@@ -244,6 +254,43 @@ export function QaToolsSection() {
 
       <TouchableOpacity
         activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel="Simulate Trial Purchase (Dev)"
+        onPress={() => {
+          Alert.alert(
+            'Simulate Trial Purchase (Dev)',
+            'Choose a trial length.',
+            [
+              ...QA_TRIAL_LENGTH_OPTIONS.map((option) => ({
+                text: option.label,
+                onPress: () => {
+                  const result = simulateTrialPurchase({
+                    trialLengthMs: option.trialLengthMs,
+                    handle: (exit) => {
+                      const decision = resolveLaterEntryExit(exit, 'paywall_route');
+                      if (decision.kind === 'auto') {
+                        router.push('/generating');
+                        return;
+                      }
+                      Alert.alert('Fallback', decision.reason);
+                    },
+                  });
+                  if (!result.ok) Alert.alert('Fallback', result.reason);
+                },
+              })),
+              { text: 'Cancel', style: 'cancel' },
+            ],
+          );
+        }}
+        style={QA_ROW_STYLE}
+      >
+        <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 14, color: colors.accent }}>
+          Simulate Trial Purchase (Dev)
+        </Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        activeOpacity={0.7}
         onPress={() => {
           mmkvStorage.removeItem('@unfold_exclusive_offer_seen');
           mmkvStorage.removeItem('@unfold_onboarding_offer_seen');
@@ -270,7 +317,7 @@ export function QaToolsSection() {
       <TouchableOpacity
         activeOpacity={0.7}
         onPress={async () => {
-          const id = await debugFireTrialEndingNotification(5);
+          const id = await debugFireTrialEndingNotification(5, 3);
           Haptics.notificationAsync(
             id
               ? Haptics.NotificationFeedbackType.Success

@@ -24,7 +24,7 @@ const mockPurchasePackage = jest.fn();
 const mockRestorePurchases = jest.fn();
 const mockGetOfferings = jest.fn();
 const mockWaitForUnfoldPremiumEntitlement = jest.fn();
-const mockSyncTrialEndingNotification = jest.fn(() => Promise.resolve());
+const mockSyncTrialEndingNotification = jest.fn((..._args: unknown[]) => Promise.resolve());
 const mockIdentityListeners = new Set<(epoch: number) => void>();
 
 jest.mock('react-native-reanimated', () => {
@@ -79,6 +79,14 @@ jest.mock('expo-haptics', () => ({
   NotificationFeedbackType: { Success: 'success', Warning: 'warning', Error: 'error' },
 }));
 
+jest.mock('expo-notifications', () => ({
+  getPermissionsAsync: jest.fn(async () => ({ status: 'granted' })),
+  requestPermissionsAsync: jest.fn(async () => ({ status: 'granted' })),
+  scheduleNotificationAsync: jest.fn(async () => 'id'),
+  cancelScheduledNotificationAsync: jest.fn(async () => undefined),
+  getAllScheduledNotificationsAsync: jest.fn(async () => []),
+  setNotificationHandler: jest.fn(),
+}));
 jest.mock('expo-image', () => ({ Image: 'ExpoImage' }));
 jest.mock('expo-linear-gradient', () => ({ LinearGradient: 'LinearGradient' }));
 jest.mock('expo-application', () => ({ nativeApplicationVersion: '1.0.0', nativeBuildVersion: '1' }));
@@ -88,13 +96,24 @@ jest.mock('@react-native-masked-view/masked-view', () => {
   return { __esModule: true, default: ({ children }: { children: React.ReactNode }) => children ?? ReactNative.View };
 });
 
+let mockPaywallSearchParams: Record<string, string> = {};
 jest.mock('expo-router', () => ({
   useRouter: () => ({ back: mockBack, replace: mockReplace }),
-  useLocalSearchParams: () => ({}),
+  useLocalSearchParams: () => mockPaywallSearchParams,
+  useFocusEffect: (cb: () => void) => {
+    const ReactActual = require('react');
+    ReactActual.useEffect(cb, [cb]);
+  },
 }));
 
 jest.mock('@/components/EmberSystem', () => ({ EmberSystem: () => null }));
-jest.mock('@/components/ExclusiveOfferSheet', () => ({ ExclusiveOfferSheet: () => null }));
+let paywallOfferProps: { onPurchaseSuccess?: (exit: unknown) => void } | null = null;
+jest.mock('@/components/ExclusiveOfferSheet', () => ({
+  ExclusiveOfferSheet: (props: { onPurchaseSuccess?: (exit: unknown) => void }) => {
+    paywallOfferProps = props;
+    return null;
+  },
+}));
 jest.mock('@/components/icons', () => {
   const icon = () => null;
   return new Proxy({}, { get: () => icon });
@@ -144,7 +163,24 @@ jest.mock('@/lib/revenuecatClient', () => ({
 }));
 
 jest.mock('@/lib/trial-notification', () => ({
-  syncTrialEndingNotification: () => mockSyncTrialEndingNotification(),
+  syncTrialEndingNotification: (...args: unknown[]) => mockSyncTrialEndingNotification(...args),
+}));
+const mockResolveLaterEntryExit = jest.fn((..._args: unknown[]) => ({ kind: 'fallback', reason: 'switch_off' }));
+const mockRequestLaterEntryNotifyAsk = jest.fn();
+jest.mock('@/lib/auto-trial-exit', () => ({
+  resolveLaterEntryExit: (...args: unknown[]) => mockResolveLaterEntryExit(...args),
+}));
+jest.mock('@/lib/notification-ask', () => ({
+  requestLaterEntryNotifyAsk: (...args: unknown[]) => mockRequestLaterEntryNotifyAsk(...args),
+}));
+jest.mock('@/lib/remote-config', () => ({
+  refreshRemoteConfig: jest.fn(),
+}));
+const mockSetPendingPaywallGrant = jest.fn();
+jest.mock('@/lib/ui-state', () => ({
+  useUIState: {
+    getState: () => ({ setPendingPaywallGrant: mockSetPendingPaywallGrant }),
+  },
 }));
 
 jest.mock('@/lib/paywall-diagnostics', () => ({
@@ -345,6 +381,9 @@ async function startPress(tree: { root: { findAll: Function } }, label: string) 
 describe('standalone PaywallScreen lifecycle', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockPaywallSearchParams = {};
+    paywallOfferProps = null;
+    mockResolveLaterEntryExit.mockReturnValue({ kind: 'fallback', reason: 'switch_off' });
     mockIdentityListeners.clear();
     mockGetOfferings.mockResolvedValue(offeringsWithPackages());
     mockWaitForUnfoldPremiumEntitlement.mockReturnValue(new Promise(() => {}));
@@ -397,7 +436,7 @@ describe('standalone PaywallScreen lifecycle', () => {
 
     await press(tree, 'Unlock Unfold Premium');
     expect(findText(tree, PAYWALL_ENTITLEMENT_PENDING_CUE).length).toBeGreaterThan(0);
-    expect(closeButton(tree).props.disabled).toBe(false);
+    expect(closeButton(tree).props.disabled).toBe(true);
     expect(findByLabel(tree, 'Restore purchases')[0].props.disabled).toBeFalsy();
 
     await press(tree, 'Restore purchases');
@@ -473,48 +512,50 @@ describe('standalone PaywallScreen lifecycle', () => {
     expect(mockUpdateUser).not.toHaveBeenCalled();
   });
 
-  it('lets Close run during the entitlement wait and ignores a later grant after unmount', async () => {
+  it('blocks Close during the entitlement wait so a later grant can still complete', async () => {
     mockPurchasePackage.mockResolvedValue({ ok: true, data: unentitledCustomerInfo });
     const wait = deferred<typeof entitledCustomerInfo | null>();
     mockWaitForUnfoldPremiumEntitlement.mockReturnValue(wait.promise);
     const { tree, unmount } = await renderPaywall();
 
     await press(tree, 'Unlock Unfold Premium');
-    expect(closeButton(tree).props.disabled).toBe(false);
+    expect(closeButton(tree).props.disabled).toBe(true);
     expect(findText(tree, PAYWALL_ENTITLEMENT_PENDING_MESSAGE).length).toBeGreaterThan(0);
 
     await act(async () => {
       closeButton(tree).props.onPress();
     });
-    expect(mockBack).toHaveBeenCalledTimes(1);
+    expect(mockBack).not.toHaveBeenCalled();
 
-    await unmount();
     await wait.resolve(entitledCustomerInfo);
-
-    expect(mockBack).toHaveBeenCalledTimes(1);
-    expect(mockUpdateUser).not.toHaveBeenCalled();
+    expect(mockResolveLaterEntryExit).toHaveBeenCalledTimes(1);
+    expect(mockResolveLaterEntryExit).toHaveBeenCalledWith(
+      { source: 'lateGrant', customerInfo: entitledCustomerInfo },
+      'paywall_route',
+    );
+    expect(mockUpdateUser).toHaveBeenCalledWith({ isPremium: true });
+    await unmount();
   });
 
-  it('ignores a late entitlement while Close has started and the screen is still mounted', async () => {
+  it('keeps a blocked Close from racing a late grant while the screen is still mounted', async () => {
     mockPurchasePackage.mockResolvedValue({ ok: true, data: unentitledCustomerInfo });
     const wait = deferred<typeof entitledCustomerInfo | null>();
     mockWaitForUnfoldPremiumEntitlement.mockReturnValue(wait.promise);
     const { tree, unmount } = await renderPaywall();
 
     await press(tree, 'Unlock Unfold Premium');
-    expect(closeButton(tree).props.disabled).toBe(false);
+    expect(closeButton(tree).props.disabled).toBe(true);
     expect(findText(tree, PAYWALL_ENTITLEMENT_PENDING_MESSAGE).length).toBeGreaterThan(0);
 
     await act(async () => {
       closeButton(tree).props.onPress();
     });
-    expect(mockBack).toHaveBeenCalledTimes(1);
+    expect(mockBack).not.toHaveBeenCalled();
 
     await wait.resolve(entitledCustomerInfo);
-    const callsDuringClosingTransition = mockBack.mock.calls.length;
+    expect(mockResolveLaterEntryExit).toHaveBeenCalledTimes(1);
+    expect(mockUpdateUser).toHaveBeenCalledWith({ isPremium: true });
     await unmount();
-    expect(callsDuringClosingTransition).toBe(1);
-    expect(mockUpdateUser).not.toHaveBeenCalled();
   });
 
   it('clears identity-epoch wait state so the current screen is not left disabled', async () => {
@@ -569,6 +610,124 @@ describe('standalone PaywallScreen lifecycle', () => {
     expect(mockPurchasePackage).not.toHaveBeenCalled();
     expect(mockUpdateUser).not.toHaveBeenCalled();
     expect(closeButton(tree).props.disabled).toBe(false);
+    await unmount();
+  });
+});
+
+describe('F6 /paywall auto-trial exits', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockPaywallSearchParams = {};
+    paywallOfferProps = null;
+    mockIdentityListeners.clear();
+    mockGetOfferings.mockResolvedValue(offeringsWithPackages());
+    mockWaitForUnfoldPremiumEntitlement.mockReturnValue(new Promise(() => {}));
+    mockSyncTrialEndingNotification.mockResolvedValue(undefined);
+    mockResolveLaterEntryExit.mockReturnValue({ kind: 'fallback', reason: 'switch_off' });
+  });
+
+  it('threads purchase, lateGrant, and restore sources, and restore after wait is lateGrant', async () => {
+    mockPurchasePackage.mockResolvedValue({ ok: true, data: entitledCustomerInfo });
+    const purchased = await renderPaywall();
+    await press(purchased.tree, 'Unlock Unfold Premium');
+    expect(mockResolveLaterEntryExit).toHaveBeenCalledWith(
+      { source: 'purchase', customerInfo: entitledCustomerInfo },
+      'paywall_route',
+    );
+    await purchased.unmount();
+
+    mockPurchasePackage.mockResolvedValue({ ok: true, data: unentitledCustomerInfo });
+    const wait = deferred<typeof entitledCustomerInfo | null>();
+    mockWaitForUnfoldPremiumEntitlement.mockReturnValue(wait.promise);
+    const late = await renderPaywall();
+    await press(late.tree, 'Unlock Unfold Premium');
+    await wait.resolve(entitledCustomerInfo);
+    expect(mockResolveLaterEntryExit).toHaveBeenCalledWith(
+      { source: 'lateGrant', customerInfo: entitledCustomerInfo },
+      'paywall_route',
+    );
+    await late.unmount();
+
+    mockRestorePurchases.mockResolvedValue({ ok: true, data: entitledCustomerInfo });
+    const restored = await renderPaywall();
+    await press(restored.tree, 'Restore purchases');
+    expect(mockResolveLaterEntryExit).toHaveBeenCalledWith(
+      { source: 'restore', customerInfo: entitledCustomerInfo },
+      'paywall_route',
+    );
+    await restored.unmount();
+
+    mockPurchasePackage.mockResolvedValue({ ok: true, data: unentitledCustomerInfo });
+    const armedWait = deferred<typeof entitledCustomerInfo | null>();
+    mockWaitForUnfoldPremiumEntitlement.mockReturnValue(armedWait.promise);
+    const armed = await renderPaywall();
+    await press(armed.tree, 'Unlock Unfold Premium');
+    await press(armed.tree, 'Restore purchases');
+    expect(mockResolveLaterEntryExit).toHaveBeenCalledWith(
+      { source: 'lateGrant', customerInfo: entitledCustomerInfo },
+      'paywall_route',
+    );
+    await armed.unmount();
+  });
+
+  it('replaces to generating on an auto decision and asks on fallback', async () => {
+    mockPurchasePackage.mockResolvedValue({ ok: true, data: entitledCustomerInfo });
+    mockResolveLaterEntryExit.mockReturnValue({
+      kind: 'auto',
+      created: true,
+      intent: { intentId: 'intent-auto' },
+    } as never);
+    const auto = await renderPaywall();
+    await press(auto.tree, 'Unlock Unfold Premium');
+    expect(mockReplace).toHaveBeenCalledWith('/generating');
+    expect(mockRequestLaterEntryNotifyAsk).not.toHaveBeenCalled();
+    await auto.unmount();
+
+    mockResolveLaterEntryExit.mockReturnValue({ kind: 'fallback', reason: 'switch_off' });
+    const fallback = await renderPaywall();
+    await press(fallback.tree, 'Unlock Unfold Premium');
+    expect(mockBack).toHaveBeenCalled();
+    expect(mockRequestLaterEntryNotifyAsk).toHaveBeenCalledWith(entitledCustomerInfo);
+    await fallback.unmount();
+  });
+
+  it('skips the later-entry handler when opened from onboarding', async () => {
+    mockPaywallSearchParams = { source: 'onboarding' };
+    mockPurchasePackage.mockResolvedValue({ ok: true, data: entitledCustomerInfo });
+    const { tree, unmount } = await renderPaywall();
+    await press(tree, 'Unlock Unfold Premium');
+    expect(mockResolveLaterEntryExit).not.toHaveBeenCalled();
+    expect(mockRequestLaterEntryNotifyAsk).not.toHaveBeenCalled();
+    await unmount();
+  });
+
+  it('advances once from the offer sheet and writes the seen flag', async () => {
+    mockPurchasePackage.mockResolvedValue({ ok: false, reason: 'user_cancelled' });
+    const { mmkvStorage } = require('@/lib/mmkv-storage');
+    mmkvStorage.getItem.mockReturnValue(null);
+    const { tree, unmount } = await renderPaywall();
+    await press(tree, 'Unlock Unfold Premium');
+    expect(paywallOfferProps?.onPurchaseSuccess).toEqual(expect.any(Function));
+    await act(async () => {
+      paywallOfferProps?.onPurchaseSuccess?.({
+        source: 'offer',
+        customerInfo: entitledCustomerInfo,
+      });
+    });
+    expect(mmkvStorage.setItem).toHaveBeenCalledWith('@unfold_onboarding_offer_seen', 'true');
+    expect(mockResolveLaterEntryExit).toHaveBeenCalledTimes(1);
+    await unmount();
+  });
+
+  it('still navigates back with no generic error copy when the decision throws', async () => {
+    mockPurchasePackage.mockResolvedValue({ ok: true, data: entitledCustomerInfo });
+    mockResolveLaterEntryExit.mockImplementation(() => {
+      throw new Error('decision failed');
+    });
+    const { tree, unmount } = await renderPaywall();
+    await press(tree, 'Unlock Unfold Premium');
+    expect(mockBack).toHaveBeenCalled();
+    expect(findText(tree, PAYWALL_GENERIC_ERROR_MESSAGE)).toHaveLength(0);
     await unmount();
   });
 });

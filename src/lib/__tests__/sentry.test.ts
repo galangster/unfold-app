@@ -883,7 +883,7 @@ describe('capture helpers', () => {
     });
     expect(mockCaptureMessage).toHaveBeenCalledWith('onboarding_completed', {
       level: 'info',
-      tags: { source: 'app_event' },
+      tags: { steps: 7, source: 'app_event' },
       extra: { steps: 7 },
     });
 
@@ -895,4 +895,73 @@ describe('capture helpers', () => {
     expect(JSON.stringify(scrubbed)).not.toContain(JOURNAL_TEXT);
   });
 });
+
+describe('K1 captureAppEvent allowlist', () => {
+  it('keeps the new string keys, numbers, and booleans, and forces tags.source last', () => {
+    const sentry = bootEnabled();
+    sentry.captureAppEvent('trial_started', {
+      outcome: 'auto_trial',
+      entry: 'onboarding',
+      surface: 'onboarding_paywall',
+      purchase_source: 'lateGrant',
+      age_bucket: '6h',
+      trial_days: 3,
+      auto_trial: true,
+      source: 'x',
+      secret_title: 'My Series',
+    });
+
+    expect(mockCaptureMessage).toHaveBeenCalledWith('trial_started', {
+      level: 'info',
+      tags: {
+        outcome: 'auto_trial',
+        entry: 'onboarding',
+        surface: 'onboarding_paywall',
+        purchase_source: 'lateGrant',
+        age_bucket: '6h',
+        trial_days: 3,
+        auto_trial: true,
+        secret_title: 'My Series',
+        source: 'app_event',
+      },
+      extra: {
+        outcome: 'auto_trial',
+        entry: 'onboarding',
+        surface: 'onboarding_paywall',
+        purchase_source: 'lateGrant',
+        age_bucket: '6h',
+        trial_days: 3,
+        auto_trial: true,
+        source: 'x',
+        secret_title: 'My Series',
+      },
+    });
+
+    const payload = mockCaptureMessage.mock.calls.at(-1)?.[1] as {
+      tags: Record<string, unknown>;
+      extra: Record<string, unknown>;
+    };
+    expect(Object.keys(payload.tags).at(-1)).toBe('source');
+    expect(payload.tags.source).toBe('app_event');
+
+    const scrubbed = initOptions().beforeSend({
+      tags: payload.tags,
+      extra: payload.extra,
+    }) as { tags: Record<string, unknown>; extra: Record<string, unknown> };
+
+    expect(scrubbed.tags.source).toBe('app_event');
+    expect(scrubbed.tags.outcome).toBe('auto_trial');
+    expect(scrubbed.tags.entry).toBe('onboarding');
+    expect(scrubbed.tags.surface).toBe('onboarding_paywall');
+    expect(scrubbed.tags.purchase_source).toBe('lateGrant');
+    expect(scrubbed.tags.age_bucket).toBe('6h');
+    expect(scrubbed.tags.trial_days).toBe(3);
+    expect(scrubbed.tags.auto_trial).toBe(true);
+    expect(scrubbed.tags.secret_title).toBeUndefined();
+    expect(scrubbed.extra.trial_days).toBe(3);
+    expect(scrubbed.extra.auto_trial).toBe(true);
+    expect(scrubbed.extra.secret_title).toBeUndefined();
+  });
+});
+
 

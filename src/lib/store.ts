@@ -29,6 +29,8 @@ import { getEffectivePremiumAccessPolicy } from './premium-state';
 import { canEarnPremiumMilestone } from './premium-access-policy';
 import { repairRehydratedState } from './store-rehydrate-repair';
 import type { WordStudy } from './word-study';
+import { flushCheckInToServer } from './check-in-flush';
+import { isOnboardingSampleDevotionalId } from './auto-trial-series';
 import {
   bibleHighlightSyncData,
   bibleReadingPositionSyncData,
@@ -225,6 +227,14 @@ export interface CrossReference {
   text: string;
 }
 
+export interface NextPick {
+  theme: string;
+  themeName: string;
+  type: string;
+  suggestedLength: 7 | 14;
+  line: string;
+}
+
 export interface DevotionalDay {
   dayNumber: number;
   title: string;
@@ -253,6 +263,9 @@ export interface DevotionalDay {
   actOutcome?: 'done' | 'skipped';
   /** 6-12 word recall line for the afternoon; also used by the midday check-in notification. */
   carryLine?: string;
+  shapedByCheckIn?: true;
+  nextPickLine?: string;
+  nextPick?: NextPick;
   // Phase 2: Midday check-in question + chips (generated with devotional)
   checkInQuestion?: string;
   checkInChips?: string[];
@@ -443,6 +456,7 @@ export interface SeriesArcDay {
   narrativeRole: 'foundation' | 'deepening' | 'tension' | 'turning' | 'resolution';
   /** Bible study method ID assigned by arc generator (e.g., 'word_study', 'lectio_divina') */
   studyMethod?: string;
+  dayTitle?: string;
 }
 
 /** High-level series plan generated at onboarding (not the content itself) */
@@ -460,6 +474,8 @@ export interface SeriesArc {
   thesisRevisedAt?: string;
   /** Named movements for series >= 14 days; groups the series-detail day list. */
   acts?: { name: string; fromDay: number; toDay: number; function: string }[];
+  seriesKind?: 'auto_trial';
+  promise?: string;
 }
 
 /** Full context snapshot for a recently completed day (Layer 1) */
@@ -609,6 +625,7 @@ interface UnfoldState {
   currentDevotionalId: string | null;
   addDevotional: (devotional: Devotional) => void;
   removeDevotional: (devotionalId: string) => void;
+  retireOnboardingSamples: (opts: { keepId?: string }) => void;
   updateDevotionalDays: (devotionalId: string, days: DevotionalDay[], title?: string) => void;
   setCurrentDevotional: (id: string) => void;
   archiveCurrentDevotional: () => void;
@@ -1034,6 +1051,23 @@ export const useUnfoldStore = create<UnfoldState>()(
           highlights: state.highlights.filter((h) => h.devotionalId !== devotionalId),
           bookmarks: state.bookmarks.filter((b) => b.devotionalId !== devotionalId),
         })),
+
+      retireOnboardingSamples: ({ keepId }) =>
+        set((state) => {
+          const retiringIds = new Set(
+            state.devotionals
+              .filter((d) => isOnboardingSampleDevotionalId(d.id) && d.id !== keepId)
+              .map((d) => d.id),
+          );
+          if (retiringIds.size === 0) return state;
+          return {
+            devotionals: state.devotionals.filter((d) => !retiringIds.has(d.id)),
+            currentDevotionalId:
+              state.currentDevotionalId && retiringIds.has(state.currentDevotionalId)
+                ? (keepId ?? null)
+                : state.currentDevotionalId,
+          };
+        }),
 
       updateDevotionalDays: (devotionalId, days, title) =>
         set((state) => {
@@ -1608,10 +1642,10 @@ export const useUnfoldStore = create<UnfoldState>()(
         }),
 
       // Check-ins (Phase 2)
-      addCheckIn: (checkIn) =>
+      addCheckIn: (checkIn) => {
+        const now = new Date().toISOString();
+        const newCheckIn: CheckIn = { ...checkIn, id: newId(), createdAt: now, updatedAt: now };
         set((state) => {
-          const now = new Date().toISOString();
-          const newCheckIn: CheckIn = { ...checkIn, id: newId(), createdAt: now, updatedAt: now };
           enqueuePersonalDataSyncChange('check_ins', newCheckIn.id, checkInSyncData(newCheckIn), now);
           return {
             checkIns: [
@@ -1619,7 +1653,9 @@ export const useUnfoldStore = create<UnfoldState>()(
               ...state.checkIns,
             ].slice(0, 200), // Cap at 200 entries
           };
-        }),
+        });
+        void flushCheckInToServer(newCheckIn.id);
+      },
       getCheckIn: (devotionalId, dayNumber, timeOfDay) => {
         return get().checkIns.find(
           (c) => c.devotionalId === devotionalId && c.dayNumber === dayNumber && c.timeOfDay === timeOfDay

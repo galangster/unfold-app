@@ -1,4 +1,5 @@
 import { getBuildProfile, resolveQaToolsEnabled } from '@/lib/build-profile';
+import { useUIState } from '@/lib/ui-state';
 
 /**
  * Master gate for every QA / debug affordance. A production build (stamped
@@ -11,4 +12,18 @@ export function isQaToolsEnabled(): boolean {
     isDev: __DEV__,
     qaFlag: process.env.EXPO_PUBLIC_ENABLE_QA_TOOLS,
   });
+}
+
+export function shouldRenderQaChrome(): boolean {
+  return isQaToolsEnabled() && !useUIState.getState().qaCaptureMode;
+}
+
+export function isLocalFixtureEnvironment(backendUrl: string): boolean {
+  let host = '';
+  try {
+    host = new URL(backendUrl).hostname;
+  } catch {
+    return false;
+  }
+  return isQaToolsEnabled() && (host === '127.0.0.1' || host === 'localhost');
 }

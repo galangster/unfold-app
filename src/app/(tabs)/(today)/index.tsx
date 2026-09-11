@@ -42,7 +42,21 @@ import {
   resolvePreparingFirstSeriesTitle,
   resolveTodayInflightAction,
   type InflightGenerationJob,
+  type TodayInflightDecision,
 } from '@/lib/inflight-generation-job';
+import {
+  readAutoTrialIntent,
+  reconcileAutoTrialIntentOnLaunch,
+  settleLandedAutoTrialSeries,
+  transitionAutoTrialIntent,
+  type AutoTrialIntentV1,
+  type AutoTrialLaunchAction,
+  type IntentStorage,
+} from '@/lib/auto-trial-intent';
+import { isAutoTrialSeries } from '@/lib/auto-trial-series';
+import { getDeviceId } from '@/lib/mmkv-storage';
+import { getServerOwnedSeriesTotalDays } from '@/lib/devotional-series-boundary';
+import { countReadDaysWithinBoundary } from '@/lib/series-path';
 import { classifyInitialArcPoll, type InitialArcPollResult } from '@/lib/inflight-initial-arc-watch';
 import { classifyPollFailure } from '@/lib/generation-poll-outcome';
 import { settleInflightInitialArcWatch } from '@/lib/initial-arc-result';
@@ -69,6 +83,7 @@ import { getCalendarDayNumber } from '@/lib/devotional-day-access';
 import { useGeneratedDayWatch } from '@/hooks/useGeneratedDayWatch';
 import { getQaTodayProfileMarker } from '@/lib/qa-today-marker';
 import { getStreakDayKey, shouldCelebrateStreakDayFlip } from '@/lib/streak-helpers';
+import { shouldShowCompletedEmberAmbience } from '@/lib/today-ambient-rive';
 
 const QA_TODAY_PROFILE_MARKER = getQaTodayProfileMarker();
 const QA_TODAY_CONTEXT_SLOT_PREFIX = 'QA Today context slot:';
@@ -115,6 +130,122 @@ function formatResumeRelativeTime(iso?: string): string {
 }
 
 const REVEAL_RESUME_WINDOW_MS = 15_000;
+
+function generatingRoute(autoTrialIntentId?: string | null): {
+  pathname: '/generating';
+  params?: { autoTrialIntentId: string };
+} {
+  return autoTrialIntentId
+    ? { pathname: '/generating', params: { autoTrialIntentId } }
+    : { pathname: '/generating' };
+}
+
+export function applyTodayAutoTrialFocus(i: {
+  intent: AutoTrialIntentV1 | null;
+  deviceId: string;
+  nowMs: number;
+  hasCompletedOnboarding: boolean;
+  landedDevotionalIds: readonly string[];
+  inflightJob: InflightGenerationJob | null;
+  revealGuardKey: string | null;
+  generationSessionStatus: import('@/lib/store').GenerationSessionStatus;
+  resolveInflight?: (
+    job: InflightGenerationJob | null,
+    status: import('@/lib/store').GenerationSessionStatus,
+  ) => TodayInflightDecision;
+}):
+  | {
+      launchAction: AutoTrialLaunchAction;
+      skipResolver: true;
+      navigation: { pathname: '/generating'; params?: { autoTrialIntentId: string } };
+      inflightDecision: null;
+      resumeGenerating: false;
+      settleIntent: AutoTrialIntentV1 | null;
+    }
+  | {
+      launchAction: AutoTrialLaunchAction;
+      skipResolver: false;
+      navigation: null;
+      inflightDecision: TodayInflightDecision;
+      resumeGenerating: boolean;
+      settleIntent: AutoTrialIntentV1 | null;
+    } {
+  const launchAction = reconcileAutoTrialIntentOnLaunch({
+    intent: i.intent,
+    deviceId: i.deviceId,
+    nowMs: i.nowMs,
+    hasCompletedOnboarding: i.hasCompletedOnboarding,
+    landedDevotionalIds: i.landedDevotionalIds,
+    inflightJob: i.inflightJob,
+    revealGuardKey: i.revealGuardKey,
+  });
+
+  if (launchAction.action === 'open_reveal') {
+    return {
+      launchAction,
+      skipResolver: true,
+      navigation: generatingRoute(i.intent?.intentId),
+      inflightDecision: null,
+      resumeGenerating: false,
+      settleIntent: null,
+    };
+  }
+
+  const settleIntent = launchAction.action === 'mark_landed' && i.intent?.devotionalId
+    ? i.intent
+    : null;
+
+  if (launchAction.action === 'mark_landed' && launchAction.then === 'open_reveal' && i.intent) {
+    return {
+      launchAction,
+      skipResolver: true,
+      navigation: generatingRoute(i.intent.intentId),
+      inflightDecision: null,
+      resumeGenerating: false,
+      settleIntent,
+    };
+  }
+
+  const resolveInflight = i.resolveInflight ?? resolveTodayInflightAction;
+  const raw = resolveInflight(i.inflightJob, i.generationSessionStatus);
+  const inflightDecision = (
+    raw.action === 'resume-on-generating'
+    && i.inflightJob
+    && i.intent
+    && i.inflightJob.jobId === i.intent.jobId
+  )
+    ? { action: 'watch-on-today' as const, job: i.inflightJob }
+    : raw;
+
+  return {
+    launchAction,
+    skipResolver: false,
+    navigation: null,
+    inflightDecision,
+    resumeGenerating: inflightDecision.action === 'resume-on-generating',
+    settleIntent,
+  };
+}
+
+/** Abandons purchased or failed auto-trial intents before the user starts a new series. */
+export function abandonPurchasedIntentBeforeNewSeries(i: {
+  nowMs: number;
+  storage?: IntentStorage;
+}): void {
+  const current = readAutoTrialIntent(i.storage);
+  const reason = current?.status === 'purchased'
+    ? 'superseded_by_user_series'
+    : current?.status === 'failed'
+      ? 'user_setup_fallback'
+      : null;
+  if (!reason) return;
+  transitionAutoTrialIntent(
+    'abandoned',
+    { abandonReason: reason },
+    { nowMs: i.nowMs },
+    i.storage,
+  );
+}
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -248,7 +379,7 @@ export default function HomeScreen() {
   const [voiceCheckInAutoStart, setVoiceCheckInAutoStart] = useState(false);
   const [showPremiumSheet, setShowPremiumSheet] = useState(false);
   const [stackPremiumFeature, setStackPremiumFeature] = useState<TodayPremiumFeature | null>(null);
-  const { gate, showExclusiveOffer, dismissOffer } = useCreationGate();
+  const { gate, showExclusiveOffer, dismissOffer, handleOfferVerifiedExit } = useCreationGate();
   const voiceCheckInPrototypeParam = Array.isArray(routeParams.voiceCheckInPrototype)
     ? routeParams.voiceCheckInPrototype[0]
     : routeParams.voiceCheckInPrototype;
@@ -301,9 +432,42 @@ export default function HomeScreen() {
   const generationSessionError = useUnfoldStore((s) => s.generationSession.error);
   const clearGenerationSession = useUnfoldStore((s) => s.clearGenerationSession);
   const [inflightSeries, setInflightSeries] = useState<InflightGenerationJob | null>(null);
+  const [autoIntent, setAutoIntent] = useState<AutoTrialIntentV1 | null>(readAutoTrialIntent);
+  const landedDevotionalIdsKey = devotionals.map((row) => row.id).join('\0');
+
   useEffect(() => {
     if (!isTodayFocused) return;
-    const decision = resolveTodayInflightAction(readInflightGenerationJob(), generationSessionStatus);
+    const intent = readAutoTrialIntent();
+    const inflightJob = readInflightGenerationJob();
+    const focus = applyTodayAutoTrialFocus({
+      intent,
+      deviceId: getDeviceId(),
+      nowMs: Date.now(),
+      hasCompletedOnboarding: user?.hasCompletedOnboarding === true,
+      landedDevotionalIds: useUnfoldStore.getState().devotionals.map((row) => row.id),
+      inflightJob,
+      revealGuardKey: useUIState.getState().autoTrialRevealGuardKey,
+      generationSessionStatus,
+    });
+    if (focus.launchAction.action === 'abandon') {
+      transitionAutoTrialIntent(
+        'abandoned',
+        { abandonReason: focus.launchAction.reason },
+        { nowMs: Date.now() },
+      );
+    }
+    if (focus.settleIntent?.devotionalId) {
+      settleLandedAutoTrialSeries(focus.settleIntent, focus.settleIntent.devotionalId);
+    }
+    setAutoIntent(readAutoTrialIntent());
+    if (focus.skipResolver) {
+      setInflightSeries(null);
+      if (focus.navigation) {
+        router.push(focus.navigation);
+      }
+      return;
+    }
+    const decision = focus.inflightDecision;
     if (decision.action !== 'resume-on-generating') {
       const next = decision.action === 'watch-on-today' ? decision.job : null;
       // The same record read again on focus keeps its object, so the watch
@@ -343,7 +507,7 @@ export default function HomeScreen() {
         const serverStatus = 'status' in poll ? poll.status.status : null;
         logger.log(`[home] Resuming inflight generation job ${jobId} (server: ${serverStatus})`);
         // Navigate to generating screen — it will pick up the inflight job from MMKV
-        router.replace('/generating');
+        router.replace(generatingRoute(readAutoTrialIntent()?.intentId));
         return;
       }
       if (resume === 'discard') {
@@ -363,7 +527,7 @@ export default function HomeScreen() {
     return () => {
       cancelled = true;
     };
-  }, [router, isTodayFocused, generationSessionStatus, generationSessionDevotionalId]);
+  }, [router, isTodayFocused, generationSessionStatus, generationSessionDevotionalId, user?.hasCompletedOnboarding, landedDevotionalIdsKey]);
   const onInflightSeriesSettled = useCallback(() => setInflightSeries(null), []);
 
   // The series failed after the reader left for Today (the watch below
@@ -375,7 +539,7 @@ export default function HomeScreen() {
   // same answers.
   const handleRetryInflightSeries = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.replace('/generating');
+    router.replace(generatingRoute(readAutoTrialIntent()?.intentId));
   }, [router]);
   const handleDismissInflightSeriesFailure = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -670,6 +834,7 @@ export default function HomeScreen() {
   }, [resumeContext, resumeDevotional, router, setCurrentDevotional]);
 
   const openNewSeriesDiscovery = () => {
+    abandonPurchasedIntentBeforeNewSeries({ nowMs: Date.now() });
     clearInitialGenerationRequestId();
     router.push({
       pathname: '/onboarding',
@@ -826,11 +991,17 @@ export default function HomeScreen() {
     }
   }, [setHasSeenDay1Review, addCheckIn]);
 
-  const daysCompleted = currentDevotional ? (currentDevotional.days ?? []).filter(d => d.isRead).length : 0;
-  const progressPercent = currentDevotional ? (daysCompleted / currentDevotional.totalDays) * 100 : 0;
+  const daysCompleted = currentDevotional ? countReadDaysWithinBoundary(currentDevotional) : 0;
+  const totalDays = currentDevotional ? getServerOwnedSeriesTotalDays(currentDevotional) : 0;
+  const progressPercent = currentDevotional && totalDays > 0 ? (daysCompleted / totalDays) * 100 : 0;
+  const inflightMatchesAuto = Boolean(
+    inflightSeries && autoIntent && inflightSeries.jobId === autoIntent.jobId,
+  );
+  const autoTrialActive = isAutoTrialSeries(currentDevotional) || inflightMatchesAuto;
+  const storedNextPick = currentDevotional?.days?.find((row) => row.dayNumber === totalDays)?.nextPick ?? null;
   const homeDayData = getHomeDevotionalDayData(currentDevotional);
   const activeCurrentDayData = currentDevotional?.days.find((day) => day.dayNumber === currentDevotional.currentDay) ?? null;
-  const isCurrentDevotionalComplete = currentDevotional ? daysCompleted === currentDevotional.totalDays : false;
+  const isCurrentDevotionalComplete = currentDevotional ? totalDays > 0 && daysCompleted === totalDays : false;
   const currentDayData = !isCurrentDevotionalComplete && hasReadToday && activeCurrentDayData && !activeCurrentDayData.isRead
     ? activeCurrentDayData
     : homeDayData;
@@ -893,7 +1064,7 @@ export default function HomeScreen() {
 
   const isJourneyComplete = isCurrentDevotionalComplete;
   const isFirstDay = currentDevotional ? currentDevotional.currentDay === 1 && daysCompleted === 0 : false;
-  const isLastDay = currentDevotional ? currentDevotional.currentDay === currentDevotional.totalDays : false;
+  const isLastDay = currentDevotional ? currentDevotional.currentDay === totalDays : false;
   const showDay1Review = daysCompleted >= 1 && !hasSeenDay1Review && !isJourneyComplete;
 
   // True when today's reading is done and the card is previewing tomorrow's content
@@ -1324,7 +1495,7 @@ export default function HomeScreen() {
       : null,
     premiumPolicy,
     daysCompleted,
-    totalDays: currentDevotional?.totalDays ?? 0,
+    totalDays,
     progress: progressPercent,
     tomorrowTeaser: homeTomorrowTeaser,
     onContinue: handleContinueReading,
@@ -1337,6 +1508,7 @@ export default function HomeScreen() {
     reflectionStatus: currentDayReflectionStatus,
     freeWriteDraft: currentDayFreeWriteDraft,
     onSaveFreeWrite: handleSaveFreeWrite,
+    autoTrialActive,
   });
 
   // During reveal → reading transition, render a centered ripple loader to
@@ -1395,6 +1567,12 @@ export default function HomeScreen() {
                 state={devotionalState}
                 scrollY={scrollY}
                 isReturningUser={isReturningUser && !isQaPreparingLoadingPreview}
+                gateCreation={gate}
+                storedPick={autoTrialActive ? storedNextPick : undefined}
+                ambienceVisible={shouldShowCompletedEmberAmbience({
+                  stateType: devotionalState.type,
+                  hasReadToday,
+                })}
               />
             </Animated.View>
           </View>
@@ -1474,6 +1652,8 @@ export default function HomeScreen() {
       <ExclusiveOfferSheet
         visible={showExclusiveOffer}
         onDismiss={dismissOffer}
+        onPurchaseSuccess={handleOfferVerifiedExit}
+        surface="churned_sheet"
         context="churned"
       />
 

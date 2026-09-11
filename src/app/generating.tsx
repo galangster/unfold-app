@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, type ComponentProps, type ReactNode } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { View, Text, TouchableOpacity, AppState, AppStateStatus, AccessibilityInfo, ScrollView, StyleSheet, ActivityIndicator, Linking } from 'react-native';
 import { useRouter, useNavigation, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -39,10 +39,11 @@ import {
   INITIAL_ARC_UNKNOWN_STATUS_MESSAGE,
   INITIAL_ARC_UNREACHABLE_MESSAGE,
 } from '@/lib/inflight-initial-arc-watch';
-import { applyInitialArcResult, requireCanonicalDevotionalId, type InitialArcResult } from '@/lib/initial-arc-result';
+import { applyInitialArcResult, DEFAULT_SERIES_TITLE, requireCanonicalDevotionalId, type InitialArcResult } from '@/lib/initial-arc-result';
 import {
   clearInitialGenerationRequestId,
   ensureInitialGenerationRequestId,
+  readInitialGenerationRequestId,
 } from '@/lib/initial-generation-request';
 import {
   captureSyncSession,
@@ -65,19 +66,25 @@ import {
   type ObservedJobState,
 } from '@/lib/generation-poll-outcome';
 import { toFriendlyOnboardingGenerationError } from '@/lib/generation-errors';
+import { getServerOwnedSeriesTotalDays } from '@/lib/devotional-series-boundary';
 
 import {
-  requestNotificationPermissions,
   areNotificationsEnabled,
 } from '@/lib/notifications';
 import { registerPushToken } from '@/lib/push-notifications';
 import {
   getNotifyControlState,
   resolveNotifyRequestOutcome,
-  type NotifyControlState,
   type NotifyRequestOutcome,
 } from '@/lib/generating-notify-state';
+import { NOTIFY_NOTE_COPY, NotifyNote } from '@/components/generating/NotifyNote';
+import { GlassSurface } from '@/components/ui/GlassSurface';
+import { useAutoTrialGeneration } from '@/hooks/useAutoTrialGeneration';
+import { readAutoTrialIntent } from '@/lib/auto-trial-intent';
 import { resolveGeneratingEntry } from '@/lib/generating-entry';
+import { resolveGeneratingPalette } from '@/lib/generating-palette';
+import { canRetrySeriesReveal, type SeriesRevealState } from '@/lib/series-reveal-machine';
+import { askNotificationPermissionInContext } from '@/lib/notification-ask';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
 import { Typography } from '@/constants/typography';
@@ -118,76 +125,54 @@ const RIPPLE_COUNT = 3;
 const RIPPLE_STAGGER = 900;
 const MESSAGE_CYCLE_MS = 3800;
 
-/** Copy for the nudge notes under the notify control: one tree, three states. */
-const NOTIFY_NOTE_COPY: Record<Extract<NotifyControlState, 'pending' | 'denied' | 'registration-failed'>, string> = {
-  pending: 'Setting up your nudge\u2026',
-  denied: 'Notifications are off for Unfold. Turn them on in Settings and we\u2019ll nudge you when it\u2019s\u00A0ready.',
-  'registration-failed': 'We couldn\u2019t set up the nudge. Check your connection and tap Notify me\u00A0again.',
-};
+function autoTrialErrorMessage(state: Extract<SeriesRevealState, { kind: 'failed' | 'retry_exhausted' }>): string {
+  if (state.reason === 'unreachable') return INITIAL_ARC_UNREACHABLE_MESSAGE;
+  if (state.reason === 'invalid_result') return INITIAL_ARC_INVALID_RESULT_MESSAGE;
+  if (state.reason === 'unknown_status') return INITIAL_ARC_UNKNOWN_STATUS_MESSAGE;
+  return 'Generation failed on server';
+}
 
-type NotifyNoteColors = { inputBackground: string; border: string; textMuted: string; textSubtle: string };
+function autoReadySeriesDays(state: SeriesRevealState): number | undefined {
+  const landedId = state.kind === 'revealed' ? state.devotionalId : null;
+  const landed = landedId
+    ? useUnfoldStore.getState().devotionals.find((row) => row.id === landedId)
+    : undefined;
+  return getServerOwnedSeriesTotalDays(landed) || readAutoTrialIntent()?.trialDays;
+}
 
-/**
- * A bordered note under the notify control: an icon (the bell unless given)
- * beside muted copy, with optional content — the Settings link — below it.
- */
-function NotifyNote({
-  entering,
-  colors,
-  text,
-  icon,
-  centered = false,
-  gap,
-  children,
-}: {
-  entering: ComponentProps<typeof Animated.View>['entering'];
-  colors: NotifyNoteColors;
-  text: string;
-  icon?: ReactNode;
-  /** Centre the icon on the text (the spinner) instead of top-aligning it. */
-  centered?: boolean;
-  gap?: number;
-  children?: ReactNode;
+function resolveEntryNow(params: {
+  jobId?: string;
+  devotionalId?: string;
+  autoTrialIntentId?: string;
 }) {
-  return (
-    <Animated.View
-      entering={entering}
-      style={{ marginTop: Spacing['10'], width: '100%', alignItems: 'center', ...(gap === undefined ? {} : { gap }) }}
-    >
-      <View
-        style={[
-          genStyles.notifyNote,
-          { ...(centered ? { alignItems: 'center' as const } : {}), backgroundColor: colors.inputBackground, borderColor: colors.border },
-        ]}
-      >
-        {icon ?? <BellIcon size={14} color={colors.textSubtle} weight="light" />}
-        <Text style={[genStyles.notifyNoteText, { color: colors.textMuted }]}>{text}</Text>
-      </View>
-      {children}
-    </Animated.View>
-  );
+  const { generationSession, devotionals } = useUnfoldStore.getState();
+  return resolveGeneratingEntry({
+    inflight: readInflightGenerationJob(),
+    params: {
+      jobId: params.jobId,
+      devotionalId: params.devotionalId,
+      autoTrialIntentId: params.autoTrialIntentId,
+    },
+    sessionDevotionalId: generationSession.devotionalId,
+    landedDevotionalIds: devotionals.map((row) => row.id),
+    autoTrialIntent: readAutoTrialIntent(),
+    initialGenerationRequestId: readInitialGenerationRequestId(),
+  });
 }
 
 export default function GeneratingScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   // Set only by a tapped generation_failed push, which names the job that died.
-  const params = useLocalSearchParams<{ jobId?: string; devotionalId?: string }>();
-  const { colors: themeColors } = useTheme();
+  const params = useLocalSearchParams<{
+    jobId?: string;
+    devotionalId?: string;
+    autoTrialIntentId?: string;
+  }>();
+  const { colors: themeColors, isDark } = useTheme();
   const { reducedMotion, entering, exiting } = useAccessibleAnimation();
 
-  const colors = {
-    ...themeColors,
-    background: '#0A0A0A',
-    cardBackground: '#111214',
-    inputBackground: '#111214',
-    border: '#24262B',
-    text: '#F5F5F7',
-    textMuted: '#A0A6B1',
-    textSubtle: '#7D8592',
-    buttonBackground: themeColors.accent,
-    buttonBackgroundPressed: themeColors.accent,
-  };
+  const colors = resolveGeneratingPalette(themeColors, isDark);
 
   const user = useUnfoldStore((s) => s.user);
   const startGenerationSession = useUnfoldStore((s) => s.startGenerationSession);
@@ -198,7 +183,7 @@ export default function GeneratingScreen() {
   const [isComplete, setIsComplete] = useState(false);
   const [devotionalTitle, setDevotionalTitle] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [canRetry, setCanRetry] = useState(true);
+  const [canRetryJob, setCanRetry] = useState(true);
 
   // Job polling state
   const [pendingJobId, setPendingJobId] = useState<string | null>(null);
@@ -266,6 +251,50 @@ export default function GeneratingScreen() {
 
   const [currentSeriesTitle, setCurrentSeriesTitle] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(true);
+  const [autoTrialHandoffId] = useState(() => {
+    const entry = resolveEntryNow(params);
+    return entry.kind === 'auto-trial-handoff' ? entry.intentId : null;
+  });
+  const auto = useAutoTrialGeneration(autoTrialHandoffId);
+  const autoState = auto.state;
+  const autoReadyDays = useMemo(
+    () => (autoTrialHandoffId ? autoReadySeriesDays(autoState) : undefined),
+    [autoTrialHandoffId, autoState],
+  );
+  const autoSetUpSeries = auto.setUpSeries;
+  const canRetry = autoTrialHandoffId
+    ? canRetrySeriesReveal(autoState, Date.now())
+    : canRetryJob;
+  useEffect(() => {
+    if (!autoTrialHandoffId) return;
+    if (autoState.kind === 'revealed') {
+      const landed = useUnfoldStore.getState().devotionals.find((row) => row.id === autoState.devotionalId);
+      setDevotionalTitle(landed?.title ?? DEFAULT_SERIES_TITLE);
+      setIsComplete(true);
+      setIsGenerating(false);
+      setError(null);
+      return;
+    }
+    if (autoState.kind === 'declined') {
+      autoSetUpSeries();
+      return;
+    }
+    if (autoState.kind === 'failed') {
+      setIsComplete(false);
+      setIsGenerating(false);
+      setError(autoTrialErrorMessage(autoState));
+      return;
+    }
+    if (autoState.kind === 'retry_exhausted') {
+      setIsComplete(false);
+      setIsGenerating(false);
+      setError(autoTrialErrorMessage(autoState));
+      return;
+    }
+    setIsComplete(false);
+    setIsGenerating(true);
+    setError(null);
+  }, [autoSetUpSeries, autoState, autoTrialHandoffId]);
   const notificationPromptTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Prevent swipe-back during generation; re-enable on error.
@@ -462,15 +491,18 @@ export default function GeneratingScreen() {
     setHasAskedPermission(true);
     setNotifyOutcome(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const granted = await requestNotificationPermissions();
+    setNotifyOutcome('pending');
+    const result = await askNotificationPermissionInContext({
+      trigger: 'generating',
+      registration: 'await',
+    });
+    const granted = result === 'granted' || result === 'registration_failed';
     setNotificationPermission(granted ? 'granted' : 'denied');
     setShowNotificationPrompt(false);
-    // Nothing promises a nudge until the token reaches the server. The
-    // registration can stall for tens of seconds on a bad network, and a
-    // reader told to step away during it would never get the push.
-    if (granted) setNotifyOutcome('pending');
-    const registration = granted ? await registerPushToken() : null;
-    setNotifyOutcome(resolveNotifyRequestOutcome({ granted, registration }));
+    setNotifyOutcome(resolveNotifyRequestOutcome({
+      granted,
+      registration: result === 'registration_failed' ? 'failed' : result === 'granted' ? 'registered' : null,
+    }));
   };
 
   const handleOpenNotificationSettings = () => {
@@ -734,13 +766,10 @@ export default function GeneratingScreen() {
     // A push is judged stale against the generation session and the series
     // already in the store, never against currentDevotionalId: onboarding's
     // sample and a finished journey are "current" too, and read as moved on.
-    const { generationSession, devotionals } = useUnfoldStore.getState();
-    const entry = resolveGeneratingEntry({
-      inflight: readInflightGenerationJob(),
-      params: { jobId: params.jobId, devotionalId: params.devotionalId },
-      sessionDevotionalId: generationSession.devotionalId,
-      landedDevotionalIds: devotionals.map((devotional) => devotional.id),
-    });
+    if (autoTrialHandoffId) {
+      return;
+    }
+    const entry = resolveEntryNow(params);
     if (entry.kind === 'resume') {
       const { inflight } = entry;
       logger.log('[generating] Resuming inflight job from MMKV:', inflight.jobId);
@@ -877,14 +906,14 @@ export default function GeneratingScreen() {
 
   const [isNavigating, setIsNavigating] = useState(false);
 
-  const handleBeginReading = () => {
+  const legacyBeginDayOne = () => {
     if (isNavigating) return;
     setIsNavigating(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     router.replace('/(tabs)/(today)/reading');
   };
 
-  const handleRetry = async () => {
+  const legacyTryAgain = async () => {
     if (isGenerating) return;
     void logBugEvent('generation', 'generation-user-retry', { pendingJobId });
 
@@ -973,7 +1002,7 @@ export default function GeneratingScreen() {
     }
   };
 
-  const handleRetryFromOnboarding = () => {
+  const legacySetUpSeries = () => {
     if (isGenerating) return;
     void logBugEvent('generation', 'generation-restart-onboarding');
     stopOwnedPolling();
@@ -988,7 +1017,7 @@ export default function GeneratingScreen() {
     router.replace('/onboarding');
   };
 
-  const handleGoHome = () => {
+  const legacyGoToToday = () => {
     if (isGenerating) return;
     void logBugEvent('generation', 'generation-abandoned-go-home');
     stopOwnedPolling();
@@ -1014,7 +1043,7 @@ export default function GeneratingScreen() {
   // preparing card and watches it instead of bouncing back here. Nothing is
   // awaited and no permission prompt sits on this path: the tap must always
   // leave this screen.
-  const handleLeaveForHome = () => {
+  const legacyLeaveForHome = () => {
     leftForHomeRef.current = true;
     stopOwnedPolling();
     const record = markInflightJobLeftForHome();
@@ -1026,6 +1055,25 @@ export default function GeneratingScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.replace('/(tabs)/(today)');
   };
+
+  const actions = autoTrialHandoffId ? {
+    beginDayOne: auto.beginDayOne,
+    tryAgain: auto.tryAgain,
+    setUpSeries: auto.setUpSeries,
+    goToToday: auto.goToToday,
+    leaveForHome: auto.goToToday,
+  } : {
+    beginDayOne: legacyBeginDayOne,
+    tryAgain: legacyTryAgain,
+    setUpSeries: legacySetUpSeries,
+    goToToday: legacyGoToToday,
+    leaveForHome: legacyLeaveForHome,
+  };
+  const handleBeginReading = actions.beginDayOne;
+  const handleRetry = actions.tryAgain;
+  const handleRetryFromOnboarding = actions.setUpSeries;
+  const handleGoHome = actions.goToToday;
+  const handleLeaveForHome = actions.leaveForHome;
 
   // ========== RENDER: ERROR STATE ==========
 
@@ -1083,7 +1131,7 @@ export default function GeneratingScreen() {
             accessibilityState={{ disabled: isGenerating }}
             accessibilityLabel="Go home"
             accessibilityRole="button"
-            style={[genStyles.startOverButton, { opacity: isGenerating ? 0.6 : 1, marginTop: Spacing['2'] }]}
+            style={[genStyles.startOverButton, genStyles.startAligned, { opacity: isGenerating ? 0.6 : 1, marginTop: Spacing['2'] }]}
           >
             <Text style={[genStyles.startOverText, { color: colors.textSubtle }]}>
               Go home
@@ -1109,7 +1157,7 @@ export default function GeneratingScreen() {
                   textAlign: 'left',
                 }}
               >
-                Your {user?.devotionalLength}-day series
+                Your {autoReadyDays ?? user?.devotionalLength}-day series
               </Text>
             </Animated.View>
 
@@ -1302,19 +1350,14 @@ export default function GeneratingScreen() {
               style={{
                 marginTop: 56,
                 width: '100%',
-                alignItems: 'center',
+                alignItems: 'flex-start',
               }}
             >
+              {/* No box (Nick, 2026-09-11): the note reads as a left-aligned row. */}
               <View
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  backgroundColor: colors.inputBackground,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  borderRadius: Radius.lg,
-                  paddingVertical: Spacing['4'],
-                  paddingHorizontal: Spacing['5'],
                   width: '100%',
                 }}
               >
@@ -1355,7 +1398,7 @@ export default function GeneratingScreen() {
                 </View>
               </View>
 
-              <View style={{ flexDirection: 'row', gap: Spacing['3'], marginTop: 14 }}>
+              <View style={[genStyles.startAligned, { flexDirection: 'row', gap: Spacing['3'], marginTop: 14 }]}>
                 <TouchableOpacity activeOpacity={0.7}
                   onPress={handleRequestNotifications}
                   accessibilityLabel="Notify me when ready"
@@ -1412,7 +1455,6 @@ export default function GeneratingScreen() {
             <NotifyNote
               entering={entering(FadeIn.duration(400).delay(300))}
               colors={colors}
-              centered
               icon={<ActivityIndicator size="small" color={colors.textSubtle} />}
               text={NOTIFY_NOTE_COPY.pending}
             />
@@ -1426,12 +1468,7 @@ export default function GeneratingScreen() {
                 marginTop: Spacing['10'],
                 flexDirection: 'row',
                 alignItems: 'center',
-                paddingHorizontal: Spacing['4'],
-                paddingVertical: 10,
-                backgroundColor: colors.inputBackground,
-                borderRadius: Radius.xl,
-                borderWidth: 1,
-                borderColor: colors.border,
+                alignSelf: 'flex-start',
               }}
             >
               <BellIcon size={14} color={colors.accent} weight="light" />
@@ -1507,7 +1544,7 @@ export default function GeneratingScreen() {
           {isGenerating && !isComplete && (
             <Animated.View
               entering={entering(FadeIn.duration(600).delay(1200))}
-              style={{ marginTop: Spacing['8'], alignItems: 'center', gap: Spacing['3'] }}
+              style={[genStyles.startAligned, { marginTop: Spacing['8'], alignItems: 'flex-start', gap: Spacing['3'] }]}
             >
               <TouchableOpacity
                 activeOpacity={0.7}
@@ -1564,7 +1601,7 @@ export default function GeneratingScreen() {
               style={{
                 marginTop: Spacing['12'],
                 width: '100%',
-                alignItems: 'center',
+                alignItems: 'flex-start',
               }}
             >
               {/* Label */}
@@ -1594,13 +1631,10 @@ export default function GeneratingScreen() {
               </View>
 
               {/* Preview card */}
-              <View
+              <GlassSurface
+                radius={Radius.lg}
                 style={{
                   width: '100%',
-                  backgroundColor: colors.cardBackground,
-                  borderRadius: Radius.lg,
-                  borderWidth: 1,
-                  borderColor: colors.border,
                   padding: Spacing['6'],
                 }}
               >
@@ -1686,7 +1720,7 @@ export default function GeneratingScreen() {
                     {SAMPLE_PREVIEW.reflectionQuestion}
                   </Text>
                 </View>
-              </View>
+              </GlassSurface>
 
               {/* Reassurance note below card */}
               <Animated.Text
@@ -1715,22 +1749,6 @@ const genStyles = StyleSheet.create({
   transparentFlex: {
     flex: 1,
     backgroundColor: 'transparent',
-  },
-  notifyNote: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    width: '100%',
-    paddingHorizontal: Spacing['4'],
-    paddingVertical: 10,
-    borderRadius: Radius.xl,
-    borderWidth: 1,
-  },
-  notifyNoteText: {
-    flex: 1,
-    fontFamily: FontFamily.ui,
-    fontSize: 13,
-    lineHeight: 18,
-    marginLeft: Spacing['2'],
   },
   errorSafeArea: {
     flex: 1,
@@ -1780,6 +1798,10 @@ const genStyles = StyleSheet.create({
   startOverText: {
     fontFamily: FontFamily.ui,
     fontSize: FontSize.sm,
+  },
+  startAligned: {
+    justifyContent: 'flex-start',
+    alignSelf: 'flex-start',
   },
   rippleContainer: {
     width: 200,

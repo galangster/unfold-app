@@ -1,3 +1,4 @@
+import type { AutoTrialIntentV1 } from './auto-trial-intent';
 import type { Devotional } from './store';
 
 export const LEGAL_LINKS = {
@@ -266,9 +267,43 @@ function readStringField(data: Record<string, unknown>, key: string): string | u
   return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
+function isLiveAutoTrialStatus(status: AutoTrialIntentV1['status']): boolean {
+  return status === 'purchased' || status === 'submitted' || status === 'landed' || status === 'failed';
+}
+
+export function pushNamesAutoTrialIntent(
+  data: Record<string, unknown> | null | undefined,
+  intent: Pick<AutoTrialIntentV1, 'jobId' | 'devotionalId'> | null | undefined,
+): boolean {
+  if (!data || !intent) return false;
+  const dataDevotionalId = readStringField(data, 'devotionalId');
+  const dataJobId = readStringField(data, 'jobId');
+  return (
+    (dataDevotionalId != null && dataDevotionalId === intent.devotionalId)
+    || (dataJobId != null && dataJobId === intent.jobId)
+  );
+}
+
 export function buildNotificationNavigationRoute(
   data: Record<string, unknown> | null | undefined,
+  autoTrialIntent?: AutoTrialIntentV1 | null,
 ): NotificationNavigationRoute | null {
+  if (
+    autoTrialIntent
+    && isLiveAutoTrialStatus(autoTrialIntent.status)
+    && (data?.type === 'devotional_ready' || data?.type === 'generation_failed')
+  ) {
+    if (pushNamesAutoTrialIntent(data, autoTrialIntent)) {
+      return {
+        pathname: '/generating',
+        params: {
+          ...(autoTrialIntent.jobId ? { jobId: autoTrialIntent.jobId } : {}),
+          ...(autoTrialIntent.devotionalId ? { devotionalId: autoTrialIntent.devotionalId } : {}),
+        },
+      };
+    }
+  }
+
   const revealRoute = buildRevealNotificationRoute(data);
   if (revealRoute) return revealRoute;
 
@@ -343,10 +378,12 @@ export function createNotificationNavigationCoordinator({
   replace,
   onEvent,
   recentNavigationWindowMs = 5_000,
+  readAutoTrialIntent,
 }: {
   replace: (route: NotificationNavigationRoute) => void;
   onEvent?: (event: NotificationNavigationDebugEvent) => void;
   recentNavigationWindowMs?: number;
+  readAutoTrialIntent?: () => AutoTrialIntentV1 | null;
 }): {
   queueFromData: (
     data: Record<string, unknown> | null | undefined,
@@ -390,7 +427,7 @@ export function createNotificationNavigationCoordinator({
 
   return {
     queueFromData(data, notificationKey) {
-      const route = buildNotificationNavigationRoute(data);
+      const route = buildNotificationNavigationRoute(data, readAutoTrialIntent?.() ?? null);
       if (!route) {
         onEvent?.({ type: 'ignored_invalid', notificationKey });
         return false;

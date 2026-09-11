@@ -5,6 +5,7 @@
  * record itself is read and written by `inflight-generation-job.ts` — one
  * module, one key, no expiry: the server decides a job's fate, never a clock.
  */
+import type { AutoTrialIntentV1 } from './auto-trial-intent';
 import type { InflightGenerationJob } from './inflight-generation-job';
 import { firstParam } from './reveal-params';
 
@@ -12,6 +13,7 @@ import { firstParam } from './reveal-params';
 export type GeneratingRouteParams = {
   jobId?: string | string[];
   devotionalId?: string | string[];
+  autoTrialIntentId?: string | string[];
 };
 
 export type GeneratingEntry =
@@ -19,7 +21,8 @@ export type GeneratingEntry =
   | { kind: 'poll-from-push'; jobId: string; devotionalId: string | null }
   /** The push names a job the reader has moved past; Today reconciles. */
   | { kind: 'stale-push'; jobId: string }
-  | { kind: 'submit' };
+  | { kind: 'submit' }
+  | { kind: 'auto-trial-handoff'; intentId: string };
 
 /**
  * A push that names a job is checked against what the reader has now. The
@@ -51,6 +54,8 @@ export function resolveGeneratingEntry({
   params,
   sessionDevotionalId,
   landedDevotionalIds = [],
+  autoTrialIntent = null,
+  initialGenerationRequestId = null,
 }: {
   inflight: InflightGenerationJob | null;
   params: GeneratingRouteParams | null | undefined;
@@ -58,7 +63,35 @@ export function resolveGeneratingEntry({
   sessionDevotionalId: string | null | undefined;
   /** Ids of the series already in the store; a pushed series among them has landed. */
   landedDevotionalIds?: readonly string[];
+  autoTrialIntent?: Pick<AutoTrialIntentV1, 'intentId' | 'status' | 'jobId' | 'devotionalId'> | null;
+  /** A new-series request id means /generating should submit that flow, not the old auto job. */
+  initialGenerationRequestId?: string | null;
 }): GeneratingEntry {
+  if (autoTrialIntent) {
+    const { status, intentId, jobId } = autoTrialIntent;
+    const skipFailedHandoff = status === 'failed' && Boolean(initialGenerationRequestId);
+    if (!skipFailedHandoff) {
+      if (status === 'purchased' || status === 'failed') {
+        return { kind: 'auto-trial-handoff', intentId };
+      }
+      // A bare entry hands off only a purchased intent (fresh purchase from
+      // onboarding, paywall, offer sheet, RevenueCat sync, creation gate).
+      // submitted and landed need the autoTrialIntentId param that Today's
+      // reconcile, resume, and retry entries pass, or a pushed jobId.
+      // New-series entries stay bare on purpose.
+      if (status === 'submitted' || status === 'landed') {
+        const namedIntentId = firstParam(params?.autoTrialIntentId);
+        if (namedIntentId === intentId) {
+          return { kind: 'auto-trial-handoff', intentId };
+        }
+        const pushedJobId = firstParam(params?.jobId);
+        if (namedIntentId == null && pushedJobId != null && pushedJobId === jobId) {
+          return { kind: 'auto-trial-handoff', intentId };
+        }
+      }
+    }
+  }
+
   const pushedJobId = firstParam(params?.jobId);
   if (!pushedJobId) {
     return inflight && !inflight.superseded ? { kind: 'resume', inflight } : { kind: 'submit' };

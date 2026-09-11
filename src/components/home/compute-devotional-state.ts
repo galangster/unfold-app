@@ -135,6 +135,7 @@ export interface ComputeInput {
   reflectionStatus?: ReflectionStatus;
   freeWriteDraft?: string;
   onSaveFreeWrite?: (dayNumber: number, text: string) => void;
+  autoTrialActive?: boolean;
 }
 
 // ─── State machine ──────────────────────────────────────────────
@@ -203,6 +204,7 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
     reflectionStatus = 'empty',
     freeWriteDraft = '',
     onSaveFreeWrite = () => {},
+    autoTrialActive = false,
   } = input;
 
   // 0. A series the reader is waiting on from Today. It is not in the store,
@@ -211,13 +213,13 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
   // happening", which is exactly what "Go home — we'll keep writing" looked
   // like. The card must say the series is being written, or that it failed.
   if (preparingInflightSeries) {
-    return {
-      type: 'preparing',
+    return ({
+      type: 'preparing' as const,
       progress: 0,
       seriesTitle: preparingInflightSeries.seriesTitle,
       dayNumber: 1,
       onCreateNew,
-    };
+    });
   }
   if (inflightSeriesFailed) {
     return { type: 'first-series-failed', ...inflightSeriesFailed };
@@ -229,6 +231,14 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
   }
 
   const seriesTitle = currentDevotional.title;
+
+  // Auto trial: journey-complete wins over premium-denied (TS-6).
+  if (
+    isJourneyComplete
+    && (autoTrialActive || hasReadToday || currentDayData != null || premiumPolicy !== 'denied')
+  ) {
+    return { type: 'journey-complete', seriesTitle, onCreateNew };
+  }
 
   // 2. Confirmed churned users should not see generation-progress copy for a
   // missing next day. The series is paused, not being prepared.
@@ -243,37 +253,19 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
     };
   }
 
-  // 3. Entire series finished. This must win over missing-data/preparing
-  // states because a completed progressive series may have currentDay = totalDays + 1.
-  if (isJourneyComplete) {
-    return { type: 'journey-complete', seriesTitle, onCreateNew };
-  }
-
   // 4. Content is still being generated or no day data available.
-  // Never show "preparing" if the user has already read today — the completed
-  // day should remain visible while the next day generates in the background.
-  if (!hasReadToday && (isPreparing || !currentDayData)) {
-    return {
-      type: 'preparing',
+  // Missing day data always anchors as preparing so the series does not
+  // disappear. If the user already read today and day data exists, skip
+  // preparing so the completed day stays visible while the next day generates.
+  if (!currentDayData || (!hasReadToday && isPreparing)) {
+    return ({
+      type: 'preparing' as const,
       progress: 0,
       seriesTitle,
       dayNumber: currentDevotional.currentDay,
       onCreateNew,
       ...(dailyRecovery ? { recovery: dailyRecovery } : {}),
-    };
-  }
-
-  // If we somehow have no day data even after reading today, keep the active
-  // series anchored instead of implying the series disappeared.
-  if (!currentDayData) {
-    return {
-      type: 'preparing',
-      progress: 0,
-      seriesTitle,
-      dayNumber: currentDevotional.currentDay,
-      onCreateNew,
-      ...(dailyRecovery ? { recovery: dailyRecovery } : {}),
-    };
+    });
   }
 
   // 5. Today's reading done but series not complete — locked until tomorrow.
@@ -282,8 +274,8 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
   // The card still owes the reader a reflect action for the day they just
   // finished, so the completed day rides along with tomorrow's preview.
   if (hasReadToday && !currentDayData.isRead && dayLabel === 'Tomorrow') {
-    return {
-      type: 'tomorrow-locked',
+    return ({
+      type: 'tomorrow-locked' as const,
       devotionalId: currentDevotional.id,
       dayData: currentDayData,
       dayLabel: 'Tomorrow' as DayLabel,
@@ -297,13 +289,13 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
       onReflect,
       onCreateNew,
       onSaveFreeWrite,
-    };
+    });
   }
 
   // 5. Current day already read (complete-today — may still browse)
   if (currentDayData.isRead) {
-    return {
-      type: 'complete-today',
+    return ({
+      type: 'complete-today' as const,
       dayData: currentDayData,
       dayLabel,
       seriesTitle,
@@ -316,26 +308,26 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
       reflectionStatus,
       freeWriteDraft,
       onSaveFreeWrite,
-    };
+    });
   }
 
   // 6. Content available but not yet revealed — show teaser card
   //    Day 1 bypasses this (uses generating screen flow).
   if (!currentDayData.isRead && !currentDayData.isRevealed && currentDayData.dayNumber > 1) {
-    return {
-      type: 'reveal-ready',
+    return ({
+      type: 'reveal-ready' as const,
       dayData: currentDayData,
       dayLabel,
       seriesTitle,
       dayNumber: currentDayData.dayNumber,
       totalDays,
       onReveal,
-    };
+    });
   }
 
   // 7. Unread — covers both brand-new (daysCompleted=0) and in-progress (daysCompleted>0)
-  return {
-    type: 'unread',
+  return ({
+    type: 'unread' as const,
     dayData: currentDayData,
     dayLabel,
     seriesTitle,
@@ -345,5 +337,5 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
     onContinue,
     onCreateNew,
     ctaText,
-  };
+  });
 }

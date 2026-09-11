@@ -51,8 +51,18 @@ jest.mock('@/lib/generation-api', () => ({
   retryJob: (...args: unknown[]) => mockRetryJob(...args),
   recoverCompletedGenerationResult: jest.fn(async () => null),
   buildInitialArcUserContext: jest.fn(() => ({})),
+  buildAutoTrialUserContext: jest.fn(() => ({})),
 }));
 
+const mockGetPermissionsAsync = jest.fn(async (..._args: unknown[]) => ({ status: 'granted' }));
+jest.mock('react-native-purchases', () => ({ __esModule: true, default: { getCustomerInfo: jest.fn(async () => ({ entitlements: { active: {} } })) } }));
+jest.mock('expo-notifications', () => ({
+  getPermissionsAsync: (...args: unknown[]) => mockGetPermissionsAsync(...args),
+  requestPermissionsAsync: jest.fn(),
+}));
+jest.mock('expo-file-system/legacy', () => ({ documentDirectory: '', cacheDirectory: '', readAsStringAsync: jest.fn(async () => ''), writeAsStringAsync: jest.fn(async () => undefined) }));
+jest.mock('expo-file-system', () => ({ File: jest.fn(), Paths: { cache: '' }, Directory: jest.fn() }));
+jest.mock('expo-application', () => ({ nativeApplicationVersion: '1.0.0', nativeBuildVersion: '1' }));
 jest.mock('@/lib/notifications', () => ({
   requestNotificationPermissions: jest.fn(async () => false),
   areNotificationsEnabled: jest.fn(async () => false),
@@ -63,10 +73,15 @@ jest.mock('@/lib/push-notifications', () => ({
 }));
 
 const mockReplace = jest.fn();
+const mockSearchParams: {
+  jobId?: string;
+  devotionalId?: string;
+  autoTrialIntentId?: string;
+} = {};
 jest.mock('expo-router', () => ({
   useRouter: () => ({ replace: mockReplace, push: jest.fn(), back: jest.fn() }),
   useNavigation: () => ({ setOptions: jest.fn(), addListener: jest.fn(() => jest.fn()) }),
-  useLocalSearchParams: () => ({}),
+  useLocalSearchParams: () => mockSearchParams,
 }));
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -120,7 +135,14 @@ jest.mock('@/hooks/useAccessibility', () => ({
 }));
 
 jest.mock('@/lib/theme', () => ({
-  useTheme: () => ({ isDark: true, colors: { accent: '#C8A55C' } }),
+  useTheme: () => ({
+    isDark: true,
+    colors: {
+      accent: '#C8A55C',
+      backgroundElevated: '#181614',
+      text: '#f5f0e8',
+    },
+  }),
 }));
 
 import { act, create } from 'react-test-renderer';
@@ -141,8 +163,10 @@ import {
   INITIAL_GENERATION_REQUEST_ID_KEY,
   readInitialGenerationRequestId,
 } from '../initial-generation-request';
+import { createAutoTrialIntent, transitionAutoTrialIntent } from '../auto-trial-intent';
 import { mmkvStorage } from '../mmkv-storage';
-import { useUnfoldStore, type UserProfile } from '../store';
+import { useUnfoldStore, type Devotional, type UserProfile } from '../store';
+import { useUIState } from '@/lib/ui-state';
 
 const GO_HOME_LABEL = 'Go home while your devotional is prepared';
 
@@ -210,8 +234,15 @@ beforeEach(() => {
   mockPollJobStatus.mockReset();
   mockRetryJob.mockReset();
   mockSubmitGenerationJob.mockReset();
+  delete mockSearchParams.jobId;
+  delete mockSearchParams.devotionalId;
+  delete mockSearchParams.autoTrialIntentId;
   mmkvStorage.removeItem(INFLIGHT_GENERATION_JOB_KEY);
   mmkvStorage.removeItem(INITIAL_GENERATION_REQUEST_ID_KEY);
+  mmkvStorage.removeItem('auto-trial-series-intent-v1');
+  // The reveal guard is session state; an earlier test's key must not mark this mount as a repeat.
+  useUIState.getState().setAutoTrialRevealGuardKey(null);
+  useUIState.getState().setSeriesRevealMountedIntentId(null);
   useUnfoldStore.setState({
     devotionals: [],
     currentDevotionalId: null,
@@ -418,5 +449,151 @@ describe('regression: Jordan item 6 — Go home from /generating', () => {
 
     expect(useUnfoldStore.getState().devotionals).toHaveLength(0);
     expect(useUnfoldStore.getState().generationSession.status).not.toBe('complete');
+  });
+});
+
+describe('H10 generating auto-trial handoff', () => {
+  it('routes a declined auto claim to series setup instead of the error card', async () => {
+    const { createAutoTrialIntent } = jest.requireActual('../auto-trial-intent') as typeof import('../auto-trial-intent');
+    createAutoTrialIntent({
+      deviceId: 'test-device-id',
+      entry: 'onboarding',
+      surface: 'onboarding_paywall',
+      source: 'purchase',
+      simulated: false,
+      trialDays: 3,
+      purchasedAt: '2026-09-08T17:00:00.000Z',
+      expiresAt: '2026-09-11T17:00:00.000Z',
+      timeZone: 'America/Chicago',
+      isSandbox: false,
+      productIdentifier: 'unfold_premium_yearly',
+      switchFetchedAt: '2026-09-08T17:00:00.000Z',
+      nowMs: Date.parse('2026-09-10T17:00:00.000Z'),
+    });
+    useUnfoldStore.setState({
+      user: { ...user, hasCompletedOnboarding: true } as UserProfile,
+    });
+    mockSubmitGenerationJob.mockRejectedValue({ status: 409, code: 'switch_off', message: 'switch_off' });
+    const tree = await renderScreen();
+    mounted.push(tree);
+    // submit rejection -> declined -> setUpSeries -> redirect spans several
+    // microtask turns and a React effect flush; settle fully before asserting.
+    // The hook races the profile push against PROFILE_PUSH_CAP_MS under fake
+    // timers, so advance the clock until the redirect lands (bounded).
+    for (let i = 0; i < 30 && mockReplace.mock.calls.length === 0; i += 1) {
+      await act(async () => {
+        jest.advanceTimersByTime(1_000);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+    }
+    expect(mockReplace).toHaveBeenCalledWith({
+      pathname: '/onboarding',
+      params: { startAt: 'themeType', flow: 'newSeries' },
+    });
+    expect(tree.root.findAll((n) => (
+      typeof n.props?.children === 'string' && n.props.children.includes('Something went')
+    ))).toHaveLength(0);
+  });
+
+  it('keeps auto-trial on generating without the screen submit or a generation session write', async () => {
+    const { createAutoTrialIntent } = jest.requireActual('../auto-trial-intent') as typeof import('../auto-trial-intent');
+    createAutoTrialIntent({
+      deviceId: 'test-device-id',
+      entry: 'onboarding',
+      surface: 'onboarding_paywall',
+      source: 'purchase',
+      simulated: false,
+      trialDays: 3,
+      purchasedAt: '2026-09-08T17:00:00.000Z',
+      expiresAt: '2026-09-11T17:00:00.000Z',
+      timeZone: 'America/Chicago',
+      isSandbox: false,
+      productIdentifier: 'unfold_premium_yearly',
+      switchFetchedAt: '2026-09-08T17:00:00.000Z',
+      nowMs: 1_800_000_000_000,
+    });
+    const sessionBefore = useUnfoldStore.getState().generationSession;
+    const tree = await renderScreen();
+    mounted.push(tree);
+    expect(mockReplace).not.toHaveBeenCalledWith(expect.objectContaining({ pathname: '/series-reveal' }));
+    expect(useUnfoldStore.getState().generationSession).toEqual(sessionBefore);
+  });
+
+  it('ready copy on the auto path uses trial days, not profile length', async () => {
+    const created = createAutoTrialIntent({
+      deviceId: 'test-device-id',
+      entry: 'onboarding',
+      surface: 'onboarding_paywall',
+      source: 'purchase',
+      simulated: false,
+      trialDays: 3,
+      purchasedAt: '2026-09-08T17:00:00.000Z',
+      expiresAt: '2026-09-11T17:00:00.000Z',
+      timeZone: 'America/Chicago',
+      isSandbox: false,
+      productIdentifier: 'unfold_premium_yearly',
+      switchFetchedAt: '2026-09-08T17:00:00.000Z',
+      nowMs: 1_800_000_000_000,
+    });
+    transitionAutoTrialIntent(
+      'submitted',
+      { jobId: 'job-ready', devotionalId: 'devo-ready' },
+      { nowMs: 1_800_000_000_000 },
+    );
+    transitionAutoTrialIntent('landed', {}, { nowMs: 1_800_000_000_000 });
+    mockSearchParams.autoTrialIntentId = created.intentId;
+
+    const createdAt = '2026-09-08T17:00:00.000Z';
+    const readySeries = {
+      id: 'devo-ready',
+      title: 'Trial Series',
+      totalDays: 3,
+      currentDay: 1,
+      days: [{
+        id: 'day-1',
+        devotionalId: 'devo-ready',
+        dayNumber: 1,
+        title: 'Day 1',
+        scriptureReference: 'Psalm 1:1',
+        scriptureText: 'Blessed is the one',
+        bodyText: 'Body',
+        quotableLine: 'Line',
+        isRead: false,
+      }],
+      createdAt,
+      userContext: { name: '', aboutMe: '', currentSituation: '', emotionalState: '' },
+      generationMode: 'progressive',
+      seriesStartDate: createdAt,
+      seriesArc: {
+        totalDaysPlanned: 3,
+        overarchingTheme: 'theme',
+        narrativeShape: 'shape',
+        dayHints: [],
+        isOpenEnded: false,
+        createdAt,
+        seriesKind: 'auto_trial',
+      },
+    } as unknown as Devotional;
+
+    useUnfoldStore.setState({
+      user: { ...user, hasCompletedOnboarding: true, devotionalLength: 7 } as unknown as UserProfile,
+      devotionals: [readySeries],
+      currentDevotionalId: 'devo-ready',
+      generationSession: { status: 'idle', devotionalId: null, totalDays: 7, generatedDayNumbers: [] },
+    });
+
+    const tree = await renderScreen();
+    mounted.push(tree);
+    await flush();
+
+    const joined = (children: unknown): string => {
+      if (typeof children === 'string' || typeof children === 'number') return String(children);
+      if (Array.isArray(children)) return children.map(joined).join('');
+      return '';
+    };
+    const labels = tree.root.findAll((node) => joined(node.props?.children) === 'Your 3-day series');
+    expect(labels.length).toBeGreaterThan(0);
+    expect(tree.root.findAll((node) => joined(node.props?.children) === 'Your 7-day series')).toHaveLength(0);
   });
 });

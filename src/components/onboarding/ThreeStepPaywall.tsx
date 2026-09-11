@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef, memo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef, memo } from 'react';
 import {
   View,
   Text,
@@ -57,7 +57,12 @@ import { EmberSystem } from '@/components/EmberSystem';
 import type { ExclusionZone } from '@/lib/ember-system';
 import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
 import { mmkvStorage } from '@/lib/mmkv-storage';
-import { isQaToolsEnabled } from '@/lib/qa-tools';
+import { shouldRenderQaChrome } from '@/lib/qa-tools';
+import { QA_TRIAL_LENGTH_OPTIONS, simulateTrialPurchase } from '@/lib/qa-simulated-trial';
+import { getTrialPaywallTimeline } from '@/lib/trial-reminder-copy';
+import { MIDDAY_FALLBACK } from '@/lib/notifications';
+import { usePendingPaywallGrantOnUnmount } from '@/hooks/usePendingPaywallGrantOnUnmount';
+import type { VerifiedEntitlementExit } from '@/lib/auto-trial-exit';
 import { getPerMonthEquivalent } from '@/lib/paywall-pricing';
 import {
   computeMockupSize,
@@ -69,6 +74,7 @@ import {
   getThreeStepPaywallPrimaryAction,
   PAYWALL_ENTITLEMENT_PENDING_CUE,
   resolveOnboardingPurchaseAdvance,
+  resolveRestoreExitSource,
   resolveRestoreOutcome,
   runGuardedPaywallFlow,
 } from '@/lib/paywall-guardrails';
@@ -87,7 +93,7 @@ interface ThreeStepPaywallProps {
   yearlyRaw: number;
   monthlyRaw: number;
   trialDuration: string;
-  trialDays: number;
+  trialDays: number | null;
   // When false, the yearly package has no intro/free-trial offer configured in
   // App Store Connect. We must not promise a trial anywhere in the UI — skip
   // the trial-reminder screen and drop trial copy from CTAs + disclosures.
@@ -97,7 +103,7 @@ interface ThreeStepPaywallProps {
   // with a 'Loading plans… / Tap to retry' state.
   offeringsReady: boolean;
   onRetryOfferings: () => void;
-  onPurchaseSuccess: () => void;
+  onPurchaseSuccess: (exit: VerifiedEntitlementExit) => void;
   onSkip: () => void;
   // Every-build exit from the paywall. The stack disables the back gesture and
   // there is no close control, so before this the only ways out were a
@@ -572,9 +578,16 @@ function ScreenTrialReminder({
   trialDays,
 }: {
   colors: ColorTheme;
-  trialDays: number;
+  trialDays: number | null;
 }) {
   const reducedMotion = useReducedMotion();
+  const nowMs = useRef(Date.now()).current;
+  const lead = useMemo(() => getTrialPaywallTimeline({
+    trialDays,
+    nowMs,
+    middaySlot: MIDDAY_FALLBACK,
+  }).reminderLeadLabel, [trialDays, nowMs]);
+  const reminderLine = `You'll get a notification${lead ? ` ${lead}` : ''} before your trial ends. No surprises, ever.`;
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.screen2Root}>
           <View style={styles.screen2Content}>
@@ -620,8 +633,7 @@ function ScreenTrialReminder({
                 paddingHorizontal: Spacing['4'],
               }}
             >
-              You'll get a notification {trialDays <= 3 ? '1 day' : trialDays === 7 ? '2 days' : '1 day'} before
-              your trial ends. No surprises, ever.
+              {reminderLine}
             </Text>
           </View>
     </ScrollView>
@@ -1063,7 +1075,7 @@ function BottomCTA({
   currentPage: number;
   totalPages: number;
   hasFreeTrial: boolean;
-  trialDays: number;
+  trialDays: number | null;
   yearlyPrice: string;
   monthlyPrice: string;
   yearlyRaw: number;
@@ -1090,7 +1102,7 @@ function BottomCTA({
     offeringsReady,
     selectedPlan,
     hasFreeTrial: effectiveHasTrial, // verified for the SELECTED plan — monthly intro state is unverified here
-    trialDays,
+    trialDays: trialDays ?? 0,
     yearlyPrice,
     monthlyPrice,
   });
@@ -1341,6 +1353,7 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
   // here, so a second callback (a restore racing a purchase, the listener
   // firing after a success) can never advance twice.
   const advancedRef = useRef(false);
+  const lateGrantArmedRef = useRef(false);
   // onboarding.tsx hands over an inline arrow, so every parent render is a new
   // onPurchaseSuccess. Read it through a ref: advanceOnce keeps one identity,
   // and the entitlement wait keyed on it is never aborted and restarted by a
@@ -1352,16 +1365,24 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
   // person has paid, so this state gets neutral styling and no error haptic.
   const [entitlementPendingMessage, setEntitlementPendingMessage] = useState<string | null>(null);
 
-  const advanceOnce = useCallback((): boolean => {
+  usePendingPaywallGrantOnUnmount({
+    surface: 'onboarding_paywall',
+    entry: 'onboarding',
+    armedRef: lateGrantArmedRef,
+    advancedRef,
+  });
+
+  const advanceOnce = useCallback((exit: VerifiedEntitlementExit): boolean => {
     if (advancedRef.current) return false;
     advancedRef.current = true;
     setEntitlementPendingMessage(null);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    // Navigate first. The notification sync reads customer info with no
-    // timeout; awaiting it before onPurchaseSuccess once held a paying person
-    // on the paywall, and a rejection cancelled the advance outright.
-    onPurchaseSuccessRef.current();
-    syncTrialEndingNotification().catch((error: unknown) => {
+    try {
+      onPurchaseSuccessRef.current(exit);
+    } catch (error: unknown) {
+      logger.log('[ThreeStepPaywall] purchase success handler failed:', error);
+    }
+    void syncTrialEndingNotification(exit.customerInfo).catch((error: unknown) => {
       logger.log('[ThreeStepPaywall] trial notification sync failed after purchase:', error);
     });
     return true;
@@ -1383,7 +1404,7 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
     }).then((customerInfo) => {
       if (controller.signal.aborted) return;
       if (customerInfo) {
-        advanceOnce();
+        advanceOnce({ source: 'lateGrant', customerInfo });
         return;
       }
       setEntitlementPendingMessage(null);
@@ -1423,7 +1444,9 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
       const decision = resolveOnboardingPurchaseAdvance({ result, hasAdvanced: advancedRef.current });
       switch (decision.action) {
         case 'advance':
-          advanceOnce();
+          if (result.ok) {
+            advanceOnce({ source: 'purchase', customerInfo: result.data });
+          }
           return;
         case 'noop':
           return;
@@ -1438,6 +1461,7 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
           // Not a failure: the store transaction is done and only the grant
           // is late. No error haptic, and the copy renders in the neutral
           // pending slot with a "finishing up" cue, not the error slot.
+          lateGrantArmedRef.current = true;
           setEntitlementPendingMessage(decision.message);
           return;
         case 'error':
@@ -1458,13 +1482,14 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
   }, []);
 
   const handleDecideLater = useCallback(() => {
+    if (entitlementPendingMessage !== null) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onDecideLater();
-  }, [onDecideLater]);
+  }, [entitlementPendingMessage, onDecideLater]);
 
-  const handleExclusiveOfferPurchaseSuccess = useCallback(() => {
+  const handleExclusiveOfferPurchaseSuccess = useCallback((exit: VerifiedEntitlementExit) => {
     dismissExclusiveOffer();
-    advanceOnce();
+    advanceOnce(exit);
   }, [dismissExclusiveOffer, advanceOnce]);
 
   const handleRestore = useCallback(() => runGuardedPaywallFlow({
@@ -1478,12 +1503,15 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
       const result = await restorePurchases();
 
       const outcome = resolveRestoreOutcome(result);
-      if (outcome.kind === 'success') {
-        advanceOnce();
+      if (outcome.kind === 'success' && result.ok) {
+        advanceOnce({
+          source: resolveRestoreExitSource(lateGrantArmedRef.current),
+          customerInfo: result.data,
+        });
         return;
       }
 
-      setPurchaseError(outcome.message);
+      setPurchaseError(outcome.kind === 'error' ? outcome.message : null);
       Haptics.notificationAsync(
         Haptics.NotificationFeedbackType.Warning,
       );
@@ -1611,20 +1639,41 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
             onPress={currentPage === totalPages - 1 && !offeringsReady ? () => {} : handleCTAPress}
           />
         )}
-        {isQaToolsEnabled() && currentPage === totalPages - 1 && (
-          <TouchableOpacity
-            activeOpacity={1}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              onSkip();
-            }}
-            hitSlop={12}
-            accessibilityRole="button"
-            accessibilityLabel="Continue without premium for QA"
-            style={styles.qaSkipButton}
-          >
-            <Text style={[styles.qaSkipText, { color: colors.accent }]}>Continue for QA</Text>
-          </TouchableOpacity>
+        {shouldRenderQaChrome() && currentPage === totalPages - 1 && (
+          <>
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                onSkip();
+              }}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Continue without premium for QA"
+              style={styles.qaSkipButton}
+            >
+              <Text style={[styles.qaSkipText, { color: colors.accent }]}>Continue for QA</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={1}
+              testID="paywall-qa-simulate-trial"
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                simulateTrialPurchase({
+                  trialLengthMs: QA_TRIAL_LENGTH_OPTIONS[0].trialLengthMs,
+                  handle: (exit) => {
+                    advanceOnce(exit);
+                  },
+                });
+              }}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Simulate trial purchase"
+              style={styles.qaSkipButton}
+            >
+              <Text style={[styles.qaSkipText, { color: colors.accent }]}>Simulate trial purchase</Text>
+            </TouchableOpacity>
+          </>
         )}
         {/* Dignified exit. Ships in EVERY build — this is not QA-gated and must
             not be folded into the isQaToolsEnabled() block above. It renders on
@@ -1635,9 +1684,11 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
           <TouchableOpacity
             activeOpacity={0.6}
             onPress={handleDecideLater}
+            disabled={entitlementPendingMessage !== null}
             hitSlop={12}
             accessibilityRole="button"
             accessibilityLabel="I'll decide later"
+            accessibilityState={{ disabled: entitlementPendingMessage !== null }}
             style={styles.decideLaterButton}
           >
             <Text style={[styles.decideLaterText, { color: colors.textMuted }]}>
@@ -1716,6 +1767,7 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
         visible={showExclusiveOffer}
         onDismiss={dismissExclusiveOffer}
         onPurchaseSuccess={handleExclusiveOfferPurchaseSuccess}
+        surface="onboarding_paywall"
         context="onboarding"
       />
     </View>

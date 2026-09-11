@@ -669,3 +669,106 @@ describe('computeDevotionalState — inflightSeriesFailed', () => {
     expect(state).toEqual({ type: 'first-series-failed', ...failed });
   });
 });
+
+describe('J2 auto trial compute-devotional-state', () => {
+  it('returns journey-complete when auto complete, denied, and no day data', () => {
+    const onCreateNew = jest.fn();
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDayData: null,
+      isJourneyComplete: true,
+      premiumPolicy: 'denied',
+      daysCompleted: 3,
+      totalDays: 3,
+      progress: 100,
+      onCreateNew,
+      autoTrialActive: true,
+    });
+
+    expect(state.type).toBe('journey-complete');
+    if (state.type === 'journey-complete') {
+      expect(state.seriesTitle).toBe('Faith Foundations');
+      expect(state.onCreateNew).toBe(onCreateNew);
+    }
+  });
+
+  it('returns premium-paused when auto is incomplete and denied', () => {
+    const onOpenBible = jest.fn();
+    const onRenewPremium = jest.fn();
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDayData: null,
+      isJourneyComplete: false,
+      premiumPolicy: 'denied',
+      daysCompleted: 2,
+      totalDays: 3,
+      onOpenBible,
+      onRenewPremium,
+      autoTrialActive: true,
+    });
+
+    expect(state.type).toBe('premium-paused');
+    if (state.type === 'premium-paused') {
+      expect(state.seriesTitle).toBe('Faith Foundations');
+      expect(state.daysCompleted).toBe(2);
+      expect(state.totalDays).toBe(3);
+      expect(state.onOpenBible).toBe(onOpenBible);
+      expect(state.onRenewPremium).toBe(onRenewPremium);
+    }
+  });
+
+  it('never pauses when premium policy is unknown, even with autoTrial', () => {
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDayData: null,
+      isPreparing: true,
+      premiumPolicy: 'unknown',
+      autoTrialActive: true,
+    });
+
+    expect(state.type).toBe('preparing');
+    expect(state.type).not.toBe('premium-paused');
+  });
+
+  it('keeps non-trial fixtures on premium-paused when complete is false', () => {
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDayData: null,
+      isPreparing: true,
+      premiumPolicy: 'denied',
+      daysCompleted: 6,
+    });
+
+    expect(state.type).toBe('premium-paused');
+  });
+
+  it('keeps non-trial journey-complete behind premium-paused when denied and no day data', () => {
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDayData: null,
+      isJourneyComplete: true,
+      premiumPolicy: 'denied',
+      daysCompleted: 7,
+      totalDays: 7,
+    });
+
+    expect(state.type).toBe('premium-paused');
+  });
+
+  it('does not attach a series path on auto or ordinary unread', () => {
+    const unread = computeDevotionalState(baseInput);
+    expect(unread.type).toBe('unread');
+    if (unread.type === 'unread') {
+      expect(unread).not.toHaveProperty('path');
+    }
+
+    const autoUnread = computeDevotionalState({
+      ...baseInput,
+      autoTrialActive: true,
+    });
+    expect(autoUnread.type).toBe('unread');
+    if (autoUnread.type === 'unread') {
+      expect(autoUnread).not.toHaveProperty('path');
+    }
+  });
+});

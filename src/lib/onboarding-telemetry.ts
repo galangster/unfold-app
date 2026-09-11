@@ -56,6 +56,7 @@ export const ONBOARDING_ABANDONED_THRESHOLD_MS = 6 * 60 * 60 * 1000;
  * per draft. Cleared alongside the draft when onboarding completes.
  */
 export const ABANDONED_MARKER_KEY = 'onboarding-abandon-reported-v1';
+export const ONBOARDING_COMPLETED_MARKER_KEY = 'onboarding-completed-reported-v1';
 
 /**
  * Age buckets, not raw durations. Buckets aggregate — "eleven people abandoned
@@ -156,9 +157,24 @@ export function trackOnboardingResumed(fromStepId: string, ageMs: number): void 
  * generation. Both are completions, and the split is the whole point of
  * recording the outcome.
  */
-export function trackOnboardingCompleted(outcome: 'generated' | 'deferred'): void {
+export function trackOnboardingCompleted(
+  outcome: 'generated' | 'deferred' | 'auto_trial',
+  ctx: { isFirstRun: boolean },
+): boolean {
+  if (!ctx.isFirstRun) return false;
+  try {
+    if (mmkvStorage.getItem(ONBOARDING_COMPLETED_MARKER_KEY)) return false;
+  } catch {
+    // A storage read that throws must not be read as "already reported".
+  }
   addAppBreadcrumb(ONBOARDING_BREADCRUMB_CATEGORY, 'completed', { outcome });
   captureAppEvent(ONBOARDING_COMPLETED_EVENT, { outcome });
+  try {
+    mmkvStorage.setItem(ONBOARDING_COMPLETED_MARKER_KEY, outcome);
+  } catch {
+    // Best-effort. A marker that fails to persist costs a duplicate event.
+  }
+  return true;
 }
 
 function hasReportedAbandonedOnboarding(): boolean {

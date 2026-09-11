@@ -27,6 +27,9 @@ jobs:
       - name: Lint
         run: bun run lint
 
+      - name: Verify profiles
+        run: bun run verify:profiles
+
       # `bun run test` runs the npm script, which invokes the jest binary.
       # Do NOT use `bun test` — that is bun's own runner and it cannot parse
       # React Native's Flow-typed sources, so it fails on every file.

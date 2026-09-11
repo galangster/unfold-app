@@ -148,4 +148,49 @@ describe('generation mutation errors', () => {
       error: { code: 'SERIES_ARCHIVED', message: 'This series has ended.' },
     }));
   });
+
+  // Contract pin: the backend repo carries the byte-identical fixture at
+  // src/routes/__tests__/fixtures/auto-trial-decline-v1.json and asserts its
+  // route sends exactly these bodies. Every reason must survive the parser.
+  const declineFixture = require('./fixtures/auto-trial-decline-v1.json') as Record<
+    string,
+    { error: { code: string; message: string; reason: string } }
+  >;
+  it.each(Object.keys(declineFixture))(
+    'keeps the %s decline reason from the pinned 409 body',
+    async (reason) => {
+      fetchMock.mockResolvedValueOnce(jsonResponse(409, declineFixture[reason]));
+
+      const error = await submitGenerationJob({
+        dayNumber: 1,
+        jobType: 'initial_arc',
+      }).catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(ApiError);
+      expect(error).toMatchObject({ status: 409, code: 'AUTO_TRIAL_UNAVAILABLE', reason });
+    },
+  );
+
+  it('carries AUTO_TRIAL_UNAVAILABLE reason from a 409 body', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(409, {
+      error: {
+        code: 'AUTO_TRIAL_UNAVAILABLE',
+        message: 'Auto trial series is turned off.',
+        reason: 'switch_off',
+      },
+    }));
+
+    const error = await submitGenerationJob({
+      dayNumber: 1,
+      jobType: 'initial_arc',
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({
+      status: 409,
+      code: 'AUTO_TRIAL_UNAVAILABLE',
+      reason: 'switch_off',
+      message: 'Auto trial series is turned off.',
+    });
+  });
 });

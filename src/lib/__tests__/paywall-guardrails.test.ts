@@ -5,6 +5,7 @@ import {
   resolveOnboardingPurchaseAdvance,
   resolvePaywallCompletionNavigation,
   resolvePurchaseOutcome,
+  resolveRestoreExitSource,
   resolveRestoreOutcome,
   runGuardedPaywallFlow,
   PAYWALL_ENTITLEMENT_PENDING_MESSAGE,
@@ -44,6 +45,7 @@ describe('paywall guardrails', () => {
           isEarlyOnboarding: true,
           isFromOnboarding: true,
           currentDevotionalId: 'devotional-1',
+          autoTrialIntentId: null,
         }),
       ).toEqual({ action: 'back' });
     });
@@ -54,6 +56,7 @@ describe('paywall guardrails', () => {
           isEarlyOnboarding: false,
           isFromOnboarding: true,
           currentDevotionalId: 'devotional-1',
+          autoTrialIntentId: null,
         }),
       ).toEqual({ action: 'replace', href: '/(tabs)/(today)' });
     });
@@ -64,6 +67,7 @@ describe('paywall guardrails', () => {
           isEarlyOnboarding: false,
           isFromOnboarding: true,
           currentDevotionalId: null,
+          autoTrialIntentId: null,
         }),
       ).toEqual({ action: 'replace', href: '/generating' });
     });
@@ -74,6 +78,66 @@ describe('paywall guardrails', () => {
           isEarlyOnboarding: false,
           isFromOnboarding: false,
           currentDevotionalId: 'devotional-1',
+          autoTrialIntentId: null,
+        }),
+      ).toEqual({ action: 'back' });
+    });
+  });
+
+  describe('F8 autoTrialIntentId wins every other completion rule', () => {
+    const reveal = {
+      action: 'replace' as const,
+      href: '/generating' as const,
+    };
+
+    it('replaces to generating before early-onboarding back', () => {
+      expect(
+        resolvePaywallCompletionNavigation({
+          isEarlyOnboarding: true,
+          isFromOnboarding: true,
+          currentDevotionalId: 'devotional-1',
+          autoTrialIntentId: 'intent-1',
+        }),
+      ).toEqual(reveal);
+    });
+
+    it('replaces to generating before onboarding Today and generating', () => {
+      expect(
+        resolvePaywallCompletionNavigation({
+          isEarlyOnboarding: false,
+          isFromOnboarding: true,
+          currentDevotionalId: 'devotional-1',
+          autoTrialIntentId: 'intent-1',
+        }),
+      ).toEqual(reveal);
+      expect(
+        resolvePaywallCompletionNavigation({
+          isEarlyOnboarding: false,
+          isFromOnboarding: true,
+          currentDevotionalId: null,
+          autoTrialIntentId: 'intent-1',
+        }),
+      ).toEqual(reveal);
+    });
+
+    it('replaces to generating before a later-entry back', () => {
+      expect(
+        resolvePaywallCompletionNavigation({
+          isEarlyOnboarding: false,
+          isFromOnboarding: false,
+          currentDevotionalId: 'devotional-1',
+          autoTrialIntentId: 'intent-1',
+        }),
+      ).toEqual(reveal);
+    });
+
+    it('keeps existing cases when autoTrialIntentId is null', () => {
+      expect(
+        resolvePaywallCompletionNavigation({
+          isEarlyOnboarding: false,
+          isFromOnboarding: false,
+          currentDevotionalId: 'devotional-1',
+          autoTrialIntentId: null,
         }),
       ).toEqual({ action: 'back' });
     });
@@ -344,6 +408,13 @@ describe('paywall guardrails', () => {
       // No error surfaced by the guard on success (run owns non-throwing branches).
       expect(setError).not.toHaveBeenCalled();
       expect(setLoading).toHaveBeenCalledWith(false);
+    });
+  });
+
+  describe('resolveRestoreExitSource', () => {
+    it('returns lateGrant when the mount armed a pending grant, otherwise restore', () => {
+      expect(resolveRestoreExitSource(true)).toBe('lateGrant');
+      expect(resolveRestoreExitSource(false)).toBe('restore');
     });
   });
 });

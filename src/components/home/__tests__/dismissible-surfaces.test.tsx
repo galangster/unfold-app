@@ -135,6 +135,7 @@ jest.mock('@/lib/store', () => ({
 }));
 
 import { ContextSlot } from '../ContextSlot';
+import { GLASS } from '@/constants/today-surfaces';
 import { TodayCardStack, type TodayCardStackCard } from '../TodayCardStack';
 import { PremiumNudgeCard } from '../../PremiumNudgeCard';
 import type { ColorTheme } from '@/constants/colors';
@@ -275,6 +276,7 @@ describe('dismissible Today/Home surfaces', () => {
     const blurLayers = tree.root.findAll((node: any) => node.props.testID === 'today-companion-glass-blur');
     if (Platform.OS === 'ios') {
       expect(blurLayers.length).toBeGreaterThan(0);
+      expect(blurLayers[0].props.intensity).toBe(GLASS.blurIntensity.dark);
     } else {
       expect(blurLayers).toHaveLength(0);
     }

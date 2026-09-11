@@ -28,6 +28,7 @@ import {
   configureNotificationPresentation,
   scheduleRemindLater,
 } from '@/lib/notifications';
+import { readAutoTrialIntent } from '@/lib/auto-trial-intent';
 import {
   buildNotificationPreferenceRequestBody,
   buildPushRegistrationRequestBody,
@@ -42,6 +43,7 @@ import {
 
 const notificationNavigationCoordinator = createNotificationNavigationCoordinator({
   replace: (route) => router.replace(route),
+  readAutoTrialIntent,
   onEvent: (event) => {
     logger.log('[push] coordinator event', event);
   },

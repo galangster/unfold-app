@@ -26,6 +26,7 @@ type ExistingUserLike = {
 type OnboardingSelectionContext = {
   selectedMainOption?: 'theme' | 'type' | 'guided';
   selectedType?: string;
+  autoTrialActive?: boolean;
 };
 
 const TYPES_WITH_SUBJECT_SELECTION = new Set(['book_study', 'character_study']);
@@ -114,6 +115,17 @@ const RETURNING_USER_ONLY_SKIPS = new Set([
   'purchaseConfirmation',
   'stylePreferences1',
   'stylePreferences2',
+]);
+
+export const AUTO_TRIAL_SKIP_STEP_IDS: ReadonlySet<string> = new Set([
+  'themeType',
+  'studySubject',
+  'currentSituation',
+  'diagnosticRound',
+  'spiritualSeeking',
+  'upcomingEvent',
+  'readingDuration',
+  'devotionalLength',
 ]);
 
 function hasValue(value: string | null | undefined): boolean {
@@ -208,8 +220,33 @@ export function getFilteredOnboardingSteps<T extends OnboardingStepLike>(
       if (step.id === 'reminderTime' && hasValue(existingUser?.reminderTime)) return false;
     }
 
+    if (
+      selectionContext?.autoTrialActive
+      && existingUser?.hasCompletedOnboarding !== true
+      && AUTO_TRIAL_SKIP_STEP_IDS.has(step.id)
+    ) {
+      return false;
+    }
+
     return true;
   });
+}
+
+export function resolveOnboardingBackTarget(i: {
+  stepIds: readonly string[];
+  currentStepId: string;
+  purchasedDuringOnboarding: boolean;
+}): string | null {
+  const index = i.stepIds.indexOf(i.currentStepId);
+  if (index <= 0) return null;
+  const previousId = i.stepIds[index - 1];
+  if (
+    i.purchasedDuringOnboarding
+    && (previousId === 'purchaseConfirmation' || previousId === 'threeStepPaywall')
+  ) {
+    return null;
+  }
+  return previousId;
 }
 
 export function getInitialOnboardingStepId<T extends OnboardingStepLike>(
@@ -653,10 +690,16 @@ export function resolveOnboardingResumeStep({
   // Someone holding a generated devotional has already watched the segue and
   // read the devotional — clamping back past the reader would replay both.
   const readDevotionalIndex = allStepIds.indexOf('readDevotional');
-  const floorIndex =
+  const existingFloor =
     hasSampleDevotionalDay && readDevotionalIndex !== -1 && savedIndex >= readDevotionalIndex
       ? readDevotionalIndex
       : 0;
+  const purchaseConfirmationIndex = allStepIds.indexOf('purchaseConfirmation');
+  const purchaseFloor =
+    purchasedDuringOnboarding && purchaseConfirmationIndex !== -1
+      ? purchaseConfirmationIndex + 1
+      : 0;
+  const floorIndex = Math.max(existingFloor, purchaseFloor);
 
   // The resolved step may not survive this person's step filter (e.g. a name
   // they already gave). Take the nearest earlier step that does.

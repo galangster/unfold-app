@@ -39,16 +39,24 @@ jest.mock('@/lib/logger', () => ({
   logger: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
 
+const mockStoreState = {
+  streakCurrent: 3,
+  streakLongest: 10,
+  streakLastReadDate: null as string | null,
+  user: null as { readingDuration: number } | null,
+  devotionals: [] as { id: string }[],
+  getCurrentDevotional: (): null | {
+    id: string;
+    currentDay: number;
+    totalDays?: number;
+    seriesArc?: { totalDaysPlanned?: number };
+    days?: { dayNumber: number; title?: string }[];
+  } => null,
+};
+
 jest.mock('@/lib/store', () => ({
   useUnfoldStore: {
-    getState: () => ({
-      streakCurrent: 3,
-      streakLongest: 10,
-      streakLastReadDate: null,
-      user: null,
-      devotionals: [],
-      getCurrentDevotional: () => null,
-    }),
+    getState: () => mockStoreState,
   },
 }));
 
@@ -64,7 +72,13 @@ import {
   endReadingSession,
   endOrphanedReadingSessions,
   isReadingSessionActive,
+  syncWidgets,
+  resetWidgetSyncFingerprintForTesting,
+  updateReadingSession,
 } from '@/lib/widget-bridge';
+import UnfoldStreakDefault from '@/widgets/ios/UnfoldStreak';
+import UnfoldTodayDefault from '@/widgets/ios/UnfoldToday';
+import UnfoldDashboardDefault from '@/widgets/ios/UnfoldDashboard';
 
 function makeActivity() {
   return { end: jest.fn(() => Promise.resolve()), update: jest.fn() };
@@ -79,10 +93,28 @@ const START_PARAMS = {
   isListening: true,
 };
 
+function timelineCalls(): number {
+  return [
+    (UnfoldStreakDefault as unknown as { updateTimeline: jest.Mock }).updateTimeline,
+    (UnfoldTodayDefault as unknown as { updateTimeline: jest.Mock }).updateTimeline,
+    (UnfoldDashboardDefault as unknown as { updateTimeline: jest.Mock }).updateTimeline,
+  ].reduce((sum, fn) => sum + fn.mock.calls.length, 0);
+}
+
 beforeEach(() => {
   jest.useFakeTimers();
   mockStart.mockReset();
   mockGetInstances.mockReset().mockReturnValue([]);
+  mockStoreState.streakCurrent = 3;
+  mockStoreState.streakLongest = 10;
+  mockStoreState.streakLastReadDate = null;
+  mockStoreState.user = null;
+  mockStoreState.devotionals = [];
+  mockStoreState.getCurrentDevotional = () => null;
+  resetWidgetSyncFingerprintForTesting();
+  (UnfoldStreakDefault as unknown as { updateTimeline: jest.Mock }).updateTimeline.mockClear();
+  (UnfoldTodayDefault as unknown as { updateTimeline: jest.Mock }).updateTimeline.mockClear();
+  (UnfoldDashboardDefault as unknown as { updateTimeline: jest.Mock }).updateTimeline.mockClear();
   // Drain any session left tracked by a previous test
   endReadingSession();
 });
@@ -147,5 +179,45 @@ describe('endReadingSession', () => {
 
   it('is safe to call with no active session', () => {
     expect(() => endReadingSession()).not.toThrow();
+  });
+});
+
+describe('J13 widget boundary totals', () => {
+  it('changes the fingerprint when the boundary total goes 7 to 3', () => {
+    mockStoreState.getCurrentDevotional = () => ({
+      id: 'd1',
+      currentDay: 2,
+      totalDays: 7,
+      days: [{ dayNumber: 2, title: 'Day 2' }],
+    });
+    syncWidgets();
+    const afterSeven = timelineCalls();
+
+    mockStoreState.getCurrentDevotional = () => ({
+      id: 'd1',
+      currentDay: 2,
+      totalDays: 7,
+      seriesArc: { totalDaysPlanned: 3 },
+      days: [{ dayNumber: 2, title: 'Day 2' }],
+    });
+    syncWidgets();
+    expect(timelineCalls()).toBeGreaterThan(afterSeven);
+  });
+
+  it('uses the boundary total in the live activity', () => {
+    const live = makeActivity();
+    mockStart.mockReturnValue(live);
+    startReadingSession(START_PARAMS);
+    jest.runAllTimers();
+
+    mockStoreState.getCurrentDevotional = () => ({
+      id: 'd1',
+      currentDay: 2,
+      totalDays: 7,
+      seriesArc: { totalDaysPlanned: 3 },
+      days: [{ dayNumber: 2, title: 'Day 2' }],
+    });
+    updateReadingSession(1);
+    expect(live.update).toHaveBeenCalledWith(expect.objectContaining({ totalDays: 3 }));
   });
 });

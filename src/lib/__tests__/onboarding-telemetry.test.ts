@@ -33,6 +33,7 @@ import {
   ONBOARDING_ABANDONED_EVENT,
   ONBOARDING_ABANDONED_THRESHOLD_MS,
   ONBOARDING_COMPLETED_EVENT,
+  ONBOARDING_COMPLETED_MARKER_KEY,
   ONBOARDING_RESUMED_EVENT,
   ONBOARDING_STARTED_EVENT,
   ONBOARDING_STEP_IDS,
@@ -54,9 +55,11 @@ const breadcrumb = addAppBreadcrumb as jest.Mock;
 
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
+const FIRST_RUN = { isFirstRun: true } as const;
 
 beforeEach(() => {
   clearAbandonedOnboardingMarker();
+  mmkvStorage.removeItem(ONBOARDING_COMPLETED_MARKER_KEY);
   jest.clearAllMocks();
 });
 
@@ -191,13 +194,41 @@ describe('funnel events', () => {
   });
 
   it('reports the generated outcome', () => {
-    trackOnboardingCompleted('generated');
+    trackOnboardingCompleted('generated', FIRST_RUN);
     expect(capture).toHaveBeenCalledWith(ONBOARDING_COMPLETED_EVENT, { outcome: 'generated' });
   });
 
   it('reports the deferred outcome', () => {
-    trackOnboardingCompleted('deferred');
+    trackOnboardingCompleted('deferred', FIRST_RUN);
     expect(capture).toHaveBeenCalledWith(ONBOARDING_COMPLETED_EVENT, { outcome: 'deferred' });
+  });
+});
+
+describe('K2 completion marker', () => {
+  it('emits once on first run, writes the marker, and rejects a second call', () => {
+    expect(trackOnboardingCompleted('generated', FIRST_RUN)).toBe(true);
+    expect(capture).toHaveBeenCalledTimes(1);
+    expect(mmkvStorage.getItem(ONBOARDING_COMPLETED_MARKER_KEY)).toBe('generated');
+    expect(trackOnboardingCompleted('deferred', FIRST_RUN)).toBe(false);
+    expect(capture).toHaveBeenCalledTimes(1);
+  });
+
+  it('emits nothing when isFirstRun is false', () => {
+    expect(trackOnboardingCompleted('generated', { isFirstRun: false })).toBe(false);
+    expect(capture).not.toHaveBeenCalled();
+    expect(mmkvStorage.getItem(ONBOARDING_COMPLETED_MARKER_KEY)).toBeNull();
+  });
+
+  it('accepts auto_trial', () => {
+    expect(trackOnboardingCompleted('auto_trial', FIRST_RUN)).toBe(true);
+    expect(capture).toHaveBeenCalledWith(ONBOARDING_COMPLETED_EVENT, { outcome: 'auto_trial' });
+  });
+
+  it('emits again after the full-reset key is cleared', () => {
+    expect(trackOnboardingCompleted('generated', FIRST_RUN)).toBe(true);
+    mmkvStorage.removeItem(ONBOARDING_COMPLETED_MARKER_KEY);
+    expect(trackOnboardingCompleted('deferred', FIRST_RUN)).toBe(true);
+    expect(capture).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -219,8 +250,8 @@ describe('privacy', () => {
       reportAbandonedOnboarding(content, 2 * DAY);
       clearAbandonedOnboardingMarker();
     }
-    trackOnboardingCompleted('generated');
-    trackOnboardingCompleted('deferred');
+    trackOnboardingCompleted('generated', FIRST_RUN);
+    trackOnboardingCompleted('deferred', FIRST_RUN);
 
     const payloads = JSON.stringify([capture.mock.calls, breadcrumb.mock.calls]);
     for (const content of userContent) {
@@ -232,7 +263,7 @@ describe('privacy', () => {
     trackOnboardingStarted('name');
     trackOnboardingResumed('aboutMe', 8 * DAY);
     reportAbandonedOnboarding('threeStepPaywall', 8 * DAY);
-    trackOnboardingCompleted('deferred');
+    trackOnboardingCompleted('deferred', FIRST_RUN);
 
     const allowedKeys = new Set(['step', 'age_bucket', 'outcome']);
     const allowedBuckets = new Set(['under6h', '6h', '24h', '3d', '7d', 'longer']);
@@ -241,7 +272,7 @@ describe('privacy', () => {
       for (const [key, value] of Object.entries(data ?? {})) {
         expect(allowedKeys.has(key)).toBe(true);
         if (key === 'age_bucket') expect(allowedBuckets.has(value)).toBe(true);
-        if (key === 'outcome') expect(['generated', 'deferred']).toContain(value);
+        if (key === 'outcome') expect(['generated', 'deferred', 'auto_trial']).toContain(value);
         // Only a step this app actually has, or the safe fallback.
         if (key === 'step') expect([...ONBOARDING_STEP_IDS, 'unknown']).toContain(value);
       }
@@ -284,16 +315,10 @@ describe('screen wiring (ONB-TELEMETRY-1)', () => {
   // owns its teardown, so a completion path only has to clear the draft. What
   // that call then clears is asserted behaviourally above and in
   // `onboarding-draft-store.test.ts`.
-  it('reports the generated outcome from proceedToGeneration, and clears the draft with it', () => {
-    const body = sliceBody('const proceedToGeneration = useCallback(', '}, [router, saveOnboardingData]);');
-    expect(body).toContain("trackOnboardingCompleted('generated')");
-    expect(body).toContain('clearOnboardingDraft()');
-  });
-
-  it('reports the deferred outcome from handleDecideLater, and clears the draft with it', () => {
-    const body = sliceBody('const handleDecideLater = useCallback(', 'const completeOnboarding');
-    expect(body).toContain("trackOnboardingCompleted('deferred')");
-    expect(body).toContain('clearOnboardingDraft()');
+  it('reports completion through runOnboardingCompletion with a required first-run context', () => {
+    expect(onboardingSrc).toContain('runOnboardingCompletion(');
+    expect(onboardingSrc).toContain('trackOnboardingCompleted(outcome, { isFirstRun: true })');
+    expect(onboardingSrc).toContain("'/(tabs)/(today)'");
   });
 
   it('reports started at the name step and a breadcrumb per step change', () => {
