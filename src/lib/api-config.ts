@@ -6,6 +6,7 @@
  */
 import { Platform } from 'react-native';
 import { PRIMARY_BACKEND_URL } from '@/lib/backend-url';
+import { getCachedDeviceCredential } from '@/lib/device-credential';
 import { getDeviceId } from '@/lib/mmkv-storage';
 
 // Custom User-Agent for Cloudflare WAF allowlisting
@@ -22,15 +23,20 @@ export function getBackendCandidates(): string[] {
 }
 
 // ---------------------------------------------------------------------------
-// Request headers — anonymous, keyed by X-Device-ID
+// Request headers — anonymous, keyed by X-Device-ID (+ cached credential)
 // ---------------------------------------------------------------------------
 
 export async function getAuthHeaders(): Promise<Record<string, string>> {
-  return {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'User-Agent': APP_USER_AGENT,
     'X-Device-ID': getDeviceId(),
   };
+  const credential = getCachedDeviceCredential();
+  if (credential) {
+    headers['X-Device-Credential'] = credential;
+  }
+  return headers;
 }
 
 // ---------------------------------------------------------------------------

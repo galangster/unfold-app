@@ -23,6 +23,7 @@
 import { mmkvStorage, getDeviceId } from '@/lib/mmkv-storage';
 import { isEphemeralDeviceId } from '@/lib/device-id';
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from '@/lib/api-config';
+import { authenticatedFetch } from '@/lib/device-credential';
 import {
   createSyncPushBodyEnvelope,
   selectEncodedSyncPushBatch,
@@ -261,7 +262,7 @@ export function drainSyncOutbox(): Promise<void> {
         clearTimeout(timeoutId);
         timeoutId = setTimeout(() => controller.abort(), 15_000);
 
-        const response = await fetch(`${PRIMARY_BACKEND_URL}/api/sync/push`, {
+        const response = await authenticatedFetch(`${PRIMARY_BACKEND_URL}/api/sync/push`, {
           method: 'POST',
           headers,
           body,

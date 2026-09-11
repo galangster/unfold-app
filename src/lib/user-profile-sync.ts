@@ -1,4 +1,5 @@
 import { getAuthHeaders, PRIMARY_BACKEND_URL } from './api-config';
+import { authenticatedFetch } from './device-credential';
 import { logger } from './logger';
 import { getDeviceId } from './mmkv-storage';
 import type { UserProfile } from './store';
@@ -95,7 +96,7 @@ export async function syncUserProfileToBackend(
     const headers = await getAuthHeaders();
     assertSyncSessionCurrent(session, 'user profile sync');
 
-    const response = await fetch(`${PRIMARY_BACKEND_URL}/api/sync/push`, {
+    const response = await authenticatedFetch(`${PRIMARY_BACKEND_URL}/api/sync/push`, {
       method: 'POST',
       headers,
       body: buildSyncPushBody([change]),

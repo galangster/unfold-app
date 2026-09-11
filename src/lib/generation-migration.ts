@@ -6,6 +6,7 @@
 import { mmkvStorage } from "./mmkv-storage";
 import { useUnfoldStore } from "./store";
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from "./api-config";
+import { authenticatedFetch } from "./device-credential";
 import { logger } from "./logger";
 import {
   assertSyncSessionCurrent,
@@ -103,7 +104,7 @@ async function postMigrationStep(
   const controller = new AbortController();
   const unregister = registerSyncTransport(controller);
   try {
-    const response = await fetch(`${PRIMARY_BACKEND_URL}${path}`, {
+    const response = await authenticatedFetch(`${PRIMARY_BACKEND_URL}${path}`, {
       method: "POST",
       headers,
       body: JSON.stringify(body),

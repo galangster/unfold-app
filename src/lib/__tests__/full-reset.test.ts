@@ -5,6 +5,7 @@ let mockDeviceId = 'old-device-id';
 const mockCacheEntries: string[] = [];
 const mockVoiceFileDelete = jest.fn();
 const mockVoiceDirectoryDelete = jest.fn();
+const mockClearDeviceCredential = jest.fn(async () => undefined);
 
 jest.mock('expo-crypto', () => ({
   CryptoDigestAlgorithm: { SHA256: 'SHA256' },
@@ -38,6 +39,12 @@ jest.mock('expo-file-system/legacy', () => ({
   cacheDirectory: 'file:///cache/',
   deleteAsync: jest.fn(async () => undefined),
   readDirectoryAsync: jest.fn(async () => [...mockCacheEntries]),
+}));
+
+jest.mock('../device-credential', () => ({
+  clearDeviceCredential: () => mockClearDeviceCredential(),
+  getCachedDeviceCredential: () => null,
+  authenticatedFetch: (url: string, init?: RequestInit) => fetch(url, init),
 }));
 
 jest.mock('../mmkv-storage', () => ({
@@ -168,6 +175,7 @@ import {
   invalidateRevenueCatIdentityReadiness,
   logoutUser,
 } from '../revenuecatClient';
+import { clearDeviceCredential } from '../device-credential';
 import { useUIState } from '../ui-state';
 import { PRIMARY_BACKEND_URL } from '../api-config';
 import { deleteAsync, readDirectoryAsync } from 'expo-file-system/legacy';
@@ -188,6 +196,8 @@ beforeEach(() => {
   mockDeviceId = 'old-device-id';
   resetSyncSessionFenceForTesting();
   jest.clearAllMocks();
+  mockClearDeviceCredential.mockReset();
+  mockClearDeviceCredential.mockImplementation(async () => undefined);
   mockFetch.mockReset();
   mockFetch.mockResolvedValue(okResponse());
   global.fetch = mockFetch as unknown as typeof fetch;
@@ -313,6 +323,26 @@ describe('performFullLocalReset', () => {
     expect(order.indexOf('server-erase')).toBeGreaterThan(order.indexOf('clear-resolved'));
     expect(invalidateRevenueCatIdentityReadiness).toHaveBeenCalledTimes(1);
     expect(useUIState.getState().clearRevenueCatResolved).toHaveBeenCalled();
+  });
+
+  it('full reset clears the record', async () => {
+    const order: string[] = [];
+    mockClearDeviceCredential.mockImplementation(async () => {
+      order.push('clear-credential');
+    });
+    (rotateDeviceId as jest.Mock).mockImplementationOnce(() => {
+      order.push('rotate');
+      return 'new-id';
+    });
+
+    await performFullLocalReset();
+
+    expect(mockClearDeviceCredential).toHaveBeenCalled();
+    expect(order.filter((step) => step === 'clear-credential' || step === 'rotate')).toEqual([
+      'clear-credential',
+      'clear-credential',
+      'rotate',
+    ]);
   });
 
   it('invalidates RevenueCat readiness before logout and establishes the new identity after rotation', async () => {

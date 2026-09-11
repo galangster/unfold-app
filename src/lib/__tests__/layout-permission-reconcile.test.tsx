@@ -66,6 +66,14 @@ jest.mock('@/lib/mmkv-storage', () => ({
   getDeviceId: () => 'device-1',
 }));
 
+jest.mock('@/lib/device-credential', () => ({
+  loadDeviceCredential: jest.fn(async () => undefined),
+  ensureDeviceCredential: jest.fn(async () => null),
+  clearDeviceCredential: jest.fn(async () => undefined),
+  authenticatedFetch: (url: string, init?: RequestInit) => fetch(url, init),
+  getCachedDeviceCredential: jest.fn(() => null),
+}));
+
 jest.mock('@/lib/sentry', () => ({
   initSentry: jest.fn(),
   registerNavigationContainer: jest.fn(),
@@ -182,6 +190,9 @@ describe('G11 layout AppState reconcile', () => {
     const RootLayout = require('@/app/_layout').default as () => React.ReactElement;
     await act(async () => {
       create(<RootLayout />);
+    });
+    await act(async () => {
+      await Promise.resolve();
     });
     expect(mockRefreshRemoteConfig).toHaveBeenCalled();
     expect(mockOnPermissionChanged).toHaveBeenCalled();

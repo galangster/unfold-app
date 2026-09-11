@@ -17,6 +17,7 @@ import Constants from 'expo-constants';
 import { AppState, type AppStateStatus, Platform } from 'react-native';
 import { router } from 'expo-router';
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from './api-config';
+import { authenticatedFetch } from './device-credential';
 import { logger } from '@/lib/logger';
 import { getDeviceId } from '@/lib/mmkv-storage';
 import { useUnfoldStore } from '@/lib/store';
@@ -261,7 +262,7 @@ async function registerPushTokenForOwner(
     const unregister = registerSyncTransport(controller);
     let response: Response;
     try {
-      response = await fetch(
+      response = await authenticatedFetch(
         `${PRIMARY_BACKEND_URL}/api/users/push-token`,
         {
           method: 'POST',
@@ -312,7 +313,7 @@ export async function syncNotificationPreferences(): Promise<void> {
     const headers = await getAuthHeaders();
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-    const response = await fetch(
+    const response = await authenticatedFetch(
       `${PRIMARY_BACKEND_URL}/api/users/notification-preferences`,
       {
         method: 'POST',

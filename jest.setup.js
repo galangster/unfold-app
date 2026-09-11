@@ -3,6 +3,7 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 );
 
 jest.mock('expo-secure-store', () => ({
+  AFTER_FIRST_UNLOCK: 'AFTER_FIRST_UNLOCK',
   getItem: jest.fn(() => null),
   setItem: jest.fn(),
   getItemAsync: jest.fn(async () => null),

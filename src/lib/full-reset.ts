@@ -57,6 +57,7 @@ import {
   SERVER_ERASE_TIMEOUT_MS,
   type ServerEraseResult,
 } from '@/lib/account-erase';
+import { clearDeviceCredential } from '@/lib/device-credential';
 import { logger } from '@/lib/logger';
 import { cacheDirectory, deleteAsync, documentDirectory, readDirectoryAsync } from 'expo-file-system/legacy';
 // RS13-1: import the canonical keys — don't repeat the string literals here.
@@ -347,7 +348,9 @@ async function runFullLocalReset(options: FullResetOptions): Promise<FullResetRe
   );
 
   // 12. Rotate device identity LAST — server data (if the erase above did not
-  //     confirm) becomes permanently unreachable from this install.
+  //     confirm) becomes permanently unreachable from this install. Drop the
+  //     credential bound to the old id before the new id is minted.
+  await clearDeviceCredential();
   rotateDeviceId();
 
   // 13. Log in to the new deterministic id. The timeout only stops waiting;

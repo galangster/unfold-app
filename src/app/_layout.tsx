@@ -13,6 +13,7 @@ import { useFonts } from 'expo-font';
 import { Colors } from '@/constants/colors';
 import { LaterEntryNotifySheet } from '@/components/onboarding/LaterEntryNotifySheet';
 import { onNotificationPermissionMaybeChanged } from '@/lib/notification-ask';
+import { ensureDeviceCredential, loadDeviceCredential } from '@/lib/device-credential';
 import { refreshRemoteConfig } from '@/lib/remote-config';
 import * as SecureStore from 'expo-secure-store';
 import { RecoveryScreen } from '@/components/RecoveryScreen';
@@ -143,23 +144,33 @@ function RootLayoutNav() {
   // reach the server when connectivity returns.
   useSyncOutboxDrain();
 
-  // Register push token with backend (anonymous, keyed by X-Device-ID).
-  // Also re-attempts on foreground so the POST succeeds after any earlier
-  // failure (network down at cold start, permission granted during session).
-  // The session-dedupe flag in registerPushToken makes foreground retries free
-  // after the first successful POST.
+  // Load any stored device credential, then register if needed, before the
+  // first authenticated request from this effect. Registration is network I/O
+  // and must not block first render; a failure just omits the header and
+  // retries on the next foreground.
   useEffect(() => {
-    void refreshRemoteConfig();
-    void onNotificationPermissionMaybeChanged();
-    registerPushToken();
+    let cancelled = false;
+    void (async () => {
+      await loadDeviceCredential();
+      if (cancelled) return;
+      await ensureDeviceCredential();
+      if (cancelled) return;
+      void refreshRemoteConfig();
+      void onNotificationPermissionMaybeChanged();
+      registerPushToken();
+    })();
     const sub = AppState.addEventListener('change', (s) => {
       if (s === 'active') {
+        void ensureDeviceCredential();
         void refreshRemoteConfig();
         void onNotificationPermissionMaybeChanged();
         void registerPushToken();
       }
     });
-    return () => sub.remove();
+    return () => {
+      cancelled = true;
+      sub.remove();
+    };
   }, []);
 
   // Keep backend-side devotional-ready push timing aligned with the user's
