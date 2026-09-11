@@ -3,6 +3,7 @@ import type { AutoTrialEntry, AutoTrialSurface } from '@/lib/auto-trial-exit';
 import { isOnboardingSampleDevotionalId } from '@/lib/auto-trial-series';
 import { trackAutoTrialAbandoned, trackAutoTrialLanded } from '@/lib/auto-trial-telemetry';
 import { isEphemeralDeviceId } from '@/lib/device-id';
+import { formatDateOnly } from '@/lib/onboarding-step-helpers';
 import {
   clearInflightGenerationJob,
   readInflightGenerationJob,
@@ -153,14 +154,6 @@ function isNullableString(value: unknown): value is string | null {
   return value === null || typeof value === 'string';
 }
 
-function localDateFromIso(iso: string): string {
-  const date = new Date(iso);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
 function asIntent(value: unknown): AutoTrialIntentV1 | null {
   if (!value || typeof value !== 'object') return null;
   const row = value as Record<string, unknown>;
@@ -269,7 +262,7 @@ export function createAutoTrialIntent(
     trialDays: input.trialDays,
     purchasedAt: input.purchasedAt,
     expiresAt: input.expiresAt,
-    purchaseLocalDate: localDateFromIso(input.purchasedAt),
+    purchaseLocalDate: formatDateOnly(new Date(input.purchasedAt)),
     timeZone: input.timeZone,
     platform: 'ios',
     isSandbox: input.isSandbox,
@@ -297,7 +290,7 @@ export function createAutoTrialIntent(
 export function transitionAutoTrialIntent(
   to: AutoTrialIntentStatus,
   patch: Partial<Pick<AutoTrialIntentV1, 'jobId' | 'devotionalId' | 'failureCode' | 'abandonReason'>>,
-  opts: { nowMs: number; devotionalId?: string },
+  opts: { nowMs: number },
   storage?: IntentStorage,
 ): AutoTrialIntentV1 | null {
   const store = resolveStorage(storage);
@@ -305,7 +298,7 @@ export function transitionAutoTrialIntent(
   if (!current) return null;
   if (!ALLOWED_TRANSITIONS.has(`${current.status}->${to}`)) return null;
 
-  const incomingId = opts.devotionalId ?? patch.devotionalId;
+  const incomingId = patch.devotionalId;
   if (incomingId != null && current.devotionalId != null && incomingId !== current.devotionalId) {
     return null;
   }
@@ -316,7 +309,6 @@ export function transitionAutoTrialIntent(
   if (to === 'submitted') {
     if (patch.jobId !== undefined) next.jobId = patch.jobId;
     if (patch.devotionalId !== undefined) next.devotionalId = patch.devotionalId;
-    else if (opts.devotionalId !== undefined) next.devotionalId = opts.devotionalId;
     if (current.status === 'purchased') next.submittedAt = now;
   } else if (to === 'failed') {
     next.failedAt = now;
@@ -442,38 +434,34 @@ export function reconcileAutoTrialIntentOnLaunch(i: {
   }
 
   if (intent.status === 'purchased' && !hasCompletedOnboarding) return { action: 'none' };
-  if (intent.status === 'purchased' && hasCompletedOnboarding) {
-    return applyRevealGuard({ action: 'open_reveal', intentId: intent.intentId }, intent, inflightJob, revealGuardKey);
-  }
 
   const day1Present = intent.devotionalId != null && landedDevotionalIds.includes(intent.devotionalId);
-  if (intent.status === 'submitted' && day1Present) {
+  let action: AutoTrialLaunchAction;
+  if (intent.status === 'purchased' && hasCompletedOnboarding) {
+    action = { action: 'open_reveal', intentId: intent.intentId };
+  } else if (intent.status === 'submitted' && day1Present) {
     const then: 'open_reveal' | 'none' =
       intent.revealedAt == null && intent.dismissedAt == null ? 'open_reveal' : 'none';
-    return applyRevealGuard({ action: 'mark_landed', then }, intent, inflightJob, revealGuardKey);
-  }
-
-  if (
+    action = { action: 'mark_landed', then };
+  } else if (
     (intent.status === 'submitted' || intent.status === 'landed')
     && intent.revealedAt == null
     && intent.dismissedAt == null
   ) {
-    return applyRevealGuard({ action: 'open_reveal', intentId: intent.intentId }, intent, inflightJob, revealGuardKey);
-  }
-
-  if (
+    action = { action: 'open_reveal', intentId: intent.intentId };
+  } else if (
     intent.status === 'submitted'
     && !day1Present
     && (inflightJob == null || inflightJob.superseded || inflightJob.jobId !== intent.jobId)
   ) {
-    return applyRevealGuard({ action: 'open_reveal', intentId: intent.intentId }, intent, inflightJob, revealGuardKey);
+    action = { action: 'open_reveal', intentId: intent.intentId };
+  } else if (intent.status === 'failed') {
+    action = { action: 'open_reveal', intentId: intent.intentId };
+  } else {
+    return { action: 'none' };
   }
 
-  if (intent.status === 'failed') {
-    return applyRevealGuard({ action: 'open_reveal', intentId: intent.intentId }, intent, inflightJob, revealGuardKey);
-  }
-
-  return { action: 'none' };
+  return applyRevealGuard(action, intent, inflightJob, revealGuardKey);
 }
 
 export function settleLandedAutoTrialSeries(intent: AutoTrialIntentV1, devotionalId: string): void {
@@ -494,14 +482,15 @@ export function settleLandedAutoTrialSeries(intent: AutoTrialIntentV1, devotiona
   }
 
   if (intent.status !== 'submitted') return;
-  const next = transitionAutoTrialIntent('landed', {}, { nowMs: Date.now(), devotionalId });
+  const nowMs = Date.now();
+  const next = transitionAutoTrialIntent('landed', { devotionalId }, { nowMs });
   if (!next) return;
   try {
     const startedAt = Date.parse(intent.submittedAt ?? intent.createdAt);
     trackAutoTrialLanded({
       entry: intent.entry,
       trial_days: intent.trialDays,
-      wait_s: Number.isFinite(startedAt) ? Math.round((Date.now() - startedAt) / 1000) : 0,
+      wait_s: Number.isFinite(startedAt) ? Math.round((nowMs - startedAt) / 1000) : 0,
     });
   } catch {
     // Telemetry never changes the decision.

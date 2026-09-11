@@ -63,12 +63,12 @@ import {
   type AutoTrialIntentStatus,
   type AutoTrialIntentV1,
   type CreateAutoTrialIntentInput,
-  type IntentStorage,
 } from '../auto-trial-intent';
 import { writeInflightGenerationJob } from '../inflight-generation-job';
 import { getCurrentDevotional, getHomeDevotionalDayData } from '../home-devotional-state';
 import { mmkvStorage } from '../mmkv-storage';
 import { useUnfoldStore, type Devotional, type DevotionalDay } from '../store';
+import { memoryIntentStorage } from './fixtures/memory-intent-storage';
 
 const REQUEST_ID = '11111111-2222-4333-8444-555555555555';
 const INTENT_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
@@ -109,25 +109,6 @@ function validIntent(overrides: Partial<AutoTrialIntentV1> = {}): AutoTrialInten
     abandonedAt: null,
     abandonReason: null,
     ...overrides,
-  };
-}
-
-function memoryStorage(initial?: AutoTrialIntentV1 | string | null): IntentStorage & { raw(): string | null } {
-  let value: string | null =
-    initial === undefined || initial === null
-      ? initial ?? null
-      : typeof initial === 'string'
-        ? initial
-        : JSON.stringify(initial);
-  return {
-    getItem: jest.fn(() => value),
-    setItem: jest.fn((_key: string, next: string) => {
-      value = next;
-    }),
-    removeItem: jest.fn(() => {
-      value = null;
-    }),
-    raw: () => value,
   };
 }
 
@@ -242,7 +223,7 @@ describe('D7 strict parse', () => {
 
 describe('D8 write-once sync create', () => {
   it('writes before return and refuses a second write for the same deviceId', () => {
-    const storage = memoryStorage();
+    const storage = memoryIntentStorage();
     const created = createAutoTrialIntent(createInput(), storage);
     expect(storage.setItem).toHaveBeenCalledTimes(1);
     expect(storage.raw()).toBe(JSON.stringify(created));
@@ -256,12 +237,12 @@ describe('D8 write-once sync create', () => {
   });
 
   it('overwrites when the stored record is for another device or is unparseable', () => {
-    const otherDevice = memoryStorage(validIntent({ deviceId: 'device-other' }));
+    const otherDevice = memoryIntentStorage(validIntent({ deviceId: 'device-other' }));
     const created = createAutoTrialIntent(createInput(), otherDevice);
     expect(otherDevice.setItem).toHaveBeenCalled();
     expect(created.deviceId).toBe('device-1');
 
-    const garbage = memoryStorage('{');
+    const garbage = memoryIntentStorage('{');
     const replaced = createAutoTrialIntent(createInput(), garbage);
     expect(garbage.setItem).toHaveBeenCalled();
     expect(replaced.deviceId).toBe('device-1');
@@ -272,7 +253,7 @@ describe('D9 transition matrix', () => {
   it('writes every allowed pair, rejects every other pair, and never changes facts or requestId', () => {
     for (const from of STATUSES) {
       for (const to of STATUSES) {
-        const storage = memoryStorage(validIntent({
+        const storage = memoryIntentStorage(validIntent({
           status: from,
           jobId: from === 'purchased' ? null : 'job-1',
           devotionalId: from === 'purchased' ? null : 'devo-1',
@@ -288,7 +269,7 @@ describe('D9 transition matrix', () => {
             failureCode: 'SUBMIT_FAILED',
             abandonReason: 'user_setup_fallback',
           },
-          { nowMs: NOW_MS, devotionalId: from === 'purchased' ? 'devo-1' : undefined },
+          { nowMs: NOW_MS },
           storage,
         );
         const allowed = ALLOWED_TRANSITIONS.has(`${from}->${to}`);
@@ -313,14 +294,13 @@ describe('D9 transition matrix', () => {
   });
 
   it('returns null and writes nothing when devotionalId differs from a stored value', () => {
-    const storage = memoryStorage(validIntent({
+    const storage = memoryIntentStorage(validIntent({
       status: 'submitted',
       jobId: 'job-1',
       devotionalId: 'server-devo',
       submittedAt: '2026-09-08T18:00:00.000Z',
     }));
     const before = storage.raw();
-    expect(transitionAutoTrialIntent('landed', {}, { nowMs: NOW_MS, devotionalId: 'other-devo' }, storage)).toBeNull();
     expect(transitionAutoTrialIntent(
       'landed',
       { devotionalId: 'other-devo' },
@@ -331,7 +311,7 @@ describe('D9 transition matrix', () => {
   });
 
   it('sets dismissedAt once while purchased or submitted', () => {
-    const storage = memoryStorage(validIntent());
+    const storage = memoryIntentStorage(validIntent());
     const first = markAutoTrialIntentDismissed({ nowMs: NOW_MS }, storage);
     expect(first?.dismissedAt).toBe(new Date(NOW_MS).toISOString());
     const second = markAutoTrialIntentDismissed({ nowMs: NOW_MS + 5_000 }, storage);
@@ -341,7 +321,7 @@ describe('D9 transition matrix', () => {
 
 describe('D10 claim adoption', () => {
   it('stores the server devotionalId on submitted and lands that same id', () => {
-    const storage = memoryStorage(validIntent());
+    const storage = memoryIntentStorage(validIntent());
     const submitted = transitionAutoTrialIntent(
       'submitted',
       { jobId: 'job-server', devotionalId: 'server-devo' },
@@ -350,7 +330,7 @@ describe('D10 claim adoption', () => {
     );
     expect(submitted?.devotionalId).toBe('server-devo');
     expect(submitted?.devotionalId).not.toBe('locally-derived');
-    const landed = transitionAutoTrialIntent('landed', {}, { nowMs: NOW_MS + 1_000, devotionalId: 'server-devo' }, storage);
+    const landed = transitionAutoTrialIntent('landed', { devotionalId: 'server-devo' }, { nowMs: NOW_MS + 1_000 }, storage);
     expect(landed?.status).toBe('landed');
     expect(landed?.devotionalId).toBe('server-devo');
   });

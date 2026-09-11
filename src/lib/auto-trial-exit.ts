@@ -11,6 +11,7 @@ import {
 import { isOnboardingSampleDevotionalId } from '@/lib/auto-trial-series';
 import { trackAutoTrialSkipped, trackTrialStarted } from '@/lib/auto-trial-telemetry';
 import { isEphemeralDeviceId } from '@/lib/device-id';
+import { getDeviceTimezone } from '@/lib/device-timezone';
 import { getDeviceId } from '@/lib/mmkv-storage';
 import { isQaToolsEnabled } from '@/lib/qa-tools';
 import { readAutoTrialSwitchSnapshot, type AutoTrialSwitchSnapshot } from '@/lib/remote-config';
@@ -49,6 +50,29 @@ export type VerifiedExitDecision =
   | { kind: 'auto'; intent: AutoTrialIntentV1; created: boolean }
   | { kind: 'fallback'; reason: AutoTrialFallbackReason };
 
+const EMIT_FALLBACK_TRIAL_STARTED: Record<AutoTrialFallbackReason, boolean> = {
+  no_entitlement: false,
+  unsupported_platform: false,
+  restore_source: false,
+  not_trial: false,
+  not_app_store: false,
+  family_shared: false,
+  missing_expiration: false,
+  missing_purchase_date: false,
+  invalid_duration: false,
+  already_expired: false,
+  stale_purchase: false,
+  intent_exists: false,
+  simulated_without_qa: false,
+  ephemeral_device_id: true,
+  missing_time_zone: true,
+  switch_off: true,
+  trial_length_not_allowed: true,
+  no_completed_profile: true,
+  has_real_series: true,
+  internal_error: false,
+};
+
 function entryFromSurface(surface: AutoTrialSurface): AutoTrialEntry {
   return surface === 'onboarding_paywall' ? 'onboarding' : 'later';
 }
@@ -71,12 +95,7 @@ function shouldEmitFallbackTrialStarted(
 ): boolean {
   if (source === 'restore') return false;
   if (facts?.entitlement?.periodType !== 'TRIAL') return false;
-  return reason === 'ephemeral_device_id'
-    || reason === 'missing_time_zone'
-    || reason === 'switch_off'
-    || reason === 'trial_length_not_allowed'
-    || reason === 'no_completed_profile'
-    || reason === 'has_real_series';
+  return EMIT_FALLBACK_TRIAL_STARTED[reason];
 }
 
 function emitExitTelemetry(
@@ -147,6 +166,18 @@ export function handleVerifiedEntitlementExit(i: {
       return { kind: 'auto', intent: existing, created: false };
     }
 
+    const facts = readTrialFacts({
+      customerInfo: i.exit.customerInfo,
+      source: i.exit.source,
+      platform: i.platform,
+      nowMs: i.nowMs,
+    });
+    const fallback = (reason: AutoTrialFallbackReason): VerifiedExitDecision => {
+      const decision: VerifiedExitDecision = { kind: 'fallback', reason };
+      emitExitTelemetry(decision, facts, entry, i.surface, i.exit.source);
+      return decision;
+    };
+
     if (existing && existing.deviceId === i.deviceId) {
       if (isAutoTrialIntentExpired(existing, i.nowMs)) {
         transitionAutoTrialIntent(
@@ -156,69 +187,33 @@ export function handleVerifiedEntitlementExit(i: {
           i.storage,
         );
       }
-      const facts = readTrialFacts({
-        customerInfo: i.exit.customerInfo,
-        source: i.exit.source,
-        platform: i.platform,
-        nowMs: i.nowMs,
-      });
-      const decision: VerifiedExitDecision = { kind: 'fallback', reason: 'intent_exists' };
-      emitExitTelemetry(decision, facts, entry, i.surface, i.exit.source);
-      return decision;
+      return fallback('intent_exists');
     }
 
     if (isSimulatedTrialCustomerInfo(i.exit.customerInfo) && !isQaToolsEnabled()) {
-      const facts = readTrialFacts({
-        customerInfo: i.exit.customerInfo,
-        source: i.exit.source,
-        platform: i.platform,
-        nowMs: i.nowMs,
-      });
-      const decision: VerifiedExitDecision = { kind: 'fallback', reason: 'simulated_without_qa' };
-      emitExitTelemetry(decision, facts, entry, i.surface, i.exit.source);
-      return decision;
+      return fallback('simulated_without_qa');
     }
 
-    const facts = readTrialFacts({
-      customerInfo: i.exit.customerInfo,
-      source: i.exit.source,
-      platform: i.platform,
-      nowMs: i.nowMs,
-    });
     if (facts.rejectReason !== null) {
-      const decision: VerifiedExitDecision = { kind: 'fallback', reason: facts.rejectReason };
-      emitExitTelemetry(decision, facts, entry, i.surface, i.exit.source);
-      return decision;
+      return fallback(facts.rejectReason);
     }
     if (isEphemeralDeviceId(i.deviceId)) {
-      const decision: VerifiedExitDecision = { kind: 'fallback', reason: 'ephemeral_device_id' };
-      emitExitTelemetry(decision, facts, entry, i.surface, i.exit.source);
-      return decision;
+      return fallback('ephemeral_device_id');
     }
     if (i.timeZone === '') {
-      const decision: VerifiedExitDecision = { kind: 'fallback', reason: 'missing_time_zone' };
-      emitExitTelemetry(decision, facts, entry, i.surface, i.exit.source);
-      return decision;
+      return fallback('missing_time_zone');
     }
     if (!i.switchSnapshot.enabled) {
-      const decision: VerifiedExitDecision = { kind: 'fallback', reason: 'switch_off' };
-      emitExitTelemetry(decision, facts, entry, i.surface, i.exit.source);
-      return decision;
+      return fallback('switch_off');
     }
     if (facts.trialDays == null || facts.trialDays > i.switchSnapshot.maxTrialDays) {
-      const decision: VerifiedExitDecision = { kind: 'fallback', reason: 'trial_length_not_allowed' };
-      emitExitTelemetry(decision, facts, entry, i.surface, i.exit.source);
-      return decision;
+      return fallback('trial_length_not_allowed');
     }
     if (entry === 'later' && i.profile?.hasCompletedOnboarding !== true) {
-      const decision: VerifiedExitDecision = { kind: 'fallback', reason: 'no_completed_profile' };
-      emitExitTelemetry(decision, facts, entry, i.surface, i.exit.source);
-      return decision;
+      return fallback('no_completed_profile');
     }
     if (entry === 'later' && i.devotionalIds.some((id) => !isOnboardingSampleDevotionalId(id))) {
-      const decision: VerifiedExitDecision = { kind: 'fallback', reason: 'has_real_series' };
-      emitExitTelemetry(decision, facts, entry, i.surface, i.exit.source);
-      return decision;
+      return fallback('has_real_series');
     }
 
     const source = i.exit.source === 'restore' ? 'purchase' : i.exit.source;
@@ -271,7 +266,7 @@ export function resolveLaterEntryExit(
       deviceId: getDeviceId(),
       nowMs,
       platform,
-      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone ?? '',
+      timeZone: getDeviceTimezone() ?? '',
       switchSnapshot: readAutoTrialSwitchSnapshot(nowMs, platform),
       profile: state.user
         ? { hasCompletedOnboarding: state.user.hasCompletedOnboarding === true }

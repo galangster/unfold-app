@@ -44,26 +44,12 @@ import {
 } from '../auto-trial-exit';
 import {
   type AutoTrialIntentV1,
-  type IntentStorage,
 } from '../auto-trial-intent';
 import { DAY_MS, QA_SIMULATED_TRIAL_APP_USER_ID } from '../trial-facts';
 import type { AutoTrialSwitchSnapshot } from '../remote-config';
+import { memoryIntentStorage } from './fixtures/memory-intent-storage';
 
 const NOW_MS = 1_700_000_000_000;
-
-function memoryStorage(initial?: AutoTrialIntentV1 | null): IntentStorage & { raw(): string | null } {
-  let value = initial ? JSON.stringify(initial) : null;
-  return {
-    getItem: jest.fn(() => value),
-    setItem: jest.fn((_key: string, next: string) => {
-      value = next;
-    }),
-    removeItem: jest.fn(() => {
-      value = null;
-    }),
-    raw: () => value,
-  };
-}
 
 function entitlement(overrides: Record<string, unknown> = {}) {
   const purchasedAtMs = NOW_MS - 30_000;
@@ -107,7 +93,7 @@ function exitArgs(overrides: Record<string, unknown> = {}) {
     switchSnapshot: ON_SNAPSHOT,
     profile: { hasCompletedOnboarding: false },
     devotionalIds: [] as string[],
-    storage: memoryStorage(),
+    storage: memoryIntentStorage(),
     ...overrides,
   };
 }
@@ -122,7 +108,7 @@ describe('F2 created intent', () => {
   it('copies the snapshot, assigns a UUID requestId, and derives entry from surface', () => {
     const purchasedAt = '2026-09-09T05:00:00.000Z';
     const purchasedAtMs = Date.parse(purchasedAt);
-    const storage = memoryStorage();
+    const storage = memoryIntentStorage();
     const decision = handleVerifiedEntitlementExit(exitArgs({
       storage,
       nowMs: purchasedAtMs + 60_000,
@@ -158,7 +144,7 @@ describe('F2 created intent', () => {
 
   it('sets simulated only when that flag is passed', () => {
     const withFlag = handleVerifiedEntitlementExit(exitArgs({ simulated: true }));
-    const withoutFlag = handleVerifiedEntitlementExit(exitArgs({ storage: memoryStorage() }));
+    const withoutFlag = handleVerifiedEntitlementExit(exitArgs({ storage: memoryIntentStorage() }));
     expect(withFlag.kind === 'auto' && withFlag.intent.simulated).toBe(true);
     expect(withoutFlag.kind === 'auto' && withoutFlag.intent.simulated).toBe(false);
   });
@@ -173,7 +159,7 @@ describe('F1 precedence', () => {
   });
 
   it('reuses an existing purchased intent even for restore and does not re-read facts', () => {
-    const storage = memoryStorage();
+    const storage = memoryIntentStorage();
     const first = handleVerifiedEntitlementExit(exitArgs({ storage }));
     expect(first.kind).toBe('auto');
     if (first.kind !== 'auto') return;
@@ -189,7 +175,7 @@ describe('F1 precedence', () => {
   });
 
   it('abandons an expired purchased intent then returns intent_exists', () => {
-    const storage = memoryStorage();
+    const storage = memoryIntentStorage();
     const created = handleVerifiedEntitlementExit(exitArgs({
       storage,
       nowMs: NOW_MS,
@@ -216,7 +202,7 @@ describe('F1 precedence', () => {
 
   it('rejects a simulated CustomerInfo when QA is off (P3)', () => {
     mockIsQaToolsEnabled.mockReturnValue(false);
-    const storage = memoryStorage();
+    const storage = memoryIntentStorage();
     const decision = handleVerifiedEntitlementExit(exitArgs({
       storage,
       exit: {
@@ -247,7 +233,7 @@ describe('F1 precedence', () => {
       }, 'has_real_series'],
     ];
     for (const [overrides, reason] of cases) {
-      const storage = memoryStorage();
+      const storage = memoryIntentStorage();
       const decision = handleVerifiedEntitlementExit(exitArgs({ storage, ...overrides }));
       expect(decision).toEqual({ kind: 'fallback', reason });
       expect(storage.raw()).toBeNull();
@@ -265,7 +251,7 @@ describe('F1 precedence', () => {
       [30 * DAY_MS, 'trial_length_not_allowed'],
     ];
     for (const [durationMs, expected, trialDays] of lengths) {
-      const storage = memoryStorage();
+      const storage = memoryIntentStorage();
       const purchasedAtMs = NOW_MS - 30_000;
       const decision = handleVerifiedEntitlementExit(exitArgs({
         storage,
@@ -288,7 +274,7 @@ describe('F1 precedence', () => {
   });
 
   it('returns internal_error when setItem throws and when later-entry store reads throw', () => {
-    const storage = memoryStorage();
+    const storage = memoryIntentStorage();
     (storage.setItem as jest.Mock).mockImplementation(() => {
       throw new Error('disk');
     });
@@ -312,7 +298,7 @@ describe('F1 precedence', () => {
     mockTrackTrialStarted.mockImplementation(() => {
       throw new Error('sink');
     });
-    const storage = memoryStorage();
+    const storage = memoryIntentStorage();
     const decision = handleVerifiedEntitlementExit(exitArgs({ storage }));
     expect(decision.kind).toBe('auto');
     if (decision.kind === 'auto') expect(decision.created).toBe(true);
@@ -328,7 +314,7 @@ describe('F3 telemetry', () => {
   });
 
   it('emits one trial_started on create and nothing on reuse, including restore reuse', () => {
-    const storage = memoryStorage();
+    const storage = memoryIntentStorage();
     const first = handleVerifiedEntitlementExit(exitArgs({ storage }));
     expect(mockTrackTrialStarted).toHaveBeenCalledTimes(1);
     expect(mockTrackTrialStarted).toHaveBeenCalledWith(expect.objectContaining({
@@ -351,7 +337,7 @@ describe('F3 telemetry', () => {
 
   it('emits skipped plus at most one trial_started false for eligible fallbacks, never for restore', () => {
     const skipped = handleVerifiedEntitlementExit(exitArgs({
-      storage: memoryStorage(),
+      storage: memoryIntentStorage(),
       deviceId: 'ephemeral-locked',
     }));
     expect(skipped).toEqual({ kind: 'fallback', reason: 'ephemeral_device_id' });
@@ -364,7 +350,7 @@ describe('F3 telemetry', () => {
     mockTrackTrialStarted.mockClear();
     mockTrackAutoTrialSkipped.mockClear();
     handleVerifiedEntitlementExit(exitArgs({
-      storage: memoryStorage(),
+      storage: memoryIntentStorage(),
       exit: { source: 'restore', customerInfo: info(entitlement()) },
     }));
     expect(mockTrackAutoTrialSkipped).toHaveBeenCalledTimes(1);
@@ -373,7 +359,7 @@ describe('F3 telemetry', () => {
 
   it('allows purchase_source lateGrant on create', () => {
     handleVerifiedEntitlementExit(exitArgs({
-      storage: memoryStorage(),
+      storage: memoryIntentStorage(),
       exit: { source: 'lateGrant', customerInfo: info(entitlement()) },
     }));
     expect(mockTrackTrialStarted).toHaveBeenCalledWith(expect.objectContaining({
