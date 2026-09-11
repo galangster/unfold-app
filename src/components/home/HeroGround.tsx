@@ -30,7 +30,7 @@ export function HeroGround({ children, active, style }: Props) {
   };
 
   return (
-    <View style={[{ position: 'relative' }, style]} onLayout={handleLayout}>
+    <View style={[{ position: 'relative', alignSelf: 'stretch' }, style]} onLayout={handleLayout}>
       <MaskedView
         pointerEvents="none"
         style={{

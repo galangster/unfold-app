@@ -1,7 +1,7 @@
 export const HERO_GROUND = {
-  leftAlpha: 0.94, midAlpha: 0.72, midStop: 0.48, endStop: 0.82,
+  leftAlpha: 0.94, midAlpha: 0.72, midStop: 0.56, endStop: 0.92,
   featherTop: 20, featherBottom: 36,
-  textMaxWidthPct: 68,
+  textMaxWidthPct: 86,
 } as const;
 
 export const GLASS = {
