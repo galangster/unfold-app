@@ -389,7 +389,7 @@ Block remote requests from fixtures. Keep fixture routes and purchase mocks out 
   - the paywall QA control
 
   Together they feed a fake trial CustomerInfo into the real purchase handler with source `purchase`.
-- The fixture route `src/app/dev/trial-series.tsx` ships under the same exception. This is pending Nick's confirmation (OI-3).
+- The fixture route `src/app/dev/trial-series.tsx` ships under the same exception. Nick confirmed this on 2026-09-11 (OI-3).
 - Gate: all of them sit behind `isQaToolsEnabled()`. A production build profile can never enable them (`src/lib/build-profile.ts`, `resolveQaToolsEnabled`).
 - Proof: `qa-simulated-trial.test.ts`, `qa-simulated-trial-imports.test.ts`, and `bun run verify:profiles`.
 - One real sandbox purchase on a physical device still runs before release.
