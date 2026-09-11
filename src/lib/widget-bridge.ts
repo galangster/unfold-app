@@ -13,6 +13,7 @@ import UnfoldDashboardWidget from '@/widgets/ios/UnfoldDashboard';
 import UnfoldReadingSessionActivity from '@/widgets/ios/UnfoldReadingSession';
 import { useUnfoldStore } from '@/lib/store';
 import type { LiveActivity } from 'expo-widgets';
+import { getServerOwnedSeriesTotalDays } from '@/lib/devotional-series-boundary';
 import { buildWidgetTimelineEntries, getWeeklyProgress } from '@/lib/widget-timeline';
 import { hasReadTodayGlobal } from './home-devotional-state';
 
@@ -72,6 +73,7 @@ function buildSyncFingerprint(now: Date): string {
     hasReadToday,
     dayId: devotional ? `${devotional.id}:${devotional.currentDay}` : null,
     dayTitle: currentDay?.title ?? null,
+    totalDays: getServerOwnedSeriesTotalDays(devotional),
     weeklyProgress: getWeeklyProgress(state.devotionals ?? [], now),
     // FAP-LIB-4: readingDuration is rendered by widgets (totalMinutes field) but was
     // omitted from the fingerprint, so changing reading duration in settings never
@@ -233,7 +235,7 @@ export function updateReadingSession(elapsedMinutes: number, isListening?: boole
       devotionalTitle: devotional?.title ?? 'Unfold',
       dayTitle: currentDay?.title ?? 'Reading...',
       dayNumber: devotional?.currentDay ?? 1,
-      totalDays: devotional?.totalDays ?? 7,
+      totalDays: getServerOwnedSeriesTotalDays(devotional) || 7,
       elapsedMinutes,
       totalMinutes: state.user?.readingDuration ?? 5,
       isListening: isListening ?? false,

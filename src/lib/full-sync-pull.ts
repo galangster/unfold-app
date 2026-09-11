@@ -1,6 +1,7 @@
 import NetInfo from '@react-native-community/netinfo';
 
 import { getAuthHeaders, PRIMARY_BACKEND_URL } from './api-config';
+import { asNextPick, isAutoTrialSeries, isOnboardingSampleDevotionalId } from './auto-trial-series';
 import { mmkvStorage } from './mmkv-storage';
 import { logger } from './logger';
 import { useUnfoldStore } from './store';
@@ -575,6 +576,11 @@ function mapDevotionalDay(record: SyncPulledRecord): DevotionalDay | null {
   const quotableLine = asString(row.quotableLine) ?? asString(content.quotableLine);
   if (!devotionalId || !dayNumber || !title || !scriptureReference || !scriptureText || !bodyText || !quotableLine) return null;
 
+  const nextPickLineRaw = content.nextPickLine ?? row.nextPickLine;
+  const nextPickLine = typeof nextPickLineRaw === 'string' && nextPickLineRaw.trim().length > 0
+    ? nextPickLineRaw.trim()
+    : undefined;
+
   return {
     ...content,
     id: record.id,
@@ -587,6 +593,9 @@ function mapDevotionalDay(record: SyncPulledRecord): DevotionalDay | null {
     quotableLine,
     isRead: asBoolean(row.isRead) ?? asBoolean(content.isRead) ?? false,
     readAt: asString(row.readAt) ?? asString(content.readAt),
+    shapedByCheckIn: content.shapedByCheckIn === true ? true : undefined,
+    nextPick: asNextPick(content.nextPick),
+    nextPickLine,
     updatedAt: recordUpdatedAt(record),
   } as DevotionalDay;
 }
@@ -643,9 +652,14 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
       if (!shouldApply(record, current, 'devotionals', pendingByRecord)) continue;
       const mapped = mapDevotional(record, current);
       if (!mapped) continue;
-      devotionals = current
-        ? devotionals.map((item) => (item.id === record.id ? mapped : item))
-        : [mapped, ...devotionals];
+      if (current) {
+        devotionals = devotionals.map((item) => (item.id === record.id ? mapped : item));
+        continue;
+      }
+      if (isOnboardingSampleDevotionalId(mapped.id) && devotionals.some((item) => isAutoTrialSeries(item))) {
+        continue;
+      }
+      devotionals = [mapped, ...devotionals];
     }
 
     for (const record of changes.devotional_days ?? []) {

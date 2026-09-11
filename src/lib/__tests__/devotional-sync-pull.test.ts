@@ -272,6 +272,80 @@ describe('devotional sync pull recovery', () => {
     });
   });
 
+  it('J6 normalizes shapedByCheckIn and nextPick after the content spread', () => {
+    const dayData = {
+      id: 'day-devotional-1-2',
+      updatedAt: '2026-04-25T11:58:00.000Z',
+      deleted: false,
+      data: {
+        devotionalId: 'devotional-1',
+        dayNumber: 2,
+        title: 'Day 2',
+        scriptureReference: 'John 1:1',
+        scriptureText: 'Text',
+        bodyText: 'Body',
+        quotableLine: 'Line',
+        content: {},
+      },
+    };
+
+    const valid = extractPulledDevotionalContent({
+      timestamp: '2026-04-25T12:00:00.000Z',
+      changes: {
+        devotional_days: [{
+          ...dayData,
+          data: {
+            ...dayData.data,
+            content: {
+              shapedByCheckIn: true,
+              nextPick: { theme: 't', themeName: 'n', type: 'x', suggestedLength: 7, line: 'Next' },
+              nextPickLine: '  Keep this  ',
+            },
+          },
+        }],
+      },
+    }, 'devotional-1');
+    expect(valid.days[0]?.shapedByCheckIn).toBe(true);
+    expect(valid.days[0]?.nextPick?.line).toBe('Next');
+    expect(valid.days[0]?.nextPickLine).toBe('Keep this');
+
+    const invalid = extractPulledDevotionalContent({
+      timestamp: '2026-04-25T12:00:00.000Z',
+      changes: {
+        devotional_days: [{
+          ...dayData,
+          data: {
+            ...dayData.data,
+            content: {
+              shapedByCheckIn: 'true',
+              nextPick: { theme: 't', themeName: 'n', type: 'x', suggestedLength: 30, line: 'Next' },
+              nextPickLine: '   ',
+            },
+          },
+        }],
+      },
+    }, 'devotional-1');
+    expect(invalid.days[0]?.shapedByCheckIn).toBeUndefined();
+    expect(invalid.days[0]?.nextPick).toBeUndefined();
+    expect(invalid.days[0]?.nextPickLine).toBeUndefined();
+
+    const emptyLine = extractPulledDevotionalContent({
+      timestamp: '2026-04-25T12:00:00.000Z',
+      changes: {
+        devotional_days: [{
+          ...dayData,
+          data: {
+            ...dayData.data,
+            content: {
+              nextPick: { theme: 't', themeName: 'n', type: 'x', suggestedLength: 7, line: '' },
+            },
+          },
+        }],
+      },
+    }, 'devotional-1');
+    expect(emptyLine.days[0]?.nextPick).toBeUndefined();
+  });
+
   it('posts an authenticated full pull and extracts the requested devotional', async () => {
     seedLocalDevotional();
     mockFetch.mockResolvedValue({

@@ -10,6 +10,7 @@
  *   "midnight" entry are both built by buildWidgetSharedProps.
  */
 import type { Devotional } from '@/lib/store';
+import { getServerOwnedSeriesTotalDays } from './devotional-series-boundary';
 import { hasReadTodayGlobal } from './home-devotional-state';
 
 export type WidgetSharedProps = {
@@ -94,7 +95,7 @@ export function buildWidgetSharedProps(slice: WidgetStateSlice, forDate: Date): 
     devotionalTitle: devotional?.title ?? 'Unfold',
     dayTitle: currentDay?.title ?? 'Start your series',
     dayNumber: devotional?.currentDay ?? 0,
-    totalDays: devotional?.totalDays ?? 0,
+    totalDays: getServerOwnedSeriesTotalDays(devotional),
     scriptureReference: currentDay?.scriptureReference ?? '',
     scriptureText: currentDay?.scriptureText ?? '',
     quotableLine: currentDay?.quotableLine ?? '',
