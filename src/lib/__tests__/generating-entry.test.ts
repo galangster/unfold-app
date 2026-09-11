@@ -205,6 +205,16 @@ describe('H10 auto-trial-handoff', () => {
     })).toEqual({ kind: 'auto-trial-handoff', intentId: 'intent-1' });
   });
 
+  it('submits a failed intent when a fresh new-series request id is present', () => {
+    expect(resolveGeneratingEntry({
+      inflight: null,
+      params: {},
+      sessionDevotionalId: null,
+      autoTrialIntent: { intentId: 'intent-1', status: 'failed', jobId: 'job-auto', devotionalId: 'dev-auto' },
+      initialGenerationRequestId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+    })).toEqual({ kind: 'submit' });
+  });
+
   it('hands off purchased or failed intents with no params', () => {
     expect(resolveGeneratingEntry({
       inflight: null,

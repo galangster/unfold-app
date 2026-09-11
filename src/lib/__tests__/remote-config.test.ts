@@ -62,6 +62,14 @@ describe('E1 remote-config outcomes', () => {
       ...VALID_BODY,
       autoTrialSeries: { ...VALID_BODY.autoTrialSeries, platforms: ['ios', 'web'] },
     })).toBeNull();
+    expect(parseRemoteConfig({
+      ...VALID_BODY,
+      autoTrialSeries: { ...VALID_BODY.autoTrialSeries, maxTrialDays: 14 },
+    })).toBeNull();
+    expect(parseRemoteConfig({
+      ...VALID_BODY,
+      autoTrialSeries: { ...VALID_BODY.autoTrialSeries, maxTrialDays: 30 },
+    })).toBeNull();
 
     const fetchImpl = jest.fn(async () => jsonResponse(withoutSource));
     const state = await refreshRemoteConfig({ fetchImpl, nowMs: 1_000 });

@@ -54,6 +54,7 @@ export function resolveGeneratingEntry({
   sessionDevotionalId,
   landedDevotionalIds = [],
   autoTrialIntent = null,
+  initialGenerationRequestId = null,
 }: {
   inflight: InflightGenerationJob | null;
   params: GeneratingRouteParams | null | undefined;
@@ -62,20 +63,23 @@ export function resolveGeneratingEntry({
   /** Ids of the series already in the store; a pushed series among them has landed. */
   landedDevotionalIds?: readonly string[];
   autoTrialIntent?: Pick<AutoTrialIntentV1, 'intentId' | 'status' | 'jobId' | 'devotionalId'> | null;
+  /** A new-series request id means /generating should submit that flow, not the old auto job. */
+  initialGenerationRequestId?: string | null;
 }): GeneratingEntry {
   if (autoTrialIntent) {
     const { status, intentId, jobId, devotionalId } = autoTrialIntent;
-    if (status === 'purchased' || status === 'failed') {
+    const skipFailedHandoff = status === 'failed' && Boolean(initialGenerationRequestId);
+    if (!skipFailedHandoff && (status === 'purchased' || status === 'failed')) {
       return { kind: 'auto-trial-handoff', intentId };
     }
-    if (status === 'submitted' || status === 'landed') {
+    if (!skipFailedHandoff && (status === 'submitted' || status === 'landed')) {
       const pushedJobId = firstParam(params?.jobId);
       const pushedDevotionalId = firstParam(params?.devotionalId);
-      if (
-        (pushedJobId != null && pushedJobId === jobId)
-        || (pushedDevotionalId != null && pushedDevotionalId === devotionalId)
-        || inflight?.jobId === jobId
-      ) {
+      const namesOtherJob = pushedJobId != null
+        && pushedJobId !== jobId
+        && inflight?.jobId !== jobId
+        && pushedDevotionalId !== devotionalId;
+      if (!namesOtherJob) {
         return { kind: 'auto-trial-handoff', intentId };
       }
     }

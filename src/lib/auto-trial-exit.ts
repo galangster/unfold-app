@@ -62,7 +62,7 @@ const EMIT_FALLBACK_TRIAL_STARTED: Record<AutoTrialFallbackReason, boolean> = {
   invalid_duration: false,
   already_expired: false,
   stale_purchase: false,
-  intent_exists: false,
+  intent_exists: true,
   simulated_without_qa: false,
   ephemeral_device_id: true,
   missing_time_zone: true,

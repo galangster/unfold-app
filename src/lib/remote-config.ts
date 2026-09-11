@@ -28,7 +28,7 @@ export interface AutoTrialSwitchSnapshot {
   reason: 'on' | 'flag_off' | 'platform_off' | 'not_fetched' | 'fetch_failed' | 'stale';
 }
 
-const ALLOWED_DAYS = new Set<AllowedTrialDays>([3, 7, 14, 30]);
+const ALLOWED_DAYS = new Set<AllowedTrialDays>([3, 7]);
 
 let state: RemoteConfigState = { status: 'idle' };
 let inflight: Promise<RemoteConfigState> | null = null;

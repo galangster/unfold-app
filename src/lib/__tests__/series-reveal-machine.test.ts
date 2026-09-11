@@ -1,6 +1,7 @@
 import type { AutoTrialIntentV1 } from '../auto-trial-intent';
 import { MAX_CONSECUTIVE_POLL_NETWORK_ERRORS } from '../generation-poll-outcome';
 import {
+  canRetrySeriesReveal,
   reduceSeriesReveal,
   type SeriesRevealEvent,
   type SeriesRevealState,
@@ -295,6 +296,33 @@ describe('H2 reduceSeriesReveal events', () => {
     ]);
   });
 
+  it('treats a 409 ALREADY_GENERATED_TODAY without a decline code as submit_failed', () => {
+    const from: SeriesRevealState = {
+      kind: 'generating',
+      jobId: null,
+      devotionalId: null,
+      consecutiveNetworkErrors: 0,
+    };
+    const result = reduce(from, {
+      type: 'submit_error',
+      status: 409,
+      code: 'ALREADY_GENERATED_TODAY',
+      existingJobId: null,
+      nowMs: 1,
+    });
+    expect(result.state).toEqual({
+      kind: 'failed',
+      jobId: null,
+      reason: 'submit_failed',
+      retryAtMs: null,
+    });
+    expect(result.effects).toEqual([]);
+    expect(result.effects).not.toContainEqual(expect.objectContaining({
+      type: 'transition',
+      to: 'abandoned',
+    }));
+  });
+
   it('declines 409 switch_off as server_unavailable', () => {
     const from: SeriesRevealState = {
       kind: 'generating',
@@ -565,6 +593,18 @@ describe('H2 reduceSeriesReveal events', () => {
     };
     const result = reduce(failed, { type: 'try_again', nowMs: 1 });
     expect(result.effects).toEqual([{ type: 'poll', jobId: JOB_ID }]);
+  });
+
+  it('hides Try again while the rate-limit window is open', () => {
+    const limited: SeriesRevealState = {
+      kind: 'failed',
+      jobId: null,
+      reason: 'rate_limited',
+      retryAtMs: 60_000,
+    };
+    expect(canRetrySeriesReveal(limited, 1)).toBe(false);
+    expect(canRetrySeriesReveal(limited, 60_000)).toBe(true);
+    expect(reduce(limited, { type: 'try_again', nowMs: 1 })).toEqual({ state: limited, effects: [] });
   });
 
   it('resubmits submit_failed on try_again', () => {

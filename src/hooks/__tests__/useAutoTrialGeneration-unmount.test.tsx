@@ -65,7 +65,10 @@ import {
   createAutoTrialIntent,
   markAutoTrialIntentDismissed,
   readAutoTrialIntent,
+  transitionAutoTrialIntent,
 } from '@/lib/auto-trial-intent';
+import { pullDevotionalContent } from '@/lib/devotional-sync-pull';
+import { ApiError } from '@/lib/generation-api';
 import { readInflightGenerationJob } from '@/lib/inflight-generation-job';
 import { mmkvStorage } from '@/lib/mmkv-storage';
 import { useUnfoldStore, type UserProfile } from '@/lib/store';
@@ -173,6 +176,95 @@ describe('H13 useAutoTrialGeneration unmount', () => {
     });
     expect(mockRetry).toHaveBeenCalledWith('job-1');
     expect(readInflightGenerationJob()?.jobId).toBe('job-1');
+  });
+
+  it('lands a job-gone pull recovery that has Day 1 and no arc', async () => {
+    mockPoll.mockRejectedValue(new ApiError('Poll job failed: 404 — Job not found', 404, 'NOT_FOUND'));
+    (pullDevotionalContent as jest.Mock).mockResolvedValue({
+      days: [{
+        dayNumber: 1,
+        title: 'Day 1',
+        scriptureReference: 'Psalm 1:1',
+        scriptureText: 'Blessed is the one',
+        bodyText: 'Body',
+        quotableLine: 'Line',
+        isRead: false,
+      }],
+      timestamp: 't',
+    });
+    const created = seedPurchased();
+    transitionAutoTrialIntent('submitted', { jobId: 'job-gone', devotionalId: 'devo-pull' }, { nowMs: NOW });
+    await act(async () => {
+      create(<Probe intentId={created.intentId} />);
+    });
+    await act(async () => {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 20);
+      });
+    });
+    const landed = readAutoTrialIntent();
+    // The generating screen is the reveal now (conformance C3), so a landing
+    // advances straight to revealed; the point of M2 is that it left submitted.
+    expect(landed?.status).toBe('revealed');
+    expect(landed?.revealedAt).not.toBeNull();
+  });
+
+  it('does not dispatch submit_error after unmount', async () => {
+    let rejectSubmit!: (error: Error) => void;
+    mockSubmit.mockImplementation(() => new Promise((_, reject) => {
+      rejectSubmit = reject;
+    }));
+    const intent = seedPurchased();
+    let tree!: ReturnType<typeof create>;
+    await act(async () => {
+      tree = create(<Probe intentId={intent.intentId} />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    // Unmount inside act so the hook's effect cleanup (mountedRef = false) runs
+    // before the rejection is delivered.
+    act(() => {
+      tree.unmount();
+    });
+    await act(async () => {
+      rejectSubmit(new ApiError('dup', 409, 'ALREADY_GENERATED_TODAY', 'job-existing'));
+      await Promise.resolve();
+      await Promise.resolve();
+      await new Promise((resolve) => {
+        setTimeout(resolve, 20);
+      });
+    });
+    expect(mockPoll).not.toHaveBeenCalled();
+    expect(readAutoTrialIntent()?.status).toBe('purchased');
+  });
+
+  it('does not overwrite the stored devotionalLength on auto submit', async () => {
+    useUnfoldStore.setState({
+      user: {
+        name: 'Nick',
+        aboutMe: 'x',
+        currentSituation: 'y',
+        emotionalState: 'z',
+        spiritualSeeking: 's',
+        hasCompletedOnboarding: true,
+        devotionalLength: 7,
+      } as unknown as UserProfile,
+    });
+    mockSubmit.mockResolvedValue({ jobId: 'job-keep-length', devotionalId: 'devo-keep' });
+    const intent = seedPurchased();
+    await act(async () => {
+      create(<Probe intentId={intent.intentId} />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await new Promise((resolve) => {
+        setTimeout(resolve, 20);
+      });
+    });
+    expect(useUnfoldStore.getState().user?.devotionalLength).toBe(7);
+    expect(readAutoTrialIntent()?.status).toBe('submitted');
   });
 });
 
