@@ -91,7 +91,7 @@ MASK=(f'<Shape x="0" y="{H*0.55:.0f}" name="BottomMask" id="0:3"><Rectangle widt
 class Scene:
     """Collects nodes and keyed objects, hands out ids, writes the document."""
     def __init__(self,artboard,seed=7):
-        self.artboard=artboard; self.nodes=[]; self.keyed=[]; self.nid=100; random.seed(seed)
+        self.artboard=artboard; self.nodes=[]; self.keyed=[]; self.assets=[]; self.nid=100; random.seed(seed)
     def add(self,markup_fn,*keyed_props):
         """markup_fn(id) -> element markup. keyed_props: KeyedProperty strings for that id."""
         i=f"0:{self.nid}"; self.nid+=1; self.nodes.append(markup_fn(i))
@@ -103,6 +103,11 @@ class Scene:
         for k in range(n):
             x=random.uniform(*xr); y=random.uniform(*yr); L=random.choice(CYCLES[:6]); ph=random.randint(0,L); r=random.choice(sizes); p=random.uniform(*peak)
             self.add(lambda i,x=x,y=y,r=r:shape(f"Mote{k}",ellipse(2*r)+fill(VM['artwork'],1),x,y,i),lifecycle(Y,y,-rise,p,L,ph))
+    def script(self,name,file,x=0,y=0,accent=True):
+        """A ScriptedDrawable running `file` (Luau Node protocol) with an `accent` color input bound to accentColor."""
+        aid=f"0:{self.nid}"; self.nid+=1; self.assets.append(f'<ScriptAsset file="{file}" name="{name}" id="{aid}"/>')
+        inp=f'<ScriptInputColor propertyValue="{GOLD}" name="accent">{bind(VM["accent"],836)}</ScriptInputColor>' if accent else ''
+        return self.add(lambda i:f'<ScriptedDrawable x="{x}" y="{y}" scriptAssetId="{aid}" name="{name}" id="{i}">{inp}</ScriptedDrawable>')
     def write(self,out="scene.rml"):
         doc=f'''<Rive version="1" kind="fragment">
 <Artboard defaultStateMachineId="0:7" viewModelId="0:40" viewModelInstanceId="0:41" clip="true" width="{W}" height="{H}" name="{self.artboard}" id="0:2">
@@ -119,6 +124,8 @@ class Scene:
 <ViewModelInstance exports="true" name="Default" id="0:41">
 <ViewModelInstanceColor propertyValue="{GOLD}" viewModelPropertyId="0:42"/><ViewModelInstanceColor propertyValue="{GOLD}" viewModelPropertyId="0:43"/><ViewModelInstanceColor propertyValue="00000000" viewModelPropertyId="0:44"/>
 <ViewModelInstanceColor propertyValue="000A0A0A" viewModelPropertyId="0:45"/><ViewModelInstanceColor propertyValue="FF0A0A0A" viewModelPropertyId="0:46"/><ViewModelInstanceColor propertyValue="{GOLD}" viewModelPropertyId="0:47"/>
-</ViewModelInstance></ViewModel></Rive>
+</ViewModelInstance></ViewModel>
+{"".join(self.assets)}
+</Rive>
 '''
         open(out,"w").write(doc); return len(doc)

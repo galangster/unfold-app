@@ -84,3 +84,12 @@ Built with `rive-src/lib/unfold_rml.py` and `rive-src/build-all.sh`. Not wired i
 | grass | eleven single-arc blades in one wind, drifting seeds | shipped wind-leaves | 5 |
 
 Lessons logged during the rounds: a cycle's end keyframe must sit one frame before the next cycle's start or the runtime drops one and the element sticks; rare events use `burst`, not a short `lifecycle`; cubic handle angles on open paths are the usual cause of kinks, so prefer two-vertex arcs.
+
+## Round two lesson (2026-09-11)
+
+Nick on the first set: "none of these feel cohesive, like actual art pieces... they really weren't animated." The rubric measured composition, not life. What changed for moon and mountains v2, and what every future scene does:
+
+- **Life comes from scripts, not keyframes.** A `ScriptedDrawable` (Luau `Node` protocol) spawns, moves, and kills elements every frame: bands that cross and die, stars that breathe, a flock that passes. Keyframed sway over a two-minute loop reads as still.
+- **Detail is engraving.** Fine clipped hatching, cross-hatch, and slope strokes give a drawn hero the density of an illustration while staying hairline and stroke-only. `ClippingShape` clips a hatch field to a silhouette; feathered fills do not render, so glows are radial gradients with a transparent outer stop.
+- **Judge motion on a one-second contact sheet of the clip** (`ffmpeg select+tile`), never on the 8-frame strip alone.
+- Scripts read the accent through a `ScriptInputColor` bound to `accentColor`; light and dark still work with no app change.
