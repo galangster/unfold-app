@@ -3,6 +3,19 @@ import * as path from 'path';
 import React, { useEffect } from 'react';
 import { useCreationGate } from '../useCreationGate';
 
+// useCreationGate now reaches the auto-trial exit decision, whose storage seam loads netinfo.
+jest.mock('@react-native-community/netinfo', () => ({ addEventListener: jest.fn(() => jest.fn()) }));
+jest.mock('expo-file-system', () => ({ File: jest.fn(), Paths: { cache: '' }, Directory: jest.fn() }));
+jest.mock('expo-application', () => ({ nativeApplicationVersion: '1.0.0', nativeBuildVersion: '1' }));
+const mockResolveLaterEntryExit = jest.fn();
+const mockRequestLaterEntryNotifyAsk = jest.fn(async () => undefined);
+jest.mock('@/lib/auto-trial-exit', () => ({
+  resolveLaterEntryExit: (...args: unknown[]) => mockResolveLaterEntryExit(...args),
+}));
+jest.mock('@/lib/notification-ask', () => ({
+  requestLaterEntryNotifyAsk: (...args: unknown[]) => mockRequestLaterEntryNotifyAsk(...args),
+}));
+
 const renderer = jest.requireActual('react-test-renderer');
 const { act } = renderer;
 

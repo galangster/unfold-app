@@ -1,4 +1,5 @@
 import {
+  AUTO_TRIAL_SKIP_STEP_IDS,
   buildOnboardingSampleGenerationRequest,
   formatDateOnly,
   formatDateOnlyForDisplay,
@@ -7,6 +8,8 @@ import {
   getInitialOnboardingStepId,
   getOnboardingStepLayoutMode,
   isFullScreenOnboardingStepType,
+  resolveOnboardingBackTarget,
+  resolveOnboardingResumeStep,
   resolveQuickDateChip,
   addKeyPerson,
   KEY_PEOPLE_MAX_COUNT,
@@ -23,6 +26,46 @@ import {
   shouldShowOnboardingTopContinue,
   shouldStartOnboardingSampleGeneration,
 } from '../onboarding-step-helpers';
+
+const FIRST_RUN_STEP_IDS = [
+  'hook',
+  'solution',
+  'unfoldIntro',
+  'name',
+  'aboutMe',
+  'stylePreferences1',
+  'stylePreferences2',
+  'relationshipWithGod',
+  'bibleFrequency',
+  'shockStat',
+  'growthGraph',
+  'growthGoals',
+  'obstacles',
+  'keyPeople',
+  'aspiration',
+  'vulnerabilityValidation',
+  'mirrorBack',
+  'featureSummary',
+  'founderNote',
+  'devotionalSegue',
+  'readDevotional',
+  'celebration',
+  'commitment1',
+  'commitment2',
+  'threeStepPaywall',
+  'purchaseConfirmation',
+  'themeType',
+  'studySubject',
+  'currentSituation',
+  'diagnosticRound',
+  'spiritualSeeking',
+  'upcomingEvent',
+  'readingDuration',
+  'devotionalLength',
+  'reminderTime',
+];
+
+const FIRST_RUN_STEPS = FIRST_RUN_STEP_IDS.map((id) => ({ id }));
 
 describe('onboarding step helpers', () => {
   const allSteps = [
@@ -634,6 +677,145 @@ describe('onboarding step helpers', () => {
 
     it('returns the input unchanged when malformed', () => {
       expect(formatDateOnlyForDisplay('not-a-date')).toBe('not-a-date');
+    });
+  });
+
+  describe('G1 auto skip', () => {
+    it('drops all 8 skip ids on a first run when active, and reminderTime is last', () => {
+      const filtered = getFilteredOnboardingSteps(FIRST_RUN_STEPS, null, undefined, { active: true });
+      const ids = filtered.map((step) => step.id);
+      expect([...AUTO_TRIAL_SKIP_STEP_IDS]).toEqual([
+        'themeType',
+        'studySubject',
+        'currentSituation',
+        'diagnosticRound',
+        'spiritualSeeking',
+        'upcomingEvent',
+        'readingDuration',
+        'devotionalLength',
+      ]);
+      for (const skipId of AUTO_TRIAL_SKIP_STEP_IDS) {
+        expect(ids).not.toContain(skipId);
+      }
+      expect(ids.at(-1)).toBe('reminderTime');
+    });
+
+    it('keeps today\'s returning-user output when hasCompletedOnboarding is true and active', () => {
+      const existingUser = {
+        hasCompletedOnboarding: true,
+        name: 'Nick',
+        aboutMe: 'Builder',
+      };
+
+      const filtered = getFilteredOnboardingSteps(allSteps, existingUser, {
+        selectedMainOption: 'guided',
+      }, { active: true });
+
+      expect(filtered.map((step) => step.id)).toEqual([
+        'relationshipWithGod',
+        'bibleFrequency',
+        'themeType',
+        'currentSituation',
+      ]);
+    });
+  });
+
+  describe('G3 back target', () => {
+    it('returns null when purchased and the previous id is purchaseConfirmation or threeStepPaywall', () => {
+      expect(resolveOnboardingBackTarget({
+        stepIds: ['threeStepPaywall', 'purchaseConfirmation', 'reminderTime'],
+        currentStepId: 'reminderTime',
+        purchasedDuringOnboarding: true,
+      })).toBeNull();
+
+      expect(resolveOnboardingBackTarget({
+        stepIds: ['commitment1', 'threeStepPaywall', 'purchaseConfirmation'],
+        currentStepId: 'purchaseConfirmation',
+        purchasedDuringOnboarding: true,
+      })).toBeNull();
+    });
+
+    it('returns the previous id when not purchased', () => {
+      expect(resolveOnboardingBackTarget({
+        stepIds: ['threeStepPaywall', 'purchaseConfirmation', 'themeType'],
+        currentStepId: 'themeType',
+        purchasedDuringOnboarding: false,
+      })).toBe('purchaseConfirmation');
+    });
+  });
+
+  describe('G2 resume floor', () => {
+    const autoList = getFilteredOnboardingSteps(
+      FIRST_RUN_STEPS,
+      null,
+      undefined,
+      { active: true },
+    ).map((step) => step.id);
+    const setupList = FIRST_RUN_STEP_IDS;
+
+    it('resumes purchaseConfirmation + purchased to reminderTime on the auto list and themeType on setup', () => {
+      expect(resolveOnboardingResumeStep({
+        savedStepId: 'purchaseConfirmation',
+        allStepIds: FIRST_RUN_STEP_IDS,
+        filteredStepIds: autoList,
+        purchasedDuringOnboarding: true,
+      })).toBe('reminderTime');
+
+      expect(resolveOnboardingResumeStep({
+        savedStepId: 'purchaseConfirmation',
+        allStepIds: FIRST_RUN_STEP_IDS,
+        filteredStepIds: setupList,
+        purchasedDuringOnboarding: true,
+      })).toBe('themeType');
+    });
+
+    it('keeps a saved reminderTime on the auto list', () => {
+      expect(resolveOnboardingResumeStep({
+        savedStepId: 'reminderTime',
+        allStepIds: FIRST_RUN_STEP_IDS,
+        filteredStepIds: autoList,
+        purchasedDuringOnboarding: true,
+      })).toBe('reminderTime');
+    });
+
+    it('never resumes a purchased walk-through onto commitment1 or threeStepPaywall', () => {
+      for (const savedStepId of ['commitment1', 'threeStepPaywall'] as const) {
+        expect(resolveOnboardingResumeStep({
+          savedStepId,
+          allStepIds: FIRST_RUN_STEP_IDS,
+          filteredStepIds: autoList,
+          purchasedDuringOnboarding: true,
+        })).not.toBe('commitment1');
+        expect(resolveOnboardingResumeStep({
+          savedStepId,
+          allStepIds: FIRST_RUN_STEP_IDS,
+          filteredStepIds: autoList,
+          purchasedDuringOnboarding: true,
+        })).not.toBe('threeStepPaywall');
+        expect(resolveOnboardingResumeStep({
+          savedStepId,
+          allStepIds: FIRST_RUN_STEP_IDS,
+          filteredStepIds: setupList,
+          purchasedDuringOnboarding: true,
+        })).not.toBe('commitment1');
+        expect(resolveOnboardingResumeStep({
+          savedStepId,
+          allStepIds: FIRST_RUN_STEP_IDS,
+          filteredStepIds: setupList,
+          purchasedDuringOnboarding: true,
+        })).not.toBe('threeStepPaywall');
+      }
+    });
+
+    it('gives themeType after a purchased intent past expiresAt is abandoned at mount', () => {
+      // Mount abandon lives in onboarding.tsx (not this lane). After abandon,
+      // autoTrialMode is false, so resume uses the setup list.
+      expect(resolveOnboardingResumeStep({
+        savedStepId: 'purchaseConfirmation',
+        allStepIds: FIRST_RUN_STEP_IDS,
+        filteredStepIds: setupList,
+        purchasedDuringOnboarding: true,
+      })).toBe('themeType');
     });
   });
 });

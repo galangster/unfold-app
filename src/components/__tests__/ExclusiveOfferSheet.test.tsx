@@ -261,6 +261,7 @@ async function mountSheet(props: {
   onDismiss: jest.Mock;
   onPurchaseSuccess?: jest.Mock;
   context?: 'onboarding' | 'churned';
+  surface?: 'onboarding_paywall' | 'paywall_route' | 'churned_sheet';
 }) {
   const { context = 'onboarding', ...rest } = props;
   let tree: any;
@@ -275,6 +276,7 @@ async function renderSheet(props: {
   onDismiss: jest.Mock;
   onPurchaseSuccess?: jest.Mock;
   context?: 'onboarding' | 'churned';
+  surface?: 'onboarding_paywall' | 'paywall_route' | 'churned_sheet';
   expectPrice?: string;
 }) {
   const { expectPrice = '$59.99', ...rest } = props;
@@ -473,6 +475,85 @@ describe('ExclusiveOfferSheet offering-failure state', () => {
     await waitFor(() => textOf(tree).includes('View Plans'), 'the failed query to surface an escape');
 
     expect(tree.root.findAllByType(ActivityIndicator)).toHaveLength(0);
+  });
+});
+
+describe('F5 ExclusiveOfferSheet entitlement exits', () => {
+  it('sends offer on purchase and restore on a plain restore', async () => {
+    mockPurchasePackage.mockResolvedValue(premiumCustomerInfo());
+    mockRestorePurchases.mockResolvedValue(premiumCustomerInfo());
+    const onPurchaseSuccess = jest.fn();
+
+    const purchaseTree = await renderSheet({ onDismiss: jest.fn(), onPurchaseSuccess });
+    await pressByLabel(purchaseTree, 'Accept Offer');
+    await waitFor(() => onPurchaseSuccess.mock.calls.length > 0, 'purchase to settle');
+    expect(onPurchaseSuccess).toHaveBeenCalledWith({
+      source: 'offer',
+      customerInfo: premiumCustomerInfo().data,
+    });
+
+    onPurchaseSuccess.mockClear();
+    const restoreTree = await renderSheet({ onDismiss: jest.fn(), onPurchaseSuccess });
+    await pressByLabel(restoreTree, 'Restore purchases');
+    await waitFor(() => onPurchaseSuccess.mock.calls.length > 0, 'restore to settle');
+    expect(onPurchaseSuccess).toHaveBeenCalledWith({
+      source: 'restore',
+      customerInfo: premiumCustomerInfo().data,
+    });
+  });
+
+  it('sends lateGrant when restore follows a not-activated purchase on the same mount', async () => {
+    mockPurchasePackage.mockResolvedValue({
+      ok: true as const,
+      data: { entitlements: { active: {} } },
+    });
+    mockRestorePurchases.mockResolvedValue(premiumCustomerInfo());
+    const onPurchaseSuccess = jest.fn();
+
+    const tree = await renderSheet({ onDismiss: jest.fn(), onPurchaseSuccess });
+    await pressByLabel(tree, 'Accept Offer');
+    await waitFor(
+      () => textOf(tree).includes('Purchase completed but premium was not activated'),
+      'not-activated copy',
+    );
+    expect(onPurchaseSuccess).not.toHaveBeenCalled();
+
+    await pressByLabel(tree, 'Restore purchases');
+    await waitFor(() => onPurchaseSuccess.mock.calls.length > 0, 'late grant restore');
+    expect(onPurchaseSuccess).toHaveBeenCalledWith({
+      source: 'lateGrant',
+      customerInfo: premiumCustomerInfo().data,
+    });
+  });
+
+  it('writes pendingPaywallGrant on dismiss after not-activated when surface is set', async () => {
+    const { useUIState } = require('@/lib/ui-state');
+    useUIState.getState().setPendingPaywallGrant(null);
+    mockPurchasePackage.mockResolvedValue({
+      ok: true as const,
+      data: { entitlements: { active: {} } },
+    });
+    const onDismiss = jest.fn();
+
+    const tree = await renderSheet({
+      onDismiss,
+      surface: 'churned_sheet',
+      context: 'churned',
+    });
+    await pressByLabel(tree, 'Accept Offer');
+    await waitFor(
+      () => textOf(tree).includes('Purchase completed but premium was not activated'),
+      'not-activated copy',
+    );
+    await pressByLabel(tree, 'No thanks');
+
+    const marker = useUIState.getState().pendingPaywallGrant;
+    expect(marker).toMatchObject({
+      surface: 'churned_sheet',
+      entry: 'later',
+    });
+    expect(typeof marker?.setAtMs).toBe('number');
+    expect(onDismiss).toHaveBeenCalled();
   });
 });
 
