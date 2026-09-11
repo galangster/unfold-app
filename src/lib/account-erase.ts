@@ -18,7 +18,7 @@
  * error of the two, so only the status decides.
  */
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from '@/lib/api-config';
-import { authenticatedFetch, clearDeviceCredential } from '@/lib/device-credential';
+import { authenticatedFetch } from '@/lib/device-credential';
 import { getDeviceId } from '@/lib/mmkv-storage';
 import { isEphemeralDeviceId } from '@/lib/device-id';
 import { logger } from '@/lib/logger';
@@ -65,7 +65,6 @@ export async function requestServerAccountErase({
     }
 
     if (response.status === 200 || response.status === 204) {
-      await clearDeviceCredential();
       logger.log(`[reset] Server data erased (HTTP ${response.status})`);
       return { ok: true };
     }

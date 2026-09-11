@@ -27,12 +27,13 @@ export function getBackendCandidates(): string[] {
 // ---------------------------------------------------------------------------
 
 export async function getAuthHeaders(): Promise<Record<string, string>> {
+  const deviceId = getDeviceId();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'User-Agent': APP_USER_AGENT,
-    'X-Device-ID': getDeviceId(),
+    'X-Device-ID': deviceId,
   };
-  const credential = getCachedDeviceCredential();
+  const credential = getCachedDeviceCredential(deviceId);
   if (credential) {
     headers['X-Device-Credential'] = credential;
   }

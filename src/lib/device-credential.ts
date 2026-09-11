@@ -9,11 +9,10 @@ import * as SecureStore from 'expo-secure-store';
 import { PRIMARY_BACKEND_URL } from '@/lib/backend-url';
 import { isEphemeralDeviceId } from '@/lib/device-id';
 import { logger } from '@/lib/logger';
+import { getDeviceId } from '@/lib/mmkv-storage';
 
 function currentDeviceId(): string {
-  // Lazy so helper-only tests can import API modules without native MMKV.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  return (require('@/lib/mmkv-storage') as typeof import('@/lib/mmkv-storage')).getDeviceId();
+  return getDeviceId();
 }
 
 export const DEVICE_CREDENTIAL_STORE_KEY = 'unfold-device-credential';
@@ -34,13 +33,14 @@ type DeviceCredentialRecord = {
 };
 
 let cache: DeviceCredentialRecord | null = null;
-let loaded = false;
-let loadInFlight: Promise<void> | null = null;
+let loadPromise: Promise<void> | null = null;
 let ensureInFlight: Promise<string | null> | null = null;
 let recoveryInFlight: Promise<void> | null = null;
 
-export function getCachedDeviceCredential(): string | null {
-  if (!cache || cache.deviceId !== currentDeviceId()) return null;
+export function getCachedDeviceCredential(
+  deviceId: string = currentDeviceId(),
+): string | null {
+  if (!cache || cache.deviceId !== deviceId) return null;
   return cache.credential;
 }
 
@@ -66,11 +66,8 @@ async function persistRecord(record: DeviceCredentialRecord): Promise<void> {
   );
 }
 
-export async function loadDeviceCredential(): Promise<void> {
-  if (loaded) return;
-  if (loadInFlight) return loadInFlight;
-
-  loadInFlight = (async () => {
+export function loadDeviceCredential(): Promise<void> {
+  loadPromise ??= (async () => {
     try {
       const raw = await SecureStore.getItemAsync(DEVICE_CREDENTIAL_STORE_KEY);
       if (!raw) return;
@@ -82,16 +79,9 @@ export async function loadDeviceCredential(): Promise<void> {
       cache = record;
     } catch {
       // Keychain unreadability must not throw to boot or header callers.
-    } finally {
-      loaded = true;
     }
   })();
-
-  try {
-    await loadInFlight;
-  } finally {
-    loadInFlight = null;
-  }
+  return loadPromise;
 }
 
 async function registerDeviceCredential(): Promise<string | null> {
@@ -160,10 +150,7 @@ export async function clearDeviceCredential(): Promise<void> {
 
 async function isDeviceCredentialAuthError(response: Response): Promise<boolean> {
   try {
-    const payload: unknown =
-      typeof response.clone === 'function'
-        ? await response.clone().json()
-        : await response.json();
+    const payload: unknown = await response.clone().json();
     if (!payload || typeof payload !== 'object') return false;
     const error = (payload as { error?: unknown }).error;
     return typeof error === 'string' && DEVICE_CREDENTIAL_AUTH_ERRORS.has(error);
@@ -172,7 +159,7 @@ async function isDeviceCredentialAuthError(response: Response): Promise<boolean>
   }
 }
 
-export async function recoverDeviceCredentialIfUnauthorized(
+async function recoverDeviceCredentialIfUnauthorized(
   response: Response,
 ): Promise<void> {
   try {
@@ -203,8 +190,7 @@ export async function authenticatedFetch(
 
 export function resetDeviceCredentialForTesting(): void {
   cache = null;
-  loaded = false;
-  loadInFlight = null;
+  loadPromise = null;
   ensureInFlight = null;
   recoveryInFlight = null;
 }

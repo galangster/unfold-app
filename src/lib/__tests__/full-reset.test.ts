@@ -175,7 +175,6 @@ import {
   invalidateRevenueCatIdentityReadiness,
   logoutUser,
 } from '../revenuecatClient';
-import { clearDeviceCredential } from '../device-credential';
 import { useUIState } from '../ui-state';
 import { PRIMARY_BACKEND_URL } from '../api-config';
 import { deleteAsync, readDirectoryAsync } from 'expo-file-system/legacy';
@@ -339,7 +338,6 @@ describe('performFullLocalReset', () => {
 
     expect(mockClearDeviceCredential).toHaveBeenCalled();
     expect(order.filter((step) => step === 'clear-credential' || step === 'rotate')).toEqual([
-      'clear-credential',
       'clear-credential',
       'rotate',
     ]);
