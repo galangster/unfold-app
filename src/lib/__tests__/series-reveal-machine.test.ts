@@ -557,6 +557,18 @@ describe('H2 reduceSeriesReveal events', () => {
     expect(reset.state).toMatchObject({ consecutiveNetworkErrors: 0 });
   });
 
+  it('fails a network retry_error as unreachable so Try again polls', () => {
+    const result = reduce(generating, { type: 'retry_error', code: 'NETWORK_ERROR' });
+    expect(result.state).toEqual({
+      kind: 'failed',
+      jobId: JOB_ID,
+      reason: 'unreachable',
+      retryAtMs: null,
+    });
+    const again = reduce(result.state, { type: 'try_again', nowMs: 1 });
+    expect(again.effects).toEqual([{ type: 'poll', jobId: JOB_ID }]);
+  });
+
   it('exhausts MAX_RETRIES_EXCEEDED with transition failed and both clears', () => {
     const result = reduce(generating, { type: 'retry_error', code: 'MAX_RETRIES_EXCEEDED' });
     expect(result.state).toEqual({

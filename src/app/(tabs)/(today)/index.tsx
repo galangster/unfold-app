@@ -130,6 +130,15 @@ function formatResumeRelativeTime(iso?: string): string {
 
 const REVEAL_RESUME_WINDOW_MS = 15_000;
 
+function generatingRoute(autoTrialIntentId?: string | null): {
+  pathname: '/generating';
+  params?: { autoTrialIntentId: string };
+} {
+  return autoTrialIntentId
+    ? { pathname: '/generating', params: { autoTrialIntentId } }
+    : { pathname: '/generating' };
+}
+
 export function applyTodayAutoTrialFocus(i: {
   intent: AutoTrialIntentV1 | null;
   deviceId: string;
@@ -147,7 +156,7 @@ export function applyTodayAutoTrialFocus(i: {
   | {
       launchAction: AutoTrialLaunchAction;
       skipResolver: true;
-      navigation: { pathname: '/generating' };
+      navigation: { pathname: '/generating'; params?: { autoTrialIntentId: string } };
       inflightDecision: null;
       resumeGenerating: false;
       settleIntent: AutoTrialIntentV1 | null;
@@ -174,7 +183,7 @@ export function applyTodayAutoTrialFocus(i: {
     return {
       launchAction,
       skipResolver: true,
-      navigation: { pathname: '/generating' },
+      navigation: generatingRoute(i.intent?.intentId),
       inflightDecision: null,
       resumeGenerating: false,
       settleIntent: null,
@@ -189,7 +198,7 @@ export function applyTodayAutoTrialFocus(i: {
     return {
       launchAction,
       skipResolver: true,
-      navigation: { pathname: '/generating' },
+      navigation: generatingRoute(i.intent.intentId),
       inflightDecision: null,
       resumeGenerating: false,
       settleIntent,
@@ -497,7 +506,7 @@ export default function HomeScreen() {
         const serverStatus = 'status' in poll ? poll.status.status : null;
         logger.log(`[home] Resuming inflight generation job ${jobId} (server: ${serverStatus})`);
         // Navigate to generating screen — it will pick up the inflight job from MMKV
-        router.replace('/generating');
+        router.replace(generatingRoute(readAutoTrialIntent()?.intentId));
         return;
       }
       if (resume === 'discard') {
@@ -529,7 +538,7 @@ export default function HomeScreen() {
   // same answers.
   const handleRetryInflightSeries = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.replace('/generating');
+    router.replace(generatingRoute(readAutoTrialIntent()?.intentId));
   }, [router]);
   const handleDismissInflightSeriesFailure = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

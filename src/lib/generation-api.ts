@@ -29,6 +29,7 @@ export class ApiError extends Error {
     public status: number,
     public code: string,
     public existingJobId?: string | null,
+    public reason?: string,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -36,7 +37,7 @@ export class ApiError extends Error {
 }
 
 type ApiErrorBody = {
-  error?: { code?: string; message?: string };
+  error?: { code?: string; message?: string; reason?: string };
   existingJobId?: string | null;
 };
 
@@ -51,6 +52,7 @@ async function responseApiError(
     response.status,
     body?.error?.code ?? fallbackCode,
     body?.existingJobId,
+    typeof body?.error?.reason === 'string' ? body.error.reason : undefined,
   );
 }
 

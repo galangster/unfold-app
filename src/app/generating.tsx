@@ -66,6 +66,7 @@ import {
   type ObservedJobState,
 } from '@/lib/generation-poll-outcome';
 import { toFriendlyOnboardingGenerationError } from '@/lib/generation-errors';
+import { getServerOwnedSeriesTotalDays } from '@/lib/devotional-series-boundary';
 
 import {
   areNotificationsEnabled,
@@ -129,11 +130,27 @@ function autoTrialErrorMessage(state: Extract<SeriesRevealState, { kind: 'failed
   return 'Generation failed on server';
 }
 
-function resolveEntryNow(params: { jobId?: string; devotionalId?: string }) {
+function autoReadySeriesDays(state: SeriesRevealState): number | undefined {
+  const landedId = state.kind === 'revealed' ? state.devotionalId : null;
+  const landed = landedId
+    ? useUnfoldStore.getState().devotionals.find((row) => row.id === landedId)
+    : undefined;
+  return getServerOwnedSeriesTotalDays(landed) || readAutoTrialIntent()?.trialDays;
+}
+
+function resolveEntryNow(params: {
+  jobId?: string;
+  devotionalId?: string;
+  autoTrialIntentId?: string;
+}) {
   const { generationSession, devotionals } = useUnfoldStore.getState();
   return resolveGeneratingEntry({
     inflight: readInflightGenerationJob(),
-    params: { jobId: params.jobId, devotionalId: params.devotionalId },
+    params: {
+      jobId: params.jobId,
+      devotionalId: params.devotionalId,
+      autoTrialIntentId: params.autoTrialIntentId,
+    },
     sessionDevotionalId: generationSession.devotionalId,
     landedDevotionalIds: devotionals.map((row) => row.id),
     autoTrialIntent: readAutoTrialIntent(),
@@ -145,7 +162,11 @@ export default function GeneratingScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   // Set only by a tapped generation_failed push, which names the job that died.
-  const params = useLocalSearchParams<{ jobId?: string; devotionalId?: string }>();
+  const params = useLocalSearchParams<{
+    jobId?: string;
+    devotionalId?: string;
+    autoTrialIntentId?: string;
+  }>();
   const { colors: themeColors } = useTheme();
   const { reducedMotion, entering, exiting } = useAccessibleAnimation();
 
@@ -1141,7 +1162,7 @@ export default function GeneratingScreen() {
                   textAlign: 'left',
                 }}
               >
-                Your {user?.devotionalLength}-day series
+                Your {(autoTrialHandoffId ? autoReadySeriesDays(autoState) : undefined) ?? user?.devotionalLength}-day series
               </Text>
             </Animated.View>
 

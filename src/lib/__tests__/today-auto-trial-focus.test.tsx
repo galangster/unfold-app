@@ -290,6 +290,7 @@ describe('H7 Today auto-trial focus', () => {
     expect(result.skipResolver).toBe(true);
     expect(result.navigation).toEqual({
       pathname: '/generating',
+      params: { autoTrialIntentId: INTENT_ID },
     });
     expect(resolveInflight).not.toHaveBeenCalled();
   });
@@ -340,6 +341,7 @@ describe('H7 Today auto-trial focus', () => {
     });
     expect(fresh.navigation).toEqual({
       pathname: '/generating',
+      params: { autoTrialIntentId: INTENT_ID },
     });
   });
 
@@ -372,6 +374,7 @@ describe('H7 Today auto-trial focus', () => {
     }).action).toBe('open_reveal');
     expect(result.navigation).toEqual({
       pathname: '/generating',
+      params: { autoTrialIntentId: INTENT_ID },
     });
   });
 
@@ -399,12 +402,15 @@ describe('H7 Today auto-trial focus', () => {
 
     expect(focus.launchAction).toEqual({ action: 'mark_landed', then: 'open_reveal' });
     expect(focus.settleIntent).toEqual(submitted);
-    expect(focus.navigation).toEqual({ pathname: '/generating' });
+    expect(focus.navigation).toEqual({
+      pathname: '/generating',
+      params: { autoTrialIntentId: INTENT_ID },
+    });
 
     const landed = { ...submitted, status: 'landed' as const };
     const entry = resolveGeneratingEntry({
       inflight: null,
-      params: null,
+      params: focus.navigation?.params ?? {},
       sessionDevotionalId: null,
       autoTrialIntent: landed,
     });
@@ -445,9 +451,62 @@ describe('H7 Today auto-trial focus', () => {
       todaySource.indexOf('const handleRetryInflightSeries'),
       todaySource.indexOf('const handleDismissInflightSeriesFailure'),
     );
-    expect(retry).toContain("router.replace('/generating')");
+    expect(retry).toContain('generatingRoute(readAutoTrialIntent()?.intentId)');
     expect(retry).not.toContain("pathname: '/series-reveal'");
     expect(retry).not.toContain('submitGenerationJob');
+  });
+
+  it('openNewSeriesDiscovery with a landed intent does not hand off', () => {
+    const landed = intent({ status: 'landed', jobId: 'job-1', devotionalId: 'auto-1' });
+    expect(resolveGeneratingEntry({
+      inflight: null,
+      params: {},
+      sessionDevotionalId: null,
+      autoTrialIntent: landed,
+    }).kind).not.toBe('auto-trial-handoff');
+
+    const discovery = todaySource.slice(
+      todaySource.indexOf('const openNewSeriesDiscovery'),
+      todaySource.indexOf('const handleCreateNew'),
+    );
+    expect(discovery).not.toContain('/generating');
+    expect(discovery).toContain("pathname: '/onboarding'");
+  });
+
+  it('the reconcile push carries autoTrialIntentId', () => {
+    const openReveal = applyTodayAutoTrialFocus({
+      intent: intent({ status: 'purchased' }),
+      deviceId: 'device-1',
+      nowMs: Date.parse('2026-09-10T17:00:00.000Z'),
+      hasCompletedOnboarding: true,
+      landedDevotionalIds: [],
+      inflightJob: null,
+      revealGuardKey: null,
+      generationSessionStatus: 'idle',
+    });
+    expect(openReveal.navigation).toEqual({
+      pathname: '/generating',
+      params: { autoTrialIntentId: INTENT_ID },
+    });
+
+    const markLanded = applyTodayAutoTrialFocus({
+      intent: intent({ status: 'submitted', jobId: 'job-1', devotionalId: 'auto-1' }),
+      deviceId: 'device-1',
+      nowMs: Date.parse('2026-09-10T17:00:00.000Z'),
+      hasCompletedOnboarding: true,
+      landedDevotionalIds: ['auto-1'],
+      inflightJob: {
+        jobId: 'job-1',
+        devotionalId: 'auto-1',
+        submittedAt: Date.parse('2026-09-10T16:00:00.000Z'),
+      },
+      revealGuardKey: null,
+      generationSessionStatus: 'running',
+    });
+    expect(markLanded.navigation).toEqual({
+      pathname: '/generating',
+      params: { autoTrialIntentId: INTENT_ID },
+    });
   });
 
   it('abandons a purchased intent before opening new-series onboarding', () => {

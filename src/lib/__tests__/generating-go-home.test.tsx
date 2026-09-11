@@ -73,10 +73,15 @@ jest.mock('@/lib/push-notifications', () => ({
 }));
 
 const mockReplace = jest.fn();
+const mockSearchParams: {
+  jobId?: string;
+  devotionalId?: string;
+  autoTrialIntentId?: string;
+} = {};
 jest.mock('expo-router', () => ({
   useRouter: () => ({ replace: mockReplace, push: jest.fn(), back: jest.fn() }),
   useNavigation: () => ({ setOptions: jest.fn(), addListener: jest.fn(() => jest.fn()) }),
-  useLocalSearchParams: () => ({}),
+  useLocalSearchParams: () => mockSearchParams,
 }));
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -151,8 +156,9 @@ import {
   INITIAL_GENERATION_REQUEST_ID_KEY,
   readInitialGenerationRequestId,
 } from '../initial-generation-request';
+import { createAutoTrialIntent, transitionAutoTrialIntent } from '../auto-trial-intent';
 import { mmkvStorage } from '../mmkv-storage';
-import { useUnfoldStore, type UserProfile } from '../store';
+import { useUnfoldStore, type Devotional, type UserProfile } from '../store';
 import { useUIState } from '@/lib/ui-state';
 
 const GO_HOME_LABEL = 'Go home while your devotional is prepared';
@@ -221,6 +227,9 @@ beforeEach(() => {
   mockPollJobStatus.mockReset();
   mockRetryJob.mockReset();
   mockSubmitGenerationJob.mockReset();
+  delete mockSearchParams.jobId;
+  delete mockSearchParams.devotionalId;
+  delete mockSearchParams.autoTrialIntentId;
   mmkvStorage.removeItem(INFLIGHT_GENERATION_JOB_KEY);
   mmkvStorage.removeItem(INITIAL_GENERATION_REQUEST_ID_KEY);
   mmkvStorage.removeItem('auto-trial-series-intent-v1');
@@ -502,5 +511,82 @@ describe('H10 generating auto-trial handoff', () => {
     mounted.push(tree);
     expect(mockReplace).not.toHaveBeenCalledWith(expect.objectContaining({ pathname: '/series-reveal' }));
     expect(useUnfoldStore.getState().generationSession).toEqual(sessionBefore);
+  });
+
+  it('ready copy on the auto path uses trial days, not profile length', async () => {
+    const created = createAutoTrialIntent({
+      deviceId: 'test-device-id',
+      entry: 'onboarding',
+      surface: 'onboarding_paywall',
+      source: 'purchase',
+      simulated: false,
+      trialDays: 3,
+      purchasedAt: '2026-09-08T17:00:00.000Z',
+      expiresAt: '2026-09-11T17:00:00.000Z',
+      timeZone: 'America/Chicago',
+      isSandbox: false,
+      productIdentifier: 'unfold_premium_yearly',
+      switchFetchedAt: '2026-09-08T17:00:00.000Z',
+      nowMs: 1_800_000_000_000,
+    });
+    transitionAutoTrialIntent(
+      'submitted',
+      { jobId: 'job-ready', devotionalId: 'devo-ready' },
+      { nowMs: 1_800_000_000_000 },
+    );
+    transitionAutoTrialIntent('landed', {}, { nowMs: 1_800_000_000_000 });
+    mockSearchParams.autoTrialIntentId = created.intentId;
+
+    const createdAt = '2026-09-08T17:00:00.000Z';
+    const readySeries = {
+      id: 'devo-ready',
+      title: 'Trial Series',
+      totalDays: 3,
+      currentDay: 1,
+      days: [{
+        id: 'day-1',
+        devotionalId: 'devo-ready',
+        dayNumber: 1,
+        title: 'Day 1',
+        scriptureReference: 'Psalm 1:1',
+        scriptureText: 'Blessed is the one',
+        bodyText: 'Body',
+        quotableLine: 'Line',
+        isRead: false,
+      }],
+      createdAt,
+      userContext: { name: '', aboutMe: '', currentSituation: '', emotionalState: '' },
+      generationMode: 'progressive',
+      seriesStartDate: createdAt,
+      seriesArc: {
+        totalDaysPlanned: 3,
+        overarchingTheme: 'theme',
+        narrativeShape: 'shape',
+        dayHints: [],
+        isOpenEnded: false,
+        createdAt,
+        seriesKind: 'auto_trial',
+      },
+    } as unknown as Devotional;
+
+    useUnfoldStore.setState({
+      user: { ...user, hasCompletedOnboarding: true, devotionalLength: 7 } as unknown as UserProfile,
+      devotionals: [readySeries],
+      currentDevotionalId: 'devo-ready',
+      generationSession: { status: 'idle', devotionalId: null, totalDays: 7, generatedDayNumbers: [] },
+    });
+
+    const tree = await renderScreen();
+    mounted.push(tree);
+    await flush();
+
+    const joined = (children: unknown): string => {
+      if (typeof children === 'string' || typeof children === 'number') return String(children);
+      if (Array.isArray(children)) return children.map(joined).join('');
+      return '';
+    };
+    const labels = tree.root.findAll((node) => joined(node.props?.children) === 'Your 3-day series');
+    expect(labels.length).toBeGreaterThan(0);
+    expect(tree.root.findAll((node) => joined(node.props?.children) === 'Your 7-day series')).toHaveLength(0);
   });
 });

@@ -371,7 +371,7 @@ export function reduceSeriesReveal(
     if (e.code === 'MAX_RETRIES_EXCEEDED') {
       return { state: exhausted(currentJob(s).jobId, 'max_retries'), effects: FAILED_CLEARS };
     }
-    return keep(s);
+    return { state: failed(currentJob(s).jobId, 'unreachable'), effects: [] };
   }
 
   if (e.type === 'landed') {

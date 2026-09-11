@@ -148,4 +148,27 @@ describe('generation mutation errors', () => {
       error: { code: 'SERIES_ARCHIVED', message: 'This series has ended.' },
     }));
   });
+
+  it('carries AUTO_TRIAL_UNAVAILABLE reason from a 409 body', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(409, {
+      error: {
+        code: 'AUTO_TRIAL_UNAVAILABLE',
+        message: 'Auto trial series is turned off.',
+        reason: 'switch_off',
+      },
+    }));
+
+    const error = await submitGenerationJob({
+      dayNumber: 1,
+      jobType: 'initial_arc',
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({
+      status: 409,
+      code: 'AUTO_TRIAL_UNAVAILABLE',
+      reason: 'switch_off',
+      message: 'Auto trial series is turned off.',
+    });
+  });
 });

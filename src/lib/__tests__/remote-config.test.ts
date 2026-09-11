@@ -76,6 +76,15 @@ describe('E1 remote-config outcomes', () => {
     expect(state).toEqual({ status: 'error', failedAtMs: 1_000, reason: 'parse' });
   });
 
+  it('treats maxTrialDays 14 as off with reason parse', async () => {
+    const fetchImpl = jest.fn(async () => jsonResponse({
+      ...VALID_BODY,
+      autoTrialSeries: { ...VALID_BODY.autoTrialSeries, maxTrialDays: 14 },
+    }));
+    const state = await refreshRemoteConfig({ fetchImpl, nowMs: 1_000 });
+    expect(state).toEqual({ status: 'error', failedAtMs: 1_000, reason: 'parse' });
+  });
+
   it('maps source fallback, http 500, abort, and throw to the documented reasons', async () => {
     expect(await refreshRemoteConfig({
       fetchImpl: jest.fn(async () => jsonResponse({ ...VALID_BODY, source: 'fallback' })),

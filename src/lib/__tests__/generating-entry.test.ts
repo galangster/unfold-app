@@ -182,7 +182,7 @@ describe('H10 auto-trial-handoff', () => {
     devotionalId: 'dev-auto',
   };
 
-  it('hands off a matching inflight record, a matching push without a record, and no params with a matching record', () => {
+  it('hands off a matching jobId on inflight or push, and resumes a bare matching record', () => {
     expect(resolveGeneratingEntry({
       inflight: autoJob,
       params: { jobId: 'job-auto', devotionalId: 'dev-auto' },
@@ -202,7 +202,62 @@ describe('H10 auto-trial-handoff', () => {
       params: {},
       sessionDevotionalId: null,
       autoTrialIntent: submitted,
+    })).toEqual({ kind: 'resume', inflight: autoJob });
+  });
+
+  it('a bare landed or submitted intent stays on the legacy path', () => {
+    const landed = { ...submitted, status: 'landed' as const };
+    expect(resolveGeneratingEntry({
+      inflight: null,
+      params: {},
+      sessionDevotionalId: null,
+      autoTrialIntent: landed,
+    })).toEqual({ kind: 'submit' });
+    expect(resolveGeneratingEntry({
+      inflight: autoJob,
+      params: {},
+      sessionDevotionalId: null,
+      autoTrialIntent: submitted,
+    })).toEqual({ kind: 'resume', inflight: autoJob });
+  });
+
+  it('a bare purchased intent still hands off', () => {
+    expect(resolveGeneratingEntry({
+      inflight: null,
+      params: {},
+      sessionDevotionalId: null,
+      autoTrialIntent: { intentId: 'intent-1', status: 'purchased', jobId: null, devotionalId: null },
     })).toEqual({ kind: 'auto-trial-handoff', intentId: 'intent-1' });
+  });
+
+  it('hands off submitted or landed when autoTrialIntentId matches', () => {
+    expect(resolveGeneratingEntry({
+      inflight: null,
+      params: { autoTrialIntentId: 'intent-1' },
+      sessionDevotionalId: null,
+      autoTrialIntent: submitted,
+    })).toEqual({ kind: 'auto-trial-handoff', intentId: 'intent-1' });
+    expect(resolveGeneratingEntry({
+      inflight: null,
+      params: { autoTrialIntentId: 'intent-1' },
+      sessionDevotionalId: null,
+      autoTrialIntent: { ...submitted, status: 'landed' },
+    })).toEqual({ kind: 'auto-trial-handoff', intentId: 'intent-1' });
+  });
+
+  it('keeps a mismatched autoTrialIntentId on the legacy path', () => {
+    expect(resolveGeneratingEntry({
+      inflight: autoJob,
+      params: { autoTrialIntentId: 'intent-other' },
+      sessionDevotionalId: null,
+      autoTrialIntent: submitted,
+    })).toEqual({ kind: 'resume', inflight: autoJob });
+    expect(resolveGeneratingEntry({
+      inflight: null,
+      params: { autoTrialIntentId: 'intent-other' },
+      sessionDevotionalId: null,
+      autoTrialIntent: { ...submitted, status: 'landed' },
+    })).toEqual({ kind: 'submit' });
   });
 
   it('submits a failed intent when a fresh new-series request id is present', () => {
