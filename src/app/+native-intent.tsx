@@ -51,6 +51,33 @@ export function redirectSystemPath({ path, initial }: { path: string; initial: b
         });
       if (validPreview) return path;
     }
+    if (__DEV__ && isQaToolsEnabled() && path.startsWith('unfold://dev/trial-series')) {
+      const preview = new URL(path);
+      const keys = [...preview.searchParams.keys()];
+      const validPreview = preview.hostname === 'dev' && preview.pathname === '/trial-series'
+        && preview.searchParams.has('state')
+        && new Set(keys).size === keys.length
+        && [...preview.searchParams].every(([key, value]) => {
+          if (key === 'state') {
+            return [
+              'reveal-generating',
+              'reveal-failed',
+              'reveal-exhausted',
+              'confirmation',
+              'later-entry-notify',
+              'today-day1',
+              'today-day2',
+              'today-day2-read',
+              'today-day3',
+              'today-lapsed-before-day3',
+              'series-complete',
+            ].includes(value);
+          }
+          if (key === 'theme') return value === 'dark' || value === 'light';
+          return false;
+        });
+      if (validPreview) return path;
+    }
     const decision = resolveExternalDeepLink(path);
     if (decision.allowed) return path;
 
