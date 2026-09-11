@@ -28,6 +28,11 @@ function baselineFromState(state: NotificationPermissionState): PermissionBaseli
   return state === 'granted' ? 'granted' : 'not_granted';
 }
 
+function onPermissionBecameGranted(): void {
+  void syncTrialEndingNotification();
+  useUIState.getState().bumpNotificationPermissionEpoch();
+}
+
 export function resetNotificationAskBaseline(): void {
   lastKnownPermission = null;
 }
@@ -35,18 +40,6 @@ export function resetNotificationAskBaseline(): void {
 export async function readNotificationPermissionState(): Promise<NotificationPermissionState> {
   const { status } = await Notifications.getPermissionsAsync();
   return mapPermissionStatus(status);
-}
-
-function emitAnswered(
-  trigger: NotificationAskTrigger,
-  result: 'granted' | 'denied' | 'registration_failed',
-  priorStatus: NotificationPermissionState,
-): void {
-  trackNotificationPermissionAnswered({
-    trigger,
-    result,
-    prior_status: priorStatus,
-  });
 }
 
 export async function askNotificationPermissionInContext(o: {
@@ -58,24 +51,31 @@ export async function askNotificationPermissionInContext(o: {
   lastKnownPermission = granted ? 'granted' : 'not_granted';
 
   if (!granted) {
-    emitAnswered(o.trigger, 'denied', priorStatus);
+    trackNotificationPermissionAnswered({
+      trigger: o.trigger,
+      result: 'denied',
+      prior_status: priorStatus,
+    });
     return 'denied';
   }
 
-  void syncTrialEndingNotification();
-  useUIState.getState().bumpNotificationPermissionEpoch();
+  onPermissionBecameGranted();
 
   if (o.registration === 'background') {
     void registerPushToken().then(
       (result) => {
-        emitAnswered(
-          o.trigger,
-          result === 'failed' ? 'registration_failed' : 'granted',
-          priorStatus,
-        );
+        trackNotificationPermissionAnswered({
+          trigger: o.trigger,
+          result: result === 'failed' ? 'registration_failed' : 'granted',
+          prior_status: priorStatus,
+        });
       },
       () => {
-        emitAnswered(o.trigger, 'registration_failed', priorStatus);
+        trackNotificationPermissionAnswered({
+          trigger: o.trigger,
+          result: 'registration_failed',
+          prior_status: priorStatus,
+        });
       },
     );
     return 'granted';
@@ -84,13 +84,25 @@ export async function askNotificationPermissionInContext(o: {
   try {
     const result = await registerPushToken();
     if (result === 'failed') {
-      emitAnswered(o.trigger, 'registration_failed', priorStatus);
+      trackNotificationPermissionAnswered({
+        trigger: o.trigger,
+        result: 'registration_failed',
+        prior_status: priorStatus,
+      });
       return 'registration_failed';
     }
-    emitAnswered(o.trigger, 'granted', priorStatus);
+    trackNotificationPermissionAnswered({
+      trigger: o.trigger,
+      result: 'granted',
+      prior_status: priorStatus,
+    });
     return 'granted';
   } catch {
-    emitAnswered(o.trigger, 'registration_failed', priorStatus);
+    trackNotificationPermissionAnswered({
+      trigger: o.trigger,
+      result: 'registration_failed',
+      prior_status: priorStatus,
+    });
     return 'registration_failed';
   }
 }
@@ -98,12 +110,10 @@ export async function askNotificationPermissionInContext(o: {
 export async function onNotificationPermissionMaybeChanged(): Promise<void> {
   try {
     const state = await readNotificationPermissionState();
-    const next = baselineFromState(state);
     if (lastKnownPermission === 'not_granted' && state === 'granted') {
-      void syncTrialEndingNotification();
-      useUIState.getState().bumpNotificationPermissionEpoch();
+      onPermissionBecameGranted();
     }
-    lastKnownPermission = next;
+    lastKnownPermission = baselineFromState(state);
   } catch {
     // A read that throws changes nothing.
   }

@@ -4,6 +4,8 @@ export const PURCHASE_CONFIRMATION_SETUP_TEXT =
 export const PURCHASE_CONFIRMATION_AUTO_TRIAL_TEXT =
   "Welcome to Unfold Premium. Your first series starts from what you've already shared.";
 
+const HIGHLIGHT_WORD = 'Unfold' as const;
+
 export function getPurchaseConfirmationCopy(mode: 'auto_trial' | 'setup'): {
   text: string;
   highlightWord: 'Unfold';
@@ -12,6 +14,6 @@ export function getPurchaseConfirmationCopy(mode: 'auto_trial' | 'setup'): {
     text: mode === 'auto_trial'
       ? PURCHASE_CONFIRMATION_AUTO_TRIAL_TEXT
       : PURCHASE_CONFIRMATION_SETUP_TEXT,
-    highlightWord: 'Unfold',
+    highlightWord: HIGHLIGHT_WORD,
   };
 }

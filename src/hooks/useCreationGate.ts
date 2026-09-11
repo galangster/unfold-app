@@ -6,6 +6,7 @@ import type { ExclusiveOfferDismissInfo } from '@/components/ExclusiveOfferSheet
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import type { VerifiedEntitlementExit } from '@/lib/auto-trial-exit';
 import { resolveLaterEntryExit } from '@/lib/auto-trial-exit';
+import { requestLaterEntryNotifyAsk } from '@/lib/notification-ask';
 import {
   getChurnedCreationGateAction,
   shouldEmitPendingFeedback,
@@ -81,7 +82,6 @@ export function useCreationGate() {
       });
       return;
     }
-    const { requestLaterEntryNotifyAsk } = require('@/lib/notification-ask') as typeof import('@/lib/notification-ask');
     void requestLaterEntryNotifyAsk(exit.customerInfo);
   }, [dismissOffer, router]);
 

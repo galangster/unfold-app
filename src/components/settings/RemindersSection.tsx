@@ -96,7 +96,9 @@ export function RemindersSection() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const time = user?.reminderTime ?? '8:00 AM';
     const applied = await commitDailyReminderSetting(value, time, updateUser);
-    void onNotificationPermissionMaybeChanged();
+    if (value) {
+      void onNotificationPermissionMaybeChanged();
+    }
     if (applied) {
       setNotificationsEnabled(value);
       // Midday / evening check-in scheduling is owned by

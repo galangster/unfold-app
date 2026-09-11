@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Linking, Modal, Pressable, View } from 'react-native';
-import { AutoTrialNotifyCard } from '@/components/onboarding/AutoTrialNotifyCard';
+import { AutoTrialNotifyCard, type AutoTrialNotifyPhase } from '@/components/onboarding/AutoTrialNotifyCard';
 import {
   askNotificationPermissionInContext,
   readNotificationPermissionState,
@@ -11,7 +11,7 @@ import { useUIState } from '@/lib/ui-state';
 export function LaterEntryNotifySheet() {
   const pending = useUIState((state) => state.laterEntryNotifyAskPending);
   const [permission, setPermission] = useState<NotificationPermissionState>('undetermined');
-  const [phase, setPhase] = useState<'idle' | 'requesting' | 'registering' | 'registration_failed'>('idle');
+  const [phase, setPhase] = useState<AutoTrialNotifyPhase>('idle');
 
   useEffect(() => {
     if (!pending) return;
@@ -21,6 +21,7 @@ export function LaterEntryNotifySheet() {
   const hide = () => {
     useUIState.getState().setLaterEntryNotifyAskPending(false);
     setPhase('idle');
+    setPermission('undetermined');
   };
 
   const onAsk = async () => {
@@ -34,7 +35,6 @@ export function LaterEntryNotifySheet() {
       setPhase('registration_failed');
       return;
     }
-    setPhase('idle');
     hide();
   };
 

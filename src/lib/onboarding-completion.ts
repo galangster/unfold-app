@@ -26,6 +26,22 @@ export async function runOnboardingCompletion(
   if (state.started) return false;
   state.started = true;
 
+  let target: CompletionTarget;
+  switch (mode) {
+    case 'auto_trial':
+      target = {
+        pathname: '/series-reveal',
+        params: { intentId: intent?.intentId ?? '' },
+      };
+      break;
+    case 'generated':
+      target = '/generating';
+      break;
+    case 'deferred':
+      target = '/(tabs)/(today)';
+      break;
+  }
+
   deps.retireDraftAutosave();
   deps.clearSampleJob();
   if (mode === 'auto_trial') {
@@ -38,15 +54,6 @@ export async function runOnboardingCompletion(
   await deps.flushStoreAsync();
   deps.clearDraft();
   deps.trackCompleted(mode);
-  if (mode === 'auto_trial') {
-    deps.navigate({
-      pathname: '/series-reveal',
-      params: { intentId: intent?.intentId ?? '' },
-    });
-  } else if (mode === 'generated') {
-    deps.navigate('/generating');
-  } else {
-    deps.navigate('/(tabs)/(today)');
-  }
+  deps.navigate(target);
   return true;
 }

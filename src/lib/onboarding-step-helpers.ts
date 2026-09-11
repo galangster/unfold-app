@@ -26,6 +26,7 @@ type ExistingUserLike = {
 type OnboardingSelectionContext = {
   selectedMainOption?: 'theme' | 'type' | 'guided';
   selectedType?: string;
+  autoTrialActive?: boolean;
 };
 
 const TYPES_WITH_SUBJECT_SELECTION = new Set(['book_study', 'character_study']);
@@ -189,7 +190,6 @@ export function getFilteredOnboardingSteps<T extends OnboardingStepLike>(
   allSteps: readonly T[],
   existingUser: ExistingUserLike,
   selectionContext?: OnboardingSelectionContext,
-  autoTrial?: { active: boolean },
 ): T[] {
   return allSteps.filter((step) => {
     if (step.id === 'studySubject') {
@@ -221,7 +221,7 @@ export function getFilteredOnboardingSteps<T extends OnboardingStepLike>(
     }
 
     if (
-      autoTrial?.active
+      selectionContext?.autoTrialActive
       && existingUser?.hasCompletedOnboarding !== true
       && AUTO_TRIAL_SKIP_STEP_IDS.has(step.id)
     ) {

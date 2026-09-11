@@ -1,6 +1,8 @@
 import { Pressable, Text, View } from 'react-native';
 import type { NotificationPermissionState } from '@/lib/notification-ask';
 
+export type AutoTrialNotifyPhase = 'idle' | 'requesting' | 'registering' | 'registration_failed';
+
 export function AutoTrialNotifyCard({
   permission,
   phase,
@@ -8,7 +10,7 @@ export function AutoTrialNotifyCard({
   onOpenSettings,
 }: {
   permission: NotificationPermissionState;
-  phase: 'idle' | 'requesting' | 'registering' | 'registration_failed';
+  phase: AutoTrialNotifyPhase;
   onAsk(): void;
   onOpenSettings(): void;
 }) {

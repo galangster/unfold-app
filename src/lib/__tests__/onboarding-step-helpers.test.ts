@@ -682,7 +682,7 @@ describe('onboarding step helpers', () => {
 
   describe('G1 auto skip', () => {
     it('drops all 8 skip ids on a first run when active, and reminderTime is last', () => {
-      const filtered = getFilteredOnboardingSteps(FIRST_RUN_STEPS, null, undefined, { active: true });
+      const filtered = getFilteredOnboardingSteps(FIRST_RUN_STEPS, null, { autoTrialActive: true });
       const ids = filtered.map((step) => step.id);
       expect([...AUTO_TRIAL_SKIP_STEP_IDS]).toEqual([
         'themeType',
@@ -709,7 +709,8 @@ describe('onboarding step helpers', () => {
 
       const filtered = getFilteredOnboardingSteps(allSteps, existingUser, {
         selectedMainOption: 'guided',
-      }, { active: true });
+        autoTrialActive: true,
+      });
 
       expect(filtered.map((step) => step.id)).toEqual([
         'relationshipWithGod',
@@ -748,8 +749,7 @@ describe('onboarding step helpers', () => {
     const autoList = getFilteredOnboardingSteps(
       FIRST_RUN_STEPS,
       null,
-      undefined,
-      { active: true },
+      { autoTrialActive: true },
     ).map((step) => step.id);
     const setupList = FIRST_RUN_STEP_IDS;
 
