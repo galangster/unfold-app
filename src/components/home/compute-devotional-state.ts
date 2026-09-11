@@ -311,22 +311,10 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
   }
 
   // 4. Content is still being generated or no day data available.
-  // Never show "preparing" if the user has already read today — the completed
-  // day should remain visible while the next day generates in the background.
-  if (!hasReadToday && (isPreparing || !currentDayData)) {
-    return withPath({
-      type: 'preparing' as const,
-      progress: 0,
-      seriesTitle,
-      dayNumber: currentDevotional.currentDay,
-      onCreateNew,
-      ...(dailyRecovery ? { recovery: dailyRecovery } : {}),
-    });
-  }
-
-  // If we somehow have no day data even after reading today, keep the active
-  // series anchored instead of implying the series disappeared.
-  if (!currentDayData) {
+  // Missing day data always anchors as preparing so the series does not
+  // disappear. If the user already read today and day data exists, skip
+  // preparing so the completed day stays visible while the next day generates.
+  if (!currentDayData || (!hasReadToday && isPreparing)) {
     return withPath({
       type: 'preparing' as const,
       progress: 0,

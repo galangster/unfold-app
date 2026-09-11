@@ -164,7 +164,7 @@ export function RecommendedSeriesCard({
           hasSeenExclusiveOffer: mmkvStorage.getItem('@unfold_exclusive_offer_seen') === 'true',
         });
       trackAutoTrialPickStartTapped({
-        gate_action: allowed ? 'allow' : gateAction,
+        gate_action: gateAction,
         pick_source: storedRecommendation ? 'stored' : 'fetched',
       });
     }

@@ -159,14 +159,23 @@ export function applyTodayAutoTrialFocus(i: {
     job: InflightGenerationJob | null,
     status: import('@/lib/store').GenerationSessionStatus,
   ) => TodayInflightDecision;
-}): {
-  launchAction: AutoTrialLaunchAction;
-  skipResolver: boolean;
-  navigation: { pathname: '/series-reveal'; params: { intentId: string } } | null;
-  inflightDecision: TodayInflightDecision | null;
-  resumeGenerating: boolean;
-  settleIntent: AutoTrialIntentV1 | null;
-} {
+}):
+  | {
+      launchAction: AutoTrialLaunchAction;
+      skipResolver: true;
+      navigation: { pathname: '/series-reveal'; params: { intentId: string } };
+      inflightDecision: null;
+      resumeGenerating: false;
+      settleIntent: AutoTrialIntentV1 | null;
+    }
+  | {
+      launchAction: AutoTrialLaunchAction;
+      skipResolver: false;
+      navigation: null;
+      inflightDecision: TodayInflightDecision;
+      resumeGenerating: boolean;
+      settleIntent: AutoTrialIntentV1 | null;
+    } {
   const launchAction = reconcileAutoTrialIntentOnLaunch({
     intent: i.intent,
     deviceId: i.deviceId,
@@ -438,8 +447,10 @@ export default function HomeScreen() {
   const generationSessionError = useUnfoldStore((s) => s.generationSession.error);
   const clearGenerationSession = useUnfoldStore((s) => s.clearGenerationSession);
   const [inflightSeries, setInflightSeries] = useState<InflightGenerationJob | null>(null);
+  const [autoIntent, setAutoIntent] = useState<AutoTrialIntentV1 | null>(readAutoTrialIntent);
   const [notifyPermission, setNotifyPermission] = useState<NotificationPermissionState>('denied');
   const [notifyPhase, setNotifyPhase] = useState<AutoTrialNotifyPhase>('idle');
+  const landedDevotionalIdsKey = devotionals.map((row) => row.id).join('\0');
   useEffect(() => {
     void readNotificationPermissionState().then(setNotifyPermission);
     const sub = AppState.addEventListener('change', (next) => {
@@ -459,7 +470,7 @@ export default function HomeScreen() {
       deviceId: getDeviceId(),
       nowMs: Date.now(),
       hasCompletedOnboarding: user?.hasCompletedOnboarding === true,
-      landedDevotionalIds: devotionals.map((row) => row.id),
+      landedDevotionalIds: useUnfoldStore.getState().devotionals.map((row) => row.id),
       inflightJob,
       revealGuardKey: useUIState.getState().autoTrialRevealGuardKey,
       generationSessionStatus,
@@ -474,6 +485,7 @@ export default function HomeScreen() {
     if (focus.settleIntent?.devotionalId) {
       settleLandedAutoTrialSeries(focus.settleIntent, focus.settleIntent.devotionalId);
     }
+    setAutoIntent(readAutoTrialIntent());
     if (focus.skipResolver) {
       setInflightSeries(null);
       if (focus.navigation) {
@@ -481,7 +493,7 @@ export default function HomeScreen() {
       }
       return;
     }
-    const decision = focus.inflightDecision ?? { action: 'none' as const };
+    const decision = focus.inflightDecision;
     if (decision.action !== 'resume-on-generating') {
       const next = decision.action === 'watch-on-today' ? decision.job : null;
       // The same record read again on focus keeps its object, so the watch
@@ -541,7 +553,7 @@ export default function HomeScreen() {
     return () => {
       cancelled = true;
     };
-  }, [router, isTodayFocused, generationSessionStatus, generationSessionDevotionalId, user?.hasCompletedOnboarding, devotionals]);
+  }, [router, isTodayFocused, generationSessionStatus, generationSessionDevotionalId, user?.hasCompletedOnboarding, landedDevotionalIdsKey]);
   const onInflightSeriesSettled = useCallback(() => setInflightSeries(null), []);
 
   // The series failed after the reader left for Today (the watch below
@@ -1017,26 +1029,28 @@ export default function HomeScreen() {
   const daysCompleted = currentDevotional ? countReadDaysWithinBoundary(currentDevotional) : 0;
   const totalDays = currentDevotional ? getServerOwnedSeriesTotalDays(currentDevotional) : 0;
   const progressPercent = currentDevotional && totalDays > 0 ? (daysCompleted / totalDays) * 100 : 0;
-  const autoIntent = readAutoTrialIntent();
   const inflightMatchesAuto = Boolean(
     inflightSeries && autoIntent && inflightSeries.jobId === autoIntent.jobId,
   );
   const autoTrialActive = isAutoTrialSeries(currentDevotional) || inflightMatchesAuto;
   const storedNextPick = currentDevotional?.days?.find((row) => row.dayNumber === totalDays)?.nextPick ?? null;
-  const autoTrialInput = autoTrialActive
-    ? {
-      path: currentDevotional && isAutoTrialSeries(currentDevotional)
-        ? buildSeriesPath(currentDevotional, clockNow, { isCurrentSeries: true })
-        : (autoIntent ? buildPlannedSeriesPath(autoIntent.trialDays) : []),
-      daysRead: daysCompleted,
-      keepsakeAvailable: daysCompleted >= 1,
-      onOpenKeepsake: () => {
-        if (!currentDevotional) return;
-        router.push({ pathname: '/keepsake', params: { devotionalId: currentDevotional.id } });
-      },
-      nextPick: storedNextPick,
-    }
-    : null;
+  const onOpenKeepsake = useCallback(() => {
+    if (!currentDevotional) return;
+    router.push({ pathname: '/keepsake', params: { devotionalId: currentDevotional.id } });
+  }, [currentDevotional, router]);
+  const autoTrialInput = useMemo(() => (
+    autoTrialActive
+      ? {
+        path: currentDevotional && isAutoTrialSeries(currentDevotional)
+          ? buildSeriesPath(currentDevotional, clockNow, { isCurrentSeries: true })
+          : (autoIntent ? buildPlannedSeriesPath(autoIntent.trialDays) : []),
+        daysRead: daysCompleted,
+        keepsakeAvailable: daysCompleted >= 1,
+        onOpenKeepsake,
+        nextPick: storedNextPick,
+      }
+      : null
+  ), [autoIntent, autoTrialActive, clockNow, currentDevotional, daysCompleted, onOpenKeepsake, storedNextPick]);
   const showAutoTrialNotify = shouldShowTodayAutoTrialNotify({
     autoTrialActive,
     intent: autoIntent,
