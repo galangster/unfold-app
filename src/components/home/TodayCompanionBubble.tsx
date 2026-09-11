@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  Platform,
   StyleProp,
   StyleSheet,
   Text,
@@ -7,6 +8,7 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 import { ArrowRightIcon, XIcon } from '@/components/icons';
 import * as Haptics from 'expo-haptics';
 import { FontFamily, FontSize } from '@/constants/fonts';
@@ -14,8 +16,11 @@ import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import { GlassSurface } from '@/components/ui/GlassSurface';
+import { alpha } from '@/components/ui/utils/alpha';
 import { animateCardDismiss } from '@/lib/card-dismiss-animation';
+import { useTheme } from '@/lib/theme';
 import type { ColorTheme } from '@/constants/colors';
+import { GLASS } from '@/constants/today-surfaces';
 import { Typography } from '@/constants/typography';
 
 interface Props {
@@ -37,6 +42,21 @@ interface Props {
 
 const BODY_TEXT_MAX_SCALE = 1.28;
 const LABEL_TEXT_MAX_SCALE = 1.14;
+const BUBBLE_TAIL_WIDTH = 6;
+const BUBBLE_TAIL_HEIGHT = 14;
+const BUBBLE_TAIL_CENTER_Y = 18;
+
+function buildLeftTailPath(width: number, height: number): string {
+  const half = height / 2;
+  return [
+    `M ${width} ${height}`,
+    `C ${width - width * 0.42} ${half + half * 0.74} 0 ${half + half * 0.32} 0 ${half}`,
+    `C 0 ${half - half * 0.32} ${width - width * 0.42} ${half - half * 0.74} ${width} 0`,
+    'Z',
+  ].join(' ');
+}
+
+const BUBBLE_TAIL_PATH = buildLeftTailPath(BUBBLE_TAIL_WIDTH, BUBBLE_TAIL_HEIGHT);
 
 export function TodayCompanionBubble({
   colors,
@@ -54,6 +74,14 @@ export function TodayCompanionBubble({
   dismissAccessibilityLabel,
   dismissAccessibilityHint,
 }: Props) {
+  const { isDark } = useTheme();
+  const mode = isDark ? 'dark' : 'light';
+  const tailFill = alpha(
+    colors.backgroundElevated,
+    Platform.OS === 'ios' ? GLASS.tintAlpha[mode] : GLASS.androidTintAlpha,
+  );
+  const tailStroke = alpha(colors.text, GLASS.borderAlpha[mode]);
+
   const handleDismiss = React.useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     animateCardDismiss();
@@ -75,32 +103,49 @@ export function TodayCompanionBubble({
   ) : null;
 
   const bubbleContent = (
-    <GlassSurface
-      radius={Radius.lg}
-      blurTestID="today-companion-glass-blur"
-      style={[styles.bubble, onDismiss && styles.bubbleWithDismiss]}
-    >
-      {children ?? (
-        <Text style={[styles.text, { color: colors.text }]} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}>
-          {text}
-        </Text>
-      )}
-
-      {label ? (
-        <Text style={[styles.label, { color: colors.textMuted }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
-          {label}
-        </Text>
-      ) : null}
-
-      {actionLabel ? (
-        <View style={styles.actionLink}>
-          <Text style={[styles.actionText, { color: colors.textSubtle }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
-            {actionLabel}
+    <View style={styles.bubbleHost}>
+      <GlassSurface
+        radius={Radius.lg}
+        blurTestID="today-companion-glass-blur"
+        style={[styles.bubble, onDismiss && styles.bubbleWithDismiss]}
+      >
+        {children ?? (
+          <Text style={[styles.text, { color: colors.text }]} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}>
+            {text}
           </Text>
-          <ArrowRightIcon size={13} color={accentColor} weight="light" />
-        </View>
-      ) : null}
-    </GlassSurface>
+        )}
+
+        {label ? (
+          <Text style={[styles.label, { color: colors.textMuted }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
+            {label}
+          </Text>
+        ) : null}
+
+        {actionLabel ? (
+          <View style={styles.actionLink}>
+            <Text style={[styles.actionText, { color: colors.textSubtle }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
+              {actionLabel}
+            </Text>
+            <ArrowRightIcon size={13} color={accentColor} weight="light" />
+          </View>
+        ) : null}
+      </GlassSurface>
+      <Svg
+        width={BUBBLE_TAIL_WIDTH}
+        height={BUBBLE_TAIL_HEIGHT}
+        viewBox={`0 0 ${BUBBLE_TAIL_WIDTH} ${BUBBLE_TAIL_HEIGHT}`}
+        style={styles.tail}
+        pointerEvents="none"
+        testID="today-companion-tail"
+      >
+        <Path
+          d={BUBBLE_TAIL_PATH}
+          fill={tailFill}
+          stroke={tailStroke}
+          strokeWidth={StyleSheet.hairlineWidth}
+        />
+      </Svg>
+    </View>
   );
 
   const content = (
@@ -180,6 +225,14 @@ const styles = StyleSheet.create({
     minWidth: 0,
     position: 'relative',
     alignItems: 'flex-start',
+  },
+  bubbleHost: {
+    position: 'relative',
+  },
+  tail: {
+    position: 'absolute',
+    left: -BUBBLE_TAIL_WIDTH,
+    top: BUBBLE_TAIL_CENTER_Y - BUBBLE_TAIL_HEIGHT / 2,
   },
   bubble: {
     position: 'relative',
