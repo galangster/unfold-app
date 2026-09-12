@@ -1,0 +1,2210 @@
+{
+  "version": 1,
+  "examples": [
+    {
+      "id": "lectio_divina",
+      "methodId": "lectio_divina",
+      "methodName": "Lectio Divina (Divine Reading)",
+      "title": "Be Still",
+      "introduction": "One verse tonight, nothing more. After a day of hurrying past words, just read slowly, and let a phrase find you.",
+      "passage": {
+        "reference": "Psalm 46:10",
+        "translation": "BSB",
+        "bookId": 19,
+        "chapter": 46,
+        "verseStart": 10,
+        "verseEnd": 10,
+        "verses": [
+          {
+            "verse": 10,
+            "text": "“Be still and know that I am God; I will be exalted among the nations, I will be exalted over the earth.”"
+          }
+        ]
+      },
+      "supportingPassages": [],
+      "sections": [
+        {
+          "id": "lectio",
+          "label": "Read",
+          "kind": "reading",
+          "text": "Be still and know that I am God; I will be exalted among the nations, I will be exalted over the earth.",
+          "prompt": ""
+        },
+        {
+          "id": "meditatio",
+          "label": "A phrase stays",
+          "kind": "notice",
+          "text": "Read the verse again, slower. Notice which few words catch on something in you tonight. Do not chase meaning yet. Just stay where the words hold you.",
+          "prompt": "Which phrase caught you this time?"
+        },
+        {
+          "id": "oratio",
+          "label": "Speak honestly",
+          "kind": "prayer",
+          "text": "Take that phrase back to God, just as it is. Say it as a question, an ache, or a plain admission if that is what is honest.",
+          "prompt": "Speak the phrase to God now."
+        },
+        {
+          "id": "contemplatio",
+          "label": "Rest without words",
+          "kind": "pause",
+          "text": "Let the words go quiet now. No conclusion to reach, nothing to fix. Just stillness, for as long as it lasts.",
+          "prompt": ""
+        }
+      ],
+      "provenance": {
+        "model": "claude-sonnet-5",
+        "generatedAt": "2026-09-12T23:24:23.903Z"
+      }
+    },
+    {
+      "id": "inductive_oia",
+      "methodId": "inductive_oia",
+      "methodName": "Inductive Study (OIA)",
+      "title": "Four Men and a Roof",
+      "introduction": "You're tired, and the words move fast when you're tired. Before anyone explains this scene, slow down enough to actually look at it. What's on the page, plainly, before you reach for meaning?",
+      "passage": {
+        "reference": "Mark 2:1-12",
+        "translation": "BSB",
+        "bookId": 41,
+        "chapter": 2,
+        "verseStart": 1,
+        "verseEnd": 12,
+        "verses": [
+          {
+            "verse": 1,
+            "text": "A few days later Jesus went back to Capernaum. And when the people heard that He was home,"
+          },
+          {
+            "verse": 2,
+            "text": "they gathered in such large numbers that there was no more room, not even outside the door, as Jesus spoke the word to them."
+          },
+          {
+            "verse": 3,
+            "text": "Then a paralytic was brought to Him, carried by four men."
+          },
+          {
+            "verse": 4,
+            "text": "Since they were unable to get to Jesus through the crowd, they uncovered the roof above Him, made an opening, and lowered the paralytic on his mat."
+          },
+          {
+            "verse": 5,
+            "text": "When Jesus saw their faith, He said to the paralytic, “Son, your sins are forgiven.”"
+          },
+          {
+            "verse": 6,
+            "text": "But some of the scribes were sitting there and thinking in their hearts,"
+          },
+          {
+            "verse": 7,
+            "text": "“Why does this man speak like this? He is blaspheming! Who can forgive sins but God alone?”"
+          },
+          {
+            "verse": 8,
+            "text": "At once Jesus knew in His spirit that they were thinking this way within themselves. “Why are you thinking these things in your hearts?” He asked."
+          },
+          {
+            "verse": 9,
+            "text": "“Which is easier: to say to a paralytic, ‘Your sins are forgiven,’ or to say, ‘Get up, pick up your mat, and walk’?"
+          },
+          {
+            "verse": 10,
+            "text": "But so that you may know that the Son of Man has authority on earth to forgive sins...” He said to the paralytic,"
+          },
+          {
+            "verse": 11,
+            "text": "“I tell you, get up, pick up your mat, and go home.”"
+          },
+          {
+            "verse": 12,
+            "text": "And immediately the man got up, picked up his mat, and walked out in front of them all. As a result, they were all astounded and glorified God, saying, “We have never seen anything like this!”"
+          }
+        ]
+      },
+      "supportingPassages": [],
+      "sections": [
+        {
+          "id": "observe",
+          "label": "What is on the page",
+          "kind": "notice",
+          "text": "Count the people who speak. Jesus speaks. The scribes speak, but only in their hearts. The crowd speaks at the end. The four men never say a word. Neither does the paralytic. Notice the mat: it is lowered, then picked up and carried home. Notice the order too: forgiveness comes first, walking comes second.",
+          "prompt": "List every action taken before Jesus speaks to the man."
+        },
+        {
+          "id": "interpret",
+          "label": "Why it is shaped this way",
+          "kind": "reflection",
+          "text": "Jesus responds to faith He sees in the people bringing the man. The mat that carried him becomes the mat he carries out: the same object, moving in the opposite direction. The scribes question His authority to forgive, and Jesus answers that question through something they can see. Hold those details together before deciding what the scene asks of you.",
+          "prompt": "Why might Jesus have answered a question no one asked aloud?"
+        },
+        {
+          "id": "apply",
+          "label": "One concrete move",
+          "kind": "response",
+          "text": "Head: notice that forgiveness came before healing, not after proof of change. Heart: sit with the fact that four men did the work of bringing someone to Jesus, while the passage leaves the paralytic's words unrecorded. Hands: think of one person you could carry, literally or otherwise, toward Him this week.",
+          "prompt": "Who has carried you toward Jesus without you asking?"
+        }
+      ],
+      "provenance": {
+        "model": "claude-sonnet-5",
+        "generatedAt": "2026-09-12T23:24:23.902Z"
+      }
+    },
+    {
+      "id": "narrative_study",
+      "methodId": "narrative_study",
+      "methodName": "Narrative / Story Analysis",
+      "title": "Alone at the Jabbok",
+      "introduction": "A man sends his household and possessions across a stream and stays behind in the dark. What happens next has no easy edges. Just a fight that lasts until morning, and a name that changes because of it.",
+      "passage": {
+        "reference": "Genesis 32:22-32",
+        "translation": "BSB",
+        "bookId": 1,
+        "chapter": 32,
+        "verseStart": 22,
+        "verseEnd": 32,
+        "verses": [
+          {
+            "verse": 22,
+            "text": "During the night Jacob got up and took his two wives, his two maidservants, and his eleven sons, and crossed the ford of the Jabbok."
+          },
+          {
+            "verse": 23,
+            "text": "He took them and sent them across the stream, along with all his possessions."
+          },
+          {
+            "verse": 24,
+            "text": "So Jacob was left all alone, and there a man wrestled with him until daybreak."
+          },
+          {
+            "verse": 25,
+            "text": "When the man saw that he could not overpower Jacob, he struck the socket of Jacob’s hip and dislocated it as they wrestled."
+          },
+          {
+            "verse": 26,
+            "text": "Then the man said, “Let me go, for it is daybreak.”  But Jacob replied, “I will not let you go unless you bless me.”"
+          },
+          {
+            "verse": 27,
+            "text": "“What is your name?” the man asked.  “Jacob,” he replied."
+          },
+          {
+            "verse": 28,
+            "text": "Then the man said, “Your name will no longer be Jacob, but Israel, because you have struggled with God and with men, and you have prevailed.”"
+          },
+          {
+            "verse": 29,
+            "text": "And Jacob requested, “Please tell me your name.”  But he replied, “Why do you ask my name?” Then he blessed Jacob there."
+          },
+          {
+            "verse": 30,
+            "text": "So Jacob named the place Peniel, saying, “Indeed, I have seen God face to face, and yet my life was spared.”"
+          },
+          {
+            "verse": 31,
+            "text": "The sun rose above him as he passed by Penuel, and he was limping because of his hip."
+          },
+          {
+            "verse": 32,
+            "text": "Therefore to this day the Israelites do not eat the tendon which is at the socket of the hip, because the socket of Jacob’s hip was struck near that tendon."
+          }
+        ]
+      },
+      "supportingPassages": [],
+      "sections": [
+        {
+          "id": "scene",
+          "label": "Night at the ford",
+          "kind": "reading",
+          "text": "Night. Jacob sends his wives, his sons, his maidservants, and his possessions across the ford of the Jabbok. Then he is alone. No family voice remains beside him in the dark. And there, while Jacob is alone, a man wrestles with him. The struggle continues until daybreak.",
+          "prompt": ""
+        },
+        {
+          "id": "conflict",
+          "label": "What is at stake",
+          "kind": "notice",
+          "text": "The man sees that he cannot overpower Jacob and strikes his hip, dislocating it. Still Jacob holds on. He wants a blessing before he lets go. The injury does not end his request. Listen to those words again, spoken in the middle of a struggle the passage has not yet explained.",
+          "prompt": ""
+        },
+        {
+          "id": "climax",
+          "label": "The limp remains",
+          "kind": "reflection",
+          "text": "Jacob gets a new name, Israel, because he has struggled with God and with men. His hip is injured too. The blessing and the injury belong to the same encounter. He calls the place Peniel, because he has seen God face to face and lived. Then the sun rises, and the passage leaves us with Jacob limping as he passes by.",
+          "prompt": ""
+        },
+        {
+          "id": "after",
+          "label": "Carry the unfinished fight",
+          "kind": "response",
+          "text": "Jacob walks away with a new name and an injured hip. The text does not say the limp healed later. It says he was limping as he passed by Penuel. The encounter has marked both his name and his body, and the passage leaves him carrying both.",
+          "prompt": "What fight are you still carrying the mark of?"
+        }
+      ],
+      "provenance": {
+        "model": "claude-sonnet-5",
+        "generatedAt": "2026-09-12T23:24:23.903Z"
+      }
+    },
+    {
+      "id": "word_study",
+      "methodId": "word_study",
+      "methodName": "Word Study",
+      "title": "His Loving Devotion Endures Forever",
+      "introduction": "Nine verses. One line repeating. If your eyes skim past it tonight, that's fine. It's built to be heard even when you're tired: His loving devotion endures forever.",
+      "passage": {
+        "reference": "Psalm 136:1-9",
+        "translation": "BSB",
+        "bookId": 19,
+        "chapter": 136,
+        "verseStart": 1,
+        "verseEnd": 9,
+        "verses": [
+          {
+            "verse": 1,
+            "text": "Give thanks to the LORD, for He is good. His loving devotion endures forever."
+          },
+          {
+            "verse": 2,
+            "text": "Give thanks to the God of gods. His loving devotion endures forever."
+          },
+          {
+            "verse": 3,
+            "text": "Give thanks to the Lord of lords. His loving devotion endures forever."
+          },
+          {
+            "verse": 4,
+            "text": "He alone does great wonders. His loving devotion endures forever."
+          },
+          {
+            "verse": 5,
+            "text": "By His insight He made the heavens. His loving devotion endures forever."
+          },
+          {
+            "verse": 6,
+            "text": "He spread out the earth upon the waters. His loving devotion endures forever."
+          },
+          {
+            "verse": 7,
+            "text": "He made the great lights— His loving devotion endures forever."
+          },
+          {
+            "verse": 8,
+            "text": "the sun to rule the day, His loving devotion endures forever."
+          },
+          {
+            "verse": 9,
+            "text": "the moon and stars to govern the night. His loving devotion endures forever."
+          }
+        ]
+      },
+      "supportingPassages": [],
+      "sections": [
+        {
+          "id": "the_word",
+          "label": "Notice the repeated phrase",
+          "kind": "notice",
+          "text": "Read the psalm straight through and you'll see it every single line. After naming God, after each wonder listed, the same words return: His loving devotion endures forever. Nine times in nine verses. It's not background noise. It's the whole structure.",
+          "prompt": ""
+        },
+        {
+          "id": "the_refrain",
+          "label": "The refrain at work",
+          "kind": "reflection",
+          "text": "Verse one says it after calling God good. Verse four says it after great wonders. Verse six says it after the earth spread over the waters. Verse nine says it after the moon and stars. Whatever comes before, the line after never changes. Heavens, earth, sun, moon, all different subjects. One answer follows every single one.",
+          "prompt": ""
+        },
+        {
+          "id": "this_verse",
+          "label": "These nine verses only",
+          "kind": "reflection",
+          "text": "Stay right here in these nine verses. Don't reach ahead in the psalm or borrow from another passage. God of gods, Lord of lords, the heavens made by His insight, the earth spread out, the lights set to rule day and night. That's the whole scope for now.",
+          "prompt": ""
+        },
+        {
+          "id": "carry_the_word",
+          "label": "Keep the refrain",
+          "kind": "response",
+          "text": "You don't need to explain this line today. Just carry it. Say it once when the day feels ordinary and once when it doesn't. His loving devotion endures forever, whether you noticed it or not.",
+          "prompt": "Where will you say this line today?"
+        }
+      ],
+      "provenance": {
+        "model": "claude-sonnet-5",
+        "generatedAt": "2026-09-12T23:24:23.913Z"
+      }
+    },
+    {
+      "id": "cross_reference",
+      "methodId": "cross_reference",
+      "methodName": "Cross-Reference / Theme Tracing",
+      "title": "Three Rests, One Thread",
+      "introduction": "You skimmed yesterday, and that's fine. Today, slow down for one saying about rest. It connects to two older promises about rest that God already made, long before Jesus ever spoke.",
+      "passage": {
+        "reference": "Matthew 11:28-30",
+        "translation": "BSB",
+        "bookId": 40,
+        "chapter": 11,
+        "verseStart": 28,
+        "verseEnd": 30,
+        "verses": [
+          {
+            "verse": 28,
+            "text": "Come to Me, all you who are weary and burdened, and I will give you rest."
+          },
+          {
+            "verse": 29,
+            "text": "Take My yoke upon you and learn from Me; for I am gentle and humble in heart, and you will find rest for your souls."
+          },
+          {
+            "verse": 30,
+            "text": "For My yoke is easy and My burden is light.”"
+          }
+        ]
+      },
+      "supportingPassages": [
+        {
+          "reference": "Exodus 33:14",
+          "translation": "BSB",
+          "bookId": 2,
+          "chapter": 33,
+          "verseStart": 14,
+          "verseEnd": 14,
+          "verses": [
+            {
+              "verse": 14,
+              "text": "And the LORD answered, “My Presence will go with you, and I will give you rest.”"
+            }
+          ]
+        },
+        {
+          "reference": "Jeremiah 6:16",
+          "translation": "BSB",
+          "bookId": 24,
+          "chapter": 6,
+          "verseStart": 16,
+          "verseEnd": 16,
+          "verses": [
+            {
+              "verse": 16,
+              "text": "This is what the LORD says:  “Stand at the crossroads and look. Ask for the ancient paths: ‘Where is the good way?’ Then walk in it, and you will find rest for your souls. But they said, ‘We will not walk in it!’"
+            }
+          ]
+        }
+      ],
+      "sections": [
+        {
+          "id": "this_link",
+          "label": "Today's yoke",
+          "kind": "reading",
+          "text": "Jesus says come to Him, all who are weary and burdened, and He will give rest. He adds a yoke, His yoke, calling it easy and light. He says He is gentle and humble in heart. This is one saying in a longer line about rest.",
+          "prompt": ""
+        },
+        {
+          "id": "before",
+          "label": "Rest in the earlier passage",
+          "kind": "notice",
+          "text": "In the Exodus passage, the LORD says, \"My Presence will go with you, and I will give you rest.\" In Jeremiah, the invitation is to stand at the crossroads, ask for the good way, and walk in it to find rest for their souls. The response is a refusal: they will not walk in it.",
+          "prompt": ""
+        },
+        {
+          "id": "today_adds",
+          "label": "What this saying adds",
+          "kind": "reflection",
+          "text": "Jeremiah's crossroads asks for searching, choosing, and walking. Jesus gives that invitation a personal center: come to Me, take My yoke, learn from Me. These passages connect rest with God's presence and with a way of living. Notice what Jesus adds here: the one teaching us is gentle and humble in heart.",
+          "prompt": ""
+        },
+        {
+          "id": "the_join",
+          "label": "How these rests meet",
+          "kind": "reflection",
+          "text": "Rest through God's Presence. Rest found by walking in the good way. Rest offered by Jesus as we come and learn from Him. Read those invitations beside each other once more. What connection do you notice?",
+          "prompt": "Where do these three promises meet for you tonight?"
+        }
+      ],
+      "provenance": {
+        "model": "claude-sonnet-5",
+        "generatedAt": "2026-09-12T23:24:23.894Z"
+      }
+    },
+    {
+      "id": "soap_journal",
+      "methodId": "soap_journal",
+      "methodName": "SOAP Journaling",
+      "title": "Quick to Listen",
+      "introduction": "Some nights the words on the page go by fast. Tonight, just two verses. Slow down enough to actually see them before you close the book.",
+      "passage": {
+        "reference": "James 1:19-20",
+        "translation": "BSB",
+        "bookId": 59,
+        "chapter": 1,
+        "verseStart": 19,
+        "verseEnd": 20,
+        "verses": [
+          {
+            "verse": 19,
+            "text": "My beloved brothers, understand this: Everyone should be quick to listen, slow to speak, and slow to anger,"
+          },
+          {
+            "verse": 20,
+            "text": "for man’s anger does not bring about the righteousness that God desires."
+          }
+        ]
+      },
+      "supportingPassages": [],
+      "sections": [
+        {
+          "id": "scripture_frame",
+          "label": "The verses on the page",
+          "kind": "reading",
+          "text": "James is writing to people he calls beloved. He tells them to be quick to listen, slow to speak, slow to anger. Then he adds a reason: human anger doesn't produce the righteousness God wants.",
+          "prompt": ""
+        },
+        {
+          "id": "observation",
+          "label": "Two things noticed",
+          "kind": "notice",
+          "text": "First, the three instructions belong together: quick to listen, slow to speak, slow to anger. Second, ‘quick’ attaches only to listening, while ‘slow’ governs both speaking and anger. The contrast is visible without turning the list into a timetable.",
+          "prompt": ""
+        },
+        {
+          "id": "application",
+          "label": "One specific act",
+          "kind": "response",
+          "text": "Pick one conversation tomorrow, maybe a tense email, maybe someone at the table who talks too long. Before you answer, count to five. That's it. Not a technique, just a pause long enough to actually listen first.",
+          "prompt": "Which conversation tomorrow could use a five-second pause?"
+        },
+        {
+          "id": "prayer",
+          "label": "A written reply",
+          "kind": "prayer",
+          "text": "God, I read past this too fast most days. Tonight I saw it. Slow me down before I speak, before I snap. My anger doesn't build what You're building. Teach me to listen first. Amen.",
+          "prompt": ""
+        }
+      ],
+      "provenance": {
+        "model": "claude-sonnet-5",
+        "generatedAt": "2026-09-12T23:24:23.908Z"
+      }
+    },
+    {
+      "id": "breath_prayer",
+      "methodId": "breath_prayer",
+      "methodName": "Breath Prayer with Scripture",
+      "title": "The Lord Is My Shepherd",
+      "introduction": "You're tired after a long day. Before you skim past this one more time, slow down for one verse and five breaths.",
+      "passage": {
+        "reference": "Psalm 23:1",
+        "translation": "BSB",
+        "bookId": 19,
+        "chapter": 23,
+        "verseStart": 1,
+        "verseEnd": 1,
+        "verses": [
+          {
+            "verse": 1,
+            "text": "The LORD is my shepherd; I shall not want."
+          }
+        ]
+      },
+      "supportingPassages": [],
+      "sections": [
+        {
+          "id": "the_line",
+          "label": "The whole verse",
+          "kind": "reading",
+          "text": "The LORD is my shepherd; I shall not want. Read it once. Read it again, slower this time. Let the words sit on your tongue before you move on.",
+          "prompt": ""
+        },
+        {
+          "id": "the_split",
+          "label": "Inhale and exhale",
+          "kind": "notice",
+          "text": "Breathe in on \"The LORD is my shepherd.\" Breathe out on \"I shall not want.\" Notice the weight in the first half, and the release in the second. You're not managing your own care right now. Something is being carried for you.",
+          "prompt": ""
+        },
+        {
+          "id": "the_repeat",
+          "label": "Five slow breaths",
+          "kind": "pause",
+          "text": "Five times now. In: \"The LORD is my shepherd.\" Out: \"I shall not want.\" Let your shoulders drop with the exhale. Nothing to figure out here, just breath and the phrase.",
+          "prompt": "Breathe five times with only these words."
+        }
+      ],
+      "provenance": {
+        "model": "claude-sonnet-5",
+        "generatedAt": "2026-09-12T23:24:23.887Z"
+      }
+    },
+    {
+      "id": "character_study",
+      "methodId": "character_study",
+      "methodName": "Character / Biographical Study",
+      "title": "The Boy Who Answered a King",
+      "introduction": "Saul sees a boy facing an experienced fighter. David answers with a memory of deliverance. Read their conversation before deciding whether this is simply a story about being brave enough to ignore someone's doubts.",
+      "passage": {
+        "reference": "1 Samuel 17:32-37",
+        "translation": "BSB",
+        "bookId": 9,
+        "chapter": 17,
+        "verseStart": 32,
+        "verseEnd": 37,
+        "verses": [
+          {
+            "verse": 32,
+            "text": "And David said to Saul, “Let no man’s heart fail on account of this Philistine. Your servant will go and fight him!”"
+          },
+          {
+            "verse": 33,
+            "text": "But Saul replied, “You cannot go out against this Philistine to fight him. You are just a boy, and he has been a warrior from his youth.”"
+          },
+          {
+            "verse": 34,
+            "text": "David replied, “Your servant has been tending his father’s sheep, and whenever a lion or a bear came and carried off a lamb from the flock,"
+          },
+          {
+            "verse": 35,
+            "text": "I went after it, struck it down, and delivered the lamb from its mouth. If it reared up against me, I would grab it by its fur, strike it down, and kill it."
+          },
+          {
+            "verse": 36,
+            "text": "Your servant has killed lions and bears; this uncircumcised Philistine will be like one of them, for he has defied the armies of the living God.”"
+          },
+          {
+            "verse": 37,
+            "text": "David added, “The LORD, who delivered me from the claws of the lion and the bear, will deliver me from the hand of this Philistine.”  “Go,” said Saul, “and may the LORD be with you.”"
+          }
+        ]
+      },
+      "supportingPassages": [],
+      "sections": [
+        {
+          "id": "the_person",
+          "label": "David before the giant speech",
+          "kind": "reading",
+          "text": "Saul sees a mismatch between David's youth and the Philistine's experience. David answers by describing his work as a shepherd. When a lion or bear took a sheep, he pursued it and rescued the animal. His answer brings experience Saul's first assessment has not considered into the conversation.",
+          "prompt": ""
+        },
+        {
+          "id": "the_choice",
+          "label": "The crisis line",
+          "kind": "notice",
+          "text": "David does more than list his encounters with the lion and bear. He names the LORD as the one who delivered him. Then he expresses confidence about facing the Philistine. Watch how the remembered danger, the rescue, and the present decision fit together in his answer.",
+          "prompt": ""
+        },
+        {
+          "id": "the_mirror",
+          "label": "Where the reader stands",
+          "kind": "reflection",
+          "text": "David's confidence rests on how he understands the help he has already received. The passage does not ask you to treat every doubt as an enemy. It gives you a person whose memory of God's deliverance shapes a difficult choice. Consider what you remember, and how you interpret it, before making your own next decision.",
+          "prompt": "When has your history shaped a choice someone else questioned?"
+        }
+      ],
+      "provenance": {
+        "model": "claude-sonnet-5",
+        "generatedAt": "2026-09-12T23:24:23.891Z"
+      }
+    },
+    {
+      "id": "comparative_translation",
+      "methodId": "comparative_translation",
+      "methodName": "Comparative Translation Study",
+      "title": "One Verse, Two Shades",
+      "introduction": "Place these two translations beside each other. Read each aloud if you can. Notice the words they share before moving to the words that differ. You are listening for what each English rendering brings into focus.",
+      "passage": {
+        "reference": "Romans 12:1",
+        "translation": "BSB",
+        "bookId": 45,
+        "chapter": 12,
+        "verseStart": 1,
+        "verseEnd": 1,
+        "verses": [
+          {
+            "verse": 1,
+            "text": "Therefore I urge you, brothers, on account of God’s mercy, to offer your bodies as living sacrifices, holy and pleasing to God, which is your spiritual service of worship."
+          }
+        ]
+      },
+      "supportingPassages": [
+        {
+          "reference": "Romans 12:1",
+          "translation": "KJV",
+          "bookId": 45,
+          "chapter": 12,
+          "verseStart": 1,
+          "verseEnd": 1,
+          "verses": [
+            {
+              "verse": 1,
+              "text": "I beseech you therefore, brethren, by the mercies of God, that ye present your bodies a living sacrifice, holy, acceptable unto God, which is your reasonable service."
+            }
+          ]
+        }
+      ],
+      "sections": [
+        {
+          "id": "bsb_line",
+          "label": "The BSB wording",
+          "kind": "reading",
+          "text": "The BSB says God's mercy is the reason for the offering. Bodies given as living sacrifices, holy and pleasing, called spiritual worship. Mercy comes first, before the ask.",
+          "prompt": ""
+        },
+        {
+          "id": "kjv_line",
+          "label": "The KJV wording",
+          "kind": "notice",
+          "text": "The KJV uses older words for the same move. It says mercies, plural, and beseech instead of urge. The sacrifice is still living, still holy, still acceptable. But it names the service reasonable, not spiritual, and that word choice sits differently in the ear.",
+          "prompt": ""
+        },
+        {
+          "id": "the_shade",
+          "label": "Where they agree and differ",
+          "kind": "reflection",
+          "text": "Both renderings begin with God's mercy and ask for bodies offered as a living sacrifice. Now read spiritual and reasonable aloud within their sentences. Notice how each word directs your attention. You do not have to choose a winning translation. Hold both renderings beside the shared call to offer your life to God.",
+          "prompt": "Which word, spiritual or reasonable, describes your worship today?"
+        }
+      ],
+      "provenance": {
+        "model": "claude-sonnet-5",
+        "generatedAt": "2026-09-12T23:24:23.892Z"
+      }
+    },
+    {
+      "id": "covenant_study",
+      "methodId": "covenant_study",
+      "methodName": "Covenant Study",
+      "title": "Count the Stars",
+      "introduction": "God takes Abram outside and directs his attention to the stars. In two short verses, a promise about offspring meets a response of belief. Read the promise and response separately before considering how they belong together.",
+      "passage": {
+        "reference": "Genesis 15:5-6",
+        "translation": "BSB",
+        "bookId": 1,
+        "chapter": 15,
+        "verseStart": 5,
+        "verseEnd": 6,
+        "verses": [
+          {
+            "verse": 5,
+            "text": "And the LORD took him outside and said, “Now look to the heavens and count the stars, if you are able.” Then He told him, “So shall your offspring be.”"
+          },
+          {
+            "verse": 6,
+            "text": "Abram believed the LORD, and it was credited to him as righteousness."
+          }
+        ]
+      },
+      "supportingPassages": [],
+      "sections": [
+        {
+          "id": "the_promise",
+          "label": "Stars and offspring",
+          "kind": "reading",
+          "text": "God brings Abram outside and asks him to look at the sky. Could he count the stars? The promise follows that invitation to look: so shall your offspring be. Stay with the scale of the image and the directness of the promise. Abram is receiving a word from God.",
+          "prompt": ""
+        },
+        {
+          "id": "the_elements",
+          "label": "Promise and trust",
+          "kind": "notice",
+          "text": "Three things sit here, nothing more. God is the one speaking, not Abram bargaining or striving. The promise is offspring, a future Abram cannot manufacture on his own. And Abram's trust, simple and unadorned, is what gets credited to him as righteousness. Not effort. Not a ritual performed. Belief, counted.",
+          "prompt": ""
+        },
+        {
+          "id": "the_trust",
+          "label": "Counted as righteousness",
+          "kind": "prayer",
+          "text": "Abram believes the LORD, and the LORD credits it to him as righteousness. Keep both parts of that sentence in view. Before taking inventory of what you accomplished today, consider what prayer shaped by trust might sound like. You can begin by answering the God who speaks.",
+          "prompt": "What would a prayer shaped by Abram's trust sound like?"
+        }
+      ],
+      "provenance": {
+        "model": "claude-sonnet-5",
+        "generatedAt": "2026-09-12T23:24:23.893Z"
+      }
+    },
+    {
+      "id": "discovery_bible_study",
+      "methodId": "discovery_bible_study",
+      "methodName": "Discovery Bible Study (DBS)",
+      "title": "Midnight in the Jail",
+      "introduction": "Read this scene once, then try telling it back in your own words. Notice what happens before deciding what it means. The questions will help you explore God, people, and someone with whom you might share what you discover.",
+      "passage": {
+        "reference": "Acts 16:25-34",
+        "translation": "BSB",
+        "bookId": 44,
+        "chapter": 16,
+        "verseStart": 25,
+        "verseEnd": 34,
+        "verses": [
+          {
+            "verse": 25,
+            "text": "About midnight Paul and Silas were praying and singing hymns to God, and the other prisoners were listening to them."
+          },
+          {
+            "verse": 26,
+            "text": "Suddenly a strong earthquake shook the foundations of the prison. At once all the doors flew open and everyone’s chains came loose."
+          },
+          {
+            "verse": 27,
+            "text": "When the jailer woke up and saw the prison doors open, he drew his sword and was about to kill himself, presuming that the prisoners had escaped."
+          },
+          {
+            "verse": 28,
+            "text": "But Paul called out in a loud voice, “Do not harm yourself! We are all here!”"
+          },
+          {
+            "verse": 29,
+            "text": "Calling for lights, the jailer rushed in and fell trembling before Paul and Silas."
+          },
+          {
+            "verse": 30,
+            "text": "Then he brought them out and asked, “Sirs, what must I do to be saved?”"
+          },
+          {
+            "verse": 31,
+            "text": "They replied, “Believe in the Lord Jesus and you will be saved, you and your household.”"
+          },
+          {
+            "verse": 32,
+            "text": "Then Paul and Silas spoke the word of the Lord to him and to everyone in his house."
+          },
+          {
+            "verse": 33,
+            "text": "At that hour of the night, the jailer took them and washed their wounds. And without delay, he and all his household were baptized."
+          },
+          {
+            "verse": 34,
+            "text": "Then he brought them into his home and set a meal before them. So he and all his household rejoiced that they had come to believe in God."
+          }
+        ]
+      },
+      "supportingPassages": [],
+      "sections": [
+        {
+          "id": "what_happens",
+          "label": "The night in the jail",
+          "kind": "reading",
+          "text": "Paul and Silas are praying and singing around midnight. Other prisoners are listening. An earthquake hits, the doors fly open, every chain comes loose. The jailer wakes, sees the open doors, and draws his sword to kill himself. Paul shouts, \"Do not harm yourself! We are all here!\" The jailer falls trembling before them and asks what he must do to be saved.",
+          "prompt": ""
+        },
+        {
+          "id": "about_god",
+          "label": "What this shows about God",
+          "kind": "reflection",
+          "text": "The earthquake opens the doors, yet Paul tells the jailer that everyone is still there. He calls out before the man harms himself. Look at the power displayed in the scene and the care shown for one frightened person. What do you notice when you hold those together?",
+          "prompt": "What do you notice about God's work in this scene?"
+        },
+        {
+          "id": "about_people",
+          "label": "What this shows about people",
+          "kind": "reflection",
+          "text": "The jailer asks a real question in a real crisis: \"What must I do to be saved?\" Paul and Silas answer plainly, then speak the word to everyone in the house. That night he washes their wounds, and his whole household is baptized without delay.",
+          "prompt": "What moved the jailer from fear to that question?"
+        },
+        {
+          "id": "who_hears",
+          "label": "Who needs this told",
+          "kind": "response",
+          "text": "The jailer didn't keep this to himself. His whole household heard the word that night and believed with him. Whose ordinary, tired night could use this story told to them this week?",
+          "prompt": "Who in your house or workplace needs this told to them?"
+        }
+      ],
+      "provenance": {
+        "model": "claude-sonnet-5",
+        "generatedAt": "2026-09-12T23:24:23.895Z"
+      }
+    },
+    {
+      "id": "epistle_study",
+      "methodId": "epistle_study",
+      "methodName": "Epistle / Letter Study",
+      "title": "Freedom, Love, and the Warning",
+      "introduction": "Paul is not writing a lesson on liberty. He's writing to a church that's tearing itself apart, telling them what freedom is actually for and what happens when they forget.",
+      "passage": {
+        "reference": "Galatians 5:13-15",
+        "translation": "BSB",
+        "bookId": 48,
+        "chapter": 5,
+        "verseStart": 13,
+        "verseEnd": 15,
+        "verses": [
+          {
+            "verse": 13,
+            "text": "For you, brothers, were called to freedom; but do not use your freedom as an opportunity for the flesh. Rather, serve one another in love."
+          },
+          {
+            "verse": 14,
+            "text": "The entire law is fulfilled in a single decree: “Love your neighbor as yourself.”"
+          },
+          {
+            "verse": 15,
+            "text": "But if you keep on biting and devouring one another, watch out, or you will be consumed by one another."
+          }
+        ]
+      },
+      "supportingPassages": [],
+      "sections": [
+        {
+          "id": "the_letter",
+          "label": "Freedom named to a real church",
+          "kind": "reading",
+          "text": "This is a letter to real people, not an idea floating in the air. Paul tells them they were called to freedom. Then he warns them fast: don't let that freedom become cover for the flesh. Freedom was never the finish line.",
+          "prompt": ""
+        },
+        {
+          "id": "the_therefore",
+          "label": "Because freedom, therefore love",
+          "kind": "notice",
+          "text": "Notice the sequence. Freedom comes first, but it's not the destination. It's the reason for what follows: serve one another in love. Paul says the whole law comes down to loving your neighbor as yourself. Freedom that doesn't move toward someone else isn't the freedom he's describing.",
+          "prompt": ""
+        },
+        {
+          "id": "the_bite",
+          "label": "What devouring looks like",
+          "kind": "response",
+          "text": "Then the warning lands. Biting and devouring one another. That's what happens when freedom curves inward instead of outward. Paul doesn't soften it. He tells them plainly they will be consumed by each other if this keeps going.",
+          "prompt": "Where has your freedom curved inward instead of toward someone else?"
+        }
+      ],
+      "provenance": {
+        "model": "claude-sonnet-5",
+        "generatedAt": "2026-09-12T23:24:23.896Z"
+      }
+    },
+    {
+      "id": "examen_with_scripture",
+      "methodId": "examen_with_scripture",
+      "methodName": "Examen with Scripture",
+      "title": "Search Me Tonight",
+      "introduction": "The day is done, or close enough. Before you set it down, let this old prayer walk through it with you. Search me, O God.",
+      "passage": {
+        "reference": "Psalm 139:23-24",
+        "translation": "BSB",
+        "bookId": 19,
+        "chapter": 139,
+        "verseStart": 23,
+        "verseEnd": 24,
+        "verses": [
+          {
+            "verse": 23,
+            "text": "Search me, O God, and know my heart; test me and know my concerns."
+          },
+          {
+            "verse": 24,
+            "text": "See if there is any offensive way in me; lead me in the way everlasting."
+          }
+        ]
+      },
+      "supportingPassages": [],
+      "sections": [
+        {
+          "id": "replay",
+          "label": "Walk the day once",
+          "kind": "notice",
+          "text": "Start at this morning and move forward slowly. Do not judge yet, just watch. Maybe a meeting ran long, or a text remained unsent. Let the hours pass in front of you while this prayer guides what you notice.",
+          "prompt": "Where did today actually take you?"
+        },
+        {
+          "id": "recognize",
+          "label": "Where this prayer was true",
+          "kind": "reflection",
+          "text": "Somewhere in those hours, what might God search and know? Perhaps irritation rose, or kindness became possible. Bring both concern and any offensive way into the prayer. Ask to see honestly without inventing the answer yourself.",
+          "prompt": "Where did you recognize this prayer in your day?"
+        },
+        {
+          "id": "release",
+          "label": "Give the day back",
+          "kind": "pause",
+          "text": "Some things may need repair tomorrow. Tonight, hand the day back to God. Ask Him to know your concerns and lead you in the way everlasting. Let that prayer accompany you into sleep.",
+          "prompt": ""
+        }
+      ],
+      "provenance": {
+        "model": "claude-sonnet-5",
+        "generatedAt": "2026-09-12T23:24:23.896Z"
+      }
+    },
+    {
+      "id": "expository",
+      "methodId": "expository",
+      "methodName": "Expository (Verse-by-Verse)",
+      "title": "Peace, Access, and a Chain That Holds",
+      "introduction": "Paul opens with a verdict, then a door, then a chain of words that seem to argue with each other. Read it slow tonight. Every line is building on the one before it.",
+      "passage": {
+        "reference": "Romans 5:1-5",
+        "translation": "BSB",
+        "bookId": 45,
+        "chapter": 5,
+        "verseStart": 1,
+        "verseEnd": 5,
+        "verses": [
+          {
+            "verse": 1,
+            "text": "Therefore, since we have been justified through faith, we have peace with God through our Lord Jesus Christ,"
+          },
+          {
+            "verse": 2,
+            "text": "through whom we have gained access by faith into this grace in which we stand. And we rejoice in the hope of the glory of God."
+          },
+          {
+            "verse": 3,
+            "text": "Not only that, but we also rejoice in our sufferings, because we know that suffering produces perseverance;"
+          },
+          {
+            "verse": 4,
+            "text": "perseverance, character; and character, hope."
+          },
+          {
+            "verse": 5,
+            "text": "And hope does not disappoint us, because God has poured out His love into our hearts through the Holy Spirit, whom He has given us."
+          }
+        ]
+      },
+      "supportingPassages": [],
+      "sections": [
+        {
+          "id": "justified",
+          "label": "Peace after the verdict",
+          "kind": "reading",
+          "text": "Paul starts with a courtroom word. Justified. The verdict is already in, and it's in your favor through faith. Because of that verdict, there's peace with God, not a truce we negotiated but one He secured through Jesus. Everything after this verse rests on that settled peace.",
+          "prompt": ""
+        },
+        {
+          "id": "access",
+          "label": "The open way",
+          "kind": "notice",
+          "text": "Through Him, Paul says, we have gained access. Not access we earned by cleaning ourselves up first. Access into this grace we now stand in, a place to stay, not just visit. And standing there, Paul says we rejoice in the hope of God's glory. The door stayed open.",
+          "prompt": ""
+        },
+        {
+          "id": "suffering_chain",
+          "label": "From hope to endurance",
+          "kind": "reflection",
+          "text": "Then the sentence turns somewhere unexpected. We rejoice in our sufferings too, Paul says, because we know something about them. Suffering produces perseverance. Perseverance produces character. Character produces hope. Each word hands the next one something to work with. Nothing here says suffering feels good or means God is punishing you. It says suffering isn't wasted when hope already has your peace secured underneath it.",
+          "prompt": ""
+        },
+        {
+          "id": "transfer",
+          "label": "One principle to keep",
+          "kind": "response",
+          "text": "The final link is hope, and Paul says that hope will not disappoint. God's love has been poured into our hearts through the Holy Spirit. Return to one difficult part of your day with that assurance beside you. Consider where perseverance might be forming.",
+          "prompt": "Where might perseverance be forming in you right now?"
+        }
+      ],
+      "provenance": {
+        "model": "claude-sonnet-5",
+        "generatedAt": "2026-09-12T23:24:23.897Z"
+      }
+    },
+    {
+      "id": "historical_cultural",
+      "methodId": "historical_cultural",
+      "methodName": "Historical-Cultural Background",
+      "title": "The Fact That Changes the Road",
+      "introduction": "You know this story. A man beaten, two men who pass, one man who stops. But there's a fact tucked inside it that most fast readings skip right over.",
+      "passage": {
+        "reference": "Luke 10:30-35",
+        "translation": "BSB",
+        "bookId": 42,
+        "chapter": 10,
+        "verseStart": 30,
+        "verseEnd": 35,
+        "verses": [
+          {
+            "verse": 30,
+            "text": "Jesus took up this question and said, “A man was going down from Jerusalem to Jericho when he fell into the hands of robbers. They stripped him, beat him, and went away, leaving him half dead."
+          },
+          {
+            "verse": 31,
+            "text": "Now by chance a priest was going down the same road, but when he saw him, he passed by on the other side."
+          },
+          {
+            "verse": 32,
+            "text": "So too, when a Levite came to that spot and saw him, he passed by on the other side."
+          },
+          {
+            "verse": 33,
+            "text": "But when a Samaritan on a journey came upon him, he looked at him and had compassion."
+          },
+          {
+            "verse": 34,
+            "text": "He went to him and bandaged his wounds, pouring on oil and wine. Then he put him on his own animal, brought him to an inn, and took care of him."
+          },
+          {
+            "verse": 35,
+            "text": "The next day he took out two denarii and gave them to the innkeeper. ‘Take care of him,’ he said, ‘and on my return I will repay you for any additional expense.’"
+          }
+        ]
+      },
+      "supportingPassages": [
+        {
+          "reference": "John 4:9",
+          "translation": "BSB",
+          "bookId": 43,
+          "chapter": 4,
+          "verseStart": 9,
+          "verseEnd": 9,
+          "verses": [
+            {
+              "verse": 9,
+              "text": "“You are a Jew,” said the woman. “How can You ask for a drink from me, a Samaritan woman?” (For Jews do not associate with Samaritans.)"
+            }
+          ]
+        }
+      ],
+      "sections": [
+        {
+          "id": "the_road",
+          "label": "Jericho road as the text gives it",
+          "kind": "reading",
+          "text": "A man goes down from Jerusalem to Jericho and falls into the hands of robbers. They strip him, beat him, and leave him half dead. A priest sees him and passes by on the other side. A Levite does the same. Then a Samaritan comes upon him, looks at him, and has compassion.",
+          "prompt": ""
+        },
+        {
+          "id": "the_pinned_social",
+          "label": "Jews and Samaritans",
+          "kind": "notice",
+          "text": "In John 4:9, a Samaritan woman is surprised that Jesus, a Jew, asks her for a drink. The narrator explains that Jews do not associate with Samaritans. That brief explanation gives us a social boundary to notice when we return to the road. We do not need to invent the injured man's background to see it.",
+          "prompt": ""
+        },
+        {
+          "id": "reread",
+          "label": "The same sentences after that fact",
+          "kind": "reflection",
+          "text": "Now return to the road. A priest passes by. A Levite passes by. The Samaritan stops, bandages the man's wounds, pours on oil and wine, and pays for his care. Read those actions beside John 4:9. The helper belongs to a group separated from Jews by a boundary the other passage names.",
+          "prompt": "How does that social boundary change your hearing of the Samaritan’s compassion?"
+        }
+      ],
+      "provenance": {
+        "model": "claude-sonnet-5",
+        "generatedAt": "2026-09-12T23:24:23.898Z"
+      }
+    },
+    {
+      "id": "ignatian_contemplation",
+      "methodId": "ignatian_contemplation",
+      "methodName": "Ignatian Contemplation (Imaginative Prayer)",
+      "title": "Silence, Be Still",
+      "introduction": "It's evening. The crowd is gone. You're in the boat, tired, and the water is about to turn against you. Slow down and step into the scene with the disciples.",
+      "passage": {
+        "reference": "Mark 4:35-41",
+        "translation": "BSB",
+        "bookId": 41,
+        "chapter": 4,
+        "verseStart": 35,
+        "verseEnd": 41,
+        "verses": [
+          {
+            "verse": 35,
+            "text": "When that evening came, He said to His disciples, “Let us cross to the other side.”"
+          },
+          {
+            "verse": 36,
+            "text": "After they had dismissed the crowd, they took Jesus with them, since He was already in the boat. And there were other boats with Him."
+          },
+          {
+            "verse": 37,
+            "text": "Soon a violent windstorm came up, and the waves were breaking over the boat, so that it was being swamped."
+          },
+          {
+            "verse": 38,
+            "text": "But Jesus was in the stern, sleeping on the cushion. So they woke Him and said, “Teacher, don’t You care that we are perishing?”"
+          },
+          {
+            "verse": 39,
+            "text": "Then Jesus got up and rebuked the wind and the sea. “Silence!” He commanded. “Be still!” And the wind died down, and it was perfectly calm."
+          },
+          {
+            "verse": 40,
+            "text": "“Why are you so afraid?” He asked. “Do you still have no faith?”"
+          },
+          {
+            "verse": 41,
+            "text": "Overwhelmed with fear, they asked one another, “Who is this, that even the wind and the sea obey Him?”"
+          }
+        ]
+      },
+      "supportingPassages": [],
+      "sections": [
+        {
+          "id": "senses",
+          "label": "The boat at night",
+          "kind": "reading",
+          "text": "Picture the boat in the evening. Mark places Jesus in the stern, asleep on a cushion. A violent windstorm rises, and waves begin to swamp the boat. Imagine the spray and the movement under your feet. Those imagined sensations can help you attend to what the passage actually names: danger, sleeping, waking, and the disciples' frightened question.",
+          "prompt": ""
+        },
+        {
+          "id": "in_the_scene",
+          "label": "Where you stand",
+          "kind": "notice",
+          "text": "Maybe you're pulling on the oars, arms shaking. Maybe you're the one who wakes Him, half angry, half terrified, asking if He cares that you're all going down. Maybe you're just watching, gripping the side, waiting to see what He'll do.",
+          "prompt": "Where are you sitting in this boat tonight?"
+        },
+        {
+          "id": "colloquy",
+          "label": "What you would say",
+          "kind": "prayer",
+          "text": "Jesus commands, \"Silence!\" Then, \"Be still!\" The water becomes calm. He asks the disciples, \"Why are you so afraid?\" and \"Do you still have no faith?\" Imagine remaining beside Him after those questions. Let your answer take its time.",
+          "prompt": "What do you say back to Him right now?"
+        }
+      ],
+      "provenance": {
+        "model": "claude-sonnet-5",
+        "generatedAt": "2026-09-12T23:24:23.901Z"
+      }
+    },
+    {
+      "id": "lament_study",
+      "methodId": "lament_study",
+      "methodName": "Lament Study",
+      "title": "When the Cry Stays Open",
+      "introduction": "Some days the words come fast because you're tired and want them done. Psalm 88:1-7 asks something different. Stay with a prayer spoken from darkness, without requiring it to reach relief before you finish reading.",
+      "passage": {
+        "reference": "Psalm 88:1-7",
+        "translation": "BSB",
+        "bookId": 19,
+        "chapter": 88,
+        "verseStart": 1,
+        "verseEnd": 7,
+        "verses": [
+          {
+            "verse": 1,
+            "text": "O LORD, the God of my salvation, day and night I cry out before You."
+          },
+          {
+            "verse": 2,
+            "text": "May my prayer come before You; incline Your ear to my cry."
+          },
+          {
+            "verse": 3,
+            "text": "For my soul is full of troubles, and my life draws near to Sheol."
+          },
+          {
+            "verse": 4,
+            "text": "I am counted among those descending to the Pit. I am like a man without strength."
+          },
+          {
+            "verse": 5,
+            "text": "I am forsaken among the dead, like the slain who lie in the grave, whom You remember no more, who are cut off from Your care."
+          },
+          {
+            "verse": 6,
+            "text": "You have laid me in the lowest Pit, in the darkest of the depths."
+          },
+          {
+            "verse": 7,
+            "text": "Your wrath weighs heavily upon me; all Your waves have submerged me. Selah"
+          }
+        ]
+      },
+      "supportingPassages": [],
+      "sections": [
+        {
+          "id": "address",
+          "label": "Still speaking to God",
+          "kind": "reading",
+          "text": "The psalmist never stops talking to God, even from the Pit. \"O LORD, the God of my salvation, day and night I cry out before You.\" Not away from God. Straight at Him. That's the whole shape of this prayer, even when nothing lifts.",
+          "prompt": ""
+        },
+        {
+          "id": "complaint",
+          "label": "The unsoftened cry",
+          "kind": "notice",
+          "text": "There is no cushioning here. The psalmist feels without strength, forsaken among the dead. He addresses God directly: \"You have laid me in the lowest Pit, in the darkest of the depths.\" These are the words of suffering brought into prayer. He does not make the pain more presentable before speaking to God.",
+          "prompt": ""
+        },
+        {
+          "id": "unresolved",
+          "label": "No forced turn",
+          "kind": "pause",
+          "text": "The passage closes with Selah. No relief arrives in these verses, and no explanation is given. The voice is still addressed to the God the psalmist calls his salvation. Let this prayer remain open. You do not have to supply the resolution these verses withhold.",
+          "prompt": ""
+        }
+      ],
+      "provenance": {
+        "model": "claude-sonnet-5",
+        "generatedAt": "2026-09-12T23:24:23.902Z"
+      }
+    },
+    {
+      "id": "manuscript",
+      "methodId": "manuscript",
+      "methodName": "Manuscript Study",
+      "title": "One Paragraph, Not Seven Verses",
+      "introduction": "You've probably read this passage in pieces before, numbered and separated. Tonight, after a long day, try it differently. Read it as one letter, one breath, one thought moving forward.",
+      "passage": {
+        "reference": "Ephesians 2:1-7",
+        "translation": "BSB",
+        "bookId": 49,
+        "chapter": 2,
+        "verseStart": 1,
+        "verseEnd": 7,
+        "verses": [
+          {
+            "verse": 1,
+            "text": "And you were dead in your trespasses and sins,"
+          },
+          {
+            "verse": 2,
+            "text": "in which you used to walk when you conformed to the ways of this world and of the ruler of the power of the air, the spirit who is now at work in the sons of disobedience."
+          },
+          {
+            "verse": 3,
+            "text": "All of us also lived among them at one time, fulfilling the cravings of our flesh and indulging its desires and thoughts. Like the rest, we were by nature children of wrath."
+          },
+          {
+            "verse": 4,
+            "text": "But because of His great love for us, God, who is rich in mercy,"
+          },
+          {
+            "verse": 5,
+            "text": "made us alive with Christ even when we were dead in our trespasses. It is by grace you have been saved!"
+          },
+          {
+            "verse": 6,
+            "text": "And God raised us up with Christ and seated us with Him in the heavenly realms in Christ Jesus,"
+          },
+          {
+            "verse": 7,
+            "text": "in order that in the coming ages He might display the surpassing riches of His grace, demonstrated by His kindness to us in Christ Jesus."
+          }
+        ]
+      },
+      "supportingPassages": [],
+      "sections": [
+        {
+          "id": "whole_cloth",
+          "label": "Read as one passage",
+          "kind": "reading",
+          "text": "Read the whole thing straight through, no stopping at numbers. Dead in trespasses, walking in the world's ways, children of wrath by nature. Then the turn: because of His great love, God made us alive with Christ, raised us up, seated us with Him. Grace, start to finish.",
+          "prompt": ""
+        },
+        {
+          "id": "seams",
+          "label": "Where the letter turns",
+          "kind": "notice",
+          "text": "Somewhere in that paragraph the subject changes from us to God. The sentence starts with what we were doing and what we were by nature. Then something shifts, and God becomes the one acting. Find the hinge word. It carries the whole weight of the passage on its back.",
+          "prompt": "Where does the letter stop describing you and start describing God?"
+        },
+        {
+          "id": "hidden_join",
+          "label": "What the structure reveals",
+          "kind": "reflection",
+          "text": "Verse numbers can make you stop where the thought keeps moving. Read this as one sustained movement: what we were, the turn in God's mercy, and what God did in Christ. The clauses carry into one another even when the numbers invite separate reading.",
+          "prompt": ""
+        }
+      ],
+      "provenance": {
+        "model": "claude-sonnet-5",
+        "generatedAt": "2026-09-12T23:24:23.903Z"
+      }
+    },
+    {
+      "id": "parable_study",
+      "methodId": "parable_study",
+      "methodName": "Parable Study",
+      "title": "The Sting of the Sheep Story",
+      "introduction": "You've heard this one before, maybe too many times to feel it. But two groups are present, and the story meets their responses differently.",
+      "passage": {
+        "reference": "Luke 15:1-7",
+        "translation": "BSB",
+        "bookId": 42,
+        "chapter": 15,
+        "verseStart": 1,
+        "verseEnd": 7,
+        "verses": [
+          {
+            "verse": 1,
+            "text": "Now all the tax collectors and sinners were gathering around to listen to Jesus."
+          },
+          {
+            "verse": 2,
+            "text": "So the Pharisees and scribes began to grumble: “This man welcomes sinners and eats with them.”"
+          },
+          {
+            "verse": 3,
+            "text": "Then Jesus told them this parable:"
+          },
+          {
+            "verse": 4,
+            "text": "“What man among you, if he has a hundred sheep and loses one of them, does not leave the ninety-nine in the pasture and go after the one that is lost, until he finds it?"
+          },
+          {
+            "verse": 5,
+            "text": "And when he finds it, he joyfully puts it on his shoulders,"
+          },
+          {
+            "verse": 6,
+            "text": "comes home, and calls together his friends and neighbors to tell them, ‘Rejoice with me, for I have found my lost sheep!’"
+          },
+          {
+            "verse": 7,
+            "text": "In the same way, I tell you that there will be more joy in heaven over one sinner who repents than over ninety-nine righteous ones who do not need to repent."
+          }
+        ]
+      },
+      "supportingPassages": [],
+      "sections": [
+        {
+          "id": "the_audience",
+          "label": "Who is listening",
+          "kind": "notice",
+          "text": "Tax collectors and sinners gather to hear Jesus. Pharisees and scribes complain that He welcomes sinners and eats with them. Keep those two responses in view as you read. Jesus tells the parable in the presence of that complaint about whom He receives.",
+          "prompt": ""
+        },
+        {
+          "id": "the_one_point",
+          "label": "One shock",
+          "kind": "reflection",
+          "text": "The shepherd goes after the lost sheep until he finds it. He carries it home with joy and calls his friends and neighbors to rejoice with him. Jesus compares that joy with heaven's joy over one sinner who repents. The story moves toward a celebration, directly beside the complaint about welcoming sinners.",
+          "prompt": ""
+        },
+        {
+          "id": "the_sit",
+          "label": "Stay with the discomfort",
+          "kind": "pause",
+          "text": "Return to the grumbling that prompted the story. Jesus describes joy where His critics see a reason to complain. Sit with that difference before assigning yourself a place in the parable. What would it mean to join the shepherd's rejoicing when someone else is found?",
+          "prompt": ""
+        }
+      ],
+      "provenance": {
+        "model": "claude-sonnet-5",
+        "generatedAt": "2026-09-12T23:24:23.904Z"
+      }
+    },
+    {
+      "id": "poetry_psalms",
+      "methodId": "poetry_psalms",
+      "methodName": "Poetry & Psalms Study",
+      "title": "How Long, O Lord",
+      "introduction": "Some days Scripture gets read fast, words skimmed on the way to sleep. Psalm 13:1-6 asks for something slower. Four times it asks how long. Stay with that repetition a moment before following the poem's turn toward trust.",
+      "passage": {
+        "reference": "Psalm 13:1-6",
+        "translation": "BSB",
+        "bookId": 19,
+        "chapter": 13,
+        "verseStart": 1,
+        "verseEnd": 6,
+        "verses": [
+          {
+            "verse": 1,
+            "text": "How long, O LORD? Will You forget me forever? How long will You hide Your face from me?"
+          },
+          {
+            "verse": 2,
+            "text": "How long must I wrestle in my soul, with sorrow in my heart each day? How long will my enemy dominate me?"
+          },
+          {
+            "verse": 3,
+            "text": "Consider me and respond, O LORD my God. Give light to my eyes, lest I sleep in death,"
+          },
+          {
+            "verse": 4,
+            "text": "lest my enemy say, “I have overcome him,” and my foes rejoice when I fall."
+          },
+          {
+            "verse": 5,
+            "text": "But I have trusted in Your loving devotion; my heart will rejoice in Your salvation."
+          },
+          {
+            "verse": 6,
+            "text": "I will sing to the LORD, for He has been good to me."
+          }
+        ]
+      },
+      "supportingPassages": [],
+      "sections": [
+        {
+          "id": "how_long",
+          "label": "The opening ache",
+          "kind": "reading",
+          "text": "How long, O LORD? The question repeats four times before any answer comes. Forgotten. Hidden face. Sorrow every day. An enemy that will not let up. This is not a tidy prayer. It is someone still waiting, still asking, still awake at the ache.",
+          "prompt": ""
+        },
+        {
+          "id": "the_volta",
+          "label": "The turn in the poem",
+          "kind": "notice",
+          "text": "Then the pleading turns toward trust. The request for God to consider and respond gives way to confidence in His loving devotion. The poem does not name a changed circumstance before this turn. Notice what changes in the speaker's language, and what remains unanswered around it.",
+          "prompt": ""
+        },
+        {
+          "id": "the_landing",
+          "label": "Trust that still sounds like a psalm",
+          "kind": "pause",
+          "text": "My heart will rejoice in Your salvation. I will sing to the LORD, for He has been good to me. The psalm ends there, still inside trust, not outside the waiting. That is where it stops singing.",
+          "prompt": ""
+        }
+      ],
+      "provenance": {
+        "model": "claude-sonnet-5",
+        "generatedAt": "2026-09-12T23:24:23.905Z"
+      }
+    },
+    {
+      "id": "praying_psalms",
+      "methodId": "praying_psalms",
+      "methodName": "Praying the Psalms",
+      "title": "My Soul Thirsts For You",
+      "introduction": "Some days you have no words left, only tiredness and a skimmed page. The psalm already gives you words. Let these four verses go first tonight, before yours try to catch up.",
+      "passage": {
+        "reference": "Psalm 63:1-4",
+        "translation": "BSB",
+        "bookId": 19,
+        "chapter": 63,
+        "verseStart": 1,
+        "verseEnd": 4,
+        "verses": [
+          {
+            "verse": 1,
+            "text": "O God, You are my God. Earnestly I seek You; my soul thirsts for You. My body yearns for You in a dry and weary land without water."
+          },
+          {
+            "verse": 2,
+            "text": "So I have seen You in the sanctuary and beheld Your power and glory."
+          },
+          {
+            "verse": 3,
+            "text": "Because Your loving devotion is better than life, my lips will glorify You."
+          },
+          {
+            "verse": 4,
+            "text": "So I will bless You as long as I live; in Your name I will lift my hands."
+          }
+        ]
+      },
+      "supportingPassages": [],
+      "sections": [
+        {
+          "id": "the_psalm",
+          "label": "Pray these lines",
+          "kind": "reading",
+          "text": "Read the lines aloud if you can. O God, You are my God. Earnestly I seek You. My soul thirsts for You. My body yearns for You in a dry and weary land without water. Let the psalm's thirst be the opening line, not yours.",
+          "prompt": ""
+        },
+        {
+          "id": "the_swap",
+          "label": "Put your day in the nouns",
+          "kind": "response",
+          "text": "The psalm names a dry and weary land without water. What has today felt like, dry, weary, worn thin? Put that into his image instead of writing a new one. His words already hold a place for your particular exhaustion, waiting for you to set it there.",
+          "prompt": "What has today felt dry and weary in?"
+        },
+        {
+          "id": "the_voice",
+          "label": "Keep praying the psalm's words",
+          "kind": "prayer",
+          "text": "Stay inside his words a little longer. Because Your loving devotion is better than life, my lips will glorify You. So I will bless You as long as I live, in Your name I will lift my hands, tired hands, tonight, still lifted.",
+          "prompt": ""
+        }
+      ],
+      "provenance": {
+        "model": "claude-sonnet-5",
+        "generatedAt": "2026-09-12T23:24:23.905Z"
+      }
+    },
+    {
+      "id": "prophetic_study",
+      "methodId": "prophetic_study",
+      "methodName": "Prophetic Literature Study",
+      "title": "What the LORD Requires",
+      "introduction": "Micah 6:6-8 begins with a question about approaching God. The proposed offerings grow larger until the answer turns our attention to how a person lives. Read slowly enough to hear that change in direction.",
+      "passage": {
+        "reference": "Micah 6:6-8",
+        "translation": "BSB",
+        "bookId": 33,
+        "chapter": 6,
+        "verseStart": 6,
+        "verseEnd": 8,
+        "verses": [
+          {
+            "verse": 6,
+            "text": "With what shall I come before the LORD when I bow before the God on high? Should I come to Him with burnt offerings, with year-old calves?"
+          },
+          {
+            "verse": 7,
+            "text": "Would the LORD be pleased with thousands of rams, with ten thousand rivers of oil? Shall I present my firstborn for my transgression, the fruit of my body for the sin of my soul?"
+          },
+          {
+            "verse": 8,
+            "text": "He has shown you, O man, what is good. And what does the LORD require of you but to act justly, to love mercy, and to walk humbly with your God?"
+          }
+        ]
+      },
+      "supportingPassages": [],
+      "sections": [
+        {
+          "id": "the_court",
+          "label": "The question already in the text",
+          "kind": "reading",
+          "text": "The question comes first: what shall I come before the LORD with? Burnt offerings, year-old calves, thousands of rams, ten thousand rivers of oil. Even his own firstborn. The offers escalate, each one bigger than the last, and none of them answer the actual question being asked.",
+          "prompt": ""
+        },
+        {
+          "id": "who_is_addressed",
+          "label": "Who is addressed",
+          "kind": "notice",
+          "text": "The address is \"O man.\" Within these verses, the question reaches a person standing before God and asking what to bring. Notice how direct the answer becomes. It moves from the size of an offering to justice, mercy, and a humble walk with God.",
+          "prompt": ""
+        },
+        {
+          "id": "the_requirement",
+          "label": "The three demands",
+          "kind": "response",
+          "text": "Act justly. Love mercy. Walk humbly with your God. The answer will not let larger offerings substitute for these demands. Justice takes shape in how we treat people. Mercy reaches beyond a passing feeling. Humility concerns the way we keep walking. Let the three verbs stay together as you consider your week.",
+          "prompt": "Which of the three would cost you something this week?"
+        }
+      ],
+      "provenance": {
+        "model": "claude-sonnet-5",
+        "generatedAt": "2026-09-12T23:24:23.906Z"
+      }
+    },
+    {
+      "id": "redemptive_historical",
+      "methodId": "redemptive_historical",
+      "methodName": "Redemptive-Historical (Biblical Theology)",
+      "title": "A Sentence Aimed at the Snake",
+      "introduction": "Genesis 3:14-15 gives us God's words to the serpent. The curse also looks ahead to conflict between offspring. Read the future tense carefully. These verses open a horizon that their own short scene does not close.",
+      "passage": {
+        "reference": "Genesis 3:14-15",
+        "translation": "BSB",
+        "bookId": 1,
+        "chapter": 3,
+        "verseStart": 14,
+        "verseEnd": 15,
+        "verses": [
+          {
+            "verse": 14,
+            "text": "So the LORD God said to the serpent:  “Because you have done this, cursed are you above all livestock and every beast of the field! On your belly will you go, and dust you will eat, all the days of your life."
+          },
+          {
+            "verse": 15,
+            "text": "And I will put enmity between you and the woman, and between your seed and her seed. He will crush your head, and you will strike his heel.”"
+          }
+        ]
+      },
+      "supportingPassages": [],
+      "sections": [
+        {
+          "id": "on_the_timeline",
+          "label": "After the break",
+          "kind": "reading",
+          "text": "Stay with the movement inside these two verses. God first speaks of the serpent's condition, then of enmity involving the woman and their offspring. The address reaches beyond the serpent's immediate future into a conflict between generations. Notice that widening horizon before tracing where the larger story will go.",
+          "prompt": ""
+        },
+        {
+          "id": "the_move",
+          "label": "What God says here",
+          "kind": "notice",
+          "text": "God does not negotiate with the serpent. He curses it directly: cursed above all livestock, belly on the ground, dust for food all its days. Then He speaks past the animal to something larger, promising enmity between the serpent's seed and the woman's, a conflict God Himself sets in motion.",
+          "prompt": ""
+        },
+        {
+          "id": "the_horizon",
+          "label": "How this advances the story",
+          "kind": "reflection",
+          "text": "He will crush your head, and you will strike his heel. Christians have long read that sentence as a promise: the serpent's strike wounds, but the woman's offspring finally crushes the serpent. The verse opens that horizon without narrating its fulfillment here.",
+          "prompt": "What does this early promise ask you to hope for?"
+        }
+      ],
+      "provenance": {
+        "model": "claude-sonnet-5",
+        "generatedAt": "2026-09-12T23:24:23.906Z"
+      }
+    },
+    {
+      "id": "rhetorical_analysis",
+      "methodId": "rhetorical_analysis",
+      "methodName": "Rhetorical / Literary Analysis",
+      "title": "The Slow Slide Downward",
+      "introduction": "Psalm 1:1-4 opens with a picture. Before the tree or the chaff appears, the first verse names walking, standing, and sitting. Watch how those three postures give shape to the kind of company the blessed person refuses.",
+      "passage": {
+        "reference": "Psalm 1:1-4",
+        "translation": "BSB",
+        "bookId": 19,
+        "chapter": 1,
+        "verseStart": 1,
+        "verseEnd": 4,
+        "verses": [
+          {
+            "verse": 1,
+            "text": "Blessed is the man who does not walk in the counsel of the wicked, or set foot on the path of sinners, or sit in the seat of mockers."
+          },
+          {
+            "verse": 2,
+            "text": "But his delight is in the Law of the LORD, and on His law he meditates day and night."
+          },
+          {
+            "verse": 3,
+            "text": "He is like a tree planted by streams of water, yielding its fruit in season, whose leaf does not wither, and who prospers in all he does."
+          },
+          {
+            "verse": 4,
+            "text": "Not so the wicked! For they are like chaff driven off by the wind."
+          }
+        ]
+      },
+      "supportingPassages": [],
+      "sections": [
+        {
+          "id": "device",
+          "label": "The walk-stand-sit descent",
+          "kind": "notice",
+          "text": "The first verse names three positions: walking in counsel, standing on a path, sitting in a seat. The blessed person refuses each one. Read the verbs aloud. They can suggest an increasingly settled relationship with the company described, from moving alongside it to making a place within it. Notice that effect without treating the verse as a literal timetable.",
+          "prompt": ""
+        },
+        {
+          "id": "form",
+          "label": "How the images stack",
+          "kind": "reflection",
+          "text": "Against that downward slide, the poet sets two images side by side. The blessed man is a tree planted by streams of water, rooted, fed, bearing fruit in its season, leaf still green. The wicked are chaff, driven off by wind, with nothing underneath to hold them in place. One image has roots and water. The other has no weight at all.",
+          "prompt": ""
+        },
+        {
+          "id": "why_this_shape",
+          "label": "What the form claims",
+          "kind": "reflection",
+          "text": "These verses give their claim a shape you can picture. The planted tree draws from water and bears fruit in season. The chaff is driven by wind. Read the images beside the earlier verbs. The poem asks you to consider the company a life keeps and the source from which it draws its strength.",
+          "prompt": ""
+        }
+      ],
+      "provenance": {
+        "model": "claude-sonnet-5",
+        "generatedAt": "2026-09-12T23:24:23.907Z"
+      }
+    },
+    {
+      "id": "storytelling_renarration",
+      "methodId": "storytelling_renarration",
+      "methodName": "Scriptural Storytelling / Re-narration",
+      "title": "Stay With Us",
+      "introduction": "You are tired tonight, skimming instead of seeing. Before you read another verse, come to the table at Emmaus. Let the evening settle. Let the bread break slow this time.",
+      "passage": {
+        "reference": "Luke 24:28-32",
+        "translation": "BSB",
+        "bookId": 42,
+        "chapter": 24,
+        "verseStart": 28,
+        "verseEnd": 32,
+        "verses": [
+          {
+            "verse": 28,
+            "text": "As they approached the village where they were headed, He seemed to be going farther."
+          },
+          {
+            "verse": 29,
+            "text": "But they pleaded with Him, “Stay with us, for it is nearly evening and the day is almost over.”  So He went in to stay with them."
+          },
+          {
+            "verse": 30,
+            "text": "While He was reclining at the table with them, He took bread, spoke a blessing and broke it, and gave it to them."
+          },
+          {
+            "verse": 31,
+            "text": "Then their eyes were opened and they recognized Jesus—and He disappeared from their sight."
+          },
+          {
+            "verse": 32,
+            "text": "They asked each other, “Were not our hearts burning within us as He spoke with us on the road and opened the Scriptures to us?”"
+          }
+        ]
+      },
+      "supportingPassages": [],
+      "sections": [
+        {
+          "id": "the_retell",
+          "label": "The table in present tense",
+          "kind": "reading",
+          "text": "The road is almost gone now, light going gray at the edges. He seems to be going farther, as though He might continue past the village. But they ask Him to stay, since it is nearly evening. So He goes in with them. He takes the bread. He speaks a blessing over it. He breaks it with His own hands and gives it to them. And right there, in that small motion, their eyes open. They see Him. Then He is gone.",
+          "prompt": ""
+        },
+        {
+          "id": "the_burn",
+          "label": "What the story carries",
+          "kind": "reflection",
+          "text": "He was already near them on the road, speaking and opening the Scriptures, though they had not recognized Him. At the table He broke the bread, their eyes were opened, and they recognized Him. Stay with that movement from nearness to recognition.",
+          "prompt": "Where today did you rush past what deserved your staying?"
+        }
+      ],
+      "provenance": {
+        "model": "claude-sonnet-5",
+        "generatedAt": "2026-09-12T23:24:23.909Z"
+      }
+    },
+    {
+      "id": "scripture_meditation",
+      "methodId": "scripture_meditation",
+      "methodName": "Scripture Meditation & Memorization",
+      "title": "Called By Name",
+      "introduction": "One phrase to hold onto today, straight from Isaiah. Not a task to finish. Just words to carry while you work, wait, and wind down tonight.",
+      "passage": {
+        "reference": "Isaiah 43:1-2",
+        "translation": "BSB",
+        "bookId": 23,
+        "chapter": 43,
+        "verseStart": 1,
+        "verseEnd": 2,
+        "verses": [
+          {
+            "verse": 1,
+            "text": "Now this is what the LORD says— He who created you, O Jacob, and He who formed you, O Israel:   “Do not fear, for I have redeemed you; I have called you by your name; you are Mine!"
+          },
+          {
+            "verse": 2,
+            "text": "When you pass through the waters, I will be with you; and when you go through the rivers, they will not overwhelm you. When you walk through the fire, you will not be scorched; the flames will not set you ablaze."
+          }
+        ]
+      },
+      "supportingPassages": [],
+      "sections": [
+        {
+          "id": "morning_words",
+          "label": "Take the two verses",
+          "kind": "reading",
+          "text": "He who created you, O Jacob, and He who formed you, O Israel: Do not fear, for I have redeemed you; I have called you by your name; you are Mine!",
+          "prompt": ""
+        },
+        {
+          "id": "midday_return",
+          "label": "How they land later",
+          "kind": "reflection",
+          "text": "Somewhere around midmorning, the tiredness sets in and the day starts to blur. That's when the phrase surfaces again, quiet and unforced. He called you by your name. Not a title, not a role you're filling. Your name.",
+          "prompt": "When did those words come back to you today?"
+        },
+        {
+          "id": "evening_notice",
+          "label": "Where the focus showed up",
+          "kind": "pause",
+          "text": "Before the day closes, return to the phrase you carried this morning. Hear it within God's address to Jacob and Israel. Stay with the words about being called by name, without adding another task tonight.",
+          "prompt": "Where did you notice being called by name today?"
+        }
+      ],
+      "provenance": {
+        "model": "claude-sonnet-5",
+        "generatedAt": "2026-09-12T23:24:23.908Z"
+      }
+    },
+    {
+      "id": "swedish_method",
+      "methodId": "swedish_method",
+      "methodName": "Swedish Method",
+      "title": "Martha, Martha",
+      "introduction": "You skimmed this story before, probably in a hurry. Tonight, just three marks. What shines, what confuses, what touches your actual day. Nothing more.",
+      "passage": {
+        "reference": "Luke 10:38-42",
+        "translation": "BSB",
+        "bookId": 42,
+        "chapter": 10,
+        "verseStart": 38,
+        "verseEnd": 42,
+        "verses": [
+          {
+            "verse": 38,
+            "text": "As they traveled along, Jesus entered a village where a woman named Martha welcomed Him into her home."
+          },
+          {
+            "verse": 39,
+            "text": "She had a sister named Mary, who sat at the Lord’s feet listening to His message."
+          },
+          {
+            "verse": 40,
+            "text": "But Martha was distracted by all the preparations to be made. She came to Jesus and said, “Lord, do You not care that my sister has left me to serve alone? Tell her to help me!”"
+          },
+          {
+            "verse": 41,
+            "text": "“Martha, Martha,” the Lord replied, “you are worried and upset about many things."
+          },
+          {
+            "verse": 42,
+            "text": "But only one thing is necessary. Mary has chosen the good portion, and it will not be taken away from her.”"
+          }
+        ]
+      },
+      "supportingPassages": [],
+      "sections": [
+        {
+          "id": "lightbulb",
+          "label": "What shines",
+          "kind": "notice",
+          "text": "Mary sits at the Lord's feet and listens. Jesus says she has chosen the good portion, and it will not be taken from her. After a busy day, notice that protection of her listening. The passage gives you a choice to linger over.",
+          "prompt": "What line here shines for you tonight?"
+        },
+        {
+          "id": "question_mark",
+          "label": "What confuses",
+          "kind": "notice",
+          "text": "Martha is called out for being worried and upset about many things, but she was the one who welcomed Jesus into her home in the first place. So what happens to her hospitality now? Does Jesus dismiss the work, or just the worry underneath it?",
+          "prompt": "What in this scene still confuses you?"
+        },
+        {
+          "id": "arrow",
+          "label": "What touches life",
+          "kind": "response",
+          "text": "Martha comes to Jesus frustrated and comparing her work with her sister's. She asks, \"Do You not care\" that she has been left to serve alone. Notice where that question touches your own week.",
+          "prompt": "Where does this touch your own week?"
+        }
+      ],
+      "provenance": {
+        "model": "claude-sonnet-5",
+        "generatedAt": "2026-09-12T23:24:23.910Z"
+      }
+    },
+    {
+      "id": "thematic_thread",
+      "methodId": "thematic_thread",
+      "methodName": "Thematic Thread",
+      "title": "Remain: The One Word",
+      "introduction": "Yesterday moved fast and the words blurred together. Today one word gets to stay put. Remain. Just that, sitting in the middle of five verses, asking for nothing but presence.",
+      "passage": {
+        "reference": "John 15:4-8",
+        "translation": "BSB",
+        "bookId": 43,
+        "chapter": 15,
+        "verseStart": 4,
+        "verseEnd": 8,
+        "verses": [
+          {
+            "verse": 4,
+            "text": "Remain in Me, and I will remain in you. Just as no branch can bear fruit by itself unless it remains in the vine, neither can you bear fruit unless you remain in Me."
+          },
+          {
+            "verse": 5,
+            "text": "I am the vine and you are the branches. The one who remains in Me, and I in him, will bear much fruit. For apart from Me you can do nothing."
+          },
+          {
+            "verse": 6,
+            "text": "If anyone does not remain in Me, he is like a branch that is thrown away and withers. Such branches are gathered up, thrown into the fire, and burned."
+          },
+          {
+            "verse": 7,
+            "text": "If you remain in Me and My words remain in you, ask whatever you wish, and it will be done for you."
+          },
+          {
+            "verse": 8,
+            "text": "This is to My Father’s glory, that you bear much fruit, proving yourselves to be My disciples."
+          }
+        ]
+      },
+      "supportingPassages": [],
+      "sections": [
+        {
+          "id": "the_thread",
+          "label": "Abide as today's strand",
+          "kind": "reading",
+          "text": "Jesus says it before anything about fruit or asking or glory: remain in Me. The branch cannot bear fruit by itself. Its fruit depends on remaining in the vine, and Jesus makes that dependence the center of the image.",
+          "prompt": ""
+        },
+        {
+          "id": "the_tighten",
+          "label": "What this slice adds",
+          "kind": "reflection",
+          "text": "Verse six adds a severe contrast. A branch that does not remain is thrown away, withers, is gathered, and is burned. The saying does not soften that warning or explain every part of the image. It keeps remaining and fruit together under Jesus' command.",
+          "prompt": ""
+        },
+        {
+          "id": "the_next",
+          "label": "Carry the thread forward",
+          "kind": "reflection",
+          "text": "Verse seven moves remaining somewhere unexpected: into asking. If His words remain in you too, asking whatever you wish gets tied to that same staying. Not a formula. An overflow.",
+          "prompt": "Where has skimming replaced staying attached this week?"
+        }
+      ],
+      "provenance": {
+        "model": "claude-sonnet-5",
+        "generatedAt": "2026-09-12T23:24:23.910Z"
+      }
+    },
+    {
+      "id": "topical",
+      "methodId": "topical",
+      "methodName": "Topical Study",
+      "title": "Two Voices on Trust",
+      "introduction": "You skimmed this passage yesterday without really reading it. Tonight, slow down. Proverbs and one psalm both talk about trust, but they say it differently. Worth hearing both.",
+      "passage": {
+        "reference": "Proverbs 3:5-6",
+        "translation": "BSB",
+        "bookId": 20,
+        "chapter": 3,
+        "verseStart": 5,
+        "verseEnd": 6,
+        "verses": [
+          {
+            "verse": 5,
+            "text": "Trust in the LORD with all your heart, and lean not on your own understanding;"
+          },
+          {
+            "verse": 6,
+            "text": "in all your ways acknowledge Him, and He will make your paths straight."
+          }
+        ]
+      },
+      "supportingPassages": [
+        {
+          "reference": "Psalm 37:5",
+          "translation": "BSB",
+          "bookId": 19,
+          "chapter": 37,
+          "verseStart": 5,
+          "verseEnd": 5,
+          "verses": [
+            {
+              "verse": 5,
+              "text": "Commit your way to the LORD; trust in Him, and He will do it."
+            }
+          ]
+        }
+      ],
+      "sections": [
+        {
+          "id": "this_witness",
+          "label": "What Proverbs uniquely says",
+          "kind": "reading",
+          "text": "Proverbs doesn't just say trust God. It says not to lean on your own understanding. Do not make your own understanding the support that carries everything. Then, in all your ways, acknowledge Him. The promise is straight paths. Not easy paths. Straight ones.",
+          "prompt": ""
+        },
+        {
+          "id": "second_witness",
+          "label": "The psalm beside it",
+          "kind": "notice",
+          "text": "The psalm says something shorter. Commit your way to the LORD. Trust in Him. Then four words that carry the weight: He will do it. Not you working it out. Not you figuring the path. Him doing something. The psalm hands over the action itself, not just the direction.",
+          "prompt": ""
+        },
+        {
+          "id": "held_together",
+          "label": "Agreement and leftover tension",
+          "kind": "reflection",
+          "text": "Both texts ask for trust over self-reliance. Proverbs promises a straight path you can walk. The psalm promises God acting on your behalf. One still asks something of your ways, your acknowledgment. The other simply says He will do it. Neither tells you exactly what that looks like this week, or how long it takes.",
+          "prompt": "Where are you leaning most heavily on your own understanding?"
+        }
+      ],
+      "provenance": {
+        "model": "claude-sonnet-5",
+        "generatedAt": "2026-09-12T23:24:23.911Z"
+      }
+    },
+    {
+      "id": "typological",
+      "methodId": "typological",
+      "methodName": "Typological Study",
+      "title": "The Lamb On The Mountain",
+      "introduction": "Abraham reaches for the knife, and a voice interrupts him. A ram becomes the offering in his son's place. Read the scene on its own before placing John's words about Jesus beside it.",
+      "passage": {
+        "reference": "Genesis 22:9-14",
+        "translation": "BSB",
+        "bookId": 1,
+        "chapter": 22,
+        "verseStart": 9,
+        "verseEnd": 14,
+        "verses": [
+          {
+            "verse": 9,
+            "text": "When they arrived at the place God had designated, Abraham built the altar there and arranged the wood. He bound his son Isaac and placed him on the altar, atop the wood."
+          },
+          {
+            "verse": 10,
+            "text": "Then Abraham reached out his hand and took the knife to slaughter his son."
+          },
+          {
+            "verse": 11,
+            "text": "Just then the angel of the LORD called out to him from heaven, “Abraham, Abraham!”  “Here I am,” he replied."
+          },
+          {
+            "verse": 12,
+            "text": "“Do not lay a hand on the boy or do anything to him,” said the angel, “for now I know that you fear God, since you have not withheld your only son from me.”"
+          },
+          {
+            "verse": 13,
+            "text": "Then Abraham looked up and saw behind him a ram in a thicket, caught by its horns. So he went and took the ram and offered it as a burnt offering in place of his son."
+          },
+          {
+            "verse": 14,
+            "text": "And Abraham called that place The LORD Will Provide. So to this day it is said, “On the mountain of the LORD it will be provided.”"
+          }
+        ]
+      },
+      "supportingPassages": [
+        {
+          "reference": "John 1:29",
+          "translation": "BSB",
+          "bookId": 43,
+          "chapter": 1,
+          "verseStart": 29,
+          "verseEnd": 29,
+          "verses": [
+            {
+              "verse": 29,
+              "text": "The next day John saw Jesus coming toward him and said, “Look, the Lamb of God, who takes away the sin of the world!"
+            }
+          ]
+        }
+      ],
+      "sections": [
+        {
+          "id": "the_scene",
+          "label": "The hill and the knife",
+          "kind": "reading",
+          "text": "Abraham builds the altar himself. He arranges the wood with his own hands, binds his son, lays him on top. He reaches for the knife. There is no rescue yet, only a father's hand moving toward his own child. The voice from heaven stops him mid motion, calling his name twice. Only then does he look up and see the ram caught in the thicket.",
+          "prompt": ""
+        },
+        {
+          "id": "the_tension",
+          "label": "The missing lamb",
+          "kind": "notice",
+          "text": "Isaac is bound on the altar. Abraham's hand holds the knife. Stay with that danger long enough to notice the interruption. The angel tells Abraham not to harm the boy. The ram then becomes the burnt offering in his son's place. Watch whom the substitute spares.",
+          "prompt": ""
+        },
+        {
+          "id": "the_provide",
+          "label": "The name on the mountain",
+          "kind": "reflection",
+          "text": "Abraham names the place The LORD Will Provide. The passage preserves that name and the saying about provision on the mountain. Keep the name attached to this particular rescue. The ram is offered in Isaac's place, and the son is spared. The story gives the remembered name its weight.",
+          "prompt": ""
+        },
+        {
+          "id": "the_greater",
+          "label": "The later fulfillment",
+          "kind": "reflection",
+          "text": "John sees Jesus approaching and calls Him the Lamb of God, who takes away the sin of the world. Abraham offers a ram in his son's place. Read that substitution beside John's declaration. Let the echo guide the connection while keeping each scene's own words in view.",
+          "prompt": ""
+        }
+      ],
+      "provenance": {
+        "model": "claude-sonnet-5",
+        "generatedAt": "2026-09-12T23:24:23.911Z"
+      }
+    },
+    {
+      "id": "verse_mapping",
+      "methodId": "verse_mapping",
+      "methodName": "Verse Mapping",
+      "title": "The Word Made Flesh",
+      "introduction": "One sentence holds a lot of weight. Slow down with John's words tonight and let each phrase sit a little longer than a tired skim usually allows.",
+      "passage": {
+        "reference": "John 1:14",
+        "translation": "BSB",
+        "bookId": 43,
+        "chapter": 1,
+        "verseStart": 14,
+        "verseEnd": 14,
+        "verses": [
+          {
+            "verse": 14,
+            "text": "The Word became flesh and made His dwelling among us. We have seen His glory, the glory of the one and only Son from the Father, full of grace and truth."
+          }
+        ]
+      },
+      "supportingPassages": [],
+      "sections": [
+        {
+          "id": "the_words",
+          "label": "Words that carry meaning",
+          "kind": "notice",
+          "text": "Read it slowly. \"The Word became flesh and made His dwelling among us.\" Notice became, flesh, dwelling, and us. Each word brings the sentence closer: a change, a body, a place among people. Let dwelling suggest the familiar image of someone making a home.",
+          "prompt": ""
+        },
+        {
+          "id": "the_english_wording",
+          "label": "How the words connect",
+          "kind": "reflection",
+          "text": "\"Full of grace and truth\" closes the verse the way a hand closes around something it means to keep. Grace and truth sitting together, not fighting for space. The verse doesn't split them into two separate qualities to weigh against each other. It names one Person, holding both at once, without losing either.",
+          "prompt": ""
+        },
+        {
+          "id": "the_dwelling",
+          "label": "What this verse claims",
+          "kind": "reflection",
+          "text": "This verse claims something was seen. \"We have seen His glory.\" Not imagined, not inferred from a story told later. Glory, in a body, among people who could watch it happen. The Father's Son, present enough to be witnessed, close enough to leave a memory.",
+          "prompt": ""
+        },
+        {
+          "id": "what_changes",
+          "label": "One changed seeing",
+          "kind": "response",
+          "text": "Picture a shared home as you sit with the word dwelling. Keep that image beside the verse's words about the Word becoming flesh. Let the closeness of this sentence accompany your prayer tonight, and notice what it makes room for.",
+          "prompt": "What word in this verse did you skim past before tonight?"
+        }
+      ],
+      "provenance": {
+        "model": "claude-sonnet-5",
+        "generatedAt": "2026-09-12T23:24:23.912Z"
+      }
+    },
+    {
+      "id": "wisdom_study",
+      "methodId": "wisdom_study",
+      "methodName": "Wisdom Literature Study",
+      "title": "A Time for Everything",
+      "introduction": "You've been moving fast today, skimming even this. Ecclesiastes won't rush with you. It lays out the pairs of a life, weeping and laughing, tearing and mending, and leaves them standing there, unexplained.",
+      "passage": {
+        "reference": "Ecclesiastes 3:1-8",
+        "translation": "BSB",
+        "bookId": 21,
+        "chapter": 3,
+        "verseStart": 1,
+        "verseEnd": 8,
+        "verses": [
+          {
+            "verse": 1,
+            "text": "To everything there is a season, and a time for every purpose under heaven:"
+          },
+          {
+            "verse": 2,
+            "text": "a time to be born and a time to die, a time to plant and a time to uproot,"
+          },
+          {
+            "verse": 3,
+            "text": "a time to kill and a time to heal, a time to break down and a time to build,"
+          },
+          {
+            "verse": 4,
+            "text": "a time to weep and a time to laugh, a time to mourn and a time to dance,"
+          },
+          {
+            "verse": 5,
+            "text": "a time to cast away stones and a time to gather stones together, a time to embrace and a time to refrain from embracing,"
+          },
+          {
+            "verse": 6,
+            "text": "a time to search and a time to count as lost, a time to keep and a time to discard,"
+          },
+          {
+            "verse": 7,
+            "text": "a time to tear and a time to mend, a time to be silent and a time to speak,"
+          },
+          {
+            "verse": 8,
+            "text": "a time to love and a time to hate, a time for war and a time for peace."
+          }
+        ]
+      },
+      "supportingPassages": [],
+      "sections": [
+        {
+          "id": "the_pairs",
+          "label": "Time as the Teacher lists it",
+          "kind": "reading",
+          "text": "The writer doesn't explain these pairs. He just lists them: born, die. Plant, uproot. Kill, heal. Weep, laugh. Mourn, dance. No ranking, no hierarchy, no order of importance. Just pairs stacked one after another, like someone counting off what a life actually holds.",
+          "prompt": ""
+        },
+        {
+          "id": "not_a_promise",
+          "label": "Pattern, not bargain",
+          "kind": "notice",
+          "text": "These pairs aren't handed to you as promises to cash in for outcomes. The text names a time to plant and a time to uproot, full stop, with no formula attached to either. Nothing here guarantees which season you're standing in or when it will end. The list describes life. It doesn't manage it for you.",
+          "prompt": ""
+        },
+        {
+          "id": "the_open_question",
+          "label": "What stays unanswered",
+          "kind": "reflection",
+          "text": "The passage never says how you're supposed to know which time you're in. It doesn't explain who decides when killing gives way to healing, or why war drags on past its welcome. Ecclesiastes leaves that standing open, unresolved.",
+          "prompt": "How do you know which season you're actually in right now?"
+        }
+      ],
+      "provenance": {
+        "model": "claude-sonnet-5",
+        "generatedAt": "2026-09-12T23:24:23.912Z"
+      }
+    }
+  ]
+}

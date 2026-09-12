@@ -3,6 +3,8 @@ import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useAutoHide } from '@/hooks/useAutoHide';
 import { View, Text, Dimensions, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet, TouchableOpacity, Keyboard, ScrollView, UIManager, Modal, type LayoutChangeEvent } from 'react-native';
 import { useRouter, useLocalSearchParams, useIsFocused } from 'expo-router';
+import { useModalNavigation } from '@/hooks/useModalNavigation';
+import { qaMethodReadingsHref } from '@/lib/qa-method-readings-route';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   useSharedValue,
@@ -795,21 +797,33 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     }
   }, [params.practice, router, practiceIdentity, isViewingActiveSeries, assignedPractice?.id, setScripturePracticeReturn]);
 
+  const hidePractice = useCallback(() => {
+    setPracticeVisible(false);
+    if (params.practice === '1') {
+      router.setParams({ practice: '', practiceMethod: '' });
+    }
+  }, [params.practice, router]);
+
+  const { navigateAfterDismiss, onDismiss: onPracticeDismiss } = useModalNavigation(practiceVisible, hidePractice);
+  const openSampleReadings = useCallback(() => {
+    navigateAfterDismiss(() => router.push(qaMethodReadingsHref()));
+  }, [navigateAfterDismiss, router]);
+
   const openPracticeBible = useCallback((reference: string) => {
     const passage = getPracticePassage(reference);
     if (!passage || !practiceIdentity) return;
-    setPracticeVisible(false);
     if (isViewingActiveSeries && activePracticeMethodId) {
       setScripturePracticeReturn({
         target: { ...practiceIdentity, methodId: activePracticeMethodId },
         destination: 'practice',
       });
     }
-    router.navigate(buildPracticeBibleHref(passage));
+    navigateAfterDismiss(() => router.navigate(buildPracticeBibleHref(passage)));
   }, [
     activePracticeMethodId,
     isViewingActiveSeries,
     practiceIdentity,
+    navigateAfterDismiss,
     router,
     setScripturePracticeReturn,
   ]);
@@ -2645,6 +2659,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
         animationType={reducedMotion ? 'none' : 'fade'}
         presentationStyle="fullScreen"
         onRequestClose={closePractice}
+        onDismiss={onPracticeDismiss}
       >
         {practiceIdentity && currentDayData ? (
           <ScripturePracticeSheet
@@ -2654,6 +2669,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
             day={currentDayData}
             onChangeMethod={setPracticePreviewMethodId}
             onClose={closePractice}
+            onOpenSamples={openSampleReadings}
             onSkipPractice={closePractice}
             onOpenBible={openPracticeBible}
           />

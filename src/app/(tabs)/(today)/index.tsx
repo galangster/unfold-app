@@ -68,7 +68,13 @@ import { animateCardDismiss } from '@/lib/card-dismiss-animation';
 import { getBibleDbStatus, downloadBibleDb } from '@/lib/bible-db';
 import { commitDevotionalPullCursor, pullDevotionalContent } from '@/lib/devotional-sync-pull';
 import { applyPulledDevotionalContent } from '@/lib/devotional-pulled-content';
-import { clearInitialGenerationRequestId } from '@/lib/initial-generation-request';
+import { clearInitialGenerationRequestId, readInitialGenerationRequestId } from '@/lib/initial-generation-request';
+import {
+  isReadableCurrentSeries,
+  resolveCreateNewDuringPendingInitial,
+  resolvePendingInitialArcResume,
+  type PendingInitialArcResume,
+} from '@/lib/support-clarity';
 import { captureSyncSession, isSyncSessionCurrent } from '@/lib/sync-session-fence';
 import {
   getCurrentDevotional,
@@ -436,6 +442,7 @@ export default function HomeScreen() {
   const generationSessionError = useUnfoldStore((s) => s.generationSession.error);
   const clearGenerationSession = useUnfoldStore((s) => s.clearGenerationSession);
   const [inflightSeries, setInflightSeries] = useState<InflightGenerationJob | null>(null);
+  const [pendingInitialResume, setPendingInitialResume] = useState<PendingInitialArcResume>('none');
   const [autoIntent, setAutoIntent] = useState<AutoTrialIntentV1 | null>(readAutoTrialIntent);
   const landedDevotionalIdsKey = devotionals.map((row) => row.id).join('\0');
 
@@ -466,6 +473,7 @@ export default function HomeScreen() {
     setAutoIntent(readAutoTrialIntent());
     if (focus.skipResolver) {
       setInflightSeries(null);
+      setPendingInitialResume('none');
       if (focus.navigation) {
         router.push(focus.navigation);
       }
@@ -473,6 +481,21 @@ export default function HomeScreen() {
     }
     const decision = focus.inflightDecision;
     if (decision.action !== 'resume-on-generating') {
+      if (decision.action === 'none') {
+        const store = useUnfoldStore.getState();
+        const pendingResume = resolvePendingInitialArcResume({
+          inflight: inflightJob,
+          requestId: readInitialGenerationRequestId(),
+          generationSessionStatus,
+          hasReadableCurrentSeries: isReadableCurrentSeries(
+            getCurrentDevotional(store.devotionals, store.currentDevotionalId),
+          ),
+          autoTrialOwnsFlow: readAutoTrialIntent()?.status === 'purchased',
+        });
+        setPendingInitialResume(pendingResume);
+      } else {
+        setPendingInitialResume('none');
+      }
       const next = decision.action === 'watch-on-today' ? decision.job : null;
       // The same record read again on focus keeps its object, so the watch
       // keyed on it is not restarted.
@@ -489,6 +512,7 @@ export default function HomeScreen() {
       return;
     }
     setInflightSeries(null);
+    setPendingInitialResume('none');
     const { jobId, devotionalId } = decision.job;
     let cancelled = false;
     const session = captureSyncSession();
@@ -531,7 +555,7 @@ export default function HomeScreen() {
     return () => {
       cancelled = true;
     };
-  }, [router, isTodayFocused, generationSessionStatus, generationSessionDevotionalId, user?.hasCompletedOnboarding, landedDevotionalIdsKey]);
+  }, [router, isTodayFocused, generationSessionStatus, generationSessionDevotionalId, user?.hasCompletedOnboarding, landedDevotionalIdsKey, currentDevotionalId]);
   const onInflightSeriesSettled = useCallback(() => setInflightSeries(null), []);
 
   // The series failed after the reader left for Today (the watch below
@@ -545,9 +569,15 @@ export default function HomeScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.replace(generatingRoute(readAutoTrialIntent()?.intentId));
   }, [router]);
+  const handleResumePendingInitial = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push({ pathname: '/generating' });
+  }, [router]);
   const handleDismissInflightSeriesFailure = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     clearGenerationSession();
+    clearInitialGenerationRequestId();
+    setPendingInitialResume('none');
   }, [clearGenerationSession]);
 
   // Check premium status through the tri-state policy so QA premium override can
@@ -835,7 +865,6 @@ export default function HomeScreen() {
 
   const openNewSeriesDiscovery = () => {
     abandonPurchasedIntentBeforeNewSeries({ nowMs: Date.now() });
-    clearInitialGenerationRequestId();
     router.push({
       pathname: '/onboarding',
       params: { startAt: 'themeType', flow: 'newSeries' },
@@ -845,6 +874,17 @@ export default function HomeScreen() {
   const handleCreateNew = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (!gate()) return;
+    const pending = resolvePendingInitialArcResume({
+      inflight: readInflightGenerationJob(),
+      requestId: readInitialGenerationRequestId(),
+      generationSessionStatus,
+      hasReadableCurrentSeries: isReadableCurrentSeries(currentDevotional),
+      autoTrialOwnsFlow: readAutoTrialIntent()?.status === 'purchased',
+    });
+    if (resolveCreateNewDuringPendingInitial(pending) === 'resume-existing') {
+      handleResumePendingInitial();
+      return;
+    }
     if (currentDevotionalId) {
       Alert.alert(
         'Start a new series?',
@@ -1528,6 +1568,9 @@ export default function HomeScreen() {
           onDismiss: handleDismissInflightSeriesFailure,
         }
       : null,
+    pendingInitialResume: pendingInitialResume === 'offer-resume'
+      ? { onResume: handleResumePendingInitial }
+      : null,
     premiumPolicy,
     daysCompleted,
     totalDays,
@@ -1604,6 +1647,9 @@ export default function HomeScreen() {
                 isReturningUser={isReturningUser && !isQaPreparingLoadingPreview}
                 gateCreation={gate}
                 storedPick={autoTrialActive ? storedNextPick : undefined}
+                nonblockingResume={pendingInitialResume === 'offer-nonblocking-resume'
+                  ? { onResume: handleResumePendingInitial }
+                  : null}
                 ambienceVisible={shouldShowCompletedEmberAmbience({
                   stateType: devotionalState.type,
                   hasReadToday,

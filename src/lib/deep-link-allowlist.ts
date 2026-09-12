@@ -178,6 +178,7 @@ export const EXTERNAL_ROUTE_BLOCKLIST: ReadonlySet<string> = new Set([
   '/unfolded', // hidden year-in-review recap; its only in-app entry is dead code
   '/generating', // transitional screen, meaningful only mid-flow
   '/day-menu', // in-reader sheet that needs reader context
+  '/qa-method-readings', // QA sample library; in-app only behind the practice gate
 ]);
 
 /** Route groups that may appear as path segments; anything else is rejected. */
