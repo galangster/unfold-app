@@ -3,6 +3,35 @@ const { defineConfig } = require("eslint/config");
 const expoConfig = require("eslint-config-expo/flat");
 const pluginQuery = require("@tanstack/eslint-plugin-query");
 
+// Hoisted so the src/lib/navigation.ts override below can re-list them: flat
+// config REPLACES a rule's config rather than merging it, so an override that
+// only named the router selector would silently reopen the fetch ban there.
+// src/lib/__tests__/eslint-no-bare-fetch-rule.test.ts pins these.
+const FETCH_SELECTORS = [
+  {
+    selector: "CallExpression[callee.name='fetch']",
+    message:
+      "Call authenticatedFetch (@/lib/device-credential) for backend requests, or externalFetch (@/lib/external-fetch) for third-party hosts.",
+  },
+  {
+    selector:
+      "CallExpression[callee.type='MemberExpression'][callee.property.name='fetch'][callee.object.name=/^(globalThis|global|window|self)$/]",
+    message:
+      "Call authenticatedFetch (@/lib/device-credential) for backend requests, or externalFetch (@/lib/external-fetch) for third-party hosts.",
+  },
+];
+
+// router.back() is a no-op on an empty stack, so a screen reached from a push
+// notification or an `unfold://` link on a cold start could not be left at all
+// (1.1.8 build 279). src/lib/__tests__/eslint-no-router-back-rule.test.ts pins
+// this and its single allowed file.
+const ROUTER_BACK_SELECTOR = {
+  selector:
+    "CallExpression[callee.type='MemberExpression'][callee.object.name='router'][callee.property.name='back']",
+  message:
+    "router.back() is a silent no-op on an empty stack (a push or deep-link cold start). Call goBackOr from @/lib/navigation so the exit always leads somewhere.",
+};
+
 module.exports = defineConfig([
   expoConfig,
   {
@@ -76,20 +105,7 @@ module.exports = defineConfig([
       // anywhere else skips both. The allowlist below is those two transports,
       // tests, manual mocks, and Node tooling;
       // src/lib/__tests__/eslint-no-bare-fetch-rule.test.ts pins both halves.
-      "no-restricted-syntax": [
-        "error",
-        {
-          selector: "CallExpression[callee.name='fetch']",
-          message:
-            "Call authenticatedFetch (@/lib/device-credential) for backend requests, or externalFetch (@/lib/external-fetch) for third-party hosts.",
-        },
-        {
-          selector:
-            "CallExpression[callee.type='MemberExpression'][callee.property.name='fetch'][callee.object.name=/^(globalThis|global|window|self)$/]",
-          message:
-            "Call authenticatedFetch (@/lib/device-credential) for backend requests, or externalFetch (@/lib/external-fetch) for third-party hosts.",
-        },
-      ],
+      "no-restricted-syntax": ["error", ...FETCH_SELECTORS, ROUTER_BACK_SELECTOR],
     },
   },
   {
@@ -127,6 +143,14 @@ module.exports = defineConfig([
     ],
     rules: {
       "no-restricted-syntax": "off",
+    },
+  },
+  {
+    // The guard itself — the only file allowed to call router.back(). The fetch
+    // selectors are re-listed because flat config replaces rule config.
+    files: ["src/lib/navigation.ts"],
+    rules: {
+      "no-restricted-syntax": ["error", ...FETCH_SELECTORS],
     },
   },
   ...pluginQuery.configs["flat/recommended"],

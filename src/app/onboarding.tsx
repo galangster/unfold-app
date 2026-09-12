@@ -37,6 +37,7 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon, XIcon, HandIcon, FingerprintIcon, MoonIcon, CompassIcon, HeartIcon, EyeIcon, FireIcon, SparkleIcon, CloudRainIcon, ScalesIcon, CrosshairIcon, BookOpenIcon, UsersIcon, MusicNotesIcon, CrownIcon, LeafIcon, ChatCircleIcon, CalendarIcon, MagicWandIcon, SmileyIcon, GiftIcon, BinocularsIcon, CloudIcon, ShieldIcon, ShieldCheckIcon, SpeakerHighIcon, LockIcon, GavelIcon } from '@/components/icons';
 import { logger } from '@/lib/logger';
+import { goBackOr } from '@/lib/navigation';
 import { requestReviewOncePerVersion } from '@/lib/review-prompt';
 
 import { useTheme } from '@/lib/theme';
@@ -4288,7 +4289,7 @@ export default function OnboardingScreen() {
               </TouchableOpacity>
             ) : existingUser?.hasCompletedOnboarding ? (
               <TouchableOpacity activeOpacity={1}
-                onPress={() => router.back()}
+                onPress={() => goBackOr(router, '/(tabs)/(today)')}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 style={{ width: 40, height: 40, justifyContent: 'center', alignItems: 'center' }}
                 accessibilityLabel="Close"

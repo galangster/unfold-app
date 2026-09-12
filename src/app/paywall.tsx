@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, ActivityIndicator, Linking, ScrollView, Platform, Pressable } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { LEGAL_LINKS } from '@/lib/push-notification-helpers';
+import { goBackOr } from '@/lib/navigation';
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import { useFocusEffect, useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -125,7 +126,7 @@ export default function PaywallScreen() {
     });
 
     if (navigation.action === 'back') {
-      router.back();
+      goBackOr(router, '/(tabs)/(today)');
       return;
     }
 

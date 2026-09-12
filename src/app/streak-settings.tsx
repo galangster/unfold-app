@@ -21,6 +21,7 @@ import { Spacing } from '@/constants/spacing';
 import { Typography } from '@/constants/typography';
 import { alpha } from '@/components/ui';
 import { useTheme } from '@/lib/theme';
+import { goBackOr } from '@/lib/navigation';
 import { useUnfoldStore } from '@/lib/store';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 
@@ -143,7 +144,7 @@ export default function StreakSettingsScreen() {
 
   const handleBack = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.back();
+    goBackOr(router, '/(tabs)/(today)');
   };
 
   const handleStatTap = (id: StatTooltipId) => {

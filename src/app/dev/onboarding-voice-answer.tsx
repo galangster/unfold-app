@@ -14,6 +14,7 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { isQaToolsEnabled } from '@/lib/qa-tools';
+import { goBackOr } from '@/lib/navigation';
 
 const PHASES: OnboardingVoiceAnswerPhase[] = ['idle', 'recording', 'review', 'transcribing', 'transcript', 'error'];
 const OVER_LIMIT_TRANSCRIPT = `${'I want a quieter morning and more room to notice what is already good. '.repeat(40)}`;
@@ -64,7 +65,7 @@ export default function OnboardingVoiceAnswerPreviewScreen() {
               activeOpacity={0.72}
               accessibilityRole="button"
               accessibilityLabel="Close prototype route"
-              onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/(today)')}
+              onPress={() => goBackOr(router, '/(tabs)/(today)')}
               style={[styles.routeClose, { borderColor: colors.border }]}
             >
               <Text style={[styles.routeCloseText, { color: colors.textMuted }]}>Close</Text>

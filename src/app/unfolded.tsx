@@ -48,6 +48,7 @@ import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
 import { StoryProgressBar } from '@/components/unfolded/StoryProgressBar';
 import { useUnfoldStore } from '@/lib/store';
+import { goBackOr } from '@/lib/navigation';
 import { logger } from '@/lib/logger';
 import { computeRecapData, type RecapData } from '@/lib/recap-stats';
 import { SparkleBurst } from '@/components/SparkleBurst';
@@ -1219,7 +1220,7 @@ export default function UnfoldedScreen() {
         router.dismiss();
       } catch (err) {
         logger.error('[UNFOLDED] dismiss failed:', err);
-        router.back();
+        goBackOr(router, '/(tabs)/(today)');
       }
     }, 80);
   }, [router, isClosing]);

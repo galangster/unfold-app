@@ -10,6 +10,7 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
+import { goBackOr } from '@/lib/navigation';
 import { useUnfoldStore } from '@/lib/store';
 import { alpha } from '@/components/ui';
 import { useBibleSearch, type BibleSearchResultWithMeta } from '@/hooks/useBibleSearch';
@@ -116,7 +117,7 @@ export default function BibleSearchScreen() {
       {/* Search Header */}
       <View style={styles.header}>
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => goBackOr(router, '/(tabs)/(bible)')}
           style={styles.backButton}
           accessibilityLabel="Go back"
         >

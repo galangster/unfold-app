@@ -14,6 +14,7 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { isQaToolsEnabled } from '@/lib/qa-tools';
+import { goBackOr } from '@/lib/navigation';
 import { seedVoiceCheckInDraftFromUrl } from '@/lib/voice-check-ins';
 
 const PHASES: VoiceCheckInPhase[] = ['idle', 'recording', 'review', 'saved', 'error'];
@@ -73,7 +74,7 @@ export default function VoiceCheckInPrototypeScreen() {
               activeOpacity={0.72}
               accessibilityRole="button"
               accessibilityLabel="Close prototype route"
-              onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/(today)')}
+              onPress={() => goBackOr(router, '/(tabs)/(today)')}
               style={[styles.routeClose, { borderColor: colors.border }]}
             >
               <Text style={[styles.routeCloseText, { color: colors.textMuted }]}>Close</Text>

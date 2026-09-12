@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { logger } from '@/lib/logger';
+import { goBackOr, tabRootFromSegments } from '@/lib/navigation';
 import {
   AppState,
   View,
@@ -459,7 +460,10 @@ export default function JournalScreen() {
       router.replace('/(tabs)/(journal)');
       return;
     }
-    router.back();
+    // Mounted in two tabs — as (today)/journal and re-exported as
+    // (journal)/entry — so a deep-link cold start falls back to whichever
+    // tab root the reader is actually in.
+    goBackOr(router, tabRootFromSegments(segments));
   }, [segments, navigation, router]);
 
   const handleDone = () => {

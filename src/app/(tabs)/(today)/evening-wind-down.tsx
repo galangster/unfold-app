@@ -23,6 +23,7 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Typography } from '@/constants/typography';
 import { useTheme } from '@/lib/theme';
+import { goBackOr } from '@/lib/navigation';
 import { useUnfoldStore } from '@/lib/store';
 import { generateExamen } from '@/lib/examen-service';
 import { fetchVerse } from '@/lib/bible-api';
@@ -35,7 +36,6 @@ import {
   findTodayMiddayCheckIn,
   resolveEveningLoadingCaption,
   resolveEveningWindDownDayNumber,
-  resolveEveningWindDownExit,
 } from '@/lib/evening-wind-down-state';
 
 // Single unified flow: prayer + scripture together (no pill toggle)
@@ -276,16 +276,11 @@ export default function EveningWindDownScreen() {
     setShowCelebration(true);
   }, [currentDevotional, currentDay, addCheckIn, gate, markEveningWindDownCompleted]);
 
-  // Every exit from this screen goes through here. See
-  // resolveEveningWindDownExit: arriving from the evening push notification
-  // leaves no history, and a bare router.back() then does nothing at all.
+  // Every exit from this screen goes through here: the evening push
+  // deep-links straight to this route, so a cold start has no history and a
+  // bare router.back() does nothing at all. See src/lib/navigation.ts.
   const exitWindDown = useCallback(() => {
-    const exit = resolveEveningWindDownExit(router.canGoBack());
-    if (exit === 'back') {
-      router.back();
-    } else {
-      router.replace(exit);
-    }
+    goBackOr(router, '/(tabs)/(today)');
   }, [router]);
 
   const handleDismissCelebration = useCallback(() => {
