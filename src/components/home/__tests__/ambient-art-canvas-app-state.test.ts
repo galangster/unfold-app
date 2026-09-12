@@ -3,6 +3,7 @@ import { getInitialAmbientAppStateStatus } from '../AmbientArtCanvas';
 
 jest.mock('../../../../assets/rive/today-campfire.riv', () => 1);
 jest.mock('../../../../assets/rive/today-canopy-lights.riv', () => 1);
+jest.mock('../../../../assets/rive/today-clouds.riv', () => 1);
 jest.mock('../../../../assets/rive/today-doors.riv', () => 1);
 jest.mock('../../../../assets/rive/today-tree.riv', () => 1);
 jest.mock('../../../../assets/rive/today-waterfall.riv', () => 1);
