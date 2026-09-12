@@ -4,6 +4,7 @@ import {
   findTodayMiddayCheckIn,
   resolveEveningLoadingCaption,
   resolveEveningWindDownDayNumber,
+  resolveEveningWindDownReadiness,
 } from '../evening-wind-down-state';
 
 // Evening of a day on which Day 6 was read in the morning; the store has
@@ -138,5 +139,48 @@ describe('resolveEveningLoadingCaption', () => {
   it('keeps the prayer copy while the examen is actually loading', () => {
     expect(resolveEveningLoadingCaption('allow')).toBe('Preparing your evening prayer...');
     expect(resolveEveningLoadingCaption('gate')).toBe('Preparing your evening prayer...');
+  });
+});
+
+describe('resolveEveningWindDownReadiness', () => {
+  it('is ready when the day on screen is the day finished today', () => {
+    // The fixture has day 6 read this morning, and NOW is that evening.
+    expect(resolveEveningWindDownReadiness(devotional(), 6, NOW)).toBe('ready');
+  });
+
+  it('is unread when nothing was read today', () => {
+    // Reported 2026-09-12: the evening push deep-links past Today's
+    // hasReadToday gate, so an unread day still produced an examen announced
+    // as reflecting on "the reading this morning".
+    const d = devotional({ currentDay: 1, days: [day(1)] });
+    expect(resolveEveningWindDownReadiness(d, 1, NOW)).toBe('unread');
+  });
+
+  it('is unread mid-series when the reader skipped today', () => {
+    // The hole that made the first fix almost useless. getEveningWindDownDayNumber
+    // falls back to getHighestReadDayNumber, which hands back a day that IS
+    // read, so asking only "is the target day read" answered yes for every
+    // reader past day 1 and the gate never fired.
+    const d = devotional({
+      currentDay: 6,
+      days: [day(5, { isRead: true, readAt: '2026-05-10T08:00:00' })],
+    });
+    expect(resolveEveningWindDownReadiness(d, 5, NOW)).toBe('unread');
+  });
+
+  it('is unread when a link names a different day than the one read today', () => {
+    // Day 6 read today must not authorise an examen about Day 7. dayNumber is
+    // deep-link allowlisted and wins in resolveEveningWindDownDayNumber.
+    expect(resolveEveningWindDownReadiness(devotional(), 7, NOW)).toBe('unread');
+  });
+
+  it('is unread without a devotional at all', () => {
+    // The resolver answers only "was this day finished today", so no
+    // devotional is trivially unread. The SCREEN must not route on that
+    // alone: with no series there is no day to send anyone to, so
+    // evening-wind-down.tsx additionally requires currentDevotional and
+    // currentDay before showing the prompt, and falls through to the
+    // "Start a devotional" empty state otherwise.
+    expect(resolveEveningWindDownReadiness(null, 1, NOW)).toBe('unread');
   });
 });
