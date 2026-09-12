@@ -1,8 +1,9 @@
 /**
- * A bare fetch() call is an error for every file, with a short, explained
+ * A global fetch() call is an error for every file, with a short, explained
  * allowlist (eslint.config.js): backend requests go through authenticatedFetch
- * so a device-credential 401 heals. Pinning both halves here means the rule
- * cannot quietly disappear and a new escape hatch cannot slip in unnoticed.
+ * so a device-credential 401 heals, and third-party hosts go through
+ * externalFetch. Pinning both halves here means the rule cannot quietly
+ * disappear and a new escape hatch cannot slip in unnoticed.
  */
 type FlatConfigEntry = {
   files?: string[];
@@ -14,7 +15,12 @@ type FlatConfigEntry = {
 const config = require('../../../eslint.config.js') as FlatConfigEntry[];
 
 const RULE = 'no-restricted-syntax';
-const FETCH_SELECTOR = "CallExpression[callee.name='fetch']";
+const FETCH_SELECTORS = [
+  // fetch(...)
+  "CallExpression[callee.name='fetch']",
+  // globalThis.fetch(...), global.fetch(...), window.fetch(...), self.fetch(...)
+  "CallExpression[callee.type='MemberExpression'][callee.property.name='fetch'][callee.object.name=/^(globalThis|global|window|self)$/]",
+];
 
 const ALLOWLIST = [
   'scripts/**',
@@ -22,24 +28,21 @@ const ALLOWLIST = [
   'src/**/*.test.tsx',
   'src/**/__tests__/**',
   'src/lib/__mocks__/**',
-  'src/lib/bible-api.ts',
   'src/lib/device-credential.ts',
-  'src/lib/network-error-handler.ts',
+  'src/lib/external-fetch.ts',
 ];
 
-function forbidsBareFetch(value: unknown): boolean {
+function forbidsGlobalFetch(value: unknown): boolean {
   if (!Array.isArray(value) || value[0] !== 'error') return false;
-  return value.slice(1).some(
-    (option) =>
-      typeof option === 'object'
-      && option !== null
-      && (option as { selector?: unknown }).selector === FETCH_SELECTOR,
-  );
+  const selectors = value
+    .slice(1)
+    .map((option) => (typeof option === 'object' && option !== null ? (option as { selector?: unknown }).selector : undefined));
+  return FETCH_SELECTORS.every((selector) => selectors.includes(selector));
 }
 
-describe('eslint no-bare-fetch rule', () => {
-  it('is an error for every file by default', () => {
-    const global = config.filter((entry) => !entry.files && forbidsBareFetch(entry.rules?.[RULE]));
+describe('eslint no-global-fetch rule', () => {
+  it('is an error for every file by default, for bare and member calls', () => {
+    const global = config.filter((entry) => !entry.files && forbidsGlobalFetch(entry.rules?.[RULE]));
     expect(global).toHaveLength(1);
   });
 
@@ -52,7 +55,7 @@ describe('eslint no-bare-fetch rule', () => {
   it('is not reconfigured anywhere else', () => {
     const other = config.filter((entry) => {
       const value = entry.rules?.[RULE];
-      return value !== undefined && value !== 'off' && !forbidsBareFetch(value);
+      return value !== undefined && value !== 'off' && !forbidsGlobalFetch(value);
     });
     expect(other).toHaveLength(0);
   });

@@ -14,6 +14,7 @@ import { referenceToRoute, BIBLE_BOOKS, formatScriptureReference, normalizeScrip
 import { getVerseByReference, getBibleDbStatus, type BibleTranslation } from '@/lib/bible-db';
 import { PRIMARY_BACKEND_URL, getAuthHeaders, sanitizeForPrompt } from '@/lib/api-config';
 import { authenticatedFetch } from './device-credential';
+import { externalFetch } from './external-fetch';
 import { checkRateLimit, incrementRateLimit } from '@/lib/rate-limit';
 import { getSharedEncryptionKey } from '@/lib/mmkv-storage';
 import { toSuperscript } from '@/lib/superscript';
@@ -168,7 +169,7 @@ export async function fetchVerse(
   const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
   try {
-    const response = await fetch(url, {
+    const response = await externalFetch(url, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',

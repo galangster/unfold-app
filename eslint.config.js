@@ -71,15 +71,23 @@ module.exports = defineConfig([
       "no-console": "error",
 
       // Backend requests go through `authenticatedFetch` (src/lib/device-credential.ts)
-      // so a device-credential 401 heals once. A bare fetch() call skips that.
-      // Non-backend callers are allowlisted by file below;
+      // so a device-credential 401 heals once. Third-party hosts go through
+      // `externalFetch` (src/lib/external-fetch.ts). A global fetch() call
+      // anywhere else skips both. The allowlist below is those two transports,
+      // tests, manual mocks, and Node tooling;
       // src/lib/__tests__/eslint-no-bare-fetch-rule.test.ts pins both halves.
       "no-restricted-syntax": [
         "error",
         {
           selector: "CallExpression[callee.name='fetch']",
           message:
-            "Call authenticatedFetch from @/lib/device-credential for backend requests. Non-backend callers are allowlisted by file in eslint.config.js.",
+            "Call authenticatedFetch (@/lib/device-credential) for backend requests, or externalFetch (@/lib/external-fetch) for third-party hosts.",
+        },
+        {
+          selector:
+            "CallExpression[callee.type='MemberExpression'][callee.property.name='fetch'][callee.object.name=/^(globalThis|global|window|self)$/]",
+          message:
+            "Call authenticatedFetch (@/lib/device-credential) for backend requests, or externalFetch (@/lib/external-fetch) for third-party hosts.",
         },
       ],
     },
@@ -102,16 +110,13 @@ module.exports = defineConfig([
     },
   },
   {
-    // The only places a bare fetch() call is allowed. Every entry needs a
+    // The only places a global fetch() call is allowed. Every entry needs a
     // reason; src/lib/__tests__/eslint-no-bare-fetch-rule.test.ts pins the list.
     files: [
-      // The wrapper itself and the registration call it must not recurse into.
+      // The backend transport, and the registration call it must not recurse into.
       "src/lib/device-credential.ts",
-      // bible-api.com verse lookups. The backend commentary call in the same
-      // file is pinned by authenticated-fetch-lib-callers.test.ts.
-      "src/lib/bible-api.ts",
-      // Generic URL helper with no backend caller.
-      "src/lib/network-error-handler.ts",
+      // The third-party transport (bible-api.com).
+      "src/lib/external-fetch.ts",
       // Tests and manual mocks stub the global fetch directly.
       "src/**/__tests__/**",
       "src/**/*.test.ts",
