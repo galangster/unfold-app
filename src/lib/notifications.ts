@@ -14,9 +14,8 @@ import { copySeed } from '@/lib/copy-variation';
 import { dayIndexFor } from '@/lib/variation-bag';
 import {
   getCurrentDevotional,
-  getDaysReadToday,
-  getHomeDevotionalDayData,
   getTodayCarryLine,
+  getTodayDayContext,
 } from '@/lib/home-devotional-state';
 import {
   buildDevotionalReadyNotificationData,
@@ -306,20 +305,6 @@ export async function cancelActReminder(): Promise<void> {
  * The day whose content should follow the reader into this afternoon and
  * evening: the day they finished today, else the day Home is showing.
  */
-function getTodayDayContext(devotional: Devotional | null | undefined, now = new Date()): DayContext | null {
-  const day = getDaysReadToday(devotional, now)[0] ?? getHomeDevotionalDayData(devotional, now);
-  if (!day) return null;
-  return {
-    title: day.title,
-    scriptureReference: day.scriptureReference,
-    quotableLine: day.quotableLine,
-    checkInQuestion: day.checkInQuestion,
-    act: day.act,
-    eveningScriptureRef: day.eveningScriptureRef,
-    companionNudge: day.companionNudge,
-  };
-}
-
 // Configure how notifications appear when the app is in the foreground
 // This is critical for showing notifications when the user is in the app
 Notifications.setNotificationHandler({

@@ -74,6 +74,7 @@ import {
   getCurrentDevotional,
   getHomeDevotionalDayData,
   getTodayCarryLine,
+  getTodayDayContext,
   hasReadDevotionalToday,
   shouldAutoPrepareCurrentDevotionalDay,
 } from '@/lib/home-devotional-state';
@@ -1067,15 +1068,15 @@ export default function HomeScreen() {
     [variationDayIndex],
   );
 
-  const dayCopyContext = useMemo(() => (currentDayData ? {
-    title: currentDayData.title,
-    scriptureReference: currentDayData.scriptureReference,
-    quotableLine: currentDayData.quotableLine,
-    checkInQuestion: currentDayData.checkInQuestion,
-    act: currentDayData.act,
-    eveningScriptureRef: currentDayData.eveningScriptureRef,
-    companionNudge: currentDayData.companionNudge,
-  } : null), [currentDayData]);
+  // Resolved by the SAME helper the scheduler uses — deliberately not from
+  // `currentDayData`. Finishing today's reading advances `currentDay`, so
+  // `currentDayData` points at TOMORROW from that moment on, which is right
+  // for the rest of the home UI and wrong for copy about today. Raised by
+  // Greptile on PR #107.
+  const dayCopyContext = useMemo(
+    () => getTodayDayContext(currentDevotional),
+    [currentDevotional],
+  );
 
   const todayCarryLine = useMemo(
     () => getTodayCarryLine(devotionals, currentDevotionalId),
