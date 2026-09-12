@@ -31,6 +31,7 @@ import { getPremiumNudgeCardTone } from '@/components/PremiumNudgeCard';
 import { usePremiumNudge } from '@/hooks/usePremiumNudge';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { getContentAwareMiddayMessage, getContentAwareEveningMessage } from '@/constants/check-in-messages';
+import { copyVariationFor } from '@/lib/copy-variation';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { Duration, Ease } from '@/constants/animations';
 import { pollJobStatus } from '@/lib/generation-api';
@@ -1046,19 +1047,31 @@ export default function HomeScreen() {
     }
   }, [currentDevotional]);
 
-  // Content-aware check-in messages — reference today's devotional when available
+  // Content-aware check-in messages — reference today's devotional when
+  // available. Same seed and day as the notifications draw from, so when both
+  // fall through to the generic pools they agree.
+  //
+  // They do NOT always agree. The notification body prefers the companion
+  // nudge, then today's carry line, before reaching this content-aware path
+  // (see getMiddayCheckInBody). So on a premium day with a nudge the banner is
+  // more specific than this card — even though the card is labelled "Companion
+  // note" below. Rendering the card from getMiddayCheckInCopy would make them
+  // structurally identical; that is a product call about what this card is
+  // for, not a refactor.
+  const variation = copyVariationFor(new Date());
+
   const middayMessage = useMemo(() => getContentAwareMiddayMessage(currentDayData ? {
     title: currentDayData.title,
     scriptureReference: currentDayData.scriptureReference,
     quotableLine: currentDayData.quotableLine,
     checkInQuestion: currentDayData.checkInQuestion,
-  } : null), [currentDayData?.title, currentDayData?.scriptureReference, currentDayData?.quotableLine, currentDayData?.checkInQuestion]);
+  } : null, variation), [currentDayData?.title, currentDayData?.scriptureReference, currentDayData?.quotableLine, currentDayData?.checkInQuestion, variation.seed, variation.dayIndex]);
 
   const eveningMessage = useMemo(() => getContentAwareEveningMessage(currentDayData ? {
     title: currentDayData.title,
     scriptureReference: currentDayData.scriptureReference,
     quotableLine: currentDayData.quotableLine,
-  } : null), [currentDayData?.title, currentDayData?.scriptureReference, currentDayData?.quotableLine]);
+  } : null, variation), [currentDayData?.title, currentDayData?.scriptureReference, currentDayData?.quotableLine, variation.seed, variation.dayIndex]);
 
   // --- Derived state for zone components ---
 

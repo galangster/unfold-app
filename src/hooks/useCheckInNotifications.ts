@@ -16,8 +16,8 @@
  * window, a naive `useEffect` could read `isPremium === true` and schedule
  * notifications against a user who cancelled their subscription yesterday.
  *
- * The opposite edge matters too: actively cancelling an existing DAILY/WEEKLY
- * OS schedule while policy is still `unknown` can make a legitimate premium
+ * The opposite edge matters too: actively cancelling an existing check-in
+ * schedule while policy is still `unknown` can make a legitimate premium
  * user miss today's reminder if RevenueCat is slow, offline, or still
  * migrating identity. So `unknown` means "defer without touching the OS
  * queue". Once RevenueCat definitively resolves, this owner either schedules
@@ -29,9 +29,10 @@
  *      schedules until the source resolves."
  *   2. Single reactive owner — one hook mounted once at the root layout.
  *      Every write to the OS queue flows through `runSync`. No imperative
- *      "just reschedule tomorrow" helpers at call sites (those have been
- *      deleted — they silently downgraded DAILY triggers to one-shot DATE
- *      triggers, breaking recurrence).
+ *      "just reschedule tomorrow" helpers at call sites (those were deleted
+ *      for downgrading a repeating trigger to a one-shot behind the caller's
+ *      back — the schedule is now deliberately a set of one-shots, but it is
+ *      still this hook that owns them, and it rewrites the whole horizon).
  *   3. Fingerprint + debounce — coalesce rapid changes, serialize in-flight
  *      runs, re-read state at execution time, stale-check after await.
  *   4. Passive permission — never prompt from sync, only use existing state.
@@ -73,17 +74,15 @@ const DEBOUNCE_MS = 500;
  * add its inputs here.
  *
  * Deliberately EXCLUDES `lastMiddayCompletedDate` / `lastEveningCompletedDate`:
- * those fields track completion for analytics and as a state-based alternative
- * to imperative rescheduling — but they do NOT change the schedule. We always
- * schedule DAILY/WEEKLY regardless of today's completion (the recurring
- * triggers recur tomorrow on their own). Including them would cause an
- * unnecessary re-run on every check-in completion without changing the
- * scheduling output.
+ * those fields track completion for analytics — they do NOT change the
+ * schedule. Completing today's check-in does not remove tomorrow's occurrence,
+ * and the horizon is rewritten on the next foreground anyway. Including them
+ * would re-run this sync on every completion without changing its output.
  *
  * If we ever introduce a "skip today only" mode, wire those fields in here.
  *
  * INCLUDES `middayCheckInByDay` / `eveningWindDownByDay`: these drive the
- * DAILY-vs-WEEKLY branching in `scheduleMiddayCheckIn` / `scheduleEveningWindDown`.
+ * per-weekday branching in `scheduleMiddayCheckIn` / `scheduleEveningWindDown`.
  * Without them in the fingerprint, the per-day customize UI in
  * `checkin-schedule.tsx` would silently write dead state and the owner hook
  * would never reconcile. That was a pre-existing dead-write bug Codex caught
@@ -200,7 +199,7 @@ export function useCheckInNotifications() {
       if (gatePlan.kind === 'defer') {
         // RevenueCat has not reported in this session yet. Do not schedule new
         // premium reminders from a potentially stale persisted mirror — but
-        // also do not delete existing DAILY/WEEKLY OS schedules. Deleting on
+        // also do not delete the existing OS schedule. Deleting on
         // every cold start/foreground can make active premium users miss the
         // same-day midday/evening reminder if RC is slow, offline, or still
         // migrating identity. When RC resolves, the policy fingerprint changes
@@ -226,17 +225,16 @@ export function useCheckInNotifications() {
       }
 
       const clock = { localDate: readTrialCheckInSkipDate(), now: new Date() };
-      if (middayEnabled) {
-        await scheduleMiddayCheckIn(clock);
-      } else {
-        await cancelMiddayCheckIn();
-      }
-
-      if (eveningEnabled) {
-        await scheduleEveningWindDown(clock);
-      } else {
-        await cancelEveningWindDown();
-      }
+      // The two slots share no mutable state and write disjoint identifiers,
+      // so they run together rather than one after the other.
+      const [midday, evening] = await Promise.all([
+        middayEnabled
+          ? scheduleMiddayCheckIn(clock)
+          : cancelMiddayCheckIn().then(() => ({ ids: [], complete: true })),
+        eveningEnabled
+          ? scheduleEveningWindDown(clock)
+          : cancelEveningWindDown().then(() => ({ ids: [], complete: true })),
+      ]);
 
       // Post-schedule stale-check: if state changed during any of the awaits
       // above (e.g. user churned mid-flight and RC callback fired, or user
@@ -254,10 +252,20 @@ export function useCheckInNotifications() {
         return;
       }
 
+      // Only record the sync when the OS queue actually holds what we asked
+      // for. A run that cancelled a slot and then failed to rewrite it leaves
+      // nothing pending; stamping that would strand the reader until some
+      // unrelated change moved the fingerprint. Leaving it unstamped costs one
+      // repeat attempt on the next foreground.
+      if (!midday.complete || !evening.complete) {
+        logger.error('[useCheckInNotifications] Incomplete write; leaving unsynced to retry');
+        return;
+      }
+
       lastAppliedRef.current = target;
       lastAppliedDayRef.current = todayStr;
       logger.log(
-        `[useCheckInNotifications] Synced (reason=${reason}, midday=${middayEnabled}, evening=${eveningEnabled})`,
+        `[useCheckInNotifications] Synced (reason=${reason}, midday=${midday.ids.length}, evening=${evening.ids.length})`,
       );
     } catch (error) {
       logger.error('[useCheckInNotifications] Sync failed:', error);

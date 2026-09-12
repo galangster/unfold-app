@@ -16,7 +16,8 @@ import { resetSyncSessionFenceForTesting } from '../sync-session-fence';
 import { useUIState } from '../ui-state';
 import { trackTrialNoticeScheduled, trackTrialNoticeSkipped } from '../auto-trial-telemetry';
 import { getCustomerInfo } from '../revenuecatClient';
-import { buildCheckInSchedule, firesToday, MIDDAY_FALLBACK } from '../notifications';
+import { buildCheckInSchedule, MIDDAY_FALLBACK } from '../notifications';
+import { dayIndexFor } from '../variation-bag';
 
 type NativeRequest = {
   identifier: string;
@@ -301,28 +302,34 @@ describe('I3 short trial', () => {
     expect(trialMirrors().get('trial-notice-skip-reported-v1')).toBeUndefined();
   });
 
-  it('after past_deadline on Day 3, check-in ops do not fire on Day 3', async () => {
+  it('after past_deadline on Day 3, no check-in occurrence lands on Day 3', async () => {
     jest.spyOn(Date, 'now').mockReturnValue(at(7, 10, 0).getTime());
     await scheduleTrialEndingNotification(threeDay(at(5, 10, 0)));
     const skip = readTrialCheckInSkipDate();
     expect(skip).toBe('2026-01-07');
     const now = at(7, 10, 0);
-    const midday = buildCheckInSchedule(
-      'unfold-midday-checkin',
-      '12:30',
-      null,
-      MIDDAY_FALLBACK,
-      { localDate: skip!, now },
-    );
-    const evening = buildCheckInSchedule(
-      'unfold-evening-winddown',
-      '20:30',
-      null,
-      { hour: 20, minute: 30 },
-      { localDate: skip!, now },
-    );
-    expect(midday.every((op) => !firesToday(op, now))).toBe(true);
-    expect(evening.every((op) => !firesToday(op, now))).toBe(true);
+    const skippedDay = dayIndexFor(now);
+    const midday = buildCheckInSchedule({
+      idBase: 'unfold-midday-checkin',
+      defaultTime: '12:30',
+      byDay: null,
+      fallback: MIDDAY_FALLBACK,
+      skipLocalDate: skip,
+      now,
+    });
+    const evening = buildCheckInSchedule({
+      idBase: 'unfold-evening-winddown',
+      defaultTime: '20:30',
+      byDay: null,
+      fallback: { hour: 20, minute: 30 },
+      skipLocalDate: skip,
+      now,
+    });
+    expect(midday.every((o) => o.dayIndex !== skippedDay)).toBe(true);
+    expect(evening.every((o) => o.dayIndex !== skippedDay)).toBe(true);
+    // The skip removes one day, not the schedule: the days after it remain.
+    expect(midday.length).toBeGreaterThan(0);
+    expect(evening.length).toBeGreaterThan(0);
   });
 });
 

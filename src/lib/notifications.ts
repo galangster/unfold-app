@@ -4,10 +4,14 @@ import { useUnfoldStore, type Devotional, type UserProfile } from './store';
 import { getEffectivePremiumAccessPolicy } from './premium-state';
 import { logger } from '@/lib/logger';
 import {
-  getEveningWindDownBody,
-  getMiddayCheckInBody,
+  getEveningWindDownCopy,
+  getMiddayCheckInCopy,
+  type CopyVariation,
   type DayContext,
 } from '@/constants/check-in-messages';
+import { buildCheckInSchedule, getAllCheckInIdentifiers } from '@/lib/check-in-schedule';
+import { copySeed } from '@/lib/copy-variation';
+import { dayIndexFor } from '@/lib/variation-bag';
 import {
   getCurrentDevotional,
   getDaysReadToday,
@@ -16,7 +20,6 @@ import {
 } from '@/lib/home-devotional-state';
 import {
   buildDevotionalReadyNotificationData,
-  parseHhMm,
   pushNamesAutoTrialIntent,
 } from '@/lib/push-notification-helpers';
 import { getDailyReminderContent, type DailyReminderTrigger } from '@/lib/daily-reminder-content';
@@ -24,22 +27,19 @@ import { deferPastQuietHours } from '@/lib/quiet-hours';
 import { logEvent } from '@/lib/analytics';
 import type { ActReminderPlan } from '@/lib/act-reminder';
 import { captureSyncSession, isSyncSessionCurrent } from '@/lib/sync-session-fence';
-import { localCalendarDays, parseLocalYmd } from '@/lib/trial-notice-plan';
 import { readTrialCheckInSkipDate } from '@/lib/trial-notification';
 import { readAutoTrialIntent } from '@/lib/auto-trial-intent';
 import { useUIState } from '@/lib/ui-state';
 
 // Notification identifiers for targeted cancel/reschedule.
 //
-// Midday / evening check-ins now support two scheduling modes:
-//   - Uniform mode (byDay === null): one DAILY trigger with the id below
-//   - Per-day mode (byDay !== null): up to 7 WEEKLY triggers, one per day,
-//     with the base id + "-{day}" suffix (e.g. 'unfold-midday-checkin-mon').
-//
-// The cancel path in `cancelMiddayCheckIn` / `cancelEveningWindDown` always
-// clears BOTH the DAILY id and all 7 weekday ids on every run so that mode
-// transitions don't leave orphan triggers in the OS queue. Cancelling a
-// nonexistent identifier is a no-op in expo-notifications, so this is safe.
+// A check-in slot's id below is a BASE. Its pre-rolled occurrences are
+// `${base}-0` upward (see lib/check-in-schedule.ts); `getAllCheckInIdentifiers`
+// owns the full list, including the ids of the retired repeating schedule that
+// an upgrading install may still be carrying. `cancelMiddayCheckIn` /
+// `cancelEveningWindDown` clear every one of them on every run, so a shrinking
+// occurrence count never leaves an orphan trigger. Cancelling a nonexistent
+// identifier is a no-op in expo-notifications, so this is safe.
 export const NOTIFICATION_IDS = {
   DAILY_REMINDER: 'unfold-daily-reminder',
   MIDDAY_CHECKIN: 'unfold-midday-checkin',
@@ -142,120 +142,15 @@ export function resetDailyReminderOwnershipForTesting(): void {
   dailyOperationEpoch = 0;
 }
 
-// Day keys used across the store + UI + notifications layers.
-// Order matters: WEEKLY ops are emitted in this order regardless of how the
-// byDay map is keyed, so the test invariants can compare deterministically.
-const CHECKIN_DAY_KEYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
-type CheckInDayKey = (typeof CHECKIN_DAY_KEYS)[number];
-
-// Apple weekday convention used by expo-notifications WeeklyTriggerInput:
-// Sun=1, Mon=2, Tue=3, Wed=4, Thu=5, Fri=6, Sat=7. This matches
-// iOS Calendar.current and NSDateComponents. Do NOT switch to ISO 8601
-// (Mon=1..Sun=7) — it will silently fire on the wrong day.
-const WEEKDAY_NUMBER: Record<CheckInDayKey, number> = {
-  Sun: 1,
-  Mon: 2,
-  Tue: 3,
-  Wed: 4,
-  Thu: 5,
-  Fri: 6,
-  Sat: 7,
-};
-
-// Discriminated schedule op. The pure decision function emits these; the
-// live schedule functions loop them and call the appropriate
-// scheduleNotificationAsync trigger type.
-export type ScheduleOp =
-  | { kind: 'daily'; id: string; hour: number; minute: number }
-  | { kind: 'weekly'; id: string; weekday: number; hour: number; minute: number }
-  | { kind: 'date'; id: string; date: Date };
-
-const JS_DAY_TO_KEY: CheckInDayKey[] = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-function skipIsInWindow(skipDay: Date, now: Date): boolean {
-  const d = localCalendarDays(now, skipDay);
-  return d >= 0 && d <= 6;
-}
-
-function resumeDateOp(idBase: string, skipDay: Date, hour: number, minute: number): ScheduleOp {
-  const resume = new Date(skipDay.getTime());
-  resume.setDate(resume.getDate() + 7);
-  resume.setHours(hour, minute, 0, 0);
-  return { kind: 'date', id: `${idBase}-resume`, date: resume };
-}
-
-/**
- * Pure decision function for check-in scheduling. Given an identifier base,
- * a default time, an optional per-day override map, and a fallback time,
- * returns the list of schedule operations to install.
- *
- * Contract (see notifications-scheduling.test.ts for full invariants):
- *   - `byDay === null`  → single DAILY op at defaultTime with id=idBase
- *   - `byDay !== null`  → up to 7 WEEKLY ops, one per populated non-null day
- *   - Empty map or all-null map → empty array (no notifications scheduled)
- *   - Output is always in Mon→Sun order for deterministic tests
- *   - `skip` in today..+6 days drops that weekday and adds a `-resume` date op
- */
-export function buildCheckInSchedule(
-  idBase: string,
-  defaultTime: string,
-  byDay: Record<string, string | null> | null,
-  fallback: { hour: number; minute: number },
-  skip?: { localDate: string; now: Date },
-): ScheduleOp[] {
-  const skipDay = skip ? parseLocalYmd(skip.localDate) : null;
-  const skipKey =
-    skipDay && skip && skipIsInWindow(skipDay, skip.now)
-      ? JS_DAY_TO_KEY[skipDay.getDay()]
-      : null;
-
-  if (byDay === null && !skipKey) {
-    const { hour, minute } = parseHhMm(defaultTime, fallback);
-    return [{ kind: 'daily', id: idBase, hour, minute }];
-  }
-
-  const dayTimes: Record<string, string | null> =
-    byDay === null
-      ? Object.fromEntries(CHECKIN_DAY_KEYS.map((day) => [day, defaultTime]))
-      : byDay;
-
-  const ops: ScheduleOp[] = [];
-  for (const day of CHECKIN_DAY_KEYS) {
-    const value = dayTimes[day];
-    if (value === undefined || value === null) continue;
-    if (day === skipKey) continue;
-    const { hour, minute } = parseHhMm(value, fallback);
-    ops.push({
-      kind: 'weekly',
-      id: `${idBase}-${day.toLowerCase()}`,
-      weekday: WEEKDAY_NUMBER[day],
-      hour,
-      minute,
-    });
-  }
-  const resumeTime = skipKey ? dayTimes[skipKey] : null;
-  if (skipKey && skipDay && resumeTime != null) {
-    const { hour, minute } = parseHhMm(resumeTime, fallback);
-    // One-off covers skipDay+7. After the skip window ends, the next full
-    // schedule run emits the weekly trigger for that weekday again.
-    ops.push(resumeDateOp(idBase, skipDay, hour, minute));
-  }
-  return ops;
-}
-
-/**
- * All identifiers that belong to a given check-in (1 DAILY + 7 WEEKLY + resume).
- * Cancel functions call this and clear every id on every run so that mode
- * transitions (uniform ↔ per-day, enable ↔ disable) never leave orphan
- * triggers in the OS queue. Cancelling a nonexistent id is a no-op.
- */
-export function getAllCheckInIdentifiers(idBase: string): string[] {
-  return [
-    idBase,
-    ...CHECKIN_DAY_KEYS.map((d) => `${idBase}-${d.toLowerCase()}`),
-    `${idBase}-resume`,
-  ];
-}
+// Check-in scheduling decisions live in lib/check-in-schedule.ts: pure,
+// expo-free, and directly testable. Re-exported here because this module is
+// the public face of notification scheduling for the rest of the app.
+export {
+  buildCheckInSchedule,
+  getAllCheckInIdentifiers,
+  PRE_ROLL_DAYS,
+  type CheckInOccurrence,
+} from '@/lib/check-in-schedule';
 
 export const MIDDAY_FALLBACK = { hour: 12, minute: 30 };
 const EVENING_FALLBACK = { hour: 20, minute: 30 };
@@ -423,17 +318,6 @@ function getTodayDayContext(devotional: Devotional | null | undefined, now = new
     eveningScriptureRef: day.eveningScriptureRef,
     companionNudge: day.companionNudge,
   };
-}
-
-/**
- * Today's content only rides on today's trigger; a line baked onto another
- * weekday would be stale by the time it fired. (expo WEEKLY weekday:
- * 1=Sunday … 7=Saturday.)
- */
-export function firesToday(op: ScheduleOp, now = new Date()): boolean {
-  if (op.kind === 'daily') return true;
-  if (op.kind === 'date') return localCalendarDays(op.date, now) === 0;
-  return op.weekday === now.getDay() + 1;
 }
 
 // Configure how notifications appear when the app is in the foreground
@@ -892,244 +776,203 @@ export async function scheduleDevotionalReadyTapTestNotification(
 
 type CheckInClock = { localDate: string | null; now: Date };
 
-async function scheduleCheckInOp(
-  op: ScheduleOp,
-  content: { title: string; body: string; dataType: string },
-  logNoun: string,
-): Promise<string> {
-  const extras = channel(NOTIFICATION_CHANNELS.CHECK_INS);
-  const trigger: Notifications.NotificationTriggerInput =
-    op.kind === 'daily'
-      ? {
-          type: Notifications.SchedulableTriggerInputTypes.DAILY,
-          hour: op.hour,
-          minute: op.minute,
-          ...extras,
-        }
-      : op.kind === 'weekly'
-        ? {
-            type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
-            weekday: op.weekday,
-            hour: op.hour,
-            minute: op.minute,
-            ...extras,
-          }
-        : {
-            type: Notifications.SchedulableTriggerInputTypes.DATE,
-            date: op.date,
-            ...extras,
-          };
-  const id = await Notifications.scheduleNotificationAsync({
-    identifier: op.id,
-    content: {
-      title: content.title,
-      body: content.body,
-      sound: true,
-      data: { type: content.dataType },
-    },
-    trigger,
+/**
+ * The outcome of writing one slot's schedule.
+ *
+ * `complete` is false ONLY when an intended occurrence failed to write. Every
+ * intended no-op — web, a policy refusal, no OS permission, every day switched
+ * off — is complete, because the queue ends up in the state we wanted. The
+ * caller uses this to decide whether it may record the sync as applied: a run
+ * that cancelled the whole slot and then failed to rewrite it leaves ZERO
+ * pending notifications, and marking that day synced would strand the reader
+ * until some unrelated state change moved the fingerprint.
+ */
+export interface CheckInWriteResult {
+  ids: string[];
+  complete: boolean;
+}
+
+/**
+ * One check-in slot: everything that differs between midday and evening.
+ *
+ * The two used to be ~50 lines each, identical but for these values. The
+ * file's own comment called the second "a thin mirror" of the first.
+ */
+interface CheckInSlot {
+  idBase: string;
+  defaultTime: string;
+  byDay: Record<string, string | null> | null;
+  fallback: { hour: number; minute: number };
+  dataType: string;
+  logNoun: string;
+  eventType: 'midday_checkin' | 'evening_winddown';
+  /**
+   * Copy for one occurrence. `today` is the devotional context when this
+   * occurrence lands on today, and null on every later day — those days have
+   * no content yet and draw from the seeded pools instead.
+   */
+  copyFor: (today: DayContext | null, variation: CopyVariation) => { title: string; body: string };
+}
+
+/**
+ * Install one slot's pre-rolled occurrences.
+ *
+ * OS boundary gate: this is the last line of defence against scheduling a
+ * premium-only notification for a non-premium reader. It re-checks the
+ * tri-state premium policy at call time and fails closed unless the policy is
+ * `granted`. If anything above this layer regresses — a new call site that
+ * bypasses `useCheckInNotifications` — the gate here still holds. That is
+ * defence in depth, not redundancy: the hook-level gate stops normal
+ * scheduling at the wrong moment, and this one stops any lib caller, present
+ * or future, from writing to the OS queue without RevenueCat's blessing.
+ *
+ * Cancel-then-write: every call clears the slot's whole identifier space
+ * first, so a shrinking occurrence count or an upgrade from the retired
+ * repeating schedule never leaves an orphan trigger behind.
+ *
+ * Returns the identifiers actually written. An empty array is a valid,
+ * error-free outcome when every day is switched off.
+ */
+async function scheduleCheckInSlot(
+  slot: CheckInSlot,
+  today: DayContext | null,
+  todayDayIndex: number,
+  cancel: () => Promise<void>,
+  clock?: CheckInClock,
+): Promise<CheckInWriteResult> {
+  const nothingToDo: CheckInWriteResult = { ids: [], complete: true };
+  if (Platform.OS === 'web') return nothingToDo;
+
+  const policy = getEffectivePremiumAccessPolicy();
+  if (policy !== 'granted') {
+    logger.log(`[Notifications] ${slot.logNoun} refused — policy=${policy}`);
+    return nothingToDo;
+  }
+
+  await cancel();
+
+  const hasPermission = await areNotificationsEnabled();
+  if (!hasPermission) return nothingToDo;
+
+  const now = clock?.now ?? new Date();
+  const occurrences = buildCheckInSchedule({
+    idBase: slot.idBase,
+    defaultTime: slot.defaultTime,
+    byDay: slot.byDay,
+    fallback: slot.fallback,
+    skipLocalDate: clock ? clock.localDate : readTrialCheckInSkipDate(),
+    now,
   });
-  if (op.kind === 'daily') {
-    logger.log(
-      `[Notifications] ${logNoun} scheduled DAILY for ${op.hour}:${op.minute.toString().padStart(2, '0')} (id=${id})`,
-    );
-  } else if (op.kind === 'weekly') {
-    logger.log(
-      `[Notifications] ${logNoun} scheduled WEEKLY weekday=${op.weekday} ${op.hour}:${op.minute.toString().padStart(2, '0')} (id=${id})`,
-    );
-  } else {
-    logger.log(`[Notifications] ${logNoun} scheduled DATE ${op.date.toISOString()} (id=${id})`);
-  }
-  return id;
-}
 
-// Schedule midday check-in notification (Phase 2).
-//
-// Two scheduling modes based on the store's `middayCheckInByDay` field:
-//   - Uniform (byDay === null): single DAILY trigger at `middayCheckInTime`.
-//   - Per-day (byDay !== null): up to 7 WEEKLY triggers, one per populated
-//     non-null weekday. Days set to null or absent are skipped.
-//
-// OS boundary gate: this function is the last line of defense against
-// scheduling premium-only notifications for a non-premium user. It re-checks
-// the tri-state premium access policy at call time and fails closed unless
-// the policy is `granted`. If anything above this layer regresses (e.g. a new
-// call site bypasses `useCheckInNotifications`), the gate here still holds.
-//
-// Defense-in-depth, not redundancy: the hook-level gate prevents normal
-// scheduling from firing at the wrong moment; this gate prevents any lib
-// caller — present or future — from writing to the OS queue without
-// RevenueCat's blessing.
-//
-// Cancel-then-write pattern: EVERY call cancels all 8 possible identifiers
-// (1 daily + 7 weekly) before scheduling. That way, mode transitions like
-// uniform→per-day or disabling a specific day never leave orphan triggers in
-// the OS queue.
-//
-// Returns an array of the identifiers that were actually scheduled (0-7
-// items; empty array is a valid, no-error outcome when the user has every
-// day set to skip).
-export async function scheduleMiddayCheckIn(clock?: CheckInClock): Promise<string[]> {
-  if (Platform.OS === 'web') return [];
-
-  // Tri-state premium gate at the OS boundary. Fail closed on `unknown`
-  // (RevenueCat hasn't reported in this session yet) and `denied` (churned).
-  // Never cancel from this path — cancellation is the caller's job via
-  // `cancelMiddayCheckIn()`. Returning an empty array here avoids touching
-  // OS state and signals to the caller that the schedule was refused.
-  const policy = getEffectivePremiumAccessPolicy();
-  if (policy !== 'granted') {
-    logger.log(`[Notifications] scheduleMiddayCheckIn refused — policy=${policy}`);
-    return [];
+  if (occurrences.length === 0) {
+    logger.log(`[Notifications] ${slot.logNoun}: no enabled days in the horizon; nothing scheduled`);
+    return nothingToDo;
   }
 
-  // Cancel all possible ids (uniform + per-day) before writing fresh ones.
-  // This keeps mode transitions clean with no orphan triggers.
-  await cancelMiddayCheckIn();
-
-  const hasPermission = await areNotificationsEnabled();
-  if (!hasPermission) return [];
-
-  // Read state fresh and compute the op list.
-  const store = useUnfoldStore.getState();
-  const timeStr = store.middayCheckInTime || '12:30';
-  const byDay = store.middayCheckInByDay ?? null;
-  const now = clock?.now ?? new Date();
-  const skipDate = clock ? clock.localDate : readTrialCheckInSkipDate();
-  const ops = buildCheckInSchedule(
-    NOTIFICATION_IDS.MIDDAY_CHECKIN,
-    timeStr,
-    byDay,
-    MIDDAY_FALLBACK,
-    skipDate ? { localDate: skipDate, now } : undefined,
+  const seed = copySeed();
+  // Written concurrently: identifiers are unique per occurrence and no write
+  // reads another's result, so 14 serial bridge round trips buy nothing. The
+  // per-occurrence catch stays inside the map — one failed write must not
+  // discard the other thirteen, which is what Promise.all's fail-fast would do.
+  const written = await Promise.all(
+    occurrences.map(async (occurrence) => {
+      const isToday = occurrence.dayIndex === todayDayIndex;
+      const { title, body } = slot.copyFor(isToday ? today : null, {
+        seed,
+        dayIndex: occurrence.dayIndex,
+      });
+      try {
+        const id = await Notifications.scheduleNotificationAsync({
+          identifier: occurrence.id,
+          content: { title, body, sound: true, data: { type: slot.dataType } },
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.DATE,
+            date: occurrence.date,
+            ...channel(NOTIFICATION_CHANNELS.CHECK_INS),
+          },
+        });
+        return id;
+      } catch (error) {
+        logger.error(`[Notifications] Failed to schedule ${slot.logNoun} ${occurrence.id}:`, error);
+        return null;
+      }
+    }),
   );
 
-  // Per-day with every day skipped is a valid no-op — don't treat it as
-  // an error, just log and return.
-  if (ops.length === 0) {
-    logger.log('[Notifications] Midday check-in: per-day mode with no enabled days; nothing scheduled');
-    return [];
+  const scheduled = written.filter((id): id is string => id !== null);
+  const complete = scheduled.length === occurrences.length;
+  if (!complete) {
+    logger.error(
+      `[Notifications] ${slot.logNoun}: wrote ${scheduled.length} of ${occurrences.length}; not marking synced`,
+    );
   }
+  if (scheduled.length > 0) {
+    logger.log(
+      `[Notifications] ${slot.logNoun}: wrote ${scheduled.length} occurrences to ${occurrences[occurrences.length - 1].date.toISOString()}`,
+    );
+    logEvent('notification_scheduled', {
+      type: slot.eventType,
+      owner: 'local',
+      count: scheduled.length,
+    });
+  }
+  return { ids: scheduled, complete };
+}
 
-  // Prefer the carry line from the day the reader completed today — the
-  // devotional following them into their afternoon — then the day's own
-  // check-in question, then generic copy.
+export async function scheduleMiddayCheckIn(clock?: CheckInClock): Promise<CheckInWriteResult> {
+  const store = useUnfoldStore.getState();
   const currentDevotional = getCurrentDevotional(store.devotionals, store.currentDevotionalId);
-  const todayBody = getMiddayCheckInBody(
+  // The carry line of the day finished today — the devotional following the
+  // reader into their afternoon. Only today's occurrence can carry it.
+  const carryLine = getTodayCarryLine(store.devotionals, store.currentDevotionalId);
+  return scheduleCheckInSlot(
+    {
+      idBase: NOTIFICATION_IDS.MIDDAY_CHECKIN,
+      defaultTime: store.middayCheckInTime || '12:30',
+      byDay: store.middayCheckInByDay ?? null,
+      fallback: MIDDAY_FALLBACK,
+      dataType: 'midday-checkin',
+      logNoun: 'Midday check-in',
+      eventType: 'midday_checkin',
+      copyFor: (today, variation) =>
+        getMiddayCheckInCopy(today, today ? carryLine : null, variation),
+    },
     getTodayDayContext(currentDevotional),
-    getTodayCarryLine(store.devotionals, store.currentDevotionalId),
+    dayIndexFor(clock?.now ?? new Date()),
+    cancelMiddayCheckIn,
+    clock,
   );
-  const genericBody = getMiddayCheckInBody(null, null);
-
-  const scheduled: string[] = [];
-  for (const op of ops) {
-    try {
-      const body = firesToday(op, now) ? todayBody : genericBody;
-      scheduled.push(
-        await scheduleCheckInOp(
-          op,
-          { title: 'Your midday check-in is ready', body, dataType: 'midday-checkin' },
-          'Midday check-in',
-        ),
-      );
-    } catch (error) {
-      logger.error(`[Notifications] Failed to schedule midday op ${op.id}:`, error);
-    }
-  }
-
-  if (scheduled.length > 0) {
-    logEvent('notification_scheduled', { type: 'midday_checkin', owner: 'local', count: scheduled.length });
-  }
-  return scheduled;
 }
 
-// NOTE: cancelAndRescheduleMiddayForTomorrow was deleted on 2026-04-12.
-// It silently downgraded the repeating DAILY trigger to a one-shot DATE
-// trigger, which broke recurrence after the user completed one check-in.
-// Check-in completion is now tracked in store state via
-// `markMiddayCheckInCompleted()`, and the single-owner `useCheckInNotifications`
-// hook keeps the DAILY trigger alive on its own schedule.
-// See ~/vault/gotchas/expo-reschedule-helpers-silent-one-shot-downgrade.md
-
-// Schedule evening wind-down notification (Phase 5).
-//
-// Two scheduling modes based on the store's `eveningWindDownByDay` field —
-// see `scheduleMiddayCheckIn` above for the full rationale. This function
-// is a thin mirror: same cancel-then-write pattern, same tri-state gate,
-// same per-day / uniform branching, just with evening identifiers, content,
-// and 20:30 fallback.
-export async function scheduleEveningWindDown(clock?: CheckInClock): Promise<string[]> {
-  if (Platform.OS === 'web') return [];
-
-  // Tri-state premium gate at the OS boundary. Fail closed on anything
-  // other than `granted`.
-  const policy = getEffectivePremiumAccessPolicy();
-  if (policy !== 'granted') {
-    logger.log(`[Notifications] scheduleEveningWindDown refused — policy=${policy}`);
-    return [];
-  }
-
-  // Cancel all possible ids (uniform + per-day) before writing fresh ones.
-  await cancelEveningWindDown();
-
-  const hasPermission = await areNotificationsEnabled();
-  if (!hasPermission) return [];
-
-  // Read state fresh and compute the op list.
+export async function scheduleEveningWindDown(clock?: CheckInClock): Promise<CheckInWriteResult> {
   const store = useUnfoldStore.getState();
-  const timeStr = store.eveningWindDownTime || '20:30';
-  const byDay = store.eveningWindDownByDay ?? null;
-  const now = clock?.now ?? new Date();
-  const skipDate = clock ? clock.localDate : readTrialCheckInSkipDate();
-  const ops = buildCheckInSchedule(
-    NOTIFICATION_IDS.EVENING_WINDDOWN,
-    timeStr,
-    byDay,
-    EVENING_FALLBACK,
-    skipDate ? { localDate: skipDate, now } : undefined,
+  const currentDevotional = getCurrentDevotional(store.devotionals, store.currentDevotionalId);
+  return scheduleCheckInSlot(
+    {
+      idBase: NOTIFICATION_IDS.EVENING_WINDDOWN,
+      defaultTime: store.eveningWindDownTime || '20:30',
+      byDay: store.eveningWindDownByDay ?? null,
+      fallback: EVENING_FALLBACK,
+      dataType: 'evening-winddown',
+      logNoun: 'Evening wind-down',
+      eventType: 'evening_winddown',
+      copyFor: getEveningWindDownCopy,
+    },
+    getTodayDayContext(currentDevotional),
+    dayIndexFor(clock?.now ?? new Date()),
+    cancelEveningWindDown,
+    clock,
   );
-
-  if (ops.length === 0) {
-    logger.log('[Notifications] Evening wind-down: per-day mode with no enabled days; nothing scheduled');
-    return [];
-  }
-
-  // The day's "act" leads: it is the one thing the devotional asked the
-  // reader to do later. Then the evening scripture, then generic copy.
-  const todayBody = getEveningWindDownBody(
-    getTodayDayContext(getCurrentDevotional(store.devotionals, store.currentDevotionalId)),
-  );
-  const genericBody = getEveningWindDownBody(null);
-
-  const scheduled: string[] = [];
-  for (const op of ops) {
-    try {
-      const body = firesToday(op, now) ? todayBody : genericBody;
-      scheduled.push(
-        await scheduleCheckInOp(
-          op,
-          { title: 'Your evening prayer is ready', body, dataType: 'evening-winddown' },
-          'Evening wind-down',
-        ),
-      );
-    } catch (error) {
-      logger.error(`[Notifications] Failed to schedule evening op ${op.id}:`, error);
-    }
-  }
-
-  if (scheduled.length > 0) {
-    logEvent('notification_scheduled', { type: 'evening_winddown', owner: 'local', count: scheduled.length });
-  }
-  return scheduled;
 }
+
 
 // Cancel midday check-in notification.
 //
-// Clears BOTH the DAILY id (uniform mode) AND all 7 WEEKLY ids (per-day mode)
-// on every run. This is what lets mode transitions (uniform ↔ per-day) be
-// clean: whatever was scheduled before gets cleared, and the caller then
-// writes the new shape from scratch. Cancelling a nonexistent id is a
-// no-op in expo-notifications.
+// Clears the slot's entire identifier space on every run — every pre-rolled
+// occurrence plus the retired repeating ids. That is what lets the schedule
+// shrink safely: a horizon that now holds 13 occurrences instead of 14, or an
+// install upgrading off the old DAILY trigger, leaves nothing behind.
+// Cancelling a nonexistent id is a no-op in expo-notifications.
 export async function cancelMiddayCheckIn(): Promise<void> {
   if (Platform.OS === 'web') return;
   const ids = getAllCheckInIdentifiers(NOTIFICATION_IDS.MIDDAY_CHECKIN);
