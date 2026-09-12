@@ -57,7 +57,7 @@ The table records the reader action. Several methods share controls while retain
 
 ## Scripture and privacy
 
-Practices load wording from the installed BSB or KJV database. They never substitute model verse text. Missing text offers a physical Bible path. Comparison labels each available translation. A chapter-only reference must load the chapter, not just verse one. An incomplete requested range must not claim to be complete.
+Practices load wording from the installed BSB or KJV database. They never substitute model verse text. Missing text offers a physical Bible path. Comparison labels each available translation. A chapter-only reference must load the chapter, not just verse one. Translation-specific verse metadata validates complete chapters and ranges. It preserves BSB omissions while rejecting missing expected verses. Regenerate the metadata with `python3 scripts/generate-bible-verse-layout.py <path-to-unfold-bible-v1.db>` when the shipped corpus changes.
 
 Practice notes remain in the existing encrypted local store. They are not sent to generation, sync or analytics. Day and method keys keep drafts separate. Account reset clears them. A bounded cache prevents unlimited storage growth.
 

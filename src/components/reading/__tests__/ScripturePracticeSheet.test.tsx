@@ -9,6 +9,8 @@ import type { DevotionalDay } from '@/lib/store';
 import type { ScripturePracticeSheetProps } from '../ScripturePracticeSheet';
 
 const mockFetchVerseLocal = jest.fn();
+let mockBibleDbStatus = 'ready';
+jest.mock('@/lib/bible-db', () => ({ getBibleDbStatus: () => ({ status: mockBibleDbStatus }) }));
 const mockUpdateScripturePractice = Object.assign(jest.fn(), {
   sessions: {} as Record<string, {
     step: number;
@@ -121,6 +123,7 @@ function renderSheet(props: Partial<ScripturePracticeSheetProps> = {}) {
 
 describe('ScripturePracticeSheet', () => {
   beforeEach(() => {
+    mockBibleDbStatus = 'ready';
     mockUpdateScripturePractice.sessions = {};
     mockUpdateScripturePractice.mockReset().mockImplementation((target, patch) => {
       const key = mockPracticeSessionKey(target);
@@ -283,6 +286,22 @@ describe('ScripturePracticeSheet', () => {
     expect(mockFetchVerseLocal).toHaveBeenCalledWith('Romans 5:8', 'BSB');
     expect(tree!.root.findAllByProps({ testID: 'scripture-practice-trace-Romans 5:8' })).toHaveLength(0);
     expect(collectText(tree!.toJSON()).join(' ')).not.toContain('AI_CROSS_REF_TEXT');
+  });
+
+  it('disables passage links when the installed Bible cannot load the reference', async () => {
+    mockFetchVerseLocal.mockResolvedValue(null);
+    let tree: renderer.ReactTestRenderer;
+    await act(async () => { tree = renderSheet(); });
+    expect(tree!.root.findByProps({ testID: 'scripture-practice-read-in-bible' }).props.disabled).toBe(true);
+    expect(tree!.root.findByProps({ testID: 'scripture-practice-reference' }).props.disabled).toBe(true);
+  });
+
+  it('keeps the Bible download path available before a Bible is installed', async () => {
+    mockBibleDbStatus = 'not_downloaded';
+    mockFetchVerseLocal.mockResolvedValue(null);
+    let tree: renderer.ReactTestRenderer;
+    await act(async () => { tree = renderSheet(); });
+    expect(tree!.root.findByProps({ testID: 'scripture-practice-read-in-bible' }).props.disabled).toBe(false);
   });
 
   it('ignores a stale local fetch after the passage changes', async () => {

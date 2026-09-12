@@ -12,6 +12,7 @@ import { MMKV } from 'react-native-mmkv';
 import { logger } from '@/lib/logger';
 import { referenceToRoute, BIBLE_BOOKS, formatScriptureReference, normalizeScriptureReference } from '@/lib/bible-constants';
 import { getChapter, getVerseByReference, getBibleDbStatus, type BibleTranslation } from '@/lib/bible-db';
+import { expectedVerseNumbers, versesMatchExpected } from '@/lib/bible-verse-integrity';
 import { PRIMARY_BACKEND_URL, getAuthHeaders, sanitizeForPrompt } from '@/lib/api-config';
 import { authenticatedFetch } from './device-credential';
 import { externalFetch } from './external-fetch';
@@ -251,6 +252,15 @@ export async function fetchVerseLocal(
     return null;
   }
 
+  const expected = expectedVerseNumbers({
+    translation,
+    bookId: parsed.bookId,
+    chapter: parsed.chapter,
+    verseStart: parsed.verse,
+    verseEnd: parsed.verseEnd,
+  });
+  if (!expected) return null;
+
   const verses = parsed.verse === undefined
     ? await getChapter(parsed.bookId, parsed.chapter, translation)
     : await getVerseByReference(
@@ -261,15 +271,7 @@ export async function fetchVerseLocal(
         translation,
       );
 
-  if (verses.length === 0) return null;
-  // Missing interior verses must not be labelled as a complete passage.
-  const firstVerse = parsed.verse ?? 1;
-  if (verses.some((verse, index) => verse.verse !== firstVerse + index)) return null;
-  // A partial range must not be labelled as the full requested passage.
-  if (parsed.verse !== undefined && (
-    verses[0].verse !== parsed.verse
-    || verses[verses.length - 1].verse !== (parsed.verseEnd ?? parsed.verse)
-  )) return null;
+  if (!versesMatchExpected(verses, expected)) return null;
 
   const text = verses.map((v) => `${toSuperscript(v.verse)} ${v.text.trim()}`).join(' ');
   const book = BIBLE_BOOKS.find((b) => b.id === parsed.bookId);

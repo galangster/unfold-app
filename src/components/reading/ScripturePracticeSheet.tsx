@@ -23,7 +23,7 @@ import {
   type ScripturePracticeStep,
 } from '@/constants/scripture-practices';
 import { fetchVerseLocal, type VerseResult } from '@/lib/bible-api';
-import type { BibleTranslation } from '@/lib/bible-db';
+import { getBibleDbStatus, type BibleTranslation } from '@/lib/bible-db';
 import { isQaToolsEnabled } from '@/lib/qa-tools';
 import {
   getPracticePassage,
@@ -125,6 +125,7 @@ export function ScripturePracticeSheet({
   const reference = day.scriptureReference?.trim() ?? '';
   const passageMeta = getPracticePassage(reference);
   const chapterReference = passageMeta?.chapterReference ?? null;
+  const canOpenAssignedBible = Boolean(passageMeta && (primaryState === 'ready' || getBibleDbStatus().status !== 'ready'));
   const showQaPicker = isQaToolsEnabled();
 
   const patchSession = useCallback((patch: Partial<PracticeSession>) => {
@@ -310,10 +311,10 @@ export function ScripturePracticeSheet({
         >
           <TouchableOpacity
             onPress={() => onOpenBible(reference)}
-            disabled={!passageMeta}
+            disabled={!canOpenAssignedBible}
             accessibilityRole="link"
             accessibilityLabel={`Read ${reference || 'the assigned passage'} in Bible`}
-            accessibilityState={{ disabled: !passageMeta }}
+            accessibilityState={{ disabled: !canOpenAssignedBible }}
             testID="scripture-practice-reference"
             style={{ minHeight: 44, justifyContent: 'center' }}
           >
@@ -329,7 +330,7 @@ export function ScripturePracticeSheet({
               primaryState={primaryState}
               primaryVerse={primaryVerse}
               chapterReference={chapterReference}
-              onReadInBible={passageMeta ? () => {
+              onReadInBible={canOpenAssignedBible ? () => {
                 chooseReading('app');
                 onOpenBible(reference);
               } : null}
