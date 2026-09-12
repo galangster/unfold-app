@@ -69,11 +69,31 @@ export function tabRootFromSegments(segments: readonly string[]): TabRootHref {
 }
 
 /**
- * Pop the stack when there is something to pop; otherwise replace with
- * `fallbackHref`, so the exit always leads somewhere.
+ * Pop when popping stays inside this screen's own stack; otherwise replace
+ * with `fallbackHref`, so the exit always leads somewhere sensible.
+ *
+ * `stackIndex` is the focused route's index in its enclosing stack
+ * (`useNavigation().getState()?.index`), and it is required because
+ * `router.canGoBack()` alone is not enough. The root stack is anchored on
+ * `index` (see `unstable_settings` in src/app/_layout.tsx), so a cold
+ * *external* deep link seeds it as `[index, (tabs)…]` and `canGoBack()`
+ * reports true even when the leaf stack is empty. Popping then lands on `/`,
+ * which forwards a completed reader to Today — the wrong tab root for a
+ * Journal, Bible or You screen. A notification tap has a different shape,
+ * because push-notification-helpers replaces the current route rather than
+ * pushing onto it, and leaves nothing underneath at all.
+ *
+ * At index 0 this screen is the first route of its own stack, so popping
+ * would leave that stack entirely. Treat it as having no history.
+ *
+ * Prefer the useGuardedBack hook, which reads all three inputs for you.
  */
-export function goBackOr(router: BackNavigator, fallbackHref: TabRootHref): void {
-  if (router.canGoBack()) {
+export function goBackOr(
+  router: BackNavigator,
+  fallbackHref: TabRootHref,
+  stackIndex: number,
+): void {
+  if (stackIndex > 0 && router.canGoBack()) {
     router.back();
     return;
   }

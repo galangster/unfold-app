@@ -80,6 +80,7 @@ const mockSearchParams: {
 } = {};
 jest.mock('expo-router', () => ({
   useRouter: () => ({ canGoBack: () => true, replace: mockReplace, push: jest.fn(), back: jest.fn() }),
+  useSegments: () => [],
   useNavigation: () => ({ setOptions: jest.fn(), addListener: jest.fn(() => jest.fn()) }),
   useLocalSearchParams: () => mockSearchParams,
 }));

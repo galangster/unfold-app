@@ -54,6 +54,8 @@ jest.mock('react-native-keyboard-controller', () => {
 jest.mock('@react-native-community/datetimepicker', () => ({ __esModule: true, default: 'DateTimePicker' }));
 jest.mock('expo-router', () => ({
   useRouter: () => ({ canGoBack: () => true, replace: (...args: unknown[]) => mockReplace(...args), back: jest.fn(), push: jest.fn() }),
+  useSegments: () => [],
+  useNavigation: () => ({ getState: () => ({ index: 1, routes: [] }) }),
   useLocalSearchParams: () => mockOnboardingSearchParams,
 }));
 jest.mock('expo-haptics', () => ({

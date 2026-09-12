@@ -8,6 +8,8 @@ import { resolveBibleHomeNavigation } from '../../app/(tabs)/(bible)/index';
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({ replace: jest.fn(), push: jest.fn() }),
+  useSegments: () => [],
+  useNavigation: () => ({ getState: () => ({ index: 1, routes: [] }) }),
 }));
 jest.mock('expo-haptics', () => ({
   impactAsync: jest.fn(),

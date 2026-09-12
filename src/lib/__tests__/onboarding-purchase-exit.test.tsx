@@ -32,7 +32,7 @@ jest.mock('react-native-safe-area-context', () => ({
 }));
 jest.mock('react-native-keyboard-controller', () => ({ KeyboardAwareScrollView: 'KeyboardAwareScrollView' }));
 jest.mock('@react-native-community/datetimepicker', () => ({ __esModule: true, default: 'DateTimePicker' }));
-jest.mock('expo-router', () => ({ useRouter: () => ({ replace: jest.fn() }), useLocalSearchParams: () => ({}) }));
+jest.mock('expo-router', () => ({ useRouter: () => ({ replace: jest.fn() }), useNavigation: () => ({ getState: () => ({ index: 1, routes: [] }) }), useSegments: () => [], useLocalSearchParams: () => ({}) }));
 jest.mock('expo-haptics', () => ({
   impactAsync: jest.fn(),
   notificationAsync: jest.fn(),

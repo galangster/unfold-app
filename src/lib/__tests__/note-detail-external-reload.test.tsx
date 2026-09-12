@@ -25,6 +25,8 @@ jest.mock('expo-router', () => {
   const ReactActual = require('react');
   return {
     useRouter: () => ({ canGoBack: () => true, back: jest.fn(), replace: jest.fn(), push: jest.fn() }),
+  useSegments: () => [],
+  useNavigation: () => ({ getState: () => ({ index: 1, routes: [] }) }),
     useLocalSearchParams: () => (globalThis as any).__noteParams,
     useFocusEffect: (callback: () => void | (() => void)) => {
       ReactActual.useEffect(callback, [callback]);

@@ -4,6 +4,8 @@ import { join } from 'node:path';
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: jest.fn(), replace: jest.fn(), navigate: jest.fn() }),
+  useSegments: () => [],
+  useNavigation: () => ({ getState: () => ({ index: 1, routes: [] }) }),
   useFocusEffect: () => undefined,
   useIsFocused: () => true,
   useLocalSearchParams: () => ({}),

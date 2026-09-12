@@ -20,28 +20,38 @@ function fakeRouter(canGoBack: boolean) {
 }
 
 describe('goBackOr', () => {
-  it('pops the stack when there is history', () => {
+  // The reader walked in: this screen sits above something in its own stack.
+  const PUSHED = 1;
+  // This screen is the first route of its own stack, so popping would leave it.
+  const FIRST_IN_STACK = 0;
+
+  it('pops the stack when the reader walked in from another screen', () => {
     const { router, calls } = fakeRouter(true);
 
-    goBackOr(router, '/(tabs)/(today)');
+    goBackOr(router, '/(tabs)/(today)', PUSHED);
 
     expect(calls).toEqual(['back']);
   });
 
-  it('replaces with the fallback when the stack is empty', () => {
+  it('replaces with the fallback when there is no history at all', () => {
     // Regression pin for 1.1.8 build 279; see src/lib/navigation.ts for the
-    // report. back() did nothing, so the reader could not leave at all.
+    // report. back() did nothing, so the reader could not leave at all. This
+    // is the notification shape: replace() leaves nothing underneath.
     const { router, calls } = fakeRouter(false);
 
-    goBackOr(router, '/(tabs)/(today)');
+    goBackOr(router, '/(tabs)/(today)', FIRST_IN_STACK);
 
     expect(calls).toEqual(['replace:/(tabs)/(today)']);
   });
 
-  it('honours the fallback each caller passes, so a journal screen does not land on Today', () => {
-    const { router, calls } = fakeRouter(false);
+  it('replaces rather than popping onto the root anchor beneath a deep link', () => {
+    // The root stack is anchored on `index`, so a cold external unfold:// link
+    // seeds it as [index, (tabs)…] and canGoBack() is true while the leaf
+    // stack is empty. Popping would land on `/`, which forwards a completed
+    // reader to Today — the wrong tab for a Journal screen.
+    const { router, calls } = fakeRouter(true);
 
-    goBackOr(router, '/(tabs)/(journal)');
+    goBackOr(router, '/(tabs)/(journal)', FIRST_IN_STACK);
 
     expect(calls).toEqual(['replace:/(tabs)/(journal)']);
   });

@@ -14,7 +14,7 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { isQaToolsEnabled } from '@/lib/qa-tools';
-import { goBackOr } from '@/lib/navigation';
+import { useGuardedBack } from '@/hooks/useGuardedBack';
 import { seedVoiceCheckInDraftFromUrl } from '@/lib/voice-check-ins';
 
 const PHASES: VoiceCheckInPhase[] = ['idle', 'recording', 'review', 'saved', 'error'];
@@ -25,6 +25,7 @@ function firstParam(value: string | string[] | undefined): string | undefined {
 
 export default function VoiceCheckInPrototypeScreen() {
   const router = useRouter();
+  const guardedBack = useGuardedBack();
   const params = useLocalSearchParams<{ state?: string | string[]; theme?: string | string[]; transport?: string | string[]; fixtureUrl?: string | string[] }>();
   const routePhase = firstParam(params.state);
   const routeTheme = firstParam(params.theme);
@@ -74,7 +75,7 @@ export default function VoiceCheckInPrototypeScreen() {
               activeOpacity={0.72}
               accessibilityRole="button"
               accessibilityLabel="Close prototype route"
-              onPress={() => goBackOr(router, '/(tabs)/(today)')}
+              onPress={guardedBack}
               style={[styles.routeClose, { borderColor: colors.border }]}
             >
               <Text style={[styles.routeCloseText, { color: colors.textMuted }]}>Close</Text>

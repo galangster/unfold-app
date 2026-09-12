@@ -1,13 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect } from 'react';
 import { useRouter, useNavigation, useLocalSearchParams, useSegments } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import {
-  goBackOr,
-  isTabGroupSegment,
-  tabRootFromSegments,
-  type TabGroupSegment,
-  type TabRootHref,
-} from '@/lib/navigation';
+import { isTabGroupSegment, type TabGroupSegment, type TabRootHref } from '@/lib/navigation';
+import { useGuardedBack } from '@/hooks/useGuardedBack';
 
 /**
  * Handles back navigation for screens opened via cross-tab push.
@@ -53,6 +48,7 @@ export function useCrossTabBack() {
   const navigation = useNavigation();
   const { from } = useLocalSearchParams<{ from?: string }>();
   const segments = useSegments();
+  const guardedBack = useGuardedBack();
 
   const isCrossTab = isCrossTabBackNavigation(from, segments);
   const returnRoute = from ? FROM_TO_ROUTE[from] : undefined;
@@ -87,8 +83,8 @@ export function useCrossTabBack() {
     // Same-tab exit. series-detail, my-content, past-devotionals and settings
     // are all deep-linkable, and such an arrival carries no `from` param and
     // no history, so an unguarded back() would do nothing.
-    goBackOr(router, tabRootFromSegments(segments));
-  }, [isCrossTab, returnRoute, router, segments]);
+    guardedBack();
+  }, [isCrossTab, returnRoute, router, guardedBack]);
 
   return { handleBack, isFromHome: from === 'home' };
 }

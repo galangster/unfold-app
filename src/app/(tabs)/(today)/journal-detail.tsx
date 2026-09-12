@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -18,7 +18,7 @@ import { Radius } from '@/constants/radius';
 import { Duration, Ease } from '@/constants/animations';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
-import { goBackOr } from '@/lib/navigation';
+import { useGuardedBack } from '@/hooks/useGuardedBack';
 import { useUnfoldStore } from '@/lib/store';
 import { normalizeSoapResponses } from '@/lib/journal-entry-state';
 import { format } from 'date-fns';
@@ -68,7 +68,7 @@ function SoapSectionDisplay({
 }
 
 export default function JournalDetailScreen() {
-  const router = useRouter();
+  const guardedBack = useGuardedBack();
   const { colors } = useTheme();
   const reducedMotion = useReducedMotion();
   const params = useLocalSearchParams<{ entryId: string }>();
@@ -86,8 +86,8 @@ export default function JournalDetailScreen() {
   // link has no stack to pop.
   const handleBack = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    goBackOr(router, '/(tabs)/(today)');
-  }, [router]);
+    guardedBack();
+  }, [guardedBack]);
 
   if (!entry) {
     return (

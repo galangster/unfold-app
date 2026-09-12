@@ -12,7 +12,7 @@ import {
   LayoutChangeEvent,
   Share,
 } from 'react-native';
-import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeOut, useReducedMotion } from 'react-native-reanimated';
 import { Duration, Ease } from '@/constants/animations';
@@ -55,7 +55,7 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Typography } from '@/constants/typography';
 import { useTheme } from '@/lib/theme';
-import { goBackOr } from '@/lib/navigation';
+import { useGuardedBack } from '@/hooks/useGuardedBack';
 import { flushUnfoldStorePersist, useUnfoldStore, READING_FONTS, type Note, type NoteCategory, type ScriptureRef } from '@/lib/store';
 import { ScriptureRefPill } from '@/components/notebook/ScriptureRefPill';
 import { ScriptureSearchSheet } from '@/components/notebook/ScriptureSearchSheet';
@@ -266,7 +266,6 @@ const JOURNAL_EDITOR_BOTTOM_BREATHING_ROOM = 24;
 
 export default function NoteDetailScreen() {
   const reducedMotion = useReducedMotion();
-  const router = useRouter();
   const params = useLocalSearchParams<{
     noteId?: string;
     startEditing?: string;
@@ -856,9 +855,7 @@ export default function NoteDetailScreen() {
 
   // Every exit from the editor lands here. note-detail is deep-link
   // allowlisted, so an arrival from an `unfold://` link has no stack to pop.
-  const exitToJournal = useCallback(() => {
-    goBackOr(router, '/(tabs)/(journal)');
-  }, [router]);
+  const exitToJournal = useGuardedBack();
 
   const handleBack = useCallback(async () => {
     // Cancel the pending debounce first: the explicit snapshot below is

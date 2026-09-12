@@ -12,7 +12,7 @@ import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
 import { Typography } from '@/constants/typography';
 import { useTheme } from '@/lib/theme';
-import { goBackOr } from '@/lib/navigation';
+import { useGuardedBack } from '@/hooks/useGuardedBack';
 import { useUnfoldStore } from '@/lib/store';
 import { formatReminderTime } from '@/lib/format-reminder-time';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
@@ -39,6 +39,7 @@ type CheckInType = 'midday' | 'evening';
 
 export default function CheckInScheduleScreen() {
   const router = useRouter();
+  const guardedBack = useGuardedBack();
   const { type } = useLocalSearchParams<{ type: CheckInType }>();
   const { colors, isDark } = useTheme();
 
@@ -81,8 +82,8 @@ export default function CheckInScheduleScreen() {
 
   const handleBack = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    goBackOr(router, '/(tabs)/(you)');
-  }, [router]);
+    guardedBack();
+  }, [guardedBack]);
 
   const handleSave = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -101,8 +102,8 @@ export default function CheckInScheduleScreen() {
     // store state; the hook handles OS side-effects. See
     // ~/vault/standards/one-owner-per-os-resource.md
 
-    goBackOr(router, '/(tabs)/(you)');
-  }, [localDefaultTime, customizeByDay, localByDay, setDefaultTime, setByDay, router]);
+    guardedBack();
+  }, [localDefaultTime, customizeByDay, localByDay, setDefaultTime, setByDay, guardedBack]);
 
   const handleToggleCustomize = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

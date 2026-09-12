@@ -24,6 +24,8 @@ jest.mock('@tanstack/react-query', () => ({
 }));
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: (...args: unknown[]) => mockPush(...args) }),
+  useSegments: () => [],
+  useNavigation: () => ({ getState: () => ({ index: 1, routes: [] }) }),
 }));
 jest.mock('@/lib/store', () => {
   const state = {

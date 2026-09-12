@@ -34,6 +34,8 @@ jest.mock('expo-router', () => ({
   Redirect: () => null,
   useLocalSearchParams: () => ({}),
   useRouter: () => ({ replace: jest.fn(), push: jest.fn() }),
+  useSegments: () => [],
+  useNavigation: () => ({ getState: () => ({ index: 1, routes: [] }) }),
 }));
 
 jest.mock('@react-native-community/netinfo', () => ({

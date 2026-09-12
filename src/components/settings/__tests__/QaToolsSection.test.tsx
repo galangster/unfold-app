@@ -17,6 +17,8 @@ jest.mock('react-native-gesture-handler', () => {
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush, replace: jest.fn() }),
+  useSegments: () => [],
+  useNavigation: () => ({ getState: () => ({ index: 1, routes: [] }) }),
 }));
 
 jest.mock('expo-haptics', () => ({

@@ -74,6 +74,8 @@ function autoCurrentDay2(): Devotional {
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({ canGoBack: () => true, push: mockPush, back: jest.fn() }),
+  useSegments: () => [],
+  useNavigation: () => ({ getState: () => ({ index: 1, routes: [] }) }),
   useLocalSearchParams: () => mockParams,
 }));
 

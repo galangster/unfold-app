@@ -5,7 +5,6 @@
  */
 import { useMemo } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
-import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -14,7 +13,7 @@ import { FontFamily } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
-import { goBackOr } from '@/lib/navigation';
+import { useGuardedBack } from '@/hooks/useGuardedBack';
 import { useUnfoldStore } from '@/lib/store';
 import { stripHtml, isHtmlContent } from '@/lib/note-html';
 import { buildJournalMonthMarkers, formatJournalDay, sortJournalItemsByDateDescending } from '@/lib/journal-month-groups';
@@ -22,7 +21,7 @@ import { buildJournalMonthMarkers, formatJournalDay, sortJournalItemsByDateDesce
 const RETENTION_DAYS = 30;
 
 export default function RecentlyDeletedScreen() {
-  const router = useRouter();
+  const guardedBack = useGuardedBack();
   const { colors } = useTheme();
   const reducedMotion = useReducedMotion();
   const deletedNotes = useUnfoldStore((s) => s.deletedNotes);
@@ -40,7 +39,7 @@ export default function RecentlyDeletedScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     restoreNote(id);
     if (useUnfoldStore.getState().deletedNotes.length === 0) {
-      goBackOr(router, '/(tabs)/(journal)');
+      guardedBack();
     }
   };
 
@@ -57,7 +56,7 @@ export default function RecentlyDeletedScreen() {
             activeOpacity={0.7}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              goBackOr(router, '/(tabs)/(journal)');
+              guardedBack();
             }}
             accessibilityRole="button"
             accessibilityLabel="Back"
