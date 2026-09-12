@@ -23,6 +23,7 @@ import { preventOrphan, stripOuterQuotes } from '@/lib/cn';
 import { fetchVerseLocal, fetchVerse, type VerseResult } from '@/lib/bible-api';
 import type { BibleTranslation } from '@/lib/bible-db';
 import { ScriptureVerseBlock } from './ScriptureVerseBlock';
+import { ScripturePracticeEntry } from './ScripturePracticeEntry';
 import { DevotionalWebView } from './DevotionalWebView';
 import type { DevotionalWebViewCommands, HighlightsChangedEvent } from './DevotionalWebView';
 import { InlineReflectionJournal } from './InlineReflectionJournal';
@@ -48,6 +49,7 @@ interface DevotionalContentProps {
   targetBookmark?: Bookmark | null;
   onTargetBookmarkLocated?: (contentY: number) => void;
   onScriptureTap?: (reference: string) => void;
+  onBeginPractice?: () => void;
   devotionalId?: string;
   dayNumber?: number;
   onOpenJournal?: (focusQuestion?: number) => void;
@@ -107,6 +109,7 @@ export function DevotionalContent({
   targetBookmark,
   onTargetBookmarkLocated,
   onScriptureTap,
+  onBeginPractice,
   devotionalId,
   dayNumber,
   onOpenJournal,
@@ -355,6 +358,13 @@ export function DevotionalContent({
           </Text>
         )}
       </View>
+
+      {onBeginPractice ? (
+        <ScripturePracticeEntry
+          reference={day.scriptureReference}
+          onBegin={onBeginPractice}
+        />
+      ) : null}
 
       {/* Section divider: scripture -> body */}
       <SectionDivider color={colors.textMuted} style={{ marginTop: 20, marginBottom: 8 }} />

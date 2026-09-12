@@ -1,7 +1,7 @@
 import { getDailyGenerationNotice } from '@/lib/daily-generation-messages';
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useAutoHide } from '@/hooks/useAutoHide';
-import { View, Text, Dimensions, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet, TouchableOpacity, Keyboard, ScrollView, UIManager, type LayoutChangeEvent } from 'react-native';
+import { View, Text, Dimensions, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet, TouchableOpacity, Keyboard, ScrollView, UIManager, Modal, type LayoutChangeEvent } from 'react-native';
 import { useRouter, useLocalSearchParams, useIsFocused } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
@@ -75,6 +75,14 @@ import { readAutoTrialIntent, transitionAutoTrialIntent } from '@/lib/auto-trial
 import { trackAutoTrialCompleted } from '@/lib/auto-trial-telemetry';
 // ShareDevotionalModal removed — pull quote share now uses /share-card route
 import { DevotionalContent } from '@/components/reading/DevotionalContent';
+import { ScripturePracticeSheet, buildPracticeBibleHref } from '@/components/reading/ScripturePracticeSheet';
+import { getScripturePractice } from '@/constants/scripture-practices';
+import { isQaToolsEnabled } from '@/lib/qa-tools';
+import { isScripturePracticeEnabled } from '@/lib/scripture-practice-feature';
+import {
+  getPracticePassage, readingPracticeReturn,
+  type PracticeTarget,
+} from '@/lib/scripture-practice';
 import type { DevotionalWebViewCommands, HighlightsChangedEvent } from '@/components/reading/DevotionalWebView';
 import { AnalyticsEvents, logEvent } from '@/lib/analytics';
 import { addAppBreadcrumb } from '@/lib/sentry';
@@ -223,7 +231,7 @@ export function maybeCompleteAutoTrialOnLastDay(i: {
 export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = {}) {
   const router = useRouter();
   const isReadingFocused = useIsFocused();
-  const params = useLocalSearchParams<{ dayNumber?: string; devotionalId?: string; highlightId?: string; bookmarkId?: string; readOnly?: string; focus?: string; from?: string }>();
+  const params = useLocalSearchParams<{ dayNumber?: string; devotionalId?: string; highlightId?: string; bookmarkId?: string; readOnly?: string; focus?: string; from?: string; practice?: string; practiceMethod?: string }>();
   const { handleBack: handleReaderBack } = useCrossTabBack();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
@@ -254,6 +262,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   const updateDevotionalDays = useUnfoldStore((s) => s.updateDevotionalDays);
   const setResumeContext = useUnfoldStore((s) => s.setResumeContext);
   const clearResumeContext = useUnfoldStore((s) => s.clearResumeContext);
+  const setScripturePracticeReturn = useUnfoldStore((s) => s.setScripturePracticeReturn);
   const user = useUnfoldStore((s) => s.user);
   const addBookmark = useUnfoldStore((s) => s.addBookmark);
   const removeBookmark = useUnfoldStore((s) => s.removeBookmark);
@@ -348,6 +357,8 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   const [readerScrollReady, setReaderScrollReady] = useState(0);
   const [readerLayoutVersion, setReaderLayoutVersion] = useState(0);
   const [studyMethodVisible, setStudyMethodVisible] = useState(false);
+  const [practiceVisible, setPracticeVisible] = useState(false);
+  const [practicePreviewMethodId, setPracticePreviewMethodId] = useState<string | null>(null);
   const pendingReviewRef = useRef<{ manager: ReviewPromptManager; totalDaysCompleted: number } | null>(null);
   const autoBackgroundKickoffRef = useRef<Record<string, number>>({});
   const autoRetryAttemptsRef = useRef<Record<string, number>>({});
@@ -405,6 +416,33 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     [currentDevotional, viewingDay],
   );
   const currentDayData = renderableDay.status === 'ready' ? renderableDay.day : undefined;
+  const practiceHostTab: PracticeTarget['hostTab'] = hostTab === '(study)' ? '(study)' : '(today)';
+  const assignedPractice = getScripturePractice(currentDayData?.studyMethod);
+  const canOfferPractice = Boolean(
+    isScripturePracticeEnabled()
+    && isViewingActiveSeries
+    && currentDayData
+    && (assignedPractice || (!currentDayData.studyMethod && isQaToolsEnabled())),
+  );
+  const requestedPracticeMethod = Array.isArray(params.practiceMethod)
+    ? params.practiceMethod[0]
+    : params.practiceMethod;
+  const previewPractice = getScripturePractice(practicePreviewMethodId ?? undefined);
+  const returnPractice = getScripturePractice(requestedPracticeMethod);
+  const activePracticeMethodId = previewPractice
+    ? practicePreviewMethodId
+    : assignedPractice
+      ? currentDayData?.studyMethod ?? null
+      : returnPractice
+        ? requestedPracticeMethod ?? null
+        : isQaToolsEnabled() ? 'discovery_bible_study' : null;
+  const practiceIdentity = useMemo(() => effectiveDevotionalId
+    ? {
+        devotionalId: effectiveDevotionalId,
+        dayNumber: viewingDay,
+        hostTab: practiceHostTab,
+      }
+    : null, [effectiveDevotionalId, viewingDay, practiceHostTab]);
 
   // Reactive bookmark check - fixes the bookmark icon not updating
   const isCurrentDayBookmarked = useMemo(() => {
@@ -744,6 +782,67 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     setResumeContext,
   ]);
 
+  const closePractice = useCallback(() => {
+    setPracticeVisible(false);
+    if (practiceIdentity && isViewingActiveSeries) {
+      setScripturePracticeReturn({
+        target: { ...practiceIdentity, methodId: assignedPractice?.id ?? 'discovery_bible_study' },
+        destination: 'reading',
+      });
+    }
+    if (params.practice === '1') {
+      router.setParams({ practice: '', practiceMethod: '' });
+    }
+  }, [params.practice, router, practiceIdentity, isViewingActiveSeries, assignedPractice?.id, setScripturePracticeReturn]);
+
+  const openPracticeBible = useCallback((reference: string) => {
+    const passage = getPracticePassage(reference);
+    if (!passage || !practiceIdentity) return;
+    setPracticeVisible(false);
+    if (isViewingActiveSeries && activePracticeMethodId) {
+      setScripturePracticeReturn({
+        target: { ...practiceIdentity, methodId: activePracticeMethodId },
+        destination: 'practice',
+      });
+    }
+    router.navigate(buildPracticeBibleHref(passage));
+  }, [
+    activePracticeMethodId,
+    isViewingActiveSeries,
+    practiceIdentity,
+    router,
+    setScripturePracticeReturn,
+  ]);
+
+  const beginPractice = useCallback(() => {
+    setPracticeVisible(true);
+  }, []);
+
+  useEffect(() => {
+    setPracticePreviewMethodId(null);
+    setPracticeVisible(false);
+  }, [effectiveDevotionalId, viewingDay]);
+
+  const hasPracticeDay = Boolean(currentDayData);
+  const assignedPracticeId = assignedPractice?.id;
+  useEffect(() => {
+    if (!isScripturePracticeEnabled() || !isReadingFocused || !isViewingActiveSeries || !practiceIdentity || !hasPracticeDay) return;
+    setScripturePracticeReturn(readingPracticeReturn(
+      useUnfoldStore.getState().scripturePracticeReturn,
+      { ...practiceIdentity, methodId: assignedPracticeId ?? 'discovery_bible_study' },
+    ));
+  }, [isReadingFocused, isViewingActiveSeries, practiceIdentity, hasPracticeDay, assignedPracticeId, setScripturePracticeReturn]);
+
+  useEffect(() => {
+    if (params.practice !== '1' || !isScripturePracticeEnabled() || !isReadingFocused || !isViewingActiveSeries || !currentDayData) return;
+    const requested = getScripturePractice(requestedPracticeMethod) ? requestedPracticeMethod : currentDayData.studyMethod;
+    if (!getScripturePractice(requested)) return;
+    setPracticePreviewMethodId(currentDayData.studyMethod === requested ? null : requested ?? null);
+    setPracticeVisible(true);
+    router.setParams({ practice: '', practiceMethod: '' });
+  }, [currentDayData, params.practice, requestedPracticeMethod, isReadingFocused, isViewingActiveSeries, router]);
+
+
   const goToDay = useCallback((day: number) => {
     if (day >= 1 && day <= availableDays) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1015,6 +1114,8 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
       if (isViewingActiveSeries) {
         clearResumeContext();
       }
+      setScripturePracticeReturn(null);
+      setPracticeVisible(false);
 
       // Use the server-owned series boundary; user devotionalLength is only a new-series preference.
       const expectedTotal = totalDays;
@@ -1079,7 +1180,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
         }
       }
     }
-  }, [effectiveDevotionalId, isViewingActiveSeries, viewingDay, totalDays, user?.devotionalLength, currentDevotional, currentDayData, markDayAsRead, advanceDay, clearResumeContext, recordStreakRead, syncWidgets, journalEntries.length, reviewPromptLastDate, reviewPromptCount, hasReviewed, reviewPromptDaysAtLast, recordReviewPrompt]);
+  }, [effectiveDevotionalId, isViewingActiveSeries, viewingDay, totalDays, user?.devotionalLength, currentDevotional, currentDayData, markDayAsRead, advanceDay, clearResumeContext, setScripturePracticeReturn, recordStreakRead, syncWidgets, journalEntries.length, reviewPromptLastDate, reviewPromptCount, hasReviewed, reviewPromptDaysAtLast, recordReviewPrompt]);
 
   const generateRemainingDays = useCallback(async (
     options?: { navigateToNextDay?: boolean; withHaptics?: boolean }
@@ -2065,6 +2166,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                 onScriptureTap={(ref) => {
                   setScriptureSheetRef(ref);
                 }}
+                onBeginPractice={canOfferPractice ? beginPractice : undefined}
                 devotionalId={effectiveDevotionalId ?? ''}
                 dayNumber={viewingDay}
                 onOpenJournal={(focusQuestion) => {
@@ -2537,6 +2639,26 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
         visible={studyMethodVisible}
         onClose={() => setStudyMethodVisible(false)}
       />
+
+      <Modal
+        visible={practiceVisible}
+        animationType={reducedMotion ? 'none' : 'fade'}
+        presentationStyle="fullScreen"
+        onRequestClose={closePractice}
+      >
+        {practiceIdentity && currentDayData ? (
+          <ScripturePracticeSheet
+            targetIdentity={practiceIdentity}
+            methodId={activePracticeMethodId}
+            assignedMethodId={currentDayData.studyMethod}
+            day={currentDayData}
+            onChangeMethod={setPracticePreviewMethodId}
+            onClose={closePractice}
+            onSkipPractice={closePractice}
+            onOpenBible={openPracticeBible}
+          />
+        ) : null}
+      </Modal>
     </View>
   );
 }
