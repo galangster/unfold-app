@@ -298,6 +298,14 @@ export default function EveningWindDownScreen() {
   // Every exit from this screen goes through here: the evening push
   // deep-links straight to this route, so a cold start has no history and a
   // bare router.back() does nothing at all. See src/lib/navigation.ts.
+  // "Reflect anyway" is otherwise a one-way door. At 20:30 with no signal the
+  // examen fails, and the reader would be stranded on a retry screen with the
+  // one control that still works — opening the reading — no longer rendered.
+  // Send them back to the prompt instead.
+  useEffect(() => {
+    if (error) setReflectAnyway(false);
+  }, [error]);
+
   const exitWindDown = useGuardedBack();
 
   const handleDismissCelebration = useCallback(() => {
@@ -368,7 +376,11 @@ export default function EveningWindDownScreen() {
                 color: colors.textMuted,
               }}
             >
-              {currentDay?.title ? `Reflecting on "${currentDay.title}"` : 'A moment of peace before rest'}
+              {askToReadFirst
+                ? 'A moment of peace before rest'
+                : currentDay?.title
+                  ? `Reflecting on "${currentDay.title}"`
+                  : 'A moment of peace before rest'}
             </Text>
           </Animated.View>
 
@@ -407,7 +419,7 @@ export default function EveningWindDownScreen() {
                     });
                   }}
                   accessibilityRole="button"
-                  accessibilityLabel="Read today's devotional"
+                  accessibilityLabel="Read it now"
                 >
                   <View
                     style={{
@@ -435,9 +447,11 @@ export default function EveningWindDownScreen() {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     setReflectAnyway(true);
                   }}
-                  style={{ marginTop: Spacing['4'] }}
+                  style={{ marginTop: Spacing['2'], paddingVertical: Spacing['3'], paddingHorizontal: Spacing['5'] }}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   accessibilityRole="button"
-                  accessibilityLabel="Reflect without reading"
+                  accessibilityLabel="Reflect anyway"
+                  accessibilityHint="Continues without opening the reading"
                 >
                   <Text
                     style={{
@@ -632,7 +646,7 @@ export default function EveningWindDownScreen() {
             )}
 
             {/* === DONE BUTTON === */}
-            {(examen || scriptureText) && (
+            {!askToReadFirst && (examen || scriptureText) && (
               <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(600 + (examen?.movements.length ?? 5) * 150).easing(Ease.out)} style={{ marginTop: Spacing['4'], marginBottom: Spacing['2'] }}>
                 <TouchableOpacity activeOpacity={0.7}
                   onPress={handleShowCelebration}

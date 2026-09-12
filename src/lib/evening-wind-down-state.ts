@@ -1,6 +1,7 @@
 import type { CheckIn, Devotional } from '@/lib/store';
 import type { PremiumAccessPolicy } from '@/lib/premium-access-policy';
 import { getEveningWindDownDayNumber } from '@/lib/today-companion-state';
+import { getLatestReadDayNumberToday } from '@/lib/devotional-day-access';
 
 /**
  * Pure derivations for the evening wind-down screen, kept out of the
@@ -109,21 +110,31 @@ export type EveningWindDownReadiness = 'ready' | 'unread';
  *
  * So the screen now enforces the same rule its in-app entry point does.
  *
- * The question is about THIS day, not about the calendar. An earlier draft
- * also passed when any day had been read today, which sounds equivalent and
- * is not: `resolveEveningWindDownDayNumber` lets a `dayNumber` route param
- * win, and that param is in the deep-link allowlist. A reader who finished
- * Day 6 today, arriving on a link that names Day 7, would have been waved
- * through to an examen about a reading they had never opened — the exact
- * reader this gate exists for. A day read on an earlier date still counts,
- * because the examen has real material either way.
+ * The invariant is Today's: did the reader finish a day TODAY. Two earlier
+ * drafts each got half of it.
+ *
+ * Asking "was any day read today" ignored which day is on screen, and
+ * `resolveEveningWindDownDayNumber` lets a deep-linkable `dayNumber` param
+ * win — so a reader who finished Day 6 and followed a link naming Day 7 was
+ * waved through to an examen about a reading they never opened.
+ *
+ * Asking only "is the target day read" looked tighter and was far weaker.
+ * `getEveningWindDownDayNumber` falls back to `getHighestReadDayNumber`,
+ * which deliberately hands back a day that IS read, so mid-series the target
+ * was almost always an already-read day and the gate never fired at all. It
+ * caught only a reader who had never finished anything — the one reader who
+ * reported it, and nobody else.
+ *
+ * Both halves together: ready when a day was finished today AND that is the
+ * day being reflected on. A day read yesterday does not qualify, because the
+ * evening reflection speaks about this morning's reading, and Today would not
+ * have offered the wind-down either.
  */
 export function resolveEveningWindDownReadiness(
   devotional: Devotional | null | undefined,
   dayNumber: number,
+  now = new Date(),
 ): EveningWindDownReadiness {
   if (!devotional) return 'unread';
-
-  const day = (devotional.days ?? []).find((entry) => entry.dayNumber === dayNumber);
-  return day?.isRead ? 'ready' : 'unread';
+  return getLatestReadDayNumberToday(devotional, now) === dayNumber ? 'ready' : 'unread';
 }
