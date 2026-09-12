@@ -152,7 +152,7 @@ import {
 } from '@/lib/auto-trial-intent';
 import { runOnboardingCompletion } from '@/lib/onboarding-completion';
 import { ensureInitialGenerationRequestId } from '@/lib/initial-generation-request';
-import { resolveCompanionNameToPersist } from '@/lib/support-clarity';
+import { resolveCompanionDisplayName, resolveCompanionNameToPersist } from '@/lib/support-clarity';
 import { runOnboardingPurchaseSuccess } from '@/lib/onboarding-purchase-success';
 import { runReminderTimeCommit } from '@/lib/reminder-time-commit';
 import { askNotificationPermissionInContext } from '@/lib/notification-ask';
@@ -659,7 +659,9 @@ export default function OnboardingScreen() {
   const onboardingDeviceIdRef = useRef<string | null>(null);
 
   // Companion naming state (saved to store on continue)
-  const [companionNameInput, setCompanionNameInput] = useState('');
+  const [companionNameInput, setCompanionNameInput] = useState(() =>
+    resolveCompanionDisplayName(existingUser?.companionName, useUnfoldStore.getState().companionName) ?? '',
+  );
 
   // RT-ONB-1: the name field is uncontrolled (defaultValue) so React never
   // writes back into the native field mid-typing; commitName is the single

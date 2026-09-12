@@ -38,6 +38,7 @@ describe('companion naming', () => {
     expect(resolveCompanionNameToPersist('Grace')).toBe('Grace');
     expect(resolveCompanionNameToPersist('  ')).toBe('Grace');
     expect(resolveCompanionDisplayName('Grace', null)).toBe('Grace');
+    expect(resolveCompanionDisplayName('Selah', 'Grace')).toBe('Selah');
     expect(resolveCompanionDisplayName(undefined, 'Selah')).toBe('Selah');
     expect(resolveCompanionDisplayName('', '')).toBeNull();
     expect(COMPANION_IS_AI_BODY).toContain("Companion is Unfold's AI");
@@ -188,6 +189,7 @@ describe('copy is wired where the questions arise', () => {
     expect(onboarding).toContain("if (mode === 'generated')");
     expect(onboarding).toContain('ensureInitialGenerationRequestId()');
     expect(onboarding).toContain('companionNameInputRef.current');
+    expect(onboarding).toContain('resolveCompanionDisplayName(existingUser?.companionName, useUnfoldStore.getState().companionName)');
     expect(onboarding).toContain('const companionName = resolveCompanionNameToPersist(companionNameInputRef.current)');
     expect(today).toContain('resolvePendingInitialArcResume');
     expect(today).toContain("pendingInitialResume === 'offer-resume'");
