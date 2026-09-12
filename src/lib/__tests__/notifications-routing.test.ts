@@ -4,6 +4,12 @@ jest.mock('react-native', () => ({
 
 // notifications.ts now reads the auto-trial intent; keep MMKV out of this suite.
 jest.mock('@/lib/auto-trial-intent', () => ({ readAutoTrialIntent: jest.fn(() => null) }));
+// The real seed reaches the Keychain through MMKV, which has no native
+// module here. The copy bags only need a stable string.
+jest.mock('@/lib/copy-variation', () => ({
+  copySeed: () => 'test-install',
+  copyVariationFor: (date: Date) => ({ seed: 'test-install', dayIndex: 20_000 }),
+}));
 jest.mock('@/lib/trial-notification', () => ({
   readTrialCheckInSkipDate: jest.fn(() => null),
 }));
@@ -125,33 +131,29 @@ describe('notifications routing + cancellation', () => {
     expect(mockCancelScheduledNotificationAsync).not.toHaveBeenCalled();
   });
 
-  it('cancelAllReminders clears daily plus all weekday check-in identifiers', async () => {
-    const { cancelAllReminders } = require('../notifications');
+  it('cancelAllReminders clears the daily reminder and every check-in identifier', async () => {
+    const { cancelAllReminders, PRE_ROLL_DAYS } = require('../notifications');
 
     await cancelAllReminders();
 
-    expect(mockCancelScheduledNotificationAsync.mock.calls.map((call) => call[0])).toEqual([
-      'unfold-daily-reminder',
-      'unfold-midday-checkin',
-      'unfold-midday-checkin-mon',
-      'unfold-midday-checkin-tue',
-      'unfold-midday-checkin-wed',
-      'unfold-midday-checkin-thu',
-      'unfold-midday-checkin-fri',
-      'unfold-midday-checkin-sat',
-      'unfold-midday-checkin-sun',
-      'unfold-midday-checkin-resume',
-      'unfold-evening-winddown',
-      'unfold-evening-winddown-mon',
-      'unfold-evening-winddown-tue',
-      'unfold-evening-winddown-wed',
-      'unfold-evening-winddown-thu',
-      'unfold-evening-winddown-fri',
-      'unfold-evening-winddown-sat',
-      'unfold-evening-winddown-sun',
-      'unfold-evening-winddown-resume',
-      'unfold-daily-reminder:0',
-      'unfold-daily-reminder:0:1',
-    ]);
+    const cancelled = mockCancelScheduledNotificationAsync.mock.calls.map((call) => call[0]);
+
+    expect(cancelled).toContain('unfold-daily-reminder');
+    expect(cancelled).toContain('unfold-daily-reminder:0');
+    expect(cancelled).toContain('unfold-daily-reminder:0:1');
+
+    for (const base of ['unfold-midday-checkin', 'unfold-evening-winddown']) {
+      // Every pre-rolled slot.
+      for (let i = 0; i < PRE_ROLL_DAYS; i += 1) expect(cancelled).toContain(`${base}-${i}`);
+      // And the retired repeating schedule, so an upgrading install does not
+      // keep firing the old frozen copy alongside the new dated occurrences.
+      expect(cancelled).toContain(base);
+      expect(cancelled).toContain(`${base}-resume`);
+      for (const day of ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']) {
+        expect(cancelled).toContain(`${base}-${day}`);
+      }
+    }
+
+    expect(new Set(cancelled).size).toBe(cancelled.length);
   });
 });

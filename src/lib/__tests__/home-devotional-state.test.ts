@@ -1,6 +1,7 @@
 import {
   getCurrentDevotional,
   getHomeDevotionalDayData,
+  getTodayDayContext,
   hasReadDevotionalToday,
   hasReadTodayGlobal,
   shouldAutoPrepareCurrentDevotionalDay,
@@ -249,5 +250,46 @@ describe('getTodayCarryLine', () => {
       ],
     });
     expect(getTodayCarryLine([dev], 'dev-1', today)).toBe('Day four line');
+  });
+});
+
+describe('getTodayDayContext', () => {
+  // Raised by Greptile on PR #107. Finishing a reading calls advanceDay, so
+  // `currentDay` becomes TOMORROW's day from that moment. Copy resolved off
+  // currentDay would then carry tomorrow's companion nudge into today's
+  // afternoon card, while the notification scheduled from the same state
+  // carried today's. Both now resolve here.
+  it('prefers the day read today over the advanced currentDay', () => {
+    const d = devotional({
+      currentDay: 2,
+      days: [
+        day({
+          dayNumber: 1,
+          title: 'Read this morning',
+          isRead: true,
+          readAt: today.toISOString(),
+          companionNudge: "Today's nudge",
+        }),
+        day({ id: 'day-2', dayNumber: 2, title: 'Not read yet', companionNudge: "Tomorrow's nudge" }),
+      ],
+    });
+
+    const context = getTodayDayContext(d, today);
+
+    expect(context?.title).toBe('Read this morning');
+    expect(context?.companionNudge).toBe("Today's nudge");
+  });
+
+  it('falls back to the home day when nothing has been read today', () => {
+    const d = devotional({
+      currentDay: 1,
+      days: [day({ dayNumber: 1, title: 'Waiting', companionNudge: 'Nudge for the unread day' })],
+    });
+
+    expect(getTodayDayContext(d, today)?.title).toBe('Waiting');
+  });
+
+  it('is null without a devotional', () => {
+    expect(getTodayDayContext(null, today)).toBeNull();
   });
 });

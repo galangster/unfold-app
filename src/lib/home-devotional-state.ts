@@ -1,3 +1,4 @@
+import type { DayContext } from '@/constants/check-in-messages';
 import type { Devotional, DevotionalDay } from '@/lib/store';
 import type { PremiumAccessPolicy } from './premium-access-policy';
 import { getCalendarDayNumber, getLockedTodayDayNumber, getLatestReadDayNumberToday } from './devotional-day-access';
@@ -140,4 +141,35 @@ export function shouldAutoPrepareCurrentDevotionalDay(
 ): boolean {
   if (premiumPolicy !== 'granted') return false;
   return shouldPrepareCurrentDevotionalDay(devotional, now);
+}
+
+/**
+ * The day the check-in copy should talk about.
+ *
+ * The day READ TODAY wins over whatever `currentDay` now points at. Finishing
+ * a reading calls `advanceDay`, which moves `currentDay` to the next unread
+ * day — so from that moment `currentDay` is TOMORROW's material. Copy drawn
+ * from it would follow the reader into their afternoon talking about a day
+ * they have not read yet, and would use tomorrow's companion nudge.
+ *
+ * The Today cards and the scheduled notifications both resolve their context
+ * here, so "same copy, same day" holds for the context as well as the body.
+ * Do not substitute the screen's own `currentDayData`: that deliberately
+ * points at the next day for the rest of the home UI.
+ */
+export function getTodayDayContext(
+  devotional: Devotional | null | undefined,
+  now = new Date(),
+): DayContext | null {
+  const day = getDaysReadToday(devotional, now)[0] ?? getHomeDevotionalDayData(devotional, now);
+  if (!day) return null;
+  return {
+    title: day.title,
+    scriptureReference: day.scriptureReference,
+    quotableLine: day.quotableLine,
+    checkInQuestion: day.checkInQuestion,
+    act: day.act,
+    eveningScriptureRef: day.eveningScriptureRef,
+    companionNudge: day.companionNudge,
+  };
 }
