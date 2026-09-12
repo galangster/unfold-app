@@ -19,7 +19,7 @@ export default function TodayLayout() {
       <Stack.Screen name="series-detail" options={{ animation: 'ios_from_right', gestureEnabled: true, fullScreenGestureEnabled: true }} />
       <Stack.Screen
         name="evening-wind-down"
-        options={{ animation: 'fade_from_bottom' }}
+        options={{ animation: 'fade_from_bottom', gestureEnabled: true }}
       />
       <Stack.Screen
         name="day-menu"
