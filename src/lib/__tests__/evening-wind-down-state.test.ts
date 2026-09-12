@@ -4,6 +4,7 @@ import {
   findTodayMiddayCheckIn,
   resolveEveningLoadingCaption,
   resolveEveningWindDownDayNumber,
+  resolveEveningWindDownExit,
 } from '../evening-wind-down-state';
 
 // Evening of a day on which Day 6 was read in the morning; the store has
@@ -138,5 +139,19 @@ describe('resolveEveningLoadingCaption', () => {
   it('keeps the prayer copy while the examen is actually loading', () => {
     expect(resolveEveningLoadingCaption('allow')).toBe('Preparing your evening prayer...');
     expect(resolveEveningLoadingCaption('gate')).toBe('Preparing your evening prayer...');
+  });
+});
+
+describe('resolveEveningWindDownExit', () => {
+  it('goes back when the reader walked in from Today', () => {
+    expect(resolveEveningWindDownExit(true)).toBe('back');
+  });
+
+  it('lands on Today when the evening notification opened the screen cold', () => {
+    // Regression pin (1.1.8 build 279, reported 2026-09-12): the push
+    // deep-links straight here, so there is no history and router.back() did
+    // nothing. The caret still fired its haptic, and dismissing the closing
+    // thought returned to the reflection list — an inescapable loop.
+    expect(resolveEveningWindDownExit(false)).toBe('/(tabs)/(today)');
   });
 });

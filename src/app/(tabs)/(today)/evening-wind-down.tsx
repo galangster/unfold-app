@@ -35,6 +35,7 @@ import {
   findTodayMiddayCheckIn,
   resolveEveningLoadingCaption,
   resolveEveningWindDownDayNumber,
+  resolveEveningWindDownExit,
 } from '@/lib/evening-wind-down-state';
 
 // Single unified flow: prayer + scripture together (no pill toggle)
@@ -275,10 +276,22 @@ export default function EveningWindDownScreen() {
     setShowCelebration(true);
   }, [currentDevotional, currentDay, addCheckIn, gate, markEveningWindDownCompleted]);
 
+  // Every exit from this screen goes through here. See
+  // resolveEveningWindDownExit: arriving from the evening push notification
+  // leaves no history, and a bare router.back() then does nothing at all.
+  const exitWindDown = useCallback(() => {
+    const exit = resolveEveningWindDownExit(router.canGoBack());
+    if (exit === 'back') {
+      router.back();
+    } else {
+      router.replace(exit);
+    }
+  }, [router]);
+
   const handleDismissCelebration = useCallback(() => {
     setShowCelebration(false);
-    router.back();
-  }, [router]);
+    exitWindDown();
+  }, [exitWindDown]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -295,7 +308,7 @@ export default function EveningWindDownScreen() {
           <TouchableOpacity activeOpacity={0.7}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.back();
+              exitWindDown();
             }}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             style={{ padding: Spacing['2'] }}
