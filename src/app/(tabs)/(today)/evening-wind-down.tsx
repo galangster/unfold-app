@@ -36,6 +36,7 @@ import {
   findTodayMiddayCheckIn,
   resolveEveningLoadingCaption,
   resolveEveningWindDownDayNumber,
+  resolveEveningWindDownReadiness,
 } from '@/lib/evening-wind-down-state';
 
 // Single unified flow: prayer + scripture together (no pill toggle)
@@ -175,6 +176,13 @@ export default function EveningWindDownScreen() {
   const currentDay = currentDevotional?.days.find(
     (d) => d.dayNumber === eveningDayNumber
   );
+  // Today gates its evening slot on hasReadToday (context-slot-priority.ts).
+  // The evening push notification deep-links straight here and gates nothing,
+  // so this screen has to enforce the same rule. See
+  // resolveEveningWindDownReadiness for the report behind it.
+  const readiness = resolveEveningWindDownReadiness(currentDevotional, eveningDayNumber);
+  const [reflectAnyway, setReflectAnyway] = useState(false);
+  const askToReadFirst = readiness === 'unread' && !reflectAnyway;
 
   const middayCheckIn = useMemo(() => {
     if (!currentDevotional || !currentDay) return undefined;
@@ -230,7 +238,7 @@ export default function EveningWindDownScreen() {
       if (!result) throw new Error('Failed to generate examen');
       return result;
     },
-    enabled: entryAllowed && !!currentDay && !!user && !!currentDevotional,
+    enabled: entryAllowed && !askToReadFirst && !!currentDay && !!user && !!currentDevotional,
     staleTime: Infinity,
     retry: 1,
   });
@@ -245,7 +253,7 @@ export default function EveningWindDownScreen() {
       if (!result) throw new Error('Failed to fetch verse');
       return result;
     },
-    enabled: entryAllowed && !!currentDay?.eveningScriptureRef,
+    enabled: entryAllowed && !askToReadFirst && !!currentDay?.eveningScriptureRef,
     staleTime: Infinity,
     retry: 1,
   });
@@ -355,7 +363,82 @@ export default function EveningWindDownScreen() {
           {/* Unified content: Prayer → Scripture → Done */}
           <View style={{ paddingHorizontal: Spacing['7'] }}>
             {/* === EVENING PRAYER SECTION === */}
-            {loading || entryDecision === 'wait' ? (
+            {askToReadFirst ? (
+              <Animated.View
+                entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
+                style={{ alignItems: 'center', paddingTop: 40 }}
+              >
+                <Text
+                  style={{
+                    fontFamily: FontFamily.body,
+                    fontSize: 15,
+                    color: colors.textMuted,
+                    textAlign: 'center',
+                    lineHeight: 23,
+                    marginBottom: Spacing['5'],
+                  }}
+                >
+                  Tonight's reflection looks back on the day's reading.{'\n'}You haven't finished
+                  {currentDay?.title ? ` ${currentDay.title}` : ` Day ${eveningDayNumber}`} yet.
+                </Text>
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    if (!currentDevotional) return;
+                    router.replace({
+                      pathname: '/(tabs)/(today)/reading',
+                      params: {
+                        devotionalId: currentDevotional.id,
+                        dayNumber: String(eveningDayNumber),
+                      },
+                    });
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Read today's devotional"
+                >
+                  <View
+                    style={{
+                      backgroundColor: colors.accent,
+                      borderRadius: Radius.card,
+                      paddingVertical: Spacing['4'],
+                      paddingHorizontal: Spacing['7'],
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontFamily: FontFamily.uiMedium,
+                        fontSize: 15,
+                        color: colors.background,
+                      }}
+                    >
+                      Read it now
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setReflectAnyway(true);
+                  }}
+                  style={{ marginTop: Spacing['4'] }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Reflect without reading"
+                >
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.ui,
+                      fontSize: FontSize.sm,
+                      color: colors.textSubtle,
+                    }}
+                  >
+                    Reflect anyway
+                  </Text>
+                </TouchableOpacity>
+              </Animated.View>
+            ) : loading || entryDecision === 'wait' ? (
               <Animated.View
                 entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
                 style={{ alignItems: 'center', paddingTop: 40 }}

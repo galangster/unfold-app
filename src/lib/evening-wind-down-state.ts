@@ -1,6 +1,7 @@
 import type { CheckIn, Devotional } from '@/lib/store';
 import type { PremiumAccessPolicy } from '@/lib/premium-access-policy';
 import { getEveningWindDownDayNumber } from '@/lib/today-companion-state';
+import { getLatestReadDayNumberToday } from '@/lib/devotional-day-access';
 
 /**
  * Pure derivations for the evening wind-down screen, kept out of the
@@ -87,4 +88,37 @@ export function decideEveningWindDownEntry(policy: PremiumAccessPolicy): Evening
  */
 export function resolveEveningLoadingCaption(decision: EveningWindDownEntryDecision): string {
   return decision === 'wait' ? 'Checking your subscription…' : 'Preparing your evening prayer...';
+}
+
+/** Whether the reader has actually done the reading this reflection is about. */
+export type EveningWindDownReadiness = 'ready' | 'unread';
+
+/**
+ * Today only offers the wind-down once a day has been finished — the evening
+ * slot in `context-slot-priority.ts` is gated on `hasReadToday`. The evening
+ * push notification deep-links straight to this screen and honours no such
+ * gate, so the two entry points disagreed.
+ *
+ * A subscriber hit that on 2026-09-12. He opened the evening notification
+ * without having finished the reading, and the examen still greeted him with
+ * five points of reflection "based on the reading this morning" — because
+ * `getEveningWindDownDayNumber` falls through to `currentDay` when nothing is
+ * read. He reasonably concluded the day was done. Reopening the app then
+ * showed him Day One again, and he believed he had lost his progress. Nothing
+ * was lost; the day had never been marked read, and the evening ritual should
+ * never have claimed otherwise.
+ *
+ * So the screen now enforces the same rule its in-app entry point does. A day
+ * read earlier counts: the examen has real material either way.
+ */
+export function resolveEveningWindDownReadiness(
+  devotional: Devotional | null | undefined,
+  dayNumber: number,
+  now = new Date(),
+): EveningWindDownReadiness {
+  if (!devotional) return 'unread';
+  if (getLatestReadDayNumberToday(devotional, now) != null) return 'ready';
+
+  const day = (devotional.days ?? []).find((entry) => entry.dayNumber === dayNumber);
+  return day?.isRead ? 'ready' : 'unread';
 }

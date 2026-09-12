@@ -4,6 +4,7 @@ import {
   findTodayMiddayCheckIn,
   resolveEveningLoadingCaption,
   resolveEveningWindDownDayNumber,
+  resolveEveningWindDownReadiness,
 } from '../evening-wind-down-state';
 
 // Evening of a day on which Day 6 was read in the morning; the store has
@@ -138,5 +139,30 @@ describe('resolveEveningLoadingCaption', () => {
   it('keeps the prayer copy while the examen is actually loading', () => {
     expect(resolveEveningLoadingCaption('allow')).toBe('Preparing your evening prayer...');
     expect(resolveEveningLoadingCaption('gate')).toBe('Preparing your evening prayer...');
+  });
+});
+
+describe('resolveEveningWindDownReadiness', () => {
+  it('is ready when a day was read today', () => {
+    // The default fixture has day 6 read this morning.
+    expect(resolveEveningWindDownReadiness(devotional(), 6, NOW)).toBe('ready');
+  });
+
+  it('is ready when the target day was read on an earlier day', () => {
+    // Day 5 was read yesterday. The examen still has real material.
+    const d = devotional({ days: [day(5, { isRead: true, readAt: '2026-05-10T08:00:00' })] });
+    expect(resolveEveningWindDownReadiness(d, 5, NOW)).toBe('ready');
+  });
+
+  it('is unread when the target day was never read', () => {
+    // Reported 2026-09-12: the evening push deep-links past Today's
+    // hasReadToday gate, so an unread day still produced an examen announced
+    // as reflecting on "the reading this morning".
+    const d = devotional({ currentDay: 1, days: [day(1)] });
+    expect(resolveEveningWindDownReadiness(d, 1, NOW)).toBe('unread');
+  });
+
+  it('is unread without a devotional at all', () => {
+    expect(resolveEveningWindDownReadiness(null, 1, NOW)).toBe('unread');
   });
 });
