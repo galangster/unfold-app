@@ -29,7 +29,7 @@ const ARRAY_SLICES = [
 
 /** Slices that must be reset together when their parent is invalid. */
 const DEPENDENTS: Partial<Record<string, string[]>> = {
-  devotionals: ['currentDevotionalId', 'resumeContext'],
+  devotionals: ['currentDevotionalId', 'resumeContext', 'scripturePracticeReturn'],
 };
 
 const isString = (v: unknown): v is string => typeof v === 'string' && v.length > 0;
@@ -79,5 +79,42 @@ export function repairRehydratedState(
     reset('user');
   }
 
+  if ('scripturePracticeSessions' in state) {
+    if (!isPlainObject(state.scripturePracticeSessions)) {
+      reset('scripturePracticeSessions');
+    } else {
+      const kept: Record<string, unknown> = {};
+      for (const [key, session] of Object.entries(state.scripturePracticeSessions).slice(-64)) {
+        if (isPracticeSession(session)) kept[key] = session;
+      }
+      if (Object.keys(kept).length !== Object.keys(state.scripturePracticeSessions).length) {
+        state.scripturePracticeSessions = kept;
+        repairedKeys.push('scripturePracticeSessions');
+      }
+    }
+  }
+
+  if ('scripturePracticeReturn' in state && state.scripturePracticeReturn != null && !isPlainObject(state.scripturePracticeReturn)) {
+    reset('scripturePracticeReturn');
+  }
+
   return { repairedKeys };
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return value != null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isPracticeSession(value: unknown): boolean {
+  if (!isPlainObject(value)) return false;
+  return (
+    typeof value.step === 'number'
+    && Number.isInteger(value.step)
+    && value.step >= 0
+    && isPlainObject(value.answers)
+    && Object.keys(value.answers).length <= 8
+    && Object.values(value.answers).every((answer) => typeof answer === 'string' && answer.length <= 2000)
+    && typeof value.completed === 'boolean'
+    && (value.readingMode === 'app' || value.readingMode === 'physical' || value.readingMode === null)
+  );
 }

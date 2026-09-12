@@ -128,6 +128,30 @@ describe('repairRehydratedState', () => {
     expect(state.user).toBeNull();
   });
 
+  it('repairs invalid scripture practice slices without touching valid neighbors', () => {
+    const state = makeValidState();
+    const journalRef = [{ id: 'j1' }];
+    state.journalEntries = journalRef;
+    state.scripturePracticeSessions = {
+      'dev-1:2:lectio_divina': { step: 1, answers: { first: 'kept' }, completed: false, readingMode: 'physical' },
+      bad: 'nope',
+    };
+    state.scripturePracticeReturn = 'stale';
+
+    const { repairedKeys } = repairRehydratedState(state, {
+      ...initialState,
+      scripturePracticeSessions: {},
+      scripturePracticeReturn: null,
+    });
+
+    expect(state.scripturePracticeSessions).toEqual({
+      'dev-1:2:lectio_divina': { step: 1, answers: { first: 'kept' }, completed: false, readingMode: 'physical' },
+    });
+    expect(state.scripturePracticeReturn).toBeNull();
+    expect(state.journalEntries).toBe(journalRef);
+    expect(repairedKeys).toEqual(expect.arrayContaining(['scripturePracticeSessions', 'scripturePracticeReturn']));
+  });
+
   it('invalid generationSession resets only generationSession', () => {
     const state = makeValidState();
     state.generationSession = null;

@@ -24,6 +24,8 @@ import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { Radius } from '@/constants/radius';
 import { BIBLE_STUDY_METHODS, type BibleStudyMethodCard } from '@/constants/bible-study-methods';
+import { getScripturePractice } from '@/constants/scripture-practices';
+import { isScripturePracticeEnabled } from '@/lib/scripture-practice-feature';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -61,6 +63,10 @@ interface MethodGuide {
  * Extracts bullet/numbered items as steps, and classifies the method style.
  */
 function parseMethodGuide(method: BibleStudyMethodCard): MethodGuide {
+  const practice = isScripturePracticeEnabled() ? getScripturePractice(method.id) : null;
+  if (practice) {
+    return { style: 'Scripture practice', summary: practice.intro, steps: practice.steps.map((step) => step.prompt) };
+  }
   const text = method.promptModifier;
 
   // --- Classify style ---

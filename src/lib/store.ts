@@ -51,6 +51,15 @@ import {
   seriesPersonaSyncData,
   usedScriptureSyncData,
 } from './personal-data-sync-records';
+import {
+  type PracticeReturn,
+  type PracticeSession,
+  type PracticeTarget,
+  applyPracticeSessionPatch,
+  boundPracticeSessions,
+  practiceSessionKey,
+  resolvePracticeReturn,
+} from './scripture-practice';
 
 // Types
 export type FontSize = 'small' | 'medium' | 'large';
@@ -878,6 +887,12 @@ interface UnfoldState {
   // Sync tracking
   userUpdatedAt?: string; // ISO timestamp for user profile sync
 
+  // Scripture practice (local-only; never syncs)
+  scripturePracticeSessions: Record<string, PracticeSession>;
+  scripturePracticeReturn: PracticeReturn | null;
+  updateScripturePractice: (target: PracticeTarget, patch: Partial<PracticeSession>) => void;
+  setScripturePracticeReturn: (context: PracticeReturn | null) => void;
+
   // Helpers
   getCurrentDevotional: () => Devotional | undefined;
   reset: () => void;
@@ -955,6 +970,8 @@ const initialState = {
     translation: 'BSB' as const,
   } as BibleReaderSettings,
   readerBrightness: null as number | null,
+  scripturePracticeSessions: {} as Record<string, PracticeSession>,
+  scripturePracticeReturn: null as PracticeReturn | null,
 };
 
 // WR-23: session-scoped flags are reset on every launch (see
@@ -1211,13 +1228,14 @@ export const useUnfoldStore = create<UnfoldState>()(
         set((state) => {
           const existing = state.devotionals.find((d) => d.id === id);
           if (!existing || !isDevotionalArchived(existing)) {
-            return { currentDevotionalId: id };
+            return { currentDevotionalId: id, scripturePracticeReturn: state.currentDevotionalId === id ? state.scripturePracticeReturn : null };
           }
           const resumed = applyUnarchiveIntent(existing, new Date().toISOString());
           enqueueDevotionalRow(resumed);
           return {
             devotionals: state.devotionals.map((d) => (d.id === existing.id ? resumed : d)),
             currentDevotionalId: id,
+            scripturePracticeReturn: null,
           };
         }),
       archiveCurrentDevotional: () =>
@@ -1225,20 +1243,23 @@ export const useUnfoldStore = create<UnfoldState>()(
           const currentId = state.currentDevotionalId;
           if (!currentId) return state;
           const existing = state.devotionals.find((d) => d.id === currentId);
-          if (!existing) return { currentDevotionalId: null };
+          if (!existing) return { currentDevotionalId: null, scripturePracticeReturn: null };
           const archived = applyArchiveIntent(existing, new Date().toISOString());
           enqueueDevotionalRow(archived);
           return {
             devotionals: state.devotionals.map((d) => (d.id === existing.id ? archived : d)),
             currentDevotionalId: null,
+            scripturePracticeReturn: null,
           };
         }),
       isReturningUser: () => get().hasEverCreatedDevotional || get().devotionals.length > 0,
 
       markDayAsRead: (devotionalId, dayNumber) =>
-        set((state) =>
-          updateDay(state, devotionalId, dayNumber, (now) => ({ isRead: true, readAt: now, isRevealed: true })),
-        ),
+        set((state) => ({
+          ...updateDay(state, devotionalId, dayNumber, (now) => ({ isRead: true, readAt: now, isRevealed: true })),
+          scripturePracticeReturn: state.scripturePracticeReturn?.target.devotionalId === devotionalId
+            && state.scripturePracticeReturn.target.dayNumber === dayNumber ? null : state.scripturePracticeReturn,
+        })),
 
       setActOutcome: (devotionalId, dayNumber, outcome) =>
         set((state) => updateDay(state, devotionalId, dayNumber, () => ({ actOutcome: outcome }))),
@@ -2208,6 +2229,28 @@ export const useUnfoldStore = create<UnfoldState>()(
         return crumbs;
       },
 
+      updateScripturePractice: (target, patch) =>
+        set((state) => {
+          if (!resolvePracticeReturn({ target, destination: 'practice' }, state.devotionals, state.currentDevotionalId)) return {};
+          const nextSession = applyPracticeSessionPatch(
+            target,
+            state.scripturePracticeSessions?.[practiceSessionKey(target)],
+            patch,
+          );
+          if (!nextSession) return {};
+          return {
+            scripturePracticeSessions: boundPracticeSessions(
+              state.scripturePracticeSessions ?? {},
+              practiceSessionKey(target),
+              nextSession,
+            ),
+          };
+        }),
+
+      setScripturePracticeReturn: (context) => set((state) => ({
+        scripturePracticeReturn: resolvePracticeReturn(context, state.devotionals, state.currentDevotionalId),
+      })),
+
       // Helpers
       getCurrentDevotional: () => {
         const state = get();
@@ -2249,6 +2292,7 @@ export const useUnfoldStore = create<UnfoldState>()(
 
           if (state) {
             const { repairedKeys } = repairRehydratedState(state, initialState);
+            state.scripturePracticeReturn = resolvePracticeReturn(state.scripturePracticeReturn, state.devotionals, state.currentDevotionalId);
             if (repairedKeys.length > 0) {
               logger.warn('[store] Repaired invalid persisted slices:', repairedKeys.join(', '));
               void logBugError('store-validation', new Error('Invalid persisted state (repaired per-slice)'), {

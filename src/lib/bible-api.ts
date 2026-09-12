@@ -11,7 +11,8 @@
 import { MMKV } from 'react-native-mmkv';
 import { logger } from '@/lib/logger';
 import { referenceToRoute, BIBLE_BOOKS, formatScriptureReference, normalizeScriptureReference } from '@/lib/bible-constants';
-import { getVerseByReference, getBibleDbStatus, type BibleTranslation } from '@/lib/bible-db';
+import { getChapter, getVerseByReference, getBibleDbStatus, type BibleTranslation } from '@/lib/bible-db';
+import { expectedVerseNumbers, versesMatchExpected } from '@/lib/bible-verse-integrity';
 import { PRIMARY_BACKEND_URL, getAuthHeaders, sanitizeForPrompt } from '@/lib/api-config';
 import { authenticatedFetch } from './device-credential';
 import { externalFetch } from './external-fetch';
@@ -251,15 +252,26 @@ export async function fetchVerseLocal(
     return null;
   }
 
-  const verses = await getVerseByReference(
-    parsed.bookId,
-    parsed.chapter,
-    parsed.verse ?? 1,
-    parsed.verseEnd,
+  const expected = expectedVerseNumbers({
     translation,
-  );
+    bookId: parsed.bookId,
+    chapter: parsed.chapter,
+    verseStart: parsed.verse,
+    verseEnd: parsed.verseEnd,
+  });
+  if (!expected) return null;
 
-  if (verses.length === 0) return null;
+  const verses = parsed.verse === undefined
+    ? await getChapter(parsed.bookId, parsed.chapter, translation)
+    : await getVerseByReference(
+        parsed.bookId,
+        parsed.chapter,
+        parsed.verse,
+        parsed.verseEnd,
+        translation,
+      );
+
+  if (!versesMatchExpected(verses, expected)) return null;
 
   const text = verses.map((v) => `${toSuperscript(v.verse)} ${v.text.trim()}`).join(' ');
   const book = BIBLE_BOOKS.find((b) => b.id === parsed.bookId);
