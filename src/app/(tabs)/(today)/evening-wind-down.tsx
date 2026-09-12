@@ -184,17 +184,11 @@ export default function EveningWindDownScreen() {
   // resolveEveningWindDownReadiness for the report behind it.
   const readiness = resolveEveningWindDownReadiness(currentDevotional, eveningDayNumber);
   const [reflectAnyway, setReflectAnyway] = useState(false);
-  // Only ask for a reading that actually exists. A reader with no current
-  // series still gets the evening notification — scheduleEveningWindDown
-  // pre-rolls its occurrences without requiring a devotional, and
-  // removeDevotional nulls currentDevotionalId when the last series is
-  // deleted — so without these guards the prompt would claim "you haven't
-  // finished Day 1" to someone who has no Day 1, over a "Read it now" button
-  // that early-returns. That is a dead primary control, the same failure this
-  // screen was just fixed for, and it would shadow the existing
-  // "Start a devotional" empty state below.
+  // A missing progressive day still belongs to this series. Its reader can
+  // recover the content. Only readers with no series need the creation state.
   const askToReadFirst =
-    readiness === 'unread' && !!currentDevotional && !!currentDay && !reflectAnyway;
+    !!currentDevotional && (readiness === 'preparing' || (readiness === 'unread' && !reflectAnyway));
+  const readingActionLabel = readiness === 'preparing' ? "Open today's reading" : 'Read it now';
 
   const middayCheckIn = useMemo(() => {
     if (!currentDevotional || !currentDay) return undefined;
@@ -402,8 +396,10 @@ export default function EveningWindDownScreen() {
                     marginBottom: Spacing['5'],
                   }}
                 >
-                  Tonight's reflection looks back on the day's reading.{'\n'}You haven't finished
-                  {currentDay?.title ? ` ${currentDay.title}` : ` Day ${eveningDayNumber}`} yet.
+                  {readiness === 'preparing'
+                    ? "Let's open today's reading first. Your evening reflection will be here when you're ready."
+                    : "Tonight's reflection looks back on the day's reading.\nYou haven't finished"
+                      + (currentDay?.title ? ' ' + currentDay.title : ' Day ' + eveningDayNumber) + ' yet.'}
                 </Text>
                 <TouchableOpacity
                   activeOpacity={0.7}
@@ -419,7 +415,7 @@ export default function EveningWindDownScreen() {
                     });
                   }}
                   accessibilityRole="button"
-                  accessibilityLabel="Read it now"
+                  accessibilityLabel={readingActionLabel}
                 >
                   <View
                     style={{
@@ -437,32 +433,34 @@ export default function EveningWindDownScreen() {
                         color: colors.background,
                       }}
                     >
-                      Read it now
+                      {readingActionLabel}
                     </Text>
                   </View>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setReflectAnyway(true);
-                  }}
-                  style={{ marginTop: Spacing['2'], paddingVertical: Spacing['3'], paddingHorizontal: Spacing['5'] }}
-                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Reflect anyway"
-                  accessibilityHint="Continues without opening the reading"
-                >
-                  <Text
-                    style={{
-                      fontFamily: FontFamily.ui,
-                      fontSize: FontSize.sm,
-                      color: colors.textSubtle,
+                {readiness === 'unread' && (
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setReflectAnyway(true);
                     }}
+                    style={{ marginTop: Spacing['2'], paddingVertical: Spacing['3'], paddingHorizontal: Spacing['5'] }}
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Reflect anyway"
+                    accessibilityHint="Continues without opening the reading"
                   >
-                    Reflect anyway
-                  </Text>
-                </TouchableOpacity>
+                    <Text
+                      style={{
+                        fontFamily: FontFamily.ui,
+                        fontSize: FontSize.sm,
+                        color: colors.textSubtle,
+                      }}
+                    >
+                      Reflect anyway
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </Animated.View>
             ) : loading || entryDecision === 'wait' ? (
               <Animated.View

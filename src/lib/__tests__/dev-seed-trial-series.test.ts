@@ -14,6 +14,7 @@ const DAY_OFFSET: Partial<Record<TrialSeriesFixtureState, number>> = {
   'today-day2': 1,
   'today-day2-read': 1,
   'today-day3': 2,
+  'today-day3-preparing': 2,
   'today-lapsed-before-day3': 2,
   'series-complete': 2,
 };
@@ -28,6 +29,7 @@ const TARGET: Record<TrialSeriesFixtureState, unknown> = {
   'today-day2': '/(tabs)/(today)',
   'today-day2-read': '/(tabs)/(today)',
   'today-day3': '/(tabs)/(today)',
+  'today-day3-preparing': '/(tabs)/(today)',
   'today-lapsed-before-day3': '/(tabs)/(today)',
   'series-complete': '/(tabs)/(today)',
 };

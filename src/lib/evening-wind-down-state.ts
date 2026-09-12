@@ -93,7 +93,7 @@ export function resolveEveningLoadingCaption(decision: EveningWindDownEntryDecis
 }
 
 /** Whether the reader has actually done the reading this reflection is about. */
-export type EveningWindDownReadiness = 'ready' | 'unread';
+export type EveningWindDownReadiness = 'ready' | 'unread' | 'preparing';
 
 /**
  * Today only offers the wind-down once a day has been finished — the evening
@@ -101,16 +101,8 @@ export type EveningWindDownReadiness = 'ready' | 'unread';
  * push notification deep-links straight to this screen and honours no such
  * gate, so the two entry points disagreed.
  *
- * A subscriber hit that on 2026-09-12. He opened the evening notification
- * without having finished the reading, and the examen still greeted him with
- * five points of reflection "based on the reading this morning" — because
- * `getEveningWindDownDayNumber` falls through to `currentDay` when nothing is
- * read. He reasonably concluded the day was done. Reopening the app then
- * showed him Day One again, and he believed he had lost his progress. Nothing
- * was lost; the day had never been marked read, and the evening ritual should
- * never have claimed otherwise.
- *
- * So the screen now enforces the same rule its in-app entry point does.
+ * The notification can arrive before the day's completion is recorded.
+ * Offer today's reader before reflecting, including its missing-day recovery.
  *
  * The invariant is Today's: did the reader finish a day TODAY. Two earlier
  * drafts each got half of it.
@@ -138,5 +130,6 @@ export function resolveEveningWindDownReadiness(
   now = new Date(),
 ): EveningWindDownReadiness {
   if (!devotional) return 'unread';
+  if (!(devotional.days ?? []).some((day) => day.dayNumber === dayNumber)) return 'preparing';
   return getLatestReadDayNumberToday(devotional, now) === dayNumber ? 'ready' : 'unread';
 }

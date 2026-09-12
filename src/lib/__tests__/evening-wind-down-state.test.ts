@@ -135,10 +135,22 @@ describe('resolveEveningWindDownDayNumber', () => {
     expect(resolveEveningWindDownReadiness(d, 5, NOW)).toBe('unread');
   });
 
-  it('is unread when the series has no days yet', () => {
+  it('is preparing when the series has no days yet', () => {
     const d = devotional({ currentDay: 1, days: [] });
     expect(resolveEveningWindDownDayNumber(d, null, NOW)).toBe(1);
-    expect(resolveEveningWindDownReadiness(d, 1, NOW)).toBe('unread');
+    expect(resolveEveningWindDownReadiness(d, 1, NOW)).toBe('preparing');
+  });
+
+  it('opens recovery for the current progressive day when only yesterday exists', () => {
+    const d = devotional({
+      currentDay: 6,
+      generationMode: 'progressive',
+      seriesStartDate: '2026-05-06T00:00:00',
+      days: [day(5, { isRead: true, readAt: '2026-05-10T08:00:00' })],
+    });
+    const target = resolveEveningWindDownDayNumber(d, null, NOW);
+    expect(target).toBe(6);
+    expect(resolveEveningWindDownReadiness(d, target, NOW)).toBe('preparing');
   });
 
   it('keeps the requested day (or 1) when there is no devotional to validate against', () => {

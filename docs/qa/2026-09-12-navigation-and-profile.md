@@ -4,7 +4,7 @@ This change gives Devotional its own reader stack and exposes settings directly 
 Today returns to its root with one tap. History browsing preserves the active series.
 The day selector reuses its reader. Completion and edge-back return to Devotional.
 
-Support repairs cover notification retry persistence, full Companion copy, today's unread evening target, modal exits, bug-report cancellation, and the App Store link.
+Support repairs cover notification retry persistence, full Companion copy, today's unread evening target, missing-day recovery, modal exits, bug-report cancellation, and the App Store link.
 
 ## Reference patterns
 
@@ -18,7 +18,7 @@ Support repairs cover notification retry persistence, full Companion copy, today
 
 - TypeScript: passed.
 - ESLint: zero errors. Repository style warnings remain.
-- Jest: 385 suites and 3,342 tests passed. One suite/test was skipped.
+- Jest: 385 suites and 3,343 tests passed. One suite/test was skipped.
 - Release-profile safety and Maestro selector validation: passed.
 - Standard test command: `CI=1 bun run test --maxWorkers=2`. In-band execution exposed existing trial-test cleanup warnings.
 - The orchestrator reviewed and simplified the integrated change.
@@ -34,6 +34,7 @@ The client reports 1.1.4 / build 183. No new release archive was built.
 | iPhone 17 Pro, dark | Edge-back returns to the series | Passed |
 | iPhone 17 Pro, dark | Completion updates progress and returns to the series | Passed |
 | iPhone 17 Pro, dark | Day selector reuses the reader; one Back returns to the series | Passed |
+| iPhone 17 Pro, dark | Missing progressive day opens reader recovery and preserves the series | Passed |
 | iPhone 17 Pro, dark | Companion Profile opens account controls and Support | Passed |
 | Compact iPhone, light, largest text | Profile and settings rows wrap and scroll | Passed |
 | Compact iPhone, light, largest text | Settings links scroll to reminders and appearance | Passed |
