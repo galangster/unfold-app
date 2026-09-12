@@ -1,0 +1,1 @@
+A quiet update under the hood. Unfold now signs every request to its servers with a credential unique to your device, so your reading plans, journal, and check-ins stay tied to you. Nothing changes in how Unfold looks or works.
