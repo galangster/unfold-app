@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 export const EXPECTED_BUNDLE_ID = 'com.unfoldapp.ios';
@@ -44,7 +44,44 @@ export function expectedProductionStamp(candidatePlistText) {
 }
 
 export function manifestHash(manifest) {
-  return sha256Text(manifest.map((entry) => `${entry.path}\t${entry.candidateSha256}\t${entry.expectedSha256}`).join('\n'));
+  return sha256Text(manifest.map((entry) => `${entry.path}\t${entry.kind}\t${entry.candidateSha256}\t${entry.expectedSha256}`).join('\n'));
+}
+
+export function inspectSourceEntry(filePath, { label = filePath, missingReason } = {}) {
+  let stat;
+  try {
+    stat = lstatSync(filePath);
+  } catch (err) {
+    if (err?.code === 'ENOENT') {
+      return fail('stale-inputs', missingReason || `source entry missing: ${label}`);
+    }
+    return fail('stale-inputs', `unable to inspect source entry: ${label}`);
+  }
+  if (stat.isSymbolicLink()) {
+    let linkTarget;
+    try {
+      linkTarget = readlinkSync(filePath);
+    } catch {
+      return fail('stale-inputs', `unable to read symlink target: ${label}`);
+    }
+    return {
+      ok: true,
+      kind: 'symlink',
+      linkTarget,
+      sha256: sha256Text(linkTarget),
+    };
+  }
+  if (stat.isFile()) {
+    return {
+      ok: true,
+      kind: 'file',
+      sha256: sha256File(filePath),
+    };
+  }
+  if (stat.isDirectory()) {
+    return fail('stale-inputs', `source entry is a directory: ${label}`);
+  }
+  return fail('stale-inputs', `unsupported source entry: ${label}`);
 }
 
 export function readGitIdentity(cwd) {
@@ -157,24 +194,31 @@ export function readCandidateManifest(candidateDir, stampProduction) {
   const manifest = [];
   for (const file of files) {
     const candidateFile = join(candidateDir, file);
-    if (!existsSync(candidateFile)) {
-      return fail('stale-inputs', `candidate file missing: ${file}`);
-    }
-    const candidateBytes = readFileSync(candidateFile);
-    const candidateSha256 = sha256Text(candidateBytes);
+    const source = inspectSourceEntry(candidateFile, {
+      label: file,
+      missingReason: `candidate file missing: ${file}`,
+    });
+    if (!source.ok) return source;
+    const candidateSha256 = source.sha256;
     let expectedSha256 = candidateSha256;
     if (stampProduction && file === STAMP_PLIST) {
-      expectedSha256 = sha256Text(expectedProductionStamp(candidateBytes.toString('utf8')));
+      if (source.kind !== 'file') {
+        return fail('stale-inputs', 'Info.plist must be a regular file');
+      }
+      expectedSha256 = sha256Text(expectedProductionStamp(readFileSync(candidateFile, 'utf8')));
     }
-    manifest.push({ path: file, candidateSha256, expectedSha256 });
+    const entry = { path: file, kind: source.kind, candidateSha256, expectedSha256 };
+    if (source.kind === 'symlink') entry.linkTarget = source.linkTarget;
+    manifest.push(entry);
   }
   const protectedHashes = {};
   for (const file of PROTECTED_FILES) {
     const candidateFile = join(candidateDir, file);
-    if (!existsSync(candidateFile)) {
-      return fail('protected-hash', `protected file missing: ${file}`);
+    const source = inspectSourceEntry(candidateFile);
+    if (!source.ok || source.kind !== 'file') {
+      return fail('protected-hash', `protected file must be a regular file: ${file}`);
     }
-    protectedHashes[file] = sha256File(candidateFile);
+    protectedHashes[file] = source.sha256;
   }
   return {
     ok: true,
@@ -192,10 +236,12 @@ export function readPreparedInputs({ candidateDir, nativeDir, stampProduction })
   if (!expected.ok) return expected;
   for (const entry of expected.manifest) {
     const nativeFile = join(nativeDir, entry.path);
-    if (!existsSync(nativeFile)) {
-      return fail('stale-inputs', `prepared native file missing: ${entry.path}`);
-    }
-    if (sha256File(nativeFile) !== entry.expectedSha256) {
+    const source = inspectSourceEntry(nativeFile, {
+      label: entry.path,
+      missingReason: `prepared native file missing: ${entry.path}`,
+    });
+    if (!source.ok) return source;
+    if (source.kind !== entry.kind || source.linkTarget !== entry.linkTarget || source.sha256 !== entry.expectedSha256) {
       return fail(
         'stale-inputs',
         entry.path === STAMP_PLIST && stampProduction
@@ -413,7 +459,12 @@ export function evaluateSimulatorReleaseProof({ recordPath, runPlutil = plutilEx
   }
   for (const stored of record.inputs.manifest) {
     const liveEntry = live.manifest.find((entry) => entry.path === stored.path);
-    if (!liveEntry || liveEntry.expectedSha256 !== stored.expectedSha256) {
+    if (
+      !liveEntry
+      || liveEntry.kind !== stored.kind
+      || liveEntry.linkTarget !== stored.linkTarget
+      || liveEntry.expectedSha256 !== stored.expectedSha256
+    ) {
       return fail('stale-inputs', `candidate no longer matches captured expected hash: ${stored.path}`);
     }
   }

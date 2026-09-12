@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, test } from 'node:test';
@@ -11,6 +11,8 @@ import {
   captureSimulatorReleaseProof,
   evaluateReleaseGate,
   evaluateSimulatorReleaseProof,
+  readCandidateManifest,
+  readPreparedInputs,
   sha256Text,
 } from '../release-proof-lib.mjs';
 
@@ -600,6 +602,97 @@ test('too-early and splash-only observations cannot pass', () => {
   const splashOnly = splash.capture();
   assert.equal(splashOnly.ok, false);
   assert.equal(splashOnly.code, 'splash-only');
+});
+
+test('directory symlink in a clean candidate and prepared native binds target and kind', () => {
+  const fx = makeHarness();
+  const targetDir = tempDir('unfold-skill-target-');
+  writeFileSync(join(targetDir, 'SKILL.md'), 'skill\n');
+  mkdirSync(join(fx.candidateDir, 'skills'));
+  mkdirSync(join(fx.nativeDir, 'skills'));
+  symlinkSync(targetDir, join(fx.candidateDir, 'skills/link'));
+  symlinkSync(targetDir, join(fx.nativeDir, 'skills/link'));
+  git(fx.candidateDir, ['add', 'skills/link']);
+  git(fx.candidateDir, ['commit', '-m', 'skill dir link']);
+
+  const candidate = readCandidateManifest(fx.candidateDir, true);
+  assert.equal(candidate.ok, true, candidate.reason);
+  const link = candidate.manifest.find((entry) => entry.path === 'skills/link');
+  assert.equal(link.kind, 'symlink');
+  assert.equal(link.linkTarget, targetDir);
+  assert.equal(link.candidateSha256, sha256Text(targetDir));
+  assert.equal(link.expectedSha256, sha256Text(targetDir));
+
+  const prepared = readPreparedInputs({
+    candidateDir: fx.candidateDir,
+    nativeDir: fx.nativeDir,
+    stampProduction: true,
+  });
+  assert.equal(prepared.ok, true, prepared.reason);
+
+  const captured = fx.capture();
+  assert.equal(captured.ok, true, captured.reason);
+  const capturedLink = captured.record.inputs.manifest.find((entry) => entry.path === 'skills/link');
+  assert.equal(capturedLink.kind, 'symlink');
+  assert.equal(capturedLink.linkTarget, targetDir);
+});
+
+test('mismatched symlink target or kind cannot pass prepared input validation', () => {
+  const fx = makeHarness();
+  const targetDir = tempDir('unfold-skill-target-');
+  const otherDir = tempDir('unfold-skill-other-');
+  writeFileSync(join(targetDir, 'SKILL.md'), 'skill\n');
+  mkdirSync(join(fx.candidateDir, 'skills'));
+  mkdirSync(join(fx.nativeDir, 'skills'));
+  symlinkSync(targetDir, join(fx.candidateDir, 'skills/link'));
+  symlinkSync(otherDir, join(fx.nativeDir, 'skills/link'));
+  git(fx.candidateDir, ['add', 'skills/link']);
+  git(fx.candidateDir, ['commit', '-m', 'skill dir link']);
+
+  const targetMismatch = readPreparedInputs({
+    candidateDir: fx.candidateDir,
+    nativeDir: fx.nativeDir,
+    stampProduction: true,
+  });
+  assert.equal(targetMismatch.ok, false);
+  assert.equal(targetMismatch.code, 'stale-inputs');
+
+  rmSync(join(fx.nativeDir, 'skills/link'));
+  writeFileSync(join(fx.nativeDir, 'skills/link'), targetDir);
+  const kindMismatch = readPreparedInputs({
+    candidateDir: fx.candidateDir,
+    nativeDir: fx.nativeDir,
+    stampProduction: true,
+  });
+  assert.equal(kindMismatch.ok, false);
+  assert.equal(kindMismatch.code, 'stale-inputs');
+});
+
+test('protected source files cannot be replaced with directory links', () => {
+  const fx = makeHarness();
+  const targetDir = tempDir('unfold-protected-target-');
+  const lock = join(fx.candidateDir, 'ios/Podfile.lock');
+  rmSync(lock);
+  symlinkSync(targetDir, lock);
+  git(fx.candidateDir, ['add', 'ios/Podfile.lock']);
+  git(fx.candidateDir, ['commit', '-m', 'invalid protected link']);
+  const candidate = readCandidateManifest(fx.candidateDir, true);
+  assert.equal(candidate.ok, false);
+  assert.equal(candidate.code, 'protected-hash');
+});
+
+test('dangling symlink binds target and does not throw', () => {
+  const fx = makeHarness();
+  const missing = join(tempDir('unfold-skill-missing-'), 'absent');
+  mkdirSync(join(fx.candidateDir, 'skills'));
+  symlinkSync(missing, join(fx.candidateDir, 'skills/link'));
+  git(fx.candidateDir, ['add', 'skills/link']);
+  git(fx.candidateDir, ['commit', '-m', 'dangling skill link']);
+  const candidate = readCandidateManifest(fx.candidateDir, true);
+  assert.equal(candidate.ok, true, candidate.reason);
+  const link = candidate.manifest.find((entry) => entry.path === 'skills/link');
+  assert.equal(link.kind, 'symlink');
+  assert.equal(link.linkTarget, missing);
 });
 
 test('unrelated build workspace cannot pass capture or evaluation', () => {
