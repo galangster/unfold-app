@@ -1,7 +1,6 @@
 import type { CheckIn, Devotional } from '@/lib/store';
 import type { PremiumAccessPolicy } from '@/lib/premium-access-policy';
 import { getEveningWindDownDayNumber } from '@/lib/today-companion-state';
-import { getLatestReadDayNumberToday } from '@/lib/devotional-day-access';
 
 /**
  * Pure derivations for the evening wind-down screen, kept out of the
@@ -108,16 +107,22 @@ export type EveningWindDownReadiness = 'ready' | 'unread';
  * was lost; the day had never been marked read, and the evening ritual should
  * never have claimed otherwise.
  *
- * So the screen now enforces the same rule its in-app entry point does. A day
- * read earlier counts: the examen has real material either way.
+ * So the screen now enforces the same rule its in-app entry point does.
+ *
+ * The question is about THIS day, not about the calendar. An earlier draft
+ * also passed when any day had been read today, which sounds equivalent and
+ * is not: `resolveEveningWindDownDayNumber` lets a `dayNumber` route param
+ * win, and that param is in the deep-link allowlist. A reader who finished
+ * Day 6 today, arriving on a link that names Day 7, would have been waved
+ * through to an examen about a reading they had never opened — the exact
+ * reader this gate exists for. A day read on an earlier date still counts,
+ * because the examen has real material either way.
  */
 export function resolveEveningWindDownReadiness(
   devotional: Devotional | null | undefined,
   dayNumber: number,
-  now = new Date(),
 ): EveningWindDownReadiness {
   if (!devotional) return 'unread';
-  if (getLatestReadDayNumberToday(devotional, now) != null) return 'ready';
 
   const day = (devotional.days ?? []).find((entry) => entry.dayNumber === dayNumber);
   return day?.isRead ? 'ready' : 'unread';

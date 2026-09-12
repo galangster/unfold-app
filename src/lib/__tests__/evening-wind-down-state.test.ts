@@ -143,15 +143,15 @@ describe('resolveEveningLoadingCaption', () => {
 });
 
 describe('resolveEveningWindDownReadiness', () => {
-  it('is ready when a day was read today', () => {
+  it('is ready when the target day was read today', () => {
     // The default fixture has day 6 read this morning.
-    expect(resolveEveningWindDownReadiness(devotional(), 6, NOW)).toBe('ready');
+    expect(resolveEveningWindDownReadiness(devotional(), 6)).toBe('ready');
   });
 
   it('is ready when the target day was read on an earlier day', () => {
     // Day 5 was read yesterday. The examen still has real material.
     const d = devotional({ days: [day(5, { isRead: true, readAt: '2026-05-10T08:00:00' })] });
-    expect(resolveEveningWindDownReadiness(d, 5, NOW)).toBe('ready');
+    expect(resolveEveningWindDownReadiness(d, 5)).toBe('ready');
   });
 
   it('is unread when the target day was never read', () => {
@@ -159,10 +159,18 @@ describe('resolveEveningWindDownReadiness', () => {
     // hasReadToday gate, so an unread day still produced an examen announced
     // as reflecting on "the reading this morning".
     const d = devotional({ currentDay: 1, days: [day(1)] });
-    expect(resolveEveningWindDownReadiness(d, 1, NOW)).toBe('unread');
+    expect(resolveEveningWindDownReadiness(d, 1)).toBe('unread');
+  });
+
+  it('is unread for an unread day even when another day was read today', () => {
+    // The hole an earlier draft left open. resolveEveningWindDownDayNumber
+    // lets a dayNumber route param win, and dayNumber is deep-link
+    // allowlisted. Day 6 read today must not authorise an examen about the
+    // still-unread Day 7.
+    expect(resolveEveningWindDownReadiness(devotional(), 7)).toBe('unread');
   });
 
   it('is unread without a devotional at all', () => {
-    expect(resolveEveningWindDownReadiness(null, 1, NOW)).toBe('unread');
+    expect(resolveEveningWindDownReadiness(null, 1)).toBe('unread');
   });
 });

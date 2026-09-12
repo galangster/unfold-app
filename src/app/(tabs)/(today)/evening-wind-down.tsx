@@ -566,7 +566,7 @@ export default function EveningWindDownScreen() {
             )}
 
             {/* === EVENING SCRIPTURE SECTION === */}
-            {entryAllowed && currentDay?.eveningScriptureRef && (
+            {entryAllowed && !askToReadFirst && currentDay?.eveningScriptureRef && (
               <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).delay(examen ? 800 : 200).easing(Ease.out)}>
                 {/* Section divider */}
                 <View
