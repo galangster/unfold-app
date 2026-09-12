@@ -20,6 +20,10 @@ for translation in ('BSB', 'KJV'):
             'SELECT DISTINCT chapter FROM verses WHERE translation=? AND book_id=? ORDER BY chapter',
             (translation, book),
         ).fetchall()
+        book_row = connection.execute('SELECT chapter_count FROM books WHERE id=?', (book,)).fetchone()
+        expected_chapters = list(range(1, book_row[0] + 1)) if book_row else []
+        if not expected_chapters or [row[0] for row in chapter_rows] != expected_chapters:
+            raise ValueError(f'Invalid chapter sequence: {translation} book {book}')
         for (chapter,) in chapter_rows:
             verses = [row[0] for row in connection.execute(
                 'SELECT verse FROM verses WHERE translation=? AND book_id=? AND chapter=? ORDER BY verse',
