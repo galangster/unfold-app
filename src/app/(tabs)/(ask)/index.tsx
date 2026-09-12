@@ -41,6 +41,7 @@ import {
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { CompanionOrb } from '@/components/CompanionOrb';
+import { ProfileEntryButton } from '@/components/ProfileEntryButton';
 import { COMPANION_MESSAGE_MAX_CHARS, useCompanionChat, type SendOutcome } from '@/lib/use-companion-chat';
 import { selectActiveMessages, useCompanionChatStore, type CompanionMessage } from '@/lib/companion-chat-store';
 import {
@@ -492,20 +493,23 @@ export default function CompanionScreen() {
           </Text>
         </View>
 
-        {/* Right: new chat — fixed width to balance center */}
-        <TouchableOpacity
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            handleNewChat();
-          }}
-          hitSlop={8}
-          activeOpacity={0.7}
-          accessibilityLabel="New conversation"
-          accessibilityRole="button"
-          style={{ width: 40, height: 44, alignItems: 'flex-end', justifyContent: 'center' }}
-        >
-          <NotePencil size={22} color={colors.textMuted} weight="light" />
-        </TouchableOpacity>
+        {/* Right: new chat + Profile — Profile stays reachable from Companion */}
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <TouchableOpacity
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              handleNewChat();
+            }}
+            hitSlop={8}
+            activeOpacity={0.7}
+            accessibilityLabel="New conversation"
+            accessibilityRole="button"
+            style={{ width: 40, height: 44, alignItems: 'flex-end', justifyContent: 'center' }}
+          >
+            <NotePencil size={22} color={colors.textMuted} weight="light" />
+          </TouchableOpacity>
+          <ProfileEntryButton testID="companion-profile-button" size={32} />
+        </View>
       </View>
 
       {/* Each scroll container owns keyboard dismissal and touch handling. */}

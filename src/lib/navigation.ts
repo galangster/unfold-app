@@ -27,7 +27,7 @@
  * src/app/(tabs)/_layout.tsx. This is the app's single list of them: the
  * types below and src/hooks/useCrossTabBack.ts both derive from it.
  */
-const TAB_GROUPS = ['(today)', '(journal)', '(bible)', '(you)', '(ask)'] as const;
+const TAB_GROUPS = ['(today)', '(journal)', '(bible)', '(you)', '(ask)', '(study)'] as const;
 
 export type TabGroupSegment = (typeof TAB_GROUPS)[number];
 
@@ -45,6 +45,17 @@ export type TabRootHref = `/(tabs)/${TabGroupSegment}`;
 export interface BackNavigator {
   canGoBack(): boolean;
   back(): void;
+  replace(href: TabRootHref): void;
+}
+
+/**
+ * The slice of expo-router a modal close needs. `dismiss()` is a silent
+ * no-op when the screen is not sitting on a dismissable stack — the same
+ * trap `back()` has on a cold notification or `unfold://` arrival.
+ */
+export interface DismissNavigator {
+  canDismiss(): boolean;
+  dismiss(): void;
   replace(href: TabRootHref): void;
 }
 
@@ -95,6 +106,20 @@ export function goBackOr(
 ): void {
   if (stackIndex > 0 && router.canGoBack()) {
     router.back();
+    return;
+  }
+  router.replace(fallbackHref);
+}
+
+/**
+ * Close a modal when there is something under it; otherwise replace with
+ * `fallbackHref`. `/share-card` is deep-link allowlisted and registered as a
+ * root modal, so a cold `unfold://share-card` arrival has nothing to
+ * dismiss and a bare `router.dismiss()` leaves the reader stuck.
+ */
+export function dismissOr(router: DismissNavigator, fallbackHref: TabRootHref): void {
+  if (router.canDismiss()) {
+    router.dismiss();
     return;
   }
   router.replace(fallbackHref);

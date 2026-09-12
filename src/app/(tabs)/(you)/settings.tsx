@@ -1,231 +1,57 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, ScrollView, Alert, ActivityIndicator, StyleSheet, type LayoutChangeEvent } from 'react-native';
+import { View, Text, ScrollView, useWindowDimensions, StyleSheet } from 'react-native';
 import { TouchableOpacity } from 'react-native-gesture-handler';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as Application from 'expo-application';
-import * as Haptics from 'expo-haptics';
-import { CaretLeftIcon, TrashIcon } from '@/components/icons';
+import { CaretLeftIcon } from '@/components/icons';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
-import { performFullLocalReset } from '@/lib/full-reset';
 import { useCrossTabBack } from '@/hooks/useCrossTabBack';
-import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
-import { AppearanceSection } from '@/components/settings/AppearanceSection';
-import { RemindersSection } from '@/components/settings/RemindersSection';
-import { WritingStyleSection } from '@/components/settings/WritingStyleSection';
-import { SupportSection } from '@/components/settings/SupportSection';
-import { QaToolsSection } from '@/components/settings/QaToolsSection';
-import { SettingsSectionHeader, getSettingsCardStyle } from '@/components/settings/SettingsSectionHeader';
+import {
+  ProfileSettingsSections,
+  useSettingsSectionScroll,
+} from '@/components/settings/ProfileSettingsSections';
 
-// Shown when the best-effort server erase inside performFullLocalReset did
-// not confirm deletion (offline, timeout, server error). The device identity
-// has already been rotated, so the user cannot simply retry from this install.
-const SERVER_ERASE_NOT_CONFIRMED_TITLE = 'Server data not confirmed deleted';
-const SERVER_ERASE_NOT_CONFIRMED_MESSAGE =
-  "Your data was deleted from this device, but we couldn't confirm that your synced data was deleted from Unfold's servers. This device is no longer linked to it. If you'd like it removed, contact us from the Support section in Settings.";
-
-type SettingsSection = 'reminders' | 'appearance';
-
+/**
+ * Compatibility path for old settings links and section parameters.
+ * Profile now shows the same sections; this screen keeps a back caret for
+ * deep links and cross-tab pushes.
+ */
 export default function SettingsScreen() {
-  const router = useRouter();
+  const { fontScale } = useWindowDimensions();
   const { colors } = useTheme();
-  // Opened from the You tab's "Daily Reminders" / "Appearance" habit rows
-  // with a section param — scrolled into view below instead of landing on
-  // the top of the screen.
   const { section } = useLocalSearchParams<{ section?: string }>();
-  // Cross-tab entries (reader sheets) pass `from: 'bible' | 'home'` so back
-  // returns to the source tab; without a `from` param (opened from the You
-  // screen gear) this pops normally back to You.
   const { handleBack } = useCrossTabBack();
-
-  // Premium sheet state is owned here — sections request it via
-  // `onPremiumFeature` instead of owning their own sheet instances.
-  const [showPremiumSheet, setShowPremiumSheet] = useState(false);
-  const [premiumFeature, setPremiumFeature] = useState<'voice' | 'theme' | 'font' | 'general' | null>(null);
-  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
-
-  const scrollViewRef = useRef<ScrollView>(null);
-  const [sectionOffsets, setSectionOffsets] = useState<Partial<Record<SettingsSection, number>>>({});
-  const hasScrolledToSectionRef = useRef(false);
-
-  const handleSectionLayout = useCallback(
-    (target: SettingsSection) => (e: LayoutChangeEvent) => {
-      const y = e.nativeEvent.layout.y;
-      setSectionOffsets((prev) => (prev[target] === y ? prev : { ...prev, [target]: y }));
-    },
-    [],
-  );
-
-  // Scroll the requested section into view once its layout is known. Only
-  // runs once per mount so a later re-layout (e.g. keyboard) can't yank the
-  // scroll position back.
-  useEffect(() => {
-    if (hasScrolledToSectionRef.current) return;
-    const target: SettingsSection | undefined =
-      section === 'reminders' || section === 'appearance' ? section : undefined;
-    if (!target) return;
-    const y = sectionOffsets[target];
-    if (y === undefined) return;
-    hasScrolledToSectionRef.current = true;
-    scrollViewRef.current?.scrollTo({ y: Math.max(y - Spacing['4'], 0), animated: true });
-  }, [section, sectionOffsets]);
-
-  const handleResetData = async () => {
-    if (isDeletingAccount) return;
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    Alert.alert(
-      'Reset all data?',
-      'This will permanently delete all your devotionals, journal entries, and settings.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Continue',
-          onPress: () => {
-            Alert.alert(
-              'Are you absolutely sure?',
-              "This will permanently delete your data from this device and ask Unfold's servers to delete your synced data. This cannot be undone.",
-              [
-                { text: 'Go Back', style: 'cancel' },
-                {
-                  text: 'Delete Everything',
-                  style: 'destructive',
-                  onPress: async () => {
-                    setIsDeletingAccount(true);
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                    try {
-                      const { serverErase } = await performFullLocalReset();
-                      router.dismissAll();
-                      setTimeout(() => router.replace('/'), 50);
-                      if (!serverErase.ok) {
-                        // The local wipe is done either way; say so once the
-                        // welcome screen has replaced this stack.
-                        setTimeout(() => {
-                          Alert.alert(SERVER_ERASE_NOT_CONFIRMED_TITLE, SERVER_ERASE_NOT_CONFIRMED_MESSAGE);
-                        }, 600);
-                      }
-                    } finally {
-                      setIsDeletingAccount(false);
-                    }
-                  },
-                },
-              ]
-            );
-          },
-        },
-      ]
-    );
-  };
+  const { scrollViewRef, handleScrollLayout, handleSectionLayout } = useSettingsSectionScroll(section);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }} testID="settings-screen">
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        {/* Header — back chevron pattern from streak-settings.tsx */}
         <View style={styles.header}>
-          <TouchableOpacity activeOpacity={0.7} onPress={handleBack} style={styles.backButton} testID="settings-back-button" accessibilityLabel="Go back" accessibilityRole="button" hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={handleBack}
+            style={styles.backButton}
+            testID="settings-back-button"
+            accessibilityLabel="Go back"
+            accessibilityRole="button"
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
             <CaretLeftIcon size={24} color={colors.text} weight="light" />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>
-            Settings
-          </Text>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Settings</Text>
         </View>
 
         <ScrollView
+          key={fontScale}
           ref={scrollViewRef}
+          onLayout={handleScrollLayout}
           contentContainerStyle={{ paddingBottom: 100 }}
           showsVerticalScrollIndicator={false}
         >
-          <View style={{ paddingHorizontal: Spacing['6'] }}>
-            {/* Theme (light/dark/system) from AppearanceSection is also
-                surfaced as an "Appearance" row on the You profile's Habits
-                card — both read/write the same user.themeMode field. Accent
-                colors, reading font, and font size stay settings-only. */}
-            <View onLayout={handleSectionLayout('appearance')}>
-              <AppearanceSection onPremiumFeature={setPremiumFeature} />
-            </View>
-
-            {/* Midday check-in, evening wind-down, and daily reminders from
-                RemindersSection are also surfaced on the You profile's
-                Habits card (src/app/(tabs)/(you)/index.tsx) — same store
-                fields and paywall gate, no duplicated logic. */}
-            <View onLayout={handleSectionLayout('reminders')}>
-              <RemindersSection />
-            </View>
-
-            <WritingStyleSection />
-
-            <SupportSection />
-
-            <QaToolsSection />
-
-            {/* --- Data / Danger zone --- */}
-            <SettingsSectionHeader label="Data" />
-
-            <View style={getSettingsCardStyle(colors)}>
-              <TouchableOpacity activeOpacity={0.7} onPress={handleResetData} disabled={isDeletingAccount} accessibilityState={{ disabled: isDeletingAccount }}>
-                <View
-                  style={{
-                    paddingVertical: Spacing['3.5'],
-                    paddingHorizontal: Spacing['4'],
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    opacity: isDeletingAccount ? 0.6 : 1,
-                  }}
-                >
-                  {isDeletingAccount ? (
-                    <ActivityIndicator size="small" color={colors.error} />
-                  ) : (
-                    <TrashIcon size={20} color={colors.error} weight="light" />
-                  )}
-                  <Text
-                    style={{
-                      fontFamily: FontFamily.ui,
-                      fontSize: 15,
-                      color: colors.error,
-                      marginLeft: Spacing['3'],
-                    }}
-                  >
-                    {isDeletingAccount ? 'Resetting...' : 'Reset all data (deletes your account)'}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            </View>
-
-            {/* App info */}
-            <View style={{ marginTop: Spacing['12'], alignItems: 'center', marginBottom: Spacing['6'] }}>
-              <Text
-                style={{
-                  fontFamily: FontFamily.display,
-                  fontSize: 21,
-                  color: colors.textHint,
-                }}
-              >
-                Unfold
-              </Text>
-              <Text
-                style={{
-                  fontFamily: FontFamily.ui,
-                  fontSize: FontSize.xs,
-                  color: colors.textHint,
-                  marginTop: Spacing['1'],
-                }}
-              >
-                Version {Application.nativeApplicationVersion ?? '1.0.0'}
-              </Text>
-            </View>
-          </View>
+          <ProfileSettingsSections onSectionLayout={handleSectionLayout} />
         </ScrollView>
       </SafeAreaView>
-
-      <PremiumFeatureSheet
-        visible={!!premiumFeature || showPremiumSheet}
-        onClose={() => {
-          setPremiumFeature(null);
-          setShowPremiumSheet(false);
-        }}
-        feature={premiumFeature ?? 'general'}
-      />
     </View>
   );
 }
@@ -239,6 +65,9 @@ const styles = StyleSheet.create({
   },
   backButton: {
     padding: Spacing['2'],
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center',
   },
   headerTitle: {
     fontFamily: FontFamily.uiMedium,

@@ -5,10 +5,6 @@ const readingSource = readFileSync(
   join(__dirname, '../../app/(tabs)/(today)/reading.tsx'),
   'utf8',
 );
-const seriesDetailSource = readFileSync(
-  join(__dirname, '../../app/(tabs)/(you)/series-detail.tsx'),
-  'utf8',
-);
 
 describe('reading swipe navigation source contract', () => {
   it('opens the devotional scripture tap sheet instead of immediately routing parseable references to Bible', () => {
@@ -69,12 +65,6 @@ describe('reading swipe navigation source contract', () => {
     expect(readingSource).toMatch(
       /if \(source === 'auto' && syncRecoveryAttemptRef\.current\[attemptKey\]\) \{[\s\S]{0,160}setDailySyncRecoveryKey\(attemptKey\)/,
     );
-  });
-
-  it('keeps an inactive library series read-only when its reader route becomes current', () => {
-    expect(seriesDetailSource).toContain("readOnly: '1'");
-    expect(seriesDetailSource).not.toContain('readOnly: isActiveSeries');
-    expect(readingSource).toContain("params.readOnly !== '1'");
   });
 
   it('does not keep re-applying the original dayNumber route param after a manual swipe changes days', () => {

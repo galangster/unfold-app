@@ -1,3 +1,5 @@
+jest.mock('@/components/ProfileEntryButton', () => ({ ProfileEntryButton: () => null }));
+
 import React from 'react';
 import { canonicalGeneratedDayId } from '../devotional-canonical-days';
 import type { Devotional, DevotionalDay } from '../store';

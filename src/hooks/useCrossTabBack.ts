@@ -14,6 +14,7 @@ export const FROM_TO_ROUTE: Record<string, TabRootHref> = {
   journal: '/(tabs)/(journal)',
   bible: '/(tabs)/(bible)',
   you: '/(tabs)/(you)',
+  study: '/(tabs)/(study)',
 };
 
 export const FROM_TO_TAB: Record<string, TabGroupSegment> = {
@@ -21,6 +22,7 @@ export const FROM_TO_TAB: Record<string, TabGroupSegment> = {
   journal: '(journal)',
   bible: '(bible)',
   you: '(you)',
+  study: '(study)',
 };
 
 export function getCurrentTabFromSegments(segments: readonly string[]): string | undefined {

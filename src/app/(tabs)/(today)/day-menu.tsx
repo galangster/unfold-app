@@ -26,6 +26,7 @@ import {
   resolveInitialReadingDayNumber,
   type DayMenuPresentation,
 } from '@/lib/devotional-day-access';
+import { resolveStackRoute, type TabGroup } from '@/lib/tab-stack-routes';
 
 // Generic fallback shown under any locked day that doesn't carry its own
 // unlock date (e.g. content still being written).
@@ -35,13 +36,15 @@ const GENERIC_UNLOCK_LABEL = 'Unlocks as you continue your reading';
 // settles back to its resting opacity.
 const TAP_EMPHASIS_MS = 900;
 
-export default function DayMenuScreen() {
+export function DayMenuScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = {}) {
   const router = useRouter();
   const { colors } = useTheme();
   const reducedMotion = useReducedMotion();
   const params = useLocalSearchParams<{
     devotionalId: string;
     currentDay: string;
+    from?: string;
+    readOnly?: string;
   }>();
 
   const devotionals = useUnfoldStore((s) => s.devotionals);
@@ -87,11 +90,14 @@ export default function DayMenuScreen() {
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.replace({
-      pathname: '/(tabs)/(today)/reading',
+    // Reuse the reader below the sheet instead of stacking a second reader.
+    router.dismissTo({
+      pathname: resolveStackRoute(hostTab, 'reading'),
       params: {
         devotionalId: devotional.id,
         dayNumber: dayNumber.toString(),
+        ...(params.from ? { from: params.from } : {}),
+        ...(params.readOnly ? { readOnly: params.readOnly } : {}),
       },
     });
   };
@@ -165,6 +171,10 @@ export default function DayMenuScreen() {
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+export default function TodayDayMenuScreen() {
+  return <DayMenuScreen hostTab="(today)" />;
 }
 
 /** A single selectable/locked day row. Owns its own tap-emphasis animation

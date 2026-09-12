@@ -1,4 +1,11 @@
-import { goBackOr, tabRootFromSegments, type BackNavigator, type TabRootHref } from '../navigation';
+import {
+  dismissOr,
+  goBackOr,
+  tabRootFromSegments,
+  type BackNavigator,
+  type DismissNavigator,
+  type TabRootHref,
+} from '../navigation';
 
 /**
  * Records what a screen asked the router to do. `canGoBack` is the only input
@@ -62,6 +69,7 @@ describe('tabRootFromSegments', () => {
     expect(tabRootFromSegments(['(tabs)', '(bible)', 'search'])).toBe('/(tabs)/(bible)');
     expect(tabRootFromSegments(['(tabs)', '(you)', 'checkin-schedule'])).toBe('/(tabs)/(you)');
     expect(tabRootFromSegments(['(tabs)', '(ask)'])).toBe('/(tabs)/(ask)');
+    expect(tabRootFromSegments(['(tabs)', '(study)', 'past-devotionals'])).toBe('/(tabs)/(study)');
   });
 
   // The journal reflection screen is one component mounted twice — as
@@ -87,5 +95,37 @@ describe('tabRootFromSegments', () => {
 
   it('ignores a leaf segment that merely looks like a group', () => {
     expect(tabRootFromSegments(['(tabs)', '(modal)'])).toBe('/(tabs)/(today)');
+  });
+});
+
+describe('dismissOr', () => {
+  function fakeDismissRouter(canDismiss: boolean) {
+    const calls: string[] = [];
+    const router: DismissNavigator = {
+      canDismiss: () => canDismiss,
+      dismiss: () => {
+        calls.push('dismiss');
+      },
+      replace: (href: TabRootHref) => {
+        calls.push(`replace:${href}`);
+      },
+    };
+    return { router, calls };
+  }
+
+  it('dismisses when the modal has a screen under it', () => {
+    const { router, calls } = fakeDismissRouter(true);
+
+    dismissOr(router, '/(tabs)/(today)');
+
+    expect(calls).toEqual(['dismiss']);
+  });
+
+  it('replaces with Today when a cold-opened share-card cannot dismiss', () => {
+    const { router, calls } = fakeDismissRouter(false);
+
+    dismissOr(router, '/(tabs)/(today)');
+
+    expect(calls).toEqual(['replace:/(tabs)/(today)']);
   });
 });

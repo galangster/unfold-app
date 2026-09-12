@@ -109,6 +109,7 @@ export { SparkleIcon } from 'phosphor-react-native/src/icons/Sparkle';
 export { SpeakerHighIcon } from 'phosphor-react-native/src/icons/SpeakerHigh';
 export { StackIcon } from 'phosphor-react-native/src/icons/Stack';
 export { StarIcon } from 'phosphor-react-native/src/icons/Star';
+export { StepsIcon } from 'phosphor-react-native/src/icons/Steps';
 export { StopCircleIcon } from 'phosphor-react-native/src/icons/StopCircle';
 export { SunIcon } from 'phosphor-react-native/src/icons/Sun';
 export { SunDimIcon } from 'phosphor-react-native/src/icons/SunDim';

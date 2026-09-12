@@ -1,12 +1,11 @@
-# Settings information architecture — both entry points into Settings.
+# Settings information architecture — Profile is the settings destination.
 #
 # VERIFIES:
-#   1. Home → profile avatar → You screen → gear → Settings screen, and the
-#      Settings back button returns to You (You is NOT a labelled tab; it is
-#      reached only through the home avatar).
+#   1. Home → profile avatar → You screen already shows settings sections
+#      (no gear hop). Support ID is visible near the top.
 #   2. Bible reader → gear → reader preferences sheet → "All settings" row →
-#      the same Settings screen, and back from there returns to the Bible
-#      reader (the cross-tab back behaviour, `from: 'bible'`).
+#      the compatibility Settings screen, and back from there returns to the
+#      Bible reader (the cross-tab back behaviour, `from: 'bible'`).
 
 appId: com.unfoldapp.ios
 ---
@@ -22,18 +21,8 @@ appId: com.unfoldapp.ios
     id: "home-avatar-button"
 - assertVisible:
     id: "you-screen"
-
-- tapOn:
-    id: "you-settings-button"
-- assertVisible:
-    id: "settings-screen"
-
-- tapOn:
-    id: "settings-back-button"
-- assertVisible:
-    id: "you-screen"
-- assertNotVisible:
-    id: "settings-screen"
+- assertVisible: "Copy Support ID"
+- assertVisible: "Report a bug"
 
 # ── Path 2: Bible reader → preferences sheet → All settings ─────────────────
 - tapOn:

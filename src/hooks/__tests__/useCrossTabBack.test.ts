@@ -47,3 +47,20 @@ describe('Today alias back routing helpers', () => {
     expect(isCrossTabBackNavigation('you', ['(tabs)', '(you)', 'settings'])).toBe(false);
   });
 });
+
+describe('Study tab back routing', () => {
+  it('resolves the Study stack and leaves same-stack pops native', () => {
+    expect(getCurrentTabFromSegments(['(tabs)', '(study)', 'series-detail'])).toBe('(study)');
+    expect(isCrossTabBackNavigation('study', ['(tabs)', '(study)', 'past-devotionals'])).toBe(false);
+    expect(isCrossTabBackNavigation('home', ['(tabs)', '(study)', 'index'])).toBe(true);
+  });
+
+  it('returns a leftover Study-originated Today reader to the Study tab', () => {
+    expect(isCrossTabBackNavigation('study', ['(tabs)', '(today)', 'reading'])).toBe(true);
+  });
+
+  it('leaves a Study-hosted reader on the native Study stack', () => {
+    expect(isCrossTabBackNavigation('study', ['(tabs)', '(study)', 'reading'])).toBe(false);
+    expect(isCrossTabBackNavigation(undefined, ['(tabs)', '(study)', 'reading'])).toBe(false);
+  });
+});

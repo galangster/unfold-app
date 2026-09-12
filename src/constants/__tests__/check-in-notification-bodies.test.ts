@@ -1,10 +1,13 @@
 import {
   getEveningWindDownBody,
+  getEveningWindDownCopy,
   getMiddayCheckInBody,
+  getMiddayCheckInCopy,
   MIDDAY_MESSAGES,
   EVENING_MESSAGES,
 } from '../check-in-messages';
-import { truncateNotificationBody } from '@/lib/daily-reminder-content';
+import { MAX_NOTIFICATION_BODY, truncateNotificationBody } from '@/lib/daily-reminder-content';
+import { PRE_ROLL_DAYS } from '@/lib/check-in-schedule';
 
 // A fixed draw. These tests are about the fallback ORDER, not about which
 // entry the bag returns — variation-bag.test.ts owns that.
@@ -71,5 +74,35 @@ describe('getMiddayCheckInBody', () => {
 
   it('uses the generic pool when nothing about the day is known', () => {
     expect(MIDDAY_MESSAGES).toContain(getMiddayCheckInBody(null, null, V));
+  });
+
+  it('keeps the selected companion sentence in full on the card and truncates only the banner', () => {
+    const day = { companionNudge: LONG_ACT, checkInQuestion: 'Q?' };
+    const selected = getMiddayCheckInBody(day, 'Carry line', V);
+    const copy = getMiddayCheckInCopy(day, 'Carry line', V);
+
+    expect(selected).toBe(LONG_ACT);
+    expect(copy.body).toBe(truncateNotificationBody(LONG_ACT));
+    expect(copy.body.length).toBeLessThanOrEqual(MAX_NOTIFICATION_BODY);
+    expect(copy.body).not.toBe(selected);
+    expect(selected.startsWith(copy.body.replace(/…$/, ''))).toBe(true);
+  });
+});
+
+describe('notification copy limits', () => {
+  it('truncates the evening banner without changing the 14-day horizon', () => {
+    const selected = getEveningWindDownBody(
+      { title: 'The Unfinished House', act: LONG_ACT, eveningScriptureRef: 'Psalm 132:1-5' },
+      V,
+    );
+    const copy = getEveningWindDownCopy(
+      { title: 'The Unfinished House', act: LONG_ACT, eveningScriptureRef: 'Psalm 132:1-5' },
+      V,
+    );
+
+    expect(selected).toBe(LONG_ACT);
+    expect(copy.body).toBe(truncateNotificationBody(LONG_ACT));
+    expect(copy.body.length).toBeLessThanOrEqual(MAX_NOTIFICATION_BODY);
+    expect(PRE_ROLL_DAYS).toBe(14);
   });
 });

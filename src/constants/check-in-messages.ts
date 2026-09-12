@@ -503,10 +503,8 @@ export function getContentAwareEveningMessage(
 }
 
 /**
- * Body of the midday check-in notification. The companion nudge wins when
- * generation produced one (it names something from the reader's own life),
- * then the carry line of the day finished today, then the day's check-in
- * question, then a template that names the day, then the generic pool.
+ * Selected midday check-in sentence. The Companion card and the notification
+ * share this exact choice. Truncation belongs only on the OS banner.
  */
 export function getMiddayCheckInBody(
   day: DayContext | null | undefined,
@@ -514,29 +512,28 @@ export function getMiddayCheckInBody(
   variation: CopyVariation,
 ): string {
   const nudge = day?.companionNudge?.trim();
-  if (nudge) return truncateNotificationBody(nudge);
+  if (nudge) return nudge;
   const carry = carryLine?.trim();
-  if (carry) return truncateNotificationBody(carry);
-  return truncateNotificationBody(getContentAwareMiddayMessage(day, variation));
+  if (carry) return carry;
+  return getContentAwareMiddayMessage(day, variation);
 }
 
 /**
- * Body of the evening wind-down notification. The day's "act" is the one
- * thing the devotional asked the reader to do later, so it leads. Then the
- * evening scripture, then a template that names the day, then the pool.
+ * Selected evening wind-down sentence. Same choice as the notification.
+ * Truncation belongs only on the OS banner.
  */
 export function getEveningWindDownBody(
   day: DayContext | null | undefined,
   variation: CopyVariation,
 ): string {
   const act = day?.act?.trim();
-  if (act) return truncateNotificationBody(act);
+  if (act) return act;
   const ref = day?.eveningScriptureRef?.trim();
-  if (ref) return truncateNotificationBody(`Before rest, sit with ${ref} for a minute.`);
-  return truncateNotificationBody(getContentAwareEveningMessage(day, variation));
+  if (ref) return `Before rest, sit with ${ref} for a minute.`;
+  return getContentAwareEveningMessage(day, variation);
 }
 
-/** Title and body for one midday occurrence. */
+/** Title and truncated body for one midday notification occurrence. */
 export function getMiddayCheckInCopy(
   day: DayContext | null | undefined,
   carryLine: string | null | undefined,
@@ -544,17 +541,17 @@ export function getMiddayCheckInCopy(
 ): { title: string; body: string } {
   return {
     title: draw(MIDDAY_TITLES, variation, 'midday-title'),
-    body: getMiddayCheckInBody(day, carryLine, variation),
+    body: truncateNotificationBody(getMiddayCheckInBody(day, carryLine, variation)),
   };
 }
 
-/** Title and body for one evening occurrence. */
+/** Title and truncated body for one evening notification occurrence. */
 export function getEveningWindDownCopy(
   day: DayContext | null | undefined,
   variation: CopyVariation,
 ): { title: string; body: string } {
   return {
     title: draw(EVENING_TITLES, variation, 'evening-title'),
-    body: getEveningWindDownBody(day, variation),
+    body: truncateNotificationBody(getEveningWindDownBody(day, variation)),
   };
 }

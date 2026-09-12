@@ -26,6 +26,7 @@ import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, BibleHighlight, Devotional, Highlight } from '@/lib/store';
 import { BookmarkRow, SavedRow } from '@/components/saved/SavedRows';
 import { toBookmarkSavedItem, type SavedBookmarkItem } from '@/lib/saved-items';
+import { resolveStackRoute, type TabGroup } from '@/lib/tab-stack-routes';
 
 
 type Tab = 'highlights' | 'bookmarks';
@@ -56,7 +57,7 @@ type LibraryRow =
 
 const LIST_CONTENT_STYLE = { padding: Spacing['5'] } as const;
 
-export default function MyContentScreen() {
+export default function MyContentScreen({ hostTab }: { hostTab?: TabGroup } = {}) {
   const router = useRouter();
   const { colors, isDark } = useTheme();
   const reducedMotion = useReducedMotion();
@@ -171,7 +172,7 @@ export default function MyContentScreen() {
     if (item.source === 'devotional') {
       const h = item.raw as Highlight;
       router.push({
-        pathname: '/(tabs)/(today)/reading',
+        pathname: resolveStackRoute(hostTab, 'reading'),
         params: {
           devotionalId: h.devotionalId,
           dayNumber: h.dayNumber.toString(),
@@ -190,18 +191,18 @@ export default function MyContentScreen() {
         ...(item.kind === 'note' ? { openNote: 'true', noteId: b.id } : {}),
       },
     });
-  }, [router]);
+  }, [hostTab, router]);
 
   const handleBookmarkPress = useCallback((item: SavedBookmarkItem) => {
     router.push({
-      pathname: '/(tabs)/(today)/reading',
+      pathname: resolveStackRoute(hostTab, 'reading'),
       params: {
         devotionalId: item.raw.devotionalId,
         dayNumber: item.raw.dayNumber.toString(),
         bookmarkId: item.raw.id,
       },
     });
-  }, [router]);
+  }, [hostTab, router]);
 
   const devotionalById = useMemo(() => {
     const map = new Map<string, Devotional>();

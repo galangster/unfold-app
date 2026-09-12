@@ -49,6 +49,7 @@ describe('deep-link allowlist — legitimate producers', () => {
       'unfold://(tabs)/(bible)',
       'unfold://(tabs)/(ask)',
       'unfold://(tabs)/(journal)',
+      'unfold://(tabs)/(study)',
       'unfold://(tabs)/(you)',
       'unfold:///(tabs)/(today)/',
     ]) {
@@ -95,6 +96,14 @@ describe('deep-link allowlist — legitimate producers', () => {
     expectAllowed('unfold://my-content?tab=highlights&source=devotional&type=notes', '/my-content');
     expectAllowed('unfold://(tabs)/(today)/past-devotionals?from=home', '/past-devotionals');
     expectAllowed('unfold://(tabs)/(you)/series-detail?id=devotional-1725000000000-abc123xyz', '/series-detail');
+    expectAllowed('unfold://(tabs)/(you)/settings?section=reminders', '/settings');
+    expectAllowed('unfold://(tabs)/(you)/settings?section=appearance', '/settings');
+    expectRejected('unfold://(tabs)/(you)/settings?section=unknown', 'invalid-param');
+    expectAllowed(
+      'unfold://(tabs)/(study)/series-detail?id=devotional-1725000000000-abc123xyz&from=study',
+      '/series-detail',
+    );
+    expectAllowed('unfold://(tabs)/(study)/past-devotionals?from=study', '/past-devotionals');
   });
 
   it('accepts bible reader references and the search screen', () => {
@@ -140,6 +149,9 @@ describe('deep-link allowlist — rejections', () => {
     expectRejected('unfold:///series-reveal?intentId=abc', 'unknown-route');
     expectRejected('unfold://keepsake?devotionalId=abc', 'unknown-route');
     expectRejected('unfold://(tabs)/(today)/day-menu?devotionalId=abc&currentDay=1', 'blocked-route');
+    expectRejected('unfold://(tabs)/(study)/day-menu?devotionalId=abc&currentDay=1', 'blocked-route');
+    // `from` is in-app-only on the reader, exactly like `readOnly`.
+    expectRejected('unfold://reading?devotionalId=abc&dayNumber=2&from=study', 'unknown-param');
     for (const route of EXTERNAL_ROUTE_BLOCKLIST) {
       expect(EXTERNAL_ROUTE_ALLOWLIST).not.toHaveProperty(route);
     }

@@ -1,3 +1,5 @@
+jest.mock('@/components/ProfileEntryButton', () => ({ ProfileEntryButton: () => null }));
+
 /**
  * The Bible tab used to router.replace() into the reader on every mount,
  * so the book grid and search bar (search.tsx) were never reachable. This

@@ -56,8 +56,10 @@ interface FingerprintInputs {
   middayByDay: ByDay;
   eveningByDay: ByDay;
   hasCompletedOnboarding: boolean;
+  todayCarryLine: string;
   notificationPermissionEpoch: number;
   trialNoticeEpoch: number;
+  deviceTimezone: string;
 }
 
 function buildFingerprint(inputs: FingerprintInputs): string {
@@ -71,8 +73,10 @@ function buildFingerprint(inputs: FingerprintInputs): string {
     inputs.middayByDay,
     inputs.eveningByDay,
     inputs.hasCompletedOnboarding ? '1' : '0',
+    inputs.todayCarryLine,
     inputs.notificationPermissionEpoch,
     inputs.trialNoticeEpoch,
+    inputs.deviceTimezone,
   ]);
 }
 
@@ -85,8 +89,10 @@ const baseline: FingerprintInputs = {
   middayByDay: null,
   eveningByDay: null,
   hasCompletedOnboarding: true,
+  todayCarryLine: '',
   notificationPermissionEpoch: 0,
   trialNoticeEpoch: 0,
+  deviceTimezone: 'Pacific/Honolulu',
 };
 
 describe('useCheckInFingerprint — invariants', () => {
@@ -199,6 +205,18 @@ describe('useCheckInFingerprint — invariants', () => {
     it('changes when trialNoticeEpoch bumps', () => {
       const a = buildFingerprint(baseline);
       const b = buildFingerprint({ ...baseline, trialNoticeEpoch: 1 });
+      expect(a).not.toBe(b);
+    });
+
+    it('changes when todayCarryLine changes', () => {
+      const a = buildFingerprint(baseline);
+      const b = buildFingerprint({ ...baseline, todayCarryLine: 'Carry this: you are already home.' });
+      expect(a).not.toBe(b);
+    });
+
+    it('changes when deviceTimezone changes', () => {
+      const a = buildFingerprint(baseline);
+      const b = buildFingerprint({ ...baseline, deviceTimezone: 'America/New_York' });
       expect(a).not.toBe(b);
     });
 

@@ -12,6 +12,7 @@ import { buildBubblePath } from '@/lib/bubble-path';
 import { Radius } from '@/constants/radius';
 import { Shadow } from '@/constants/shadows';
 import { Spacing } from '@/constants/spacing';
+import { TAB_BAR_HORIZONTAL_PADDING, VISIBLE_TAB_GROUPS } from '@/lib/visible-tabs';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -64,7 +65,7 @@ const TOOLTIP_STEPS: TooltipStep[] = [
   },
   {
     title: 'Read, Ask & Write',
-    message: 'Bible, Companion, and Journal are always one tap away whenever you want to read, ask, or write.',
+    message: 'Devotional, Bible, Companion, and Journal are always one tap away whenever you want to continue a series, read, ask, or write.',
     targetKey: 'tabs',
     placement: 'above',
   },
@@ -119,19 +120,21 @@ const TOOLTIP_STROKE_WIDTH = 1;
 // ---------------------------------------------------------------------------
 
 const TAB_BAR_HEIGHT = 49;
-const TAB_BAR_PADDING_H = Spacing['6']; // matches _layout.tsx paddingHorizontal
 const TOOLTIP_ESTIMATED_HEIGHT = 130;
 
-/** Compute the Bible / Companion / Journal rect from the fixed bottom navigation. */
+/** Compute the non-Today tab rect from the shared visible-tab registry. */
 function computeTabBarRect(screenW: number, screenH: number, bottomInset: number): TargetRect {
-  const usableWidth = screenW - TAB_BAR_PADDING_H * 2;
-  const tabWidth = usableWidth / 4;
+  const visibleTabCount = VISIBLE_TAB_GROUPS.length;
+  const todayIndex = Math.max(VISIBLE_TAB_GROUPS.indexOf('(today)'), 0);
+  const usableWidth = screenW - TAB_BAR_HORIZONTAL_PADDING * 2;
+  const tabWidth = usableWidth / visibleTabCount;
   const tabBarTop = screenH - TAB_BAR_HEIGHT - bottomInset;
+  const spotlitCount = visibleTabCount - 1;
 
   return {
-    x: TAB_BAR_PADDING_H + tabWidth,
+    x: TAB_BAR_HORIZONTAL_PADDING + tabWidth * (todayIndex + 1),
     y: tabBarTop + 4,
-    width: tabWidth * 3,
+    width: tabWidth * spotlitCount,
     height: TAB_BAR_HEIGHT - 4,
   };
 }

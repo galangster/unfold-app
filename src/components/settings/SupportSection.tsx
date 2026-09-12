@@ -36,7 +36,7 @@ export function SupportSection() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (Platform.OS === 'ios') {
       try {
-        await Linking.openURL('https://apps.apple.com/app/id6746827498?action=write-review');
+        await Linking.openURL('https://apps.apple.com/app/id6760814444?action=write-review');
       } catch {}
     } else if (Platform.OS === 'android') {
       const bundleId = Constants.expoConfig?.android?.package ?? 'com.unfold.app';
@@ -65,26 +65,25 @@ export function SupportSection() {
     }
   };
 
-  const promptForBugReportNote = async (): Promise<string | undefined> => {
-    if (Platform.OS !== 'ios') return undefined;
-    return new Promise((resolve) => {
+  const promptForBugReportNote = (): Promise<string | undefined | null> =>
+    new Promise((resolve) => {
+      if (Platform.OS !== 'ios') {
+        Alert.alert('Send bug report?', 'Send diagnostics from this device to Unfold support.', [
+          { text: 'Cancel', style: 'cancel', onPress: () => resolve(null) },
+          { text: 'Send', onPress: () => resolve(undefined) },
+        ], { cancelable: true, onDismiss: () => resolve(null) });
+        return;
+      }
       Alert.prompt(
-        'What happened? (optional)',
-        'Add a short note so we have context (example: stuck on day 3 after tapping retry).',
+        'Report a bug',
+        'Send diagnostics to Unfold support. You can add a note about what happened.',
         [
-          { text: 'Skip', style: 'cancel', onPress: () => resolve(undefined) },
-          {
-            text: 'Send',
-            onPress: (value?: string) => {
-              const trimmed = value?.trim();
-              resolve(trimmed && trimmed.length > 0 ? trimmed : undefined);
-            },
-          },
+          { text: 'Cancel', style: 'cancel', onPress: () => resolve(null) },
+          { text: 'Send', onPress: (value?: string) => resolve(value?.trim() || undefined) },
         ],
-        'plain-text'
+        'plain-text',
       );
     });
-  };
 
   const sendBugReportEmail = async (payload: {
     source: string;
@@ -118,12 +117,12 @@ export function SupportSection() {
     }
   };
 
-  const handleReportBug = async () => {
+  const sendBugReport = async () => {
     if (isExportingData) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setIsExportingData(true);
     try {
       const note = await promptForBugReportNote();
+      if (note === null) return;
       void logBugEvent('profile', 'bug-report-export-requested', { hasNote: !!note });
       const { path, bundle, triageSummary } = await exportBugReportBundleToFile({ source: 'profile', note, label: note });
       const reportPayload = { triageSummary, ...bundle } as Record<string, unknown>;
@@ -165,82 +164,22 @@ export function SupportSection() {
     }
   };
 
+  const handleReportBug = () => {
+    if (isExportingData) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    return sendBugReport();
+  };
+
   return (
     <>
       <SettingsSectionHeader label="Support" />
 
       <View style={getSettingsCardStyle(colors)}>
-        {isPremium && (
-          <TouchableOpacity activeOpacity={0.7}
-            onPress={() => Linking.openURL('https://apps.apple.com/account/subscriptions')}
-            accessibilityRole="link"
-            accessibilityLabel="Manage Subscription"
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              padding: Spacing['4'],
-              borderBottomWidth: 1,
-              borderBottomColor: colors.border,
-            }}
-          >
-            <View
-              style={{
-                width: 36, height: 36, borderRadius: 10,
-                backgroundColor: colors.buttonBackground,
-                justifyContent: 'center', alignItems: 'center',
-              }}
-            >
-              <CreditCardIcon size={18} color={colors.text} weight="light" />
-            </View>
-            <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
-              <Text style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.text }}>
-                Manage Subscription
-              </Text>
-            </View>
-            <CaretRightIcon size={16} color={colors.textMuted} weight="light" />
-          </TouchableOpacity>
-        )}
-
-        <TouchableOpacity activeOpacity={0.7}
-          onPress={handleReportBug}
-          disabled={isExportingData}
-          accessibilityState={{ disabled: isExportingData }}
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            padding: Spacing['4'],
-            borderBottomWidth: 1,
-            borderBottomColor: colors.border,
-            opacity: isExportingData ? 0.6 : 1,
-          }}
-        >
-          <View
-            style={{
-              width: 36, height: 36, borderRadius: 10,
-              backgroundColor: colors.buttonBackground,
-              justifyContent: 'center', alignItems: 'center',
-            }}
-          >
-            {isExportingData ? (
-              <ActivityIndicator size="small" color={colors.accent} />
-            ) : (
-              <ChatDotsIcon size={18} color={colors.text} weight="light" />
-            )}
-          </View>
-          <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
-            <Text style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.text }}>
-              {isExportingData ? 'Sending report...' : 'Report a bug'}
-            </Text>
-            <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textMuted, marginTop: Spacing['0.5'] }}>
-              {isExportingData ? 'Please wait...' : 'Send diagnostics report'}
-            </Text>
-          </View>
-        </TouchableOpacity>
-
         <TouchableOpacity
           activeOpacity={0.7}
           onPress={handleCopySupportId}
           accessibilityRole="button"
+          testID="copy-support-id"
           accessibilityLabel="Copy Support ID"
           accessibilityHint="Copies the identifier used to find your subscription account."
           style={{
@@ -265,10 +204,82 @@ export function SupportSection() {
               Copy Support ID
             </Text>
             <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, lineHeight: 18, color: colors.textMuted, marginTop: Spacing['0.5'] }}>
-              For subscription support
+              For help with your account
             </Text>
           </View>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={handleReportBug}
+          disabled={isExportingData}
+          testID="report-a-bug"
+          accessibilityRole="button"
+          accessibilityLabel="Report a bug"
+          accessibilityState={{ disabled: isExportingData }}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            padding: Spacing['4'],
+            borderBottomWidth: 1,
+            borderBottomColor: colors.border,
+            opacity: isExportingData ? 0.6 : 1,
+          }}
+        >
+          <View
+            style={{
+              width: 36, height: 36, borderRadius: 10,
+              backgroundColor: colors.buttonBackground,
+              justifyContent: 'center', alignItems: 'center',
+            }}
+          >
+            {isExportingData ? (
+              <ActivityIndicator size="small" color={colors.accent} />
+            ) : (
+              <ChatDotsIcon size={18} color={colors.text} weight="light" />
+            )}
+          </View>
+          <View style={{ marginLeft: Spacing['3.5'], flex: 1, minWidth: 0 }}>
+            <Text style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.text }}>
+              {isExportingData ? 'Sending report...' : 'Report a bug'}
+            </Text>
+            <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textMuted, marginTop: Spacing['0.5'] }}>
+              {isExportingData ? 'Please wait...' : 'Send diagnostics report'}
+            </Text>
+          </View>
+        </TouchableOpacity>
+
+        {isPremium && (
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => Linking.openURL('https://apps.apple.com/account/subscriptions')}
+            accessibilityRole="link"
+            accessibilityLabel="Manage Subscription"
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              padding: Spacing['4'],
+              borderBottomWidth: 1,
+              borderBottomColor: colors.border,
+            }}
+          >
+            <View
+              style={{
+                width: 36, height: 36, borderRadius: 10,
+                backgroundColor: colors.buttonBackground,
+                justifyContent: 'center', alignItems: 'center',
+              }}
+            >
+              <CreditCardIcon size={18} color={colors.text} weight="light" />
+            </View>
+            <View style={{ marginLeft: Spacing['3.5'], flex: 1, minWidth: 0 }}>
+              <Text style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.text }}>
+                Manage Subscription
+              </Text>
+            </View>
+            <CaretRightIcon size={16} color={colors.textMuted} weight="light" />
+          </TouchableOpacity>
+        )}
 
         <TouchableOpacity activeOpacity={0.7}
           onPress={handleRateApp}

@@ -8,6 +8,7 @@ export const TRIAL_SERIES_FIXTURE_STATES = [
   'today-day2',
   'today-day2-read',
   'today-day3',
+  'today-day3-preparing',
   'today-lapsed-before-day3',
   'series-complete',
 ] as const;

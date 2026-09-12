@@ -35,7 +35,12 @@ import {
   isDevotionalDaySelectable,
 } from '@/lib/devotional-day-access';
 import { selectRenderableDevotionalDay } from '@/lib/devotional-canonical-days';
+import {
+  resolveStackRoute,
+  type TabGroup,
+} from '@/lib/tab-stack-routes';
 import { alpha } from '@/components/ui';
+import { ProfileEntryButton } from '@/components/ProfileEntryButton';
 
 // ── Sealed letter tease lines for locked days ──────────────────
 const SEALED_LINES = [
@@ -107,16 +112,59 @@ function BottomGlow({
   );
 }
 
+function DevotionalTabHeader({ onOpenPastSeries }: { onOpenPastSeries: () => void }) {
+  const { colors } = useTheme();
+  return (
+    <View style={[styles.header, styles.headerTabRoot]}>
+      <Text style={[styles.headerTitle, styles.headerTitleTabRoot, { color: colors.text }]}>
+        Devotional
+      </Text>
+      <View style={styles.headerActions}>
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={onOpenPastSeries}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityRole="button"
+          accessibilityLabel="Past series"
+          accessibilityHint="Opens your library of past and in-progress series"
+          style={styles.headerAction}
+        >
+          <Text style={[styles.headerActionLabel, { color: colors.accent }]}>
+            Past series
+          </Text>
+        </TouchableOpacity>
+        <ProfileEntryButton testID="study-profile-button" />
+      </View>
+    </View>
+  );
+}
+
 // ── Main screen ────────────────────────────────────────────────
 
-export default function SeriesDetailScreen() {
+export type SeriesArcChrome = 'stack' | 'tabRoot';
+
+interface SeriesArcScreenProps {
+  /** Tab stack this mount lives in. Static, from the route file. */
+  hostTab?: TabGroup;
+  /** 'tabRoot' drops the back caret and falls back to the current series. */
+  chrome?: SeriesArcChrome;
+}
+
+export function SeriesArcScreen({ hostTab, chrome = 'stack' }: SeriesArcScreenProps = {}) {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id: paramId } = useLocalSearchParams<{ id?: string }>();
   const { colors } = useTheme();
   const reducedMotion = useReducedMotion();
   const { handleBack } = useCrossTabBack();
   const devotionals = useUnfoldStore((s) => s.devotionals);
-  const setCurrentDevotional = useUnfoldStore((s) => s.setCurrentDevotional);
+  const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
+
+  // A tab root receives no params. Every stack mount is pushed with an id
+  // (past-devotionals' handleSelectDevotional is the sole in-app producer;
+  // deep-link-allowlist.ts marks id required on /series-detail), so the
+  // fallback is gated to the tab root and can never mask a genuine
+  // "not found" in the stack mounts.
+  const id = paramId ?? (chrome === 'tabRoot' ? currentDevotionalId : undefined);
 
   const devotional = useMemo(
     () => devotionals.find((d) => d.id === id) ?? null,
@@ -151,27 +199,66 @@ export default function SeriesDetailScreen() {
     [devotional, now],
   );
 
+  const openPastSeries = useCallback(() => {
+    router.push({
+      pathname: resolveStackRoute('(study)', 'past-devotionals'),
+      params: { from: 'study' },
+    });
+  }, [router]);
+
   const handleDayPress = useCallback(
     (dayNumber: number) => {
       if (!devotional) return;
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      setCurrentDevotional(devotional.id);
+      // Viewing a series is not activating it. currentDevotionalId stays the
+      // live series so history cannot steal Today or background generation.
       router.push({
-        pathname: '/(tabs)/(today)/reading',
-        // Pass the id explicitly rather than relying on the store write above —
-        // the reader honours ?devotionalId and the user may hold several series.
+        pathname: resolveStackRoute(hostTab, 'reading'),
         params: {
           devotionalId: devotional.id,
           dayNumber: String(dayNumber),
-          // The mobile store tracks reader selection, not server-side series
-          // activity. Library detail entry therefore stays read-only even
-          // after selecting it changes currentDevotionalId.
-          readOnly: '1',
+          // readOnly only blocks missing-day generation. Stack mounts are
+          // library / history; the tab-root current series may recover.
+          ...(chrome !== 'tabRoot' ? { readOnly: '1' } : {}),
         },
       });
     },
-    [devotional, setCurrentDevotional, router],
+    [devotional, router, hostTab, chrome],
   );
+
+  if (!devotional && chrome === 'tabRoot') {
+    // A tab root has nothing to pop, and nothing to apologise for: the user
+    // simply has no study running. Create Series stays Today's hero (it carries
+    // a premium gate and an archive confirmation there), so this points at it
+    // rather than forking it.
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+          <DevotionalTabHeader onOpenPastSeries={openPastSeries} />
+          <View style={styles.emptyState}>
+            <Text style={[styles.seriesTitle, { color: colors.text }]}>
+              No series in progress.
+            </Text>
+            <Text style={[styles.emptyBody, { color: colors.textMuted }]}>
+              Begin a series on Today and its whole arc appears here.
+            </Text>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => router.navigate('/(tabs)/(today)')}
+              accessibilityRole="button"
+              accessibilityLabel="Go to Today"
+              accessibilityHint="Opens the Today tab, where a new series begins"
+              style={[styles.emptyCta, { backgroundColor: colors.accent }]}
+            >
+              <Text style={[styles.emptyCtaLabel, { color: colors.background }]}>
+                Go to Today
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </View>
+    );
+  }
 
   if (!devotional) {
     return (
@@ -201,19 +288,23 @@ export default function SeriesDetailScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={handleBack}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            style={styles.backButton}
-          >
-            <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>
-            Devotional Details
-          </Text>
-        </View>
+        {chrome === 'tabRoot' ? (
+          <DevotionalTabHeader onOpenPastSeries={openPastSeries} />
+        ) : (
+          <View style={styles.header}>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={handleBack}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              style={styles.backButton}
+            >
+              <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
+            </TouchableOpacity>
+            <Text style={[styles.headerTitle, { color: colors.text }]}>
+              Devotional Details
+            </Text>
+          </View>
+        )}
 
         <ScrollView
           showsVerticalScrollIndicator={false}
@@ -465,6 +556,15 @@ export default function SeriesDetailScreen() {
   );
 }
 
+/**
+ * Default export = the plain stack mount. The (today) and (you) route files
+ * re-export this. Study and Today pass hostTab from their route files.
+ * A named export beside a route default has precedent in (today)/reading.tsx.
+ */
+export default function SeriesDetailScreen() {
+  return <SeriesArcScreen />;
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -482,6 +582,56 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.uiMedium,
     fontSize: FontSize.base,
     marginLeft: Spacing['2'],
+  },
+  // A tab root has no back caret, so the row keeps the stack header's height
+  // (24pt icon + Spacing['2'] padding) explicitly instead of collapsing to the
+  // title's line box.
+  headerTabRoot: {
+    minHeight: 64,
+    justifyContent: 'space-between',
+  },
+  // headerTitle's marginLeft Spacing['2'] on top of the row's Spacing['4'] puts
+  // the title at 24pt — flush with scrollContent's Spacing['6'] gutter below.
+  // flex: 1 pushes the trailing action to the right edge.
+  headerTitleTabRoot: {
+    flex: 1,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerAction: {
+    paddingVertical: Spacing['2'],
+    paddingLeft: Spacing['3'],
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  headerActionLabel: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: FontSize.sm,
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: Spacing['6'],
+    paddingBottom: 120,
+  },
+  emptyBody: {
+    fontFamily: FontFamily.body,
+    fontSize: FontSize.base,
+    lineHeight: FontSize.base * 1.55,
+    marginBottom: Spacing['6'],
+  },
+  emptyCta: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: Spacing['6'],
+    paddingVertical: Spacing['3'],
+    borderRadius: Radius.full,
+  },
+  emptyCtaLabel: {
+    fontFamily: FontFamily.uiSemiBold,
+    fontSize: FontSize.sm,
+    letterSpacing: 0.2,
   },
   scrollContent: {
     paddingHorizontal: Spacing['6'],

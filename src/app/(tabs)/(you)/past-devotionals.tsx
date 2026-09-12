@@ -28,6 +28,7 @@ import { Typography } from '@/constants/typography';
 import { alpha } from '@/components/ui';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, Devotional } from '@/lib/store';
+import { resolveStackRoute, type TabGroup } from '@/lib/tab-stack-routes';
 import { format } from 'date-fns';
 import { exportDevotionalToPDF, isPDFExportSupported } from '@/lib/pdf-export';
 
@@ -536,7 +537,7 @@ const LIST_CONTENT_STYLE = {
   paddingBottom: 100,
 } as const;
 
-export default function PastDevotionalsScreen() {
+export function PastSeriesLibraryScreen({ hostTab }: { hostTab?: TabGroup } = {}) {
   const router = useRouter();
   const { handleBack, isFromHome } = useCrossTabBack();
   const { colors } = useTheme();
@@ -614,10 +615,16 @@ export default function PastDevotionalsScreen() {
   const handleSelectDevotional = useCallback((id: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.push({
-      pathname: isFromHome ? '/(tabs)/(today)/series-detail' : '/(tabs)/(you)/series-detail',
+      // A Study mount always supplies its host, so a Study visitor can never
+      // fall to the (you) arm and land in the href:null stack.
+      pathname: hostTab
+        ? resolveStackRoute(hostTab, 'series-detail')
+        : isFromHome
+          ? '/(tabs)/(today)/series-detail'
+          : '/(tabs)/(you)/series-detail',
       params: { id },
     });
-  }, [isFromHome, router]);
+  }, [hostTab, isFromHome, router]);
 
   const handleExportPDF = useCallback(async (devotional: Devotional) => {
     if (exportingId) return;
@@ -885,6 +892,14 @@ export default function PastDevotionalsScreen() {
       </SafeAreaView>
     </View>
   );
+}
+
+/**
+ * Default export = the plain stack mount (no host tab). (today) and (you)
+ * re-export this; the Study mount uses the named export and supplies its host.
+ */
+export default function PastDevotionalsScreen() {
+  return <PastSeriesLibraryScreen />;
 }
 
 // ============================================================================

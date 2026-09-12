@@ -36,6 +36,10 @@ function build(overrides: Partial<Parameters<typeof buildCheckInSchedule>[0]> = 
 const hhmm = (o: CheckInOccurrence) => `${o.date.getHours()}:${`${o.date.getMinutes()}`.padStart(2, '0')}`;
 
 describe('buildCheckInSchedule — uniform mode', () => {
+  it('keeps the confirmed 14-day pre-roll horizon', () => {
+    expect(PRE_ROLL_DAYS).toBe(14);
+  });
+
   it('pre-rolls one dated occurrence per day across the horizon', () => {
     const ops = build();
     expect(ops).toHaveLength(PRE_ROLL_DAYS);

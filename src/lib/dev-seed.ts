@@ -49,6 +49,7 @@ const FIXTURE_PLAN: Partial<Record<TrialSeriesFixtureState, {
   'today-day2': { dayOffset: 1, readThroughDay: 1, includeDay3: true },
   'today-day2-read': { dayOffset: 1, readThroughDay: 2, includeDay3: true },
   'today-day3': { dayOffset: 2, readThroughDay: 2, includeDay3: true },
+  'today-day3-preparing': { dayOffset: 2, readThroughDay: 2, includeDay3: false },
   'today-lapsed-before-day3': { dayOffset: 2, readThroughDay: 2, includeDay3: false },
   'series-complete': { dayOffset: 2, readThroughDay: 3, includeDay3: true },
 };

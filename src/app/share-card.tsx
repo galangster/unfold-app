@@ -35,6 +35,7 @@ import { Radius } from '@/constants/radius';
 import { Duration, Ease } from '@/constants/animations';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
+import { dismissOr } from '@/lib/navigation';
 import { logger } from '@/lib/logger';
 import { canUsePremiumFeature } from '@/lib/premium-access-helpers';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
@@ -410,7 +411,7 @@ export default function ShareCardScreen() {
       <View style={[s.header, { paddingTop: insets.top + 8 }]}>
         <TouchableOpacity
           activeOpacity={0.6}
-          onPress={() => router.dismiss()}
+          onPress={() => dismissOr(router, '/(tabs)/(today)')}
           hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
           style={s.closeButton}
           accessibilityLabel="Close share card"

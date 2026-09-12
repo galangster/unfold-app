@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Tabs, useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { StyleSheet, Platform, View, TouchableOpacity, Text } from 'react-native';
-import { HouseIcon, BookBookmarkIcon, BookOpenIcon, UserIcon, ChatCircleIcon } from '@/components/icons';
+import { HouseIcon, BookBookmarkIcon, BookOpenIcon, UserIcon, ChatCircleIcon, StepsIcon } from '@/components/icons';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -22,6 +22,7 @@ import { Spacing } from '@/constants/spacing';
 import { useUIState } from '@/lib/ui-state';
 import { useAudioPlayerState } from '@/lib/audio-player-state';
 import { getNoteDraftDockOffset, useNoteDraftDock } from '@/lib/note-draft-dock';
+import { TAB_BAR_HORIZONTAL_PADDING, titleForVisibleTab } from '@/lib/visible-tabs';
 // Expo Router owns its tab navigator types in SDK 56+. Use structural typing
 // here so this custom tab bar stays decoupled from router internals.
 type TabBarProps = {
@@ -268,7 +269,7 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
           flexDirection: 'row',
           paddingTop: Spacing['2'],
           paddingBottom: Math.max(insets.bottom, 8),
-          paddingHorizontal: Spacing['6'],
+          paddingHorizontal: TAB_BAR_HORIZONTAL_PADDING,
           // Dark matches colors.background exactly; light matches colors.backgroundPure.
           backgroundColor: Platform.OS === 'ios'
             ? 'transparent'
@@ -290,15 +291,7 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
           const label =
             typeof options.title === 'string'
               ? options.title
-              : route.name === '(today)'
-                ? 'Today'
-                : route.name === '(bible)'
-                  ? 'Bible'
-                  : route.name === '(ask)'
-                    ? 'Companion'
-                    : route.name === '(journal)'
-                      ? 'Journal'
-                      : 'You';
+              : titleForVisibleTab(route.name) ?? 'You';
 
           const onPress = () => {
             const event = navigation.emit({
@@ -308,11 +301,13 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
             });
 
             if (!event.defaultPrevented) {
-              if (!isFocused) {
-                navigation.navigate(route.name, route.params);
-              } else {
-                // Already on this tab — pop to root (e.g., reading → home)
+              // Today always returns to its root in one tap, including when a
+              // reader is sitting in an inactive Today stack. Other tabs keep
+              // their stacks until the already-active tab is tapped again.
+              if (route.name === '(today)' || isFocused) {
                 navigation.navigate(route.name, { screen: 'index' });
+              } else {
+                navigation.navigate(route.name, route.params);
               }
 
               // Auto-collapse audio player to pill on tab switch
@@ -345,6 +340,8 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
                 return <ChatCircleIcon {...iconProps} />;
               case '(journal)':
                 return <BookOpenIcon {...iconProps} />;
+              case '(study)':
+                return <StepsIcon {...iconProps} />;
               case '(you)':
                 return <UserIcon {...iconProps} />;
               default:
@@ -368,6 +365,7 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
                 flex: 1,
                 alignItems: 'center',
                 justifyContent: 'center',
+                minHeight: 44,
                 paddingVertical: 2,
               }}
             >
@@ -420,24 +418,35 @@ export default function TabLayout() {
           name="(today)"
           options={{
             title: 'Today',
+            tabBarAccessibilityLabel: 'Today',
+          }}
+        />
+        <Tabs.Screen
+          name="(study)"
+          options={{
+            title: 'Devotional',
+            tabBarAccessibilityLabel: 'Devotional',
           }}
         />
         <Tabs.Screen
           name="(bible)"
           options={{
             title: 'Bible',
+            tabBarAccessibilityLabel: 'Bible',
           }}
         />
         <Tabs.Screen
           name="(ask)"
           options={{
             title: 'Companion',
+            tabBarAccessibilityLabel: 'Companion',
           }}
         />
         <Tabs.Screen
           name="(journal)"
           options={{
             title: 'Journal',
+            tabBarAccessibilityLabel: 'Journal',
           }}
         />
         <Tabs.Screen
