@@ -36,8 +36,13 @@ jest.mock('@/lib/scripture-practice', () => ({
   getPracticePassage: (reference: string) => mockGetPracticePassage(reference),
 }));
 
+
 jest.mock('@/lib/qa-tools', () => ({
   isQaToolsEnabled: () => true,
+}));
+
+jest.mock('@/lib/scripture-practice-feature', () => ({
+  isScripturePracticeEnabled: () => true,
 }));
 
 jest.mock('@/lib/store', () => ({
@@ -114,6 +119,7 @@ function renderSheet(props: Partial<ScripturePracticeSheetProps> = {}) {
       day={day()}
       onChangeMethod={jest.fn()}
       onClose={jest.fn()}
+      onOpenSamples={jest.fn()}
       onSkipPractice={jest.fn()}
       onOpenBible={jest.fn()}
       {...props}
@@ -322,6 +328,7 @@ describe('ScripturePracticeSheet', () => {
           day={day({ scriptureReference: 'Psalm 23:1' })}
           onChangeMethod={jest.fn()}
           onClose={jest.fn()}
+          onOpenSamples={jest.fn()}
           onSkipPractice={jest.fn()}
           onOpenBible={jest.fn()}
         />,
@@ -367,6 +374,7 @@ describe('ScripturePracticeSheet', () => {
           day={day()}
           onChangeMethod={jest.fn()}
           onClose={jest.fn()}
+          onOpenSamples={jest.fn()}
           onSkipPractice={jest.fn()}
           onOpenBible={jest.fn()}
         />,
@@ -375,5 +383,33 @@ describe('ScripturePracticeSheet', () => {
     expect(tree!.root.findByType(TextInput).props.value).toBe('Preview draft');
     const picker = tree!.root.findByProps({ testID: 'scripture-practice-qa-picker' });
     expect(picker.props.accessibilityLabel).toContain('Does not change the assigned day method');
+  });
+
+  it('delegates sample navigation without closing or changing the practice', async () => {
+    const onClose = jest.fn();
+    const onOpenSamples = jest.fn();
+    mockUpdateScripturePractice.sessions['devo-1:2:inductive_oia'] = {
+      step: 0,
+      answers: { observe: 'Keep this practice note' },
+      completed: false,
+      readingMode: 'physical',
+    };
+    let tree: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderSheet({ onClose, onOpenSamples });
+    });
+    expect(tree!.root.findByType(TextInput).props.value).toBe('Keep this practice note');
+    const entry = tree!.root.findByProps({ testID: 'scripture-practice-qa-method-readings' });
+    expect(entry.props.accessibilityLabel).toContain('Explore sample readings');
+    expect(entry.props.accessibilityLabel).toContain('Does not change this day');
+    await act(async () => {
+      entry.props.onPress();
+    });
+    expect(onOpenSamples).toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(mockUpdateScripturePractice).not.toHaveBeenCalled();
+    expect(mockUpdateScripturePractice.sessions['devo-1:2:inductive_oia']?.answers.observe).toBe(
+      'Keep this practice note',
+    );
   });
 });

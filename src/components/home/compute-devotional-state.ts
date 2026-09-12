@@ -25,6 +25,7 @@ export type DevotionalCardState =
   | { type: 'empty'; onCreateNew: () => void }
   | { type: 'preparing'; progress: number; seriesTitle: string; dayNumber: number; onCreateNew: () => void; recovery?: DailyRecoveryCardState }
   | { type: 'first-series-failed'; message: string; onTryAgain: () => void; onDismiss: () => void }
+  | { type: 'pending-initial-resume'; onResume: () => void }
   | {
       type: 'premium-paused';
       seriesTitle: string;
@@ -120,6 +121,11 @@ export interface ComputeInput {
    * card that would say nothing about it.
    */
   inflightSeriesFailed?: { message: string; onTryAgain: () => void; onDismiss: () => void } | null;
+  /**
+   * The first-series request survived a close before a job record landed.
+   * Today stays put so Profile remains reachable; the card offers resume.
+   */
+  pendingInitialResume?: { onResume: () => void } | null;
   premiumPolicy: PremiumAccessPolicy;
   daysCompleted: number;
   totalDays: number;
@@ -168,6 +174,7 @@ export function findMostRecentlyReadDay(days: readonly DevotionalDay[]): Devotio
  * Priority order (first match wins):
  * 0. In-flight series not in the store yet  -> preparing (day 1)
  * 0. In-flight series failed                -> first-series-failed
+ * 0. Pending first-series request, no job, no readable series -> pending-initial-resume
  * 1. No devotional                          -> empty
  * 2. !hasReadToday && (preparing/no data)   -> preparing
  * 3. No day data (fallback)                 -> preparing
@@ -189,6 +196,7 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
     dailyRecovery = null,
     preparingInflightSeries = null,
     inflightSeriesFailed = null,
+    pendingInitialResume = null,
     premiumPolicy,
     daysCompleted,
     totalDays,
@@ -223,6 +231,9 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
   }
   if (inflightSeriesFailed) {
     return { type: 'first-series-failed', ...inflightSeriesFailed };
+  }
+  if (pendingInitialResume && !currentDevotional) {
+    return { type: 'pending-initial-resume', onResume: pendingInitialResume.onResume };
   }
 
   // 1. No devotional at all.

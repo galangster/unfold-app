@@ -402,7 +402,7 @@ describe('regression: Jordan item 6 — Go home from /generating', () => {
     mounted.push(tree);
     expect(mockSubmitGenerationJob).toHaveBeenCalled();
 
-    await press(tree, GO_HOME_LABEL);
+    await press(tree, 'Go home');
 
     await act(async () => {
       submit.resolve({ jobId: 'job-late', devotionalId: 'devo-late' });

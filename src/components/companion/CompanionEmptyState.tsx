@@ -31,6 +31,7 @@ import { Radius } from '@/constants/radius';
 import { Duration, Ease } from '@/constants/animations';
 import { Spacing } from '@/constants/spacing';
 import { useUnfoldStore } from '@/lib/store';
+import { COMPANION_EMPTY_STATE_AI_NOTE } from '@/lib/support-clarity';
 
 const EASE_OUT = Easing.out(Easing.cubic);
 
@@ -243,6 +244,24 @@ export function CompanionEmptyState({ onSelectStarter, todayTheme }: Props) {
             }}
           >
             Explore Scripture together, pray, or just talk through what’s on your mind.
+          </Text>
+        </FadeSlideIn>
+
+        <FadeSlideIn delay={420} translateY={6}>
+          <Text
+            style={{
+              fontFamily: FontFamily.ui,
+              fontSize: FontSize.sm,
+              color: colors.textSubtle,
+              textAlign: 'center',
+              maxWidth: 300,
+              alignSelf: 'center',
+              marginTop: Spacing['3'],
+              lineHeight: 20,
+              flexShrink: 1,
+            }}
+          >
+            {COMPANION_EMPTY_STATE_AI_NOTE}
           </Text>
         </FadeSlideIn>
 

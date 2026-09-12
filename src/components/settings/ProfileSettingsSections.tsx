@@ -15,6 +15,7 @@ import { RemindersSection } from '@/components/settings/RemindersSection';
 import { WritingStyleSection } from '@/components/settings/WritingStyleSection';
 import { SupportSection } from '@/components/settings/SupportSection';
 import { QaToolsSection } from '@/components/settings/QaToolsSection';
+import { PersonalContextSection } from '@/components/settings/PersonalContextSection';
 import { SettingsSectionHeader, getSettingsCardStyle } from '@/components/settings/SettingsSectionHeader';
 
 const SERVER_ERASE_NOT_CONFIRMED_TITLE = 'Server data not confirmed deleted';
@@ -122,6 +123,10 @@ export function ProfileSettingsSections({ onSectionLayout }: ProfileSettingsSect
 
   return (
     <>
+      <View style={styles.sectionBlock}>
+        <PersonalContextSection />
+      </View>
+
       <View style={styles.sectionBlock}>
         <SupportSection />
       </View>

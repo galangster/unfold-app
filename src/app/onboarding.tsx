@@ -151,6 +151,8 @@ import {
   transitionAutoTrialIntent,
 } from '@/lib/auto-trial-intent';
 import { runOnboardingCompletion } from '@/lib/onboarding-completion';
+import { ensureInitialGenerationRequestId } from '@/lib/initial-generation-request';
+import { resolveCompanionDisplayName, resolveCompanionNameToPersist } from '@/lib/support-clarity';
 import { runOnboardingPurchaseSuccess } from '@/lib/onboarding-purchase-success';
 import { runReminderTimeCommit } from '@/lib/reminder-time-commit';
 import { askNotificationPermissionInContext } from '@/lib/notification-ask';
@@ -657,7 +659,9 @@ export default function OnboardingScreen() {
   const onboardingDeviceIdRef = useRef<string | null>(null);
 
   // Companion naming state (saved to store on continue)
-  const [companionNameInput, setCompanionNameInput] = useState('');
+  const [companionNameInput, setCompanionNameInput] = useState(() =>
+    resolveCompanionDisplayName(existingUser?.companionName, useUnfoldStore.getState().companionName) ?? '',
+  );
 
   // RT-ONB-1: the name field is uncontrolled (defaultValue) so React never
   // writes back into the native field mid-typing; commitName is the single
@@ -906,6 +910,8 @@ export default function OnboardingScreen() {
   // times were dropped the same way).
   const dataRef = useRef(data);
   dataRef.current = data;
+  const companionNameInputRef = useRef(companionNameInput);
+  companionNameInputRef.current = companionNameInput;
 
   const onboardingMountedRef = useRef(true);
   useEffect(() => {
@@ -1366,11 +1372,13 @@ export default function OnboardingScreen() {
     const pendingAuth = pendingAuthDataRef.current ?? {};
     // Read through the ref, never the closure — see dataRef above.
     const data = dataRef.current;
+    const companionName = resolveCompanionNameToPersist(companionNameInputRef.current);
 
     if (existingUser) {
       updateUser({
         name: data.name,
         aboutMe: data.aboutMe,
+        companionName,
         currentSituation: data.currentSituation,
         emotionalState: '',
         faithImpact: '',
@@ -1398,10 +1406,12 @@ export default function OnboardingScreen() {
         ...pendingAuth,
         ...(isPrem ? { isPremium: true } : {}),
       });
+      setCompanionName(companionName);
     } else {
       setUser({
         name: data.name,
         aboutMe: data.aboutMe,
+        companionName,
         personaTraits: [],
         currentSituation: data.currentSituation,
         emotionalState: '',
@@ -1437,8 +1447,9 @@ export default function OnboardingScreen() {
         mirrorCorrection: data.mirrorCorrection || undefined,
         ...pendingAuth,
       });
+      setCompanionName(companionName);
     }
-  }, [data, existingUser, updateUser, setUser, purchasedDuringOnboarding]);
+  }, [data, existingUser, updateUser, setUser, setCompanionName, purchasedDuringOnboarding]);
 
   const retireDraftAutosave = useCallback(() => {
     draftRetiredRef.current = true;
@@ -1454,6 +1465,9 @@ export default function OnboardingScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const intent = readAutoTrialIntent();
     const mode = autoTrialMode && intent?.status === 'purchased' ? 'auto_trial' : 'generated';
+    if (mode === 'generated') {
+      ensureInitialGenerationRequestId();
+    }
     void runOnboardingCompletion(completionStateRef.current, mode, {
       retireDraftAutosave,
       clearSampleJob: () => {
@@ -1735,8 +1749,7 @@ export default function OnboardingScreen() {
 
     // Save companion name when leaving the feature summary step (companion naming is inside the carousel)
     if (currentStepId === 'featureSummary') {
-      const trimmed = companionNameInput.trim();
-      setCompanionName(trimmed.length > 0 ? trimmed : null);
+      setCompanionName(resolveCompanionNameToPersist(companionNameInput));
     }
 
     // Dismiss keyboard first to prevent layout shift during animation
@@ -3748,7 +3761,9 @@ export default function OnboardingScreen() {
           onPageChange={setFeatureSummaryPage}
           onComplete={() => {
             setFeatureSummaryPage(0);
-            updateUser({ companionName: companionNameInput.trim() || 'Grace' });
+            const companionName = resolveCompanionNameToPersist(companionNameInput);
+            updateUser({ companionName });
+            setCompanionName(companionName);
             advanceToNextStep();
           }}
         />

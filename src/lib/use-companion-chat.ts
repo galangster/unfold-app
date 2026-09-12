@@ -24,6 +24,7 @@ import { parseDeepLinks } from './parse-deep-links';
 import { generateConversationTitle } from './companion-service';
 import { companionReplyAnnouncement } from '@/lib/companion-announcements';
 import { pickRegenerateTarget } from './companion-regenerate';
+import { resolveCompanionDisplayName } from '@/lib/support-clarity';
 
 /**
  * WR-20: screen-reader users get no signal when a reply lands — the list
@@ -334,7 +335,9 @@ export function useCompanionChat() {
 
   // Phase 4: Gather user context
   const userName = useUnfoldStore((s) => s.user?.name ?? null);
-  const companionName = useUnfoldStore((s) => s.companionName);
+  const companionName = useUnfoldStore((s) =>
+    resolveCompanionDisplayName(s.user?.companionName, s.companionName),
+  );
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const streakDays = useUnfoldStore((s) => s.streakCurrent);

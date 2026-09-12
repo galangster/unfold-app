@@ -82,6 +82,7 @@ import { GlassSurface } from '@/components/ui/GlassSurface';
 import { useAutoTrialGeneration } from '@/hooks/useAutoTrialGeneration';
 import { readAutoTrialIntent } from '@/lib/auto-trial-intent';
 import { resolveGeneratingEntry } from '@/lib/generating-entry';
+import { resolveGeneratingCloseCopy, resolveGeneratingGoHomeLabel } from '@/lib/support-clarity';
 import { resolveGeneratingPalette } from '@/lib/generating-palette';
 import { canRetrySeriesReveal, type SeriesRevealState } from '@/lib/series-reveal-machine';
 import { askNotificationPermissionInContext } from '@/lib/notification-ask';
@@ -297,26 +298,28 @@ export default function GeneratingScreen() {
   }, [autoSetUpSeries, autoState, autoTrialHandoffId]);
   const notificationPromptTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Prevent swipe-back during generation; re-enable on error.
+  // Prevent swipe-back during generation. Error swipe is safe only after
+  // beforeRemove clears a stale request ID.
   useEffect(() => {
     navigation.setOptions({ gestureEnabled: !!error });
   }, [navigation, error]);
 
-  // Block deep-link / external navigation while generation is in progress.
   useEffect(() => {
-    if (!isGenerating) return;
+    if (!isGenerating && !error) return;
 
     const unsubscribe = navigation.addListener('beforeRemove' as never, (e: { data: { action: { type: string } }; preventDefault: () => void }) => {
       const actionType = e.data.action.type;
-      // Allow programmatic REPLACE that we trigger ourselves
       if (actionType === 'REPLACE') return;
-      // Block external navigation (deep links typically use NAVIGATE or RESET)
-      logger.warn('[generating] Blocked external navigation during generation, action:', actionType);
-      e.preventDefault();
+      if (isGenerating) {
+        logger.warn('[generating] Blocked external navigation during generation, action:', actionType);
+        e.preventDefault();
+        return;
+      }
+      clearInitialGenerationRequestId();
     });
 
     return unsubscribe;
-  }, [navigation, isGenerating]);
+  }, [navigation, isGenerating, error]);
 
   // Notification state
   const [notificationPermission, setNotificationPermission] = useState<'unknown' | 'granted' | 'denied'>('unknown');
@@ -818,9 +821,11 @@ export default function GeneratingScreen() {
     const submitJob = async () => {
       try {
         void logBugEvent('generation', 'server-generation-start', { jobType: 'initial_arc' });
+        // Persist before the POST so a close during submit can resume the same request.
+        const requestId = ensureInitialGenerationRequestId();
 
         const { jobId, devotionalId: submittedDevotionalId } = await submitGenerationJob({
-          requestId: ensureInitialGenerationRequestId(),
+          requestId,
           dayNumber: 1,
           jobType: 'initial_arc',
           userContext: buildInitialArcUserContext(user),
@@ -1550,7 +1555,11 @@ export default function GeneratingScreen() {
                 activeOpacity={0.7}
                 onPress={handleLeaveForHome}
                 accessibilityRole="button"
-                accessibilityLabel="Go home while your devotional is prepared"
+                accessibilityLabel={
+                  pendingJobId
+                    ? 'Go home while your devotional is prepared'
+                    : 'Go home'
+                }
                 hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}
               >
                 <Text
@@ -1561,9 +1570,22 @@ export default function GeneratingScreen() {
                     textDecorationLine: 'underline',
                   }}
                 >
-                  {'Go home \u2014 we\u2019ll keep\u00A0writing'}
+                  {pendingJobId
+                    ? 'Go home \u2014 we\u2019ll keep\u00A0writing'
+                    : resolveGeneratingGoHomeLabel(false)}
                 </Text>
               </TouchableOpacity>
+              <Text
+                style={{
+                  fontFamily: FontFamily.ui,
+                  fontSize: FontSize.sm,
+                  lineHeight: 20,
+                  color: colors.textSubtle,
+                  flexShrink: 1,
+                }}
+              >
+                {resolveGeneratingCloseCopy(pendingJobId != null)}
+              </Text>
 
               {/* Second chance at the ready-notification for "I'll wait" users.
                   Hidden while the main notification prompt above is already

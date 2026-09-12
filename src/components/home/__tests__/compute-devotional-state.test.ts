@@ -670,6 +670,56 @@ describe('computeDevotionalState — inflightSeriesFailed', () => {
   });
 });
 
+describe('computeDevotionalState — pendingInitialResume', () => {
+  const onResume = jest.fn();
+
+  it('offers resume instead of the empty card when a first-series request is still waiting', () => {
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDevotional: null,
+      currentDayData: null,
+      pendingInitialResume: { onResume },
+    });
+
+    expect(state).toEqual({ type: 'pending-initial-resume', onResume });
+  });
+
+  it('does not hide a readable current series or sample behind the exclusive resume hero', () => {
+    const state = computeDevotionalState({
+      ...baseInput,
+      pendingInitialResume: { onResume },
+    });
+
+    expect(state.type).toBe('unread');
+    if (state.type === 'unread') {
+      expect(state.seriesTitle).toBe('Faith Foundations');
+      expect(state.onContinue).toBe(baseInput.onContinue);
+    }
+  });
+
+  it('lets a live or failed job win over the pending-request resume card', () => {
+    expect(computeDevotionalState({
+      ...baseInput,
+      currentDevotional: null,
+      currentDayData: null,
+      preparingInflightSeries: { seriesTitle: 'your devotional' },
+      pendingInitialResume: { onResume },
+    }).type).toBe('preparing');
+
+    expect(computeDevotionalState({
+      ...baseInput,
+      currentDevotional: null,
+      currentDayData: null,
+      inflightSeriesFailed: {
+        message: 'We couldn’t finish creating this devotional right now.',
+        onTryAgain: noop,
+        onDismiss: noop,
+      },
+      pendingInitialResume: { onResume },
+    }).type).toBe('first-series-failed');
+  });
+});
+
 describe('J2 auto trial compute-devotional-state', () => {
   it('returns journey-complete when auto complete, denied, and no day data', () => {
     const onCreateNew = jest.fn();

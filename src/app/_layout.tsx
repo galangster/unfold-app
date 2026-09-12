@@ -262,6 +262,13 @@ function RootLayoutNav() {
             gestureEnabled: true,
           }}
         />
+        <Stack.Screen
+          name="qa-method-readings"
+          options={{
+            animation: 'slide_from_right',
+            gestureEnabled: false,
+          }}
+        />
         </Stack>
         <AudioPlayerOverlay />
         <LaterEntryNotifySheet />

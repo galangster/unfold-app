@@ -68,6 +68,7 @@ import {
   FREE_COMPANION_DAILY_LIMIT,
 } from '@/lib/premium-gating';
 import { computeCompanionStatusSlotHeight } from '@/lib/companion-status-slot';
+import { resolveCompanionDisplayName } from '@/lib/support-clarity';
 
 // ── Message item ───────────────────────────────────────────────────────────
 
@@ -195,6 +196,9 @@ export default function CompanionScreen() {
   // chips — same lookup today/index.tsx uses for its own "todayTheme".
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
   const devotionals = useUnfoldStore((s) => s.devotionals);
+  const companionDisplayName = useUnfoldStore((s) =>
+    resolveCompanionDisplayName(s.user?.companionName, s.companionName),
+  );
   const currentDevotional = useMemo(
     () => getCurrentDevotional(devotionals, currentDevotionalId),
     [devotionals, currentDevotionalId]
@@ -475,7 +479,7 @@ export default function CompanionScreen() {
         </TouchableOpacity>
 
         {/* Center: orb + name */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1, minWidth: 0 }}>
           <CompanionOrb
             accentColor={colors.accent}
             size={32}
@@ -487,9 +491,11 @@ export default function CompanionScreen() {
               fontFamily: FontFamily.uiMedium,
               fontSize: FontSize.base,
               color: colors.text,
+              flexShrink: 1,
             }}
+            numberOfLines={2}
           >
-            Companion
+            {companionDisplayName ?? 'Companion'}
           </Text>
         </View>
 

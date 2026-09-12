@@ -74,6 +74,8 @@ describe('onboarding answer draft lifecycle (ONB-RESUME-1)', () => {
   it('writes hasCompletedOnboarding true on both profile paths', () => {
     const save = sliceBody('const saveOnboardingData = useCallback', 'const proceedToGeneration');
     expect(save.match(/hasCompletedOnboarding: true/g)?.length).toBe(2);
+    expect(save).toContain('companionNameInputRef.current');
+    expect(save.match(/companionName,/g)?.length).toBeGreaterThanOrEqual(2);
   });
 
   it('resumes from the draft while letting an explicit startAt win', () => {

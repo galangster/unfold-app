@@ -10,6 +10,7 @@ export type TodayAmbientStateType =
   | 'empty'
   | 'preparing'
   | 'first-series-failed'
+  | 'pending-initial-resume'
   | 'premium-paused'
   | 'unread'
   | 'complete-today'

@@ -3,7 +3,7 @@ import { getDailyGenerationNotice } from '@/lib/daily-generation-messages';
  * DevotionalCard — 9-state hero card for the home screen.
  *
  * Renders based on a DevotionalCardState discriminated union:
- *   empty | preparing | first-series-failed | premium-paused | reveal-ready | unread | complete-today | tomorrow-locked | journey-complete
+ *   empty | preparing | first-series-failed | pending-initial-resume | premium-paused | reveal-ready | unread | complete-today | tomorrow-locked | journey-complete
  *
  * Extracted from (tabs)/(today)/index.tsx for single-responsibility and testability.
  */
@@ -38,6 +38,11 @@ import { GLASS, HERO_GROUND } from '@/constants/today-surfaces';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { RecommendedSeriesCard } from './RecommendedSeriesCard';
 import { InlineReflectComposer } from './InlineReflectComposer';
+import {
+  PENDING_INITIAL_RESUME_BODY,
+  PENDING_INITIAL_RESUME_CTA,
+  PENDING_INITIAL_RESUME_TITLE,
+} from '@/lib/support-clarity';
 import { HeroGround } from './HeroGround';
 import { useCompletedDayReflection } from './use-completed-day-reflection';
 import type { DevotionalCardState } from './compute-devotional-state';
@@ -59,6 +64,8 @@ interface Props {
   gateCreation?: () => boolean;
   storedPick?: NextPick | null;
   ambienceVisible?: boolean;
+  /** Resume a first-series request without replacing a readable current series. */
+  nonblockingResume?: { onResume: () => void } | null;
 }
 
 // ─── Character reveal for "Unfold" title (empty state) ──────────
@@ -388,6 +395,77 @@ function FirstSeriesFailedState({
           style={styles.failedDismiss}
         >
           <Text style={[styles.failedDismissText, { color: colors.textSubtle }]}>Not now</Text>
+        </TouchableOpacity>
+      </View>
+    </Animated.View>
+  );
+}
+
+function NonblockingInitialResume({
+  onResume,
+}: {
+  onResume: () => void;
+}) {
+  const { colors } = useTheme();
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.72}
+      onPress={onResume}
+      accessibilityRole="button"
+      accessibilityLabel={PENDING_INITIAL_RESUME_CTA}
+      testID="home-pending-initial-resume-inline"
+      style={[styles.nonblockingResume, { borderColor: alpha(colors.accent, 0.28) }]}
+    >
+      <Text style={[styles.nonblockingResumeTitle, { color: colors.text }]}>
+        {PENDING_INITIAL_RESUME_TITLE}
+      </Text>
+      <Text style={[styles.nonblockingResumeCta, { color: colors.accent }]}>
+        {PENDING_INITIAL_RESUME_CTA} →
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
+function PendingInitialResumeState({
+  state,
+  ambienceVisible,
+}: {
+  state: Extract<DevotionalCardState, { type: 'pending-initial-resume' }>;
+  ambienceVisible: boolean;
+}) {
+  const { colors } = useTheme();
+  const { entering } = useAccessibleAnimation();
+  const textCap = heroCopyCap(ambienceVisible);
+
+  return (
+    <Animated.View
+      entering={entering(FadeIn.duration(Duration.normal).delay(80).easing(Ease.out))}
+      testID="home-pending-initial-resume"
+      style={styles.heroStateBlock}
+    >
+      <HeroGround active={ambienceVisible}>
+        <Text style={[styles.heroSeriesEyebrow, { color: colors.textSubtle, textAlign: 'left' }]}>
+          Still with you
+        </Text>
+        <Text style={[styles.returningTitle, { color: colors.text, textAlign: 'left' }, textCap]}>
+          {PENDING_INITIAL_RESUME_TITLE}
+        </Text>
+        <Text style={[styles.returningSubtitle, { color: colors.textMuted, textAlign: 'left' }, textCap]}>
+          {PENDING_INITIAL_RESUME_BODY}
+        </Text>
+      </HeroGround>
+
+      <View style={styles.heroCtaRow}>
+        <TouchableOpacity
+          activeOpacity={0.72}
+          onPress={state.onResume}
+          accessibilityRole="button"
+          accessibilityLabel={PENDING_INITIAL_RESUME_CTA}
+          style={[styles.returningCta, { borderColor: alpha(colors.accent, 0.28), backgroundColor: alpha(colors.accent, 0.08) }]}
+        >
+          <Text style={[styles.returningCtaText, { color: colors.text }]}>{PENDING_INITIAL_RESUME_CTA}</Text>
+          <Text style={[styles.returningCtaArrow, { color: colors.accent }]}>→</Text>
         </TouchableOpacity>
       </View>
     </Animated.View>
@@ -1096,6 +1174,7 @@ export function DevotionalCard({
   gateCreation,
   storedPick,
   ambienceVisible = false,
+  nonblockingResume = null,
 }: Props) {
   const { entering } = useAccessibleAnimation();
 
@@ -1110,6 +1189,9 @@ export function DevotionalCard({
       entering={entering(FadeIn.delay(100).duration(Duration.normal).easing(Ease.out))}
       style={[inStack ? styles.rootInStack : styles.root, parallaxStyle]}
     >
+      {nonblockingResume && state.type !== 'pending-initial-resume' ? (
+        <NonblockingInitialResume onResume={nonblockingResume.onResume} />
+      ) : null}
       {state.type === 'empty' && (
         <EmptyState
           onCreateNew={state.onCreateNew}
@@ -1124,6 +1206,9 @@ export function DevotionalCard({
       )}
       {state.type === 'first-series-failed' && (
         <FirstSeriesFailedState state={state} ambienceVisible={ambienceVisible} />
+      )}
+      {state.type === 'pending-initial-resume' && (
+        <PendingInitialResumeState state={state} ambienceVisible={ambienceVisible} />
       )}
       {state.type === 'premium-paused' && (
         <PremiumPausedState state={state} ambienceVisible={ambienceVisible} />
@@ -1155,6 +1240,24 @@ const styles = StyleSheet.create({
   root: {
     paddingHorizontal: Spacing['6'],
     marginTop: Spacing['5'],
+  },
+  nonblockingResume: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radius.lg,
+    paddingHorizontal: Spacing['4'],
+    paddingVertical: Spacing['3'],
+    marginBottom: Spacing['4'],
+    gap: Spacing['1'],
+  },
+  nonblockingResumeTitle: {
+    fontFamily: FontFamily.ui,
+    fontSize: FontSize.sm,
+    lineHeight: 20,
+  },
+  nonblockingResumeCta: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: FontSize.sm,
+    lineHeight: 20,
   },
   rootInStack: {
     // No padding/margin — the stack handles layout

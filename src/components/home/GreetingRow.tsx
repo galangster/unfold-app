@@ -41,7 +41,7 @@ export function GreetingRow({ userName, onAvatarPress, avatarTestID }: Props) {
       }}
     >
       {/* Greeting text — stagger 0ms */}
-      <Animated.View entering={entering(FadeIn.duration(Duration.normal).easing(Ease.out))} style={{ flex: 1 }}>
+      <Animated.View entering={entering(FadeIn.duration(Duration.normal).easing(Ease.out))} style={{ flex: 1, minWidth: 0 }}>
         <Text
           style={{
             fontFamily: FontFamily.bodyItalic,
@@ -52,13 +52,15 @@ export function GreetingRow({ userName, onAvatarPress, avatarTestID }: Props) {
         >
           {getGreeting()}
         </Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
           <Text
             style={{
               fontFamily: FontFamily.display,
               fontSize: 30,
               color: colors.text,
               letterSpacing: -0.15,
+              maxWidth: '100%',
+              flexShrink: 1,
             }}
           >
             {userName}
@@ -70,7 +72,7 @@ export function GreetingRow({ userName, onAvatarPress, avatarTestID }: Props) {
       {/* Avatar — stagger 80ms per spec Zone 1 */}
       <Animated.View
         entering={entering(FadeIn.duration(Duration.normal).delay(80).easing(Ease.out))}
-        style={{ marginTop: Spacing['1'] }}
+        style={{ marginTop: Spacing['1'], marginLeft: Spacing['3'] }}
       >
         <ProfileAvatar size={38} onPress={onAvatarPress} testID={avatarTestID} />
       </Animated.View>

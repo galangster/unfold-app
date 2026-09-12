@@ -84,6 +84,9 @@ export default function YouScreen() {
         <ScrollView
           key={fontScale}
           ref={scrollViewRef}
+          automaticallyAdjustKeyboardInsets
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
           onLayout={handleScrollLayout}
           contentContainerStyle={{ paddingBottom: 100 }}
           showsVerticalScrollIndicator={false}

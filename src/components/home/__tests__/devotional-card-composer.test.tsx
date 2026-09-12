@@ -420,6 +420,53 @@ describe('DevotionalCard composer integration', () => {
   });
 });
 
+describe('DevotionalCard pending-initial-resume', () => {
+  it('offers Continue without forcing another navigation', () => {
+    const onResume = jest.fn();
+    const tree = renderInAct(
+      <DevotionalCard
+        state={{ type: 'pending-initial-resume', onResume }}
+      />,
+    );
+
+    expect(tree.root.findByProps({ testID: 'home-pending-initial-resume' })).toBeTruthy();
+    act(() => {
+      findByLabel(tree, 'Continue')[0].props.onPress();
+    });
+    expect(onResume).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a readable series visible and offers a nonblocking resume', () => {
+    const onResume = jest.fn();
+    const tree = renderInAct(
+      <DevotionalCard
+        state={{
+          type: 'unread',
+          dayData: makeDayData(),
+          dayLabel: 'Today',
+          seriesTitle: 'Faith Foundations',
+          progress: 0,
+          daysCompleted: 0,
+          totalDays: 7,
+          onContinue: noop,
+          onCreateNew: noop,
+          ctaText: 'Begin Your Journey',
+        }}
+        nonblockingResume={{ onResume }}
+      />,
+    );
+
+    expect(tree.root.findByProps({ testID: 'home-pending-initial-resume-inline' })).toBeTruthy();
+    expect(tree.root.findAll((node: { props?: { testID?: string } }) => (
+      node.props?.testID === 'home-pending-initial-resume'
+    ))).toHaveLength(0);
+    act(() => {
+      tree.root.findByProps({ testID: 'home-pending-initial-resume-inline' }).props.onPress();
+    });
+    expect(onResume).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('DevotionalCard first-series-failed', () => {
   it('shows the failure copy and routes Try again / Not now to the state callbacks', () => {
     const onTryAgain = jest.fn();

@@ -25,6 +25,7 @@ import {
 import { fetchVerseLocal, type VerseResult } from '@/lib/bible-api';
 import { getBibleDbStatus, type BibleTranslation } from '@/lib/bible-db';
 import { isQaToolsEnabled } from '@/lib/qa-tools';
+import { isScripturePracticeEnabled } from '@/lib/scripture-practice-feature';
 import {
   getPracticePassage,
   PRACTICE_ANSWER_MAX_CHARS,
@@ -74,6 +75,7 @@ export interface ScripturePracticeSheetProps {
   day: DevotionalDay;
   onChangeMethod: (methodId: string) => void;
   onClose: () => void;
+  onOpenSamples: () => void;
   onSkipPractice: () => void;
   onOpenBible: (reference: string) => void;
 }
@@ -85,6 +87,7 @@ export function ScripturePracticeSheet({
   day,
   onChangeMethod,
   onClose,
+  onOpenSamples,
   onSkipPractice,
   onOpenBible,
 }: ScripturePracticeSheetProps) {
@@ -127,6 +130,7 @@ export function ScripturePracticeSheet({
   const chapterReference = passageMeta?.chapterReference ?? null;
   const canOpenAssignedBible = Boolean(passageMeta && (primaryState === 'ready' || getBibleDbStatus().status !== 'ready'));
   const showQaPicker = isQaToolsEnabled();
+  const showSampleReadings = isScripturePracticeEnabled();
 
   const patchSession = useCallback((patch: Partial<PracticeSession>) => {
     if (!target) return;
@@ -368,6 +372,24 @@ export function ScripturePracticeSheet({
 
           {showQaPicker ? (
             <View style={styles.pickerBlock}>
+              {showSampleReadings ? (
+                <View style={styles.block}>
+                  <TouchableOpacity
+                    onPress={onOpenSamples}
+                    accessibilityRole="button"
+                    accessibilityLabel="Explore sample readings. Does not change this day."
+                    testID="scripture-practice-qa-method-readings"
+                    style={[styles.primaryAction, { backgroundColor: colors.accent }]}
+                  >
+                    <Text style={[styles.primaryActionLabel, { color: colors.background }]}>
+                      Explore sample readings
+                    </Text>
+                  </TouchableOpacity>
+                  <Text style={[styles.pickerHint, { color: colors.textHint }]}>
+                    Does not change this day.
+                  </Text>
+                </View>
+              ) : null}
               <TouchableOpacity
                 onPress={openPicker}
                 accessibilityRole="button"
