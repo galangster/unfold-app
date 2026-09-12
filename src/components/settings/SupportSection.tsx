@@ -22,6 +22,7 @@ import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { exportBugReportBundleToFile, logBugEvent } from '@/lib/bug-logger';
 import { analyzeNetworkError } from '@/lib/network-error-handler';
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from '@/lib/api-config';
+import { authenticatedFetch } from '@/lib/device-credential';
 import { getRevenueCatSupportId } from '@/lib/revenuecatClient';
 import { SettingsSectionHeader, getSettingsCardStyle } from './SettingsSectionHeader';
 
@@ -94,7 +95,7 @@ export function SupportSection() {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000);
     try {
-      const response = await fetch(`${PRIMARY_BACKEND_URL}/api/bug-report/email`, {
+      const response = await authenticatedFetch(`${PRIMARY_BACKEND_URL}/api/bug-report/email`, {
         method: 'POST',
         headers: await getAuthHeaders(),
         body: JSON.stringify(payload),

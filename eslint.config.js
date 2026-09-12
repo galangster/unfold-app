@@ -69,6 +69,19 @@ module.exports = defineConfig([
       // spam dev output (37 of them ran on every hydration). Go through
       // `logger` (dev-only) or `reportError` (production-worthy failures).
       "no-console": "error",
+
+      // Backend requests go through `authenticatedFetch` (src/lib/device-credential.ts)
+      // so a device-credential 401 heals once. A bare fetch() call skips that.
+      // Non-backend callers are allowlisted by file below;
+      // src/lib/__tests__/eslint-no-bare-fetch-rule.test.ts pins both halves.
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "CallExpression[callee.name='fetch']",
+          message:
+            "Call authenticatedFetch from @/lib/device-credential for backend requests. Non-backend callers are allowlisted by file in eslint.config.js.",
+        },
+      ],
     },
   },
   {
@@ -86,6 +99,29 @@ module.exports = defineConfig([
     ],
     rules: {
       "no-console": "off",
+    },
+  },
+  {
+    // The only places a bare fetch() call is allowed. Every entry needs a
+    // reason; src/lib/__tests__/eslint-no-bare-fetch-rule.test.ts pins the list.
+    files: [
+      // The wrapper itself and the registration call it must not recurse into.
+      "src/lib/device-credential.ts",
+      // bible-api.com verse lookups. The backend commentary call in the same
+      // file is pinned by authenticated-fetch-lib-callers.test.ts.
+      "src/lib/bible-api.ts",
+      // Generic URL helper with no backend caller.
+      "src/lib/network-error-handler.ts",
+      // Tests and manual mocks stub the global fetch directly.
+      "src/**/__tests__/**",
+      "src/**/*.test.ts",
+      "src/**/*.test.tsx",
+      "src/lib/__mocks__/**",
+      // Node-side tooling talks to App Store Connect and the backend directly.
+      "scripts/**",
+    ],
+    rules: {
+      "no-restricted-syntax": "off",
     },
   },
   ...pluginQuery.configs["flat/recommended"],

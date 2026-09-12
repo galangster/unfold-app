@@ -90,8 +90,10 @@ jest.mock('@/lib/api-config', () => ({
   getAuthHeaders: jest.fn(async () => ({})),
 }));
 
+jest.mock('@/lib/device-credential');
+
 jest.mock('@/lib/qa-tools', () => ({
-  isQaToolsEnabled: () => true,
+  isQaToolsEnabled: jest.fn(() => true),
 }));
 
 jest.mock('@/lib/qa-today-marker', () => ({
@@ -104,6 +106,11 @@ import {
   readInitialGenerationRequestId,
 } from '@/lib/initial-generation-request';
 import { mmkvStorage } from '@/lib/mmkv-storage';
+import { authenticatedFetch } from '@/lib/device-credential';
+import { isQaToolsEnabled } from '@/lib/qa-tools';
+
+const mockAuthenticatedFetch = authenticatedFetch as jest.Mock;
+const mockIsQaToolsEnabled = isQaToolsEnabled as jest.Mock;
 
 const storedPick = {
   theme: 'trust',
@@ -119,6 +126,7 @@ describe('RecommendedSeriesCard initial generation identity', () => {
     mockStorage.clear();
     focusEffects.length = 0;
     global.fetch = mockFetch;
+    mockIsQaToolsEnabled.mockReturnValue(true);
   });
 
   it('clears a stale request ID before navigating to a recommended study', async () => {
@@ -156,6 +164,7 @@ describe('J10 RecommendedSeriesCard start-study gate', () => {
     focusEffects.length = 0;
     global.fetch = mockFetch;
     mockFetch.mockReset();
+    mockIsQaToolsEnabled.mockReturnValue(true);
   });
 
   async function mount(props: Record<string, unknown> = {}) {
@@ -287,5 +296,30 @@ describe('J10 RecommendedSeriesCard start-study gate', () => {
       return init?.method === 'POST' || String(call[0]).includes('/api/jobs');
     });
     expect(posts).toHaveLength(0);
+  });
+
+  it('loads the next-series recommendation through authenticatedFetch', async () => {
+    mockIsQaToolsEnabled.mockReturnValue(false);
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        theme: 'trust',
+        themeName: 'Fetched Strength',
+        type: 'theme',
+        reason: 'Because this season needs courage.',
+        suggestedLength: 7,
+      }),
+    });
+
+    await mount();
+    // Let the effect's request chain settle before asserting on the transport.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(mockAuthenticatedFetch).toHaveBeenCalledWith(
+      'https://example.test/api/recommendations/next-series',
+      expect.objectContaining({ headers: {} }),
+    );
   });
 });

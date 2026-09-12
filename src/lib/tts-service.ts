@@ -9,6 +9,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { logger } from '@/lib/logger';
 import { reportError } from '@/lib/report-error';
 import { getAuthHeaders, PRIMARY_BACKEND_URL } from '@/lib/api-config';
+import { authenticatedFetch } from './device-credential';
 
 import { checkRateLimit, incrementRateLimit } from '@/lib/rate-limit';
 import { recordCachedFile, touchCachedFile, saveMetadata } from '@/lib/audio-cache';
@@ -148,7 +149,7 @@ async function downloadAudio(text: string, voiceId: string, key: string): Promis
 
     let genResponse: Response;
     try {
-      genResponse = await fetch(TTS_PROXY_URL, {
+      genResponse = await authenticatedFetch(TTS_PROXY_URL, {
         method: 'POST',
         headers,
         body: JSON.stringify({ text, voiceId: safeVoiceId }),

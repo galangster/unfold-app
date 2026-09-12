@@ -15,6 +15,7 @@ import { MMKV } from 'react-native-mmkv';
 import { logger } from '@/lib/logger';
 import { buildPromptWithPersona, BANNED_PHRASES } from '@/constants/persona';
 import { getBackendCandidates, getAuthHeaders, sanitizeForPrompt } from '@/lib/api-config';
+import { authenticatedFetch } from './device-credential';
 import { checkRateLimit, incrementRateLimit } from '@/lib/rate-limit';
 import { getSharedEncryptionKey } from '@/lib/mmkv-storage';
 
@@ -162,7 +163,7 @@ async function postBridgeRequest(
         `${LOG_PREFIX} POST ${backendUrl}/api/generate-bridge (attempt ${i + 1})`
       );
 
-      const response = await fetch(`${backendUrl}/api/generate-bridge`, {
+      const response = await authenticatedFetch(`${backendUrl}/api/generate-bridge`, {
         method: 'POST',
         headers: await getAuthHeaders(),
         body: JSON.stringify(payload),

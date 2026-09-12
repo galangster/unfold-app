@@ -3,6 +3,7 @@ import { Directory, File, Paths } from 'expo-file-system';
 import { fetch as expoFetch } from 'expo/fetch';
 
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from '@/lib/api-config';
+import { authenticatedFetch } from './device-credential';
 import { mmkvStorage } from '@/lib/mmkv-storage';
 
 export const VOICE_CHECK_IN_DRAFT_KEY = '@unfold_voice_check_in_draft_v1';
@@ -261,7 +262,7 @@ async function requestJson(path: string, init?: RequestInit): Promise<unknown> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    const response = await fetch(`${PRIMARY_BACKEND_URL}${path}`, {
+    const response = await authenticatedFetch(`${PRIMARY_BACKEND_URL}${path}`, {
       ...init,
       headers: { ...headers, ...init?.headers },
       signal: controller.signal,

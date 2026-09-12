@@ -55,6 +55,7 @@ import { isOnline } from '@/lib/network-error-handler';
 import { PERSONA_BRIEF } from '@/constants/persona';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { PRIMARY_BACKEND_URL, getAuthHeaders, sanitizeForPrompt } from '@/lib/api-config';
+import { authenticatedFetch } from '@/lib/device-credential';
 import { checkRateLimit, incrementRateLimit } from '@/lib/rate-limit';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
 import { alpha } from '@/components/ui';
@@ -757,7 +758,7 @@ Scripture: ${sanitizeForPrompt(currentDay?.scriptureReference ?? 'N/A', 200)}
 Their journal entry:
 "${sanitizeForPrompt(content, 2000)}"`;
 
-      const response = await fetch(`${PRIMARY_BACKEND_URL}/api/generate/go-deeper`, {
+      const response = await authenticatedFetch(`${PRIMARY_BACKEND_URL}/api/generate/go-deeper`, {
         method: 'POST',
         headers: await getAuthHeaders(),
         body: JSON.stringify({

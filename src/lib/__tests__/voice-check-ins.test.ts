@@ -15,6 +15,8 @@ jest.mock('@/lib/api-config', () => ({
   getAuthHeaders: jest.fn(async () => ({ 'Content-Type': 'application/json', 'X-Device-ID': 'device-1' })),
 }));
 
+jest.mock('@/lib/device-credential');
+
 jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
 
 jest.mock('expo-crypto', () => ({
@@ -44,12 +46,14 @@ jest.mock('expo-file-system', () => {
 import {
   createVoiceCheckInDraft,
   discardVoiceCheckInDraft,
+  listVoiceCheckIns,
   readVoiceCheckInDraft,
   retryPendingVoiceAudioCleanup,
   sendVoiceCheckInDraft,
   VOICE_CHECK_IN_PENDING_DELETIONS_KEY,
 } from '@/lib/voice-check-ins';
 import { fetch as expoFetch } from 'expo/fetch';
+import { authenticatedFetch } from '@/lib/device-credential';
 
 const mockExpoFetch = expoFetch as jest.Mock;
 
@@ -135,5 +139,24 @@ describe('voice check-in local retry', () => {
     mockDeleteFile.mockImplementation(() => undefined);
     retryPendingVoiceAudioCleanup();
     expect(mockValues.has(VOICE_CHECK_IN_PENDING_DELETIONS_KEY)).toBe(false);
+  });
+});
+
+describe('voice check-in JSON requests', () => {
+  it('lists check-ins through authenticatedFetch with an abort signal', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ checkIns: [] }),
+    }) as unknown as typeof fetch;
+
+    await expect(listVoiceCheckIns()).resolves.toEqual([]);
+
+    expect(authenticatedFetch).toHaveBeenCalledWith(
+      'https://voice.test/api/voice-check-ins',
+      expect.objectContaining({
+        signal: expect.any(AbortSignal),
+      }),
+    );
   });
 });

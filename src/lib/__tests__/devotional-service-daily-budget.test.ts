@@ -5,7 +5,8 @@
  * response now surfaces its own copy with the reset estimate; every other
  * 429 keeps the old copy; neither is retried by generateBatchWithRetry.
  */
-import { generateDevotional, type GenerationContext } from '@/lib/devotional-service';
+import { generateDevotional, postJsonWithBackendFallback, type GenerationContext } from '@/lib/devotional-service';
+import { authenticatedFetch } from '@/lib/device-credential';
 
 jest.mock('@/lib/api-config', () => ({
   getBackendCandidates: () => ['https://backend.test'],
@@ -13,6 +14,8 @@ jest.mock('@/lib/api-config', () => ({
   PRIMARY_BACKEND_URL: 'https://backend.test',
   sanitizeForPrompt: (s: string | undefined, max: number) => (s ?? '').slice(0, max),
 }));
+
+jest.mock('@/lib/device-credential');
 
 jest.mock('@/lib/logger', () => ({
   logger: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
@@ -99,6 +102,22 @@ describe('generateDevotional on a 429', () => {
 
     await expect(generateDevotional(CONTEXT)).rejects.toThrow(
       'Rate limit exceeded. Please wait a moment and try again.',
+    );
+  });
+});
+
+describe('generation POST transport', () => {
+  it('posts through authenticatedFetch with an abort signal', async () => {
+    mockBackend(200, { ok: true });
+
+    await postJsonWithBackendFallback('/api/generate', { probe: true });
+
+    expect(authenticatedFetch).toHaveBeenCalledWith(
+      'https://backend.test/api/generate',
+      expect.objectContaining({
+        method: 'POST',
+        signal: expect.any(AbortSignal),
+      }),
     );
   });
 });

@@ -1,5 +1,6 @@
 import { MMKV } from 'react-native-mmkv';
 import { PRIMARY_BACKEND_URL, getAuthHeaders, sanitizeForPrompt } from './api-config';
+import { authenticatedFetch } from './device-credential';
 import { getSharedEncryptionKey } from './mmkv-storage';
 
 export type ScriptureExplainSource = 'bible-reader' | 'devotional-scripture-sheet';
@@ -199,7 +200,7 @@ async function fetchWithTimeout(url: string, options: RequestInit, ms: number): 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), ms);
   try {
-    return await fetch(url, { ...options, signal: controller.signal });
+    return await authenticatedFetch(url, { ...options, signal: controller.signal });
   } finally {
     clearTimeout(timer);
   }

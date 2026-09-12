@@ -1,6 +1,7 @@
 import { logger } from '@/lib/logger';
 import { PERSONA_BRIEF } from '../constants/persona';
 import { getBackendCandidates, getAuthHeaders, sanitizeForPrompt } from '@/lib/api-config';
+import { authenticatedFetch } from './device-credential';
 import { checkRateLimit, incrementRateLimit } from '@/lib/rate-limit';
 
 export type CompanionMood = 'Grateful' | 'Peaceful' | 'Hopeful' | 'Restless' | 'Heavy' | 'Confused';
@@ -148,7 +149,7 @@ Generate a short, personal companion response and 2 suggestion pills.`;
       const timeoutId = setTimeout(() => controller.abort(), 10000);
 
       try {
-        const response = await fetch(`${backendUrl}/api/generate/adaptive-question`, {
+        const response = await authenticatedFetch(`${backendUrl}/api/generate/adaptive-question`, {
           method: 'POST',
           headers: await getAuthHeaders(),
           body: JSON.stringify({
@@ -254,7 +255,7 @@ export async function generateConversationTitle(
       const timeoutId = setTimeout(() => controller.abort(), 5000);
 
       try {
-        const response = await fetch(`${backendUrl}/api/companion/title`, {
+        const response = await authenticatedFetch(`${backendUrl}/api/companion/title`, {
           method: 'POST',
           headers,
           body: JSON.stringify({
