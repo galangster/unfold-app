@@ -6,10 +6,10 @@ import { asNextPick, asTrimmedString, isAutoTrialSeries, shouldInsertPulledDevot
 import {
   didDevotionalLifecycleChange,
   extractDevotionalLifecycle,
-  isDevotionalArchived,
   mergeDevotionalLifecycle,
   parseLifecycleTimestamp,
 } from './devotional-lifecycle';
+import { selectSyncedCurrentDevotionalId } from './devotional-resume-selection';
 import { mmkvStorage } from './mmkv-storage';
 import { logger } from './logger';
 import { useUnfoldStore } from './store';
@@ -660,8 +660,8 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
   const pendingByChapter = pendingBibleReadingByChapter();
   const pendingLifecycleById = pendingDevotionalArchivedStateAtById();
   useUnfoldStore.setState((state) => {
-    let devotionals = state.devotionals;
-    let currentDevotionalId = state.currentDevotionalId;
+    const previousDevotionals = state.devotionals;
+    let devotionals = previousDevotionals;
     const incomingDevotionals = changes.devotionals ?? [];
     const hasAutoTrialSeries = devotionals.some(isAutoTrialSeries)
       || incomingDevotionals.some((record) => {
@@ -686,7 +686,6 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
       if (record.deleted) {
         if (!contentShouldApply) continue;
         devotionals = devotionals.filter((item) => item.id !== record.id);
-        if (currentDevotionalId === record.id) currentDevotionalId = null;
         continue;
       }
       if (!contentShouldApply && !lifecycleChanged) continue;
@@ -735,14 +734,13 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
       });
     }
 
-    if (currentDevotionalId) {
-      const currentSeries = devotionals.find((item) => item.id === currentDevotionalId);
-      if (isDevotionalArchived(currentSeries)) currentDevotionalId = null;
-    }
-
     return {
       devotionals,
-      currentDevotionalId,
+      currentDevotionalId: selectSyncedCurrentDevotionalId({
+        previousCurrentId: state.currentDevotionalId,
+        previous: previousDevotionals,
+        next: devotionals,
+      }),
       // Journal rows the server minted before entry ids were day-derived still
       // carry random ids, so upserting them by id alone re-creates exactly the
       // per-day duplicates the v41→42 migration merged. Collapse the day again

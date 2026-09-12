@@ -796,6 +796,118 @@ describe('pulled series lifecycle', () => {
     });
   });
 
+  it('restores Today onto a newer accepted remote resume and keeps reading history', () => {
+    useUnfoldStore.setState({
+      devotionals: [localSeries({ archivedAt: LOCAL_ARCHIVE_AT, archivedStateAt: LOCAL_ARCHIVE_AT })],
+      currentDevotionalId: null,
+    });
+
+    applyPulledUserData({
+      timestamp: '2026-09-12T17:00:00.000Z',
+      changes: {
+        devotionals: [{
+          id: 'series-1',
+          updatedAt: '2026-09-12T17:00:00.000Z',
+          deleted: false,
+          data: {
+            archivedAt: null,
+            archivedStateAt: '2026-09-12T17:00:00.000Z',
+            clientUpdatedAt: '2026-09-12T17:00:00.000Z',
+          },
+        }],
+      },
+    });
+
+    const state = useUnfoldStore.getState();
+    expect(state.currentDevotionalId).toBe('series-1');
+    expect(state.devotionals[0]).toMatchObject({
+      archivedAt: null,
+      archivedStateAt: '2026-09-12T17:00:00.000Z',
+    });
+    expect(state.devotionals[0]?.days[0]).toMatchObject({
+      isRead: true,
+      readAt: '2026-09-11T12:00:00.000Z',
+    });
+  });
+
+  it('does not restore a stale remote resume or steal a different live selection', () => {
+    useUnfoldStore.setState({
+      devotionals: [
+        localSeries({ archivedAt: LOCAL_ARCHIVE_AT, archivedStateAt: LOCAL_ARCHIVE_AT }),
+        localSeries({ id: 'series-2', title: 'Other' }),
+      ],
+      currentDevotionalId: 'series-2',
+    });
+
+    applyPulledUserData({
+      timestamp: OLDER_AT,
+      changes: {
+        devotionals: [{
+          id: 'series-1',
+          updatedAt: OLDER_AT,
+          deleted: false,
+          data: {
+            archivedAt: null,
+            archivedStateAt: OLDER_AT,
+            clientUpdatedAt: OLDER_AT,
+          },
+        }],
+      },
+    });
+
+    const state = useUnfoldStore.getState();
+    expect(state.currentDevotionalId).toBe('series-2');
+    expect(state.devotionals.find((item) => item.id === 'series-1')).toMatchObject({
+      archivedAt: LOCAL_ARCHIVE_AT,
+      archivedStateAt: LOCAL_ARCHIVE_AT,
+    });
+  });
+
+  it('selects the newest accepted remote resume when several arrive', () => {
+    useUnfoldStore.setState({
+      devotionals: [
+        localSeries({ archivedAt: LOCAL_ARCHIVE_AT, archivedStateAt: LOCAL_ARCHIVE_AT }),
+        localSeries({
+          id: 'series-2',
+          title: 'Other',
+          archivedAt: LOCAL_ARCHIVE_AT,
+          archivedStateAt: LOCAL_ARCHIVE_AT,
+        }),
+      ],
+      currentDevotionalId: null,
+    });
+
+    applyPulledUserData({
+      timestamp: '2026-09-12T18:00:00.000Z',
+      changes: {
+        devotionals: [
+          {
+            id: 'series-1',
+            updatedAt: '2026-09-12T17:00:00.000Z',
+            deleted: false,
+            data: {
+              archivedAt: null,
+              archivedStateAt: '2026-09-12T17:00:00.000Z',
+              clientUpdatedAt: '2026-09-12T17:00:00.000Z',
+            },
+          },
+          {
+            id: 'series-2',
+            updatedAt: '2026-09-12T18:00:00.000Z',
+            deleted: false,
+            data: {
+              archivedAt: null,
+              archivedStateAt: '2026-09-12T18:00:00.000Z',
+              clientUpdatedAt: '2026-09-12T18:00:00.000Z',
+            },
+          },
+        ],
+      },
+    });
+
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe('series-2');
+  });
+
   it('does not archive a sibling series that the user did not end', () => {
     useUnfoldStore.setState({
       devotionals: [

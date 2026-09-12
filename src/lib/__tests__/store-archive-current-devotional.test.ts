@@ -79,6 +79,41 @@ test('metadata pull clears an archived current pointer without enqueueing a resu
   expect(peekSyncOutbox()).toEqual([]);
 });
 
+test('metadata pull restores a newer accepted remote resume without enqueueing', () => {
+  const current = series(CURRENT_ID, { archivedAt: CLOCK, archivedStateAt: CLOCK });
+  const resumeAt = '2026-09-12T16:00:00.000Z';
+  useUnfoldStore.setState({ devotionals: [current], currentDevotionalId: null });
+  replaceSyncOutbox([]);
+  updateSyncedDevotionals((items) => items.map((item) => ({
+    ...item, archivedAt: null, archivedStateAt: resumeAt,
+  })));
+  const state = useUnfoldStore.getState();
+  expect(state.currentDevotionalId).toBe(CURRENT_ID);
+  expect(state.devotionals[0]).toMatchObject({
+    archivedAt: null,
+    archivedStateAt: resumeAt,
+  });
+  expect(state.devotionals[0].days).toEqual(current.days);
+  expect(peekSyncOutbox()).toEqual([]);
+});
+
+test('metadata pull keeps a different live selection when a sibling resumes', () => {
+  const archived = series(CURRENT_ID, { archivedAt: CLOCK, archivedStateAt: CLOCK });
+  const other = series(OTHER_ID);
+  useUnfoldStore.setState({
+    devotionals: [archived, other],
+    currentDevotionalId: OTHER_ID,
+  });
+  replaceSyncOutbox([]);
+  updateSyncedDevotionals((items) => items.map((item) => (
+    item.id === CURRENT_ID
+      ? { ...item, archivedAt: null, archivedStateAt: '2026-09-12T16:00:00.000Z' }
+      : item
+  )));
+  expect(useUnfoldStore.getState().currentDevotionalId).toBe(OTHER_ID);
+  expect(peekSyncOutbox()).toEqual([]);
+});
+
 describe('store archive and resume lifecycle', () => {
   beforeEach(() => {
     getMockMmkvStore().clear();

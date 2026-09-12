@@ -34,6 +34,7 @@ import type { WordStudy } from './word-study';
 import { flushCheckInToServer } from './check-in-flush';
 import { isOnboardingSampleDevotionalId } from './auto-trial-series';
 import { applyArchiveIntent, applyUnarchiveIntent, isDevotionalArchived } from './devotional-lifecycle';
+import { selectSyncedCurrentDevotionalId } from './devotional-resume-selection';
 import {
   bibleHighlightSyncData,
   bibleReadingPositionSyncData,
@@ -970,14 +971,17 @@ const unfoldPersistStorage = createDebouncedJSONStorage<PersistedUnfoldState>(
   instrumentPersistRead(mmkvStorage),
 );
 
-/** Apply pulled metadata without leaving an archived series selected. */
+/** Reconcile pulled content and its current-series selection. */
 export function updateSyncedDevotionals(updater: (devotionals: Devotional[]) => Devotional[]): void {
   useUnfoldStore.setState((state) => {
     const devotionals = updater(state.devotionals);
-    const selected = devotionals.find((item) => item.id === state.currentDevotionalId);
     return {
       devotionals,
-      currentDevotionalId: isDevotionalArchived(selected) ? null : state.currentDevotionalId,
+      currentDevotionalId: selectSyncedCurrentDevotionalId({
+        previousCurrentId: state.currentDevotionalId,
+        previous: state.devotionals,
+        next: devotionals,
+      }),
     };
   });
 }
