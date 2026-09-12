@@ -16,26 +16,31 @@ import { dayIndexFor } from '@/lib/variation-bag';
 
 /**
  * Seed for the copy shuffle bags. The install id is Keychain-backed, so it is
- * stable across launches and reinstalls: two readers are never drawing the
- * same sequence on the same day, and one reader's sequence does not reset
- * when the app restarts.
+ * normally stable across launches and reinstalls: two readers are never
+ * drawing the same sequence on the same day, and one reader's sequence does
+ * not reset when the app restarts.
  *
- * A recovery session returns an ephemeral id and a locked Keychain throws.
- * Variation still works in both — it just reshuffles, which is invisible next
- * to the failure that caused it.
+ * `getDeviceId()` does NOT throw when the Keychain is unreadable — a recovery
+ * session, or a normal boot on a locked device, returns a session-scoped
+ * `ephemeral-` id instead, memoised for that session (see mmkv-storage.ts).
+ * So the seed is always stable within a session; an ephemeral one just draws
+ * a different sequence on the next launch. That is invisible next to the
+ * failure that caused it, and no reason to reach for a shared fallback.
  */
 let cachedSeed: string | null = null;
 
 export function copySeed(): string {
   // The install id cannot change within a session, and the home screen asks
-  // for a variation on every render — so read the Keychain at most once.
+  // for a variation on every render — so resolve it at most once.
   if (cachedSeed !== null) return cachedSeed;
   try {
     cachedSeed = getDeviceId();
   } catch {
-    // Do NOT cache the fallback: a Keychain that is merely locked at boot
-    // reads fine later, and caching 'unfold' here would pin every reader on
-    // this device to the same sequence for the whole session.
+    // Last resort only. getDeviceId handles an unreadable Keychain itself and
+    // returns an ephemeral id, so reaching here means something unexpected
+    // threw. Deliberately not cached: whatever broke may not be broken on the
+    // next call, and pinning this literal would hold the reader on one
+    // sequence for the rest of the session.
     return 'unfold';
   }
   return cachedSeed;
