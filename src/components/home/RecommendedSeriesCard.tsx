@@ -19,6 +19,7 @@ import { Radius } from '@/constants/radius';
 import { Duration, Ease } from '@/constants/animations';
 import { useUnfoldStore } from '@/lib/store';
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from '@/lib/api-config';
+import { authenticatedFetch } from '@/lib/device-credential';
 import { isQaToolsEnabled } from '@/lib/qa-tools';
 import { getQaTodayProfileMarker } from '@/lib/qa-today-marker';
 import { clearInitialGenerationRequestId } from '@/lib/initial-generation-request';
@@ -133,7 +134,7 @@ export function RecommendedSeriesCard({
     async function fetchRecommendation() {
       try {
         const headers = await getAuthHeaders();
-        const res = await fetch(`${PRIMARY_BACKEND_URL}/api/recommendations/next-series`, { headers });
+        const res = await authenticatedFetch(`${PRIMARY_BACKEND_URL}/api/recommendations/next-series`, { headers });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data: Recommendation = await res.json();
         if (!cancelled) {

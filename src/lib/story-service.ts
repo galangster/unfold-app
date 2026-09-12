@@ -9,6 +9,7 @@
  */
 
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from '@/lib/api-config';
+import { authenticatedFetch } from './device-credential';
 import { logger } from '@/lib/logger';
 
 export interface StoryResult {
@@ -66,7 +67,7 @@ export async function fetchStoriesForGeneration(
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
 
-    const res = await fetch(
+    const res = await authenticatedFetch(
       `${PRIMARY_BACKEND_URL}/api/stories?${params.toString()}`,
       { headers, signal: controller.signal }
     );

@@ -25,6 +25,8 @@ jest.mock('@/lib/api-config', () => ({
   getAuthHeaders: jest.fn(),
 }));
 
+jest.mock('@/lib/device-credential');
+
 jest.mock('@/lib/rate-limit', () => ({
   checkRateLimit: jest.fn(),
   incrementRateLimit: jest.fn(),
@@ -103,6 +105,30 @@ describe('TTS native audio downloads', () => {
       'https://cdn.example/audio.mp3',
       expect.stringContaining('tts_'),
       undefined,
+    );
+  });
+
+  it('generates TTS through authenticatedFetch with an abort signal', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ downloadId: 'download-id' }),
+    }) as unknown as typeof fetch;
+
+    const { authenticatedFetch } = require('@/lib/device-credential') as {
+      authenticatedFetch: jest.Mock;
+    };
+    const { streamDevotionalAudio } = require('../tts-service') as typeof import('../tts-service');
+
+    await expect(streamDevotionalAudio('hello authenticated tts', 'grace')).resolves.toEqual({
+      audioUrl: expect.stringContaining('tts_'),
+    });
+
+    expect(authenticatedFetch).toHaveBeenCalledWith(
+      'https://api.unfoldapp.co/api/tts',
+      expect.objectContaining({
+        method: 'POST',
+        signal: expect.any(AbortSignal),
+      }),
     );
   });
 });

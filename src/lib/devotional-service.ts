@@ -51,6 +51,7 @@ export { DEVOTIONAL_PERSONAS, DevotionalPersona };
 
 // Centralized backend config + auth headers
 import { getBackendCandidates, getAuthHeaders, PRIMARY_BACKEND_URL, sanitizeForPrompt } from '@/lib/api-config';
+import { authenticatedFetch } from './device-credential';
 import {
   assertSyncSessionCurrent,
   isGenerationSessionInvalidatedError,
@@ -98,7 +99,7 @@ export async function postJsonWithBackendFallback(
     try {
       const headers = await getAuthHeaders();
       assertSyncSessionCurrent(session, 'generation request');
-      const response = await fetch(`${backendUrl}${path}`, {
+      const response = await authenticatedFetch(`${backendUrl}${path}`, {
         method: 'POST',
         headers,
         body: JSON.stringify(payload),

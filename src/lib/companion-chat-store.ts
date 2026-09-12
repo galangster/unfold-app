@@ -16,6 +16,7 @@ import { createDebouncedJSONStorage } from './debounced-persist-storage';
 import { shouldFlushAutosaveOnAppState } from './autosave-controller';
 
 import { getAuthHeaders, PRIMARY_BACKEND_URL } from '@/lib/api-config';
+import { authenticatedFetch } from './device-credential';
 import type { DeepLinkData } from './parse-deep-links';
 import { BOOK_NAME_TO_ID } from './bible-constants';
 import {
@@ -329,7 +330,7 @@ export const useCompanionChatStore = create<CompanionChatState>()(
               .slice(-1)[0];
 
             getAuthHeaders().then(headers => {
-              fetch(`${PRIMARY_BACKEND_URL}/api/companion-feedback`, {
+              authenticatedFetch(`${PRIMARY_BACKEND_URL}/api/companion-feedback`, {
                 method: 'POST',
                 headers,
                 body: JSON.stringify({

@@ -13,6 +13,8 @@ import { logger } from '@/lib/logger';
 import { referenceToRoute, BIBLE_BOOKS, formatScriptureReference, normalizeScriptureReference } from '@/lib/bible-constants';
 import { getVerseByReference, getBibleDbStatus, type BibleTranslation } from '@/lib/bible-db';
 import { PRIMARY_BACKEND_URL, getAuthHeaders, sanitizeForPrompt } from '@/lib/api-config';
+import { authenticatedFetch } from './device-credential';
+import { externalFetch } from './external-fetch';
 import { checkRateLimit, incrementRateLimit } from '@/lib/rate-limit';
 import { getSharedEncryptionKey } from '@/lib/mmkv-storage';
 import { toSuperscript } from '@/lib/superscript';
@@ -167,7 +169,7 @@ export async function fetchVerse(
   const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
   try {
-    const response = await fetch(url, {
+    const response = await externalFetch(url, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
@@ -337,7 +339,7 @@ export async function fetchCommentary(input: CommentaryInput): Promise<string | 
   const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
   try {
-    const response = await fetch(`${PRIMARY_BACKEND_URL}/api/generate-commentary`, {
+    const response = await authenticatedFetch(`${PRIMARY_BACKEND_URL}/api/generate-commentary`, {
       method: 'POST',
       headers: await getAuthHeaders(),
       body: JSON.stringify({

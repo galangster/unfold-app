@@ -1,5 +1,6 @@
 import { Alert } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
+import { externalFetch } from './external-fetch';
 
 export type NetworkErrorType = 
   | 'offline'
@@ -104,7 +105,7 @@ export async function fetchWithErrorHandling(
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
     
-    const response = await fetch(url, {
+    const response = await externalFetch(url, {
       ...options,
       signal: controller.signal,
     });

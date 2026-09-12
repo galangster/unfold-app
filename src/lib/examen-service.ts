@@ -19,6 +19,7 @@ import { MMKV } from 'react-native-mmkv';
 import { logger } from '@/lib/logger';
 import { PERSONA_FULL } from '@/constants/persona';
 import { getBackendCandidates, getAuthHeaders, sanitizeForPrompt } from '@/lib/api-config';
+import { authenticatedFetch } from './device-credential';
 import { checkRateLimit, incrementRateLimit } from '@/lib/rate-limit';
 import { getSharedEncryptionKey } from '@/lib/mmkv-storage';
 
@@ -174,7 +175,7 @@ async function postToBackend(
         `[Examen] POST ${backendUrl}/api/generate/go-deeper (attempt ${i + 1}/${backendCandidates.length})`
       );
 
-      const response = await fetch(`${backendUrl}/api/generate/go-deeper`, {
+      const response = await authenticatedFetch(`${backendUrl}/api/generate/go-deeper`, {
         method: 'POST',
         headers: await getAuthHeaders(),
         body: JSON.stringify(payload),

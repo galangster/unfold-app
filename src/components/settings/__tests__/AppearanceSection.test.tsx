@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, Text } from 'react-native';
 import { AppearanceSection } from '../AppearanceSection';
 import { shouldStackSettingsPreferenceRow } from '../preference-row-layout';
+import { pressableAncestor } from '@/lib/__tests__/fixtures/pressable-ancestor';
 
 const renderer = jest.requireActual('react-test-renderer');
 const { act } = renderer;
@@ -108,17 +109,6 @@ function labelNode(tree: { root: any }, label: string) {
 
 function chipRowStyle(tree: { root: any }, label: string) {
   return flatten(labelNode(tree, label).parent.props.style);
-}
-
-function pressableAncestor(node: { parent?: any; props?: { onPress?: unknown } }): { props: { onPress: () => void } } {
-  let current: { parent?: any; props?: { onPress?: unknown } } | undefined = node;
-  while (current && typeof current.props?.onPress !== 'function') {
-    current = current.parent;
-  }
-  if (!current || typeof current.props?.onPress !== 'function') {
-    throw new Error('expected a pressable ancestor');
-  }
-  return current as { props: { onPress: () => void } };
 }
 
 describe('AppearanceSection preference rows', () => {

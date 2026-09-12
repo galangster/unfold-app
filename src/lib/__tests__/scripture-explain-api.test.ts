@@ -10,6 +10,8 @@ jest.mock('../api-config', () => ({
   }),
 }));
 
+jest.mock('@/lib/device-credential');
+
 jest.mock('../mmkv-storage', () => ({
   getSharedEncryptionKey: jest.fn(() => 'test-key'),
 }));
@@ -29,6 +31,7 @@ import {
   validateScriptureExplanationResponse,
   type ScriptureExplainRequest,
 } from '../scripture-explain-api';
+import { authenticatedFetch } from '@/lib/device-credential';
 
 const mockApiConfig = require('../api-config') as {
   getAuthHeaders: jest.Mock;
@@ -197,5 +200,19 @@ describe('scripture explain API helper', () => {
       ...validResponse,
       model: '',
     })).toThrow(ScriptureExplainApiError);
+  });
+
+  it('requests scripture explain through authenticatedFetch with an abort signal', async () => {
+    mockFetch.mockResolvedValue(jsonResponse(validResponse));
+
+    await expect(fetchScriptureExplanation(validInput)).resolves.toMatchObject(validResponse);
+
+    expect(authenticatedFetch).toHaveBeenCalledWith(
+      'https://example.test/api/scripture/explain',
+      expect.objectContaining({
+        method: 'POST',
+        signal: expect.any(AbortSignal),
+      }),
+    );
   });
 });

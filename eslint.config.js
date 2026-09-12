@@ -69,6 +69,27 @@ module.exports = defineConfig([
       // spam dev output (37 of them ran on every hydration). Go through
       // `logger` (dev-only) or `reportError` (production-worthy failures).
       "no-console": "error",
+
+      // Backend requests go through `authenticatedFetch` (src/lib/device-credential.ts)
+      // so a device-credential 401 heals once. Third-party hosts go through
+      // `externalFetch` (src/lib/external-fetch.ts). A global fetch() call
+      // anywhere else skips both. The allowlist below is those two transports,
+      // tests, manual mocks, and Node tooling;
+      // src/lib/__tests__/eslint-no-bare-fetch-rule.test.ts pins both halves.
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "CallExpression[callee.name='fetch']",
+          message:
+            "Call authenticatedFetch (@/lib/device-credential) for backend requests, or externalFetch (@/lib/external-fetch) for third-party hosts.",
+        },
+        {
+          selector:
+            "CallExpression[callee.type='MemberExpression'][callee.property.name='fetch'][callee.object.name=/^(globalThis|global|window|self)$/]",
+          message:
+            "Call authenticatedFetch (@/lib/device-credential) for backend requests, or externalFetch (@/lib/external-fetch) for third-party hosts.",
+        },
+      ],
     },
   },
   {
@@ -86,6 +107,26 @@ module.exports = defineConfig([
     ],
     rules: {
       "no-console": "off",
+    },
+  },
+  {
+    // The only places a global fetch() call is allowed. Every entry needs a
+    // reason; src/lib/__tests__/eslint-no-bare-fetch-rule.test.ts pins the list.
+    files: [
+      // The backend transport, and the registration call it must not recurse into.
+      "src/lib/device-credential.ts",
+      // The third-party transport (bible-api.com).
+      "src/lib/external-fetch.ts",
+      // Tests and manual mocks stub the global fetch directly.
+      "src/**/__tests__/**",
+      "src/**/*.test.ts",
+      "src/**/*.test.tsx",
+      "src/lib/__mocks__/**",
+      // Node-side tooling talks to App Store Connect and the backend directly.
+      "scripts/**",
+    ],
+    rules: {
+      "no-restricted-syntax": "off",
     },
   },
   ...pluginQuery.configs["flat/recommended"],
