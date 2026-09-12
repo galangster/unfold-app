@@ -24,12 +24,29 @@
  * the lapsed-reader path (backend lib/lapse-reentry.ts), and a fortnight of
  * identical banners is how an app gets its notifications switched off.
  *
+ * DO NOT RAISE THIS NUMBER TO "FIX" THE DRAIN. 14 was ruled over 21 on
+ * 2026-09-12: days 15-21 recover almost nobody (such a reader has already
+ * ignored a fortnight of banners, the morning reminder, and a server
+ * re-entry push), and the extra 14 pending slots would eat headroom that
+ * protects the trial-ending notice. iOS keeps only the 64 soonest pending
+ * requests, nothing in this app enforces a shared budget, and a dropped
+ * trial notice means a surprise charge. The real fix for the drain is a
+ * background top-up, not a longer horizon.
+ *
  * ## Sizing the horizon
  *
  * iOS keeps only the 64 soonest pending local notifications per app and
  * silently drops the rest. Two slots across 14 days is at most 28, alongside
  * the daily reminder, one act reminder and one trial notice — comfortably
  * inside the cap with room for both slots to grow.
+ *
+ * One consequence of dated occurrences: they are absolute instants, so a
+ * reader who changes timezone keeps the old local times until the schedule is
+ * rewritten. The retired DAILY trigger fired on clock-time components and
+ * never drifted. `useCheckInNotifications` carries the device timezone in its
+ * fingerprint for exactly this reason — without it the foreground reconcile
+ * hits its own skip gate (same fingerprint, same wall-clock day) and never
+ * rewrites.
  *
  * This module is pure: no expo, no store, no clock of its own. Everything it
  * needs arrives as an argument so the whole schedule is testable directly.

@@ -71,6 +71,10 @@ describe('buildCheckInSchedule — uniform mode', () => {
     expect(hhmm(build({ defaultTime: '00:00' })[0])).toBe('0:00');
     expect(hhmm(build({ defaultTime: '23:59' })[0])).toBe('23:59');
   });
+
+  it('parses a single-digit hour with a colon (9:05)', () => {
+    expect(hhmm(build({ defaultTime: '9:05' })[0])).toBe('9:05');
+  });
 });
 
 describe('buildCheckInSchedule — a time that has already passed today', () => {
@@ -151,6 +155,37 @@ describe('buildCheckInSchedule — parameterisation', () => {
 
   it('honours a custom horizon', () => {
     expect(build({ horizonDays: 3 })).toHaveLength(3);
+  });
+
+  it('uses each slot’s own fallback time on unparseable input', () => {
+    expect(hhmm(build({ defaultTime: 'x' })[0])).toBe('12:30');
+    const evening = build({ idBase: 'unfold-evening-winddown', defaultTime: 'x', fallback: EVENING });
+    expect(hhmm(evening[0])).toBe('20:30');
+  });
+});
+
+describe('buildCheckInSchedule — a skipped day returns the following week', () => {
+  // The retired schedule needed a one-off `-resume` trigger for this, because
+  // a WEEKLY trigger could not skip a single occurrence. A dated horizon gets
+  // it for free: the skipped date is dropped and the same weekday is already
+  // in the window seven days later, at its own configured time.
+  it('keeps the same weekday seven days on, at its per-day time', () => {
+    const ops = build({
+      byDay: { Mon: '12:30', Tue: '12:30', Wed: '13:15', Thu: '12:30', Fri: '12:30', Sat: '12:30', Sun: '12:30' },
+      skipLocalDate: '2026-01-07', // the Wednesday `now` sits on
+    });
+    const wednesdays = ops.filter((o) => o.date.getDay() === 3);
+    expect(wednesdays).toHaveLength(1);
+    expect(wednesdays[0].dayIndex).toBe(dayIndexFor(new Date(2026, 0, 14)));
+    expect(hhmm(wednesdays[0])).toBe('13:15');
+  });
+
+  it('drops the skipped day entirely when that weekday is switched off', () => {
+    const ops = build({
+      byDay: { Mon: '12:30', Tue: '12:30', Wed: null, Thu: '12:30', Fri: '12:30', Sat: '12:30', Sun: '12:30' },
+      skipLocalDate: '2026-01-07',
+    });
+    expect(ops.some((o) => o.date.getDay() === 3)).toBe(false);
   });
 });
 

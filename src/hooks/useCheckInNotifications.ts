@@ -65,6 +65,7 @@ import { readTrialCheckInSkipDate } from '@/lib/trial-notification';
 import { logger } from '@/lib/logger';
 import { getCheckInNotificationGatePlan } from '@/lib/check-in-notification-sync-policy';
 import { useUIState } from '@/lib/ui-state';
+import { getDeviceTimezone } from '@/lib/device-timezone';
 
 const DEBOUNCE_MS = 500;
 
@@ -108,6 +109,14 @@ function useCheckInFingerprint(): string {
   );
   const notificationPermissionEpoch = useUIState((s) => s.notificationPermissionEpoch);
   const trialNoticeEpoch = useUIState((s) => s.trialNoticeEpoch);
+  // INCLUDED: the device timezone. Occurrences are written as absolute
+  // instants, so a reader who flies London -> New York keeps receiving a
+  // 12:30 London schedule at 07:30 local until it is rewritten. Nothing else
+  // here would catch that: the fingerprint is otherwise unchanged and
+  // `toDateString()` often still matches, so the foreground reconcile would
+  // hit the skip gate in runSync and never rewrite. The retired DAILY trigger
+  // fired on clock-time components and needed no such rewrite.
+  const deviceTimezone = getDeviceTimezone() ?? '';
 
   return JSON.stringify([
     policy,
@@ -121,6 +130,7 @@ function useCheckInFingerprint(): string {
     todayCarryLine,
     notificationPermissionEpoch,
     trialNoticeEpoch,
+    deviceTimezone,
   ]);
 }
 
