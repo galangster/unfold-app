@@ -19,7 +19,7 @@ const config = require('../../../eslint.config.js') as FlatConfigEntry[];
 
 const RULE = 'no-restricted-syntax';
 const ROUTER_BACK_SELECTOR =
-  "CallExpression[callee.type='MemberExpression'][callee.object.name='router'][callee.property.name='back']";
+  "CallExpression[callee.type='MemberExpression'][callee.property.name='back'][arguments.length=0]";
 /** The guard itself is the only file that may pop the stack directly. */
 const ALLOWED_FILE = 'src/lib/navigation.ts';
 

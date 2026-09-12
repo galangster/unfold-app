@@ -26,8 +26,13 @@ const FETCH_SELECTORS = [
 // (1.1.8 build 279). src/lib/__tests__/eslint-no-router-back-rule.test.ts pins
 // this and its single allowed file.
 const ROUTER_BACK_SELECTOR = {
+  // Any zero-argument .back() call, not just one on an identifier spelled
+  // `router`: the repo already navigates through `routerRef.current` in
+  // src/hooks/useRevenueCatSync.ts, and useRouter().back() or a renamed
+  // binding would slip past a narrower selector. navigation.ts is the only
+  // file with a .back() call, so the broad form has nothing else to catch.
   selector:
-    "CallExpression[callee.type='MemberExpression'][callee.object.name='router'][callee.property.name='back']",
+    "CallExpression[callee.type='MemberExpression'][callee.property.name='back'][arguments.length=0]",
   message:
     "router.back() is a silent no-op on an empty stack (a push or deep-link cold start). Call goBackOr from @/lib/navigation so the exit always leads somewhere.",
 };
