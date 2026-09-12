@@ -1,6 +1,7 @@
 import type { Devotional, DevotionalDay } from './store';
 import type { PulledDevotionalContent } from './devotional-sync-pull';
 import { canonicalGeneratedDayId } from './devotional-canonical-days';
+import { mergeDevotionalLifecycle } from './devotional-lifecycle';
 import { assertSyncSessionCurrent } from './sync-session-fence';
 import { buildDevotionalSyncMetadataPatch } from './devotional-sync-metadata';
 import {
@@ -69,6 +70,12 @@ function buildPulledDevotionalShell(
   // the real start), which could lock a restored reader out of days they were
   // owed and then push that wrong anchor upstream.
   const seriesStartDate = pulled.devotional?.seriesStartDate ?? days[0]?.generatedAt ?? updatedAt;
+  const lifecycle = mergeDevotionalLifecycle({
+    incoming: {
+      archivedAt: pulled.devotional?.archivedAt,
+      archivedStateAt: pulled.devotional?.archivedStateAt,
+    },
+  });
 
   return {
     id: devotionalId,
@@ -87,6 +94,7 @@ function buildPulledDevotionalShell(
     },
     generationMode: 'progressive',
     ...(pulled.devotional?.seriesArc ? { seriesArc: pulled.devotional.seriesArc } : {}),
+    ...lifecycle,
   };
 }
 

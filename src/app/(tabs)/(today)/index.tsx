@@ -11,7 +11,7 @@ import { useTheme } from '@/lib/theme';
 import { logger } from '@/lib/logger';
 import { isQaToolsEnabled } from '@/lib/qa-tools';
 import { isVoiceCheckInsEnabled } from '@/lib/voice-feature';
-import { useUnfoldStore, type MoodLevel } from '@/lib/store';
+import { updateSyncedDevotionals, useUnfoldStore, type MoodLevel } from '@/lib/store';
 import { requestReviewOncePerVersion } from '@/lib/review-prompt';
 import { useQuery } from '@tanstack/react-query';
 import { StreakBox } from '@/components/StreakBox';
@@ -591,11 +591,7 @@ export default function HomeScreen() {
             devotionalId,
             pulled,
             updateDevotionalDays,
-            updateDevotionals: (updater) => {
-              useUnfoldStore.setState((state) => ({
-                devotionals: updater(state.devotionals),
-              }));
-            },
+            updateDevotionals: updateSyncedDevotionals,
           });
           // Only after the content is in the store — a cancelled focus above
           // discards the response, and must not advance the cursor.

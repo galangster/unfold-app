@@ -3,6 +3,13 @@ import NetInfo from '@react-native-community/netinfo';
 import { getAuthHeaders, PRIMARY_BACKEND_URL } from './api-config';
 import { authenticatedFetch } from './device-credential';
 import { asNextPick, asTrimmedString, isAutoTrialSeries, shouldInsertPulledDevotional } from './auto-trial-series';
+import {
+  didDevotionalLifecycleChange,
+  extractDevotionalLifecycle,
+  mergeDevotionalLifecycle,
+  parseLifecycleTimestamp,
+} from './devotional-lifecycle';
+import { selectSyncedCurrentDevotionalId } from './devotional-resume-selection';
 import { mmkvStorage } from './mmkv-storage';
 import { logger } from './logger';
 import { useUnfoldStore } from './store';
@@ -93,6 +100,18 @@ function pendingClientUpdatedAtsByRecord(): PendingClientUpdatedAtByRecord {
     if (!existing || change.clientUpdatedAt > existing) {
       pending.set(key, change.clientUpdatedAt);
     }
+  }
+  return pending;
+}
+
+function pendingDevotionalArchivedStateAtById(): Map<string, string> {
+  const pending = new Map<string, string>();
+  for (const change of peekSyncOutbox()) {
+    if (change.table !== 'devotionals' || change.deleted) continue;
+    const archivedStateAt = parseLifecycleTimestamp(asRecord(change.data).archivedStateAt);
+    if (typeof archivedStateAt !== 'string') continue;
+    const existing = pending.get(change.id);
+    if (!existing || existing < archivedStateAt) pending.set(change.id, archivedStateAt);
   }
   return pending;
 }
@@ -639,8 +658,10 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
   const changes = payload.changes;
   const pendingByRecord = pendingClientUpdatedAtsByRecord();
   const pendingByChapter = pendingBibleReadingByChapter();
+  const pendingLifecycleById = pendingDevotionalArchivedStateAtById();
   useUnfoldStore.setState((state) => {
-    let devotionals = state.devotionals;
+    const previousDevotionals = state.devotionals;
+    let devotionals = previousDevotionals;
     const incomingDevotionals = changes.devotionals ?? [];
     const hasAutoTrialSeries = devotionals.some(isAutoTrialSeries)
       || incomingDevotionals.some((record) => {
@@ -653,21 +674,45 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
       });
     for (const record of incomingDevotionals) {
       const current = devotionals.find((item) => item.id === record.id);
-      // Tombstones are LWW-gated like every other row (WR-25): a pending local
-      // write or a newer local row must not be wiped by a stale delete.
-      if (!shouldApply(record, current, 'devotionals', pendingByRecord)) continue;
+      const contentShouldApply = shouldApply(record, current, 'devotionals', pendingByRecord);
+      const mergedLifecycle = mergeDevotionalLifecycle({
+        local: current,
+        incoming: extractDevotionalLifecycle(asRecord(record.data)),
+        pendingArchivedStateAt: pendingLifecycleById.get(record.id),
+      });
+      const lifecycleChanged = didDevotionalLifecycleChange(current, mergedLifecycle);
+      // Tombstones stay content-LWW. Archive/resume uses archivedStateAt, so a
+      // pending read must not block a newer remote lifecycle decision.
       if (record.deleted) {
+        if (!contentShouldApply) continue;
         devotionals = devotionals.filter((item) => item.id !== record.id);
         continue;
       }
-      const mapped = mapDevotional(record, current);
-      if (!mapped) continue;
-      if (current) {
-        devotionals = devotionals.map((item) => (item.id === record.id ? mapped : item));
+      if (!contentShouldApply && !lifecycleChanged) continue;
+      if (contentShouldApply) {
+        const mapped = mapDevotional(record, current);
+        if (!mapped) {
+          if (current && lifecycleChanged) {
+            devotionals = devotionals.map((item) => (
+              item.id === record.id ? { ...item, ...mergedLifecycle } : item
+            ));
+          }
+          continue;
+        }
+        const next = { ...mapped, ...mergedLifecycle };
+        if (current) {
+          devotionals = devotionals.map((item) => (item.id === record.id ? next : item));
+          continue;
+        }
+        if (!shouldInsertPulledDevotional(next, hasAutoTrialSeries)) continue;
+        devotionals = [next, ...devotionals];
         continue;
       }
-      if (!shouldInsertPulledDevotional(mapped, hasAutoTrialSeries)) continue;
-      devotionals = [mapped, ...devotionals];
+      if (current && lifecycleChanged) {
+        devotionals = devotionals.map((item) => (
+          item.id === record.id ? { ...item, ...mergedLifecycle } : item
+        ));
+      }
     }
 
     for (const record of changes.devotional_days ?? []) {
@@ -691,6 +736,11 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
 
     return {
       devotionals,
+      currentDevotionalId: selectSyncedCurrentDevotionalId({
+        previousCurrentId: state.currentDevotionalId,
+        previous: previousDevotionals,
+        next: devotionals,
+      }),
       // Journal rows the server minted before entry ids were day-derived still
       // carry random ids, so upserting them by id alone re-creates exactly the
       // per-day duplicates the v41→42 migration merged. Collapse the day again

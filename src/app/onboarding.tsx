@@ -609,8 +609,12 @@ function ProgressIndicator({
 export default function OnboardingScreen() {
   const router = useRouter();
   const guardedBack = useGuardedBack();
-  const { startAt } = useLocalSearchParams<{ startAt?: string | string[] }>();
+  const { startAt, flow } = useLocalSearchParams<{
+    startAt?: string | string[];
+    flow?: string | string[];
+  }>();
   const requestedStartStepId = Array.isArray(startAt) ? startAt[0] : startAt;
+  const isNewSeriesFlow = (Array.isArray(flow) ? flow[0] : flow) === 'newSeries';
   const { colors: _themeColors, isDark: _themeIsDark } = useTheme();
   const colors = useOnboardingDarkColors();
   const isDark = true;
@@ -1788,7 +1792,13 @@ export default function OnboardingScreen() {
       stepIds: STEPS.map((s) => s.id),
       currentStepId,
       purchasedDuringOnboarding,
+      entryStepId: isNewSeriesFlow ? requestedStartStepId ?? 'themeType' : undefined,
     }) as StepId | null;
+    if (!prevStepId && isNewSeriesFlow) {
+      Keyboard.dismiss();
+      router.dismissTo('/(tabs)/(today)');
+      return;
+    }
     if (prevStepId) {
 
       // Dismiss keyboard first to prevent layout shift

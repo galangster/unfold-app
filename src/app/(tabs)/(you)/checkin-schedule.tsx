@@ -15,6 +15,7 @@ import { useTheme } from '@/lib/theme';
 import { useGuardedBack } from '@/hooks/useGuardedBack';
 import { useUnfoldStore } from '@/lib/store';
 import { formatReminderTime } from '@/lib/format-reminder-time';
+import { CHECKIN_DAY_KEYS as DAYS } from '@/lib/check-in-schedule';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 // NOTE: scheduleMiddayCheckIn / scheduleEveningWindDown are NOT imported here.
 // `useCheckInNotifications` owns the OS queue — this screen only mutates
@@ -22,7 +23,6 @@ import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 // and the single-owner hook reacts through its fingerprint watcher.
 // See ~/vault/standards/one-owner-per-os-resource.md
 
-const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 
 function timeStringToDate(time: string): Date {
   const [h, m] = time.split(':').map(Number);

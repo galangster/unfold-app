@@ -1,9 +1,11 @@
 import { enqueueSyncChanges } from './sync-outbox';
+import { devotionalLifecycleSyncFields } from './devotional-lifecycle';
 import type {
   BibleHighlight,
   BibleReadingPosition,
   Bookmark,
   CheckIn,
+  Devotional,
   Highlight,
   JournalEntry,
   MethodUsageRecord,
@@ -57,6 +59,25 @@ export function journalEntrySyncData(entry: JournalEntry): Record<string, unknow
     prayerRequests: entry.prayerRequests,
     questionResponses: entry.questionResponses,
     deeperQuestions: entry.deeperQuestions,
+  });
+}
+
+export function devotionalSyncData(devotional: Devotional): Record<string, unknown> {
+  return compact({
+    schemaVersion: 1,
+    title: devotional.title,
+    totalDays: devotional.totalDays,
+    currentDay: devotional.currentDay,
+    userContext: devotional.userContext,
+    themeCategory: devotional.themeCategory,
+    devotionalType: devotional.devotionalType,
+    studySubject: devotional.studySubject,
+    generationMode: devotional.generationMode,
+    usedStoryIds: devotional.usedStoryIds,
+    seriesArc: devotional.seriesArc,
+    progressiveMemory: devotional.progressiveMemory,
+    seriesStartDate: devotional.seriesStartDate,
+    ...devotionalLifecycleSyncFields(devotional),
   });
 }
 

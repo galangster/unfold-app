@@ -236,9 +236,11 @@ export function resolveOnboardingBackTarget(i: {
   stepIds: readonly string[];
   currentStepId: string;
   purchasedDuringOnboarding: boolean;
+  entryStepId?: string;
 }): string | null {
   const index = i.stepIds.indexOf(i.currentStepId);
-  if (index <= 0) return null;
+  const entryIndex = i.entryStepId ? i.stepIds.indexOf(i.entryStepId) : -1;
+  if (index <= 0 || (entryIndex >= 0 && index <= entryIndex)) return null;
   const previousId = i.stepIds[index - 1];
   if (
     i.purchasedDuringOnboarding

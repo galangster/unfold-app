@@ -85,6 +85,27 @@ describe('buildDevotionalReadSyncChanges', () => {
     expect(changes[0].data).not.toHaveProperty('content');
     expect(changes[0].data.schemaVersion).toBe(1);
     expect(changes[1].data.schemaVersion).toBe(1);
+    expect(changes[1].data).not.toHaveProperty('archivedAt');
+    expect(changes[1].data).not.toHaveProperty('archivedStateAt');
+  });
+
+  it('carries archive clocks on a later read so outbox replace cannot drop them', () => {
+    const readAt = '2026-09-12T16:00:00.000Z';
+    const archivedDevotional: Devotional = {
+      ...devotional,
+      archivedAt: '2026-09-12T15:00:00.000Z',
+      archivedStateAt: '2026-09-12T15:00:00.000Z',
+    };
+    const changes = buildDevotionalReadSyncChanges({
+      devotional: archivedDevotional,
+      day,
+      readAt,
+    });
+    expect(changes[1].data).toMatchObject({
+      currentDay: 2,
+      archivedAt: '2026-09-12T15:00:00.000Z',
+      archivedStateAt: '2026-09-12T15:00:00.000Z',
+    });
   });
 
   it('uses the canonical sync id for progressive read state even when the local day id is not canonical', () => {

@@ -257,6 +257,8 @@ describe('devotional sync pull recovery', () => {
       totalDays: 14,
       currentDay: 2,
     });
+    expect(result.devotional).not.toHaveProperty('archivedAt');
+    expect(result.devotional).not.toHaveProperty('archivedStateAt');
     expect(result.days).toHaveLength(1);
     expect(result.days[0]).toMatchObject({
       id: 'day-devotional-1-2',
@@ -269,6 +271,30 @@ describe('devotional sync pull recovery', () => {
       wordStudy: 'The Hebrew name points to God meeting people personally.',
       isRead: false,
       updatedAt: '2026-04-25T11:58:00.000Z', // WR-25: mapped rows store clientUpdatedAt as local updatedAt (same-clock LWW basis),
+    });
+  });
+
+  it('maps archive clocks from a pulled series row', () => {
+    const result = extractPulledDevotionalContent({
+      timestamp: '2026-09-12T16:00:00.000Z',
+      changes: {
+        devotionals: [{
+          id: 'devotional-1',
+          updatedAt: '2026-09-12T15:00:00.000Z',
+          deleted: false,
+          data: {
+            title: 'The Names That Hold You',
+            archivedAt: '2026-09-12T15:00:00.000Z',
+            archivedStateAt: '2026-09-12T15:00:00.000Z',
+          },
+        }],
+      },
+    }, 'devotional-1');
+
+    expect(result.devotional).toMatchObject({
+      id: 'devotional-1',
+      archivedAt: '2026-09-12T15:00:00.000Z',
+      archivedStateAt: '2026-09-12T15:00:00.000Z',
     });
   });
 
