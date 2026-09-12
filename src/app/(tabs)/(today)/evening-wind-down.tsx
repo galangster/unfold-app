@@ -184,7 +184,17 @@ export default function EveningWindDownScreen() {
   // resolveEveningWindDownReadiness for the report behind it.
   const readiness = resolveEveningWindDownReadiness(currentDevotional, eveningDayNumber);
   const [reflectAnyway, setReflectAnyway] = useState(false);
-  const askToReadFirst = readiness === 'unread' && !reflectAnyway;
+  // Only ask for a reading that actually exists. A reader with no current
+  // series still gets the evening notification — scheduleEveningWindDown
+  // pre-rolls its occurrences without requiring a devotional, and
+  // removeDevotional nulls currentDevotionalId when the last series is
+  // deleted — so without these guards the prompt would claim "you haven't
+  // finished Day 1" to someone who has no Day 1, over a "Read it now" button
+  // that early-returns. That is a dead primary control, the same failure this
+  // screen was just fixed for, and it would shadow the existing
+  // "Start a devotional" empty state below.
+  const askToReadFirst =
+    readiness === 'unread' && !!currentDevotional && !!currentDay && !reflectAnyway;
 
   const middayCheckIn = useMemo(() => {
     if (!currentDevotional || !currentDay) return undefined;

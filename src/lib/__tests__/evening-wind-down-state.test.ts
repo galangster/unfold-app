@@ -171,6 +171,12 @@ describe('resolveEveningWindDownReadiness', () => {
   });
 
   it('is unread without a devotional at all', () => {
+    // The resolver answers only "is this day read", so no devotional is
+    // trivially unread. The SCREEN must not route on that alone: with no
+    // series there is no day to send anyone to, so evening-wind-down.tsx
+    // additionally requires currentDevotional and currentDay before it shows
+    // the read-first prompt, and falls through to the "Start a devotional"
+    // empty state otherwise.
     expect(resolveEveningWindDownReadiness(null, 1)).toBe('unread');
   });
 });
