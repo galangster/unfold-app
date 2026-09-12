@@ -165,6 +165,41 @@ describe('SupportSection bug report request', () => {
     spies.splice(0).forEach((spy) => spy.mockRestore());
   });
 
+  function sendWithoutNote() {
+    const cancelPrompt: typeof Alert.prompt = (_title, _message, callbackOrButtons) => {
+      if (Array.isArray(callbackOrButtons)) {
+        callbackOrButtons.find((button) => button.text === 'Send')?.onPress?.();
+      }
+    };
+    spies.push(
+      jest.spyOn(Alert, 'prompt').mockImplementation(cancelPrompt),
+      jest.spyOn(Alert, 'alert').mockImplementation((title, _message, buttons) => {
+        if (title === 'Report a bug?' && Array.isArray(buttons)) {
+          buttons.find((button) => button.text === 'Continue')?.onPress?.();
+        }
+      }),
+    );
+  }
+
+  it('does not create or send diagnostics when the note prompt is cancelled', async () => {
+    spies.push(
+      jest.spyOn(Alert, 'prompt').mockImplementation((_title, _message, buttons) => {
+        if (Array.isArray(buttons)) {
+          buttons.find((button) => button.style === 'cancel')?.onPress?.();
+        }
+      }),
+    );
+
+    const tree = createSection();
+    const row = pressableAncestor(tree.root.findByProps({ children: 'Report a bug' }));
+    await act(async () => {
+      await row.props.onPress();
+    });
+
+    expect(exportBugReportBundleToFile).not.toHaveBeenCalled();
+    expect(authenticatedFetch).not.toHaveBeenCalled();
+  });
+
   it('sends the bug-report email through authenticatedFetch with an abort signal', async () => {
     (getAuthHeaders as jest.Mock).mockResolvedValue({ 'Content-Type': 'application/json' });
     (exportBugReportBundleToFile as jest.Mock).mockResolvedValue({
@@ -173,16 +208,7 @@ describe('SupportSection bug report request', () => {
       triageSummary: { headline: 'ok' },
     });
     global.fetch = jest.fn().mockResolvedValue({ ok: true }) as unknown as typeof fetch;
-    // Cancel the note prompt so the report sends without a user note.
-    const cancelPrompt: typeof Alert.prompt = (_title, _message, callbackOrButtons) => {
-      if (Array.isArray(callbackOrButtons)) {
-        callbackOrButtons.find((button) => button.style === 'cancel')?.onPress?.();
-      }
-    };
-    spies.push(
-      jest.spyOn(Alert, 'prompt').mockImplementation(cancelPrompt),
-      jest.spyOn(Alert, 'alert').mockImplementation(() => undefined),
-    );
+    sendWithoutNote();
 
     const tree = createSection();
     const row = pressableAncestor(tree.root.findByProps({ children: 'Report a bug' }));

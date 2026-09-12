@@ -1,5 +1,4 @@
 import { getDailyGenerationNotice } from '@/lib/daily-generation-messages';
-import { useGuardedBack } from '@/hooks/useGuardedBack';
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useAutoHide } from '@/hooks/useAutoHide';
 import { View, Text, Dimensions, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet, TouchableOpacity, Keyboard, ScrollView, UIManager, type LayoutChangeEvent } from 'react-native';
@@ -70,6 +69,8 @@ import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
 import { CompletionCelebration } from '@/components/CompletionCelebration';
 import { getCompletionDismissRoute } from '@/lib/completion-dismiss-route';
+import { useCrossTabBack } from '@/hooks/useCrossTabBack';
+import { resolveStackRoute, tabGroupToFrom, type TabGroup } from '@/lib/tab-stack-routes';
 import { readAutoTrialIntent, transitionAutoTrialIntent } from '@/lib/auto-trial-intent';
 import { trackAutoTrialCompleted } from '@/lib/auto-trial-telemetry';
 // ShareDevotionalModal removed — pull quote share now uses /share-card route
@@ -219,11 +220,11 @@ export function maybeCompleteAutoTrialOnLastDay(i: {
   });
 }
 
-export default function ReadingScreen() {
+export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = {}) {
   const router = useRouter();
-  const guardedBack = useGuardedBack();
   const isReadingFocused = useIsFocused();
-  const params = useLocalSearchParams<{ dayNumber?: string; devotionalId?: string; highlightId?: string; bookmarkId?: string; readOnly?: string; focus?: string }>();
+  const params = useLocalSearchParams<{ dayNumber?: string; devotionalId?: string; highlightId?: string; bookmarkId?: string; readOnly?: string; focus?: string; from?: string }>();
+  const { handleBack: handleReaderBack } = useCrossTabBack();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
@@ -281,15 +282,11 @@ export default function ReadingScreen() {
   // Honor ?devotionalId=… so deep links (e.g., from the library) open the
   // correct devotional instead of whatever happens to be current in the store.
   // We resolve the effective devotional locally from the param *immediately*
-  // so first-render state (viewingDay) picks the right days. We mirror it to
-  // the store from an effect so downstream consumers (audio player, highlight
-  // filters) see the right id without mutating Zustand during render.
+  // Reading history must not replace the active series used by Today.
   const effectiveDevotionalId = params.devotionalId ?? currentDevotionalId;
-  useEffect(() => {
-    if (params.devotionalId && params.devotionalId !== currentDevotionalId) {
-      setCurrentDevotional(params.devotionalId);
-    }
-  }, [params.devotionalId, currentDevotionalId, setCurrentDevotional]);
+  const isViewingActiveSeries = Boolean(
+    effectiveDevotionalId && effectiveDevotionalId === currentDevotionalId,
+  );
 
   // Derive via useMemo instead of inline .find() in a Zustand selector.
   // .find() inside a selector returns a new reference on every store update,
@@ -411,9 +408,9 @@ export default function ReadingScreen() {
 
   // Reactive bookmark check - fixes the bookmark icon not updating
   const isCurrentDayBookmarked = useMemo(() => {
-    if (!currentDevotionalId) return false;
-    return bookmarks.some((b) => b.devotionalId === currentDevotionalId && b.dayNumber === viewingDay);
-  }, [bookmarks, currentDevotionalId, viewingDay]);
+    if (!effectiveDevotionalId) return false;
+    return bookmarks.some((b) => b.devotionalId === effectiveDevotionalId && b.dayNumber === viewingDay);
+  }, [bookmarks, effectiveDevotionalId, viewingDay]);
 
   // Get highlights for current day
   const currentDayHighlights = useMemo(() => {
@@ -511,13 +508,13 @@ export default function ReadingScreen() {
   const openJournalForDay = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.push({
-      pathname: '/(tabs)/(today)/journal',
+      pathname: resolveStackRoute(hostTab, 'journal'),
       params: {
         devotionalId: effectiveDevotionalId ?? currentDevotionalId,
         dayNumber: String(viewingDay),
       },
     });
-  }, [router, effectiveDevotionalId, currentDevotionalId, viewingDay]);
+  }, [router, hostTab, effectiveDevotionalId, currentDevotionalId, viewingDay]);
 
   const handleJumpToSection = useCallback((section: ReaderSection) => {
     const y = sectionOffsets[section];
@@ -539,8 +536,8 @@ export default function ReadingScreen() {
 
   const handleOpenEntry = useCallback((entry: JournalEntry) => {
     setShowOutlineSheet(false);
-    router.push({ pathname: '/(tabs)/(today)/journal-detail', params: { entryId: entry.id } });
-  }, [router]);
+    router.push({ pathname: resolveStackRoute(hostTab, 'journal-detail'), params: { entryId: entry.id } });
+  }, [router, hostTab]);
 
   const handleWriteReflection = useCallback(() => {
     setShowOutlineSheet(false);
@@ -723,12 +720,13 @@ export default function ReadingScreen() {
   }, [lockedTodayDayNumber, viewingDay]);
 
   // Persist latest reading context so Home can offer one-tap resume.
+  // History views must not overwrite Today's resume pointer.
   useEffect(() => {
-    if (!currentDevotionalId || !currentDevotional) return;
+    if (!isViewingActiveSeries || !effectiveDevotionalId || !currentDevotional) return;
 
     setResumeContext({
       route: 'reading',
-      devotionalId: currentDevotionalId,
+      devotionalId: effectiveDevotionalId,
       dayNumber: viewingDay,
       devotionalTitle: currentDevotional.title,
       dayTitle: currentDayData?.title,
@@ -738,7 +736,8 @@ export default function ReadingScreen() {
       // fresh touchedAt → home clears + pushes to reading → loop.
     });
   }, [
-    currentDevotionalId,
+    isViewingActiveSeries,
+    effectiveDevotionalId,
     currentDevotional?.title,
     currentDayData?.title,
     viewingDay,
@@ -772,17 +771,17 @@ export default function ReadingScreen() {
   }, [viewingDay, availableDays, goToDay]);
 
   const handleToggleBookmark = useCallback(() => {
-    if (!currentDevotionalId || !currentDevotional || !currentDayData) return;
+    if (!effectiveDevotionalId || !currentDevotional || !currentDayData) return;
 
     const existingBookmark = bookmarks.find(
-      (b) => b.devotionalId === currentDevotionalId && b.dayNumber === viewingDay
+      (b) => b.devotionalId === effectiveDevotionalId && b.dayNumber === viewingDay
     );
 
     if (existingBookmark) {
       removeBookmark(existingBookmark.id);
     } else {
       addBookmark({
-        devotionalId: currentDevotionalId,
+        devotionalId: effectiveDevotionalId,
         devotionalTitle: currentDevotional.title,
         dayNumber: viewingDay,
         dayTitle: currentDayData.title,
@@ -794,7 +793,7 @@ export default function ReadingScreen() {
       setBookmarkToast(true);
     }
     // Haptic removed — DevotionalContent handles it (Medium weight)
-  }, [currentDevotionalId, currentDevotional, viewingDay, currentDayData, bookmarks, addBookmark, removeBookmark]);
+  }, [effectiveDevotionalId, currentDevotional, viewingDay, currentDayData, bookmarks, addBookmark, removeBookmark]);
 
   const handlePlayAudio = useCallback(async () => {
     if (!isPremium) {
@@ -814,7 +813,7 @@ export default function ReadingScreen() {
     const metadata = {
       title: currentDayData?.title ?? 'Devotional',
       seriesTitle: currentDevotional?.title ?? '',
-      devotionalId: currentDevotionalId ?? '',
+      devotionalId: effectiveDevotionalId ?? '',
       dayNumber: viewingDay,
     };
     useAudioPlayerState.getState().startAudio('', metadata);
@@ -853,7 +852,7 @@ export default function ReadingScreen() {
     } finally {
       setIsPreparingAudio(false);
     }
-  }, [isPremium, currentDayData, currentDevotional, currentDevotionalId, user?.preferredVoice, viewingDay, totalDays, user?.readingDuration, startAudio, isPreparingAudio]);
+  }, [isPremium, currentDayData, currentDevotional, effectiveDevotionalId, user?.preferredVoice, viewingDay, totalDays, user?.readingDuration, startAudio, isPreparingAudio]);
 
   const handleStudyMethodPress = useCallback((methodId: string) => {
     // Audio continues playing behind the study method sheet (spec requirement)
@@ -862,10 +861,10 @@ export default function ReadingScreen() {
   }, []);
 
   const handleHighlightsChanged = useCallback((event: HighlightsChangedEvent) => {
-    if (!currentDevotionalId || !currentDevotional || !currentDayData) return;
+    if (!effectiveDevotionalId || !currentDevotional || !currentDayData) return;
 
     reconcileDayHighlights(
-      { devotionalId: currentDevotionalId, devotionalTitle: currentDevotional.title, dayNumber: viewingDay, dayTitle: currentDayData.title },
+      { devotionalId: effectiveDevotionalId, devotionalTitle: currentDevotional.title, dayNumber: viewingDay, dayTitle: currentDayData.title },
       event.removed,
       event.added,
     );
@@ -873,7 +872,7 @@ export default function ReadingScreen() {
     if (event.silent) {
       const name = event.reason === 'heal' ? AnalyticsEvents.HIGHLIGHT_HEALED : AnalyticsEvents.HIGHLIGHT_UNDONE;
       logEvent(name, { added: event.added.length, removed: event.removed.length });
-      if (event.reason === 'heal') addAppBreadcrumb('highlights', 'Re-anchored highlights after text change', { devotionalId: currentDevotionalId ?? '', day: viewingDay, count: event.added.length });
+      if (event.reason === 'heal') addAppBreadcrumb('highlights', 'Re-anchored highlights after text change', { devotionalId: effectiveDevotionalId, day: viewingDay, count: event.added.length });
       return;
     }
 
@@ -892,13 +891,13 @@ export default function ReadingScreen() {
         setHighlightToast(null);
       },
     });
-  }, [currentDevotionalId, currentDevotional, viewingDay, currentDayData, reconcileDayHighlights]);
+  }, [effectiveDevotionalId, currentDevotional, viewingDay, currentDayData, reconcileDayHighlights]);
 
   const handleHighlightsLost = useCallback((serials: string[]) => {
-    if (!currentDevotionalId) return;
+    if (!effectiveDevotionalId) return;
     logEvent(AnalyticsEvents.HIGHLIGHT_LOST, { count: serials.length });
-    addAppBreadcrumb('highlights', 'Stored highlight text not found in document', { devotionalId: currentDevotionalId ?? '', day: viewingDay, count: serials.length });
-  }, [currentDevotionalId, viewingDay]);
+    addAppBreadcrumb('highlights', 'Stored highlight text not found in document', { devotionalId: effectiveDevotionalId, day: viewingDay, count: serials.length });
+  }, [effectiveDevotionalId, viewingDay]);
 
   const handleHighlightFailed = useCallback(() => {
     logEvent(AnalyticsEvents.HIGHLIGHT_FAILED);
@@ -925,6 +924,8 @@ export default function ReadingScreen() {
 
   const panGesture = useMemo(() =>
     Gesture.Pan()
+      // Reserve the leading edge for the native stack back gesture.
+      .hitSlop({ left: -24 })
       .activeOffsetX([-20, 20])
       .onStart(() => {
         runOnJS(dismissKeyboardForSwipe)();
@@ -994,8 +995,8 @@ export default function ReadingScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setIsCompleted(true);
 
-    if (currentDevotionalId) {
-      markDayAsRead(currentDevotionalId, viewingDay);
+    if (effectiveDevotionalId) {
+      markDayAsRead(effectiveDevotionalId, viewingDay);
       if (currentDevotional && currentDayData) {
         void syncDevotionalDayRead({
           devotional: currentDevotional,
@@ -1004,20 +1005,22 @@ export default function ReadingScreen() {
           logger.warn('[reading] Failed to sync read state:', err instanceof Error ? err.message : err);
           void logBugError('reading', err, {
             phase: 'sync-read-state',
-            devotionalId: currentDevotionalId,
+            devotionalId: effectiveDevotionalId,
             dayNumber: viewingDay,
           });
         });
       }
 
       // Clear resume context since user just completed this day
-      clearResumeContext();
+      if (isViewingActiveSeries) {
+        clearResumeContext();
+      }
 
       // Use the server-owned series boundary; user devotionalLength is only a new-series preference.
       const expectedTotal = totalDays;
       const completingLastDay = viewingDay >= expectedTotal;
       if (currentDevotional?.currentDay === viewingDay && viewingDay < expectedTotal) {
-        advanceDay(currentDevotionalId);
+        advanceDay(effectiveDevotionalId);
       }
       setCelebrationType(completingLastDay ? 'series' : 'day');
       setShowCelebration(true);
@@ -1029,7 +1032,7 @@ export default function ReadingScreen() {
       }
       maybeCompleteAutoTrialOnLastDay({
         completingLastDay,
-        devotionalId: currentDevotionalId,
+        devotionalId: effectiveDevotionalId,
         nowMs: Date.now(),
       });
 
@@ -1076,7 +1079,7 @@ export default function ReadingScreen() {
         }
       }
     }
-  }, [currentDevotionalId, viewingDay, totalDays, user?.devotionalLength, currentDevotional, currentDayData, markDayAsRead, advanceDay, clearResumeContext, recordStreakRead, syncWidgets, journalEntries.length, reviewPromptLastDate, reviewPromptCount, hasReviewed, reviewPromptDaysAtLast, recordReviewPrompt]);
+  }, [effectiveDevotionalId, isViewingActiveSeries, viewingDay, totalDays, user?.devotionalLength, currentDevotional, currentDayData, markDayAsRead, advanceDay, clearResumeContext, recordStreakRead, syncWidgets, journalEntries.length, reviewPromptLastDate, reviewPromptCount, hasReviewed, reviewPromptDaysAtLast, recordReviewPrompt]);
 
   const generateRemainingDays = useCallback(async (
     options?: { navigateToNextDay?: boolean; withHaptics?: boolean }
@@ -1084,7 +1087,13 @@ export default function ReadingScreen() {
     const navigateToNextDay = options?.navigateToNextDay ?? false;
     const withHaptics = options?.withHaptics ?? false;
 
-    if (!user || !currentDevotional || isGeneratingMore) {
+    if (
+      !user ||
+      !currentDevotional ||
+      isGeneratingMore ||
+      params.readOnly === '1' ||
+      !isViewingActiveSeries
+    ) {
       return { ok: false, retriable: false };
     }
 
@@ -1198,7 +1207,7 @@ export default function ReadingScreen() {
         setIsGeneratingMore(false);
       }
     }
-  }, [user, currentDevotional, isGeneratingMore, isOnline, updateDevotionalDays]);
+  }, [user, currentDevotional, isGeneratingMore, isOnline, updateDevotionalDays, params.readOnly, isViewingActiveSeries]);
 
   // Manual CTA from completion screen
   const handleGenerateMore = useCallback(async () => {
@@ -1214,7 +1223,16 @@ export default function ReadingScreen() {
   // Auto-continue generation in the background when Day 1 is ready but remaining days are missing.
   // Includes capped retry with backoff for transient network/service failures.
   useEffect(() => {
-    if (!user || !devoId || !isPremium || isGeneratingMore) return;
+    if (
+      !user ||
+      !devoId ||
+      !isPremium ||
+      isGeneratingMore ||
+      params.readOnly === '1' ||
+      !isViewingActiveSeries
+    ) {
+      return;
+    }
 
     const devotionalId = devoId;
     const expectedTotalDays = currentDevotional?.generationMode === 'progressive'
@@ -1320,7 +1338,7 @@ export default function ReadingScreen() {
         setAutoRetryTick((tick) => tick + 1);
       }, delayMs);
     })();
-  }, [user, devoId, devoTotalDays, devoDaysCount, isPremium, isGeneratingMore, generateRemainingDays, autoRetryTick, isOnline]);
+  }, [user, devoId, devoTotalDays, devoDaysCount, isPremium, isGeneratingMore, generateRemainingDays, autoRetryTick, isOnline, params.readOnly, isViewingActiveSeries]);
 
   const recoverSyncedDay = useCallback(async (source: 'auto' | 'manual' = 'manual'): Promise<boolean> => {
     if (!currentDevotional || currentDayData || isCheckingForSyncedDay) return false;
@@ -1466,7 +1484,9 @@ export default function ReadingScreen() {
           },
         });
         commitDevotionalPullCursor(pulled);
-        setCurrentDevotional(devotionalId);
+        if (params.readOnly !== '1' && !currentDevotionalId) {
+          setCurrentDevotional(devotionalId);
+        }
 
         void logBugEvent('reading-sync-recovery', 'hydrated-missing-devotional-from-sync-pull', {
           devotionalId,
@@ -1488,7 +1508,7 @@ export default function ReadingScreen() {
     return () => {
       cancelled = true;
     };
-  }, [effectiveDevotionalId, currentDevotional, isHydratingMissingDevotional, setCurrentDevotional, updateDevotionalDays]);
+  }, [effectiveDevotionalId, currentDevotional, currentDevotionalId, isHydratingMissingDevotional, params.readOnly, setCurrentDevotional, updateDevotionalDays]);
 
   const fallbackBottomPadding = Math.max(insets.bottom + 96, 112);
 
@@ -1650,13 +1670,7 @@ export default function ReadingScreen() {
           {/* Back header */}
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing['4'], paddingVertical: Spacing['3'] }}>
             <TouchableOpacity activeOpacity={0.7}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                // This "not ready yet" state can be entered directly via a
-                // deep link/notification for a specific day, so there may be
-                // no back stack to pop.
-                guardedBack();
-              }}
+              onPress={handleReaderBack}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               accessibilityRole="button"
               accessibilityLabel="Go back"
@@ -1901,12 +1915,7 @@ export default function ReadingScreen() {
               >
               {/* Left: Back button */}
               <TouchableOpacity activeOpacity={0.7}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  // The act reminder push replaces straight into this reader,
-                  // so a cold start has no stack to pop.
-                  guardedBack();
-                }}
+                onPress={handleReaderBack}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 accessibilityRole="button"
                 accessibilityLabel="Go back"
@@ -1921,10 +1930,12 @@ export default function ReadingScreen() {
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   router.push({
-                    pathname: '/(tabs)/(today)/day-menu',
+                    pathname: resolveStackRoute(hostTab, 'day-menu'),
                     params: {
-                      devotionalId: currentDevotionalId ?? '',
+                      devotionalId: effectiveDevotionalId ?? '',
                       currentDay: viewingDay.toString(),
+                      ...(params.from ? { from: params.from } : {}),
+                      ...(params.readOnly ? { readOnly: params.readOnly } : {}),
                     },
                   });
                 }}
@@ -2054,30 +2065,30 @@ export default function ReadingScreen() {
                 focusAct={params.focus === 'act'}
                 onActLocated={handleTargetHighlightLocated}
                 onActOutcome={(outcome) => {
-                  if (!currentDevotionalId) return;
-                  setActOutcome(currentDevotionalId, viewingDay, outcome);
+                  if (!effectiveDevotionalId) return;
+                  setActOutcome(effectiveDevotionalId, viewingDay, outcome);
                   logEvent('act_outcome', { outcome, source: 'reading' });
                 }}
                 onScriptureTap={(ref) => {
                   setScriptureSheetRef(ref);
                 }}
-                devotionalId={currentDevotionalId ?? ''}
+                devotionalId={effectiveDevotionalId ?? ''}
                 dayNumber={viewingDay}
                 onOpenJournal={(focusQuestion) => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  if (currentDevotionalId && currentDevotional) {
+                  if (isViewingActiveSeries && effectiveDevotionalId && currentDevotional) {
                     setResumeContext({
                       route: 'journal',
-                      devotionalId: currentDevotionalId,
+                      devotionalId: effectiveDevotionalId,
                       dayNumber: viewingDay,
                       devotionalTitle: currentDevotional.title,
                       dayTitle: currentDayData?.title,
                     });
                   }
                   router.push({
-                    pathname: '/(tabs)/(today)/journal',
+                    pathname: resolveStackRoute(hostTab, 'journal'),
                     params: {
-                      devotionalId: currentDevotionalId ?? '',
+                      devotionalId: effectiveDevotionalId ?? '',
                       dayNumber: viewingDay.toString(),
                       ...(focusQuestion != null ? { focusQuestion: String(focusQuestion) } : {}),
                     },
@@ -2388,7 +2399,7 @@ export default function ReadingScreen() {
         visible={showCelebration}
         onDismiss={() => {
           setShowCelebration(false);
-          const dismissRoute = getCompletionDismissRoute(celebrationType);
+          const dismissRoute = getCompletionDismissRoute(celebrationType, params.from, hostTab);
           const pending = pendingReviewRef.current;
           pendingReviewRef.current = null;
           if (pending) {
@@ -2465,7 +2476,7 @@ export default function ReadingScreen() {
         onClose={() => setShowReadingSettings(false)}
         onOpenSavedContent={() => {
           router.push({
-            pathname: '/(tabs)/(today)/my-content',
+            pathname: resolveStackRoute(hostTab, 'my-content'),
             params: { tab: 'highlights', source: 'devotional', from: 'reader-settings' },
           });
         }}
@@ -2492,8 +2503,8 @@ export default function ReadingScreen() {
           onPress={() => {
             setBookmarkToast(false);
             router.push({
-              pathname: '/(tabs)/(today)/my-content',
-              params: { tab: 'bookmarks', from: 'home' },
+              pathname: resolveStackRoute(hostTab, 'my-content'),
+              params: { tab: 'bookmarks', from: tabGroupToFrom(hostTab) ?? 'home' },
             });
           }}
           accessibilityRole="link"
@@ -2535,6 +2546,10 @@ export default function ReadingScreen() {
       />
     </View>
   );
+}
+
+export default function TodayReadingScreen() {
+  return <ReadingScreen hostTab="(today)" />;
 }
 
 const styles = StyleSheet.create({

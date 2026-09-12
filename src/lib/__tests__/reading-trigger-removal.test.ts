@@ -58,7 +58,7 @@ describe('reading.tsx server-side generation migration', () => {
   it('advances local currentDay when the reader completes the current day', () => {
     expect(readingSource).toContain('const advanceDay = useUnfoldStore((s) => s.advanceDay);');
     expect(readingSource).toContain('currentDevotional?.currentDay === viewingDay');
-    expect(readingSource).toContain('advanceDay(currentDevotionalId);');
+    expect(readingSource).toContain('advanceDay(effectiveDevotionalId);');
   });
 
   it('does not use mutable user devotionalLength to extend a server-owned series completion boundary', () => {

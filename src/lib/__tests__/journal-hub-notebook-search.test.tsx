@@ -1,3 +1,5 @@
+jest.mock('@/components/ProfileEntryButton', () => ({ ProfileEntryButton: () => null }));
+
 /**
  * Notebook search ran over the note's stored content, which is editor HTML —
  * so "div", "h2" or "br" matched every note while matching nothing the user

@@ -1,3 +1,5 @@
+jest.mock('@/components/ProfileEntryButton', () => ({ ProfileEntryButton: () => null }));
+
 /**
  * The notebook FAB wrote its Reanimated shared value straight from the render
  * body when `visible` changed — a side effect during render, which Reanimated

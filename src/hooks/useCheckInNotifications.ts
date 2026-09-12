@@ -142,6 +142,7 @@ export function useCheckInNotifications() {
   // See useDailyReminderSync for the rationale on each ref.
   const lastAppliedRef = useRef<string>('');
   const lastAppliedDayRef = useRef<string>('');
+  const needsRetryRef = useRef(false);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inFlightRef = useRef(false);
   const pendingRef = useRef(false);
@@ -159,12 +160,16 @@ export function useCheckInNotifications() {
 
     // Skip no-op runs. A sync is a no-op iff:
     //   - fingerprint is unchanged (same inputs), AND
-    //   - the wall-clock day is unchanged
+    //   - the wall-clock day is unchanged, AND
+    //   - the last write for that fingerprint actually completed
     // Hydration runs always proceed so we establish the baseline in lastApplied.
+    // `needsRetryRef` is sticky: inferring failure from unchanged refs loses
+    // the retry when a later same-day fingerprint reverts to a stamped value.
     if (
-      reason !== 'hydration' &&
-      target === lastAppliedRef.current &&
-      todayStr === lastAppliedDayRef.current
+      reason !== 'hydration'
+      && !needsRetryRef.current
+      && target === lastAppliedRef.current
+      && todayStr === lastAppliedDayRef.current
     ) {
       return;
     }
@@ -198,6 +203,7 @@ export function useCheckInNotifications() {
         // told us to remove premium-only reminders. Both are hard cancels.
         await cancelMiddayCheckIn();
         await cancelEveningWindDown();
+        needsRetryRef.current = false;
         lastAppliedRef.current = target;
         lastAppliedDayRef.current = todayStr;
         logger.log(
@@ -257,6 +263,7 @@ export function useCheckInNotifications() {
       if (latestFingerprintRef.current !== target || freshPolicy !== 'granted') {
         await cancelMiddayCheckIn();
         await cancelEveningWindDown();
+        needsRetryRef.current = true;
         pendingRef.current = true;
         logger.log('[useCheckInNotifications] State changed during schedule; cancelled and re-queuing');
         return;
@@ -265,19 +272,23 @@ export function useCheckInNotifications() {
       // Only record the sync when the OS queue actually holds what we asked
       // for. A run that cancelled a slot and then failed to rewrite it leaves
       // nothing pending; stamping that would strand the reader until some
-      // unrelated change moved the fingerprint. Leaving it unstamped costs one
-      // repeat attempt on the next foreground.
+      // unrelated change moved the fingerprint. Leaving it unstamped is not
+      // enough: if the fingerprint later reverts to an already-stamped value
+      // on the same day, the skip gate would treat the broken queue as done.
       if (!midday.complete || !evening.complete) {
+        needsRetryRef.current = true;
         logger.error('[useCheckInNotifications] Incomplete write; leaving unsynced to retry');
         return;
       }
 
+      needsRetryRef.current = false;
       lastAppliedRef.current = target;
       lastAppliedDayRef.current = todayStr;
       logger.log(
         `[useCheckInNotifications] Synced (reason=${reason}, midday=${midday.ids.length}, evening=${evening.ids.length})`,
       );
     } catch (error) {
+      needsRetryRef.current = true;
       logger.error('[useCheckInNotifications] Sync failed:', error);
     } finally {
       inFlightRef.current = false;

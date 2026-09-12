@@ -48,6 +48,7 @@ import {
 } from '@/lib/bible-hub-view-preference';
 import { DownloadBibleSheet } from '@/components/bible/DownloadBibleSheet';
 import { Spacing } from '@/constants/spacing';
+import { ProfileEntryButton } from '@/components/ProfileEntryButton';
 import { Duration, Ease } from '@/constants/animations';
 import { Typography } from '@/constants/typography';
 
@@ -328,23 +329,26 @@ export default function BibleHomeScreen() {
         >
           Bible
         </Text>
-        <SegmentedControl
-          values={[...BIBLE_HUB_VIEW_LABELS]}
-          selectedIndex={viewMode === 'names' ? 1 : 0}
-          onValueChange={handleViewChange}
-          appearance={isDark ? 'dark' : 'light'}
-          tintColor={colors.accent}
-          fontStyle={{ fontSize: segmentedMetrics.fontSize, color: colors.text }}
-          activeFontStyle={{
-            fontSize: segmentedMetrics.fontSize,
-            color: bibleHubContrastInk(colors.accent),
-          }}
-          style={{
-            width: segmentedMetrics.width,
-            height: segmentedMetrics.height,
-            minHeight: BIBLE_HUB_SEGMENTED_MIN_HEIGHT,
-          }}
-        />
+        <View style={styles.headerTrailing}>
+          <SegmentedControl
+            values={[...BIBLE_HUB_VIEW_LABELS]}
+            selectedIndex={viewMode === 'names' ? 1 : 0}
+            onValueChange={handleViewChange}
+            appearance={isDark ? 'dark' : 'light'}
+            tintColor={colors.accent}
+            fontStyle={{ fontSize: segmentedMetrics.fontSize, color: colors.text }}
+            activeFontStyle={{
+              fontSize: segmentedMetrics.fontSize,
+              color: bibleHubContrastInk(colors.accent),
+            }}
+            style={{
+              width: segmentedMetrics.width,
+              height: segmentedMetrics.height,
+              minHeight: BIBLE_HUB_SEGMENTED_MIN_HEIGHT,
+            }}
+          />
+          <ProfileEntryButton testID="bible-profile-button" />
+        </View>
       </View>
 
       <TouchableOpacity
@@ -497,6 +501,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 27,
     letterSpacing: -0.15,
+  },
+  headerTrailing: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing['3'],
   },
   searchBar: {
     flexDirection: 'row',

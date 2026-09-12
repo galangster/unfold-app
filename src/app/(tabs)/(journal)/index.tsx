@@ -67,6 +67,7 @@ import { useCreationGate } from '@/hooks/useCreationGate';
 import { prepareJournalFolderDelete } from '@/lib/journal-folder-delete';
 import { undoJournalDeletions, type JournalUndoAction } from '@/lib/journal-undo';
 import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
+import { ProfileEntryButton } from '@/components/ProfileEntryButton';
 import { logger } from '@/lib/logger';
 import {
   buildJournalMonthMarkers,
@@ -1587,33 +1588,36 @@ export default function JournalHubScreen() {
             >
               Journal
             </Text>
-            {hasContent && (
-              <TouchableOpacity
-                onPress={() => {
-                  setShowSearch(!showSearch);
-                  if (showSearch) setSearchQuery('');
-                }}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                activeOpacity={0.6}
-                style={mainStyles.headerAction}
-                accessibilityRole="button"
-                accessibilityLabel={showSearch ? 'Close journal search' : 'Search journal'}
-              >
-                {showSearch ? (
-                  <XIcon
-                    size={20}
-                    color={colors.textMuted}
-                    weight="light"
-                  />
-                ) : (
-                  <MagnifyingGlassIcon
-                    size={20}
-                    color={colors.textMuted}
-                    weight="light"
-                  />
-                )}
-              </TouchableOpacity>
-            )}
+            <View style={mainStyles.headerActions}>
+              {hasContent && (
+                <TouchableOpacity
+                  onPress={() => {
+                    setShowSearch(!showSearch);
+                    if (showSearch) setSearchQuery('');
+                  }}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  activeOpacity={0.6}
+                  style={mainStyles.headerAction}
+                  accessibilityRole="button"
+                  accessibilityLabel={showSearch ? 'Close journal search' : 'Search journal'}
+                >
+                  {showSearch ? (
+                    <XIcon
+                      size={20}
+                      color={colors.textMuted}
+                      weight="light"
+                    />
+                  ) : (
+                    <MagnifyingGlassIcon
+                      size={20}
+                      color={colors.textMuted}
+                      weight="light"
+                    />
+                  )}
+                </TouchableOpacity>
+              )}
+              <ProfileEntryButton testID="journal-profile-button" />
+            </View>
           </Animated.View>
 
           {/* Search Bar */}
@@ -2214,6 +2218,10 @@ const mainStyles = StyleSheet.create({
     fontSize: 34,
     lineHeight: 40,
     letterSpacing: -0.25,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   headerAction: {
     minWidth: 44,

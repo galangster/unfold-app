@@ -299,7 +299,7 @@ describe('SG-10 reading auto trial', () => {
   });
 
   it('dismisses a completed auto series through the series-complete route', () => {
-    expect(readingSource).toContain('getCompletionDismissRoute(celebrationType)');
+    expect(readingSource).toContain('getCompletionDismissRoute(celebrationType, params.from, hostTab)');
   });
 
   it('keeps the premium nudge free of price on the keepsake path (OI-37)', () => {

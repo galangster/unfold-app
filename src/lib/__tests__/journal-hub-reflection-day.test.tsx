@@ -1,3 +1,5 @@
+jest.mock('@/components/ProfileEntryButton', () => ({ ProfileEntryButton: () => null }));
+
 /**
  * The Journal hub reflects on the LAST READ day (currentDayData), not on
  * `currentDevotional.currentDay`, which has already advanced to the next day

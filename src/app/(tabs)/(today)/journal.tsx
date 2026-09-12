@@ -78,6 +78,7 @@ import {
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
 import { getReflectionTypography } from '@/lib/reflection-typography';
+import { resolveStackRoute, type TabGroup } from '@/lib/tab-stack-routes';
 
 const SOAP_SECTIONS: { key: keyof SoapResponses; letter: string; label: string; placeholder: string; icon: 'BookOpen' | 'Eye' | 'PencilSimple' | 'HandsPraying' }[] = [
   {
@@ -164,7 +165,7 @@ function AnimatedPrayerCircle({ isAnswered, accentColor, hintColor }: {
   );
 }
 
-export default function JournalScreen() {
+export default function JournalScreen({ hostTab }: { hostTab?: TabGroup } = {}) {
   const router = useRouter();
   const guardedBack = useGuardedBack();
   const segments = useSegments();
@@ -920,8 +921,11 @@ Their journal entry:
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     router.push({
-                      pathname: '/(tabs)/(today)/reading',
-                      params: { dayNumber: String(dayNumber) },
+                      pathname: resolveStackRoute(hostTab, 'reading'),
+                      params: {
+                        dayNumber: String(dayNumber),
+                        ...(devotionalId ? { devotionalId } : {}),
+                      },
                     });
                   }}
                   style={[jStyles.scriptureAnchor, { backgroundColor: colors.inputBackground }]}

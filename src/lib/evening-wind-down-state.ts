@@ -1,7 +1,6 @@
 import type { CheckIn, Devotional } from '@/lib/store';
 import type { PremiumAccessPolicy } from '@/lib/premium-access-policy';
-import { getEveningWindDownDayNumber } from '@/lib/today-companion-state';
-import { getLatestReadDayNumberToday } from '@/lib/devotional-day-access';
+import { getLatestReadDayNumberToday, getTodayReaderDayNumber } from '@/lib/devotional-day-access';
 
 /**
  * Pure derivations for the evening wind-down screen, kept out of the
@@ -47,6 +46,9 @@ export function findTodayMiddayCheckIn(
  * A dayNumber route param wins only when that day exists in the devotional;
  * an unknown day would render the "Start a devotional" empty state while a
  * devotional is active. Otherwise the day completed today is the target.
+ * When nothing was finished today, aim at today's readable day — not the
+ * last completed day. That fallback used to send "Read it now" at a day
+ * the reader already finished yesterday.
  */
 export function resolveEveningWindDownDayNumber(
   devotional: Devotional | null | undefined,
@@ -60,7 +62,7 @@ export function resolveEveningWindDownDayNumber(
     (devotional.days ?? []).some((day) => day.dayNumber === requestedDayNumber);
   if (hasRequestedDay) return requestedDayNumber;
 
-  return getEveningWindDownDayNumber(devotional, now) ?? 1;
+  return getLatestReadDayNumberToday(devotional, now) ?? getTodayReaderDayNumber(devotional, now);
 }
 
 export type EveningWindDownEntryDecision = 'allow' | 'wait' | 'gate';

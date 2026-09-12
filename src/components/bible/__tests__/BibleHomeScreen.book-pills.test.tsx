@@ -1,3 +1,5 @@
+jest.mock('@/components/ProfileEntryButton', () => ({ ProfileEntryButton: () => null }));
+
 import React from 'react';
 import { StyleSheet, Text } from 'react-native';
 import { OT_BOOKS } from '@/lib/bible-constants';

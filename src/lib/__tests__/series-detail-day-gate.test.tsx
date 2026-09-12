@@ -20,6 +20,7 @@ const { act } = renderer;
 
 const mockPush = jest.fn();
 const mockSetCurrentDevotional = jest.fn();
+let mockParams: { id?: string } = { id: 'dino-series' };
 
 // Day 1 read *today* — required for the reader's tomorrow-lock to engage.
 const readTodayIso = new Date().toISOString();
@@ -62,7 +63,7 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ canGoBack: () => true, push: mockPush, back: jest.fn() }),
   useSegments: () => [],
   useNavigation: () => ({ getState: () => ({ index: 1, routes: [] }) }),
-  useLocalSearchParams: () => ({ id: 'dino-series' }),
+  useLocalSearchParams: () => mockParams,
 }));
 
 // Swappable so a test can render a different store state without re-requiring
@@ -141,12 +142,23 @@ jest.mock('phosphor-react-native', () => ({
   CircleIcon: 'CircleIcon',
 }));
 
-const SeriesDetailScreen = require('@/app/(tabs)/(you)/series-detail').default;
+jest.mock('@/components/ProfileEntryButton', () => ({
+  ProfileEntryButton: 'ProfileEntryButton',
+}));
 
-function renderScreen() {
+const seriesDetailModule = require('@/app/(tabs)/(you)/series-detail');
+const SeriesDetailScreen = seriesDetailModule.default;
+const SeriesArcScreen = seriesDetailModule.SeriesArcScreen;
+
+function renderScreen(props?: { hostTab?: '(today)' | '(study)' | '(you)'; chrome?: 'stack' | 'tabRoot' }) {
   let tree: { root: { findAll: (p: (n: unknown) => boolean) => unknown[] } };
   act(() => {
-    tree = renderer.create(React.createElement(SeriesDetailScreen));
+    tree = renderer.create(
+      React.createElement(
+        props ? SeriesArcScreen : SeriesDetailScreen,
+        props,
+      ),
+    );
   });
   // @ts-expect-error assigned inside act
   return tree;
@@ -192,6 +204,7 @@ beforeEach(() => {
   mockSetCurrentDevotional.mockClear();
   mockDevotionals = [mockSeries];
   mockCurrentDevotionalId = null;
+  mockParams = { id: 'dino-series' };
 });
 
 describe('SeriesDetailScreen day gating', () => {
@@ -231,31 +244,49 @@ describe('SeriesDetailScreen day gating', () => {
       (row!.props.onPress as () => void)();
     });
 
-    expect(mockSetCurrentDevotional).toHaveBeenCalledWith('dino-series');
+    expect(mockSetCurrentDevotional).not.toHaveBeenCalled();
     expect(mockPush).toHaveBeenCalledTimes(1);
     const target = mockPush.mock.calls[0][0];
     expect(target.params.dayNumber).toBe('1');
+    expect(target.params.readOnly).toBe('1');
+    expect(target.pathname).toBe('/(tabs)/(today)/reading');
     // Whatever day the list navigates to, the reader must land on that same day.
     expect(resolveInitialReadingDayNumber(mockSeries, Number(target.params.dayNumber))).toBe(1);
   });
 
-  it('keeps every library re-read read-only after selection changes the current pointer', () => {
-    const firstVisit = renderScreen();
-    const firstRow = findRowContaining(firstVisit, 'Day 1');
+  it('keeps a library series read-only without replacing the active series', () => {
+    mockCurrentDevotionalId = 'other-active-series';
+    const tree = renderScreen({ hostTab: '(study)' });
+    const row = findRowContaining(tree, 'Day 1');
+    expect(row).toBeDefined();
+
     act(() => {
-      (firstRow!.props.onPress as () => void)();
+      (row!.props.onPress as () => void)();
     });
 
-    mockCurrentDevotionalId = 'dino-series';
-    const secondVisit = renderScreen();
-    const secondRow = findRowContaining(secondVisit, 'Day 1');
-    act(() => {
-      (secondRow!.props.onPress as () => void)();
-    });
-
-    expect(mockPush).toHaveBeenCalledTimes(2);
+    expect(mockSetCurrentDevotional).not.toHaveBeenCalled();
+    expect(mockPush).toHaveBeenCalledTimes(1);
+    expect(mockPush.mock.calls[0][0].pathname).toBe('/(tabs)/(study)/reading');
     expect(mockPush.mock.calls[0][0].params.readOnly).toBe('1');
-    expect(mockPush.mock.calls[1][0].params.readOnly).toBe('1');
+    expect(mockPush.mock.calls[0][0].params.devotionalId).toBe('dino-series');
+  });
+
+  it('lets the Study tab-root recover the current series without a read-only lock', () => {
+    mockParams = {};
+    mockCurrentDevotionalId = 'dino-series';
+    const tree = renderScreen({ hostTab: '(study)', chrome: 'tabRoot' });
+    const row = findRowContaining(tree, 'Day 1');
+    expect(row).toBeDefined();
+
+    act(() => {
+      (row!.props.onPress as () => void)();
+    });
+
+    expect(mockSetCurrentDevotional).not.toHaveBeenCalled();
+    expect(mockPush).toHaveBeenCalledTimes(1);
+    expect(mockPush.mock.calls[0][0].pathname).toBe('/(tabs)/(study)/reading');
+    expect(mockPush.mock.calls[0][0].params.readOnly).toBeUndefined();
+    expect(mockPush.mock.calls[0][0].params.devotionalId).toBe('dino-series');
   });
   it('does NOT claim "Tomorrow" when the next day has no canonical content', () => {
     // Same state, except Day 2's content never materialised (non-canonical id).

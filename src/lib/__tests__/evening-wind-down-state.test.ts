@@ -115,6 +115,32 @@ describe('resolveEveningWindDownDayNumber', () => {
     expect(resolveEveningWindDownDayNumber(devotional(), null, NOW)).toBe(6);
   });
 
+  it('targets today\'s readable day when nothing was finished today', () => {
+    // getEveningWindDownDayNumber falls back to the last completed day. That
+    // made the unread prompt claim Day 5 was unfinished and sent Read it now
+    // at a reading finished yesterday.
+    const d = devotional({
+      currentDay: 6,
+      days: [day(5, { isRead: true, readAt: '2026-05-10T08:00:00' }), day(6)],
+    });
+    expect(resolveEveningWindDownDayNumber(d, null, NOW)).toBe(6);
+    expect(resolveEveningWindDownReadiness(d, 6, NOW)).toBe('unread');
+  });
+
+  it('does not treat a completed-yesterday day as this morning\'s reading', () => {
+    const d = devotional({
+      currentDay: 6,
+      days: [day(5, { isRead: true, readAt: '2026-05-10T08:00:00' }), day(6)],
+    });
+    expect(resolveEveningWindDownReadiness(d, 5, NOW)).toBe('unread');
+  });
+
+  it('is unread when the series has no days yet', () => {
+    const d = devotional({ currentDay: 1, days: [] });
+    expect(resolveEveningWindDownDayNumber(d, null, NOW)).toBe(1);
+    expect(resolveEveningWindDownReadiness(d, 1, NOW)).toBe('unread');
+  });
+
   it('keeps the requested day (or 1) when there is no devotional to validate against', () => {
     expect(resolveEveningWindDownDayNumber(null, 3, NOW)).toBe(3);
     expect(resolveEveningWindDownDayNumber(undefined, null, NOW)).toBe(1);

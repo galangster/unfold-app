@@ -76,7 +76,7 @@ describe('Today tab motion guardrails', () => {
     expect(seriesCarouselSource).not.toContain("pathname: '/(tabs)/(you)/past-devotionals'");
     expect(yourSeriesSectionSource).toContain("pathname: '/(tabs)/(today)/past-devotionals'");
     expect(yourSeriesSectionSource).not.toContain("pathname: '/(tabs)/(you)/past-devotionals'");
-    expect(todayReadingSource).toContain("pathname: '/(tabs)/(today)/my-content'");
+    expect(todayReadingSource).toContain("resolveStackRoute(hostTab, 'my-content')");
     expect(todayReadingSource).not.toContain("pathname: '/(tabs)/(you)/my-content'");
     expect(crossTabBackSource).toContain("return currentTab !== sourceTab;");
   });
@@ -189,7 +189,11 @@ describe('Today tab motion guardrails', () => {
 
   it('keeps devotional detail navigation in the Today stack when My Devotionals was opened from Today', () => {
     expect(pastDevotionalsSource).toContain('const { handleBack, isFromHome } = useCrossTabBack();');
-    expect(pastDevotionalsSource).toContain("pathname: isFromHome ? '/(tabs)/(today)/series-detail' : '/(tabs)/(you)/series-detail'");
+    // The detail screen opens in the stack the list was opened from. Generalised
+    // from two tabs to three when the Study tab landed: the (today)/(you) arms
+    // are still the fallback, and a Study mount resolves through the host table.
+    expect(pastDevotionalsSource).toContain("resolveStackRoute(hostTab, 'series-detail')");
+    expect(pastDevotionalsSource).toContain("isFromHome\n          ? '/(tabs)/(today)/series-detail'\n          : '/(tabs)/(you)/series-detail',");
     expect(pastDevotionalsSource).toContain('params: { id }');
   });
 

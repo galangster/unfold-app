@@ -82,7 +82,7 @@ const SCRIPT_PREFIX = /^\s*(?:javascript|data|vbscript):/i;
 // ─── Enums mirrored from the screens that consume them ───────────────────────
 
 /** Mirror of the FROM_TO_ROUTE keys in src/hooks/useCrossTabBack.ts. */
-const CROSS_TAB_FROM = ['home', 'journal', 'bible', 'you'] as const;
+const CROSS_TAB_FROM = ['home', 'journal', 'bible', 'you', 'study'] as const;
 /** Mirrors VALID_TABS / VALID_TYPES / VALID_SOURCES in src/app/(tabs)/(you)/my-content.tsx. */
 const MY_CONTENT_TABS = ['highlights', 'bookmarks'] as const;
 const MY_CONTENT_TYPES = ['all', 'notes', 'highlights'] as const;
@@ -112,8 +112,10 @@ const MY_CONTENT_ROUTE: RouteSchema = {
  * Every route an external URL may open, with its param schema. Keys are
  * canonical paths with route groups removed (`/(tabs)/(today)/reading` and
  * `/reading` both resolve to `/reading`). Duplicate file routes that
- * re-export one screen ((today)/(you) my-content, past-devotionals,
- * series-detail; (journal)/entry → journal) share a single entry.
+ * re-export one screen ((today)/(you)/(study) past-devotionals and
+ * series-detail, (today)/(you)/(study) my-content; (journal)/entry → journal)
+ * share a single entry. The reader's in-app-only `from` param (like
+ * `readOnly`) is deliberately absent from /reading below.
  */
 export const EXTERNAL_ROUTE_ALLOWLIST: Readonly<Record<string, RouteSchema>> = {
   // Root stack + tab roots (`/(tabs)`, `/(tabs)/(today)`, … all canonicalise to `/`)
@@ -167,7 +169,7 @@ export const EXTERNAL_ROUTE_ALLOWLIST: Readonly<Record<string, RouteSchema>> = {
   '/note-detail': { params: { noteId: id(), startEditing: oneOf(['true', 'false']), folderId: id() } },
   '/recently-deleted': { params: {} },
   // You tab
-  '/settings': { params: { from: oneOf(CROSS_TAB_FROM) } },
+  '/settings': { params: { from: oneOf(CROSS_TAB_FROM), section: oneOf(['reminders', 'appearance']) } },
   '/checkin-schedule': { params: { type: oneOf(['midday', 'evening']) }, required: ['type'] },
 };
 
@@ -185,6 +187,7 @@ const KNOWN_ROUTE_GROUPS: ReadonlySet<string> = new Set([
   '(bible)',
   '(ask)',
   '(journal)',
+  '(study)',
   '(you)',
 ]);
 
