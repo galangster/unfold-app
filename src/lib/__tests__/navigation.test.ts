@@ -72,6 +72,14 @@ describe('tabRootFromSegments', () => {
     expect(tabRootFromSegments(['(tabs)', '(journal)', 'entry'])).toBe('/(tabs)/(journal)');
   });
 
+  // The screen the reported bug came in on. useGuardedBack derives the
+  // wind-down exit from these segments rather than naming a route, so this is
+  // the assertion that pins where a trapped reader now ends up. Two paying
+  // subscribers hit the dead caret on 1.1.8 build 279 (reported 2026-09-12).
+  it('sends the evening wind-down screen back to Today', () => {
+    expect(tabRootFromSegments(['(tabs)', '(today)', 'evening-wind-down'])).toBe('/(tabs)/(today)');
+  });
+
   it('falls back to Today for routes mounted outside the tabs', () => {
     expect(tabRootFromSegments(['paywall'])).toBe('/(tabs)/(today)');
     expect(tabRootFromSegments([])).toBe('/(tabs)/(today)');

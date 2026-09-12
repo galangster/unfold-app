@@ -23,19 +23,41 @@ const FETCH_SELECTORS = [
 
 // router.back() is a no-op on an empty stack, so a screen reached from a push
 // notification or an `unfold://` link on a cold start could not be left at all
-// (1.1.8 build 279). src/lib/__tests__/eslint-no-router-back-rule.test.ts pins
-// this and its single allowed file.
-const ROUTER_BACK_SELECTOR = {
-  // Any zero-argument .back() call, not just one on an identifier spelled
-  // `router`: the repo already navigates through `routerRef.current` in
-  // src/hooks/useRevenueCatSync.ts, and useRouter().back() or a renamed
-  // binding would slip past a narrower selector. navigation.ts is the only
-  // file with a .back() call, so the broad form has nothing else to catch.
-  selector:
-    "CallExpression[callee.type='MemberExpression'][callee.property.name='back'][arguments.length=0]",
+// (1.1.8 build 279). Every screen goes through useGuardedBack instead.
+//
+// Four shapes, kept narrow on purpose: matching a bare `.back()` with no object
+// constraint would fire on every carousel, animation controller and array
+// helper in the dependency tree, and each false positive breeds a suppression
+// comment. `goBack` needs no object constraint because src contains no
+// `.goBack()` call at all — it is React Navigation's own idiom and there are
+// four useNavigation() objects in src, so it is one keystroke from slipping in.
+// src/lib/__tests__/eslint-no-router-back-rule.test.ts pins all four.
+const ROUTER_BACK_SELECTORS = [
+  // router.back(), nav.back(), navigation.back()
+  {
+    selector:
+      "CallExpression[callee.type='MemberExpression'][callee.object.name=/^(router|nav|navigation)$/][callee.property.name='back'][arguments.length=0]",
+  },
+  // routerRef.current.back() — src/hooks/useRevenueCatSync.ts already navigates this way.
+  {
+    selector:
+      "CallExpression[callee.type='MemberExpression'][callee.object.type='MemberExpression'][callee.object.property.name='current'][callee.property.name='back'][arguments.length=0]",
+  },
+  // useRouter().back()
+  {
+    selector:
+      "CallExpression[callee.type='MemberExpression'][callee.object.type='CallExpression'][callee.property.name='back'][arguments.length=0]",
+  },
+  // Any .goBack() — React Navigation's spelling.
+  {
+    selector:
+      "CallExpression[callee.type='MemberExpression'][callee.property.name='goBack'][arguments.length=0]",
+  },
+].map((entry) => ({
+  ...entry,
   message:
-    "router.back() is a silent no-op on an empty stack (a push or deep-link cold start). Call goBackOr from @/lib/navigation so the exit always leads somewhere.",
-};
+    "Popping the stack directly is a silent no-op when there is no history, and pops onto the synthesized root anchor when there is none that is real. Use useGuardedBack from @/hooks/useGuardedBack.",
+}));
 
 module.exports = defineConfig([
   expoConfig,
@@ -110,7 +132,7 @@ module.exports = defineConfig([
       // anywhere else skips both. The allowlist below is those two transports,
       // tests, manual mocks, and Node tooling;
       // src/lib/__tests__/eslint-no-bare-fetch-rule.test.ts pins both halves.
-      "no-restricted-syntax": ["error", ...FETCH_SELECTORS, ROUTER_BACK_SELECTOR],
+      "no-restricted-syntax": ["error", ...FETCH_SELECTORS, ...ROUTER_BACK_SELECTORS],
     },
   },
   {
