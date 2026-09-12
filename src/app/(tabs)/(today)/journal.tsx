@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { logger } from '@/lib/logger';
+import { useGuardedBack } from '@/hooks/useGuardedBack';
 import {
   AppState,
   View,
@@ -165,6 +166,7 @@ function AnimatedPrayerCircle({ isAnswered, accentColor, hintColor }: {
 
 export default function JournalScreen() {
   const router = useRouter();
+  const guardedBack = useGuardedBack();
   const segments = useSegments();
   const navigation = useNavigation();
   const { colors, isDark } = useTheme();
@@ -459,8 +461,11 @@ export default function JournalScreen() {
       router.replace('/(tabs)/(journal)');
       return;
     }
-    router.back();
-  }, [segments, navigation, router]);
+    // Mounted in two tabs — as (today)/journal and re-exported as
+    // (journal)/entry — so a deep-link cold start falls back to whichever
+    // tab root the reader is actually in.
+    guardedBack();
+  }, [segments, navigation, router, guardedBack]);
 
   const handleDone = () => {
     if (!gate()) return;

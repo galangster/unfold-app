@@ -14,6 +14,7 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { isQaToolsEnabled } from '@/lib/qa-tools';
+import { useGuardedBack } from '@/hooks/useGuardedBack';
 
 const PHASES: OnboardingVoiceAnswerPhase[] = ['idle', 'recording', 'review', 'transcribing', 'transcript', 'error'];
 const OVER_LIMIT_TRANSCRIPT = `${'I want a quieter morning and more room to notice what is already good. '.repeat(40)}`;
@@ -24,6 +25,7 @@ function firstParam(value: string | string[] | undefined): string | undefined {
 
 export default function OnboardingVoiceAnswerPreviewScreen() {
   const router = useRouter();
+  const guardedBack = useGuardedBack();
   const params = useLocalSearchParams<{ state?: string | string[]; existing?: string | string[] }>();
   const routePhase = firstParam(params.state);
   const existingPreset = firstParam(params.existing);
@@ -64,7 +66,7 @@ export default function OnboardingVoiceAnswerPreviewScreen() {
               activeOpacity={0.72}
               accessibilityRole="button"
               accessibilityLabel="Close prototype route"
-              onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/(today)')}
+              onPress={guardedBack}
               style={[styles.routeClose, { borderColor: colors.border }]}
             >
               <Text style={[styles.routeCloseText, { color: colors.textMuted }]}>Close</Text>

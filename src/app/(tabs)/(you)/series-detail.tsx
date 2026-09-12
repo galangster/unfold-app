@@ -180,7 +180,7 @@ export default function SeriesDetailScreen() {
           <View style={styles.header}>
             <TouchableOpacity
               activeOpacity={0.7}
-              onPress={() => router.back()}
+              onPress={handleBack}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               style={styles.backButton}
             >

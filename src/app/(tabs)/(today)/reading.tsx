@@ -1,4 +1,5 @@
 import { getDailyGenerationNotice } from '@/lib/daily-generation-messages';
+import { useGuardedBack } from '@/hooks/useGuardedBack';
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useAutoHide } from '@/hooks/useAutoHide';
 import { View, Text, Dimensions, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet, TouchableOpacity, Keyboard, ScrollView, UIManager, type LayoutChangeEvent } from 'react-native';
@@ -220,6 +221,7 @@ export function maybeCompleteAutoTrialOnLastDay(i: {
 
 export default function ReadingScreen() {
   const router = useRouter();
+  const guardedBack = useGuardedBack();
   const isReadingFocused = useIsFocused();
   const params = useLocalSearchParams<{ dayNumber?: string; devotionalId?: string; highlightId?: string; bookmarkId?: string; readOnly?: string; focus?: string }>();
   const { colors, isDark } = useTheme();
@@ -1650,14 +1652,10 @@ export default function ReadingScreen() {
             <TouchableOpacity activeOpacity={0.7}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                // This "not ready yet" state can be entered directly via a deep
-                // link/notification for a specific day, so there may be no back
-                // stack to pop — fall back to replacing with the Today root.
-                if (router.canGoBack()) {
-                  router.back();
-                } else {
-                  router.replace('/(tabs)/(today)');
-                }
+                // This "not ready yet" state can be entered directly via a
+                // deep link/notification for a specific day, so there may be
+                // no back stack to pop.
+                guardedBack();
               }}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               accessibilityRole="button"
@@ -1905,7 +1903,9 @@ export default function ReadingScreen() {
               <TouchableOpacity activeOpacity={0.7}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  router.back();
+                  // The act reminder push replaces straight into this reader,
+                  // so a cold start has no stack to pop.
+                  guardedBack();
                 }}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 accessibilityRole="button"

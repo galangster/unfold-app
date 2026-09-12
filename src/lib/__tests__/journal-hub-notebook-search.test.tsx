@@ -17,8 +17,9 @@ const mockPush = jest.fn();
 
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({}),
-  useRouter: () => ({
-    push: (...args: unknown[]) => mockPush(...args),
+  useRouter: () => ({ canGoBack: () => true, push: (...args: unknown[]) => mockPush(...args),
+  useSegments: () => [],
+  useNavigation: () => ({ getState: () => ({ index: 1, routes: [] }) }),
     back: jest.fn(),
     replace: jest.fn(),
   }),

@@ -1,5 +1,6 @@
+import { useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -17,6 +18,7 @@ import { Radius } from '@/constants/radius';
 import { Duration, Ease } from '@/constants/animations';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
+import { useGuardedBack } from '@/hooks/useGuardedBack';
 import { useUnfoldStore } from '@/lib/store';
 import { normalizeSoapResponses } from '@/lib/journal-entry-state';
 import { format } from 'date-fns';
@@ -66,7 +68,7 @@ function SoapSectionDisplay({
 }
 
 export default function JournalDetailScreen() {
-  const router = useRouter();
+  const guardedBack = useGuardedBack();
   const { colors } = useTheme();
   const reducedMotion = useReducedMotion();
   const params = useLocalSearchParams<{ entryId: string }>();
@@ -79,16 +81,21 @@ export default function JournalDetailScreen() {
   const entry = journalEntries.find((e) => e.id === entryId);
   const devotional = devotionals.find((d) => d.id === entry?.devotionalId);
 
+  // Shared by both header carets (the not-found shell and the entry itself).
+  // journal-detail is deep-link allowlisted, so an arrival from an `unfold://`
+  // link has no stack to pop.
+  const handleBack = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    guardedBack();
+  }, [guardedBack]);
+
   if (!entry) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
         <SafeAreaView style={{ flex: 1 }} edges={['top']}>
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing['4'], paddingVertical: Spacing['3'] }}>
             <TouchableOpacity
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.back();
-              }}
+              onPress={handleBack}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               activeOpacity={0.6}
               style={{ padding: Spacing['2'] }}
@@ -130,10 +137,7 @@ export default function JournalDetailScreen() {
         {/* Header */}
         <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing['4'], paddingVertical: Spacing['3'] }}>
           <TouchableOpacity
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.back();
-            }}
+            onPress={handleBack}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             activeOpacity={0.6}
             style={{ padding: Spacing['2'] }}

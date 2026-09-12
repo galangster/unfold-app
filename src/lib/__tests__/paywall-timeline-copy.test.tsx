@@ -72,7 +72,9 @@ jest.mock('expo-video', () => ({
   VideoView: 'VideoView',
 }));
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ back: jest.fn(), replace: jest.fn() }),
+  useRouter: () => ({ canGoBack: () => true, back: jest.fn(), replace: jest.fn() }),
+  useSegments: () => [],
+  useNavigation: () => ({ getState: () => ({ index: 1, routes: [] }) }),
   useLocalSearchParams: () => ({}),
   useFocusEffect: (cb: () => void) => {
     const ReactActual = require('react');

@@ -12,6 +12,7 @@ import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
 import { Typography } from '@/constants/typography';
 import { useTheme } from '@/lib/theme';
+import { useGuardedBack } from '@/hooks/useGuardedBack';
 import { useUnfoldStore } from '@/lib/store';
 import { formatReminderTime } from '@/lib/format-reminder-time';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
@@ -38,6 +39,7 @@ type CheckInType = 'midday' | 'evening';
 
 export default function CheckInScheduleScreen() {
   const router = useRouter();
+  const guardedBack = useGuardedBack();
   const { type } = useLocalSearchParams<{ type: CheckInType }>();
   const { colors, isDark } = useTheme();
 
@@ -80,8 +82,8 @@ export default function CheckInScheduleScreen() {
 
   const handleBack = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.back();
-  }, [router]);
+    guardedBack();
+  }, [guardedBack]);
 
   const handleSave = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -100,8 +102,8 @@ export default function CheckInScheduleScreen() {
     // store state; the hook handles OS side-effects. See
     // ~/vault/standards/one-owner-per-os-resource.md
 
-    router.back();
-  }, [localDefaultTime, customizeByDay, localByDay, setDefaultTime, setByDay, router]);
+    guardedBack();
+  }, [localDefaultTime, customizeByDay, localByDay, setDefaultTime, setByDay, guardedBack]);
 
   const handleToggleCustomize = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -148,7 +150,7 @@ export default function CheckInScheduleScreen() {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'bottom']}>
         <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing['4'], paddingVertical: Spacing['3'] }}>
-          <TouchableOpacity activeOpacity={0.7} onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={{ padding: Spacing['2'] }}>
+          <TouchableOpacity activeOpacity={0.7} onPress={handleBack} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={{ padding: Spacing['2'] }}>
             <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
           </TouchableOpacity>
         </View>
@@ -162,7 +164,7 @@ export default function CheckInScheduleScreen() {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'bottom']}>
         <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing['4'], paddingVertical: Spacing['3'] }}>
-          <TouchableOpacity activeOpacity={0.7} onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={{ padding: Spacing['2'] }}>
+          <TouchableOpacity activeOpacity={0.7} onPress={handleBack} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={{ padding: Spacing['2'] }}>
             <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
           </TouchableOpacity>
         </View>

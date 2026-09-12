@@ -120,6 +120,8 @@ const { StyleSheet: RNStyleSheet } = require('react-native');
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockRouterPush }),
+  useSegments: () => [],
+  useNavigation: () => ({ getState: () => ({ index: 1, routes: [] }) }),
 }));
 
 const mockSetDismissedRememberThisCardDate = jest.fn();

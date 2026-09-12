@@ -88,16 +88,3 @@ export function decideEveningWindDownEntry(policy: PremiumAccessPolicy): Evening
 export function resolveEveningLoadingCaption(decision: EveningWindDownEntryDecision): string {
   return decision === 'wait' ? 'Checking your subscription…' : 'Preparing your evening prayer...';
 }
-
-/**
- * Both wind-down exits — the back caret and the closing-thought dismiss —
- * called router.back() unguarded. The evening push notification deep-links
- * straight to this route, so on a cold start there is no history and back()
- * is a silent no-op: the caret's haptic fired and nothing moved, while
- * dismissing the closing thought dropped the reader back on the reflection
- * list. Reported from 1.1.8 build 279 on 2026-09-12. Fall back to Today so
- * every exit leads somewhere.
- */
-export function resolveEveningWindDownExit(canGoBack: boolean): 'back' | '/(tabs)/(today)' {
-  return canGoBack ? 'back' : '/(tabs)/(today)';
-}

@@ -12,7 +12,7 @@ import {
   LayoutChangeEvent,
   Share,
 } from 'react-native';
-import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeOut, useReducedMotion } from 'react-native-reanimated';
 import { Duration, Ease } from '@/constants/animations';
@@ -55,6 +55,7 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Typography } from '@/constants/typography';
 import { useTheme } from '@/lib/theme';
+import { useGuardedBack } from '@/hooks/useGuardedBack';
 import { flushUnfoldStorePersist, useUnfoldStore, READING_FONTS, type Note, type NoteCategory, type ScriptureRef } from '@/lib/store';
 import { ScriptureRefPill } from '@/components/notebook/ScriptureRefPill';
 import { ScriptureSearchSheet } from '@/components/notebook/ScriptureSearchSheet';
@@ -265,7 +266,6 @@ const JOURNAL_EDITOR_BOTTOM_BREATHING_ROOM = 24;
 
 export default function NoteDetailScreen() {
   const reducedMotion = useReducedMotion();
-  const router = useRouter();
   const params = useLocalSearchParams<{
     noteId?: string;
     startEditing?: string;
@@ -853,6 +853,10 @@ export default function NoteDetailScreen() {
 
   /* ───── Navigation ───── */
 
+  // Every exit from the editor lands here. note-detail is deep-link
+  // allowlisted, so an arrival from an `unfold://` link has no stack to pop.
+  const exitToJournal = useGuardedBack();
+
   const handleBack = useCallback(async () => {
     // Cancel the pending debounce first: the explicit snapshot below is
     // fresher, and a stale-closure flush firing from unmount cleanup could
@@ -872,8 +876,8 @@ export default function NoteDetailScreen() {
       newNoteLog: '[NoteDetail] Saved new note on back:',
     });
 
-    router.back();
-  }, [router, getCurrentEditorHtml, persistCurrentSnapshot]);
+    exitToJournal();
+  }, [exitToJournal, getCurrentEditorHtml, persistCurrentSnapshot]);
 
   const handleMinimize = useCallback(async () => {
     if (!gate() || isMinimizingRef.current) return;
@@ -914,12 +918,12 @@ export default function NoteDetailScreen() {
       IS_NATIVE_EDITOR ? editorRef.current?.blur() : editor.blur();
       // Return to wherever the user came from — the draft dock floats above
       // every tab (rendered in (tabs)/_layout), so no tab switch is needed.
-      router.back();
+      exitToJournal();
     } catch (error) {
       isMinimizingRef.current = false;
       logger.error('[NoteDetail] Failed to minimize note:', error);
     }
-  }, [editor, gate, getCurrentEditorHtml, persistCurrentSnapshot, router, setDraftDock]);
+  }, [editor, gate, getCurrentEditorHtml, persistCurrentSnapshot, exitToJournal, setDraftDock]);
 
 
   /* ───── Menu actions ───── */
@@ -986,7 +990,7 @@ export default function NoteDetailScreen() {
       autoSaveControllerRef.current?.cancel();
       pendingAutoSaveHtmlRef.current = undefined;
       setShowMoreMenu(false);
-      router.back();
+      exitToJournal();
       return;
     }
 
@@ -1006,8 +1010,8 @@ export default function NoteDetailScreen() {
     pendingAutoSaveHtmlRef.current = undefined;
     deleteNote(noteId);
     setShowMoreMenu(false);
-    router.back();
-  }, [noteId, deleteConfirm, deleteNote, router]);
+    exitToJournal();
+  }, [noteId, deleteConfirm, deleteNote, exitToJournal]);
 
   const handleMoveToFolder = useCallback(() => {
     setShowMoreMenu(false);
@@ -1257,7 +1261,7 @@ export default function NoteDetailScreen() {
         <SafeAreaView style={styles.flex} edges={['top']}>
           <View style={styles.header}>
             <TouchableOpacity
-              onPress={() => router.back()}
+              onPress={exitToJournal}
               style={styles.headerButton}
               activeOpacity={0.6}
             >

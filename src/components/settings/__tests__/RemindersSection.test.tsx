@@ -40,6 +40,8 @@ jest.mock('@/lib/auto-trial-telemetry', () => ({
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: jest.fn() }),
+  useSegments: () => [],
+  useNavigation: () => ({ getState: () => ({ index: 1, routes: [] }) }),
 }));
 
 jest.mock('expo-haptics', () => ({

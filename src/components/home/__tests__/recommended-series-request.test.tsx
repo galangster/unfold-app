@@ -33,6 +33,8 @@ jest.mock('@/lib/store', () => ({
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush, navigate: mockNavigate }),
+  useSegments: () => [],
+  useNavigation: () => ({ getState: () => ({ index: 1, routes: [] }) }),
   useFocusEffect: (cb: () => void) => {
     focusEffects.push(cb);
   },

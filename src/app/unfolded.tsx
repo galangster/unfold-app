@@ -48,6 +48,7 @@ import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
 import { StoryProgressBar } from '@/components/unfolded/StoryProgressBar';
 import { useUnfoldStore } from '@/lib/store';
+import { useGuardedBack } from '@/hooks/useGuardedBack';
 import { logger } from '@/lib/logger';
 import { computeRecapData, type RecapData } from '@/lib/recap-stats';
 import { SparkleBurst } from '@/components/SparkleBurst';
@@ -1086,6 +1087,7 @@ function ClosingCard({ data, userName }: { data: RecapData; userName: string }) 
 // ═══════════════════════════════════════════════════════════════
 export default function UnfoldedScreen() {
   const router = useRouter();
+  const guardedBack = useGuardedBack();
   const insets = useSafeAreaInsets();
   const [currentCard, setCurrentCard] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -1219,10 +1221,10 @@ export default function UnfoldedScreen() {
         router.dismiss();
       } catch (err) {
         logger.error('[UNFOLDED] dismiss failed:', err);
-        router.back();
+        guardedBack();
       }
     }, 80);
-  }, [router, isClosing]);
+  }, [router, guardedBack, isClosing]);
 
   const renderCard = () => {
     switch (currentCard) {

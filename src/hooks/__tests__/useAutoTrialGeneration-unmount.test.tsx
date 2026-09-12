@@ -55,6 +55,8 @@ jest.mock('@/lib/devotional-sync-pull', () => ({
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({ replace: jest.fn(), push: jest.fn() }),
+  useSegments: () => [],
+  useNavigation: () => ({ getState: () => ({ index: 1, routes: [] }) }),
   router: { replace: jest.fn(), push: jest.fn() },
 }));
 

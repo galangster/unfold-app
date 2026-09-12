@@ -46,6 +46,8 @@ jest.mock('@/lib/store', () => ({
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockRouterPush }),
+  useSegments: () => [],
+  useNavigation: () => ({ getState: () => ({ index: 1, routes: [] }) }),
 }));
 
 jest.mock('@/lib/theme', () => ({

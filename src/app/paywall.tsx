@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, ActivityIndicator, Linking, ScrollView, Platform, Pressable } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { LEGAL_LINKS } from '@/lib/push-notification-helpers';
+import { useGuardedBack } from '@/hooks/useGuardedBack';
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import { useFocusEffect, useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -105,6 +106,7 @@ function getTrialDuration(pkg: PurchasesPackage | undefined | null): string | nu
 export default function PaywallScreen() {
   const reducedMotion = useReducedMotion();
   const router = useRouter();
+  const guardedBack = useGuardedBack();
   const { source } = useLocalSearchParams<{ source?: string }>();
   const isFromOnboarding = source === 'onboarding' || source === 'onboarding_early';
   const isEarlyOnboarding = source === 'onboarding_early';
@@ -125,7 +127,7 @@ export default function PaywallScreen() {
     });
 
     if (navigation.action === 'back') {
-      router.back();
+      guardedBack();
       return;
     }
 

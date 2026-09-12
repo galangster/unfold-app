@@ -10,6 +10,7 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
+import { useGuardedBack } from '@/hooks/useGuardedBack';
 import { useUnfoldStore } from '@/lib/store';
 import { alpha } from '@/components/ui';
 import { useBibleSearch, type BibleSearchResultWithMeta } from '@/hooks/useBibleSearch';
@@ -80,6 +81,7 @@ function SearchEmptyState({ mode, query, onSuggest }: SearchEmptyStateProps) {
 export default function BibleSearchScreen() {
   const { colors, isDark } = useTheme();
   const router = useRouter();
+  const guardedBack = useGuardedBack();
   const inputRef = useRef<TextInput>(null);
   const bibleReaderSettings = useUnfoldStore((s) => s.bibleReaderSettings);
 
@@ -116,7 +118,7 @@ export default function BibleSearchScreen() {
       {/* Search Header */}
       <View style={styles.header}>
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={guardedBack}
           style={styles.backButton}
           accessibilityLabel="Go back"
         >

@@ -37,6 +37,7 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon, XIcon, HandIcon, FingerprintIcon, MoonIcon, CompassIcon, HeartIcon, EyeIcon, FireIcon, SparkleIcon, CloudRainIcon, ScalesIcon, CrosshairIcon, BookOpenIcon, UsersIcon, MusicNotesIcon, CrownIcon, LeafIcon, ChatCircleIcon, CalendarIcon, MagicWandIcon, SmileyIcon, GiftIcon, BinocularsIcon, CloudIcon, ShieldIcon, ShieldCheckIcon, SpeakerHighIcon, LockIcon, GavelIcon } from '@/components/icons';
 import { logger } from '@/lib/logger';
+import { useGuardedBack } from '@/hooks/useGuardedBack';
 import { requestReviewOncePerVersion } from '@/lib/review-prompt';
 
 import { useTheme } from '@/lib/theme';
@@ -607,6 +608,7 @@ function ProgressIndicator({
 
 export default function OnboardingScreen() {
   const router = useRouter();
+  const guardedBack = useGuardedBack();
   const { startAt } = useLocalSearchParams<{ startAt?: string | string[] }>();
   const requestedStartStepId = Array.isArray(startAt) ? startAt[0] : startAt;
   const { colors: _themeColors, isDark: _themeIsDark } = useTheme();
@@ -4288,7 +4290,7 @@ export default function OnboardingScreen() {
               </TouchableOpacity>
             ) : existingUser?.hasCompletedOnboarding ? (
               <TouchableOpacity activeOpacity={1}
-                onPress={() => router.back()}
+                onPress={guardedBack}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 style={{ width: 40, height: 40, justifyContent: 'center', alignItems: 'center' }}
                 accessibilityLabel="Close"

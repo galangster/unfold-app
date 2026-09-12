@@ -1,20 +1,22 @@
 import { useCallback, useEffect, useLayoutEffect } from 'react';
 import { useRouter, useNavigation, useLocalSearchParams, useSegments } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import { isTabGroupSegment, type TabGroupSegment, type TabRootHref } from '@/lib/navigation';
+import { useGuardedBack } from '@/hooks/useGuardedBack';
 
 /**
  * Handles back navigation for screens opened via cross-tab push.
  * Maps `from` param to the correct tab route so back always returns
  * to the source tab, not the (you) tab's index.
  */
-export const FROM_TO_ROUTE: Record<string, string> = {
+export const FROM_TO_ROUTE: Record<string, TabRootHref> = {
   home: '/(tabs)/(today)',
   journal: '/(tabs)/(journal)',
   bible: '/(tabs)/(bible)',
   you: '/(tabs)/(you)',
 };
 
-export const FROM_TO_TAB: Record<string, string> = {
+export const FROM_TO_TAB: Record<string, TabGroupSegment> = {
   home: '(today)',
   journal: '(journal)',
   bible: '(bible)',
@@ -22,8 +24,7 @@ export const FROM_TO_TAB: Record<string, string> = {
 };
 
 export function getCurrentTabFromSegments(segments: readonly string[]): string | undefined {
-  const knownTabs = new Set(Object.values(FROM_TO_TAB));
-  return segments.find((segment) => knownTabs.has(segment));
+  return segments.find(isTabGroupSegment);
 }
 
 export function isCrossTabBackNavigation(from: string | undefined, segments: readonly string[]) {
@@ -47,6 +48,7 @@ export function useCrossTabBack() {
   const navigation = useNavigation();
   const { from } = useLocalSearchParams<{ from?: string }>();
   const segments = useSegments();
+  const guardedBack = useGuardedBack();
 
   const isCrossTab = isCrossTabBackNavigation(from, segments);
   const returnRoute = from ? FROM_TO_ROUTE[from] : undefined;
@@ -76,10 +78,13 @@ export function useCrossTabBack() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (isCrossTab && returnRoute) {
       router.navigate(returnRoute as any);
-    } else {
-      router.back();
+      return;
     }
-  }, [isCrossTab, returnRoute, router]);
+    // Same-tab exit. series-detail, my-content, past-devotionals and settings
+    // are all deep-linkable, and such an arrival carries no `from` param and
+    // no history, so an unguarded back() would do nothing.
+    guardedBack();
+  }, [isCrossTab, returnRoute, router, guardedBack]);
 
   return { handleBack, isFromHome: from === 'home' };
 }

@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Switch, StyleSheet } from 'react-native';
-import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown, FadeOut, useReducedMotion } from 'react-native-reanimated';
 import { Duration, Ease } from '@/constants/animations';
@@ -21,6 +20,7 @@ import { Spacing } from '@/constants/spacing';
 import { Typography } from '@/constants/typography';
 import { alpha } from '@/components/ui';
 import { useTheme } from '@/lib/theme';
+import { useGuardedBack } from '@/hooks/useGuardedBack';
 import { useUnfoldStore } from '@/lib/store';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 
@@ -127,7 +127,7 @@ function TierIcon({
 type StatTooltipId = 'best' | 'freezes' | 'toFreeze';
 
 export default function StreakSettingsScreen() {
-  const router = useRouter();
+  const guardedBack = useGuardedBack();
   const { colors, isDark } = useTheme();
   const reducedMotion = useReducedMotion();
   const [activeTooltip, setActiveTooltip] = useState<StatTooltipId | null>(null);
@@ -143,7 +143,7 @@ export default function StreakSettingsScreen() {
 
   const handleBack = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.back();
+    guardedBack();
   };
 
   const handleStatTap = (id: StatTooltipId) => {
