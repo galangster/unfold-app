@@ -14,6 +14,7 @@ import {
   serializeDevotionalPullCursor,
 } from './devotional-pull-cursor';
 import type { CommittedDevotionalPull, DevotionalPullCursor, DevotionalPullScope } from './devotional-pull-cursor';
+import { extractDevotionalLifecycle } from './devotional-lifecycle';
 import { bindPulledDevotionalSession } from './devotional-pulled-content';
 import { logger } from './logger';
 import { getDeviceId, mmkvStorage } from './mmkv-storage';
@@ -39,6 +40,8 @@ type PulledDevotionalMetadata = {
   // tomorrow-lock fail closed. See devotional-day-access.getCalendarDayNumber.
   seriesStartDate?: string;
   updatedAt?: string;
+  archivedAt?: string | null;
+  archivedStateAt?: string;
 };
 
 export type PulledDevotionalContent = {
@@ -146,6 +149,7 @@ function mapPulledDevotionalMetadata(record: SyncPulledRecord): PulledDevotional
   if (record.deleted) return null;
   const data = asRecord(record.data);
   const seriesArc = asRecord(data.seriesArc);
+  const lifecycle = extractDevotionalLifecycle(data);
   return {
     id: record.id,
     title: asString(data.title),
@@ -154,6 +158,7 @@ function mapPulledDevotionalMetadata(record: SyncPulledRecord): PulledDevotional
     seriesArc: seriesArc as unknown as Devotional['seriesArc'] | undefined,
     seriesStartDate: asString(data.seriesStartDate),
     updatedAt: record.updatedAt,
+    ...lifecycle,
   };
 }
 

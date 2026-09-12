@@ -1,6 +1,7 @@
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from './api-config';
 import { authenticatedFetch } from './device-credential';
 import { buildReadOnlyCanonicalDayData, canonicalGeneratedDayId } from './devotional-canonical-days';
+import { devotionalSyncData } from './personal-data-sync-records';
 import { buildSyncPushBody } from './sync-push-body';
 import { isCanonicalProgressiveDevotional } from './reading-generation-policy';
 import type { Devotional, DevotionalDay } from './store';
@@ -64,19 +65,8 @@ export function buildDevotionalReadSyncChanges({
       id: devotional.id,
       clientUpdatedAt: readAt,
       data: {
-        schemaVersion: 1,
-        title: devotional.title,
-        totalDays: devotional.totalDays,
+        ...devotionalSyncData(devotional),
         currentDay: nextCurrentDay,
-        userContext: devotional.userContext,
-        themeCategory: devotional.themeCategory,
-        devotionalType: devotional.devotionalType,
-        studySubject: devotional.studySubject,
-        generationMode: devotional.generationMode,
-        usedStoryIds: devotional.usedStoryIds,
-        seriesArc: devotional.seriesArc,
-        progressiveMemory: devotional.progressiveMemory,
-        seriesStartDate: devotional.seriesStartDate,
       },
       deleted: false,
     },

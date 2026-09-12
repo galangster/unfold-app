@@ -35,7 +35,7 @@ import { Typography } from '@/constants/typography';
 import { Shadow } from '@/constants/shadows';
 import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
-import { useUnfoldStore, FONT_SIZE_VALUES } from '@/lib/store';
+import { updateSyncedDevotionals, useUnfoldStore, FONT_SIZE_VALUES } from '@/lib/store';
 import { UndoToast } from '@/components/UndoToast';
 import type { Highlight, Bookmark, DevotionalDay, JournalEntry } from '@/lib/store';
 import { refreshDailyReminder } from '@/lib/notifications';
@@ -1374,11 +1374,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
         devotionalId: currentDevotional.id,
         pulled,
         updateDevotionalDays,
-        updateDevotionals: (updater) => {
-          useUnfoldStore.setState((state) => ({
-            devotionals: updater(state.devotionals),
-          }));
-        },
+        updateDevotionals: updateSyncedDevotionals,
       });
       commitDevotionalPullCursor(pulled);
 
@@ -1477,14 +1473,11 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
           devotionalId,
           pulled,
           updateDevotionalDays,
-          updateDevotionals: (updater) => {
-            useUnfoldStore.setState((state) => ({
-              devotionals: updater(state.devotionals),
-            }));
-          },
+          updateDevotionals: updateSyncedDevotionals,
         });
         commitDevotionalPullCursor(pulled);
-        if (params.readOnly !== '1' && !currentDevotionalId) {
+        if (params.readOnly !== '1' && !currentDevotionalId
+          && !useUnfoldStore.getState().devotionals.find((item) => item.id === devotionalId)?.archivedAt) {
           setCurrentDevotional(devotionalId);
         }
 

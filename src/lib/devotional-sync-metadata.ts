@@ -1,16 +1,20 @@
 import type { Devotional } from './store';
 import type { PulledDevotionalContent } from './devotional-sync-pull';
 import {
+  didDevotionalLifecycleChange,
+  mergeDevotionalLifecycle,
+} from './devotional-lifecycle';
+import {
   clampCurrentDayToSeriesBoundary,
   getServerOwnedSeriesTotalDays,
 } from './devotional-series-boundary';
 
 type SyncedDevotionalMetadata = NonNullable<PulledDevotionalContent['devotional']>;
 
-export type DevotionalSyncMetadataPatch = Partial<Pick<Devotional, 'title' | 'totalDays' | 'currentDay' | 'seriesArc' | 'seriesStartDate' | 'updatedAt'>>;
+export type DevotionalSyncMetadataPatch = Partial<Pick<Devotional, 'title' | 'totalDays' | 'currentDay' | 'seriesArc' | 'seriesStartDate' | 'updatedAt' | 'archivedAt' | 'archivedStateAt'>>;
 
 export function buildDevotionalSyncMetadataPatch(
-  local: Pick<Devotional, 'id' | 'title' | 'totalDays' | 'currentDay' | 'seriesArc' | 'seriesStartDate' | 'createdAt'>,
+  local: Pick<Devotional, 'id' | 'title' | 'totalDays' | 'currentDay' | 'seriesArc' | 'seriesStartDate' | 'createdAt' | 'archivedAt' | 'archivedStateAt'>,
   synced?: SyncedDevotionalMetadata,
 ): DevotionalSyncMetadataPatch {
   if (!synced || synced.id !== local.id) return {};
@@ -66,6 +70,18 @@ export function buildDevotionalSyncMetadataPatch(
 
   if (synced.updatedAt) {
     patch.updatedAt = synced.updatedAt;
+  }
+
+  const mergedLifecycle = mergeDevotionalLifecycle({
+    local,
+    incoming: {
+      archivedAt: synced.archivedAt,
+      archivedStateAt: synced.archivedStateAt,
+    },
+  });
+  if (didDevotionalLifecycleChange(local, mergedLifecycle)) {
+    patch.archivedAt = mergedLifecycle.archivedAt;
+    patch.archivedStateAt = mergedLifecycle.archivedStateAt;
   }
 
   return patch;

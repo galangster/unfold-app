@@ -137,4 +137,43 @@ describe('buildDevotionalSyncMetadataPatch', () => {
       }),
     ).toEqual({ updatedAt: '2026-04-25T13:29:48.574Z' });
   });
+
+  it('applies a newer remote archive without moving currentDay backwards', () => {
+    expect(
+      buildDevotionalSyncMetadataPatch(
+        { ...baseDevotional, currentDay: 4, archivedAt: null, archivedStateAt: '2026-09-12T14:00:00.000Z' },
+        {
+          id: 'devotional-1',
+          currentDay: 3,
+          archivedAt: '2026-09-12T15:00:00.000Z',
+          archivedStateAt: '2026-09-12T15:00:00.000Z',
+          updatedAt: '2026-09-12T15:00:00.000Z',
+        },
+      ),
+    ).toEqual({
+      archivedAt: '2026-09-12T15:00:00.000Z',
+      archivedStateAt: '2026-09-12T15:00:00.000Z',
+      updatedAt: '2026-09-12T15:00:00.000Z',
+    });
+  });
+
+  it('keeps a newer local archive when incremental metadata omits the intent clock', () => {
+    expect(
+      buildDevotionalSyncMetadataPatch(
+        {
+          ...baseDevotional,
+          archivedAt: '2026-09-12T15:00:00.000Z',
+          archivedStateAt: '2026-09-12T15:00:00.000Z',
+        },
+        {
+          id: 'devotional-1',
+          currentDay: 2,
+          updatedAt: '2026-09-12T16:00:00.000Z',
+        },
+      ),
+    ).toEqual({
+      currentDay: 2,
+      updatedAt: '2026-09-12T16:00:00.000Z',
+    });
+  });
 });

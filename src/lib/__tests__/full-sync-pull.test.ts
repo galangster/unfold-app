@@ -659,3 +659,170 @@ describe('J6 full-sync day mapper', () => {
     expect(emptyLine?.nextPick).toBeUndefined();
   });
 });
+
+describe('pulled series lifecycle', () => {
+  const LOCAL_ARCHIVE_AT = '2026-09-12T15:00:00.000Z';
+  const REMOTE_ARCHIVE_AT = '2026-09-12T16:00:00.000Z';
+  const OLDER_AT = '2026-09-12T14:00:00.000Z';
+
+  function localSeries(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'series-1',
+      title: 'Stillness',
+      totalDays: 14,
+      currentDay: 4,
+      days: [{
+        id: 'day-1',
+        dayNumber: 1,
+        title: 'Day 1',
+        scriptureReference: 'John 1:1',
+        scriptureText: 'In the beginning',
+        bodyText: 'Body',
+        quotableLine: 'Line',
+        isRead: true,
+        readAt: '2026-09-11T12:00:00.000Z',
+      }],
+      createdAt: '2026-09-01T00:00:00.000Z',
+      updatedAt: '2026-09-11T12:00:00.000Z',
+      generationMode: 'progressive',
+      userContext: { name: '', aboutMe: '', currentSituation: '', emotionalState: '' },
+      ...overrides,
+    } as never;
+  }
+
+  it('keeps a local archive when a newer content pull omits lifecycle fields', () => {
+    useUnfoldStore.setState({
+      devotionals: [localSeries({ archivedAt: LOCAL_ARCHIVE_AT, archivedStateAt: LOCAL_ARCHIVE_AT })],
+      currentDevotionalId: null,
+    });
+
+    applyPulledUserData({
+      timestamp: '2026-09-12T16:00:00.000Z',
+      changes: {
+        devotionals: [{
+          id: 'series-1',
+          updatedAt: '2026-09-12T16:00:00.000Z',
+          deleted: false,
+          data: {
+            title: 'Stillness',
+            currentDay: 5,
+            clientUpdatedAt: '2026-09-12T16:00:00.000Z',
+          },
+        }],
+      },
+    });
+
+    const series = useUnfoldStore.getState().devotionals.find((item) => item.id === 'series-1');
+    expect(series).toMatchObject({
+      currentDay: 5,
+      archivedAt: LOCAL_ARCHIVE_AT,
+      archivedStateAt: LOCAL_ARCHIVE_AT,
+    });
+    expect(series?.days[0]).toMatchObject({ isRead: true, readAt: '2026-09-11T12:00:00.000Z' });
+  });
+
+  it('applies a newer remote archive even when a content write is still pending', () => {
+    useUnfoldStore.setState({
+      devotionals: [localSeries()],
+      currentDevotionalId: 'series-1',
+    });
+    replaceSyncOutbox([{
+      table: 'devotionals',
+      id: 'series-1',
+      data: { currentDay: 5 },
+      clientUpdatedAt: '2026-09-12T16:30:00.000Z',
+      deleted: false,
+    }]);
+
+    applyPulledUserData({
+      timestamp: REMOTE_ARCHIVE_AT,
+      changes: {
+        devotionals: [{
+          id: 'series-1',
+          updatedAt: REMOTE_ARCHIVE_AT,
+          deleted: false,
+          data: {
+            currentDay: 4,
+            archivedAt: REMOTE_ARCHIVE_AT,
+            archivedStateAt: REMOTE_ARCHIVE_AT,
+            clientUpdatedAt: REMOTE_ARCHIVE_AT,
+          },
+        }],
+      },
+    });
+
+    const state = useUnfoldStore.getState();
+    expect(state.currentDevotionalId).toBeNull();
+    expect(state.devotionals[0]).toMatchObject({
+      currentDay: 4,
+      archivedAt: REMOTE_ARCHIVE_AT,
+      archivedStateAt: REMOTE_ARCHIVE_AT,
+    });
+    expect(state.devotionals[0]?.days[0]?.isRead).toBe(true);
+  });
+
+  it('keeps a newer pending local archive against an older remote unarchive', () => {
+    useUnfoldStore.setState({
+      devotionals: [localSeries({ archivedAt: LOCAL_ARCHIVE_AT, archivedStateAt: LOCAL_ARCHIVE_AT })],
+      currentDevotionalId: null,
+    });
+    replaceSyncOutbox([{
+      table: 'devotionals',
+      id: 'series-1',
+      data: { archivedAt: LOCAL_ARCHIVE_AT, archivedStateAt: LOCAL_ARCHIVE_AT },
+      clientUpdatedAt: LOCAL_ARCHIVE_AT,
+      deleted: false,
+    }]);
+
+    applyPulledUserData({
+      timestamp: OLDER_AT,
+      changes: {
+        devotionals: [{
+          id: 'series-1',
+          updatedAt: OLDER_AT,
+          deleted: false,
+          data: {
+            archivedAt: null,
+            archivedStateAt: OLDER_AT,
+            clientUpdatedAt: OLDER_AT,
+          },
+        }],
+      },
+    });
+
+    expect(useUnfoldStore.getState().devotionals[0]).toMatchObject({
+      archivedAt: LOCAL_ARCHIVE_AT,
+      archivedStateAt: LOCAL_ARCHIVE_AT,
+    });
+  });
+
+  it('does not archive a sibling series that the user did not end', () => {
+    useUnfoldStore.setState({
+      devotionals: [
+        localSeries({ archivedAt: LOCAL_ARCHIVE_AT, archivedStateAt: LOCAL_ARCHIVE_AT }),
+        localSeries({ id: 'series-2', title: 'Other' }),
+      ],
+      currentDevotionalId: 'series-2',
+    });
+
+    applyPulledUserData({
+      timestamp: REMOTE_ARCHIVE_AT,
+      changes: {
+        devotionals: [{
+          id: 'series-1',
+          updatedAt: REMOTE_ARCHIVE_AT,
+          deleted: false,
+          data: {
+            archivedAt: REMOTE_ARCHIVE_AT,
+            archivedStateAt: REMOTE_ARCHIVE_AT,
+            clientUpdatedAt: REMOTE_ARCHIVE_AT,
+          },
+        }],
+      },
+    });
+
+    const state = useUnfoldStore.getState();
+    expect(state.currentDevotionalId).toBe('series-2');
+    expect(state.devotionals.find((item) => item.id === 'series-2')?.archivedAt).toBeUndefined();
+  });
+});

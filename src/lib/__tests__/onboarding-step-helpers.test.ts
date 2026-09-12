@@ -722,6 +722,16 @@ describe('onboarding step helpers', () => {
   });
 
   describe('G3 back target', () => {
+    it('stops a new series at its entry step and preserves Back within discovery', () => {
+      const context = {
+        stepIds: ['commitment1', 'themeType', 'currentSituation'],
+        purchasedDuringOnboarding: false,
+        entryStepId: 'themeType',
+      };
+      expect(resolveOnboardingBackTarget({ ...context, currentStepId: 'themeType' })).toBeNull();
+      expect(resolveOnboardingBackTarget({ ...context, currentStepId: 'commitment1' })).toBeNull();
+      expect(resolveOnboardingBackTarget({ ...context, currentStepId: 'currentSituation' })).toBe('themeType');
+    });
     it('returns null when purchased and the previous id is purchaseConfirmation or threeStepPaywall', () => {
       expect(resolveOnboardingBackTarget({
         stepIds: ['threeStepPaywall', 'purchaseConfirmation', 'reminderTime'],
