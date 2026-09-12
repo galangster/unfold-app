@@ -98,7 +98,7 @@ jest.mock('@react-native-masked-view/masked-view', () => {
 
 let mockPaywallSearchParams: Record<string, string> = {};
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ back: mockBack, replace: mockReplace }),
+  useRouter: () => ({ canGoBack: () => true, back: mockBack, replace: mockReplace }),
   useLocalSearchParams: () => mockPaywallSearchParams,
   useFocusEffect: (cb: () => void) => {
     const ReactActual = require('react');

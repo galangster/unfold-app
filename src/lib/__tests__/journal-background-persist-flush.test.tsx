@@ -16,7 +16,7 @@ const renderer = require('react-test-renderer');
 const { act } = renderer;
 
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ back: jest.fn(), replace: jest.fn(), push: jest.fn() }),
+  useRouter: () => ({ canGoBack: () => true, back: jest.fn(), replace: jest.fn(), push: jest.fn() }),
   useLocalSearchParams: () => ({ devotionalId: 'dev-1', dayNumber: '1' }),
   // Today-flow mount: closeJournal reads segments + the enclosing stack state.
   useSegments: () => ['(tabs)', '(today)', 'journal'],

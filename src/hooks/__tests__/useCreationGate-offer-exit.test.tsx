@@ -14,8 +14,7 @@ const mockGetItem = jest.fn();
 const mockSetItem = jest.fn();
 
 jest.mock('expo-router', () => ({
-  useRouter: () => ({
-    navigate: (...args: unknown[]) => mockNavigate(...args),
+  useRouter: () => ({ canGoBack: () => true, navigate: (...args: unknown[]) => mockNavigate(...args),
     push: (...args: unknown[]) => mockPush(...args),
     back: jest.fn(),
   }),

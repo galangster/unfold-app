@@ -18,7 +18,7 @@ const { act } = renderer;
 (globalThis as any).__journalParams = { devotionalId: 'dev-1', dayNumber: '1' };
 
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ back: jest.fn(), replace: jest.fn(), push: jest.fn() }),
+  useRouter: () => ({ canGoBack: () => true, back: jest.fn(), replace: jest.fn(), push: jest.fn() }),
   useLocalSearchParams: () => (globalThis as any).__journalParams,
   // Today-flow mount: closeJournal reads segments + the enclosing stack state.
   useSegments: () => ['(tabs)', '(today)', 'journal'],

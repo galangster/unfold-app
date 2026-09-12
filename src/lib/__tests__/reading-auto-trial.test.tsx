@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ push: jest.fn(), replace: jest.fn(), back: jest.fn() }),
+  useRouter: () => ({ canGoBack: () => true, push: jest.fn(), replace: jest.fn(), back: jest.fn() }),
   useLocalSearchParams: () => ({}),
   useFocusEffect: () => undefined,
   useIsFocused: () => true,

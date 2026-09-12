@@ -175,7 +175,7 @@ jest.mock('react-native-safe-area-context', () => ({
 }));
 
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ push: (...args: unknown[]) => mockRouterPush(...args) }),
+  useRouter: () => ({ canGoBack: () => true, push: (...args: unknown[]) => mockRouterPush(...args) }),
 }));
 
 jest.mock('expo-haptics', () => ({

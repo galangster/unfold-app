@@ -79,7 +79,7 @@ const mockSearchParams: {
   autoTrialIntentId?: string;
 } = {};
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ replace: mockReplace, push: jest.fn(), back: jest.fn() }),
+  useRouter: () => ({ canGoBack: () => true, replace: mockReplace, push: jest.fn(), back: jest.fn() }),
   useNavigation: () => ({ setOptions: jest.fn(), addListener: jest.fn(() => jest.fn()) }),
   useLocalSearchParams: () => mockSearchParams,
 }));
