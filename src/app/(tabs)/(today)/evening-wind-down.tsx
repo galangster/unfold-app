@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
   FadeIn,
@@ -144,6 +144,8 @@ function MovementCard({
 
 export default function EveningWindDownScreen() {
   const params = useLocalSearchParams<{ devotionalId?: string; dayNumber?: string }>();
+  // Forward navigation only. The exit is useGuardedBack's; see exitWindDown.
+  const router = useRouter();
   const { colors } = useTheme();
   const reducedMotion = useReducedMotion();
   const user = useUnfoldStore((s) => s.user);
