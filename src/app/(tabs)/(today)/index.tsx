@@ -30,8 +30,9 @@ import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
 import { getPremiumNudgeCardTone } from '@/components/PremiumNudgeCard';
 import { usePremiumNudge } from '@/hooks/usePremiumNudge';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
-import { getContentAwareMiddayMessage, getContentAwareEveningMessage } from '@/constants/check-in-messages';
-import { copyVariationFor } from '@/lib/copy-variation';
+import { getContentAwareEveningMessage, getMiddayCheckInBody } from '@/constants/check-in-messages';
+import { copySeed } from '@/lib/copy-variation';
+import { dayIndexFor } from '@/lib/variation-bag';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { Duration, Ease } from '@/constants/animations';
 import { pollJobStatus } from '@/lib/generation-api';
@@ -72,6 +73,7 @@ import { captureSyncSession, isSyncSessionCurrent } from '@/lib/sync-session-fen
 import {
   getCurrentDevotional,
   getHomeDevotionalDayData,
+  getTodayCarryLine,
   hasReadDevotionalToday,
   shouldAutoPrepareCurrentDevotionalDay,
 } from '@/lib/home-devotional-state';
@@ -1047,31 +1049,54 @@ export default function HomeScreen() {
     }
   }, [currentDevotional]);
 
-  // Content-aware check-in messages — reference today's devotional when
-  // available. Same seed and day as the notifications draw from, so when both
-  // fall through to the generic pools they agree.
+  // The card and the notification are the SAME copy, from the same function,
+  // on the same seed and day — not two paths that happen to agree.
   //
-  // They do NOT always agree. The notification body prefers the companion
-  // nudge, then today's carry line, before reaching this content-aware path
-  // (see getMiddayCheckInBody). So on a premium day with a nudge the banner is
-  // more specific than this card — even though the card is labelled "Companion
-  // note" below. Rendering the card from getMiddayCheckInCopy would make them
-  // structurally identical; that is a product call about what this card is
-  // for, not a refactor.
-  const variation = copyVariationFor(new Date());
+  // They used to diverge: the card took only the content-aware path while the
+  // notification preferred the companion nudge and then the carry line. So the
+  // card labelled "Companion note" was the one surface that never showed the
+  // companion nudge, which is generated per reader per day and names something
+  // real from their life. Fixed 2026-09-12 at Nick's call.
+  // Stable within a local day, so the memos below actually memoise. The seed
+  // is cached after its first read; dayIndexFor is arithmetic on today's date,
+  // so recomputing it per render is free and it rolls over at local midnight
+  // without needing a remount.
+  const variationDayIndex = dayIndexFor(new Date());
+  const variation = useMemo(
+    () => ({ seed: copySeed(), dayIndex: variationDayIndex }),
+    [variationDayIndex],
+  );
 
-  const middayMessage = useMemo(() => getContentAwareMiddayMessage(currentDayData ? {
+  const dayCopyContext = useMemo(() => (currentDayData ? {
     title: currentDayData.title,
     scriptureReference: currentDayData.scriptureReference,
     quotableLine: currentDayData.quotableLine,
     checkInQuestion: currentDayData.checkInQuestion,
-  } : null, variation), [currentDayData?.title, currentDayData?.scriptureReference, currentDayData?.quotableLine, currentDayData?.checkInQuestion, variation.seed, variation.dayIndex]);
+    act: currentDayData.act,
+    eveningScriptureRef: currentDayData.eveningScriptureRef,
+    companionNudge: currentDayData.companionNudge,
+  } : null), [currentDayData]);
 
-  const eveningMessage = useMemo(() => getContentAwareEveningMessage(currentDayData ? {
-    title: currentDayData.title,
-    scriptureReference: currentDayData.scriptureReference,
-    quotableLine: currentDayData.quotableLine,
-  } : null, variation), [currentDayData?.title, currentDayData?.scriptureReference, currentDayData?.quotableLine, variation.seed, variation.dayIndex]);
+  const todayCarryLine = useMemo(
+    () => getTodayCarryLine(devotionals, currentDevotionalId),
+    [devotionals, currentDevotionalId],
+  );
+
+  const middayMessage = useMemo(
+    () => getMiddayCheckInBody(dayCopyContext, todayCarryLine, variation),
+    [dayCopyContext, todayCarryLine, variation],
+  );
+
+  // Evening deliberately still takes the content-aware path only. Its
+  // notification leads with the day's `act` — a task — and that is the right
+  // lead for a banner at 20:30 but not obviously right for a card the reader
+  // is already looking at. Aligning it is a product call, not a cleanup, and
+  // it has not been made. The midday divergence above was a plain defect: a
+  // card named for the companion nudge that never showed it.
+  const eveningMessage = useMemo(
+    () => getContentAwareEveningMessage(dayCopyContext, variation),
+    [dayCopyContext, variation],
+  );
 
   // --- Derived state for zone components ---
 
