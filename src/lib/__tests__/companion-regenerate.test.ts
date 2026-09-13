@@ -39,6 +39,18 @@ describe('pickRegenerateTarget', () => {
 
     expect(pickRegenerateTarget([userMessage, companionMessage])?.companionMessage).toBe(companionMessage);
   });
+
+  it('retries an older error with its paired user message and does not pick a later reply', () => {
+    const olderUser = message('user-1', 'user', 'sent', 'Older question');
+    const olderError = message('error-1', 'companion', 'error', 'Failed');
+    const laterUser = message('user-2', 'user', 'sent', 'Later question');
+    const laterReply = message('reply-2', 'companion', 'complete', 'Later reply');
+
+    expect(pickRegenerateTarget([olderUser, olderError, laterUser, laterReply], 'error-1')).toEqual({
+      userMessage: olderUser,
+      companionMessage: olderError,
+    });
+  });
 });
 
 it('gives every feedback reason a unique id and a label', () => {

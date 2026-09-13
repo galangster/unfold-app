@@ -185,12 +185,21 @@ async function downloadAudio(text: string, voiceId: string, key: string): Promis
       cachedFile.uri,
       downloadOptions,
     );
-    const downloadResult = await Promise.race([
-      downloadPromise,
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('TTS download timed out after 30s')), DOWNLOAD_TIMEOUT)
-      ),
-    ]);
+    let downloadTimer: ReturnType<typeof setTimeout> | null = null;
+    let downloadResult: Awaited<typeof downloadPromise>;
+    try {
+      downloadResult = await Promise.race([
+        downloadPromise,
+        new Promise<never>((_, reject) => {
+          downloadTimer = setTimeout(
+            () => reject(new Error('TTS download timed out after 30s')),
+            DOWNLOAD_TIMEOUT,
+          );
+        }),
+      ]);
+    } finally {
+      if (downloadTimer !== null) clearTimeout(downloadTimer);
+    }
 
     if (downloadResult.status !== 200) {
       throw new Error(`TTS download failed: HTTP ${downloadResult.status}`);

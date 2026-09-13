@@ -229,7 +229,10 @@ describe('G5 onboarding completion draft retirement', () => {
 
   it('does not recreate onboarding-draft-v1 after completion starts and the app backgrounds', async () => {
     const client = new QueryClient({
-      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+      defaultOptions: {
+        queries: { retry: false, gcTime: Infinity },
+        mutations: { retry: false, gcTime: Infinity },
+      },
     });
     let tree: { root: { findAll: Function }; unmount: () => void };
     await act(async () => {

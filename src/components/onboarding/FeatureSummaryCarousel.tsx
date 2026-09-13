@@ -19,7 +19,7 @@ import {
 } from '@/app/how-it-works';
 import type { FeatureCard } from '@/app/how-it-works';
 import type { ColorTheme } from '@/constants/colors';
-import { COMPANION_IS_AI_BODY, COMPANION_NAME_LATER_HINT } from '@/lib/support-clarity';
+import { COMPANION_INTRO_BODY, COMPANION_NAME_LATER_HINT } from '@/lib/support-clarity';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25;
@@ -28,7 +28,7 @@ const SWIPE_VELOCITY = 500;
 // Companion naming card — inserted into the carousel
 const COMPANION_CARD: FeatureCard & { type: 'companion' } = {
   headline: 'Meet your companion',
-  body: COMPANION_IS_AI_BODY,
+  body: COMPANION_INTRO_BODY,
   animation: 'orb',
   type: 'companion',
 };

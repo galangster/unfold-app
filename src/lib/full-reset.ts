@@ -30,6 +30,7 @@
 import { cancelAllScheduledNotifications } from '@/lib/notifications';
 import { useUnfoldStore } from '@/lib/store';
 import { useCompanionChatStore } from '@/lib/companion-chat-store';
+import { COMPANION_CHAT_SHARD_PREFIX } from '@/lib/companion-chat-persist-storage';
 import {
   mmkvStorage,
   getMmkvKeys,
@@ -132,6 +133,7 @@ export const FULL_RESET_MMKV_KEYS: readonly string[] = [
  */
 export const FULL_RESET_MMKV_KEY_PREFIXES: readonly string[] = [
   `${RATE_LIMIT_STORAGE_KEY}_`,
+  COMPANION_CHAT_SHARD_PREFIX,
 ] as const;
 
 const REVENUECAT_LOGOUT_TIMEOUT_MS = 5_000;

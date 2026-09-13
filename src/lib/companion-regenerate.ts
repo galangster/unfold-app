@@ -21,14 +21,21 @@ export const FEEDBACK_REASONS = [
 export type FeedbackReasonId = (typeof FEEDBACK_REASONS)[number]['id'];
 
 /**
- * The only message a reader can regenerate: the last one, when it is a
- * finished companion reply (complete or error) with a user message before it.
+ * Pair a finished companion reply with the user turn immediately before it.
+ * Pass `companionId` to retry that specific reply (including an older error)
+ * instead of rewriting whatever is last.
  */
-export function pickRegenerateTarget(messages: CompanionMessage[]): {
+export function pickRegenerateTarget(
+  messages: CompanionMessage[],
+  companionId?: string,
+): {
   userMessage: CompanionMessage;
   companionMessage: CompanionMessage;
 } | null {
-  const companionMessage = messages[messages.length - 1];
+  const companionIndex = companionId
+    ? messages.findIndex((message) => message.id === companionId)
+    : messages.length - 1;
+  const companionMessage = companionIndex >= 0 ? messages[companionIndex] : undefined;
   if (
     !companionMessage ||
     companionMessage.role !== 'companion' ||
@@ -37,7 +44,7 @@ export function pickRegenerateTarget(messages: CompanionMessage[]): {
     return null;
   }
 
-  for (let index = messages.length - 2; index >= 0; index -= 1) {
+  for (let index = companionIndex - 1; index >= 0; index -= 1) {
     if (messages[index].role === 'user') {
       return { userMessage: messages[index], companionMessage };
     }

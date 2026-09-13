@@ -12,7 +12,10 @@ import { AppState } from 'react-native';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { mmkvStorage } from './mmkv-storage';
-import { createDebouncedJSONStorage } from './debounced-persist-storage';
+import {
+  COMPANION_CHAT_STORAGE_KEY,
+  createCompanionChatPersistStorage,
+} from './companion-chat-persist-storage';
 import { shouldFlushAutosaveOnAppState } from './autosave-controller';
 
 import { getAuthHeaders, PRIMARY_BACKEND_URL } from '@/lib/api-config';
@@ -24,6 +27,10 @@ import {
   companionMessageSyncData,
   enqueuePersonalDataSyncChange,
 } from './personal-data-sync-records';
+import {
+  nearestPrecedingUserMessage,
+  shouldEnqueueCompanionMessage,
+} from './companion-chat-request';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -77,10 +84,47 @@ export interface Conversation {
 
 const makeId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
-// Cap stored messages per conversation to prevent unbounded growth in MMKV
-const MAX_STORED_MESSAGES = 200;
-const MAX_CONVERSATIONS = 50;
 const INACTIVITY_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+let pendingCompanionHydrationCorrections: { conversationId: string; message: CompanionMessage }[] = [];
+
+export function reconcileUnfinishedCompanionReplies(
+  conversations: Conversation[],
+): { conversations: Conversation[]; corrections: { conversationId: string; message: CompanionMessage }[] } {
+  const corrections: { conversationId: string; message: CompanionMessage }[] = [];
+  const nextConversations = conversations.map((conversation) => {
+    const messages = conversation.messages ?? [];
+    if (!messages.some((message) => message.status === 'streaming')) return conversation;
+    return {
+      ...conversation,
+      messages: messages.map((message) => {
+        if (message.status !== 'streaming') return message;
+        const corrected: CompanionMessage = {
+          ...message,
+          status: 'error',
+          interrupted: true,
+        };
+        corrections.push({ conversationId: conversation.id, message: corrected });
+        return corrected;
+      }),
+    };
+  });
+  return { conversations: nextConversations, corrections };
+}
+
+export function enqueueCompanionHydrationCorrections(
+  corrections: { conversationId: string; message: CompanionMessage }[],
+): void {
+  const now = new Date().toISOString();
+  for (const { conversationId, message } of corrections) {
+    enqueuePersonalDataSyncChange(
+      'companion_messages',
+      message.id,
+      companionMessageSyncData(message, conversationId),
+      now,
+    );
+  }
+}
 
 // ── Title helper ──────────────────────────────────────────────────────────
 
@@ -218,14 +262,17 @@ interface CompanionChatState {
   setActiveConversation: (id: string) => void;
 }
 
-// WR-23: coalesces persist writes so the ~30/sec token flushes during SSE
-// streaming serialize the store once per debounce window instead of running a
-// full partialize + JSON.stringify + sync MMKV write on every set(). Flushed
-// when the app backgrounds (listener below), matching store.ts.
-const companionPersistStorage = createDebouncedJSONStorage<CompanionChatState>(mmkvStorage);
+export type PersistedCompanionChatState = Pick<
+  CompanionChatState,
+  'conversations' | 'activeConversationId'
+>;
+
+// Conversation shards keep streaming persistence proportional to the active
+// conversation. The manifest stores only order and the active ID.
+const companionPersistStorage = createCompanionChatPersistStorage<Conversation>(mmkvStorage);
 
 export const useCompanionChatStore = create<CompanionChatState>()(
-  persist(
+  persist<CompanionChatState, [], [], PersistedCompanionChatState>(
     (set, get) => ({
       conversations: [],
       activeConversationId: null,
@@ -234,9 +281,15 @@ export const useCompanionChatStore = create<CompanionChatState>()(
         set((s) => {
           const now = new Date().toISOString();
           const timestampedMsg = { ...msg, updatedAt: now };
+          const activeConversation = s.conversations.find((c) => c.id === s.activeConversationId);
 
-          // Auto-create conversation if none active
-          if (!s.activeConversationId) {
+          const enqueueMessageIfDurable = (conversationId: string) => {
+            if (!shouldEnqueueCompanionMessage(timestampedMsg)) return;
+            enqueuePersonalDataSyncChange('companion_messages', timestampedMsg.id, companionMessageSyncData(timestampedMsg, conversationId), now);
+          };
+
+          // Auto-create when none is active, or when pull left a stale id.
+          if (!activeConversation) {
             const seededTitle = timestampedMsg.role === 'user'
               ? deriveConversationTitleFromText(timestampedMsg.content)
               : null;
@@ -251,7 +304,7 @@ export const useCompanionChatStore = create<CompanionChatState>()(
               updatedAt: now,
             };
             enqueuePersonalDataSyncChange('companion_conversations', newConv.id, companionConversationSyncData(newConv), now);
-            enqueuePersonalDataSyncChange('companion_messages', timestampedMsg.id, companionMessageSyncData(timestampedMsg, newConv.id), now);
+            enqueueMessageIfDurable(newConv.id);
             return {
               conversations: [...s.conversations, newConv],
               activeConversationId: newConv.id,
@@ -260,22 +313,20 @@ export const useCompanionChatStore = create<CompanionChatState>()(
 
           return {
             conversations: s.conversations.map(c => {
-              if (c.id !== s.activeConversationId) return c;
+              if (c.id !== activeConversation.id) return c;
               const updated = [...(c.messages ?? []), timestampedMsg];
               const nextTitle = c.title ?? (timestampedMsg.role === 'user'
                 ? deriveConversationTitleFromText(timestampedMsg.content)
                 : null);
               const nextConv: Conversation = {
                 ...c,
-                messages: updated.length > MAX_STORED_MESSAGES
-                  ? updated.slice(-MAX_STORED_MESSAGES)
-                  : updated,
+                messages: updated,
                 lastMessageAt: Date.now(),
                 title: nextTitle,
                 updatedAt: now,
               };
               enqueuePersonalDataSyncChange('companion_conversations', nextConv.id, companionConversationSyncData(nextConv), now);
-              enqueuePersonalDataSyncChange('companion_messages', timestampedMsg.id, companionMessageSyncData(timestampedMsg, nextConv.id), now);
+              enqueueMessageIfDurable(nextConv.id);
               return nextConv;
             }),
           };
@@ -297,7 +348,17 @@ export const useCompanionChatStore = create<CompanionChatState>()(
                 updatedAt: now,
                 messages: (c.messages ?? []).map(m => {
                   if (m.id !== id) return m;
-                  changedMessage = { ...m, ...updates, updatedAt: now };
+                  const nextInterrupted = updates.status === 'complete' && updates.interrupted === undefined
+                    ? false
+                    : updates.interrupted !== undefined
+                      ? updates.interrupted
+                      : m.interrupted;
+                  changedMessage = {
+                    ...m,
+                    ...updates,
+                    interrupted: nextInterrupted,
+                    updatedAt: now,
+                  };
                   return changedMessage;
                 }),
               };
@@ -325,9 +386,7 @@ export const useCompanionChatStore = create<CompanionChatState>()(
           const activeConvMessages = activeConv?.messages ?? [];
           const msg = activeConvMessages.find(m => m.id === id);
           if (msg) {
-            const prevMsg = activeConvMessages
-              .filter(m => m.role === 'user')
-              .slice(-1)[0];
+            const prevMsg = nearestPrecedingUserMessage(activeConvMessages, id);
 
             getAuthHeaders().then(headers => {
               authenticatedFetch(`${PRIMARY_BACKEND_URL}/api/companion-feedback`, {
@@ -395,16 +454,6 @@ export const useCompanionChatStore = create<CompanionChatState>()(
             conversations = conversations.filter(c => c.id !== active.id);
           }
 
-          // Prune old conversations beyond cap
-          const archived = conversations.filter(c => c.archived);
-          if (archived.length > MAX_CONVERSATIONS) {
-            const toRemove = archived
-              .sort((a, b) => a.lastMessageAt - b.lastMessageAt)
-              .slice(0, archived.length - MAX_CONVERSATIONS)
-              .map(c => c.id);
-            conversations = conversations.filter(c => !toRemove.includes(c.id));
-          }
-
           const newConv: Conversation = {
             id: makeId(),
             messages: [],
@@ -469,7 +518,7 @@ export const useCompanionChatStore = create<CompanionChatState>()(
           };
         }),
 
-      clearAllConversations: () =>
+      clearAllConversations: () => {
         set((s) => {
           const now = new Date().toISOString();
           s.conversations.forEach((conversation) => {
@@ -479,7 +528,11 @@ export const useCompanionChatStore = create<CompanionChatState>()(
             });
           });
           return { conversations: [], activeConversationId: null };
-        }),
+        });
+        // This action also backs full reset. Remove the manifest and every
+        // known shard now so the later direct key sweep cannot leave shards.
+        companionPersistStorage.removeItem(COMPANION_CHAT_STORAGE_KEY);
+      },
 
       updateConversation: (id, updates) =>
         set((s) => {
@@ -530,20 +583,12 @@ export const useCompanionChatStore = create<CompanionChatState>()(
         }),
     }),
     {
-      name: 'unfold-companion-chat',
+      name: COMPANION_CHAT_STORAGE_KEY,
       storage: companionPersistStorage,
       version: 5, // v5: Add deepLinks to CompanionMessage
-      // Skip persisting streaming message content to avoid expensive serialization during SSE
-      partialize: (state) => ({
-        ...state,
-        conversations: (state.conversations ?? []).map(c => ({
-          ...c,
-          messages: (c.messages ?? []).map(m =>
-            m.status === 'streaming'
-              ? { ...m, content: '' }
-              : m
-          ),
-        })),
+      partialize: (state): PersistedCompanionChatState => ({
+        conversations: state.conversations,
+        activeConversationId: state.activeConversationId,
       }),
       migrate: (persistedState: unknown, version: number) => {
         const state = persistedState as Partial<CompanionChatState>;
@@ -599,23 +644,19 @@ export const useCompanionChatStore = create<CompanionChatState>()(
           ...currentState,
           ...(persistedState as Partial<CompanionChatState>),
         };
-        // Rehydrate sweep: partialize blanks streaming content, so a message
-        // persisted mid-stream comes back as a permanently blank 'streaming'
-        // row with no retry affordance. Reconcile to 'error' (retryable).
         const conversations = merged.conversations ?? [];
-        if (conversations.some(c => (c.messages ?? []).some(m => m.status === 'streaming'))) {
-          merged.conversations = conversations.map(c => {
-            const messages = c.messages ?? [];
-            if (!messages.some(m => m.status === 'streaming')) return c;
-            return {
-              ...c,
-              messages: messages.map(m =>
-                m.status === 'streaming' ? { ...m, status: 'error' as const } : m
-              ),
-            };
-          });
-        }
+        const reconciled = reconcileUnfinishedCompanionReplies(conversations);
+        merged.conversations = reconciled.conversations;
+        pendingCompanionHydrationCorrections = reconciled.corrections;
         return merged;
+      },
+      onRehydrateStorage: () => (state) => {
+        if (!state) {
+          pendingCompanionHydrationCorrections = [];
+          return;
+        }
+        enqueueCompanionHydrationCorrections(pendingCompanionHydrationCorrections);
+        pendingCompanionHydrationCorrections = [];
       },
     }
   )

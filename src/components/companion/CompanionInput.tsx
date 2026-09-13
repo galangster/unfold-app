@@ -174,7 +174,7 @@ export const CompanionInput = memo(function CompanionInput({ onSend, onStop, isS
           value={text}
           onChangeText={setText}
           placeholder={placeholder}
-          placeholderTextColor={colors.textHint}
+          placeholderTextColor={colors.textMuted}
           selectionColor={colors.accent}
           cursorColor={colors.accent}
           multiline

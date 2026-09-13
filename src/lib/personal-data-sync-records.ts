@@ -207,6 +207,8 @@ export function companionConversationSyncData(conversation: Conversation): Recor
     summary: conversation.title,
     topicTags: conversation.topicTags,
     archived: conversation.archived,
+    startedAt: new Date(conversation.createdAt).toISOString(),
+    pinned: conversation.pinned === true,
   });
 }
 
@@ -222,7 +224,7 @@ export function companionMessageSyncData(message: CompanionMessage, conversation
     feedback: message.feedback,
     feedbackReason: message.feedbackReason,
     deepLinks: message.deepLinks,
-    // Only ever true; `compact` drops it otherwise, so untouched rows are unchanged.
-    interrupted: message.interrupted === true ? true : undefined,
+    // Explicit false after a successful retry clears a prior true on pull.
+    interrupted: message.interrupted === true ? true : message.interrupted === false ? false : undefined,
   });
 }

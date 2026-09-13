@@ -271,6 +271,18 @@ describe('performFullLocalReset', () => {
     expect(mockStore.has('unfold-bible-meta-not-in-list')).toBe(true);
   });
 
+  it('removes orphaned conversation shards even when the chat manifest is absent', async () => {
+    mockStore.set('unfold-companion-chat:conversation:orphaned', '{"messages":[{"content":"private draft"}]}');
+    mockStore.set('unfold-companion-chat:conversation:interrupted-migration', '{}');
+    mockStore.set('unfold-bible-meta-not-in-list', 'survivor');
+
+    await performFullLocalReset();
+
+    expect(mockStore.has('unfold-companion-chat:conversation:orphaned')).toBe(false);
+    expect(mockStore.has('unfold-companion-chat:conversation:interrupted-migration')).toBe(false);
+    expect(mockStore.has('unfold-bible-meta-not-in-list')).toBe(true);
+  });
+
   it('purges the real store files for recovery sessions (FAP-LIB-2/FAP-X-2)', async () => {
     // During a recovery session every mmkvStorage.removeItem above hits the
     // throwaway namespace, so the reset must ALSO delete the real (encrypted,
