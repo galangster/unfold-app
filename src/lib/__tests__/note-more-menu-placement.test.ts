@@ -10,17 +10,13 @@ describe('noteMoreMenuOverlayPlacement', () => {
   it('keeps the menu header-relative after a centered cluster resize', () => {
     const wide = noteMoreMenuOverlayPlacement({
       headerX: 152,
-      headerY: 0,
+      headerY: 24,
       headerWidth: 720,
-      insetLeft: 0,
-      insetTop: 24,
     });
     const narrow = noteMoreMenuOverlayPlacement({
       headerX: 40,
-      headerY: 0,
+      headerY: 24,
       headerWidth: 600,
-      insetLeft: 0,
-      insetTop: 24,
     });
 
     expect(wide).toEqual({
@@ -33,17 +29,17 @@ describe('noteMoreMenuOverlayPlacement', () => {
     expect(narrow.left).toBeLessThan(wide.left);
   });
 
-  it('adds live safe-area insets so a full-window overlay matches the header', () => {
+  it('uses the measured header frame without adding safe-area padding twice', () => {
     const placement = noteMoreMenuOverlayPlacement({
-      headerX: 80,
-      headerY: 12,
-      headerWidth: 520,
-      insetLeft: 20,
-      insetTop: 48,
+      headerX: 156,
+      headerY: 32,
+      headerWidth: 720,
     });
 
-    expect(placement.top).toBe(48 + 12 + NOTE_MORE_MENU_TOP_OFFSET);
-    expect(placement.left).toBe(20 + 80 + 520 - NOTE_MORE_MENU_RIGHT_INSET - NOTE_MORE_MENU_WIDTH);
+    // Native iPad capture: More button ends at y=80 and x=860.
+    // The menu starts eight points below it and shares its right edge.
+    expect(placement.top).toBe(88);
+    expect(placement.left + placement.width).toBe(860);
   });
 
   it('treats invalid header frames as empty so the overlay does not jump', () => {

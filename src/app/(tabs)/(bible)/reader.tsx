@@ -25,7 +25,7 @@ import { planHighlightApplication, planHighlightRemoval } from '@/lib/bible-high
 import { useReadingFont } from '@/lib/useReadingFont';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { useBibleChapter } from '@/hooks/useBibleChapter';
-import { buildBibleReaderLayoutKey, findVisibleVerseAnchor, isCurrentBibleLayoutReport, resolveActiveVerseScrollTarget, resolveBibleReaderLocation, resolveInitialVerseAnchor, resolveRecordedVerseAnchor, resolveTargetVerse, resolveTranslationRefreshVerse, resolveVerseScrollTarget, shouldFlashVerseForScroll } from '@/lib/bible-reader-params';
+import { buildBibleReaderLayoutKey, findVisibleVerseAnchor, isCurrentBibleLayoutReport, resolveActiveVerseScrollTarget, resolveBibleReaderLocation, resolveBibleResizeVerseAnchor, resolveInitialVerseAnchor, resolveRecordedVerseAnchor, resolveTargetVerse, resolveTranslationRefreshVerse, resolveVerseScrollTarget, shouldFlashVerseForScroll } from '@/lib/bible-reader-params';
 import { useBibleDb } from '@/hooks/useBibleDb';
 import { BIBLE_BOOKS, getNextChapter, getPreviousChapter, formatScriptureReference } from '@/lib/bible-constants';
 import type { BibleTranslation } from '@/lib/bible-db';
@@ -567,10 +567,16 @@ export default function BibleReaderScreen() {
     pendingScrollFlashRef.current = false;
     verseLayoutsContentRef.current = { chapterKey, contentKey: readerContentKey, layoutKey: readerLayoutKey };
   } else if (verseLayoutsContentRef.current.layoutKey !== readerLayoutKey) {
+    const liveVerse = resolveBibleResizeVerseAnchor({
+      userScrollActive: userScrollActiveRef.current,
+      layouts: verseLayoutsRef.current,
+      contentOffsetY: lastScrollY.value,
+      headerOffset: headerOverlap,
+      persistedPosition: persistedVerseAnchorRef.current,
+      chapterKey,
+      entryVerse: chapterResumeRef.current.entryVerse,
+    });
     userScrollActiveRef.current = false;
-    const liveVerse = persistedVerseAnchorRef.current?.chapterKey === chapterKey
-      ? persistedVerseAnchorRef.current.verse
-      : chapterResumeRef.current.entryVerse;
     persistedVerseAnchorRef.current = { chapterKey, verse: liveVerse };
     const restoreVerse = resolveTranslationRefreshVerse({
       hadPreviousContent: verseLayoutsContentRef.current.layoutKey !== '',
@@ -1290,6 +1296,7 @@ export default function BibleReaderScreen() {
 
   const handleScrollSettled = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (userScrollActiveRef.current) saveVisibleVerse(event.nativeEvent.contentOffset.y);
+    userScrollActiveRef.current = false;
   }, [saveVisibleVerse]);
 
   // UI-thread scroll handler. Thresholds and direction logic are byte-for-byte
@@ -1424,6 +1431,7 @@ export default function BibleReaderScreen() {
         onScroll={handleScroll}
         onScrollBeginDrag={() => { userScrollActiveRef.current = true; }}
         onScrollEndDrag={handleScrollSettled}
+        onMomentumScrollBegin={() => { userScrollActiveRef.current = true; }}
         onMomentumScrollEnd={handleScrollSettled}
         // Kept at 16 (Animated.ScrollView would otherwise default to 1) so the
         // per-event 5px direction thresholds keep the exact sensitivity they

@@ -127,6 +127,8 @@ export function DevotionalContent({
 }: DevotionalContentProps) {
   const { colors, isDark } = useTheme();
   const actLocatedRef = useRef(false);
+  const layoutCommitFrameRef = useRef<number | null>(null);
+  const [reflectionLayoutCommitSignal, setReflectionLayoutCommitSignal] = useState(0);
   const handleActLayout = useCallback((event: LayoutChangeEvent) => {
     if (!focusAct || actLocatedRef.current) return;
     actLocatedRef.current = true;
@@ -223,14 +225,25 @@ export function DevotionalContent({
   }, [onSectionLayout]);
 
   const handleLayoutGenerationCommitted = useCallback((reportGeneration: number) => {
-    requestAnimationFrame(() => {
+    if (layoutCommitFrameRef.current !== null) {
+      cancelAnimationFrame(layoutCommitFrameRef.current);
+    }
+    layoutCommitFrameRef.current = requestAnimationFrame(() => {
+      layoutCommitFrameRef.current = null;
       measureSection('scripture', scriptureSectionRef, reportGeneration);
       measureSection('devotional', devotionalSectionRef, reportGeneration);
       measureSection('reflection', reflectionSectionRef, reportGeneration);
       measureSection('act', actSectionRef, reportGeneration);
       measureSection('prayer', prayerSectionRef, reportGeneration);
+      setReflectionLayoutCommitSignal((current) => current + 1);
     });
   }, [measureSection]);
+
+  useEffect(() => () => {
+    if (layoutCommitFrameRef.current !== null) {
+      cancelAnimationFrame(layoutCommitFrameRef.current);
+    }
+  }, []);
 
   useEffect(() => {
     const scriptureBlockTop = scriptureBlockTopRef.current;
@@ -476,6 +489,7 @@ export function DevotionalContent({
               fontSize={fontSize}
               scrollViewRef={scrollViewRef}
               onFocusInput={onReflectionInputFocus}
+              layoutCommitSignal={reflectionLayoutCommitSignal}
             />
           ) : (
             <View>

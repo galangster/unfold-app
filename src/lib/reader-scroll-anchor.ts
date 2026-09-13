@@ -23,6 +23,26 @@ export type VersionedParagraphLocations = {
   ys: number[];
 };
 
+export const WEBVIEW_COLLECT_PARAGRAPH_YS_JS = `
+      function documentRelativeOffsetTop(el) {
+        var y = 0;
+        var node = el;
+        while (node) {
+          y += node.offsetTop;
+          node = node.offsetParent;
+        }
+        return Math.round(y);
+      }
+      function collectParagraphYs() {
+        var nodes = document.querySelectorAll('p, blockquote, .context-box, .word-study-box');
+        var ys = [];
+        for (var i = 0; i < nodes.length; i++) {
+          ys.push(documentRelativeOffsetTop(nodes[i]));
+        }
+        return ys;
+      }
+`;
+
 export function parseWebViewParagraphYs(value: unknown): number[] {
   if (!Array.isArray(value)) return [];
   return value
@@ -82,6 +102,10 @@ export function findVisibleParagraphIndex(
     index = i;
   }
   return index;
+}
+
+export function resolveReflectionFocusAnchor(): ReaderScrollAnchor {
+  return { kind: 'section', section: 'reflection' };
 }
 
 export function resolveVisibleReaderAnchor(params: {

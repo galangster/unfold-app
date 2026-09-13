@@ -207,3 +207,30 @@ export function findVisibleVerseAnchor(
   }
   return anchor;
 }
+
+/**
+ * Capture a resize restore verse. Live viewport wins only during drag or
+ * momentum. Native reflow must keep the persisted semantic verse.
+ */
+export function resolveBibleResizeVerseAnchor(params: {
+  userScrollActive: boolean;
+  layouts: Readonly<Record<number, number>>;
+  contentOffsetY: number;
+  headerOffset: number;
+  persistedPosition: { chapterKey: string; verse: number } | null;
+  chapterKey: string;
+  entryVerse: number;
+}): number {
+  if (params.userScrollActive) {
+    const liveVerse = findVisibleVerseAnchor(
+      params.layouts,
+      params.contentOffsetY,
+      params.headerOffset,
+    );
+    if (liveVerse !== null) return liveVerse;
+  }
+  if (params.persistedPosition?.chapterKey === params.chapterKey) {
+    return params.persistedPosition.verse;
+  }
+  return params.entryVerse;
+}

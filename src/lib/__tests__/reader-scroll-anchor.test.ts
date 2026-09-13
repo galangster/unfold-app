@@ -1,3 +1,7 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { runInNewContext } from 'node:vm';
+
 import {
   applyParagraphReport,
   applySectionLayoutReport,
@@ -12,8 +16,10 @@ import {
   parseWebViewParagraphYs,
   resolveExplicitReaderTargetKey,
   resolveReaderReflowScrollY,
+  resolveReflectionFocusAnchor,
   resolveVisibleReaderAnchor,
   shouldApplyPassiveReflowRestore,
+  WEBVIEW_COLLECT_PARAGRAPH_YS_JS,
 } from '../reader-scroll-anchor';
 
 describe('findVisibleReaderSection', () => {
@@ -26,6 +32,21 @@ describe('findVisibleReaderSection', () => {
 
   it('returns null until section positions exist', () => {
     expect(findVisibleReaderSection({}, 200, 12)).toBeNull();
+  });
+});
+
+describe('WebView paragraph collector', () => {
+  it('reports positioned boxes and nested paragraphs in document coordinates', () => {
+    const box = { offsetTop: 400, offsetParent: { offsetTop: 0, offsetParent: null } };
+    const paragraph = { offsetTop: 22, offsetParent: box };
+    const document = { querySelectorAll: () => [box, paragraph] };
+    const ys = runInNewContext(`${WEBVIEW_COLLECT_PARAGRAPH_YS_JS}; collectParagraphYs()`, { document });
+    expect(Array.from(ys)).toEqual([400, 422]);
+    // The same paragraph remains anchored after the positioned box moves.
+    box.offsetTop = 650;
+    paragraph.offsetTop = 48;
+    const resizedYs = runInNewContext(`${WEBVIEW_COLLECT_PARAGRAPH_YS_JS}; collectParagraphYs()`, { document });
+    expect(Array.from(resizedYs)).toEqual([650, 698]);
   });
 });
 
@@ -244,6 +265,83 @@ describe('versioned layout reports', () => {
       webViewTop: sections.offsets.devotional ?? 0,
       headerOffset: 24,
     })).toBe(376);
+  });
+});
+
+describe('reflection focus anchor', () => {
+  const sectionOffsets = { scripture: 0, devotional: 200, reflection: 880 };
+  const paragraphYs = [0, 120, 360];
+
+  it('does not treat a keyboard-inset reflection scroll Y as a teaching paragraph', () => {
+    expect(resolveVisibleReaderAnchor({
+      sectionOffsets,
+      paragraphYs,
+      webViewTop: 200,
+      contentOffsetY: 880 - 220,
+      headerOffset: 24,
+    })).toEqual({ kind: 'paragraph', section: 'devotional', index: 2 });
+    expect(resolveReflectionFocusAnchor()).toEqual({ kind: 'section', section: 'reflection' });
+  });
+
+  it('keeps the reflection section through resize and Dynamic Type', () => {
+    const previousSections = {
+      ...createVersionedSectionLocations(1),
+      offsets: sectionOffsets,
+      reportedGeneration: { scripture: 1, devotional: 1, reflection: 1 },
+    };
+    const started = beginReaderLayoutGeneration({
+      nextGeneration: 2,
+      previousAnchor: resolveReflectionFocusAnchor(),
+      sections: previousSections,
+      paragraphs: { generation: 1, ys: paragraphYs },
+      contentOffsetY: 660,
+      headerOffset: 24,
+    });
+    const intermediate = beginReaderLayoutGeneration({
+      nextGeneration: 3,
+      previousAnchor: started.anchor,
+      sections: started.sections,
+      paragraphs: started.paragraphs,
+      contentOffsetY: 0,
+      headerOffset: 24,
+    });
+    const sections = applySectionLayoutReport(intermediate.sections, 'reflection', 1100, 3);
+
+    expect(intermediate.anchor).toEqual({ kind: 'section', section: 'reflection' });
+    expect(canRestoreReaderAnchor(intermediate.anchor, sections, intermediate.paragraphs)).toBe(true);
+    expect(resolveReaderReflowScrollY({
+      explicitTargetY: null,
+      anchor: intermediate.anchor,
+      sectionOffsets: sections.offsets,
+      paragraphYs: [],
+      webViewTop: 240,
+      headerOffset: 24,
+    })).toBe(1076);
+  });
+});
+
+describe('reader source contracts', () => {
+  const readingSource = readFileSync(
+    join(__dirname, '../../app/(tabs)/(today)/reading.tsx'),
+    'utf8',
+  );
+  const webViewSource = readFileSync(
+    join(__dirname, '../../components/reading/DevotionalWebView.tsx'),
+    'utf8',
+  );
+
+  it('selects the reflection section before a preserved focus scroll', () => {
+    expect(readingSource).toContain('reflowAnchorRef.current = resolveReflectionFocusAnchor()');
+    expect(readingSource).toContain('scrollReaderToY(y, true)');
+  });
+
+  it('uses one document-relative collector in every HTML reporting path', () => {
+    expect(WEBVIEW_COLLECT_PARAGRAPH_YS_JS).toContain('documentRelativeOffsetTop');
+    expect(WEBVIEW_COLLECT_PARAGRAPH_YS_JS).toContain('node.offsetParent');
+    expect(WEBVIEW_COLLECT_PARAGRAPH_YS_JS).not.toContain('nodes[i].offsetTop');
+    expect(webViewSource).toContain('${WEBVIEW_COLLECT_PARAGRAPH_YS_JS}');
+    expect(webViewSource.match(/WEBVIEW_COLLECT_PARAGRAPH_YS_JS/g)?.length).toBe(4);
+    expect(webViewSource).not.toContain('nodes[i].offsetTop');
   });
 });
 

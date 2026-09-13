@@ -13,6 +13,7 @@ import {
   getChapterCount,
   resolveActiveVerseScrollTarget,
   resolveBibleReaderLocation,
+  resolveBibleResizeVerseAnchor,
   resolveInitialVerseAnchor,
   resolveRecordedVerseAnchor,
   resolveTargetVerse,
@@ -334,5 +335,46 @@ describe('findVisibleVerseAnchor', () => {
 
   it('returns null until verse layouts exist', () => {
     expect(findVisibleVerseAnchor({}, 200, 12)).toBeNull();
+  });
+});
+
+describe('resolveBibleResizeVerseAnchor', () => {
+  const layouts = { 1: 0, 8: 240, 16: 520 };
+  const persistedPosition = { chapterKey: '43:3', verse: 8 };
+
+  it('captures the live verse when resize starts during drag or momentum', () => {
+    expect(resolveBibleResizeVerseAnchor({
+      userScrollActive: true,
+      layouts,
+      contentOffsetY: 510,
+      headerOffset: 12,
+      persistedPosition,
+      chapterKey: '43:3',
+      entryVerse: 1,
+    })).toBe(16);
+  });
+
+  it('keeps the persisted semantic verse on native reflow without an active scroll', () => {
+    expect(resolveBibleResizeVerseAnchor({
+      userScrollActive: false,
+      layouts: { 1: 0, 8: 80, 16: 160 },
+      contentOffsetY: 0,
+      headerOffset: 12,
+      persistedPosition,
+      chapterKey: '43:3',
+      entryVerse: 1,
+    })).toBe(8);
+  });
+
+  it('falls back to the persisted verse when a drag has no layouts yet', () => {
+    expect(resolveBibleResizeVerseAnchor({
+      userScrollActive: true,
+      layouts: {},
+      contentOffsetY: 510,
+      headerOffset: 12,
+      persistedPosition,
+      chapterKey: '43:3',
+      entryVerse: 1,
+    })).toBe(8);
   });
 });

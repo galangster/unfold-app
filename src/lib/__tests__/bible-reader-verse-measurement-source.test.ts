@@ -61,6 +61,20 @@ describe('Bible reader verse measurement source contract', () => {
     expect(readerSource).toContain('const readerContentKey = `${chapterKey}:${bibleReaderSettings.translation}`;');
   });
 
+  it('captures a live resize verse before disabling active-scroll tracking', () => {
+    const layoutBlock =
+      readerSource.match(
+        /else if \(verseLayoutsContentRef\.current\.layoutKey !== readerLayoutKey\) \{[\s\S]*?layoutKey: readerLayoutKey,[\s\S]*?\};\n  \}/,
+      )?.[0] ?? '';
+
+    expect(layoutBlock).toContain('resolveBibleResizeVerseAnchor({');
+    expect(layoutBlock).toContain('userScrollActive: userScrollActiveRef.current');
+    expect(layoutBlock).toContain('contentOffsetY: lastScrollY.value');
+    expect(layoutBlock.indexOf('resolveBibleResizeVerseAnchor')).toBeLessThan(
+      layoutBlock.indexOf('userScrollActiveRef.current = false'),
+    );
+  });
+
   it('cancels delayed scroll work and invalidates the fallback native target', () => {
     expect(readerSource).toContain('if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);');
     expect(readerSource).toContain('if (flashTimerRef.current) clearTimeout(flashTimerRef.current);');

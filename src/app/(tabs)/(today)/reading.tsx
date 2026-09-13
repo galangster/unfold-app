@@ -103,6 +103,7 @@ import {
   decideExplicitLocationCallback,
   resolveExplicitReaderTargetKey,
   resolveReaderReflowScrollY,
+  resolveReflectionFocusAnchor,
   resolveVisibleReaderAnchor,
   shouldApplyPassiveReflowRestore,
   type ReaderScrollAnchor,
@@ -697,6 +698,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
 
   const handleReflectionInputFocus = useCallback((contentY: number) => {
     const y = Math.max(0, contentY - LIBRARY_TARGET_TOP_INSET);
+    reflowAnchorRef.current = resolveReflectionFocusAnchor();
     scrollReaderToY(y, true);
   }, [scrollReaderToY]);
 

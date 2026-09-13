@@ -1,6 +1,8 @@
 /**
  * Header-relative placement for the note more-menu when it lives in a
- * full-window overlay. The menu keeps the same offset it had as a child
+ * full-window overlay. Header onLayout coordinates already include the
+ * SafeAreaView's padding. Both containers start at the screen origin.
+ * The menu keeps the same offset it had as a child
  * of the header cluster (`top: 56`, `right: 16`, width 240).
  */
 
@@ -23,19 +25,14 @@ export function noteMoreMenuOverlayPlacement(params: {
   headerX: number;
   headerY: number;
   headerWidth: number;
-  insetLeft?: number;
-  insetTop?: number;
 }): { top: number; left: number; width: number } {
   const headerX = finiteNonNegative(params.headerX);
   const headerY = finiteNonNegative(params.headerY);
   const headerWidth = finiteNonNegative(params.headerWidth);
-  const insetLeft = finiteNonNegative(params.insetLeft ?? 0);
-  const insetTop = finiteNonNegative(params.insetTop ?? 0);
 
   return {
-    top: insetTop + headerY + NOTE_MORE_MENU_TOP_OFFSET,
+    top: headerY + NOTE_MORE_MENU_TOP_OFFSET,
     left:
-      insetLeft +
       headerX +
       headerWidth -
       NOTE_MORE_MENU_RIGHT_INSET -

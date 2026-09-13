@@ -14,7 +14,7 @@ import { isStructuredWordStudy, normalizeWordStudy } from '@/lib/word-study';
 import { DISPLAY_SERIF_WOFF2_BASE64 } from '@/lib/display-font-base64';
 import { RANGY_BUNDLE } from './rangy-bundle';
 import { highlightInk, highlighterStroke, strokeFitFor, webFontNameFor } from '@/constants/bible-highlight-colors';
-import { parseWebViewLayoutGeneration, parseWebViewParagraphYs } from '@/lib/reader-scroll-anchor';
+import { parseWebViewLayoutGeneration, parseWebViewParagraphYs, WEBVIEW_COLLECT_PARAGRAPH_YS_JS } from '@/lib/reader-scroll-anchor';
 
 /** The document is the source of truth: every mutation reports the diff of
  *  live highlights before and after, and the store reconciles from it. */
@@ -149,14 +149,7 @@ function buildThemeVarsScript(themeVars: ThemeVars): string {
       var root = document.documentElement;
       var vars = ${themeVars.json};
       Object.keys(vars).forEach(function(name) { root.style.setProperty(name, vars[name]); });
-      function collectParagraphYs() {
-        var nodes = document.querySelectorAll('p, blockquote, .context-box, .word-study-box');
-        var ys = [];
-        for (var i = 0; i < nodes.length; i++) {
-          ys.push(Math.round(nodes[i].offsetTop));
-        }
-        return ys;
-      }
+      ${WEBVIEW_COLLECT_PARAGRAPH_YS_JS}
       function reportHeight() {
         if (!window.ReactNativeWebView || !document.body) return;
         window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -178,14 +171,7 @@ function buildLayoutGenerationScript(generation: number): string {
   return `
     (function() {
       window.__unfoldLayoutGeneration = ${generation};
-      function collectParagraphYs() {
-        var nodes = document.querySelectorAll('p, blockquote, .context-box, .word-study-box');
-        var ys = [];
-        for (var i = 0; i < nodes.length; i++) {
-          ys.push(Math.round(nodes[i].offsetTop));
-        }
-        return ys;
-      }
+      ${WEBVIEW_COLLECT_PARAGRAPH_YS_JS}
       if (!window.ReactNativeWebView || !document.body) return;
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'HEIGHT_CHANGE',
@@ -386,14 +372,7 @@ export function DevotionalWebView({
         setTimeout(locateTargetBookmark, 1000);
       }
       
-      function collectParagraphYs() {
-        var nodes = document.querySelectorAll('p, blockquote, .context-box, .word-study-box');
-        var ys = [];
-        for (var i = 0; i < nodes.length; i++) {
-          ys.push(Math.round(nodes[i].offsetTop));
-        }
-        return ys;
-      }
+      ${WEBVIEW_COLLECT_PARAGRAPH_YS_JS}
       function reportHeight() {
         const height = document.body.scrollHeight;
         window.ReactNativeWebView.postMessage(JSON.stringify({

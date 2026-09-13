@@ -669,27 +669,35 @@ describe('InlineReflectionJournal', () => {
     act(() => tree!.unmount());
   });
 
-  it('measures the focused input after expanding a collapsed question', () => {
+  it('remeasures a focused later question after layout commits without remounting its draft', () => {
     let tree: any;
     const onFocusInput = jest.fn();
     const scrollView = {};
+    const scrollViewRef = { current: scrollView as any };
+    const onOpenFullJournal = jest.fn();
+    const measurementCallbacks: ((x: number, y: number) => void)[] = [];
     const textInputNode = {
       focus: jest.fn(),
       measureLayout: jest.fn((_relativeTo: unknown, onSuccess: (x: number, y: number) => void) => {
-        onSuccess(12, 640);
+        measurementCallbacks.push(onSuccess);
       }),
     };
 
+    const renderJournal = (layoutCommitSignal: number) => (
+      <InlineReflectionJournal
+        questions={['What stood out?', 'How will you respond?']}
+        devotionalId="devotional"
+        dayNumber={1}
+        onOpenFullJournal={onOpenFullJournal}
+        scrollViewRef={scrollViewRef}
+        onFocusInput={onFocusInput}
+        layoutCommitSignal={layoutCommitSignal}
+      />
+    );
+
     act(() => {
       tree = renderer.create(
-        <InlineReflectionJournal
-          questions={['What stood out?', 'How will you respond?']}
-          devotionalId="devotional"
-          dayNumber={1}
-          onOpenFullJournal={jest.fn()}
-          scrollViewRef={{ current: scrollView as any }}
-          onFocusInput={onFocusInput}
-        />,
+        renderJournal(0),
         {
           createNodeMock: () => textInputNode,
         }
@@ -719,12 +727,44 @@ describe('InlineReflectionJournal', () => {
     });
 
     expect(textInputNode.focus).toHaveBeenCalled();
+    expect(onFocusInput).not.toHaveBeenCalled();
+
+    let input = tree!.root.findByType(RNTextInput);
+    const mountedInput = input.instance;
+    input.instance.measureLayout = textInputNode.measureLayout;
+
+    act(() => {
+      input.props.onFocus();
+      input.props.onChangeText('A draft that stays mounted');
+    });
+
     expect(textInputNode.measureLayout).toHaveBeenCalledWith(
       scrollView,
       expect.any(Function),
       expect.any(Function)
     );
-    expect(onFocusInput).toHaveBeenCalledWith(640);
+    act(() => {
+      tree!.update(renderJournal(1));
+    });
+    expect(measurementCallbacks).toHaveLength(2);
+
+    act(() => measurementCallbacks[0](12, 640));
+    expect(onFocusInput).not.toHaveBeenCalled();
+
+    act(() => measurementCallbacks[1](12, 820));
+
+    input = tree!.root.findByType(RNTextInput);
+    expect(input.instance).toBe(mountedInput);
+    expect(input.props.value).toBe('A draft that stays mounted');
+    expect(onFocusInput).toHaveBeenLastCalledWith(820);
+
+    act(() => {
+      tree!.update(renderJournal(2));
+    });
+    expect(measurementCallbacks).toHaveLength(3);
+    act(() => input.props.onBlur());
+    act(() => measurementCallbacks[2](12, 900));
+    expect(onFocusInput).toHaveBeenLastCalledWith(820);
 
     act(() => tree!.unmount());
   });

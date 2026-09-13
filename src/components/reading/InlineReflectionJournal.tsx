@@ -47,6 +47,7 @@ interface InlineReflectionJournalProps {
   fontSize?: FontSize;
   scrollViewRef?: RefObject<ScrollView | null>;
   onFocusInput?: (contentY: number) => void;
+  layoutCommitSignal?: number;
 }
 
 type ReflectionSaveState = 'saving' | 'saved' | 'error';
@@ -73,6 +74,7 @@ export function InlineReflectionJournal({
   fontSize = 'medium',
   scrollViewRef,
   onFocusInput,
+  layoutCommitSignal,
 }: InlineReflectionJournalProps) {
   const { colors, isDark } = useTheme();
   const reducedMotion = useReducedMotion();
@@ -118,6 +120,8 @@ export function InlineReflectionJournal({
   }
   const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRefs = useRef<Map<number, TextInput | null>>(new Map());
+  const focusedInputIndexRef = useRef<number | null>(null);
+  const measurementRequestRef = useRef(0);
 
   const questionsKey = useMemo(() => questions.join('\u001f'), [questions]);
 
@@ -125,8 +129,15 @@ export function InlineReflectionJournal({
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
+      focusedInputIndexRef.current = null;
+      measurementRequestRef.current += 1;
     };
   }, []);
+
+  useEffect(() => {
+    focusedInputIndexRef.current = null;
+    measurementRequestRef.current += 1;
+  }, [devotionalId, dayNumber, questionsKey]);
 
   // Load day-scoped responses from store. This must also clear stale local state when
   // swiping from an answered day to an unanswered day, because the component instance
@@ -303,6 +314,7 @@ export function InlineReflectionJournal({
 
   const measureFocusedInput = useCallback(
     (index: number) => {
+      const request = ++measurementRequestRef.current;
       const input = inputRefs.current.get(index) as MeasurableTextInput | null | undefined;
       const scrollView = scrollViewRef?.current;
       if (!input || !scrollView || typeof input.measureLayout !== 'function') return;
@@ -310,7 +322,11 @@ export function InlineReflectionJournal({
       input.measureLayout(
         scrollView,
         (_x, y) => {
-          if (Number.isFinite(y)) {
+          if (
+            measurementRequestRef.current === request
+            && focusedInputIndexRef.current === index
+            && Number.isFinite(y)
+          ) {
             onFocusInput?.(y);
           }
         },
@@ -319,6 +335,24 @@ export function InlineReflectionJournal({
     },
     [onFocusInput, scrollViewRef]
   );
+
+  useEffect(() => {
+    if (layoutCommitSignal === undefined) return;
+    const focusedIndex = focusedInputIndexRef.current;
+    if (focusedIndex !== null) measureFocusedInput(focusedIndex);
+  }, [layoutCommitSignal, measureFocusedInput]);
+
+  const handleInputFocus = useCallback((index: number) => {
+    focusedInputIndexRef.current = index;
+    measureFocusedInput(index);
+  }, [measureFocusedInput]);
+
+  const handleInputBlur = useCallback((index: number) => {
+    if (focusedInputIndexRef.current === index) {
+      focusedInputIndexRef.current = null;
+      measurementRequestRef.current += 1;
+    }
+  }, []);
 
   const handleQuestionTap = useCallback(
     (index: number) => {
@@ -329,6 +363,10 @@ export function InlineReflectionJournal({
 
       if (expandedIndex === index) {
         // Collapse
+        if (focusedInputIndexRef.current === index) {
+          focusedInputIndexRef.current = null;
+          measurementRequestRef.current += 1;
+        }
         Keyboard.dismiss();
         setExpandedIndex(null);
       } else {
@@ -337,12 +375,12 @@ export function InlineReflectionJournal({
         setExpandedIndex(index);
         if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
         focusTimerRef.current = setTimeout(() => {
+          focusedInputIndexRef.current = index;
           inputRefs.current.get(index)?.focus();
-          measureFocusedInput(index);
         }, 400);
       }
     },
-    [expandedIndex, measureFocusedInput]
+    [expandedIndex]
   );
 
   // Save any pending responses on unmount
@@ -461,6 +499,8 @@ export function InlineReflectionJournal({
             saveState={saveStatuses.get(index) ?? null}
             onRetrySave={handleRetrySave}
             inputRefs={inputRefs}
+            onInputFocus={handleInputFocus}
+            onInputBlur={handleInputBlur}
             colors={colors}
             isDark={isDark}
             typography={typography}
@@ -524,6 +564,8 @@ function ReflectionQuestionCard({
   saveState,
   onRetrySave,
   inputRefs,
+  onInputFocus,
+  onInputBlur,
   colors,
   isDark,
   typography,
@@ -540,6 +582,8 @@ function ReflectionQuestionCard({
   saveState: ReflectionSaveState | null;
   onRetrySave: (index: number) => void;
   inputRefs: React.MutableRefObject<Map<number, TextInput | null>>;
+  onInputFocus: (index: number) => void;
+  onInputBlur: (index: number) => void;
   colors: any;
   isDark: boolean;
   typography: ReflectionTypography;
@@ -619,6 +663,8 @@ function ReflectionQuestionCard({
               ref={(ref) => { inputRefs.current.set(index, ref); }}
               value={response}
               editable={editable}
+              onFocus={() => onInputFocus(index)}
+              onBlur={() => onInputBlur(index)}
               onChangeText={(text) => onResponseChange(index, question, text)}
               placeholder={editable ? 'Write your thoughts...' : 'Unlock Premium to journal your reflections'}
               placeholderTextColor={colors.textHint}

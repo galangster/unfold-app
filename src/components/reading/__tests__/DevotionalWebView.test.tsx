@@ -628,6 +628,8 @@ describe('DevotionalWebView Aa / theme updates without remounting', () => {
     expect(script).toContain("type: 'HEIGHT_CHANGE'");
     expect(script).toContain('document.body.scrollHeight');
     expect(script).toContain("docId: root.getAttribute('data-doc-id')");
+    expect(script).toContain('documentRelativeOffsetTop');
+    expect(script).not.toContain('nodes[i].offsetTop');
 
     // Same source object ⇒ no document reload; the baked block is untouched.
     expect(getWebViewProps(tree).source).toBe(source);
@@ -651,6 +653,9 @@ describe('DevotionalWebView Aa / theme updates without remounting', () => {
     const script = getWebViewProps(tree).injectedJavaScript as string;
     expect(script).toContain('collectParagraphYs');
     expect(script).toContain("paragraphs: collectParagraphYs()");
+    expect(script).toContain('documentRelativeOffsetTop');
+    expect(script).toContain('node.offsetParent');
+    expect(script).not.toContain('nodes[i].offsetTop');
     expect(getWebViewProps(tree).source.html).not.toContain('key={');
 
     act(() => {
@@ -727,6 +732,7 @@ describe('DevotionalWebView Aa / theme updates without remounting', () => {
     expect(getWebViewProps(tree).source).toBe(source);
     expect(mockInjectJavaScript.mock.calls.some(([injected]) => (
       String(injected).includes('window.__unfoldLayoutGeneration = 3')
+      && String(injected).includes('documentRelativeOffsetTop')
     ))).toBe(true);
 
     act(() => {
