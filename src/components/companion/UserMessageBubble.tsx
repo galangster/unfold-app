@@ -78,7 +78,7 @@ export function UserMessageBubble({ message }: Props) {
           // Plain-color fallback so the text always sits on a bubble, even
           // during the one frame before onLayout reports a size and the
           // exact tailed SVG shape can be drawn on top of this same fill.
-          backgroundColor: bubbleFill,
+          backgroundColor: bubblePath ? 'transparent' : bubbleFill,
           borderRadius: USER_BUBBLE_RADIUS.topLeft,
         }}
       >

@@ -5,6 +5,7 @@ import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
 import { adaptiveFrameStyle, chapterSwipeMetrics } from '@/lib/adaptive-layout';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useGuardedBack } from '@/hooks/useGuardedBack';
 import Animated, { FadeIn, FadeOut, useSharedValue, useAnimatedStyle, useAnimatedScrollHandler, withTiming, withDelay, withSpring, withSequence, Easing, runOnJS, useReducedMotion } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
@@ -406,7 +407,8 @@ export default function BibleReaderScreen() {
   const arrowRevealDistance = swipeMetrics.arrowRevealDistance;
   const readerFrameStyle = adaptiveFrameStyle(adaptiveLayout.readableMaxWidth);
   const router = useRouter();
-  const params = useLocalSearchParams<{ bookId: string; chapter: string; verse?: string }>();
+  const guardedBack = useGuardedBack();
+  const params = useLocalSearchParams<{ bookId: string; chapter: string; verse?: string; fromSearch?: string }>();
   // P3-4: clamp to the canon (1–66) and to the book's real chapter count so an
   // out-of-range deep link lands on the nearest real chapter, not an empty query.
   const { bookId, chapter } = resolveBibleReaderLocation(params);
@@ -1373,6 +1375,16 @@ export default function BibleReaderScreen() {
         backgroundColor: colors.background,
         opacity: showNavigator ? 0 : 1,
       }]}>
+        {params.fromSearch === 'true' && (
+          <TouchableOpacity
+            onPress={guardedBack}
+            style={styles.headerButton}
+            accessibilityRole="button"
+            accessibilityLabel="Back to search"
+          >
+            <CaretLeftIcon size={20} color={colors.text} weight="light" />
+          </TouchableOpacity>
+        )}
         <TouchableOpacity
           onPress={() => setShowSettings(true)}
           style={styles.headerButton}

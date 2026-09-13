@@ -1,12 +1,12 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Modal, useWindowDimensions } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Modal, useWindowDimensions, TextInput, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { MMKV } from 'react-native-mmkv';
 import SegmentedControl from '@react-native-segmented-control/segmented-control';
-import { MagnifyingGlassIcon, ClockIcon, CaretRightIcon, XIcon } from '@/components/icons';
+import { MagnifyingGlassIcon, ClockIcon, CaretRightIcon, XIcon, XCircleIcon } from '@/components/icons';
 import { FontFamily } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { elevated } from '@/constants/shadows';
@@ -19,6 +19,8 @@ import {
   getBookCategory,
   CATEGORY_LABELS,
   citationBookName,
+  resolveBookName,
+  BOOK_BY_ID,
   type BibleBookInfo,
   type BibleCategory,
 } from '@/lib/bible-constants';
@@ -54,6 +56,8 @@ import { adaptiveFrameStyle } from '@/lib/adaptive-layout';
 import { ProfileEntryButton } from '@/components/ProfileEntryButton';
 import { Duration, Ease } from '@/constants/animations';
 import { Typography } from '@/constants/typography';
+import { useBibleSearch, type BibleSearchResultWithMeta } from '@/hooks/useBibleSearch';
+import type { BibleTranslation } from '@/lib/bible-db';
 
 const EMPTY_CHAPTERS: number[] = [];
 
@@ -118,7 +122,13 @@ export default function BibleHomeScreen() {
   );
   const { isReady, isDownloading, progress, download, error } = useBibleDb();
   const lastPosition = useUnfoldStore((s) => s.bibleReadingHistory[0] ?? null);
+  const bibleReaderSettings = useUnfoldStore((s) => s.bibleReaderSettings);
+  const { query, setQuery, results, isSearching, error: searchError } = useBibleSearch({
+    databaseReady: isReady,
+    translation: bibleReaderSettings.translation as BibleTranslation,
+  });
   const [selectedBook, setSelectedBook] = useState<BibleBookInfo | null>(null);
+  const searchedBookId = resolveBookName(query);
   const [viewMode, setViewMode] = useState<BibleHubView>(() =>
     parseBibleHubViewPreference(bibleHomeMeta.getString(BIBLE_HUB_VIEW_STORAGE_KEY)),
   );
@@ -186,8 +196,8 @@ export default function BibleHomeScreen() {
     router.push(`/(tabs)/(bible)/reader?bookId=${lastPosition.bookId}&chapter=${lastPosition.chapter}&verse=${lastPosition.verse ?? 1}`);
   }, [lastPosition, router]);
 
-  const handleSearchPress = useCallback(() => {
-    router.push('/(tabs)/(bible)/search');
+  const handleSearchResultPress = useCallback((result: BibleSearchResultWithMeta) => {
+    router.push(`/(tabs)/(bible)/reader?bookId=${result.bookId}&chapter=${result.chapter}&verse=${result.verse}&fromSearch=true`);
   }, [router]);
 
   const renderBook = useCallback((book: BibleBookInfo) => {
@@ -363,23 +373,64 @@ export default function BibleHomeScreen() {
         </View>
       </View>
 
-      <TouchableOpacity
-        onPress={handleSearchPress}
+      <View
         style={[styles.searchBar, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)' }]}
-        activeOpacity={0.7}
-        accessibilityLabel="Search the Bible"
-        accessibilityRole="search"
       >
         <MagnifyingGlassIcon size={16} color={colors.textHint} weight="light" />
-        <Text style={[styles.searchPlaceholder, { color: colors.textHint }]}>
-          Search the Bible...
-        </Text>
-      </TouchableOpacity>
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search the Bible..."
+          placeholderTextColor={colors.textHint}
+          selectionColor={colors.accent}
+          cursorColor={colors.accent}
+          style={[styles.searchInput, { color: colors.text }]}
+          autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType="search"
+          accessibilityLabel="Search the Bible"
+        />
+        {query.length > 0 && (
+          <TouchableOpacity onPress={() => setQuery('')} accessibilityLabel="Clear search" hitSlop={8}>
+            <XCircleIcon size={18} color={colors.textSubtle} weight="fill" />
+          </TouchableOpacity>
+        )}
+      </View>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
       >
+        {query.trim().length > 0 ? (
+          <View accessibilityLabel="Bible search results">
+            {searchedBookId !== null && results.length > 0 && (
+              <Text accessibilityRole="header" style={[styles.searchResultRef, { color: colors.textMuted }]}>
+                {BOOK_BY_ID[searchedBookId].name} · Chapter 1
+              </Text>
+            )}
+            {isSearching ? (
+              <ActivityIndicator color={colors.accent} style={styles.searchStatus} />
+            ) : searchError ? (
+              <Text style={[styles.searchMessage, { color: colors.textMuted }]}>Search is unavailable. Try again.</Text>
+            ) : results.length === 0 ? (
+              <Text style={[styles.searchMessage, { color: colors.textMuted }]}>No verses found. Check the reference, or try a word or phrase.</Text>
+            ) : results.map((result) => (
+              <TouchableOpacity
+                key={`${result.translation}-${result.bookId}-${result.chapter}-${result.verse}`}
+                onPress={() => handleSearchResultPress(result)}
+                style={[styles.searchResult, { borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }]}
+                accessibilityRole="button"
+                accessibilityLabel={`${result.reference}. ${result.text}`}
+                accessibilityHint="Opens the chapter at this verse"
+              >
+                <Text style={[styles.searchResultRef, { color: colors.accent }]}>{result.reference}</Text>
+                <Text style={[styles.searchResultText, { color: colors.text }]}>{result.text}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        ) : (
+          <>
         {lastPosition && (
           <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).easing(Ease.out)}>
             <TouchableOpacity
@@ -424,6 +475,8 @@ export default function BibleHomeScreen() {
         )}
 
         <View style={{ height: 100 }} />
+          </>
+        )}
       </ScrollView>
       </View>
 
@@ -541,9 +594,35 @@ const styles = StyleSheet.create({
     gap: Spacing['2'],
     marginBottom: Spacing['5'],
   },
-  searchPlaceholder: {
+  searchInput: {
+    flex: 1,
     fontFamily: FontFamily.ui,
     fontSize: 15,
+    padding: 0,
+  },
+  searchStatus: {
+    marginTop: Spacing['8'],
+  },
+  searchMessage: {
+    fontFamily: FontFamily.body,
+    fontSize: 15,
+    lineHeight: 22,
+    paddingVertical: Spacing['8'],
+    textAlign: 'center',
+  },
+  searchResult: {
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  searchResultRef: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 13,
+    marginBottom: 4,
+  },
+  searchResultText: {
+    fontFamily: FontFamily.body,
+    fontSize: 15,
+    lineHeight: 22,
   },
   scrollContent: {
     paddingHorizontal: Spacing['6'],

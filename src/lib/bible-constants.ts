@@ -302,7 +302,7 @@ for (const [alias, id] of Object.entries(EXTRA_ALIASES)) {
  *
  * @returns The book ID (1-66) or null if not recognized
  */
-function resolveBookName(bookStr: string): number | null {
+export function resolveBookName(bookStr: string): number | null {
   const normalized = bookStr.trim().toLowerCase();
 
   // Direct lookup
@@ -354,23 +354,31 @@ export function referenceToRoute(reference: string): ParsedReference | null {
   //   (?::(\d{1,3}))?                       — optional :verse
   //   (?:\s*[-–—]\s*(\d{1,3}))?             — optional -verseEnd
   const match = trimmed.match(
-    /^((?:\d\s*)?[A-Za-z][A-Za-z\s.]*?)\s+(\d{1,3})(?::(\d{1,3}))?(?:\s*[-–—]\s*(\d{1,3}))?$/
+    /^((?:[123]\s*)?[A-Za-z][A-Za-z\s.]*?)\s*(\d{1,3})(?:\s*:\s*(\d{1,3}))?(?:\s*[-–—]\s*(\d{1,3}))?$/
   );
 
   if (!match) return null;
 
   const bookStr = match[1];
-  const chapter = parseInt(match[2], 10);
-  const verse = match[3] ? parseInt(match[3], 10) : undefined;
+  let chapter = parseInt(match[2], 10);
+  let verse = match[3] ? parseInt(match[3], 10) : undefined;
   const verseEnd = match[4] ? parseInt(match[4], 10) : undefined;
 
   const bookId = resolveBookName(bookStr);
   if (bookId === null) return null;
 
-  // Validate chapter is within range
   const bookInfo = BOOK_BY_ID[bookId];
+  if (bookInfo?.chapterCount === 1 && verse === undefined && (chapter > 1 || verseEnd !== undefined)) {
+    verse = chapter;
+    chapter = 1;
+  }
+
+  // Validate the fields that metadata can prove. Verse maxima come from the
+  // translation-specific database layout in searchBible.
   if (bookInfo && chapter > bookInfo.chapterCount) return null;
   if (chapter < 1) return null;
+  if (verse !== undefined && verse < 1) return null;
+  if (verseEnd !== undefined && (verse === undefined || verseEnd < verse)) return null;
 
   const result: ParsedReference = { bookId, chapter };
   if (verse !== undefined) {
