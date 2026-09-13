@@ -1,6 +1,8 @@
 /** @jsxImportSource react */
 import React, { useState, useCallback, useMemo, useRef, useEffect, useLayoutEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, TextInput, Platform, Keyboard, Dimensions, UIManager, type LayoutChangeEvent, type ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, TextInput, Platform, Keyboard, UIManager, type LayoutChangeEvent, type NativeSyntheticEvent, type NativeScrollEvent, type ScrollView } from 'react-native';
+import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
+import { adaptiveFrameStyle, chapterSwipeMetrics } from '@/lib/adaptive-layout';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeOut, useSharedValue, useAnimatedStyle, useAnimatedScrollHandler, withTiming, withDelay, withSpring, withSequence, Easing, runOnJS, useReducedMotion } from 'react-native-reanimated';
@@ -23,7 +25,7 @@ import { planHighlightApplication, planHighlightRemoval } from '@/lib/bible-high
 import { useReadingFont } from '@/lib/useReadingFont';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { useBibleChapter } from '@/hooks/useBibleChapter';
-import { findVisibleVerseAnchor, resolveBibleReaderLocation, resolveInitialVerseAnchor, resolveRecordedVerseAnchor, resolveTargetVerse, resolveTranslationRefreshVerse, resolveVerseScrollTarget } from '@/lib/bible-reader-params';
+import { buildBibleReaderLayoutKey, findVisibleVerseAnchor, isCurrentBibleLayoutReport, resolveActiveVerseScrollTarget, resolveBibleReaderLocation, resolveInitialVerseAnchor, resolveRecordedVerseAnchor, resolveTargetVerse, resolveTranslationRefreshVerse, resolveVerseScrollTarget, shouldFlashVerseForScroll } from '@/lib/bible-reader-params';
 import { useBibleDb } from '@/hooks/useBibleDb';
 import { BIBLE_BOOKS, getNextChapter, getPreviousChapter, formatScriptureReference } from '@/lib/bible-constants';
 import type { BibleTranslation } from '@/lib/bible-db';
@@ -86,20 +88,13 @@ const ANIM = {
 const EASE_OUT_QUART = Easing.bezier(0.165, 0.84, 0.44, 1);
 
 // ─── Chapter swipe config ─────────────────────────────────────────────────
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 // Activate horizontal swipe only after deliberate 20px intent (protects taps + text selection)
 const SWIPE_ACTIVATE_X = 20;
 // Fail the pan gesture promptly if vertical scroll starts — ScrollView wins
 const SWIPE_FAIL_Y = 15;
-// Commit threshold: ~10% of screen OR a strong flick
-const SWIPE_DISTANCE_THRESHOLD = SCREEN_WIDTH * 0.10;
 const SWIPE_VELOCITY_THRESHOLD = 500;
-// Maximum visual drag distance — 15% of screen width
-const DRAG_MAX = SCREEN_WIDTH * 0.15;
 // Rubber-band divisor when there's no chapter to navigate to
 const EDGE_RESISTANCE = 3;
-// Drag distance at which edge arrow indicators are fully revealed
-const ARROW_REVEAL_DISTANCE = DRAG_MAX * 0.6;
 // Duration of the "slide off screen" exit after commit
 const NAV_EXIT_DURATION = 180;
 // Spring back when gesture ends without commit (clamped — raw config is ζ≈0.72, so no-bounce needs overshootClamping)
@@ -153,6 +148,8 @@ const VerseItem = React.memo(function VerseItem({
   isDark,
   textColor,
   contentKey,
+  layoutKey,
+  contentRootRef,
   onPress,
   onLayout,
 }: {
@@ -170,8 +167,10 @@ const VerseItem = React.memo(function VerseItem({
   isDark: boolean;
   textColor: string;
   contentKey: string;
+  layoutKey: string;
+  contentRootRef: React.RefObject<View | null>;
   onPress: (verseNum: number) => void;
-  onLayout: (contentKey: string, verseNum: number, y: number) => void;
+  onLayout: (contentKey: string, layoutKey: string, verseNum: number, y: number) => void;
 }) {
   // PERF: onTextLayout fires for every verse when the chapter mounts (176
   // times in Psalm 119) and again whenever a row's text re-lays out, but a row
@@ -181,6 +180,18 @@ const VerseItem = React.memo(function VerseItem({
   const measuredLinesRef = useRef<BibleTextLine[]>(EMPTY_LINES);
   const [textLines, setTextLines] = useState<BibleTextLine[]>(EMPTY_LINES);
   const verseNum = verse.verse;
+  const rowRef = useRef<View>(null);
+  // Native resizing can finish before React receives the final window width.
+  // Measure again after that commit, even when no new onLayout event fires.
+  useLayoutEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      const root = contentRootRef.current;
+      if (root) rowRef.current?.measureLayout(root, (_x, y) => {
+        onLayout(contentKey, layoutKey, verseNum, y);
+      }, () => {});
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [contentKey, layoutKey, contentRootRef, onLayout, verseNum]);
   const reducedMotion = useReducedMotion();
 
   // Flash animation: quick fade in → hold → smooth fade out
@@ -237,8 +248,8 @@ const VerseItem = React.memo(function VerseItem({
   // Row layout capture for scroll-to-verse. Bound here (not in the parent's
   // map callback) so the parent can pass one stable `onLayout` to every row.
   const handleLayout = useCallback(
-    (e: LayoutChangeEvent) => onLayout(contentKey, verseNum, e.nativeEvent.layout.y),
-    [contentKey, onLayout, verseNum],
+    (e: LayoutChangeEvent) => onLayout(contentKey, layoutKey, verseNum, e.nativeEvent.layout.y),
+    [contentKey, layoutKey, onLayout, verseNum],
   );
 
   const hasOverlay = isSelected || !!highlightColor;
@@ -282,7 +293,7 @@ const VerseItem = React.memo(function VerseItem({
   const verseNumSize = Math.max(11, Math.round(fontSize * 0.55));
 
   return (
-    <View onLayout={handleLayout}>
+    <View ref={rowRef} collapsable={false} onLayout={handleLayout}>
       {/* Section heading before this verse */}
       {sectionHeading ? (
         <Text style={[
@@ -385,6 +396,15 @@ const VerseItem = React.memo(function VerseItem({
 export default function BibleReaderScreen() {
   const { colors, isDark } = useTheme();
   const reducedMotion = useReducedMotion();
+  const adaptiveLayout = useAdaptiveLayout();
+  const swipeMetrics = useMemo(
+    () => chapterSwipeMetrics(adaptiveLayout.readableMaxWidth),
+    [adaptiveLayout.readableMaxWidth],
+  );
+  const swipeDistanceThreshold = swipeMetrics.distanceThreshold;
+  const dragMax = swipeMetrics.dragMax;
+  const arrowRevealDistance = swipeMetrics.arrowRevealDistance;
+  const readerFrameStyle = adaptiveFrameStyle(adaptiveLayout.readableMaxWidth);
   const router = useRouter();
   const params = useLocalSearchParams<{ bookId: string; chapter: string; verse?: string }>();
   // P3-4: clamp to the canon (1–66) and to the book's real chapter count so an
@@ -401,6 +421,7 @@ export default function BibleReaderScreen() {
   const bibleReadingHistory = useUnfoldStore((s) => s.bibleReadingHistory);
 
   const insets = useSafeAreaInsets();
+  const [measuredHeaderHeight, setMeasuredHeaderHeight] = useState(0);
   const tabBarHeight = 56 + insets.bottom;
   const readingFont = useReadingFont();
   const book = useMemo(() => BIBLE_BOOKS.find((b) => b.id === bookId), [bookId]);
@@ -436,10 +457,13 @@ export default function BibleReaderScreen() {
   // render state is what lets `handleVerseLayout` stay referentially stable
   // (see VerseItem's memo contract).
   const pendingScrollVerseRef = useRef<number | null>(null);
-  const [scrollRequest, setScrollRequest] = useState<{ contentKey: string; verse: number } | null>(null);
+  const pendingScrollFlashRef = useRef(false);
+  const [scrollRequest, setScrollRequest] = useState<{ contentKey: string; layoutKey: string; verse: number; flash: boolean } | null>(null);
   const scrollRef = useRef<ScrollView | null>(null);
   const scrollNativeTargetRef = useRef<number | null>(null);
   const activeContentKeyRef = useRef('');
+  const activeLayoutKeyRef = useRef('');
+  const userScrollActiveRef = useRef(false);
   const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const setScrollViewRef = useCallback((node: ScrollView | null) => {
@@ -451,6 +475,7 @@ export default function BibleReaderScreen() {
     scrollNativeTargetRef.current = typeof target === 'number' ? target : null;
   }, []);
   const scrollReaderTo = useCallback((targetY: number, animated: boolean) => {
+    userScrollActiveRef.current = false;
     if (scrollRef.current) {
       scrollRef.current.scrollTo({ x: 0, y: targetY, animated });
     } else if (scrollNativeTargetRef.current !== null) {
@@ -462,12 +487,14 @@ export default function BibleReaderScreen() {
     }
   }, []);
   const verseLayoutsRef = useRef<Record<number, number>>({});
+  const verseContentRootRef = useRef<View>(null);
   const scrollContentReadyRef = useRef(false);
   const versesRef = useRef(verses);
   versesRef.current = verses;
-  const verseLayoutsContentRef = useRef<{ chapterKey: string; contentKey: string }>({
+  const verseLayoutsContentRef = useRef<{ chapterKey: string; contentKey: string; layoutKey: string }>({
     chapterKey: '',
     contentKey: '',
+    layoutKey: '',
   });
   const chapterResumeRef = useRef<{
     chapterKey: string;
@@ -492,13 +519,22 @@ export default function BibleReaderScreen() {
   const lastScrollY = useSharedValue(0);
   const tabBarHiddenSV = useSharedValue(false);
   const showActionsSV = useSharedValue(false);
+  const { fontSize, lineHeightMultiplier } = bibleReaderSettings;
 
   // Invalidate cached verse Y positions when chapter changes. onLayout Ys are
   // specific to the rendered verses; carrying them across chapters would make
   // scroll-to-verse land on the wrong position (e.g., verse 9 of old chapter).
   const chapterKey = `${bookId}:${chapter}`;
   const readerContentKey = `${chapterKey}:${bibleReaderSettings.translation}`;
+  const readerLayoutKey = buildBibleReaderLayoutKey({
+    readableWidth: adaptiveLayout.readableMaxWidth,
+    fontSize,
+    lineHeightMultiplier,
+    fontScale: adaptiveLayout.fontScale,
+    fontFamily: readingFont.body,
+  });
   activeContentKeyRef.current = readerContentKey;
+  activeLayoutKeyRef.current = readerLayoutKey;
   if (chapterResumeRef.current.chapterKey !== chapterKey) {
     const savedVerse = resolveInitialVerseAnchor({
       bookId,
@@ -528,7 +564,31 @@ export default function BibleReaderScreen() {
     verseLayoutsRef.current = {};
     scrollContentReadyRef.current = false;
     pendingScrollVerseRef.current = null;
-    verseLayoutsContentRef.current = { chapterKey, contentKey: readerContentKey };
+    pendingScrollFlashRef.current = false;
+    verseLayoutsContentRef.current = { chapterKey, contentKey: readerContentKey, layoutKey: readerLayoutKey };
+  } else if (verseLayoutsContentRef.current.layoutKey !== readerLayoutKey) {
+    userScrollActiveRef.current = false;
+    const liveVerse = persistedVerseAnchorRef.current?.chapterKey === chapterKey
+      ? persistedVerseAnchorRef.current.verse
+      : chapterResumeRef.current.entryVerse;
+    persistedVerseAnchorRef.current = { chapterKey, verse: liveVerse };
+    const restoreVerse = resolveTranslationRefreshVerse({
+      hadPreviousContent: verseLayoutsContentRef.current.layoutKey !== '',
+      previousChapterKey: verseLayoutsContentRef.current.chapterKey,
+      chapterKey,
+      persistedPosition: persistedVerseAnchorRef.current,
+    });
+    contentRestoreRef.current = restoreVerse === null
+      ? contentRestoreRef.current
+      : { contentKey: readerContentKey, verse: restoreVerse };
+    verseLayoutsRef.current = {};
+    scrollContentReadyRef.current = false;
+    pendingScrollVerseRef.current = null;
+    pendingScrollFlashRef.current = false;
+    verseLayoutsContentRef.current = {
+      ...verseLayoutsContentRef.current,
+      layoutKey: readerLayoutKey,
+    };
   }
 
   // Context bar slide-up animation
@@ -601,24 +661,34 @@ export default function BibleReaderScreen() {
       if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
       if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
     };
-  }, [readerContentKey]);
+  }, [readerContentKey, readerLayoutKey]);
 
   // State-driven scroll-to-verse (runs after render when refs are guaranteed set)
   useEffect(() => {
     if (scrollRequest === null) return;
     const request = scrollRequest;
     setScrollRequest(null);
-    if (request.contentKey !== activeContentKeyRef.current) return;
+    if (!isCurrentBibleLayoutReport({
+      reportContentKey: request.contentKey,
+      reportLayoutKey: request.layoutKey,
+      activeContentKey: activeContentKeyRef.current,
+      activeLayoutKey: activeLayoutKeyRef.current,
+    })) return;
     if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
 
     // Delay to let navigator exit animation complete, then scroll
     scrollTimerRef.current = setTimeout(() => {
       scrollTimerRef.current = null;
-      if (request.contentKey !== activeContentKeyRef.current) return;
+      if (!isCurrentBibleLayoutReport({
+        reportContentKey: request.contentKey,
+        reportLayoutKey: request.layoutKey,
+        activeContentKey: activeContentKeyRef.current,
+        activeLayoutKey: activeLayoutKeyRef.current,
+      })) return;
       const knownY = verseLayoutsRef.current[request.verse];
-      if (knownY !== undefined && scrollContentReadyRef.current) {
+      if (knownY !== undefined) {
         scrollReaderTo(Math.max(0, knownY - headerOverlap), true);
-        flashVerseBriefly(request.verse, request.contentKey);
+        if (request.flash) flashVerseBriefly(request.verse, request.contentKey);
       }
     }, 300);
   }, [scrollRequest, scrollReaderTo, flashVerseBriefly]);
@@ -689,20 +759,20 @@ export default function BibleReaderScreen() {
     verses,
   });
   const contentRestore = contentRestoreRef.current;
-  const scrollTarget = routeScrollTarget ?? (
-    contentRestore?.contentKey === readerContentKey
-      ? {
-          verse: resolveTargetVerse(String(contentRestore.verse), verses) ?? 1,
-          source: 'refresh' as const,
-        }
-      : null
-  );
+  const scrollTarget = resolveActiveVerseScrollTarget({
+    routeTarget: routeScrollTarget,
+    refreshVerse: contentRestore?.verse ?? null,
+    refreshContentKey: contentRestore?.contentKey ?? null,
+    activeContentKey: readerContentKey,
+    verses,
+  });
   const scrollTargetVerse = scrollTarget?.verse ?? null;
   const scrollTargetSource = scrollTarget?.source ?? null;
   if (scrollTargetVerse !== null && verses && verses.length > 0 && !isLoading) {
     // Prime the target during render so a newly mounted verse row can consume
     // it from onLayout. Effects can run after the first native layout pass.
     pendingScrollVerseRef.current = scrollTargetVerse;
+    pendingScrollFlashRef.current = shouldFlashVerseForScroll(scrollTargetSource);
   }
 
   // Record reading position on chapter change
@@ -751,8 +821,10 @@ export default function BibleReaderScreen() {
         scrollContentReadyRef.current
       ) {
         pendingScrollVerseRef.current = null;
+        const flash = pendingScrollFlashRef.current;
+        pendingScrollFlashRef.current = false;
         scrollReaderTo(Math.max(0, knownY - headerOverlap), true);
-        flashVerseBriefly(scrollTargetVerse, readerContentKey);
+        if (flash) flashVerseBriefly(scrollTargetVerse, readerContentKey);
       }
     }
   }, [scrollTargetVerse, verses, isLoading, scrollReaderTo, flashVerseBriefly, readerContentKey]);
@@ -771,12 +843,19 @@ export default function BibleReaderScreen() {
   // Called from onLayout — scrolls to verse once its position is known.
   // Stable identity ([] deps): every verse row receives this same function, so
   // it never invalidates VerseItem's memo.
-  const handleVerseLayout = useCallback((contentKey: string, verseNum: number, y: number) => {
-    if (contentKey !== activeContentKeyRef.current) return;
+  const handleVerseLayout = useCallback((contentKey: string, layoutKey: string, verseNum: number, y: number) => {
+    if (!isCurrentBibleLayoutReport({
+      reportContentKey: contentKey,
+      reportLayoutKey: layoutKey,
+      activeContentKey: activeContentKeyRef.current,
+      activeLayoutKey: activeLayoutKeyRef.current,
+    })) return;
     verseLayoutsRef.current[verseNum] = y;
-    if (pendingScrollVerseRef.current === verseNum && scrollContentReadyRef.current) {
+    if (pendingScrollVerseRef.current === verseNum) {
       pendingScrollVerseRef.current = null;
-      setScrollRequest({ contentKey, verse: verseNum });
+      const flash = pendingScrollFlashRef.current;
+      pendingScrollFlashRef.current = false;
+      setScrollRequest({ contentKey, layoutKey, verse: verseNum, flash });
     }
   }, []);
 
@@ -786,8 +865,10 @@ export default function BibleReaderScreen() {
     const verse = pendingScrollVerseRef.current;
     if (verse === null || verseLayoutsRef.current[verse] === undefined) return;
     pendingScrollVerseRef.current = null;
-    setScrollRequest({ contentKey: readerContentKey, verse });
-  }, [isLoading, readerContentKey, verses]);
+    const flash = pendingScrollFlashRef.current;
+    pendingScrollFlashRef.current = false;
+    setScrollRequest({ contentKey: readerContentKey, layoutKey: readerLayoutKey, verse, flash });
+  }, [isLoading, readerContentKey, readerLayoutKey, verses]);
 
   // ─── Verse selection ────────────────────────────────────────────────────────
 
@@ -1016,7 +1097,7 @@ export default function BibleReaderScreen() {
     if (verse && sameChapter) {
       persistVerseAnchor(verse);
       // Trigger scroll via state — useEffect handles it after render
-      setScrollRequest({ contentKey: readerContentKey, verse });
+      setScrollRequest({ contentKey: readerContentKey, layoutKey: readerLayoutKey, verse, flash: true });
       return;
     }
 
@@ -1029,11 +1110,10 @@ export default function BibleReaderScreen() {
       chapter: String(selectedChapter),
       verse: String(verse ?? 1),
     });
-  }, [router, bookId, chapter, readerContentKey, restoreTabBarForClosedActions, persistVerseAnchor, scrollReaderTo]);
+  }, [router, bookId, chapter, readerContentKey, readerLayoutKey, restoreTabBarForClosedActions, persistVerseAnchor, scrollReaderTo]);
 
   // ─── Reading settings ─────────────────────────────────────────────────────
 
-  const { fontSize, lineHeightMultiplier } = bibleReaderSettings;
   const lineHeight = Math.round(fontSize * Math.max(lineHeightMultiplier, 1.8));
 
   const isCrossBook = nextChapter !== null && nextChapter.bookId !== bookId;
@@ -1072,7 +1152,7 @@ export default function BibleReaderScreen() {
 
   // Left arrow fades in when dragging RIGHT (revealing previous chapter)
   const leftArrowStyle = useAnimatedStyle(() => {
-    const progress = Math.min(1, Math.max(0, dragX.value) / ARROW_REVEAL_DISTANCE);
+    const progress = Math.min(1, Math.max(0, dragX.value) / arrowRevealDistance);
     return {
       opacity: progress,
       transform: [
@@ -1084,7 +1164,7 @@ export default function BibleReaderScreen() {
 
   // Right arrow fades in when dragging LEFT (revealing next chapter)
   const rightArrowStyle = useAnimatedStyle(() => {
-    const progress = Math.min(1, Math.max(0, -dragX.value) / ARROW_REVEAL_DISTANCE);
+    const progress = Math.min(1, Math.max(0, -dragX.value) / arrowRevealDistance);
     return {
       opacity: progress,
       transform: [
@@ -1120,19 +1200,19 @@ export default function BibleReaderScreen() {
         } else if (tx < 0 && !nextChapter) {
           tx = tx / EDGE_RESISTANCE;
         }
-        // Damped resistance: drag follows finger up to DRAG_MAX, then tapers off
-        // Formula: DRAG_MAX * tanh(tx / DRAG_MAX) — gives smooth asymptotic limit
+        // Damped resistance: drag follows finger up to dragMax, then tapers off
+        // Formula: dragMax * tanh(tx / dragMax) — gives smooth asymptotic limit
         const sign = tx >= 0 ? 1 : -1;
         const abs = Math.abs(tx);
-        const damped = DRAG_MAX * (abs / (abs + DRAG_MAX));
+        const damped = dragMax * (abs / (abs + dragMax));
         dragX.value = sign * damped;
       })
       .onEnd((e) => {
         'worklet';
         const tx = e.translationX;
         const vx = e.velocityX;
-        const goPrev = !!prevChapter && (tx > SWIPE_DISTANCE_THRESHOLD || vx > SWIPE_VELOCITY_THRESHOLD);
-        const goNext = !!nextChapter && (tx < -SWIPE_DISTANCE_THRESHOLD || vx < -SWIPE_VELOCITY_THRESHOLD);
+        const goPrev = !!prevChapter && (tx > swipeDistanceThreshold || vx > SWIPE_VELOCITY_THRESHOLD);
+        const goNext = !!nextChapter && (tx < -swipeDistanceThreshold || vx < -SWIPE_VELOCITY_THRESHOLD);
 
         if (goPrev && tx > 0) {
           if (reducedMotion) {
@@ -1142,7 +1222,7 @@ export default function BibleReaderScreen() {
           } else {
             // Quick settle to max drag distance, then navigate
             dragX.value = withTiming(
-              DRAG_MAX,
+              dragMax,
               { duration: NAV_EXIT_DURATION, easing: EASE_OUT_QUART },
               () => { runOnJS(navigateChapter)(-1); },
             );
@@ -1155,7 +1235,7 @@ export default function BibleReaderScreen() {
           } else {
             // Quick settle to max drag distance, then navigate
             dragX.value = withTiming(
-              -DRAG_MAX,
+              -dragMax,
               { duration: NAV_EXIT_DURATION, easing: EASE_OUT_QUART },
               () => { runOnJS(navigateChapter)(1); },
             );
@@ -1168,7 +1248,7 @@ export default function BibleReaderScreen() {
           dragX.value = withSpring(0, SWIPE_SPRING_BACK);
         }
       }),
-    [prevChapter, nextChapter, navigateChapter, dragX, nativeScrollGesture, reducedMotion],
+    [prevChapter, nextChapter, navigateChapter, dragX, nativeScrollGesture, reducedMotion, dragMax, swipeDistanceThreshold],
   );
 
   // Chapter swipe is otherwise undiscoverable — peek the edge arrow once,
@@ -1182,7 +1262,7 @@ export default function BibleReaderScreen() {
 
     bibleReaderHints.set(HAS_SEEN_SWIPE_HINT_KEY, true);
 
-    const peekTarget = nextChapter ? -ARROW_REVEAL_DISTANCE : ARROW_REVEAL_DISTANCE;
+    const peekTarget = nextChapter ? -arrowRevealDistance : arrowRevealDistance;
     dragX.value = withDelay(
       500,
       withSequence(
@@ -1190,7 +1270,7 @@ export default function BibleReaderScreen() {
         withTiming(0, { duration: SWIPE_HINT_PEEK_DURATION, easing: EASE_OUT_QUART }),
       ),
     );
-  }, [prevChapter, nextChapter, reducedMotion, dragX]);
+  }, [prevChapter, nextChapter, reducedMotion, dragX, arrowRevealDistance]);
 
   // ─── Tab bar hide/show on scroll ──────────────────────────────────────────
 
@@ -1207,6 +1287,10 @@ export default function BibleReaderScreen() {
     const verse = findVisibleVerseAnchor(verseLayoutsRef.current, contentOffsetY, headerOverlap);
     if (verse !== null) persistVerseAnchor(verse);
   }, [persistVerseAnchor]);
+
+  const handleScrollSettled = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (userScrollActiveRef.current) saveVisibleVerse(event.nativeEvent.contentOffset.y);
+  }, [saveVisibleVerse]);
 
   // UI-thread scroll handler. Thresholds and direction logic are byte-for-byte
   // the previous JS implementation: top-of-list (y <= 10) always reveals,
@@ -1231,14 +1315,6 @@ export default function BibleReaderScreen() {
         runOnJS(commitScrollTabBarHidden)(false);
       }
       lastScrollY.value = y;
-    },
-    onEndDrag: (event) => {
-      'worklet';
-      runOnJS(saveVisibleVerse)(event.contentOffset.y);
-    },
-    onMomentumEnd: (event) => {
-      'worklet';
-      runOnJS(saveVisibleVerse)(event.contentOffset.y);
     },
   });
 
@@ -1282,8 +1358,10 @@ export default function BibleReaderScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]} testID="bible-reader-screen">
       {/* Header — hidden when navigator is open to prevent double-header jitter */}
-      <View style={[styles.header, {
+      <View onLayout={(event) => setMeasuredHeaderHeight(event.nativeEvent.layout.height)} style={[styles.header, {
         paddingTop: insets.top + 4,
+        paddingLeft: Math.max(insets.left, (adaptiveLayout.width - adaptiveLayout.clusterMaxWidth) / 2) + Spacing['4'],
+        paddingRight: Math.max(insets.right, (adaptiveLayout.width - adaptiveLayout.clusterMaxWidth) / 2) + Spacing['4'],
         borderBottomColor: alpha(colors.text, 0.04),
         backgroundColor: colors.background,
         opacity: showNavigator ? 0 : 1,
@@ -1308,11 +1386,9 @@ export default function BibleReaderScreen() {
           accessibilityRole="button"
           hitSlop={8}
         >
-          <Text style={[styles.headerBook, { color: colors.text, fontFamily: FontFamily.uiMedium }]} numberOfLines={1}>
-            {book?.name ?? ''}
-          </Text>
-          <Text style={[styles.headerChapter, { color: colors.textSubtle }]}>
-            {chapter}
+          <Text key={adaptiveLayout.fontScale} style={[styles.headerBook, { color: colors.text, fontFamily: FontFamily.uiMedium }]} numberOfLines={1} maxFontSizeMultiplier={1.4}>
+            {book?.name ?? ''}{' '}
+            <Text maxFontSizeMultiplier={1.4} style={[styles.headerChapter, { color: colors.textSubtle }]}>{chapter}</Text>
           </Text>
         </TouchableOpacity>
 
@@ -1346,15 +1422,19 @@ export default function BibleReaderScreen() {
         onLayout={handleScrollViewLayout}
         onContentSizeChange={handleScrollContentSizeChange}
         onScroll={handleScroll}
+        onScrollBeginDrag={() => { userScrollActiveRef.current = true; }}
+        onScrollEndDrag={handleScrollSettled}
+        onMomentumScrollEnd={handleScrollSettled}
         // Kept at 16 (Animated.ScrollView would otherwise default to 1) so the
         // per-event 5px direction thresholds keep the exact sensitivity they
         // had with the old JS handler — at throttle 1 a 120Hz display would
         // halve the time window each threshold is measured over.
         scrollEventThrottle={16}
         style={styles.flex}
-        contentContainerStyle={[styles.versesContent, { paddingTop: insets.top + HEADER_HEIGHT + 16, paddingBottom: tabBarHeight + 80 }]}
+        contentContainerStyle={{ paddingTop: (measuredHeaderHeight || insets.top + HEADER_HEIGHT) + 16, paddingBottom: tabBarHeight + 80, paddingLeft: insets.left, paddingRight: insets.right }}
         showsVerticalScrollIndicator={false}
       >
+        <View ref={verseContentRootRef} collapsable={false} style={[readerFrameStyle, styles.versesContent]}>
         {!isDbReady ? (
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['8'] }}>
             <DownloadBibleSheet
@@ -1395,6 +1475,8 @@ export default function BibleReaderScreen() {
                 isDark={isDark}
                 textColor={colors.text}
                 contentKey={readerContentKey}
+                layoutKey={readerLayoutKey}
+                contentRootRef={verseContentRootRef}
                 onPress={handleVersePress}
                 onLayout={handleVerseLayout}
               />
@@ -1442,6 +1524,7 @@ export default function BibleReaderScreen() {
             )}
           </Animated.View>
         )}
+        </View>
       </Animated.ScrollView>
       </GestureDetector>
       </Animated.View>
@@ -1473,6 +1556,8 @@ export default function BibleReaderScreen() {
               // controls; alpha(colors.text, …) would tint it visibly warmer.
               backgroundColor: isDark ? 'rgba(28, 28, 30, 0.98)' : 'rgba(255, 255, 255, 0.98)',
               paddingBottom: showNoteInput && keyboardHeight > 0 ? 8 : Math.max(insets.bottom, 8),
+              paddingLeft: insets.left,
+              paddingRight: insets.right,
               bottom: showNoteInput && keyboardHeight > 0 ? keyboardHeight - insets.bottom + 12 : 0,
               borderTopColor: alpha(colors.text, 0.08),
             },
@@ -1763,7 +1848,7 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     marginTop: 2,
   },
-  headerCenter: { flex: 1, flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', gap: 6 },
+  headerCenter: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   headerBook: { fontSize: 17 },
   headerChapter: { fontFamily: FontFamily.ui, fontSize: 15 },
 

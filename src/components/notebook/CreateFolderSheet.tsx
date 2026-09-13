@@ -26,6 +26,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
+  ScrollView,
+  type LayoutChangeEvent,
 } from 'react-native';
 import { GestureHandlerRootView, Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -36,6 +38,14 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
+import {
+  adaptiveFrameStyle,
+  adaptiveSafeGutterStyle,
+  keyboardAdjustedSheetBodyMaxHeight,
+  keyboardAdjustedSheetMaxHeight,
+  keyboardAdjustedSheetPaddingBottom,
+} from '@/lib/adaptive-layout';
 import * as Haptics from 'expo-haptics';
 import { FolderSimplePlusIcon } from '@/components/icons';
 import { FontFamily, FontSize } from '@/constants/fonts';
@@ -92,14 +102,39 @@ interface CreateFolderSheetProps {
 export function CreateFolderSheet({ visible, onClose, onSubmit, parentFolderId, parentFolderName }: CreateFolderSheetProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const adaptiveLayout = useAdaptiveLayout();
+  const sheetFrameStyle = adaptiveFrameStyle(adaptiveLayout.sheetMaxWidth);
   const inputRef = useRef<TextInput>(null);
   const translateY = useSharedValue(OFFSCREEN);
   const dismissing = useRef(false);
 
   const [folderName, setFolderName] = useState('');
   const [selectedColor, setSelectedColor] = useState<string | undefined>(undefined);
+  const [containerHeight, setContainerHeight] = useState(0);
+  const [chromeHeight, setChromeHeight] = useState(0);
 
   const isCreateEnabled = folderName.trim().length > 0;
+  const sheetPaddingBottom = keyboardAdjustedSheetPaddingBottom(insets.bottom);
+  const sheetMaxHeight = keyboardAdjustedSheetMaxHeight(
+    containerHeight,
+    adaptiveLayout.height,
+  );
+  const bodyMaxHeight = keyboardAdjustedSheetBodyMaxHeight({
+    containerHeight,
+    chromeHeight,
+    paddingBottom: sheetPaddingBottom,
+    fallbackHeight: adaptiveLayout.height,
+  });
+
+  const handleContainerLayout = useCallback((event: LayoutChangeEvent) => {
+    const height = event.nativeEvent.layout.height;
+    setContainerHeight((prev) => (prev === height ? prev : height));
+  }, []);
+
+  const handleChromeLayout = useCallback((event: LayoutChangeEvent) => {
+    const height = event.nativeEvent.layout.height;
+    setChromeHeight((prev) => (prev === height ? prev : height));
+  }, []);
 
   // Spring in when sheet opens, reset state
   useEffect(() => {
@@ -174,6 +209,10 @@ export function CreateFolderSheet({ visible, onClose, onSubmit, parentFolderId, 
           style={styles.modalContainer}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
+          <View
+            style={[styles.modalContainer, { marginTop: insets.top }]}
+            onLayout={handleContainerLayout}
+          >
           {/* Transparent dismiss area (tap above sheet to close) */}
           <TouchableOpacity
             style={styles.dismissArea}
@@ -182,24 +221,37 @@ export function CreateFolderSheet({ visible, onClose, onSubmit, parentFolderId, 
           />
 
           {/* Sheet — single unified surface, slides up from bottom */}
+          <View
+            pointerEvents="box-none"
+            style={[adaptiveSafeGutterStyle(insets.left, insets.right), { width: '100%' }]}
+          >
           <Animated.View
             style={[
               styles.sheet,
               sheetAnimatedStyle,
+              sheetFrameStyle,
               {
                 backgroundColor: colors.backgroundElevated,
-                paddingBottom: insets.bottom + 200,
+                paddingBottom: sheetPaddingBottom,
+                maxHeight: sheetMaxHeight,
               },
             ]}
           >
             {/* Handle indicator — keep the pan gesture scoped away from TextInput so taps focus reliably. */}
+            <View onLayout={handleChromeLayout}>
             <GestureDetector gesture={panGesture}>
               <View style={styles.handleRow}>
                 <View style={[styles.handleBar, { backgroundColor: colors.borderStrong }]} />
               </View>
             </GestureDetector>
+            </View>
 
-            <View style={styles.content}>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              style={{ maxHeight: bodyMaxHeight }}
+              contentContainerStyle={styles.content}
+            >
               {/* Header */}
               <View style={styles.headerRow}>
                   <FolderSimplePlusIcon size={20} color={colors.accent} weight="light" />
@@ -293,8 +345,10 @@ export function CreateFolderSheet({ visible, onClose, onSubmit, parentFolderId, 
                   onPress={handleCreate}
                   haptic={false}
                 />
-              </View>
+            </ScrollView>
             </Animated.View>
+          </View>
+          </View>
         </KeyboardAvoidingView>
       </GestureHandlerRootView>
     </Modal>

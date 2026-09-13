@@ -1,9 +1,11 @@
 import { useState, useCallback } from 'react';
-import { View, Text, ScrollView, useWindowDimensions, TextInput } from 'react-native';
+import { View, Text, useWindowDimensions, TextInput } from 'react-native';
+import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
+import { adaptiveFrameStyle } from '@/lib/adaptive-layout';
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
+import Animated, { FadeIn, useReducedMotion, useSharedValue, useAnimatedScrollHandler, useAnimatedStyle } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Duration, Ease } from '@/constants/animations';
 import * as Haptics from 'expo-haptics';
@@ -39,11 +41,35 @@ interface MenuItem {
 
 export default function YouScreen() {
   const { fontScale } = useWindowDimensions();
+  const adaptiveLayout = useAdaptiveLayout();
+  const youFrameStyle = adaptiveLayout.usesSplit
+    ? {
+        ...adaptiveFrameStyle(adaptiveLayout.splitMaxWidth),
+        flexDirection: 'row' as const,
+        alignItems: 'flex-start' as const,
+        gap: adaptiveLayout.columnGap,
+      }
+    : adaptiveFrameStyle(adaptiveLayout.clusterMaxWidth);
+  const youColumnStyle = adaptiveLayout.usesSplit ? { flex: 1, minWidth: 0 } : undefined;
+  const [profileHeight, setProfileHeight] = useState(0);
+  const profileScrollY = useSharedValue(0);
+  const handleProfileScroll = useAnimatedScrollHandler({
+    onScroll: (event) => { profileScrollY.value = event.contentOffset.y; },
+  });
+  const canKeepProfileVisible = adaptiveLayout.usesSplit && profileHeight > 0 &&
+    profileHeight <= adaptiveLayout.availableHeight - 100;
+  const profileStickyStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: canKeepProfileVisible ? Math.max(0, profileScrollY.value) : 0 }],
+  }));
   const router = useRouter();
   const { colors } = useTheme();
   const reducedMotion = useReducedMotion();
   const { section } = useLocalSearchParams<{ section?: string }>();
-  const { scrollViewRef, handleScrollLayout, handleSectionLayout } = useSettingsSectionScroll(section);
+  const [settingsWrapperY, setSettingsWrapperY] = useState(0);
+  const { scrollViewRef, handleScrollLayout, handleSectionLayout } = useSettingsSectionScroll(
+    section,
+    settingsWrapperY,
+  );
   const user = useUnfoldStore((s) => s.user);
   const updateUser = useUnfoldStore((s) => s.updateUser);
   const [isEditingName, setIsEditingName] = useState(false);
@@ -80,17 +106,24 @@ export default function YouScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }} testID="you-screen">
-      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        <ScrollView
+      <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
+        <Animated.ScrollView
           key={fontScale}
           ref={scrollViewRef}
           automaticallyAdjustKeyboardInsets
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
           onLayout={handleScrollLayout}
+          onScroll={handleProfileScroll}
+          scrollEventThrottle={16}
           contentContainerStyle={{ paddingBottom: 100 }}
           showsVerticalScrollIndicator={false}
         >
+          <View style={youFrameStyle}>
+          <Animated.View
+            style={[youColumnStyle, profileStickyStyle]}
+            onLayout={(event) => setProfileHeight(event.nativeEvent.layout.height)}
+          >
           <Animated.View
             entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
             style={{
@@ -329,9 +362,19 @@ export default function YouScreen() {
               ))}
             </View>
           </View>
+          </Animated.View>
 
+          <View
+            style={youColumnStyle}
+            onLayout={(event) => {
+              const nextY = event.nativeEvent.layout.y;
+              setSettingsWrapperY((prev) => (prev === nextY ? prev : nextY));
+            }}
+          >
           <ProfileSettingsSections onSectionLayout={handleSectionLayout} />
-        </ScrollView>
+          </View>
+          </View>
+        </Animated.ScrollView>
       </SafeAreaView>
     </View>
   );

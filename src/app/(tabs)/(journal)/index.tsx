@@ -13,6 +13,8 @@ import {
   Share,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
+import { adaptiveFrameStyle } from '@/lib/adaptive-layout';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
@@ -836,6 +838,8 @@ export default function JournalHubScreen() {
   const { colors } = useTheme();
   const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
+  const adaptiveLayout = useAdaptiveLayout();
+  const journalFrameStyle = adaptiveFrameStyle(adaptiveLayout.clusterMaxWidth);
   const journalEntries = useUnfoldStore((s) => s.journalEntries);
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
@@ -1497,7 +1501,7 @@ export default function JournalHubScreen() {
   // lockstep with the header content (same shared value, UI thread only).
   const renderNoteRow = useCallback(
     ({ item, index }: ListRenderItemInfo<Note>) => (
-      <Animated.View style={[notebookSwipeStyle, mainStyles.notesListContainer]}>
+      <Animated.View style={[notebookSwipeStyle, mainStyles.notesListContainer, journalFrameStyle]}>
         {noteMonthMarkers[index] ? (
           <JournalMonthHeader marker={noteMonthMarkers[index]} />
         ) : null}
@@ -1518,6 +1522,7 @@ export default function JournalHubScreen() {
       handleNoteShare,
       handleNoteMove,
       handleNoteDelete,
+      journalFrameStyle,
     ],
   );
 
@@ -1529,7 +1534,7 @@ export default function JournalHubScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
         {/* WR-24: virtualized list — notebook notes are the rows, everything
             else renders as the list header. One segment-aware GestureDetector
             wraps the list so segment swipes work over rows and header alike
@@ -1550,7 +1555,7 @@ export default function JournalHubScreen() {
           initialNumToRender={12}
           maxToRenderPerBatch={10}
           windowSize={11}
-          contentContainerStyle={{ paddingBottom: 100 }}
+          contentContainerStyle={{ paddingBottom: 100, alignItems: 'stretch' }}
           showsVerticalScrollIndicator={false}
           onScroll={handleScroll}
           scrollEventThrottle={16}
@@ -1559,7 +1564,7 @@ export default function JournalHubScreen() {
             searchQuery.trim().length > 0 &&
             verseNoteMatches.length > 0 ? (
               <Animated.View
-                style={[notebookSwipeStyle, mainStyles.notesListContainer]}
+                style={[notebookSwipeStyle, mainStyles.notesListContainer, journalFrameStyle]}
               >
                 <Text
                   style={[verseNoteStyles.sectionHeader, { color: colors.textSubtle }]}
@@ -1577,7 +1582,7 @@ export default function JournalHubScreen() {
             ) : null
           }
           ListHeaderComponent={
-            <>
+            <View style={journalFrameStyle}>
           {/* Header with search toggle */}
           <Animated.View
             entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
@@ -2086,7 +2091,7 @@ export default function JournalHubScreen() {
               <SavedSegment searchQuery={searchQuery} onRemove={savedUndo.remove} />
             </Animated.View>
           )}
-            </>
+            </View>
           }
         />
         </GestureDetector>

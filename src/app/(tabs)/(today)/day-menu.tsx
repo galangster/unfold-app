@@ -18,6 +18,8 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Typography } from '@/constants/typography';
+import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
+import { adaptiveFrameStyle } from '@/lib/adaptive-layout';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import {
@@ -40,6 +42,8 @@ export function DayMenuScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   const router = useRouter();
   const { colors } = useTheme();
   const reducedMotion = useReducedMotion();
+  const adaptiveLayout = useAdaptiveLayout();
+  const sheetFrameStyle = adaptiveFrameStyle(adaptiveLayout.sheetMaxWidth);
   const params = useLocalSearchParams<{
     devotionalId: string;
     currentDay: string;
@@ -70,7 +74,7 @@ export function DayMenuScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
 
   if (!devotional) {
     return (
-      <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }} edges={['top', 'bottom', 'left', 'right']}>
         <Text style={{ fontFamily: FontFamily.body, color: colors.textMuted }}>
           Series not found
         </Text>
@@ -103,7 +107,8 @@ export function DayMenuScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'bottom']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'bottom', 'left', 'right']}>
+      <View style={[sheetFrameStyle, { flex: 1 }]}>
       {/* Header */}
       <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)} style={{ paddingHorizontal: Spacing['8'], paddingTop: Spacing['5'], paddingBottom: Spacing['5'] }}>
         <Text
@@ -112,9 +117,6 @@ export function DayMenuScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
             color: colors.textSubtle,
             textAlign: 'left',
           }}
-          numberOfLines={2}
-          adjustsFontSizeToFit
-          minimumFontScale={0.85}
         >
           {devotional.title}
         </Text>
@@ -169,6 +171,7 @@ export function DayMenuScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
           );
         })}
       </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
@@ -306,7 +309,6 @@ function DayRow({
               fontSize: FontSize.base,
               color: isLocked ? colors.textMuted : colors.text,
             }}
-            numberOfLines={1}
           >
             {dayTitle}
           </Text>

@@ -22,6 +22,8 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Typography } from '@/constants/typography';
+import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
+import { adaptiveFrameStyle, PRIMARY_SAFE_AREA_EDGES } from '@/lib/adaptive-layout';
 import { useTheme } from '@/lib/theme';
 import { useGuardedBack } from '@/hooks/useGuardedBack';
 import { useUnfoldStore } from '@/lib/store';
@@ -148,6 +150,9 @@ export default function EveningWindDownScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const reducedMotion = useReducedMotion();
+  const adaptiveLayout = useAdaptiveLayout();
+  const clusterFrameStyle = adaptiveFrameStyle(adaptiveLayout.clusterMaxWidth);
+  const readableFrameStyle = adaptiveFrameStyle(adaptiveLayout.readableMaxWidth);
   const user = useUnfoldStore((s) => s.user);
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
@@ -309,8 +314,9 @@ export default function EveningWindDownScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+      <SafeAreaView style={{ flex: 1 }} edges={PRIMARY_SAFE_AREA_EDGES}>
         {/* Header — minimal */}
+        <View style={clusterFrameStyle}>
         <View
           style={{
             flexDirection: 'row',
@@ -333,6 +339,7 @@ export default function EveningWindDownScreen() {
           </TouchableOpacity>
           <View style={{ flex: 1 }} />
         </View>
+        </View>
 
         <ScrollView
           contentContainerStyle={{ paddingBottom: 100 }}
@@ -341,11 +348,14 @@ export default function EveningWindDownScreen() {
           {/* Hero — Moon + title */}
           <Animated.View
             entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
-            style={{
-              alignItems: 'center',
-              paddingTop: Spacing['6'],
-              paddingBottom: Spacing['8'],
-            }}
+            style={[
+              clusterFrameStyle,
+              {
+                alignItems: 'center',
+                paddingTop: Spacing['6'],
+                paddingBottom: Spacing['8'],
+              },
+            ]}
           >
             <View style={{ width: 120, height: 120, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing['6'] }}>
               <MoonRipples color={colors.accent} />
@@ -379,7 +389,7 @@ export default function EveningWindDownScreen() {
           </Animated.View>
 
           {/* Unified content: Prayer → Scripture → Done */}
-          <View style={{ paddingHorizontal: Spacing['7'] }}>
+          <View style={[readableFrameStyle, { paddingHorizontal: Spacing['7'] }]}>
             {/* === EVENING PRAYER SECTION === */}
             {askToReadFirst ? (
               <Animated.View

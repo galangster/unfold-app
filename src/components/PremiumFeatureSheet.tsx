@@ -9,7 +9,9 @@
  */
 
 import { useRef, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal, Pressable, ScrollView, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, Pressable, ScrollView } from 'react-native';
+import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
+import { adaptiveFrameStyle, adaptiveSafeGutterStyle, adaptiveViewportMaxHeight } from '@/lib/adaptive-layout';
 import Animated, {
   FadeIn,
   SlideInDown,
@@ -163,6 +165,9 @@ export function PremiumFeatureSheet({ visible, onClose, feature }: PremiumFeatur
   const { colors } = useTheme();
   const router = useRouter();
   const reducedMotion = useReducedMotion();
+  const adaptiveLayout = useAdaptiveLayout();
+  const sheetFrameStyle = adaptiveFrameStyle(adaptiveLayout.sheetMaxWidth);
+  const sheetMaxHeight = adaptiveViewportMaxHeight(adaptiveLayout.height, 0.85);
 
   const config = FEATURES[feature] ?? FEATURES.general;
   const IconComponent = config.icon as React.ComponentType<{ size: number; color: string; weight: IconWeight }>;
@@ -250,18 +255,32 @@ export function PremiumFeatureSheet({ visible, onClose, feature }: PremiumFeatur
           exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
           style={pfStyles.backdrop}
         >
-          <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+          <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessible={false} />
         </Animated.View>
 
         {/* The handle owns dismissal so the body can scroll. */}
+        <View
+          pointerEvents="box-none"
+          style={[
+              pfStyles.sheetGutter,
+              adaptiveSafeGutterStyle(adaptiveLayout.insetLeft, adaptiveLayout.insetRight),
+            ]}
+          >
           <Animated.View
             entering={reducedMotion ? undefined : SlideInDown.duration(Duration.normal).easing(Ease.out)}
             exiting={reducedMotion ? undefined : SlideOutDown.duration(Duration.fast).easing(Ease.out)}
             style={[
               pfStyles.sheet,
-              { backgroundColor: colors.backgroundElevated },
+              sheetFrameStyle,
+              {
+                backgroundColor: colors.backgroundElevated,
+                maxHeight: sheetMaxHeight,
+                paddingBottom: Math.max(adaptiveLayout.insetBottom, 34),
+              },
               sheetAnimatedStyle,
             ]}
+            accessibilityViewIsModal
+            onAccessibilityEscape={dismissSheet}
           >
             {/* Handle indicator */}
             <GestureDetector gesture={panGesture}>
@@ -319,6 +338,7 @@ export function PremiumFeatureSheet({ visible, onClose, feature }: PremiumFeatur
               </TouchableOpacity>
             </ScrollView>
           </Animated.View>
+          </View>
       </GestureHandlerRootView>
     </Modal>
   );
@@ -332,15 +352,16 @@ const pfStyles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
-  sheet: {
+  sheetGutter: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
+    width: '100%',
+  },
+  sheet: {
     borderTopLeftRadius: Radius['2xl'],
     borderTopRightRadius: Radius['2xl'],
-    paddingBottom: 34, // Safe area
-    maxHeight: '85%',
   },
   handleRow: {
     alignItems: 'center',

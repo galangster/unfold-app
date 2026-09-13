@@ -112,6 +112,7 @@ jest.mock('@/components/home/GreetingRow', () => ({ GreetingRow: () => null }));
 jest.mock('@/components/home/BentoGrid', () => ({ BentoGrid: () => null }));
 jest.mock('@/components/home/SeriesCarousel', () => ({ SeriesCarousel: () => null }));
 jest.mock('@/components/home/CompactStreakRow', () => ({ CompactStreakRow: () => null }));
+jest.mock('@/components/home/RecommendedSeriesCard', () => ({ RecommendedSeriesCard: () => null }));
 jest.mock('@/components/StreakBox', () => ({ StreakBox: () => null }));
 jest.mock('@/components/HomeOnboardingTooltips', () => ({ HomeOnboardingTooltips: () => null }));
 jest.mock('@/components/RippleLoader', () => ({ RippleLoader: () => null }));

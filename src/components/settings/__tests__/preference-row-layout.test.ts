@@ -5,6 +5,7 @@ import {
   SETTINGS_PREFERENCE_ROW_PADDING,
   settingsPreferenceChipGroupReserve,
   settingsPreferenceContentWidth,
+  settingsPreferenceEquivalentColumnWidth,
   settingsPreferenceLabelReserve,
   shouldStackSettingsPreferenceRow,
 } from '../preference-row-layout';
@@ -19,6 +20,8 @@ describe('settings preference-row layout budget', () => {
     expect(settingsPreferenceContentWidth(402)).toBe(322);
     expect(settingsPreferenceContentWidth(375)).toBe(295);
     expect(settingsPreferenceContentWidth(320)).toBe(240);
+    expect(settingsPreferenceEquivalentColumnWidth(354)).toBe(402);
+    expect(settingsPreferenceEquivalentColumnWidth(0)).toBe(48);
   });
 
   it('keeps the existing 1.4 / 1.2 scale caps and does not lower them at fontScale 3', () => {

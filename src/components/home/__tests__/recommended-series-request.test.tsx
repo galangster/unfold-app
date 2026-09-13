@@ -24,6 +24,13 @@ const mockNavigate = jest.fn();
 const mockTrackPickStart = jest.fn();
 const focusEffects: Array<() => void> = [];
 const mockFetch = jest.fn();
+const mountedTrees: Array<ReturnType<typeof renderer.create>> = [];
+
+afterEach(() => {
+  act(() => {
+    mountedTrees.splice(0).forEach((tree) => tree.unmount());
+  });
+});
 
 jest.mock('@/lib/mmkv-storage', () => ({
   mmkvStorage: {
@@ -155,6 +162,7 @@ describe('RecommendedSeriesCard initial generation identity', () => {
       tree = createTestRenderer(
         <RecommendedSeriesCard variant="empty" onChooseOther={jest.fn()} />,
       );
+      mountedTrees.push(tree);
     });
 
     const start = tree.root.findByProps({
@@ -193,6 +201,7 @@ describe('J10 RecommendedSeriesCard start-study gate', () => {
           {...props}
         />,
       );
+      mountedTrees.push(tree);
     });
     return tree;
   }

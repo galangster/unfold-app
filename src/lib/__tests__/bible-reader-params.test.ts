@@ -7,14 +7,18 @@ import {
   MAX_VERSE_NUMBER,
   clampBookId,
   clampChapter,
+  buildBibleReaderLayoutKey,
+  isCurrentBibleLayoutReport,
   findVisibleVerseAnchor,
   getChapterCount,
+  resolveActiveVerseScrollTarget,
   resolveBibleReaderLocation,
   resolveInitialVerseAnchor,
   resolveRecordedVerseAnchor,
   resolveTargetVerse,
   resolveTranslationRefreshVerse,
   resolveVerseScrollTarget,
+  shouldFlashVerseForScroll,
 } from '../bible-reader-params';
 
 describe('clampBookId', () => {
@@ -205,6 +209,114 @@ describe('resolveVerseScrollTarget', () => {
       savedVerseConsumed: true,
       verses,
     })).toBeNull();
+  });
+});
+
+describe('buildBibleReaderLayoutKey', () => {
+  it('changes when the bounded width or text size changes', () => {
+    const base = buildBibleReaderLayoutKey({
+      readableWidth: 672,
+      fontSize: 18,
+      lineHeightMultiplier: 1.8,
+      fontScale: 1,
+      fontFamily: 'SourceSerif',
+    });
+    expect(buildBibleReaderLayoutKey({
+      readableWidth: 520,
+      fontSize: 18,
+      lineHeightMultiplier: 1.8,
+      fontScale: 1,
+      fontFamily: 'SourceSerif',
+    })).not.toBe(base);
+    expect(buildBibleReaderLayoutKey({
+      readableWidth: 672,
+      fontSize: 22,
+      lineHeightMultiplier: 1.8,
+      fontScale: 1,
+      fontFamily: 'SourceSerif',
+    })).not.toBe(base);
+    expect(buildBibleReaderLayoutKey({
+      readableWidth: 672,
+      fontSize: 18,
+      lineHeightMultiplier: 1.8,
+      fontScale: 1,
+      fontFamily: 'SourceSerif',
+    })).toBe(base);
+  });
+});
+
+describe('isCurrentBibleLayoutReport', () => {
+  const active = { activeContentKey: '1:1:web', activeLayoutKey: '672:18:180:100:serif' };
+
+  it('accepts only measurements from the active content and layout generation', () => {
+    expect(isCurrentBibleLayoutReport({
+      ...active,
+      reportContentKey: '1:1:web',
+      reportLayoutKey: '672:18:180:100:serif',
+    })).toBe(true);
+    expect(isCurrentBibleLayoutReport({
+      ...active,
+      reportContentKey: '1:1:web',
+      reportLayoutKey: '672:18:180:160:serif',
+    })).toBe(false);
+    expect(isCurrentBibleLayoutReport({
+      ...active,
+      reportContentKey: '1:2:web',
+      reportLayoutKey: '672:18:180:100:serif',
+    })).toBe(false);
+  });
+});
+
+describe('resolveActiveVerseScrollTarget', () => {
+  const verses = [{ verse: 1 }, { verse: 2 }, { verse: 8 }, { verse: 16 }];
+
+  it('keeps explicit incoming navigation ahead of a layout refresh', () => {
+    expect(resolveActiveVerseScrollTarget({
+      routeTarget: { verse: 2, source: 'explicit' },
+      refreshVerse: 16,
+      refreshContentKey: '43:3:web',
+      activeContentKey: '43:3:web',
+      verses,
+    })).toEqual({ verse: 2, source: 'explicit' });
+  });
+
+  it('keeps a saved chapter-entry target ahead of a layout refresh', () => {
+    expect(resolveActiveVerseScrollTarget({
+      routeTarget: { verse: 8, source: 'saved' },
+      refreshVerse: 16,
+      refreshContentKey: '43:3:web',
+      activeContentKey: '43:3:web',
+      verses,
+    })).toEqual({ verse: 8, source: 'saved' });
+  });
+
+  it('restores the captured verse after reflow when no explicit target remains', () => {
+    expect(resolveActiveVerseScrollTarget({
+      routeTarget: null,
+      refreshVerse: 16,
+      refreshContentKey: '43:3:web',
+      activeContentKey: '43:3:web',
+      verses,
+    })).toEqual({ verse: 16, source: 'refresh' });
+  });
+
+  it('ignores a refresh belonging to a previous content key', () => {
+    expect(resolveActiveVerseScrollTarget({
+      routeTarget: null,
+      refreshVerse: 16,
+      refreshContentKey: '43:3:kjv',
+      activeContentKey: '43:3:web',
+      verses,
+    })).toBeNull();
+  });
+});
+
+describe('shouldFlashVerseForScroll', () => {
+  it('flashes only explicit verse navigation, not a passive resize restore', () => {
+    expect(shouldFlashVerseForScroll('explicit')).toBe(true);
+    expect(shouldFlashVerseForScroll('saved')).toBe(false);
+    expect(shouldFlashVerseForScroll('refresh')).toBe(false);
+    expect(shouldFlashVerseForScroll(null)).toBe(false);
   });
 });
 

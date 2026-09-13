@@ -18,6 +18,9 @@ describe('notebook accessibility source contract', () => {
   it('keeps notebook more-menu rows targetable by label and test id', () => {
     const source = readSource('src/app/(tabs)/(journal)/note-detail.tsx');
 
+    expect(source).toContain('testID="note-more-menu-overlay"');
+    expect(source).toContain('testID="note-more-menu-backdrop"');
+    expect(source).not.toContain('headerAnchor: {\n    position: \'relative\',\n    zIndex: 200,');
     expect(source).toContain('testID="note-more-toggle-favorite"');
     expect(source).toContain("accessibilityLabel={isFavorite ? 'Remove from favorites' : 'Add to favorites'}");
     expect(source).toContain('testID="note-more-move-to-folder"');

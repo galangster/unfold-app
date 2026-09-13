@@ -42,6 +42,12 @@ export function settingsPreferenceContentWidth(windowWidth: number): number {
   return Math.max(0, width - SETTINGS_PAGE_HORIZONTAL_GUTTER - SETTINGS_PREFERENCE_ROW_PADDING);
 }
 
+/** Convert a measured settings card width into the helper's column-width input. */
+export function settingsPreferenceEquivalentColumnWidth(cardWidth: number): number {
+  const width = Number.isFinite(cardWidth) && cardWidth > 0 ? cardWidth : 0;
+  return width + SETTINGS_PAGE_HORIZONTAL_GUTTER;
+}
+
 export function settingsPreferenceLabelReserve(fontScale: number): number {
   const scale = Number.isFinite(fontScale) && fontScale > 0 ? fontScale : 1;
   const applied = Math.min(scale, SETTINGS_PREFERENCE_LABEL_MAX_SCALE);

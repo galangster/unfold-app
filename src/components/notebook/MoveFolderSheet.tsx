@@ -43,6 +43,8 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
+import { adaptiveFrameStyle, adaptiveSafeGutterStyle, adaptiveViewportMaxHeight } from '@/lib/adaptive-layout';
 import * as Haptics from 'expo-haptics';
 import {
   FolderSimpleIcon,
@@ -118,6 +120,9 @@ export function MoveFolderSheet({
 }: MoveFolderSheetProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const adaptiveLayout = useAdaptiveLayout();
+  const sheetFrameStyle = adaptiveFrameStyle(adaptiveLayout.sheetMaxWidth);
+  const sheetMaxHeight = adaptiveViewportMaxHeight(adaptiveLayout.height, 0.7);
   const translateY = useSharedValue(OFFSCREEN);
   const dismissing = useRef(false);
 
@@ -262,14 +267,20 @@ export function MoveFolderSheet({
         />
 
         {/* Sheet — single unified surface, slides up from bottom */}
+        <View
+          pointerEvents="box-none"
+          style={[adaptiveSafeGutterStyle(insets.left, insets.right), { width: '100%' }]}
+        >
         <GestureDetector gesture={panGesture}>
           <Animated.View
             style={[
               styles.sheet,
               sheetAnimatedStyle,
+              sheetFrameStyle,
               {
                 backgroundColor: colors.backgroundElevated,
-                paddingBottom: insets.bottom + 200,
+                paddingBottom: insets.bottom + 16,
+                maxHeight: sheetMaxHeight,
               },
             ]}
           >
@@ -397,7 +408,7 @@ export function MoveFolderSheet({
                 )}
 
                 {/* Folder list */}
-                {displayFolders.map((folder) => {
+                {displayFolders.map((folder, folderIndex) => {
                   const isSelected = currentFolderId === folder.id;
                   const isDragging = draggingId === folder.id;
                   const folderHasChildren = hasChildren(folder.id);
@@ -418,6 +429,8 @@ export function MoveFolderSheet({
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       } : undefined}
                       onSwap={handleSwapFolders}
+                      canMoveUp={!!onReorder && folderIndex > 0}
+                      canMoveDown={!!onReorder && folderIndex < displayFolders.length - 1}
                       onDragStart={() => setDraggingId(folder.id)}
                       onDragEnd={() => setDraggingId(null)}
                       onDelete={onDeleteFolder ? () => {
@@ -478,6 +491,7 @@ export function MoveFolderSheet({
             </View>
           </Animated.View>
         </GestureDetector>
+        </View>
       </GestureHandlerRootView>
     </Modal>
   );
@@ -499,6 +513,8 @@ interface DraggableFolderRowProps {
   onSelect: () => void;
   onDrillIn?: () => void;
   onSwap: (folderId: string, direction: 'up' | 'down') => void;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
   onDragStart: () => void;
   onDragEnd: () => void;
   onDelete?: () => void;
@@ -516,6 +532,8 @@ function DraggableFolderRow({
   onSelect,
   onDrillIn,
   onSwap,
+  canMoveUp,
+  canMoveDown,
   onDragStart,
   onDragEnd,
   onDelete,
@@ -568,6 +586,17 @@ function DraggableFolderRow({
         accessibilityRole="button"
         accessibilityLabel={`${showAllNotes ? 'Filter by' : 'Move to'} ${folder.name}`}
         accessibilityState={{ selected: isSelected }}
+        accessibilityActions={showDragHandle ? [
+          ...(canMoveUp ? [{ name: 'moveUp', label: `Move ${folder.name} up` }] : []),
+          ...(canMoveDown ? [{ name: 'moveDown', label: `Move ${folder.name} down` }] : []),
+        ] : undefined}
+        onAccessibilityAction={showDragHandle ? (event) => {
+          if (event.nativeEvent.actionName === 'moveUp' && canMoveUp) {
+            onSwap(folder.id, 'up');
+          } else if (event.nativeEvent.actionName === 'moveDown' && canMoveDown) {
+            onSwap(folder.id, 'down');
+          }
+        } : undefined}
         style={[
           styles.folderRow,
           {
@@ -670,7 +699,6 @@ const styles = StyleSheet.create({
   sheet: {
     borderTopLeftRadius: Radius['2xl'],
     borderTopRightRadius: Radius['2xl'],
-    maxHeight: '70%',
     ...Shadow.sheet,
   },
   handleRow: {
@@ -721,10 +749,13 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   dragHandle: {
-    paddingVertical: 2,
-    paddingHorizontal: 4,
-    marginLeft: -8,
-    marginRight: -4,
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: -12,
+    marginLeft: -16,
+    marginRight: -12,
   },
   deleteButton: {
     padding: 6,

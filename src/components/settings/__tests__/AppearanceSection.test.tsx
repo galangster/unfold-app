@@ -1,7 +1,10 @@
 import React from 'react';
 import { StyleSheet, Text } from 'react-native';
 import { AppearanceSection } from '../AppearanceSection';
-import { shouldStackSettingsPreferenceRow } from '../preference-row-layout';
+import {
+  SETTINGS_PAGE_HORIZONTAL_GUTTER,
+  shouldStackSettingsPreferenceRow,
+} from '../preference-row-layout';
 import { pressableAncestor } from '@/lib/__tests__/fixtures/pressable-ancestor';
 
 const renderer = jest.requireActual('react-test-renderer');
@@ -96,6 +99,18 @@ function createSection() {
   act(() => {
     tree = renderer.create(<AppearanceSection onPremiumFeature={jest.fn()} />);
   });
+  act(() => {
+    tree.root.findByProps({ testID: 'appearance-preference-card' }).props.onLayout({
+      nativeEvent: {
+        layout: {
+          x: 0,
+          y: 0,
+          width: mockAppearanceState.window.width - SETTINGS_PAGE_HORIZONTAL_GUTTER,
+          height: 240,
+        },
+      },
+    });
+  });
   return tree!;
 }
 
@@ -122,6 +137,15 @@ describe('AppearanceSection preference rows', () => {
     mockAppearanceState.updateUser.mockReset();
     mockAppearanceState.premium = 'granted';
     mockAppearanceState.window = { width: 402, height: 874, scale: 3, fontScale: 1 };
+  });
+
+  it('stacks preference chips until the card reports its measured width', () => {
+    let tree: { root: any };
+    act(() => {
+      tree = renderer.create(<AppearanceSection onPremiumFeature={jest.fn()} />);
+    });
+    expect(chipRowStyle(tree!, 'Theme').flexDirection).toBe('column');
+    expect(shouldStackSettingsPreferenceRow(0, 1)).toBe(true);
   });
 
   it('renders complete Theme, Reading Font, and Font size labels at 402pt default text', () => {

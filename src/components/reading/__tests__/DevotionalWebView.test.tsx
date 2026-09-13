@@ -639,6 +639,182 @@ describe('DevotionalWebView Aa / theme updates without remounting', () => {
     expect(mockInjectJavaScript).toHaveBeenCalledTimes(1);
   });
 
+  it('reports paragraph locations with height so a resize can restore the same teaching block', () => {
+    const onContentLocations = jest.fn();
+    let tree: any;
+    act(() => {
+      tree = renderer.create(
+        <DevotionalWebView day={day} fontSize="medium" onContentLocations={onContentLocations} />,
+      );
+    });
+
+    const script = getWebViewProps(tree).injectedJavaScript as string;
+    expect(script).toContain('collectParagraphYs');
+    expect(script).toContain("paragraphs: collectParagraphYs()");
+    expect(getWebViewProps(tree).source.html).not.toContain('key={');
+
+    act(() => {
+      getWebViewProps(tree).onMessage({
+        nativeEvent: {
+          data: JSON.stringify({
+            type: 'HEIGHT_CHANGE',
+            height: 980,
+            docId: getDocId(tree),
+            paragraphs: [0, 140, 360],
+          }),
+        },
+      });
+    });
+
+    expect(onContentLocations).toHaveBeenCalledWith([0, 140, 360], 0);
+    const source = getWebViewProps(tree).source;
+    act(() => {
+      tree.update(
+        <DevotionalWebView day={day} fontSize="large" onContentLocations={onContentLocations} />,
+      );
+    });
+    expect(getWebViewProps(tree).source).toBe(source);
+  });
+
+  it('echoes the current layout generation without reloading the document', () => {
+    const onContentLocations = jest.fn();
+    const onLayoutGenerationCommitted = jest.fn();
+    let tree: any;
+    act(() => {
+      tree = renderer.create(
+        <DevotionalWebView
+          day={day}
+          fontSize="medium"
+          layoutGeneration={2}
+          onContentLocations={onContentLocations}
+          onLayoutGenerationCommitted={onLayoutGenerationCommitted}
+        />,
+      );
+    });
+
+    const script = getWebViewProps(tree).injectedJavaScript as string;
+    expect(script).toContain('layoutGeneration: window.__unfoldLayoutGeneration || 0');
+    const source = getWebViewProps(tree).source;
+
+    act(() => {
+      getWebViewProps(tree).onMessage({
+        nativeEvent: {
+          data: JSON.stringify({
+            type: 'HEIGHT_CHANGE',
+            height: 980,
+            docId: getDocId(tree),
+            paragraphs: [0, 140, 360],
+            layoutGeneration: 2,
+          }),
+        },
+      });
+    });
+    expect(onContentLocations).toHaveBeenCalledWith([0, 140, 360], 2);
+    expect(onLayoutGenerationCommitted).toHaveBeenCalledWith(2);
+
+    mockInjectJavaScript.mockClear();
+    act(() => {
+      tree.update(
+        <DevotionalWebView
+          day={day}
+          fontSize="medium"
+          layoutGeneration={3}
+          onContentLocations={onContentLocations}
+          onLayoutGenerationCommitted={onLayoutGenerationCommitted}
+        />,
+      );
+    });
+    expect(getWebViewProps(tree).source).toBe(source);
+    expect(mockInjectJavaScript.mock.calls.some(([injected]) => (
+      String(injected).includes('window.__unfoldLayoutGeneration = 3')
+    ))).toBe(true);
+
+    act(() => {
+      getWebViewProps(tree).onMessage({
+        nativeEvent: {
+          data: JSON.stringify({
+            type: 'HEIGHT_CHANGE',
+            height: 980,
+            docId: getDocId(tree),
+            paragraphs: [0, 140, 360],
+            layoutGeneration: 2,
+          }),
+        },
+      });
+    });
+    expect(onContentLocations).toHaveBeenCalledTimes(1);
+    expect(onLayoutGenerationCommitted).toHaveBeenCalledTimes(1);
+  });
+
+  it('commits only the current generation when height reports arrive out of order', () => {
+    const onContentLocations = jest.fn();
+    const onLayoutGenerationCommitted = jest.fn();
+    let tree: any;
+    act(() => {
+      tree = renderer.create(
+        <DevotionalWebView
+          day={day}
+          fontSize="medium"
+          layoutGeneration={4}
+          onContentLocations={onContentLocations}
+          onLayoutGenerationCommitted={onLayoutGenerationCommitted}
+        />,
+      );
+    });
+
+    const source = getWebViewProps(tree).source;
+    act(() => {
+      getWebViewProps(tree).onMessage({
+        nativeEvent: {
+          data: JSON.stringify({
+            type: 'HEIGHT_CHANGE',
+            height: 700,
+            docId: getDocId(tree),
+            paragraphs: [0, 90],
+            layoutGeneration: 3,
+          }),
+        },
+      });
+    });
+    expect(onContentLocations).not.toHaveBeenCalled();
+    expect(onLayoutGenerationCommitted).not.toHaveBeenCalled();
+    expect(getWebViewProps(tree).style).toEqual(expect.arrayContaining([{ height: 200 }]));
+
+    act(() => {
+      getWebViewProps(tree).onMessage({
+        nativeEvent: {
+          data: JSON.stringify({
+            type: 'HEIGHT_CHANGE',
+            height: 840,
+            docId: getDocId(tree),
+            paragraphs: [0, 120],
+            layoutGeneration: 4,
+          }),
+        },
+      });
+    });
+    expect(onContentLocations).toHaveBeenCalledWith([0, 120], 4);
+    expect(onLayoutGenerationCommitted).toHaveBeenCalledWith(4);
+    expect(getWebViewProps(tree).source).toBe(source);
+    expect(getWebViewProps(tree).style).toEqual(expect.arrayContaining([{ height: 840 }]));
+
+    act(() => {
+      getWebViewProps(tree).onMessage({
+        nativeEvent: {
+          data: JSON.stringify({
+            type: 'HEIGHT_CHANGE',
+            height: 400,
+            docId: getDocId(tree),
+            paragraphs: [0],
+          }),
+        },
+      });
+    });
+    expect(onContentLocations).toHaveBeenCalledTimes(1);
+    expect(onLayoutGenerationCommitted).toHaveBeenCalledTimes(1);
+    expect(getWebViewProps(tree).style).toEqual(expect.arrayContaining([{ height: 840 }]));
+  });
+
   it('pushes the new palette when the theme flips and skips re-renders that change nothing', () => {
     mockIsDark = true;
     let tree: any;

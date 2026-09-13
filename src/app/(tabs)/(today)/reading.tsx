@@ -1,7 +1,9 @@
 import { getDailyGenerationNotice } from '@/lib/daily-generation-messages';
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useAutoHide } from '@/hooks/useAutoHide';
-import { View, Text, Dimensions, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet, TouchableOpacity, Keyboard, ScrollView, UIManager, Modal, type LayoutChangeEvent } from 'react-native';
+import { View, Text, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet, TouchableOpacity, Keyboard, ScrollView, UIManager, Modal, type LayoutChangeEvent } from 'react-native';
+import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
+import { adaptiveFrameStyle } from '@/lib/adaptive-layout';
 import { useRouter, useLocalSearchParams, useIsFocused } from 'expo-router';
 import { useModalNavigation } from '@/hooks/useModalNavigation';
 import { qaMethodReadingsHref } from '@/lib/qa-method-readings-route';
@@ -91,6 +93,20 @@ import { addAppBreadcrumb } from '@/lib/sentry';
 import { StudyMethodSheet } from '@/components/reading/StudyMethodSheet';
 import { ReaderOutlineSheet } from '@/components/reading/ReaderOutlineSheet';
 import type { ReaderSection } from '@/components/reading/DevotionalContent';
+import {
+  applyParagraphReport,
+  applySectionLayoutReport,
+  beginReaderLayoutGeneration,
+  canRestoreReaderAnchor,
+  createVersionedParagraphLocations,
+  createVersionedSectionLocations,
+  decideExplicitLocationCallback,
+  resolveExplicitReaderTargetKey,
+  resolveReaderReflowScrollY,
+  resolveVisibleReaderAnchor,
+  shouldApplyPassiveReflowRestore,
+  type ReaderScrollAnchor,
+} from '@/lib/reader-scroll-anchor';
 import { createReviewPromptManager, type ReviewPromptManager } from '@/lib/review-prompt';
 import { useGlobalAudioPlayer } from '@/hooks/useGlobalAudioPlayer';
 import { useAudioPlayerState } from '@/lib/audio-player-state';
@@ -103,8 +119,6 @@ import { PremiumNudgeCard } from '@/components/PremiumNudgeCard';
 import { usePremiumNudge } from '@/hooks/usePremiumNudge';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { alpha } from '@/components/ui';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const AUTO_RETRY_MAX_ATTEMPTS = 3;
 const AUTO_RETRY_BASE_DELAY_MS = 15000;
@@ -238,6 +252,8 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
+  const adaptiveLayout = useAdaptiveLayout();
+  const readingFrameStyle = adaptiveFrameStyle(adaptiveLayout.readableMaxWidth);
 
   // Clear reveal transition flag AFTER reading screen has painted to prevent
   // home screen from flashing behind during the transition handoff.
@@ -355,9 +371,8 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   const highlightCommandRef = useRef<DevotionalWebViewCommands | null>(null);
   const [lockedDayToast, setLockedDayToast] = useState(false);
   const [selectedStudyMethod, setSelectedStudyMethod] = useState<string | undefined>(undefined);
-  const [targetScrollRequest, setTargetScrollRequest] = useState<{ id: number; y: number } | null>(null);
-  const [readerScrollReady, setReaderScrollReady] = useState(0);
-  const [readerLayoutVersion, setReaderLayoutVersion] = useState(0);
+  const [targetScrollRequest, setTargetScrollRequest] = useState<{ id: number; y: number; key: string } | null>(null);
+  const [layoutGeneration, setLayoutGeneration] = useState(1);
   const [studyMethodVisible, setStudyMethodVisible] = useState(false);
   const [practiceVisible, setPracticeVisible] = useState(false);
   const [practicePreviewMethodId, setPracticePreviewMethodId] = useState<string | null>(null);
@@ -373,6 +388,17 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   const chevronBounce = useSharedValue(0);
   const contentOpacity = useSharedValue(1);
   const scrollProgress = useSharedValue(0);
+  const readerScrollYRef = useRef(0);
+  const userScrollActiveRef = useRef(false);
+  const layoutGenerationRef = useRef(1);
+  const sectionLocationsRef = useRef(createVersionedSectionLocations(1));
+  const paragraphLocationsRef = useRef(createVersionedParagraphLocations());
+  const reflowAnchorRef = useRef<ReaderScrollAnchor | null>(null);
+  const pendingReflowRestoreRef = useRef(false);
+  const readerLayoutKeyRef = useRef('');
+  const targetScrollRequestRef = useRef<{ id: number; y: number; key: string } | null>(null);
+  const consumedExplicitKeyRef = useRef<string | null>(null);
+  const explicitTargetKeyRef = useRef<string | null>(null);
 
   // Bookmark toast auto-dismiss after 2.5s
   useAutoHide(bookmarkToast, 2500, useCallback(() => setBookmarkToast(false), []));
@@ -476,18 +502,25 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
 
   const setReaderScrollViewRef = useCallback((node: ScrollView | null) => {
     scrollViewRef.current = node;
-    if (node) {
-      setReaderScrollReady((version) => version + 1);
-    }
   }, []);
 
   const handleReaderScrollViewLayout = useCallback((event: LayoutChangeEvent) => {
     const target = (event.nativeEvent as { target?: number }).target;
     readerScrollNativeTargetRef.current = typeof target === 'number' ? target : null;
-    setReaderScrollReady((version) => version + 1);
   }, []);
 
-  const scrollReaderToY = useCallback((y: number) => {
+  const scrollReaderToY = useCallback((y: number, preserveAnchor = false) => {
+    userScrollActiveRef.current = false;
+    readerScrollYRef.current = y;
+    if (!preserveAnchor) {
+      reflowAnchorRef.current = resolveVisibleReaderAnchor({
+        sectionOffsets: sectionLocationsRef.current.offsets,
+        paragraphYs: paragraphLocationsRef.current.ys,
+        webViewTop: sectionLocationsRef.current.offsets.devotional ?? 0,
+        contentOffsetY: y,
+        headerOffset: SECTION_TARGET_TOP_INSET,
+      });
+    }
     const ref = scrollViewRef.current as unknown as Record<string, unknown> | null;
     const proto = ref ? Object.getPrototypeOf(ref) as Record<string, unknown> | null : null;
     const options = { x: 0, y, animated: true };
@@ -539,11 +572,56 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
 
   useEffect(() => {
     setSectionOffsets({});
+    sectionLocationsRef.current = createVersionedSectionLocations(layoutGenerationRef.current);
+    paragraphLocationsRef.current = createVersionedParagraphLocations();
+    reflowAnchorRef.current = null;
+    pendingReflowRestoreRef.current = false;
+    consumedExplicitKeyRef.current = null;
+    targetScrollRequestRef.current = null;
+    setTargetScrollRequest(null);
   }, [viewingDay, effectiveDevotionalId]);
 
-  const handleSectionLayout = useCallback((section: ReaderSection, contentY: number) => {
-    setSectionOffsets((prev) => (prev[section] === contentY ? prev : { ...prev, [section]: contentY }));
-  }, []);
+  const tryRestoreAfterReflow = useCallback(() => {
+    if (!pendingReflowRestoreRef.current) return;
+    if (!shouldApplyPassiveReflowRestore({
+      explicitPending: targetScrollRequestRef.current !== null,
+    })) {
+      pendingReflowRestoreRef.current = false;
+      return;
+    }
+    const sections = sectionLocationsRef.current;
+    const paragraphs = paragraphLocationsRef.current;
+    if (!canRestoreReaderAnchor(reflowAnchorRef.current, sections, paragraphs)) return;
+    const y = resolveReaderReflowScrollY({
+      explicitTargetY: null,
+      anchor: reflowAnchorRef.current,
+      sectionOffsets: sections.offsets,
+      paragraphYs: paragraphs.ys,
+      webViewTop: sections.offsets.devotional ?? 0,
+      headerOffset: SECTION_TARGET_TOP_INSET,
+    });
+    if (y === null) return;
+    pendingReflowRestoreRef.current = false;
+    scrollReaderToY(y, true);
+  }, [scrollReaderToY]);
+
+  const handleSectionLayout = useCallback((
+    section: ReaderSection,
+    contentY: number,
+    reportGeneration: number,
+  ) => {
+    const current = sectionLocationsRef.current;
+    const next = applySectionLayoutReport(
+      current,
+      section,
+      contentY,
+      reportGeneration,
+    );
+    if (next === current) return;
+    sectionLocationsRef.current = next;
+    setSectionOffsets(next.offsets);
+    tryRestoreAfterReflow();
+  }, [tryRestoreAfterReflow]);
 
   const openJournalForDay = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -584,40 +662,102 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     openJournalForDay();
   }, [openJournalForDay]);
 
+  const explicitTargetKey = resolveExplicitReaderTargetKey({
+    highlightId: targetHighlight?.id,
+    bookmarkId: targetBookmark?.id,
+    focusAct: params.focus === 'act',
+  });
+  explicitTargetKeyRef.current = explicitTargetKey;
+  targetScrollRequestRef.current = targetScrollRequest;
+
   const handleTargetHighlightLocated = useCallback((contentY: number) => {
     const y = Math.max(0, contentY - LIBRARY_TARGET_TOP_INSET);
     if (sheetJumpPendingRef.current) {
       sheetJumpPendingRef.current = false;
+      pendingReflowRestoreRef.current = false;
       scrollReaderToY(y);
       return;
     }
+    const decision = decideExplicitLocationCallback({
+      targetKey: explicitTargetKeyRef.current,
+      pendingKey: targetScrollRequestRef.current?.key ?? null,
+      consumedKey: consumedExplicitKeyRef.current,
+    });
+    if (decision === 'ignore' || explicitTargetKeyRef.current === null) return;
+    pendingReflowRestoreRef.current = false;
     targetScrollRequestIdRef.current += 1;
-    setTargetScrollRequest({
+    const request = {
       id: targetScrollRequestIdRef.current,
       y,
-    });
+      key: explicitTargetKeyRef.current,
+    };
+    targetScrollRequestRef.current = request;
+    setTargetScrollRequest(request);
   }, [scrollReaderToY]);
 
   const handleReflectionInputFocus = useCallback((contentY: number) => {
     const y = Math.max(0, contentY - LIBRARY_TARGET_TOP_INSET);
-    scrollReaderToY(y);
+    scrollReaderToY(y, true);
   }, [scrollReaderToY]);
 
   useEffect(() => {
     if (!targetScrollRequest) return;
 
     // WebView target messages can arrive before the parent ScrollView ref or
-    // final content height has committed. Store the requested Y in React state
-    // and retry from an effect so each attempt uses the latest mounted ref.
+    // final content height has committed. Retry from this request identity
+    // only. Content-size and layout-version events must not replay it.
+    const request = targetScrollRequest;
     const delays = [0, 250, 650, 1200, 1800, 2600];
     const timers = delays.map((delay) => setTimeout(() => {
-      scrollReaderToY(targetScrollRequest.y);
+      scrollReaderToY(request.y);
     }, delay));
+    const expire = setTimeout(() => {
+      consumedExplicitKeyRef.current = request.key;
+      targetScrollRequestRef.current = null;
+      setTargetScrollRequest(null);
+    }, 2600);
 
     return () => {
       timers.forEach((timer) => clearTimeout(timer));
+      clearTimeout(expire);
     };
-  }, [readerLayoutVersion, readerScrollReady, scrollReaderToY, targetScrollRequest]);
+  }, [scrollReaderToY, targetScrollRequest]);
+
+  const readerLayoutKey = `${adaptiveLayout.readableMaxWidth}:${adaptiveLayout.fontScale}:${fontSize}:${user?.readingFont ?? ''}`;
+  if (readerLayoutKeyRef.current !== readerLayoutKey) {
+    if (readerLayoutKeyRef.current !== '') {
+      userScrollActiveRef.current = false;
+      const started = beginReaderLayoutGeneration({
+        nextGeneration: layoutGenerationRef.current + 1,
+        previousAnchor: reflowAnchorRef.current,
+        sections: sectionLocationsRef.current,
+        paragraphs: paragraphLocationsRef.current,
+        contentOffsetY: readerScrollYRef.current,
+        headerOffset: SECTION_TARGET_TOP_INSET,
+      });
+      layoutGenerationRef.current = started.generation;
+      sectionLocationsRef.current = started.sections;
+      paragraphLocationsRef.current = started.paragraphs;
+      // Keep the semantic position through intermediate window sizes.
+      reflowAnchorRef.current = started.anchor;
+      pendingReflowRestoreRef.current = reflowAnchorRef.current !== null;
+      if (layoutGeneration !== started.generation) {
+        setLayoutGeneration(started.generation);
+      }
+    }
+    readerLayoutKeyRef.current = readerLayoutKey;
+  }
+
+  const handleWebViewLocations = useCallback((paragraphYs: number[], reportGeneration: number) => {
+    paragraphLocationsRef.current = applyParagraphReport(
+      paragraphLocationsRef.current,
+      paragraphYs,
+      reportGeneration,
+      layoutGenerationRef.current,
+    );
+    tryRestoreAfterReflow();
+  }, [tryRestoreAfterReflow]);
+
   const expectedDays = Math.max(user?.devotionalLength ?? 0, totalDays);
   // Only show retry banner if this specific series has ungenerated days
   // Compare against totalDays (the series plan), not expectedDays (user preference)
@@ -1090,19 +1230,32 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   // flips via runOnJS only when its hysteresis threshold is actually crossed.
   // (The native scroll target for scrollTo fallbacks comes from onLayout.)
   const scrollHintHiddenOnUI = useSharedValue(false);
-  const handleScroll = useAnimatedScrollHandler((event) => {
-    const offsetY = event.contentOffset.y;
-    const scrollable = event.contentSize.height - event.layoutMeasurement.height;
-    if (scrollable > 0) {
-      scrollProgress.value = Math.min(1, Math.max(0, offsetY / scrollable));
-    }
-    if (offsetY > 100 && !scrollHintHiddenOnUI.value) {
-      scrollHintHiddenOnUI.value = true;
-      runOnJS(setShowScrollHint)(false);
-    } else if (offsetY <= 50 && scrollHintHiddenOnUI.value) {
-      scrollHintHiddenOnUI.value = false;
-      runOnJS(setShowScrollHint)(true);
-    }
+  const saveReaderScrollY = useCallback((contentOffsetY: number) => {
+    if (!userScrollActiveRef.current) return;
+    readerScrollYRef.current = contentOffsetY;
+    reflowAnchorRef.current = resolveVisibleReaderAnchor({
+      sectionOffsets: sectionLocationsRef.current.offsets,
+      paragraphYs: paragraphLocationsRef.current.ys,
+      webViewTop: sectionLocationsRef.current.offsets.devotional ?? 0,
+      contentOffsetY,
+      headerOffset: SECTION_TARGET_TOP_INSET,
+    });
+  }, []);
+  const handleScroll = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      const offsetY = event.contentOffset.y;
+      const scrollable = event.contentSize.height - event.layoutMeasurement.height;
+      if (scrollable > 0) {
+        scrollProgress.value = Math.min(1, Math.max(0, offsetY / scrollable));
+      }
+      if (offsetY > 100 && !scrollHintHiddenOnUI.value) {
+        scrollHintHiddenOnUI.value = true;
+        runOnJS(setShowScrollHint)(false);
+      } else if (offsetY <= 50 && scrollHintHiddenOnUI.value) {
+        scrollHintHiddenOnUI.value = false;
+        runOnJS(setShowScrollHint)(true);
+      }
+    },
   });
 
   const handleComplete = useCallback(() => {
@@ -1633,7 +1786,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     if (shouldShowMissingSeriesRecovery) {
       return (
         <View style={{ flex: 1, backgroundColor: colors.background }}>
-          <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'bottom']}>
+          <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'bottom', 'left', 'right']}>
             <ReaderLoadingSkeleton colors={colors} />
           </SafeAreaView>
         </View>
@@ -1775,7 +1928,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
 
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
-        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'bottom']}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'bottom', 'left', 'right']}>
           {/* Back header */}
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing['4'], paddingVertical: Spacing['3'] }}>
             <TouchableOpacity activeOpacity={0.7}
@@ -2010,9 +2163,9 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     <View style={{ flex: 1, backgroundColor: colors.background }} testID="devotional-reader-screen">
       <GestureDetector gesture={panGesture}>
         <Animated.View style={[{ flex: 1 }, contentStyle]}>
-          <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
+          <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'left', 'right']}>
             {/* Header */}
-            <View style={{ backgroundColor: colors.background }}>
+            <View style={[adaptiveFrameStyle(adaptiveLayout.clusterMaxWidth), { backgroundColor: colors.background }]}>
               <View
                 style={{
                   flexDirection: 'row',
@@ -2149,9 +2302,12 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
               keyboardShouldPersistTaps="handled"
               onLayout={handleReaderScrollViewLayout}
               onScroll={handleScroll}
-              onContentSizeChange={() => setReaderLayoutVersion((version) => version + 1)}
+              onScrollBeginDrag={() => { userScrollActiveRef.current = true; }}
+              onScrollEndDrag={(event) => saveReaderScrollY(event.nativeEvent.contentOffset.y)}
+              onMomentumScrollEnd={(event) => saveReaderScrollY(event.nativeEvent.contentOffset.y)}
               scrollEventThrottle={16}
             >
+              <View style={readingFrameStyle}>
               <DevotionalContent
                 day={currentDayData}
                 fontSize={fontSize}
@@ -2166,6 +2322,8 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                 existingHighlights={currentDayHighlights}
                 targetHighlight={targetHighlight}
                 onTargetHighlightLocated={handleTargetHighlightLocated}
+                onWebViewLocations={handleWebViewLocations}
+                layoutGeneration={layoutGeneration}
                 onSectionLayout={handleSectionLayout}
                 targetBookmark={targetBookmark}
                 onTargetBookmarkLocated={handleTargetHighlightLocated}
@@ -2498,6 +2656,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                   )}
 
               </Animated.View>
+              </View>
             </Animated.ScrollView>
             </Animated.View>
           </SafeAreaView>

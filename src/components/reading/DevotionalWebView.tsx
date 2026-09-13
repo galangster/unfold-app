@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useMemo, useState } from 'react';
 import * as Clipboard from 'expo-clipboard';
 import { View, StyleSheet, Dimensions, PixelRatio } from 'react-native';
 import { WebView } from 'react-native-webview';
@@ -14,6 +14,7 @@ import { isStructuredWordStudy, normalizeWordStudy } from '@/lib/word-study';
 import { DISPLAY_SERIF_WOFF2_BASE64 } from '@/lib/display-font-base64';
 import { RANGY_BUNDLE } from './rangy-bundle';
 import { highlightInk, highlighterStroke, strokeFitFor, webFontNameFor } from '@/constants/bible-highlight-colors';
+import { parseWebViewLayoutGeneration, parseWebViewParagraphYs } from '@/lib/reader-scroll-anchor';
 
 /** The document is the source of truth: every mutation reports the diff of
  *  live highlights before and after, and the store reconciles from it. */
@@ -50,6 +51,9 @@ interface DevotionalWebViewProps {
   existingHighlights?: Highlight[];
   targetHighlight?: Highlight | null;
   onTargetHighlightLocated?: (y: number) => void;
+  onContentLocations?: (paragraphYs: number[], layoutGeneration: number) => void;
+  onLayoutGenerationCommitted?: (layoutGeneration: number) => void;
+  layoutGeneration?: number;
   targetBookmark?: Bookmark | null;
   onTargetBookmarkLocated?: (y: number) => void;
   onScriptureTap?: (reference: string) => void;
@@ -59,7 +63,6 @@ interface DevotionalWebViewProps {
   dayTitle?: string;
 }
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CONTENT_PADDING = 24;
 
 // System Dynamic Type is layered on top of the reader's own Aa font-size
@@ -146,16 +149,51 @@ function buildThemeVarsScript(themeVars: ThemeVars): string {
       var root = document.documentElement;
       var vars = ${themeVars.json};
       Object.keys(vars).forEach(function(name) { root.style.setProperty(name, vars[name]); });
+      function collectParagraphYs() {
+        var nodes = document.querySelectorAll('p, blockquote, .context-box, .word-study-box');
+        var ys = [];
+        for (var i = 0; i < nodes.length; i++) {
+          ys.push(Math.round(nodes[i].offsetTop));
+        }
+        return ys;
+      }
       function reportHeight() {
         if (!window.ReactNativeWebView || !document.body) return;
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'HEIGHT_CHANGE',
           height: document.body.scrollHeight,
-          docId: root.getAttribute('data-doc-id')
+          docId: root.getAttribute('data-doc-id'),
+          paragraphs: collectParagraphYs(),
+          layoutGeneration: window.__unfoldLayoutGeneration || 0
         }));
       }
       reportHeight();
       setTimeout(reportHeight, 300);
+    })();
+    true;
+  `;
+}
+
+function buildLayoutGenerationScript(generation: number): string {
+  return `
+    (function() {
+      window.__unfoldLayoutGeneration = ${generation};
+      function collectParagraphYs() {
+        var nodes = document.querySelectorAll('p, blockquote, .context-box, .word-study-box');
+        var ys = [];
+        for (var i = 0; i < nodes.length; i++) {
+          ys.push(Math.round(nodes[i].offsetTop));
+        }
+        return ys;
+      }
+      if (!window.ReactNativeWebView || !document.body) return;
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'HEIGHT_CHANGE',
+        height: document.body.scrollHeight,
+        docId: document.documentElement.getAttribute('data-doc-id'),
+        paragraphs: collectParagraphYs(),
+        layoutGeneration: window.__unfoldLayoutGeneration
+      }));
     })();
     true;
   `;
@@ -178,6 +216,9 @@ export function DevotionalWebView({
   existingHighlights = NO_HIGHLIGHTS,
   targetHighlight,
   onTargetHighlightLocated,
+  onContentLocations,
+  onLayoutGenerationCommitted,
+  layoutGeneration = 0,
   targetBookmark,
   onTargetBookmarkLocated,
   onScriptureTap,
@@ -190,7 +231,13 @@ export function DevotionalWebView({
   const readingFont = useReadingFont();
   const webViewRef = useRef<WebView>(null);
 
-  const [webViewHeight, setWebViewHeight] = useState(200);
+  const [heightCommit, setHeightCommit] = useState({ height: 200, generation: 0 });
+  const webViewHeight = heightCommit.height;
+
+  useLayoutEffect(() => {
+    if (heightCommit.generation !== layoutGeneration || layoutGeneration <= 0) return;
+    onLayoutGenerationCommitted?.(layoutGeneration);
+  }, [heightCommit, layoutGeneration, onLayoutGenerationCommitted]);
 
   // System Dynamic Type setting, layered on top of the reader's own Aa
   // choice. Dimensions' 'change' event also fires when the OS text-size
@@ -339,6 +386,14 @@ export function DevotionalWebView({
         setTimeout(locateTargetBookmark, 1000);
       }
       
+      function collectParagraphYs() {
+        var nodes = document.querySelectorAll('p, blockquote, .context-box, .word-study-box');
+        var ys = [];
+        for (var i = 0; i < nodes.length; i++) {
+          ys.push(Math.round(nodes[i].offsetTop));
+        }
+        return ys;
+      }
       function reportHeight() {
         const height = document.body.scrollHeight;
         window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -346,7 +401,9 @@ export function DevotionalWebView({
           height: height,
           // Lets the RN side attribute this report to the document that sent
           // it (its first report is the "ready for injectJavaScript" signal).
-          docId: document.documentElement.getAttribute('data-doc-id')
+          docId: document.documentElement.getAttribute('data-doc-id'),
+          paragraphs: collectParagraphYs(),
+          layoutGeneration: window.__unfoldLayoutGeneration || 0
         }));
       }
 
@@ -527,6 +584,13 @@ export function DevotionalWebView({
       // Backup height reports
       setTimeout(reportHeight, 500);
       setTimeout(reportHeight, 1000);
+
+      // Reflow the existing document when the iPad window changes size.
+      let resizeFrame = 0;
+      window.addEventListener('resize', function() {
+        cancelAnimationFrame(resizeFrame);
+        resizeFrame = requestAnimationFrame(reportHeight);
+      });
       
       // Selection handling
       let selectedText = '';
@@ -1801,6 +1865,13 @@ export function DevotionalWebView({
     pushThemeVars(themeVars);
   }, [themeVars, pushThemeVars]);
 
+  useEffect(() => {
+    if (layoutGeneration <= 0) return;
+    const live = liveDocRef.current;
+    if (!live || live.token !== liveDocToken) return;
+    webViewRef.current?.injectJavaScript(buildLayoutGenerationScript(layoutGeneration));
+  }, [layoutGeneration, liveDocToken]);
+
   const handleCustomMenuSelection = useCallback((event: { nativeEvent: { key: string; selectedText: string } }) => {
     if (event.nativeEvent.key === 'copy') {
       const text = (event.nativeEvent.selectedText || '').trim();
@@ -1861,13 +1932,32 @@ export function DevotionalWebView({
         // A report still in flight from the previous document (same-key
         // source swap) must not size the new one, even for a frame.
         if (data.docId !== webViewDocument.docId) return;
-        setWebViewHeight(Math.max(data.height, 200));
+        const reportGeneration = parseWebViewLayoutGeneration(data.layoutGeneration);
+        const isFirstDocumentReport = liveDocRef.current?.token !== liveDocToken;
+        if (
+          reportGeneration === layoutGeneration
+          || (reportGeneration === 0 && isFirstDocumentReport)
+        ) {
+          setHeightCommit({
+            height: Math.max(data.height, 200),
+            generation: reportGeneration,
+          });
+        }
+        if (reportGeneration === layoutGeneration) {
+          onContentLocations?.(
+            parseWebViewParagraphYs(data.paragraphs),
+            reportGeneration,
+          );
+        }
         // First report from the current document ⇒ it is ready for
         // injectJavaScript. It rendered with the baked values; catch it up
         // with anything that changed while it was loading (usually nothing).
-        if (liveDocRef.current?.token !== liveDocToken) {
+        if (isFirstDocumentReport) {
           liveDocRef.current = { token: liveDocToken, appliedJson: webViewDocument.bakedThemeJson };
           pushThemeVars(themeVars);
+          if (layoutGeneration > 0) {
+            webViewRef.current?.injectJavaScript(buildLayoutGenerationScript(layoutGeneration));
+          }
         }
       } else if (data.type === 'TARGET_HIGHLIGHT_LOCATED' && onTargetHighlightLocated) {
         onTargetHighlightLocated(Math.max(0, Number(data.y) || 0));
@@ -1928,6 +2018,7 @@ export function DevotionalWebView({
         testID={webViewTargetKey}
         ref={webViewRef}
         source={webViewDocument.source}
+        containerStyle={{ height: webViewHeight, flex: 0 }}
         style={[styles.webview, { height: webViewHeight }]}
         scrollEnabled={false}
         showsVerticalScrollIndicator={false}
@@ -1954,11 +2045,11 @@ function escapeHtml(text: string): string {
 
 const styles = StyleSheet.create({
   container: {
-    width: SCREEN_WIDTH,
-    marginLeft: -CONTENT_PADDING,
+    // Expand around the HTML body's padding while following the parent measure.
+    marginHorizontal: -CONTENT_PADDING,
   },
   webview: {
-    width: SCREEN_WIDTH,
+    width: '100%',
     backgroundColor: 'transparent',
   },
 });

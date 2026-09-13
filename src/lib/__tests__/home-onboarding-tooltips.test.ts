@@ -16,6 +16,14 @@ describe('home onboarding tooltips', () => {
     'utf-8',
   );
 
+  it('uses the existing split gate and one Today tree for wide windows', () => {
+    expect(todaySource).toContain('todayUsesSplit = adaptiveLayout.usesSplit');
+    expect(todaySource).toContain('todayUsesSplit ? adaptiveLayout.splitMaxWidth : adaptiveLayout.clusterMaxWidth');
+    expect(todaySource).toContain('styles.splitHeroColumn');
+    expect(todaySource).toContain('styles.splitTrailColumn');
+    expect(todaySource).toContain('relaxHeroMinHeight={todayUsesSplit}');
+  });
+
   it('uses current Today concepts instead of stale per-tab and streak copy', () => {
     expect(tooltipSource).toContain("title: 'Today’s thread'");
     expect(tooltipSource).toContain("title: 'Companion check-in'");
@@ -30,8 +38,9 @@ describe('home onboarding tooltips', () => {
     expect(tooltipSource).toContain("type TargetKey = 'reading' | 'context' | 'rhythm' | 'tabs'");
     expect(todaySource).toContain('onLayout={handleContextLayout}');
     expect(todaySource).toContain('onLayout={handleRhythmLayout}');
-    expect(todaySource).toContain('context: rect');
-    expect(todaySource).toContain('rhythm: rect');
+    expect(todaySource).toContain('measureInWindow');
+    expect(todaySource).toContain("key === 'reading' ? Spacing['5'] : 0");
+    expect(todaySource).toContain("horizontalInset = Spacing['6']");
   });
 
   it('keeps each coachmark visually tuned with one continuous tooltip outline', () => {

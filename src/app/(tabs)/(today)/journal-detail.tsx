@@ -17,6 +17,8 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Duration, Ease } from '@/constants/animations';
 import { Spacing } from '@/constants/spacing';
+import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
+import { adaptiveFrameStyle, PRIMARY_SAFE_AREA_EDGES } from '@/lib/adaptive-layout';
 import { useTheme } from '@/lib/theme';
 import { useGuardedBack } from '@/hooks/useGuardedBack';
 import { useUnfoldStore } from '@/lib/store';
@@ -71,6 +73,9 @@ export default function JournalDetailScreen() {
   const guardedBack = useGuardedBack();
   const { colors } = useTheme();
   const reducedMotion = useReducedMotion();
+  const adaptiveLayout = useAdaptiveLayout();
+  const clusterFrameStyle = adaptiveFrameStyle(adaptiveLayout.clusterMaxWidth);
+  const readableFrameStyle = adaptiveFrameStyle(adaptiveLayout.readableMaxWidth);
   const params = useLocalSearchParams<{ entryId: string }>();
 
   const entryId = params.entryId ?? '';
@@ -92,7 +97,8 @@ export default function JournalDetailScreen() {
   if (!entry) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
-        <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <SafeAreaView style={{ flex: 1 }} edges={PRIMARY_SAFE_AREA_EDGES}>
+          <View style={[clusterFrameStyle, { flex: 1 }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing['4'], paddingVertical: Spacing['3'] }}>
             <TouchableOpacity
               onPress={handleBack}
@@ -112,6 +118,7 @@ export default function JournalDetailScreen() {
             <Text style={{ fontFamily: FontFamily.body, fontSize: FontSize.sm, color: colors.textHint, textAlign: 'center' }}>
               This entry may have been removed.
             </Text>
+          </View>
           </View>
         </SafeAreaView>
       </View>
@@ -133,8 +140,9 @@ export default function JournalDetailScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+      <SafeAreaView style={{ flex: 1 }} edges={PRIMARY_SAFE_AREA_EDGES}>
         {/* Header */}
+        <View style={clusterFrameStyle}>
         <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing['4'], paddingVertical: Spacing['3'] }}>
           <TouchableOpacity
             onPress={handleBack}
@@ -180,11 +188,13 @@ export default function JournalDetailScreen() {
             </View>
           )}
         </View>
+        </View>
 
         <ScrollView
           contentContainerStyle={{ paddingHorizontal: Spacing['6'], paddingTop: Spacing['6'], paddingBottom: 40 }}
           showsVerticalScrollIndicator={false}
         >
+          <View style={readableFrameStyle}>
           <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}>
             {/* Meta info */}
             <View style={{ marginBottom: Spacing['6'] }}>
@@ -404,6 +414,7 @@ export default function JournalDetailScreen() {
               </View>
             )}
           </Animated.View>
+          </View>
         </ScrollView>
       </SafeAreaView>
     </View>

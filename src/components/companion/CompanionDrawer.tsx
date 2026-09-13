@@ -16,13 +16,13 @@ import {
   TextInput,
   TouchableOpacity,
   FlatList,
-  Dimensions,
   useWindowDimensions,
   Platform,
   StyleSheet,
   LayoutAnimation,
   Keyboard,
 } from 'react-native';
+import { companionDrawerWidth } from '@/lib/adaptive-layout';
 import * as Haptics from 'expo-haptics';
 import { Sheet } from '@/components/ui/Sheet';
 import Animated, {
@@ -57,9 +57,8 @@ import {
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
-const SCREEN_WIDTH = Dimensions.get('window').width;
 const TAB_BAR_CONTENT_HEIGHT = 56;
-export const DRAWER_WIDTH = Math.min(SCREEN_WIDTH * 0.80, 320);
+export const DRAWER_WIDTH = 320;
 
 const SPRING_CONFIG = { duration: 300, dampingRatio: 1 } as const; // Critically damped — no bounce
 const EDGE_WIDTH = 36;
@@ -94,6 +93,8 @@ export function useDrawerGesture(
   onOpen: () => void,
   onClose: () => void,
 ) {
+  const { width: windowWidth } = useWindowDimensions();
+  const drawerWidth = companionDrawerWidth(windowWidth);
   const startX = useSharedValue(0);
   const isEdgeSwipe = useSharedValue(false);
 
@@ -108,7 +109,7 @@ export function useDrawerGesture(
     })
     .onUpdate((e) => {
       if (!isEdgeSwipe.value) return;
-      const newX = Math.max(-DRAWER_WIDTH, Math.min(0, startX.value + e.translationX));
+      const newX = Math.max(-drawerWidth, Math.min(0, startX.value + e.translationX));
       translateX.value = newX;
     })
     .onEnd((e) => {
@@ -116,7 +117,7 @@ export function useDrawerGesture(
       const distance = Math.abs(e.translationX);
 
       if (distance < MIN_SWIPE_DISTANCE) {
-        translateX.value = withSpring(isOpen ? 0 : -DRAWER_WIDTH, SPRING_CONFIG);
+        translateX.value = withSpring(isOpen ? 0 : -drawerWidth, SPRING_CONFIG);
         return;
       }
 
@@ -125,20 +126,20 @@ export function useDrawerGesture(
           translateX.value = withSpring(0, SPRING_CONFIG);
           runOnJS(onOpen)();
         } else {
-          translateX.value = withSpring(-DRAWER_WIDTH, SPRING_CONFIG);
+          translateX.value = withSpring(-drawerWidth, SPRING_CONFIG);
           runOnJS(onClose)();
         }
         return;
       }
 
       const projected = translateX.value + VELOCITY_PROJECTION * e.velocityX;
-      const threshold = -DRAWER_WIDTH * 0.5;
+      const threshold = -drawerWidth * 0.5;
 
       if (projected > threshold) {
         translateX.value = withSpring(0, SPRING_CONFIG);
         runOnJS(onOpen)();
       } else {
-        translateX.value = withSpring(-DRAWER_WIDTH, SPRING_CONFIG);
+        translateX.value = withSpring(-drawerWidth, SPRING_CONFIG);
         runOnJS(onClose)();
       }
     });
@@ -402,7 +403,8 @@ export const CompanionDrawer = memo(function CompanionDrawer({
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
-  const { height: windowHeight } = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const drawerWidth = companionDrawerWidth(windowWidth);
   const [keyboardInset, setKeyboardInset] = useState(() => Keyboard.metrics()?.height ?? 0);
 
   useEffect(() => {
@@ -573,7 +575,7 @@ export const CompanionDrawer = memo(function CompanionDrawer({
   // the prop and can leave the scrim touch-active when the drawer is closed
   // (spring animation doesn't settle to exact target value).
   const scrimStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(translateX.value, [-DRAWER_WIDTH, 0], [0, 0.5]),
+    opacity: interpolate(translateX.value, [-drawerWidth, 0], [0, 0.5]),
   }));
 
   // Drawer animated style — slides in from left
@@ -631,7 +633,7 @@ export const CompanionDrawer = memo(function CompanionDrawer({
         style={[
           styles.drawer,
           {
-            width: DRAWER_WIDTH,
+            width: drawerWidth,
             backgroundColor: colors.background,
             paddingTop: insets.top,
             bottom: Math.max(keyboardInset, TAB_BAR_CONTENT_HEIGHT + insets.bottom),

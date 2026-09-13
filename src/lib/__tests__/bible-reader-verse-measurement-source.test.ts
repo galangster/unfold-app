@@ -49,10 +49,15 @@ describe('Bible reader verse measurement source contract', () => {
     expect(readerSource).toContain('onLayout={handleVerseLayout}');
   });
 
-  it('scopes row readiness and delayed scrolls to the active chapter translation', () => {
+  it('scopes row readiness and delayed scrolls to the active content and layout generation', () => {
     expect(readerSource).toContain('contentKey={readerContentKey}');
-    expect(readerSource).toContain('if (contentKey !== activeContentKeyRef.current) return;');
-    expect(readerSource).toContain('if (request.contentKey !== activeContentKeyRef.current) return;');
+    expect(readerSource).toContain('layoutKey={readerLayoutKey}');
+    expect(readerSource).toContain('reportContentKey: contentKey');
+    expect(readerSource).toContain('reportLayoutKey: layoutKey');
+    expect(readerSource).toContain('reportContentKey: request.contentKey');
+    expect(readerSource).toContain('reportLayoutKey: request.layoutKey');
+    expect(readerSource).toContain('activeContentKey: activeContentKeyRef.current');
+    expect(readerSource).toContain('activeLayoutKey: activeLayoutKeyRef.current');
     expect(readerSource).toContain('const readerContentKey = `${chapterKey}:${bibleReaderSettings.translation}`;');
   });
 

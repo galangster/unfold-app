@@ -3,7 +3,7 @@
  * Pi-style single continuous conversation.
  * Phase 2: rich text with verse pills, blockquotes, scripture tap sheet.
  */
-import React, { useCallback, useRef, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useMemo, useState } from 'react';
 import {
   FlatList,
   ListRenderItemInfo,
@@ -17,6 +17,8 @@ import {
 } from 'react-native';
 import { GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
+import { adaptiveFrameStyle, adaptiveSafeGutterStyle, companionDrawerClosedTranslate, companionDrawerWidth } from '@/lib/adaptive-layout';
 import { useFocusEffect, useIsFocused } from 'expo-router';
 import {
   CrownIcon,
@@ -47,7 +49,6 @@ import { COMPANION_MESSAGE_MAX_CHARS, useCompanionChat, type SendOutcome } from 
 import { selectActiveMessages, useCompanionChatStore, type CompanionMessage } from '@/lib/companion-chat-store';
 import {
   CompanionDrawer,
-  DRAWER_WIDTH,
   useDrawerGesture,
 } from '@/components/companion/CompanionDrawer';
 import { CompanionEmptyState } from '@/components/companion/CompanionEmptyState';
@@ -162,7 +163,10 @@ export default function CompanionScreen() {
   const { colors } = useTheme();
   const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
-  const { fontScale } = useWindowDimensions();
+  const { width: windowWidth, fontScale } = useWindowDimensions();
+  const adaptiveLayout = useAdaptiveLayout();
+  const askFrameStyle = adaptiveFrameStyle(adaptiveLayout.readableMaxWidth);
+  const drawerWidth = companionDrawerWidth(windowWidth);
   const listRef = useRef<any>(null);
 
   // Full tab bar height including safe area (home indicator)
@@ -229,7 +233,13 @@ export default function CompanionScreen() {
 
   // Drawer state
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const drawerTranslateX = useSharedValue(-DRAWER_WIDTH);
+  const drawerTranslateX = useSharedValue(companionDrawerClosedTranslate(drawerWidth));
+
+  useEffect(() => {
+    if (!drawerOpen) {
+      drawerTranslateX.value = companionDrawerClosedTranslate(drawerWidth);
+    }
+  }, [drawerOpen, drawerWidth, drawerTranslateX]);
 
   const handleDrawerOpen = useCallback(() => {
     Keyboard.dismiss();
@@ -242,9 +252,9 @@ export default function CompanionScreen() {
   const handleDrawerClose = useCallback(() => {
     setDrawerOpen(false);
     drawerTranslateX.value = reducedMotion
-      ? -DRAWER_WIDTH
-      : withSpring(-DRAWER_WIDTH, { duration: 300, dampingRatio: 1 });
-  }, [drawerTranslateX, reducedMotion]);
+      ? companionDrawerClosedTranslate(drawerWidth)
+      : withSpring(companionDrawerClosedTranslate(drawerWidth), { duration: 300, dampingRatio: 1 });
+  }, [drawerTranslateX, drawerWidth, reducedMotion]);
 
   // P0-5: leaving the current conversation (new chat or drawer switch) stops
   // its in-flight stream — a reply to a conversation the user abandoned
@@ -453,7 +463,8 @@ export default function CompanionScreen() {
         style={{
           paddingTop: insets.top + 4,
           paddingBottom: 8,
-          paddingHorizontal: Spacing['4'],
+          paddingLeft: Spacing['4'] + insets.left,
+          paddingRight: Spacing['4'] + insets.right,
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -511,11 +522,13 @@ export default function CompanionScreen() {
 
       {/* Each scroll container owns keyboard dismissal and touch handling. */}
       {isEmpty ? (
-        <View style={{ flex: 1, overflow: 'hidden' }}>
+        <View style={[{ flex: 1, overflow: 'hidden' }, adaptiveSafeGutterStyle(insets.left, insets.right)]}>
+          <View style={[{ flex: 1 }, askFrameStyle]}>
           <CompanionEmptyState onSelectStarter={handleSend} todayTheme={todayTheme} />
+          </View>
         </View>
       ) : (
-        <View style={{ flex: 1 }}>
+        <View style={[{ flex: 1 }, adaptiveSafeGutterStyle(insets.left, insets.right)]}>
           <FlatList
             ref={listRef}
             data={invertedMessages}
@@ -531,6 +544,7 @@ export default function CompanionScreen() {
             contentContainerStyle={{
               paddingBottom: Spacing['2'],
               paddingTop: Spacing['2'],
+              ...askFrameStyle,
             }}
           />
 
@@ -544,7 +558,8 @@ export default function CompanionScreen() {
           never changes while a conversation is open, so the message list
           doesn't lurch when either child appears or disappears. */}
       {!isEmpty && (
-        <View style={{ height: statusSlotHeight, justifyContent: 'center' }}>
+        <View style={[{ height: statusSlotHeight, justifyContent: 'center' }, adaptiveSafeGutterStyle(insets.left, insets.right)]}>
+        <View style={askFrameStyle}>
           {showTyping ? (
             <View style={{ paddingHorizontal: Spacing['4'] }}>
               <TypingIndicator />
@@ -557,6 +572,7 @@ export default function CompanionScreen() {
             />
           ) : null}
         </View>
+        </View>
       )}
 
       {/* Error banner — announced as an alert, dismissible (P1) */}
@@ -566,6 +582,9 @@ export default function CompanionScreen() {
           style={{
             flexDirection: 'row',
             alignItems: 'center',
+            alignSelf: 'center',
+            width: '100%',
+            maxWidth: Math.max(0, adaptiveLayout.readableMaxWidth - Spacing['4'] * 2),
             marginHorizontal: Spacing['4'],
             marginBottom: Spacing['2'],
             backgroundColor: alpha(colors.error, 0.10),
@@ -668,11 +687,15 @@ export default function CompanionScreen() {
       )}
 
       {/* Input bar */}
+      <View style={adaptiveSafeGutterStyle(insets.left, insets.right)}>
+      <View style={askFrameStyle}>
       <CompanionInput
         onSend={handleSend}
         onStop={stopGeneration}
         isStreaming={isStreaming}
       />
+      </View>
+      </View>
 
       {/* Bottom spacer: clears the absolutely-positioned custom tab bar.
           keyboardVerticalOffset negates this when the keyboard opens,

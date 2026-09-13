@@ -15,6 +15,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
+import { adaptiveFrameStyle } from '@/lib/adaptive-layout';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon } from '@/components/icons';
@@ -185,6 +187,8 @@ export default function WelcomeScreen() {
   const focusedPath = segments.length ? `/${segments.join('/')}` : '/';
   const user = useUnfoldStore((s) => s.user);
   const { colors } = useTheme();
+  const adaptiveLayout = useAdaptiveLayout();
+  const welcomeFrameStyle = adaptiveFrameStyle(adaptiveLayout.clusterMaxWidth);
   // ONB-RESUME-1: someone mid-onboarding has a null user until the very last
   // step, which used to land them right back on this first-run welcome — name
   // typed again, answers gone. A saved draft means they are returning, not
@@ -393,7 +397,7 @@ export default function WelcomeScreen() {
       {/* Ember field — shared vocabulary; EmberSystem owns the bottom glow */}
       <EmberSystem variant="ambient" direction="both" count={20} />
 
-      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom', 'left', 'right']}>
         {/* Features header — Skip + back arrow (only in features phase) */}
         {phase === 'features' && (
           <Animated.View
@@ -418,7 +422,7 @@ export default function WelcomeScreen() {
           </Animated.View>
         )}
 
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['8'], paddingVertical: Spacing['6'] }}>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={[{ flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['8'], paddingVertical: Spacing['6'] }, welcomeFrameStyle]}>
           {/* Welcome + cutscene: icon + text (unmounts entirely in features phase) */}
           {phase !== 'features' && (
             <>
@@ -521,7 +525,7 @@ export default function WelcomeScreen() {
         </ScrollView>
 
         {/* Bottom section — buttons + dots */}
-        <View style={{ paddingHorizontal: Spacing['6'], paddingBottom: Spacing['4'] }}>
+        <View style={[{ paddingHorizontal: Spacing['6'], paddingBottom: Spacing['4'] }, welcomeFrameStyle]}>
           {/* Welcome button */}
           {phase === 'welcome' && (
             <Animated.View style={buttonStyle}>

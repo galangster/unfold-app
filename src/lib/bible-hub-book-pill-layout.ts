@@ -19,6 +19,7 @@
  *   its pill wraps instead of ellipsizing.
  */
 
+export const BIBLE_HUB_FOUR_COLUMN_MIN_WIDTH = 700;
 export const BIBLE_HUB_THREE_COLUMN_MIN_WIDTH = 375;
 export const BIBLE_HUB_TWO_COLUMN_MIN_WIDTH = 320;
 export const BIBLE_HUB_ENLARGED_FONT_SCALE = 1.18;
@@ -27,7 +28,7 @@ export const BIBLE_HUB_SINGLE_COLUMN_FONT_SCALE = 2.5;
 export function bibleHubBookPillColumnCount(
   windowWidth: number,
   fontScale: number,
-): 1 | 2 | 3 {
+): 1 | 2 | 3 | 4 {
   const width = Number.isFinite(windowWidth) && windowWidth > 0 ? windowWidth : 0;
   const scale = Number.isFinite(fontScale) && fontScale > 0 ? fontScale : 1;
 
@@ -41,10 +42,13 @@ export function bibleHubBookPillColumnCount(
   if (scale >= BIBLE_HUB_ENLARGED_FONT_SCALE || width < BIBLE_HUB_THREE_COLUMN_MIN_WIDTH) {
     return 2;
   }
+  if (width >= BIBLE_HUB_FOUR_COLUMN_MIN_WIDTH) {
+    return 4;
+  }
   return 3;
 }
 
-export function bibleHubBookPillWidthStyle(columns: 1 | 2 | 3): {
+export function bibleHubBookPillWidthStyle(columns: 1 | 2 | 3 | 4): {
   minWidth: `${number}%`;
   flexGrow: number;
   flexBasis: `${number}%`;
@@ -55,6 +59,9 @@ export function bibleHubBookPillWidthStyle(columns: 1 | 2 | 3): {
   }
   if (columns === 2) {
     return { minWidth: '46%', flexGrow: 1, flexBasis: '46%', maxWidth: '100%' };
+  }
+  if (columns === 4) {
+    return { minWidth: '22%', flexGrow: 1, flexBasis: '22%', maxWidth: '24.5%' };
   }
   return { minWidth: '30%', flexGrow: 1, flexBasis: '30%', maxWidth: '48%' };
 }

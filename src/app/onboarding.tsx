@@ -19,6 +19,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { ADAPTIVE_CLUSTER_MEASURE, adaptiveFrameStyle } from '@/lib/adaptive-layout';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image as ExpoImage } from 'expo-image';
 import Animated, {
@@ -4232,7 +4233,7 @@ export default function OnboardingScreen() {
   if (isPreparingDiscovery) {
     return (
       <View style={{ flex: 1, backgroundColor: 'transparent', justifyContent: 'center', alignItems: 'center' }}>
-        <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }} edges={['top']}>
+        <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }} edges={['top', 'left', 'right']}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing['2'], marginBottom: Spacing['4'] }}>
             <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted }} />
             <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted, opacity: 0.6 }} />
@@ -4260,7 +4261,7 @@ export default function OnboardingScreen() {
   if (showWelcomeBack) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
-        <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
           <WelcomeBackStep
             name={data.name}
             hasDevotional={!!onboardingDevotionalDay}
@@ -4300,8 +4301,8 @@ export default function OnboardingScreen() {
           />
         </Animated.View>
       )}
-      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        <View style={{ flex: 1 }}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
+        <View style={[{ flex: 1 }, adaptiveFrameStyle(ADAPTIVE_CLUSTER_MEASURE)]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, minHeight: 52 }}>
             {currentStepIndex > 0 ? (
               <TouchableOpacity activeOpacity={1}

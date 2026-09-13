@@ -22,6 +22,8 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
+import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
+import { adaptiveFrameStyle } from '@/lib/adaptive-layout';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, BibleHighlight, Devotional, Highlight } from '@/lib/store';
 import { BookmarkRow, SavedRow } from '@/components/saved/SavedRows';
@@ -62,6 +64,8 @@ export default function MyContentScreen({ hostTab }: { hostTab?: TabGroup } = {}
   const { colors, isDark } = useTheme();
   const reducedMotion = useReducedMotion();
   const { handleBack } = useCrossTabBack();
+  const adaptiveLayout = useAdaptiveLayout();
+  const clusterFrameStyle = adaptiveFrameStyle(adaptiveLayout.clusterMaxWidth);
   const params = useLocalSearchParams<{ tab?: string; source?: string; type?: string; from?: string }>();
   const isHomeEntry = params.from === 'home';
 
@@ -356,7 +360,8 @@ export default function MyContentScreen({ hostTab }: { hostTab?: TabGroup } = {}
     );
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'bottom']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'bottom', 'left', 'right']}>
+      <View style={[clusterFrameStyle, { flex: 1 }]}>
       {/* Header */}
       <View
         style={{
@@ -540,6 +545,7 @@ export default function MyContentScreen({ hostTab }: { hostTab?: TabGroup } = {}
           showsVerticalScrollIndicator={false}
         />
       </Animated.View>
+      </View>
     </SafeAreaView>
   );
 }
