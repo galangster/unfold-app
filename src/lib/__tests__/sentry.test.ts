@@ -55,6 +55,13 @@ const mockConstants = {
 
 jest.mock('expo-constants', () => ({ __esModule: true, default: mockConstants }));
 
+let mockIsDevice = true;
+let mockDeviceLoadError: Error | null = null;
+jest.mock('expo-device', () => {
+  if (mockDeviceLoadError !== null) throw mockDeviceLoadError;
+  return { get isDevice() { return mockIsDevice; } };
+});
+
 type SentryLib = typeof import('../sentry');
 type InitOptions = {
   beforeSend: (event: Record<string, unknown>) => Record<string, unknown> | null;
@@ -141,6 +148,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  mockIsDevice = true;
+  mockDeviceLoadError = null;
   mockConstants.expoConfig.extra.buildProfile = 'production';
   if (originalDsn === undefined) delete process.env.EXPO_PUBLIC_SENTRY_DSN;
   else process.env.EXPO_PUBLIC_SENTRY_DSN = originalDsn;
@@ -197,6 +206,53 @@ describe('under Jest', () => {
 });
 
 describe('initSentry', () => {
+  it('keeps startup safe when the device module cannot load', () => {
+    mockDeviceLoadError = new Error('Cannot find native module ExpoDevice');
+
+    expect(bootEnabled).not.toThrow();
+    expect(mockInit).not.toHaveBeenCalled();
+  });
+
+  it.each(['production', 'production-hotfix', 'qa-testflight', 'preview', ''])(
+    'labels an iOS Release simulator as simulator for profile %s',
+    (profile) => {
+      mockConstants.expoConfig.extra.buildProfile = profile;
+      mockIsDevice = false;
+      const options = bootEnabledAs(false, 'ios');
+
+      expect(options.environment).toBe('simulator');
+      expect(options.autoInitializeNativeSdk).toBe(false);
+      expect(options).not.toHaveProperty('replaysOnErrorSampleRate');
+      expect(mockConstants.expoConfig.extra.buildProfile).toBe(profile);
+    },
+  );
+
+  it.each(['production', 'production-hotfix', 'qa-testflight', 'preview'])(
+    'preserves the physical iOS device environment for profile %s',
+    (profile) => {
+      mockConstants.expoConfig.extra.buildProfile = profile;
+      expect(bootEnabledAs(false, 'ios').environment).toBe(profile);
+    },
+  );
+
+  it('keeps the exact replay pilot enabled on a simulator', () => {
+    mockConstants.expoConfig.extra.buildProfile = 'qa-replay-testflight';
+    mockIsDevice = false;
+    const options = bootEnabledAs(false, 'ios');
+
+    expect(options.environment).toBe('simulator');
+    expect(options.replaysSessionSampleRate).toBe(0);
+    expect(options.replaysOnErrorSampleRate).toBe(1);
+    expect(mockMobileReplayIntegration).toHaveBeenCalledWith(expect.objectContaining({
+      maskAllText: true, maskAllImages: true, maskAllVectors: true, networkCaptureBodies: false,
+    }));
+  });
+
+  it('does not label a production web runtime as an iOS simulator', () => {
+    mockIsDevice = false;
+    expect(bootEnabledAs(false, 'web').environment).toBe('production');
+  });
+
   it('initialises once with the privacy-critical options and build provenance', () => {
     const sentry = bootEnabled();
     sentry.initSentry();

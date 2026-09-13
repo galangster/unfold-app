@@ -594,9 +594,15 @@ function loadSentry(): SentryModule | null {
   }
 }
 
-/** The EAS build profile that produced this binary, reused from build-profile.ts. */
-function resolveEnvironment(): string {
-  return getBuildProfile() ?? (__DEV__ ? 'development' : 'unknown');
+/** Simulator telemetry must stay separate from physical production devices. */
+function resolveEnvironment(buildProfile: string): string {
+  if (Platform.OS === 'ios') {
+    // Keep native modules lazy, like the SDK itself, when no DSN is present.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { isDevice } = require('expo-device') as typeof import('expo-device');
+    if (isDevice === false) return 'simulator';
+  }
+  return buildProfile;
 }
 
 /** Pure: performance spans are sampled in production builds only. */
@@ -676,10 +682,11 @@ export function initSentry(): void {
   if (sentry === null) return;
 
   initialized = true;
-  const environment = resolveEnvironment();
+  const buildProfile = getBuildProfile() ?? (__DEV__ ? 'development' : 'unknown');
   const backendOnly = originPattern(PRIMARY_BACKEND_URL);
 
   try {
+    const environment = resolveEnvironment(buildProfile);
     // Route changes become `navigation` spans and breadcrumbs, and the native
     // app-start measurement attaches to the first of them. The container is
     // handed over from the root layout via `registerNavigationContainer`.
@@ -716,7 +723,7 @@ export function initSentry(): void {
       // `integrations/default.js` installs `mobileReplayIntegration()` when
       // either key is `typeof === 'number'`, which `0` satisfies. Production
       // and unknown profiles must keep both keys absent.
-      ...(isReplayPilotBuildProfile(environment)
+      ...(isReplayPilotBuildProfile(buildProfile)
         ? { replaysSessionSampleRate: 0, replaysOnErrorSampleRate: 1 }
         : {}),
       enableUserInteractionTracing: false,
@@ -737,11 +744,11 @@ export function initSentry(): void {
       // Transactions bypass `beforeSend`, so `beforeSendTransaction` below
       // rebuilds them from the same allowlists.
       enableAutoPerformanceTracing: true,
-      tracesSampleRate: resolveTracesSampleRate(environment),
+      tracesSampleRate: resolveTracesSampleRate(buildProfile),
       integrations: [
         navigationIntegration,
         sentry.httpClientIntegration({ failedRequestTargets: [backendOnly] }),
-        ...(isReplayPilotBuildProfile(environment)
+        ...(isReplayPilotBuildProfile(buildProfile)
           ? [sentry.mobileReplayIntegration({
               ...MOBILE_REPLAY_MASKING,
               beforeErrorSampling: (event) => shouldCaptureReplayForEvent(event),

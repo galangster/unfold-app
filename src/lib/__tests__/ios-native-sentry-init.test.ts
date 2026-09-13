@@ -158,6 +158,15 @@ describe('iOS native-first Sentry init (regression: launch crash with no JS bund
     expect(crashReporting).toContain('stampedProfile.contains("$")');
   });
 
+  it('classifies Release simulator telemetry without changing the native profile gates', () => {
+    expect(crashReporting).toMatch(
+      /#if targetEnvironment\(simulator\)\s+let environment = "simulator"\s+#else\s+let environment = buildProfile\s+#endif/,
+    );
+    expect(crashReporting).toContain('let buildProfile = (stampedProfile.isEmpty || stampedProfile.contains("$"))');
+    expect(crashReporting).toContain('let enableReplayOnError = buildProfile == "qa-replay-testflight"');
+    expect(crashReporting).not.toContain('environment == "qa-replay-testflight"');
+  });
+
   it('stamps the profile with a build hook, because Info.plist cannot expand it', () => {
     // The checked-in value is the literal $(EAS_BUILD_PROFILE). Xcode's
     // INFOPLIST_EXPAND_BUILD_SETTINGS substitutes BUILD SETTINGS, and
@@ -184,7 +193,7 @@ describe('iOS native-first Sentry init (regression: launch crash with no JS bund
     expectOptionSetOnce('sessionReplay.maskAllText', 'true');
     expectOptionSetOnce('sessionReplay.maskAllImages', 'true');
     expectOptionSetOnce('sessionReplay.networkCaptureBodies', 'false');
-    expect(crashReporting).toContain('environment == "qa-replay-testflight"');
+    expect(crashReporting).toContain('buildProfile == "qa-replay-testflight"');
     expect(crashReporting).toContain('["RNSVGSvgView", "RCTImageView", "RCTImageComponentView"]');
     expect(crashReporting).toContain('NSClassFromString(className)');
     expect(crashReporting).toContain('maskedViewClasses.append(viewClass)');
