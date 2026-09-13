@@ -1,9 +1,9 @@
 import { useCallback, memo } from 'react';
 import { useIsFocused } from 'expo-router';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeOut, runOnJS, useReducedMotion } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut, runOnJS } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import { FontFamily, FontSize } from '@/constants/fonts';
@@ -22,9 +22,8 @@ import type { FeatureCard } from '@/app/how-it-works';
 import type { ColorTheme } from '@/constants/colors';
 import { COMPANION_INTRO_BODY } from '@/lib/support-clarity';
 import { COMPANION_PERSONALITIES, type CompanionPersonality } from '@/lib/companion-personality';
+import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25;
 const SWIPE_VELOCITY = 500;
 
 // Companion introduction card — inserted into the carousel
@@ -60,8 +59,10 @@ export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
   onComplete,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const { width: viewportWidth, fontScale } = useWindowDimensions();
   const isFocused = useIsFocused();
-  const reducedMotion = useReducedMotion();
+  const { reducedMotion } = useAccessibleAnimation();
+  const swipeThreshold = viewportWidth * 0.25;
   const page = ALL_PAGES[currentPage];
   const isLastPage = currentPage === ALL_PAGES.length - 1;
   const isCompanionPage = 'type' in page && page.type === 'companion';
@@ -88,9 +89,9 @@ export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
     .activeOffsetX([-20, 20])
     .failOffsetY([-15, 15])
     .onEnd((e) => {
-      if (e.translationX < -SWIPE_THRESHOLD || e.velocityX < -SWIPE_VELOCITY) {
+      if (e.translationX < -swipeThreshold || e.velocityX < -SWIPE_VELOCITY) {
         runOnJS(handleSwipeLeft)();
-      } else if (e.translationX > SWIPE_THRESHOLD || e.velocityX > SWIPE_VELOCITY) {
+      } else if (e.translationX > swipeThreshold || e.velocityX > SWIPE_VELOCITY) {
         runOnJS(handleSwipeRight)();
       }
     });
@@ -126,20 +127,28 @@ export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
                       active={isCompanionPage && isFocused}
                     />
                   ) : (
-                    <CardAnimation type={page.animation} accent={colors.accent} />
+                    <CardAnimation
+                      type={page.animation}
+                      accent={colors.accent}
+                      reducedMotion={reducedMotion}
+                    />
                   )}
                 </View>
 
                 <View style={{ gap: 12, alignSelf: 'stretch' }}>
                   <AnimatedHeadline
+                    key={`feature-headline-${fontScale}`}
                     text={page.headline}
                     color={colors.text}
                     pageKey={currentPage}
+                    reducedMotion={reducedMotion}
                   />
                   <AnimatedBody
+                    key={`feature-body-${fontScale}`}
                     text={page.body}
                     color={colors.textMuted}
                     pageKey={currentPage}
+                    reducedMotion={reducedMotion}
                   />
 
                   {/* Companion personality choices — staggered entrance top to bottom */}
@@ -150,7 +159,7 @@ export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
                       accessibilityLabel="Companion personality"
                       style={styles.personalityGroup}
                     >
-                      <Text style={[styles.personalityPrompt, { color: colors.textMuted }]}>How should your companion meet you?</Text>
+                      <Text key={`personality-prompt-${fontScale}`} style={[styles.personalityPrompt, { color: colors.textMuted }]}>How should your companion meet you?</Text>
                       {COMPANION_PERSONALITIES.map((option) => {
                         const selected = companionPersonality === option.value;
                         return (
@@ -168,8 +177,8 @@ export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
                               },
                             ]}
                           >
-                            <Text style={[styles.personalityLabel, { color: colors.text }]}>{option.label}</Text>
-                            <Text style={[styles.personalityDescription, { color: colors.textMuted }]}>{option.description}</Text>
+                            <Text key={`personality-label-${fontScale}`} style={[styles.personalityLabel, { color: colors.text }]}>{option.label}</Text>
+                            <Text key={`personality-description-${fontScale}`} style={[styles.personalityDescription, { color: colors.textMuted }]}>{option.description}</Text>
                           </TouchableOpacity>
                         );
                       })}
@@ -185,10 +194,17 @@ export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
       {/* Bottom: page dots + continue button */}
       <View style={{ paddingHorizontal: Spacing['6'], paddingBottom: Math.max(insets.bottom, Spacing['4']) }}>
         {/* Page dots */}
-        <View style={{ flexDirection: 'row', justifyContent: 'flex-start', alignItems: 'center', gap: 6, marginBottom: Spacing['6'] }}>
+        <View
+          accessible
+          accessibilityRole="text"
+          accessibilityLabel={`Step ${currentPage + 1} of ${ALL_PAGES.length}`}
+          style={{ flexDirection: 'row', justifyContent: 'flex-start', alignItems: 'center', gap: 6, marginBottom: Spacing['6'] }}
+        >
           {ALL_PAGES.map((_, index) => (
             <View
               key={index}
+              accessible={false}
+              importantForAccessibility="no"
               style={{
                 width: index === currentPage ? 20 : 6,
                 height: 6,
@@ -200,14 +216,19 @@ export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
         </View>
 
         {/* Continue button */}
-        <TouchableOpacity activeOpacity={0.7} onPress={handleContinue}>
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={handleContinue}
+          accessibilityRole="button"
+          accessibilityLabel={isLastPage ? 'Continue' : 'Next'}
+        >
           <View style={{
             paddingVertical: Spacing['4'],
             borderRadius: Radius.md,
             alignItems: 'center',
             backgroundColor: colors.accent,
           }}>
-            <Text style={{
+            <Text key={`continue-font-${fontScale}`} style={{
               fontFamily: FontFamily.uiMedium,
               fontSize: FontSize.base,
               color: colors.background,

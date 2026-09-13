@@ -20,6 +20,12 @@ const mockDeviceState = { isDevice: true };
 const mockConstantsState: { projectId: string | undefined } = {
   projectId: 'synthetic-project',
 };
+const mockStoreState: {
+  user: { reminderTime: string } | null;
+} = {
+  user: { reminderTime: '8:00 AM' },
+};
+const mockUpdateUser = jest.fn();
 
 jest.mock('expo-device', () => ({
   get isDevice() {
@@ -98,8 +104,8 @@ jest.mock('../api-config', () => {
 jest.mock('../store', () => ({
   useUnfoldStore: {
     getState: () => ({
-      user: { reminderTime: '8:00 AM' },
-      updateUser: jest.fn(),
+      user: mockStoreState.user,
+      updateUser: mockUpdateUser,
     }),
   },
 }));
@@ -208,6 +214,8 @@ beforeEach(() => {
   resetDeviceId();
   mockDeviceState.isDevice = true;
   mockConstantsState.projectId = 'synthetic-project';
+  mockStoreState.user = { reminderTime: '8:00 AM' };
+  mockUpdateUser.mockClear();
   permissionMode = 'granted';
   resolvePermission = undefined;
   tokenMode = 'immediate';
@@ -412,6 +420,25 @@ describe('push registration identity ownership', () => {
     expect(second).toBe('registered');
     expect(pushPosts).toHaveLength(1);
     expect(pushPosts[0]?.identity).toBe('synthetic-old');
+  });
+
+  it('backfills push registration after the profile is created without posting twice', async () => {
+    mockStoreState.user = null;
+
+    await expect(registerPushToken()).resolves.toBe('registered');
+    expect(pushPosts).toHaveLength(1);
+    expect(pushPosts[0]?.identity).toBe('synthetic-old');
+    expect(mockUpdateUser).not.toHaveBeenCalled();
+
+    mockStoreState.user = { reminderTime: '8:00 AM' };
+
+    await expect(registerPushToken()).resolves.toBe('registered');
+    expect(pushPosts).toHaveLength(1);
+    expect(pushPosts[0]?.identity).toBe('synthetic-old');
+    expect(mockUpdateUser).toHaveBeenCalledTimes(1);
+    expect(mockUpdateUser).toHaveBeenCalledWith({
+      pushRegisteredAt: expect.any(String),
+    });
   });
 
   it('retries after a failed POST in the same session', async () => {

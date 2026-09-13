@@ -259,5 +259,8 @@ describe('CompanionMessageContent streaming bubble', () => {
       ));
     });
     expect(tree.root.findByProps({ testID: 'companion-bubble-surface' }).props.layout).toBeUndefined();
+    expect(
+      tree.root.findAllByType('AnimatedView').every((node: any) => node.props.entering == null),
+    ).toBe(true);
   });
 });

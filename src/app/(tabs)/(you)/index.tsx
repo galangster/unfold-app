@@ -156,6 +156,7 @@ export default function YouScreen() {
                   marginTop: 10,
                   textAlign: 'center',
                   minWidth: 120,
+                  minHeight: 44,
                   paddingHorizontal: 12,
                   paddingVertical: 4,
                   borderBottomWidth: 1,
@@ -173,6 +174,14 @@ export default function YouScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Edit your name"
                 accessibilityHint="Tap to change your display name"
+                style={{
+                  minWidth: 120,
+                  minHeight: 44,
+                  marginTop: 10,
+                  paddingHorizontal: 12,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
               >
                 <Text
                   style={{
@@ -180,7 +189,6 @@ export default function YouScreen() {
                     fontSize: 23,
                     color: colors.text,
                     letterSpacing: -0.15,
-                    marginTop: 10,
                     textAlign: 'center',
                   }}
                 >

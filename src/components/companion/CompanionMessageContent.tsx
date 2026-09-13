@@ -41,6 +41,7 @@ function stripMarkdownLight(text: string): string {
 interface Props {
   message: CompanionMessage;
   isStreaming: boolean;
+  fontScale?: number;
   motionActive?: boolean;
   reduceMotion?: boolean;
   onVersePress?: (reference: string) => void;
@@ -66,10 +67,11 @@ export const COMPANION_TEXT_INDENT = Spacing['4'] + BUBBLE_HORIZONTAL_PADDING;
  * Streaming text leaf: strips markdown while rendering the actual text
  * received from the live request. It does not add a cursor or reveal queue.
  */
-function StreamingText({ content, color }: { content: string; color: string }) {
+function StreamingText({ content, color, fontScale }: { content: string; color: string; fontScale: number }) {
   const stripped = useMemo(() => smartQuotes(stripMarkdownLight(content)), [content]);
   return (
     <Text
+      key={`font-scale-${fontScale}`}
       style={{
         ...Typography.bodyRelaxed,
         color,
@@ -83,6 +85,7 @@ function StreamingText({ content, color }: { content: string; color: string }) {
 export function CompanionMessageContent({
   message,
   isStreaming,
+  fontScale = 1,
   motionActive = true,
   reduceMotion,
   onVersePress,
@@ -140,7 +143,7 @@ export function CompanionMessageContent({
 
   return (
     <Animated.View
-      entering={reducedMotion ? undefined : ENTERING}
+      entering={reducedMotion || !motionActive ? undefined : ENTERING}
       style={{ alignItems: 'flex-start', paddingHorizontal: Spacing['4'] }}
     >
       <View
@@ -170,7 +173,7 @@ export function CompanionMessageContent({
         {hasMessageBody && (
         <Animated.View
           key="message-body"
-          entering={reducedMotion ? undefined : TEXT_ENTERING}
+          entering={reducedMotion || !motionActive ? undefined : TEXT_ENTERING}
           style={{ minWidth: 0, flexShrink: 1 }}
         >
         {message.status === 'error' ? (
@@ -178,6 +181,7 @@ export function CompanionMessageContent({
             {interruptedReply.length > 0 && (
               <RichMessageText
                 text={interruptedReply}
+                layoutFontScale={fontScale}
                 onVersePress={onVersePress ?? noopVersePress}
               />
             )}
@@ -188,11 +192,11 @@ export function CompanionMessageContent({
                 accessibilityLabel="Retry sending your message"
                 style={errorBoxStyle}
               >
-                <Text style={errorTextStyle}>{errorText}</Text>
+                <Text key={`error-font-scale-${fontScale}`} style={errorTextStyle}>{errorText}</Text>
               </Pressable>
             ) : (
               <View style={errorBoxStyle}>
-                <Text style={errorTextStyle}>{errorText}</Text>
+                <Text key={`error-font-scale-${fontScale}`} style={errorTextStyle}>{errorText}</Text>
               </View>
             )}
           </>
@@ -204,6 +208,7 @@ export function CompanionMessageContent({
                 {stableStreamText.length > 0 && (
                   <RichMessageText
                     text={stableStreamText}
+                    layoutFontScale={fontScale}
                     onVersePress={onVersePress}
                   />
                 )}
@@ -211,6 +216,7 @@ export function CompanionMessageContent({
                   <View style={stableStreamText.length > 0 ? { marginTop: Spacing['3'] } : undefined}>
                     <RichMessageText
                       text={streamTail}
+                      layoutFontScale={fontScale}
                       onVersePress={onVersePress}
                     />
                   </View>
@@ -219,11 +225,12 @@ export function CompanionMessageContent({
             ) : (
               <RichMessageText
                 text={message.content}
+                layoutFontScale={fontScale}
                 onVersePress={onVersePress}
               />
             )}
             {deepLinkCards?.map((dl, i) => (
-              <DevotionalCard key={`dl-${i}`} data={dl} />
+              <DevotionalCard key={`dl-${i}-font-${fontScale}`} data={dl} />
             ))}
           </>
         ) : (
@@ -234,6 +241,7 @@ export function CompanionMessageContent({
             {stableStreamText.length > 0 && (
               <RichMessageText
                 text={stableStreamText}
+                layoutFontScale={fontScale}
                 onVersePress={onVersePress ?? noopVersePress}
               />
             )}
@@ -249,7 +257,7 @@ export function CompanionMessageContent({
                 ]}
               >
                 <View style={{ flexShrink: 1 }}>
-                  <StreamingText content={streamTail} color={colors.text} />
+                  <StreamingText content={streamTail} color={colors.text} fontScale={fontScale} />
                 </View>
               </View>
             )}
@@ -260,6 +268,7 @@ export function CompanionMessageContent({
 
         {isStreaming && !hasMessageBody && (
           <Text
+            key={`pending-font-scale-${fontScale}`}
             testID="companion-pending-ellipsis"
             accessibilityElementsHidden
             importantForAccessibility="no-hide-descendants"

@@ -197,7 +197,6 @@ function ConversationRow({ conversation, isCurrent, onSelect, onOpenActions }: C
       <TouchableOpacity
         activeOpacity={0.7}
         onPress={() => onOpenActions(conversation)}
-        hitSlop={8}
         style={styles.conversationOptions}
         accessibilityRole="button"
         accessibilityLabel={`Conversation options for ${title}`}

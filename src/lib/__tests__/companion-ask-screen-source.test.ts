@@ -8,11 +8,15 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const source = readFileSync(join(__dirname, '../../app/(tabs)/(ask)/index.tsx'), 'utf8');
+const actionsSource = readFileSync(
+  join(__dirname, '../../components/companion/CompanionActions.tsx'),
+  'utf8',
+);
 
 describe('free quota line shown at full quota too', () => {
   it('no longer gates the quota indicator on some quota being spent', () => {
     expect(source).not.toMatch(/\{!isPremium && dailyRemaining < FREE_COMPANION_DAILY_LIMIT/);
-    expect(source).toMatch(/\{!isPremium && \(/);
+    expect(source).toContain('{!isPremium && dailyRemaining > 0 && (');
   });
 
   it('shows "N free messages today" at full quota, distinct from the "left today" copy', () => {
@@ -22,11 +26,17 @@ describe('free quota line shown at full quota too', () => {
 
   it('uses FontSize tokens for the quota copy instead of a raw 11-12px', () => {
     const quotaBlock = source.slice(
-      source.indexOf('Daily limit indicator'),
+      source.indexOf('const dailyLimitContent'),
       source.indexOf('Daily limit indicator') + 2200,
     );
     expect(quotaBlock).not.toMatch(/fontSize:\s*1[12],/);
     expect(quotaBlock).toMatch(/fontSize: FontSize\.(xs|sm)/);
+  });
+
+  it('exposes upgrade touch semantics only when the quota is exhausted', () => {
+    expect(source).toContain('{!isPremium && dailyRemaining === 0 && (');
+    expect(source).toContain('{!isPremium && dailyRemaining > 0 && (');
+    expect(source).toMatch(/dailyRemaining > 0 && \(\s*<View\s+accessible/);
   });
 });
 
@@ -49,7 +59,7 @@ describe('Ask header and retry wiring', () => {
     expect(source).toContain('companion-profile-button');
     expect(source.match(/<CompanionOrb/g)).toHaveLength(1);
     expect(source).toContain('const HEADER_COMPANION_SIZE = 64');
-    expect(source).toContain('const TOOLBAR_SIDE_SLOT_WIDTH = 84');
+    expect(source).toContain('const TOOLBAR_SIDE_SLOT_WIDTH = 88');
     expect(source.match(/width: TOOLBAR_SIDE_SLOT_WIDTH/g)).toHaveLength(2);
     expect(source).toContain('size={HEADER_COMPANION_SIZE}');
     expect(source).toContain('thinking={isStreaming}');
@@ -63,7 +73,7 @@ describe('Ask header and retry wiring', () => {
     expect(source).toContain('item.id === activeRequestCompanionId');
     expect(source).toContain("item.status === 'streaming'");
     expect(source).toContain('isStreaming={isThisStreaming}');
-    expect(source).toContain('motionActive={isFocused}');
+    expect(source).toContain('motionActive={isFocused && !drawerOpen}');
     expect(source).not.toContain('showCompanionPresence');
     expect(source).not.toContain('showIcon=');
     expect(source).not.toContain('<TypingIndicator');
@@ -74,6 +84,14 @@ describe('Ask header and retry wiring', () => {
   it('retries error rows in place through regenerateReply, not handleSend', () => {
     expect(source).toContain('regenerateReply({ companionId })');
     expect(source).not.toContain('handleSendRef.current(userText)');
+  });
+});
+
+describe('Companion response motion', () => {
+  it('cancels action fades and skips them while hidden or reduced', () => {
+    expect(actionsSource).toContain('cancelAnimation(opacity)');
+    expect(actionsSource).toContain('motionActive && !reducedMotion');
+    expect(source).toContain('motionActive={isFocused && !drawerOpen}');
   });
 });
 
