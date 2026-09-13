@@ -16,6 +16,7 @@ jest.mock('react-native-reanimated', () => {
       bezier: () => easingFn,
       inOut: () => easingFn,
     },
+    ReduceMotion: { System: 'system', Always: 'always', Never: 'never' },
     interpolate: (value: number) => value,
     cancelAnimation: jest.fn(),
     useSharedValue: (initial: unknown) => ({ value: initial }),
