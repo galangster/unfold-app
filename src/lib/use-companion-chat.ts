@@ -667,6 +667,7 @@ export function useCompanionChat() {
             chatMessages,
             abortController.signal,
             (revealed) => {
+              accumulatedText = revealed;
               throttledUpdate(companionId, revealed);
             }
           );

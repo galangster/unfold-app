@@ -458,8 +458,15 @@ describe('J14 Today auto-trial card', () => {
       pausedTree = renderer.create(<DevotionalCard state={pausedState} />);
     });
 
-    expect(completeTree.root.findAllByProps({ accessibilityLabel: 'Open keepsake' })).toHaveLength(0);
-    expect(pausedTree.root.findAllByProps({ accessibilityLabel: 'Open keepsake' })).toHaveLength(0);
+    try {
+      expect(completeTree.root.findAllByProps({ accessibilityLabel: 'Open keepsake' })).toHaveLength(0);
+      expect(pausedTree.root.findAllByProps({ accessibilityLabel: 'Open keepsake' })).toHaveLength(0);
+    } finally {
+      await act(async () => {
+        completeTree.unmount();
+        pausedTree.unmount();
+      });
+    }
   });
 
   it('does not mount a Today notify card', () => {

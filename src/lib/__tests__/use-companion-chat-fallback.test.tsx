@@ -4,6 +4,19 @@ import { AppState } from 'react-native';
 const renderer = require('react-test-renderer');
 const { act } = renderer;
 
+const testRenderers: Array<ReturnType<typeof renderer.create>> = [];
+function createTestRenderer(element: React.ReactElement) {
+  const tree = renderer.create(element);
+  testRenderers.push(tree);
+  return tree;
+}
+
+afterEach(async () => {
+  await act(async () => {
+    testRenderers.splice(0).forEach((tree) => tree.unmount());
+  });
+});
+
 const mockFetch = jest.fn();
 global.fetch = mockFetch as unknown as typeof fetch;
 
@@ -146,7 +159,7 @@ describe('sendMessage outcome', () => {
 
     let hook: ReturnType<typeof useCompanionChat> | null = null;
     await act(async () => {
-      renderer.create(<HookHarness onReady={(next) => { hook = next; }} />);
+      createTestRenderer(<HookHarness onReady={(next) => { hook = next; }} />);
       await Promise.resolve();
     });
 
@@ -173,7 +186,7 @@ describe('sendMessage outcome', () => {
 
     let hook: ReturnType<typeof useCompanionChat> | null = null;
     await act(async () => {
-      renderer.create(<HookHarness onReady={(next) => { hook = next; }} />);
+      createTestRenderer(<HookHarness onReady={(next) => { hook = next; }} />);
       await Promise.resolve();
     });
 
@@ -198,7 +211,7 @@ describe('sendMessage outcome', () => {
 
     let hook: ReturnType<typeof useCompanionChat> | null = null;
     await act(async () => {
-      renderer.create(<HookHarness onReady={(next) => { hook = next; }} />);
+      createTestRenderer(<HookHarness onReady={(next) => { hook = next; }} />);
       await Promise.resolve();
     });
 
@@ -218,7 +231,7 @@ describe('sendMessage outcome', () => {
 
     let hook: ReturnType<typeof useCompanionChat> | null = null;
     await act(async () => {
-      renderer.create(<HookHarness onReady={(next) => { hook = next; }} />);
+      createTestRenderer(<HookHarness onReady={(next) => { hook = next; }} />);
       await Promise.resolve();
     });
 
@@ -246,7 +259,7 @@ describe('sendMessage outcome', () => {
 
     let hook: ReturnType<typeof useCompanionChat> | null = null;
     await act(async () => {
-      renderer.create(<HookHarness onReady={(next) => { hook = next; }} />);
+      createTestRenderer(<HookHarness onReady={(next) => { hook = next; }} />);
       await Promise.resolve();
     });
 
@@ -300,7 +313,7 @@ describe('retry error replies in place', () => {
 
     let hook: ReturnType<typeof useCompanionChat> | null = null;
     await act(async () => {
-      renderer.create(<HookHarness onReady={(next) => { hook = next; }} />);
+      createTestRenderer(<HookHarness onReady={(next) => { hook = next; }} />);
       await Promise.resolve();
     });
 
@@ -346,7 +359,7 @@ describe('retry error replies in place', () => {
 
     let hook: ReturnType<typeof useCompanionChat> | null = null;
     await act(async () => {
-      renderer.create(<HookHarness onReady={(next) => { hook = next; }} />);
+      createTestRenderer(<HookHarness onReady={(next) => { hook = next; }} />);
       await Promise.resolve();
     });
 
@@ -388,7 +401,7 @@ describe('retry error replies in place', () => {
 
     let hook: ReturnType<typeof useCompanionChat> | null = null;
     await act(async () => {
-      renderer.create(<HookHarness onReady={(next) => { hook = next; }} />);
+      createTestRenderer(<HookHarness onReady={(next) => { hook = next; }} />);
       await Promise.resolve();
     });
 
@@ -423,7 +436,7 @@ describe('useCompanionChat prompt payload length', () => {
 
     let hook: ReturnType<typeof useCompanionChat> | null = null;
     await act(async () => {
-      renderer.create(<HookHarness onReady={(next) => { hook = next; }} />);
+      createTestRenderer(<HookHarness onReady={(next) => { hook = next; }} />);
       await Promise.resolve();
     });
 
@@ -450,7 +463,7 @@ describe('useCompanionChat prompt payload length', () => {
 
     let hook: ReturnType<typeof useCompanionChat> | null = null;
     await act(async () => {
-      renderer.create(<HookHarness onReady={(next) => { hook = next; }} />);
+      createTestRenderer(<HookHarness onReady={(next) => { hook = next; }} />);
       await Promise.resolve();
     });
 
@@ -476,6 +489,63 @@ describe('useCompanionChat fallback streaming', () => {
     });
   });
 
+  it.each(['stop', 'switch'] as const)(
+    'keeps the latest fallback prefix before the first store flush on %s',
+    async (action) => {
+      jest.useFakeTimers();
+      const fullResponse = 'One small pause can make room for a thoughtful prayer. '.repeat(10);
+      mockFetch
+        .mockResolvedValueOnce(streamingResponseWithoutDone())
+        .mockResolvedValueOnce(jsonResponse({ content: fullResponse }));
+
+      let hook: ReturnType<typeof useCompanionChat> | null = null;
+      let view: ReturnType<typeof renderer.create> | undefined;
+      try {
+        await act(async () => {
+          view = createTestRenderer(<HookHarness onReady={(next) => { hook = next; }} />);
+        });
+        let pending!: ReturnType<ReturnType<typeof useCompanionChat>['sendMessage']>;
+        await act(async () => {
+          pending = hook!.sendMessage('Help me slow down.');
+          await jest.advanceTimersByTimeAsync(8);
+        });
+        expect(mockFetch).toHaveBeenCalledTimes(2);
+        const originalId = useCompanionChatStore.getState().activeConversationId;
+
+        act(() => {
+          hook!.stopGeneration();
+          if (action === 'switch') hook!.startNewConversation();
+        });
+        await act(async () => {
+          await jest.advanceTimersByTimeAsync(8);
+          await pending;
+        });
+
+        const reply = useCompanionChatStore.getState().conversations
+          .find((conversation) => conversation.id === originalId)!
+          .messages.find((message) => message.role === 'companion')!;
+        expect(reply).toMatchObject({ status: 'error', interrupted: true });
+        expect(reply.content).toMatch(/^One(?:\s|$)/);
+        expect(fullResponse.startsWith(reply.content)).toBe(true);
+        expect(reply.content.length).toBeLessThan(fullResponse.length);
+        if (action === 'switch') {
+          const state = useCompanionChatStore.getState();
+          expect(state.conversations.find((conversation) => conversation.id === state.activeConversationId)?.messages)
+            .toEqual([]);
+        }
+
+        await act(async () => { await jest.advanceTimersByTimeAsync(200); });
+        const savedReply = useCompanionChatStore.getState().conversations
+          .find((conversation) => conversation.id === originalId)!
+          .messages.find((message) => message.id === reply.id);
+        expect(savedReply).toEqual(reply);
+      } finally {
+        act(() => { view?.unmount(); });
+        jest.useRealTimers();
+      }
+    },
+  );
+
   it('keeps the final non-streaming fallback text after delayed progressive-reveal updates fire', async () => {
     const fullResponse =
       'Here is the complete study-series answer with a finished ending that should remain visible.';
@@ -489,7 +559,7 @@ describe('useCompanionChat fallback streaming', () => {
 
     let hook: ReturnType<typeof useCompanionChat> | null = null;
     await act(async () => {
-      renderer.create(<HookHarness onReady={(next) => { hook = next; }} />);
+      createTestRenderer(<HookHarness onReady={(next) => { hook = next; }} />);
       await Promise.resolve();
     });
 
@@ -534,7 +604,7 @@ describe('useCompanionChat fallback streaming', () => {
 
     let hook: ReturnType<typeof useCompanionChat> | null = null;
     await act(async () => {
-      renderer.create(<HookHarness onReady={(next) => { hook = next; }} />);
+      createTestRenderer(<HookHarness onReady={(next) => { hook = next; }} />);
       await Promise.resolve();
     });
 
@@ -610,7 +680,7 @@ describe('conversation-scoped streaming (WR-09)', () => {
     let hook: ReturnType<typeof useCompanionChat> | null = null;
     let rerender: () => void = () => {};
     await act(async () => {
-      const tree = renderer.create(<HookHarness onReady={(next) => { hook = next; }} />);
+      const tree = createTestRenderer(<HookHarness onReady={(next) => { hook = next; }} />);
       rerender = () => tree.update(<HookHarness onReady={(next) => { hook = next; }} />);
       await Promise.resolve();
     });
@@ -670,7 +740,7 @@ describe('conversation-scoped streaming (WR-09)', () => {
     let hook: ReturnType<typeof useCompanionChat> | null = null;
     let rerender: () => void = () => {};
     await act(async () => {
-      const tree = renderer.create(<HookHarness onReady={(next) => { hook = next; }} />);
+      const tree = createTestRenderer(<HookHarness onReady={(next) => { hook = next; }} />);
       rerender = () => tree.update(<HookHarness onReady={(next) => { hook = next; }} />);
       await Promise.resolve();
     });
@@ -722,7 +792,7 @@ describe('server error events never trigger the non-streaming fallback (P0-3)', 
 
     let hook: ReturnType<typeof useCompanionChat> | null = null;
     await act(async () => {
-      renderer.create(<HookHarness onReady={(next) => { hook = next; }} />);
+      createTestRenderer(<HookHarness onReady={(next) => { hook = next; }} />);
       await Promise.resolve();
     });
 
@@ -751,7 +821,7 @@ describe('server error events never trigger the non-streaming fallback (P0-3)', 
 
     let hook: ReturnType<typeof useCompanionChat> | null = null;
     await act(async () => {
-      renderer.create(<HookHarness onReady={(next) => { hook = next; }} />);
+      createTestRenderer(<HookHarness onReady={(next) => { hook = next; }} />);
       await Promise.resolve();
     });
 
@@ -781,7 +851,7 @@ describe('server error events never trigger the non-streaming fallback (P0-3)', 
 
     let hook: ReturnType<typeof useCompanionChat> | null = null;
     await act(async () => {
-      renderer.create(<HookHarness onReady={(next) => { hook = next; }} />);
+      createTestRenderer(<HookHarness onReady={(next) => { hook = next; }} />);
       await Promise.resolve();
     });
 
@@ -808,7 +878,7 @@ describe('server error events never trigger the non-streaming fallback (P0-3)', 
 
     let hook: ReturnType<typeof useCompanionChat> | null = null;
     await act(async () => {
-      renderer.create(<HookHarness onReady={(next) => { hook = next; }} />);
+      createTestRenderer(<HookHarness onReady={(next) => { hook = next; }} />);
       await Promise.resolve();
     });
 
@@ -856,7 +926,7 @@ describe('network-drop resilience (WR-11)', () => {
 
     let hook: ReturnType<typeof useCompanionChat> | null = null;
     await act(async () => {
-      renderer.create(<HookHarness onReady={(next) => { hook = next; }} />);
+      createTestRenderer(<HookHarness onReady={(next) => { hook = next; }} />);
       await Promise.resolve();
     });
 
@@ -883,7 +953,7 @@ describe('network-drop resilience (WR-11)', () => {
 
     let hook: ReturnType<typeof useCompanionChat> | null = null;
     await act(async () => {
-      renderer.create(<HookHarness onReady={(next) => { hook = next; }} />);
+      createTestRenderer(<HookHarness onReady={(next) => { hook = next; }} />);
       await Promise.resolve();
     });
 
@@ -917,7 +987,7 @@ describe('foreground resume reconciliation', () => {
     const listenerCallsBefore = addEventListener.mock.calls.length;
 
     await act(async () => {
-      renderer.create(<HookHarness onReady={() => {}} />);
+      createTestRenderer(<HookHarness onReady={() => {}} />);
       await Promise.resolve();
     });
 
@@ -980,7 +1050,7 @@ describe('daily AI budget (429 SPEND_CAP_REACHED)', () => {
   async function sendOnce(text: string) {
     let hook: ReturnType<typeof useCompanionChat> | null = null;
     await act(async () => {
-      renderer.create(<HookHarness onReady={(next) => { hook = next; }} />);
+      createTestRenderer(<HookHarness onReady={(next) => { hook = next; }} />);
       await Promise.resolve();
     });
 

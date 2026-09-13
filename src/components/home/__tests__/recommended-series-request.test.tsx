@@ -4,6 +4,19 @@ import React from 'react';
 const renderer = require('react-test-renderer');
 const { act } = renderer;
 
+const testRenderers: Array<ReturnType<typeof renderer.create>> = [];
+function createTestRenderer(element: React.ReactElement) {
+  const tree = renderer.create(element);
+  testRenderers.push(tree);
+  return tree;
+}
+
+afterEach(async () => {
+  await act(async () => {
+    testRenderers.splice(0).forEach((tree) => tree.unmount());
+  });
+});
+
 const mockStorage = new Map<string, string>();
 const mockUpdateUser = jest.fn();
 const mockPush = jest.fn();
@@ -139,7 +152,7 @@ describe('RecommendedSeriesCard initial generation identity', () => {
 
     let tree!: ReturnType<typeof renderer.create>;
     await act(async () => {
-      tree = renderer.create(
+      tree = createTestRenderer(
         <RecommendedSeriesCard variant="empty" onChooseOther={jest.fn()} />,
       );
     });
@@ -172,7 +185,7 @@ describe('J10 RecommendedSeriesCard start-study gate', () => {
   async function mount(props: Record<string, unknown> = {}) {
     let tree!: ReturnType<typeof renderer.create>;
     await act(async () => {
-      tree = renderer.create(
+      tree = createTestRenderer(
         <RecommendedSeriesCard
           variant="empty"
           onChooseOther={jest.fn()}

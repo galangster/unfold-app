@@ -12,7 +12,10 @@ import { AppState } from 'react-native';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { mmkvStorage } from './mmkv-storage';
-import { createDebouncedJSONStorage } from './debounced-persist-storage';
+import {
+  COMPANION_CHAT_STORAGE_KEY,
+  createCompanionChatPersistStorage,
+} from './companion-chat-persist-storage';
 import { shouldFlushAutosaveOnAppState } from './autosave-controller';
 
 import { getAuthHeaders, PRIMARY_BACKEND_URL } from '@/lib/api-config';
@@ -264,13 +267,9 @@ export type PersistedCompanionChatState = Pick<
   'conversations' | 'activeConversationId'
 >;
 
-// WR-23: coalesces persist writes so the ~30/sec token flushes during SSE
-// streaming serialize the store once per debounce window instead of running a
-// full partialize + JSON.stringify + sync MMKV write on every set(). Flushed
-// when the app backgrounds (listener below), matching store.ts.
-// The snapshot is still the whole conversations array (every message). That
-// cost grows with local history. This slice does not add a storage migration.
-const companionPersistStorage = createDebouncedJSONStorage<PersistedCompanionChatState>(mmkvStorage);
+// Conversation shards keep streaming persistence proportional to the active
+// conversation. The manifest stores only order and the active ID.
+const companionPersistStorage = createCompanionChatPersistStorage<Conversation>(mmkvStorage);
 
 export const useCompanionChatStore = create<CompanionChatState>()(
   persist<CompanionChatState, [], [], PersistedCompanionChatState>(
@@ -519,7 +518,7 @@ export const useCompanionChatStore = create<CompanionChatState>()(
           };
         }),
 
-      clearAllConversations: () =>
+      clearAllConversations: () => {
         set((s) => {
           const now = new Date().toISOString();
           s.conversations.forEach((conversation) => {
@@ -529,7 +528,11 @@ export const useCompanionChatStore = create<CompanionChatState>()(
             });
           });
           return { conversations: [], activeConversationId: null };
-        }),
+        });
+        // This action also backs full reset. Remove the manifest and every
+        // known shard now so the later direct key sweep cannot leave shards.
+        companionPersistStorage.removeItem(COMPANION_CHAT_STORAGE_KEY);
+      },
 
       updateConversation: (id, updates) =>
         set((s) => {
@@ -580,7 +583,7 @@ export const useCompanionChatStore = create<CompanionChatState>()(
         }),
     }),
     {
-      name: 'unfold-companion-chat',
+      name: COMPANION_CHAT_STORAGE_KEY,
       storage: companionPersistStorage,
       version: 5, // v5: Add deepLinks to CompanionMessage
       partialize: (state): PersistedCompanionChatState => ({
