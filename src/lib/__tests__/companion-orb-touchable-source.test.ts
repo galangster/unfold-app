@@ -16,8 +16,10 @@ describe('CompanionOrb touchable-only-when-pressable source contract', () => {
   });
 
   it('renders a plain View with no accessibility role/label as the non-pressable fallback', () => {
-    const fallbackBlock = source.match(/\) : \([\s\S]{0,200}?\)\}/)?.[0] ?? '';
-    expect(fallbackBlock).toContain('<View');
+    const fallbackStart = source.indexOf('<View style={{ width: size, height: size }}>');
+    const fallbackBlock = source.slice(fallbackStart, fallbackStart + 160);
+    expect(fallbackStart).toBeGreaterThan(-1);
+    expect(fallbackBlock).toContain('{face}');
     expect(fallbackBlock).not.toContain('accessibilityRole');
     expect(fallbackBlock).not.toContain('accessibilityLabel');
   });
@@ -36,6 +38,10 @@ describe('CompanionOrb touchable-only-when-pressable source contract', () => {
     expect(typingIndicator).not.toContain('CompanionOrb');
     expect(messageContent).not.toContain('CompanionOrb');
     expect(askIndex.match(/<CompanionOrb/g)).toHaveLength(1);
-    expect(askIndex).toMatch(/<CompanionOrb\s+accentColor=\{colors\.accent\}\s+size=\{32\}\s+isActive=\{isStreaming\}\s+active=\{isFocused\}\s*\/>/);
+    const orb = askIndex.match(/<CompanionOrb\b[\s\S]*?\/>/)?.[0] ?? '';
+    expect(orb).toContain('thinking={isStreaming}');
+    expect(orb).toContain('active={isFocused}');
+    expect(orb).not.toContain('onPress');
+    expect(askIndex).not.toMatch(/isActive=\{isStreaming\}/);
   });
 });

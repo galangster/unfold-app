@@ -46,6 +46,7 @@ describe('onboarding-draft-store', () => {
       deviceId: 'device-A',
       stepId: 'threeStepPaywall',
       data: answers,
+      companionPersonality: 'thoughtful',
       purchasedDuringOnboarding: true,
       sampleDevotionalId: 'dev-1',
     });
@@ -57,6 +58,7 @@ describe('onboarding-draft-store', () => {
     expect(restored?.stepId).toBe('threeStepPaywall');
     expect(restored?.data.name).toBe('Nick');
     expect(restored?.data.aboutMe).toBe('A dad and a builder.');
+    expect(restored?.companionPersonality).toBe('thoughtful');
     expect(restored?.purchasedDuringOnboarding).toBe(true);
     expect(restored?.sampleDevotionalId).toBe('dev-1');
     expect(restored?.sampleDevotionalDay).toEqual({ dayNumber: 1, title: 'Begin here' });
@@ -70,6 +72,7 @@ describe('onboarding-draft-store', () => {
     expect(restored?.purchasedDuringOnboarding).toBe(false);
     expect(restored?.sampleDevotionalId).toBeNull();
     expect(restored?.sampleDevotionalDay).toBeNull();
+    expect(restored?.companionPersonality).toBe('gentle');
   });
 
   it('returns null when nothing has been persisted', () => {

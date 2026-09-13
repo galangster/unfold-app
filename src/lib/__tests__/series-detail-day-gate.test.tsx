@@ -59,6 +59,8 @@ const mockSeries = {
   ],
 } as unknown as Devotional;
 
+jest.mock('@/hooks/useCalendarNow', () => ({ useCalendarNow: () => new Date() }));
+
 jest.mock('expo-router', () => ({
   useRouter: () => ({ canGoBack: () => true, push: mockPush, back: jest.fn() }),
   useSegments: () => [],
@@ -86,6 +88,7 @@ jest.mock('@/hooks/useCrossTabBack', () => ({
 
 jest.mock('@/lib/theme', () => ({
   useTheme: () => ({
+    isDark: true,
     colors: {
       accent: '#C8A55C',
       background: '#111111',
@@ -135,16 +138,41 @@ jest.mock('@/components/ui', () => ({
 }));
 
 jest.mock('expo-linear-gradient', () => ({ LinearGradient: 'LinearGradient' }));
+jest.mock('react-native-svg', () => ({
+  __esModule: true,
+  default: 'Svg',
+  Svg: 'Svg',
+  Circle: 'Circle',
+  Defs: 'Defs',
+  Ellipse: 'Ellipse',
+  LinearGradient: 'LinearGradient',
+  Path: 'Path',
+  RadialGradient: 'RadialGradient',
+  Stop: 'Stop',
+}));
 
 jest.mock('phosphor-react-native', () => ({
   CaretLeftIcon: 'CaretLeftIcon',
+  CaretRightIcon: 'CaretRightIcon',
   CheckCircleIcon: 'CheckCircleIcon',
+  CheckIcon: 'CheckIcon',
   LockSimpleIcon: 'LockSimpleIcon',
   CircleIcon: 'CircleIcon',
+  ArrowRightIcon: 'ArrowRightIcon',
 }));
 
 jest.mock('@/components/ProfileEntryButton', () => ({
   ProfileEntryButton: 'ProfileEntryButton',
+}));
+
+jest.mock('@/components/icons', () => ({
+  CaretLeftIcon: 'CaretLeftIcon',
+  CaretRightIcon: 'CaretRightIcon',
+  CheckCircleIcon: 'CheckCircleIcon',
+  CheckIcon: 'CheckIcon',
+  LockSimpleIcon: 'LockSimpleIcon',
+  CircleIcon: 'CircleIcon',
+  ArrowRightIcon: 'ArrowRightIcon',
 }));
 
 const seriesDetailModule = require('@/app/(tabs)/(you)/series-detail');
@@ -276,11 +304,14 @@ describe('SeriesDetailScreen day gating', () => {
     mockParams = {};
     mockCurrentDevotionalId = 'dino-series';
     const tree = renderScreen({ hostTab: '(study)', chrome: 'tabRoot' });
-    const row = findRowContaining(tree, 'Day 1');
-    expect(row).toBeDefined();
+    const button = tree.root.findAll((node) => {
+      const n = node as { props?: { testID?: string } };
+      return n.props?.testID === 'book-continue-reading';
+    })[0] as { props: { onPress: () => void } };
+    expect(button).toBeDefined();
 
     act(() => {
-      (row!.props.onPress as () => void)();
+      button.props.onPress();
     });
 
     expect(mockSetCurrentDevotional).not.toHaveBeenCalled();
@@ -288,6 +319,7 @@ describe('SeriesDetailScreen day gating', () => {
     expect(mockPush.mock.calls[0][0].pathname).toBe('/(tabs)/(study)/reading');
     expect(mockPush.mock.calls[0][0].params.readOnly).toBeUndefined();
     expect(mockPush.mock.calls[0][0].params.devotionalId).toBe('dino-series');
+    expect(mockPush.mock.calls[0][0].params.dayNumber).toBe('1');
   });
   it('does NOT claim "Tomorrow" when the next day has no canonical content', () => {
     // Same state, except Day 2's content never materialised (non-canonical id).

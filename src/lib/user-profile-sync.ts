@@ -3,6 +3,7 @@ import { authenticatedFetch } from './device-credential';
 import { logger } from './logger';
 import { getDeviceId } from './mmkv-storage';
 import type { UserProfile } from './store';
+import { resolveCompanionPersonality } from './companion-personality';
 import { enqueueSyncChanges } from './sync-outbox';
 import { buildSyncPushBody } from './sync-push-body';
 import {
@@ -48,6 +49,7 @@ export function buildUserProfileSyncData(user: UserProfile): Record<string, unkn
     selectedTheme: user.selectedTheme,
     selectedType: user.selectedType,
     selectedStudySubject: user.selectedStudySubject,
+    companionPersonality: resolveCompanionPersonality(user.companionPersonality),
   });
 
   return withoutUndefined({

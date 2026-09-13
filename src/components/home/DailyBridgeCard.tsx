@@ -9,9 +9,10 @@ interface Props {
   text: string;
   colors: ColorTheme;
   onDismiss?: () => void;
+  active?: boolean;
 }
 
-export function DailyBridgeCard({ text, colors, onDismiss }: Props) {
+export function DailyBridgeCard({ text, colors, onDismiss, active }: Props) {
   const { entering } = useAccessibleAnimation();
 
   return (
@@ -19,6 +20,7 @@ export function DailyBridgeCard({ text, colors, onDismiss }: Props) {
       <TodayCompanionBubble
         colors={colors}
         text={text}
+        active={active}
         onDismiss={onDismiss}
         dismissAccessibilityLabel="Dismiss bridge card"
         dismissAccessibilityHint="Hides this bridge text for today"

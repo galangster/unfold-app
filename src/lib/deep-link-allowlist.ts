@@ -171,7 +171,7 @@ export const EXTERNAL_ROUTE_ALLOWLIST: Readonly<Record<string, RouteSchema>> = {
   '/note-detail': { params: { noteId: id(), startEditing: oneOf(['true', 'false']), folderId: id() } },
   '/recently-deleted': { params: {} },
   // You tab
-  '/settings': { params: { from: oneOf(CROSS_TAB_FROM), section: oneOf(['reminders', 'appearance']) } },
+  '/settings': { params: { from: oneOf(CROSS_TAB_FROM), section: oneOf(['reminders', 'appearance', 'companion']) } },
   '/checkin-schedule': { params: { type: oneOf(['midday', 'evening']) }, required: ['type'] },
 };
 

@@ -1,5 +1,6 @@
 import { useCallback, memo } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Dimensions, Keyboard } from 'react-native';
+import { useIsFocused } from 'expo-router';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeOut, runOnJS, useReducedMotion } from 'react-native-reanimated';
@@ -19,13 +20,14 @@ import {
 } from '@/app/how-it-works';
 import type { FeatureCard } from '@/app/how-it-works';
 import type { ColorTheme } from '@/constants/colors';
-import { COMPANION_INTRO_BODY, COMPANION_NAME_LATER_HINT } from '@/lib/support-clarity';
+import { COMPANION_INTRO_BODY } from '@/lib/support-clarity';
+import { COMPANION_PERSONALITIES, type CompanionPersonality } from '@/lib/companion-personality';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25;
 const SWIPE_VELOCITY = 500;
 
-// Companion naming card — inserted into the carousel
+// Companion introduction card — inserted into the carousel
 const COMPANION_CARD: FeatureCard & { type: 'companion' } = {
   headline: 'Meet your companion',
   body: COMPANION_INTRO_BODY,
@@ -42,9 +44,8 @@ const ALL_PAGES = [
 
 interface Props {
   colors: ColorTheme;
-  isDark: boolean;
-  companionName: string;
-  onCompanionNameChange: (name: string) => void;
+  companionPersonality: CompanionPersonality;
+  onCompanionPersonalityChange: (personality: CompanionPersonality) => void;
   currentPage: number;
   onPageChange: (page: number | ((prev: number) => number)) => void;
   onComplete: () => void;
@@ -52,18 +53,18 @@ interface Props {
 
 export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
   colors,
-  isDark,
-  companionName,
-  onCompanionNameChange,
+  companionPersonality,
+  onCompanionPersonalityChange,
   currentPage,
   onPageChange,
   onComplete,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const isFocused = useIsFocused();
   const reducedMotion = useReducedMotion();
   const page = ALL_PAGES[currentPage];
   const isLastPage = currentPage === ALL_PAGES.length - 1;
-  const isCompanionPage = 'type' in page && (page as any).type === 'companion';
+  const isCompanionPage = 'type' in page && page.type === 'companion';
   const handleContinue = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (isLastPage) {
@@ -115,7 +116,15 @@ export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
                 {/* Animation or companion orb */}
                 <View>
                   {isCompanionPage ? (
-                    <CompanionOrb accentColor={colors.accent} size={96} isActive showBadge={false} />
+                    <CompanionOrb
+                      accentColor={colors.accent}
+                      size={96}
+                      isActive
+                      showBadge={false}
+                      expression="welcome"
+                      idleStyle="joyful"
+                      active={isCompanionPage && isFocused}
+                    />
                   ) : (
                     <CardAnimation type={page.animation} accent={colors.accent} />
                   )}
@@ -133,58 +142,38 @@ export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
                     pageKey={currentPage}
                   />
 
-                  {/* Companion name input — staggered entrance top to bottom */}
+                  {/* Companion personality choices — staggered entrance top to bottom */}
                   {isCompanionPage && (
-                    <View style={{ marginTop: Spacing['4'] }}>
-                      <Animated.View entering={reducedMotion ? undefined : FadeIn.delay(600).duration(Duration.slow).easing(Ease.out)}>
-                        <Text style={{
-                          ...Typography.cardMeta,
-                          color: colors.textMuted,
-                          marginBottom: Spacing['2'],
-                        }}>
-                          Companion name
-                        </Text>
-                      </Animated.View>
-                      <Animated.View entering={reducedMotion ? undefined : FadeIn.delay(750).duration(Duration.slow).easing(Ease.out)}>
-                        <TextInput
-                          value={companionName}
-                          onChangeText={onCompanionNameChange}
-                          placeholder="e.g. Grace, Selah, Guide"
-                          placeholderTextColor={colors.textMuted}
-                          selectionColor={colors.accent}
-                          cursorColor={colors.accent}
-                          style={{
-                            fontFamily: FontFamily.body,
-                            fontSize: FontSize.lg,
-                            color: colors.text,
-                            minHeight: 54,
-                            paddingVertical: Spacing['3'],
-                            paddingHorizontal: Spacing['5'],
-                            backgroundColor: colors.inputBackground,
-                            borderRadius: Radius.lg,
-                            borderWidth: 1,
-                            borderColor: colors.border,
-                          }}
-                          maxLength={30}
-                          returnKeyType="done"
-                          submitBehavior="blurAndSubmit"
-                          onSubmitEditing={Keyboard.dismiss}
-                        />
-                      </Animated.View>
-                      <Animated.Text
-                        entering={reducedMotion ? undefined : FadeIn.delay(900).duration(Duration.slow).easing(Ease.out)}
-                        style={{
-                          fontFamily: FontFamily.ui,
-                          fontSize: FontSize.xs,
-                          lineHeight: 18,
-                          color: colors.textSubtle,
-                          marginTop: Spacing['2'],
-                          flexShrink: 1,
-                        }}
-                      >
-                        {COMPANION_NAME_LATER_HINT}
-                      </Animated.Text>
-                    </View>
+                    <Animated.View
+                      entering={reducedMotion ? undefined : FadeIn.delay(600).duration(Duration.slow).easing(Ease.out)}
+                      accessibilityRole="radiogroup"
+                      accessibilityLabel="Companion personality"
+                      style={styles.personalityGroup}
+                    >
+                      <Text style={[styles.personalityPrompt, { color: colors.textMuted }]}>How should your companion meet you?</Text>
+                      {COMPANION_PERSONALITIES.map((option) => {
+                        const selected = companionPersonality === option.value;
+                        return (
+                          <TouchableOpacity
+                            key={option.value}
+                            accessibilityRole="radio"
+                            accessibilityState={{ checked: selected }}
+                            onPress={() => onCompanionPersonalityChange(option.value)}
+                            activeOpacity={0.76}
+                            style={[
+                              styles.personalityChoice,
+                              {
+                                backgroundColor: colors.inputBackground,
+                                borderColor: selected ? colors.accent : colors.border,
+                              },
+                            ]}
+                          >
+                            <Text style={[styles.personalityLabel, { color: colors.text }]}>{option.label}</Text>
+                            <Text style={[styles.personalityDescription, { color: colors.textMuted }]}>{option.description}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </Animated.View>
                   )}
                 </View>
               </View>
@@ -231,4 +220,34 @@ export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
       </View>
     </View>
   );
+});
+
+const styles = StyleSheet.create({
+  personalityGroup: {
+    marginTop: Spacing['4'],
+    gap: Spacing['2'],
+  },
+  personalityPrompt: {
+    ...Typography.cardMeta,
+    marginBottom: Spacing['1'],
+  },
+  personalityChoice: {
+    minHeight: 64,
+    paddingVertical: Spacing['3'],
+    paddingHorizontal: Spacing['4'],
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+  },
+  personalityLabel: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: FontSize.base,
+    lineHeight: 22,
+  },
+  personalityDescription: {
+    marginTop: 2,
+    fontFamily: FontFamily.body,
+    fontSize: FontSize.sm,
+    lineHeight: 20,
+    flexShrink: 1,
+  },
 });

@@ -119,6 +119,7 @@ const mockRouterPush = jest.fn();
 const { StyleSheet: RNStyleSheet } = require('react-native');
 
 jest.mock('expo-router', () => ({
+  useIsFocused: () => true,
   useRouter: () => ({ push: mockRouterPush }),
   useSegments: () => [],
   useNavigation: () => ({ getState: () => ({ index: 1, routes: [] }) }),

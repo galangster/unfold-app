@@ -1,84 +1,21 @@
-/**
- * TypingIndicator — three-dot pulse animation.
- * Opacity-only, no vertical bounce (per user rules).
- *
- * ANIMATION: Fade in on entrance (200ms). Dots pulse internally.
- */
 import { useEffect } from 'react';
-import { View } from 'react-native';
+import { Text } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import Animated, {
-  FadeIn,
-  useSharedValue,
-  useAnimatedStyle,
-  withRepeat,
-  withSequence,
-  withTiming,
-  withDelay,
-  useReducedMotion,
-} from 'react-native-reanimated';
+import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
 import { Duration, Ease } from '@/constants/animations';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { Spacing } from '@/constants/spacing';
-const DOT_SIZE = 6;
-const DOT_GAP = 6;
-const STAGGER = 150;
-const HALF_CYCLE = 400;
-
-function Dot({ delay, color }: { delay: number; color: string }) {
-  const reducedMotion = useReducedMotion();
-  // Static, fully-visible dots when motion is reduced — no endless pulse loop.
-  const opacity = useSharedValue(reducedMotion ? 1 : 0.3);
-
-  useEffect(() => {
-    if (reducedMotion) {
-      opacity.value = 1;
-      return;
-    }
-    opacity.value = withDelay(
-      delay,
-      withRepeat(
-        withSequence(
-          withTiming(1, { duration: HALF_CYCLE }),
-          withTiming(0.3, { duration: HALF_CYCLE })
-        ),
-        -1
-      )
-    );
-  }, [delay, opacity, reducedMotion]);
-
-  const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
-
-  return (
-    <Animated.View
-      style={[
-        {
-          width: DOT_SIZE,
-          height: DOT_SIZE,
-          borderRadius: DOT_SIZE / 2,
-          backgroundColor: color,
-        },
-        style,
-      ]}
-    />
-  );
-}
-
-/* ─────────────────────────────────────────────────────────
- * ANIMATION STORYBOARD — Typing Indicator Entrance
- *
- *   0ms   haptic selection + container fade in (200ms)
- *         dots begin pulsing immediately on mount
- * ───────────────────────────────────────────────────────── */
 
 const ENTERING = FadeIn.duration(Duration.normal).easing(Ease.out);
 
+/** The avatar owns the animated typing spheres. This marks the pending reply. */
 export function TypingIndicator() {
   const { colors } = useTheme();
   const reducedMotion = useReducedMotion();
 
   useEffect(() => {
-    Haptics.selectionAsync();
+    void Haptics.selectionAsync();
   }, []);
 
   return (
@@ -87,20 +24,11 @@ export function TypingIndicator() {
       accessible
       accessibilityLabel="Companion is thinking"
       accessibilityLiveRegion="polite"
-      style={{ flexDirection: 'row', alignItems: 'center', paddingLeft: Spacing['4'] }}
+      style={{ paddingLeft: Spacing['4'] }}
     >
-      {/* Three dots */}
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: DOT_GAP,
-        }}
-      >
-        <Dot delay={0} color={colors.textSubtle} />
-        <Dot delay={STAGGER} color={colors.textSubtle} />
-        <Dot delay={STAGGER * 2} color={colors.textSubtle} />
-      </View>
+      <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.sm, color: colors.textMuted }}>
+        Thinking…
+      </Text>
     </Animated.View>
   );
 }
