@@ -219,6 +219,7 @@ export function ProfileAvatar({ size = 36, editable = false, onPress, testID }: 
           />
         ) : (
           <Text
+            maxFontSizeMultiplier={1.35}
             style={{
               fontFamily: FontFamily.uiSemiBold,
               fontSize,

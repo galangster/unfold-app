@@ -36,9 +36,10 @@ const USER_BUBBLE_RADIUS = {
 
 interface Props {
   message: CompanionMessage;
+  fontScale: number;
 }
 
-export function UserMessageBubble({ message }: Props) {
+export function UserMessageBubble({ message, fontScale }: Props) {
   const { colors } = useTheme();
   const reducedMotion = useReducedMotion();
   const [bubbleSize, setBubbleSize] = useState<{ width: number; height: number } | null>(null);
@@ -94,6 +95,7 @@ export function UserMessageBubble({ message }: Props) {
           </Svg>
         )}
         <Text
+          key={`font-scale-${fontScale}`}
           style={{
             ...Typography.bodyRelaxed,
             color: colors.text,

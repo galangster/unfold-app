@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  useWindowDimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -21,7 +22,6 @@ import Animated, {
   FadeOut,
   interpolate,
   runOnJS,
-  useReducedMotion,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
@@ -30,6 +30,7 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
+import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { DarkColors, createThemedColors } from '@/constants/colors';
 import { useUnfoldStore, ACCENT_THEMES } from '@/lib/store';
 
@@ -930,14 +931,21 @@ function ExpandingRings({ accent }: { accent: string }) {
 
 export const EASE_TEXT = Easing.bezier(0.25, 0.1, 0.25, 1);
 
-export function FeatureRevealWord({ word, delay, color, style }: { word: string; delay: number; color: string; style: any }) {
-  const opacity = useSharedValue(0);
-  const translateY = useSharedValue(14);
+export function FeatureRevealWord({ word, delay, color, style, reducedMotion = false }: { word: string; delay: number; color: string; style: any; reducedMotion?: boolean }) {
+  const opacity = useSharedValue(reducedMotion ? 1 : 0);
+  const translateY = useSharedValue(reducedMotion ? 0 : 14);
 
   useEffect(() => {
+    if (reducedMotion) {
+      opacity.value = 1;
+      translateY.value = 0;
+      return;
+    }
+    opacity.value = 0;
+    translateY.value = 14;
     opacity.value = withDelay(delay, withTiming(1, { duration: 450, easing: EASE_TEXT }));
     translateY.value = withDelay(delay, withTiming(0, { duration: 450, easing: EASE_TEXT }));
-  }, [delay]);
+  }, [delay, opacity, reducedMotion, translateY]);
 
   const animStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
@@ -945,23 +953,29 @@ export function FeatureRevealWord({ word, delay, color, style }: { word: string;
   }));
 
   return (
-    <Animated.Text style={[style, { color }, animStyle]}>
+    <Animated.Text accessible={false} importantForAccessibility="no" style={[style, { color }, animStyle]}>
       {word}{' '}
     </Animated.Text>
   );
 }
 
-export const AnimatedHeadline = memo(function AnimatedHeadline({ text, color, pageKey }: { text: string; color: string; pageKey: number }) {
+export const AnimatedHeadline = memo(function AnimatedHeadline({ text, color, pageKey, reducedMotion = false }: { text: string; color: string; pageKey: number; reducedMotion?: boolean }) {
   const words = useMemo(() => text.split(' '), [text]);
 
   return (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start' }}>
+    <View
+      accessible
+      accessibilityRole="header"
+      accessibilityLabel={text}
+      style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start' }}
+    >
       {words.map((word, i) => (
         <FeatureRevealWord
           key={`${pageKey}-${i}`}
           word={word}
           delay={300 + i * 70}
           color={color}
+          reducedMotion={reducedMotion}
           style={{
             fontFamily: FontFamily.display,
             fontSize: 28,
@@ -974,19 +988,24 @@ export const AnimatedHeadline = memo(function AnimatedHeadline({ text, color, pa
   );
 });
 
-export function AnimatedBody({ text, color, pageKey }: { text: string; color: string; pageKey: number }) {
-  const opacity = useSharedValue(0);
-  const translateY = useSharedValue(10);
+export function AnimatedBody({ text, color, pageKey, reducedMotion = false }: { text: string; color: string; pageKey: number; reducedMotion?: boolean }) {
+  const opacity = useSharedValue(reducedMotion ? 1 : 0);
+  const translateY = useSharedValue(reducedMotion ? 0 : 10);
   const wordCount = text.split(' ').length;
   // Body fades in after all headline words have revealed
   const bodyDelay = 300 + wordCount * 70 + 200;
 
   useEffect(() => {
+    if (reducedMotion) {
+      opacity.value = 1;
+      translateY.value = 0;
+      return;
+    }
     opacity.value = 0;
     translateY.value = 10;
     opacity.value = withDelay(bodyDelay, withTiming(1, { duration: 500, easing: EASE_TEXT }));
     translateY.value = withDelay(bodyDelay, withTiming(0, { duration: 500, easing: EASE_TEXT }));
-  }, [pageKey, bodyDelay]);
+  }, [bodyDelay, opacity, pageKey, reducedMotion, translateY]);
 
   const animStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
@@ -1011,8 +1030,7 @@ export function AnimatedBody({ text, color, pageKey }: { text: string; color: st
   );
 }
 
-export function CardAnimation({ type, accent }: { type: string; accent: string }) {
-  const reducedMotion = useReducedMotion();
+export function CardAnimation({ type, accent, reducedMotion = false }: { type: string; accent: string; reducedMotion?: boolean }) {
   if (reducedMotion) return null;
   switch (type) {
     case 'dots': return <FloatingDots accent={accent} />;
@@ -1037,6 +1055,8 @@ export function CardAnimation({ type, accent }: { type: string; accent: string }
 
 export default function HowItWorksScreen() {
   const router = useRouter();
+  const { fontScale } = useWindowDimensions();
+  const { reducedMotion } = useAccessibleAnimation();
   const accentThemeId = useUnfoldStore((s) => s.user?.accentTheme ?? 'gold');
 
   const colors = useMemo(() => {
@@ -1115,8 +1135,14 @@ export default function HowItWorksScreen() {
           ) : (
             <View style={{ width: 40, height: 40 }} />
           )}
-          <TouchableOpacity activeOpacity={0.7} onPress={handleSkip} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 15, color: colors.textMuted }}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={handleSkip}
+            accessibilityRole="button"
+            accessibilityLabel="Skip introduction"
+            style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Text key={`skip-font-${fontScale}`} style={{ fontFamily: FontFamily.uiMedium, fontSize: 15, color: colors.textMuted }}>
               Skip
             </Text>
           </TouchableOpacity>
@@ -1127,27 +1153,31 @@ export default function HowItWorksScreen() {
           <View style={{ flex: 1 }}>
             <Animated.View
               key={currentPage}
-              entering={FadeIn.duration(Duration.normal)}
-              exiting={FadeOut.duration(Duration.fast)}
+              entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal)}
+              exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast)}
               style={StyleSheet.absoluteFill}
             >
               <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['8'], paddingVertical: Spacing['6'] }}>
                 <View style={{ alignItems: 'center', gap: 36, alignSelf: 'stretch' }}>
                   <View>
-                    <CardAnimation type={page.animation} accent={colors.accent} />
+                    <CardAnimation type={page.animation} accent={colors.accent} reducedMotion={reducedMotion} />
                   </View>
 
                   <View style={{ gap: 12, alignSelf: 'stretch' }}>
                     <AnimatedHeadline
+                      key={`feature-headline-${fontScale}`}
                       text={page.headline}
                       color={colors.text}
                       pageKey={currentPage}
+                      reducedMotion={reducedMotion}
                     />
 
                     <AnimatedBody
+                      key={`feature-body-${fontScale}`}
                       text={page.body}
                       color={colors.textMuted}
                       pageKey={currentPage}
+                      reducedMotion={reducedMotion}
                     />
                   </View>
                 </View>
@@ -1159,10 +1189,17 @@ export default function HowItWorksScreen() {
         {/* Bottom: page dots + continue button */}
         <View style={{ paddingHorizontal: Spacing['6'], paddingBottom: Spacing['6'] }}>
           {/* Page dots */}
-          <View style={{ flexDirection: 'row', justifyContent: 'flex-start', alignItems: 'center', gap: 6, marginBottom: Spacing['6'] }}>
+          <View
+            accessible
+            accessibilityRole="text"
+            accessibilityLabel={`Step ${currentPage + 1} of ${FEATURE_PAGES.length}`}
+            style={{ flexDirection: 'row', justifyContent: 'flex-start', alignItems: 'center', gap: 6, marginBottom: Spacing['6'] }}
+          >
             {FEATURE_PAGES.map((_, index) => (
               <View
                 key={index}
+                accessible={false}
+                importantForAccessibility="no"
                 style={{
                   width: index === currentPage ? 20 : 6,
                   height: 6,
@@ -1174,7 +1211,12 @@ export default function HowItWorksScreen() {
           </View>
 
           {/* Continue button */}
-          <TouchableOpacity activeOpacity={0.7} onPress={handleContinue}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={handleContinue}
+            accessibilityRole="button"
+            accessibilityLabel={isLastPage ? 'Get started' : 'Continue'}
+          >
             <View
               style={{
                 paddingVertical: Spacing['4'],
@@ -1184,6 +1226,7 @@ export default function HowItWorksScreen() {
               }}
             >
               <Text
+                key={`continue-font-${fontScale}`}
                 style={{
                   fontFamily: FontFamily.uiMedium,
                   fontSize: FontSize.base,

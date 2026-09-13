@@ -23,6 +23,7 @@ import { smartQuotes } from '@/lib/smart-quotes';
 interface Props {
   text: string;
   onVersePress: (reference: string) => void;
+  layoutFontScale?: number;
 }
 
 // ── Segment types ─────────────────────────────────────────────────────────
@@ -331,7 +332,7 @@ function InlineText({
 
 // Memoized: during streaming the stable-paragraph prefix re-renders with an
 // unchanged `text` on every token (WR-18) — skip the parse + block rebuild.
-export const RichMessageText = memo(function RichMessageText({ text, onVersePress }: Props) {
+export const RichMessageText = memo(function RichMessageText({ text, onVersePress, layoutFontScale = 1 }: Props) {
   const { colors } = useTheme();
 
   const blocks = useMemo(() => {
@@ -365,7 +366,7 @@ export const RichMessageText = memo(function RichMessageText({ text, onVersePres
   }, [text]);
 
   return (
-    <View>
+    <View key={`font-scale-${layoutFontScale}`}>
       {blocks.map((block, i) => {
         if (!block) return null;
 

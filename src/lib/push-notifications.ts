@@ -172,6 +172,7 @@ export async function registerPushToken(): Promise<PushRegistrationResult> {
   }
 
   if (registeredOwner && isPushRegistrationOwnerCurrent(registeredOwner)) {
+    markPushRegistered();
     return 'registered';
   }
 

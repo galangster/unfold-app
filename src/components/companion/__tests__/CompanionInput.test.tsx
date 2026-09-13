@@ -140,4 +140,58 @@ describe('CompanionInput send clearing', () => {
     expect(onSend).toHaveBeenCalledWith(message);
     expect(tree.root.findByType(TextInput).props.value).toBe(message);
   });
+
+  it('updates the native font-scale prop without remounting or clearing the draft', () => {
+    const onSend = jest.fn(() => true);
+    const onStop = jest.fn();
+    let tree: any;
+
+    act(() => {
+      tree = renderer.create(
+        <CompanionInput
+          onSend={onSend}
+          onStop={onStop}
+          isStreaming={false}
+          fontScale={1}
+        />
+      );
+    });
+    enterText(tree, 'Keep this draft and focus target');
+
+    act(() => {
+      tree.update(
+        <CompanionInput
+          onSend={onSend}
+          onStop={onStop}
+          isStreaming={false}
+          fontScale={2.35}
+        />
+      );
+    });
+
+    const input = tree.root.findByType(TextInput);
+    expect(input.props.value).toBe('Keep this draft and focus target');
+    expect(input.props.maxFontSizeMultiplier).toBe(1.8);
+  });
+
+  it.each([
+    ['Voice input', false, ''],
+    ['Send message', false, 'Ready to send'],
+    ['Stop generating', true, ''],
+  ])('gives %s button semantics and a real 44-point frame', (label, isStreaming, draft) => {
+    const onSend = jest.fn(() => true);
+    let tree: any;
+
+    act(() => {
+      tree = renderer.create(
+        <CompanionInput onSend={onSend} onStop={jest.fn()} isStreaming={isStreaming} />
+      );
+    });
+    if (draft) enterText(tree, draft);
+
+    const button = tree.root.findByProps({ accessibilityLabel: label });
+    expect(button.props.accessibilityRole).toBe('button');
+    expect(button.props.hitSlop).toBeUndefined();
+    expect(button.props.style).toEqual(expect.objectContaining({ width: 44, height: 44 }));
+  });
 });

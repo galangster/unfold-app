@@ -14,6 +14,7 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
   withDelay,
+  cancelAnimation,
   Easing,
 } from 'react-native-reanimated';
 import {
@@ -49,6 +50,8 @@ interface Props {
   /** Present only when a current series exists to file the entry under. Returns true when saved. */
   onSaveToJournal?: (messageId: string) => boolean;
   visible: boolean;
+  motionActive?: boolean;
+  reducedMotion?: boolean;
 }
 
 function ActionButton({
@@ -60,6 +63,8 @@ function ActionButton({
   onPress,
   accessibilityLabel,
   hintColor,
+  motionActive,
+  reducedMotion,
 }: {
   icon: React.ComponentType<any>;
   activeIcon?: React.ComponentType<any>;
@@ -69,12 +74,18 @@ function ActionButton({
   onPress: () => void;
   accessibilityLabel: string;
   hintColor: string;
+  motionActive: boolean;
+  reducedMotion: boolean;
 }) {
-  const opacity = useSharedValue(0);
+  const opacity = useSharedValue(motionActive && !reducedMotion ? 0 : 1);
 
   useEffect(() => {
-    opacity.value = withDelay(delay, withTiming(1, { duration: Duration.fast, easing: EASE_OUT }));
-  }, [delay, opacity]);
+    cancelAnimation(opacity);
+    opacity.value = motionActive && !reducedMotion
+      ? withDelay(delay, withTiming(1, { duration: Duration.fast, easing: EASE_OUT }))
+      : 1;
+    return () => cancelAnimation(opacity);
+  }, [delay, motionActive, opacity, reducedMotion]);
 
   const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
 
@@ -114,6 +125,8 @@ export function CompanionActions({
   onRegenerate,
   onSaveToJournal,
   visible,
+  motionActive = true,
+  reducedMotion = false,
 }: Props) {
   const { colors } = useTheme();
   const setFeedback = useCompanionChatStore((s) => s.setFeedback);
@@ -216,6 +229,8 @@ export function CompanionActions({
             onPress={button.onPress}
             accessibilityLabel={button.accessibilityLabel}
             hintColor={colors.textMuted}
+            motionActive={motionActive}
+            reducedMotion={reducedMotion}
           />
         ))}
       </View>

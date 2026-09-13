@@ -40,17 +40,35 @@ const PLACEHOLDERS = [
 ];
 
 const COMPANION_MESSAGE_COUNTER_THRESHOLD = 3500;
+const MAX_APP_FONT_SCALE = 1.8;
+
+const styles = StyleSheet.create({
+  actionFrame: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionVisual: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});
 
 interface Props {
   onSend: (text: string) => boolean | void;
   onStop: () => void;
   isStreaming: boolean;
+  fontScale?: number;
 }
 
 // Memoized: the companion screen re-renders on every streaming token flush —
-// the input bar's props (stable callbacks + isStreaming) only change at
-// stream boundaries, so the memo skips ~30 re-renders/sec while streaming.
-export const CompanionInput = memo(function CompanionInput({ onSend, onStop, isStreaming }: Props) {
+// the input bar's props (stable callbacks + isStreaming/fontScale) only change
+// at stream or text-size boundaries, so the memo skips token-flush rerenders.
+export const CompanionInput = memo(function CompanionInput({ onSend, onStop, isStreaming, fontScale = 1 }: Props) {
   const { colors, isDark } = useTheme();
   const [text, setText] = useState('');
   const [isVoiceMode, setIsVoiceMode] = useState(false);
@@ -141,6 +159,7 @@ export const CompanionInput = memo(function CompanionInput({ onSend, onStop, isS
       {/* Mic permission denied — explain instead of silently doing nothing */}
       {micPermissionDenied && !isVoiceMode && (
         <Text
+          key={`permission-font-scale-${fontScale}`}
           accessibilityRole="alert"
           style={{
             fontFamily: FontFamily.ui,
@@ -163,8 +182,7 @@ export const CompanionInput = memo(function CompanionInput({ onSend, onStop, isS
           borderColor: colors.border,
           borderRadius: 22,
           paddingLeft: Spacing['4'],
-          paddingRight: 6,
-          paddingVertical: 4,
+          paddingRight: 2,
           minHeight: 44,
         }}
       >
@@ -172,6 +190,7 @@ export const CompanionInput = memo(function CompanionInput({ onSend, onStop, isS
           ref={inputRef}
           testID="companion-input"
           value={text}
+          maxFontSizeMultiplier={Math.min(MAX_APP_FONT_SCALE, Math.max(1, fontScale))}
           onChangeText={setText}
           placeholder={placeholder}
           placeholderTextColor={colors.textMuted}
@@ -200,6 +219,7 @@ export const CompanionInput = memo(function CompanionInput({ onSend, onStop, isS
 
         {showCharacterCounter && (
           <Text
+            key={`counter-font-scale-${fontScale}`}
             style={{
               fontFamily: FontFamily.ui,
               fontSize: FontSize.xs,
@@ -216,40 +236,30 @@ export const CompanionInput = memo(function CompanionInput({ onSend, onStop, isS
         )}
 
         {/* Action button: mic / send / stop */}
-        <Animated.View style={[{ marginBottom: 2 }, sendAnimStyle]}>
+        <Animated.View style={[styles.actionFrame, sendAnimStyle]}>
           {isStreaming ? (
             <TouchableOpacity
               activeOpacity={0.7}
               onPress={handleStop}
               accessibilityLabel="Stop generating"
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: Radius.lg,
-                backgroundColor: alpha(colors.error, 0.60),
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
+              accessibilityRole="button"
+              style={styles.actionFrame}
             >
-              <StopCircleIcon size={18} color={isDark ? '#FFFFFF' : colors.backgroundPure} weight="fill" />
+              <View style={[styles.actionVisual, { backgroundColor: alpha(colors.error, 0.60) }]}>
+                <StopCircleIcon size={18} color={isDark ? '#FFFFFF' : colors.backgroundPure} weight="fill" />
+              </View>
             </TouchableOpacity>
           ) : showMic ? (
             <TouchableOpacity
               activeOpacity={0.7}
               onPress={handleMicPress}
               accessibilityLabel="Voice input"
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: Radius.lg,
-                backgroundColor: colors.buttonBackground,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
+              accessibilityRole="button"
+              style={styles.actionFrame}
             >
-              <MicrophoneIcon size={18} color={colors.textMuted} weight="light" />
+              <View style={[styles.actionVisual, { backgroundColor: colors.buttonBackground }]}>
+                <MicrophoneIcon size={18} color={colors.textMuted} weight="light" />
+              </View>
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
@@ -258,21 +268,16 @@ export const CompanionInput = memo(function CompanionInput({ onSend, onStop, isS
               disabled={!canSend}
               testID="companion-send"
               accessibilityLabel="Send message"
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: Radius.lg,
-                backgroundColor: colors.accent,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
+              accessibilityRole="button"
+              style={styles.actionFrame}
             >
-              <ArrowUpIcon
-                size={18}
-                color={isDark ? '#FFFFFF' : colors.backgroundPure}
-                weight="bold"
-              />
+              <View style={[styles.actionVisual, { backgroundColor: colors.accent }]}>
+                <ArrowUpIcon
+                  size={18}
+                  color={isDark ? '#FFFFFF' : colors.backgroundPure}
+                  weight="bold"
+                />
+              </View>
             </TouchableOpacity>
           )}
         </Animated.View>

@@ -121,7 +121,7 @@ function BottomGlow({
 function DevotionalTabHeader({ onOpenPastSeries }: { onOpenPastSeries: () => void }) {
   const { colors } = useTheme();
   return (
-    <View style={[styles.header, styles.headerTabRoot]}>
+    <View testID="devotional-tab-header" style={[styles.header, styles.headerTabRoot]}>
       <Text style={[styles.headerTitle, styles.headerTitleTabRoot, { color: colors.text }]}>
         Devotional
       </Text>
@@ -239,7 +239,7 @@ export function SeriesArcScreen({ hostTab, chrome = 'stack' }: SeriesArcScreenPr
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
-          <View style={[frameStyle, { flex: 1 }]}>
+          <View key={`series-empty-${layout.fontScale}`} style={[frameStyle, { flex: 1 }]}>
           <DevotionalTabHeader onOpenPastSeries={openPastSeries} />
           <View style={styles.emptyState}>
             <Text style={[styles.seriesTitle, { color: colors.text }]}>
@@ -271,7 +271,7 @@ export function SeriesArcScreen({ hostTab, chrome = 'stack' }: SeriesArcScreenPr
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
-          <View style={[frameStyle, { flex: 1 }]}>
+          <View key={`series-missing-${layout.fontScale}`} style={[frameStyle, { flex: 1 }]}>
           <View style={styles.header}>
             <TouchableOpacity
               activeOpacity={0.7}
@@ -301,9 +301,12 @@ export function SeriesArcScreen({ hostTab, chrome = 'stack' }: SeriesArcScreenPr
           <View style={[frameStyle, { flex: 1 }]}>
         {/* Header */}
         {chrome === 'tabRoot' ? (
-          <DevotionalTabHeader onOpenPastSeries={openPastSeries} />
+          <DevotionalTabHeader
+            key={`devotional-header-${layout.fontScale}`}
+            onOpenPastSeries={openPastSeries}
+          />
         ) : (
-          <View style={styles.header}>
+          <View key={`series-header-${layout.fontScale}`} style={styles.header}>
             <TouchableOpacity
               activeOpacity={0.7}
               onPress={handleBack}
@@ -321,11 +324,13 @@ export function SeriesArcScreen({ hostTab, chrome = 'stack' }: SeriesArcScreenPr
         )}
 
         <ScrollView
+          testID="series-detail-scroll"
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
           {chrome === 'tabRoot' ? (
             <BookOfSeasonsView
+              key={`book-of-seasons-${layout.fontScale}`}
               devotional={devotional}
               now={now}
               colors={colors}
@@ -335,7 +340,10 @@ export function SeriesArcScreen({ hostTab, chrome = 'stack' }: SeriesArcScreenPr
           ) : (
             <>
           {/* Series info */}
-          <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}>
+          <Animated.View
+            key={`series-info-${layout.fontScale}`}
+            entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
+          >
             <Text style={[styles.dateLabel, { color: colors.textHint }]}>
               {createdDate}
             </Text>
@@ -364,7 +372,7 @@ export function SeriesArcScreen({ hostTab, chrome = 'stack' }: SeriesArcScreenPr
           </Animated.View>
 
           {/* Day list — grouped under named movements when the arc has them */}
-          <View style={styles.dayList}>
+          <View key={`series-days-${layout.fontScale}`} style={styles.dayList}>
             {listDaysInOrder(devotional.days)
               .map((day) => {
                 // A movement header renders above the first day of each act.

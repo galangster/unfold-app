@@ -1,4 +1,4 @@
-import { View } from 'react-native';
+import { TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { ProfileAvatar } from '@/components/ProfileAvatar';
@@ -16,15 +16,24 @@ export function ProfileEntryButton({
   const router = useRouter();
 
   return (
-    <View style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
-      <ProfileAvatar
-        size={size}
-        testID={testID}
-        onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          router.push('/(tabs)/(you)');
-        }}
-      />
-    </View>
+    <TouchableOpacity
+      activeOpacity={0.7}
+      testID={testID}
+      accessibilityLabel="Open profile"
+      accessibilityRole="button"
+      onPress={() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        router.push('/(tabs)/(you)');
+      }}
+      style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+    >
+      <View
+        pointerEvents="none"
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+      >
+        <ProfileAvatar size={size} />
+      </View>
+    </TouchableOpacity>
   );
 }

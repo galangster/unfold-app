@@ -79,6 +79,7 @@ const MessageItem = React.memo(function MessageItem({
   isFirstInGroup,
   isLastMessage,
   isStreaming,
+  fontScale,
   motionActive,
   reducedMotion,
   onVersePress,
@@ -90,6 +91,7 @@ const MessageItem = React.memo(function MessageItem({
   isFirstInGroup: boolean;
   isLastMessage: boolean;
   isStreaming: boolean;
+  fontScale: number;
   motionActive: boolean;
   reducedMotion: boolean;
   onVersePress: (reference: string) => void;
@@ -102,7 +104,7 @@ const MessageItem = React.memo(function MessageItem({
   if (item.role === 'user') {
     return (
       <View style={gapStyle}>
-        <UserMessageBubble message={item} />
+        <UserMessageBubble message={item} fontScale={fontScale} />
       </View>
     );
   }
@@ -115,6 +117,7 @@ const MessageItem = React.memo(function MessageItem({
       <CompanionMessageContent
         message={item}
         isStreaming={isStreaming}
+        fontScale={fontScale}
         motionActive={motionActive}
         reduceMotion={reducedMotion}
         onVersePress={onVersePress}
@@ -129,6 +132,8 @@ const MessageItem = React.memo(function MessageItem({
           onRegenerate={onRegenerate}
           onSaveToJournal={onSaveToJournal}
           visible
+          motionActive={motionActive}
+          reducedMotion={reducedMotion}
         />
       )}
     </View>
@@ -140,6 +145,7 @@ const MessageItem = React.memo(function MessageItem({
   prev.item.feedback === next.item.feedback &&
   prev.item.feedbackReason === next.item.feedbackReason &&
   prev.isStreaming === next.isStreaming &&
+  prev.fontScale === next.fontScale &&
   prev.motionActive === next.motionActive &&
   prev.reducedMotion === next.reducedMotion &&
   prev.isFirstInGroup === next.isFirstInGroup &&
@@ -157,7 +163,7 @@ const MemoPremiumFeatureSheet = React.memo(PremiumFeatureSheet);
 // Height of the custom absolutely-positioned tab bar (content + padding)
 const TAB_BAR_CONTENT_HEIGHT = 56;
 const HEADER_COMPANION_SIZE = 64;
-const TOOLBAR_SIDE_SLOT_WIDTH = 84;
+const TOOLBAR_SIDE_SLOT_WIDTH = 88;
 
 // ── Screen ─────────────────────────────────────────────────────────────────
 
@@ -431,7 +437,8 @@ export default function CompanionScreen() {
           isFirstInGroup={isFirstInGroup}
           isLastMessage={isLastMessage}
           isStreaming={isThisStreaming}
-          motionActive={isFocused}
+          fontScale={fontScale}
+          motionActive={isFocused && !drawerOpen}
           reducedMotion={reducedMotion}
           onVersePress={handleVersePress}
           onRetry={onRetry}
@@ -440,12 +447,67 @@ export default function CompanionScreen() {
         />
       );
     },
-    [activeRequestCompanionId, isStreaming, isFocused, reducedMotion, handleVersePress, onRegenerate, handleSaveToJournal, hasCurrentDevotional]
+    [activeRequestCompanionId, isStreaming, fontScale, isFocused, drawerOpen, reducedMotion, handleVersePress, onRegenerate, handleSaveToJournal, hasCurrentDevotional]
   );
 
   const keyExtractor = useCallback((item: CompanionMessage) => item.id, []);
 
   const isEmpty = messages.length === 0;
+  const dailyLimitAccessibilityLabel = dailyRemaining === 0
+    ? 'Daily message limit reached. Tap to upgrade.'
+    : dailyRemaining === FREE_COMPANION_DAILY_LIMIT
+      ? `${FREE_COMPANION_DAILY_LIMIT} free messages today`
+      : `${dailyRemaining} of ${FREE_COMPANION_DAILY_LIMIT} free messages remaining today`;
+  const dailyLimitStyle = {
+    flexDirection: 'row' as const,
+    flexShrink: 0,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    minHeight: 44,
+    paddingVertical: 6,
+    paddingHorizontal: Spacing['4'],
+    gap: 6,
+    backgroundColor: dailyRemaining === 0 ? alpha(colors.accent, 0.12) : 'transparent',
+  };
+  const dailyLimitContent = isPremium ? null : dailyRemaining === 0 ? (
+    <>
+      <CrownIcon size={13} color={colors.accent} weight="fill" />
+      <Text
+        key={`quota-font-${fontScale}`}
+        style={{
+          fontFamily: FontFamily.uiMedium,
+          fontSize: FontSize.xs,
+          color: colors.accent,
+        }}
+      >
+        Daily limit reached. Upgrade for unlimited.
+      </Text>
+    </>
+  ) : dailyRemaining === FREE_COMPANION_DAILY_LIMIT ? (
+    <Text
+      key={`quota-font-${fontScale}`}
+      style={{
+        fontFamily: FontFamily.ui,
+        fontSize: FontSize.xs,
+        color: colors.textSubtle,
+        fontVariant: ['tabular-nums'],
+      }}
+    >
+      {FREE_COMPANION_DAILY_LIMIT} free messages today
+    </Text>
+  ) : (
+    <Text
+      key={`quota-font-${fontScale}`}
+      style={{
+        fontFamily: FontFamily.ui,
+        fontSize: FontSize.xs,
+        color: colors.textSubtle,
+        fontVariant: ['tabular-nums'],
+      }}
+    >
+      {dailyRemaining} of {FREE_COMPANION_DAILY_LIMIT} free messages left today
+    </Text>
+  );
 
   return (
     <GestureDetector gesture={drawerPanGesture}>
@@ -473,11 +535,10 @@ export default function CompanionScreen() {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               handleDrawerOpen();
             }}
-            hitSlop={8}
             activeOpacity={0.7}
             accessibilityLabel="Open conversation history"
             accessibilityRole="button"
-            style={{ width: 40, height: 44, alignItems: 'center', justifyContent: 'center' }}
+            style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
           >
             <List size={22} color={colors.textMuted} weight="light" />
           </TouchableOpacity>
@@ -513,11 +574,10 @@ export default function CompanionScreen() {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               handleNewChat();
             }}
-            hitSlop={8}
             activeOpacity={0.7}
             accessibilityLabel="New conversation"
             accessibilityRole="button"
-            style={{ width: 40, height: 44, alignItems: 'flex-end', justifyContent: 'center' }}
+            style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
           >
             <NotePencil size={22} color={colors.textMuted} weight="light" />
           </TouchableOpacity>
@@ -619,72 +679,28 @@ export default function CompanionScreen() {
 
       {/* Daily limit indicator for free users — shown at full quota too, not
           only once some has been spent */}
-      {!isPremium && (
+      {!isPremium && dailyRemaining === 0 && (
         <TouchableOpacity
           activeOpacity={0.7}
           accessibilityRole="button"
           onPress={() => {
-            if (dailyRemaining === 0) {
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-              setShowPremiumSheet(true);
-            }
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            setShowPremiumSheet(true);
           }}
-          style={{
-            flexDirection: 'row',
-            flexShrink: 0,
-            alignItems: 'center',
-            justifyContent: 'center',
-            minHeight: 44,
-            paddingVertical: 6,
-            paddingHorizontal: Spacing['4'],
-            gap: 6,
-            backgroundColor: dailyRemaining === 0 ? alpha(colors.accent, 0.12) : 'transparent',
-          }}
-          accessibilityLabel={
-            dailyRemaining === 0
-              ? 'Daily message limit reached. Tap to upgrade.'
-              : dailyRemaining === FREE_COMPANION_DAILY_LIMIT
-                ? `${FREE_COMPANION_DAILY_LIMIT} free messages today`
-                : `${dailyRemaining} of ${FREE_COMPANION_DAILY_LIMIT} free messages remaining today`
-          }
+          style={dailyLimitStyle}
+          accessibilityLabel={dailyLimitAccessibilityLabel}
         >
-          {dailyRemaining === 0 ? (
-            <>
-              <CrownIcon size={13} color={colors.accent} weight="fill" />
-              <Text
-                style={{
-                  fontFamily: FontFamily.uiMedium,
-                  fontSize: FontSize.xs,
-                  color: colors.accent,
-                }}
-              >
-                Daily limit reached. Upgrade for unlimited.
-              </Text>
-            </>
-          ) : dailyRemaining === FREE_COMPANION_DAILY_LIMIT ? (
-            <Text
-              style={{
-                fontFamily: FontFamily.ui,
-                fontSize: FontSize.xs,
-                color: colors.textSubtle,
-                fontVariant: ['tabular-nums'],
-              }}
-            >
-              {FREE_COMPANION_DAILY_LIMIT} free messages today
-            </Text>
-          ) : (
-            <Text
-              style={{
-                fontFamily: FontFamily.ui,
-                fontSize: FontSize.xs,
-                color: colors.textSubtle,
-                fontVariant: ['tabular-nums'],
-              }}
-            >
-              {dailyRemaining} of {FREE_COMPANION_DAILY_LIMIT} free messages left today
-            </Text>
-          )}
+          {dailyLimitContent}
         </TouchableOpacity>
+      )}
+      {!isPremium && dailyRemaining > 0 && (
+        <View
+          accessible
+          accessibilityLabel={dailyLimitAccessibilityLabel}
+          style={dailyLimitStyle}
+        >
+          {dailyLimitContent}
+        </View>
       )}
 
       {/* Input bar */}
@@ -694,6 +710,7 @@ export default function CompanionScreen() {
         onSend={handleSend}
         onStop={stopGeneration}
         isStreaming={isStreaming}
+        fontScale={fontScale}
       />
       </View>
       </View>

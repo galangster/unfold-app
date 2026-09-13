@@ -45,7 +45,7 @@ describe('CompanionOrb touchable-only-when-pressable source contract', () => {
     expect(toolbarOrb).toContain('active={isFocused && !drawerOpen}');
     expect(toolbarOrb).not.toContain('onPress');
     expect(askIndex).toContain('const HEADER_COMPANION_SIZE = 64');
-    expect(askIndex).toContain('const TOOLBAR_SIDE_SLOT_WIDTH = 84');
+    expect(askIndex).toContain('const TOOLBAR_SIDE_SLOT_WIDTH = 88');
     expect(askIndex).not.toContain('showCompanionPresence');
     expect(askIndex).not.toMatch(/isActive=\{isStreaming\}/);
   });

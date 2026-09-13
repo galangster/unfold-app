@@ -17,6 +17,10 @@ const notificationsSrc = fs.readFileSync(
   path.join(sourceRoot, 'lib/notifications.ts'),
   'utf-8',
 );
+const youSrc = fs.readFileSync(
+  path.join(sourceRoot, 'app/(tabs)/(you)/index.tsx'),
+  'utf-8',
+);
 
 describe('Settings appearance rows Dynamic Type contract (RT-DYN-1/RT-DYN-2)', () => {
   it('defines the settings-row scale caps', () => {
@@ -32,6 +36,20 @@ describe('Settings appearance rows Dynamic Type contract (RT-DYN-1/RT-DYN-2)', (
     expect(appearanceSrc).toContain('label="Font size"');
     expect((appearanceSrc.match(/maxFontSizeMultiplier=\{SETTINGS_LABEL_MAX_SCALE\}/g) ?? []).length).toBe(1);
     expect((appearanceSrc.match(/maxFontSizeMultiplier=\{SETTINGS_CHIP_MAX_SCALE\}/g) ?? []).length).toBe(2);
+  });
+});
+
+describe('Profile name touch target contract', () => {
+  it('keeps both display and editing states at least 44 points tall', () => {
+    const inputBlock = youSrc.slice(
+      youSrc.indexOf('<TextInput'),
+      youSrc.indexOf('/>', youSrc.indexOf('<TextInput')),
+    );
+    const buttonLabel = youSrc.indexOf('accessibilityLabel="Edit your name"');
+    const buttonBlock = youSrc.slice(buttonLabel, buttonLabel + 500);
+
+    expect(inputBlock).toContain('minHeight: 44');
+    expect(buttonBlock).toContain('minHeight: 44');
   });
 });
 

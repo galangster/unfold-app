@@ -1,4 +1,5 @@
 import React from 'react';
+import type { ReactTestRenderer } from 'react-test-renderer';
 import { canonicalGeneratedDayId } from '../devotional-canonical-days';
 import type { Devotional, DevotionalDay } from '../store';
 
@@ -10,6 +11,7 @@ const mockSetCurrentDevotional = jest.fn();
 let mockParams: { id?: string } = {};
 let mockDevotionals: Devotional[] = [];
 let mockCurrentDevotionalId: string | null = 'devo-1';
+let mockFontScale = 1;
 
 const now = new Date();
 const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 3, 12).toISOString();
@@ -83,6 +85,10 @@ jest.mock('@/lib/store', () => ({
 
 jest.mock('@/hooks/useCrossTabBack', () => ({
   useCrossTabBack: () => ({ handleBack: jest.fn() }),
+}));
+
+jest.mock('@/hooks/useAdaptiveLayout', () => ({
+  useAdaptiveLayout: () => ({ clusterMaxWidth: 560, fontScale: mockFontScale }),
 }));
 
 jest.mock('@/lib/theme', () => ({
@@ -210,10 +216,28 @@ beforeEach(() => {
   mockSetCurrentDevotional.mockClear();
   mockParams = {};
   mockCurrentDevotionalId = 'devo-1';
+  mockFontScale = 1;
   mockDevotionals = [withActs()];
 });
 
 describe('Book of Seasons tab root', () => {
+  it('remounts text content for live font changes without remounting the scroll view', () => {
+    let tree!: ReactTestRenderer;
+    const screen = () => React.createElement(SeriesArcScreen, { hostTab: '(study)', chrome: 'tabRoot' });
+    act(() => { tree = renderer.create(screen()); });
+
+    const scroll = tree.root.findByProps({ testID: 'series-detail-scroll' });
+    const header = tree.root.findByProps({ testID: 'devotional-tab-header' });
+    const book = tree.root.findByProps({ testID: 'book-of-seasons' });
+
+    mockFontScale = 2;
+    act(() => { tree.update(screen()); });
+
+    expect(tree.root.findByProps({ testID: 'series-detail-scroll' })).toBe(scroll);
+    expect(tree.root.findByProps({ testID: 'devotional-tab-header' })).not.toBe(header);
+    expect(tree.root.findByProps({ testID: 'book-of-seasons' })).not.toBe(book);
+  });
+
   it('keeps real days accessible when a legacy series has no chapters', () => {
     mockDevotionals = [withActs({ seriesArc: undefined })];
     const tree = renderTab();
