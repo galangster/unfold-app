@@ -56,6 +56,7 @@ export type SendOutcome = 'sent' | 'noop' | 'error';
 interface RegenerateTurn {
   companionId: string;
   previousReply: string;
+  originalMessage: CompanionMessage;
   reason?: string;
 }
 
@@ -409,10 +410,14 @@ export function useCompanionChat() {
     abort: AbortController;
     companionId: string;
     lastActivityAt: number;
+    stoppedByUser: boolean;
   }>());
   const [, setStreamVersion] = useState(0);
   const bumpStreamVersion = useCallback(() => setStreamVersion((v) => v + 1), []);
   const isStreaming = activeConversationId != null && inFlightRef.current.has(activeConversationId);
+  const activeRequestCompanionId = activeConversationId
+    ? inFlightRef.current.get(activeConversationId)?.companionId ?? null
+    : null;
 
   // Phase 4: Gather user context
   const userName = useUnfoldStore((s) => s.user?.name ?? null);
@@ -548,6 +553,7 @@ export function useCompanionChat() {
         abort: abortController,
         companionId,
         lastActivityAt: Date.now(),
+        stoppedByUser: false,
       };
       inFlightRef.current.set(streamConversationId, inFlightRequest);
       bumpStreamVersion();
@@ -804,7 +810,33 @@ export function useCompanionChat() {
       } catch (err: any) {
         cancelThrottle();
         if (err.name === 'AbortError') {
-          // User stopped — flush any buffered tokens before setting status
+          // An explicit Stop before any text should not become a red failure
+          // bubble. New placeholders were never durable, so remove only that
+          // local row. A stopped regeneration restores its original reply.
+          if (inFlightRequest.stoppedByUser && !accumulatedText) {
+            if (regenerate) {
+              updateMessage(companionId, regenerate.originalMessage, streamConversationId);
+            } else {
+              useCompanionChatStore.setState((state) => ({
+                conversations: state.conversations.map((conversation) => {
+                  if (conversation.id !== streamConversationId) return conversation;
+                  const currentMessages = conversation.messages ?? [];
+                  const messagesWithoutPendingReply = currentMessages.filter((message) => !(
+                    message.id === companionId &&
+                    message.role === 'companion' &&
+                    message.status === 'streaming' &&
+                    message.content === ''
+                  ));
+                  return messagesWithoutPendingReply.length === currentMessages.length
+                    ? conversation
+                    : { ...conversation, messages: messagesWithoutPendingReply };
+                }),
+              }));
+            }
+            return 'error';
+          }
+
+          // Preserve any buffered text for explicit stops and other aborts.
           if (accumulatedText) {
             updateMessage(companionId, { content: accumulatedText }, streamConversationId);
           }
@@ -895,6 +927,7 @@ export function useCompanionChat() {
       return runTurn(target.userMessage.content, {
         companionId: companionMessage.id,
         previousReply,
+        originalMessage: companionMessage,
         reason: options?.reason,
       });
     },
@@ -907,12 +940,17 @@ export function useCompanionChat() {
     // Stop targets the conversation the user is looking at — never an
     // invisible background stream (WR-09).
     const active = useCompanionChatStore.getState().activeConversationId;
-    if (active) inFlightRef.current.get(active)?.abort.abort();
+    const request = active ? inFlightRef.current.get(active) : undefined;
+    if (request) {
+      request.stoppedByUser = true;
+      request.abort.abort();
+    }
   }, []);
 
   return {
     messages,
     isStreaming,
+    activeRequestCompanionId,
     isSearching,
     suggestions,
     error,
