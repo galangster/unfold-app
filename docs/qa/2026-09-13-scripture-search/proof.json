@@ -1,0 +1,66 @@
+{
+  "base": "a3efce34c05f5e3f6917783b002390ac09969acd",
+  "native": {
+    "micahInline": true,
+    "exactChapterContext": true,
+    "backPreservesSearch": true,
+    "clearRestoresBooks": true,
+    "rangeBothVerses": true,
+    "bareBookCompleteChapter51Verses": true
+  },
+  "sourceProvenance": {
+    "checks": [
+      {
+        "source": "src/app/(tabs)/(bible)/index.tsx",
+        "matches": true,
+        "sha256": "af1413d98e5b4579daf1d358316d6422dc8283e63f8724a7a1e29dbe89d1936c"
+      },
+      {
+        "source": "src/app/(tabs)/(bible)/reader.tsx",
+        "matches": true,
+        "sha256": "333f87d7b6c7af1dcccb396e8362920823d1575979ca05cb23e13505640254c5"
+      },
+      {
+        "source": "src/hooks/useBibleSearch.ts",
+        "matches": true,
+        "sha256": "d4ed01c0f3e542f1d803f62cdb05e7bd62f428a883f71f4454f99c4bea21cbc3"
+      },
+      {
+        "source": "src/lib/bible-db.ts",
+        "matches": true,
+        "sha256": "09563b6d1cbe71cabce36f6571e2f4bd6bf51eedea8ad0e0fce703571afdf3ed"
+      },
+      {
+        "source": "src/lib/bible-constants.ts",
+        "matches": true,
+        "sha256": "8a52c79fb2577d94b2f3bdff225b051febbdc268e115d8941e547e003ff171ea"
+      }
+    ],
+    "bundleSha256": "b1976217a1eeca69a67de6fbeb7c25cc327665e3b4711e1a5722c0b92acbb43e"
+  },
+  "installed": {
+    "installedBundleSha256": "b1976217a1eeca69a67de6fbeb7c25cc327665e3b4711e1a5722c0b92acbb43e",
+    "matchesExport": true
+  },
+  "validation": {
+    "typecheck": "PASS",
+    "lint": "PASS: 0 errors, 3800 repository warnings",
+    "jest": "PASS: 430 suites, 3739 tests, 1 suite and 1 test skipped",
+    "profileSafety": "PASS",
+    "maestroSelectors": "PASS"
+  },
+  "review": {
+    "independent": "Sol High reviewed the change. All findings corrected and verified.",
+    "simplify": "Single orchestrator pass. Shared complete-chapter query, canonical parser, and one validation per translation."
+  },
+  "nativeRuntime": {
+    "source": "PR119 production simulator shell at 350ad32f",
+    "sourceUnchanged": true,
+    "nativeInputsMatchBase": true,
+    "simulator": "Unfold Scripture QA",
+    "os": "iOS 26.5",
+    "version": "1.1.11",
+    "build": "183"
+  },
+  "release": "Source candidate for combined 1.1.11. Release coordinator owns merge and distribution."
+}

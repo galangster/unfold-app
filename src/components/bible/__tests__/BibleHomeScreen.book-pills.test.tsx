@@ -91,8 +91,12 @@ jest.mock('@/lib/theme', () => ({
 }));
 
 jest.mock('@/lib/store', () => ({
-  useUnfoldStore: (selector: (state: { bibleReadingHistory: never[] }) => unknown) =>
-    selector({ bibleReadingHistory: [] }),
+  useUnfoldStore: (selector: (state: { bibleReadingHistory: never[]; bibleReaderSettings: { translation: string } }) => unknown) =>
+    selector({ bibleReadingHistory: [], bibleReaderSettings: { translation: 'BSB' } }),
+}));
+
+jest.mock('@/hooks/useBibleSearch', () => ({
+  useBibleSearch: () => ({ query: '', setQuery: jest.fn(), results: [], isSearching: false, error: null }),
 }));
 
 jest.mock('@/hooks/useBibleDb', () => ({

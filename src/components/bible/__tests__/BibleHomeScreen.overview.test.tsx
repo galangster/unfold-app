@@ -34,6 +34,13 @@ const mockBibleDbState = { isReady: true };
 const mockStoreState = {
   lastPosition: null as { bookId: number; chapter: number; bookName: string; verse?: number } | null,
 };
+const mockBibleSearchState = {
+  query: '',
+  results: [] as { id: number; bookId: number; chapter: number; verse: number; text: string; translation: 'BSB'; snippet: string; bookName: string; reference: string }[],
+  isSearching: false,
+  error: null as string | null,
+};
+const mockSetBibleQuery = jest.fn((query: string) => { mockBibleSearchState.query = query; });
 
 jest.spyOn(jest.requireActual('react-native'), 'useWindowDimensions').mockImplementation(() => ({
   ...mockBibleWindow,
@@ -158,8 +165,13 @@ jest.mock('@/lib/theme', () => {
 });
 
 jest.mock('@/lib/store', () => ({
-  useUnfoldStore: (selector: (state: { bibleReadingHistory: NonNullable<typeof mockStoreState.lastPosition>[] }) => unknown) =>
-    selector({ bibleReadingHistory: mockStoreState.lastPosition ? [mockStoreState.lastPosition] : [] }),
+  useUnfoldStore: (selector: (state: {
+    bibleReadingHistory: NonNullable<typeof mockStoreState.lastPosition>[];
+    bibleReaderSettings: { translation: 'BSB' };
+  }) => unknown) => selector({
+    bibleReadingHistory: mockStoreState.lastPosition ? [mockStoreState.lastPosition] : [],
+    bibleReaderSettings: { translation: 'BSB' },
+  }),
 }));
 
 jest.mock('@/hooks/useBibleDb', () => ({
@@ -170,6 +182,10 @@ jest.mock('@/hooks/useBibleDb', () => ({
     download: jest.fn(),
     error: null,
   }),
+}));
+
+jest.mock('@/hooks/useBibleSearch', () => ({
+  useBibleSearch: () => ({ ...mockBibleSearchState, setQuery: mockSetBibleQuery }),
 }));
 
 jest.mock('@/components/bible/DownloadBibleSheet', () => ({
@@ -260,6 +276,11 @@ describe('Bible hub overview restoration', () => {
     mockThemeState.accent = DarkColors.accent;
     mockBibleDbState.isReady = true;
     mockStoreState.lastPosition = null;
+    mockBibleSearchState.query = '';
+    mockBibleSearchState.results = [];
+    mockBibleSearchState.isSearching = false;
+    mockBibleSearchState.error = null;
+    mockSetBibleQuery.mockClear();
     bibleHomeMeta().clear();
   });
 
@@ -456,13 +477,32 @@ describe('Bible hub overview restoration', () => {
     }
   });
 
-  it('routes search and continue reading from the hub', () => {
+  it('keeps search inline and routes a result to its exact verse', () => {
     mockStoreState.lastPosition = { bookId: 43, chapter: 3, bookName: 'John', verse: 16 };
+    mockBibleSearchState.query = 'John 3:16';
+    mockBibleSearchState.results = [{
+      id: 1,
+      bookId: 43,
+      chapter: 3,
+      verse: 16,
+      text: 'For God so loved the world.',
+      translation: 'BSB',
+      snippet: 'For God so loved the world.',
+      bookName: 'John',
+      reference: 'John 3:16',
+    }];
     const tree = createHome();
+    expect(tree.root.findByProps({ accessibilityLabel: 'Search the Bible' }).props.value).toBe('John 3:16');
+    expect(tree.root.findAllByProps({ accessibilityLabel: 'Genesis' })).toHaveLength(0);
     act(() => {
-      tree.root.findByProps({ accessibilityLabel: 'Search the Bible' }).props.onPress();
+      tree.root.findByProps({ accessibilityLabel: 'John 3:16. For God so loved the world.' }).props.onPress();
     });
-    expect(mockRouter.push).toHaveBeenCalledWith('/(tabs)/(bible)/search');
+    expect(mockRouter.push).toHaveBeenCalledWith('/(tabs)/(bible)/reader?bookId=43&chapter=3&verse=16&fromSearch=true');
+
+    mockBibleSearchState.query = '';
+    mockBibleSearchState.results = [];
+    act(() => tree.update(<BibleHomeScreen />));
+    expect(renderedBookNames(tree)).toContain('Genesis');
     act(() => {
       tree.root.findByProps({ accessibilityLabel: 'Continue reading John 3' }).props.onPress();
     });

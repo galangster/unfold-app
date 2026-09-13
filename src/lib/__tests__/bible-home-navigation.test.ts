@@ -48,6 +48,9 @@ jest.mock('@/lib/theme', () => ({
 jest.mock('@/lib/store', () => ({
   useUnfoldStore: () => () => null,
 }));
+jest.mock('@/hooks/useBibleSearch', () => ({
+  useBibleSearch: () => ({ query: '', setQuery: jest.fn(), results: [], isSearching: false, error: null }),
+}));
 jest.mock('@/hooks/useBibleDb', () => ({
   useBibleDb: () => ({
     isReady: true,
