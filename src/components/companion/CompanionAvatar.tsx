@@ -2,6 +2,7 @@ import { memo, useEffect, useId, useMemo, useState } from 'react';
 import { AppState, type AppStateStatus, StyleSheet, View } from 'react-native';
 import Animated, {
   Easing,
+  ReduceMotion,
   cancelAnimation,
   interpolate,
   useAnimatedStyle,
@@ -56,6 +57,12 @@ function useIsAppActive(): boolean {
 
 function cancelValues(...values: SharedValue<number>[]) {
   for (const value of values) cancelAnimation(value);
+}
+
+// The live accessibility gate owns motion. Reanimated caches its System flag at startup.
+// Override that stale flag only after the gate permits animation. Children inherit this policy.
+function withLiveMotion(animation: number): number {
+  return withDelay(0, animation, ReduceMotion.Never);
 }
 
 function thinkingSequence(distance: number) {
@@ -128,46 +135,46 @@ export const CompanionAvatar = memo(function CompanionAvatar({
     }
 
     if (thinking) {
-      blink.value = withTiming(0, { duration: 120, easing: LIFE_EASE });
-      glance.value = withTiming(0, { duration: 240, easing: LIFE_EASE });
-      joyWeight.value = withTiming(0, { duration: 420, easing: LIFE_EASE }, (finished) => {
+      blink.value = withLiveMotion(withTiming(0, { duration: 120, easing: LIFE_EASE }));
+      glance.value = withLiveMotion(withTiming(0, { duration: 240, easing: LIFE_EASE }));
+      joyWeight.value = withLiveMotion(withTiming(0, { duration: 420, easing: LIFE_EASE }, (finished) => {
         if (finished) joy.value = 0;
-      });
-      identity.value = withTiming(0, { duration: COMPANION_IDENTITY_OUT_MS, easing: LIFE_EASE });
-      morphCenter.value = withTiming(1, { duration: COMPANION_MORPH_MS, easing: MORPH_EASE });
-      morphLeft.value = withDelay(45, withTiming(1, { duration: COMPANION_MORPH_MS, easing: MORPH_EASE }));
-      morphRight.value = withDelay(90, withTiming(1, { duration: COMPANION_MORPH_MS, easing: MORPH_EASE }));
+      }));
+      identity.value = withLiveMotion(withTiming(0, { duration: COMPANION_IDENTITY_OUT_MS, easing: LIFE_EASE }));
+      morphCenter.value = withLiveMotion(withTiming(1, { duration: COMPANION_MORPH_MS, easing: MORPH_EASE }));
+      morphLeft.value = withLiveMotion(withDelay(45, withTiming(1, { duration: COMPANION_MORPH_MS, easing: MORPH_EASE })));
+      morphRight.value = withLiveMotion(withDelay(90, withTiming(1, { duration: COMPANION_MORPH_MS, easing: MORPH_EASE })));
       const distance = COMPANION_THINKING_Y * layout.viewScale;
-      bobLeft.value = withDelay(COMPANION_MORPH_MS + COMPANION_THINKING_DELAYS_MS[0], thinkingSequence(distance));
-      bobCenter.value = withDelay(COMPANION_MORPH_MS + COMPANION_THINKING_DELAYS_MS[1], thinkingSequence(distance));
-      bobRight.value = withDelay(COMPANION_MORPH_MS + COMPANION_THINKING_DELAYS_MS[2], thinkingSequence(distance));
+      bobLeft.value = withLiveMotion(withDelay(COMPANION_MORPH_MS + COMPANION_THINKING_DELAYS_MS[0], thinkingSequence(distance)));
+      bobCenter.value = withLiveMotion(withDelay(COMPANION_MORPH_MS + COMPANION_THINKING_DELAYS_MS[1], thinkingSequence(distance)));
+      bobRight.value = withLiveMotion(withDelay(COMPANION_MORPH_MS + COMPANION_THINKING_DELAYS_MS[2], thinkingSequence(distance)));
     } else {
-      bobLeft.value = withTiming(0, { duration: 240, easing: LIFE_EASE });
-      bobCenter.value = withTiming(0, { duration: 240, easing: LIFE_EASE });
-      bobRight.value = withTiming(0, { duration: 240, easing: LIFE_EASE });
-      morphLeft.value = withTiming(0, { duration: COMPANION_MORPH_MS, easing: MORPH_EASE });
-      morphRight.value = withDelay(35, withTiming(0, { duration: COMPANION_MORPH_MS, easing: MORPH_EASE }));
-      morphCenter.value = withDelay(75, withTiming(0, { duration: COMPANION_MORPH_MS, easing: MORPH_EASE }));
-      identity.value = withDelay(COMPANION_IDENTITY_IN_DELAY_MS, withTiming(1, { duration: COMPANION_IDENTITY_IN_MS, easing: LIFE_EASE }));
+      bobLeft.value = withLiveMotion(withTiming(0, { duration: 240, easing: LIFE_EASE }));
+      bobCenter.value = withLiveMotion(withTiming(0, { duration: 240, easing: LIFE_EASE }));
+      bobRight.value = withLiveMotion(withTiming(0, { duration: 240, easing: LIFE_EASE }));
+      morphLeft.value = withLiveMotion(withTiming(0, { duration: COMPANION_MORPH_MS, easing: MORPH_EASE }));
+      morphRight.value = withLiveMotion(withDelay(35, withTiming(0, { duration: COMPANION_MORPH_MS, easing: MORPH_EASE })));
+      morphCenter.value = withLiveMotion(withDelay(75, withTiming(0, { duration: COMPANION_MORPH_MS, easing: MORPH_EASE })));
+      identity.value = withLiveMotion(withDelay(COMPANION_IDENTITY_IN_DELAY_MS, withTiming(1, { duration: COMPANION_IDENTITY_IN_MS, easing: LIFE_EASE })));
 
       if (idleStyle !== 'off') {
-        blink.value = withRepeat(withSequence(
+        blink.value = withLiveMotion(withRepeat(withSequence(
           withTiming(0, { duration: 120, easing: LIFE_EASE }),
           withDelay(idleStyle === 'joyful' ? 4700 : 6700, withTiming(1, { duration: 85, easing: LIFE_EASE })),
           withTiming(0, { duration: 115, easing: LIFE_EASE }),
-        ), -1, false);
-        glance.value = withRepeat(withSequence(
+        ), -1, false));
+        glance.value = withLiveMotion(withRepeat(withSequence(
           withTiming(0, { duration: 240, easing: LIFE_EASE }),
           withDelay(idleStyle === 'joyful' ? 1700 : 4200, withTiming(1, { duration: 620, easing: LIFE_EASE })),
           withDelay(1050, withTiming(0, { duration: 620, easing: LIFE_EASE })),
           withDelay(2400, withTiming(-1, { duration: 680, easing: LIFE_EASE })),
           withDelay(850, withTiming(0, { duration: 680, easing: LIFE_EASE })),
-        ), -1, false);
+        ), -1, false));
       }
       if (idleStyle === 'joyful') {
         joy.value = 0;
         joyWeight.value = 1;
-        joy.value = withRepeat(joyfulTurnSequence(), -1, false);
+        joy.value = withLiveMotion(withRepeat(joyfulTurnSequence(), -1, false));
       } else {
         joy.value = 0;
         joyWeight.value = 0;

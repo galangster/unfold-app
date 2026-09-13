@@ -10,6 +10,8 @@ FlowDeck Release builds ran on iPhone 17 Pro, compact iPhone, and the existing i
 
 Reduced Motion was enabled through iOS Settings. Nine settled avatar captures were pixel-identical over eight seconds. The first frame was excluded because the route was entering.
 
+A final native check started the app with Reduce Motion enabled. Turning it off resumed animation without relaunch. Turning it on stopped the animation again. The settled captures were pixel-identical from 2s through 10s after returning to the app. The avatar uses the live accessibility setting instead of Reanimated’s cached startup setting.
+
 ![Light reading page](book-light.png)
 ![Dark reading page](book-dark.png)
 ![Personality settings](personality-settings.png)
@@ -29,6 +31,7 @@ The browser preview measured 119.4 and 120.0 animation callbacks per second duri
 - Typecheck passed. Lint reported zero errors and existing repository warnings.
 - Profile safety passed. Final FlowDeck Release build passed.
 - Independent review closed the onboarding draft and motion lifecycle findings.
+- Live Reduce Motion correction: typecheck, targeted lint, two suites/eight tests, independent review, and FlowDeck Release build passed.
 
 The new onboarding personality is allowlisted, saved in both draft paths, and restored separately from devotional preferences. Existing names remain compatible. Backend PR46 already deployed request validation and tone instructions on commit 711d405068cda98b5b440b75af308d6fc0e323f0.
 
