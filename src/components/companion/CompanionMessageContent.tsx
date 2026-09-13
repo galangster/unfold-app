@@ -1,18 +1,17 @@
 /**
- * CompanionMessageContent — full-width, no bubble.
- * Shows companion icon on first message of a group.
+ * CompanionMessageContent — incoming Companion bubble.
+ * The latest reply owns one stable presence slot below its text.
  * Renders rich text (verse pills, blockquotes, bold, italic, bullets)
  * for complete messages, lightly-stripped text during streaming.
  *
  * ANIMATION: Fade in on mount (200ms, ease-out).
  */
-import { useMemo, useRef } from 'react';
-import { View, Text, Pressable } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import type { TextStyle, ViewStyle } from 'react-native';
-import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
+import Animated, { FadeIn, LinearTransition, ReduceMotion, useReducedMotion } from 'react-native-reanimated';
 import { Duration, Ease } from '@/constants/animations';
-import { useSmoothTextReveal } from '@/lib/use-smooth-text-reveal';
-import { StreamingCursor } from './StreamingCursor';
+import { CompanionOrb, type CompanionExpression } from '@/components/CompanionOrb';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { Radius } from '@/constants/radius';
@@ -44,7 +43,9 @@ interface Props {
   message: CompanionMessage;
   showIcon: boolean;
   isStreaming: boolean;
-  isSearching?: boolean;
+  companionExpression?: CompanionExpression;
+  active?: boolean;
+  reduceMotion?: boolean;
   onVersePress?: (reference: string) => void;
   onRetry?: () => void;
 }
@@ -53,32 +54,23 @@ interface Props {
  * ANIMATION STORYBOARD — Companion Message Entrance
  *
  *   0ms   message container: opacity 0→1 (200ms, ease-out)
- *         streaming cursor starts immediately if streaming
+ *         first response text fades in once, without delaying its layout
  * ───────────────────────────────────────────────────────── */
 
 const ENTERING = FadeIn.duration(Duration.normal).easing(Ease.out);
+const TEXT_ENTERING = FadeIn.duration(Duration.fast).easing(Ease.out);
+const SURFACE_GROWTH = LinearTransition.duration(180).easing(Ease.out).reduceMotion(ReduceMotion.Never);
 
-// Companion gutter: row paddingLeft (Spacing['4']) + icon column width +
-// icon-to-text gap = the left edge every message's text lines up on.
-// Exported so sibling surfaces below the message (CompanionActions,
-// SuggestionChips) can align to the same edge instead of repeating the
-// magic number.
-const ICON_COLUMN_WIDTH = 28;
-const ICON_COLUMN_GAP = Spacing['3'];
-export const COMPANION_TEXT_INDENT = Spacing['4'] + ICON_COLUMN_WIDTH + ICON_COLUMN_GAP;
+// Row inset plus bubble padding aligns actions and suggestions with reply text.
+const BUBBLE_HORIZONTAL_PADDING = Spacing['4'] + Spacing['0.5'];
+export const COMPANION_TEXT_INDENT = Spacing['4'] + BUBBLE_HORIZONTAL_PADDING;
 
 /**
- * Streaming text leaf: strips markdown on the fly and reveals it word by word
- * (useSmoothTextReveal) instead of popping whole chunks every 32ms. Width
- * reservation trick (TypewriterText precedent): the not-yet-revealed suffix
- * renders transparently so the paragraph lays out at its full size and words
- * never reflow mid-line as they appear. The StreamingCursor sits inline at
- * the tail of the revealed prefix.
+ * Streaming text leaf: strips markdown while rendering the actual text
+ * received from the live request. It does not add a cursor or reveal queue.
  */
 function StreamingText({ content, color }: { content: string; color: string }) {
   const stripped = useMemo(() => smartQuotes(stripMarkdownLight(content)), [content]);
-  const revealed = useSmoothTextReveal(stripped);
-  const hidden = stripped.slice(revealed.length);
   return (
     <Text
       style={{
@@ -86,18 +78,35 @@ function StreamingText({ content, color }: { content: string; color: string }) {
         color,
       }}
     >
-      {revealed}
-      <StreamingCursor />
-      {hidden.length > 0 && <Text style={{ color: 'transparent' }}>{hidden}</Text>}
+      {stripped}
     </Text>
   );
 }
 
-export function CompanionMessageContent({ message, showIcon: _showIcon, isStreaming, isSearching, onVersePress, onRetry }: Props) {
+export function CompanionMessageContent({
+  message,
+  showIcon,
+  isStreaming,
+  companionExpression,
+  active = true,
+  reduceMotion,
+  onVersePress,
+  onRetry,
+}: Props) {
   const { colors } = useTheme();
-  const reducedMotion = useReducedMotion();
+  const initialReducedMotion = useReducedMotion();
+  const reducedMotion = reduceMotion ?? initialReducedMotion;
+  const [thinkingMounted, setThinkingMounted] = useState(!isStreaming);
 
   const isComplete = message.status === 'complete';
+  const hasMessageBody = message.status === 'error' || message.content.length > 0;
+
+  // A newly mounted pending row starts as the reunited Companion. The next
+  // commit supplies `thinking`, so the same avatar instance morphs into the
+  // three live spheres without delaying the request.
+  useEffect(() => {
+    if (isStreaming && !thinkingMounted) setThinkingMounted(true);
+  }, [isStreaming, thinkingMounted]);
 
   // Build deep link segments for completed messages with deep links
   const deepLinkCards = useMemo(() => {
@@ -143,11 +152,39 @@ export function CompanionMessageContent({ message, showIcon: _showIcon, isStream
   };
 
   return (
-    <Animated.View entering={reducedMotion ? undefined : ENTERING} style={{ flexDirection: 'row', alignItems: 'flex-start', paddingLeft: Spacing['4'] }}>
-      <View style={{ width: ICON_COLUMN_WIDTH, marginRight: ICON_COLUMN_GAP }} />
-
-      {/* Content */}
-      <View style={{ flex: 1, paddingRight: Spacing['6'] }}>
+    <Animated.View
+      entering={reducedMotion ? undefined : ENTERING}
+      style={{ alignItems: 'flex-start', paddingHorizontal: Spacing['4'] }}
+    >
+      <View
+        testID="companion-message-bubble"
+        style={{
+            maxWidth: '88%',
+            paddingHorizontal: BUBBLE_HORIZONTAL_PADDING,
+            paddingVertical: Spacing['3'],
+        }}
+      >
+        {/* Animate only the empty surface. Text keeps its natural size and layout. */}
+        <Animated.View
+          pointerEvents="none"
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          layout={showIcon && active && !reducedMotion ? SURFACE_GROWTH : undefined}
+          style={[StyleSheet.absoluteFill, {
+            backgroundColor: colors.backgroundElevated,
+            borderColor: colors.border,
+            borderWidth: 1,
+            borderRadius: Radius.xl,
+            borderBottomLeftRadius: Radius.sm,
+            borderCurve: 'continuous',
+          }]}
+        />
+        {hasMessageBody && (
+        <Animated.View
+          key="message-body"
+          entering={reducedMotion ? undefined : TEXT_ENTERING}
+          style={{ minWidth: 0, flexShrink: 1 }}
+        >
         {message.status === 'error' ? (
           <>
             {interruptedReply.length > 0 && (
@@ -230,17 +267,34 @@ export function CompanionMessageContent({ message, showIcon: _showIcon, isStream
             )}
           </>
         )}
+        </Animated.View>
+        )}
 
-        {isSearching && (
-          <Text style={{
-            fontFamily: FontFamily.body,
-            fontSize: FontSize.xs,
-            color: alpha(colors.text, 0.4),
-            fontStyle: 'italic',
-            marginTop: Spacing['1'],
-          }}>
-            Looking something up…
-          </Text>
+        {showIcon && (
+          <View
+            key="presence"
+            testID="companion-presence-slot"
+            style={{
+              width: 48,
+              height: 48,
+              marginTop: hasMessageBody ? Spacing['2'] : 0,
+              alignItems: 'flex-start',
+              justifyContent: 'flex-end',
+            }}
+            accessible={isStreaming}
+            accessibilityLabel={isStreaming ? 'Companion is replying' : undefined}
+            accessibilityLiveRegion="polite"
+          >
+            <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+            <CompanionOrb
+              accentColor={colors.accent}
+              size={48}
+              expression={companionExpression}
+              thinking={isStreaming && thinkingMounted}
+              active={active}
+            />
+            </View>
+          </View>
         )}
       </View>
     </Animated.View>

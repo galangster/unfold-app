@@ -40,6 +40,8 @@ export interface BibleSearchResultWithMeta extends BibleSearchResultRaw {
 export type BibleSearchResult = BibleSearchResultWithMeta;
 
 export interface UseBibleSearchOptions {
+  /** Share readiness with a caller that manages the Bible download. */
+  databaseReady?: boolean;
   /** Filter results to a specific translation, or omit for both */
   translation?: BibleTranslation;
   /** Maximum number of results (defaults to 50) */
@@ -79,8 +81,10 @@ function useBibleSearchCore(
   translation: BibleTranslation | undefined,
   limit: number,
   debounceMs: number,
+  databaseReady?: boolean,
 ) {
-  const { isReady } = useBibleDb();
+  const { isReady: localReady } = useBibleDb();
+  const isReady = databaseReady ?? localReady;
   const debouncedQuery = useDebouncedValue(rawQuery.trim(), debounceMs);
 
   // Minimum query length for search (avoid overly broad queries)
@@ -95,12 +99,13 @@ function useBibleSearchCore(
     enabled: isReady && isQueryValid,
     staleTime: 5 * 60 * 1000, // Cache search results for 5 minutes
     gcTime: 10 * 60 * 1000,
-    placeholderData: (previousData) => previousData, // Keep previous results while loading new ones
   });
+
+  const hasCurrentData = rawQuery.trim() === debouncedQuery;
 
   // Enrich results with book names and formatted references
   const enrichedResults = useMemo<BibleSearchResultWithMeta[]>(() => {
-    if (!data) return [];
+    if (!data || !hasCurrentData) return [];
 
     return data.map((result) => {
       const book = BOOK_BY_ID[result.bookId];
@@ -113,11 +118,11 @@ function useBibleSearchCore(
         reference,
       };
     });
-  }, [data]);
+  }, [data, hasCurrentData]);
 
   return {
     results: enrichedResults,
-    isSearching: isLoading && isQueryValid,
+    isSearching: (isLoading && isQueryValid) || rawQuery.trim() !== debouncedQuery,
     isPending: rawQuery.trim() !== debouncedQuery,
     error: isError && error instanceof Error ? error.message : null,
     debouncedQuery,
@@ -161,7 +166,10 @@ export function useBibleSearch(
     ? ((queryOrOptions as UseBibleSearchOptions).debounceMs ?? 300)
     : 300;
 
-  const core = useBibleSearchCore(rawQuery, translation, limit, debounceMs);
+  const core = useBibleSearchCore(
+    rawQuery, translation, limit, debounceMs,
+    isOptionsMode ? queryOrOptions.databaseReady : undefined,
+  );
 
   // Clear function for options mode
   const clear = () => {
