@@ -493,6 +493,13 @@ export function useCompanionChat() {
       const trimmedText = text.trim();
       if (!trimmedText) return 'noop';
 
+      // Companion requests require the profile that onboarding commits on its
+      // final step. Read current store state so a reset blocks sends and
+      // regenerations from an existing hook before auth or provider work.
+      if (useUnfoldStore.getState().user?.hasCompletedOnboarding !== true) {
+        return 'noop';
+      }
+
       // A pulled delete can leave a stale active id. Only send into a row
       // that still exists; otherwise start a real conversation.
       const startingState = useCompanionChatStore.getState();
