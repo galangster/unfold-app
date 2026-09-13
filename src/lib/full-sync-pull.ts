@@ -620,23 +620,29 @@ function mapDevotionalDay(record: SyncPulledRecord): DevotionalDay | null {
 function mapConversation(record: SyncPulledRecord, current?: Conversation): Conversation | null {
   const row = asRecord(record.data);
   const lastMessageAt = Date.parse(asString(row.lastMessageAt) ?? recordUpdatedAt(record));
+  const startedAt = Date.parse(asString(row.startedAt) ?? asString(row.createdAt) ?? recordUpdatedAt(record));
+  const remotePinned = asBoolean(row.pinned);
   return {
     id: record.id,
     messages: current?.messages ?? [],
-    createdAt: Date.parse(asString(row.createdAt) ?? recordUpdatedAt(record)),
+    createdAt: Number.isFinite(startedAt) ? startedAt : Date.now(),
     lastMessageAt: Number.isFinite(lastMessageAt) ? lastMessageAt : Date.now(),
     title: asString(row.summary) ?? current?.title ?? null,
     topicTags: asArray<string>(row.topicTags),
     archived: asBoolean(row.archived) ?? current?.archived ?? false,
-    pinned: current?.pinned,
+    pinned: remotePinned === undefined ? current?.pinned : remotePinned,
     updatedAt: recordUpdatedAt(record),
   };
 }
 
-function mapMessage(record: SyncPulledRecord): (CompanionMessage & { conversationId: string }) | null {
+function mapMessage(
+  record: SyncPulledRecord,
+  current?: CompanionMessage,
+): (CompanionMessage & { conversationId: string }) | null {
   const row = asRecord(record.data);
   const conversationId = asString(row.conversationId);
   if (!conversationId) return null;
+  const remoteInterrupted = asBoolean(row.interrupted);
   return {
     id: record.id,
     conversationId,
@@ -649,7 +655,7 @@ function mapMessage(record: SyncPulledRecord): (CompanionMessage & { conversatio
     feedback: (asString(row.feedback) as CompanionMessage['feedback']) ?? null,
     feedbackReason: asString(row.feedbackReason) ?? null,
     deepLinks: asArray(row.deepLinks) as CompanionMessage['deepLinks'],
-    interrupted: asBoolean(row.interrupted) === true ? true : undefined,
+    interrupted: remoteInterrupted === undefined ? current?.interrupted : remoteInterrupted,
     updatedAt: recordUpdatedAt(record),
   };
 }
@@ -820,8 +826,13 @@ function applyCompanionChanges(payload: SyncPullResponse): void {
     }
 
     for (const record of messageRecords) {
-      const message = mapMessage(record);
-      const conversationId = message?.conversationId ?? asString(asRecord(record.data).conversationId);
+      const conversationIdHint = asString(asRecord(record.data).conversationId);
+      const existingForMap = conversationIdHint
+        ? conversations.find((conversation) => conversation.id === conversationIdHint)
+          ?.messages?.find((item) => item.id === record.id)
+        : undefined;
+      const message = mapMessage(record, existingForMap);
+      const conversationId = message?.conversationId ?? conversationIdHint;
       if (!conversationId) continue;
       conversations = conversations.map((conversation) => {
         if (conversation.id !== conversationId) return conversation;
@@ -837,7 +848,11 @@ function applyCompanionChanges(payload: SyncPullResponse): void {
       });
     }
 
-    return { conversations };
+    const activeStillPresent = conversations.some((conversation) => conversation.id === state.activeConversationId);
+    return {
+      conversations,
+      activeConversationId: activeStillPresent ? state.activeConversationId : null,
+    };
   });
 }
 

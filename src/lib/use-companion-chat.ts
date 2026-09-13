@@ -24,7 +24,9 @@ import { parseDeepLinks } from './parse-deep-links';
 import { generateConversationTitle } from './companion-service';
 import { companionReplyAnnouncement } from '@/lib/companion-announcements';
 import { pickRegenerateTarget } from './companion-regenerate';
+import { buildCompanionRequestMessages } from './companion-chat-request';
 import { resolveCompanionDisplayName } from '@/lib/support-clarity';
+import { COMPANION_MESSAGE_MAX_CHARS } from '@/lib/companion-limits';
 
 /**
  * WR-20: screen-reader users get no signal when a reply lands — the list
@@ -57,7 +59,6 @@ interface RegenerateTurn {
 }
 
 export { COMPANION_MESSAGE_MAX_CHARS } from '@/lib/companion-limits';
-import { COMPANION_MESSAGE_MAX_CHARS } from '@/lib/companion-limits';
 const STREAMING_UPDATE_INTERVAL_MS = 32; // ~30fps, matching the SDK 56 chat-template cadence.
 // Inter-chunk idle timeout: a stream that goes silent this long is dead —
 // abort it instead of hanging the send forever (companion-service.ts 10s
@@ -397,9 +398,14 @@ export function useCompanionChat() {
       const trimmedText = text.trim();
       if (!trimmedText) return 'noop';
 
-      // Ensure an active conversation exists before sending
-      if (!useCompanionChatStore.getState().activeConversationId) {
-        useCompanionChatStore.getState().startNewConversation();
+      // A pulled delete can leave a stale active id. Only send into a row
+      // that still exists; otherwise start a real conversation.
+      const startingState = useCompanionChatStore.getState();
+      const existingActive = startingState.conversations.find(
+        (conversation) => conversation.id === startingState.activeConversationId,
+      );
+      if (!existingActive) {
+        startingState.startNewConversation();
       }
       const streamConversationId = useCompanionChatStore.getState().activeConversationId!;
       if (inFlightRef.current.has(streamConversationId)) return 'noop';
@@ -418,10 +424,10 @@ export function useCompanionChat() {
           status: 'streaming',
           feedback: null,
           feedbackReason: null,
-          citations: undefined,
-          suggestions: undefined,
-          deepLinks: undefined,
-          interrupted: undefined,
+          citations: [],
+          suggestions: [],
+          deepLinks: [],
+          interrupted: false,
         }, streamConversationId);
       } else {
         // User message — uuid ids: Date.now() collides when two messages land
@@ -491,22 +497,14 @@ export function useCompanionChat() {
         useCompanionChatStore.getState().activeConversationId === streamConversationId;
 
       try {
-        // Build conversation context (last 10 messages)
-        const currentMessages = selectActiveMessages(useCompanionChatStore.getState());
-        const recentMessages = currentMessages
-          // A regenerate turn rewrites its target, so the old reply must not
-          // sit in the history the model sees.
-          .filter((m) => m.id !== companionId && (m.status === 'sent' || m.status === 'complete'))
-          .slice(-10)
-          .map((m) => ({
-            role: m.role === 'user' ? ('user' as const) : ('assistant' as const),
-            content: sanitizeForPrompt(m.content),
-          }));
-
-        const chatMessages = [
-          ...recentMessages,
-          { role: 'user' as const, content: sanitizeForPrompt(trimmedText, COMPANION_MESSAGE_MAX_CHARS) },
-        ];
+        const streamConversation = useCompanionChatStore.getState().conversations
+          .find((conversation) => conversation.id === streamConversationId);
+        const chatMessages = buildCompanionRequestMessages(streamConversation?.messages ?? [], {
+          userText: trimmedText,
+          rewriteCompanionId: regenerate ? companionId : undefined,
+          sanitize: sanitizeForPrompt,
+          maxChars: COMPANION_MESSAGE_MAX_CHARS,
+        });
 
         const companionContext = buildCompanionContext(
           userName,
@@ -533,7 +531,7 @@ export function useCompanionChat() {
             JSON.stringify({
               messages: chatMessages,
               model: 'claude-haiku-4-5-20251001',
-              conversationId: useCompanionChatStore.getState().activeConversationId,
+              conversationId: streamConversationId,
               context: companionContext,
             }),
             abortController.signal,
@@ -573,7 +571,7 @@ export function useCompanionChat() {
 
                 updateMessage(companionId, {
                   content: cleanContent,
-                  deepLinks: deepLinks.length > 0 ? deepLinks : undefined,
+                  deepLinks,
                   status: 'complete',
                   suggestions: finalSuggestions,
                 }, streamConversationId);
@@ -613,11 +611,11 @@ export function useCompanionChat() {
           cancelThrottle();
           if (isStreamConversationVisible()) setIsSearching(false);
           if (accumulatedText) {
-            // Keep the partial answer as a normal message (rich block path)
-            // and surface the failure via banner + VO only.
+            // Preserve the partial text and its interruption state across launches.
             updateMessage(companionId, {
               content: accumulatedText,
-              status: 'complete',
+              status: 'error',
+              interrupted: true,
             }, streamConversationId);
             if (isStreamConversationVisible()) {
               setError(`${serverErrorMessage} Your reply may be incomplete.`);
@@ -641,13 +639,13 @@ export function useCompanionChat() {
         // ── Stream ended without `d` after partial content (P0-3) ────────
 
         if (!streamSucceeded && hasReceivedStreamingToken) {
-          // Keep the partial and mark complete-with-warning instead of
-          // rewinding it with a second full request.
+          // Preserve partial text without issuing a second provider request.
           cancelThrottle();
           if (isStreamConversationVisible()) setIsSearching(false);
           updateMessage(companionId, {
             content: accumulatedText,
-            status: 'complete',
+            status: 'error',
+            interrupted: true,
           }, streamConversationId);
           if (isStreamConversationVisible()) {
             setError('The connection dropped mid-reply. Your reply may be incomplete.');
@@ -683,7 +681,7 @@ export function useCompanionChat() {
 
           updateMessage(companionId, {
             content: fallbackClean,
-            deepLinks: fallbackLinks.length > 0 ? fallbackLinks : undefined,
+            deepLinks: fallbackLinks,
             status: 'complete',
             suggestions: result.suggestions,
           }, streamConversationId);
@@ -726,7 +724,8 @@ export function useCompanionChat() {
             .find((c) => c.id === streamConversationId);
           const current = (streamConv?.messages ?? []).find((m) => m.id === companionId);
           updateMessage(companionId, {
-            status: current?.content ? 'complete' : 'error',
+            status: 'error',
+            interrupted: Boolean(current?.content),
           }, streamConversationId);
           return current?.content ? 'sent' : 'error';
         } else {
@@ -736,12 +735,11 @@ export function useCompanionChat() {
             err instanceof AiBudgetError ? err.message : analyzed.userFriendlyMessage;
           logger.warn('[CompanionChat] Error:', err, analyzed.type);
           if (accumulatedText) {
-            // WR-11: a partial answer survived the drop — keep it as a normal
-            // message (renders through the rich block path, not the plain
-            // error box) and surface the interruption via banner + VO only.
+            // Preserve partial text with a durable interruption flag and retry control.
             updateMessage(companionId, {
               content: accumulatedText,
-              status: 'complete',
+              status: 'error',
+              interrupted: true,
             }, streamConversationId);
             if (isStreamConversationVisible()) {
               setError(`${userFriendlyMessage} Your reply may be incomplete.`);
@@ -770,13 +768,13 @@ export function useCompanionChat() {
       }
     },
     [
-      isStreaming,
       addMessage,
       updateMessage,
       userName,
       companionName,
       currentDevotional,
       streakDays,
+      bumpStreamVersion,
     ]
   );
 
@@ -785,15 +783,17 @@ export function useCompanionChat() {
     [runTurn]
   );
 
-  // Regenerate the last reply in place. Same quota rules as a send: the
-  // screen charges a free message on 'sent'.
+  // Rewrite one finished reply in place. Same quota rules as a send: the
+  // screen charges a free message on 'sent'. An explicit companionId retries
+  // that row (including an older error) instead of the latest reply.
   const regenerateReply = useCallback(
-    async (options?: { reason?: string }): Promise<SendOutcome> => {
+    async (options?: { reason?: string; companionId?: string }): Promise<SendOutcome> => {
       const state = useCompanionChatStore.getState();
       const conversationId = state.activeConversationId;
       if (!conversationId || inFlightRef.current.has(conversationId)) return 'noop';
-      const target = pickRegenerateTarget(selectActiveMessages(state));
+      const target = pickRegenerateTarget(selectActiveMessages(state), options?.companionId);
       if (!target) return 'noop';
+      if (options?.companionId && target.companionMessage.id !== options.companionId) return 'noop';
       const { companionMessage } = target;
       // An error row stores an app-authored error string unless it was an
       // interrupted partial; only real reply text is worth quoting back.

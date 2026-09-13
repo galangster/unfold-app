@@ -14,7 +14,6 @@ import Animated, {
   useReducedMotion,
 } from 'react-native-reanimated';
 import {
-  ChatCircleDotsIcon,
   BookOpenTextIcon,
   HeartIcon,
   BookIcon,
@@ -31,7 +30,7 @@ import { Radius } from '@/constants/radius';
 import { Duration, Ease } from '@/constants/animations';
 import { Spacing } from '@/constants/spacing';
 import { useUnfoldStore } from '@/lib/store';
-import { COMPANION_EMPTY_STATE_AI_NOTE } from '@/lib/support-clarity';
+import { COMPANION_EMPTY_STATE_NOTE } from '@/lib/support-clarity';
 
 const EASE_OUT = Easing.out(Easing.cubic);
 
@@ -195,24 +194,6 @@ export function CompanionEmptyState({ onSelectStarter, todayTheme }: Props) {
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
       >
-        {/* Companion icon */}
-        <FadeSlideIn delay={0} translateY={0}>
-          <View style={{ alignItems: 'center', marginBottom: Spacing['4'] }}>
-            <View
-              style={{
-                width: 48,
-                height: 48,
-                borderRadius: Radius['2xl'],
-                backgroundColor: alpha(colors.accent, 0.15),
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <ChatCircleDotsIcon size={24} color={colors.accent} weight="light" />
-            </View>
-          </View>
-        </FadeSlideIn>
-
         {/* Greeting */}
         <FadeSlideIn delay={200} translateY={8}>
           <Text
@@ -243,25 +224,7 @@ export function CompanionEmptyState({ onSelectStarter, todayTheme }: Props) {
               lineHeight: 24,
             }}
           >
-            Explore Scripture together, pray, or just talk through what’s on your mind.
-          </Text>
-        </FadeSlideIn>
-
-        <FadeSlideIn delay={420} translateY={6}>
-          <Text
-            style={{
-              fontFamily: FontFamily.ui,
-              fontSize: FontSize.sm,
-              color: colors.textSubtle,
-              textAlign: 'center',
-              maxWidth: 300,
-              alignSelf: 'center',
-              marginTop: Spacing['3'],
-              lineHeight: 20,
-              flexShrink: 1,
-            }}
-          >
-            {COMPANION_EMPTY_STATE_AI_NOTE}
+            {COMPANION_EMPTY_STATE_NOTE}
           </Text>
         </FadeSlideIn>
 

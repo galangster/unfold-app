@@ -372,6 +372,111 @@ describe('full user-data sync', () => {
     expect(conversation?.messages.map((m) => m.id)).toEqual(['msg-1']);
   });
 
+  it('clears a stale active conversation id after a pulled delete', () => {
+    replaceSyncOutbox([]);
+    useCompanionChatStore.setState({
+      activeConversationId: 'conv-open',
+      conversations: [{
+        id: 'conv-open',
+        messages: [{ id: 'msg-open', role: 'user', content: 'hi', timestamp: Date.now(), status: 'sent', updatedAt: '2026-06-01T00:00:00.000Z' }],
+        createdAt: Date.now(),
+        lastMessageAt: Date.now(),
+        title: 'Open',
+        topicTags: [],
+        archived: false,
+        updatedAt: '2026-06-01T00:00:00.000Z',
+      } as never],
+    });
+    const tombstoneAt = new Date(Date.now() + 60_000).toISOString();
+    applyPulledUserData({
+      timestamp: tombstoneAt,
+      changes: {
+        companion_conversations: [{ id: 'conv-open', data: { clientUpdatedAt: tombstoneAt }, updatedAt: tombstoneAt, deleted: true }],
+      },
+    });
+    expect(useCompanionChatStore.getState().conversations.find((item) => item.id === 'conv-open')).toBeUndefined();
+    expect(useCompanionChatStore.getState().activeConversationId).toBeNull();
+  });
+
+  it('maps startedAt before createdAt and preserves local pinned when remote omits it', () => {
+    useCompanionChatStore.setState({
+      conversations: [{
+        id: 'conv-1',
+        messages: [],
+        createdAt: Date.parse('2020-01-01T00:00:00.000Z'),
+        lastMessageAt: Date.parse('2026-07-01T12:00:00.000Z'),
+        title: 'Pinned locally',
+        topicTags: [],
+        archived: false,
+        pinned: true,
+        updatedAt: '2026-06-01T00:00:00.000Z',
+      } as never],
+    });
+    applyPulledUserData({
+      timestamp: '2026-07-01T12:00:00.000Z',
+      changes: {
+        companion_conversations: [{
+          id: 'conv-1',
+          data: {
+            startedAt: '2024-03-01T08:00:00.000Z',
+            createdAt: '2026-07-01T12:00:00.000Z',
+            lastMessageAt: '2026-07-01T12:00:00.000Z',
+            summary: 'Pinned locally',
+          },
+          updatedAt: '2026-07-01T12:00:00.000Z',
+          deleted: false,
+        }],
+      },
+    });
+    const conversation = useCompanionChatStore.getState().conversations.find((item) => item.id === 'conv-1');
+    expect(conversation?.createdAt).toBe(Date.parse('2024-03-01T08:00:00.000Z'));
+    expect(conversation?.pinned).toBe(true);
+  });
+
+  it('clears a prior interrupted flag when pull sends explicit false', () => {
+    useCompanionChatStore.setState({
+      conversations: [{
+        id: 'conv-1',
+        messages: [{
+          id: 'msg-1',
+          role: 'companion',
+          content: 'Retry worked',
+          timestamp: Date.parse('2026-07-01T12:00:00.000Z'),
+          status: 'error',
+          interrupted: true,
+          updatedAt: '2026-06-01T00:00:00.000Z',
+        }],
+        createdAt: Date.now(),
+        lastMessageAt: Date.now(),
+        title: null,
+        topicTags: [],
+        archived: false,
+        updatedAt: '2026-06-01T00:00:00.000Z',
+      } as never],
+    });
+    applyPulledUserData({
+      timestamp: '2026-07-01T12:00:00.000Z',
+      changes: {
+        companion_messages: [{
+          id: 'msg-1',
+          data: {
+            conversationId: 'conv-1',
+            role: 'companion',
+            content: 'Retry worked',
+            timestamp: '2026-07-01T12:00:00.000Z',
+            status: 'complete',
+            interrupted: false,
+          },
+          updatedAt: '2026-07-01T12:00:00.000Z',
+          deleted: false,
+        }],
+      },
+    });
+    const message = useCompanionChatStore.getState().conversations[0]?.messages[0];
+    expect(message?.status).toBe('complete');
+    expect(message?.interrupted).toBe(false);
+  });
+
   it('resurrects an open note when a pulled tombstone lands before the next save', async () => {
     const store = useUnfoldStore.getState();
     const noteId = store.addNote({

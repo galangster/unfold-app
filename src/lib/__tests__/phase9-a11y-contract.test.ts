@@ -27,13 +27,32 @@ describe('Phase 9 accessibility source contracts', () => {
     const source = readSource('src/components/companion/CompanionDrawer.tsx');
     const actionPanel = extractBlock(source, 'function ConversationActionPanel', '// ── CompanionDrawer');
 
-    expect(actionPanel).toContain('accessibilityViewIsModal');
-    expect(source).toContain('accessibilityHint="Long press for conversation actions"');
+    expect(source).toContain('accessibilityLabel={`Conversation options for ${title}`}');
+    expect(source).toContain('onLongPress={handleLongPress}');
     expect(actionPanel).toContain('accessibilityRole="button"');
     expect(actionPanel).toContain('accessibilityState={{ disabled: !canSaveRename }}');
     expect(actionPanel).toContain('accessibilityLabel="Permanently delete conversation"');
     expect(source).not.toContain('ActionSheetIOS');
     expect(source).not.toContain('Alert.prompt');
+    expect(source).toContain('Search conversation titles');
+    expect(source).toContain('No conversations match that title');
+    expect(source).toContain('accessibilityLabel="Close history"');
+    expect(source).toContain('accessibilityLabel="Close options"');
+    expect(source).toContain('accessibilityRole="header"');
+    expect(source).toContain('Chats');
+    expect(source).toContain('New Chat');
+    expect(source).toContain('numberOfLines={2}');
+    expect(source).toContain('searchClear');
+    expect(source).toContain('width: 44');
+    expect(source).toContain('height: 44');
+    expect(source).toContain('accessibilityElementsHidden={activeActionConversation != null}');
+    expect(source).toContain("importantForAccessibility={activeActionConversation ? 'no-hide-descendants' : 'auto'}");
+    expect(source).toContain('keyboardShouldPersistTaps="handled"');
+    expect(actionPanel).toContain('<Sheet visible onClose={onClose}');
+    expect(source).toContain('Keyboard.dismiss');
+    expect(source).toContain('handleDrawerNewChat');
+    expect(source).not.toContain('onClose();\n            onNewChat();');
+    expect(actionPanel).not.toContain('KeyboardAvoidingView');
   });
 
   it('keeps touched reader/settings controls on the shared 44pt accessible-control contract', () => {

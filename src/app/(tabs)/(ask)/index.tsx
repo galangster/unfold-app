@@ -10,6 +10,7 @@ import {
   View,
   Text,
   KeyboardAvoidingView,
+  Keyboard,
   Platform,
   TouchableOpacity,
   useWindowDimensions,
@@ -68,7 +69,6 @@ import {
   FREE_COMPANION_DAILY_LIMIT,
 } from '@/lib/premium-gating';
 import { computeCompanionStatusSlotHeight } from '@/lib/companion-status-slot';
-import { resolveCompanionDisplayName } from '@/lib/support-clarity';
 
 // ── Message item ───────────────────────────────────────────────────────────
 
@@ -114,7 +114,7 @@ const MessageItem = React.memo(function MessageItem({
     <View style={gapStyle}>
       <CompanionMessageContent
         message={item}
-        showIcon={isFirstInGroup}
+        showIcon={false}
         isStreaming={isThisStreaming}
         isSearching={isThisStreaming && isSearching}
         onVersePress={onVersePress}
@@ -196,9 +196,6 @@ export default function CompanionScreen() {
   // chips — same lookup today/index.tsx uses for its own "todayTheme".
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
   const devotionals = useUnfoldStore((s) => s.devotionals);
-  const companionDisplayName = useUnfoldStore((s) =>
-    resolveCompanionDisplayName(s.user?.companionName, s.companionName),
-  );
   const currentDevotional = useMemo(
     () => getCurrentDevotional(devotionals, currentDevotionalId),
     [devotionals, currentDevotionalId]
@@ -226,23 +223,16 @@ export default function CompanionScreen() {
     }, [])
   );
 
-  // Hidden tabs stay mounted: pause the header orb's Skia loops while another
-  // tab is focused so they don't keep the UI thread busy off screen.
+  // Hidden tabs stay mounted: pause the conversation orb's Skia loops while
+  // another tab is focused so they don't keep the UI thread busy off screen.
   const isFocused = useIsFocused();
-
-  // P0-5: leaving the current conversation (new chat or drawer switch) stops
-  // its in-flight stream — a reply to a conversation the user abandoned
-  // shouldn't keep billing tokens in the background.
-  const handleNewChat = useCallback(() => {
-    stopGeneration();
-    startNewConversation();
-  }, [stopGeneration, startNewConversation]);
 
   // Drawer state
   const [drawerOpen, setDrawerOpen] = useState(false);
   const drawerTranslateX = useSharedValue(-DRAWER_WIDTH);
 
   const handleDrawerOpen = useCallback(() => {
+    Keyboard.dismiss();
     setDrawerOpen(true);
     drawerTranslateX.value = reducedMotion
       ? 0
@@ -255,6 +245,15 @@ export default function CompanionScreen() {
       ? -DRAWER_WIDTH
       : withSpring(-DRAWER_WIDTH, { duration: 300, dampingRatio: 1 });
   }, [drawerTranslateX, reducedMotion]);
+
+  // P0-5: leaving the current conversation (new chat or drawer switch) stops
+  // its in-flight stream — a reply to a conversation the user abandoned
+  // shouldn't keep billing tokens in the background.
+  const handleNewChat = useCallback(() => {
+    stopGeneration();
+    startNewConversation();
+    handleDrawerClose();
+  }, [stopGeneration, startNewConversation, handleDrawerClose]);
 
   // Edge-swipe to open/close, alongside the hamburger button + scrim tap.
   // activeOffsetX/failOffsetY inside useDrawerGesture keep this from
@@ -324,11 +323,6 @@ export default function CompanionScreen() {
     [sendMessage, runWithQuota, isStreaming]
   );
 
-  // Retry handlers must be identity-stable per (message, text) or the
-  // MessageItem memo comparator re-renders every error row on each list pass.
-  const handleSendRef = useRef(handleSend);
-  handleSendRef.current = handleSend;
-
   // The hook returns 'noop' while a stream is in flight, so no guard here.
   const handleRegenerate = useCallback(
     (reason?: string) => {
@@ -338,6 +332,14 @@ export default function CompanionScreen() {
   );
   const handleRegenerateRef = useRef(handleRegenerate);
   handleRegenerateRef.current = handleRegenerate;
+  const handleRetry = useCallback(
+    (companionId: string) => {
+      runWithQuota(() => regenerateReply({ companionId }));
+    },
+    [regenerateReply, runWithQuota]
+  );
+  const handleRetryRef = useRef(handleRetry);
+  handleRetryRef.current = handleRetry;
   // Identity-stable so the MessageItem memo comparator stays quiet.
   const onRegenerate = useCallback((reason?: string) => handleRegenerateRef.current(reason), []);
 
@@ -402,22 +404,15 @@ export default function CompanionScreen() {
       const isFirstInGroup = !prevMsg || prevMsg.role !== item.role;
       const isLastMessage = index === 0;
 
-      // NET-13: for error companion messages, find the most recent preceding user
-      // message (higher inverted index = older) and wire a retry handler.
-      // Retry fires handleSend which only charges quota if the response succeeds.
+      // Retry an error row in place through regenerateReply. The hook pairs
+      // the preceding user turn and drops later exchanges from the request.
       let onRetry: (() => void) | undefined;
       if (item.role === 'companion' && item.status === 'error') {
-        for (let i = index + 1; i < msgs.length; i++) {
-          if (msgs[i].role === 'user') {
-            const userText = msgs[i].content;
-            const retryKey = `${item.id}::${userText}`;
-            onRetry = retryHandlersRef.current.get(retryKey);
-            if (!onRetry) {
-              onRetry = () => handleSendRef.current(userText);
-              retryHandlersRef.current.set(retryKey, onRetry);
-            }
-            break;
-          }
+        const retryKey = item.id;
+        onRetry = retryHandlersRef.current.get(retryKey);
+        if (!onRetry) {
+          onRetry = () => handleRetryRef.current(item.id);
+          retryHandlersRef.current.set(retryKey, onRetry);
         }
       }
 
@@ -452,7 +447,8 @@ export default function CompanionScreen() {
       keyboardVerticalOffset={Platform.OS === 'ios' ? -tabBarHeight : 0}
       testID="companion-screen"
     >
-      {/* Header — drawer / orb + name / new chat */}
+      {/* Header — History / New Conversation / Profile. The companion orb
+          lives in one conversation slot below, not here. */}
       <View
         style={{
           paddingTop: insets.top + 4,
@@ -463,7 +459,6 @@ export default function CompanionScreen() {
           justifyContent: 'space-between',
         }}
       >
-        {/* Left: drawer toggle */}
         <TouchableOpacity
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -478,28 +473,6 @@ export default function CompanionScreen() {
           <List size={22} color={colors.textMuted} weight="light" />
         </TouchableOpacity>
 
-        {/* Center: orb + name */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1, minWidth: 0 }}>
-          <CompanionOrb
-            accentColor={colors.accent}
-            size={32}
-            isActive={isStreaming}
-            active={isFocused}
-          />
-          <Text
-            style={{
-              fontFamily: FontFamily.uiMedium,
-              fontSize: FontSize.base,
-              color: colors.text,
-              flexShrink: 1,
-            }}
-            numberOfLines={2}
-          >
-            {companionDisplayName ?? 'Companion'}
-          </Text>
-        </View>
-
-        {/* Right: new chat + Profile — Profile stays reachable from Companion */}
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <TouchableOpacity
             onPress={() => {
@@ -516,6 +489,24 @@ export default function CompanionScreen() {
           </TouchableOpacity>
           <ProfileEntryButton testID="companion-profile-button" size={32} />
         </View>
+      </View>
+
+      <View
+        style={{
+          alignItems: 'center',
+          justifyContent: 'center',
+          paddingBottom: Spacing['2'],
+          minHeight: 40,
+        }}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+      >
+        <CompanionOrb
+          accentColor={colors.accent}
+          size={32}
+          isActive={isStreaming}
+          active={isFocused}
+        />
       </View>
 
       {/* Each scroll container owns keyboard dismissal and touch handling. */}

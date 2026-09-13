@@ -17,7 +17,6 @@ import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
-import { CompanionOrb } from '@/components/CompanionOrb';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Typography } from '@/constants/typography';
 import { RichMessageText } from './RichMessageText';
@@ -94,7 +93,7 @@ function StreamingText({ content, color }: { content: string; color: string }) {
   );
 }
 
-export function CompanionMessageContent({ message, showIcon, isStreaming, isSearching, onVersePress, onRetry }: Props) {
+export function CompanionMessageContent({ message, showIcon: _showIcon, isStreaming, isSearching, onVersePress, onRetry }: Props) {
   const { colors } = useTheme();
   const reducedMotion = useReducedMotion();
 
@@ -145,12 +144,7 @@ export function CompanionMessageContent({ message, showIcon, isStreaming, isSear
 
   return (
     <Animated.View entering={reducedMotion ? undefined : ENTERING} style={{ flexDirection: 'row', alignItems: 'flex-start', paddingLeft: Spacing['4'] }}>
-      {/* Icon column — 28px wide + 12px gap = 40px indent */}
-      <View style={{ width: ICON_COLUMN_WIDTH, marginRight: ICON_COLUMN_GAP }}>
-        {showIcon && (
-          <CompanionOrb accentColor={colors.accent} size={28} animated={false} />
-        )}
-      </View>
+      <View style={{ width: ICON_COLUMN_WIDTH, marginRight: ICON_COLUMN_GAP }} />
 
       {/* Content */}
       <View style={{ flex: 1, paddingRight: Spacing['6'] }}>

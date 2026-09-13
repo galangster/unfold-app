@@ -237,10 +237,16 @@ function offerings(intro: { periodNumberOfUnits: number; periodUnit: string } | 
 }
 
 async function renderThreeStep(trialDays: number | null) {
+  const client = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, gcTime: Infinity },
+      mutations: { retry: false, gcTime: Infinity },
+    },
+  });
   let tree: { root: { findAll: Function }; unmount: () => void };
   await act(async () => {
     tree = renderer.create(
-      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <QueryClientProvider client={client}>
         <ThreeStepPaywall
           colors={colors}
           isDark

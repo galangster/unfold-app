@@ -80,7 +80,7 @@ function ActionButton({
 
   const CurrentIcon = isActive && ActiveIcon ? ActiveIcon : Icon;
   const color = isActive ? activeColor : hintColor;
-  const weight = isActive ? 'fill' : ('light' as const);
+  const weight = isActive ? 'fill' : ('regular' as const);
 
   return (
     <Animated.View style={style}>
@@ -215,7 +215,7 @@ export function CompanionActions({
             activeColor={button.activeColor}
             onPress={button.onPress}
             accessibilityLabel={button.accessibilityLabel}
-            hintColor={colors.textHint}
+            hintColor={colors.textMuted}
           />
         ))}
       </View>

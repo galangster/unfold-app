@@ -9,7 +9,7 @@
  *   DRAWER_WIDTH       — constant for parent layout use
  */
 
-import React, { memo, useCallback, useMemo, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -17,10 +17,14 @@ import {
   TouchableOpacity,
   FlatList,
   Dimensions,
+  useWindowDimensions,
+  Platform,
   StyleSheet,
   LayoutAnimation,
+  Keyboard,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { Sheet } from '@/components/ui/Sheet';
 import Animated, {
   useAnimatedStyle,
   withSpring,
@@ -31,7 +35,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { Gesture } from 'react-native-gesture-handler';
-import { PlusCircle } from '@/components/icons';
+import { DotsThreeIcon, MagnifyingGlassIcon, PlusCircle, XIcon } from '@/components/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTheme } from '@/lib/theme';
@@ -42,13 +46,19 @@ import { alpha } from '@/components/ui';
 import {
   useCompanionChatStore,
   type Conversation,
-  deriveConversationTitleFromText,
-  sentenceCaseTitle,
 } from '@/lib/companion-chat-store';
+import {
+  buildListItems,
+  conversationMatchesTitleQuery,
+  formatRelativeDate,
+  getFullConversationTitle,
+  type DrawerListItem,
+} from '@/lib/companion-drawer-model';
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
+const TAB_BAR_CONTENT_HEIGHT = 56;
 export const DRAWER_WIDTH = Math.min(SCREEN_WIDTH * 0.80, 320);
 
 const SPRING_CONFIG = { duration: 300, dampingRatio: 1 } as const; // Critically damped — no bounce
@@ -58,10 +68,6 @@ const FAIL_OFFSET_Y = 15;
 const MIN_SWIPE_DISTANCE = 60;
 const VELOCITY_THRESHOLD = 500;
 const VELOCITY_PROJECTION = 0.05;
-
-// Time thresholds for grouping
-const ONE_DAY_MS = 24 * 60 * 60 * 1000;
-const ONE_WEEK_MS = 7 * ONE_DAY_MS;
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -76,95 +82,9 @@ interface CompanionDrawerProps {
   onWillSwitchConversation?: () => void;
 }
 
-type ListItem =
-  | { type: 'header'; label: string }
-  | { type: 'conversation'; conversation: Conversation };
+type ListItem = DrawerListItem;
 
 type ActionMode = 'actions' | 'rename' | 'delete';
-
-// ── Helpers ───────────────────────────────────────────────────────────────
-
-function getConversationTitle(conv: Conversation): string {
-  // Use AI-generated title if available (capped at 60 chars for safety).
-  // sentenceCaseTitle de-slops machine Title Case from the backend title
-  // endpoint and from legacy persisted titles.
-  if (conv.title) {
-    const display = sentenceCaseTitle(conv.title);
-    return display.length > 60 ? display.slice(0, 57) + '…' : display;
-  }
-  // Fallback: first user message, truncated
-  const firstUser = (conv.messages ?? []).find(m => m.role === 'user');
-  if (firstUser) {
-    const derived = deriveConversationTitleFromText(firstUser.content);
-    if (derived) return derived;
-  }
-  return 'New chat';
-}
-
-function formatRelativeDate(timestamp: number): string {
-  const now = Date.now();
-  const diff = now - timestamp;
-
-  if (diff < 60_000) return 'Just now';
-  if (diff < 3_600_000) {
-    const h = Math.floor(diff / 3_600_000);
-    return `${h}h ago`;
-  }
-  if (diff < ONE_DAY_MS) {
-    const h = Math.floor(diff / 3_600_000);
-    return `${h}h ago`;
-  }
-  if (diff < ONE_WEEK_MS) {
-    const d = Math.floor(diff / ONE_DAY_MS);
-    return `${d}d ago`;
-  }
-  return new Date(timestamp).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-  });
-}
-
-function buildListItems(conversations: Conversation[]): ListItem[] {
-  const now = Date.now();
-  const sorted = [...conversations].sort((a, b) => b.lastMessageAt - a.lastMessageAt);
-
-  const starred: Conversation[] = [];
-  const today: Conversation[] = [];
-  const thisWeek: Conversation[] = [];
-  const earlier: Conversation[] = [];
-
-  for (const conv of sorted) {
-    if (conv.pinned) {
-      starred.push(conv);
-      continue;
-    }
-    const age = now - conv.createdAt;
-    if (age < ONE_DAY_MS) today.push(conv);
-    else if (age < ONE_WEEK_MS) thisWeek.push(conv);
-    else earlier.push(conv);
-  }
-
-  const items: ListItem[] = [];
-
-  if (starred.length > 0) {
-    items.push({ type: 'header', label: 'Starred' });
-    for (const conv of starred) items.push({ type: 'conversation', conversation: conv });
-  }
-  if (today.length > 0) {
-    items.push({ type: 'header', label: 'Today' });
-    for (const conv of today) items.push({ type: 'conversation', conversation: conv });
-  }
-  if (thisWeek.length > 0) {
-    items.push({ type: 'header', label: 'This Week' });
-    for (const conv of thisWeek) items.push({ type: 'conversation', conversation: conv });
-  }
-  if (earlier.length > 0) {
-    items.push({ type: 'header', label: 'Earlier' });
-    for (const conv of earlier) items.push({ type: 'conversation', conversation: conv });
-  }
-
-  return items;
-}
 
 // ── useDrawerGesture hook ─────────────────────────────────────────────────
 
@@ -237,7 +157,7 @@ interface ConversationRowProps {
 
 function ConversationRow({ conversation, isCurrent, onSelect, onOpenActions }: ConversationRowProps) {
   const { colors } = useTheme();
-  const title = getConversationTitle(conversation);
+  const title = getFullConversationTitle(conversation);
   const dateLabel = formatRelativeDate(conversation.lastMessageAt);
 
   const handleLongPress = useCallback(() => {
@@ -246,11 +166,7 @@ function ConversationRow({ conversation, isCurrent, onSelect, onOpenActions }: C
   }, [conversation, onOpenActions]);
 
   return (
-    <TouchableOpacity
-      activeOpacity={0.7}
-      onPress={() => onSelect(conversation)}
-      onLongPress={handleLongPress}
-      delayLongPress={400}
+    <View
       style={[
         styles.conversationRow,
         isCurrent && {
@@ -258,18 +174,37 @@ function ConversationRow({ conversation, isCurrent, onSelect, onOpenActions }: C
           borderRadius: Radius.sm,
         },
       ]}
-      accessibilityRole="button"
-      accessibilityLabel={`${title}, ${dateLabel}${isCurrent ? ', current conversation' : ''}`}
-      accessibilityHint="Long press for conversation actions"
     >
-      <Text
-        style={[styles.convTitle, { color: colors.text }]}
-        numberOfLines={1}
+      <TouchableOpacity
+        activeOpacity={0.7}
+        onPress={() => onSelect(conversation)}
+        onLongPress={handleLongPress}
+        delayLongPress={400}
+        style={styles.conversationMain}
+        accessibilityRole="button"
+        accessibilityLabel={`${title}, ${dateLabel}${isCurrent ? ', current conversation' : ''}`}
+        accessibilityHint="Opens this conversation. Long press is optional; use the options button to star, rename, or delete."
       >
-        {title}
-      </Text>
-      <Text style={[styles.convDate, { color: colors.textMuted }]}>{dateLabel}</Text>
-    </TouchableOpacity>
+        <Text
+          style={[styles.convTitle, { color: colors.text }]}
+          numberOfLines={2}
+        >
+          {title}
+        </Text>
+        <Text style={[styles.convDate, { color: colors.textMuted }]}>{dateLabel}</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        activeOpacity={0.7}
+        onPress={() => onOpenActions(conversation)}
+        hitSlop={8}
+        style={styles.conversationOptions}
+        accessibilityRole="button"
+        accessibilityLabel={`Conversation options for ${title}`}
+        accessibilityHint="Star, rename, or delete this conversation"
+      >
+        <DotsThreeIcon size={20} color={colors.textMuted} weight="bold" />
+      </TouchableOpacity>
+    </View>
   );
 }
 
@@ -299,10 +234,9 @@ function ConversationActionPanel({
   onConfirmDelete,
 }: ConversationActionPanelProps) {
   const { colors } = useTheme();
-
   if (!conversation) return null;
 
-  const title = getConversationTitle(conversation);
+  const title = getFullConversationTitle(conversation);
   const isPinned = conversation.pinned ?? false;
   const canSaveRename = renameDraft.trim().length > 0;
   const heading = mode === 'rename'
@@ -312,147 +246,143 @@ function ConversationActionPanel({
       : 'Conversation options';
 
   return (
-    <View style={styles.actionOverlay} pointerEvents="auto">
-      <TouchableOpacity
-        style={StyleSheet.absoluteFill}
-        onPress={onClose}
-        activeOpacity={1}
-        accessible={false}
-      />
-
-      <View
-        style={[
-          styles.actionPanel,
-          {
-            backgroundColor: colors.backgroundElevated,
-            borderColor: colors.border,
-          },
-        ]}
-        accessibilityViewIsModal
-      >
-        <Text style={[styles.actionEyebrow, { color: colors.accent }]}>Companion</Text>
-        <Text style={[styles.actionHeading, { color: colors.text }]}>{heading}</Text>
-        <Text style={[styles.actionConversationTitle, { color: colors.textMuted }]} numberOfLines={2}>
-          {title}
-        </Text>
-
-        {mode === 'actions' && (
-          <View style={styles.actionButtonGroup}>
-            <TouchableOpacity
-              activeOpacity={0.76}
-              onPress={onPin}
-              style={[styles.actionButton, { borderColor: colors.border, backgroundColor: alpha(colors.accent, 0.08) }]}
-              accessibilityRole="button"
-              accessibilityLabel={isPinned ? 'Unstar conversation' : 'Star conversation'}
-            >
-              <Text style={[styles.actionButtonLabel, { color: colors.text }]}>
-                {isPinned ? 'Unstar' : 'Star'}
-              </Text>
-              <Text style={[styles.actionButtonMeta, { color: colors.textMuted }]}>
-                {isPinned ? 'Move this chat out of Starred' : 'Keep this chat easy to find'}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              activeOpacity={0.76}
-              onPress={onStartRename}
-              style={[styles.actionButton, { borderColor: colors.border }]}
-              accessibilityRole="button"
-              accessibilityLabel="Rename conversation"
-            >
-              <Text style={[styles.actionButtonLabel, { color: colors.text }]}>Rename</Text>
-              <Text style={[styles.actionButtonMeta, { color: colors.textMuted }]}>Give this thread a clearer title</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              activeOpacity={0.76}
-              onPress={onStartDelete}
-              style={[styles.actionButton, { borderColor: alpha(colors.error, 0.35), backgroundColor: alpha(colors.error, 0.08) }]}
-              accessibilityRole="button"
-              accessibilityLabel="Delete conversation"
-            >
-              <Text style={[styles.actionButtonLabel, { color: colors.error }]}>Delete</Text>
-              <Text style={[styles.actionButtonMeta, { color: colors.textMuted }]}>Remove this conversation permanently</Text>
-            </TouchableOpacity>
+    <Sheet visible onClose={onClose} contentPadding={16} bottomPadding={12}>
+        <View style={styles.actionHeaderRow}>
+          <View style={styles.actionHeaderCopy}>
+            <Text style={[styles.actionHeading, { color: colors.text }]}>{heading}</Text>
+            <Text style={[styles.actionConversationTitle, { color: colors.textMuted }]} numberOfLines={2}>
+              {title}
+            </Text>
           </View>
-        )}
+          <TouchableOpacity
+            activeOpacity={0.76}
+            onPress={onClose}
+            style={styles.headerClose}
+            accessibilityRole="button"
+            accessibilityLabel="Close options"
+          >
+            <Text style={[styles.headerCloseLabel, { color: colors.textMuted }]}>Close</Text>
+          </TouchableOpacity>
+        </View>
 
-        {mode === 'rename' && (
-          <View style={styles.actionButtonGroup}>
-            <TextInput
-              value={renameDraft}
-              onChangeText={onRenameDraftChange}
-              autoFocus
-              selectTextOnFocus
-              placeholder="Conversation title"
-              placeholderTextColor={colors.textMuted}
-              selectionColor={colors.accent}
-              cursorColor={colors.accent}
-              style={[
-                styles.renameInput,
-                {
-                  color: colors.text,
-                  borderColor: colors.border,
-                  backgroundColor: colors.inputBackground,
-                },
-              ]}
-              accessibilityLabel="Conversation title"
-            />
-            <View style={styles.actionFooterRow}>
+        <View style={styles.actionScrollContent}>
+          {mode === 'actions' && (
+            <View style={styles.actionButtonGroup}>
               <TouchableOpacity
                 activeOpacity={0.76}
-                onPress={onClose}
-                style={[styles.secondaryAction, { borderColor: colors.border }]}
+                onPress={onPin}
+                style={[styles.actionButton, { borderColor: colors.border, backgroundColor: alpha(colors.accent, 0.08) }]}
                 accessibilityRole="button"
-                accessibilityLabel="Cancel rename"
+                accessibilityLabel={isPinned ? 'Unstar conversation' : 'Star conversation'}
               >
-                <Text style={[styles.secondaryActionText, { color: colors.textMuted }]}>Cancel</Text>
+                <Text style={[styles.actionButtonLabel, { color: colors.text }]}>
+                  {isPinned ? 'Unstar' : 'Star'}
+                </Text>
+                <Text style={[styles.actionButtonMeta, { color: colors.textMuted }]}>
+                  {isPinned ? 'Move this chat out of Starred' : 'Keep this chat easy to find'}
+                </Text>
               </TouchableOpacity>
+
               <TouchableOpacity
-                activeOpacity={canSaveRename ? 0.76 : 1}
-                onPress={canSaveRename ? onConfirmRename : undefined}
-                disabled={!canSaveRename}
+                activeOpacity={0.76}
+                onPress={onStartRename}
+                style={[styles.actionButton, { borderColor: colors.border }]}
+                accessibilityRole="button"
+                accessibilityLabel="Rename conversation"
+              >
+                <Text style={[styles.actionButtonLabel, { color: colors.text }]}>Rename</Text>
+                <Text style={[styles.actionButtonMeta, { color: colors.textMuted }]}>Give this thread a clearer title</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                activeOpacity={0.76}
+                onPress={onStartDelete}
+                style={[styles.actionButton, { borderColor: alpha(colors.error, 0.35), backgroundColor: alpha(colors.error, 0.08) }]}
+                accessibilityRole="button"
+                accessibilityLabel="Delete conversation"
+              >
+                <Text style={[styles.actionButtonLabel, { color: colors.error }]}>Delete</Text>
+                <Text style={[styles.actionButtonMeta, { color: colors.textMuted }]}>Remove this conversation permanently</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {mode === 'rename' && (
+            <View style={styles.actionButtonGroup}>
+              <TextInput
+                value={renameDraft}
+                onChangeText={onRenameDraftChange}
+                autoFocus
+                selectTextOnFocus
+                placeholder="Conversation title"
+                placeholderTextColor={colors.textMuted}
+                selectionColor={colors.accent}
+                cursorColor={colors.accent}
                 style={[
-                  styles.primaryAction,
-                  { backgroundColor: canSaveRename ? colors.accent : alpha(colors.textMuted, 0.25) },
+                  styles.renameInput,
+                  {
+                    color: colors.text,
+                    borderColor: colors.border,
+                    backgroundColor: colors.inputBackground,
+                  },
                 ]}
-                accessibilityRole="button"
-                accessibilityLabel="Save conversation title"
-                accessibilityState={{ disabled: !canSaveRename }}
-              >
-                <Text style={[styles.primaryActionText, { color: colors.background }]}>Save</Text>
-              </TouchableOpacity>
+                accessibilityLabel="Conversation title"
+              />
+              <View style={styles.actionFooterRow}>
+                <TouchableOpacity
+                  activeOpacity={0.76}
+                  onPress={onClose}
+                  style={[styles.secondaryAction, { borderColor: colors.border }]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Cancel rename"
+                >
+                  <Text style={[styles.secondaryActionText, { color: colors.textMuted }]}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  activeOpacity={canSaveRename ? 0.76 : 1}
+                  onPress={canSaveRename ? onConfirmRename : undefined}
+                  disabled={!canSaveRename}
+                  style={[
+                    styles.primaryAction,
+                    { backgroundColor: canSaveRename ? colors.accent : alpha(colors.textMuted, 0.25) },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Save conversation title"
+                  accessibilityState={{ disabled: !canSaveRename }}
+                >
+                  <Text style={[styles.primaryActionText, { color: colors.background }]}>Save</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-        )}
+          )}
 
-        {mode === 'delete' && (
-          <View style={styles.actionButtonGroup}>
-            <Text style={[styles.deleteCopy, { color: colors.textMuted }]}>This permanently removes the conversation from your history.</Text>
-            <View style={styles.actionFooterRow}>
-              <TouchableOpacity
-                activeOpacity={0.76}
-                onPress={onClose}
-                style={[styles.secondaryAction, { borderColor: colors.border }]}
-                accessibilityRole="button"
-                accessibilityLabel="Cancel delete"
-              >
-                <Text style={[styles.secondaryActionText, { color: colors.textMuted }]}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                activeOpacity={0.76}
-                onPress={onConfirmDelete}
-                style={[styles.primaryAction, { backgroundColor: colors.error }]}
-                accessibilityRole="button"
-                accessibilityLabel="Permanently delete conversation"
-              >
-                <Text style={[styles.primaryActionText, { color: colors.background }]}>Delete</Text>
-              </TouchableOpacity>
+          {mode === 'delete' && (
+            <View style={styles.actionButtonGroup}>
+              <Text style={[styles.deleteCopy, { color: colors.textMuted }]}>This permanently removes the conversation from your history.</Text>
+              <View style={styles.actionFooterRow}>
+                <TouchableOpacity
+                  activeOpacity={0.76}
+                  onPress={onClose}
+                  style={[styles.secondaryAction, { borderColor: colors.border }]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Cancel delete"
+                >
+                  <Text style={[styles.secondaryActionText, { color: colors.textMuted }]}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  activeOpacity={0.76}
+                  onPress={onConfirmDelete}
+                  style={[styles.primaryAction, { backgroundColor: colors.error }]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Permanently delete conversation"
+                >
+                  <Text style={[styles.primaryActionText, { color: colors.background }]}>Delete</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-        )}
-      </View>
-    </View>
+          )}
+        </View>
+    </Sheet>
   );
 }
 
@@ -472,6 +402,20 @@ export const CompanionDrawer = memo(function CompanionDrawer({
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
+  const { height: windowHeight } = useWindowDimensions();
+  const [keyboardInset, setKeyboardInset] = useState(() => Keyboard.metrics()?.height ?? 0);
+
+  useEffect(() => {
+    const event = Platform.OS === 'ios' ? 'keyboardWillChangeFrame' : 'keyboardDidShow';
+    const show = Keyboard.addListener(event, ({ endCoordinates }) => {
+      setKeyboardInset(Math.max(0, windowHeight - endCoordinates.screenY));
+    });
+    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardInset(0));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, [windowHeight]);
 
   const activeId = useCompanionChatStore((s) => s.activeConversationId);
   // A streaming token flush replaces the active conversation object (content
@@ -496,10 +440,30 @@ export const CompanionDrawer = memo(function CompanionDrawer({
     );
   }, [conversationsFingerprint]);
 
-  const listItems = useMemo(() => buildListItems(allWithMessages), [allWithMessages]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [groupingNow, setGroupingNow] = useState(() => Date.now());
   const [actionConversation, setActionConversation] = useState<Conversation | null>(null);
   const [actionMode, setActionMode] = useState<ActionMode>('actions');
   const [renameDraft, setRenameDraft] = useState('');
+
+  useEffect(() => {
+    if (isOpen) setGroupingNow(Date.now());
+    else {
+      Keyboard.dismiss();
+      setActionConversation(null);
+      setActionMode('actions');
+      setRenameDraft('');
+    }
+  }, [isOpen]);
+
+  const visibleConversations = useMemo(
+    () => allWithMessages.filter((conversation) => conversationMatchesTitleQuery(conversation, searchQuery)),
+    [allWithMessages, searchQuery],
+  );
+  const listItems = useMemo(
+    () => buildListItems(visibleConversations, groupingNow),
+    [visibleConversations, groupingNow],
+  );
 
   const activeActionConversation = useMemo(() => {
     if (!actionConversation) return null;
@@ -507,19 +471,31 @@ export const CompanionDrawer = memo(function CompanionDrawer({
   }, [actionConversation, allWithMessages]);
 
   const closeActionPanel = useCallback(() => {
+    Keyboard.dismiss();
     setActionConversation(null);
     setActionMode('actions');
     setRenameDraft('');
   }, []);
 
+  const handleCloseHistory = useCallback(() => {
+    closeActionPanel();
+    onClose();
+  }, [closeActionPanel, onClose]);
+
+  const handleDrawerNewChat = useCallback(() => {
+    closeActionPanel();
+    onNewChat();
+  }, [closeActionPanel, onNewChat]);
+
   const openActionPanel = useCallback((conv: Conversation) => {
     setActionConversation(conv);
     setActionMode('actions');
-    setRenameDraft(getConversationTitle(conv));
+    setRenameDraft(getFullConversationTitle(conv));
   }, []);
 
   const handleSelectConversation = useCallback(
     (conv: Conversation) => {
+      Keyboard.dismiss();
       if (conv.id === activeId) {
         onClose();
       } else {
@@ -557,7 +533,7 @@ export const CompanionDrawer = memo(function CompanionDrawer({
 
   const handleStartRename = useCallback(() => {
     if (!activeActionConversation) return;
-    setRenameDraft(getConversationTitle(activeActionConversation));
+    setRenameDraft(getFullConversationTitle(activeActionConversation));
     setActionMode('rename');
   }, [activeActionConversation]);
 
@@ -585,9 +561,12 @@ export const CompanionDrawer = memo(function CompanionDrawer({
         delete: { type: LayoutAnimation.Types.easeOut, property: LayoutAnimation.Properties.opacity },
       });
     }
+    if (activeActionConversation.id === activeId) {
+      onWillSwitchConversation?.();
+    }
     deleteConversation(activeActionConversation.id);
     closeActionPanel();
-  }, [activeActionConversation, deleteConversation, closeActionPanel, reducedMotion]);
+  }, [activeActionConversation, activeId, deleteConversation, closeActionPanel, reducedMotion, onWillSwitchConversation]);
 
   // Scrim animated style — opacity only. pointerEvents controlled by isOpen prop.
   // IMPORTANT: Do NOT set pointerEvents in animated style — it conflicts with
@@ -655,7 +634,7 @@ export const CompanionDrawer = memo(function CompanionDrawer({
             width: DRAWER_WIDTH,
             backgroundColor: colors.background,
             paddingTop: insets.top,
-            paddingBottom: insets.bottom,
+            bottom: Math.max(keyboardInset, TAB_BAR_CONTENT_HEIGHT + insets.bottom),
           },
           drawerStyle,
         ]}
@@ -664,36 +643,88 @@ export const CompanionDrawer = memo(function CompanionDrawer({
         accessibilityElementsHidden={!isOpen}
         importantForAccessibility={isOpen ? 'yes' : 'no-hide-descendants'}
       >
-        {/* New Chat button */}
-        <TouchableOpacity
-          onPress={onNewChat}
-          activeOpacity={0.7}
-          style={[styles.newChatButton, { borderBottomColor: colors.border }]}
-          accessibilityRole="button"
-          accessibilityLabel="Start new conversation"
+        <View
+          style={styles.historyContent}
+          accessibilityElementsHidden={activeActionConversation != null}
+          importantForAccessibility={activeActionConversation ? 'no-hide-descendants' : 'auto'}
         >
-          <PlusCircle size={20} color={colors.accent} weight="light" />
-          <Text style={[styles.newChatLabel, { color: colors.accent }]}>
-            New Chat
-          </Text>
-        </TouchableOpacity>
-
-        {/* Conversation list */}
-        {listItems.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-              Your conversations will appear here
+          <View style={styles.historyHeader}>
+            <Text
+              style={[styles.chatsHeading, { color: colors.text }]}
+              accessibilityRole="header"
+            >
+              Chats
             </Text>
+            <TouchableOpacity
+              onPress={handleCloseHistory}
+              activeOpacity={0.7}
+              style={styles.headerClose}
+              accessibilityRole="button"
+              accessibilityLabel="Close history"
+            >
+              <Text style={[styles.headerCloseLabel, { color: colors.textMuted }]}>Close</Text>
+            </TouchableOpacity>
           </View>
-        ) : (
-          <FlatList
-            data={listItems}
-            renderItem={renderItem}
-            keyExtractor={keyExtractor}
-            contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
-          />
-        )}
+
+          <TouchableOpacity
+            onPress={handleDrawerNewChat}
+            activeOpacity={0.7}
+            style={[styles.newChatButton, { borderBottomColor: colors.border }]}
+            accessibilityRole="button"
+            accessibilityLabel="Start new conversation"
+          >
+            <PlusCircle size={20} color={colors.accent} weight="light" />
+            <Text style={[styles.newChatLabel, { color: colors.accent }]}>
+              New Chat
+            </Text>
+          </TouchableOpacity>
+
+          <View style={[styles.searchRow, { borderBottomColor: colors.border, backgroundColor: colors.inputBackground }]}>
+            <MagnifyingGlassIcon size={16} color={colors.textMuted} weight="light" />
+            <TextInput
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Search titles"
+              placeholderTextColor={colors.textMuted}
+              selectionColor={colors.accent}
+              cursorColor={colors.accent}
+              style={[styles.searchInput, { color: colors.text }]}
+              accessibilityLabel="Search conversation titles"
+              autoCorrect={false}
+              autoCapitalize="none"
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity
+                onPress={() => setSearchQuery('')}
+                style={styles.searchClear}
+                accessibilityRole="button"
+                accessibilityLabel="Clear search"
+              >
+                <XIcon size={16} color={colors.textMuted} weight="bold" />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {listItems.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={[styles.emptyText, { color: colors.textMuted }]}>
+                {searchQuery.trim()
+                  ? 'No conversations match that title'
+                  : 'Your conversations will appear here'}
+              </Text>
+            </View>
+          ) : (
+            <FlatList
+              data={listItems}
+              renderItem={renderItem}
+              keyExtractor={keyExtractor}
+              contentContainerStyle={styles.listContent}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="none"
+            />
+          )}
+        </View>
 
         <ConversationActionPanel
           conversation={activeActionConversation}
@@ -732,6 +763,33 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 12,
   },
+  historyContent: {
+    flex: 1,
+  },
+  historyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing['4'],
+    paddingTop: Spacing['3'],
+    paddingBottom: Spacing['1'],
+  },
+  chatsHeading: {
+    flex: 1,
+    fontFamily: FontFamily.display,
+    fontSize: FontSize.xl,
+    lineHeight: 26,
+  },
+  headerClose: {
+    minWidth: 44,
+    minHeight: 44,
+    paddingHorizontal: Spacing['2'],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerCloseLabel: {
+    fontFamily: FontFamily.uiSemiBold,
+    fontSize: FontSize.sm,
+  },
   newChatButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -761,6 +819,44 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing['3'],
     paddingVertical: Spacing['3'],
     borderRadius: Radius.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  conversationMain: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  conversationOptions: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing['2'],
+    marginHorizontal: Spacing['3'],
+    marginTop: Spacing['3'],
+    marginBottom: Spacing['1'],
+    paddingHorizontal: Spacing['3'],
+    minHeight: 44,
+    borderRadius: Radius.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  searchInput: {
+    flex: 1,
+    minHeight: 44,
+    fontFamily: FontFamily.body,
+    fontSize: FontSize.sm,
+  },
+  searchClear: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   convTitle: {
     fontFamily: FontFamily.body,
@@ -771,34 +867,22 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.body,
     fontSize: FontSize.xs,
   },
-  actionOverlay: {
-    ...StyleSheet.absoluteFill,
-    justifyContent: 'flex-end',
-    zIndex: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.18)',
+  actionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing['2'],
   },
-  actionPanel: {
-    marginHorizontal: Spacing['3'],
-    marginBottom: Spacing['3'],
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: Radius.xl,
-    padding: Spacing['4'],
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.22,
-    shadowRadius: 18,
-    elevation: 18,
-  },
-  actionEyebrow: {
-    fontFamily: FontFamily.uiSemiBold,
-    fontSize: 11,
-    lineHeight: 14,
-    marginBottom: Spacing['1'],
+  actionHeaderCopy: {
+    flex: 1,
+    minWidth: 0,
   },
   actionHeading: {
     fontFamily: FontFamily.display,
     fontSize: 18,
     lineHeight: 23,
+  },
+  actionScrollContent: {
+    paddingBottom: Spacing['1'],
   },
   actionConversationTitle: {
     fontFamily: FontFamily.body,

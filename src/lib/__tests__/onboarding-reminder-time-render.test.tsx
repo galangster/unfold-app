@@ -261,7 +261,10 @@ function findText(tree: { root: { findAll: Function } }, text: string) {
 
 async function renderOnboarding() {
   const client = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    defaultOptions: {
+      queries: { retry: false, gcTime: Infinity },
+      mutations: { retry: false, gcTime: Infinity },
+    },
   });
   let tree: { root: { findAll: Function }; unmount: () => void };
   await act(async () => {

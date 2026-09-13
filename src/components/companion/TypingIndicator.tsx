@@ -20,8 +20,6 @@ import Animated, {
 import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { Spacing } from '@/constants/spacing';
-import { CompanionOrb } from '@/components/CompanionOrb';
-
 const DOT_SIZE = 6;
 const DOT_GAP = 6;
 const STAGGER = 150;
@@ -91,10 +89,6 @@ export function TypingIndicator() {
       accessibilityLiveRegion="polite"
       style={{ flexDirection: 'row', alignItems: 'center', paddingLeft: Spacing['4'] }}
     >
-      {/* Companion orb — same size as in CompanionMessageContent */}
-      <CompanionOrb accentColor={colors.accent} size={28} />
-      <View style={{ width: Spacing['3'] }} />
-
       {/* Three dots */}
       <View
         style={{

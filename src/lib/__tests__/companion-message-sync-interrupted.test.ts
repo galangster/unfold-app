@@ -17,8 +17,11 @@ describe('companionMessageSyncData interrupted flag', () => {
     expect(data.interrupted).toBe(true);
   });
 
-  it('leaves ordinary rows unchanged (no interrupted key at all)', () => {
+  it('sends explicit false so a successful retry can clear a prior true flag', () => {
+    expect(companionMessageSyncData({ ...base, interrupted: false }, 'c1').interrupted).toBe(false);
+  });
+
+  it('leaves omitted interrupted rows without the key', () => {
     expect('interrupted' in companionMessageSyncData(base, 'c1')).toBe(false);
-    expect('interrupted' in companionMessageSyncData({ ...base, interrupted: false }, 'c1')).toBe(false);
   });
 });

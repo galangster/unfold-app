@@ -6,14 +6,14 @@ export const COMPANION_NAME_MAX_LENGTH = 30;
 export const PERSONAL_CONTEXT_MAX_LENGTH = INPUT_LIMITS.LONG_TEXT.max;
 export const DEFAULT_COMPANION_NAME = 'Grace';
 
-export const COMPANION_IS_AI_BODY =
-  "Companion is Unfold's AI. It can pray with you, talk through Scripture, and sit with what's going on. Naming it is how you'll address it — it doesn't change how your devotionals are written.";
+export const COMPANION_INTRO_BODY =
+  "Your Companion is here to talk through Scripture, pray with you, and help you reflect. Choose a name that feels right.";
 
 export const COMPANION_NAME_LATER_HINT =
   'You can change this name later in Profile.';
 
-export const COMPANION_EMPTY_STATE_AI_NOTE =
-  "Companion is Unfold's AI. It can listen, pray, and think with you — and it can get things wrong.";
+export const COMPANION_EMPTY_STATE_NOTE =
+  "Explore Scripture, pray, or talk through what's on your mind.";
 
 export const GENERATING_CAN_CLOSE_COPY =
   'You can close Unfold and come back when you are ready.';

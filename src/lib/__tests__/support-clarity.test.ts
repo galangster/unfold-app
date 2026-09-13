@@ -2,8 +2,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { UserProfile } from '../store';
 import {
-  COMPANION_EMPTY_STATE_AI_NOTE,
-  COMPANION_IS_AI_BODY,
+  COMPANION_EMPTY_STATE_NOTE,
+  COMPANION_INTRO_BODY,
   COMPANION_NAME_LATER_HINT,
   GENERATING_CAN_CLOSE_COPY,
   GENERATING_WRITING_CONTINUES_COPY,
@@ -41,8 +41,8 @@ describe('companion naming', () => {
     expect(resolveCompanionDisplayName('Selah', 'Grace')).toBe('Selah');
     expect(resolveCompanionDisplayName(undefined, 'Selah')).toBe('Selah');
     expect(resolveCompanionDisplayName('', '')).toBeNull();
-    expect(COMPANION_IS_AI_BODY).toContain("Companion is Unfold's AI");
-    expect(COMPANION_IS_AI_BODY).toContain("doesn't change how your devotionals are written");
+    expect(COMPANION_INTRO_BODY).toContain("talk through Scripture");
+    expect(COMPANION_INTRO_BODY).toContain("Choose a name");
   });
 });
 
@@ -162,9 +162,9 @@ describe('copy is wired where the questions arise', () => {
     const empty = readSrc('components/companion/CompanionEmptyState.tsx');
     const profile = readSrc('components/settings/PersonalContextSection.tsx');
     const settings = readSrc('components/settings/ProfileSettingsSections.tsx');
-    expect(carousel).toContain('COMPANION_IS_AI_BODY');
+    expect(carousel).toContain('COMPANION_INTRO_BODY');
     expect(carousel).toContain('COMPANION_NAME_LATER_HINT');
-    expect(empty).toContain('COMPANION_EMPTY_STATE_AI_NOTE');
+    expect(empty).toContain('COMPANION_EMPTY_STATE_NOTE');
     expect(profile).toContain('PERSONAL_CONTEXT_FUTURE_DAYS_COPY');
     expect(settings).toContain('PersonalContextSection');
   });

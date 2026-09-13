@@ -163,8 +163,9 @@ describe('H13 useAutoTrialGeneration unmount', () => {
       latest = useAutoTrialGeneration(created.intentId);
       return null;
     }
+    let tree!: ReturnType<typeof create>;
     await act(async () => {
-      create(<RetryProbe />);
+      tree = create(<RetryProbe />);
     });
     await act(async () => {
       jest.advanceTimersByTime?.(0);
@@ -183,6 +184,7 @@ describe('H13 useAutoTrialGeneration unmount', () => {
     });
     expect(mockRetry).toHaveBeenCalledWith('job-1');
     expect(readInflightGenerationJob()?.jobId).toBe('job-1');
+    act(() => tree.unmount());
   });
 
   it('lands a job-gone pull recovery that has Day 1 and no arc', async () => {
@@ -260,8 +262,9 @@ describe('H13 useAutoTrialGeneration unmount', () => {
     });
     mockSubmit.mockResolvedValue({ jobId: 'job-keep-length', devotionalId: 'devo-keep' });
     const intent = seedPurchased();
+    let tree!: ReturnType<typeof create>;
     await act(async () => {
-      create(<Probe intentId={intent.intentId} />);
+      tree = create(<Probe intentId={intent.intentId} />);
     });
     await act(async () => {
       await Promise.resolve();
@@ -272,6 +275,7 @@ describe('H13 useAutoTrialGeneration unmount', () => {
     });
     expect(useUnfoldStore.getState().user?.devotionalLength).toBe(7);
     expect(readAutoTrialIntent()?.status).toBe('submitted');
+    act(() => tree.unmount());
   });
 });
 

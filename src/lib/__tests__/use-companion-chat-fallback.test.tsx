@@ -108,13 +108,14 @@ function jsonResponse(payload: unknown) {
   };
 }
 
-function sentCompanionPayload() {
-  const body = mockFetch.mock.calls[0]?.[1]?.body;
+function sentCompanionPayload(callIndex = 0) {
+  const body = mockFetch.mock.calls[callIndex]?.[1]?.body;
   if (typeof body !== 'string') {
     throw new Error('Expected companion request body');
   }
   return JSON.parse(body) as {
     messages: Array<{ role: 'user' | 'assistant'; content: string }>;
+    conversationId?: string;
   };
 }
 
@@ -207,6 +208,201 @@ describe('sendMessage outcome', () => {
     });
 
     expect(outcome).toBe('sent');
+  });
+
+  it('sends streamConversationId and includes the current user turn once', async () => {
+    mockFetch.mockResolvedValueOnce(streamingResponseFromChunks([
+      'data: {"t":"Hello"}\n\n',
+      'data: {"d":true,"s":[]}\n\n',
+    ]));
+
+    let hook: ReturnType<typeof useCompanionChat> | null = null;
+    await act(async () => {
+      renderer.create(<HookHarness onReady={(next) => { hook = next; }} />);
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await hook!.sendMessage('How should I pray?');
+    });
+
+    const payload = sentCompanionPayload();
+    const conversationId = useCompanionChatStore.getState().conversations[0]?.id;
+    expect(payload.conversationId).toBe(conversationId);
+    expect(payload.messages.filter((message) => message.role === 'user' && message.content === 'How should I pray?')).toHaveLength(1);
+    expect(useCompanionChatStore.getState().conversations[0]?.messages.filter((message) => message.role === 'user')).toHaveLength(1);
+  });
+
+  it('keeps the request conversationId on the stream conversation after a switch during auth', async () => {
+    const { getAuthHeaders } = require('@/lib/api-config') as { getAuthHeaders: jest.Mock };
+    let releaseAuth!: () => void;
+    getAuthHeaders.mockImplementationOnce(() => new Promise((resolve) => {
+      releaseAuth = () => resolve({ 'Content-Type': 'application/json' });
+    }));
+    mockFetch.mockResolvedValueOnce(streamingResponseFromChunks([
+      'data: {"t":"Hello"}\n\n',
+      'data: {"d":true,"s":[]}\n\n',
+    ]));
+
+    let hook: ReturnType<typeof useCompanionChat> | null = null;
+    await act(async () => {
+      renderer.create(<HookHarness onReady={(next) => { hook = next; }} />);
+      await Promise.resolve();
+    });
+
+    let send!: Promise<string>;
+    await act(async () => {
+      send = hook!.sendMessage('Stay on this thread');
+      await wait(10);
+    });
+    const streamId = useCompanionChatStore.getState().conversations[0]?.id;
+    act(() => {
+      useCompanionChatStore.getState().startNewConversation();
+    });
+    await act(async () => {
+      releaseAuth();
+      await send;
+    });
+
+    expect(sentCompanionPayload().conversationId).toBe(streamId);
+  });
+});
+
+describe('retry error replies in place', () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+    act(() => {
+      useCompanionChatStore.getState().clearAllConversations();
+    });
+  });
+
+  it('retries the latest failed reply in place without appending another user turn', async () => {
+    mockFetch.mockResolvedValueOnce(streamingResponseFromChunks([
+      'data: {"t":"Retried"}\n\n',
+      'data: {"d":true,"s":[]}\n\n',
+    ]));
+
+    useCompanionChatStore.setState({
+      activeConversationId: 'c1',
+      conversations: [{
+        id: 'c1',
+        messages: [
+          { id: 'u1', role: 'user', content: 'Question', timestamp: 1, status: 'sent' },
+          { id: 'e1', role: 'companion', content: 'Failed', timestamp: 2, status: 'error' },
+        ],
+        createdAt: 1,
+        lastMessageAt: Date.now(),
+        title: 'Question',
+        topicTags: [],
+        archived: false,
+      }],
+    });
+
+    let hook: ReturnType<typeof useCompanionChat> | null = null;
+    await act(async () => {
+      renderer.create(<HookHarness onReady={(next) => { hook = next; }} />);
+      await Promise.resolve();
+    });
+
+    let outcome!: string;
+    await act(async () => {
+      outcome = await hook!.regenerateReply({ companionId: 'e1' });
+    });
+
+    expect(outcome).toBe('sent');
+    const messages = useCompanionChatStore.getState().conversations[0]?.messages ?? [];
+    expect(messages.filter((message) => message.role === 'user')).toHaveLength(1);
+    expect(messages.find((message) => message.id === 'e1')).toMatchObject({
+      status: 'complete',
+      content: 'Retried',
+      interrupted: false,
+    });
+    expect(sentCompanionPayload().messages).toEqual([{ role: 'user', content: 'Question' }]);
+  });
+
+  it('retries an older failed reply without rewriting a later one or sending later exchanges', async () => {
+    mockFetch.mockResolvedValueOnce(streamingResponseFromChunks([
+      'data: {"t":"Older recovered"}\n\n',
+      'data: {"d":true,"s":[]}\n\n',
+    ]));
+
+    useCompanionChatStore.setState({
+      activeConversationId: 'c1',
+      conversations: [{
+        id: 'c1',
+        messages: [
+          { id: 'u1', role: 'user', content: 'Older question', timestamp: 1, status: 'sent' },
+          { id: 'e1', role: 'companion', content: 'Failed', timestamp: 2, status: 'error' },
+          { id: 'u2', role: 'user', content: 'Later question', timestamp: 3, status: 'sent' },
+          { id: 'c2', role: 'companion', content: 'Later reply', timestamp: 4, status: 'complete' },
+        ],
+        createdAt: 1,
+        lastMessageAt: Date.now(),
+        title: 'Older question',
+        topicTags: [],
+        archived: false,
+      }],
+    });
+
+    let hook: ReturnType<typeof useCompanionChat> | null = null;
+    await act(async () => {
+      renderer.create(<HookHarness onReady={(next) => { hook = next; }} />);
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await hook!.regenerateReply({ companionId: 'e1' });
+    });
+
+    const messages = useCompanionChatStore.getState().conversations[0]?.messages ?? [];
+    expect(messages.map((message) => message.id)).toEqual(['u1', 'e1', 'u2', 'c2']);
+    expect(messages.find((message) => message.id === 'e1')?.content).toBe('Older recovered');
+    expect(messages.find((message) => message.id === 'c2')?.content).toBe('Later reply');
+    expect(sentCompanionPayload().messages.map((message) => message.content)).toEqual(['Older question']);
+  });
+
+  it('keeps the no-double-send gate while a retry is in flight', async () => {
+    let release!: () => void;
+    mockFetch.mockReturnValueOnce(new Promise((resolve) => {
+      release = () => resolve(streamingResponseFromChunks([
+        'data: {"t":"Later"}\n\n',
+        'data: {"d":true,"s":[]}\n\n',
+      ]) as never);
+    }));
+
+    useCompanionChatStore.setState({
+      activeConversationId: 'c1',
+      conversations: [{
+        id: 'c1',
+        messages: [
+          { id: 'u1', role: 'user', content: 'Question', timestamp: 1, status: 'sent' },
+          { id: 'e1', role: 'companion', content: 'Failed', timestamp: 2, status: 'error' },
+        ],
+        createdAt: 1,
+        lastMessageAt: Date.now(),
+        title: 'Question',
+        topicTags: [],
+        archived: false,
+      }],
+    });
+
+    let hook: ReturnType<typeof useCompanionChat> | null = null;
+    await act(async () => {
+      renderer.create(<HookHarness onReady={(next) => { hook = next; }} />);
+      await Promise.resolve();
+    });
+
+    let first!: Promise<string>;
+    act(() => {
+      first = hook!.regenerateReply({ companionId: 'e1' });
+    });
+    let second!: string;
+    await act(async () => {
+      second = await hook!.regenerateReply({ companionId: 'e1' });
+    });
+    expect(second).toBe('noop');
+    release();
+    await act(async () => { await first; });
   });
 });
 
@@ -569,12 +765,13 @@ describe('server error events never trigger the non-streaming fallback (P0-3)', 
     expect(mockFetch).toHaveBeenCalledTimes(1);
     const reply = useCompanionChatStore.getState().conversations[0]
       ?.messages.find((m) => m.role === 'companion');
-    expect(reply?.status).toBe('complete');
+    expect(reply?.status).toBe('error');
+    expect(reply?.interrupted).toBe(true);
     expect(reply?.content).toBe('Partial thought'); // never rewound
     expect(hook!.error).toMatch(/incomplete/i);
   });
 
-  it('keeps partial text as complete-with-warning when the stream ends without done', async () => {
+  it('keeps a durable interruption marker when the stream ends without done', async () => {
     mockFetch
       .mockResolvedValueOnce(streamingResponseFromChunks([
         'data: {"t":"Half an answer"}\n\n',
@@ -598,7 +795,8 @@ describe('server error events never trigger the non-streaming fallback (P0-3)', 
     expect(mockFetch).toHaveBeenCalledTimes(1); // no fallback re-request
     const reply = useCompanionChatStore.getState().conversations[0]
       ?.messages.find((m) => m.role === 'companion');
-    expect(reply?.status).toBe('complete');
+    expect(reply?.status).toBe('error');
+    expect(reply?.interrupted).toBe(true);
     expect(reply?.content).toBe('Half an answer');
     expect(hook!.error).toMatch(/incomplete/i);
   });
@@ -670,7 +868,8 @@ describe('network-drop resilience (WR-11)', () => {
 
     const conv = useCompanionChatStore.getState().conversations[0];
     const reply = (conv?.messages ?? []).find((m) => m.role === 'companion');
-    expect(reply?.status).toBe('complete');
+    expect(reply?.status).toBe('error');
+    expect(reply?.interrupted).toBe(true);
     expect(reply?.content).toBe('Partial answer');
     expect(outcome).toBe('sent');
     expect(hook!.error).toMatch(/incomplete/i);

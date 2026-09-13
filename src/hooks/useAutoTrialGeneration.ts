@@ -197,12 +197,17 @@ export function useAutoTrialGeneration(intentId: string | null): {
     await flushUnfoldStorePersistAsync();
     const flushed = useUnfoldStore.getState();
     if (flushed.user) {
-      await Promise.race([
-        syncUserProfileToBackend(flushed.user, flushed.userUpdatedAt).catch(() => undefined),
-        new Promise<void>((resolve) => {
-          setTimeout(resolve, PROFILE_PUSH_CAP_MS);
-        }),
-      ]);
+      let profilePushTimer: ReturnType<typeof setTimeout> | null = null;
+      try {
+        await Promise.race([
+          syncUserProfileToBackend(flushed.user, flushed.userUpdatedAt).catch(() => undefined),
+          new Promise<void>((resolve) => {
+            profilePushTimer = setTimeout(resolve, PROFILE_PUSH_CAP_MS);
+          }),
+        ]);
+      } finally {
+        if (profilePushTimer !== null) clearTimeout(profilePushTimer);
+      }
     }
     try {
       const reply = await submitGenerationJob({
