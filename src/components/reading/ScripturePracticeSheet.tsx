@@ -11,6 +11,8 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
+import { adaptiveFrameStyle, adaptiveSafeGutterStyle } from '@/lib/adaptive-layout';
 import { BookOpenIcon, CaretLeftIcon, XIcon } from '@/components/icons';
 import { FontFamily } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
@@ -93,6 +95,9 @@ export function ScripturePracticeSheet({
 }: ScripturePracticeSheetProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const adaptiveLayout = useAdaptiveLayout();
+  const clusterFrameStyle = adaptiveFrameStyle(adaptiveLayout.clusterMaxWidth);
+  const readableFrameStyle = adaptiveFrameStyle(adaptiveLayout.readableMaxWidth);
   const translation = useUnfoldStore((s) => s.bibleReaderSettings.translation) as BibleTranslation;
   const sessions = useUnfoldStore((s) => s.scripturePracticeSessions);
   const updateScripturePractice = useUnfoldStore((s) => s.updateScripturePractice);
@@ -275,12 +280,19 @@ export function ScripturePracticeSheet({
 
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.background }]} testID="scripture-practice-sheet">
+    <View
+      style={[
+        styles.root,
+        { backgroundColor: colors.background },
+        adaptiveSafeGutterStyle(insets.left, insets.right),
+      ]}
+      testID="scripture-practice-sheet"
+    >
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <View style={[styles.header, { paddingTop: Math.max(insets.top, Spacing['3']) }]}>
+        <View style={[clusterFrameStyle, styles.header, { paddingTop: Math.max(insets.top, Spacing['3']) }]}>
           <TouchableOpacity
             onPress={goBack}
             accessibilityRole="button"
@@ -310,6 +322,7 @@ export function ScripturePracticeSheet({
           automaticallyAdjustKeyboardInsets
           contentContainerStyle={[
             styles.content,
+            readableFrameStyle,
             { paddingBottom: Math.max(insets.bottom, Spacing['4']) + Spacing['8'] },
           ]}
         >
@@ -433,6 +446,7 @@ export function ScripturePracticeSheet({
 
         <View
           style={[
+            clusterFrameStyle,
             styles.footer,
             {
               paddingBottom: Math.max(insets.bottom, Spacing['3']),

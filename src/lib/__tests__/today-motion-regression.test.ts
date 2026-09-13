@@ -102,9 +102,9 @@ describe('Today tab motion guardrails', () => {
   });
 
   it('keeps the optional Today context stack under the hero instead of above it', () => {
-    const contextZoneIndex = todayIndexSource.indexOf('/* Zone 2: Context stack moved under the hero in Phase 3. */');
     const heroZoneIndex = todayIndexSource.indexOf("/* Zone 3: Hero Devotional — Today's primary act */");
-    const todayCardStackIndex = todayIndexSource.indexOf('<TodayCardStack', heroZoneIndex);
+    const contextColumnIndex = todayIndexSource.indexOf('<View style={todayTrailColumnStyle}>', heroZoneIndex);
+    const todayCardStackIndex = todayIndexSource.indexOf('<TodayCardStack', contextColumnIndex);
     const dailyRhythmIndex = todayIndexSource.indexOf('/* Zone 6: Daily Rhythm */', todayCardStackIndex);
     const revealStart = devotionalCardSource.indexOf('function RevealReadyState');
     const revealEnd = devotionalCardSource.indexOf('// ─── Preparing progress bar', revealStart);
@@ -113,9 +113,10 @@ describe('Today tab motion guardrails', () => {
     const companionDismissStyleEnd = todayCompanionBubbleSource.indexOf('orbWrap:', companionDismissStyleStart);
     const companionDismissStyle = todayCompanionBubbleSource.slice(companionDismissStyleStart, companionDismissStyleEnd);
 
-    expect(contextZoneIndex).toBeGreaterThan(-1);
-    expect(heroZoneIndex).toBeGreaterThan(contextZoneIndex);
-    expect(todayCardStackIndex).toBeGreaterThan(heroZoneIndex);
+    expect(todayIndexSource).toContain('<View style={todayColumnsStyle}>');
+    expect(heroZoneIndex).toBeGreaterThan(-1);
+    expect(contextColumnIndex).toBeGreaterThan(heroZoneIndex);
+    expect(todayCardStackIndex).toBeGreaterThan(contextColumnIndex);
     expect(dailyRhythmIndex).toBeGreaterThan(todayCardStackIndex);
     expect(todayIndexSource).toContain('hasOptionalTodayStack && (');
     expect(todayIndexSource).toContain('cards={todayStackCards}');

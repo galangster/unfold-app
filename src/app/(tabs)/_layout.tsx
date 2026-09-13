@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Tabs, useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { StyleSheet, Platform, View, TouchableOpacity, Text } from 'react-native';
+import { ADAPTIVE_CLUSTER_MEASURE, adaptiveFrameStyle, adaptiveSafeGutterStyle } from '@/lib/adaptive-layout';
 import { HouseIcon, BookBookmarkIcon, BookOpenIcon, UserIcon, ChatCircleIcon, StepsIcon } from '@/components/icons';
 import Animated, {
   useSharedValue,
@@ -167,6 +168,7 @@ function AnimatedTabIcon({
 function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const tabClusterStyle = adaptiveFrameStyle(ADAPTIVE_CLUSTER_MEASURE);
   const reducedMotion = useReducedMotion();
   const tabBarHidden = useUIState((s) => s.tabBarHidden);
   const tabBarHideMode = useUIState((s) => s.tabBarHideMode);
@@ -264,9 +266,11 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
       />
 
       {/* Tab items */}
+      <View style={adaptiveSafeGutterStyle(insets.left, insets.right)}>
       <View
         style={{
           flexDirection: 'row',
+          ...tabClusterStyle,
           paddingTop: Spacing['2'],
           paddingBottom: Math.max(insets.bottom, 8),
           paddingHorizontal: TAB_BAR_HORIZONTAL_PADDING,
@@ -378,6 +382,8 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
                 numberOfLines={1}
                 maxFontSizeMultiplier={TAB_LABEL_MAX_SCALE}
                 style={{
+                  alignSelf: 'stretch',
+                  paddingHorizontal: 4,
                   fontFamily: FontFamily.uiMedium,
                   fontSize: 10,
                   color: currentColor,
@@ -391,6 +397,7 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
             </TouchableOpacity>
           );
         })}
+      </View>
       </View>
     </Animated.View>
   );

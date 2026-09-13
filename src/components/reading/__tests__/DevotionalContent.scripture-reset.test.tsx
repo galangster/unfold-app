@@ -8,6 +8,8 @@ import { DevotionalContent } from '../DevotionalContent';
 
 const mockFetchVerseLocal = jest.fn();
 const mockFetchVerse = jest.fn();
+const mockDevotionalWebView = jest.fn((_props: unknown) => null);
+const mockInlineReflectionJournal = jest.fn((_props: unknown) => null);
 
 jest.mock('@/lib/bible-api', () => ({
   fetchVerse: (...args: unknown[]) => mockFetchVerse(...args),
@@ -57,8 +59,12 @@ jest.mock('../ScriptureVerseBlock', () => {
     ),
   };
 });
-jest.mock('../DevotionalWebView', () => ({ DevotionalWebView: () => null }));
-jest.mock('../InlineReflectionJournal', () => ({ InlineReflectionJournal: () => null }));
+jest.mock('../DevotionalWebView', () => ({
+  DevotionalWebView: (props: unknown) => mockDevotionalWebView(props),
+}));
+jest.mock('../InlineReflectionJournal', () => ({
+  InlineReflectionJournal: (props: unknown) => mockInlineReflectionJournal(props),
+}));
 
 function collectText(node: any): string[] {
   if (typeof node === 'string') return [node];
@@ -85,6 +91,8 @@ describe('DevotionalContent versed scripture (Greptile A8)', () => {
   beforeEach(() => {
     mockFetchVerseLocal.mockReset();
     mockFetchVerse.mockReset();
+    mockDevotionalWebView.mockClear();
+    mockInlineReflectionJournal.mockClear();
   });
 
   it('drops the previous passage when the reference changes and the new fetch fails', async () => {
@@ -111,5 +119,53 @@ describe('DevotionalContent versed scripture (Greptile A8)', () => {
     const text = collectText(tree!.toJSON()).join(' ');
     expect(text).not.toContain('OLDPASSAGE');
     expect(text).toContain('NEWAITEXT');
+  });
+
+  it('signals reflection remeasurement after the WebView height commit', async () => {
+    mockFetchVerseLocal.mockResolvedValue(null);
+    mockFetchVerse.mockResolvedValue(null);
+    let committedFrame: FrameRequestCallback | null = null;
+    const requestAnimationFrameSpy = jest
+      .spyOn(global, 'requestAnimationFrame')
+      .mockImplementation((callback) => {
+        committedFrame = callback;
+        return 1;
+      });
+
+    let tree: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderer.create(
+        <DevotionalContent
+          day={day({ reflectionQuestions: ['First', 'Later'] })}
+          fontSize="medium"
+          devotionalId="devotional"
+          dayNumber={1}
+          onOpenJournal={jest.fn()}
+          layoutGeneration={4}
+        />
+      );
+      await Promise.resolve();
+    });
+
+    const initialReflectionProps = mockInlineReflectionJournal.mock.calls.at(-1)?.[0] as {
+      layoutCommitSignal: number;
+    };
+    const webViewProps = mockDevotionalWebView.mock.calls.at(-1)?.[0] as {
+      onLayoutGenerationCommitted: (generation: number) => void;
+    };
+
+    act(() => webViewProps.onLayoutGenerationCommitted(4));
+    expect(mockInlineReflectionJournal.mock.calls.at(-1)?.[0]).toBe(initialReflectionProps);
+    act(() => committedFrame?.(0));
+
+    const committedReflectionProps = mockInlineReflectionJournal.mock.calls.at(-1)?.[0] as {
+      layoutCommitSignal: number;
+    };
+    expect(committedReflectionProps.layoutCommitSignal).toBe(
+      initialReflectionProps.layoutCommitSignal + 1,
+    );
+
+    act(() => tree!.unmount());
+    requestAnimationFrameSpy.mockRestore();
   });
 });

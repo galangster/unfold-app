@@ -18,6 +18,9 @@ jest.mock('@/components/icons', () => new Proxy({}, {
 }));
 jest.mock('@/components/VoiceInputBar', () => ({ VoiceInputBar: () => null }));
 jest.mock('@/components/ui', () => ({ alpha: (c: string) => c }));
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+}));
 jest.mock('@/lib/theme', () => ({
   useTheme: () => ({ isDark: true, colors: new Proxy({}, { get: () => '#888888' }) }),
 }));

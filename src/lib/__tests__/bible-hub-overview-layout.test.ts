@@ -6,9 +6,14 @@ import {
   BIBLE_HUB_SEGMENTED_MIN_HEIGHT,
   BIBLE_HUB_SEGMENTED_NATIVE_FONT_SIZE,
   BIBLE_HUB_SEGMENTED_VERTICAL_PADDING,
+  BIBLE_HUB_HEADER_GAP,
+  BIBLE_HUB_HEADER_PROFILE_WIDTH,
   bibleHubBookAccessibilityHint,
+  bibleHubHeaderTitleReserve,
+  bibleHubHeaderTrailingWidth,
   bibleHubOverviewMetrics,
   bibleHubSegmentedMetrics,
+  shouldStackBibleHubHeader,
 } from '../bible-hub-overview-layout';
 
 const WIDTHS = [320, 375, 402, 768] as const;
@@ -31,7 +36,7 @@ describe('bible hub compact overview geometry', () => {
       for (const fontScale of SCALES) {
         const metrics = bibleHubOverviewMetrics(width, fontScale);
         expect(metrics.columns).toBeGreaterThanOrEqual(1);
-        expect(metrics.columns).toBeLessThanOrEqual(7);
+        expect(metrics.columns).toBeLessThanOrEqual(12);
         expect(metrics.tileWidth).toBeGreaterThanOrEqual(BIBLE_HUB_OVERVIEW_MIN_TILE);
         expect(metrics.minTileHeight).toBeGreaterThanOrEqual(BIBLE_HUB_OVERVIEW_MIN_TILE);
         expect(metrics.minTileHeight).toBe(Math.max(44, Math.round(44 * fontScale)));
@@ -39,13 +44,15 @@ describe('bible hub compact overview geometry', () => {
     }
   });
 
-  it('caps tablet columns at seven and leaves leftover tiles unstretched', () => {
+  it('adds columns on a wide window so tiles stay near the compact size', () => {
     const phone = bibleHubOverviewMetrics(402, 1);
-    const tablet = bibleHubOverviewMetrics(768, 1);
-    expect(tablet.columns).toBe(7);
-    expect(tablet.tileWidth).toBeGreaterThan(phone.tileWidth);
-    expect(tablet.tileWidth * tablet.columns + 6 * (tablet.columns - 1)).toBeCloseTo(
-      tablet.availableWidth,
+    const wide = bibleHubOverviewMetrics(768, 1);
+    expect(phone.columns).toBe(7);
+    expect(wide.columns).toBeGreaterThan(phone.columns);
+    expect(wide.columns).toBeLessThanOrEqual(12);
+    expect(wide.tileWidth).toBeLessThan(phone.tileWidth + 20);
+    expect(wide.tileWidth * wide.columns + 6 * (wide.columns - 1)).toBeCloseTo(
+      wide.availableWidth,
       5,
     );
   });
@@ -59,6 +66,19 @@ describe('bible hub compact overview geometry', () => {
     expect(large.height).toBe(39 + BIBLE_HUB_SEGMENTED_VERTICAL_PADDING);
     expect(large.height).toBeGreaterThanOrEqual(BIBLE_HUB_SEGMENTED_MIN_HEIGHT);
     expect(large.width).toBeLessThanOrEqual(320 - 48);
+  });
+
+  it('keeps the 720pt hub header on one row and stacks only when trailing chrome no longer fits', () => {
+    const title = bibleHubHeaderTitleReserve();
+    const trailingAt720 = bibleHubHeaderTrailingWidth(1, 720);
+    const segmented = bibleHubSegmentedMetrics(1, 720);
+
+    expect(trailingAt720).toBe(segmented.width + BIBLE_HUB_HEADER_GAP + BIBLE_HUB_HEADER_PROFILE_WIDTH);
+    expect(title + BIBLE_HUB_HEADER_GAP + trailingAt720).toBeLessThan(720 - 48);
+    expect(shouldStackBibleHubHeader(720, 1)).toBe(false);
+    expect(shouldStackBibleHubHeader(720, 3)).toBe(false);
+    expect(shouldStackBibleHubHeader(320, 1)).toBe(true);
+    expect(shouldStackBibleHubHeader(390, 2)).toBe(true);
   });
 
   it('names category and chapter count in book hints, including one-chapter books', () => {

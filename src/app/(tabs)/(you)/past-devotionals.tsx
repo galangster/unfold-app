@@ -26,6 +26,8 @@ import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
 import { Typography } from '@/constants/typography';
 import { alpha } from '@/components/ui';
+import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
+import { adaptiveFrameStyle, PRIMARY_SAFE_AREA_EDGES } from '@/lib/adaptive-layout';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, Devotional } from '@/lib/store';
 import { resolveStackRoute, type TabGroup } from '@/lib/tab-stack-routes';
@@ -543,6 +545,8 @@ export function PastSeriesLibraryScreen({ hostTab }: { hostTab?: TabGroup } = {}
   const { handleBack, isFromHome } = useCrossTabBack();
   const { colors } = useTheme();
   const reducedMotion = useReducedMotion();
+  const adaptiveLayout = useAdaptiveLayout();
+  const clusterFrameStyle = adaptiveFrameStyle(adaptiveLayout.clusterMaxWidth);
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const removeDevotional = useUnfoldStore((s) => s.removeDevotional);
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
@@ -722,7 +726,8 @@ export function PastSeriesLibraryScreen({ hostTab }: { hostTab?: TabGroup } = {}
   if (devotionals.length === 0) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
-        <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <SafeAreaView style={{ flex: 1 }} edges={PRIMARY_SAFE_AREA_EDGES}>
+          <View style={[clusterFrameStyle, { flex: 1 }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing['4'], paddingVertical: Spacing['3'] }}>
             <TouchableOpacity activeOpacity={0.7}
               onPress={handleBack}
@@ -763,6 +768,7 @@ export function PastSeriesLibraryScreen({ hostTab }: { hostTab?: TabGroup } = {}
               No devotionals yet
             </Text>
           </Animated.View>
+          </View>
         </SafeAreaView>
       </View>
     );
@@ -776,7 +782,8 @@ export function PastSeriesLibraryScreen({ hostTab }: { hostTab?: TabGroup } = {}
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+      <SafeAreaView style={{ flex: 1 }} edges={PRIMARY_SAFE_AREA_EDGES}>
+        <View style={[clusterFrameStyle, { flex: 1 }]}>
         <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing['4'], paddingVertical: Spacing['3'] }}>
           <TouchableOpacity activeOpacity={0.7}
             onPress={handleBack}
@@ -896,6 +903,7 @@ export function PastSeriesLibraryScreen({ hostTab }: { hostTab?: TabGroup } = {}
           />
           </>
         )}
+        </View>
       </SafeAreaView>
     </View>
   );

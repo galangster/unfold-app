@@ -43,6 +43,17 @@ describe('bible hub book pill columns', () => {
     });
   });
 
+  it('uses 4 columns on a 700pt window at default text', () => {
+    expect(bibleHubBookPillColumnCount(700, 1)).toBe(4);
+    expect(bibleHubBookPillColumnCount(700, 1.18)).toBe(2);
+    expect(bibleHubBookPillWidthStyle(4)).toEqual({
+      minWidth: '22%',
+      flexGrow: 1,
+      flexBasis: '22%',
+      maxWidth: '24.5%',
+    });
+  });
+
   it('covers the requested width and scale matrix without forcing 3 columns at large text', () => {
     for (const width of WIDTHS) {
       for (const fontScale of SCALES) {

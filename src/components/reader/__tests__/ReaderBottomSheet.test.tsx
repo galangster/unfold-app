@@ -24,7 +24,14 @@ jest.mock('@/lib/theme', () => ({
 }));
 
 jest.mock('react-native-safe-area-context', () => ({
-  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 12, left: 0 }),
+  useSafeAreaInsets: () => ({ top: 0, right: 20, bottom: 12, left: 80 }),
+}));
+
+jest.spyOn(jest.requireActual('react-native'), 'useWindowDimensions').mockImplementation(() => ({
+  width: 1024,
+  height: 768,
+  scale: 2,
+  fontScale: 1,
 }));
 
 jest.mock('react-native-reanimated', () => ({
@@ -121,6 +128,18 @@ describe('ReaderBottomSheet', () => {
     expect(JSON.stringify(tree.toJSON())).toContain('Footer action');
     // Title text + close button chrome were removed — dismissal is swipe-down + backdrop.
     expect(() => tree.root.findByProps({ testID: 'reader-bottom-sheet-close' })).toThrow();
+  });
+
+  it('centers the surface inside asymmetric left and right safe areas', () => {
+    const { tree } = renderSheet();
+    const surface = tree.root.findByProps({ testID: 'reader-bottom-sheet-surface' });
+    const style = Array.isArray(surface.props.style)
+      ? Object.assign({}, ...surface.props.style.filter((item: unknown) => item && typeof item === 'object'))
+      : surface.props.style;
+
+    expect(style.left).toBeGreaterThan(80);
+    expect(style.width).toBe(520);
+    expect(style.left + style.width).toBeLessThanOrEqual(1024 - 20);
   });
 
   it('closes from a backdrop press', () => {

@@ -10,6 +10,7 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  type LayoutChangeEvent,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -42,9 +43,18 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { adaptiveFrameStyle, adaptiveSafeGutterStyle, resolveAdaptiveLayout } from '@/lib/adaptive-layout';
 import { CHECKIN_CELEBRATION_MESSAGES } from '@/constants/check-in-messages';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
 import { alpha } from '@/components/ui';
+
+// iOS may update glyph sizes before invalidating native text measurements.
+// Remount text leaves on scale changes without resetting answers or inputs.
+function CheckInText(props: React.ComponentProps<typeof Text>) {
+  const { fontScale } = useWindowDimensions();
+  return <Text key={fontScale} {...props} />;
+}
 
 const TOTAL_STEPS = 3;
 
@@ -133,22 +143,22 @@ function MoodStep({
 
   return (
     <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)} style={styles.stepContent}>
-      <Text
+      <CheckInText
         style={[
           styles.stepTitle,
           { color: colors.text, fontFamily: FontFamily.display },
         ]}
       >
         How are you today?
-      </Text>
-      <Text
+      </CheckInText>
+      <CheckInText
         style={[
           styles.stepSubtitle,
           { color: colors.textMuted, fontFamily: FontFamily.body },
         ]}
       >
         Tap the one that fits
-      </Text>
+      </CheckInText>
       <View
         style={styles.moodRow}
         accessibilityRole="radiogroup"
@@ -184,7 +194,7 @@ function MoodStep({
                 color={isSelected ? colors.accent : colors.textMuted}
                 weight={isSelected ? 'fill' : 'light'}
               />
-              <Text
+              <CheckInText
                 style={[
                   styles.moodLabel,
                   {
@@ -194,7 +204,7 @@ function MoodStep({
                 ]}
               >
                 {label}
-              </Text>
+              </CheckInText>
             </TouchableOpacity>
           );
         })}
@@ -259,14 +269,14 @@ function QuestionStep({
 
   return (
     <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)} style={styles.stepContent}>
-      <Text
+      <CheckInText
         style={[
           styles.stepTitle,
           { color: colors.text, fontFamily: FontFamily.display },
         ]}
       >
         {question}
-      </Text>
+      </CheckInText>
 
       <View style={styles.chipsContainer}>
         {chips.map((chip) => {
@@ -290,7 +300,7 @@ function QuestionStep({
               accessibilityLabel={chip}
               accessibilityState={{ selected: isSelected }}
             >
-              <Text
+              <CheckInText
                 style={[
                   styles.chipText,
                   {
@@ -304,7 +314,7 @@ function QuestionStep({
                 ]}
               >
                 {chip}
-              </Text>
+              </CheckInText>
             </TouchableOpacity>
           );
         })}
@@ -352,7 +362,7 @@ function QuestionStep({
             accessibilityLabel="Submit answer"
             accessibilityState={{ disabled: typedAnswer.trim().length === 0 }}
           >
-            <Text
+            <CheckInText
               style={[
                 styles.submitTypedText,
                 {
@@ -365,7 +375,7 @@ function QuestionStep({
               ]}
             >
               Done
-            </Text>
+            </CheckInText>
           </TouchableOpacity>
         </Animated.View>
       ) : (
@@ -376,14 +386,14 @@ function QuestionStep({
           accessibilityLabel="Type my own answer"
         >
           <PencilSimpleIcon size={16} color={colors.textMuted} weight="light" />
-          <Text
+          <CheckInText
             style={[
               styles.typeOwnText,
               { color: colors.textMuted, fontFamily: FontFamily.ui },
             ]}
           >
             Type my own
-          </Text>
+          </CheckInText>
         </TouchableOpacity>
       )}
     </Animated.View>
@@ -423,22 +433,22 @@ function NoteStep({
 
   return (
     <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)} style={styles.stepContent}>
-      <Text
+      <CheckInText
         style={[
           styles.stepTitle,
           { color: colors.text, fontFamily: FontFamily.display },
         ]}
       >
         Anything on your heart?
-      </Text>
-      <Text
+      </CheckInText>
+      <CheckInText
         style={[
           styles.stepSubtitle,
           { color: colors.textMuted, fontFamily: FontFamily.body },
         ]}
       >
         Optional -- just for you
-      </Text>
+      </CheckInText>
 
       <TextInput
         ref={inputRef}
@@ -472,14 +482,14 @@ function NoteStep({
           accessibilityRole="button"
           accessibilityLabel="Skip this step"
         >
-          <Text
+          <CheckInText
             style={[
               styles.skipText,
               { color: colors.textMuted, fontFamily: FontFamily.uiMedium },
             ]}
           >
             Skip
-          </Text>
+          </CheckInText>
         </TouchableOpacity>
 
         <TouchableOpacity activeOpacity={0.7}
@@ -499,7 +509,7 @@ function NoteStep({
           accessibilityLabel="Submit note"
           accessibilityState={{ disabled: noteText.trim().length === 0 }}
         >
-          <Text
+          <CheckInText
             style={[
               styles.doneButtonText,
               {
@@ -512,7 +522,7 @@ function NoteStep({
             ]}
           >
             Done
-          </Text>
+          </CheckInText>
         </TouchableOpacity>
       </View>
     </Animated.View>
@@ -575,7 +585,7 @@ function CheckInCelebration({ colors, onDismiss }: { colors: ReturnType<typeof u
     <TouchableOpacity activeOpacity={1} onPress={onDismiss} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 }}>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' }}>
         {reducedMotion ? (
-          <Text
+          <CheckInText
             style={{
               fontFamily: FontFamily.body,
               fontSize: FontSize.xl,
@@ -585,14 +595,14 @@ function CheckInCelebration({ colors, onDismiss }: { colors: ReturnType<typeof u
             }}
           >
             {message}
-          </Text>
+          </CheckInText>
         ) : (
           message.split('').map((char, i) => (
             <MagicChar key={`${char}-${i}`} char={char} delay={charDelays[i]} colors={colors} />
           ))
         )}
       </View>
-      <Text
+      <CheckInText
         style={{
           fontFamily: FontFamily.ui,
           fontSize: FontSize.xs,
@@ -601,7 +611,7 @@ function CheckInCelebration({ colors, onDismiss }: { colors: ReturnType<typeof u
         }}
       >
         Tap anywhere to continue
-      </Text>
+      </CheckInText>
     </TouchableOpacity>
   );
 }
@@ -624,8 +634,24 @@ export function CheckInSheet({
   dayNumber: _dayNumber,
 }: CheckInSheetProps) {
   const { colors, isDark } = useTheme();
-  const { height: screenHeight, fontScale } = useWindowDimensions();
-  const sheetHeight = screenHeight * Math.min(0.85, 0.5 * Math.max(1, fontScale));
+  const insets = useSafeAreaInsets();
+  const { width: windowWidth, height: screenHeight, fontScale } = useWindowDimensions();
+  const adaptiveLayout = resolveAdaptiveLayout({
+    width: windowWidth,
+    height: screenHeight,
+    fontScale,
+    insetLeft: insets.left,
+    insetRight: insets.right,
+  });
+  const sheetMaxWidth = adaptiveLayout.sheetMaxWidth;
+  const [containerHeight, setContainerHeight] = useState(0);
+  const handleContainerLayout = useCallback((event: LayoutChangeEvent) => {
+    setContainerHeight(event.nativeEvent.layout.height);
+  }, []);
+  const sheetHeight = Math.min(
+    screenHeight * Math.min(0.85, 0.5 * Math.max(1, fontScale)),
+    containerHeight || Math.max(0, screenHeight - insets.top),
+  );
   const reducedMotion = useReducedMotion();
   const [currentStep, setCurrentStep] = useState(0);
   const [selectedMood, setSelectedMood] = useState<MoodValue | null>(null);
@@ -750,6 +776,7 @@ export function CheckInSheet({
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.modalContainer}
       >
+        <View style={[styles.modalContainer, { width: '100%', marginTop: insets.top }]} onLayout={handleContainerLayout}>
         {/* Backdrop */}
         <TouchableOpacity activeOpacity={1} style={StyleSheet.absoluteFill} onPress={handleClose}>
           <Animated.View
@@ -763,11 +790,15 @@ export function CheckInSheet({
 
         {/* Sheet */}
         {visible && (
+          <View pointerEvents="box-none" style={[adaptiveSafeGutterStyle(insets.left, insets.right), { width: '100%' }]}>
           <Animated.View
+            accessibilityViewIsModal
+            onAccessibilityEscape={handleClose}
             entering={reducedMotion ? undefined : SlideInDown.duration(Duration.normal).easing(Ease.out)}
             exiting={reducedMotion ? undefined : SlideOutDown.duration(Duration.fast).easing(Ease.out)}
             style={[
               styles.sheet,
+              adaptiveFrameStyle(sheetMaxWidth),
               {
                 height: sheetHeight,
                 backgroundColor: isDark
@@ -820,7 +851,7 @@ export function CheckInSheet({
             </View>
 
             {/* Step content */}
-            <ScrollView key={showCelebration ? 'celebration' : currentStep} style={{ flex: 1 }} contentContainerStyle={styles.stepContainer} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive">
+            <ScrollView key={showCelebration ? 'celebration' : currentStep} style={{ flex: 1 }} contentContainerStyle={[styles.stepContainer, { paddingBottom: 24 + insets.bottom }]} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive">
               {showCelebration ? (
                 <CheckInCelebration colors={colors} onDismiss={handleClose} />
               ) : (
@@ -853,7 +884,9 @@ export function CheckInSheet({
               )}
             </ScrollView>
           </Animated.View>
+          </View>
         )}
+        </View>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -863,6 +896,7 @@ const styles = StyleSheet.create({
   modalContainer: {
     flex: 1,
     justifyContent: 'flex-end',
+    alignItems: 'center',
   },
 
   /* Sheet card */

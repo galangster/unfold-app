@@ -112,10 +112,59 @@ export function resolveTranslationRefreshVerse(params: {
   return params.persistedPosition.verse;
 }
 
+export function buildBibleReaderLayoutKey(input: {
+  readableWidth: number;
+  fontSize: number;
+  lineHeightMultiplier: number;
+  fontScale: number;
+  fontFamily?: string;
+}): string {
+  const width = Number.isFinite(input.readableWidth) ? Math.round(input.readableWidth) : 0;
+  const fontSize = Number.isFinite(input.fontSize) ? Math.round(input.fontSize) : 0;
+  const lineHeight = Number.isFinite(input.lineHeightMultiplier)
+    ? Math.round(input.lineHeightMultiplier * 100)
+    : 0;
+  const fontScale = Number.isFinite(input.fontScale) ? Math.round(input.fontScale * 100) : 100;
+  return `${width}:${fontSize}:${lineHeight}:${fontScale}:${input.fontFamily ?? ''}`;
+}
+
+export function isCurrentBibleLayoutReport(params: {
+  reportContentKey: string;
+  reportLayoutKey: string;
+  activeContentKey: string;
+  activeLayoutKey: string;
+}): boolean {
+  return params.reportContentKey === params.activeContentKey
+    && params.reportLayoutKey === params.activeLayoutKey;
+}
+
 export type BibleVerseScrollTarget = {
   verse: number;
-  source: 'explicit' | 'saved';
+  source: 'explicit' | 'saved' | 'refresh';
 };
+
+export function shouldFlashVerseForScroll(
+  source: BibleVerseScrollTarget['source'] | null | undefined,
+): boolean {
+  return source === 'explicit';
+}
+
+export function resolveActiveVerseScrollTarget(params: {
+  routeTarget: BibleVerseScrollTarget | null;
+  refreshVerse: number | null;
+  refreshContentKey: string | null;
+  activeContentKey: string;
+  verses: readonly { verse: number }[] | null | undefined;
+}): BibleVerseScrollTarget | null {
+  if (params.routeTarget) return params.routeTarget;
+  if (params.refreshVerse === null || params.refreshContentKey !== params.activeContentKey) {
+    return null;
+  }
+  return {
+    verse: resolveTargetVerse(String(params.refreshVerse), params.verses) ?? 1,
+    source: 'refresh',
+  };
+}
 
 /**
  * Resolve one scroll target for the current render. A later explicit target
@@ -157,4 +206,31 @@ export function findVisibleVerseAnchor(
     anchor = entry.verse;
   }
   return anchor;
+}
+
+/**
+ * Capture a resize restore verse. Live viewport wins only during drag or
+ * momentum. Native reflow must keep the persisted semantic verse.
+ */
+export function resolveBibleResizeVerseAnchor(params: {
+  userScrollActive: boolean;
+  layouts: Readonly<Record<number, number>>;
+  contentOffsetY: number;
+  headerOffset: number;
+  persistedPosition: { chapterKey: string; verse: number } | null;
+  chapterKey: string;
+  entryVerse: number;
+}): number {
+  if (params.userScrollActive) {
+    const liveVerse = findVisibleVerseAnchor(
+      params.layouts,
+      params.contentOffsetY,
+      params.headerOffset,
+    );
+    if (liveVerse !== null) return liveVerse;
+  }
+  if (params.persistedPosition?.chapterKey === params.chapterKey) {
+    return params.persistedPosition.verse;
+  }
+  return params.entryVerse;
 }

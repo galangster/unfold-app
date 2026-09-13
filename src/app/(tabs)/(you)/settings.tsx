@@ -1,4 +1,6 @@
 import { View, Text, ScrollView, useWindowDimensions, StyleSheet } from 'react-native';
+import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
+import { adaptiveFrameStyle } from '@/lib/adaptive-layout';
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import { useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -19,6 +21,8 @@ import {
  */
 export default function SettingsScreen() {
   const { fontScale } = useWindowDimensions();
+  const adaptiveLayout = useAdaptiveLayout();
+  const settingsFrameStyle = adaptiveFrameStyle(adaptiveLayout.clusterMaxWidth);
   const { colors } = useTheme();
   const { section } = useLocalSearchParams<{ section?: string }>();
   const { handleBack } = useCrossTabBack();
@@ -26,7 +30,7 @@ export default function SettingsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }} testID="settings-screen">
-      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
         <View style={styles.header}>
           <TouchableOpacity
             activeOpacity={0.7}
@@ -49,7 +53,9 @@ export default function SettingsScreen() {
           contentContainerStyle={{ paddingBottom: 100 }}
           showsVerticalScrollIndicator={false}
         >
-          <ProfileSettingsSections onSectionLayout={handleSectionLayout} />
+          <View style={settingsFrameStyle}>
+            <ProfileSettingsSections onSectionLayout={handleSectionLayout} />
+          </View>
         </ScrollView>
       </SafeAreaView>
     </View>

@@ -50,6 +50,8 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
 import { Typography } from '@/constants/typography';
+import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
+import { adaptiveFrameStyle, PRIMARY_SAFE_AREA_EDGES } from '@/lib/adaptive-layout';
 import { useTheme } from '@/lib/theme';
 import { flushUnfoldStorePersist, useUnfoldStore, JournalMode, SoapResponses } from '@/lib/store';
 import { isOnline } from '@/lib/network-error-handler';
@@ -172,6 +174,9 @@ export default function JournalScreen({ hostTab }: { hostTab?: TabGroup } = {}) 
   const navigation = useNavigation();
   const { colors, isDark } = useTheme();
   const reducedMotion = useReducedMotion();
+  const adaptiveLayout = useAdaptiveLayout();
+  const clusterFrameStyle = adaptiveFrameStyle(adaptiveLayout.clusterMaxWidth);
+  const readableFrameStyle = adaptiveFrameStyle(adaptiveLayout.readableMaxWidth);
   const params = useLocalSearchParams<{ devotionalId: string; dayNumber: string; focusQuestion?: string }>();
 
   const devotionalId = params.devotionalId ?? '';
@@ -846,8 +851,9 @@ Their journal entry:
 
   return (
     <TouchableOpacity accessible={false} activeOpacity={1} style={[jStyles.flex1, { backgroundColor: colors.background }]} onPress={Keyboard.dismiss}>
-      <SafeAreaView style={jStyles.flex1} edges={['top']}>
+      <SafeAreaView style={jStyles.flex1} edges={PRIMARY_SAFE_AREA_EDGES}>
           {/* Header */}
+          <View style={clusterFrameStyle}>
           <View style={jStyles.headerRow}>
             <TouchableOpacity
               onPress={handleSkip}
@@ -902,12 +908,13 @@ Their journal entry:
               </TouchableOpacity>
             ))}
           </View>
+          </View>
 
           {/* Content */}
           <KeyboardAwareScrollView
             ref={scrollViewRef}
             style={jStyles.flex1}
-            contentContainerStyle={jStyles.scrollContent}
+            contentContainerStyle={[jStyles.scrollContent, readableFrameStyle]}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"
             bottomOffset={20}
@@ -1380,7 +1387,7 @@ Their journal entry:
           {/* Bottom hint — crossfade between states */}
           <Animated.View
             entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(400).easing(Ease.out)}
-            style={jStyles.bottomHint}
+            style={[jStyles.bottomHint, clusterFrameStyle]}
           >
             <Animated.Text
               key={hasChanges ? 'saving' : justSaved ? 'saved' : 'idle'}

@@ -54,6 +54,12 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Typography } from '@/constants/typography';
+import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
+import { adaptiveFrameStyle, PRIMARY_SAFE_AREA_EDGES } from '@/lib/adaptive-layout';
+import {
+  noteMoreMenuOverlayPlacement,
+  sameNoteHeaderFrame,
+} from '@/lib/note-more-menu-placement';
 import { useTheme } from '@/lib/theme';
 import { useGuardedBack } from '@/hooks/useGuardedBack';
 import { flushUnfoldStorePersist, useUnfoldStore, READING_FONTS, type Note, type NoteCategory, type ScriptureRef } from '@/lib/store';
@@ -282,6 +288,9 @@ export default function NoteDetailScreen() {
 
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const adaptiveLayout = useAdaptiveLayout();
+  const clusterFrameStyle = adaptiveFrameStyle(adaptiveLayout.clusterMaxWidth);
+  const readableFrameStyle = adaptiveFrameStyle(adaptiveLayout.readableMaxWidth);
 
   const { isPremium, gate, showExclusiveOffer, dismissOffer, handleOfferVerifiedExit } = useCreationGate();
 
@@ -366,6 +375,7 @@ export default function NoteDetailScreen() {
 
   // Menu state
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [headerFrame, setHeaderFrame] = useState({ x: 0, y: 0, width: 0, height: 52 });
   const [showMoveFolderSheet, setShowMoveFolderSheet] = useState(false);
   const [showCreateFolderSheet, setShowCreateFolderSheet] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
@@ -563,6 +573,27 @@ export default function NoteDetailScreen() {
   const handleToolbarLayout = useCallback((event: LayoutChangeEvent) => {
     const nextHeight = Math.ceil(event.nativeEvent.layout.height);
     if (nextHeight > 0) setEditorToolbarHeight(nextHeight);
+  }, []);
+
+  const handleHeaderLayout = useCallback((event: LayoutChangeEvent) => {
+    const { x, y, width, height } = event.nativeEvent.layout;
+    const next = { x, y, width, height };
+    setHeaderFrame((prev) => (sameNoteHeaderFrame(prev, next) ? prev : next));
+  }, []);
+
+  const moreMenuPlacement = useMemo(
+    () =>
+      noteMoreMenuOverlayPlacement({
+        headerX: headerFrame.x,
+        headerY: headerFrame.y,
+        headerWidth: headerFrame.width,
+      }),
+    [headerFrame.x, headerFrame.y, headerFrame.width],
+  );
+
+  const dismissMoreMenu = useCallback(() => {
+    setShowMoreMenu(false);
+    setDeleteConfirm(false);
   }, []);
 
   // Cleanup on unmount — flush (not cancel) any pending autosave so edits
@@ -1258,7 +1289,8 @@ export default function NoteDetailScreen() {
   if (params.noteId && !existingNote && !isNewNote) {
     return (
       <View style={[styles.screen, { backgroundColor: colors.background }]}>
-        <SafeAreaView style={styles.flex} edges={['top']}>
+        <SafeAreaView style={styles.flex} edges={PRIMARY_SAFE_AREA_EDGES}>
+          <View style={[clusterFrameStyle, styles.headerAnchor]}>
           <View style={styles.header}>
             <TouchableOpacity
               onPress={exitToJournal}
@@ -1267,6 +1299,7 @@ export default function NoteDetailScreen() {
             >
               <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
             </TouchableOpacity>
+          </View>
           </View>
           <View style={styles.emptyContainer}>
             <Text style={[styles.emptyText, { color: colors.textMuted }]}>
@@ -1283,8 +1316,12 @@ export default function NoteDetailScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      <SafeAreaView style={styles.flex} edges={['top']}>
+      <SafeAreaView style={styles.flex} edges={PRIMARY_SAFE_AREA_EDGES}>
         {/* ── Header ── */}
+        <View
+          style={[clusterFrameStyle, styles.headerAnchor]}
+          onLayout={handleHeaderLayout}
+        >
         <View style={styles.header}>
           <TouchableOpacity
             onPress={handleBack}
@@ -1378,113 +1415,9 @@ export default function NoteDetailScreen() {
             </TouchableOpacity>
           </View>
         </View>
+        </View>
 
-        {/* ── Backdrop for more menu ── */}
-        {showMoreMenu && (
-          <TouchableOpacity
-            style={styles.backdrop}
-            activeOpacity={1}
-            onPress={() => {
-              setShowMoreMenu(false);
-              setDeleteConfirm(false);
-            }}
-          />
-        )}
-
-        {/* ── More menu dropdown ── */}
-        {showMoreMenu && (
-          <Animated.View
-            entering={reducedMotion ? undefined : FadeIn.duration(Duration.fast).easing(Ease.out)}
-            style={[
-              styles.moreMenu,
-              {
-                backgroundColor: colors.backgroundElevated,
-                borderColor: colors.border,
-                shadowColor: '#000',
-              },
-            ]}
-          >
-            {/* Share */}
-            <TouchableOpacity
-              onPress={handleShare}
-              style={styles.menuItem}
-              activeOpacity={0.6}
-              accessible
-              testID="note-more-share"
-              accessibilityRole="button"
-              accessibilityLabel="Share note"
-              accessibilityHint="Opens the share sheet for this note"
-            >
-              <ArrowUpRightIcon size={16} color={colors.textMuted} weight="light" />
-              <Text style={[styles.menuItemText, { color: colors.text }]}>
-                Share
-              </Text>
-            </TouchableOpacity>
-
-            <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
-
-            {/* Favorite toggle */}
-            <TouchableOpacity
-              onPress={handleToggleFavorite}
-              style={styles.menuItem}
-              activeOpacity={0.6}
-              accessible
-              testID="note-more-toggle-favorite"
-              accessibilityRole="button"
-              accessibilityLabel={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-              accessibilityHint={isFavorite ? 'Removes this note from favorites' : 'Marks this note as a favorite'}
-              accessibilityState={{ selected: isFavorite }}
-            >
-              <StarIcon
-                size={16}
-                color={isFavorite ? colors.accent : colors.textMuted}
-                weight={isFavorite ? 'fill' : 'light'}
-              />
-              <Text style={[styles.menuItemText, { color: colors.text }]}>
-                {isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-              </Text>
-            </TouchableOpacity>
-
-            <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
-
-            {/* Move to folder */}
-            <TouchableOpacity
-              onPress={handleMoveToFolder}
-              style={styles.menuItem}
-              activeOpacity={0.6}
-              accessible
-              testID="note-more-move-to-folder"
-              accessibilityRole="button"
-              accessibilityLabel={currentFolder ? `Move note from ${currentFolder.name}` : 'Move to folder'}
-              accessibilityHint="Opens the folder picker for this note"
-            >
-              <FolderSimpleIcon size={16} color={colors.textMuted} weight="light" />
-              <Text style={[styles.menuItemText, { color: colors.text }]}>
-                {currentFolder ? `Folder: ${currentFolder.name}` : 'Move to folder'}
-              </Text>
-            </TouchableOpacity>
-
-            <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
-
-            {/* Delete / Discard */}
-            <TouchableOpacity
-              onPress={handleDelete}
-              style={styles.menuItem}
-              activeOpacity={0.6}
-              accessible
-              testID="note-more-delete"
-              accessibilityRole="button"
-              accessibilityLabel={deleteConfirm ? 'Confirm delete note' : noteId ? 'Delete note' : 'Discard note'}
-              accessibilityHint={deleteConfirm ? 'Deletes this note. Tap outside the menu to cancel.' : 'Shows a confirmation before deleting'}
-            >
-              <TrashIcon size={16} color={colors.error} weight="light" />
-              <Text style={[styles.menuItemText, { color: colors.error }]}>
-                {deleteConfirm ? 'Tap again to delete' : noteId ? 'Delete note' : 'Discard note'}
-              </Text>
-            </TouchableOpacity>
-          </Animated.View>
-        )}
-
+        <View style={[readableFrameStyle, styles.editorColumn]}>
         {/* ── Metadata row ── */}
         <View style={styles.metadataRow}>
           <Text style={[styles.metadataText, { color: colors.textHint }]}>
@@ -1689,6 +1622,7 @@ export default function NoteDetailScreen() {
             </View>
           </Animated.View>
         )}
+        </View>
 
         {/* ── Compact editor actions (whenever the keyboard is up) ── */}
         {isPremium && (IS_NATIVE_EDITOR || editorState.isReady) && isKeyboardUp && (
@@ -1707,6 +1641,7 @@ export default function NoteDetailScreen() {
               },
             ]}
           >
+            <View style={clusterFrameStyle}>
             {showFormatting ? (
               <View
                 style={[
@@ -1797,9 +1732,111 @@ export default function NoteDetailScreen() {
               onOpenFormatting={() => setShowFormatting((visible) => !visible)}
               onInsertScripture={handleScripturePress}
             />
+            </View>
           </View>
         )}
       </SafeAreaView>
+
+      {showMoreMenu && (
+        <View style={styles.menuOverlay} pointerEvents="box-none" testID="note-more-menu-overlay">
+          <TouchableOpacity
+            style={styles.backdrop}
+            activeOpacity={1}
+            onPress={dismissMoreMenu}
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss more options"
+            testID="note-more-menu-backdrop"
+          />
+          <Animated.View
+            entering={reducedMotion ? undefined : FadeIn.duration(Duration.fast).easing(Ease.out)}
+            pointerEvents="auto"
+            style={[
+              styles.moreMenu,
+              moreMenuPlacement,
+              {
+                backgroundColor: colors.backgroundElevated,
+                borderColor: colors.border,
+                shadowColor: '#000',
+              },
+            ]}
+          >
+            <TouchableOpacity
+              onPress={handleShare}
+              style={styles.menuItem}
+              activeOpacity={0.6}
+              accessible
+              testID="note-more-share"
+              accessibilityRole="button"
+              accessibilityLabel="Share note"
+              accessibilityHint="Opens the share sheet for this note"
+            >
+              <ArrowUpRightIcon size={16} color={colors.textMuted} weight="light" />
+              <Text style={[styles.menuItemText, { color: colors.text }]}>
+                Share
+              </Text>
+            </TouchableOpacity>
+
+            <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+
+            <TouchableOpacity
+              onPress={handleToggleFavorite}
+              style={styles.menuItem}
+              activeOpacity={0.6}
+              accessible
+              testID="note-more-toggle-favorite"
+              accessibilityRole="button"
+              accessibilityLabel={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+              accessibilityHint={isFavorite ? 'Removes this note from favorites' : 'Marks this note as a favorite'}
+              accessibilityState={{ selected: isFavorite }}
+            >
+              <StarIcon
+                size={16}
+                color={isFavorite ? colors.accent : colors.textMuted}
+                weight={isFavorite ? 'fill' : 'light'}
+              />
+              <Text style={[styles.menuItemText, { color: colors.text }]}>
+                {isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+              </Text>
+            </TouchableOpacity>
+
+            <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+
+            <TouchableOpacity
+              onPress={handleMoveToFolder}
+              style={styles.menuItem}
+              activeOpacity={0.6}
+              accessible
+              testID="note-more-move-to-folder"
+              accessibilityRole="button"
+              accessibilityLabel={currentFolder ? `Move note from ${currentFolder.name}` : 'Move to folder'}
+              accessibilityHint="Opens the folder picker for this note"
+            >
+              <FolderSimpleIcon size={16} color={colors.textMuted} weight="light" />
+              <Text style={[styles.menuItemText, { color: colors.text }]}>
+                {currentFolder ? `Folder: ${currentFolder.name}` : 'Move to folder'}
+              </Text>
+            </TouchableOpacity>
+
+            <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+
+            <TouchableOpacity
+              onPress={handleDelete}
+              style={styles.menuItem}
+              activeOpacity={0.6}
+              accessible
+              testID="note-more-delete"
+              accessibilityRole="button"
+              accessibilityLabel={deleteConfirm ? 'Confirm delete note' : noteId ? 'Delete note' : 'Discard note'}
+              accessibilityHint={deleteConfirm ? 'Deletes this note. Tap outside the menu to cancel.' : 'Shows a confirmation before deleting'}
+            >
+              <TrashIcon size={16} color={colors.error} weight="light" />
+              <Text style={[styles.menuItemText, { color: colors.error }]}>
+                {deleteConfirm ? 'Tap again to delete' : noteId ? 'Delete note' : 'Discard note'}
+              </Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
+      )}
 
       {/* Scripture search bottom sheet */}
       <ScriptureSearchSheet
@@ -1889,12 +1926,18 @@ const styles = StyleSheet.create({
   flex: {
     flex: 1,
   },
+  headerAnchor: {
+    position: 'relative',
+  },
   header: {
     height: 52,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Spacing['4'],
+  },
+  editorColumn: {
+    flex: 1,
   },
   headerButton: {
     width: 44,
@@ -1921,13 +1964,11 @@ const styles = StyleSheet.create({
   },
   moreMenu: {
     position: 'absolute',
-    top: 56,
-    right: 16,
     width: 240,
     borderRadius: Radius.md,
     borderWidth: 1,
     paddingVertical: Spacing['1.5'],
-    zIndex: 200,
+    zIndex: 1,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.12,
     shadowRadius: 12,
@@ -1949,9 +1990,12 @@ const styles = StyleSheet.create({
     marginHorizontal: Spacing['4'],
     marginVertical: Spacing['1'],
   },
+  menuOverlay: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 200,
+  },
   backdrop: {
     ...StyleSheet.absoluteFill,
-    zIndex: 100,
   },
   emptyContainer: {
     flex: 1,

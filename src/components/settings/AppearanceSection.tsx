@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { View, Text, useWindowDimensions } from 'react-native';
+import { View, Text, useWindowDimensions, type LayoutChangeEvent } from 'react-native';
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -28,7 +28,10 @@ import {
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { loadAllReadingFonts, loadReadingFont } from '@/lib/reading-fonts-loader';
 import { SettingsSectionHeader, getSettingsCardStyle } from './SettingsSectionHeader';
-import { shouldStackSettingsPreferenceRow } from './preference-row-layout';
+import {
+  settingsPreferenceEquivalentColumnWidth,
+  shouldStackSettingsPreferenceRow,
+} from './preference-row-layout';
 
 const FONT_SIZES: { value: FontSizePreference; label: string }[] = [
   { value: 'small', label: 'Small' },
@@ -111,12 +114,19 @@ function PreferenceChipRow({
 
 export function AppearanceSection({ onPremiumFeature }: AppearanceSectionProps) {
   const { colors, isDark } = useTheme();
-  const { width, fontScale } = useWindowDimensions();
+  const { fontScale } = useWindowDimensions();
   const reducedMotion = useReducedMotion();
   const user = useUnfoldStore((s) => s.user);
   const updateUser = useUnfoldStore((s) => s.updateUser);
   const isPremium = usePremiumAccessPolicy() === 'granted';
-  const stackPreferenceRows = shouldStackSettingsPreferenceRow(width, fontScale);
+  const [measuredCardWidth, setMeasuredCardWidth] = useState(0);
+  const preferenceColumnWidth =
+    measuredCardWidth > 0 ? settingsPreferenceEquivalentColumnWidth(measuredCardWidth) : 0;
+  const stackPreferenceRows = shouldStackSettingsPreferenceRow(preferenceColumnWidth, fontScale);
+  const handlePreferenceCardLayout = (event: LayoutChangeEvent) => {
+    const nextWidth = event.nativeEvent.layout.width;
+    setMeasuredCardWidth((prev) => (prev === nextWidth ? prev : nextWidth));
+  };
 
   const [expandedPremium, setExpandedPremium] = useState<'colors' | 'fonts' | null>(null);
 
@@ -133,7 +143,11 @@ export function AppearanceSection({ onPremiumFeature }: AppearanceSectionProps) 
       <SettingsSectionHeader label="Preferences" />
 
       {/* Theme + Accent Colors + Reading Font card */}
-      <View style={getSettingsCardStyle(colors)}>
+      <View
+        testID="appearance-preference-card"
+        style={getSettingsCardStyle(colors)}
+        onLayout={handlePreferenceCardLayout}
+      >
         {/* Theme row */}
         <PreferenceChipRow
           label="Theme"

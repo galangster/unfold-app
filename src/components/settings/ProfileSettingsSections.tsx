@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, Alert, ActivityIndicator, StyleSheet, ScrollView, UIManager, type LayoutChangeEvent } from 'react-native';
+import { useCallback, useState } from 'react';
+import { View, Text, Alert, ActivityIndicator, StyleSheet, type LayoutChangeEvent } from 'react-native';
+import type { SettingsSection } from '@/components/settings/settings-section-scroll';
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
 import * as Application from 'expo-application';
@@ -22,46 +23,8 @@ const SERVER_ERASE_NOT_CONFIRMED_TITLE = 'Server data not confirmed deleted';
 const SERVER_ERASE_NOT_CONFIRMED_MESSAGE =
   "Your data was deleted from this device, but we couldn't confirm that your synced data was deleted from Unfold's servers. This device is no longer linked to it. If you'd like it removed, contact us from the Support section in Profile.";
 
-export type SettingsSection = 'reminders' | 'appearance';
-
-export function useSettingsSectionScroll(section?: string) {
-  const scrollViewRef = useRef<ScrollView>(null);
-  const [nativeTarget, setNativeTarget] = useState<number | null>(null);
-  const handleScrollLayout = useCallback((event: LayoutChangeEvent) => {
-    const target = (event.nativeEvent as { target?: number }).target;
-    setNativeTarget(typeof target === 'number' ? target : null);
-  }, []);
-  const [sectionOffsets, setSectionOffsets] = useState<Partial<Record<SettingsSection, number>>>({});
-
-  const handleSectionLayout = useCallback(
-    (target: SettingsSection) => (e: LayoutChangeEvent) => {
-      const y = e.nativeEvent.layout.y;
-      setSectionOffsets((prev) => (prev[target] === y ? prev : { ...prev, [target]: y }));
-    },
-    [],
-  );
-
-  useEffect(() => {
-    const target: SettingsSection | undefined =
-      section === 'reminders' || section === 'appearance' ? section : undefined;
-    if (!target) return;
-    const y = sectionOffsets[target];
-    if (y === undefined || (!scrollViewRef.current && nativeTarget === null)) return;
-    const frame = requestAnimationFrame(() => {
-      const offset = Math.max(y - Spacing['4'], 0);
-      const scrollView = scrollViewRef.current;
-      if (scrollView?.scrollTo) {
-        scrollView.scrollTo({ y: offset, animated: false });
-      } else if (nativeTarget !== null) {
-        // NativeWind can omit the forwarded ref. The reader uses this fallback too.
-        UIManager.dispatchViewManagerCommand(nativeTarget, 'scrollTo', [0, offset, false]);
-      }
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [section, sectionOffsets, nativeTarget]);
-
-  return { scrollViewRef, handleScrollLayout, handleSectionLayout };
-}
+export type { SettingsSection } from '@/components/settings/settings-section-scroll';
+export { useSettingsSectionScroll } from '@/components/settings/settings-section-scroll';
 
 interface ProfileSettingsSectionsProps {
   onSectionLayout?: (target: SettingsSection) => (e: LayoutChangeEvent) => void;

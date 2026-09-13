@@ -30,11 +30,14 @@ describe('shouldPlaySwipeHint source contract', () => {
   });
 
   it('persists the seen flag before playing, so a later effect run this session is a no-op', () => {
-    const effectBlock = source.match(
-      /useEffect\(\(\) => \{\s*const hasSeenHint = bibleReaderHints\.getBoolean[\s\S]{0,700}?\}, \[prevChapter, nextChapter, reducedMotion, dragX\]\);/,
-    )?.[0] ?? '';
+    const effectStart = source.lastIndexOf('useEffect(() => {', source.indexOf('const hasSeenHint = bibleReaderHints.getBoolean'));
+    const effectEnd = source.indexOf('\n  // ─── Tab bar hide/show on scroll', effectStart);
+    const effectBlock = source.slice(effectStart, effectEnd);
+    expect(effectStart).toBeGreaterThan(-1);
+    expect(effectEnd).toBeGreaterThan(effectStart);
     expect(effectBlock).toContain('bibleReaderHints.set(HAS_SEEN_SWIPE_HINT_KEY, true)');
     expect(effectBlock).toContain('shouldPlaySwipeHint(');
     expect(effectBlock).toContain("bibleReaderHints.getBoolean(HAS_SEEN_SWIPE_HINT_KEY) ?? false");
+    expect(effectBlock).toContain('arrowRevealDistance');
   });
 });

@@ -141,7 +141,7 @@ jest.mock('react-native-reanimated', () => {
 
 jest.mock('react-native-safe-area-context', () => {
   const { View } = jest.requireActual('react-native');
-  return { SafeAreaView: View };
+  return { SafeAreaView: View, useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) };
 });
 
 jest.mock('@/lib/theme', () => {
@@ -514,7 +514,7 @@ describe('Bible hub overview restoration', () => {
       mockBibleWindow.width = width;
       mockBibleWindow.fontScale = fontScale;
       const tree = createHome();
-      const expected = bibleHubOverviewMetrics(width, fontScale);
+      const expected = bibleHubOverviewMetrics(Math.min(width, 720), fontScale);
       const tile = flatten(bookTarget(tree, 'Genesis').props.style);
       expect(tile.width).toBe(expected.tileWidth);
       expect(tile.paddingHorizontal).toBe(BIBLE_HUB_OVERVIEW_TILE_PADDING_X);

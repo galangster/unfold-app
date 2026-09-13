@@ -69,6 +69,7 @@ import { mmkvStorage } from '@/lib/mmkv-storage';
 import { useUnfoldStore, type UserProfile } from '@/lib/store';
 
 const NOW = Date.parse('2026-09-10T17:00:00.000Z');
+const mountedTrees: Array<ReturnType<typeof create>> = [];
 
 const UNAVAILABLE_MESSAGES = {
   switch_off: 'Auto trial series is turned off.',
@@ -129,6 +130,9 @@ describe('useAutoTrialGeneration AUTO_TRIAL_UNAVAILABLE', () => {
   });
 
   afterEach(() => {
+    act(() => {
+      mountedTrees.splice(0).forEach((tree) => tree.unmount());
+    });
     jest.restoreAllMocks();
   });
 
@@ -157,7 +161,7 @@ describe('useAutoTrialGeneration AUTO_TRIAL_UNAVAILABLE', () => {
       }
 
       await act(async () => {
-        create(<Probe />);
+        mountedTrees.push(create(<Probe />));
       });
       await flush();
 

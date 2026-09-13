@@ -45,6 +45,7 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
+import { ADAPTIVE_SHEET_MEASURE, adaptiveSafeGutterStyle } from '@/lib/adaptive-layout';
 import { pauseForVoiceInput, resumeAfterVoiceInput } from '@/hooks/useGlobalAudioPlayer';
 import {
   composeOnboardingVoiceDraft,
@@ -802,12 +803,16 @@ export function OnboardingVoiceAnswerSheet({
           style={[styles.backdrop, { backgroundColor: alpha('#000000', isDark ? 0.46 : 0.28) }]}
         />
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} pointerEvents="box-none">
+          <View pointerEvents="box-none" style={[adaptiveSafeGutterStyle(insets.left, insets.right), { width: '100%' }]}>
           <Animated.View
             entering={reducedMotion ? undefined : FadeInDown.duration(280)}
             accessibilityViewIsModal
             style={[
               styles.sheet,
               {
+                width: '100%',
+                maxWidth: ADAPTIVE_SHEET_MEASURE,
+                alignSelf: 'center',
                 maxHeight: windowHeight * 0.84,
                 backgroundColor: colors.backgroundElevated,
                 borderColor: colors.borderStrong,
@@ -854,6 +859,7 @@ export function OnboardingVoiceAnswerSheet({
               </Text>
             </ScrollView>
           </Animated.View>
+          </View>
         </KeyboardAvoidingView>
       </View>
     </Modal>

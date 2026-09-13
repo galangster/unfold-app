@@ -28,6 +28,7 @@ import {
   ActivityIndicator,
   ScrollView,
   Keyboard,
+  type LayoutChangeEvent,
 } from 'react-native';
 import { GestureHandlerRootView, Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -49,12 +50,21 @@ const DISMISS_DURATION = 180;
 const SWIPE_THRESHOLD = 80;
 const VELOCITY_THRESHOLD = 500;
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
+import {
+  adaptiveFrameStyle,
+  adaptiveSafeGutterStyle,
+  keyboardAdjustedSheetBodyMaxHeight,
+  keyboardAdjustedSheetMaxHeight,
+  keyboardAdjustedSheetPaddingBottom,
+} from '@/lib/adaptive-layout';
 import * as Haptics from 'expo-haptics';
 import {
   BookBookmarkIcon,
   MagnifyingGlassIcon,
   ArrowRightIcon,
   WarningCircleIcon,
+  XIcon,
 } from '@/components/icons';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Duration, Ease } from '@/constants/animations';
@@ -100,6 +110,8 @@ export function ScriptureSearchSheet({
   const { colors, isDark } = useTheme();
   const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
+  const adaptiveLayout = useAdaptiveLayout();
+  const sheetFrameStyle = adaptiveFrameStyle(adaptiveLayout.sheetMaxWidth);
   const inputRef = useRef<TextInput>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const translateY = useSharedValue(OFFSCREEN);
@@ -109,9 +121,32 @@ export function ScriptureSearchSheet({
   const [searchState, setSearchState] = useState<SearchState>('idle');
   const [verseResult, setVerseResult] = useState<VerseResult | null>(null);
   const [parsedRef, setParsedRef] = useState<ScriptureRef | null>(null);
+  const [containerHeight, setContainerHeight] = useState(0);
+  const [chromeHeight, setChromeHeight] = useState(0);
   // Only the latest lookup may write results: the debounce cancels timers,
   // not in-flight fetches.
   const searchRequest = useLatestRequest();
+  const sheetPaddingBottom = keyboardAdjustedSheetPaddingBottom(insets.bottom);
+  const sheetMaxHeight = keyboardAdjustedSheetMaxHeight(
+    containerHeight,
+    adaptiveLayout.height,
+  );
+  const bodyMaxHeight = keyboardAdjustedSheetBodyMaxHeight({
+    containerHeight,
+    chromeHeight,
+    paddingBottom: sheetPaddingBottom,
+    fallbackHeight: adaptiveLayout.height,
+  });
+
+  const handleContainerLayout = useCallback((event: LayoutChangeEvent) => {
+    const height = event.nativeEvent.layout.height;
+    setContainerHeight((prev) => (prev === height ? prev : height));
+  }, []);
+
+  const handleChromeLayout = useCallback((event: LayoutChangeEvent) => {
+    const height = event.nativeEvent.layout.height;
+    setChromeHeight((prev) => (prev === height ? prev : height));
+  }, []);
 
   // Spring in when sheet opens, reset state
   useEffect(() => {
@@ -286,6 +321,10 @@ export function ScriptureSearchSheet({
           style={sheetStyles.modalContainer}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
+          <View
+            style={[sheetStyles.modalContainer, { marginTop: insets.top }]}
+            onLayout={handleContainerLayout}
+          >
           {/* Transparent dismiss area */}
           <TouchableOpacity
             style={sheetStyles.dismissArea}
@@ -294,31 +333,52 @@ export function ScriptureSearchSheet({
           />
 
           {/* Sheet — single unified surface, slides up from bottom */}
-          <GestureDetector gesture={panGesture}>
+          <View
+            pointerEvents="box-none"
+            style={[adaptiveSafeGutterStyle(insets.left, insets.right), { width: '100%' }]}
+          >
             <Animated.View
               style={[
                 sheetStyles.sheet,
                 sheetAnimatedStyle,
+                sheetFrameStyle,
                 {
                   backgroundColor: colors.backgroundElevated,
-                  paddingBottom: insets.bottom + 200,
+                  paddingBottom: sheetPaddingBottom,
+                  maxHeight: sheetMaxHeight,
                 },
               ]}
             >
-              {/* Handle indicator */}
-              <View style={sheetStyles.handleRow}>
-                <View style={[sheetStyles.handleBar, { backgroundColor: colors.borderStrong }]} />
-              </View>
+              <View onLayout={handleChromeLayout}>
+              <GestureDetector gesture={panGesture}>
+                <View style={sheetStyles.handleRow}>
+                  <View style={[sheetStyles.handleBar, { backgroundColor: colors.borderStrong }]} />
+                </View>
+              </GestureDetector>
 
-              <View style={sheetStyles.content}>
-                {/* Header */}
-                <View style={sheetStyles.header}>
+                <View style={[sheetStyles.header, sheetStyles.headerPad]}>
                   <BookBookmarkIcon size={20} color={colors.accent} weight="light" />
                   <Text style={[sheetStyles.headerTitle, { color: colors.text }]}>
                     Insert Scripture
                   </Text>
+                  <TouchableOpacity
+                    onPress={dismissSheet}
+                    accessibilityRole="button"
+                    accessibilityLabel="Close scripture search"
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    style={sheetStyles.closeButton}
+                  >
+                    <XIcon size={18} color={colors.textSubtle} weight="light" />
+                  </TouchableOpacity>
                 </View>
+              </View>
 
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                style={{ maxHeight: bodyMaxHeight }}
+                contentContainerStyle={sheetStyles.content}
+              >
                 {/* Search input */}
                 <View
                   style={[
@@ -456,9 +516,10 @@ export function ScriptureSearchSheet({
                     </TouchableOpacity>
                   </Animated.View>
                 )}
-              </View>
+              </ScrollView>
             </Animated.View>
-          </GestureDetector>
+          </View>
+          </View>
         </KeyboardAvoidingView>
       </GestureHandlerRootView>
     </Modal>
@@ -480,7 +541,6 @@ const sheetStyles = StyleSheet.create({
   sheet: {
     borderTopLeftRadius: Radius['2xl'],
     borderTopRightRadius: Radius['2xl'],
-    maxHeight: '70%',
     ...Shadow.sheet,
   },
   handleRow: {
@@ -503,10 +563,22 @@ const sheetStyles = StyleSheet.create({
     gap: Spacing['2'],
     marginBottom: Spacing['4'],
   },
+  headerPad: {
+    paddingHorizontal: Spacing['6'],
+    paddingTop: 4,
+  },
   headerTitle: {
     fontFamily: FontFamily.uiSemiBold,
     fontSize: FontSize.lg,
     flexShrink: 1,
+    minWidth: 0,
+    flex: 1,
+  },
+  closeButton: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   inputContainer: {
     flexDirection: 'row',
@@ -544,6 +616,8 @@ const sheetStyles = StyleSheet.create({
     paddingHorizontal: Spacing['3'],
     paddingVertical: 6,
     borderRadius: Radius.sm,
+    minHeight: 44,
+    justifyContent: 'center',
   },
   pillText: {
     fontFamily: FontFamily.uiMedium,

@@ -49,11 +49,30 @@ describe('Bible reader verse measurement source contract', () => {
     expect(readerSource).toContain('onLayout={handleVerseLayout}');
   });
 
-  it('scopes row readiness and delayed scrolls to the active chapter translation', () => {
+  it('scopes row readiness and delayed scrolls to the active content and layout generation', () => {
     expect(readerSource).toContain('contentKey={readerContentKey}');
-    expect(readerSource).toContain('if (contentKey !== activeContentKeyRef.current) return;');
-    expect(readerSource).toContain('if (request.contentKey !== activeContentKeyRef.current) return;');
+    expect(readerSource).toContain('layoutKey={readerLayoutKey}');
+    expect(readerSource).toContain('reportContentKey: contentKey');
+    expect(readerSource).toContain('reportLayoutKey: layoutKey');
+    expect(readerSource).toContain('reportContentKey: request.contentKey');
+    expect(readerSource).toContain('reportLayoutKey: request.layoutKey');
+    expect(readerSource).toContain('activeContentKey: activeContentKeyRef.current');
+    expect(readerSource).toContain('activeLayoutKey: activeLayoutKeyRef.current');
     expect(readerSource).toContain('const readerContentKey = `${chapterKey}:${bibleReaderSettings.translation}`;');
+  });
+
+  it('captures a live resize verse before disabling active-scroll tracking', () => {
+    const layoutBlock =
+      readerSource.match(
+        /else if \(verseLayoutsContentRef\.current\.layoutKey !== readerLayoutKey\) \{[\s\S]*?layoutKey: readerLayoutKey,[\s\S]*?\};\n  \}/,
+      )?.[0] ?? '';
+
+    expect(layoutBlock).toContain('resolveBibleResizeVerseAnchor({');
+    expect(layoutBlock).toContain('userScrollActive: userScrollActiveRef.current');
+    expect(layoutBlock).toContain('contentOffsetY: lastScrollY.value');
+    expect(layoutBlock.indexOf('resolveBibleResizeVerseAnchor')).toBeLessThan(
+      layoutBlock.indexOf('userScrollActiveRef.current = false'),
+    );
   });
 
   it('cancels delayed scroll work and invalidates the fallback native target', () => {

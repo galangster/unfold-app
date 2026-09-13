@@ -33,6 +33,7 @@ import Animated, {
   runOnJS,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ADAPTIVE_SHEET_MEASURE, adaptiveSafeGutterStyle } from '@/lib/adaptive-layout';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/lib/theme';
 import { Shadow } from '@/constants/shadows';
@@ -153,20 +154,31 @@ export function Sheet({
               style={styles.dismissArea}
               activeOpacity={1}
               onPress={dismissSheet}
+              accessible={false}
             />
           </Animated.View>
 
           {/* Sheet surface */}
+          <View
+            pointerEvents="box-none"
+            style={[adaptiveSafeGutterStyle(insets.left, insets.right), styles.sheetGutter]}
+          >
           <Animated.View
             style={[
               styles.sheet,
               sheetAnimatedStyle,
               {
+                width: '100%',
+                maxWidth: ADAPTIVE_SHEET_MEASURE,
+                alignSelf: 'center',
                 backgroundColor: colors.backgroundElevated,
                 paddingBottom: insets.bottom + bottomPadding,
-                maxHeight: '90%',
+                flexShrink: 1,
+                maxHeight: '100%',
               },
             ]}
+            accessibilityViewIsModal
+            onAccessibilityEscape={dismissSheet}
           >
             {/* Handle bar */}
             <GestureDetector gesture={panGesture}>
@@ -184,6 +196,7 @@ export function Sheet({
               {children}
             </ScrollView>
           </Animated.View>
+          </View>
         </KeyboardAvoidingView>
       </GestureHandlerRootView>
     </Modal>
@@ -201,6 +214,10 @@ const styles = StyleSheet.create({
   },
   dismissArea: {
     flex: 1,
+  },
+  sheetGutter: {
+    width: '100%',
+    maxHeight: '90%',
   },
   sheet: {
     borderTopLeftRadius: Radius['2xl'],

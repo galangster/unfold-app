@@ -46,6 +46,8 @@ interface DevotionalContentProps {
   existingHighlights?: Highlight[];
   targetHighlight?: Highlight | null;
   onTargetHighlightLocated?: (contentY: number) => void;
+  onWebViewLocations?: (paragraphYs: number[], layoutGeneration: number) => void;
+  layoutGeneration?: number;
   targetBookmark?: Bookmark | null;
   onTargetBookmarkLocated?: (contentY: number) => void;
   onScriptureTap?: (reference: string) => void;
@@ -61,7 +63,7 @@ interface DevotionalContentProps {
   onActLocated?: (contentY: number) => void;
   onActOutcome?: (outcome: 'done' | 'skipped') => void;
   /** Content y of each section as it lays out (reader Contents sheet). */
-  onSectionLayout?: (section: ReaderSection, contentY: number) => void;
+  onSectionLayout?: (section: ReaderSection, contentY: number, layoutGeneration: number) => void;
 }
 
 /**
@@ -106,6 +108,8 @@ export function DevotionalContent({
   existingHighlights,
   targetHighlight,
   onTargetHighlightLocated,
+  onWebViewLocations,
+  layoutGeneration,
   targetBookmark,
   onTargetBookmarkLocated,
   onScriptureTap,
@@ -123,18 +127,13 @@ export function DevotionalContent({
 }: DevotionalContentProps) {
   const { colors, isDark } = useTheme();
   const actLocatedRef = useRef(false);
+  const layoutCommitFrameRef = useRef<number | null>(null);
+  const [reflectionLayoutCommitSignal, setReflectionLayoutCommitSignal] = useState(0);
   const handleActLayout = useCallback((event: LayoutChangeEvent) => {
-    onSectionLayout?.('act', event.nativeEvent.layout.y);
     if (!focusAct || actLocatedRef.current) return;
     actLocatedRef.current = true;
     onActLocated?.(event.nativeEvent.layout.y);
-  }, [focusAct, onActLocated, onSectionLayout]);
-  const handleReflectionLayout = useCallback((event: LayoutChangeEvent) => {
-    onSectionLayout?.('reflection', event.nativeEvent.layout.y);
-  }, [onSectionLayout]);
-  const handlePrayerLayout = useCallback((event: LayoutChangeEvent) => {
-    onSectionLayout?.('prayer', event.nativeEvent.layout.y);
-  }, [onSectionLayout]);
+  }, [focusAct, onActLocated]);
   const fontSizes = FONT_SIZE_VALUES[fontSize];
   const reflectionTypography = getReflectionTypography(fontSize);
   const readingFont = useReadingFont();
@@ -179,6 +178,12 @@ export function DevotionalContent({
   };
   const scriptureBlockTopRef = useRef<number | null>(null);
   const devotionalWebViewTopRef = useRef(0);
+  const contentRootRef = useRef<View>(null);
+  const scriptureSectionRef = useRef<View>(null);
+  const devotionalSectionRef = useRef<View>(null);
+  const reflectionSectionRef = useRef<View>(null);
+  const actSectionRef = useRef<View>(null);
+  const prayerSectionRef = useRef<View>(null);
   const locatedTopBookmarkRef = useRef<string | null>(null);
   const targetBookmarkIsWebViewContent = useMemo(() => {
     const reference = targetBookmark?.scriptureReference?.toLowerCase();
@@ -187,8 +192,8 @@ export function DevotionalContent({
 
   const handleDevotionalWebViewLayout = useCallback((event: LayoutChangeEvent) => {
     devotionalWebViewTopRef.current = event.nativeEvent.layout.y;
-    onSectionLayout?.('devotional', event.nativeEvent.layout.y);
-  }, [onSectionLayout]);
+    onSectionLayout?.('devotional', event.nativeEvent.layout.y, layoutGeneration ?? 0);
+  }, [layoutGeneration, onSectionLayout]);
 
   const locateTopBookmark = useCallback((contentY: number) => {
     if (!targetBookmark || targetBookmarkIsWebViewContent) return;
@@ -200,9 +205,45 @@ export function DevotionalContent({
   const handleScriptureBlockLayout = useCallback((event: LayoutChangeEvent) => {
     const y = event.nativeEvent.layout.y;
     scriptureBlockTopRef.current = y;
-    onSectionLayout?.('scripture', y);
+    onSectionLayout?.('scripture', y, layoutGeneration ?? 0);
     locateTopBookmark(y);
-  }, [locateTopBookmark, onSectionLayout]);
+  }, [layoutGeneration, locateTopBookmark, onSectionLayout]);
+
+  const measureSection = useCallback((
+    section: ReaderSection,
+    sectionRef: RefObject<View | null>,
+    reportGeneration: number,
+  ) => {
+    const root = contentRootRef.current;
+    const target = sectionRef.current;
+    if (!root || !target) return;
+    target.measureLayout(
+      root,
+      (_x, y) => onSectionLayout?.(section, y, reportGeneration),
+      () => {},
+    );
+  }, [onSectionLayout]);
+
+  const handleLayoutGenerationCommitted = useCallback((reportGeneration: number) => {
+    if (layoutCommitFrameRef.current !== null) {
+      cancelAnimationFrame(layoutCommitFrameRef.current);
+    }
+    layoutCommitFrameRef.current = requestAnimationFrame(() => {
+      layoutCommitFrameRef.current = null;
+      measureSection('scripture', scriptureSectionRef, reportGeneration);
+      measureSection('devotional', devotionalSectionRef, reportGeneration);
+      measureSection('reflection', reflectionSectionRef, reportGeneration);
+      measureSection('act', actSectionRef, reportGeneration);
+      measureSection('prayer', prayerSectionRef, reportGeneration);
+      setReflectionLayoutCommitSignal((current) => current + 1);
+    });
+  }, [measureSection]);
+
+  useEffect(() => () => {
+    if (layoutCommitFrameRef.current !== null) {
+      cancelAnimationFrame(layoutCommitFrameRef.current);
+    }
+  }, []);
 
   useEffect(() => {
     const scriptureBlockTop = scriptureBlockTopRef.current;
@@ -251,7 +292,7 @@ export function DevotionalContent({
     : `${colors.accent}26`; // ~15% opacity on light
 
   return (
-    <>
+    <View ref={contentRootRef} collapsable={false}>
       {/* Day title — fontSize is dynamic so keep inline */}
       <Text
         {...(titleSharedTransitionTag ? { sharedTransitionTag: titleSharedTransitionTag } : {})}
@@ -303,6 +344,8 @@ export function DevotionalContent({
 
       {/* Scripture block */}
       <View
+        ref={scriptureSectionRef}
+        collapsable={false}
         onLayout={handleScriptureBlockLayout}
         style={[
           dcStyles.scriptureBlock,
@@ -369,7 +412,7 @@ export function DevotionalContent({
       {/* Section divider: scripture -> body */}
       <SectionDivider color={colors.textMuted} style={{ marginTop: 20, marginBottom: 8 }} />
 
-      <View onLayout={handleDevotionalWebViewLayout}>
+      <View ref={devotionalSectionRef} collapsable={false} onLayout={handleDevotionalWebViewLayout}>
         <DevotionalWebView
           day={day}
           fontSize={fontSize}
@@ -380,6 +423,9 @@ export function DevotionalContent({
           existingHighlights={existingHighlights}
           targetHighlight={targetHighlight}
           onTargetHighlightLocated={handleTargetHighlightLocated}
+          onContentLocations={onWebViewLocations}
+          onLayoutGenerationCommitted={handleLayoutGenerationCommitted}
+          layoutGeneration={layoutGeneration}
           targetBookmark={targetBookmarkIsWebViewContent ? targetBookmark : null}
           onTargetBookmarkLocated={handleTargetBookmarkLocated}
           onScriptureTap={onScriptureTap}
@@ -431,7 +477,7 @@ export function DevotionalContent({
 
       {/* Reflection Questions Section */}
       {day.reflectionQuestions && day.reflectionQuestions.length > 0 && (
-        <View onLayout={handleReflectionLayout}>
+        <View ref={reflectionSectionRef} collapsable={false}>
           <SectionDivider color={colors.textMuted} style={{ marginTop: 48, marginBottom: 32 }} />
 
           {devotionalId && dayNumber && onOpenJournal ? (
@@ -443,6 +489,7 @@ export function DevotionalContent({
               fontSize={fontSize}
               scrollViewRef={scrollViewRef}
               onFocusInput={onReflectionInputFocus}
+              layoutCommitSignal={reflectionLayoutCommitSignal}
             />
           ) : (
             <View>
@@ -482,7 +529,7 @@ export function DevotionalContent({
 
       {/* Act Section — the day's one concrete same-day act */}
       {day.act && (
-        <View onLayout={handleActLayout}>
+        <View ref={actSectionRef} collapsable={false} onLayout={handleActLayout}>
           <SectionDivider color={colors.textMuted} style={{ marginTop: 48, marginBottom: 32 }} />
           <ReaderSectionHeader label="Today" textColor={colors.text} />
           <Text
@@ -536,7 +583,7 @@ export function DevotionalContent({
 
       {/* Closing Prayer Section */}
       {day.closingPrayer && (
-        <View style={dcStyles.prayerSection} onLayout={handlePrayerLayout}>
+        <View ref={prayerSectionRef} collapsable={false} style={dcStyles.prayerSection}>
           <SectionDivider color={colors.textMuted} style={{ marginTop: 0, marginBottom: 32 }} />
           <ReaderSectionHeader label="A Prayer" textColor={colors.text} />
           <Text
@@ -570,7 +617,7 @@ export function DevotionalContent({
           {preventOrphan(day.carryLine)}
         </Text>
       )}
-    </>
+    </View>
   );
 }
 

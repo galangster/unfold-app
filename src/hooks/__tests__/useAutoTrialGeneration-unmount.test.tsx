@@ -76,6 +76,8 @@ import { mmkvStorage } from '@/lib/mmkv-storage';
 import { useUnfoldStore, type UserProfile } from '@/lib/store';
 
 const NOW = Date.parse('2026-09-10T17:00:00.000Z');
+const nativeSetTimeout = global.setTimeout;
+const pendingTimers = new Set<ReturnType<typeof nativeSetTimeout>>();
 
 function Probe({ intentId }: { intentId: string }) {
   useAutoTrialGeneration(intentId);
@@ -119,9 +121,24 @@ describe('H13 useAutoTrialGeneration unmount', () => {
       devotionals: [],
     });
     mockPoll.mockResolvedValue({ status: 'pending' });
+    jest.spyOn(global, 'setTimeout').mockImplementation(((
+      callback: (...args: unknown[]) => void,
+      delay?: number,
+      ...args: unknown[]
+    ) => {
+      let timer: ReturnType<typeof nativeSetTimeout>;
+      timer = nativeSetTimeout(() => {
+        pendingTimers.delete(timer);
+        callback(...args);
+      }, delay);
+      pendingTimers.add(timer);
+      return timer;
+    }) as typeof global.setTimeout);
   });
 
   afterEach(() => {
+    pendingTimers.forEach((timer) => clearTimeout(timer));
+    pendingTimers.clear();
     jest.restoreAllMocks();
   });
 
@@ -139,7 +156,9 @@ describe('H13 useAutoTrialGeneration unmount', () => {
     await act(async () => {
       await Promise.resolve();
     });
-    tree.unmount();
+    act(() => {
+      tree.unmount();
+    });
     await act(async () => {
       resolveSubmit({ jobId: 'job-late', devotionalId: 'devo-late' });
       await Promise.resolve();
@@ -168,9 +187,7 @@ describe('H13 useAutoTrialGeneration unmount', () => {
       tree = create(<RetryProbe />);
     });
     await act(async () => {
-      jest.advanceTimersByTime?.(0);
-      await Promise.resolve();
-      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 0));
     });
     const { clearInflightGenerationJob } = jest.requireActual('@/lib/inflight-generation-job') as {
       clearInflightGenerationJob: () => void;
@@ -203,8 +220,9 @@ describe('H13 useAutoTrialGeneration unmount', () => {
     });
     const created = seedPurchased();
     transitionAutoTrialIntent('submitted', { jobId: 'job-gone', devotionalId: 'devo-pull' }, { nowMs: NOW });
+    let tree!: ReturnType<typeof create>;
     await act(async () => {
-      create(<Probe intentId={created.intentId} />);
+      tree = create(<Probe intentId={created.intentId} />);
     });
     await act(async () => {
       await new Promise((resolve) => {
@@ -216,6 +234,9 @@ describe('H13 useAutoTrialGeneration unmount', () => {
     // advances straight to revealed; the point of M2 is that it left submitted.
     expect(landed?.status).toBe('revealed');
     expect(landed?.revealedAt).not.toBeNull();
+    act(() => {
+      tree.unmount();
+    });
   });
 
   it('does not dispatch submit_error after unmount', async () => {
@@ -240,9 +261,7 @@ describe('H13 useAutoTrialGeneration unmount', () => {
       rejectSubmit(new ApiError('dup', 409, 'ALREADY_GENERATED_TODAY', 'job-existing'));
       await Promise.resolve();
       await Promise.resolve();
-      await new Promise((resolve) => {
-        setTimeout(resolve, 20);
-      });
+      await new Promise((resolve) => setTimeout(resolve, 20));
     });
     expect(mockPoll).not.toHaveBeenCalled();
     expect(readAutoTrialIntent()?.status).toBe('purchased');
@@ -269,9 +288,7 @@ describe('H13 useAutoTrialGeneration unmount', () => {
     await act(async () => {
       await Promise.resolve();
       await Promise.resolve();
-      await new Promise((resolve) => {
-        setTimeout(resolve, 20);
-      });
+      await new Promise((resolve) => setTimeout(resolve, 20));
     });
     expect(useUnfoldStore.getState().user?.devotionalLength).toBe(7);
     expect(readAutoTrialIntent()?.status).toBe('submitted');

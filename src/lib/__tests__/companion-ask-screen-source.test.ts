@@ -70,3 +70,37 @@ describe('drawer edge-swipe gesture wired at the screen root', () => {
     expect(source).toMatch(/<\/KeyboardAvoidingView>\s*<\/GestureDetector>/);
   });
 });
+
+describe('error banner stays inside the readable column', () => {
+  it('subtracts both horizontal margins from readableMaxWidth', () => {
+    expect(source).toContain('maxWidth: Math.max(0, adaptiveLayout.readableMaxWidth - Spacing[\'4\'] * 2)');
+    expect(source).toContain('marginHorizontal: Spacing[\'4\']');
+  });
+});
+
+describe('asymmetric safe areas and drawer resize', () => {
+  it('pads the header and composer with live left and right insets', () => {
+    expect(source).toContain('paddingLeft: Spacing[\'4\'] + insets.left');
+    expect(source).toContain('paddingRight: Spacing[\'4\'] + insets.right');
+    expect(source).toContain('adaptiveSafeGutterStyle(insets.left, insets.right)');
+  });
+
+  it('rewrites the closed drawer translation when drawer width changes', () => {
+    expect(source).toContain('companionDrawerClosedTranslate(drawerWidth)');
+    expect(source).toMatch(/if \(!drawerOpen\) \{\s*drawerTranslateX\.value = companionDrawerClosedTranslate\(drawerWidth\);/);
+  });
+});
+
+describe('drawer edge-swipe gesture wired at the screen root', () => {
+  it('imports and calls useDrawerGesture with the screen\'s own drawer state', () => {
+    expect(source).toContain('useDrawerGesture');
+    expect(source).toMatch(
+      /useDrawerGesture\(drawerTranslateX, drawerOpen, handleDrawerOpen, handleDrawerClose\)/,
+    );
+  });
+
+  it('wraps the screen root in a GestureDetector using that gesture', () => {
+    expect(source).toMatch(/<GestureDetector gesture=\{drawerPanGesture\}>\s*<KeyboardAvoidingView/);
+    expect(source).toMatch(/<\/KeyboardAvoidingView>\s*<\/GestureDetector>/);
+  });
+});

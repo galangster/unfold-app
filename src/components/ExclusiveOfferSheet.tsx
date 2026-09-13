@@ -19,6 +19,8 @@ import { LEGAL_LINKS } from '@/lib/push-notification-helpers';
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
+import { adaptiveFrameStyle, adaptiveSafeGutterStyle } from '@/lib/adaptive-layout';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query';
@@ -84,6 +86,8 @@ export function ExclusiveOfferSheet({
   const { colors, isDark } = useTheme();
   const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
+  const adaptiveLayout = useAdaptiveLayout();
+  const readableFrameStyle = adaptiveFrameStyle(adaptiveLayout.readableMaxWidth);
   const router = useRouter();
   const queryClient = useQueryClient();
   const updateUser = useUnfoldStore((s) => s.updateUser);
@@ -258,10 +262,14 @@ export function ExclusiveOfferSheet({
     >
       <Animated.View
         entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
-        style={[styles.root, { backgroundColor: colors.background }]}
+        style={[
+          styles.root,
+          { backgroundColor: colors.background },
+          adaptiveSafeGutterStyle(insets.left, insets.right),
+        ]}
       >
         {/* Scrollable content area */}
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.content, { paddingTop: insets.top + Spacing['6'], paddingBottom: Spacing['6'] }]}>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.content, readableFrameStyle, { paddingTop: insets.top + Spacing['6'], paddingBottom: Spacing['6'] }]}>
           {/* Gift icon */}
           <View
             style={[
@@ -349,7 +357,7 @@ export function ExclusiveOfferSheet({
         </ScrollView>
 
         {/* Bottom CTA area — pinned to bottom */}
-        <View style={[styles.bottomArea, { paddingBottom: insets.bottom + Spacing['4'] }]}>
+        <View style={[styles.bottomArea, readableFrameStyle, { paddingBottom: insets.bottom + Spacing['4'] }]}>
           {/* Accept Offer / Fallback CTA */}
           <TouchableOpacity
             activeOpacity={0.8}
@@ -404,6 +412,9 @@ export function ExclusiveOfferSheet({
           <View style={styles.legalRow}>
             <TouchableOpacity
               activeOpacity={0.7}
+              accessibilityRole="link"
+              accessibilityLabel="Terms of use"
+              style={styles.legalLink}
               onPress={() =>
                 Linking.openURL(
                   LEGAL_LINKS.terms,
@@ -415,6 +426,9 @@ export function ExclusiveOfferSheet({
             <Text style={[styles.legalSeparator, { color: colors.textHint }]}>{'\u00B7'}</Text>
             <TouchableOpacity
               activeOpacity={0.7}
+              accessibilityRole="link"
+              accessibilityLabel="Privacy policy"
+              style={styles.legalLink}
               onPress={() => Linking.openURL(LEGAL_LINKS.privacy)}
             >
               <Text style={[styles.legalText, { color: colors.textHint }]}>Privacy</Text>
@@ -573,6 +587,10 @@ const styles = StyleSheet.create({
   legalText: {
     fontFamily: FontFamily.ui,
     fontSize: FontSize.xs,
+  },
+  legalLink: {
+    minHeight: 44,
+    justifyContent: 'center',
   },
   legalSeparator: {
     fontFamily: FontFamily.ui,

@@ -66,6 +66,8 @@ interface Props {
   ambienceVisible?: boolean;
   /** Resume a first-series request without replacing a readable current series. */
   nonblockingResume?: { onResume: () => void } | null;
+  /** Drop the tall hero min-height in the Today split so the column can size to copy. */
+  relaxHeroMinHeight?: boolean;
 }
 
 // ─── Character reveal for "Unfold" title (empty state) ──────────
@@ -477,9 +479,11 @@ function PendingInitialResumeState({
 function RevealReadyState({
   state,
   ambienceVisible,
+  relaxHeroMinHeight,
 }: {
   state: Extract<DevotionalCardState, { type: 'reveal-ready' }>;
   ambienceVisible: boolean;
+  relaxHeroMinHeight?: boolean;
 }) {
   const { colors, isDark } = useTheme();
   const { width, fontScale } = useWindowDimensions();
@@ -499,7 +503,7 @@ function RevealReadyState({
 
   return (
     <Animated.View entering={entering(FadeIn.duration(Duration.normal).easing(Ease.out))}>
-      <View style={[styles.revealOpenHero, isCompactHero && styles.revealOpenHeroCompact, isVeryCompactHero && styles.revealOpenHeroVeryCompact]}>
+      <View style={[styles.revealOpenHero, isCompactHero && styles.revealOpenHeroCompact, isVeryCompactHero && styles.revealOpenHeroVeryCompact, relaxHeroMinHeight && styles.heroMinHeightRelaxed]}>
         <View style={[styles.openHeroContent, isCompactHero && styles.openHeroContentCompact, isVeryCompactHero && styles.openHeroContentVeryCompact]}>
           <HeroGround active={ambienceVisible}>
             <Text
@@ -879,9 +883,10 @@ function JourneyCompleteState({
 interface MainCardProps {
   state: Extract<DevotionalCardState, { type: 'unread' | 'complete-today' | 'tomorrow-locked' }>;
   ambienceVisible: boolean;
+  relaxHeroMinHeight?: boolean;
 }
 
-function MainCard({ state, ambienceVisible }: MainCardProps) {
+function MainCard({ state, ambienceVisible, relaxHeroMinHeight }: MainCardProps) {
   const { colors, isDark } = useTheme();
   const textCap = heroCopyCap(ambienceVisible);
   const glassMode = isDark ? 'dark' : 'light';
@@ -978,7 +983,7 @@ function MainCard({ state, ambienceVisible }: MainCardProps) {
   return (
     <Animated.View style={scaleStyle}>
       <View style={styles.heroTouchable}>
-        <View style={[styles.openHero, isCompactHero && styles.openHeroCompact, isVeryCompactHero && styles.openHeroVeryCompact]}>
+        <View style={[styles.openHero, isCompactHero && styles.openHeroCompact, isVeryCompactHero && styles.openHeroVeryCompact, relaxHeroMinHeight && styles.heroMinHeightRelaxed]}>
           <View style={[styles.openHeroContent, isCompactHero && styles.openHeroContentCompact, isVeryCompactHero && styles.openHeroContentVeryCompact, { alignItems: 'flex-start' }]}>
             <HeroGround active={ambienceVisible}>
             <Text
@@ -1175,6 +1180,7 @@ export function DevotionalCard({
   storedPick,
   ambienceVisible = false,
   nonblockingResume = null,
+  relaxHeroMinHeight = false,
 }: Props) {
   const { entering } = useAccessibleAnimation();
 
@@ -1223,12 +1229,12 @@ export function DevotionalCard({
         />
       )}
       {state.type === 'reveal-ready' && (
-        <RevealReadyState state={state} ambienceVisible={ambienceVisible} />
+        <RevealReadyState state={state} ambienceVisible={ambienceVisible} relaxHeroMinHeight={relaxHeroMinHeight} />
       )}
       {(state.type === 'unread' ||
         state.type === 'complete-today' ||
         state.type === 'tomorrow-locked') && (
-        <MainCard state={state} ambienceVisible={ambienceVisible} />
+        <MainCard state={state} ambienceVisible={ambienceVisible} relaxHeroMinHeight={relaxHeroMinHeight} />
       )}
     </Animated.View>
   );
@@ -1267,6 +1273,9 @@ const styles = StyleSheet.create({
   // Open editorial hero
   heroTouchable: {
     borderRadius: Radius.xl,
+  },
+  heroMinHeightRelaxed: {
+    minHeight: 0,
   },
   openHero: {
     minHeight: 416,

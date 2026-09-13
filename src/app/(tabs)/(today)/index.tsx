@@ -1,7 +1,9 @@
 import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { drainSyncOutbox } from '@/lib/sync-outbox';
 import { usePrevious } from '@/hooks/usePrevious';
-import { View, StyleSheet, Alert, type LayoutChangeEvent } from 'react-native';
+import { View, StyleSheet, Alert } from 'react-native';
+import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
+import { adaptiveFrameStyle } from '@/lib/adaptive-layout';
 import { useRouter, useFocusEffect, useIsFocused, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
@@ -261,6 +263,19 @@ export default function HomeScreen() {
   const router = useRouter();
   const routeParams = useLocalSearchParams<{ voiceCheckInPrototype?: string | string[]; voiceCheckInDemo?: string }>();
   const { colors } = useTheme();
+  const adaptiveLayout = useAdaptiveLayout();
+  const todayUsesSplit = adaptiveLayout.usesSplit;
+  const todayFrameStyle = adaptiveFrameStyle(
+    todayUsesSplit ? adaptiveLayout.splitMaxWidth : adaptiveLayout.clusterMaxWidth,
+  );
+  const todayColumnsStyle = todayUsesSplit
+    ? [styles.splitColumns, {
+        gap: adaptiveLayout.columnGap,
+        minHeight: Math.max(0, adaptiveLayout.availableHeight - 200),
+      }]
+    : undefined;
+  const todayHeroColumnStyle = todayUsesSplit ? styles.splitHeroColumn : undefined;
+  const todayTrailColumnStyle = todayUsesSplit ? styles.splitTrailColumn : undefined;
   const { entering } = useAccessibleAnimation();
   const user = useUnfoldStore((s) => s.user);
   const devotionals = useUnfoldStore((s) => s.devotionals);
@@ -327,52 +342,73 @@ export default function HomeScreen() {
     context: { x: number; y: number; width: number; height: number } | null;
     rhythm: { x: number; y: number; width: number; height: number } | null;
   }>({ reading: null, context: null, rhythm: null });
+  const readingTargetRef = useRef<View>(null);
+  const contextTargetRef = useRef<View>(null);
+  const rhythmTargetRef = useRef<View>(null);
 
-  const getInsetSurfaceRect = useCallback((event: LayoutChangeEvent) => {
-    const { x, y, width, height } = event.nativeEvent.layout;
-    const horizontalInset = Spacing['6'];
-    return {
-      x: x + horizontalInset,
-      y: y + insets.top,
-      width: Math.max(width - horizontalInset * 2, 0),
-      height,
-    };
-  }, [insets.top]);
-
-  const handleReadingLayout = useCallback((event: LayoutChangeEvent) => {
-    const rect = getInsetSurfaceRect(event);
-    const topInset = Spacing['5'];
-    if (rect.width > 0 && rect.height > topInset) {
-      setTooltipLayoutRects((prev) => ({
-        ...prev,
-        reading: {
-          ...rect,
-          y: rect.y + topInset,
-          height: Math.max(rect.height - topInset, 0),
-        },
-      }));
+  const publishTooltipRect = useCallback((
+    key: 'reading' | 'context' | 'rhythm',
+    node: View | null,
+  ) => {
+    if (!node) {
+      setTooltipLayoutRects((prev) => (prev[key] === null ? prev : { ...prev, [key]: null }));
+      return;
     }
-  }, [getInsetSurfaceRect]);
+    node.measureInWindow((x, y, width, height) => {
+      if (width <= 0 || height <= 0) return;
+      const horizontalInset = Spacing['6'];
+      const topInset = key === 'reading' ? Spacing['5'] : 0;
+      const rect = {
+        x: x + horizontalInset,
+        y: y + topInset,
+        width: Math.max(width - horizontalInset * 2, 0),
+        height: Math.max(height - topInset, 0),
+      };
+      if (rect.width <= 0 || rect.height <= 0) return;
+      setTooltipLayoutRects((prev) => {
+        const previous = prev[key];
+        if (
+          previous &&
+          previous.x === rect.x &&
+          previous.y === rect.y &&
+          previous.width === rect.width &&
+          previous.height === rect.height
+        ) {
+          return prev;
+        }
+        return { ...prev, [key]: rect };
+      });
+    });
+  }, []);
 
-  const handleContextLayout = useCallback((event: LayoutChangeEvent) => {
-    const rect = getInsetSurfaceRect(event);
-    if (rect.width > 0 && rect.height > 0) {
-      setTooltipLayoutRects((prev) => ({
-        ...prev,
-        context: rect,
-      }));
-    }
-  }, [getInsetSurfaceRect]);
+  const handleReadingLayout = useCallback(() => {
+    publishTooltipRect('reading', readingTargetRef.current);
+  }, [publishTooltipRect]);
 
-  const handleRhythmLayout = useCallback((event: LayoutChangeEvent) => {
-    const rect = getInsetSurfaceRect(event);
-    if (rect.width > 0 && rect.height > 0) {
-      setTooltipLayoutRects((prev) => ({
-        ...prev,
-        rhythm: rect,
-      }));
-    }
-  }, [getInsetSurfaceRect]);
+  const handleContextLayout = useCallback(() => {
+    publishTooltipRect('context', contextTargetRef.current);
+  }, [publishTooltipRect]);
+
+  const handleRhythmLayout = useCallback(() => {
+    publishTooltipRect('rhythm', rhythmTargetRef.current);
+  }, [publishTooltipRect]);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      publishTooltipRect('reading', readingTargetRef.current);
+      publishTooltipRect('context', contextTargetRef.current);
+      publishTooltipRect('rhythm', rhythmTargetRef.current);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [
+    adaptiveLayout.width,
+    adaptiveLayout.height,
+    adaptiveLayout.usesSplit,
+    insets.left,
+    insets.right,
+    insets.top,
+    publishTooltipRect,
+  ]);
 
   // Scroll tracking for the hero DevotionalCard parallax
   const scrollY = useSharedValue(0);
@@ -1542,6 +1578,11 @@ export default function HomeScreen() {
   ]);
 
   const hasOptionalTodayStack = todayStackCards.length > 0;
+  useEffect(() => {
+    if (!hasOptionalTodayStack) {
+      publishTooltipRect('context', null);
+    }
+  }, [hasOptionalTodayStack, publishTooltipRect]);
 
   // Compute devotional card state
   const devotionalState = computeDevotionalState({
@@ -1620,13 +1661,14 @@ export default function HomeScreen() {
         completionAmbienceKey={completionAmbienceKey}
       />
 
-      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
         <Animated.ScrollView
           onScroll={scrollHandler}
           scrollEventThrottle={16}
           contentContainerStyle={{ paddingBottom: 100 }}
           showsVerticalScrollIndicator={false}
         >
+          <View style={todayFrameStyle}>
           {/* Zone 1: Greeting */}
           <GreetingRow
             userName={user?.name}
@@ -1634,11 +1676,9 @@ export default function HomeScreen() {
             onAvatarPress={() => router.push('/(tabs)/(you)')}
           />
 
-          {/* Zone 2: Context stack moved under the hero in Phase 3. */}
-
-
+          <View style={todayColumnsStyle}>
           {/* Zone 3: Hero Devotional — Today's primary act */}
-          <View collapsable={false} onLayout={handleReadingLayout}>
+          <View ref={readingTargetRef} collapsable={false} onLayout={handleReadingLayout} style={todayHeroColumnStyle}>
             {/* No entering here — DevotionalCard runs its own FadeIn; two nested fades compounded (audit #5) */}
             <Animated.View>
               <DevotionalCard
@@ -1654,12 +1694,14 @@ export default function HomeScreen() {
                   stateType: devotionalState.type,
                   hasReadToday,
                 })}
+                relaxHeroMinHeight={todayUsesSplit}
               />
             </Animated.View>
           </View>
 
+          <View style={todayTrailColumnStyle}>
           {hasOptionalTodayStack && (
-            <View collapsable={false} onLayout={handleContextLayout}>
+            <View ref={contextTargetRef} collapsable={false} onLayout={handleContextLayout}>
               <TodayCardStack
                 cards={todayStackCards}
                 colors={colors}
@@ -1668,11 +1710,8 @@ export default function HomeScreen() {
             </View>
           )}
 
-          {/* Zone 5: Series Carousel — removed per user request */}
-
-
           {/* Zone 6: Daily Rhythm */}
-          <View collapsable={false} onLayout={handleRhythmLayout}>
+          <View ref={rhythmTargetRef} collapsable={false} onLayout={handleRhythmLayout}>
             <Animated.View
               entering={entering(FadeIn.duration(Duration.normal).delay(200).easing(Ease.out))}
               style={[
@@ -1691,6 +1730,9 @@ export default function HomeScreen() {
           {/* Zone 7: Bento Grid */}
           <View style={styles.bentoWrapper}>
             <BentoGrid />
+          </View>
+          </View>
+          </View>
           </View>
 
         </Animated.ScrollView>
@@ -1773,5 +1815,17 @@ const styles = StyleSheet.create({
   },
   bentoWrapper: {
     marginTop: TODAY_RELATIONSHIP_SPACING.rhythmToBento,
+  },
+  splitColumns: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  splitHeroColumn: {
+    flex: 1.35,
+    minWidth: 0,
+  },
+  splitTrailColumn: {
+    flex: 1,
+    minWidth: 0,
   },
 });

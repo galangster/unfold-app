@@ -38,6 +38,7 @@ import {
   bibleHubBookAccessibilityHint,
   bibleHubOverviewMetrics,
   bibleHubSegmentedMetrics,
+  shouldStackBibleHubHeader,
 } from '@/lib/bible-hub-overview-layout';
 import {
   BIBLE_HUB_VIEW_LABELS,
@@ -48,6 +49,8 @@ import {
 } from '@/lib/bible-hub-view-preference';
 import { DownloadBibleSheet } from '@/components/bible/DownloadBibleSheet';
 import { Spacing } from '@/constants/spacing';
+import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
+import { adaptiveFrameStyle } from '@/lib/adaptive-layout';
 import { ProfileEntryButton } from '@/components/ProfileEntryButton';
 import { Duration, Ease } from '@/constants/animations';
 import { Typography } from '@/constants/typography';
@@ -91,20 +94,27 @@ export function resolveBibleHomeNavigation(params: {
 
 export default function BibleHomeScreen() {
   const { colors, isDark } = useTheme();
-  const { width, fontScale } = useWindowDimensions();
+  const { fontScale } = useWindowDimensions();
+  const adaptiveLayout = useAdaptiveLayout();
+  const hubWidth = adaptiveLayout.clusterMaxWidth;
+  const hubFrameStyle = adaptiveFrameStyle(hubWidth);
   const reducedMotion = useReducedMotion();
   const router = useRouter();
   const bookPillWidth = useMemo(
-    () => bibleHubBookPillWidthStyle(bibleHubBookPillColumnCount(width, fontScale)),
-    [width, fontScale],
+    () => bibleHubBookPillWidthStyle(bibleHubBookPillColumnCount(hubWidth, fontScale)),
+    [hubWidth, fontScale],
   );
   const overviewMetrics = useMemo(
-    () => bibleHubOverviewMetrics(width, fontScale),
-    [width, fontScale],
+    () => bibleHubOverviewMetrics(hubWidth, fontScale),
+    [hubWidth, fontScale],
   );
   const segmentedMetrics = useMemo(
-    () => bibleHubSegmentedMetrics(fontScale, width),
-    [fontScale, width],
+    () => bibleHubSegmentedMetrics(fontScale, hubWidth),
+    [fontScale, hubWidth],
+  );
+  const headerStacks = useMemo(
+    () => shouldStackBibleHubHeader(hubWidth, fontScale),
+    [hubWidth, fontScale],
   );
   const { isReady, isDownloading, progress, download, error } = useBibleDb();
   const lastPosition = useUnfoldStore((s) => s.bibleReadingHistory[0] ?? null);
@@ -322,14 +332,16 @@ export default function BibleHomeScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={styles.header}>
+      <View style={[styles.container, hubFrameStyle]}>
+      <View style={[styles.header, headerStacks && styles.headerStacked]}>
         <Text
           style={[styles.title, { color: colors.text, fontFamily: FontFamily.display }]}
           maxFontSizeMultiplier={0}
+          numberOfLines={1}
         >
           Bible
         </Text>
-        <View style={styles.headerTrailing}>
+        <View style={[styles.headerTrailing, headerStacks && styles.headerTrailingStacked]}>
           <SegmentedControl
             values={[...BIBLE_HUB_VIEW_LABELS]}
             selectedIndex={viewMode === 'names' ? 1 : 0}
@@ -413,6 +425,7 @@ export default function BibleHomeScreen() {
 
         <View style={{ height: 100 }} />
       </ScrollView>
+      </View>
 
       {/* Chapter Grid Modal */}
       <Modal
@@ -422,6 +435,7 @@ export default function BibleHomeScreen() {
         onRequestClose={() => setSelectedBook(null)}
       >
         <TouchableOpacity
+          accessible={false}
           style={styles.modalOverlay}
           activeOpacity={1}
           onPress={() => setSelectedBook(null)}
@@ -435,7 +449,7 @@ export default function BibleHomeScreen() {
               backgroundColor: isDark ? '#1C1C1E' : colors.backgroundElevated,
             }]}
           >
-            <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()} style={{ flexShrink: 1 }}>
+            <TouchableOpacity accessible={false} activeOpacity={1} onPress={(e) => e.stopPropagation()} style={{ flexShrink: 1 }}>
               {/* Modal Header */}
               <View style={styles.chapterModalHeader}>
                 <Text style={[styles.chapterModalTitle, { color: colors.text, fontFamily: FontFamily.display }]}>
@@ -490,7 +504,7 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexWrap: 'nowrap',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: Spacing['6'],
@@ -498,14 +512,24 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing['3'],
     gap: Spacing['3'],
   },
+  headerStacked: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+  },
   title: {
+    flexShrink: 1,
+    minWidth: 0,
     fontSize: 27,
     letterSpacing: -0.15,
   },
   headerTrailing: {
     flexDirection: 'row',
+    flexShrink: 0,
     alignItems: 'center',
     gap: Spacing['3'],
+  },
+  headerTrailingStacked: {
+    alignSelf: 'flex-end',
   },
   searchBar: {
     flexDirection: 'row',
@@ -640,6 +664,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     padding: Spacing['5'],
     width: '100%',
+    maxWidth: 520,
     maxHeight: '70%',
     // Shadow comes from elevated('lg', isDark) at the call site — 'lg' is
     // the strongest positive-offset tier, matching this modal's original

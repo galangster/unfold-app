@@ -8,7 +8,14 @@
  */
 
 import { useCallback, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal } from 'react-native';
+import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
+import {
+  adaptiveFrameStyle,
+  adaptiveSafeGutterStyle,
+  adaptiveViewportMaxHeight,
+  swipeDismissTranslate,
+} from '@/lib/adaptive-layout';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -31,7 +38,6 @@ import { isScripturePracticeEnabled } from '@/lib/scripture-practice-feature';
 // Constants
 // ---------------------------------------------------------------------------
 
-const SCREEN_WIDTH = Dimensions.get('window').width;
 const SWIPE_THRESHOLD = 80;
 const DISMISS_DURATION = 150;
 
@@ -275,6 +281,10 @@ function StyleBadge({ style, accentColor }: { style: string; accentColor: string
 export function StudyMethodSheet({ methodId, visible, onClose }: StudyMethodSheetProps) {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const adaptiveLayout = useAdaptiveLayout();
+  const sheetFrameStyle = adaptiveFrameStyle(adaptiveLayout.sheetMaxWidth);
+  const sheetMaxHeight = adaptiveViewportMaxHeight(adaptiveLayout.height, 0.85);
+  const dismissDistance = swipeDismissTranslate(adaptiveLayout.width, 1);
 
   const method = methodId ? BIBLE_STUDY_METHODS[methodId] : undefined;
   const guide = useMemo(() => (method ? parseMethodGuide(method) : null), [method]);
@@ -304,13 +314,13 @@ export function StudyMethodSheet({ methodId, visible, onClose }: StudyMethodShee
   const dismissWithSwipe = useCallback(
     (direction: number) => {
       'worklet';
-      const target = direction > 0 ? SCREEN_WIDTH : -SCREEN_WIDTH;
+      const target = direction > 0 ? dismissDistance : -dismissDistance;
       translateX.value = withTiming(target, { duration: DISMISS_DURATION });
       opacity.value = withTiming(0, { duration: DISMISS_DURATION }, () => {
         runOnJS(onClose)();
       });
     },
-    [onClose, translateX, opacity],
+    [onClose, translateX, opacity, dismissDistance],
   );
 
   // --- Gesture: horizontal pan to dismiss ---
@@ -360,6 +370,7 @@ export function StudyMethodSheet({ methodId, visible, onClose }: StudyMethodShee
             style={StyleSheet.absoluteFill}
             activeOpacity={1}
             onPress={handleClose}
+            accessible={false}
           />
         </Animated.View>
 
@@ -367,13 +378,21 @@ export function StudyMethodSheet({ methodId, visible, onClose }: StudyMethodShee
         <View
           style={[
             smStyles.cardContainer,
+            adaptiveSafeGutterStyle(insets.left, insets.right),
             { paddingTop: insets.top + 40, paddingBottom: insets.bottom + 20 },
           ]}
           pointerEvents="box-none"
         >
           <GestureDetector gesture={panGesture}>
             <Animated.View
-              style={[smStyles.card, { backgroundColor: cardBg }, cardStyle]}
+              style={[
+                smStyles.card,
+                sheetFrameStyle,
+                { backgroundColor: cardBg, maxHeight: sheetMaxHeight },
+                cardStyle,
+              ]}
+              accessibilityViewIsModal
+              onAccessibilityEscape={handleClose}
             >
               {/* Close button */}
               <TouchableOpacity
@@ -384,6 +403,8 @@ export function StudyMethodSheet({ methodId, visible, onClose }: StudyMethodShee
                 onPress={handleClose}
                 activeOpacity={0.6}
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                accessibilityRole="button"
+                accessibilityLabel="Close study method"
               >
                 <XIcon
                   size={14}
@@ -494,7 +515,6 @@ const smStyles = StyleSheet.create({
   },
   card: {
     borderRadius: Radius.xl,
-    maxHeight: '85%',
     overflow: 'hidden',
   },
   closeButton: {

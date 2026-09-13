@@ -21,6 +21,7 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
+import { adaptiveSheetPlacement, resolveAdaptiveLayout } from '@/lib/adaptive-layout';
 
 export interface ReaderBottomSheetProps {
   visible: boolean;
@@ -56,7 +57,16 @@ export function ReaderBottomSheet({
 }: ReaderBottomSheetProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const { height: windowHeight } = useWindowDimensions();
+  const { height: windowHeight, width: windowWidth, fontScale } = useWindowDimensions();
+  const sheetPlacement = adaptiveSheetPlacement(
+    resolveAdaptiveLayout({
+      width: windowWidth,
+      height: windowHeight,
+      fontScale,
+      insetLeft: insets.left,
+      insetRight: insets.right,
+    }),
+  );
   const reducedMotion = useReducedMotion();
   const translateY = useSharedValue(reducedMotion ? 0 : ENTER_OFFSET);
 
@@ -114,7 +124,10 @@ export function ReaderBottomSheet({
   // folded into the content padding (with the home-indicator inset) so the last
   // row clears the bottom edge instead of the whole sheet floating above it.
   const contentBottomPadding = insets.bottom + bottomInset + Spacing['5'];
-  const maxHeight = Math.max(320, Math.round(windowHeight * maxHeightRatio));
+  const maxHeight = Math.min(
+    Math.max(0, windowHeight - insets.top),
+    Math.max(320, Math.round(windowHeight * maxHeightRatio)),
+  );
   const sheetBackground = colors.backgroundElevated;
 
   return (
@@ -154,6 +167,8 @@ export function ReaderBottomSheet({
             sheetAnimatedStyle,
             {
               maxHeight,
+              left: sheetPlacement.left,
+              width: sheetPlacement.width,
               bottom: 0,
               backgroundColor: sheetBackground,
               borderColor: colors.border,
@@ -204,8 +219,6 @@ const styles = StyleSheet.create({
   },
   surface: {
     position: 'absolute',
-    left: 0,
-    right: 0,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopLeftRadius: Radius['2xl'],
     borderTopRightRadius: Radius['2xl'],

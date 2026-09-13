@@ -3,6 +3,8 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-nati
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useCrossTabBack } from '@/hooks/useCrossTabBack';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
+import { adaptiveFrameStyle } from '@/lib/adaptive-layout';
 import Animated, {
   FadeIn,
   useSharedValue,
@@ -152,6 +154,8 @@ interface SeriesArcScreenProps {
 }
 
 export function SeriesArcScreen({ hostTab, chrome = 'stack' }: SeriesArcScreenProps = {}) {
+  const layout = useAdaptiveLayout();
+  const frameStyle = adaptiveFrameStyle(layout.clusterMaxWidth);
   const router = useRouter();
   const { id: paramId } = useLocalSearchParams<{ id?: string }>();
   const { colors } = useTheme();
@@ -235,7 +239,8 @@ export function SeriesArcScreen({ hostTab, chrome = 'stack' }: SeriesArcScreenPr
     // rather than forking it.
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
+          <View style={[frameStyle, { flex: 1 }]}>
           <DevotionalTabHeader onOpenPastSeries={openPastSeries} />
           <View style={styles.emptyState}>
             <Text style={[styles.seriesTitle, { color: colors.text }]}>
@@ -257,6 +262,7 @@ export function SeriesArcScreen({ hostTab, chrome = 'stack' }: SeriesArcScreenPr
               </Text>
             </TouchableOpacity>
           </View>
+        </View>
         </SafeAreaView>
       </View>
     );
@@ -265,7 +271,8 @@ export function SeriesArcScreen({ hostTab, chrome = 'stack' }: SeriesArcScreenPr
   if (!devotional) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
+          <View style={[frameStyle, { flex: 1 }]}>
           <View style={styles.header}>
             <TouchableOpacity
               activeOpacity={0.7}
@@ -281,6 +288,7 @@ export function SeriesArcScreen({ hostTab, chrome = 'stack' }: SeriesArcScreenPr
               Not Found
             </Text>
           </View>
+        </View>
         </SafeAreaView>
       </View>
     );
@@ -290,7 +298,8 @@ export function SeriesArcScreen({ hostTab, chrome = 'stack' }: SeriesArcScreenPr
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
+          <View style={[frameStyle, { flex: 1 }]}>
         {/* Header */}
         {chrome === 'tabRoot' ? (
           <DevotionalTabHeader onOpenPastSeries={openPastSeries} />
@@ -557,7 +566,8 @@ export function SeriesArcScreen({ hostTab, chrome = 'stack' }: SeriesArcScreenPr
               })}
           </View>
         </ScrollView>
-      </SafeAreaView>
+      </View>
+        </SafeAreaView>
     </View>
   );
 }
