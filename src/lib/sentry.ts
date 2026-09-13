@@ -28,12 +28,15 @@
  *     with its query string and fragment cut off;
  *   - error and transaction events carry no `user`; native release-health
  *     sessions keep their installation ID;
- *   - session replay, screenshots, and view-hierarchy attachments are never
- *     enabled — for replay that means OMITTING the two sample rates, because
- *     at @sentry/react-native 7.11.0 passing them (even as 0) is what installs
- *     `mobileReplayIntegration`; transactions (one production session in ten,
- *     none elsewhere) bypass `beforeSend`, so `scrubTransaction` rebuilds them
- *     the same way.
+ *   - session replay is omitted everywhere except the exact
+ *     `qa-replay-testflight` EAS profile. At @sentry/react-native 8.26.0
+ *     passing either sample rate (even as 0) is what installs
+ *     `mobileReplayIntegration`, so production and unknown profiles still
+ *     omit both keys. The pilot records no ordinary sessions and captures
+ *     replay only for events that carry a real exception. Screenshots and
+ *     view-hierarchy attachments stay off. Transactions (one production
+ *     session in ten, none elsewhere) bypass `beforeSend`, so
+ *     `scrubTransaction` rebuilds them the same way.
  *
  * NATIVE FIRST
  * A Release build starts the Cocoa SDK in `ios/Unfold/AppDelegate.swift`
@@ -275,10 +278,29 @@ function scrubTags(tags: unknown): Record<string, string | number | boolean> | u
   return emptyToUndefined(out);
 }
 
+/**
+ * Cocoa and MobileReplay attach a 32-hex id, no dashes — the same shape as
+ * `event_id` / `trace_id`. A dashed UUID is a device id, not a replay id, and
+ * journal text under this key would otherwise survive an allowlisted copy.
+ */
+const SENTRY_REPLAY_ID_PATTERN = /^[0-9a-f]{32}$/i;
+
+function scrubReplayContext(value: unknown): Record<string, string> | undefined {
+  if (value === null || typeof value !== 'object') return undefined;
+  const replayId = (value as Record<string, unknown>).replay_id;
+  if (typeof replayId !== 'string' || !SENTRY_REPLAY_ID_PATTERN.test(replayId)) return undefined;
+  return { replay_id: replayId.toLowerCase() };
+}
+
 function scrubContexts(contexts: unknown): Record<string, Record<string, unknown>> | undefined {
   const out: Record<string, Record<string, unknown>> = {};
   if (contexts === null || typeof contexts !== 'object') return undefined;
   for (const [section, value] of Object.entries(contexts as Record<string, unknown>)) {
+    if (section === 'replay') {
+      const replay = scrubReplayContext(value);
+      if (replay !== undefined) out.replay = replay;
+      continue;
+    }
     const allowed = ALLOWED_CONTEXT_STRING_KEYS[section];
     if (allowed === undefined) continue;
     const scrubbed = scrubBag(value, allowed);
@@ -582,6 +604,38 @@ export function resolveTracesSampleRate(environment: string): number {
   return isProductionBuildProfile(environment) ? PRODUCTION_TRACES_SAMPLE_RATE : 0;
 }
 
+/** Exact EAS profile that may install Mobile Replay. No prefix match. */
+export const REPLAY_PILOT_BUILD_PROFILE = 'qa-replay-testflight';
+
+const MOBILE_REPLAY_MASKING = {
+  maskAllText: true,
+  maskAllImages: true,
+  maskAllVectors: true,
+  networkCaptureBodies: false,
+} as const;
+
+/** Pure: replay is on only for the named internal TestFlight pilot. */
+export function isReplayPilotBuildProfile(profile: string): boolean {
+  return profile === REPLAY_PILOT_BUILD_PROFILE;
+}
+
+/**
+ * Pure: Mobile Replay's event hook already skips events with no
+ * exception. This also drops deliberate funnel telemetry (`source=app_event`)
+ * so an onboarding warning never starts a recording. Error-boundary handled
+ * exceptions keep their `exception.values` and are allowed through.
+ */
+export function shouldCaptureReplayForEvent(event: {
+  level?: string;
+  exception?: { values?: unknown[] };
+  tags?: Record<string, unknown>;
+}): boolean {
+  const values = event.exception?.values;
+  if (!Array.isArray(values) || values.length === 0) return false;
+  if (event.level !== undefined && event.level !== 'error' && event.level !== 'fatal') return false;
+  return event.tags?.source !== APP_EVENT_SOURCE;
+}
+
 /**
  * Pure: whether JavaScript must start the native SDK itself. A Release iOS
  * build already started it in AppDelegate.swift under `#if !DEBUG` — the same
@@ -657,12 +711,14 @@ export function initSentry(): void {
       sendDefaultPii: false,
       attachScreenshot: false,
       attachViewHierarchy: false,
-      // NO `replaysSessionSampleRate` / `replaysOnErrorSampleRate`. At
-      // @sentry/react-native 7.11.0 `integrations/default.js` installs
-      // `mobileReplayIntegration()` when either key is `typeof === 'number'`,
-      // which `0` satisfies — so writing them out as 0 would INSTALL replay,
-      // not suppress it. Their absence is what keeps it out;
-      // `src/lib/__tests__/sentry.test.ts` asserts the absence.
+      // Replay sample rates are omitted unless this binary is the exact
+      // `qa-replay-testflight` pilot. At @sentry/react-native 8.26.0
+      // `integrations/default.js` installs `mobileReplayIntegration()` when
+      // either key is `typeof === 'number'`, which `0` satisfies. Production
+      // and unknown profiles must keep both keys absent.
+      ...(isReplayPilotBuildProfile(environment)
+        ? { replaysSessionSampleRate: 0, replaysOnErrorSampleRate: 1 }
+        : {}),
       enableUserInteractionTracing: false,
       // Funnel milestones are Sentry Logs, not issues. Logs skip
       // `beforeSend`, so `beforeSendLog` below is the privacy gate.
@@ -685,6 +741,12 @@ export function initSentry(): void {
       integrations: [
         navigationIntegration,
         sentry.httpClientIntegration({ failedRequestTargets: [backendOnly] }),
+        ...(isReplayPilotBuildProfile(environment)
+          ? [sentry.mobileReplayIntegration({
+              ...MOBILE_REPLAY_MASKING,
+              beforeErrorSampling: (event) => shouldCaptureReplayForEvent(event),
+            })]
+          : []),
       ],
 
       // A stack for message events and for errors thrown without one; frames

@@ -41,6 +41,7 @@ import {
 } from '@/lib/tab-stack-routes';
 import { alpha } from '@/components/ui';
 import { ProfileEntryButton } from '@/components/ProfileEntryButton';
+import { addAppBreadcrumb } from '@/lib/sentry';
 
 // ── Sealed letter tease lines for locked days ──────────────────
 const SEALED_LINES = [
@@ -209,6 +210,7 @@ export function SeriesArcScreen({ hostTab, chrome = 'stack' }: SeriesArcScreenPr
   const handleDayPress = useCallback(
     (dayNumber: number) => {
       if (!devotional) return;
+      addAppBreadcrumb('series', 'opened-day');
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       // Viewing a series is not activating it. currentDevotionalId stays the
       // live series so history cannot steal Today or background generation.
@@ -268,6 +270,8 @@ export function SeriesArcScreen({ hostTab, chrome = 'stack' }: SeriesArcScreenPr
             <TouchableOpacity
               activeOpacity={0.7}
               onPress={handleBack}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               style={styles.backButton}
             >
@@ -295,6 +299,8 @@ export function SeriesArcScreen({ hostTab, chrome = 'stack' }: SeriesArcScreenPr
             <TouchableOpacity
               activeOpacity={0.7}
               onPress={handleBack}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               style={styles.backButton}
             >

@@ -29,6 +29,11 @@ function expectRejected(url: string, reason?: string) {
 }
 
 describe('deep-link allowlist — legitimate producers', () => {
+  it('opens the gated replay fixture without accepting action parameters', () => {
+    expectAllowed('unfold://qa-replay-check', '/qa-replay-check');
+    expectRejected('unfold://qa-replay-check?send=true');
+  });
+
   it('accepts the exact widgetURL literal every iOS widget source declares', () => {
     const widgetDir = path.join(__dirname, '../../widgets/ios');
     const files = ['UnfoldStreak.tsx', 'UnfoldToday.tsx', 'UnfoldDashboard.tsx'];

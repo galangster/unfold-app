@@ -98,7 +98,10 @@ const appDelegate = stripSwiftComments(rawAppDelegate);
 const infoPlist = readFileSync(join(root, 'ios/Unfold/Info.plist'), 'utf8');
 const sentryTs = readFileSync(join(root, 'src/lib/sentry.ts'), 'utf8');
 const eas = JSON.parse(readFileSync(join(root, 'eas.json'), 'utf8')) as {
-  build: { production: { env: { EXPO_PUBLIC_SENTRY_DSN: string } } };
+  build: {
+    production: { env: { EXPO_PUBLIC_SENTRY_DSN: string } };
+    'qa-replay-testflight': { extends: string };
+  };
 };
 
 const crashReporting = functionBody(appDelegate, 'startCrashReporting');
@@ -177,7 +180,18 @@ describe('iOS native-first Sentry init (regression: launch crash with no JS bund
     expectOptionSetOnce('attachScreenshot', 'false');
     expectOptionSetOnce('attachViewHierarchy', 'false');
     expectOptionSetOnce('sessionReplay.sessionSampleRate', '0');
-    expectOptionSetOnce('sessionReplay.onErrorSampleRate', '0');
+    expectOptionSetOnce('sessionReplay.onErrorSampleRate', 'enableReplayOnError ? 1 : 0');
+    expectOptionSetOnce('sessionReplay.maskAllText', 'true');
+    expectOptionSetOnce('sessionReplay.maskAllImages', 'true');
+    expectOptionSetOnce('sessionReplay.networkCaptureBodies', 'false');
+    expect(crashReporting).toContain('environment == "qa-replay-testflight"');
+    expect(crashReporting).toContain('["RNSVGSvgView", "RCTImageView", "RCTImageComponentView"]');
+    expect(crashReporting).toContain('NSClassFromString(className)');
+    expect(crashReporting).toContain('maskedViewClasses.append(viewClass)');
+    expect(sentryOptions).not.toContain('unmaskedViewClasses');
+    expect(eas.build['qa-replay-testflight'].extends).toBe('qa-testflight');
+    expect(sentryTs).toContain("export const REPLAY_PILOT_BUILD_PROFILE = 'qa-replay-testflight'");
+    expect(sentryTs).toContain('maskAllVectors: true');
     // Cocoa's own breadcrumbs label screens with their navigation title.
     expectOptionSetOnce('enableAutoBreadcrumbTracking', 'false');
     // ...and that flag does NOT govern network breadcrumbs, which are a
@@ -244,7 +258,8 @@ describe('iOS native-first Sentry init (regression: launch crash with no JS bund
     expect(appDelegate).toContain('event.threads');
     expect(appDelegate).toContain('event.exceptions');
     expect(appDelegate).toContain('image.codeFile');
-    expect(appDelegate).toContain('image.name');
+    // Cocoa 9 removed the legacy `name` field. Mach-O paths use `codeFile`.
+    expect(appDelegate).not.toContain('image.name');
     expect(appDelegate).toContain('[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}');
     expect(appDelegate).toContain('"[uuid]"');
     expect(sentryOptions).toContain('scrubNativeSentrySymbolicationPaths(event)');
@@ -258,6 +273,11 @@ describe('iOS native-first Sentry init (regression: launch crash with no JS bund
     expect(appDelegate).not.toMatch(/image\.debugID\s*=/);
     expect(sentryTs).toContain("const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi");
     expect(sentryTs).toContain("const REDACTED_UUID = '[uuid]'");
+    // Replay association is the one extra native identifier that must survive.
+    expect(appDelegate).not.toMatch(/removeValue\(forKey: "replay"\)/);
+    expect(appDelegate).not.toMatch(/removeValue\(forKey: "replay_id"\)/);
+    expect(appDelegate).not.toMatch(/context\["replay"\]\s*=\s*nil/);
+    expect(sentryTs).toContain('SENTRY_REPLAY_ID_PATTERN');
   });
 
   it('tracks sessions and hands app-start measurements to JavaScript', () => {

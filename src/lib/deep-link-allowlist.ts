@@ -121,6 +121,8 @@ export const EXTERNAL_ROUTE_ALLOWLIST: Readonly<Record<string, RouteSchema>> = {
   // Root stack + tab roots (`/(tabs)`, `/(tabs)/(today)`, … all canonicalise to `/`)
   '/': { params: {} },
   '/how-it-works': { params: {} },
+  // The screen requires the replay pilot profile and an explicit test press.
+  '/qa-replay-check': { params: {} },
   '/streak-settings': { params: {} },
   // `source=onboarding|onboarding_early` reroutes paywall completion into the
   // onboarding flow and has no in-app URL producer — external links get the
