@@ -3,6 +3,7 @@ import React from 'react';
 import { TouchableOpacity, View } from 'react-native';
 
 const renderer = require('react-test-renderer');
+const mockSharedValues: { value: unknown }[] = [];
 
 jest.mock('react-native-reanimated', () => {
   const { View: RNView } = require('react-native');
@@ -19,7 +20,15 @@ jest.mock('react-native-reanimated', () => {
     ReduceMotion: { System: 'system', Always: 'always', Never: 'never' },
     interpolate: (value: number) => value,
     cancelAnimation: jest.fn(),
-    useSharedValue: (initial: unknown) => ({ value: initial }),
+    useSharedValue: (initial: unknown) => {
+      const React = require('react');
+      const sharedValue = React.useRef(null) as { current: { value: unknown } | null };
+      if (sharedValue.current === null) {
+        sharedValue.current = { value: initial };
+        mockSharedValues.push(sharedValue.current);
+      }
+      return sharedValue.current;
+    },
     useAnimatedStyle: (fn: () => unknown) => {
       try {
         return fn();
@@ -28,9 +37,9 @@ jest.mock('react-native-reanimated', () => {
       }
     },
     withTiming: jest.fn((toValue: unknown) => toValue),
-    withRepeat: (animation: unknown) => animation,
+    withRepeat: jest.fn((animation: unknown) => animation),
     withDelay: jest.fn((_delay: number, animation: unknown) => animation),
-    withSequence: (...parts: unknown[]) => parts[0],
+    withSequence: jest.fn((...parts: unknown[]) => parts[0]),
     useReducedMotion: () => false,
   };
 });
@@ -72,10 +81,12 @@ jest.mock('react-native-svg', () => {
 
 import { CompanionOrb } from '../CompanionOrb';
 const { cancelAnimation: mockCancelAnimation, withTiming: mockWithTiming } = require('react-native-reanimated');
+const { withSequence: mockWithSequence } = require('react-native-reanimated');
 
 describe('CompanionOrb', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockSharedValues.length = 0;
   });
 
   it('keeps a stable square frame for rest and thinking', () => {
@@ -189,5 +200,112 @@ describe('CompanionOrb', () => {
       expect.objectContaining({ duration: 420 }),
       expect.any(Function),
     );
+  });
+
+  it('runs the authored idle scheduler only while Companion is resting', () => {
+    let tree: ReturnType<typeof renderer.create>;
+    renderer.act(() => {
+      tree = renderer.create(<CompanionOrb accentColor="#C8A55C" size={64} idleStyle="calm" />);
+    });
+    expect(mockWithTiming).toHaveBeenCalledWith(
+      44_000,
+      expect.objectContaining({ duration: 7_000 }),
+    );
+
+    mockWithTiming.mockClear();
+    renderer.act(() => {
+      tree!.update(<CompanionOrb accentColor="#C8A55C" size={64} idleStyle="calm" thinking />);
+    });
+    expect(mockWithTiming).not.toHaveBeenCalledWith(
+      44_000,
+      expect.anything(),
+    );
+  });
+
+  it('finishes a rapid thinking reversal at neutral before restarting idle motion', () => {
+    const fadeCallbacks: ((finished: boolean) => void)[] = [];
+    let idleSequence = 0;
+    mockWithTiming.mockImplementation((toValue: unknown, config: { duration?: number }, callback?: (finished: boolean) => void) => {
+      if (config.duration === 420 && callback) {
+        fadeCallbacks.push(callback);
+      }
+      return toValue;
+    });
+    mockWithSequence.mockImplementation((...parts: unknown[]) => (
+      parts.length > 10 ? { idleSequence: ++idleSequence } : parts[0]
+    ));
+
+    let tree: ReturnType<typeof renderer.create>;
+    renderer.act(() => {
+      tree = renderer.create(<CompanionOrb accentColor="#C8A55C" size={64} idleStyle="joyful" />);
+    });
+    const idleTime = mockSharedValues[9];
+    const idleWeight = mockSharedValues[10];
+    expect(idleTime.value).toBe(0);
+
+    renderer.act(() => {
+      fadeCallbacks[0](true);
+    });
+    const firstCycle = idleTime.value;
+    expect(firstCycle).toEqual({ idleSequence: 1 });
+    expect(idleWeight.value).toBe(1);
+
+    renderer.act(() => {
+      tree!.update(<CompanionOrb accentColor="#C8A55C" size={64} idleStyle="joyful" thinking />);
+    });
+    const thinkingFade = fadeCallbacks.at(-1)!;
+    renderer.act(() => {
+      tree!.update(<CompanionOrb accentColor="#C8A55C" size={64} idleStyle="joyful" thinking={false} />);
+    });
+    const restartFade = fadeCallbacks.at(-1)!;
+    expect(idleSequence).toBe(2);
+    expect(idleTime.value).toBe(firstCycle);
+    expect(idleWeight.value).toBe(0);
+
+    renderer.act(() => {
+      thinkingFade(false);
+    });
+    expect(idleTime.value).toBe(firstCycle);
+    expect(idleWeight.value).toBe(0);
+
+    renderer.act(() => {
+      restartFade(true);
+    });
+    expect(idleWeight.value).toBe(1);
+  });
+
+  it('keeps the current motion table until an idle style change reaches neutral', () => {
+    const fadeCallbacks: ((finished: boolean) => void)[] = [];
+    mockWithTiming.mockImplementation((toValue: unknown, config: { duration?: number }, callback?: (finished: boolean) => void) => {
+      if (config.duration === 420 && callback) {
+        fadeCallbacks.push(callback);
+      }
+      return toValue;
+    });
+
+    let tree: ReturnType<typeof renderer.create>;
+    renderer.act(() => {
+      tree = renderer.create(<CompanionOrb accentColor="#C8A55C" size={64} idleStyle="calm" />);
+    });
+    const idleWeight = mockSharedValues[10];
+    const idleMode = mockSharedValues[11];
+    renderer.act(() => {
+      fadeCallbacks.at(-1)!(true);
+    });
+    expect(idleMode.value).toBe(0);
+    expect(idleWeight.value).toBe(1);
+
+    renderer.act(() => {
+      tree!.update(<CompanionOrb accentColor="#C8A55C" size={64} idleStyle="joyful" />);
+    });
+    const styleChangeFade = fadeCallbacks.at(-1)!;
+    expect(idleMode.value).toBe(0);
+    expect(idleWeight.value).toBe(0);
+
+    renderer.act(() => {
+      styleChangeFade(true);
+    });
+    expect(idleMode.value).toBe(1);
+    expect(idleWeight.value).toBe(1);
   });
 });

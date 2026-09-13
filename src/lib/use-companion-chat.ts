@@ -4,7 +4,7 @@
  * Phase 3: Real SSE streaming via /api/companion/chat.
  * Phase 4: Context-aware system prompt (devotional progress, streak,
  *           time of day, mood history, conversation memory).
- * Phase 5: Graceful fallback to non-streaming if SSE fails.
+ * Phase 5: Non-streaming retry after an explicit pre-provider rejection.
  */
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { AccessibilityInfo, AppState } from 'react-native';
@@ -45,7 +45,7 @@ function announceCompanionReply(content: string) {
  * Outcome of a sendMessage call:
  *  'sent'  — a companion response was received (including a user-stopped partial)
  *  'noop'  — early return (empty text or already streaming)
- *  'error' — stream + fallback both failed with no usable response
+ *  'error' — no usable companion response was received
  */
 export type SendOutcome = 'sent' | 'noop' | 'error';
 
@@ -72,6 +72,23 @@ class SSEStallError extends Error {
   constructor() {
     super('Companion stream stalled');
     this.name = 'SSEStallError';
+  }
+}
+
+/** The backend accepted the request, but its SSE response could not complete.
+ * Retrying through the non-streaming endpoint could duplicate provider work. */
+class SSEIncompleteError extends Error {
+  constructor(message = 'Companion stream ended before completion') {
+    super(message);
+    this.name = 'SSEIncompleteError';
+  }
+}
+
+/** The backend rejected the streaming request before provider work began. */
+class SSEPreAcceptError extends Error {
+  constructor(status: number) {
+    super(`Companion streaming request was rejected with HTTP ${status}`);
+    this.name = 'SSEPreAcceptError';
   }
 }
 
@@ -119,6 +136,39 @@ interface SSECallbacks {
   onThinking: () => void;
   onDone: (suggestions: string[], cleanText?: string) => void;
   onError: (message: string) => void;
+  onActivity: () => void;
+}
+
+function companionAbortError(): Error {
+  const error = new Error('Aborted');
+  error.name = 'AbortError';
+  return error;
+}
+
+function raceWithAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => {
+      cleanup();
+      reject(companionAbortError());
+    };
+    const cleanup = () => signal.removeEventListener('abort', onAbort);
+
+    promise.then(
+      (value) => {
+        cleanup();
+        resolve(value);
+      },
+      (error) => {
+        cleanup();
+        reject(error);
+      },
+    );
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
 }
 
 function extractSSEPayloads(
@@ -158,46 +208,71 @@ async function consumeSSE(
   signal: AbortSignal,
   callbacks: SSECallbacks
 ): Promise<boolean> {
-  const { onToken, onThinking, onDone, onError } = callbacks;
+  const { onToken, onThinking, onDone, onError, onActivity } = callbacks;
 
-  const response = await expoFetch(url, {
-    method: 'POST',
-    headers: { ...headers, Accept: 'text/event-stream' },
-    body,
+  const response = await raceWithAbort(
+    expoFetch(url, {
+      method: 'POST',
+      headers: { ...headers, Accept: 'text/event-stream' },
+      body,
+      signal,
+    }),
     signal,
-  });
+  );
 
   if (!response.ok) {
     // A daily AI budget 429 carries its own copy and must not be retried.
-    throw (await readAiBudgetError(response)) ?? new Error(`HTTP ${response.status}`);
+    const budgetError = await raceWithAbort(readAiBudgetError(response), signal);
+    if (budgetError) throw budgetError;
+    if (response.status >= 400 && response.status < 500) {
+      throw new SSEPreAcceptError(response.status);
+    }
+    throw new SSEIncompleteError(`Companion streaming request failed with HTTP ${response.status}`);
   }
 
   // Attempt ReadableStream (RN 0.83+ with new architecture)
   const reader = response.body?.getReader();
   if (!reader) {
-    // No streaming support — return false to trigger fallback
-    return false;
+    throw new SSEIncompleteError('Companion response did not provide a readable stream');
   }
 
   const decoder = new TextDecoder();
   let sseBuffer = '';
-  let sawDone = false;
-
-  const processPayload = (json: string) => {
+  const processPayload = (json: string): 'done' | 'error' | null => {
+    let parsed: unknown;
     try {
-      const event = JSON.parse(json);
-      if (event.thinking) {
-        onThinking();
-        return;
-      }
-      if (event.t) onToken(event.t);
-      if (event.d) {
-        sawDone = true;
-        onDone(event.s || [], event.ct);
-      }
-      if (event.error) onError(event.error);
+      parsed = JSON.parse(json);
     } catch {
       // Skip malformed JSON
+      return null;
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+    const event = parsed as Record<string, unknown>;
+    if (event.thinking) {
+      onThinking();
+      return null;
+    }
+    if (typeof event.t === 'string' && event.t) onToken(event.t);
+    if (event.d) {
+      onDone(
+        Array.isArray(event.s) ? event.s.filter((item): item is string => typeof item === 'string') : [],
+        typeof event.ct === 'string' ? event.ct : undefined,
+      );
+      return 'done';
+    }
+    if (event.error) {
+      onError(typeof event.error === 'string' ? event.error : 'The companion ran into a problem answering.');
+      return 'error';
+    }
+    return null;
+  };
+
+  const cancelReader = () => {
+    try {
+      const cancellation = reader.cancel();
+      void cancellation.catch(() => {});
+    } catch {
+      // The stream is already closed or detached.
     }
   };
 
@@ -213,7 +288,7 @@ async function consumeSSE(
     // listener — attach a no-op handler so its rejection isn't unhandled.
     read.catch(() => {});
     try {
-      return await Promise.race([read, stall]);
+      return await raceWithAbort(Promise.race([read, stall]), signal);
     } finally {
       clearTimeout(stallTimer);
     }
@@ -222,55 +297,69 @@ async function consumeSSE(
   try {
     while (true) {
       const { done, value } = await readWithStallTimeout();
+      if (signal.aborted) throw companionAbortError();
       if (done) {
         sseBuffer += decoder.decode();
         const flushed = extractSSEPayloads(sseBuffer, { flush: true });
         sseBuffer = flushed.remainder;
         for (const payload of flushed.payloads) {
-          processPayload(payload);
+          const terminal = processPayload(payload);
+          if (terminal) {
+            cancelReader();
+            return terminal === 'done';
+          }
         }
-        break;
+        throw new SSEIncompleteError();
       }
 
+      onActivity();
       sseBuffer += decoder.decode(value, { stream: true });
       const parsed = extractSSEPayloads(sseBuffer);
       sseBuffer = parsed.remainder;
 
       for (const payload of parsed.payloads) {
-        processPayload(payload);
+        const terminal = processPayload(payload);
+        if (terminal) {
+          cancelReader();
+          return terminal === 'done';
+        }
       }
     }
   } catch (err) {
-    if (err instanceof SSEStallError) {
-      // Tear the dead connection down before surfacing the stall.
-      try {
-        await (reader as { cancel?: () => Promise<void> }).cancel?.();
-      } catch {
-        // Already broken — nothing to release.
-      }
+    // Do not await cancellation. Some native readers never settle after an
+    // interrupted request, and cancellation must still clear request state.
+    cancelReader();
+    if (
+      err instanceof SSEIncompleteError ||
+      err instanceof SSEStallError ||
+      (err instanceof Error && err.name === 'AbortError')
+    ) {
+      throw err;
     }
-    throw err;
+    throw new SSEIncompleteError(
+      err instanceof Error ? `Companion stream failed: ${err.message}` : undefined,
+    );
   } finally {
-    reader.releaseLock();
+    try {
+      reader.releaseLock();
+    } catch {
+      // A pending native read can retain the lock until its own promise settles.
+    }
   }
-
-  return sawDone;
 }
 
-// ── Fallback: non-streaming request with progressive reveal ───────────────────
+// ── Fallback: non-streaming request ────────────────────────────────────────────
 
 async function fallbackNonStreaming(
   headers: Record<string, string>,
   companionContext: Record<string, unknown>,
   chatMessages: { role: 'user' | 'assistant'; content: string }[],
   signal: AbortSignal,
-  onWord: (revealed: string) => void
 ): Promise<{ responseText: string; suggestions: string[] }> {
   // Call companion/chat with stream:false — gets full JSON response
   // with the proper system prompt and companion personality.
-  const response = await expoFetch(
-    `${PRIMARY_BACKEND_URL}/api/companion/chat`,
-    {
+  const response = await raceWithAbort(
+    expoFetch(`${PRIMARY_BACKEND_URL}/api/companion/chat`, {
       method: 'POST',
       headers,
       body: JSON.stringify({
@@ -280,34 +369,18 @@ async function fallbackNonStreaming(
         stream: false,
       }),
       signal,
-    }
+    }),
+    signal,
   );
 
   if (!response.ok) {
-    throw (await readAiBudgetError(response)) ?? new Error(`Backend returned ${response.status}`);
+    throw (await raceWithAbort(readAiBudgetError(response), signal)) ??
+      new Error(`Backend returned ${response.status}`);
   }
 
-  const data = await response.json();
+  const data = await raceWithAbort(response.json(), signal);
   const rawText = data?.content ?? data?.text ?? '';
   const suggestions: string[] = Array.isArray(data?.suggestions) ? data.suggestions : [];
-
-  // Progressive reveal (~120 tokens/sec) for smooth UX
-  const words = rawText.split(/(\s+)/);
-  let revealed = '';
-  for (let i = 0; i < words.length; i++) {
-    if (signal.aborted) {
-      // User stopped mid-reveal — surface as an abort so the caller keeps
-      // the revealed prefix instead of committing the full hidden answer.
-      const abortErr = new Error('Aborted');
-      abortErr.name = 'AbortError';
-      throw abortErr;
-    }
-    revealed += words[i];
-    onWord(revealed);
-    if (i % 2 === 0) {
-      await new Promise<void>((r) => setTimeout(r, 8));
-    }
-  }
 
   const fallbackSuggestions =
     suggestions.length > 0
@@ -332,7 +405,11 @@ export function useCompanionChat() {
   // WR-09: streams are keyed by conversation so switching mid-stream neither
   // orphans the reply nor blocks the newly-viewed conversation.
   const activeConversationId = useCompanionChatStore((s) => s.activeConversationId);
-  const inFlightRef = useRef(new Map<string, { abort: AbortController; companionId: string }>());
+  const inFlightRef = useRef(new Map<string, {
+    abort: AbortController;
+    companionId: string;
+    lastActivityAt: number;
+  }>());
   const [, setStreamVersion] = useState(0);
   const bumpStreamVersion = useCallback(() => setStreamVersion((v) => v + 1), []);
   const isStreaming = activeConversationId != null && inFlightRef.current.has(activeConversationId);
@@ -380,8 +457,17 @@ export function useCompanionChat() {
     const subscription = AppState.addEventListener('change', (status) => {
       if (status !== 'active') return;
       const { conversations, updateMessage: update } = useCompanionChatStore.getState();
+      const now = Date.now();
       for (const conv of conversations ?? []) {
-        if (inFlightRef.current.has(conv.id)) continue;
+        const request = inFlightRef.current.get(conv.id);
+        if (request) {
+          // Preserve short suspensions. Once a request has shown no activity
+          // for the same interval as an SSE stall, apply the same abort policy.
+          if (now - request.lastActivityAt >= SSE_STALL_TIMEOUT_MS) {
+            request.abort.abort();
+          }
+          continue;
+        }
         for (const m of conv.messages ?? []) {
           if (m.status === 'streaming') {
             // `interrupted` keeps whatever partial text arrived rendering as
@@ -458,7 +544,12 @@ export function useCompanionChat() {
       }
 
       const abortController = new AbortController();
-      inFlightRef.current.set(streamConversationId, { abort: abortController, companionId });
+      const inFlightRequest = {
+        abort: abortController,
+        companionId,
+        lastActivityAt: Date.now(),
+      };
+      inFlightRef.current.set(streamConversationId, inFlightRequest);
       bumpStreamVersion();
 
       // Throttled store updates — batch token updates to reduce re-renders while
@@ -518,7 +609,7 @@ export function useCompanionChat() {
           companionPersonality,
           regenerate
         );
-        const headers = await getAuthHeaders();
+        const headers = await raceWithAbort(getAuthHeaders(), abortController.signal);
 
         // ── Try SSE streaming (Phase 3) ──────────────────────────────────
 
@@ -541,6 +632,10 @@ export function useCompanionChat() {
             }),
             abortController.signal,
             {
+              onActivity: () => {
+                const activeRequest = inFlightRef.current.get(streamConversationId);
+                if (activeRequest === inFlightRequest) activeRequest.lastActivityAt = Date.now();
+              },
               onToken: (token) => {
                 // Clear the searching indicator on the first real token and on the
                 // first token after any `onThinking`. Local flags, not captured
@@ -596,16 +691,11 @@ export function useCompanionChat() {
           // retrying into the generic failure.
           if (sseErr instanceof AiBudgetError) throw sseErr;
 
-          // P0-3: once tokens streamed (or the stream stalled after being
-          // accepted), a retry through the non-streaming endpoint would
-          // double-bill and rewind visible text — surface via the outer
-          // catch instead (partial text survives there, WR-11).
-          if (hasReceivedStreamingToken || sseErr instanceof SSEStallError) {
-            throw sseErr;
-          }
+          // Only an explicit client-error response proves the streaming
+          // request was rejected before provider work began.
+          if (!(sseErr instanceof SSEPreAcceptError)) throw sseErr;
 
-          // Transport failure before anything streamed — fall back to
-          // non-streaming (Phase 5: graceful degradation).
+          // This rejected request can safely retry through the non-streaming endpoint.
           logger.warn('[CompanionChat] SSE failed, falling back:', sseErr.message);
           streamSucceeded = false;
         }
@@ -671,15 +761,7 @@ export function useCompanionChat() {
             companionContext,
             chatMessages,
             abortController.signal,
-            (revealed) => {
-              accumulatedText = revealed;
-              throttledUpdate(companionId, revealed);
-            }
           );
-
-          // The fallback reveal may still have a delayed prefix write queued.
-          // Cancel it before committing the authoritative full response, or a
-          // stale prefix can overwrite a complete message after suggestions render.
           cancelThrottle();
 
           // Extract deep links from fallback response
@@ -769,8 +851,10 @@ export function useCompanionChat() {
         // The stream is over one way or another — never leave the searching
         // indicator on for the conversation the user is looking at.
         if (isStreamConversationVisible()) setIsSearching(false);
-        inFlightRef.current.delete(streamConversationId);
-        bumpStreamVersion();
+        if (inFlightRef.current.get(streamConversationId) === inFlightRequest) {
+          inFlightRef.current.delete(streamConversationId);
+          bumpStreamVersion();
+        }
       }
     },
     [

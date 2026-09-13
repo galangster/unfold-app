@@ -17,6 +17,7 @@ import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import {
   COMPANION_IDENTITY_IN_DELAY_MS,
   COMPANION_IDENTITY_IN_MS,
+  COMPANION_IDLE_CYCLES,
   COMPANION_IDENTITY_OUT_MS,
   COMPANION_MORPH_MS,
   COMPANION_OUTER_REST_SCALE,
@@ -28,6 +29,7 @@ import {
   VIEWBOX,
   companionLayout,
   type CompanionExpression,
+  type CompanionIdleMotionCycle,
 } from '@/lib/companion-avatar-model';
 import { CompanionIdentity } from './CompanionIdentity';
 import { CompanionPearl } from './CompanionPearl';
@@ -45,6 +47,8 @@ export interface CompanionAvatarProps {
 
 const MORPH_EASE = Easing.bezier(0.22, 1.16, 0.36, 1);
 const LIFE_EASE = Easing.bezier(0.19, 1, 0.22, 1);
+const IDLE_EASE = Easing.bezier(0.45, 0, 0.55, 1);
+const IDLE_TRANSITION_MS = 420;
 
 function useIsAppActive(): boolean {
   const [appState, setAppState] = useState<AppStateStatus | null>(AppState.currentState ?? null);
@@ -81,17 +85,34 @@ function thinkingSequence(distance: number) {
   );
 }
 
-function joyfulTurnSequence() {
-  const ease = Easing.inOut(Easing.ease);
+function idleCycleSequence(cycle: CompanionIdleMotionCycle) {
   return withSequence(
     withTiming(0, { duration: 0 }),
-    withDelay(9600, withTiming(0.08, { duration: 190, easing: ease })),
-    withTiming(0.28, { duration: 480, easing: ease }),
-    withTiming(0.52, { duration: 575, easing: ease }),
-    withTiming(0.7, { duration: 430, easing: ease }),
-    withTiming(1, { duration: 725, easing: ease }),
+    ...cycle.frames.slice(1).map((frame, index) => withTiming(frame.timeMs, {
+      duration: frame.timeMs - cycle.frames[index].timeMs,
+      easing: IDLE_EASE,
+    })),
   );
 }
+
+function idleMotionChannels(cycle: CompanionIdleMotionCycle) {
+  return {
+    times: cycle.frames.map((frame) => frame.timeMs),
+    bodyX: cycle.frames.map((frame) => frame.bodyX),
+    bodyY: cycle.frames.map((frame) => frame.bodyY),
+    bodyScaleX: cycle.frames.map((frame) => frame.bodyScaleX),
+    bodyScaleY: cycle.frames.map((frame) => frame.bodyScaleY),
+    faceX: cycle.frames.map((frame) => frame.faceX),
+    faceY: cycle.frames.map((frame) => frame.faceY),
+    faceScaleX: cycle.frames.map((frame) => frame.faceScaleX),
+    faceOpacity: cycle.frames.map((frame) => frame.faceOpacity),
+    haloY: cycle.frames.map((frame) => frame.haloY),
+    haloRotate: cycle.frames.map((frame) => frame.haloRotate),
+  };
+}
+
+const CALM_IDLE = idleMotionChannels(COMPANION_IDLE_CYCLES.calm);
+const JOYFUL_IDLE = idleMotionChannels(COMPANION_IDLE_CYCLES.joyful);
 
 /** Warm pearl with a single eye pair and overhead gold halo. */
 export const CompanionAvatar = memo(function CompanionAvatar({
@@ -117,13 +138,14 @@ export const CompanionAvatar = memo(function CompanionAvatar({
   const bobCenter = useSharedValue(0);
   const bobRight = useSharedValue(0);
   const blink = useSharedValue(0);
-  const glance = useSharedValue(0);
-  const joy = useSharedValue(0);
-  const joyWeight = useSharedValue(0);
+  const idleTime = useSharedValue(0);
+  const idleWeight = useSharedValue(0);
+  const idleMode = useSharedValue(idleStyle === 'joyful' ? 1 : 0);
+  const idleCycle = COMPANION_IDLE_CYCLES[idleStyle === 'joyful' ? 'joyful' : 'calm'];
 
   useEffect(() => {
     const morphValues = [morphLeft, morphCenter, morphRight];
-    const motionValues = [bobLeft, bobCenter, bobRight, blink, glance, joy, joyWeight];
+    const motionValues = [bobLeft, bobCenter, bobRight, blink, idleTime, idleWeight, idleMode];
     const stopAll = () => cancelValues(identity, ...morphValues, ...motionValues);
     stopAll();
 
@@ -136,9 +158,10 @@ export const CompanionAvatar = memo(function CompanionAvatar({
 
     if (thinking) {
       blink.value = withLiveMotion(withTiming(0, { duration: 120, easing: LIFE_EASE }));
-      glance.value = withLiveMotion(withTiming(0, { duration: 240, easing: LIFE_EASE }));
-      joyWeight.value = withLiveMotion(withTiming(0, { duration: 420, easing: LIFE_EASE }, (finished) => {
-        if (finished) joy.value = 0;
+      idleWeight.value = withLiveMotion(withTiming(0, { duration: IDLE_TRANSITION_MS, easing: LIFE_EASE }, (finished) => {
+        if (finished) {
+          idleTime.value = 0;
+        }
       }));
       identity.value = withLiveMotion(withTiming(0, { duration: COMPANION_IDENTITY_OUT_MS, easing: LIFE_EASE }));
       morphCenter.value = withLiveMotion(withTiming(1, { duration: COMPANION_MORPH_MS, easing: MORPH_EASE }));
@@ -163,25 +186,30 @@ export const CompanionAvatar = memo(function CompanionAvatar({
           withDelay(idleStyle === 'joyful' ? 4700 : 6700, withTiming(1, { duration: 85, easing: LIFE_EASE })),
           withTiming(0, { duration: 115, easing: LIFE_EASE }),
         ), -1, false));
-        glance.value = withLiveMotion(withRepeat(withSequence(
-          withTiming(0, { duration: 240, easing: LIFE_EASE }),
-          withDelay(idleStyle === 'joyful' ? 1700 : 4200, withTiming(1, { duration: 620, easing: LIFE_EASE })),
-          withDelay(1050, withTiming(0, { duration: 620, easing: LIFE_EASE })),
-          withDelay(2400, withTiming(-1, { duration: 680, easing: LIFE_EASE })),
-          withDelay(850, withTiming(0, { duration: 680, easing: LIFE_EASE })),
-        ), -1, false));
-      }
-      if (idleStyle === 'joyful') {
-        joy.value = 0;
-        joyWeight.value = 1;
-        joy.value = withLiveMotion(withRepeat(joyfulTurnSequence(), -1, false));
+        const nextIdleCycle = withLiveMotion(withRepeat(
+          idleCycleSequence(idleCycle),
+          -1,
+          false,
+        ));
+        const nextIdleMode = idleStyle === 'joyful' ? 1 : 0;
+        idleWeight.value = withLiveMotion(withTiming(0, { duration: IDLE_TRANSITION_MS, easing: LIFE_EASE }, (finished) => {
+          if (finished) {
+            idleTime.value = 0;
+            idleMode.value = nextIdleMode;
+            idleWeight.value = 1;
+            idleTime.value = nextIdleCycle;
+          }
+        }));
       } else {
-        joy.value = 0;
-        joyWeight.value = 0;
+        idleWeight.value = withLiveMotion(withTiming(0, { duration: IDLE_TRANSITION_MS, easing: LIFE_EASE }, (finished) => {
+          if (finished) {
+            idleTime.value = 0;
+          }
+        }));
       }
     }
     return stopAll;
-  }, [bobCenter, bobLeft, bobRight, blink, glance, identity, idleStyle, joy, joyWeight, layout.viewScale, live, morphCenter, morphLeft, morphRight, thinking]);
+  }, [bobCenter, bobLeft, bobRight, blink, identity, idleCycle, idleMode, idleStyle, idleTime, idleWeight, layout.viewScale, live, morphCenter, morphLeft, morphRight, thinking]);
 
   const leftStyle = useAnimatedStyle(() => ({
     opacity: morphLeft.value,
@@ -202,28 +230,41 @@ export const CompanionAvatar = memo(function CompanionAvatar({
   const centerBobStyle = useAnimatedStyle(() => ({ transform: [{ translateY: bobCenter.value }] }));
   const rightBobStyle = useAnimatedStyle(() => ({ transform: [{ translateY: bobRight.value }] }));
   const identityStyle = useAnimatedStyle(() => ({ opacity: identity.value }));
-  const eyesStyle = useAnimatedStyle(() => ({
-    opacity: 1 + (interpolate(joy.value, [0, 0.42, 0.48, 0.58, 0.64, 1], [1, 1, 0, 0, 1, 1]) - 1) * joyWeight.value,
-    transformOrigin: [layout.stageWidth / 2, layout.headCenterY, 0],
-    transform: [
-      { translateX: (interpolate(joy.value, [0, 0.12, 0.38, 0.48, 0.58, 0.76, 1], [0, -2.2, 11, 20, -20, -9, 0]) * joyWeight.value + glance.value * (idleStyle === 'joyful' ? -1.1 : -0.7)) * layout.viewScale },
-      { scaleX: 1 + (interpolate(joy.value, [0, 0.38, 0.48, 0.58, 0.76, 1], [1, 0.7, 0.08, 0.08, 0.8, 1]) - 1) * joyWeight.value },
-      { scaleY: interpolate(blink.value, [0, 1], [1, 0.12]) },
-    ],
-  }));
-  const haloStyle = useAnimatedStyle(() => ({
-    transformOrigin: [layout.stageWidth / 2, (HALO.cy - VIEWBOX.y - 2.4) * layout.viewScale, 0],
-    transform: [
-      { translateX: glance.value * -0.25 * layout.viewScale },
-      { translateY: interpolate(joy.value, [0, 0.4, 0.55, 0.75, 1], [0, -0.8, 0.3, 0, 0]) * joyWeight.value * layout.viewScale },
-      { rotate: `${interpolate(joy.value, [0, 0.2, 0.45, 0.7, 1], [0, -5, 6, -2, 0]) * joyWeight.value}deg` },
-    ],
-  }));
-  const bodyStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateY: interpolate(joy.value, [0, 0.08, 0.28, 0.52, 0.7, 1], [0, 0.8, -6.5, 0.7, -0.45, 0]) * joyWeight.value * layout.viewScale },
-    ],
-  }));
+  const eyesStyle = useAnimatedStyle(() => {
+    const idle = idleMode.value === 1 ? JOYFUL_IDLE : CALM_IDLE;
+    return {
+      opacity: 1 + (interpolate(idleTime.value, idle.times, idle.faceOpacity) - 1) * idleWeight.value,
+      transformOrigin: [layout.stageWidth / 2, layout.headCenterY, 0],
+      transform: [
+        { translateX: interpolate(idleTime.value, idle.times, idle.faceX) * idleWeight.value * layout.viewScale },
+        { translateY: interpolate(idleTime.value, idle.times, idle.faceY) * idleWeight.value * layout.viewScale },
+        { scaleX: 1 + (interpolate(idleTime.value, idle.times, idle.faceScaleX) - 1) * idleWeight.value },
+        { scaleY: interpolate(blink.value, [0, 1], [1, 0.12]) },
+      ],
+    };
+  });
+  const haloStyle = useAnimatedStyle(() => {
+    const idle = idleMode.value === 1 ? JOYFUL_IDLE : CALM_IDLE;
+    return {
+      transformOrigin: [layout.stageWidth / 2, (HALO.cy - VIEWBOX.y - 2.4) * layout.viewScale, 0],
+      transform: [
+        { translateY: interpolate(idleTime.value, idle.times, idle.haloY) * idleWeight.value * layout.viewScale },
+        { rotate: `${interpolate(idleTime.value, idle.times, idle.haloRotate) * idleWeight.value}deg` },
+      ],
+    };
+  });
+  const bodyStyle = useAnimatedStyle(() => {
+    const idle = idleMode.value === 1 ? JOYFUL_IDLE : CALM_IDLE;
+    return {
+      transformOrigin: [layout.headCenterX, layout.headCenterY, 0],
+      transform: [
+        { translateX: interpolate(idleTime.value, idle.times, idle.bodyX) * idleWeight.value * layout.viewScale },
+        { translateY: interpolate(idleTime.value, idle.times, idle.bodyY) * idleWeight.value * layout.viewScale },
+        { scaleX: 1 + (interpolate(idleTime.value, idle.times, idle.bodyScaleX) - 1) * idleWeight.value },
+        { scaleY: 1 + (interpolate(idleTime.value, idle.times, idle.bodyScaleY) - 1) * idleWeight.value },
+      ],
+    };
+  });
 
   const sphereBox = {
     position: 'absolute' as const,
