@@ -78,10 +78,8 @@ const MessageItem = React.memo(function MessageItem({
   item,
   isFirstInGroup,
   isLastMessage,
-  showCompanionPresence,
   isStreaming,
-  companionExpression,
-  isFocused,
+  motionActive,
   reducedMotion,
   onVersePress,
   onRetry,
@@ -91,10 +89,8 @@ const MessageItem = React.memo(function MessageItem({
   item: CompanionMessage;
   isFirstInGroup: boolean;
   isLastMessage: boolean;
-  showCompanionPresence: boolean;
   isStreaming: boolean;
-  companionExpression: ReturnType<typeof resolveCompanionPersonality>;
-  isFocused: boolean;
+  motionActive: boolean;
   reducedMotion: boolean;
   onVersePress: (reference: string) => void;
   onRetry?: () => void;
@@ -112,17 +108,14 @@ const MessageItem = React.memo(function MessageItem({
   }
 
   // Companion message
-  const isThisStreaming = isStreaming && showCompanionPresence && item.status === 'streaming';
   const showActions = item.status === 'complete' && isLastMessage;
 
   return (
     <View style={gapStyle}>
       <CompanionMessageContent
         message={item}
-        showIcon={showCompanionPresence}
-        isStreaming={isThisStreaming}
-        companionExpression={companionExpression}
-        active={isFocused}
+        isStreaming={isStreaming}
+        motionActive={motionActive}
         reduceMotion={reducedMotion}
         onVersePress={onVersePress}
         onRetry={onRetry}
@@ -147,9 +140,7 @@ const MessageItem = React.memo(function MessageItem({
   prev.item.feedback === next.item.feedback &&
   prev.item.feedbackReason === next.item.feedbackReason &&
   prev.isStreaming === next.isStreaming &&
-  prev.showCompanionPresence === next.showCompanionPresence &&
-  prev.companionExpression === next.companionExpression &&
-  prev.isFocused === next.isFocused &&
+  prev.motionActive === next.motionActive &&
   prev.reducedMotion === next.reducedMotion &&
   prev.isFirstInGroup === next.isFirstInGroup &&
   prev.isLastMessage === next.isLastMessage &&
@@ -165,6 +156,8 @@ const MemoPremiumFeatureSheet = React.memo(PremiumFeatureSheet);
 
 // Height of the custom absolutely-positioned tab bar (content + padding)
 const TAB_BAR_CONTENT_HEIGHT = 56;
+const HEADER_COMPANION_SIZE = 64;
+const TOOLBAR_SIDE_SLOT_WIDTH = 84;
 
 // ── Screen ─────────────────────────────────────────────────────────────────
 
@@ -417,9 +410,8 @@ export default function CompanionScreen() {
       const prevMsg = index < msgs.length - 1 ? msgs[index + 1] : null;
       const isFirstInGroup = !prevMsg || prevMsg.role !== item.role;
       const isLastMessage = index === 0;
-      const showCompanionPresence = activeRequestCompanionId
-        ? item.id === activeRequestCompanionId
-        : isLastMessage;
+      const isThisStreaming =
+        isStreaming && item.id === activeRequestCompanionId && item.status === 'streaming';
 
       // Retry an error row in place through regenerateReply. The hook pairs
       // the preceding user turn and drops later exchanges from the request.
@@ -438,10 +430,8 @@ export default function CompanionScreen() {
           item={item}
           isFirstInGroup={isFirstInGroup}
           isLastMessage={isLastMessage}
-          showCompanionPresence={showCompanionPresence}
-          isStreaming={isStreaming}
-          companionExpression={companionPersonality}
-          isFocused={isFocused}
+          isStreaming={isThisStreaming}
+          motionActive={isFocused}
           reducedMotion={reducedMotion}
           onVersePress={handleVersePress}
           onRetry={onRetry}
@@ -450,7 +440,7 @@ export default function CompanionScreen() {
         />
       );
     },
-    [activeRequestCompanionId, isStreaming, companionPersonality, isFocused, reducedMotion, handleVersePress, onRegenerate, handleSaveToJournal, hasCurrentDevotional]
+    [activeRequestCompanionId, isStreaming, isFocused, reducedMotion, handleVersePress, onRegenerate, handleSaveToJournal, hasCurrentDevotional]
   );
 
   const keyExtractor = useCallback((item: CompanionMessage) => item.id, []);
@@ -465,8 +455,7 @@ export default function CompanionScreen() {
       keyboardVerticalOffset={Platform.OS === 'ios' ? -tabBarHeight : 0}
       testID="companion-screen"
     >
-      {/* Header — History / New Conversation / Profile. The companion orb
-          lives in one conversation slot below, not here. */}
+      {/* Header — one fixed Companion presence between equal control slots. */}
       <View
         style={{
           paddingTop: insets.top + 4,
@@ -478,21 +467,47 @@ export default function CompanionScreen() {
           justifyContent: 'space-between',
         }}
       >
-        <TouchableOpacity
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            handleDrawerOpen();
-          }}
-          hitSlop={8}
-          activeOpacity={0.7}
-          accessibilityLabel="Open conversation history"
-          accessibilityRole="button"
-          style={{ width: 40, height: 44, alignItems: 'center', justifyContent: 'center' }}
-        >
-          <List size={22} color={colors.textMuted} weight="light" />
-        </TouchableOpacity>
+        <View style={{ width: TOOLBAR_SIDE_SLOT_WIDTH, alignItems: 'flex-start' }}>
+          <TouchableOpacity
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              handleDrawerOpen();
+            }}
+            hitSlop={8}
+            activeOpacity={0.7}
+            accessibilityLabel="Open conversation history"
+            accessibilityRole="button"
+            style={{ width: 40, height: 44, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <List size={22} color={colors.textMuted} weight="light" />
+          </TouchableOpacity>
+        </View>
 
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View
+          accessible={isStreaming}
+          accessibilityLabel={isStreaming ? 'Companion is replying' : undefined}
+          accessibilityLiveRegion="polite"
+          style={{ width: HEADER_COMPANION_SIZE, height: HEADER_COMPANION_SIZE }}
+        >
+          <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+            <CompanionOrb
+              accentColor={colors.accent}
+              size={HEADER_COMPANION_SIZE}
+              expression={companionPersonality}
+              thinking={isStreaming}
+              active={isFocused && !drawerOpen}
+            />
+          </View>
+        </View>
+
+        <View
+          style={{
+            width: TOOLBAR_SIDE_SLOT_WIDTH,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+          }}
+        >
           <TouchableOpacity
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -509,26 +524,6 @@ export default function CompanionScreen() {
           <ProfileEntryButton testID="companion-profile-button" size={32} />
         </View>
       </View>
-
-      {isEmpty && (
-      <View
-        style={{
-          alignItems: 'center',
-          justifyContent: 'center',
-          paddingBottom: Spacing['2'],
-          minHeight: 72,
-        }}
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants"
-      >
-        <CompanionOrb
-          accentColor={colors.accent}
-          size={64}
-          expression={companionPersonality}
-          active={isFocused}
-        />
-      </View>
-      )}
 
       {/* Each scroll container owns keyboard dismissal and touch handling. */}
       {isEmpty ? (

@@ -3,7 +3,7 @@
  * "button", even for decorative orbs that pass no onPress — VoiceOver
  * announced "Companion orb, button" for something you can't actually press.
  * It should fall back to a plain, non-accessible View when onPress is absent.
- * Ask keeps one decorative orb in the conversation slot.
+ * Ask keeps one decorative orb in the toolbar.
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -24,7 +24,7 @@ describe('CompanionOrb touchable-only-when-pressable source contract', () => {
     expect(fallbackBlock).not.toContain('accessibilityLabel');
   });
 
-  it('the Ask screen keeps one non-pressable CompanionOrb paused when the tab is hidden', () => {
+  it('the Ask toolbar keeps one non-pressable CompanionOrb paused when the tab is hidden', () => {
     const typingIndicator = readFileSync(
       join(__dirname, '../../components/companion/TypingIndicator.tsx'),
       'utf8',
@@ -36,17 +36,17 @@ describe('CompanionOrb touchable-only-when-pressable source contract', () => {
     const askIndex = readFileSync(join(__dirname, '../../app/(tabs)/(ask)/index.tsx'), 'utf8');
 
     expect(typingIndicator).not.toContain('CompanionOrb');
-    expect(messageContent.match(/<CompanionOrb/g)).toHaveLength(1);
+    expect(messageContent).not.toContain('CompanionOrb');
+    expect(messageContent).toContain('testID="companion-pending-ellipsis"');
     expect(askIndex.match(/<CompanionOrb/g)).toHaveLength(1);
-    const emptyOrb = askIndex.match(/<CompanionOrb\b[\s\S]*?\/>/)?.[0] ?? '';
-    const inlineOrb = messageContent.match(/<CompanionOrb\b[\s\S]*?\/>/)?.[0] ?? '';
-    expect(emptyOrb).toContain('active={isFocused}');
-    expect(emptyOrb).not.toContain('thinking=');
-    expect(emptyOrb).not.toContain('onPress');
-    expect(inlineOrb).toContain('thinking={isStreaming && thinkingMounted}');
-    expect(inlineOrb).toContain('active={active}');
-    expect(inlineOrb).not.toContain('onPress');
-    expect(askIndex).toContain('showIcon={showCompanionPresence}');
+    const toolbarOrb = askIndex.match(/<CompanionOrb\b[\s\S]*?\/>/)?.[0] ?? '';
+    expect(toolbarOrb).toContain('size={HEADER_COMPANION_SIZE}');
+    expect(toolbarOrb).toContain('thinking={isStreaming}');
+    expect(toolbarOrb).toContain('active={isFocused && !drawerOpen}');
+    expect(toolbarOrb).not.toContain('onPress');
+    expect(askIndex).toContain('const HEADER_COMPANION_SIZE = 64');
+    expect(askIndex).toContain('const TOOLBAR_SIDE_SLOT_WIDTH = 84');
+    expect(askIndex).not.toContain('showCompanionPresence');
     expect(askIndex).not.toMatch(/isActive=\{isStreaming\}/);
   });
 });
