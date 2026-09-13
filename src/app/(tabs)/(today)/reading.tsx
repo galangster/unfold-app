@@ -389,6 +389,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   const chevronBounce = useSharedValue(0);
   const contentOpacity = useSharedValue(1);
   const scrollProgress = useSharedValue(0);
+  const latestReaderScrollY = useSharedValue(0);
   const readerScrollYRef = useRef(0);
   const userScrollActiveRef = useRef(false);
   const layoutGenerationRef = useRef(1);
@@ -728,15 +729,15 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   const readerLayoutKey = `${adaptiveLayout.readableMaxWidth}:${adaptiveLayout.fontScale}:${fontSize}:${user?.readingFont ?? ''}`;
   if (readerLayoutKeyRef.current !== readerLayoutKey) {
     if (readerLayoutKeyRef.current !== '') {
-      userScrollActiveRef.current = false;
       const started = beginReaderLayoutGeneration({
         nextGeneration: layoutGenerationRef.current + 1,
-        previousAnchor: reflowAnchorRef.current,
+        previousAnchor: userScrollActiveRef.current ? null : reflowAnchorRef.current,
         sections: sectionLocationsRef.current,
         paragraphs: paragraphLocationsRef.current,
-        contentOffsetY: readerScrollYRef.current,
+        contentOffsetY: userScrollActiveRef.current ? latestReaderScrollY.value : readerScrollYRef.current,
         headerOffset: SECTION_TARGET_TOP_INSET,
       });
+      userScrollActiveRef.current = false;
       layoutGenerationRef.current = started.generation;
       sectionLocationsRef.current = started.sections;
       paragraphLocationsRef.current = started.paragraphs;
@@ -1242,10 +1243,12 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
       contentOffsetY,
       headerOffset: SECTION_TARGET_TOP_INSET,
     });
+    userScrollActiveRef.current = false;
   }, []);
   const handleScroll = useAnimatedScrollHandler({
     onScroll: (event) => {
       const offsetY = event.contentOffset.y;
+      latestReaderScrollY.value = offsetY;
       const scrollable = event.contentSize.height - event.layoutMeasurement.height;
       if (scrollable > 0) {
         scrollProgress.value = Math.min(1, Math.max(0, offsetY / scrollable));
@@ -2306,6 +2309,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
               onScroll={handleScroll}
               onScrollBeginDrag={() => { userScrollActiveRef.current = true; }}
               onScrollEndDrag={(event) => saveReaderScrollY(event.nativeEvent.contentOffset.y)}
+              onMomentumScrollBegin={() => { userScrollActiveRef.current = true; }}
               onMomentumScrollEnd={(event) => saveReaderScrollY(event.nativeEvent.contentOffset.y)}
               scrollEventThrottle={16}
             >
