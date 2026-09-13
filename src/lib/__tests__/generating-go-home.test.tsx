@@ -19,8 +19,9 @@ jest.mock('@react-native-community/netinfo', () => ({
   addEventListener: jest.fn(() => jest.fn()),
 }));
 
+const mockLogBugError = jest.fn();
 jest.mock('../bug-logger', () => ({
-  logBugError: jest.fn(),
+  logBugError: (...args: unknown[]) => mockLogBugError(...args),
   logBugEvent: jest.fn(),
 }));
 
@@ -170,6 +171,7 @@ import { useUnfoldStore, type Devotional, type UserProfile } from '../store';
 import { useUIState } from '@/lib/ui-state';
 
 const GO_HOME_LABEL = 'Go home while your devotional is prepared';
+const EXPO_LOST_CONNECTION = 'fetch failed: UnexpectedException: The network connection was lost. (at ExpoModulesCore/Promise.swift:56)';
 
 const user = {
   name: 'Jordan',
@@ -261,10 +263,11 @@ afterEach(async () => {
 });
 
 describe('regression: Jordan item 6 — Go home from /generating', () => {
-  it('reuses one request id when a lost initial POST response is retried', async () => {
+  it('automatically retries the exact Expo connection loss with the same request id', async () => {
     mockSubmitGenerationJob
-      .mockRejectedValueOnce(new Error('Network request failed'))
-      .mockReturnValueOnce(new Promise(() => {}));
+      .mockRejectedValueOnce(new Error(EXPO_LOST_CONNECTION))
+      .mockResolvedValueOnce({ jobId: 'job-recovered', devotionalId: 'devo-recovered' });
+    mockPollJobStatus.mockReturnValue(new Promise(() => {}));
 
     const tree = await renderScreen();
     mounted.push(tree);
@@ -272,10 +275,132 @@ describe('regression: Jordan item 6 — Go home from /generating', () => {
     const firstRequestId = mockSubmitGenerationJob.mock.calls[0][0].requestId;
     expect(firstRequestId).toBe(readInitialGenerationRequestId());
 
-    await press(tree, 'Try again');
+    await act(async () => {
+      jest.advanceTimersByTime(1000);
+    });
+    await flush();
 
     expect(mockSubmitGenerationJob).toHaveBeenCalledTimes(2);
     expect(mockSubmitGenerationJob.mock.calls[1][0].requestId).toBe(firstRequestId);
+    expect(readInflightGenerationJob()).toEqual(expect.objectContaining({
+      jobId: 'job-recovered',
+      devotionalId: 'devo-recovered',
+    }));
+    expect(mockPollJobStatus).toHaveBeenCalledWith('job-recovered', expect.any(Number));
+    expect(mockLogBugError).not.toHaveBeenCalled();
+  });
+
+  it('surfaces and reports the exact Expo connection loss after one automatic retry', async () => {
+    mockSubmitGenerationJob
+      .mockRejectedValueOnce(new Error(EXPO_LOST_CONNECTION))
+      .mockRejectedValueOnce(new Error(EXPO_LOST_CONNECTION))
+      .mockReturnValueOnce(new Promise(() => {}));
+
+    const tree = await renderScreen();
+    mounted.push(tree);
+    const requestId = mockSubmitGenerationJob.mock.calls[0][0].requestId;
+    await act(async () => {
+      jest.advanceTimersByTime(1000);
+    });
+    await flush();
+
+    expect(mockSubmitGenerationJob).toHaveBeenCalledTimes(2);
+    findPressable(tree, 'Try again');
+    expect(mockLogBugError).toHaveBeenCalledTimes(1);
+    expect(mockLogBugError).toHaveBeenCalledWith(
+      'generation',
+      expect.objectContaining({ message: EXPO_LOST_CONNECTION }),
+      { jobType: 'initial_arc', phase: 'server-job-submission' },
+    );
+
+    await press(tree, 'Try again');
+    expect(mockSubmitGenerationJob).toHaveBeenCalledTimes(3);
+    expect(mockSubmitGenerationJob.mock.calls[2][0].requestId).toBe(requestId);
+  });
+
+  it('does not automatically retry a permanent initial submission error', async () => {
+    mockSubmitGenerationJob.mockRejectedValueOnce(new Error('Request rejected'));
+
+    const tree = await renderScreen();
+    mounted.push(tree);
+    await act(async () => {
+      jest.advanceTimersByTime(5000);
+    });
+    await flush();
+
+    expect(mockSubmitGenerationJob).toHaveBeenCalledTimes(1);
+    findPressable(tree, 'Try again');
+    expect(mockLogBugError).toHaveBeenCalledTimes(1);
+  });
+
+  it('adopts an existing job without scheduling another submission', async () => {
+    mockSubmitGenerationJob.mockRejectedValueOnce(
+      Object.assign(new Error('Already generated today'), { existingJobId: 'job-existing' }),
+    );
+    mockPollJobStatus.mockReturnValue(new Promise(() => {}));
+
+    const tree = await renderScreen();
+    mounted.push(tree);
+    await act(async () => {
+      jest.advanceTimersByTime(5000);
+    });
+    await flush();
+
+    expect(mockSubmitGenerationJob).toHaveBeenCalledTimes(1);
+    expect(mockPollJobStatus).toHaveBeenCalledWith('job-existing', expect.any(Number));
+    expect(mockLogBugError).not.toHaveBeenCalled();
+  });
+
+  it('cancels the scheduled retry when the screen unmounts', async () => {
+    mockSubmitGenerationJob.mockRejectedValueOnce(new Error(EXPO_LOST_CONNECTION));
+
+    const tree = await renderScreen();
+    await act(async () => {
+      tree.unmount();
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(1000);
+    });
+    await flush();
+
+    expect(mockSubmitGenerationJob).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not schedule a retry when the initial request rejects after unmount', async () => {
+    let rejectSubmit!: (error: Error) => void;
+    mockSubmitGenerationJob.mockReturnValueOnce(new Promise((_resolve, reject) => {
+      rejectSubmit = reject;
+    }));
+
+    const tree = await renderScreen();
+    await act(async () => {
+      tree.unmount();
+    });
+    await act(async () => {
+      rejectSubmit(new Error(EXPO_LOST_CONNECTION));
+    });
+    await flush();
+    await act(async () => {
+      jest.advanceTimersByTime(1000);
+    });
+    await flush();
+
+    expect(mockSubmitGenerationJob).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not replay after a local reset invalidates the generation session', async () => {
+    mockSubmitGenerationJob.mockRejectedValueOnce(new Error(EXPO_LOST_CONNECTION));
+
+    const tree = await renderScreen();
+    mounted.push(tree);
+    const token = beginLocalResetSession();
+    endLocalResetSession(token);
+    await act(async () => {
+      jest.advanceTimersByTime(1000);
+    });
+    await flush();
+
+    expect(mockSubmitGenerationJob).toHaveBeenCalledTimes(1);
   });
 
   it('clears the request id when the reader starts over with new answers', async () => {

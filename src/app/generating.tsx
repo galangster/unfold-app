@@ -65,7 +65,7 @@ import {
   type GenerationDeadlineDecision,
   type ObservedJobState,
 } from '@/lib/generation-poll-outcome';
-import { toFriendlyOnboardingGenerationError } from '@/lib/generation-errors';
+import { isTransientGenerationError, toFriendlyOnboardingGenerationError } from '@/lib/generation-errors';
 import { getServerOwnedSeriesTotalDays } from '@/lib/devotional-series-boundary';
 
 import {
@@ -96,6 +96,7 @@ const LONG_RUNNING_MESSAGE = 'Still writing — taking a little longer';
 // Grace period to wait for the persisted user to hydrate before erroring out
 // instead of sitting on an infinite spinner.
 const NO_USER_GRACE_MS = 5000;
+const INITIAL_SUBMIT_RETRY_DELAY_MS = 1000;
 
 // Sample devotional content shown as a preview while generating
 const SAMPLE_PREVIEW = {
@@ -190,6 +191,7 @@ export default function GeneratingScreen() {
   const [pendingJobId, setPendingJobId] = useState<string | null>(null);
   const pollingRef = useRef(false);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const submitRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Incremented by every startPolling; a poll whose request was in flight when
   // polling stopped (background, unmount, retry) sees a newer run and exits
   // instead of re-arming a second timer chain next to the current one.
@@ -203,6 +205,10 @@ export default function GeneratingScreen() {
   const generationSessionRef = useRef(captureSyncSession());
 
   const stopOwnedPolling = () => {
+    if (submitRetryTimerRef.current) {
+      clearTimeout(submitRetryTimerRef.current);
+      submitRetryTimerRef.current = null;
+    }
     if (pollTimerRef.current) {
       clearTimeout(pollTimerRef.current);
       pollTimerRef.current = null;
@@ -817,8 +823,9 @@ export default function GeneratingScreen() {
     }
 
     const origin = generationSessionRef.current;
+    let effectActive = true;
 
-    const submitJob = async () => {
+    const submitJob = async (attempt = 0) => {
       try {
         void logBugEvent('generation', 'server-generation-start', { jobType: 'initial_arc' });
         // Persist before the POST so a close during submit can resume the same request.
@@ -890,6 +897,17 @@ export default function GeneratingScreen() {
         }
 
         const errorMessage = failure.message;
+        if (attempt === 0 && isTransientGenerationError(errorMessage)) {
+          if (!effectActive) return;
+          logger.warn('[generating] Initial job submission lost connection; retrying once:', errorMessage);
+          setIsReconnecting(true);
+          submitRetryTimerRef.current = setTimeout(() => {
+            submitRetryTimerRef.current = null;
+            if (!effectActive || !isSyncSessionCurrent(origin)) return;
+            void submitJob(attempt + 1);
+          }, INITIAL_SUBMIT_RETRY_DELAY_MS);
+          return;
+        }
         logger.error('[generating] Job submission failed:', errorMessage);
         clearInflightGenerationJob();
         failGenerationSession(errorMessage);
@@ -903,7 +921,10 @@ export default function GeneratingScreen() {
 
     submitJob();
 
-    return stopOwnedPolling;
+    return () => {
+      effectActive = false;
+      stopOwnedPolling();
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
