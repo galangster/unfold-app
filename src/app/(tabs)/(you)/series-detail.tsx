@@ -268,6 +268,8 @@ export function SeriesArcScreen({ hostTab, chrome = 'stack' }: SeriesArcScreenPr
             <TouchableOpacity
               activeOpacity={0.7}
               onPress={handleBack}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               style={styles.backButton}
             >
@@ -295,6 +297,8 @@ export function SeriesArcScreen({ hostTab, chrome = 'stack' }: SeriesArcScreenPr
             <TouchableOpacity
               activeOpacity={0.7}
               onPress={handleBack}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               style={styles.backButton}
             >
