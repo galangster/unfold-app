@@ -214,7 +214,9 @@ function seedRepo(dir) {
     join(dir, 'eas.json'),
     `${JSON.stringify({
       build: {
-        'qa-testflight': { env: { EXPO_PUBLIC_ENABLE_QA_TOOLS: '1' } },
+        'qa-testflight': {
+          env: { EXPO_PUBLIC_ENABLE_QA_TOOLS: '1', EXPO_PUBLIC_ENABLE_SCRIPTURE_PRACTICE: '1' },
+        },
         production: { env: { EAS_USE_CACHE: '1' } },
       },
     })}\n`,
