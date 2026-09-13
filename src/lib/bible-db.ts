@@ -26,6 +26,8 @@ import { openDatabaseAsync, type SQLiteDatabase } from 'expo-sqlite';
 import { MMKV } from 'react-native-mmkv';
 import { logger } from '@/lib/logger';
 import { getAuthHeaders, PRIMARY_BACKEND_URL } from '@/lib/api-config';
+import { referenceToRoute, resolveBookName, type ParsedReference } from '@/lib/bible-constants';
+import { expectedVerseNumbers, versesMatchExpected } from '@/lib/bible-verse-integrity';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -522,9 +524,69 @@ export async function searchBible(
     const db = await openBibleDb();
     if (!db) return [];
 
+    const bookId = resolveBookName(query);
+    const reference: ParsedReference | null = referenceToRoute(query)
+      ?? (bookId === null ? null : { bookId, chapter: 1 });
+    if (reference) {
+      const clauses = ['book_id = ?', 'chapter = ?'];
+      const params: (string | number)[] = [reference.bookId, reference.chapter];
+      if (reference.verse !== undefined) {
+        clauses.push('verse >= ?', 'verse <= ?');
+        params.push(reference.verse, reference.verseEnd ?? reference.verse);
+      }
+      if (translation) {
+        clauses.push('translation = ?');
+        params.push(translation);
+      }
+
+      const rows = await db.getAllAsync<{
+        id: number;
+        book_id: number;
+        chapter: number;
+        verse: number;
+        text: string;
+        translation: string;
+      }>(
+        `SELECT id, book_id, chapter, verse, text, translation
+         FROM verses
+         WHERE ${clauses.join(' AND ')}
+         ORDER BY translation ASC, verse ASC`,
+        params,
+      );
+
+      const translations: BibleTranslation[] = translation ? [translation] : ['BSB', 'KJV'];
+      const validRows = translations.flatMap((version) => {
+        const versionRows = rows.filter(row => row.translation === version);
+        const expected = expectedVerseNumbers({
+          translation: version,
+          bookId: reference.bookId,
+          chapter: reference.chapter,
+          verseStart: reference.verse,
+          verseEnd: reference.verseEnd,
+        });
+        return expected && versesMatchExpected(versionRows, expected) ? versionRows : [];
+      });
+
+      return validRows.map(row => ({
+        id: row.id,
+        bookId: row.book_id,
+        chapter: row.chapter,
+        verse: row.verse,
+        text: row.text,
+        translation: row.translation as BibleTranslation,
+        snippet: row.text,
+      }));
+    }
+
+    const referenceLike = query.trim().match(
+      /^((?:[123]\s*)?[A-Za-z][A-Za-z\s.]*?)\s*\d/,
+    );
+    if (referenceLike && resolveBookName(referenceLike[1]) !== null) return [];
+
     // Sanitize query for FTS5 — remove characters that break FTS5 syntax
     // Keep alphanumeric, spaces, quotes, and basic operators
     const sanitized = query
+      .replace(/[-–—]/g, ' ')
       .replace(/[^\w\s"*-]/g, '')
       .trim();
 
