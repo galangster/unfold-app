@@ -347,4 +347,72 @@ describe('companion chat sharded persistence', () => {
     expect(inner.setItem).toHaveBeenCalled();
     await storage.flushPendingWritesAsync();
   });
+
+  it.each(['throw', 'reject'] as const)('automatically retries a transient %s without another chat update', async (failure) => {
+    const { inner } = makeInner();
+    (inner.setItem as jest.Mock).mockImplementationOnce(() => {
+      if (failure === 'reject') return Promise.reject(new Error('temporary write failure'));
+      throw new Error('temporary write failure');
+    });
+    const storage = createCompanionChatPersistStorage<TestConversation>(inner);
+    const latest = stored({ conversations: [conversation('latest')], activeConversationId: 'latest' });
+    storage.setItem('chat', latest);
+
+    await jest.advanceTimersByTimeAsync(1_000);
+    expect(storage.hasPendingWrites()).toBe(true);
+    await jest.advanceTimersByTimeAsync(1_000);
+
+    expect(storage.hasPendingWrites()).toBe(false);
+    const restartedStorage = createCompanionChatPersistStorage<TestConversation>(inner);
+    await expect(Promise.resolve(restartedStorage.getItem('chat'))).resolves.toEqual(latest);
+  });
+
+  it('limits automatic retries while retaining the latest state for an explicit flush', async () => {
+    const { data, inner } = makeInner();
+    (inner.setItem as jest.Mock).mockImplementation(() => { throw new Error('disk full'); });
+    const storage = createCompanionChatPersistStorage<TestConversation>(inner);
+    const latest = stored({ conversations: [conversation('latest')], activeConversationId: 'latest' });
+    storage.setItem('chat', latest);
+
+    await jest.advanceTimersByTimeAsync(60_000);
+
+    expect(inner.setItem).toHaveBeenCalledTimes(4);
+    expect(jest.getTimerCount()).toBe(0);
+    expect(storage.hasPendingWrites()).toBe(true);
+    (inner.setItem as jest.Mock).mockImplementation((name: string, value: string) => { data.set(name, value); });
+    await storage.flushPendingWritesAsync();
+    const restartedStorage = createCompanionChatPersistStorage<TestConversation>(inner);
+    await expect(Promise.resolve(restartedStorage.getItem('chat'))).resolves.toEqual(latest);
+  });
+
+  it('keeps a failed background flush nonfatal and retries its pending state', async () => {
+    const { inner } = makeInner();
+    (inner.setItem as jest.Mock).mockImplementationOnce(() => { throw new Error('temporary write failure'); });
+    const storage = createCompanionChatPersistStorage<TestConversation>(inner);
+    const latest = stored({ conversations: [conversation('latest')], activeConversationId: 'latest' });
+    storage.setItem('chat', latest);
+
+    expect(storage.flushPendingWrites()).toBe(false);
+    expect(storage.hasPendingWrites()).toBe(true);
+    await jest.advanceTimersByTimeAsync(1_000);
+
+    const restartedStorage = createCompanionChatPersistStorage<TestConversation>(inner);
+    await expect(Promise.resolve(restartedStorage.getItem('chat'))).resolves.toEqual(latest);
+  });
+
+  it('cancels automatic retries when saved conversations are reset', async () => {
+    const { data, inner } = makeInner();
+    (inner.setItem as jest.Mock).mockImplementationOnce(() => { throw new Error('temporary write failure'); });
+    const storage = createCompanionChatPersistStorage<TestConversation>(inner);
+    storage.setItem('chat', stored({ conversations: [conversation('removed')], activeConversationId: 'removed' }));
+    await jest.advanceTimersByTimeAsync(1_000);
+    expect(storage.hasPendingWrites()).toBe(true);
+
+    storage.removeItem('chat');
+    await jest.advanceTimersByTimeAsync(60_000);
+
+    expect(inner.setItem).toHaveBeenCalledTimes(1);
+    expect(storage.hasPendingWrites()).toBe(false);
+    expect(data.size).toBe(0);
+  });
 });

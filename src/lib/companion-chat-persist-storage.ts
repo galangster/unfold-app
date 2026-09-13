@@ -6,6 +6,7 @@ import {
 } from './debounced-persist-storage';
 
 const FORMAT = 'companion-chat-shards-v1';
+const MAX_AUTOMATIC_RETRIES = 3;
 export const COMPANION_CHAT_STORAGE_KEY = 'unfold-companion-chat';
 export const COMPANION_CHAT_SHARD_PREFIX = `${COMPANION_CHAT_STORAGE_KEY}:conversation:`;
 
@@ -67,6 +68,7 @@ export function createCompanionChatPersistStorage<C extends ConversationRecord>(
   let maxWaitTimer: ReturnType<typeof setTimeout> | null = null;
   let inFlightOperation: Promise<void> | null = null;
   let revision = 0;
+  let retryAttempts = 0;
   let committed = new Map<string, C>();
   const knownShardIds = new Set<string>();
   let readable: { name: string; value: StorageValue<CompanionChatState<C>> } | null = null;
@@ -85,7 +87,13 @@ export function createCompanionChatPersistStorage<C extends ConversationRecord>(
   };
 
   const restoreFailedWrite = (write: PendingWrite<C>) => {
-    if (write.revision === revision && pending === null) pending = write;
+    if (write.revision !== revision || pending !== null) return;
+    pending = write;
+    if (retryAttempts < MAX_AUTOMATIC_RETRIES) {
+      const delay = Math.min(maxWaitMs, debounceMs * (2 ** retryAttempts));
+      retryAttempts += 1;
+      debounceTimer = schedule(writeNowSafely, delay);
+    }
   };
 
   const runOperations = (
@@ -122,6 +130,7 @@ export function createCompanionChatPersistStorage<C extends ConversationRecord>(
 
     const commit = () => {
       committed = next;
+      retryAttempts = 0;
       deletedIds.forEach((id) => knownShardIds.delete(id));
     };
 
@@ -177,11 +186,12 @@ export function createCompanionChatPersistStorage<C extends ConversationRecord>(
     return true;
   };
 
-  const writeNowSafely = () => {
+  const writeNowSafely = (): boolean => {
     try {
-      writeNow();
+      return writeNow();
     } catch {
-      // Keep the restored pending value for the next store update or explicit flush.
+      // Background and timer callbacks must not throw. The restored write can retry.
+      return false;
     }
   };
 
@@ -240,6 +250,7 @@ export function createCompanionChatPersistStorage<C extends ConversationRecord>(
 
     setItem: (name, value) => {
       revision += 1;
+      retryAttempts = 0;
       pending = { name, value, revision };
       readable = { name, value };
       if (maxWaitTimer === null) maxWaitTimer = schedule(writeNowSafely, maxWaitMs);
@@ -249,6 +260,7 @@ export function createCompanionChatPersistStorage<C extends ConversationRecord>(
 
     removeItem: (name) => {
       revision += 1;
+      retryAttempts = 0;
       if (pending?.name === name) {
         pending = null;
         clearTimers();
@@ -275,7 +287,7 @@ export function createCompanionChatPersistStorage<C extends ConversationRecord>(
         if (operation) trackOperation(operation);
       }
     },
-    flushPendingWrites: writeNow,
+    flushPendingWrites: writeNowSafely,
     flushPendingWritesAsync: async () => {
       const write = takePending();
       if (write) {

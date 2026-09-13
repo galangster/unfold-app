@@ -188,21 +188,27 @@ describe('G11 layout AppState reconcile', () => {
 
   it('refreshes config and reconciles permission on mount and AppState active', async () => {
     const RootLayout = require('@/app/_layout').default as () => React.ReactElement;
-    await act(async () => {
-      create(<RootLayout />);
-    });
-    await act(async () => {
-      await Promise.resolve();
-    });
-    expect(mockRefreshRemoteConfig).toHaveBeenCalled();
-    expect(mockOnPermissionChanged).toHaveBeenCalled();
+    let tree: ReturnType<typeof create> | undefined;
+    try {
+      await act(async () => {
+        tree = create(<RootLayout />);
+      });
+      await act(async () => {
+        // The native RAF shim uses a timer. Drain it before Jest tears down.
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      expect(mockRefreshRemoteConfig).toHaveBeenCalled();
+      expect(mockOnPermissionChanged).toHaveBeenCalled();
 
-    mockRefreshRemoteConfig.mockClear();
-    mockOnPermissionChanged.mockClear();
-    await act(async () => {
-      listeners.forEach((listener) => listener('active'));
-    });
-    expect(mockRefreshRemoteConfig).toHaveBeenCalled();
-    expect(mockOnPermissionChanged).toHaveBeenCalled();
+      mockRefreshRemoteConfig.mockClear();
+      mockOnPermissionChanged.mockClear();
+      await act(async () => {
+        listeners.forEach((listener) => listener('active'));
+      });
+      expect(mockRefreshRemoteConfig).toHaveBeenCalled();
+      expect(mockOnPermissionChanged).toHaveBeenCalled();
+    } finally {
+      await act(async () => { tree?.unmount(); });
+    }
   });
 });
