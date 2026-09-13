@@ -53,6 +53,9 @@ describe('onboarding answer draft lifecycle (ONB-RESUME-1)', () => {
     const write = sliceBody('const writeOnboardingDraft = useCallback', '// The generated day');
     expect(write).toContain('purchasedDuringOnboarding,');
     expect(write).toContain('sampleDevotionalId: onboardingDevotionalId || null');
+    expect(write).toContain('companionPersonality: companionPersonalityRef.current');
+    const purchaseWrite = sliceBody('saveDraft: () => {', 'setPurchased: () => {');
+    expect(purchaseWrite).toContain('companionPersonality: companionPersonalityRef.current');
     // The day itself is deliberately NOT in this record — it is hundreds of
     // words that never change, written once under its own key instead of being
     // re-serialized on every keystroke burst.
@@ -86,6 +89,12 @@ describe('onboarding answer draft lifecycle (ONB-RESUME-1)', () => {
     expect(init).toContain('if (requestedStartStepId && filteredStepIds.includes(requestedStartStepId))');
     expect(init.indexOf('requestedStartStepId')).toBeLessThan(
       init.indexOf('resolveOnboardingResumeStep({'),
+    );
+  });
+
+  it('restores the allowlisted companion personality from the draft', () => {
+    expect(src).toContain(
+      'resolveCompanionPersonality(restoredDraft?.companionPersonality ?? existingUser?.companionPersonality)',
     );
   });
 

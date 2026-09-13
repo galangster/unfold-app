@@ -1,4 +1,5 @@
 import React from 'react';
+import { useIsFocused } from 'expo-router';
 import {
   Platform,
   StyleProp,
@@ -19,6 +20,8 @@ import { GlassSurface } from '@/components/ui/GlassSurface';
 import { alpha } from '@/components/ui/utils/alpha';
 import { animateCardDismiss } from '@/lib/card-dismiss-animation';
 import { useTheme } from '@/lib/theme';
+import { useUnfoldStore } from '@/lib/store';
+import { resolveCompanionPersonality } from '@/lib/companion-personality';
 import type { ColorTheme } from '@/constants/colors';
 import { GLASS } from '@/constants/today-surfaces';
 import { Typography } from '@/constants/typography';
@@ -38,6 +41,7 @@ interface Props {
   onDismiss?: () => void;
   dismissAccessibilityLabel?: string;
   dismissAccessibilityHint?: string;
+  active?: boolean;
 }
 
 const BODY_TEXT_MAX_SCALE = 1.28;
@@ -73,8 +77,11 @@ export function TodayCompanionBubble({
   onDismiss,
   dismissAccessibilityLabel,
   dismissAccessibilityHint,
+  active = true,
 }: Props) {
   const { isDark } = useTheme();
+  const isFocused = useIsFocused();
+  const companionPersonality = useUnfoldStore((state) => resolveCompanionPersonality(state.user?.companionPersonality));
   const mode = isDark ? 'dark' : 'light';
   const tailFill = alpha(
     colors.backgroundElevated,
@@ -150,7 +157,9 @@ export function TodayCompanionBubble({
 
   const content = (
     <>
-      <View style={styles.orbWrap}>{icon ?? <CompanionOrb accentColor={accentColor} size={24} />}</View>
+      <View style={styles.orbWrap}>
+        {icon ?? <CompanionOrb accentColor={accentColor} size={32} expression={companionPersonality} active={active && isFocused} />}
+      </View>
 
       <View style={styles.bubbleWrap}>
         {onPress ? (

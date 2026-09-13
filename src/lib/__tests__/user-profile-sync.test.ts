@@ -74,6 +74,15 @@ beforeEach(() => {
 });
 
 describe('user profile sync payloads', () => {
+  it('keeps Companion personality separate from devotional preferences', () => {
+    const data = buildUserProfileSyncData({ ...baseUser, companionPersonality: 'thoughtful' });
+    expect(data.settings).toMatchObject({ companionPersonality: 'thoughtful', writingStyle: baseUser.writingStyle });
+    expect(data).not.toHaveProperty('companionPersonality');
+  });
+  it('normalizes an invalid Companion personality before sync', () => {
+    const data = buildUserProfileSyncData({ ...baseUser, companionPersonality: 'unknown' as never });
+    expect(data.settings).toMatchObject({ companionPersonality: 'gentle' });
+  });
   it('stores generation-writing preferences under sync_users.settings', () => {
     const data = buildUserProfileSyncData(baseUser);
 

@@ -8,6 +8,7 @@ import Animated, {
   withTiming,
   Easing,
   interpolate,
+  cancelAnimation,
 } from 'react-native-reanimated';
 import { FontFamily } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
@@ -20,22 +21,28 @@ import type { ColorTheme } from '@/constants/colors';
 
 interface Props {
   colors: ColorTheme;
+  active?: boolean;
 }
 
 const LOADING_TEXT = 'Companion is gathering a thread for today…';
 
-export function BridgeShimmer({ colors }: Props) {
+export function BridgeShimmer({ colors, active = true }: Props) {
   const { reducedMotion, entering } = useAccessibleAnimation();
   const shimmer = useSharedValue(0);
 
   useEffect(() => {
-    if (reducedMotion) return;
+    if (reducedMotion || !active) {
+      cancelAnimation(shimmer);
+      shimmer.value = 0;
+      return;
+    }
     shimmer.value = withRepeat(
       withTiming(1, { duration: 1500, easing: Easing.inOut(Easing.ease) }),
       -1,
       true,
     );
-  }, [shimmer, reducedMotion]);
+    return () => cancelAnimation(shimmer);
+  }, [active, shimmer, reducedMotion]);
 
   const shimmerStyle = useAnimatedStyle(() => ({
     opacity: interpolate(shimmer.value, [0, 0.5, 1], [0.34, 0.7, 0.34]),
@@ -48,7 +55,7 @@ export function BridgeShimmer({ colors }: Props) {
       accessibilityLabel="Companion is gathering a thought for today"
       accessibilityValue={{ text: 'Preparing' }}
     >
-      <TodayCompanionBubble colors={colors} text={LOADING_TEXT}>
+      <TodayCompanionBubble colors={colors} text={LOADING_TEXT} active={active}>
         <Text style={[styles.title, { color: colors.text }]}>{LOADING_TEXT}</Text>
         <Animated.View style={[styles.skeletonGroup, shimmerStyle]}>
           <View style={[styles.skeletonLine, styles.skeletonLong, { backgroundColor: alpha(colors.text, 0.1) }]} />

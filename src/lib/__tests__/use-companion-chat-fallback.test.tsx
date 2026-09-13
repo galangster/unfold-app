@@ -61,7 +61,7 @@ jest.mock('../mmkv-storage', () => {
 });
 
 const mockUnfoldState = {
-  user: { name: 'Nick' },
+  user: { name: 'Nick', companionPersonality: undefined as string | undefined },
   companionName: null,
   currentDevotionalId: null,
   devotionals: [],
@@ -143,9 +143,28 @@ const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, 
 describe('sendMessage outcome', () => {
   beforeEach(() => {
     mockFetch.mockReset();
+    mockUnfoldState.user.companionPersonality = undefined;
     act(() => {
       useCompanionChatStore.getState().clearAllConversations();
     });
+  });
+
+  it('uses a changed personality on the next reply in the same conversation', async () => {
+    mockFetch.mockImplementation(async () => streamingResponseFromChunks([
+      'data: {"t":"Hello."}\n\n',
+      'data: {"d":true,"s":[]}\n\n',
+    ]));
+    let hook!: ReturnType<typeof useCompanionChat>;
+    const onReady = (next: ReturnType<typeof useCompanionChat>) => { hook = next; };
+    let tree!: ReturnType<typeof renderer.create>;
+    await act(async () => { tree = createTestRenderer(<HookHarness onReady={onReady} />); });
+    await act(async () => { await hook.sendMessage('First question'); });
+    expect(JSON.parse(mockFetch.mock.calls[0][1].body).context.companionPersonality).toBe('gentle');
+    mockUnfoldState.user.companionPersonality = 'encouraging';
+    await act(async () => { tree.update(<HookHarness onReady={onReady} />); });
+    await act(async () => { await hook.sendMessage('Next question'); });
+    const lastRequest = mockFetch.mock.calls.at(-1);
+    expect(JSON.parse(lastRequest[1].body).context.companionPersonality).toBe('encouraging');
   });
 
   it('resolves "noop" when called while streaming', async () => {

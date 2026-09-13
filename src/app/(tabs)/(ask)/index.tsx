@@ -44,6 +44,7 @@ import {
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { CompanionOrb } from '@/components/CompanionOrb';
+import { resolveCompanionPersonality } from '@/lib/companion-personality';
 import { ProfileEntryButton } from '@/components/ProfileEntryButton';
 import { COMPANION_MESSAGE_MAX_CHARS, useCompanionChat, type SendOutcome } from '@/lib/use-companion-chat';
 import { selectActiveMessages, useCompanionChatStore, type CompanionMessage } from '@/lib/companion-chat-store';
@@ -199,6 +200,7 @@ export default function CompanionScreen() {
   // Today's devotional theme, for the empty state's memory-aware starter
   // chips — same lookup today/index.tsx uses for its own "todayTheme".
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
+  const companionPersonality = useUnfoldStore((s) => resolveCompanionPersonality(s.user?.companionPersonality));
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const currentDevotional = useMemo(
     () => getCurrentDevotional(devotionals, currentDevotionalId),
@@ -507,15 +509,16 @@ export default function CompanionScreen() {
           alignItems: 'center',
           justifyContent: 'center',
           paddingBottom: Spacing['2'],
-          minHeight: 40,
+          minHeight: 72,
         }}
         accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants"
       >
         <CompanionOrb
           accentColor={colors.accent}
-          size={32}
-          isActive={isStreaming}
+          size={64}
+          expression={companionPersonality}
+          thinking={isStreaming}
           active={isFocused}
         />
       </View>

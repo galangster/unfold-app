@@ -3,6 +3,7 @@ import { AppState } from 'react-native';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { ThemeCategory, DevotionalType } from '../constants/devotional-types';
+import type { CompanionPersonality } from './companion-personality';
 import { logBugError, logBugEvent } from './bug-logger';
 import { logger } from './logger';
 import { applyUndoActionsWithSync } from './journal-undo';
@@ -222,6 +223,7 @@ export interface UserProfile {
   growthGoals?: string[];
   obstacles?: string[];
   companionName?: string;
+  companionPersonality?: CompanionPersonality;
   // Onboarding personalization inputs (mirror-back v2, diagnostic round, key people, upcoming event)
   keyPeople?: { name: string; relationship: string }[];
   upcomingEvent?: { label: string; date: string };

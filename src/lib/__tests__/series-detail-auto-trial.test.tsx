@@ -1,4 +1,13 @@
 jest.mock('@/components/ProfileEntryButton', () => ({ ProfileEntryButton: () => null }));
+jest.mock('@/components/icons', () => ({
+  CaretLeftIcon: 'CaretLeftIcon',
+  CaretRightIcon: 'CaretRightIcon',
+  CheckCircleIcon: 'CheckCircleIcon',
+  CheckIcon: 'CheckIcon',
+  LockSimpleIcon: 'LockSimpleIcon',
+  CircleIcon: 'CircleIcon',
+  ArrowRightIcon: 'ArrowRightIcon',
+}));
 
 import React from 'react';
 import { canonicalGeneratedDayId } from '../devotional-canonical-days';
@@ -74,6 +83,8 @@ function autoCurrentDay2(): Devotional {
   } as Devotional;
 }
 
+jest.mock('@/hooks/useCalendarNow', () => ({ useCalendarNow: () => new Date() }));
+
 jest.mock('expo-router', () => ({
   useRouter: () => ({ canGoBack: () => true, push: mockPush, back: jest.fn() }),
   useSegments: () => [],
@@ -96,6 +107,7 @@ jest.mock('@/hooks/useCrossTabBack', () => ({
 
 jest.mock('@/lib/theme', () => ({
   useTheme: () => ({
+    isDark: true,
     colors: {
       accent: '#C8A55C',
       background: '#111111',
@@ -144,12 +156,22 @@ jest.mock('@/components/ui', () => ({
 }));
 
 jest.mock('expo-linear-gradient', () => ({ LinearGradient: 'LinearGradient' }));
+jest.mock('react-native-svg', () => ({
+  __esModule: true,
+  default: 'Svg',
+  Svg: 'Svg',
+  Circle: 'Circle',
+  Path: 'Path',
+}));
 
 jest.mock('phosphor-react-native', () => ({
   CaretLeftIcon: 'CaretLeftIcon',
+  CaretRightIcon: 'CaretRightIcon',
   CheckCircleIcon: 'CheckCircleIcon',
+  CheckIcon: 'CheckIcon',
   LockSimpleIcon: 'LockSimpleIcon',
   CircleIcon: 'CircleIcon',
+  ArrowRightIcon: 'ArrowRightIcon',
 }));
 
 const SeriesDetailScreen = require('@/app/(tabs)/(you)/series-detail').default;

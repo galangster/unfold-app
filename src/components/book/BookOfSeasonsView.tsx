@@ -1,0 +1,85 @@
+import { StyleSheet, Text, View } from 'react-native';
+import { FontFamily, FontSize } from '@/constants/fonts';
+import { Spacing } from '@/constants/spacing';
+import type { ColorTheme } from '@/constants/colors';
+import type { Devotional } from '@/lib/store';
+import {
+  buildBookOfSeasonsModel,
+  resolveBookOpenDayNumber,
+} from '@/lib/book-of-seasons';
+import { OpenReadingPage } from './OpenReadingPage';
+import { ChapterJourney } from './ChapterJourney';
+import { BookDayList } from './BookDayList';
+
+export function BookOfSeasonsView({
+  devotional,
+  now,
+  colors,
+  isDark,
+  onOpenDay,
+}: {
+  devotional: Devotional;
+  now: Date;
+  colors: ColorTheme;
+  isDark: boolean;
+  onOpenDay: (dayNumber: number) => void;
+}) {
+  const model = buildBookOfSeasonsModel(devotional, now);
+  const today = model?.page;
+  const chapters = model?.chapters ?? [];
+  const theme = devotional.seriesArc?.overarchingTheme?.trim();
+
+  return (
+    <View testID="book-of-seasons">
+      <View style={styles.season}>
+        <Text
+          style={[styles.title, { color: colors.text }]}
+        >
+          {devotional.title}
+        </Text>
+        {theme ? (
+          <Text
+            style={[styles.subtitle, { color: colors.textMuted }]}
+          >
+            {theme}
+          </Text>
+        ) : null}
+      </View>
+      {today ? (
+        <OpenReadingPage
+          page={today}
+          colors={colors}
+          isDark={isDark}
+          onContinue={() => onOpenDay(today.dayNumber)}
+        />
+      ) : null}
+      {chapters.length > 0 ? <ChapterJourney
+        chapters={chapters}
+        colors={colors}
+        canOpenChapter={(chapter) => resolveBookOpenDayNumber(devotional, chapter, now) != null}
+        onOpenChapter={(chapter) => {
+          const dayNumber = resolveBookOpenDayNumber(devotional, chapter, now);
+          if (dayNumber != null) onOpenDay(dayNumber);
+        }}
+      /> : <BookDayList devotional={devotional} now={now} colors={colors} onOpenDay={onOpenDay} />}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  season: {
+    marginBottom: Spacing['6'],
+  },
+  title: {
+    fontFamily: FontFamily.display,
+    fontSize: FontSize['3xl'],
+    lineHeight: 36,
+    letterSpacing: -0.3,
+  },
+  subtitle: {
+    marginTop: Spacing['2'],
+    fontFamily: FontFamily.body,
+    fontSize: FontSize.sm,
+    lineHeight: 21,
+  },
+});

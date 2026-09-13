@@ -27,6 +27,7 @@ import { pickRegenerateTarget } from './companion-regenerate';
 import { buildCompanionRequestMessages } from './companion-chat-request';
 import { resolveCompanionDisplayName } from '@/lib/support-clarity';
 import { COMPANION_MESSAGE_MAX_CHARS } from '@/lib/companion-limits';
+import { resolveCompanionPersonality, type CompanionPersonality } from '@/lib/companion-personality';
 
 /**
  * WR-20: screen-reader users get no signal when a reply lands — the list
@@ -90,6 +91,7 @@ function buildCompanionContext(
   companionName: string | null,
   devotional: { title?: string; currentDay?: number; totalDays?: number } | null,
   streakDays: number,
+  companionPersonality: CompanionPersonality,
   regenerate?: RegenerateTurn
 ) {
   return {
@@ -100,6 +102,7 @@ function buildCompanionContext(
       : undefined,
     userName: userName ?? undefined,
     companionName: companionName ?? undefined,
+    companionPersonality,
     devotionalTitle: devotional?.title ?? undefined,
     devotionalDay: devotional?.currentDay ?? undefined,
     devotionalTotal: devotional?.totalDays ?? undefined,
@@ -340,6 +343,7 @@ export function useCompanionChat() {
     resolveCompanionDisplayName(s.user?.companionName, s.companionName),
   );
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
+  const companionPersonality = useUnfoldStore((s) => resolveCompanionPersonality(s.user?.companionPersonality));
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const streakDays = useUnfoldStore((s) => s.streakCurrent);
 
@@ -511,6 +515,7 @@ export function useCompanionChat() {
           companionName,
           currentDevotional,
           streakDays ?? 0,
+          companionPersonality,
           regenerate
         );
         const headers = await getAuthHeaders();
@@ -773,6 +778,7 @@ export function useCompanionChat() {
       updateMessage,
       userName,
       companionName,
+      companionPersonality,
       currentDevotional,
       streakDays,
       bumpStreamVersion,

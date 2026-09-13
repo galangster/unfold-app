@@ -48,7 +48,9 @@ describe('Ask header and retry wiring', () => {
     expect(source).toContain('New conversation');
     expect(source).toContain('companion-profile-button');
     expect(source.match(/<CompanionOrb/g)).toHaveLength(1);
+    expect(source).toContain('thinking={isStreaming}');
     expect(source).toContain('active={isFocused}');
+    expect(source).not.toContain('isActive={isStreaming}');
   });
 
   it('retries error rows in place through regenerateReply, not handleSend', () => {

@@ -2,6 +2,7 @@ import { useCallback, useMemo, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useCrossTabBack } from '@/hooks/useCrossTabBack';
+import { useCalendarNow } from '@/hooks/useCalendarNow';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
 import { adaptiveFrameStyle } from '@/lib/adaptive-layout';
@@ -44,6 +45,8 @@ import {
 import { alpha } from '@/components/ui';
 import { ProfileEntryButton } from '@/components/ProfileEntryButton';
 import { addAppBreadcrumb } from '@/lib/sentry';
+import { BookOfSeasonsView } from '@/components/book/BookOfSeasonsView';
+import { listDaysInOrder } from '@/lib/book-of-seasons';
 
 // ── Sealed letter tease lines for locked days ──────────────────
 const SEALED_LINES = [
@@ -158,11 +161,12 @@ export function SeriesArcScreen({ hostTab, chrome = 'stack' }: SeriesArcScreenPr
   const frameStyle = adaptiveFrameStyle(layout.clusterMaxWidth);
   const router = useRouter();
   const { id: paramId } = useLocalSearchParams<{ id?: string }>();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const reducedMotion = useReducedMotion();
   const { handleBack } = useCrossTabBack();
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
+  const now = useCalendarNow();
 
   // A tab root receives no params. Every stack mount is pushed with an id
   // (past-devotionals' handleSelectDevotional is the sole in-app producer;
@@ -187,11 +191,6 @@ export function SeriesArcScreen({ hostTab, chrome = 'stack' }: SeriesArcScreenPr
       : 0;
 
   const isComplete = devotional ? completedDays >= devotional.totalDays : false;
-
-  // One timestamp for every day-gating decision on this render. Deriving each
-  // row from its own `new Date()` lets the "Current" badge and the tap gate
-  // disagree if a re-render straddles midnight.
-  const now = useMemo(() => new Date(), [devotional]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The day the reader will actually open right now. `devotional.currentDay` is
   // NOT this: it is bumped to N+1 the moment day N is completed (advanceDay in
@@ -325,6 +324,16 @@ export function SeriesArcScreen({ hostTab, chrome = 'stack' }: SeriesArcScreenPr
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
+          {chrome === 'tabRoot' ? (
+            <BookOfSeasonsView
+              devotional={devotional}
+              now={now}
+              colors={colors}
+              isDark={isDark}
+              onOpenDay={handleDayPress}
+            />
+          ) : (
+            <>
           {/* Series info */}
           <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}>
             <Text style={[styles.dateLabel, { color: colors.textHint }]}>
@@ -356,8 +365,7 @@ export function SeriesArcScreen({ hostTab, chrome = 'stack' }: SeriesArcScreenPr
 
           {/* Day list — grouped under named movements when the arc has them */}
           <View style={styles.dayList}>
-            {(devotional.days ?? [])
-              .sort((a, b) => a.dayNumber - b.dayNumber)
+            {listDaysInOrder(devotional.days)
               .map((day) => {
                 // A movement header renders above the first day of each act.
                 const act = devotional.seriesArc?.acts?.find(
@@ -565,6 +573,8 @@ export function SeriesArcScreen({ hostTab, chrome = 'stack' }: SeriesArcScreenPr
                 );
               })}
           </View>
+            </>
+          )}
         </ScrollView>
       </View>
         </SafeAreaView>

@@ -19,6 +19,9 @@ jest.mock('@/lib/theme', () => ({
   }),
 }));
 
+jest.mock('expo-router', () => ({ useIsFocused: () => true }));
+jest.mock('@/lib/store', () => ({ useUnfoldStore: (select: (state: object) => unknown) => select({ user: null }) }));
+
 jest.mock('@/components/CompanionOrb', () => ({
   CompanionOrb: () => null,
 }));

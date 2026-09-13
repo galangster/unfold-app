@@ -7,7 +7,7 @@ export const PERSONAL_CONTEXT_MAX_LENGTH = INPUT_LIMITS.LONG_TEXT.max;
 export const DEFAULT_COMPANION_NAME = 'Grace';
 
 export const COMPANION_INTRO_BODY =
-  "Your Companion is here to talk through Scripture, pray with you, and help you reflect. Choose a name that feels right.";
+  "Your Companion is here to talk through Scripture, pray with you, and help you reflect. Choose the style that feels right for you.";
 
 export const COMPANION_NAME_LATER_HINT =
   'You can change this name later in Profile.';

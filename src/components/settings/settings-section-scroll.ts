@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, UIManager, type LayoutChangeEvent } from 'react-native';
 import { Spacing } from '@/constants/spacing';
 
-export type SettingsSection = 'reminders' | 'appearance';
+export type SettingsSection = 'reminders' | 'appearance' | 'companion';
 
 export function settingsSectionScrollOffset(sectionY: number, contentOffset = 0): number {
   return Math.max(sectionY + contentOffset - Spacing['4'], 0);
@@ -27,7 +27,7 @@ export function useSettingsSectionScroll(section?: string, contentOffset = 0) {
 
   useEffect(() => {
     const target: SettingsSection | undefined =
-      section === 'reminders' || section === 'appearance' ? section : undefined;
+      section === 'reminders' || section === 'appearance' || section === 'companion' ? section : undefined;
     if (!target) return;
     const y = sectionOffsets[target];
     if (y === undefined || (!scrollViewRef.current && nativeTarget === null)) return;

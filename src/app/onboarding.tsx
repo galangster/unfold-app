@@ -154,6 +154,7 @@ import {
 import { runOnboardingCompletion } from '@/lib/onboarding-completion';
 import { ensureInitialGenerationRequestId } from '@/lib/initial-generation-request';
 import { resolveCompanionDisplayName, resolveCompanionNameToPersist } from '@/lib/support-clarity';
+import { resolveCompanionPersonality } from '@/lib/companion-personality';
 import { runOnboardingPurchaseSuccess } from '@/lib/onboarding-purchase-success';
 import { runReminderTimeCommit } from '@/lib/reminder-time-commit';
 import { askNotificationPermissionInContext } from '@/lib/notification-ask';
@@ -659,9 +660,12 @@ export default function OnboardingScreen() {
   }, []);
   const onboardingDeviceIdRef = useRef<string | null>(null);
 
-  // Companion naming state (saved to store on continue)
-  const [companionNameInput, setCompanionNameInput] = useState(() =>
+  // Preserve legacy names while new users choose a conversation style.
+  const [companionNameInput] = useState(() =>
     resolveCompanionDisplayName(existingUser?.companionName, useUnfoldStore.getState().companionName) ?? '',
+  );
+  const [companionPersonality, setCompanionPersonality] = useState(() =>
+    resolveCompanionPersonality(restoredDraft?.companionPersonality ?? existingUser?.companionPersonality),
   );
 
   // RT-ONB-1: the name field is uncontrolled (defaultValue) so React never
@@ -913,6 +917,8 @@ export default function OnboardingScreen() {
   dataRef.current = data;
   const companionNameInputRef = useRef(companionNameInput);
   companionNameInputRef.current = companionNameInput;
+  const companionPersonalityRef = useRef(companionPersonality);
+  companionPersonalityRef.current = companionPersonality;
 
   const onboardingMountedRef = useRef(true);
   useEffect(() => {
@@ -1044,6 +1050,7 @@ export default function OnboardingScreen() {
       deviceId: onboardingDeviceIdRef.current,
       stepId: currentStepId,
       data: dataRef.current,
+      companionPersonality: companionPersonalityRef.current,
       purchasedDuringOnboarding,
       sampleDevotionalId: onboardingDevotionalId || null,
     });
@@ -1079,7 +1086,7 @@ export default function OnboardingScreen() {
   useEffect(() => {
     if (!shouldPersistOnboardingDraft(currentStepId)) return;
     draftAutosave.schedule();
-  }, [data, currentStepId, draftAutosave]);
+  }, [data, companionPersonality, currentStepId, draftAutosave]);
 
   // Land the pending write before iOS suspends the app — the debounce window is
   // exactly the gap that used to lose the last answer on a force-quit.
@@ -1380,6 +1387,7 @@ export default function OnboardingScreen() {
         name: data.name,
         aboutMe: data.aboutMe,
         companionName,
+        companionPersonality: companionPersonalityRef.current,
         currentSituation: data.currentSituation,
         emotionalState: '',
         faithImpact: '',
@@ -1413,6 +1421,7 @@ export default function OnboardingScreen() {
         name: data.name,
         aboutMe: data.aboutMe,
         companionName,
+        companionPersonality: companionPersonalityRef.current,
         personaTraits: [],
         currentSituation: data.currentSituation,
         emotionalState: '',
@@ -1599,6 +1608,7 @@ export default function OnboardingScreen() {
           deviceId,
           stepId: 'purchaseConfirmation',
           data: dataRef.current,
+          companionPersonality: companionPersonalityRef.current,
           purchasedDuringOnboarding: true,
           sampleDevotionalId: onboardingDevotionalId || null,
         });
@@ -1746,11 +1756,6 @@ export default function OnboardingScreen() {
           logger.warn('[Onboarding] Background sample generation failed:', err);
         });
       }
-    }
-
-    // Save companion name when leaving the feature summary step (companion naming is inside the carousel)
-    if (currentStepId === 'featureSummary') {
-      setCompanionName(resolveCompanionNameToPersist(companionNameInput));
     }
 
     // Dismiss keyboard first to prevent layout shift during animation
@@ -3750,21 +3755,18 @@ export default function OnboardingScreen() {
       );
     }
 
-    // Feature summary: how-it-works carousel with companion naming
+    // Feature summary: how-it-works carousel with companion personality
     if (step.type === 'featureSummary') {
       return (
         <FeatureSummaryCarousel
           colors={colors}
-          isDark={isDark}
-          companionName={companionNameInput}
-          onCompanionNameChange={setCompanionNameInput}
+          companionPersonality={companionPersonality}
+          onCompanionPersonalityChange={setCompanionPersonality}
           currentPage={featureSummaryPage}
           onPageChange={setFeatureSummaryPage}
           onComplete={() => {
             setFeatureSummaryPage(0);
-            const companionName = resolveCompanionNameToPersist(companionNameInput);
-            updateUser({ companionName });
-            setCompanionName(companionName);
+            updateUser({ companionPersonality });
             advanceToNextStep();
           }}
         />
@@ -4462,7 +4464,14 @@ export default function OnboardingScreen() {
                                 ripple3Style,
                               ]}
                             />
-                            <CompanionOrb accentColor={colors.accent} size={36} isActive showBadge={false} />
+                            <CompanionOrb
+                              accentColor={colors.accent}
+                              size={36}
+                              isActive
+                              showBadge={false}
+                              expression="welcome"
+                              idleStyle="off"
+                            />
                           </View>
                           <Text style={{
                             fontFamily: FontFamily.body,

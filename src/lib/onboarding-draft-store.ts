@@ -16,6 +16,7 @@
  */
 import { mmkvStorage } from './mmkv-storage';
 import type { OnboardingData } from '@/app/onboarding';
+import { resolveCompanionPersonality, type CompanionPersonality } from './companion-personality';
 
 /** Exported so full-reset can clear an abandoned draft. */
 export const STORE_KEY = 'onboarding-draft-v1';
@@ -45,6 +46,8 @@ export interface OnboardingDraftRecord {
   stepId: string;
   /** Every answer collected so far. */
   data: OnboardingData;
+  /** The selected chat personality. Kept separate from devotional choices. */
+  companionPersonality: CompanionPersonality;
   /** Whether the person already bought during this walk-through. */
   purchasedDuringOnboarding: boolean;
   /** Id of the generated sample devotional, once it exists. */
@@ -61,6 +64,7 @@ export interface SaveOnboardingDraftInput {
   deviceId: string;
   stepId: string;
   data: OnboardingData;
+  companionPersonality?: CompanionPersonality;
   purchasedDuringOnboarding?: boolean;
   sampleDevotionalId?: string | null;
   sampleDevotionalDay?: unknown | null;
@@ -78,6 +82,7 @@ export function saveOnboardingDraft(record: SaveOnboardingDraftInput): void {
     savedAt: Date.now(),
     stepId: record.stepId,
     data: record.data,
+    companionPersonality: resolveCompanionPersonality(record.companionPersonality),
     purchasedDuringOnboarding: record.purchasedDuringOnboarding ?? false,
     sampleDevotionalId: record.sampleDevotionalId ?? null,
     sampleDevotionalDay: null,
@@ -167,6 +172,7 @@ export function getOnboardingDraft(options?: {
     savedAt: parsed.savedAt,
     stepId: parsed.stepId,
     data: parsed.data,
+    companionPersonality: resolveCompanionPersonality(parsed.companionPersonality),
     purchasedDuringOnboarding: parsed.purchasedDuringOnboarding === true,
     sampleDevotionalId: parsed.sampleDevotionalId ?? null,
     // Written under its own key; a record from before that split may still
