@@ -557,6 +557,53 @@ describe('retry error replies in place', () => {
     await act(async () => { await first; });
     expect(hook!.isStreaming).toBe(false);
   });
+
+  it('restores the original reply when regeneration stops before any text', async () => {
+    const stream = heldOpenStream();
+    mockFetch.mockResolvedValueOnce(stream.response as any);
+    useCompanionChatStore.setState({
+      activeConversationId: 'c1',
+      conversations: [{
+        id: 'c1',
+        messages: [
+          { id: 'u1', role: 'user', content: 'Question', timestamp: 1, status: 'sent' },
+          { id: 'e1', role: 'companion', content: 'Original reply', timestamp: 2, status: 'complete' },
+        ],
+        createdAt: 1,
+        lastMessageAt: Date.now(),
+        title: 'Question',
+        topicTags: [],
+        archived: false,
+      }],
+    });
+
+    let hook: ReturnType<typeof useCompanionChat> | null = null;
+    await act(async () => {
+      createTestRenderer(<HookHarness onReady={(next) => { hook = next; }} />);
+      await Promise.resolve();
+    });
+
+    let pending!: Promise<unknown>;
+    await act(async () => {
+      pending = hook!.regenerateReply({ companionId: 'e1' });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    let outcome: unknown;
+    await act(async () => {
+      hook!.stopGeneration();
+      outcome = await pending;
+    });
+
+    expect(outcome).toBe('error');
+    const messages = useCompanionChatStore.getState().conversations[0]?.messages ?? [];
+    expect(messages).toHaveLength(2);
+    expect(messages.find((message) => message.id === 'e1')).toMatchObject({
+      content: 'Original reply',
+      status: 'complete',
+      interrupted: false,
+    });
+  });
 });
 
 describe('useCompanionChat prompt payload length', () => {
@@ -852,7 +899,7 @@ describe('active request cancellation', () => {
     });
   });
 
-  it('settles an aborted pending read without waiting for read or reader cancellation', async () => {
+  it('removes an explicitly stopped empty pending reply without showing a failure row', async () => {
     const stream = heldOpenStream();
     mockFetch.mockResolvedValueOnce(stream.response as any);
 
@@ -879,6 +926,81 @@ describe('active request cancellation', () => {
     expect(outcome).toBe('error');
     expect(hook!.isStreaming).toBe(false);
     expect(stream.reader.cancel).toHaveBeenCalledTimes(1);
+    const messages = useCompanionChatStore.getState().conversations[0]?.messages ?? [];
+    expect(messages.filter((message) => message.role === 'user')).toHaveLength(1);
+    expect(messages.filter((message) => message.role === 'companion')).toHaveLength(0);
+    expect(hook!.error).toBeNull();
+  });
+
+  it('keeps partial text retryable after an explicit Stop', async () => {
+    const stream = heldOpenStream('data: {"t":"A partial reply"}\n\n');
+    mockFetch.mockResolvedValueOnce(stream.response as any);
+
+    let hook: ReturnType<typeof useCompanionChat> | null = null;
+    await act(async () => {
+      createTestRenderer(<HookHarness onReady={(next) => { hook = next; }} />);
+      await Promise.resolve();
+    });
+
+    let pending!: Promise<unknown>;
+    await act(async () => {
+      pending = hook!.sendMessage('Stop after text arrives');
+      await wait(10);
+    });
+
+    let outcome: unknown;
+    await act(async () => {
+      hook!.stopGeneration();
+      outcome = await pending;
+    });
+
+    expect(outcome).toBe('sent');
+    const stoppedReply = useCompanionChatStore.getState().conversations[0]
+      ?.messages.find((message) => message.role === 'companion');
+    expect(stoppedReply).toMatchObject({
+      content: 'A partial reply',
+      status: 'error',
+      interrupted: true,
+    });
+
+    mockFetch.mockResolvedValueOnce(streamingResponseFromChunks([
+      'data: {"t":"A complete retry"}\n\n',
+      'data: {"d":true,"s":[]}\n\n',
+    ]));
+    await act(async () => {
+      outcome = await hook!.regenerateReply({ companionId: stoppedReply!.id });
+    });
+
+    expect(outcome).toBe('sent');
+    const messages = useCompanionChatStore.getState().conversations[0]?.messages ?? [];
+    expect(messages.filter((message) => message.role === 'user')).toHaveLength(1);
+    expect(messages.find((message) => message.id === stoppedReply!.id)).toMatchObject({
+      content: 'A complete retry',
+      status: 'complete',
+      interrupted: false,
+    });
+  });
+
+  it('keeps a real failure as a retryable error row', async () => {
+    mockFetch.mockRejectedValueOnce(new Error('Network request failed'));
+
+    let hook: ReturnType<typeof useCompanionChat> | null = null;
+    await act(async () => {
+      createTestRenderer(<HookHarness onReady={(next) => { hook = next; }} />);
+      await Promise.resolve();
+    });
+
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await hook!.sendMessage('Let the request fail');
+    });
+
+    expect(outcome).toBe('error');
+    const reply = useCompanionChatStore.getState().conversations[0]
+      ?.messages.find((message) => message.role === 'companion');
+    expect(reply?.status).toBe('error');
+    expect(reply?.content).toBeTruthy();
+    expect(hook!.error).toBeTruthy();
   });
 
   it('settles a stop while the non-streaming response body remains pending', async () => {
@@ -918,8 +1040,7 @@ describe('active request cancellation', () => {
     await act(async () => { await Promise.resolve(); });
     const reply = useCompanionChatStore.getState().conversations[0]
       ?.messages.find((message) => message.role === 'companion');
-    expect(reply?.status).toBe('error');
-    expect(reply?.content).not.toBe('Too late');
+    expect(reply).toBeUndefined();
   });
 
   it('cancels the owned reader when a stream read fails', async () => {

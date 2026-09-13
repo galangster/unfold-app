@@ -1,6 +1,6 @@
 /**
  * CompanionScreen — the main "Ask" tab.
- * Pi-style single continuous conversation.
+ * Incoming and outgoing bubbles share one continuous conversation.
  * Phase 2: rich text with verse pills, blockquotes, scripture tap sheet.
  */
 import React, { useCallback, useEffect, useRef, useMemo, useState } from 'react';
@@ -14,10 +14,12 @@ import {
   Platform,
   TouchableOpacity,
   useWindowDimensions,
+  AccessibilityInfo,
 } from 'react-native';
 import { GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
+import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { adaptiveFrameStyle, adaptiveSafeGutterStyle, companionDrawerClosedTranslate, companionDrawerWidth } from '@/lib/adaptive-layout';
 import { useFocusEffect, useIsFocused } from 'expo-router';
 import {
@@ -30,7 +32,6 @@ import * as Haptics from 'expo-haptics';
 import {
   useSharedValue,
   withSpring,
-  useReducedMotion,
 } from 'react-native-reanimated';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
@@ -58,7 +59,6 @@ import { UserMessageBubble } from '@/components/companion/UserMessageBubble';
 import { CompanionMessageContent } from '@/components/companion/CompanionMessageContent';
 import { CompanionActions } from '@/components/companion/CompanionActions';
 import { SuggestionChips } from '@/components/companion/SuggestionChips';
-import { TypingIndicator } from '@/components/companion/TypingIndicator';
 import { ScriptureTapSheet } from '@/components/ScriptureTapSheet';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { alpha } from '@/components/ui';
@@ -79,7 +79,9 @@ const MessageItem = React.memo(function MessageItem({
   isFirstInGroup,
   isLastMessage,
   isStreaming,
-  isSearching,
+  companionExpression,
+  isFocused,
+  reducedMotion,
   onVersePress,
   onRetry,
   onRegenerate,
@@ -89,7 +91,9 @@ const MessageItem = React.memo(function MessageItem({
   isFirstInGroup: boolean;
   isLastMessage: boolean;
   isStreaming: boolean;
-  isSearching?: boolean;
+  companionExpression: ReturnType<typeof resolveCompanionPersonality>;
+  isFocused: boolean;
+  reducedMotion: boolean;
   onVersePress: (reference: string) => void;
   onRetry?: () => void;
   onRegenerate?: (reason?: string) => void;
@@ -109,16 +113,15 @@ const MessageItem = React.memo(function MessageItem({
   const isThisStreaming = isStreaming && item.status === 'streaming';
   const showActions = item.status === 'complete' && isLastMessage;
 
-  // Skip rendering empty streaming messages — TypingIndicator handles that state
-  if (isThisStreaming && !item.content) return null;
-
   return (
     <View style={gapStyle}>
       <CompanionMessageContent
         message={item}
-        showIcon={false}
+        showIcon={isLastMessage}
         isStreaming={isThisStreaming}
-        isSearching={isThisStreaming && isSearching}
+        companionExpression={companionExpression}
+        active={isFocused}
+        reduceMotion={reducedMotion}
         onVersePress={onVersePress}
         onRetry={onRetry}
       />
@@ -142,7 +145,9 @@ const MessageItem = React.memo(function MessageItem({
   prev.item.feedback === next.item.feedback &&
   prev.item.feedbackReason === next.item.feedbackReason &&
   prev.isStreaming === next.isStreaming &&
-  prev.isSearching === next.isSearching &&
+  prev.companionExpression === next.companionExpression &&
+  prev.isFocused === next.isFocused &&
+  prev.reducedMotion === next.reducedMotion &&
   prev.isFirstInGroup === next.isFirstInGroup &&
   prev.isLastMessage === next.isLastMessage &&
   prev.onRetry === next.onRetry &&
@@ -162,7 +167,7 @@ const TAB_BAR_CONTENT_HEIGHT = 56;
 
 export default function CompanionScreen() {
   const { colors } = useTheme();
-  const reducedMotion = useReducedMotion();
+  const { reducedMotion } = useAccessibleAnimation();
   const insets = useSafeAreaInsets();
   const { width: windowWidth, fontScale } = useWindowDimensions();
   const adaptiveLayout = useAdaptiveLayout();
@@ -173,9 +178,7 @@ export default function CompanionScreen() {
   // Full tab bar height including safe area (home indicator)
   const tabBarHeight = TAB_BAR_CONTENT_HEIGHT + insets.bottom;
 
-  // WR-17: fixed-height band between list and input that hosts the typing
-  // indicator OR the suggestion chips, so neither mounting nor unmounting
-  // ever shifts the conversation vertically.
+  // Keep a fixed suggestion band so its appearance does not shift the list.
   const statusSlotHeight = computeCompanionStatusSlotHeight(fontScale);
 
   // Premium gating
@@ -188,7 +191,6 @@ export default function CompanionScreen() {
   const {
     messages,
     isStreaming,
-    isSearching,
     suggestions,
     error,
     sendMessage,
@@ -218,7 +220,10 @@ export default function CompanionScreen() {
   const [dismissedError, setDismissedError] = useState<string | null>(null);
   const visibleError = error && error !== dismissedError ? error : null;
   React.useEffect(() => {
-    if (isStreaming) setDismissedError(null);
+    if (isStreaming) {
+      setDismissedError(null);
+      if (Platform.OS === 'ios') AccessibilityInfo.announceForAccessibility('Companion is replying');
+    }
   }, [isStreaming]);
 
   // P1: the free-quota counter resets at midnight and can be spent from other
@@ -399,13 +404,6 @@ export default function CompanionScreen() {
   const invertedMessagesRef = useRef(invertedMessages);
   invertedMessagesRef.current = invertedMessages;
 
-  // Show typing indicator when streaming and last message is companion with empty content
-  const showTyping =
-    isStreaming &&
-    invertedMessages.length > 0 &&
-    invertedMessages[0].role === 'companion' &&
-    invertedMessages[0].content === '';
-
   // Show suggestion chips only when not streaming and there are suggestions
   const showSuggestions = !isStreaming && suggestions.length > 0 && messages.length > 0;
 
@@ -434,9 +432,9 @@ export default function CompanionScreen() {
           isFirstInGroup={isFirstInGroup}
           isLastMessage={isLastMessage}
           isStreaming={isStreaming}
-          // Scope to the newest row so a searching flip doesn't invalidate
-          // the memo of every message in the list.
-          isSearching={isSearching && isLastMessage}
+          companionExpression={companionPersonality}
+          isFocused={isFocused}
+          reducedMotion={reducedMotion}
           onVersePress={handleVersePress}
           onRetry={onRetry}
           onRegenerate={onRegenerate}
@@ -444,7 +442,7 @@ export default function CompanionScreen() {
         />
       );
     },
-    [isStreaming, isSearching, handleVersePress, onRegenerate, handleSaveToJournal, hasCurrentDevotional]
+    [isStreaming, companionPersonality, isFocused, reducedMotion, handleVersePress, onRegenerate, handleSaveToJournal, hasCurrentDevotional]
   );
 
   const keyExtractor = useCallback((item: CompanionMessage) => item.id, []);
@@ -504,6 +502,7 @@ export default function CompanionScreen() {
         </View>
       </View>
 
+      {isEmpty && (
       <View
         style={{
           alignItems: 'center',
@@ -518,10 +517,10 @@ export default function CompanionScreen() {
           accentColor={colors.accent}
           size={64}
           expression={companionPersonality}
-          thinking={isStreaming}
           active={isFocused}
         />
       </View>
+      )}
 
       {/* Each scroll container owns keyboard dismissal and touch handling. */}
       {isEmpty ? (
@@ -554,8 +553,8 @@ export default function CompanionScreen() {
         </View>
       )}
 
-      {/* Status slot — reserved band above the input hosting the typing
-          indicator or the suggestion chips (WR-17). Kept outside the FlatList
+      {/* Status slot — reserved band above the input hosting suggestion chips
+          (WR-17). Kept outside the FlatList
           so horizontal chip drags don't interact with the list's pan gesture
           recognizer (keyboardDismissMode="interactive" conflict). The height
           never changes while a conversation is open, so the message list
@@ -563,11 +562,7 @@ export default function CompanionScreen() {
       {!isEmpty && (
         <View style={[{ height: statusSlotHeight, justifyContent: 'center' }, adaptiveSafeGutterStyle(insets.left, insets.right)]}>
         <View style={askFrameStyle}>
-          {showTyping ? (
-            <View style={{ paddingHorizontal: Spacing['4'] }}>
-              <TypingIndicator />
-            </View>
-          ) : showSuggestions ? (
+          {showSuggestions ? (
             <SuggestionChips
               suggestions={suggestions}
               onSelect={handleChipSelect}

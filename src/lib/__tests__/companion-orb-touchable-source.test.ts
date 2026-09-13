@@ -36,12 +36,17 @@ describe('CompanionOrb touchable-only-when-pressable source contract', () => {
     const askIndex = readFileSync(join(__dirname, '../../app/(tabs)/(ask)/index.tsx'), 'utf8');
 
     expect(typingIndicator).not.toContain('CompanionOrb');
-    expect(messageContent).not.toContain('CompanionOrb');
+    expect(messageContent.match(/<CompanionOrb/g)).toHaveLength(1);
     expect(askIndex.match(/<CompanionOrb/g)).toHaveLength(1);
-    const orb = askIndex.match(/<CompanionOrb\b[\s\S]*?\/>/)?.[0] ?? '';
-    expect(orb).toContain('thinking={isStreaming}');
-    expect(orb).toContain('active={isFocused}');
-    expect(orb).not.toContain('onPress');
+    const emptyOrb = askIndex.match(/<CompanionOrb\b[\s\S]*?\/>/)?.[0] ?? '';
+    const inlineOrb = messageContent.match(/<CompanionOrb\b[\s\S]*?\/>/)?.[0] ?? '';
+    expect(emptyOrb).toContain('active={isFocused}');
+    expect(emptyOrb).not.toContain('thinking=');
+    expect(emptyOrb).not.toContain('onPress');
+    expect(inlineOrb).toContain('thinking={isStreaming && thinkingMounted}');
+    expect(inlineOrb).toContain('active={active}');
+    expect(inlineOrb).not.toContain('onPress');
+    expect(askIndex).toContain('showIcon={isLastMessage}');
     expect(askIndex).not.toMatch(/isActive=\{isStreaming\}/);
   });
 });

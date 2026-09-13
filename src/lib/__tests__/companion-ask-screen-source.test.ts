@@ -42,14 +42,17 @@ describe('todayTheme wired into the companion empty state', () => {
 });
 
 describe('Ask header and retry wiring', () => {
-  it('removes the header orb and companion name while keeping history, new chat, and profile', () => {
+  it('keeps the large orb for the empty state and assigns live presence to the latest row', () => {
     expect(source).not.toContain('companionDisplayName ?? \'Companion\'');
     expect(source).toContain('Open conversation history');
     expect(source).toContain('New conversation');
     expect(source).toContain('companion-profile-button');
     expect(source.match(/<CompanionOrb/g)).toHaveLength(1);
-    expect(source).toContain('thinking={isStreaming}');
     expect(source).toContain('active={isFocused}');
+    expect(source).toContain('showIcon={isLastMessage}');
+    expect(source).not.toContain('<TypingIndicator');
+    expect(source).not.toContain("from '@/components/companion/TypingIndicator'");
+    expect(source).not.toContain('thinking={isStreaming}');
     expect(source).not.toContain('isActive={isStreaming}');
   });
 
