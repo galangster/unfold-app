@@ -3,6 +3,7 @@ import { useRouter, useNavigation, useLocalSearchParams, useSegments } from 'exp
 import * as Haptics from 'expo-haptics';
 import { isTabGroupSegment, type TabGroupSegment, type TabRootHref } from '@/lib/navigation';
 import { useGuardedBack } from '@/hooks/useGuardedBack';
+import { addAppBreadcrumb } from '@/lib/sentry';
 
 /**
  * Handles back navigation for screens opened via cross-tab push.
@@ -77,6 +78,7 @@ export function useCrossTabBack() {
   }, [isCrossTab, returnRoute, navigation, router]);
 
   const handleBack = useCallback(() => {
+    addAppBreadcrumb('navigation', 'back-pressed');
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (isCrossTab && returnRoute) {
       router.navigate(returnRoute as any);

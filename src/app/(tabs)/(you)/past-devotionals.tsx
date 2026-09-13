@@ -31,6 +31,7 @@ import { useUnfoldStore, Devotional } from '@/lib/store';
 import { resolveStackRoute, type TabGroup } from '@/lib/tab-stack-routes';
 import { format } from 'date-fns';
 import { exportDevotionalToPDF, isPDFExportSupported } from '@/lib/pdf-export';
+import { addAppBreadcrumb } from '@/lib/sentry';
 
 // ============================================================================
 // Segmented Control
@@ -612,7 +613,13 @@ export function PastSeriesLibraryScreen({ hostTab }: { hostTab?: TabGroup } = {}
     }
   }, [searchQuery]);
 
+  const handleHistoryTabChange = useCallback((tab: PastSeriesTab) => {
+    addAppBreadcrumb('history', tab === 'completed' ? 'switched-to-completed' : 'switched-to-progress');
+    setActiveTab(tab);
+  }, []);
+
   const handleSelectDevotional = useCallback((id: string) => {
+    addAppBreadcrumb('history', 'opened-series');
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.push({
       // A Study mount always supplies its host, so a Study visitor can never
@@ -795,7 +802,7 @@ export function PastSeriesLibraryScreen({ hostTab }: { hostTab?: TabGroup } = {}
 
         {/* Segmented Control */}
         <View style={{ paddingHorizontal: Spacing['6'], marginBottom: Spacing['4'] }}>
-          <SegmentedControl activeTab={activeTab} onTabChange={setActiveTab} />
+          <SegmentedControl activeTab={activeTab} onTabChange={handleHistoryTabChange} />
         </View>
 
         {/* Pull-down search bar */}

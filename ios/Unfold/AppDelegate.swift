@@ -101,7 +101,6 @@ private func scrubNativeSentrySymbolicationPaths(_ event: Event) {
   event.exceptions?.forEach { stripNativeSentryFramePackages($0.stacktrace) }
   event.debugMeta?.forEach { image in
     image.codeFile = maskNativeSentryPathUUIDs(image.codeFile)
-    image.name = maskNativeSentryPathUUIDs(image.name)
   }
 }
 
@@ -165,12 +164,27 @@ extension AppDelegate {
       options.maxBreadcrumbs = 50
 
       // Privacy. Journal entries, family members' names and reflections must
-      // never leave the device: no PII, no pixels, no view tree, no replay.
+      // stay masked. Screenshot and view-tree attachments remain off. Replay is
+      // off except the exact `qa-replay-testflight` internal pilot: no
+      // ordinary sessions, on-error capture only. JS attaches later and
+      // cannot change these rates (`autoInitializeNativeSdk: false`).
       options.sendDefaultPii = false
       options.attachScreenshot = false
       options.attachViewHierarchy = false
+      let enableReplayOnError = environment == "qa-replay-testflight"
       options.sessionReplay.sessionSampleRate = 0
-      options.sessionReplay.onErrorSampleRate = 0
+      options.sessionReplay.onErrorSampleRate = enableReplayOnError ? 1 : 0
+      options.sessionReplay.maskAllText = true
+      options.sessionReplay.maskAllImages = true
+      options.sessionReplay.networkCaptureBodies = false
+      // Cocoa masks text and WebViews. Add SVGs because native-first startup
+      // skips RN's setup. Mask image containers too, including bundled assets
+      // that Cocoa otherwise exempts from maskAllImages.
+      for className in ["RNSVGSvgView", "RCTImageView", "RCTImageComponentView"] {
+        if let viewClass = NSClassFromString(className) {
+          options.sessionReplay.maskedViewClasses.append(viewClass)
+        }
+      }
       // Cocoa's automatic breadcrumbs label taps with the view's accessibility
       // identifier and screens with their navigation title, which in this app
       // is the title of something a person wrote. The scrubbed JavaScript
@@ -198,14 +212,16 @@ extension AppDelegate {
       // events never reach the JavaScript beforeSend, so user, device/app
       // hash, and on-disk frame package paths are cleared here after those
       // filters. Container UUIDs in retained debug paths are masked.
-      // Symbolication IDs and addresses stay. No callback into JavaScript.
+      // Symbolication IDs and addresses stay. Replay association
+      // (`contexts.replay.replay_id`) is left intact. No callback into
+      // JavaScript.
       options.beforeSend = { event in
         if let type = event.exceptions?.first?.type, type.contains("Unhandled JS Exception") {
           return nil
         }
         // New Architecture wraps a JS error in a C++ exception before the
         // runtime is ready; the JS handler already reported that one too.
-        if event.exceptions?.contains(where: { $0.value.contains("ExceptionsManager.reportException") }) == true {
+        if event.exceptions?.contains(where: { $0.value?.contains("ExceptionsManager.reportException") == true }) == true {
           return nil
         }
         dropNativeSentryUser(event)

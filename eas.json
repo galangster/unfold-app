@@ -40,6 +40,9 @@
       "environment": "preview",
       "credentialsSource": "remote"
     },
+    "qa-replay-testflight": {
+      "extends": "qa-testflight"
+    },
     "production": {
       "autoIncrement": true,
       "bun": "1.3.14",

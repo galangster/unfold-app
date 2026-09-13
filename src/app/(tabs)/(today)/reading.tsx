@@ -859,6 +859,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
 
   const goToDay = useCallback((day: number) => {
     if (day >= 1 && day <= availableDays) {
+      addAppBreadcrumb('reading', 'changed-day');
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       // Quick fade out → change day → fade in. Start fade-in only after the
       // fade-out callback runs; assigning a second animation immediately can

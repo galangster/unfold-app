@@ -26,6 +26,7 @@ const mockNavigationIntegration = {
 const mockReactNavigationIntegration = jest.fn((..._args: unknown[]) => mockNavigationIntegration);
 const mockHttpClientIntegration = jest.fn((options: unknown) => ({ name: 'HttpClient', options }));
 const mockWrap = jest.fn((component: unknown, ..._rest: unknown[]) => ({ wrapped: component }));
+const mockMobileReplayIntegration = jest.fn((options: unknown) => ({ name: 'MobileReplay', options }));
 
 jest.mock('@sentry/react-native', () => ({
   init: mockInit,
@@ -36,6 +37,7 @@ jest.mock('@sentry/react-native', () => ({
   logger: { info: (...args: unknown[]) => mockLoggerInfo(...args) },
   reactNavigationIntegration: (...args: unknown[]) => mockReactNavigationIntegration(...args),
   httpClientIntegration: (options: unknown) => mockHttpClientIntegration(options),
+  mobileReplayIntegration: (options: unknown) => mockMobileReplayIntegration(options),
   wrap: (component: unknown, ...rest: unknown[]) => mockWrap(component, ...rest),
 }));
 
@@ -224,7 +226,7 @@ describe('initSentry', () => {
     expect(options).not.toHaveProperty('enableAutoSessionTracking');
   });
 
-  it('passes NO replay sample rates, because passing 0 is what installs replay', () => {
+  it('passes NO replay sample rates on production, because passing 0 is what installs replay', () => {
     // integrations/default.js installs mobileReplayIntegration() when either
     // key is `typeof === 'number'` — which 0 satisfies. Absence keeps it out,
     // so asserting `=== 0` here would pin the defect in place.
@@ -234,6 +236,8 @@ describe('initSentry', () => {
     expect(options).not.toHaveProperty('replaysSessionSampleRate');
     expect(options).not.toHaveProperty('replaysOnErrorSampleRate');
     expect(options).not.toHaveProperty('_experiments');
+    expect(mockMobileReplayIntegration).not.toHaveBeenCalled();
+    expect(options.integrations).not.toContainEqual(expect.objectContaining({ name: 'MobileReplay' }));
   });
 
   it('passes NO release or dist, so both are derived from the built Info.plist', () => {
@@ -292,6 +296,18 @@ describe('tracing scope', () => {
     expect(initOptions().environment).toBe('preview');
     expect(initOptions().tracesSampleRate).toBe(0);
   });
+
+  it.each(['production', 'production-hotfix', 'qa-testflight', 'qa-replay-testflight-extra', 'preview', 'unknown', ''])(
+    'does not install replay for profile %s',
+    (profile) => {
+      mockConstants.expoConfig.extra.buildProfile = profile;
+      bootEnabled();
+      expect(initOptions()).not.toHaveProperty('replaysSessionSampleRate');
+      expect(initOptions()).not.toHaveProperty('replaysOnErrorSampleRate');
+      expect(mockMobileReplayIntegration).not.toHaveBeenCalled();
+    },
+  );
+
 
   it('files failed requests for, and propagates traces to, the backend host only', () => {
     bootEnabled();
@@ -993,14 +1009,14 @@ describe('beforeSendLog', () => {
         'sentry.release': 'com.unfoldapp.ios@1.1.8+279',
         'sentry.environment': 'production',
         'sentry.sdk.name': 'sentry.javascript.react-native',
-        'sentry.sdk.version': '7.11.0',
+        'sentry.sdk.version': '8.26.0',
         'sentry.origin': 'manual',
       },
     }) as { attributes: Record<string, unknown> };
 
     expect(scrubbed.attributes['sentry.release']).toBe('com.unfoldapp.ios@1.1.8+279');
     expect(scrubbed.attributes['sentry.environment']).toBe('production');
-    expect(scrubbed.attributes['sentry.sdk.version']).toBe('7.11.0');
+    expect(scrubbed.attributes['sentry.sdk.version']).toBe('8.26.0');
 
     expect(
       initOptions().beforeSendLog({
@@ -1012,4 +1028,116 @@ describe('beforeSendLog', () => {
   });
 });
 
+describe('replay pilot', () => {
+  const REPLAY_ID = '12c2d058d58442709aa2eca08bf20986';
 
+  it('installs error-only replay and explicit masking on qa-replay-testflight only', () => {
+    const sentry = loadSentryLib();
+    expect(sentry.isReplayPilotBuildProfile('qa-replay-testflight')).toBe(true);
+
+    mockConstants.expoConfig.extra.buildProfile = 'qa-replay-testflight';
+    bootEnabled();
+    const options = initOptions();
+
+    expect(options.environment).toBe('qa-replay-testflight');
+    expect(options.replaysSessionSampleRate).toBe(0);
+    expect(options.replaysOnErrorSampleRate).toBe(1);
+    expect(options.attachScreenshot).toBe(false);
+    expect(options.attachViewHierarchy).toBe(false);
+    expect(mockMobileReplayIntegration).toHaveBeenCalledTimes(1);
+    expect(mockMobileReplayIntegration).toHaveBeenCalledWith({
+      maskAllText: true,
+      maskAllImages: true,
+      maskAllVectors: true,
+          networkCaptureBodies: false,
+      beforeErrorSampling: expect.any(Function),
+    });
+    expect(options.integrations).toContainEqual(expect.objectContaining({ name: 'MobileReplay' }));
+
+    const { beforeErrorSampling } = mockMobileReplayIntegration.mock.calls[0][0] as {
+      beforeErrorSampling: (event: { level?: string; exception?: { values?: unknown[] }; tags?: Record<string, unknown> }) => boolean;
+    };
+    expect(beforeErrorSampling({
+      exception: { values: [{ type: 'TypeError' }] },
+      tags: { source: 'error-boundary' },
+    })).toBe(true);
+    expect(beforeErrorSampling({ tags: { source: 'app_event' } })).toBe(false);
+    for (const level of ['info', 'warning', 'debug']) {
+      expect(beforeErrorSampling({
+        level,
+        exception: { values: [{ type: 'Error' }] },
+      })).toBe(false);
+    }
+    expect(beforeErrorSampling({
+      level: 'fatal',
+      exception: { values: [{ type: 'Error' }] },
+    })).toBe(true);
+  });
+
+  it('lets error-boundary exceptions through and blocks onboarding signals', () => {
+    const { shouldCaptureReplayForEvent } = loadSentryLib();
+
+    expect(shouldCaptureReplayForEvent({
+      exception: { values: [{ type: 'TypeError', value: 'boom' }] },
+      tags: { source: 'error-boundary' },
+    })).toBe(true);
+    expect(shouldCaptureReplayForEvent({
+      exception: { values: [{ type: 'Error', value: 'sync failed' }] },
+      tags: { source: 'onboarding' },
+    })).toBe(true);
+    expect(shouldCaptureReplayForEvent({
+      tags: { source: 'app_event' },
+    })).toBe(false);
+    expect(shouldCaptureReplayForEvent({
+      exception: { values: [{ type: 'Error', value: 'ignored' }] },
+      tags: { source: 'app_event' },
+    })).toBe(false);
+    expect(shouldCaptureReplayForEvent({
+      exception: { values: [] },
+      tags: { source: 'error-boundary' },
+    })).toBe(false);
+  });
+
+  it('keeps only a valid 32-hex replay id and drops every other replay field', () => {
+    bootEnabled();
+    const beforeSend = initOptions().beforeSend;
+
+    const kept = beforeSend({
+      exception: { values: [{ type: 'TypeError', value: 'boom' }] },
+      contexts: {
+        replay: {
+          replay_id: REPLAY_ID,
+          extra: JOURNAL_TEXT,
+          deviceId: mockDeviceId,
+        },
+        device: { name: "Nick's iPhone", model: 'iPhone16,2' },
+      },
+      tags: { replayId: REPLAY_ID, source: 'error-boundary' },
+    }) as Record<string, unknown>;
+
+    expect(kept.contexts).toEqual({
+      replay: { replay_id: REPLAY_ID },
+      device: { model: 'iPhone16,2' },
+    });
+    expect((kept.tags as Record<string, unknown>).replayId).toBeUndefined();
+    expect((kept.tags as Record<string, unknown>).source).toBe('error-boundary');
+
+    const dropped = beforeSend({
+      contexts: {
+        replay: {
+          replay_id: mockDeviceId,
+          extra: JOURNAL_TEXT,
+        },
+      },
+    }) as Record<string, unknown>;
+    expect(dropped.contexts).toBeUndefined();
+
+    const hostile = beforeSend({
+      contexts: { replay: { replay_id: JOURNAL_TEXT } },
+    }) as Record<string, unknown>;
+    const serialized = JSON.stringify(hostile);
+    expect(serialized).not.toContain(JOURNAL_TEXT);
+    expect(serialized).not.toContain(mockDeviceId);
+    expect(hostile.contexts).toBeUndefined();
+  });
+});
