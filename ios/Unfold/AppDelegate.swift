@@ -131,9 +131,17 @@ extension AppDelegate {
     // "production", which is also Cocoa's own default (kSentryDefaultEnvironment).
     let stampedProfile = (info?["UNFOLDBuildProfile"] as? String)?
       .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-    let environment = (stampedProfile.isEmpty || stampedProfile.contains("$"))
+    let buildProfile = (stampedProfile.isEmpty || stampedProfile.contains("$"))
       ? "production"
       : stampedProfile
+
+    // Release simulator runs can carry a production profile. Classify their
+    // telemetry separately without changing the profile's feature gates.
+    #if targetEnvironment(simulator)
+    let environment = "simulator"
+    #else
+    let environment = buildProfile
+    #endif
 
     // `com.unfoldapp.ios@1.1.4+261` — the release that the "Bundle React
     // Native code and images" phase uploads this build's source maps under
@@ -171,7 +179,7 @@ extension AppDelegate {
       options.sendDefaultPii = false
       options.attachScreenshot = false
       options.attachViewHierarchy = false
-      let enableReplayOnError = environment == "qa-replay-testflight"
+      let enableReplayOnError = buildProfile == "qa-replay-testflight"
       options.sessionReplay.sessionSampleRate = 0
       options.sessionReplay.onErrorSampleRate = enableReplayOnError ? 1 : 0
       options.sessionReplay.maskAllText = true
