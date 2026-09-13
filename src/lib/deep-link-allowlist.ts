@@ -194,6 +194,16 @@ const KNOWN_ROUTE_GROUPS: ReadonlySet<string> = new Set([
   '(you)',
 ]);
 
+/**
+ * Group-only URLs select an index screen. They cannot all share `/` for
+ * authorization because that makes every tab root look like the public app
+ * anchor. Today is public for widgets. Bible stays public for non-AI reading.
+ */
+const PUBLIC_GROUP_ONLY_ROUTES: ReadonlyMap<string, string> = new Map([
+  ['(tabs)/(today)', '/'],
+  ['(tabs)/(bible)', '/reader'],
+]);
+
 // ─── Parsing ─────────────────────────────────────────────────────────────────
 
 export type DeepLinkRejectionReason =
@@ -284,7 +294,9 @@ function parseExternalUrl(url: string): ParsedExternalUrl | DeepLinkRejectionRea
   return { segments, params };
 }
 
-function canonicalizeRoute(segments: readonly string[]): string | 'unknown-group' {
+function canonicalizeRoute(
+  segments: readonly string[],
+): { route: string } | 'unknown-group' | 'unknown-route' {
   const kept: string[] = [];
   for (const segment of segments) {
     if (segment.startsWith('(') && segment.endsWith(')')) {
@@ -293,7 +305,11 @@ function canonicalizeRoute(segments: readonly string[]): string | 'unknown-group
     }
     kept.push(segment);
   }
-  return `/${kept.join('/')}`;
+  if (kept.length === 0 && segments.length > 0) {
+    const publicRoute = PUBLIC_GROUP_ONLY_ROUTES.get(segments.join('/'));
+    return publicRoute ? { route: publicRoute } : 'unknown-route';
+  }
+  return { route: `/${kept.join('/')}` };
 }
 
 function isValidParam(schema: ParamSchema, value: string): boolean {
@@ -332,8 +348,9 @@ export function resolveExternalDeepLink(url: string): DeepLinkDecision {
   const parsed = parseExternalUrl(url);
   if (typeof parsed === 'string') return { allowed: false, reason: parsed };
 
-  const route = canonicalizeRoute(parsed.segments);
-  if (route === 'unknown-group') return { allowed: false, reason: 'unknown-group' };
+  const canonical = canonicalizeRoute(parsed.segments);
+  if (typeof canonical === 'string') return { allowed: false, reason: canonical };
+  const { route } = canonical;
 
   if (EXTERNAL_ROUTE_BLOCKLIST.has(route)) return { allowed: false, reason: 'blocked-route', route };
   if (!Object.prototype.hasOwnProperty.call(EXTERNAL_ROUTE_ALLOWLIST, route)) {

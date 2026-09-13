@@ -45,20 +45,29 @@ describe('deep-link allowlist — legitimate producers', () => {
     }
   });
 
-  it('accepts the bare scheme and every tab root, with or without route groups', () => {
+  it('accepts the bare scheme and the public Today and Bible tab roots', () => {
     for (const url of [
       'unfold://',
       'unfold:///',
-      'unfold://(tabs)',
       'unfold://(tabs)/(today)',
-      'unfold://(tabs)/(bible)',
+      'unfold:///(tabs)/(today)/',
+    ]) {
+      expectAllowed(url, '/');
+    }
+    expectAllowed('unfold://(tabs)/(bible)', '/reader');
+  });
+
+  it('does not collapse private group-only tab routes into the public root', () => {
+    for (const url of [
+      'unfold://(tabs)',
+      'unfold://(ask)',
       'unfold://(tabs)/(ask)',
       'unfold://(tabs)/(journal)',
       'unfold://(tabs)/(study)',
       'unfold://(tabs)/(you)',
-      'unfold:///(tabs)/(today)/',
+      'unfold://(tabs)/(today)/(ask)',
     ]) {
-      expectAllowed(url, '/');
+      expectRejected(url, 'unknown-route');
     }
   });
 

@@ -60,17 +60,31 @@ jest.mock('../mmkv-storage', () => {
   };
 });
 
-const mockUnfoldState = {
-  user: { name: 'Nick', companionPersonality: undefined as string | undefined },
+type MockUser = {
+  name: string;
+  hasCompletedOnboarding: boolean;
+  companionPersonality?: string;
+};
+
+const mockUnfoldState: {
+  user: MockUser | null;
+  companionName: null;
+  currentDevotionalId: null;
+  devotionals: never[];
+  streakCurrent: number;
+} = {
+  user: { name: 'Nick', hasCompletedOnboarding: true, companionPersonality: undefined },
   companionName: null,
   currentDevotionalId: null,
   devotionals: [],
   streakCurrent: 0,
 };
 
-jest.mock('../store', () => ({
-  useUnfoldStore: (selector: (state: typeof mockUnfoldState) => unknown) => selector(mockUnfoldState),
-}));
+jest.mock('../store', () => {
+  const useUnfoldStore = (selector: (state: typeof mockUnfoldState) => unknown) => selector(mockUnfoldState);
+  useUnfoldStore.getState = () => mockUnfoldState;
+  return { useUnfoldStore };
+});
 
 jest.mock('../companion-service', () => ({
   generateConversationTitle: jest.fn(async () => null),
@@ -78,6 +92,20 @@ jest.mock('../companion-service', () => ({
 
 import { useCompanionChat } from '../use-companion-chat';
 import { useCompanionChatStore } from '../companion-chat-store';
+
+const completedMockUser = (): MockUser => ({
+  name: 'Nick',
+  hasCompletedOnboarding: true,
+  companionPersonality: undefined,
+});
+
+function getMockGetAuthHeaders(): jest.Mock {
+  return (jest.requireMock('@/lib/api-config') as { getAuthHeaders: jest.Mock }).getAuthHeaders;
+}
+
+beforeEach(() => {
+  mockUnfoldState.user = completedMockUser();
+});
 
 function streamingResponseWithoutDone() {
   const reader = {
@@ -170,10 +198,74 @@ function HookHarness({ onReady }: { onReady: (hook: ReturnType<typeof useCompani
 
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+describe('onboarding profile prerequisite', () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+    getMockGetAuthHeaders().mockClear();
+    act(() => {
+      useCompanionChatStore.getState().clearAllConversations();
+    });
+  });
+
+  it.each([
+    ['has no profile', null],
+    ['has not completed onboarding', { name: 'Nick', hasCompletedOnboarding: false }],
+  ])('does not start or send a new turn when the reader %s', async (_label, user) => {
+    mockUnfoldState.user = user;
+    mockFetch.mockResolvedValue(streamingResponseFromChunks([
+      'data: {"t":"This must not be requested."}\n\n',
+      'data: {"d":true,"s":[]}\n\n',
+    ]));
+
+    let hook: ReturnType<typeof useCompanionChat> | null = null;
+    await act(async () => {
+      createTestRenderer(<HookHarness onReady={(next) => { hook = next; }} />);
+      await Promise.resolve();
+    });
+
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await hook!.sendMessage('Can I bypass onboarding?');
+    });
+
+    expect(outcome).toBe('noop');
+    expect(getMockGetAuthHeaders()).not.toHaveBeenCalled();
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(useCompanionChatStore.getState().conversations).toHaveLength(0);
+  });
+
+  it('does not regenerate a prior reply after the onboarding profile is cleared', async () => {
+    act(() => {
+      const store = useCompanionChatStore.getState();
+      store.addMessage({ id: 'user-1', role: 'user', content: 'Original question', timestamp: 1, status: 'sent' });
+      store.addMessage({ id: 'companion-1', role: 'companion', content: 'Original reply', timestamp: 2, status: 'complete' });
+    });
+    let hook: ReturnType<typeof useCompanionChat> | null = null;
+    await act(async () => {
+      createTestRenderer(<HookHarness onReady={(next) => { hook = next; }} />);
+      await Promise.resolve();
+    });
+    mockUnfoldState.user = null;
+
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await hook!.regenerateReply({ companionId: 'companion-1' });
+    });
+
+    expect(outcome).toBe('noop');
+    expect(getMockGetAuthHeaders()).not.toHaveBeenCalled();
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(useCompanionChatStore.getState().conversations[0]?.messages).toEqual([
+      expect.objectContaining({ id: 'user-1', content: 'Original question', status: 'sent' }),
+      expect.objectContaining({ id: 'companion-1', content: 'Original reply', status: 'complete' }),
+    ]);
+  });
+});
+
 describe('sendMessage outcome', () => {
   beforeEach(() => {
     mockFetch.mockReset();
-    mockUnfoldState.user.companionPersonality = undefined;
+    mockUnfoldState.user = completedMockUser();
     act(() => {
       useCompanionChatStore.getState().clearAllConversations();
     });
@@ -190,7 +282,7 @@ describe('sendMessage outcome', () => {
     await act(async () => { tree = createTestRenderer(<HookHarness onReady={onReady} />); });
     await act(async () => { await hook.sendMessage('First question'); });
     expect(JSON.parse(mockFetch.mock.calls[0][1].body).context.companionPersonality).toBe('gentle');
-    mockUnfoldState.user.companionPersonality = 'encouraging';
+    mockUnfoldState.user = { ...mockUnfoldState.user!, companionPersonality: 'encouraging' };
     await act(async () => { tree.update(<HookHarness onReady={onReady} />); });
     await act(async () => { await hook.sendMessage('Next question'); });
     const lastRequest = mockFetch.mock.calls.at(-1);
