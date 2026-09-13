@@ -1,17 +1,16 @@
 /**
  * CompanionMessageContent — incoming Companion bubble.
- * The latest reply owns one stable presence slot below its text.
+ * Pending replies use a static ellipsis while the toolbar owns presence.
  * Renders rich text (verse pills, blockquotes, bold, italic, bullets)
  * for complete messages, lightly-stripped text during streaming.
  *
  * ANIMATION: Fade in on mount (200ms, ease-out).
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import type { TextStyle, ViewStyle } from 'react-native';
 import Animated, { FadeIn, LinearTransition, ReduceMotion, useReducedMotion } from 'react-native-reanimated';
 import { Duration, Ease } from '@/constants/animations';
-import { CompanionOrb, type CompanionExpression } from '@/components/CompanionOrb';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { Radius } from '@/constants/radius';
@@ -41,10 +40,8 @@ function stripMarkdownLight(text: string): string {
 
 interface Props {
   message: CompanionMessage;
-  showIcon: boolean;
   isStreaming: boolean;
-  companionExpression?: CompanionExpression;
-  active?: boolean;
+  motionActive?: boolean;
   reduceMotion?: boolean;
   onVersePress?: (reference: string) => void;
   onRetry?: () => void;
@@ -85,10 +82,8 @@ function StreamingText({ content, color }: { content: string; color: string }) {
 
 export function CompanionMessageContent({
   message,
-  showIcon,
   isStreaming,
-  companionExpression,
-  active = true,
+  motionActive = true,
   reduceMotion,
   onVersePress,
   onRetry,
@@ -96,17 +91,9 @@ export function CompanionMessageContent({
   const { colors } = useTheme();
   const initialReducedMotion = useReducedMotion();
   const reducedMotion = reduceMotion ?? initialReducedMotion;
-  const [thinkingMounted, setThinkingMounted] = useState(!isStreaming);
 
   const isComplete = message.status === 'complete';
   const hasMessageBody = message.status === 'error' || message.content.length > 0;
-
-  // A newly mounted pending row starts as the reunited Companion. The next
-  // commit supplies `thinking`, so the same avatar instance morphs into the
-  // three live spheres without delaying the request.
-  useEffect(() => {
-    if (isStreaming && !thinkingMounted) setThinkingMounted(true);
-  }, [isStreaming, thinkingMounted]);
 
   // Build deep link segments for completed messages with deep links
   const deepLinkCards = useMemo(() => {
@@ -166,10 +153,11 @@ export function CompanionMessageContent({
       >
         {/* Animate only the empty surface. Text keeps its natural size and layout. */}
         <Animated.View
+          testID="companion-bubble-surface"
           pointerEvents="none"
           accessibilityElementsHidden
           importantForAccessibility="no-hide-descendants"
-          layout={showIcon && active && !reducedMotion ? SURFACE_GROWTH : undefined}
+          layout={isStreaming && motionActive && !reducedMotion ? SURFACE_GROWTH : undefined}
           style={[StyleSheet.absoluteFill, {
             backgroundColor: colors.backgroundElevated,
             borderColor: colors.border,
@@ -270,31 +258,15 @@ export function CompanionMessageContent({
         </Animated.View>
         )}
 
-        {showIcon && (
-          <View
-            key="presence"
-            testID="companion-presence-slot"
-            style={{
-              width: 48,
-              height: 48,
-              marginTop: hasMessageBody ? Spacing['2'] : 0,
-              alignItems: 'flex-start',
-              justifyContent: 'flex-end',
-            }}
-            accessible={isStreaming}
-            accessibilityLabel={isStreaming ? 'Companion is replying' : undefined}
-            accessibilityLiveRegion="polite"
+        {isStreaming && !hasMessageBody && (
+          <Text
+            testID="companion-pending-ellipsis"
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+            style={{ ...Typography.bodyRelaxed, color: colors.textMuted }}
           >
-            <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-            <CompanionOrb
-              accentColor={colors.accent}
-              size={48}
-              expression={companionExpression}
-              thinking={isStreaming && thinkingMounted}
-              active={active}
-            />
-            </View>
-          </View>
+            …
+          </Text>
         )}
       </View>
     </Animated.View>

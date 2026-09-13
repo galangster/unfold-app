@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text, View } from 'react-native';
+import { Text } from 'react-native';
 import renderer, { act } from 'react-test-renderer';
 import { CompanionMessageContent } from '../CompanionMessageContent';
 import type { CompanionMessage } from '@/lib/companion-chat-store';
@@ -25,12 +25,11 @@ jest.mock('@/components/ui', () => ({
 }));
 
 jest.mock('react-native-reanimated', () => {
-  const { View } = jest.requireActual('react-native');
   return {
     __esModule: true,
-    default: { View },
+    default: { View: 'AnimatedView' },
     FadeIn: { duration: () => ({ easing: () => undefined }) },
-    LinearTransition: { duration: () => ({ easing: () => ({ reduceMotion: () => undefined }) }) },
+    LinearTransition: { duration: () => ({ easing: () => ({ reduceMotion: () => 'surface-growth' }) }) },
     ReduceMotion: { Never: 'never' },
     Easing: {
       cubic: 'cubic',
@@ -39,24 +38,6 @@ jest.mock('react-native-reanimated', () => {
       out: () => 'out',
     },
     useReducedMotion: () => true,
-  };
-});
-
-const mockCompanionOrbThinking: boolean[] = [];
-jest.mock('@/components/CompanionOrb', () => {
-  const ReactActual = jest.requireActual('react');
-  const { View: RNView } = jest.requireActual('react-native');
-  return {
-    CompanionOrb: (props: { thinking?: boolean; active?: boolean }) => {
-      const instance = ReactActual.useRef(Symbol('companion-orb')).current;
-      mockCompanionOrbThinking.push(Boolean(props.thinking));
-      return ReactActual.createElement(RNView, {
-        testID: 'companion-orb',
-        instance,
-        thinking: props.thinking,
-        active: props.active,
-      });
-    },
   };
 });
 
@@ -90,7 +71,6 @@ function render(message: CompanionMessage, onRetry?: () => void) {
     tree = renderer.create(
       <CompanionMessageContent
         message={message}
-        showIcon
         isStreaming={false}
         onVersePress={jest.fn()}
         onRetry={onRetry}
@@ -115,14 +95,14 @@ function companionMessage(
 
 function liveMessageElement(
   message: CompanionMessage,
-  options: { showIcon?: boolean; isStreaming?: boolean; active?: boolean } = {},
+  options: { isStreaming?: boolean; motionActive?: boolean; reduceMotion?: boolean } = {},
 ) {
   return (
     <CompanionMessageContent
       message={message}
-      showIcon={options.showIcon ?? true}
       isStreaming={options.isStreaming ?? false}
-      active={options.active ?? true}
+      motionActive={options.motionActive}
+      reduceMotion={options.reduceMotion}
       onVersePress={jest.fn()}
       onRetry={jest.fn()}
     />
@@ -143,10 +123,10 @@ function errorTexts(tree: any): string[] {
     .map((node: any) => node.props.children);
 }
 
-function companionOrbs(tree: any) {
+function pendingEllipses(tree: any) {
   return tree.root
-    .findAllByType(View)
-    .filter((node: any) => node.props.testID === 'companion-orb');
+    .findAllByProps({ testID: 'companion-pending-ellipsis' })
+    .filter((node: any) => node.type === Text);
 }
 
 describe('CompanionMessageContent error rows', () => {
@@ -200,27 +180,29 @@ describe('CompanionMessageContent error rows', () => {
   });
 });
 
-describe('CompanionMessageContent live presence', () => {
-  beforeEach(() => {
-    mockCompanionOrbThinking.length = 0;
+describe('CompanionMessageContent streaming bubble', () => {
+  it('shows one static, hidden ellipsis while a reply is waiting for its first token', () => {
+    let tree: any;
+    act(() => {
+      tree = renderer.create(liveMessageElement(companionMessage('streaming'), { isStreaming: true }));
+    });
+
+    const ellipsis = pendingEllipses(tree)[0];
+    expect(pendingEllipses(tree)).toHaveLength(1);
+    expect(ellipsis.props.children).toBe('…');
+    expect(ellipsis.props.accessibilityElementsHidden).toBe(true);
+    expect(ellipsis.props.importantForAccessibility).toBe('no-hide-descendants');
+    expect(tree.root.findAllByProps({ testID: 'reply-text' })).toHaveLength(0);
   });
 
-  it('keeps one avatar instance from pending through streamed text and completion', () => {
+  it('keeps the same bubble mounted from pending through streamed text and completion', () => {
     let tree: any;
     act(() => {
       tree = renderer.create(liveMessageElement(companionMessage('streaming'), { isStreaming: true }));
     });
 
     const pendingBubble = tree.root.findByProps({ testID: 'companion-message-bubble' });
-    const pendingPresence = tree.root.findByProps({ testID: 'companion-presence-slot' });
-    expect(pendingPresence.props.accessible).toBe(true);
-    expect(pendingPresence.props.accessibilityLabel).toBe('Companion is replying');
-    expect(pendingPresence.props.accessibilityLiveRegion).toBe('polite');
-    const pendingOrb = companionOrbs(tree)[0];
-    const orbInstance = pendingOrb.props.instance;
-    expect(tree.root.findAllByProps({ testID: 'reply-text' })).toHaveLength(0);
-    expect(mockCompanionOrbThinking.slice(0, 2)).toEqual([false, true]);
-    expect(pendingOrb.props.thinking).toBe(true);
+    expect(pendingEllipses(tree)).toHaveLength(1);
 
     act(() => {
       tree.update(liveMessageElement(
@@ -229,9 +211,7 @@ describe('CompanionMessageContent live presence', () => {
       ));
     });
     expect(tree.root.findByProps({ testID: 'companion-message-bubble' })).toBe(pendingBubble);
-    expect(tree.root.findByProps({ testID: 'companion-presence-slot' })).toBe(pendingPresence);
-    expect(companionOrbs(tree)[0].props.instance).toBe(orbInstance);
-    expect(companionOrbs(tree)[0].props.thinking).toBe(true);
+    expect(pendingEllipses(tree)).toHaveLength(0);
 
     act(() => {
       tree.update(liveMessageElement(
@@ -239,16 +219,15 @@ describe('CompanionMessageContent live presence', () => {
       ));
     });
     expect(tree.root.findByProps({ testID: 'companion-message-bubble' })).toBe(pendingBubble);
-    expect(companionOrbs(tree)[0].props.instance).toBe(orbInstance);
-    expect(companionOrbs(tree)[0].props.thinking).toBe(false);
+    expect(replyTexts(tree)).toEqual(['The response has started.']);
+    expect(pendingEllipses(tree)).toHaveLength(0);
   });
 
-  it('reunites the latest presence on error without a typing label', () => {
+  it('removes the pending ellipsis when the request becomes an error', () => {
     let tree: any;
     act(() => {
       tree = renderer.create(liveMessageElement(companionMessage('streaming'), { isStreaming: true }));
     });
-    const orbInstance = companionOrbs(tree)[0].props.instance;
 
     act(() => {
       tree.update(liveMessageElement(
@@ -257,23 +236,28 @@ describe('CompanionMessageContent live presence', () => {
       ));
     });
 
-    expect(companionOrbs(tree)).toHaveLength(1);
-    expect(companionOrbs(tree)[0].props.instance).toBe(orbInstance);
-    expect(companionOrbs(tree)[0].props.thinking).toBe(false);
+    expect(pendingEllipses(tree)).toHaveLength(0);
     const visibleText = tree.root.findAllByType(Text).map((node: any) => node.props.children);
     expect(visibleText).not.toContain('Thinking…');
+    expect(errorTexts(tree)).toEqual(['Stopped']);
   });
 
-  it('does not render a Companion presence in an older incoming bubble', () => {
+  it('disables bubble growth motion while the Ask route is hidden', () => {
     let tree: any;
     act(() => {
       tree = renderer.create(liveMessageElement(
-        companionMessage('complete', 'An older reply.'),
-        { showIcon: false },
+        companionMessage('streaming', 'A live reply.'),
+        { isStreaming: true, motionActive: true, reduceMotion: false },
       ));
     });
+    expect(tree.root.findByProps({ testID: 'companion-bubble-surface' }).props.layout).toBeDefined();
 
-    expect(companionOrbs(tree)).toHaveLength(0);
-    expect(tree.root.findByProps({ testID: 'reply-text' }).props.children).toBe('An older reply.');
+    act(() => {
+      tree.update(liveMessageElement(
+        companionMessage('streaming', 'A live reply.'),
+        { isStreaming: true, motionActive: false, reduceMotion: false },
+      ));
+    });
+    expect(tree.root.findByProps({ testID: 'companion-bubble-surface' }).props.layout).toBeUndefined();
   });
 });

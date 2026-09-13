@@ -42,20 +42,32 @@ describe('todayTheme wired into the companion empty state', () => {
 });
 
 describe('Ask header and retry wiring', () => {
-  it('keeps the large orb for the empty state and assigns live presence to the latest row', () => {
+  it('keeps one 64-point live Companion centered in the toolbar', () => {
     expect(source).not.toContain('companionDisplayName ?? \'Companion\'');
     expect(source).toContain('Open conversation history');
     expect(source).toContain('New conversation');
     expect(source).toContain('companion-profile-button');
     expect(source.match(/<CompanionOrb/g)).toHaveLength(1);
-    expect(source).toContain('active={isFocused}');
+    expect(source).toContain('const HEADER_COMPANION_SIZE = 64');
+    expect(source).toContain('const TOOLBAR_SIDE_SLOT_WIDTH = 84');
+    expect(source.match(/width: TOOLBAR_SIDE_SLOT_WIDTH/g)).toHaveLength(2);
+    expect(source).toContain('size={HEADER_COMPANION_SIZE}');
+    expect(source).toContain('thinking={isStreaming}');
+    expect(source).toContain('active={isFocused && !drawerOpen}');
+    expect(source).toContain("accessibilityLabel={isStreaming ? 'Companion is replying' : undefined}");
+    expect(source).toContain('accessibilityLiveRegion="polite"');
+  });
+
+  it('streams text only into the active request row without row presence plumbing', () => {
     expect(source).toContain('activeRequestCompanionId');
     expect(source).toContain('item.id === activeRequestCompanionId');
-    expect(source).toContain('showIcon={showCompanionPresence}');
-    expect(source).toContain("isStreaming && showCompanionPresence && item.status === 'streaming'");
+    expect(source).toContain("item.status === 'streaming'");
+    expect(source).toContain('isStreaming={isThisStreaming}');
+    expect(source).toContain('motionActive={isFocused}');
+    expect(source).not.toContain('showCompanionPresence');
+    expect(source).not.toContain('showIcon=');
     expect(source).not.toContain('<TypingIndicator');
     expect(source).not.toContain("from '@/components/companion/TypingIndicator'");
-    expect(source).not.toContain('thinking={isStreaming}');
     expect(source).not.toContain('isActive={isStreaming}');
   });
 
