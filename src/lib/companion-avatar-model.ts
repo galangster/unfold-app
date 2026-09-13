@@ -41,6 +41,154 @@ export const COMPANION_THINKING_MS = 1900;
 export const COMPANION_THINKING_DELAYS_MS = [0, 240, 480] as const;
 export const COMPANION_THINKING_Y = -3.8;
 
+export type CompanionIdleGestureName =
+  | 'curiousPeek'
+  | 'softDoubleHop'
+  | 'haloGlance'
+  | 'uprightSpin';
+
+export type CompanionIdleMotionFrame = {
+  readonly timeMs: number;
+  readonly bodyX: number;
+  readonly bodyY: number;
+  readonly bodyScaleX: number;
+  readonly bodyScaleY: number;
+  readonly faceX: number;
+  readonly faceY: number;
+  readonly faceScaleX: number;
+  readonly faceOpacity: number;
+  readonly haloY: number;
+  readonly haloRotate: number;
+};
+
+export type CompanionIdleMotionCycle = {
+  readonly durationMs: number;
+  readonly gestures: readonly {
+    readonly name: CompanionIdleGestureName;
+    readonly startMs: number;
+    readonly endMs: number;
+  }[];
+  readonly frames: readonly CompanionIdleMotionFrame[];
+};
+
+export const COMPANION_IDLE_NEUTRAL = {
+  bodyX: 0,
+  bodyY: 0,
+  bodyScaleX: 1,
+  bodyScaleY: 1,
+  faceX: 0,
+  faceY: 0,
+  faceScaleX: 1,
+  faceOpacity: 1,
+  haloY: 0,
+  haloRotate: 0,
+} as const;
+
+function idleFrame(
+  timeMs: number,
+  values: Partial<Omit<CompanionIdleMotionFrame, 'timeMs'>> = {},
+): CompanionIdleMotionFrame {
+  return { timeMs, ...COMPANION_IDLE_NEUTRAL, ...values };
+}
+
+/**
+ * Authored in VIEWBOX units so native and preview renderers share one motion
+ * contract. Quiet spans are explicit neutral frames. The body stays upright;
+ * only the halo rotates during the turn.
+ */
+export const COMPANION_IDLE_CYCLES = {
+  calm: {
+    durationMs: 44_000,
+    gestures: [
+      { name: 'curiousPeek', startMs: 6_500, endMs: 9_500 },
+      { name: 'softDoubleHop', startMs: 16_500, endMs: 18_300 },
+      { name: 'haloGlance', startMs: 25_500, endMs: 27_100 },
+      { name: 'uprightSpin', startMs: 34_600, endMs: 37_000 },
+    ],
+    frames: [
+      idleFrame(0),
+      idleFrame(6_500),
+      idleFrame(6_680, { faceX: -0.65 }),
+      idleFrame(6_900, { bodyX: -0.45, faceX: -0.85 }),
+      idleFrame(7_250, { bodyX: -0.45, faceX: -0.85 }),
+      idleFrame(7_530, { bodyX: -0.25, faceX: 0.8 }),
+      idleFrame(7_780, { bodyX: 0.35, faceX: 0.8 }),
+      idleFrame(8_120, { bodyX: 0.35, faceX: 0.8 }),
+      idleFrame(8_420, { bodyX: 0.2 }),
+      idleFrame(8_720),
+      idleFrame(9_500),
+      idleFrame(16_500),
+      idleFrame(16_680, { bodyY: 0.35, bodyScaleX: 1.014, bodyScaleY: 0.986 }),
+      idleFrame(16_940, { bodyY: -2.2, bodyScaleX: 0.995, bodyScaleY: 1.005, haloY: 0.55 }),
+      idleFrame(17_180, { bodyY: 0.28, bodyScaleX: 1.018, bodyScaleY: 0.982, haloY: -0.22 }),
+      idleFrame(17_420, { bodyY: -0.85, haloY: 0.28 }),
+      idleFrame(17_680, { bodyY: 0.18, bodyScaleX: 1.01, bodyScaleY: 0.99, haloY: -0.12 }),
+      idleFrame(17_900),
+      idleFrame(18_300),
+      idleFrame(25_500),
+      idleFrame(25_680, { faceY: -0.55 }),
+      idleFrame(25_880, { faceY: -0.75, haloY: -0.5, haloRotate: 0.8 }),
+      idleFrame(26_250, { faceY: -0.75, haloY: -0.5, haloRotate: 0.8 }),
+      idleFrame(26_520, { faceY: -0.65, haloY: 0.08, haloRotate: -0.2 }),
+      idleFrame(26_780, { faceY: -0.25 }),
+      idleFrame(27_100),
+      idleFrame(34_600),
+      idleFrame(34_790, { bodyY: 0.45, faceX: -1.5, haloRotate: -1.5 }),
+      idleFrame(35_200, { bodyY: -2.1, faceX: 11, faceScaleX: 0.7, haloY: -0.5, haloRotate: -4 }),
+      idleFrame(35_620, { bodyY: -3.7, faceX: 20, faceScaleX: 0.08, faceOpacity: 0, haloRotate: 4.5 }),
+      idleFrame(35_900, { bodyY: 0.4, faceX: -20, faceScaleX: 0.08, faceOpacity: 0, haloY: 0.2, haloRotate: 3 }),
+      idleFrame(36_320, { bodyY: -0.25, faceX: -9, faceScaleX: 0.8, haloRotate: -1.5 }),
+      idleFrame(37_000),
+      idleFrame(44_000),
+    ],
+  },
+  joyful: {
+    durationMs: 27_000,
+    gestures: [
+      { name: 'curiousPeek', startMs: 2_200, endMs: 5_200 },
+      { name: 'softDoubleHop', startMs: 7_400, endMs: 9_200 },
+      { name: 'haloGlance', startMs: 11_600, endMs: 13_200 },
+      { name: 'uprightSpin', startMs: 15_600, endMs: 18_000 },
+    ],
+    frames: [
+      idleFrame(0),
+      idleFrame(2_200),
+      idleFrame(2_370, { faceX: -1.15 }),
+      idleFrame(2_600, { bodyX: -0.9, faceX: -1.55 }),
+      idleFrame(2_930, { bodyX: -0.9, faceX: -1.55 }),
+      idleFrame(3_200, { bodyX: -0.45, faceX: 1.5 }),
+      idleFrame(3_450, { bodyX: 0.75, faceX: 1.5 }),
+      idleFrame(3_780, { bodyX: 0.75, faceX: 1.5 }),
+      idleFrame(4_100, { bodyX: 0.35 }),
+      idleFrame(4_400),
+      idleFrame(5_200),
+      idleFrame(7_400),
+      idleFrame(7_580, { bodyY: 0.7, bodyScaleX: 1.03, bodyScaleY: 0.97 }),
+      idleFrame(7_860, { bodyY: -4.1, bodyScaleX: 0.99, bodyScaleY: 1.01, haloY: 0.9 }),
+      idleFrame(8_120, { bodyY: 0.55, bodyScaleX: 1.035, bodyScaleY: 0.965, haloY: -0.45 }),
+      idleFrame(8_380, { bodyY: -1.7, haloY: 0.48 }),
+      idleFrame(8_640, { bodyY: 0.28, bodyScaleX: 1.018, bodyScaleY: 0.982, haloY: -0.22 }),
+      idleFrame(8_900),
+      idleFrame(9_200),
+      idleFrame(11_600),
+      idleFrame(11_770, { faceY: -0.85 }),
+      idleFrame(11_980, { faceY: -1.15, haloY: -1.15, haloRotate: 1.8 }),
+      idleFrame(12_350, { faceY: -1.15, haloY: -1.15, haloRotate: 1.8 }),
+      idleFrame(12_610, { faceY: -0.95, haloY: 0.16, haloRotate: -0.4 }),
+      idleFrame(12_880, { faceY: -0.35 }),
+      idleFrame(13_200),
+      idleFrame(15_600),
+      idleFrame(15_790, { bodyY: 0.8, faceX: -2.2, haloRotate: -2.5 }),
+      idleFrame(16_200, { bodyY: -3.6, faceX: 11, faceScaleX: 0.7, haloY: -0.8, haloRotate: -5 }),
+      idleFrame(16_620, { bodyY: -6.5, faceX: 20, faceScaleX: 0.08, faceOpacity: 0, haloRotate: 6 }),
+      idleFrame(16_900, { bodyY: 0.7, faceX: -20, faceScaleX: 0.08, faceOpacity: 0, haloY: 0.3, haloRotate: 4 }),
+      idleFrame(17_320, { bodyY: -0.45, faceX: -9, faceScaleX: 0.8, haloRotate: -2 }),
+      idleFrame(18_000),
+      idleFrame(27_000),
+    ],
+  },
+} as const satisfies Record<'calm' | 'joyful', CompanionIdleMotionCycle>;
+
 type EyeDials = {
   readonly w: number;
   readonly h: number;

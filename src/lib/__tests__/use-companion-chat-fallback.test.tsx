@@ -114,10 +114,40 @@ function streamingResponseFromChunks(chunks: string[]) {
   };
 }
 
+function heldOpenStream(firstChunk?: string) {
+  const encoder = new TextEncoder();
+  let firstRead = true;
+  const reader = {
+    read: jest.fn(() => {
+      if (firstRead && firstChunk !== undefined) {
+        firstRead = false;
+        return Promise.resolve({ done: false, value: encoder.encode(firstChunk) });
+      }
+      return new Promise<never>(() => {});
+    }),
+    cancel: jest.fn(() => new Promise<void>(() => {})),
+    releaseLock: jest.fn(),
+  };
+
+  return {
+    response: { ok: true, body: { getReader: () => reader } },
+    reader,
+  };
+}
+
 function jsonResponse(payload: unknown) {
   return {
     ok: true,
     json: async () => payload,
+  };
+}
+
+function streamingRejectedResponse(status = 406) {
+  return {
+    ok: false,
+    status,
+    headers: { get: () => null },
+    text: async () => '',
   };
 }
 
@@ -200,7 +230,7 @@ describe('sendMessage outcome', () => {
     await act(async () => { await firstSend; });
   });
 
-  it('resolves "error" when stream and fallback both fail', async () => {
+  it('resolves "error" without retrying when fetch fails before a response', async () => {
     mockFetch.mockRejectedValue(new Error('Network error'));
 
     let hook: ReturnType<typeof useCompanionChat> | null = null;
@@ -215,6 +245,7 @@ describe('sendMessage outcome', () => {
     });
 
     expect(outcome).toBe('error');
+    expect(mockFetch).toHaveBeenCalledTimes(1);
     const companion = useCompanionChatStore
       .getState()
       .conversations[0]
@@ -242,6 +273,94 @@ describe('sendMessage outcome', () => {
     expect(outcome).toBe('sent');
   });
 
+  it('ends request state on the done event without waiting for stream EOF or reader cancellation', async () => {
+    const stream = heldOpenStream(
+      'data: {"t":"Complete answer"}\n\ndata: {"d":true,"s":["Continue"]}\n\n',
+    );
+    mockFetch.mockResolvedValueOnce(stream.response as any);
+
+    let hook: ReturnType<typeof useCompanionChat> | null = null;
+    await act(async () => {
+      createTestRenderer(<HookHarness onReady={(next) => { hook = next; }} />);
+      await Promise.resolve();
+    });
+
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await hook!.sendMessage('Finish this answer');
+    });
+
+    expect(outcome).toBe('sent');
+    expect(hook!.isStreaming).toBe(false);
+    expect(stream.reader.cancel).toHaveBeenCalledTimes(1);
+    expect(stream.reader.read).toHaveBeenCalledTimes(1);
+    const reply = useCompanionChatStore.getState().conversations[0]
+      ?.messages.find((message) => message.role === 'companion');
+    expect(reply).toMatchObject({ status: 'complete', content: 'Complete answer' });
+  });
+
+  it('skips null and primitive SSE payloads before a valid done event', async () => {
+    const stream = heldOpenStream(
+      'data: null\n\ndata: 42\n\ndata: "ignored"\n\n' +
+      'data: {"t":"Valid answer"}\n\ndata: {"d":true,"s":[]}\n\n',
+    );
+    mockFetch.mockResolvedValueOnce(stream.response as any);
+
+    let hook: ReturnType<typeof useCompanionChat> | null = null;
+    await act(async () => {
+      createTestRenderer(<HookHarness onReady={(next) => { hook = next; }} />);
+      await Promise.resolve();
+    });
+
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await hook!.sendMessage('Ignore invalid events');
+    });
+
+    expect(outcome).toBe('sent');
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(stream.reader.cancel).toHaveBeenCalledTimes(1);
+    const reply = useCompanionChatStore.getState().conversations[0]
+      ?.messages.find((message) => message.role === 'companion');
+    expect(reply).toMatchObject({ status: 'complete', content: 'Valid answer' });
+  });
+
+  it('aborts during auth without starting a later fetch', async () => {
+    const { getAuthHeaders } = jest.requireMock('@/lib/api-config') as { getAuthHeaders: jest.Mock };
+    let releaseAuth!: () => void;
+    getAuthHeaders.mockImplementationOnce(() => new Promise((resolve) => {
+      releaseAuth = () => resolve({ 'Content-Type': 'application/json' });
+    }));
+
+    let hook: ReturnType<typeof useCompanionChat> | null = null;
+    await act(async () => {
+      createTestRenderer(<HookHarness onReady={(next) => { hook = next; }} />);
+      await Promise.resolve();
+    });
+
+    let pending!: Promise<unknown>;
+    act(() => {
+      pending = hook!.sendMessage('Cancel before auth finishes');
+    });
+    expect(hook!.isStreaming).toBe(true);
+
+    let outcome: unknown;
+    await act(async () => {
+      hook!.stopGeneration();
+      outcome = await pending;
+    });
+
+    expect(outcome).toBe('error');
+    expect(hook!.isStreaming).toBe(false);
+    expect(mockFetch).not.toHaveBeenCalled();
+
+    releaseAuth();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
   it('sends streamConversationId and includes the current user turn once', async () => {
     mockFetch.mockResolvedValueOnce(streamingResponseFromChunks([
       'data: {"t":"Hello"}\n\n',
@@ -266,7 +385,7 @@ describe('sendMessage outcome', () => {
   });
 
   it('keeps the request conversationId on the stream conversation after a switch during auth', async () => {
-    const { getAuthHeaders } = require('@/lib/api-config') as { getAuthHeaders: jest.Mock };
+    const { getAuthHeaders } = jest.requireMock('@/lib/api-config') as { getAuthHeaders: jest.Mock };
     let releaseAuth!: () => void;
     getAuthHeaders.mockImplementationOnce(() => new Promise((resolve) => {
       releaseAuth = () => resolve({ 'Content-Type': 'application/json' });
@@ -428,6 +547,7 @@ describe('retry error replies in place', () => {
     act(() => {
       first = hook!.regenerateReply({ companionId: 'e1' });
     });
+    expect(hook!.isStreaming).toBe(true);
     let second!: string;
     await act(async () => {
       second = await hook!.regenerateReply({ companionId: 'e1' });
@@ -435,6 +555,7 @@ describe('retry error replies in place', () => {
     expect(second).toBe('noop');
     release();
     await act(async () => { await first; });
+    expect(hook!.isStreaming).toBe(false);
   });
 });
 
@@ -508,69 +629,12 @@ describe('useCompanionChat fallback streaming', () => {
     });
   });
 
-  it.each(['stop', 'switch'] as const)(
-    'keeps the latest fallback prefix before the first store flush on %s',
-    async (action) => {
-      jest.useFakeTimers();
-      const fullResponse = 'One small pause can make room for a thoughtful prayer. '.repeat(10);
-      mockFetch
-        .mockResolvedValueOnce(streamingResponseWithoutDone())
-        .mockResolvedValueOnce(jsonResponse({ content: fullResponse }));
-
-      let hook: ReturnType<typeof useCompanionChat> | null = null;
-      let view: ReturnType<typeof renderer.create> | undefined;
-      try {
-        await act(async () => {
-          view = createTestRenderer(<HookHarness onReady={(next) => { hook = next; }} />);
-        });
-        let pending!: ReturnType<ReturnType<typeof useCompanionChat>['sendMessage']>;
-        await act(async () => {
-          pending = hook!.sendMessage('Help me slow down.');
-          await jest.advanceTimersByTimeAsync(8);
-        });
-        expect(mockFetch).toHaveBeenCalledTimes(2);
-        const originalId = useCompanionChatStore.getState().activeConversationId;
-
-        act(() => {
-          hook!.stopGeneration();
-          if (action === 'switch') hook!.startNewConversation();
-        });
-        await act(async () => {
-          await jest.advanceTimersByTimeAsync(8);
-          await pending;
-        });
-
-        const reply = useCompanionChatStore.getState().conversations
-          .find((conversation) => conversation.id === originalId)!
-          .messages.find((message) => message.role === 'companion')!;
-        expect(reply).toMatchObject({ status: 'error', interrupted: true });
-        expect(reply.content).toMatch(/^One(?:\s|$)/);
-        expect(fullResponse.startsWith(reply.content)).toBe(true);
-        expect(reply.content.length).toBeLessThan(fullResponse.length);
-        if (action === 'switch') {
-          const state = useCompanionChatStore.getState();
-          expect(state.conversations.find((conversation) => conversation.id === state.activeConversationId)?.messages)
-            .toEqual([]);
-        }
-
-        await act(async () => { await jest.advanceTimersByTimeAsync(200); });
-        const savedReply = useCompanionChatStore.getState().conversations
-          .find((conversation) => conversation.id === originalId)!
-          .messages.find((message) => message.id === reply.id);
-        expect(savedReply).toEqual(reply);
-      } finally {
-        act(() => { view?.unmount(); });
-        jest.useRealTimers();
-      }
-    },
-  );
-
-  it('keeps the final non-streaming fallback text after delayed progressive-reveal updates fire', async () => {
+  it('commits a full non-streaming response and ends request state without a synthetic reveal', async () => {
     const fullResponse =
       'Here is the complete study-series answer with a finished ending that should remain visible.';
 
     mockFetch
-      .mockResolvedValueOnce(streamingResponseWithoutDone())
+      .mockResolvedValueOnce(streamingRejectedResponse())
       .mockResolvedValueOnce(jsonResponse({
         content: fullResponse,
         suggestions: ['Start the study'],
@@ -586,7 +650,7 @@ describe('useCompanionChat fallback streaming', () => {
       await hook!.sendMessage('Can you make this a longer study series?');
     });
 
-    let companion = useCompanionChatStore
+    const companion = useCompanionChatStore
       .getState()
       .conversations[0]
       .messages.find((message) => message.role === 'companion');
@@ -596,21 +660,8 @@ describe('useCompanionChat fallback streaming', () => {
       content: fullResponse,
       suggestions: ['Start the study'],
     });
-
-    await act(async () => {
-      await wait(150);
-    });
-
-    companion = useCompanionChatStore
-      .getState()
-      .conversations[0]
-      .messages.find((message) => message.role === 'companion');
-
-    expect(companion).toMatchObject({
-      status: 'complete',
-      content: fullResponse,
-      suggestions: ['Start the study'],
-    });
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(hook!.isStreaming).toBe(false);
   });
 
   it('uses Expo fetch streaming without the legacy React Native textStreaming option', async () => {
@@ -793,12 +844,143 @@ describe('conversation-scoped streaming (WR-09)', () => {
 });
 
 
+describe('active request cancellation', () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+    act(() => {
+      useCompanionChatStore.getState().clearAllConversations();
+    });
+  });
+
+  it('settles an aborted pending read without waiting for read or reader cancellation', async () => {
+    const stream = heldOpenStream();
+    mockFetch.mockResolvedValueOnce(stream.response as any);
+
+    let hook: ReturnType<typeof useCompanionChat> | null = null;
+    await act(async () => {
+      createTestRenderer(<HookHarness onReady={(next) => { hook = next; }} />);
+      await Promise.resolve();
+    });
+
+    let pending!: Promise<unknown>;
+    await act(async () => {
+      pending = hook!.sendMessage('Stop this pending read');
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(hook!.isStreaming).toBe(true);
+
+    let outcome: unknown;
+    await act(async () => {
+      hook!.stopGeneration();
+      outcome = await pending;
+    });
+
+    expect(outcome).toBe('error');
+    expect(hook!.isStreaming).toBe(false);
+    expect(stream.reader.cancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('settles a stop while the non-streaming response body remains pending', async () => {
+    let releaseBody!: () => void;
+    const json = jest.fn(() => new Promise((resolve) => {
+      releaseBody = () => resolve({ content: 'Too late', suggestions: [] });
+    }));
+    mockFetch
+      .mockResolvedValueOnce(streamingRejectedResponse())
+      .mockResolvedValueOnce({ ok: true, json });
+
+    let hook: ReturnType<typeof useCompanionChat> | null = null;
+    await act(async () => {
+      createTestRenderer(<HookHarness onReady={(next) => { hook = next; }} />);
+      await Promise.resolve();
+    });
+
+    let pending!: Promise<unknown>;
+    await act(async () => {
+      pending = hook!.sendMessage('Stop while reading JSON');
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(json).toHaveBeenCalledTimes(1);
+    expect(hook!.isStreaming).toBe(true);
+
+    let outcome: unknown;
+    await act(async () => {
+      hook!.stopGeneration();
+      outcome = await pending;
+    });
+
+    expect(outcome).toBe('error');
+    expect(hook!.isStreaming).toBe(false);
+    releaseBody();
+    await act(async () => { await Promise.resolve(); });
+    const reply = useCompanionChatStore.getState().conversations[0]
+      ?.messages.find((message) => message.role === 'companion');
+    expect(reply?.status).toBe('error');
+    expect(reply?.content).not.toBe('Too late');
+  });
+
+  it('cancels the owned reader when a stream read fails', async () => {
+    const reader = {
+      read: jest.fn(() => Promise.reject(new Error('Reader failed'))),
+      cancel: jest.fn(() => new Promise<void>(() => {})),
+      releaseLock: jest.fn(),
+    };
+    mockFetch.mockResolvedValueOnce({ ok: true, body: { getReader: () => reader } });
+
+    let hook: ReturnType<typeof useCompanionChat> | null = null;
+    await act(async () => {
+      createTestRenderer(<HookHarness onReady={(next) => { hook = next; }} />);
+      await Promise.resolve();
+    });
+
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await hook!.sendMessage('Fail this read');
+    });
+
+    expect(outcome).toBe('error');
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(reader.cancel).toHaveBeenCalledTimes(1);
+    expect(hook!.isStreaming).toBe(false);
+  });
+});
+
+
 describe('server error events never trigger the non-streaming fallback (P0-3)', () => {
   beforeEach(() => {
     mockFetch.mockReset();
     act(() => {
       useCompanionChatStore.getState().clearAllConversations();
     });
+  });
+
+  it('ends on a server error event without waiting for stream EOF or reader cancellation', async () => {
+    const stream = heldOpenStream(
+      'data: {"error":"The companion is over capacity right now."}\n\n',
+    );
+    mockFetch
+      .mockResolvedValueOnce(stream.response as any)
+      .mockResolvedValueOnce(jsonResponse({ content: 'Billed twice!', suggestions: [] }));
+
+    let hook: ReturnType<typeof useCompanionChat> | null = null;
+    await act(async () => {
+      createTestRenderer(<HookHarness onReady={(next) => { hook = next; }} />);
+      await Promise.resolve();
+    });
+
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await hook!.sendMessage('question');
+    });
+
+    expect(outcome).toBe('error');
+    expect(hook!.isStreaming).toBe(false);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(stream.reader.cancel).toHaveBeenCalledTimes(1);
+    expect(stream.reader.read).toHaveBeenCalledTimes(1);
   });
 
   it('surfaces a server {error} event with no partial text as a retryable error without a second request', async () => {
@@ -890,10 +1072,13 @@ describe('server error events never trigger the non-streaming fallback (P0-3)', 
     expect(hook!.error).toMatch(/incomplete/i);
   });
 
-  it('still falls back when streaming is unavailable (no reader)', async () => {
+  it('surfaces an accepted response without a reader and permits an explicit retry', async () => {
     mockFetch
       .mockResolvedValueOnce({ ok: true, body: undefined })
-      .mockResolvedValueOnce(jsonResponse({ content: 'Fallback answer', suggestions: [] }));
+      .mockResolvedValueOnce(streamingResponseFromChunks([
+        'data: {"t":"Retried answer"}\n\n',
+        'data: {"d":true,"s":[]}\n\n',
+      ]));
 
     let hook: ReturnType<typeof useCompanionChat> | null = null;
     await act(async () => {
@@ -904,15 +1089,49 @@ describe('server error events never trigger the non-streaming fallback (P0-3)', 
     let outcome: unknown;
     await act(async () => {
       outcome = await hook!.sendMessage('question');
-      await wait(200);
+    });
+
+    expect(outcome).toBe('error');
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const failedReply = useCompanionChatStore.getState().conversations[0]
+      ?.messages.find((m) => m.role === 'companion');
+    expect(failedReply?.status).toBe('error');
+
+    await act(async () => {
+      outcome = await hook!.regenerateReply({ companionId: failedReply!.id });
     });
 
     expect(outcome).toBe('sent');
-    expect(mockFetch).toHaveBeenCalledTimes(2); // legitimate fallback path
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    const messages = useCompanionChatStore.getState().conversations[0]?.messages ?? [];
+    expect(messages.filter((message) => message.role === 'user')).toHaveLength(1);
+    expect(messages.find((message) => message.id === failedReply!.id)).toMatchObject({
+      status: 'complete',
+      content: 'Retried answer',
+    });
+  });
+
+  it('surfaces accepted EOF without done and never starts a fallback request', async () => {
+    mockFetch
+      .mockResolvedValueOnce(streamingResponseWithoutDone())
+      .mockResolvedValueOnce(jsonResponse({ content: 'Duplicate answer', suggestions: [] }));
+
+    let hook: ReturnType<typeof useCompanionChat> | null = null;
+    await act(async () => {
+      createTestRenderer(<HookHarness onReady={(next) => { hook = next; }} />);
+      await Promise.resolve();
+    });
+
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await hook!.sendMessage('question');
+    });
+
+    expect(outcome).toBe('error');
+    expect(mockFetch).toHaveBeenCalledTimes(1);
     const reply = useCompanionChatStore.getState().conversations[0]
-      ?.messages.find((m) => m.role === 'companion');
-    expect(reply?.status).toBe('complete');
-    expect(reply?.content).toBe('Fallback answer');
+      ?.messages.find((message) => message.role === 'companion');
+    expect(reply?.status).toBe('error');
   });
 });
 
@@ -1038,6 +1257,109 @@ describe('foreground resume reconciliation', () => {
       content: 'Elijah heard a gentle whisper',
     });
   });
+
+  it('preserves a short suspension and aborts a request after the existing stall budget', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-09-13T12:00:00.000Z'));
+    const stream = heldOpenStream();
+    mockFetch.mockResolvedValueOnce(stream.response as any);
+    const addEventListener = AppState.addEventListener as unknown as jest.Mock;
+    const listenerCallsBefore = addEventListener.mock.calls.length;
+
+    let hook: ReturnType<typeof useCompanionChat> | null = null;
+    try {
+      await act(async () => {
+        createTestRenderer(<HookHarness onReady={(next) => { hook = next; }} />);
+        await Promise.resolve();
+      });
+      const changeListener = addEventListener.mock.calls
+        .slice(listenerCallsBefore)
+        .find(([event]: [string]) => event === 'change')?.[1] as (status: string) => void;
+
+      let pending!: Promise<unknown>;
+      await act(async () => {
+        pending = hook!.sendMessage('Keep this alive briefly');
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(hook!.isStreaming).toBe(true);
+
+      act(() => {
+        changeListener('background');
+        jest.setSystemTime(new Date('2026-09-13T12:00:29.999Z'));
+        changeListener('active');
+      });
+      expect(hook!.isStreaming).toBe(true);
+      expect(stream.reader.cancel).not.toHaveBeenCalled();
+
+      let outcome: unknown;
+      await act(async () => {
+        jest.setSystemTime(new Date('2026-09-13T12:00:30.000Z'));
+        changeListener('active');
+        outcome = await pending;
+      });
+
+      expect(outcome).toBe('error');
+      expect(hook!.isStreaming).toBe(false);
+      expect(stream.reader.cancel).toHaveBeenCalledTimes(1);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('settles foreground expiry while a budget response body remains pending', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-09-13T12:00:00.000Z'));
+    let releaseBody!: () => void;
+    const text = jest.fn(() => new Promise<string>((resolve) => {
+      releaseBody = () => resolve(JSON.stringify({
+        error: { code: 'SPEND_CAP_REACHED', retryAfter: 60 },
+      }));
+    }));
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 429,
+      headers: { get: () => '60' },
+      text,
+    });
+    const addEventListener = AppState.addEventListener as unknown as jest.Mock;
+    const listenerCallsBefore = addEventListener.mock.calls.length;
+
+    let hook: ReturnType<typeof useCompanionChat> | null = null;
+    try {
+      await act(async () => {
+        createTestRenderer(<HookHarness onReady={(next) => { hook = next; }} />);
+        await Promise.resolve();
+      });
+      const changeListener = addEventListener.mock.calls
+        .slice(listenerCallsBefore)
+        .find(([event]: [string]) => event === 'change')?.[1] as (status: string) => void;
+
+      let pending!: Promise<unknown>;
+      await act(async () => {
+        pending = hook!.sendMessage('Wait on the budget body');
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(text).toHaveBeenCalledTimes(1);
+
+      let outcome: unknown;
+      await act(async () => {
+        jest.setSystemTime(new Date('2026-09-13T12:00:30.000Z'));
+        changeListener('active');
+        outcome = await pending;
+      });
+
+      expect(outcome).toBe('error');
+      expect(hook!.isStreaming).toBe(false);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      releaseBody();
+      await act(async () => { await Promise.resolve(); });
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });
 
 describe('daily AI budget (429 SPEND_CAP_REACHED)', () => {
@@ -1114,7 +1436,7 @@ describe('daily AI budget (429 SPEND_CAP_REACHED)', () => {
 
   it('shows the budget copy when the non-streaming fallback is the request that hits the budget', async () => {
     mockFetch
-      .mockResolvedValueOnce({ ok: true, body: undefined }) // no reader → legitimate fallback
+      .mockResolvedValueOnce(streamingRejectedResponse())
       .mockResolvedValueOnce(rateLimited('SPEND_CAP_REACHED', 600));
 
     const { hook, outcome, reply } = await sendOnce('question');

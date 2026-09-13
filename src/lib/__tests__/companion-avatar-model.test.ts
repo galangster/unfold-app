@@ -4,6 +4,8 @@ import {
   COMPANION_IDENTITY_IN_DELAY_MS,
   COMPANION_IDENTITY_IN_MS,
   COMPANION_IDENTITY_OUT_MS,
+  COMPANION_IDLE_CYCLES,
+  COMPANION_IDLE_NEUTRAL,
   COMPANION_MORPH_MS,
   COMPANION_SPHERE_SCALE,
   COMPANION_SPLIT_X,
@@ -58,6 +60,66 @@ describe('companion avatar model', () => {
     );
     expect(COMPANION_SPHERE_SCALE).toBe(0.27);
     expect(COMPANION_SPLIT_X).toBe(17.5);
+  });
+
+  it('keeps every idle gesture isolated between exact neutral frames', () => {
+    for (const cycle of Object.values(COMPANION_IDLE_CYCLES)) {
+      const times = cycle.frames.map((frame) => frame.timeMs);
+      expect(times).toEqual([...times].sort((a, b) => a - b));
+      expect(times[0]).toBe(0);
+      expect(times.at(-1)).toBe(cycle.durationMs);
+
+      cycle.gestures.forEach((gesture, index) => {
+        if (index > 0) {
+          expect(gesture.startMs).toBeGreaterThan(cycle.gestures[index - 1].endMs);
+        }
+        for (const boundary of [gesture.startMs, gesture.endMs]) {
+          const { timeMs: _, ...pose } = cycle.frames.find((frame) => frame.timeMs === boundary)!;
+          expect(pose).toEqual(COMPANION_IDLE_NEUTRAL);
+        }
+      });
+    }
+  });
+
+  it('authors the three new gestures with the intended lead and follow timing', () => {
+    for (const cycle of Object.values(COMPANION_IDLE_CYCLES)) {
+      const framesFor = (name: (typeof cycle.gestures)[number]['name']) => {
+        const gesture = cycle.gestures.find((candidate) => candidate.name === name)!;
+        return cycle.frames.filter(
+          (frame) => frame.timeMs >= gesture.startMs && frame.timeMs <= gesture.endMs,
+        );
+      };
+
+      const peek = framesFor('curiousPeek');
+      expect(peek.find((frame) => frame.faceX !== 0)!.timeMs).toBeLessThan(
+        peek.find((frame) => frame.bodyX !== 0)!.timeMs,
+      );
+      expect(peek.some((frame) => frame.faceX < 0)).toBe(true);
+      expect(peek.some((frame) => frame.faceX > 0)).toBe(true);
+
+      const hop = framesFor('softDoubleHop');
+      const hopPeaks = hop.filter((frame) => frame.bodyY < 0);
+      expect(hop.some((frame) => frame.bodyY > 0 && frame.bodyScaleY < 1)).toBe(true);
+      expect(Math.abs(hopPeaks[0].bodyY)).toBeGreaterThan(Math.abs(hopPeaks[1].bodyY));
+      expect(hopPeaks[0].haloY).toBeGreaterThan(0);
+
+      const haloGlance = framesFor('haloGlance');
+      expect(haloGlance.find((frame) => frame.faceY < 0)!.timeMs).toBeLessThan(
+        haloGlance.find((frame) => frame.haloY < 0)!.timeMs,
+      );
+    }
+  });
+
+  it('gives calm mode longer quiet spans and smaller motion', () => {
+    const calm = COMPANION_IDLE_CYCLES.calm;
+    const joyful = COMPANION_IDLE_CYCLES.joyful;
+    const amplitude = (cycle: typeof calm | typeof joyful, key: 'bodyX' | 'bodyY' | 'haloY') =>
+      Math.max(...cycle.frames.map((frame) => Math.abs(frame[key])));
+
+    expect(calm.durationMs).toBeGreaterThan(joyful.durationMs);
+    expect(amplitude(calm, 'bodyX')).toBeLessThan(amplitude(joyful, 'bodyX'));
+    expect(amplitude(calm, 'bodyY')).toBeLessThan(amplitude(joyful, 'bodyY'));
+    expect(amplitude(calm, 'haloY')).toBeLessThan(amplitude(joyful, 'haloY'));
   });
 
   it('keeps a square layout whose split fits inside the view box', () => {
