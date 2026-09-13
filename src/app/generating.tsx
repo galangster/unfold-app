@@ -177,6 +177,7 @@ export default function GeneratingScreen() {
   const colors = resolveGeneratingPalette(themeColors, isDark);
 
   const user = useUnfoldStore((s) => s.user);
+  const hasUser = user != null;
   const startGenerationSession = useUnfoldStore((s) => s.startGenerationSession);
   const updateGenerationSessionProgress = useUnfoldStore((s) => s.updateGenerationSessionProgress);
   const failGenerationSession = useUnfoldStore((s) => s.failGenerationSession);
@@ -926,7 +927,7 @@ export default function GeneratingScreen() {
       stopOwnedPolling();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [hasUser]);
 
   // ========== HANDLERS ==========
 
