@@ -46,7 +46,7 @@ describe('CompanionOrb touchable-only-when-pressable source contract', () => {
     expect(inlineOrb).toContain('thinking={isStreaming && thinkingMounted}');
     expect(inlineOrb).toContain('active={active}');
     expect(inlineOrb).not.toContain('onPress');
-    expect(askIndex).toContain('showIcon={isLastMessage}');
+    expect(askIndex).toContain('showIcon={showCompanionPresence}');
     expect(askIndex).not.toMatch(/isActive=\{isStreaming\}/);
   });
 });

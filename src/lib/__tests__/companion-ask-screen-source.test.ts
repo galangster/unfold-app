@@ -49,7 +49,10 @@ describe('Ask header and retry wiring', () => {
     expect(source).toContain('companion-profile-button');
     expect(source.match(/<CompanionOrb/g)).toHaveLength(1);
     expect(source).toContain('active={isFocused}');
-    expect(source).toContain('showIcon={isLastMessage}');
+    expect(source).toContain('activeRequestCompanionId');
+    expect(source).toContain('item.id === activeRequestCompanionId');
+    expect(source).toContain('showIcon={showCompanionPresence}');
+    expect(source).toContain("isStreaming && showCompanionPresence && item.status === 'streaming'");
     expect(source).not.toContain('<TypingIndicator');
     expect(source).not.toContain("from '@/components/companion/TypingIndicator'");
     expect(source).not.toContain('thinking={isStreaming}');

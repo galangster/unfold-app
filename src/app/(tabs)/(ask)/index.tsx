@@ -78,6 +78,7 @@ const MessageItem = React.memo(function MessageItem({
   item,
   isFirstInGroup,
   isLastMessage,
+  showCompanionPresence,
   isStreaming,
   companionExpression,
   isFocused,
@@ -90,6 +91,7 @@ const MessageItem = React.memo(function MessageItem({
   item: CompanionMessage;
   isFirstInGroup: boolean;
   isLastMessage: boolean;
+  showCompanionPresence: boolean;
   isStreaming: boolean;
   companionExpression: ReturnType<typeof resolveCompanionPersonality>;
   isFocused: boolean;
@@ -110,14 +112,14 @@ const MessageItem = React.memo(function MessageItem({
   }
 
   // Companion message
-  const isThisStreaming = isStreaming && item.status === 'streaming';
+  const isThisStreaming = isStreaming && showCompanionPresence && item.status === 'streaming';
   const showActions = item.status === 'complete' && isLastMessage;
 
   return (
     <View style={gapStyle}>
       <CompanionMessageContent
         message={item}
-        showIcon={isLastMessage}
+        showIcon={showCompanionPresence}
         isStreaming={isThisStreaming}
         companionExpression={companionExpression}
         active={isFocused}
@@ -145,6 +147,7 @@ const MessageItem = React.memo(function MessageItem({
   prev.item.feedback === next.item.feedback &&
   prev.item.feedbackReason === next.item.feedbackReason &&
   prev.isStreaming === next.isStreaming &&
+  prev.showCompanionPresence === next.showCompanionPresence &&
   prev.companionExpression === next.companionExpression &&
   prev.isFocused === next.isFocused &&
   prev.reducedMotion === next.reducedMotion &&
@@ -191,6 +194,7 @@ export default function CompanionScreen() {
   const {
     messages,
     isStreaming,
+    activeRequestCompanionId,
     suggestions,
     error,
     sendMessage,
@@ -413,6 +417,9 @@ export default function CompanionScreen() {
       const prevMsg = index < msgs.length - 1 ? msgs[index + 1] : null;
       const isFirstInGroup = !prevMsg || prevMsg.role !== item.role;
       const isLastMessage = index === 0;
+      const showCompanionPresence = activeRequestCompanionId
+        ? item.id === activeRequestCompanionId
+        : isLastMessage;
 
       // Retry an error row in place through regenerateReply. The hook pairs
       // the preceding user turn and drops later exchanges from the request.
@@ -431,6 +438,7 @@ export default function CompanionScreen() {
           item={item}
           isFirstInGroup={isFirstInGroup}
           isLastMessage={isLastMessage}
+          showCompanionPresence={showCompanionPresence}
           isStreaming={isStreaming}
           companionExpression={companionPersonality}
           isFocused={isFocused}
@@ -442,7 +450,7 @@ export default function CompanionScreen() {
         />
       );
     },
-    [isStreaming, companionPersonality, isFocused, reducedMotion, handleVersePress, onRegenerate, handleSaveToJournal, hasCurrentDevotional]
+    [activeRequestCompanionId, isStreaming, companionPersonality, isFocused, reducedMotion, handleVersePress, onRegenerate, handleSaveToJournal, hasCurrentDevotional]
   );
 
   const keyExtractor = useCallback((item: CompanionMessage) => item.id, []);

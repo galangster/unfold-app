@@ -415,6 +415,9 @@ export function useCompanionChat() {
   const [, setStreamVersion] = useState(0);
   const bumpStreamVersion = useCallback(() => setStreamVersion((v) => v + 1), []);
   const isStreaming = activeConversationId != null && inFlightRef.current.has(activeConversationId);
+  const activeRequestCompanionId = activeConversationId
+    ? inFlightRef.current.get(activeConversationId)?.companionId ?? null
+    : null;
 
   // Phase 4: Gather user context
   const userName = useUnfoldStore((s) => s.user?.name ?? null);
@@ -947,6 +950,7 @@ export function useCompanionChat() {
   return {
     messages,
     isStreaming,
+    activeRequestCompanionId,
     isSearching,
     suggestions,
     error,

@@ -512,6 +512,52 @@ describe('retry error replies in place', () => {
     expect(sentCompanionPayload().messages.map((message) => message.content)).toEqual(['Older question']);
   });
 
+  it('exposes the older reply id while that row is actively retrying', async () => {
+    const stream = heldOpenStream();
+    mockFetch.mockResolvedValueOnce(stream.response as any);
+    useCompanionChatStore.setState({
+      activeConversationId: 'c1',
+      conversations: [{
+        id: 'c1',
+        messages: [
+          { id: 'u1', role: 'user', content: 'Older question', timestamp: 1, status: 'sent' },
+          { id: 'e1', role: 'companion', content: 'Failed', timestamp: 2, status: 'error' },
+          { id: 'u2', role: 'user', content: 'Later question', timestamp: 3, status: 'sent' },
+          { id: 'c2', role: 'companion', content: 'Later reply', timestamp: 4, status: 'complete' },
+        ],
+        createdAt: 1,
+        lastMessageAt: Date.now(),
+        title: 'Older question',
+        topicTags: [],
+        archived: false,
+      }],
+    });
+
+    let hook: ReturnType<typeof useCompanionChat> | null = null;
+    await act(async () => {
+      createTestRenderer(<HookHarness onReady={(next) => { hook = next; }} />);
+      await Promise.resolve();
+    });
+
+    let pending!: Promise<unknown>;
+    await act(async () => {
+      pending = hook!.regenerateReply({ companionId: 'e1' });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(hook!.activeRequestCompanionId).toBe('e1');
+    const messagesDuringRetry = useCompanionChatStore.getState().conversations[0]?.messages ?? [];
+    expect(messagesDuringRetry.find((message) => message.id === 'e1')?.status).toBe('streaming');
+    expect(messagesDuringRetry.find((message) => message.id === 'c2')?.status).toBe('complete');
+
+    await act(async () => {
+      hook!.stopGeneration();
+      await pending;
+    });
+    expect(hook!.activeRequestCompanionId).toBeNull();
+  });
+
   it('keeps the no-double-send gate while a retry is in flight', async () => {
     let release!: () => void;
     mockFetch.mockReturnValueOnce(new Promise((resolve) => {
