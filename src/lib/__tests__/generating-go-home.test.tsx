@@ -290,6 +290,29 @@ describe('regression: Jordan item 6 — Go home from /generating', () => {
     expect(mockLogBugError).not.toHaveBeenCalled();
   });
 
+  it('keeps the scheduled retry when the hydrated user profile updates', async () => {
+    mockSubmitGenerationJob
+      .mockRejectedValueOnce(new Error(EXPO_LOST_CONNECTION))
+      .mockResolvedValueOnce({ jobId: 'job-profile-recovered', devotionalId: 'devo-profile-recovered' });
+    mockPollJobStatus.mockReturnValue(new Promise(() => {}));
+
+    const tree = await renderScreen();
+    mounted.push(tree);
+    const requestId = mockSubmitGenerationJob.mock.calls[0][0].requestId;
+
+    await act(async () => {
+      useUnfoldStore.setState({ user: { ...user, name: 'Jordan updated' } as UserProfile });
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(1000);
+    });
+    await flush();
+
+    expect(mockSubmitGenerationJob).toHaveBeenCalledTimes(2);
+    expect(mockSubmitGenerationJob.mock.calls[1][0].requestId).toBe(requestId);
+    expect(mockPollJobStatus).toHaveBeenCalledWith('job-profile-recovered', expect.any(Number));
+  });
+
   it('surfaces and reports the exact Expo connection loss after one automatic retry', async () => {
     mockSubmitGenerationJob
       .mockRejectedValueOnce(new Error(EXPO_LOST_CONNECTION))
