@@ -5,6 +5,10 @@ module.exports = {
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
   },
+  transform: {
+    '^.+\\.(js|ts|tsx)$': 'babel-jest',
+    '\\.(m4a|mp3|wav)$': '<rootDir>/jest.audio-asset-transformer.js',
+  },
   testMatch: [
     '**/__tests__/**/*.test.ts',
     '**/__tests__/**/*.test.tsx',

@@ -12,6 +12,26 @@ const mockTranscribe = jest.fn();
 const mockDeleteAudio = jest.fn();
 const mockPauseForVoiceInput = jest.fn(() => false);
 const mockResumeAfterVoiceInput = jest.fn(async (..._args: unknown[]) => undefined);
+const mockRecordingLease = {
+  configure: jest.fn(async () => true),
+  isActive: jest.fn(() => true),
+  release: jest.fn(),
+};
+const mockReviewLease = {
+  configure: jest.fn(async () => true),
+  isActive: jest.fn(() => true),
+  release: jest.fn(),
+};
+
+let mockRecordingInvalidated: (() => void) | undefined;
+
+jest.mock('@/lib/voice-audio-session', () => ({
+  acquireVoiceRecordingSession: (onInvalidated: () => void) => {
+    mockRecordingInvalidated = onInvalidated;
+    return mockRecordingLease;
+  },
+  acquireVoiceReviewSession: () => mockReviewLease,
+}));
 
 const mockRecorder = {
   isRecording: false,
@@ -209,6 +229,13 @@ describe('OnboardingVoiceAnswerSheet', () => {
     mockRecorder.stop.mockClear();
     mockPlayer.replace.mockClear();
     mockPlayer.pause.mockClear();
+    mockPlayer.play.mockClear();
+    mockRecordingLease.configure.mockClear();
+    mockRecordingLease.isActive.mockReturnValue(true);
+    mockRecordingLease.release.mockClear();
+    mockReviewLease.configure.mockClear();
+    mockReviewLease.isActive.mockReturnValue(true);
+    mockReviewLease.release.mockClear();
     mockAppStateListeners.length = 0;
   });
 
@@ -360,7 +387,7 @@ describe('OnboardingVoiceAnswerSheet', () => {
       await findByLabel(tree.root, 'Close voice answer')?.props?.onPress?.();
     });
     expect(mockRecorder.stop).toHaveBeenCalledTimes(1);
-    expect(mockSetAudioMode).toHaveBeenLastCalledWith({ allowsRecording: false, playsInSilentMode: true });
+    expect(mockRecordingLease.release).toHaveBeenCalled();
     expect(mockDeleteAudio).toHaveBeenCalledWith('file:///about-me.m4a');
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(mockTranscribe).not.toHaveBeenCalled();
@@ -382,6 +409,73 @@ describe('OnboardingVoiceAnswerSheet', () => {
 
     expect(mockRecorder.stop).toHaveBeenCalled();
     expect(findByLabel(tree.root, 'Transcribe recording')).toBeTruthy();
+  });
+
+  it.each(['review', 'discard'] as const)('does not revive a consumed recording after %s and background', async (action) => {
+    const tree = await renderSheet({ autoStart: true });
+    await act(async () => { await findByLabel(tree.root, 'Stop and review recording')?.props?.onPress?.(); });
+    if (action === 'discard') {
+      await act(async () => { await findByLabel(tree.root, 'Discard recording')?.props?.onPress?.(); });
+    }
+    mockPlayer.replace.mockClear();
+    mockRecorder.stop.mockClear();
+    await act(async () => { mockAppStateListeners.forEach((listener) => listener('background')); await Promise.resolve(); });
+    expect(mockPlayer.replace).not.toHaveBeenCalled();
+    expect(mockRecorder.stop).not.toHaveBeenCalled();
+    if (action === 'discard') expect(findByLabel(tree.root, 'Start recording your answer')).toBeTruthy();
+  });
+
+  it('offers review when native capture has paused before the JS interruption event', async () => {
+    const tree = await renderSheet({ autoStart: true });
+    expect(mockRecorder.record).toHaveBeenCalled();
+    mockRecorder.isRecording = false;
+    await act(async () => { mockRecordingInvalidated?.(); await Promise.resolve(); });
+    expect(mockRecorder.stop).toHaveBeenCalled();
+    expect(mockPlayer.replace).toHaveBeenCalledWith('file:///about-me.m4a');
+    expect(findByLabel(tree.root, 'Transcribe recording')).toBeTruthy();
+    expect(mockRecordingLease.release).toHaveBeenCalled();
+  });
+
+  it('configures and holds voice review ownership before playback' , async () => {
+    const tree = await renderSheet();
+    await act(async () => {
+      findByLabel(tree.root, 'Start recording your answer')?.props?.onPress?.();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      findByLabel(tree.root, 'Stop and review recording')?.props?.onPress?.();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      findByLabel(tree.root, 'Play recording')?.props?.onPress?.();
+      await Promise.resolve();
+    });
+
+    expect(mockReviewLease.configure).toHaveBeenCalledTimes(1);
+    expect(mockPlayer.play).toHaveBeenCalledTimes(1);
+    expect(mockReviewLease.release).not.toHaveBeenCalled();
+  });
+
+  it('releases review ownership and shows the existing error state when playback setup fails', async () => {
+    mockReviewLease.configure.mockRejectedValueOnce(new Error('mode failed'));
+    const tree = await renderSheet();
+    await act(async () => {
+      findByLabel(tree.root, 'Start recording your answer')?.props?.onPress?.();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      findByLabel(tree.root, 'Stop and review recording')?.props?.onPress?.();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      findByLabel(tree.root, 'Play recording')?.props?.onPress?.();
+      await Promise.resolve();
+    });
+
+    expect(mockReviewLease.release).toHaveBeenCalledTimes(1);
+    expect(mockPlayer.play).not.toHaveBeenCalled();
+    expect(flattenText(tree.root)).toContain('Recording interrupted');
+    expect(flattenText(tree.root)).toContain('Your recording is still on this device.');
   });
 
   it('ignores a stale transcription after the sheet is closed', async () => {

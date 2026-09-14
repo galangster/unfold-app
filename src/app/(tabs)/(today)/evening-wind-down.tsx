@@ -17,6 +17,11 @@ import Animated, {
 import { useQuery } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon, MoonIcon, ArrowClockwiseIcon } from '@/components/icons';
+import { AmbientMusicEntry } from '@/components/ambient/AmbientMusicEntry';
+import { AmbientQuietEnding } from '@/components/ambient/AmbientQuietEnding';
+import { endAmbientReflection } from '@/lib/ambient-audio-coordination';
+import { isAmbientAudioEnabled } from '@/lib/ambient-audio-feature';
+import { useAmbientPlayerScrollPadding } from '@/lib/ambient-sound-chrome';
 import { Duration, Ease } from '@/constants/animations';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
@@ -153,6 +158,7 @@ export default function EveningWindDownScreen() {
   const adaptiveLayout = useAdaptiveLayout();
   const clusterFrameStyle = adaptiveFrameStyle(adaptiveLayout.clusterMaxWidth);
   const readableFrameStyle = adaptiveFrameStyle(adaptiveLayout.readableMaxWidth);
+  const ambientPlayerPadding = useAmbientPlayerScrollPadding(100);
   const user = useUnfoldStore((s) => s.user);
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
@@ -273,6 +279,7 @@ export default function EveningWindDownScreen() {
 
   const handleShowCelebration = useCallback(() => {
     if (!gate()) return;
+    endAmbientReflection();
     if (currentDevotional && currentDay) {
       addCheckIn({
         devotionalId: currentDevotional.id,
@@ -338,11 +345,12 @@ export default function EveningWindDownScreen() {
             <CaretLeftIcon size={22} color={colors.text} weight="light" />
           </TouchableOpacity>
           <View style={{ flex: 1 }} />
+          {isAmbientAudioEnabled() ? <AmbientMusicEntry /> : null}
         </View>
         </View>
 
         <ScrollView
-          contentContainerStyle={{ paddingBottom: 100 }}
+          contentContainerStyle={{ paddingBottom: ambientPlayerPadding }}
           showsVerticalScrollIndicator={false}
         >
           {/* Hero — Moon + title */}
@@ -683,11 +691,15 @@ export default function EveningWindDownScreen() {
           </View>
         </ScrollView>
       </SafeAreaView>
-      <EveningCelebration
-        visible={showCelebration}
-        onDismiss={handleDismissCelebration}
-        message={celebrationMessage}
-      />
+      {isAmbientAudioEnabled() ? (
+        <AmbientQuietEnding visible={showCelebration} onClose={handleDismissCelebration} />
+      ) : (
+        <EveningCelebration
+          visible={showCelebration}
+          onDismiss={handleDismissCelebration}
+          message={celebrationMessage}
+        />
+      )}
       <ExclusiveOfferSheet
         visible={showExclusiveOffer}
         onDismiss={dismissOffer}

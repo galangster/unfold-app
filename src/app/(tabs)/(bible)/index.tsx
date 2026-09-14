@@ -54,6 +54,9 @@ import { Spacing } from '@/constants/spacing';
 import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
 import { adaptiveFrameStyle } from '@/lib/adaptive-layout';
 import { ProfileEntryButton } from '@/components/ProfileEntryButton';
+import { AmbientMusicEntry } from '@/components/ambient/AmbientMusicEntry';
+import { isAmbientAudioEnabled } from '@/lib/ambient-audio-feature';
+import { useAmbientPlayerScrollPadding } from '@/lib/ambient-sound-chrome';
 import { Duration, Ease } from '@/constants/animations';
 import { Typography } from '@/constants/typography';
 import { useBibleSearch, type BibleSearchResultWithMeta } from '@/hooks/useBibleSearch';
@@ -102,6 +105,7 @@ export default function BibleHomeScreen() {
   const adaptiveLayout = useAdaptiveLayout();
   const hubWidth = adaptiveLayout.clusterMaxWidth;
   const hubFrameStyle = adaptiveFrameStyle(hubWidth);
+  const ambientPlayerPadding = useAmbientPlayerScrollPadding(0);
   const reducedMotion = useReducedMotion();
   const router = useRouter();
   const bookPillWidth = useMemo(
@@ -117,7 +121,7 @@ export default function BibleHomeScreen() {
     [fontScale, hubWidth],
   );
   const headerStacks = useMemo(
-    () => shouldStackBibleHubHeader(hubWidth, fontScale),
+    () => shouldStackBibleHubHeader(Math.max(0, hubWidth - 88), fontScale),
     [hubWidth, fontScale],
   );
   const { isReady, isDownloading, progress, download, error } = useBibleDb();
@@ -369,6 +373,7 @@ export default function BibleHomeScreen() {
               minHeight: BIBLE_HUB_SEGMENTED_MIN_HEIGHT,
             }}
           />
+          {isAmbientAudioEnabled() ? <AmbientMusicEntry /> : null}
           <ProfileEntryButton testID="bible-profile-button" />
         </View>
       </View>
@@ -399,7 +404,7 @@ export default function BibleHomeScreen() {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: ambientPlayerPadding }]}
         keyboardShouldPersistTaps="handled"
       >
         {query.trim().length > 0 ? (
@@ -583,6 +588,9 @@ const styles = StyleSheet.create({
   },
   headerTrailingStacked: {
     alignSelf: 'flex-end',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    maxWidth: '100%',
   },
   searchBar: {
     flexDirection: 'row',

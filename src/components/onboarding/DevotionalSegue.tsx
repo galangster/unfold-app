@@ -1,3 +1,4 @@
+import { useSuccessRevealCue } from '@/hooks/useSuccessRevealCue';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -379,6 +380,7 @@ export function DevotionalSegue({
   const [activeJobId, setActiveJobId] = useState<string | null>(jobId);
   const [activeDevotionalId, setActiveDevotionalId] = useState<string | null>(devotionalId ?? null);
   const [generationIssue, setGenerationIssue] = useState<GenerationIssue | null>(null);
+  useSuccessRevealCue('first-devotional-revealed', activeDevotionalId, 1, showReadyReveal && !generationIssue);
   const [isRetrying, setIsRetrying] = useState(false);
   const [pollCycle, setPollCycle] = useState(0);
 

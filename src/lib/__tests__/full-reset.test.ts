@@ -7,6 +7,14 @@ const mockVoiceFileDelete = jest.fn();
 const mockVoiceDirectoryDelete = jest.fn();
 const mockClearDeviceCredential = jest.fn(async () => undefined);
 
+jest.mock('../feature-announcements', () => ({ FEATURE_ANNOUNCEMENTS_KEY: 'feature-announcements' }));
+jest.mock('../ambient-audio', () => ({ disposeAmbientAudio: jest.fn() }));
+jest.mock('../ambient-audio-state', () => ({
+  AMBIENT_AUDIO_PERSIST_NAME: 'ambient-audio-state',
+  AMBIENT_AUDIO_INITIAL_STATE: { status: 'off' },
+  useAmbientAudioState: { getState: () => ({ patch: jest.fn() }) },
+}));
+
 jest.mock('expo-crypto', () => ({
   CryptoDigestAlgorithm: { SHA256: 'SHA256' },
   digest: jest.fn(),
@@ -254,6 +262,8 @@ describe('performFullLocalReset', () => {
   it('D13 includes the auto-trial intent key and the completion marker', () => {
     expect(FULL_RESET_MMKV_KEYS).toContain('auto-trial-series-intent-v1');
     expect(FULL_RESET_MMKV_KEYS).toContain('onboarding-completed-reported-v1');
+    expect(FULL_RESET_MMKV_KEYS).toContain('sound-effects-enabled');
+    expect(FULL_RESET_MMKV_KEYS).toContain('success-cue-ledger');
   });
 
   it('sweeps every rate-limit key by prefix through the live key list and leaves other keys', async () => {

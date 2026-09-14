@@ -47,6 +47,7 @@ jest.spyOn(jest.requireActual('react-native'), 'useWindowDimensions').mockImplem
 }));
 
 jest.mock('expo-router', () => ({
+  useIsFocused: () => true,
   useRouter: () => mockRouter,
 }));
 

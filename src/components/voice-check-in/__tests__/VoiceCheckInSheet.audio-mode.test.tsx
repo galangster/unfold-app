@@ -3,19 +3,34 @@
  * the session was switched to record mode must hand the session back.
  */
 import React from 'react';
-import { AppState, TouchableOpacity } from 'react-native';
+import { AppState, TouchableOpacity, type AppStateStatus } from 'react-native';
 import * as renderer from 'react-test-renderer';
 import { VoiceCheckInSheet } from '../VoiceCheckInSheet';
 
 const { act } = renderer;
 
 const mockRequestPermissions = jest.fn(async () => ({ granted: true }));
-const mockSetAudioMode = jest.fn(async (..._args: unknown[]) => undefined);
+const mockSetAudioMode = jest.fn(async (..._args: unknown[]): Promise<void> => undefined);
+const mockRecordingLease = {
+  configure: jest.fn(async () => true),
+  isActive: jest.fn(() => true),
+  release: jest.fn(),
+};
+
+let mockRecordingInvalidated: (() => void) | undefined;
+
+jest.mock('@/lib/voice-audio-session', () => ({
+  acquireVoiceRecordingSession: (onInvalidated: () => void) => {
+    mockRecordingInvalidated = onInvalidated;
+    return mockRecordingLease;
+  },
+  acquireVoiceReviewSession: jest.fn(),
+}));
 
 const mockRecorder = {
   isRecording: false,
   uri: 'file:///check-in.m4a',
-  prepareToRecordAsync: jest.fn(async (..._args: unknown[]) => undefined),
+  prepareToRecordAsync: jest.fn(async (..._args: unknown[]): Promise<void> => undefined),
   record: jest.fn(),
   stop: jest.fn(async () => undefined),
   getStatus: jest.fn(() => ({ durationMillis: 0 })),
@@ -110,16 +125,97 @@ jest.mock('@/components/icons', () => new Proxy({}, {
   get: (_target, name) => (name === '__esModule' ? true : () => null),
 }));
 
-jest.spyOn(AppState, 'addEventListener').mockImplementation((() => ({ remove: jest.fn() })) as never);
+const mockAppStateListeners: ((state: AppStateStatus) => void)[] = [];
+jest.spyOn(AppState, 'addEventListener').mockImplementation((_type, listener) => {
+  mockAppStateListeners.push(listener);
+  return { remove: jest.fn() };
+});
 
 describe('VoiceCheckInSheet failed start (Greptile A12)', () => {
   beforeEach(() => {
+    AppState.currentState = 'active';
+    mockAppStateListeners.length = 0;
     mockSetAudioMode.mockClear();
     mockRecorder.prepareToRecordAsync.mockReset();
     mockRecorder.record.mockReset();
+    mockRecordingLease.configure.mockClear();
+    mockRecordingLease.isActive.mockReturnValue(true);
+    mockRecordingLease.release.mockClear();
   });
 
-  it('restores allowsRecording=false when prepareToRecordAsync throws', async () => {
+  it('does not start the microphone when interruption invalidates the lease during prepare', async () => {
+    let finishPrepare!: () => void;
+    mockRecorder.prepareToRecordAsync.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finishPrepare = resolve;
+        }),
+    );
+
+    let tree: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderer.create(<VoiceCheckInSheet visible onClose={jest.fn()} />);
+      await Promise.resolve();
+    });
+    const start = tree!.root.findAll(
+      (node) => node.type === TouchableOpacity && node.props.accessibilityLabel === 'Start voice check-in recording',
+    )[0];
+    await act(async () => {
+      void start.props.onPress();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(mockRecorder.prepareToRecordAsync).toHaveBeenCalled();
+
+    mockRecordingLease.isActive.mockReturnValue(false);
+    await act(async () => {
+      finishPrepare();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockRecorder.record).not.toHaveBeenCalled();
+    expect(mockRecordingLease.release).toHaveBeenCalled();
+  });
+
+  it('offers the saved draft when native capture has paused before JS receives interruption', async () => {
+    mockRecorder.prepareToRecordAsync.mockResolvedValue(undefined);
+    mockRecorder.getStatus.mockReturnValue({ durationMillis: 4_200 });
+    let tree: renderer.ReactTestRenderer;
+    await act(async () => { tree = renderer.create(<VoiceCheckInSheet visible onClose={jest.fn()} />); });
+    const start = tree!.root.findAll((node) => node.type === TouchableOpacity && node.props.accessibilityLabel === 'Start voice check-in recording')[0];
+    await act(async () => { await start.props.onPress(); });
+    expect(mockRecorder.record).toHaveBeenCalled();
+    mockRecorder.isRecording = false;
+    await act(async () => { mockRecordingInvalidated?.(); await Promise.resolve(); });
+    const { createVoiceCheckInDraft } = jest.requireMock('@/lib/voice-check-ins');
+    expect(createVoiceCheckInDraft).toHaveBeenCalledWith('file:///check-in.m4a', 4_200);
+    expect(mockPlayer.replace).toHaveBeenCalledWith('file:///check-in.m4a');
+    expect(mockRecordingLease.release).toHaveBeenCalled();
+  });
+
+  it.each(['review', 'discard', 'send'] as const)('does not recover a consumed check-in after %s and background', async (action) => {
+    const api = jest.requireMock('@/lib/voice-check-ins');
+    api.createVoiceCheckInDraft.mockReturnValue({ audioUri: 'file:///check-in.m4a', durationMs: 4_200, status: 'local' });
+    api.sendVoiceCheckInDraft.mockResolvedValue({ id: 'saved', transcript: 'Saved transcript', capturedAt: '2026-09-14T00:00:00Z' });
+    mockRecorder.prepareToRecordAsync.mockResolvedValue(undefined);
+    let tree: renderer.ReactTestRenderer;
+    await act(async () => { tree = renderer.create(<VoiceCheckInSheet visible onClose={jest.fn()} />); });
+    const button = (label: string) => tree!.root.findAll((node) => node.type === TouchableOpacity && node.props.accessibilityLabel === label)[0];
+    await act(async () => { await button('Start voice check-in recording').props.onPress(); });
+    await act(async () => { await button('Stop and review recording').props.onPress(); });
+    if (action === 'discard') await act(async () => { await button('Discard recording').props.onPress(); });
+    if (action === 'send') await act(async () => { await button('Send voice check-in').props.onPress(); });
+    api.createVoiceCheckInDraft.mockClear();
+    mockPlayer.replace.mockClear();
+    mockRecorder.stop.mockClear();
+    await act(async () => { mockAppStateListeners.forEach((listener) => listener('background')); await Promise.resolve(); });
+    expect(api.createVoiceCheckInDraft).not.toHaveBeenCalled();
+    expect(mockPlayer.replace).not.toHaveBeenCalled();
+    expect(mockRecorder.stop).not.toHaveBeenCalled();
+  });
+
+  it('releases recording ownership when prepareToRecordAsync throws', async () => {
     mockRecorder.prepareToRecordAsync.mockRejectedValue(new Error('recorder busy'));
 
     let tree: renderer.ReactTestRenderer;
@@ -135,9 +231,8 @@ describe('VoiceCheckInSheet failed start (Greptile A12)', () => {
       await Promise.resolve();
     });
 
-    const modes = mockSetAudioMode.mock.calls.map((call) => (call[0] as { allowsRecording: boolean }).allowsRecording);
-    expect(modes[0]).toBe(true);
-    expect(modes[modes.length - 1]).toBe(false);
+    expect(mockRecordingLease.configure).toHaveBeenCalledTimes(1);
+    expect(mockRecordingLease.release).toHaveBeenCalledTimes(1);
     expect(mockRecorder.record).not.toHaveBeenCalled();
   });
 });

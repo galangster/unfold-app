@@ -167,6 +167,10 @@ jest.mock('../../../assets/fonts/SourceSerifPro_400Regular_Italic.ttf', () => 1)
 jest.mock('../../../assets/fonts/SourceSerifPro_600SemiBold.ttf', () => 1);
 jest.mock('../../../assets/fonts/SourceSerifPro_700Bold.ttf', () => 1);
 jest.mock('../../../assets/fonts/Inter_400Regular.ttf', () => 1);
+jest.mock('@/components/ambient/AmbientSoundOverlay', () => ({
+  AmbientSoundOverlay: () => null,
+}));
+
 jest.mock('../../../assets/fonts/Inter_400Regular_Italic.ttf', () => 1);
 jest.mock('../../../assets/fonts/Inter_500Medium.ttf', () => 1);
 jest.mock('../../../assets/fonts/Inter_600SemiBold.ttf', () => 1);

@@ -51,6 +51,8 @@ jest.mock('@/components/reading/DevotionalReaderPreferencesSheet', () => ({
 jest.mock('@/components/PremiumFeatureSheet', () => ({ PremiumFeatureSheet: () => null }));
 jest.mock('@/components/PremiumNudgeCard', () => ({ PremiumNudgeCard: () => null }));
 jest.mock('@/hooks/useGlobalAudioPlayer', () => ({ useGlobalAudioPlayer: () => ({}) }));
+jest.mock('@/lib/day-completion-cue', () => ({ emitDayCompletionCueAfterSave: jest.fn() }));
+jest.mock('@/components/ambient/AmbientMusicEntry', () => ({ AmbientMusicEntry: () => null }));
 jest.mock('@/hooks/useGeneratedDayWatch', () => ({ useGeneratedDayWatch: () => undefined }));
 jest.mock('@/hooks/useAutoHide', () => ({ useAutoHide: () => undefined }));
 jest.mock('@/lib/store', () => ({

@@ -1,0 +1,114 @@
+{
+  "status": "NATIVE_CUE_OWNER_ENGINE_PASSED",
+  "createdAt": "2026-09-14T15:40:21.906945+00:00",
+  "factory": "createSuccessCueOwner",
+  "productionDependencies": [
+    "Real createAudioPlayer with downloadFirst=true, autoResumeOnInterruption=false, updateInterval=100.",
+    "Real SUCCESS_CUE_SOURCES for all four approved assets.",
+    "Real audioSessionRegistry, AppState, AccessibilityInfo, getDeviceId, and mmkvStorage.",
+    "Production-equivalent AppState cancellation listener."
+  ],
+  "instrumentation": "Additional real playbackStatusUpdate listener at player creation. Pause/remove wrappers call the original real native methods. No player mock.",
+  "sourceModuleChanges": false,
+  "engineRuns": [
+    {
+      "runId": 1,
+      "type": "first-devotional-revealed",
+      "priority": false,
+      "loaded": true,
+      "playing": true,
+      "maxPlayingTime": 4.10004528,
+      "didJustFinishObserved": true,
+      "nativeStatusEvents": 46,
+      "pauseCalled": true,
+      "removeCalled": true
+    },
+    {
+      "runId": 2,
+      "type": "new-series-revealed",
+      "priority": false,
+      "loaded": true,
+      "playing": true,
+      "maxPlayingTime": 3.700053914,
+      "didJustFinishObserved": false,
+      "nativeStatusEvents": 40,
+      "pauseCalled": true,
+      "removeCalled": true
+    },
+    {
+      "runId": 3,
+      "type": "new-day-revealed",
+      "priority": false,
+      "loaded": true,
+      "playing": true,
+      "maxPlayingTime": 2.600066128,
+      "didJustFinishObserved": false,
+      "nativeStatusEvents": 29,
+      "pauseCalled": true,
+      "removeCalled": true
+    },
+    {
+      "runId": 4,
+      "type": "day-completed",
+      "priority": false,
+      "loaded": true,
+      "playing": true,
+      "maxPlayingTime": 3.15,
+      "didJustFinishObserved": true,
+      "nativeStatusEvents": 36,
+      "pauseCalled": true,
+      "removeCalled": true
+    },
+    {
+      "runId": 5,
+      "type": "first-devotional-revealed",
+      "priority": false,
+      "loaded": true,
+      "playing": true,
+      "maxPlayingTime": 0.900039178,
+      "didJustFinishObserved": false,
+      "nativeStatusEvents": 12,
+      "pauseCalled": true,
+      "removeCalled": true
+    },
+    {
+      "runId": 6,
+      "type": "day-completed",
+      "priority": true,
+      "loaded": true,
+      "playing": true,
+      "maxPlayingTime": 0.600064426,
+      "didJustFinishObserved": false,
+      "nativeStatusEvents": 9,
+      "pauseCalled": true,
+      "removeCalled": true
+    }
+  ],
+  "background": {
+    "runId": 5,
+    "lastNativePlayingTime": 0.900039178,
+    "pauseAndRemoveBeforeReturn": true,
+    "activePlayersOnReturn": 0,
+    "nativePlayingEventsAfterCancellation": 0,
+    "foregroundObservationBeforeNextExplicitCueMs": 2435,
+    "automaticContinuation": "Not observed. Native player removed and no active player remained."
+  },
+  "voiceReview": {
+    "runId": 6,
+    "preemptionNativePlayingTime": 0.600064426,
+    "leaseConfigured": true,
+    "microphoneRecording": false,
+    "pauseAndRemoveOnPreemption": true,
+    "activePlayersAfterRelease": 0,
+    "nativePlayingEventsAfterPreemption": 0,
+    "postReleaseObservationMs": 52926,
+    "automaticContinuation": "Not observed. Release did not recreate the removed cue player."
+  },
+  "limits": [
+    "No acoustic or hardware acceptance claimed.",
+    "No phone-call or microphone behavior tested.",
+    "Native natural didJustFinish was observed for first reveal and day complete. Series and new-day tests established loaded, playing, progress, and cleanup.",
+    "Background and voice-review observation windows are bounded.",
+    "Full production combined-route and physical-device acceptance remain separate gates."
+  ]
+}

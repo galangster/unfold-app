@@ -1,0 +1,97 @@
+{
+  "status": "PASS. Source frozen for root native QA.",
+  "scope": "Six-file ambient player clearance correction.",
+  "problem": "Native evening Goodnight action was covered at maximum scroll.",
+  "files": {
+    "src/lib/ambient-sound-chrome.ts": "feb47f451b488479eb9d5cefe1bb85e91e6cc5b439f785e2ba71d3c1aecdcd58",
+    "src/components/ambient/AmbientSoundOverlay.tsx": "3376f638274b112aeac139b58de346f627b47a12b9866307f8727d2fae28a630",
+    "src/app/(tabs)/(today)/index.tsx": "3c2aac306c0e966d1143622507c49a01df3496c539cf2e1dfde1d2ef38caa5e8",
+    "src/app/(tabs)/(today)/evening-wind-down.tsx": "2a941f5e69a3f8b9658697039b6e0e3bf50653cc9ac39ac1536d517c479403ce",
+    "src/app/(tabs)/(journal)/index.tsx": "b462300a5b1fe1a2b39eded2b0ccd98a9d27cd1f3a47d6b092b0a4ba2c051942",
+    "src/app/(tabs)/(bible)/index.tsx": "4fc7aa46a594015c418d17a94e1965bdd8e42ba1cf3a68743a0bb50356e6c45a"
+  },
+  "baselineSourceHashes": {
+    "src/lib/ambient-sound-chrome.ts": "4225fa349d52a1d572b5227b4fa9a79f7f2edeac55fd74d373ef065869eef982",
+    "src/components/ambient/AmbientSoundOverlay.tsx": "8f8c406f4122b1bc644305d354c88f048f92bba15fe8dbf937f86837a0073d5a",
+    "src/app/(tabs)/(today)/index.tsx": "15f57586a73a26eabc2519660e2a945482924d2b91c2b73c57985c8ca8a3fe3a",
+    "src/app/(tabs)/(today)/evening-wind-down.tsx": "4e0934357e64a1678f1d0907bc19c009a10c049e9e2c4c9648c815c83c361b26",
+    "src/app/(tabs)/(journal)/index.tsx": "4d927938ad04ca0456d3476bb216d5fe0898a608d354619dc0b0d929b06a1bc2",
+    "src/app/(tabs)/(bible)/index.tsx": "4c1771253d5640387df69fb19d42eda0d68b57ded5d9007830f701a0c678b472"
+  },
+  "sourceChangedDuringChecks": [],
+  "checks": {
+    "affected": {
+      "command": [
+        "bun",
+        "run",
+        "test",
+        "--runInBand",
+        "--detectOpenHandles",
+        "src/lib/__tests__/today-auto-trial-focus.test.tsx",
+        "src/lib/__tests__/journal-hub-notebook-search.test.tsx",
+        "src/lib/__tests__/journal-hub-reflection-day.test.tsx",
+        "src/lib/__tests__/journal-hub-fab-motion.test.tsx",
+        "src/components/bible/__tests__/BibleHomeScreen.overview.test.tsx",
+        "src/components/bible/__tests__/BibleHomeScreen.book-pills.test.tsx",
+        "src/hooks/__tests__/useAmbientSoundVisibility.test.ts",
+        "src/components/ambient/__tests__/AmbientSoundControls.test.tsx"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 11.38,
+      "log": "/Users/galangster/clawd/work/unfold/operations/2026-09-14-release-takeover/sound-clearance/affected.log"
+    },
+    "typecheck": {
+      "command": [
+        "bun",
+        "run",
+        "typecheck"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 12.07,
+      "log": "/Users/galangster/clawd/work/unfold/operations/2026-09-14-release-takeover/sound-clearance/typecheck.log"
+    },
+    "lint": {
+      "command": [
+        "bunx",
+        "eslint",
+        "src/lib/ambient-sound-chrome.ts",
+        "src/components/ambient/AmbientSoundOverlay.tsx",
+        "src/app/(tabs)/(today)/index.tsx",
+        "src/app/(tabs)/(today)/evening-wind-down.tsx",
+        "src/app/(tabs)/(journal)/index.tsx",
+        "src/app/(tabs)/(bible)/index.tsx"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 3.05,
+      "log": "/Users/galangster/clawd/work/unfold/operations/2026-09-14-release-takeover/sound-clearance/lint.log"
+    }
+  },
+  "affectedSummary": {
+    "suitesPassed": 8,
+    "testsPassed": 48,
+    "openHandlesReported": false,
+    "workerTeardownWarningReported": false
+  },
+  "lintSummary": {
+    "errors": 0,
+    "warnings": 25,
+    "suppressionsAdded": false
+  },
+  "rootSimplify": "Remove one-use exported arithmetic helper. Keep arithmetic in useAmbientPlayerScrollPadding. No mirror test added.",
+  "geometry": "Overlay measures actual dock height, including Dynamic Type changes. Hidden or unmounted overlay clears height. Four true scroll containers add measured height to their existing base padding.",
+  "basePadding": {
+    "Today": 100,
+    "Evening": 100,
+    "Journal": 100,
+    "Bible": 0
+  },
+  "limits": [
+    "Root owns native action clearance and Dynamic Type verification.",
+    "No direct existing evening render test was available. Shared visibility and related screen behavior suites passed.",
+    "No full Jest, native commands, publication, or canonical source-worktree edits.",
+    "Existing scoped lint warnings remain.",
+    "Root owns docs/qa/2026-09-14-ambient-sound updates. These documents were untouched."
+  ],
+  "priorProof": "baseline-source-manifest.json and baseline-integration-receipt.json preserve prior proof.",
+  "nextAction": "Root can resume native QA in the current session."
+}

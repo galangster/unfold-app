@@ -35,6 +35,10 @@ import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { pauseForVoiceInput, resumeAfterVoiceInput } from '@/hooks/useGlobalAudioPlayer';
+import {
+  acquireSpeechRecognitionSession,
+  type AudioSessionLease,
+} from '@/lib/voice-audio-session';
 
 /* ─────────────────────────────────────────────────────────
  * ANIMATION STORYBOARD
@@ -56,8 +60,17 @@ const BAR_DELAYS    = [0,   80,  160, 40,  240] as const;
 
 let activeRecorder: symbol | null = null;
 let activeRecorderHandoff: (() => void) | null = null;
+let speechRecognitionLease: AudioSessionLease | null = null;
+let speechRecognitionLeaseOwner: symbol | null = null;
 /** Narration paused because dictation took the audio session; resume when the last owner ends. */
 let narrationPausedForDictation = false;
+
+function releaseSpeechRecognitionSession(owner: symbol): void {
+  if (speechRecognitionLeaseOwner !== owner) return;
+  speechRecognitionLease?.release();
+  speechRecognitionLease = null;
+  speechRecognitionLeaseOwner = null;
+}
 
 function formatTimer(seconds: number): string {
   const m = Math.floor(seconds / 60).toString().padStart(2, '0');
@@ -137,6 +150,7 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoSt
   const finalTranscriptRef = useRef('');
   const interimTranscriptRef = useRef('');
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const startGenerationRef = useRef(0);
   const valueRef = useRef(value);
   const onChangeRef = useRef(onChangeText);
 
@@ -176,12 +190,18 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoSt
     if (isRecordingRef.current && activeRecorder === instanceId.current && !userStoppedRef.current) {
       // STT ended on its own (silence) — restart so pauses don't kill the session
       commitCurrentSegment();
-      ExpoSpeechRecognitionModule.start({
-        lang: 'en-US',
-        interimResults: true,
-        maxAlternatives: 1,
-        continuous: true,
-      });
+      const lease = speechRecognitionLeaseOwner === instanceId.current
+        ? speechRecognitionLease
+        : null;
+      void lease?.configure().then((ready) => {
+        if (!ready || !lease.isActive() || !isRecordingRef.current || activeRecorder !== instanceId.current || userStoppedRef.current) return;
+        ExpoSpeechRecognitionModule.start({
+          lang: 'en-US',
+          interimResults: true,
+          maxAlternatives: 1,
+          continuous: true,
+        });
+      }).catch(() => resetRecordingState());
     }
   });
 
@@ -198,6 +218,7 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoSt
       activeRecorder = null;
       activeRecorderHandoff = null;
     }
+    releaseSpeechRecognitionSession(instanceId.current);
     if (activeRecorder === null) {
       // Last owner ended: STT flipped the shared AVAudioSession into record
       // mode — re-arm playback mode, and resume narration if dictation paused it.
@@ -231,14 +252,17 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoSt
 
   // ── Lifecycle ────────────────────────────────────────────
   useEffect(() => {
+    const owner = instanceId.current;
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      startGenerationRef.current += 1;
       clearTimer();
-      if (activeRecorder === instanceId.current) {
+      if (activeRecorder === owner) {
         activeRecorder = null;
         activeRecorderHandoff = null;
         if (isRecordingRef.current) ExpoSpeechRecognitionModule.stop();
+        releaseSpeechRecognitionSession(owner);
         const shouldResume = narrationPausedForDictation;
         narrationPausedForDictation = false;
         void resumeAfterVoiceInput(shouldResume);
@@ -248,10 +272,11 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoSt
 
   // ── Start ────────────────────────────────────────────────
   const startRecording = useCallback(async () => {
+    const generation = ++startGenerationRef.current;
     const { granted } = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
     // The permission prompt can outlive this field: an unmounted bar must not
     // claim the recognizer, start it, or leak the elapsed-time interval.
-    if (!mountedRef.current) return;
+    if (!mountedRef.current || generation !== startGenerationRef.current) return;
     if (!granted) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       onPermissionDenied?.();
@@ -270,18 +295,44 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoSt
       ExpoSpeechRecognitionModule.stop();
     }
 
+    if (pauseForVoiceInput()) {
+      narrationPausedForDictation = true;
+    }
+
+    const owner = instanceId.current;
+    const lease = acquireSpeechRecognitionSession(() => {
+      if (activeRecorder === owner && isRecordingRef.current) {
+        ExpoSpeechRecognitionModule.stop();
+      }
+      if (activeRecorder === owner) resetRecordingState();
+    });
+    if (!lease) {
+      if (activeRecorder === owner) resetRecordingState();
+      return;
+    }
+
     committedSegmentsRef.current = '';
     finalTranscriptRef.current = '';
     interimTranscriptRef.current = '';
     activeRecorder = instanceId.current;
     activeRecorderHandoff = doCommit;
+    speechRecognitionLease = lease;
+    speechRecognitionLeaseOwner = instanceId.current;
+
+    try {
+      const ready = await lease.configure();
+      if (!ready || !lease.isActive() || !mountedRef.current || generation !== startGenerationRef.current || activeRecorder !== instanceId.current) {
+        resetRecordingState();
+        return;
+      }
+    } catch {
+      resetRecordingState();
+      return;
+    }
+
     isRecordingRef.current = true;
     setIsRecording(true);
     setElapsedSeconds(0);
-
-    if (pauseForVoiceInput()) {
-      narrationPausedForDictation = true;
-    }
 
     ExpoSpeechRecognitionModule.start({
       lang: 'en-US',
@@ -317,6 +368,7 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoSt
 
   // ── Cancel ───────────────────────────────────────────────
   const cancelRecording = useCallback(() => {
+    startGenerationRef.current += 1;
     userStoppedRef.current = true;
     ExpoSpeechRecognitionModule.stop();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -326,6 +378,7 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoSt
 
   // ── Accept ───────────────────────────────────────────────
   const acceptRecording = useCallback(() => {
+    startGenerationRef.current += 1;
     userStoppedRef.current = true;
     ExpoSpeechRecognitionModule.stop();
     setTimeout(() => doCommit(), FINAL_RESULT_FLUSH_MS);

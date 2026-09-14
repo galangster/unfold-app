@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { type ReactNode } from 'react';
 import { View, Text } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { FontFamily } from '@/constants/fonts';
@@ -23,9 +23,10 @@ interface Props {
   onAvatarPress: () => void;
   /** Test selector forwarded to the avatar button for e2e flows */
   avatarTestID?: string;
+  headerActions?: ReactNode;
 }
 
-export function GreetingRow({ userName, onAvatarPress, avatarTestID }: Props) {
+export function GreetingRow({ userName, onAvatarPress, avatarTestID, headerActions }: Props) {
   const { colors } = useTheme();
   const { entering } = useAccessibleAnimation();
 
@@ -72,8 +73,9 @@ export function GreetingRow({ userName, onAvatarPress, avatarTestID }: Props) {
       {/* Avatar — stagger 80ms per spec Zone 1 */}
       <Animated.View
         entering={entering(FadeIn.duration(Duration.normal).delay(80).easing(Ease.out))}
-        style={{ marginTop: Spacing['1'], marginLeft: Spacing['3'] }}
+        style={{ marginTop: Spacing['1'], marginLeft: Spacing['3'], flexDirection: 'row', alignItems: 'center' }}
       >
+        {headerActions}
         <ProfileAvatar size={38} onPress={onAvatarPress} testID={avatarTestID} />
       </Animated.View>
     </View>

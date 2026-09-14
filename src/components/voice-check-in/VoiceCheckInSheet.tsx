@@ -20,7 +20,6 @@ import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import {
   requestRecordingPermissionsAsync,
-  setAudioModeAsync,
   useAudioPlayer,
   useAudioPlayerStatus,
   useAudioRecorder,
@@ -51,6 +50,11 @@ import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { ADAPTIVE_SHEET_MEASURE, adaptiveSafeGutterStyle } from '@/lib/adaptive-layout';
 import { pauseForVoiceInput, resumeAfterVoiceInput } from '@/hooks/useGlobalAudioPlayer';
+import {
+  acquireVoiceRecordingSession,
+  acquireVoiceReviewSession,
+  type AudioSessionLease,
+} from '@/lib/voice-audio-session';
 import {
   VOICE_CHECK_IN_MAX_DURATION_MS,
   VoiceCheckInApiError,
@@ -163,12 +167,71 @@ export function VoiceCheckInSheet({
   const visibleRef = useRef(visible);
   const wasVisibleRef = useRef(visible);
   const narrationWasPlayingRef = useRef(false);
+  const recordingLeaseRef = useRef<AudioSessionLease | null>(null);
+  const recordingCaptureRef = useRef<{ stopping: boolean } | null>(null);
+  const reviewLeaseRef = useRef<AudioSessionLease | null>(null);
+  const reviewGenerationRef = useRef(0);
+  const reviewWasPlayingRef = useRef(false);
+  const startGenerationRef = useRef(0);
   visibleRef.current = visible;
 
   const recorder = useAudioRecorder(VOICE_RECORDING_OPTIONS);
   const recorderState = useAudioRecorderState(recorder, 100);
-  const player = useAudioPlayer(null, { updateInterval: 100, keepAudioSessionActive: false });
+  const player = useAudioPlayer(null, {
+    updateInterval: 100,
+    keepAudioSessionActive: false,
+    autoResumeOnInterruption: false,
+  });
   const playerStatus = useAudioPlayerStatus(player);
+
+  const releaseRecordingLease = useCallback(() => {
+    recordingLeaseRef.current?.release();
+    recordingLeaseRef.current = null;
+  }, []);
+
+  const releaseCapturedRecordingLease = useCallback((lease: AudioSessionLease | null) => {
+    lease?.release();
+    if (recordingLeaseRef.current === lease) recordingLeaseRef.current = null;
+  }, []);
+
+  const releaseReviewLease = useCallback(() => {
+    reviewGenerationRef.current += 1;
+    reviewWasPlayingRef.current = false;
+    reviewLeaseRef.current?.release();
+    reviewLeaseRef.current = null;
+  }, []);
+
+  const stopForAudioInterruption = useCallback(async (
+    lease = recordingLeaseRef.current,
+  ) => {
+    const capture = recordingCaptureRef.current;
+    if (!lease || !capture || capture.stopping || lease !== recordingLeaseRef.current) return;
+    capture.stopping = true;
+    const durationMs = recorder.getStatus().durationMillis;
+    try {
+      await recorder.stop();
+      releaseCapturedRecordingLease(lease);
+      if (!mountedRef.current || capture !== recordingCaptureRef.current) return;
+      const uri = recorder.uri;
+      if (!uri) throw new Error('Recorded audio is unavailable');
+      if (uri) {
+        const localDraft = createVoiceCheckInDraft(uri, Math.max(1_000, durationMs));
+        setDraft(localDraft);
+        setAudioUri(uri);
+        setRecordedDurationMs(Math.max(1_000, durationMs));
+        player.replace(uri);
+        recordingCaptureRef.current = null;
+        setPhase('review');
+      }
+    } catch {
+      releaseCapturedRecordingLease(lease);
+      if (!mountedRef.current || capture !== recordingCaptureRef.current) return;
+      recordingCaptureRef.current = null;
+      setErrorKind('recording');
+      setErrorMessage('Recording was interrupted, but its local file could not be prepared.');
+      setPhase('error');
+    }
+  }, [player, recorder, releaseCapturedRecordingLease]);
 
   const refreshHistory = useCallback(async () => {
     if (demoMode) return;
@@ -209,11 +272,14 @@ export function VoiceCheckInSheet({
   }, [demoMode, visible]);
 
   useEffect(() => () => {
+    startGenerationRef.current += 1;
+    releaseRecordingLease();
+    releaseReviewLease();
     if (narrationWasPlayingRef.current) {
       void resumeAfterVoiceInput(true);
       narrationWasPlayingRef.current = false;
     }
-  }, []);
+  }, [releaseRecordingLease, releaseReviewLease]);
 
   useEffect(() => {
     if (!demoMode) return;
@@ -229,40 +295,23 @@ export function VoiceCheckInSheet({
 
   useEffect(() => {
     mountedRef.current = true;
-    const stopForLifecycle = async () => {
-      if (!recorder.isRecording) return;
-      const durationMs = recorder.getStatus().durationMillis;
-      try {
-        await recorder.stop();
-        await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
-        if (!mountedRef.current) return;
-        const uri = recorder.uri;
-        if (uri) {
-          const localDraft = createVoiceCheckInDraft(uri, Math.max(1_000, durationMs));
-          setDraft(localDraft);
-          setAudioUri(uri);
-          setRecordedDurationMs(Math.max(1_000, durationMs));
-          player.replace(uri);
-          setPhase('review');
-        }
-      } catch {
-        if (!mountedRef.current) return;
-        setErrorKind('recording');
-        setErrorMessage('Recording stopped when the app became inactive, but its local file could not be prepared.');
-        setPhase('error');
-      }
-    };
     const subscription = AppState.addEventListener('change', (nextState) => {
-      if (nextState !== 'active') void stopForLifecycle();
+      if (nextState !== 'active') {
+        startGenerationRef.current += 1;
+        busyRef.current = false;
+        setIsBusy(false);
+        player.pause();
+        releaseReviewLease();
+        void stopForAudioInterruption();
+      }
     });
     return () => {
       mountedRef.current = false;
       subscription.remove();
-      // useAudioRecorder releases its native recorder on unmount before this cleanup.
-      // Accessing that released shared object throws, even for a microphone-off demo.
-      void setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
+      releaseRecordingLease();
+      releaseReviewLease();
     };
-  }, [player, recorder]);
+  }, [player, releaseRecordingLease, releaseReviewLease, stopForAudioInterruption]);
 
   useEffect(() => {
     if (!demoMode || phase !== 'recording' || !visible) return;
@@ -286,9 +335,15 @@ export function VoiceCheckInSheet({
   }, [demoMode, demoPlaying, phase, recordedDurationMs, visible]);
 
   useEffect(() => {
-    if (!playerStatus.didJustFinish) return;
-    void player.seekTo(0);
-  }, [player, playerStatus.didJustFinish]);
+    if (playerStatus.playing) {
+      reviewWasPlayingRef.current = true;
+      return;
+    }
+    if (playerStatus.error || playerStatus.didJustFinish || reviewWasPlayingRef.current) {
+      releaseReviewLease();
+      if (playerStatus.didJustFinish) void player.seekTo(0);
+    }
+  }, [player, playerStatus.didJustFinish, playerStatus.error, playerStatus.playing, releaseReviewLease]);
 
   const activeDurationMs = phase === 'recording'
     ? (demoMode ? demoElapsedMs : recorderState.durationMillis)
@@ -306,6 +361,7 @@ export function VoiceCheckInSheet({
   const startRecording = useCallback(async () => {
     if (busyRef.current) return;
     busyRef.current = true;
+    recordingCaptureRef.current = null;
     setIsBusy(true);
     setErrorMessage('');
     if (demoMode) {
@@ -319,9 +375,11 @@ export function VoiceCheckInSheet({
       return;
     }
 
-    let recordingModeArmed = false;
+    const generation = ++startGenerationRef.current;
+    let operationLease: AudioSessionLease | null = null;
     try {
       const permission = await requestRecordingPermissionsAsync();
+      if (!mountedRef.current || !visibleRef.current || generation !== startGenerationRef.current) return;
       if (!permission.granted) {
         setErrorKind('microphone');
         setErrorMessage('Microphone access is off. Enable it in Settings, then try again.');
@@ -329,38 +387,42 @@ export function VoiceCheckInSheet({
         return;
       }
       if (!visibleRef.current) return;
-      await setAudioModeAsync({
-        allowsRecording: true,
-        playsInSilentMode: true,
-        shouldPlayInBackground: false,
-        shouldRouteThroughEarpiece: false,
+      releaseReviewLease();
+      const lease = acquireVoiceRecordingSession(() => {
+        void stopForAudioInterruption(lease);
       });
-      recordingModeArmed = true;
+      if (!lease) return;
+      operationLease = lease;
+      recordingLeaseRef.current = lease;
+      if (!(await lease.configure()) || !lease.isActive() || generation !== startGenerationRef.current) {
+        releaseCapturedRecordingLease(lease);
+        return;
+      }
       await recorder.prepareToRecordAsync();
-      if (!mountedRef.current || !visibleRef.current || AppState.currentState !== 'active') {
-        await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
+      if (!mountedRef.current || !visibleRef.current || AppState.currentState !== 'active' || !lease.isActive() || generation !== startGenerationRef.current) {
+        releaseCapturedRecordingLease(lease);
         return;
       }
       recorder.record();
+      recordingCaptureRef.current = { stopping: false };
       setAudioUri(null);
       setRecordedDurationMs(0);
       setTranscript('');
       setPhase('recording');
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch {
-      // The shared audio session was switched to record mode above; a failed
-      // prepare/record must hand it back or narration stays muted.
-      if (recordingModeArmed) {
-        await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
-      }
+      releaseCapturedRecordingLease(operationLease);
+      if (!mountedRef.current || generation !== startGenerationRef.current) return;
       setErrorKind('microphone');
       setErrorMessage('The microphone could not start. Your previous draft was not changed.');
       setPhase('error');
     } finally {
-      busyRef.current = false;
-      setIsBusy(false);
+      if (mountedRef.current && generation === startGenerationRef.current) {
+        busyRef.current = false;
+        setIsBusy(false);
+      }
     }
-  }, [demoMode, recorder]);
+  }, [demoMode, recorder, releaseCapturedRecordingLease, releaseReviewLease, stopForAudioInterruption]);
 
   useEffect(() => {
     const justOpened = visible && !wasVisibleRef.current;
@@ -371,15 +433,18 @@ export function VoiceCheckInSheet({
   }, [audioUri, autoStart, demoMode, phase, recordedDurationMs, startRecording, visible]);
 
   const stopRecording = useCallback(async () => {
+    recordingCaptureRef.current = null;
     if (phase !== 'recording' || busyRef.current) return;
     busyRef.current = true;
     setIsBusy(true);
+    const operationLease = recordingLeaseRef.current;
     try {
       if (demoMode) {
         setRecordedDurationMs(Math.max(1_000, demoElapsedMs));
       } else {
         const durationMs = recorderState.durationMillis;
         await recorder.stop();
+        releaseCapturedRecordingLease(operationLease);
         const uri = recorder.uri ?? recorderState.url;
         if (!uri) throw new Error('Recording URI unavailable');
         const localDraft = createVoiceCheckInDraft(uri, Math.max(1_000, durationMs));
@@ -387,11 +452,11 @@ export function VoiceCheckInSheet({
         setAudioUri(uri);
         setRecordedDurationMs(Math.max(1_000, durationMs));
         player.replace(uri);
-        await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
       }
       setPhase('review');
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch {
+      releaseCapturedRecordingLease(operationLease);
       setErrorKind('recording');
       setErrorMessage('The recording stopped, but its local file could not be prepared. Try recording again.');
       setPhase('error');
@@ -399,28 +464,62 @@ export function VoiceCheckInSheet({
       busyRef.current = false;
       setIsBusy(false);
     }
-  }, [demoElapsedMs, demoMode, phase, player, recorder, recorderState.durationMillis, recorderState.url]);
+  }, [demoElapsedMs, demoMode, phase, player, recorder, recorderState.durationMillis, recorderState.url, releaseCapturedRecordingLease]);
 
   useEffect(() => {
     if (phase !== 'recording' || demoMode || recorderState.durationMillis < VOICE_CHECK_IN_MAX_DURATION_MS) return;
     void stopRecording();
   }, [demoMode, phase, recorderState.durationMillis, stopRecording]);
 
-  const togglePlayback = useCallback(() => {
+  const togglePlayback = useCallback(async () => {
     if (demoMode) {
       setDemoPlaying((value) => !value);
     } else if (playerStatus.playing) {
       player.pause();
+      releaseReviewLease();
     } else {
-      if (playerStatus.didJustFinish || playerStatus.currentTime >= playerStatus.duration) {
-        void player.seekTo(0);
+      releaseReviewLease();
+      const generation = reviewGenerationRef.current;
+      const lease = acquireVoiceReviewSession(() => {
+        player.pause();
+        reviewLeaseRef.current = null;
+      });
+      if (!lease) return;
+      reviewLeaseRef.current = lease;
+      try {
+        if (!(await lease.configure()) || !lease.isActive() || generation !== reviewGenerationRef.current) {
+          lease.release();
+          if (reviewLeaseRef.current === lease) reviewLeaseRef.current = null;
+          return;
+        }
+        if (playerStatus.didJustFinish || playerStatus.currentTime >= playerStatus.duration) {
+          await player.seekTo(0);
+          if (!lease.isActive() || generation !== reviewGenerationRef.current) {
+            lease.release();
+            if (reviewLeaseRef.current === lease) reviewLeaseRef.current = null;
+            return;
+          }
+        }
+        player.play();
+      } catch {
+        lease.release();
+        if (reviewLeaseRef.current === lease) reviewLeaseRef.current = null;
+        setErrorKind('recording');
+        setErrorMessage('The recording could not be played. Your recording is still on this device.');
+        setPhase('error');
+        return;
       }
-      player.play();
     }
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, [demoMode, player, playerStatus.currentTime, playerStatus.didJustFinish, playerStatus.duration, playerStatus.playing]);
+  }, [demoMode, player, playerStatus.currentTime, playerStatus.didJustFinish, playerStatus.duration, playerStatus.playing, releaseReviewLease]);
 
   const discard = useCallback(async () => {
+    recordingCaptureRef.current = null;
+    startGenerationRef.current += 1;
+    busyRef.current = false;
+    setIsBusy(false);
+    releaseRecordingLease();
+    releaseReviewLease();
     try {
       if (!demoMode && recorderState.isRecording) await recorder.stop();
       player.pause();
@@ -441,9 +540,10 @@ export function VoiceCheckInSheet({
     setShowTranscript(false);
     setErrorMessage('');
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, [demoMode, player, recorder, recorderState.isRecording]);
+  }, [demoMode, player, recorder, recorderState.isRecording, releaseRecordingLease, releaseReviewLease]);
 
   const sendCheckIn = useCallback(async () => {
+    recordingCaptureRef.current = null;
     if (busyRef.current) return;
     Keyboard.dismiss();
     if (demoMode) {
@@ -465,6 +565,7 @@ export function VoiceCheckInSheet({
     setIsSending(true);
     try {
       player.pause();
+      releaseReviewLease();
       const saved = await sendVoiceCheckInDraft(localDraft);
       setDraft(null);
       setAudioUri(null);
@@ -493,7 +594,7 @@ export function VoiceCheckInSheet({
       setIsBusy(false);
       setIsSending(false);
     }
-  }, [audioUri, demoMode, draft, player]);
+  }, [audioUri, demoMode, draft, player, releaseReviewLease]);
 
   const saveTranscriptEdit = useCallback(async () => {
     if (!selectedCheckIn || !transcript.trim() || busyRef.current) return;
@@ -548,9 +649,14 @@ export function VoiceCheckInSheet({
   }, [demoMode, recordedDurationMs, selectedCheckIn]);
 
   const closeSheet = useCallback(async () => {
+    recordingCaptureRef.current = null;
     if (isClosingRef.current || isBusy) return;
     isClosingRef.current = true;
+    startGenerationRef.current += 1;
+    busyRef.current = false;
+    setIsBusy(false);
     Keyboard.dismiss();
+    releaseReviewLease();
     if (phase === 'recording') await stopRecording();
     if (isPlaying) {
       if (demoMode) setDemoPlaying(false);
@@ -569,7 +675,7 @@ export function VoiceCheckInSheet({
     }
     onClose();
     isClosingRef.current = false;
-  }, [demoMode, isBusy, isPlaying, onClose, phase, player, stopRecording]);
+  }, [demoMode, isBusy, isPlaying, onClose, phase, player, releaseReviewLease, stopRecording]);
 
   const renderIdle = () => (
     <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(180)} style={styles.stateContent}>

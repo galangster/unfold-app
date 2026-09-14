@@ -158,6 +158,7 @@ describe('deep-link allowlist — rejections', () => {
     expectRejected('unfold://unfolded', 'blocked-route');
     expectRejected('unfold:///unfolded', 'blocked-route');
     expectRejected('unfold://generating', 'blocked-route');
+    expectRejected('unfold://qa-ambient-sound', 'blocked-route');
     expectRejected('unfold://qa-method-readings', 'blocked-route');
     expectRejected('unfold://qa-method-readings?method=lectio_divina', 'blocked-route');
     expectRejected('unfold://series-reveal', 'unknown-route');

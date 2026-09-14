@@ -1,3 +1,6 @@
+import { disposeAmbientAudio } from './ambient-audio';
+import { AMBIENT_AUDIO_PERSIST_NAME, AMBIENT_AUDIO_INITIAL_STATE, useAmbientAudioState } from './ambient-audio-state';
+import { FEATURE_ANNOUNCEMENTS_KEY } from './feature-announcements';
 /**
  * Canonical full data reset.
  *
@@ -91,6 +94,11 @@ import {
   cancelVoiceCheckInUploads,
   clearVoiceCheckInLocalData,
 } from '@/lib/voice-check-ins';
+import {
+  cancelSuccessCuePlayback,
+  SOUND_EFFECTS_ENABLED_KEY,
+  SUCCESS_CUE_LEDGER_KEY,
+} from '@/lib/success-cue-storage';
 
 /**
  * All MMKV keys that hold user-specific data and must be cleared on reset.
@@ -98,6 +106,8 @@ import {
  * non-personal downloaded content.
  */
 export const FULL_RESET_MMKV_KEYS: readonly string[] = [
+  AMBIENT_AUDIO_PERSIST_NAME,
+  FEATURE_ANNOUNCEMENTS_KEY,
   'unfold-storage',
   'unfold-companion-chat',
   '@unfold_companion_daily',
@@ -124,6 +134,8 @@ export const FULL_RESET_MMKV_KEYS: readonly string[] = [
   AUTO_TRIAL_INTENT_KEY,
   DYNAMIC_EXAMPLE_KEY,
   VOICE_CHECK_IN_DRAFT_KEY,
+  SOUND_EFFECTS_ENABLED_KEY,
+  SUCCESS_CUE_LEDGER_KEY,
   // NOTE: 'unfold-trial-notification' is an MMKV INSTANCE id, not a key here — cleared via clearTrialNotificationMirror() below (REVM-8).
 ] as const;
 
@@ -236,6 +248,9 @@ export function performFullLocalReset(options: FullResetOptions = {}): Promise<F
   // Cancel before the first await. This prevents an upload callback from
   // restoring voice data after the reset clears local ownership.
   cancelVoiceCheckInUploads();
+  cancelSuccessCuePlayback();
+  disposeAmbientAudio();
+  useAmbientAudioState.getState().patch({ ...AMBIENT_AUDIO_INITIAL_STATE });
   invalidateRevenueCatIdentityReadiness();
   useUIState.getState().clearRevenueCatResolved();
   let tracked: Promise<FullResetResult>;

@@ -13,7 +13,6 @@
 import { useCallback } from 'react';
 import {
   createAudioPlayer,
-  setAudioModeAsync,
 } from 'expo-audio';
 import type { AudioPlayer } from 'expo-audio/build/AudioModule.types';
 import type { AudioStatus } from 'expo-audio/build/Audio.types';
@@ -26,7 +25,13 @@ import {
 } from '@/lib/audio-player-state';
 import { Duration } from '@/constants/animations';
 import { logger } from '@/lib/logger';
+import { acquireAudioSession, retryAudioAfterPermanentInterruption, type AudioSessionLease } from '@/lib/audio-session-registry';
 import { endReadingSession } from '@/lib/widget-bridge';
+import {
+  beginAmbientVoiceInterruption,
+  endAmbientVoiceInterruption,
+  notifyNarrationPlayback,
+} from '@/lib/ambient-audio-coordination';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -52,8 +57,7 @@ let globalPlayer: AudioPlayer | null = null;
 let statusSubscription: EventSubscription | null = null;
 /** Watchdog timer — resets state if playback doesn't start within timeout */
 let watchdogTimer: ReturnType<typeof setTimeout> | null = null;
-/** Track whether the audio session has been configured (lazy init). */
-let audioSessionConfigured = false;
+let narrationLease: AudioSessionLease | null = null;
 /**
  * Bumped on every startAudio/stopAudio. The deferred start body checks it
  * after each await so an older start cannot destroy or replace the player a
@@ -96,6 +100,7 @@ function destroyPlayer(): void {
  * this — a bare destroyPlayer() leaves the Live Activity on the lock screen.
  */
 function teardownPlayback(): void {
+  invalidateNarrationAudioSession();
   endReadingSession();
   destroyPlayer();
   useAudioPlayerState.getState().stopAudio();
@@ -180,6 +185,7 @@ function attachStatusListener(player: AudioPlayer): void {
     // Completion: run cascade to gracefully dismiss the player UI,
     // then destroy the native player to prevent CoreMedia spin loops.
     if (status.didJustFinish) {
+      invalidateNarrationAudioSession();
       logger.log('[AudioPlayer] Playback finished — running completion cascade');
       store.updatePlaybackState({ currentTime: 0, isPlaying: false });
       runCompletionCascade();
@@ -196,28 +202,37 @@ function attachStatusListener(player: AudioPlayer): void {
  * requested. This avoids a synchronous JSI call on the JS thread during screen
  * mount, which could block the thread for non-premium users who never play audio.
  */
-async function ensureAudioSession(): Promise<void> {
-  if (audioSessionConfigured) return;
-  try {
-    await setAudioModeAsync({
-      playsInSilentMode: true,
-      shouldPlayInBackground: true,
-      interruptionMode: 'doNotMix',
+async function ensureAudioSession(): Promise<boolean> {
+  if (!narrationLease?.isActive()) {
+    narrationLease = acquireAudioSession({
+      owner: 'narration',
+      mode: {
+        playsInSilentMode: true,
+        shouldPlayInBackground: true,
+        allowsRecording: false,
+        allowsBackgroundRecording: false,
+        shouldRouteThroughEarpiece: false,
+        interruptionMode: 'doNotMix',
+      },
+      onInvalidated: () => {
+        startGeneration += 1;
+        try { globalPlayer?.pause(); } catch {}
+        useAudioPlayerState.getState().updatePlaybackState({ isPlaying: false, isLoading: false });
+      },
     });
-    audioSessionConfigured = true;
-    logger.log('[AudioPlayer] Audio session configured (lazy)');
-  } catch (e) {
-    logger.error('[AudioPlayer] Failed to configure audio session', e);
   }
+  const lease = narrationLease;
+  return lease ? lease.configure() : false;
 }
 
-/**
- * Voice-dictation coordination. Speech recognition flips the shared
- * AVAudioSession into record mode, so narration must pause before the
- * recognizer starts and the playback session must be re-applied when
- * dictation ends (the lazy-init latch would otherwise never re-arm it).
- */
+export function invalidateNarrationAudioSession(): void {
+  narrationLease?.release();
+  narrationLease = null;
+}
+
 export function pauseForVoiceInput(): boolean {
+  beginAmbientVoiceInterruption();
+  invalidateNarrationAudioSession();
   const player = globalPlayer;
   const { isPlaying } = useAudioPlayerState.getState();
   if (!player || !isPlaying) return false;
@@ -231,15 +246,17 @@ export function pauseForVoiceInput(): boolean {
 }
 
 export async function resumeAfterVoiceInput(shouldResume: boolean): Promise<void> {
-  // STT reconfigured the session — drop the latch so playback mode re-applies.
-  audioSessionConfigured = false;
-  await ensureAudioSession();
+  endAmbientVoiceInterruption();
   if (!shouldResume) return;
   const player = globalPlayer;
+  const generation = startGeneration;
   if (!player) return;
   try {
+    if (!(await ensureAudioSession())) return;
+    if (player !== globalPlayer || generation !== startGeneration || !narrationLease?.isActive()) return;
     player.play();
   } catch (e) {
+    invalidateNarrationAudioSession();
     logger.warn('[AudioPlayer] resume after voice input failed', e);
   }
 }
@@ -250,6 +267,8 @@ export function useGlobalAudioPlayer() {
 
   const startAudio = useCallback(
     (uri: string, metadata: DevotionalAudioMetadata) => {
+      retryAudioAfterPermanentInterruption();
+      notifyNarrationPlayback();
       clearCascadeTimers();
       const generation = ++startGeneration;
 
@@ -266,7 +285,10 @@ export function useGlobalAudioPlayer() {
         try {
           if (generation !== startGeneration) return;
           // Lazily configure the audio session on first playback
-          await ensureAudioSession();
+          if (!(await ensureAudioSession())) {
+            if (generation === startGeneration) teardownPlayback();
+            return;
+          }
           if (generation !== startGeneration) return;
 
           // Yield again before the heaviest call
@@ -278,7 +300,7 @@ export function useGlobalAudioPlayer() {
 
           // createAudioPlayer is a synchronous JSI call — but with the UI
           // already showing the loading state, the brief block is acceptable.
-          const player = createAudioPlayer({ uri }, { updateInterval: 1000 });
+          const player = createAudioPlayer({ uri }, { updateInterval: 1000, autoResumeOnInterruption: false });
           globalPlayer = player;
           logger.log('[AudioPlayer] Created player with source');
 
@@ -295,7 +317,7 @@ export function useGlobalAudioPlayer() {
           // Defer play() to next frame — gives native player time to initialize
           requestAnimationFrame(() => {
             // A newer start may have replaced the player since this was queued.
-            if (globalPlayer !== player) return;
+            if (globalPlayer !== player || !narrationLease?.isActive()) return;
             try {
               globalPlayer.play();
               logger.log('[AudioPlayer] play() called');
@@ -307,7 +329,7 @@ export function useGlobalAudioPlayer() {
 
           // Lock screen controls — defer to avoid blocking
           setTimeout(() => {
-            if (globalPlayer !== player) return;
+            if (globalPlayer !== player || !narrationLease?.isActive()) return;
             try {
               globalPlayer.setActiveForLockScreen(true, {
                 title: metadata.title,
@@ -332,7 +354,7 @@ export function useGlobalAudioPlayer() {
 
         } catch (e) {
           logger.error('[AudioPlayer] startAudio FAILED:', e);
-          teardownPlayback();
+          if (generation === startGeneration) teardownPlayback();
         }
       }, 0);
     },
@@ -356,7 +378,7 @@ export function useGlobalAudioPlayer() {
     logger.log('[AudioPlayer] stopAudio — player destroyed');
   }, []);
 
-  const togglePlayPause = useCallback(() => {
+  const togglePlayPause = useCallback(async () => {
     const player = globalPlayer;
     if (!player) return;
 
@@ -364,7 +386,13 @@ export function useGlobalAudioPlayer() {
       const { isPlaying } = useAudioPlayerState.getState();
       if (isPlaying) {
         player.pause();
+        invalidateNarrationAudioSession();
       } else {
+        retryAudioAfterPermanentInterruption();
+        notifyNarrationPlayback();
+        const generation = startGeneration;
+        if (!(await ensureAudioSession())) return;
+        if (player !== globalPlayer || generation !== startGeneration || !narrationLease?.isActive()) return;
         player.play();
       }
       // State syncs via the playbackStatusUpdate listener

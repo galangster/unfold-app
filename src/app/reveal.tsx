@@ -1,3 +1,4 @@
+import { useSuccessRevealCue } from '@/hooks/useSuccessRevealCue';
 import { useEffect, useCallback, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, useWindowDimensions, TouchableOpacity, AccessibilityInfo } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -75,6 +76,16 @@ export default function RevealScreen() {
   const revealTarget = useMemo(
     () => resolveRevealTarget({ devotionalId, dayNumber }, devotionals),
     [devotionalId, dayNumber, devotionals],
+  );
+
+  const revealedDay = devotionals
+    .find((row) => row.id === revealTarget?.devotionalId)?.days
+    ?.find((day) => day.dayNumber === revealTarget?.dayNumber);
+  useSuccessRevealCue(
+    'new-day-revealed',
+    revealTarget?.devotionalId,
+    revealTarget?.dayNumber ?? 1,
+    Boolean(revealedDay && revealTarget && revealTarget.dayNumber > 1 && !revealedDay.isRead && !revealedDay.isRevealed),
   );
 
   // ─── Entrance stagger state ────────────────────────────────────
