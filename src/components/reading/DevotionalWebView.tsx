@@ -1253,7 +1253,7 @@ export function DevotionalWebView({
     // because `*` is not an HTML special char and survives escaping unchanged.
     const applyInlineMarkdown = (escaped: string): string => escaped
       .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*([^*]+)\*/g, '<em>$1</em>');
+      .replace(/\*([^*]+)\*/g, '<em class="devotional-emphasis">$1</em>');
 
     // Render a single paragraph, handling --- dividers and standalone bold headers
     const renderParagraph = (p: string, isFirst = false): string => {
@@ -1500,7 +1500,8 @@ export function DevotionalWebView({
     }
 
 
-    em, i { font-style: normal; font-weight: 500; }
+    /* Owner-approved upright emphasis retains semantic markup and visible weight. */
+    .devotional-emphasis { font-style: normal; font-weight: 600; }
 
     /* Horizontal rule from --- markdown */
     hr {

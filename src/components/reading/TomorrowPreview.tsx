@@ -13,6 +13,14 @@ interface TomorrowPreviewProps {
   };
 }
 
+function previewExcerpt(text: string): string {
+  const normalized = text.trim().replace(/\s+/g, ' ');
+  if (normalized.length <= 240) return normalized;
+  const excerpt = normalized.slice(0, 240);
+  const boundary = excerpt.lastIndexOf(' ');
+  return `${excerpt.slice(0, boundary > 0 ? boundary : 240).trimEnd()}…`;
+}
+
 export function TomorrowPreview({ title, teaser, colors }: TomorrowPreviewProps) {
   return (
     <View testID="tomorrow-preview" style={styles.root}>
@@ -38,7 +46,7 @@ export function TomorrowPreview({ title, teaser, colors }: TomorrowPreviewProps)
         testID="tomorrow-teaser"
         style={[styles.teaser, { color: colors.textMuted }]}
       >
-        {teaser}
+        {previewExcerpt(teaser)}
       </Text>
     </View>
   );

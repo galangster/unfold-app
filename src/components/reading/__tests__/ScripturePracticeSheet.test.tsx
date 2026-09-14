@@ -449,7 +449,8 @@ describe('ScripturePracticeSheet', () => {
     });
     const text = collectText(tree!.toJSON()).join(' ');
     expect(tree!.root.findByProps({ testID: 'breath-prayer-guide' })).toBeTruthy();
-    expect(tree!.root.findByProps({ testID: 'breath-prayer-phrase' }).props.children).toBe('The LORD is my shepherd');
+    expect(tree!.root.findAllByProps({ testID: 'breath-prayer-phrase' })).toHaveLength(0);
+    expect(tree!.root.findByProps({ testID: 'breath-prayer-guide' }).props.accessibilityLabel).toContain('The LORD is my shepherd');
     expect(tree!.root.findByProps({ testID: 'breath-prayer-begin' })).toBeTruthy();
     expect(text).toContain('Breathe the phrase');
     expect(text).toContain('Optional note');

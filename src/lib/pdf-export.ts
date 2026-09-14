@@ -175,7 +175,7 @@ export function generateDevotionalHTML(devotional: Devotional, options?: PDFExpo
       ? `
         <div class="section word-study">
           <h4>Word Study</h4>
-          <p class="word-study-term"><strong>${escapeHTML(wordStudy.term)}</strong> <em>(${escapeHTML(wordStudy.original)})</em></p>
+          <p class="word-study-term"><strong>${escapeHTML(wordStudy.term)}</strong> <em class="export-emphasis">(${escapeHTML(wordStudy.original)})</em></p>
           <p>${escapeHTML(wordStudy.meaning)}</p>
         </div>
       `
@@ -195,7 +195,7 @@ export function generateDevotionalHTML(devotional: Devotional, options?: PDFExpo
                   .find((qr) => qr.question === q);
 
                 const responseHTML = journalResponse
-                  ? `<div class="journal-response"><em>${escapeHTML(journalResponse.response)}</em></div>`
+                  ? `<div class="journal-response"><em class="export-emphasis">${escapeHTML(journalResponse.response)}</em></div>`
                   : '';
 
                 return `
@@ -223,7 +223,7 @@ export function generateDevotionalHTML(devotional: Devotional, options?: PDFExpo
       ? `
         <div class="section my-reflections">
           <h4>My Reflections</h4>
-          ${generalJournalContent.map((content) => `<p class="journal-text"><em>${escapeHTML(content)}</em></p>`).join('')}
+          ${generalJournalContent.map((content) => `<p class="journal-text"><em class="export-emphasis">${escapeHTML(content)}</em></p>`).join('')}
         </div>
       `
       : '';
@@ -576,7 +576,7 @@ export function generateDevotionalHTML(devotional: Devotional, options?: PDFExpo
           margin-bottom: 0.06in;
         }
 
-    em, i { font-style: normal; font-weight: 500; }
+    .export-emphasis { font-style: normal; font-weight: 600; }
 
         .scripture-text {
           font-family: Georgia, 'Times New Roman', serif;

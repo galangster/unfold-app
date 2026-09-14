@@ -148,8 +148,8 @@ function TopCardBody({ card, colors }: { card: TodayCardStackCard; colors: Color
   const quoteStrokeFit = strokeFitFor(FontFamily.bodyItalic);
 
   const body = (
-    <View style={[styles.content, card.onDismiss && styles.contentDismissible]}>
-      <Text style={[styles.title, { color: colors.text }]} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE} numberOfLines={2}>
+    <View style={styles.content}>
+      <Text style={[styles.title, card.onDismiss && styles.titleDismissible, { color: colors.text }]} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE} numberOfLines={2}>
         {balanceHeadline(smartQuotes(card.title))}
       </Text>
 
@@ -534,7 +534,7 @@ const styles = StyleSheet.create({
     gap: Spacing['2.5'],
     paddingTop: Spacing['2'],
   },
-  contentDismissible: {
+  titleDismissible: {
     paddingRight: Spacing['10'],
   },
   cardMeta: {
@@ -559,7 +559,9 @@ const styles = StyleSheet.create({
   },
   actionPill: {
     alignItems: 'center',
-    alignSelf: 'flex-start',
+    alignSelf: 'stretch',
+    justifyContent: 'center',
+    minHeight: 44,
     borderRadius: Radius.full,
     borderWidth: 1,
     flexDirection: 'row',

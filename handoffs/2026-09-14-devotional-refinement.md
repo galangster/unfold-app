@@ -26,3 +26,15 @@ Parent Simplify was a single pass. It removed a redundant native suppression var
 Native QA used released simulator4FEA33BF-3B0E-4EB1-9E8A-CAF215040415 and owned Metro8198. Sound simulator and protected simulator stayed untouched. Synthetic QA files are excluded from this commit and preserved in the external evidence fixtures directory.
 
 Open observation: changing OS text size live produced stale clipped measurements. Reloading produced correct large-text rendering. Do not describe this as verified live resizing.
+
+## Button-width correction
+
+Nick requested this correction after the first review. The old head was d8c0b8fad0bcf398ae815d9402b67494ad107f63.
+
+Dismiss clearance now applies to headings only in TodayCardStack and ContextSlot. Card action groups use the complete content width. Today reveal/read/recovery/new-study actions and compact premium/resume actions stretch to their content margins. Inline text links and paired shortcuts retain their intended layouts.
+
+Native proof: buttons-native.png and buttons-dark.png show the real card component. home-full-width.png shows the real Today route. Reveal measures354x48 points at x24. The feedback actions share both content margins.
+
+Validation: 61 focused tests passed, TypeScript passed, and targeted lint has zero errors. Parent Simplify reviewed this small correction directly. No new layout abstraction was necessary.
+
+The earlier CI failure expected the intentionally removed breath phrase. Its assertion now checks absence and accessible retention. Review feedback prompted class-scoped upright emphasis and a word-boundary teaser length cap. Full titles and large-text wrapping remain readable.

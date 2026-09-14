@@ -1519,7 +1519,8 @@ const styles = StyleSheet.create({
     marginBottom: Spacing['2'],
   },
   heroActions: {
-    alignSelf: 'flex-start',
+    alignSelf: 'stretch',
+    width: '100%',
     minHeight: 48,
     paddingVertical: Spacing['3'],
     paddingHorizontal: Spacing['5'],
@@ -1535,6 +1536,7 @@ const styles = StyleSheet.create({
   },
   heroActionContent: {
     flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
     gap: Spacing['2'],
   },
@@ -1640,6 +1642,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   heroCtaRow: {
+    width: '100%',
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'flex-start',
@@ -1665,7 +1668,8 @@ const styles = StyleSheet.create({
     marginBottom: Spacing['7'],
   },
   returningCta: {
-    alignSelf: 'flex-start',
+    alignSelf: 'stretch',
+    width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1818,6 +1822,7 @@ const styles = StyleSheet.create({
     borderRadius: 1,
   },
   preparingRecoveryButton: {
+    width: '100%',
     alignItems: 'center',
     borderRadius: Radius.full,
     borderWidth: 1,
@@ -1858,6 +1863,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
   },
   journeyCompleteCta: {
+    width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
