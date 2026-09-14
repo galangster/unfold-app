@@ -1,6 +1,6 @@
 # Unfold 1.1.12 UI and performance audit
 
-The changed interfaces pass the native Debug acceptance checks. Root applied ui-polish, ui-review, performance, and one simplify pass. Final embedded Release acceptance and publication are separate gates.
+The changed interfaces pass native Debug and embedded Release acceptance checks. Root applied ui-polish, ui-review, performance, and one simplify pass. Distribution validation remains a separate gate.
 
 ## Resulting behavior
 
@@ -21,9 +21,11 @@ Commands: `bun test --runInBand`, `bun run typecheck`, `bun run lint`, `bun run 
 
 The simulator checks cover dark and light appearance, enlarged text, keyboard focus, draft round trips, blank Next, multiline entry, Done, the four announcement pages, preview cleanup, all nine recordings, sound sheet gestures, timer layout, and the enlarged practice entry.
 
-The isolated Release build compiles with embedded JavaScript. Its bundle SHA-256 is `45496f74f756bb027c5323d8902faf65cae1f75d906b5861bc96bcf2af211a30`. Final combined Release interaction checks follow this source audit.
+The isolated Release build passes the combined interaction checks with embedded JavaScript and an unreachable Metro port. The final bundle SHA-256 is `005c044be28e72db29afec07a96e777c24a5535bb5110ffe0110a36bc5a5d852`.
 
-Evidence root: `operations/2026-09-14-release-takeover/` in the Unfold workspace. See `receipt.json`, `final-candidate-source.json`, `final-feature-validation/`, `candidate-native/feature-announcements-proof/RESULT.md`, and the native reading captures.
+With a hardware keyboard, the reflection toolbar stays above the tab bar. With a software keyboard, the toolbar and focused answer stay visible. Previous and Next preserve drafts. Done removes the toolbar. Typecheck and focused lint pass after the placement correction.
+
+Evidence root: `operations/2026-09-14-release-takeover/` in the Unfold workspace. See `receipt.json`, `final-candidate-source.json`, `final-feature-validation/`, `candidate-native/feature-announcements-proof/RESULT.md`, `candidate-native/final-combined-release-proof/RESULT.md`, and `candidate-native/final-combined-release-proof/hardware-correction-proof.json`.
 
 ## Performance scope
 

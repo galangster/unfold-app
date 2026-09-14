@@ -2654,6 +2654,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
         <KeyboardStickyView
           testID="reflection-keyboard-toolbar"
           accessible={false}
+          offset={{ closed: -(insets.bottom + 64), opened: 0 }}
           style={{ position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: colors.background }}
         >
           <ReflectionQuestionNav {...reflectionToolbar} />
