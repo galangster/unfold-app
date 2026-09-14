@@ -19,15 +19,38 @@ import {
 import {
   pauseAmbientSound,
   playAmbientSound,
+  previewAmbientVolume,
   setAmbientTimer,
+  setAmbientVolume,
 } from '@/lib/ambient-audio';
 
 jest.mock('expo-router', () => ({ useIsFocused: () => true }));
 
 const mockStopNarration = jest.fn();
-jest.mock('react-native-reanimated', () => ({
-  useReducedMotion: () => false,
-}));
+jest.mock('react-native-reanimated', () => {
+  const { View } = jest.requireActual<typeof import('react-native')>('react-native');
+  return {
+    __esModule: true,
+    default: { View, createAnimatedComponent: (component: unknown) => component },
+    useReducedMotion: () => false,
+    useSharedValue: (value: unknown) => ({ value }),
+    useAnimatedStyle: (factory: () => unknown) => {
+      try {
+        return factory();
+      } catch {
+        return {};
+      }
+    },
+    withTiming: (value: unknown, _config?: unknown, callback?: (finished: boolean) => void) => {
+      callback?.(true);
+      return value;
+    },
+    withSpring: (value: unknown) => value,
+    cancelAnimation: jest.fn(),
+    runOnJS: (fn: (...args: unknown[]) => unknown) => fn,
+    Easing: { out: (easing: unknown) => easing, in: (easing: unknown) => easing, inOut: (easing: unknown) => easing, cubic: (value: number) => value },
+  };
+});
 jest.mock('@/hooks/useGlobalAudioPlayer', () => ({
   useGlobalAudioPlayer: () => ({ stopAudio: mockStopNarration }),
   invalidateNarrationAudioSession: jest.fn(),
@@ -35,6 +58,7 @@ jest.mock('@/hooks/useGlobalAudioPlayer', () => ({
 jest.mock('@/lib/ambient-audio', () => ({
   pauseAmbientSound: jest.fn(),
   playAmbientSound: jest.fn(),
+  previewAmbientVolume: jest.fn(),
   setAmbientTimer: jest.fn(),
   setAmbientVolume: jest.fn(),
   stopAmbientSound: jest.fn(),
@@ -69,10 +93,32 @@ jest.mock('@/lib/theme', () => ({
     },
   }),
 }));
-jest.mock('@react-native-community/slider', () => ({
-  __esModule: true,
-  default: jest.requireActual<typeof import('react-native')>('react-native').View,
-}));
+jest.mock('@react-native-community/slider', () => {
+  const ReactLib = require('react') as typeof import('react');
+  const { Pressable } = jest.requireActual<typeof import('react-native')>('react-native');
+  return {
+    __esModule: true,
+    default: ({
+      onValueChange,
+      onSlidingComplete,
+    }: {
+      onValueChange?: (value: number) => void;
+      onSlidingComplete?: (value: number) => void;
+    }) =>
+      ReactLib.createElement(
+        ReactLib.Fragment,
+        null,
+        ReactLib.createElement(Pressable, {
+          testID: 'ambient-volume-drag',
+          onPress: () => onValueChange?.(0.4),
+        }),
+        ReactLib.createElement(Pressable, {
+          testID: 'ambient-volume-commit',
+          onPress: () => onSlidingComplete?.(0.4),
+        }),
+      ),
+  };
+});
 jest.mock('@/components/icons', () => {
   const View = jest.requireActual<typeof import('react-native')>('react-native').View;
   return {
@@ -152,5 +198,29 @@ describe('native sound controls', () => {
     render(<AmbientSoundSheet visible onClose={close} />);
     fireEvent.press(screen.getByText('Done'));
     await waitFor(() => expect(close).toHaveBeenCalledTimes(1));
+  });
+
+  it('reserves the header timer slot before a countdown starts', () => {
+    render(<AmbientMusicEntry />);
+    expect(screen.getByTestId('ambient-timer-countdown-slot')).toHaveTextContent('30:00');
+    expect(screen.getByLabelText('Set a timer')).toBeTruthy();
+  });
+
+  it('keeps a local volume draft until the slider settles', () => {
+    render(<AmbientSoundSheet visible onClose={jest.fn()} />);
+    fireEvent.press(screen.getByTestId('ambient-volume-drag'));
+    expect(previewAmbientVolume).toHaveBeenCalledWith(0.4);
+    expect(setAmbientVolume).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByTestId('ambient-volume-commit'));
+    expect(setAmbientVolume).toHaveBeenCalledWith(0.4);
+  });
+
+  it('restores the saved volume when a drag ends by closing the sheet', () => {
+    const savedVolume = useAmbientAudioState.getState().volume;
+    const { unmount } = render(<AmbientSoundSheet visible onClose={jest.fn()} />);
+    fireEvent.press(screen.getByTestId('ambient-volume-drag'));
+    unmount();
+    expect(previewAmbientVolume).toHaveBeenLastCalledWith(savedVolume);
+    expect(setAmbientVolume).not.toHaveBeenCalled();
   });
 });

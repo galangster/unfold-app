@@ -611,6 +611,18 @@ export function setAmbientVolume(volume: number): void {
   }
 }
 
+/** Live audible preview only. Never persist, resume, allocate, or start a fade. */
+export function previewAmbientVolume(volume: number): void {
+  if (!Number.isFinite(volume)) return;
+  const next = Math.min(1, Math.max(0, volume));
+  if (!player || store().status !== 'playing' || fadeOperation != null) return;
+  try {
+    player.volume = next;
+  } catch (error) {
+    logger.warn('[AmbientAudio] preview volume failed', error);
+  }
+}
+
 export function setAmbientTimer(minutes: number): void {
   if (!(AMBIENT_TIMER_MINUTES as readonly number[]).includes(minutes)) return;
   const timerMinutes = minutes as AmbientTimerMinutes;

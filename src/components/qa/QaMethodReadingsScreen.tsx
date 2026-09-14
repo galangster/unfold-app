@@ -396,7 +396,7 @@ const styles = StyleSheet.create({
     lineHeight: 30,
   },
   prayer: {
-    fontFamily: FontFamily.bodyItalic,
+    fontFamily: FontFamily.body,
     fontSize: 18,
     lineHeight: 30,
   },
@@ -413,7 +413,7 @@ const styles = StyleSheet.create({
     gap: Spacing['2'],
   },
   verse: {
-    fontFamily: FontFamily.bodyItalic,
+    fontFamily: FontFamily.body,
     fontSize: 18,
     lineHeight: 30,
   },

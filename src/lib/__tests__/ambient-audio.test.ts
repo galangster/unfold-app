@@ -8,6 +8,7 @@ import {
   interruptAmbientSound,
   pauseAmbientSound,
   playAmbientSound,
+  previewAmbientVolume,
   setAmbientPlaybackGuard,
   setAmbientTimer,
   setAmbientVolume,
@@ -383,6 +384,42 @@ describe('ambient audio controller', () => {
     await flush();
     expect(useAmbientAudioState.getState().selectedTrackId).toBe('tideglass-drift');
     expect(mockCreateAudioPlayer).toHaveBeenCalledTimes(2);
+  });
+
+  it('previews volume without persistence and commits only the settled value', async () => {
+    playAmbientSound('river-thread');
+    await flush();
+    const player = lastPlayer();
+    player.isLoaded = true;
+    player.emit({ isLoaded: true, playing: false });
+    await jest.advanceTimersByTimeAsync(AMBIENT_FADE_MS);
+    const savedVolume = useAmbientAudioState.getState().volume;
+    const persisted = mockPersistValues.get('ambient-audio-state');
+    previewAmbientVolume(0.25);
+    expect(player.volume).toBe(0.25);
+    expect(useAmbientAudioState.getState().volume).toBe(savedVolume);
+    expect(mockPersistValues.get('ambient-audio-state')).toBe(persisted);
+    setAmbientVolume(0.25);
+    expect(useAmbientAudioState.getState().volume).toBe(0.25);
+  });
+
+  it('never allocates or resumes playback for a volume preview', async () => {
+    previewAmbientVolume(0.75);
+    expect(mockCreateAudioPlayer).not.toHaveBeenCalled();
+    playAmbientSound('river-thread');
+    await flush();
+    const player = lastPlayer();
+    player.isLoaded = true;
+    player.emit({ isLoaded: true, playing: false });
+    await jest.advanceTimersByTimeAsync(AMBIENT_FADE_MS);
+    pauseAmbientSound();
+    const volume = player.volume;
+    const playCalls = player.play.mock.calls.length;
+    previewAmbientVolume(0.75);
+    expect(player.volume).toBe(volume);
+    expect(player.play).toHaveBeenCalledTimes(playCalls);
+    expect(mockCreateAudioPlayer).toHaveBeenCalledTimes(1);
+    expect(useAmbientAudioState.getState().status).toBe('paused');
   });
 
   it('persists volume and restores it without starting playback', async () => {

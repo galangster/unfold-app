@@ -1,4 +1,5 @@
-import { Text, TouchableOpacity, View, StyleSheet } from 'react-native';
+import { TouchableOpacity, View, StyleSheet } from 'react-native';
+import { ReaderText as Text } from './ReaderText';
 import { BookOpenIcon } from '@/components/icons';
 import { FontFamily } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
@@ -69,9 +70,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing['2'],
-    alignSelf: 'flex-start',
+    alignSelf: 'stretch',
   },
   buttonLabel: {
     ...Typography.uiLg,
+    flexShrink: 1,
+    textAlign: 'center',
   },
 });

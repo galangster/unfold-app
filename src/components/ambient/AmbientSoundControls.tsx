@@ -1,11 +1,9 @@
 /** @jsxImportSource react */
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
   ActivityIndicator,
   Alert,
-  Animated,
-  Easing,
   findNodeHandle,
   Modal,
   PanResponder,
@@ -20,7 +18,16 @@ import {
 } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useReducedMotion } from 'react-native-reanimated';
+import Animated, {
+  cancelAnimation,
+  runOnJS,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withSpring,
+  withTiming,
+  type SharedValue,
+} from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import {
   CaretLeftIcon,
@@ -33,6 +40,7 @@ import {
 } from '@/components/icons';
 import { AmbientText } from './AmbientText';
 import { FontFamily } from '@/constants/fonts';
+import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import {
   AMBIENT_TRACKS,
@@ -46,6 +54,7 @@ import {
 import {
   pauseAmbientSound,
   playAmbientSound,
+  previewAmbientVolume,
   setAmbientTimer,
   setAmbientVolume,
   stopAmbientSound,
@@ -89,7 +98,10 @@ export function useAmbientSoundActions() {
 }
 
 export function ambientStatusText(
-  state: ReturnType<typeof useAmbientAudioState.getState>,
+  state: Pick<
+    ReturnType<typeof useAmbientAudioState.getState>,
+    'status' | 'pauseReason' | 'volume'
+  >,
 ): string {
   if (state.status === 'loading') return 'Starting…';
   if (state.status === 'error') return 'Could not play · tap to retry';
@@ -100,41 +112,310 @@ export function ambientStatusText(
 }
 
 function SheetMotionLayer({
-  value,
+  translateY,
   height,
   backdrop = false,
   style,
   children,
   onEscape,
 }: {
-  value: Animated.Value;
+  translateY: SharedValue<number>;
   height: number;
   backdrop?: boolean;
   style: StyleProp<ViewStyle>;
   children?: React.ReactNode;
   onEscape?: () => void;
 }) {
-  // Scalar styles avoid stale Animated host bindings in this native runtime.
-  const [position, setPosition] = useState(height);
-  useLayoutEffect(() => {
-    const subscription = value.addListener(({ value: next }) => setPosition(next));
-    return () => value.removeListener(subscription);
-  }, [value]);
+  const motionStyle = useAnimatedStyle(() => {
+    const offset = translateY.value;
+    if (backdrop) {
+      return { opacity: Math.max(0, Math.min(1, height === 0 ? 0 : 1 - offset / height)) };
+    }
+    return { transform: [{ translateY: offset }] };
+  }, [height]);
 
   return (
-    <View
+    <Animated.View
       pointerEvents={backdrop ? 'none' : 'auto'}
       accessibilityViewIsModal={!backdrop}
       onAccessibilityEscape={onEscape}
-      style={[
-        style,
-        backdrop
-          ? { opacity: Math.max(0, Math.min(1, 1 - position / height)) }
-          : { transform: [{ translateY: position }] },
-      ]}
+      collapsable={false}
+      style={[style, motionStyle]}
     >
       {children}
-    </View>
+    </Animated.View>
+  );
+}
+
+function AmbientVolumeControl() {
+  const { colors } = useTheme();
+  const persistedVolume = useAmbientAudioState((state) => state.volume);
+  const [draft, setDraft] = useState(persistedVolume);
+  const dragging = useRef(false);
+
+  useEffect(() => {
+    if (!dragging.current) setDraft(persistedVolume);
+  }, [persistedVolume]);
+
+  useEffect(() => () => {
+    if (dragging.current) previewAmbientVolume(useAmbientAudioState.getState().volume);
+  }, []);
+
+  const percent = Math.round(draft * 100);
+
+  return (
+    <>
+      <View style={styles.volumeLabel}>
+        <AmbientText style={[styles.actionText, { color: colors.textMuted }]}>
+          Volume
+        </AmbientText>
+        <View style={styles.volumePercentSlot}>
+          {draft === 0 ? (
+            <AmbientText
+              testID="ambient-volume-percent"
+              style={[styles.actionText, { color: colors.textMuted }]}
+            >
+              Muted
+            </AmbientText>
+          ) : (
+            <>
+              <AmbientText
+                style={[styles.actionText, styles.tabular, styles.volumePercentReserve]}
+                importantForAccessibility="no"
+                accessibilityElementsHidden
+              >
+                100%
+              </AmbientText>
+              <AmbientText
+                testID="ambient-volume-percent"
+                style={[styles.actionText, styles.tabular, styles.volumePercentValue, { color: colors.textMuted }]}
+              >
+                {`${percent}%`}
+              </AmbientText>
+            </>
+          )}
+        </View>
+      </View>
+      <View style={styles.volumeRow}>
+        <SpeakerHighIcon size={17} color={colors.textMuted} />
+        <Slider
+          testID="ambient-volume-slider"
+          accessibilityLabel="Background sound volume"
+          accessibilityValue={{
+            min: 0,
+            max: 100,
+            now: percent,
+            text: `${percent} percent`,
+          }}
+          value={draft}
+          minimumValue={0}
+          maximumValue={1}
+          step={0.01}
+          onValueChange={(next) => {
+            dragging.current = true;
+            setDraft(next);
+            previewAmbientVolume(next);
+          }}
+          onSlidingComplete={(next) => {
+            dragging.current = false;
+            setDraft(next);
+            setAmbientVolume(next);
+          }}
+          minimumTrackTintColor={colors.accent}
+          maximumTrackTintColor={colors.borderStrong}
+          thumbTintColor={colors.accent}
+          style={styles.slider}
+        />
+      </View>
+    </>
+  );
+}
+
+function SheetEndedNote() {
+  const { colors } = useTheme();
+  const ended = useAmbientAudioState((state) => state.timerStatus === 'ended');
+  if (!ended) return null;
+  return (
+    <AmbientText accessibilityRole="text" style={[styles.note, { color: colors.text }]}>
+      Your time is up. Stay as long as you like.
+    </AmbientText>
+  );
+}
+
+function SheetSoundsList({
+  choose,
+}: {
+  choose: ReturnType<typeof useAmbientSoundActions>;
+}) {
+  const { colors } = useTheme();
+  const selectedTrackId = useAmbientAudioState((state) => state.selectedTrackId);
+  const status = useAmbientAudioState((state) => state.status);
+  const hasUsed = useAmbientAudioState((state) => state.hasUsed);
+  const error = useAmbientAudioState((state) => state.error);
+
+  return (
+    <>
+      {AMBIENT_TRACKS.map((track, index) => {
+        const current = selectedTrackId === track.id;
+        const loading = current && status === 'loading';
+        const playing = current && status === 'playing';
+        const chosen = current && (hasUsed || loading);
+        return (
+          <Pressable
+            key={track.id}
+            onPress={() => choose(track.id)}
+            accessibilityRole="button"
+            accessibilityLabel={`${playing ? 'Pause ' : loading ? 'Cancel ' : 'Play '}${track.title}`}
+            accessibilityState={{ busy: loading }}
+            style={({ pressed }) => [
+              styles.songRow,
+              chosen && { borderColor: colors.accent },
+              pressed && styles.pressed,
+            ]}
+          >
+            <AmbientText style={[styles.songNumber, { color: colors.textMuted }]}>
+              {String(index + 1).padStart(2, '0')}
+            </AmbientText>
+            <AmbientText style={[styles.optionTitle, styles.flex, { color: colors.text }]}>
+              {track.title}
+            </AmbientText>
+            <AmbientText style={[styles.subtitle, { color: colors.textMuted }]}>
+              {loading ? 'Starting…' : formatTrackDuration(track.duration)}
+            </AmbientText>
+            {loading ? (
+              <ActivityIndicator color={colors.accent} />
+            ) : playing ? (
+              <PauseIcon size={17} color={colors.accent} />
+            ) : (
+              <PlayIcon size={17} color={colors.accent} />
+            )}
+          </Pressable>
+        );
+      })}
+      {status === 'error' ? (
+        <AmbientText
+          accessibilityRole="alert"
+          style={[styles.note, { color: colors.accent }]}
+        >
+          {error || 'This sound could not play. Try again or choose another.'}
+        </AmbientText>
+      ) : null}
+    </>
+  );
+}
+
+function SheetTimerStatusRow({ onPress }: { onPress: () => void }) {
+  const { colors } = useTheme();
+  const timerStatus = useAmbientAudioState((state) => state.timerStatus);
+  const remainingSeconds = useAmbientAudioState((state) =>
+    state.timerStatus === 'running' ? state.remainingSeconds : 0,
+  );
+  const detail =
+    timerStatus === 'running'
+      ? `${formatAmbientRemaining(remainingSeconds)} left`
+      : timerStatus === 'ended'
+        ? 'Finished'
+        : 'Off';
+
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Timer. ${detail}`}
+      style={[styles.timerRow, { borderColor: colors.borderFocused }]}
+    >
+      <ClockIcon size={18} color={colors.textMuted} />
+      <AmbientText style={[styles.actionText, styles.flex, { color: colors.text }]}>
+        Timer
+      </AmbientText>
+      <AmbientText style={[styles.actionText, styles.tabular, { color: colors.textMuted }]}>
+        {detail}
+      </AmbientText>
+      <CaretRightIcon size={16} color={colors.textMuted} />
+    </Pressable>
+  );
+}
+
+function SheetTimerPanel({
+  selectedDuration,
+  onSelectDuration,
+  close,
+}: {
+  selectedDuration: number;
+  onSelectDuration: (minutes: number) => void;
+  close: () => void;
+}) {
+  const { colors } = useTheme();
+  const timerStatus = useAmbientAudioState((state) => state.timerStatus);
+  const remainingSeconds = useAmbientAudioState((state) =>
+    state.timerStatus === 'running' ? state.remainingSeconds : 0,
+  );
+
+  return (
+    <>
+      {timerStatus === 'running' ? (
+        <View style={styles.timerReadout}>
+          <AmbientText
+            accessibilityRole="timer"
+            accessibilityLabel={`${formatAmbientRemaining(remainingSeconds)} remaining`}
+            style={[styles.timerHuge, { color: colors.text }]}
+          >
+            {formatAmbientRemaining(remainingSeconds)}
+          </AmbientText>
+          <AmbientText style={[styles.note, { color: colors.textMuted }]}>
+            remaining
+          </AmbientText>
+        </View>
+      ) : null}
+      {TIMER_CHOICES.map((minutes) => (
+        <Pressable
+          key={minutes}
+          onPress={() => onSelectDuration(minutes)}
+          accessibilityRole="radio"
+          accessibilityState={{ checked: selectedDuration === minutes }}
+          accessibilityLabel={`${minutes} minutes`}
+          style={[styles.timerOption, { borderColor: colors.border }]}
+        >
+          <AmbientText
+            style={[
+              styles.optionTitle,
+              { color: selectedDuration === minutes ? colors.accent : colors.text },
+            ]}
+          >
+            {minutes} minutes
+          </AmbientText>
+          {selectedDuration === minutes ? (
+            <CheckIcon size={20} color={colors.accent} />
+          ) : null}
+        </Pressable>
+      ))}
+      <Pressable
+        onPress={() => {
+          setAmbientTimer(selectedDuration);
+          close();
+        }}
+        accessibilityRole="button"
+        style={[styles.primary, { backgroundColor: colors.accent }]}
+      >
+        <AmbientText style={[styles.actionText, { color: colors.background }]}>
+          {timerStatus === 'running' ? 'Restart timer' : 'Start timer'}
+        </AmbientText>
+      </Pressable>
+      {timerStatus === 'running' ? (
+        <Pressable
+          onPress={() => {
+            setAmbientTimer(0);
+            close();
+          }}
+          accessibilityRole="button"
+          style={styles.silence}
+        >
+          <AmbientText style={[styles.actionText, { color: colors.textMuted }]}>
+            Cancel timer
+          </AmbientText>
+        </Pressable>
+      ) : null}
+    </>
   );
 }
 
@@ -155,20 +436,20 @@ export function AmbientSoundSheet({
   const { height, fontScale, width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
-  const translation = useRef(new Animated.Value(height)).current;
+  const translateY = useSharedValue(height);
   const animationGeneration = useRef(0);
   const title = useRef<View>(null);
   const [timerPanel, setTimerPanel] = useState(initialPanel === 'timer');
   const [selectedDuration, setSelectedDuration] = useState(15);
-  const state = useAmbientAudioState();
+  const timerMinutes = useAmbientAudioState((state) => state.timerMinutes);
   const choose = useAmbientSoundActions();
 
   useEffect(() => {
     if (visible) {
       setTimerPanel(initialPanel === 'timer');
-      setSelectedDuration(state.timerMinutes || 15);
+      setSelectedDuration(timerMinutes || 15);
     }
-  }, [visible, initialPanel, state.timerMinutes]);
+  }, [visible, initialPanel, timerMinutes]);
 
   const focusTitle = useCallback(() => {
     const handle = findNodeHandle(title.current);
@@ -191,47 +472,49 @@ export function AmbientSoundSheet({
     };
   }, [visible, timerPanel, contained, focusTitle, restoreFocus]);
 
+  const finishClose = useCallback((generation: number) => {
+    if (generation === animationGeneration.current) onClose();
+  }, [onClose]);
+
+  const finishOpen = useCallback((generation: number) => {
+    if (generation === animationGeneration.current) focusTitle();
+  }, [focusTitle]);
+
   const close = useCallback(() => {
     const generation = ++animationGeneration.current;
-    translation.stopAnimation();
+    cancelAnimation(translateY);
     if (reducedMotion) {
       onClose();
       return;
     }
-    Animated.timing(translation, {
-      toValue: height,
-      duration: 160,
-      easing: Easing.in(Easing.cubic),
-      useNativeDriver: false,
-    }).start(({ finished }) => {
-      if (finished && generation === animationGeneration.current) onClose();
+    translateY.value = withTiming(height, { duration: Duration.fast, easing: Ease.out }, (finished) => {
+      if (finished) runOnJS(finishClose)(generation);
     });
-  }, [height, onClose, reducedMotion, translation]);
+  }, [finishClose, height, onClose, reducedMotion, translateY]);
 
   const openSheet = useCallback(() => {
     const generation = ++animationGeneration.current;
-    translation.stopAnimation();
-    translation.setValue(reducedMotion ? 0 : height);
-    Animated.timing(translation, {
-      toValue: 0,
-      duration: reducedMotion ? 0 : 220,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: false,
-    }).start(({ finished }) => {
-      if (finished && generation === animationGeneration.current) focusTitle();
+    cancelAnimation(translateY);
+    translateY.value = reducedMotion ? 0 : height;
+    if (reducedMotion) {
+      focusTitle();
+      return;
+    }
+    translateY.value = withTiming(0, { duration: Duration.normal, easing: Ease.out }, (finished) => {
+      if (finished) runOnJS(finishOpen)(generation);
     });
-  }, [height, reducedMotion, translation, focusTitle]);
+  }, [finishOpen, focusTitle, height, reducedMotion, translateY]);
 
   useEffect(() => {
     if (visible && contained) {
       const frame = requestAnimationFrame(openSheet);
       return () => {
         cancelAnimationFrame(frame);
-        translation.stopAnimation();
+        cancelAnimation(translateY);
       };
     }
-    if (!visible) translation.setValue(height);
-  }, [visible, contained, height, openSheet, translation]);
+    if (!visible) translateY.value = height;
+  }, [visible, contained, height, openSheet, translateY]);
 
   const pan = React.useMemo(
     () =>
@@ -239,24 +522,25 @@ export function AmbientSoundSheet({
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: (_, gesture) =>
           gesture.dy > 5 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
-        onPanResponderGrant: () => translation.stopAnimation(),
-        onPanResponderMove: (_, gesture) =>
-          translation.setValue(Math.max(0, gesture.dy)),
+        onPanResponderGrant: () => cancelAnimation(translateY),
+        onPanResponderMove: (_, gesture) => {
+          translateY.value = Math.max(0, gesture.dy);
+        },
         onPanResponderRelease: (_, gesture) => {
           if ((Math.abs(gesture.dx) < 4 && Math.abs(gesture.dy) < 4) || gesture.dy > 85 || (gesture.vy > 0.65 && gesture.dy > 28)) close();
-          else if (reducedMotion) translation.setValue(0);
+          else if (reducedMotion) translateY.value = 0;
           else
-            Animated.spring(translation, {
-              toValue: 0,
+            translateY.value = withSpring(0, {
               damping: 25,
               stiffness: 300,
               mass: 1,
-              useNativeDriver: false,
-            }).start();
+            });
         },
-        onPanResponderTerminate: () => translation.setValue(0),
+        onPanResponderTerminate: () => {
+          translateY.value = 0;
+        },
       }),
-    [close, reducedMotion, translation],
+    [close, reducedMotion, translateY],
   );
 
   const sheetHeight = Math.min(
@@ -267,7 +551,7 @@ export function AmbientSoundSheet({
   const contents = (
     <View collapsable={false} style={styles.modalRoot}>
       <SheetMotionLayer
-        value={translation}
+        translateY={translateY}
         height={height}
         backdrop
         style={[StyleSheet.absoluteFill, styles.backdrop]}
@@ -279,7 +563,7 @@ export function AmbientSoundSheet({
         style={StyleSheet.absoluteFill}
       />
       <SheetMotionLayer
-        value={translation}
+        translateY={translateY}
         height={height}
         onEscape={close}
         style={{
@@ -341,186 +625,21 @@ export function AmbientSoundSheet({
               </AmbientText>
             </Pressable>
           </View>
-          {state.timerStatus === 'ended' ? (
-            <AmbientText
-              accessibilityRole="text"
-              style={[styles.note, { color: colors.text }]}
-            >
-              Your time is up. Stay as long as you like.
-            </AmbientText>
-          ) : null}
+          <SheetEndedNote />
           {timerPanel ? (
-            <>
-              {state.timerStatus === 'running' ? (
-                <View style={styles.timerReadout}>
-                  <AmbientText
-                    accessibilityRole="timer"
-                    accessibilityLabel={`${formatAmbientRemaining(state.remainingSeconds)} remaining`}
-                    style={[styles.timerHuge, { color: colors.text }]}
-                  >
-                    {formatAmbientRemaining(state.remainingSeconds)}
-                  </AmbientText>
-                  <AmbientText style={[styles.note, { color: colors.textMuted }]}>
-                    remaining
-                  </AmbientText>
-                </View>
-              ) : null}
-              {TIMER_CHOICES.map((minutes) => (
-                <Pressable
-                  key={minutes}
-                  onPress={() => setSelectedDuration(minutes)}
-                  accessibilityRole="radio"
-                  accessibilityState={{ checked: selectedDuration === minutes }}
-                  accessibilityLabel={`${minutes} minutes`}
-                  style={[styles.timerOption, { borderColor: colors.border }]}
-                >
-                  <AmbientText
-                    style={[
-                      styles.optionTitle,
-                      {
-                        color:
-                          selectedDuration === minutes ? colors.accent : colors.text,
-                      },
-                    ]}
-                  >
-                    {minutes} minutes
-                  </AmbientText>
-                  {selectedDuration === minutes ? (
-                    <CheckIcon size={20} color={colors.accent} />
-                  ) : null}
-                </Pressable>
-              ))}
-              <Pressable
-                onPress={() => {
-                  setAmbientTimer(selectedDuration);
-                  close();
-                }}
-                accessibilityRole="button"
-                style={[styles.primary, { backgroundColor: colors.accent }]}
-              >
-                <AmbientText style={[styles.actionText, { color: colors.background }]}>
-                  {state.timerStatus === 'running' ? 'Restart timer' : 'Start timer'}
-                </AmbientText>
-              </Pressable>
-              {state.timerStatus === 'running' ? (
-                <Pressable
-                  onPress={() => {
-                    setAmbientTimer(0);
-                    close();
-                  }}
-                  accessibilityRole="button"
-                  style={styles.silence}
-                >
-                  <AmbientText style={[styles.actionText, { color: colors.textMuted }]}>
-                    Cancel timer
-                  </AmbientText>
-                </Pressable>
-              ) : null}
-            </>
+            <SheetTimerPanel
+              selectedDuration={selectedDuration}
+              onSelectDuration={setSelectedDuration}
+              close={close}
+            />
           ) : (
             <>
-              {AMBIENT_TRACKS.map((track, index) => {
-                const current = state.selectedTrackId === track.id;
-                const loading = current && state.status === 'loading';
-                const playing = current && state.status === 'playing';
-                const chosen = current && (state.hasUsed || loading);
-                return (
-                  <Pressable
-                    key={track.id}
-                    onPress={() => choose(track.id)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${playing ? 'Pause ' : loading ? 'Cancel ' : 'Play '}${track.title}`}
-                    accessibilityState={{ busy: loading }}
-                    style={({ pressed }) => [
-                      styles.songRow,
-                      chosen && { borderColor: colors.accent },
-                      pressed && styles.pressed,
-                    ]}
-                  >
-                    <AmbientText style={[styles.songNumber, { color: colors.textMuted }]}>
-                      {String(index + 1).padStart(2, '0')}
-                    </AmbientText>
-                    <AmbientText style={[styles.optionTitle, styles.flex, { color: colors.text }]}>
-                      {track.title}
-                    </AmbientText>
-                    <AmbientText style={[styles.subtitle, { color: colors.textMuted }]}>
-                      {loading ? 'Starting…' : formatTrackDuration(track.duration)}
-                    </AmbientText>
-                    {loading ? (
-                      <ActivityIndicator color={colors.accent} />
-                    ) : playing ? (
-                      <PauseIcon size={17} color={colors.accent} />
-                    ) : (
-                      <PlayIcon size={17} color={colors.accent} />
-                    )}
-                  </Pressable>
-                );
-              })}
-              {state.status === 'error' ? (
-                <AmbientText
-                  accessibilityRole="alert"
-                  style={[styles.note, { color: colors.accent }]}
-                >
-                  {state.error || 'This sound could not play. Try again or choose another.'}
-                </AmbientText>
-              ) : null}
+              <SheetSoundsList choose={choose} />
               <AmbientText style={[styles.note, { color: colors.textMuted }]}>
                 The next piece follows softly.
               </AmbientText>
-              <View style={styles.volumeLabel}>
-                <AmbientText style={[styles.actionText, { color: colors.textMuted }]}>
-                  Volume
-                </AmbientText>
-                <AmbientText style={[styles.actionText, { color: colors.textMuted }]}>
-                  {state.volume === 0 ? 'Muted' : `${Math.round(state.volume * 100)}%`}
-                </AmbientText>
-              </View>
-              <View style={styles.volumeRow}>
-                <SpeakerHighIcon size={17} color={colors.textMuted} />
-                <Slider
-                  accessibilityLabel="Background sound volume"
-                  accessibilityValue={{
-                    min: 0,
-                    max: 100,
-                    now: Math.round(state.volume * 100),
-                    text: `${Math.round(state.volume * 100)} percent`,
-                  }}
-                  value={state.volume}
-                  minimumValue={0}
-                  maximumValue={1}
-                  step={0.01}
-                  onValueChange={setAmbientVolume}
-                  minimumTrackTintColor={colors.accent}
-                  maximumTrackTintColor={colors.borderStrong}
-                  thumbTintColor={colors.accent}
-                  style={styles.slider}
-                />
-              </View>
-              <Pressable
-                onPress={() => setTimerPanel(true)}
-                accessibilityRole="button"
-                accessibilityLabel={`Timer. ${
-                  state.timerStatus === 'running'
-                    ? `${formatAmbientRemaining(state.remainingSeconds)} left`
-                    : state.timerStatus === 'ended'
-                      ? 'Finished'
-                      : 'Off'
-                }`}
-                style={[styles.timerRow, { borderColor: colors.borderFocused }]}
-              >
-                <ClockIcon size={18} color={colors.textMuted} />
-                <AmbientText style={[styles.actionText, styles.flex, { color: colors.text }]}>
-                  Timer
-                </AmbientText>
-                <AmbientText style={[styles.actionText, { color: colors.textMuted }]}>
-                  {state.timerStatus === 'running'
-                    ? `${formatAmbientRemaining(state.remainingSeconds)} left`
-                    : state.timerStatus === 'ended'
-                      ? 'Finished'
-                      : 'Off'}
-                </AmbientText>
-                <CaretRightIcon size={16} color={colors.textMuted} />
-              </Pressable>
+              <AmbientVolumeControl />
+              <SheetTimerStatusRow onPress={() => setTimerPanel(true)} />
               <Pressable
                 onPress={() => {
                   stopAmbientSound();
@@ -573,6 +692,7 @@ const styles = StyleSheet.create({
   sheetHeader: { flexDirection: 'row', alignItems: 'center', minHeight: 46 },
   sheetTitle: { fontFamily: FontFamily.uiMedium, fontSize: 17 },
   actionText: { fontFamily: FontFamily.ui, fontSize: 13 },
+  tabular: { fontVariant: ['tabular-nums'] },
   songRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -588,6 +708,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginTop: 19,
   },
+  volumePercentSlot: { alignItems: 'flex-end', justifyContent: 'center' },
+  volumePercentReserve: { color: 'transparent' },
+  volumePercentValue: { position: 'absolute', right: 0 },
   volumeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   slider: { height: 44, flex: 1, marginVertical: 3 },
   timerRow: {

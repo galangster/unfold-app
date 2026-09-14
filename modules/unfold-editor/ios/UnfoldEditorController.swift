@@ -322,7 +322,7 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
   func insertScripture(reference: String, text: String) {
     let escapedReference = Self.escapeHTML(reference)
     let escapedText = Self.escapeHTML(text.replacingOccurrences(of: "\n", with: " "))
-    let html = "<blockquote><p>\(escapedText)</p><p><i>\u{2014} \(escapedReference)</i></p></blockquote><p></p>"
+    let html = "<blockquote><p>\(escapedText)</p><p>\u{2014} \(escapedReference)</p></blockquote><p></p>"
     let attributed = HtmlDecoder.decode(html)
     let selectedRange = editor.selectedRange
     editor.replaceCharacters(in: selectedRange, with: attributed)

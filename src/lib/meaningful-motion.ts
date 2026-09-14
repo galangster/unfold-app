@@ -1,10 +1,15 @@
 export const PROCESSING_BAR_CYCLE_MS = 1600;
 export const PROCESSING_BAR_STAGGER_MS = 200;
 export const BREATH_HALF_MS = 4000;
-export const BREATH_PEAK_SCALE = 1.04;
+export const BREATH_RING_SIZES = [168, 148, 128] as const;
+export const BREATH_RING_SIZE = BREATH_RING_SIZES[0];
+export const BREATH_PEAK_SCALE = 1.16;
+export const BREATH_RESERVED_SIZE = Math.ceil(BREATH_RING_SIZE * BREATH_PEAK_SCALE);
+export const BREATH_BUTTON_CLEARANCE = 24;
 
 export type ReflectionSaveState = 'saving' | 'saved' | 'error';
 export type ReflectionCheckMode = 'hidden' | 'static' | 'draw';
+export type BreathCue = 'in' | 'out';
 
 export function shouldAnnounceReadingReady(
   previousType: string | null,
@@ -59,3 +64,11 @@ export function shouldShowBreathGuide(
   return methodId === 'breath_prayer' && stepId === 'breathe';
 }
 
+export function breathCueFromPhaseDelta(
+  current: number,
+  previous: number | null,
+): BreathCue | null {
+  'worklet';
+  if (previous == null || current === previous) return null;
+  return current > previous ? 'in' : 'out';
+}

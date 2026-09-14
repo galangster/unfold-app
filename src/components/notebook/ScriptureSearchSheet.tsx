@@ -646,7 +646,7 @@ const sheetStyles = StyleSheet.create({
     fontFamily: FontFamily.body,
     fontSize: 15,
     lineHeight: 24,
-    fontStyle: 'italic',
+    fontStyle: 'normal',
   },
   previewRef: {
     fontFamily: FontFamily.uiMedium,

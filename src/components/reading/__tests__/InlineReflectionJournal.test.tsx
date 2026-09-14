@@ -1,5 +1,7 @@
 import React from 'react';
-import { AppState, type AppStateStatus, StyleSheet, Text, TextInput } from 'react-native';
+import { AppState, type AppStateStatus, Keyboard, StyleSheet, Text, TextInput } from 'react-native';
+import { ReflectionQuestionNav, type ReflectionKeyboardToolbarState } from '../ReflectionQuestionNav';
+import type { ReactTestRenderer } from 'react-test-renderer';
 import { FontFamily } from '@/constants/fonts';
 
 // react-test-renderer types are not installed in this app; keep this test aligned
@@ -160,6 +162,7 @@ describe('InlineReflectionJournal', () => {
       content: '',
       questionResponses: [{ question: 'What stood out?', response: 'Day 1 answer' }],
     });
+    jest.spyOn(Keyboard, 'dismiss').mockImplementation(() => {});
   });
 
   it('marks reflection optional without claiming an untouched response was saved', () => {
@@ -177,10 +180,17 @@ describe('InlineReflectionJournal', () => {
     });
 
     const labels = tree!.root.findAllByType(Text).map((node: any) => node.props.children).join(' ');
-    expect(labels).toContain('Optional reflection');
+    expect(labels).toContain('Reflection');
+    expect(labels).toContain('Optional');
+    expect(labels).not.toContain('Optional reflection');
+    expect(labels).not.toContain('reflected on');
     expect(labels).not.toContain('Saving...');
     expect(labels).not.toContain('Saved to Journal');
     expect(mockAddJournalEntry).not.toHaveBeenCalled();
+    expect(tree!.root.findByProps({ testID: 'reflection-save-slot-0' })).toBeTruthy();
+    expect(tree!.root.findByProps({ testID: 'reflection-journal-link-target' }).props.style.minHeight).toBe(44);
+    expect(tree!.root.findByProps({ testID: 'reflection-journal-link' }).findByType(Text).props.children)
+      .toBe('Continue in Journal →');
 
     act(() => tree!.unmount());
   });
@@ -443,6 +453,37 @@ describe('InlineReflectionJournal', () => {
     expect(tree!.root.findByType(TextInput).props.value).toBe('');
   });
 
+  it('uses a left-aligned serif heading, quiet optional label, and journal text link', () => {
+    const onOpenFullJournal = jest.fn();
+    let tree: any;
+
+    act(() => {
+      tree = renderer.create(
+        <InlineReflectionJournal
+          questions={['What stood out?']}
+          devotionalId="devotional"
+          dayNumber={2}
+          onOpenFullJournal={onOpenFullJournal}
+        />
+      );
+    });
+
+    const heading = tree!.root.findByProps({ testID: 'reflection-heading' });
+    const optional = tree!.root.findByProps({ testID: 'reflection-optional-label' });
+    expect(heading.props.children).toBe('Reflection');
+    expect(optional.props.children).toBe('Optional');
+    expect(StyleSheet.flatten(heading.props.style).fontFamily).toBe(FontFamily.display);
+    expect(StyleSheet.flatten(heading.props.style).textAlign).toBe('left');
+    expect(StyleSheet.flatten(optional.props.style).fontFamily).toBe(FontFamily.ui);
+
+    act(() => {
+      tree!.root.findByProps({ testID: 'reflection-journal-link' }).props.onPress();
+    });
+    expect(onOpenFullJournal).toHaveBeenCalledTimes(1);
+
+    act(() => tree!.unmount());
+  });
+
   it('renders reflection questions in Inter instead of the selected reading font', () => {
     let tree: any;
 
@@ -694,8 +735,8 @@ describe('InlineReflectionJournal', () => {
   it('remeasures a focused later question after layout commits without remounting its draft', () => {
     let tree: any;
     const onFocusInput = jest.fn();
-    const scrollView = {};
-    const scrollViewRef = { current: scrollView as any };
+    const scrollContent = {};
+    const scrollContentRef = { current: scrollContent as any };
     const onOpenFullJournal = jest.fn();
     const measurementCallbacks: ((x: number, y: number) => void)[] = [];
     const textInputNode = {
@@ -711,7 +752,7 @@ describe('InlineReflectionJournal', () => {
         devotionalId="devotional"
         dayNumber={1}
         onOpenFullJournal={onOpenFullJournal}
-        scrollViewRef={scrollViewRef}
+        scrollContentRef={scrollContentRef}
         onFocusInput={onFocusInput}
         layoutCommitSignal={layoutCommitSignal}
       />
@@ -733,20 +774,14 @@ describe('InlineReflectionJournal', () => {
     });
 
     // The jest TextInput mock is a class component, so the component's ref map
-    // holds the class instance — spy on it directly before the focus timer fires.
+    // holds the class instance. Native layout must acknowledge the new input.
     const { TextInput: RNTextInput } = require('react-native');
     const inputInstance = tree!.root.findByType(RNTextInput).instance;
     inputInstance.focus = textInputNode.focus;
     inputInstance.measureLayout = textInputNode.measureLayout;
 
-    act(() => {
-      jest.advanceTimersByTime(399);
-    });
-    expect(onFocusInput).not.toHaveBeenCalled();
-
-    act(() => {
-      jest.advanceTimersByTime(1);
-    });
+    expect(textInputNode.focus).not.toHaveBeenCalled();
+    act(() => tree!.root.findByType(RNTextInput).props.onLayout());
 
     expect(textInputNode.focus).toHaveBeenCalled();
     expect(onFocusInput).not.toHaveBeenCalled();
@@ -761,7 +796,7 @@ describe('InlineReflectionJournal', () => {
     });
 
     expect(textInputNode.measureLayout).toHaveBeenCalledWith(
-      scrollView,
+      scrollContent,
       expect.any(Function),
       expect.any(Function)
     );
@@ -918,5 +953,128 @@ describe('InlineReflectionJournal', () => {
     expect(input.props.value).toBe('Keep this exact response.');
 
     act(() => tree!.unmount());
+  });
+
+  function mountNavigation(questions = ['First?', 'Second?', 'Third?']) {
+    const change = jest.fn<void, [ReflectionKeyboardToolbarState | null]>();
+    let tree: any;
+    const render = (dayNumber = 1) => (
+      <InlineReflectionJournal questions={questions} devotionalId="nav" dayNumber={dayNumber}
+        onOpenFullJournal={jest.fn()} onKeyboardToolbarChange={change} />
+    );
+    act(() => { tree = renderer.create(render()); });
+    const input = tree.root.findByType(TextInput);
+    input.instance.focus = jest.fn();
+    act(() => { input.props.onLayout(); input.props.onFocus(); });
+    const toolbar = () => change.mock.calls[change.mock.calls.length - 1][0]!;
+    const acknowledge = (question: string) => {
+      const incoming = tree.root.findByProps({ accessibilityLabel: `Your response to: ${question}` });
+      incoming.instance.focus = jest.fn();
+      act(() => incoming.props.onLayout());
+      expect(incoming.instance.focus).toHaveBeenCalled();
+      act(() => incoming.props.onFocus());
+      return tree.root.findByType(TextInput);
+    };
+    return { tree, toolbar, acknowledge, change, render };
+  }
+
+  it('holds the outgoing field until the laid-out incoming field acknowledges focus', () => {
+    const { tree, toolbar, acknowledge } = mountNavigation();
+    const outgoing = tree.root.findByType(TextInput).instance;
+    const outgoingBlur = tree.root.findByType(TextInput).props.onBlur;
+    act(() => toolbar().onNext());
+    expect(tree.root.findAllByType(TextInput)).toHaveLength(2);
+    const incoming = tree.root.findByProps({ accessibilityLabel: 'Your response to: Second?' });
+    incoming.instance.focus = jest.fn();
+    expect(incoming.instance.focus).not.toHaveBeenCalled();
+    act(() => incoming.props.onLayout());
+    expect(incoming.instance.focus).toHaveBeenCalled();
+    expect(tree.root.findAllByType(TextInput)).toHaveLength(2);
+    expect(tree.root.findAllByType(TextInput).some((input: any) => input.instance === outgoing)).toBe(true);
+    act(() => incoming.props.onFocus());
+    expect(tree.root.findAllByType(TextInput)).toHaveLength(1);
+    expect(tree.root.findByType(TextInput).instance).toBe(incoming.instance);
+    act(() => outgoingBlur());
+    expect(toolbar()).not.toBeNull();
+    act(() => toolbar().onPrevious());
+    acknowledge('First?');
+    act(() => tree.unmount());
+  });
+
+  it('preserves answers and newline behavior through sequential and blank navigation', () => {
+    const { tree, toolbar, acknowledge } = mountNavigation();
+    const first = tree.root.findByType(TextInput);
+    expect(first.props.multiline).toBe(true);
+    expect(first.props.submitBehavior).toBe('newline');
+    expect(first.props.blurOnSubmit).toBe(false);
+    expect(first.props.inputAccessoryViewID).toBeUndefined();
+    act(() => first.props.onChangeText('First line.\nSecond line.'));
+    act(() => toolbar().onNext());
+    expect(acknowledge('Second?').props.value).toBe('');
+    act(() => toolbar().onNext());
+    expect(acknowledge('Third?').props.value).toBe('');
+    expect(toolbar().questionIndex).toBe(2);
+    act(() => toolbar().onPrevious()); acknowledge('Second?');
+    act(() => toolbar().onPrevious());
+    expect(acknowledge('First?').props.value).toBe('First line.\nSecond line.');
+    act(() => tree.unmount());
+  });
+
+  it('cancels late focus on Done and flushes without navigating or completing', () => {
+    const { tree, toolbar, change } = mountNavigation();
+    act(() => tree.root.findByType(TextInput).props.onChangeText('Keep this answer.'));
+    act(() => toolbar().onNext());
+    const incoming = tree.root.findByProps({ accessibilityLabel: 'Your response to: Second?' });
+    incoming.instance.focus = jest.fn();
+    const done = toolbar().onDone;
+    act(() => done());
+    act(() => incoming.props.onLayout());
+    expect(incoming.instance.focus).not.toHaveBeenCalled();
+    expect(change.mock.calls[change.mock.calls.length - 1][0]).toBeNull();
+    expect(Keyboard.dismiss).toHaveBeenCalled();
+    expect(mockUpdateQuestionResponse).toHaveBeenCalledWith('entry-nav-1', 'First?', 'Keep this answer.');
+    act(() => tree.unmount());
+  });
+
+  it('clears the toolbar on keyboard closure, day changes, and unmount', () => {
+    const listener = jest.spyOn(Keyboard, 'addListener');
+    const { tree, toolbar, change, render } = mountNavigation();
+    act(() => toolbar().onNext());
+    const hide = listener.mock.calls.find(([event]) => event === 'keyboardDidHide')![1];
+    act(() => hide({} as never));
+    expect(change.mock.calls[change.mock.calls.length - 1][0]).toBeNull();
+    act(() => tree.update(render(2)));
+    expect(change.mock.calls[change.mock.calls.length - 1][0]).toBeNull();
+    act(() => tree.unmount());
+    expect(change.mock.calls[change.mock.calls.length - 1][0]).toBeNull();
+    listener.mockRestore();
+  });
+
+  it('keeps failed drafts and retry status after Next and Previous', async () => {
+    mockFlushUnfoldStorePersistAsync.mockRejectedValueOnce(new Error('disk unavailable'));
+    const { tree, toolbar, acknowledge } = mountNavigation();
+    act(() => tree.root.findByType(TextInput).props.onChangeText('Failed draft.'));
+    await act(async () => { jest.advanceTimersByTime(800); await Promise.resolve(); });
+    act(() => toolbar().onNext()); acknowledge('Second?');
+    act(() => toolbar().onPrevious());
+    expect(acknowledge('First?').props.value).toBe('Failed draft.');
+    expect(tree.root.findByProps({ accessibilityLabel: 'Save failed. Tap to retry.' })).toBeTruthy();
+    act(() => tree.unmount());
+  });
+
+  it('gives boundary controls disabled states and 44-point touch targets', () => {
+    let tree: any;
+    const props = { questionCount: 2, onPrevious: jest.fn(), onNext: jest.fn(), onDone: jest.fn() };
+    act(() => { tree = renderer.create(<ReflectionQuestionNav {...props} questionIndex={0} />); });
+    expect(tree.root.findAllByProps({ testID: 'reflection-nav-previous' }).find((node: any) => node.props.accessibilityRole === 'button').props.accessibilityState.disabled).toBe(true);
+    expect(tree.root.findAllByProps({ testID: 'reflection-nav-next' }).find((node: any) => node.props.accessibilityRole === 'button').props.accessibilityState.disabled).toBe(false);
+    for (const id of ['previous', 'next', 'done']) {
+      const control = tree.root.findAllByProps({ testID: `reflection-nav-${id}` }).find((node: any) => node.props.accessibilityRole === 'button');
+      expect(control.props.style.minHeight).toBeGreaterThanOrEqual(44);
+      expect(control.props.style.minWidth).toBeGreaterThanOrEqual(44);
+    }
+    act(() => tree.update(<ReflectionQuestionNav {...props} questionIndex={1} />));
+    expect(tree.root.findAllByProps({ testID: 'reflection-nav-next' }).find((node: any) => node.props.accessibilityRole === 'button').props.accessibilityState.disabled).toBe(true);
+    act(() => tree.unmount());
   });
 });

@@ -1,5 +1,5 @@
 /** @jsxImportSource react */
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -18,6 +18,13 @@ import { useAmbientAudioState } from '@/lib/ambient-audio-state';
 import { AmbientText } from './AmbientText';
 import { ambientStatusText, useAmbientSoundActions } from './AmbientSoundControls';
 
+type PlayerDisplay = {
+  selectedTrackId: ReturnType<typeof useAmbientAudioState.getState>['selectedTrackId'];
+  status: ReturnType<typeof useAmbientAudioState.getState>['status'];
+  pauseReason: string | null;
+  volume: number;
+};
+
 export function AmbientSoundPlayer({
   onOpen,
   onDismissStart,
@@ -31,9 +38,24 @@ export function AmbientSoundPlayer({
 }) {
   const { colors } = useTheme();
   const reducedMotion = useReducedMotion();
-  const state = useAmbientAudioState();
-  const [frozenState, setFrozenState] = useState<typeof state | null>(null);
-  const displayState = frozenState ?? state;
+  const selectedTrackId = useAmbientAudioState((state) => state.selectedTrackId);
+  const status = useAmbientAudioState((state) => state.status);
+  const pauseReason = useAmbientAudioState((state) => state.pauseReason);
+  const volume = useAmbientAudioState((state) => state.volume);
+  const liveDisplay = useMemo<PlayerDisplay>(
+    () => ({ selectedTrackId, status, pauseReason, volume }),
+    [pauseReason, selectedTrackId, status, volume],
+  );
+  const displayRef = useRef(liveDisplay);
+  displayRef.current = liveDisplay;
+  const onDismissStartRef = useRef(onDismissStart);
+  const onDismissEndRef = useRef(onDismissEnd);
+  const onFocusReturnRef = useRef(onFocusReturn);
+  onDismissStartRef.current = onDismissStart;
+  onDismissEndRef.current = onDismissEnd;
+  onFocusReturnRef.current = onFocusReturn;
+  const [frozenState, setFrozenState] = useState<PlayerDisplay | null>(null);
+  const displayState = frozenState ?? liveDisplay;
   const toggle = useAmbientSoundActions();
   const track = getAmbientTrack(displayState.selectedTrackId);
   const translateX = useSharedValue(0);
@@ -46,15 +68,15 @@ export function AmbientSoundPlayer({
     opacity.value = reducedMotion ? 1 : withTiming(1, { duration: 150 });
   }, [opacity, reducedMotion, translateX]);
 
-  const finishDismiss = () => {
-    onFocusReturn?.();
-    onDismissEnd();
-  };
+  const finishDismiss = useCallback(() => {
+    onFocusReturnRef.current?.();
+    onDismissEndRef.current();
+  }, []);
 
-  const commitDismiss = () => {
-    setFrozenState(state);
-    onDismissStart();
-  };
+  const commitDismiss = useCallback(() => {
+    setFrozenState(displayRef.current);
+    onDismissStartRef.current();
+  }, []);
 
   const close = () => {
     onDismissStart();
@@ -62,43 +84,47 @@ export function AmbientSoundPlayer({
     onDismissEnd();
   };
 
-  const pan = Gesture.Pan()
-    .activeOffsetX([-12, 12])
-    .failOffsetY([-10, 10])
-    .onUpdate((event) => {
-      if (dismissing.value) return;
-      translateX.value = event.translationX;
-      opacity.value = 1 - Math.min(0.35, Math.abs(event.translationX) / dockWidth.value * 0.35);
-    })
-    .onEnd((event) => {
-      if (dismissing.value) return;
-      const sameDirection = Math.sign(event.translationX) === Math.sign(event.velocityX);
-      const shouldDismiss =
-        Math.abs(event.translationX) >= dockWidth.value * 0.25
-        || (Math.abs(event.translationX) > 28 && sameDirection && Math.abs(event.velocityX) > 550);
-      if (shouldDismiss) {
-        dismissing.value = true;
-        const direction = Math.sign(event.translationX) || 1;
-        runOnJS(commitDismiss)();
-        if (reducedMotion) {
-          opacity.value = 0;
-          runOnJS(finishDismiss)();
-          return;
-        }
-        translateX.value = withTiming(direction * (dockWidth.value + 36), { duration: 160 });
-        opacity.value = withTiming(0, { duration: 160 }, () => {
-          runOnJS(finishDismiss)();
-        });
-        return;
-      }
-      translateX.value = reducedMotion ? 0 : withSpring(0, { damping: 28, stiffness: 280 });
-      opacity.value = reducedMotion ? 1 : withSpring(1);
-    })
-    .onFinalize((_event, success) => {
-      if (success || dismissing.value) return;
-      translateX.value = reducedMotion ? 0 : withSpring(0, { damping: 28, stiffness: 280 });
-      opacity.value = reducedMotion ? 1 : withSpring(1);
-    });
+  const pan = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetX([-12, 12])
+        .failOffsetY([-10, 10])
+        .onUpdate((event) => {
+          if (dismissing.value) return;
+          translateX.value = event.translationX;
+          opacity.value = 1 - Math.min(0.35, Math.abs(event.translationX) / dockWidth.value * 0.35);
+        })
+        .onEnd((event) => {
+          if (dismissing.value) return;
+          const sameDirection = Math.sign(event.translationX) === Math.sign(event.velocityX);
+          const shouldDismiss =
+            Math.abs(event.translationX) >= dockWidth.value * 0.25
+            || (Math.abs(event.translationX) > 28 && sameDirection && Math.abs(event.velocityX) > 550);
+          if (shouldDismiss) {
+            dismissing.value = true;
+            const direction = Math.sign(event.translationX) || 1;
+            runOnJS(commitDismiss)();
+            if (reducedMotion) {
+              opacity.value = 0;
+              runOnJS(finishDismiss)();
+              return;
+            }
+            translateX.value = withTiming(direction * (dockWidth.value + 36), { duration: 160 });
+            opacity.value = withTiming(0, { duration: 160 }, () => {
+              runOnJS(finishDismiss)();
+            });
+            return;
+          }
+          translateX.value = reducedMotion ? 0 : withSpring(0, { damping: 28, stiffness: 280 });
+          opacity.value = reducedMotion ? 1 : withSpring(1);
+        })
+        .onFinalize((_event, success) => {
+          if (success || dismissing.value) return;
+          translateX.value = reducedMotion ? 0 : withSpring(0, { damping: 28, stiffness: 280 });
+          opacity.value = reducedMotion ? 1 : withSpring(1);
+        }),
+    [commitDismiss, dismissing, dockWidth, finishDismiss, opacity, reducedMotion, translateX],
+  );
 
   const motionStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }],

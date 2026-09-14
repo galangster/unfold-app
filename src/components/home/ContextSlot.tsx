@@ -114,8 +114,8 @@ function ResumeCard({
           accessibilityLabel={`${resumeProps.label}. ${resumeProps.title}. ${resumeProps.timeAgo}.`}
           accessibilityHint={isJournalResume ? 'Opens the saved journal reflection' : 'Returns to the saved devotional reading'}
         >
-          <View style={[styles.resumeContent, onDismiss && styles.resumeContentDismissible]}>
-            <View style={styles.resumeTitleRow}>
+          <View style={styles.resumeContent}>
+            <View style={[styles.resumeTitleRow, onDismiss && styles.resumeTitleDismissible]}>
               <View style={[styles.resumeIcon, { borderColor: alpha(colors.accent, 0.16), backgroundColor: alpha(colors.accent, 0.075) }]}>
                 {isJournalResume ? (
                   <FeatherIcon size={17} color={colors.accent} weight="light" />
@@ -266,7 +266,7 @@ const styles = StyleSheet.create({
   resumeContent: {
     gap: Spacing['3'],
   },
-  resumeContentDismissible: {
+  resumeTitleDismissible: {
     paddingRight: Spacing['10'],
   },
   resumeDismissButton: {
@@ -335,7 +335,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing['3'],
   },
   resumeCtaCompact: {
-    alignSelf: 'flex-start',
+    alignSelf: 'stretch',
+    justifyContent: 'center',
+    minHeight: 44,
   },
   resumeCtaText: {
     fontFamily: FontFamily.uiMedium,

@@ -1879,7 +1879,7 @@ const styles = StyleSheet.create({
 
   // Section headings
   sectionHeading: {
-    fontStyle: 'italic',
+    fontStyle: 'normal',
     marginTop: 28,
     marginBottom: Spacing['2'],
     opacity: 0.85,
@@ -1904,7 +1904,7 @@ const styles = StyleSheet.create({
   crossBookPrompt: { alignItems: 'center' },
   crossBookSubtitle: { fontFamily: FontFamily.ui, fontSize: FontSize.xs, marginTop: 2 },
   endOfBibleContainer: { alignItems: 'center', paddingVertical: Spacing['4'] },
-  endOfBibleText: { fontFamily: FontFamily.ui, fontSize: FontSize.sm, fontStyle: 'italic' },
+  endOfBibleText: { fontFamily: FontFamily.ui, fontSize: FontSize.sm, fontStyle: 'normal' },
 
   // Context bar — full-width bottom bar that replaces tab bar
   contextBarFull: {

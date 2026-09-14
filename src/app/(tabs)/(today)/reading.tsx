@@ -1,8 +1,10 @@
+/** @jsxImportSource react */
 import { emitDayCompletionCueAfterSave } from '@/lib/day-completion-cue';
 import { getDailyGenerationNotice } from '@/lib/daily-generation-messages';
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useAutoHide } from '@/hooks/useAutoHide';
-import { View, Text, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet, TouchableOpacity, Keyboard, ScrollView, UIManager, Modal, type LayoutChangeEvent } from 'react-native';
+import { View, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet, TouchableOpacity, Keyboard, ScrollView, UIManager, Modal, type LayoutChangeEvent } from 'react-native';
+import { ReaderText as Text } from '@/components/reading/ReaderText';
 import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
 import { adaptiveFrameStyle } from '@/lib/adaptive-layout';
 import { useRouter, useLocalSearchParams, useIsFocused } from 'expo-router';
@@ -29,14 +31,13 @@ import Animated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import NetInfo from '@react-native-community/netinfo';
 import * as Haptics from 'expo-haptics';
-import { BookmarkSimpleIcon, ArrowsClockwiseIcon, CaretDownIcon, BookOpenIcon, CaretLeftIcon, PlayIcon, CheckIcon, UploadSimpleIcon, SunHorizonIcon, TextAaIcon } from '@/components/icons';
+import { BookmarkSimpleIcon, ArrowsClockwiseIcon, CaretDownIcon, BookOpenIcon, CaretLeftIcon, PlayIcon, CheckIcon, UploadSimpleIcon, TextAaIcon } from '@/components/icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { useUIState } from '@/lib/ui-state';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
-import { Typography } from '@/constants/typography';
 import { Shadow } from '@/constants/shadows';
 import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
@@ -80,6 +81,9 @@ import { readAutoTrialIntent, transitionAutoTrialIntent } from '@/lib/auto-trial
 import { trackAutoTrialCompleted } from '@/lib/auto-trial-telemetry';
 // ShareDevotionalModal removed — pull quote share now uses /share-card route
 import { DevotionalContent } from '@/components/reading/DevotionalContent';
+import { ReflectionQuestionNav, type ReflectionKeyboardToolbarState } from '@/components/reading/ReflectionQuestionNav';
+import { KeyboardStickyView } from 'react-native-keyboard-controller';
+import { TomorrowPreview } from '@/components/reading/TomorrowPreview';
 import { ScripturePracticeSheet, buildPracticeBibleHref } from '@/components/reading/ScripturePracticeSheet';
 import { getScripturePractice } from '@/constants/scripture-practices';
 import { isQaToolsEnabled } from '@/lib/qa-tools';
@@ -274,8 +278,17 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     }
   }, []);
   const scrollViewRef = useRef<ScrollView | null>(null);
+  const readingContentRef = useRef<View | null>(null);
+  const readingContentTopRef = useRef(0);
   const readerScrollNativeTargetRef = useRef<number | null>(null);
   const targetScrollRequestIdRef = useRef(0);
+  const [reflectionToolbar, setReflectionToolbar] = useState<ReflectionKeyboardToolbarState | null>(null);
+  const reflectionToolbarRef = useRef<ReflectionKeyboardToolbarState | null>(null);
+  const handleReflectionToolbarChange = useCallback((toolbar: ReflectionKeyboardToolbarState | null) => {
+    reflectionToolbarRef.current = toolbar;
+    setReflectionToolbar(toolbar);
+  }, []);
+
 
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
   const setCurrentDevotional = useUnfoldStore((s) => s.setCurrentDevotional);
@@ -354,7 +367,6 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   useEffect(() => () => { completionCueVisible.current = false; }, []);
   const [scriptureSheetRef, setScriptureSheetRef] = useState<string | null>(null);
   const [celebrationType, setCelebrationType] = useState<'day' | 'series'>('day');
-  const [showScrollHint, setShowScrollHint] = useState(true);
   const [isRetrying, setIsRetrying] = useState(false);
   const [isCheckingForSyncedDay, setIsCheckingForSyncedDay] = useState(false);
   const [dailySyncRecoveryKey, setDailySyncRecoveryKey] = useState<string | null>(null);
@@ -393,7 +405,6 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   const readingMountedRef = useRef(true);
 
   const translateX = useSharedValue(0);
-  const chevronBounce = useSharedValue(0);
   const contentOpacity = useSharedValue(1);
   const scrollProgress = useSharedValue(0);
   const latestReaderScrollY = useSharedValue(0);
@@ -508,10 +519,6 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     if (match.devotionalId !== effectiveDevotionalId || match.dayNumber !== viewingDay) return null;
     return match;
   }, [bookmarks, params.bookmarkId, effectiveDevotionalId, viewingDay]);
-
-  const setReaderScrollViewRef = useCallback((node: ScrollView | null) => {
-    scrollViewRef.current = node;
-  }, []);
 
   const handleReaderScrollViewLayout = useCallback((event: LayoutChangeEvent) => {
     const target = (event.nativeEvent as { target?: number }).target;
@@ -680,7 +687,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   targetScrollRequestRef.current = targetScrollRequest;
 
   const handleTargetHighlightLocated = useCallback((contentY: number) => {
-    const y = Math.max(0, contentY - LIBRARY_TARGET_TOP_INSET);
+    const y = Math.max(0, contentY + readingContentTopRef.current - LIBRARY_TARGET_TOP_INSET);
     if (sheetJumpPendingRef.current) {
       sheetJumpPendingRef.current = false;
       pendingReflowRestoreRef.current = false;
@@ -704,8 +711,17 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     setTargetScrollRequest(request);
   }, [scrollReaderToY]);
 
+  useEffect(() => {
+    if (!isReadingFocused) reflectionToolbarRef.current?.onDone();
+    handleReflectionToolbarChange(null);
+    return () => {
+      reflectionToolbarRef.current?.onDone();
+      reflectionToolbarRef.current = null;
+    };
+  }, [isReadingFocused, effectiveDevotionalId, viewingDay, handleReflectionToolbarChange]);
+
   const handleReflectionInputFocus = useCallback((contentY: number) => {
-    const y = Math.max(0, contentY - LIBRARY_TARGET_TOP_INSET);
+    const y = Math.max(0, contentY + readingContentTopRef.current - LIBRARY_TARGET_TOP_INSET);
     reflowAnchorRef.current = resolveReflectionFocusAnchor();
     scrollReaderToY(y, true);
   }, [scrollReaderToY]);
@@ -807,23 +823,6 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   //   const fullText = buildTtsText(currentDayData);
   //   prefetchDevotionalAudio(fullText, voiceId);
   // }, [isPremium, currentDayData, user?.preferredVoice]);
-
-  // Start the chevron bounce animation (static under reduced motion — the
-  // only animation in this file that skipped the gate; audit #14)
-  useEffect(() => {
-    if (reducedMotion) {
-      chevronBounce.value = 0;
-      return;
-    }
-    chevronBounce.value = withRepeat(
-      withSequence(
-        withTiming(-6, { duration: 600 }),
-        withTiming(0, { duration: 600 })
-      ),
-      -1, // Infinite repeat
-      true
-    );
-  }, [reducedMotion]);
 
   // Network state for offline-aware retry behavior.
   useEffect(() => {
@@ -1182,10 +1181,6 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     opacity: contentOpacity.value,
   }));
 
-  const scrollHintStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: chevronBounce.value }],
-  }));
-
   const dismissKeyboardForSwipe = useCallback(() => {
     Keyboard.dismiss();
   }, []);
@@ -1243,7 +1238,6 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   // every frame; progress now writes directly on the UI thread and the hint
   // flips via runOnJS only when its hysteresis threshold is actually crossed.
   // (The native scroll target for scrollTo fallbacks comes from onLayout.)
-  const scrollHintHiddenOnUI = useSharedValue(false);
   const saveReaderScrollY = useCallback((contentOffsetY: number) => {
     if (!userScrollActiveRef.current) return;
     readerScrollYRef.current = contentOffsetY;
@@ -1263,13 +1257,6 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
       const scrollable = event.contentSize.height - event.layoutMeasurement.height;
       if (scrollable > 0) {
         scrollProgress.value = Math.min(1, Math.max(0, offsetY / scrollable));
-      }
-      if (offsetY > 100 && !scrollHintHiddenOnUI.value) {
-        scrollHintHiddenOnUI.value = true;
-        runOnJS(setShowScrollHint)(false);
-      } else if (offsetY <= 50 && scrollHintHiddenOnUI.value) {
-        scrollHintHiddenOnUI.value = false;
-        runOnJS(setShowScrollHint)(true);
       }
     },
   });
@@ -2187,10 +2174,11 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
         <Animated.View style={[{ flex: 1 }, contentStyle]}>
           <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'left', 'right']}>
             {/* Header */}
-            <View style={[adaptiveFrameStyle(adaptiveLayout.clusterMaxWidth), { backgroundColor: colors.background }]}>
+            <View key={adaptiveLayout.fontScale} style={[adaptiveFrameStyle(adaptiveLayout.clusterMaxWidth), { backgroundColor: colors.background }]}>
               <View
                 style={{
                   flexDirection: 'row',
+                  flexWrap: adaptiveLayout.fontScale > 1.2 || adaptiveLayout.width < 375 ? 'wrap' : 'nowrap',
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   paddingHorizontal: Spacing['4'],
@@ -2200,10 +2188,9 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
               {/* Left: Back button */}
               <TouchableOpacity activeOpacity={0.7}
                 onPress={handleReaderBack}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 accessibilityRole="button"
                 accessibilityLabel="Go back"
-                style={{ padding: Spacing['2'] }}
+                style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
               >
                 <CaretLeftIcon size={22} color={colors.text} weight="light" />
               </TouchableOpacity>
@@ -2223,22 +2210,24 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                     },
                   });
                 }}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 accessibilityRole="button"
                 accessibilityLabel={`Day ${viewingDay} of ${totalDays}`}
                 accessibilityHint="Opens day selector menu"
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+                style={{ flex: 1, minWidth: 0, minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 4 }}
               >
                 <Text
+                  numberOfLines={2}
                   style={{
+                    flexShrink: 1,
                     fontFamily: FontFamily.uiMedium,
                     fontSize: FontSize.base,
                     color: colors.text,
+                    textAlign: 'center',
                   }}
                 >
                   Day {viewingDay} of {totalDays}
                 </Text>
-                {viewingDay === todayReaderDayNumber && (
+                {viewingDay === todayReaderDayNumber && adaptiveLayout.fontScale <= 1.2 && adaptiveLayout.width >= 440 && (
                   <View
                     style={{
                       backgroundColor: alpha(colors.accent, 0.13),
@@ -2263,7 +2252,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
               </TouchableOpacity>
 
               {/* Right: Journal + Reading Settings */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 2, ...(adaptiveLayout.fontScale > 1.2 || adaptiveLayout.width < 375 ? { width: '100%' as const } : {}) }}>
                 {isAmbientAudioEnabled() ? <AmbientMusicEntry /> : null}
                 {/* Contents / Highlights / Notes for this reading */}
                 <TouchableOpacity activeOpacity={0.7}
@@ -2271,11 +2260,10 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     setShowOutlineSheet(true);
                   }}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   accessibilityRole="button"
                   accessibilityLabel="Contents and highlights"
                   accessibilityHint="Jump to a section, a highlight, or your reflections for this reading"
-                  style={{ padding: Spacing['2'] }}
+                  style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
                 >
                   <BookOpenIcon
                     size={22}
@@ -2290,12 +2278,11 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     setShowReadingSettings(true);
                   }}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   testID="devotional-reader-settings-button"
                   accessibilityRole="button"
                   accessibilityLabel="Reading settings"
                   accessibilityHint="Adjust font size and reading font"
-                  style={{ padding: Spacing['2'] }}
+                  style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
                 >
                   <TextAaIcon size={22} color={colors.text} weight="light" />
                 </TouchableOpacity>
@@ -2312,7 +2299,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
             {/* Content - scrollable with day-transition fade */}
             <Animated.View style={[{ flex: 1 }, scrollContentStyle]}>
             <Animated.ScrollView
-              ref={setReaderScrollViewRef}
+              ref={scrollViewRef}
               style={{ flex: 1 }}
               contentContainerStyle={{
                 paddingHorizontal: Spacing['6'],
@@ -2331,7 +2318,12 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
               onMomentumScrollEnd={(event) => saveReaderScrollY(event.nativeEvent.contentOffset.y)}
               scrollEventThrottle={16}
             >
-              <View style={readingFrameStyle}>
+              <View
+                ref={readingContentRef}
+                collapsable={false}
+                onLayout={(event) => { readingContentTopRef.current = event.nativeEvent.layout.y; }}
+                style={readingFrameStyle}
+              >
               <DevotionalContent
                 day={currentDayData}
                 fontSize={fontSize}
@@ -2351,8 +2343,9 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                 onSectionLayout={handleSectionLayout}
                 targetBookmark={targetBookmark}
                 onTargetBookmarkLocated={handleTargetHighlightLocated}
-                scrollViewRef={scrollViewRef}
+                scrollContentRef={readingContentRef}
                 onReflectionInputFocus={handleReflectionInputFocus}
+                onReflectionKeyboardToolbarChange={handleReflectionToolbarChange}
                 focusAct={params.focus === 'act'}
                 onActLocated={handleTargetHighlightLocated}
                 onActOutcome={(outcome) => {
@@ -2388,45 +2381,20 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                 }}
               />
 
-              {/* Chevron at top of content area - invites scroll */}
-              {showScrollHint && (
-                <Animated.View
-                  entering={reducedMotion ? undefined : FadeIn.duration(Duration.slow).easing(Ease.out)}
-                  exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
-                  style={{
-                    alignItems: 'center',
-                    marginTop: 20,
-                    marginBottom: 10,
-                  }}
-                >
-                  <Animated.View style={scrollHintStyle}>
-                    <CaretDownIcon size={28} color={colors.accent} weight="light" />
-                  </Animated.View>
-                </Animated.View>
-              )}
-
-              {/* Section divider before complete button */}
+              {/* One section boundary before completion */}
               <View
+                testID="reading-ending-rule"
                 style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginTop: 48,
-                  marginBottom: 8,
-                  paddingHorizontal: 40,
+                  height: StyleSheet.hairlineWidth,
+                  backgroundColor: colors.border,
+                  marginTop: Spacing['6'],
                 }}
-              >
-                <View style={{ flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.textMuted, opacity: 0.15 }} />
-                <Text style={{ fontSize: FontSize.xs, color: colors.textMuted, opacity: 0.25, letterSpacing: 6, marginHorizontal: Spacing['4'] }}>
-                  {'···'}
-                </Text>
-                <View style={{ flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.textMuted, opacity: 0.15 }} />
-              </View>
+              />
 
-              {/* Complete button + Share button row */}
+              {/* Complete action + labeled Share */}
               <Animated.View
                 entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(200).easing(Ease.out)}
-                style={[{ marginTop: Spacing['8'], paddingHorizontal: Spacing['6'] }, completeButtonAnimStyle]}
+                style={{ marginTop: Spacing['4'] }}
               >
                 <View
                   style={{
@@ -2435,77 +2403,105 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                     alignItems: 'center',
                   }}
                 >
-                  {/* Complete Day / Day Completed — View wrapper guarantees pill renders */}
-                  <View
-                    style={{
-                      flex: 1,
-                      backgroundColor: isCompleted ? 'transparent' : colors.accent,
-                      borderWidth: 1.5,
-                      borderColor: colors.accent,
-                      borderRadius: 28,
-                      overflow: 'hidden',
-                    }}
-                  >
-                    <TouchableOpacity activeOpacity={0.7}
-                      onPress={!isCompleted ? handleComplete : undefined}
-                      onPressIn={() => {
-                        if (!isCompleted) {
-                          completeButtonScale.value = withSpring(0.96, { damping: 40, stiffness: 400 });
-                        }
-                      }}
-                      onPressOut={() => {
-                        completeButtonScale.value = withSpring(1, { damping: 40, stiffness: 400 });
-                      }}
-                      accessibilityRole="button"
-                      accessibilityLabel={isCompleted ? 'Day completed' : (isLastDay ? 'Complete Series' : 'Complete Day')}
+                  {isCompleted ? (
+                    <View
+                      testID="reading-day-completed-status"
+                      accessible
+                      accessibilityRole="text"
+                      accessibilityLabel="Day completed"
                       style={{
-                        paddingVertical: 18,
-                        paddingHorizontal: Spacing['8'],
-                        alignItems: 'center',
-                        justifyContent: 'center',
+                        flex: 1,
+                        minHeight: 44,
                         flexDirection: 'row',
+                        alignItems: 'center',
                         gap: Spacing['2'],
                       }}
                     >
-                      {isCompleted && (
-                        <CheckIcon size={18} color={colors.accent} weight="bold" />
-                      )}
+                      <CheckIcon size={18} color={colors.accent} weight="bold" />
                       <Text
                         style={{
                           fontFamily: FontFamily.uiSemiBold,
                           fontSize: FontSize.base,
-                          color: isCompleted ? colors.accent : colors.background,
-                          textAlign: 'center',
+                          color: colors.textMuted,
                           letterSpacing: 0.5,
                         }}
                       >
-                        {isCompleted
-                          ? 'Day Completed'
-                          : isLastDay
-                            ? 'Complete Series'
-                            : 'Complete Day'}
+                        Day Completed
                       </Text>
-                    </TouchableOpacity>
-                  </View>
+                    </View>
+                  ) : (
+                    <Animated.View
+                      style={[{
+                        flex: 1,
+                        backgroundColor: colors.accent,
+                        borderRadius: Radius.md,
+                        overflow: 'hidden',
+                      }, completeButtonAnimStyle]}
+                    >
+                      <TouchableOpacity
+                        activeOpacity={0.7}
+                        onPress={handleComplete}
+                        onPressIn={() => {
+                          completeButtonScale.value = withSpring(0.96, { damping: 40, stiffness: 400 });
+                        }}
+                        onPressOut={() => {
+                          completeButtonScale.value = withSpring(1, { damping: 40, stiffness: 400 });
+                        }}
+                        testID="reading-complete-day"
+                        accessibilityRole="button"
+                        accessibilityLabel={isLastDay ? 'Complete Series' : 'Complete Day'}
+                        style={{
+                          paddingVertical: 18,
+                          paddingHorizontal: Spacing['8'],
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexDirection: 'row',
+                          gap: Spacing['2'],
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontFamily: FontFamily.uiSemiBold,
+                            fontSize: FontSize.base,
+                            color: colors.background,
+                            textAlign: 'center',
+                            letterSpacing: 0.5,
+                          }}
+                        >
+                          {isLastDay ? 'Complete Series' : 'Complete Day'}
+                        </Text>
+                      </TouchableOpacity>
+                    </Animated.View>
+                  )}
 
-                  {/* Share — small icon circle */}
                   <TouchableOpacity
                     activeOpacity={0.6}
                     onPress={handleShare}
+                    testID="reading-share-action"
                     accessibilityRole="button"
                     accessibilityLabel="Share devotional"
                     style={{
-                      width: 56,
-                      height: 56,
-                      borderRadius: 28,
-                      backgroundColor: colors.inputBackground,
-                      borderWidth: 1,
+                      minHeight: 44,
+                      paddingHorizontal: Spacing['4'],
+                      borderRadius: Radius.md,
+                      borderWidth: StyleSheet.hairlineWidth,
                       borderColor: colors.border,
                       alignItems: 'center',
                       justifyContent: 'center',
+                      flexDirection: 'row',
+                      gap: 6,
                     }}
                   >
-                    <UploadSimpleIcon size={20} color={colors.textMuted} weight="light" />
+                    <UploadSimpleIcon size={16} color={colors.textMuted} weight="light" />
+                    <Text
+                      style={{
+                        fontFamily: FontFamily.ui,
+                        fontSize: FontSize.sm,
+                        color: colors.textMuted,
+                      }}
+                    >
+                      Share
+                    </Text>
                   </TouchableOpacity>
                 </View>
 
@@ -2632,50 +2628,17 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                   {isCompleted && !showCelebration && tomorrowDayData && tomorrowTeaser && (
                     <Animated.View
                       entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(300).easing(Ease.out)}
-                      style={{
-                        marginTop: Spacing['8'],
-                        paddingVertical: 18,
-                        paddingHorizontal: Spacing['5'],
-                        borderRadius: Radius.card,
-                        backgroundColor: colors.inputBackground,
-                        borderWidth: 1,
-                        borderColor: colors.border,
-                      }}
                     >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing['2'], marginBottom: 10 }}>
-                        <SunHorizonIcon size={18} color={colors.accent} weight="light" />
-                        <Text
-                          style={{
-                            ...Typography.sectionHeader,
-                            color: colors.text,
-                          }}
-                        >
-                          Tomorrow
-                        </Text>
-                      </View>
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.display,
-                          fontSize: 18,
-                          color: colors.text,
-                          lineHeight: 23,
-                          marginBottom: Spacing['2'],
+                      <TomorrowPreview
+                        title={tomorrowDayData.title}
+                        teaser={tomorrowTeaser}
+                        colors={{
+                          accent: colors.accent,
+                          text: colors.text,
+                          textMuted: colors.textMuted,
+                          border: colors.border,
                         }}
-                        numberOfLines={2}
-                      >
-                        {tomorrowDayData.title}
-                      </Text>
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.body,
-                          fontSize: FontSize.sm,
-                          color: colors.textMuted,
-                          lineHeight: 21,
-                        }}
-                        numberOfLines={3}
-                      >
-                        {tomorrowTeaser}
-                      </Text>
+                      />
                     </Animated.View>
                   )}
 
@@ -2686,6 +2649,17 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
           </SafeAreaView>
         </Animated.View>
       </GestureDetector>
+
+      {isReadingFocused && reflectionToolbar ? (
+        <KeyboardStickyView
+          testID="reflection-keyboard-toolbar"
+          accessible={false}
+          offset={{ closed: -(insets.bottom + 64), opened: 0 }}
+          style={{ position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: colors.background }}
+        >
+          <ReflectionQuestionNav {...reflectionToolbar} />
+        </KeyboardStickyView>
+      ) : null}
 
       {/* Completion Celebration */}
       <CompletionCelebration

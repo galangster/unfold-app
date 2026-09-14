@@ -168,4 +168,41 @@ describe('DevotionalContent versed scripture (Greptile A8)', () => {
     act(() => tree!.unmount());
     requestAnimationFrameSpy.mockRestore();
   });
+
+  it('reports ending section positions directly before and after a reading reflow', async () => {
+    mockFetchVerseLocal.mockResolvedValue(null);
+    mockFetchVerse.mockResolvedValue(null);
+    const onSectionLayout = jest.fn();
+    const readingDay = day({
+      reflectionQuestions: ['What stayed with you?'],
+      act: 'Take a quiet moment.',
+      closingPrayer: 'Help me stay present.',
+    });
+    let tree: renderer.ReactTestRenderer;
+    const renderReading = (generation: number) => (
+      <DevotionalContent
+        day={readingDay}
+        fontSize="medium"
+        layoutGeneration={generation}
+        onSectionLayout={onSectionLayout}
+      />
+    );
+    await act(async () => {
+      tree = renderer.create(renderReading(1));
+    });
+
+    for (const generation of [1, 2]) {
+      act(() => tree!.update(renderReading(generation)));
+      for (const [index, section] of ['reflection', 'act', 'prayer'].entries()) {
+        const y = (index + 1) * 400 * generation;
+        act(() => {
+          tree!.root.findByProps({ testID: `reading-${section}-section` }).props.onLayout({
+            nativeEvent: { layout: { x: 0, y, width: 354, height: 200 } },
+          });
+        });
+        expect(onSectionLayout).toHaveBeenCalledWith(section, y, generation);
+      }
+    }
+    act(() => tree!.unmount());
+  });
 });

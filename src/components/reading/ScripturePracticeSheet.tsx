@@ -292,7 +292,9 @@ export function ScripturePracticeSheet({
       ]}
       testID="scripture-practice-sheet"
     >
+      {/* Refresh native text bounds after Dynamic Type changes. Session state stays above this boundary. */}
       <KeyboardAvoidingView
+        key={adaptiveLayout.fontScale}
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
@@ -723,7 +725,7 @@ function StepBody({
         </View>
       ) : null}
 
-      {kind !== 'pause' || step.inputLabel ? (
+      {!shouldShowBreathGuide(methodId, step.id) && (kind !== 'pause' || step.inputLabel) ? (
         <AnswerField
           colors={colors}
           label={step.inputLabel ?? (kind === 'notice' || kind === 'trace' || kind === 'memory'
@@ -734,7 +736,9 @@ function StepBody({
         />
       ) : null}
 
-      <Text style={[styles.deviceNote, { color: colors.textHint }]}>{DEVICE_NOTE}</Text>
+      {!shouldShowBreathGuide(methodId, step.id) ? (
+        <Text style={[styles.deviceNote, { color: colors.textHint }]}>{DEVICE_NOTE}</Text>
+      ) : null}
     </View>
   );
 }
@@ -925,7 +929,7 @@ const styles = StyleSheet.create({
     lineHeight: 32,
   },
   verse: {
-    fontFamily: FontFamily.bodyItalic,
+    fontFamily: FontFamily.body,
     fontSize: 18,
     lineHeight: 30,
   },

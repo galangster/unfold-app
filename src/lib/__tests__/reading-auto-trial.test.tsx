@@ -2,6 +2,10 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+jest.mock('react-native-keyboard-controller', () => ({
+  KeyboardStickyView: require('react-native').View,
+}));
+
 jest.mock('expo-router', () => ({
   useRouter: () => ({ canGoBack: () => true, push: jest.fn(), replace: jest.fn(), back: jest.fn() }),
   useSegments: () => [],

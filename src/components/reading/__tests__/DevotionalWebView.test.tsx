@@ -916,6 +916,19 @@ describe('DevotionalWebView Aa / theme updates without remounting', () => {
     expect(getWebViewProps(tree).style).toEqual(expect.arrayContaining([{ height: 900 }]));
   });
 
+  it('fits a short reading after its first measurement and after reflow', () => {
+    let tree: any;
+    act(() => {
+      tree = renderer.create(<DevotionalWebView day={day} fontSize="medium" />);
+    });
+
+    reportHeight(tree, 140);
+    expect(getWebViewProps(tree).style).toEqual(expect.arrayContaining([{ height: 140 }]));
+
+    reportHeight(tree, 96);
+    expect(getWebViewProps(tree).style).toEqual(expect.arrayContaining([{ height: 96 }]));
+  });
+
   it('inlines rangy in the document head instead of loading it from the CDN', () => {
     let tree: any;
     act(() => {
