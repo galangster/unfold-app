@@ -53,6 +53,7 @@ import {
   logoutUser,
 } from '@/lib/revenuecatClient';
 import { useUIState } from '@/lib/ui-state';
+import { clearTodayProgressHistory } from '@/lib/today-progress-session';
 import {
   requestServerAccountErase,
   SERVER_ERASE_TIMEOUT_MS,
@@ -231,6 +232,7 @@ export function performFullLocalReset(options: FullResetOptions = {}): Promise<F
   // synchronous turn so ordinary retries and store actions cannot reopen
   // the old target before rotation.
   const resetToken = beginLocalResetSession();
+  clearTodayProgressHistory();
   // Cancel before the first await. This prevents an upload callback from
   // restoring voice data after the reset clears local ownership.
   cancelVoiceCheckInUploads();

@@ -140,6 +140,7 @@ jest.mock('@/lib/store', () => ({
 
 import { DevotionalCard, AnimatedProgressBar } from '../DevotionalCard';
 import { PageMark } from '@/components/motion/PageMark';
+import { clearTodayProgressHistory, getTodayProgressHistory } from '@/lib/today-progress-session';
 import type { DevotionalCardState } from '../compute-devotional-state';
 import type { DevotionalDay, JournalEntry } from '@/lib/store';
 
@@ -631,6 +632,10 @@ describe('DevotionalCard daily recovery', () => {
 });
 
 describe('DevotionalCard meaningful motion', () => {
+  beforeEach(() => {
+    clearTodayProgressHistory();
+  });
+
   it('plays a newly earned delta once when Home becomes visible, then remains still', () => {
     const timing = jest.requireMock('react-native-reanimated').withTiming;
     const tree = renderInAct(<AnimatedProgressBar progress={43} seriesKey="series-a" colors={mockTestColors} />);
@@ -676,6 +681,112 @@ describe('DevotionalCard meaningful motion', () => {
       now: 43,
     });
     expect(tree.root.findByType(PageMark).props.animate).toBe(false);
+  });
+
+  it('keeps an earned delta when completion ambience remounts the progress bar', () => {
+    const timing = jest.requireMock('react-native-reanimated').withTiming;
+    const tree = renderInAct(<DevotionalCard state={makeUnreadState({ progress: 43 })} />);
+    act(() => tree.update(<DevotionalCard state={makeUnreadState({ progress: 43 })} screenFocused={false} />));
+    act(() => tree.update(<DevotionalCard state={makeUnreadState({ progress: 57 })} screenFocused={false} ambienceVisible />));
+    timing.mockClear();
+
+    act(() => tree.update(<DevotionalCard state={makeUnreadState({ progress: 57 })} ambienceVisible />));
+    expect(timing).toHaveBeenCalledWith(0.57, expect.objectContaining({ duration: 250 }));
+    timing.mockClear();
+    act(() => tree.update(<DevotionalCard state={makeUnreadState({ progress: 57 })} screenFocused={false} ambienceVisible />));
+    act(() => tree.update(<DevotionalCard state={makeUnreadState({ progress: 57 })} ambienceVisible />));
+    expect(timing).not.toHaveBeenCalled();
+    act(() => tree.unmount());
+  });
+
+  it('snaps the first cached session entry and after identity or series change', () => {
+    const timing = jest.requireMock('react-native-reanimated').withTiming;
+    const first = getTodayProgressHistory('device-1', 'series-a');
+    const tree = renderInAct(
+      <AnimatedProgressBar progress={43} seriesKey="series-a" colors={mockTestColors} historyRef={first} />,
+    );
+    expect(timing).not.toHaveBeenCalled();
+    act(() => tree.unmount());
+
+    const sameValue = getTodayProgressHistory('device-1', 'series-a');
+    const replay = renderInAct(
+      <AnimatedProgressBar progress={43} seriesKey="series-a" colors={mockTestColors} historyRef={sameValue} />,
+    );
+    expect(timing).not.toHaveBeenCalled();
+    act(() => replay.unmount());
+
+    const otherIdentity = getTodayProgressHistory('device-2', 'series-a');
+    const remounted = renderInAct(
+      <AnimatedProgressBar progress={57} seriesKey="series-a" colors={mockTestColors} historyRef={otherIdentity} />,
+    );
+    expect(timing).not.toHaveBeenCalled();
+    act(() => remounted.unmount());
+
+    const otherSeries = getTodayProgressHistory('device-2', 'series-b');
+    const changed = renderInAct(
+      <AnimatedProgressBar progress={86} seriesKey="series-b" colors={mockTestColors} historyRef={otherSeries} />,
+    );
+    expect(timing).not.toHaveBeenCalled();
+    act(() => changed.unmount());
+  });
+
+  it('keeps a pending current-session earned delta after Home remounts', () => {
+    const timing = jest.requireMock('react-native-reanimated').withTiming;
+    const history = getTodayProgressHistory('device-1', 'series-a');
+    const tree = renderInAct(
+      <AnimatedProgressBar progress={43} seriesKey="series-a" colors={mockTestColors} historyRef={history} />,
+    );
+    timing.mockClear();
+    act(() => tree.unmount());
+
+    const remounted = renderInAct(
+      <AnimatedProgressBar
+        progress={57}
+        seriesKey="series-a"
+        colors={mockTestColors}
+        active={false}
+        historyRef={history}
+      />,
+    );
+    expect(timing).not.toHaveBeenCalled();
+    act(() => remounted.update(
+      <AnimatedProgressBar progress={57} seriesKey="series-a" colors={mockTestColors} historyRef={history} />,
+    ));
+    expect(timing).toHaveBeenCalledTimes(1);
+    expect(timing).toHaveBeenCalledWith(0.57, expect.objectContaining({ duration: 250 }));
+    act(() => remounted.unmount());
+  });
+
+  it('wires retained session history through a DevotionalCard remount', () => {
+    const timing = jest.requireMock('react-native-reanimated').withTiming;
+    const tree = renderInAct(
+      <DevotionalCard
+        state={makeUnreadState({ progress: 43 })}
+        seriesId="series-a"
+        progressIdentity="device-1"
+      />,
+    );
+    timing.mockClear();
+    act(() => tree.unmount());
+
+    const remounted = renderInAct(
+      <DevotionalCard
+        state={makeUnreadState({ progress: 57 })}
+        seriesId="series-a"
+        progressIdentity="device-1"
+        screenFocused={false}
+      />,
+    );
+    expect(timing).not.toHaveBeenCalled();
+    act(() => remounted.update(
+      <DevotionalCard
+        state={makeUnreadState({ progress: 57 })}
+        seriesId="series-a"
+        progressIdentity="device-1"
+      />,
+    ));
+    expect(timing).toHaveBeenCalledWith(0.57, expect.objectContaining({ duration: 250 }));
+    act(() => remounted.unmount());
   });
 
   it('marks a live preparing-to-ready transition without changing the settled progress value', () => {

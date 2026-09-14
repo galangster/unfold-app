@@ -1684,6 +1684,7 @@ export default function HomeScreen() {
               <DevotionalCard
                 state={devotionalState}
                 seriesId={currentDevotional?.id}
+                progressIdentity={getDeviceId()}
                 screenFocused={isTodayFocused}
                 scrollY={scrollY}
                 isReturningUser={isReturningUser && !isQaPreparingLoadingPreview}

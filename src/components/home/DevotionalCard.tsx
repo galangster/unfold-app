@@ -52,6 +52,7 @@ import { Typography } from '@/constants/typography';
 import { PageMark } from '@/components/motion/PageMark';
 import { progressFillMotion, shouldAnnounceReadingReady } from '@/lib/meaningful-motion';
 import { useAppForegrounded } from '@/hooks/useAppForegrounded';
+import { getTodayProgressHistory, type ProgressHistoryRef } from '@/lib/today-progress-session';
 
 // ─── Props ──────────────────────────────────────────────────────
 
@@ -71,6 +72,7 @@ interface Props {
   relaxHeroMinHeight?: boolean;
   seriesId?: string;
   screenFocused?: boolean;
+  progressIdentity?: string;
 }
 
 // ─── Character reveal for "Unfold" title (empty state) ──────────
@@ -161,15 +163,19 @@ export function AnimatedProgressBar({
   seriesKey,
   colors,
   active = true,
+  historyRef,
 }: {
   progress: number;
   seriesKey: string;
   colors: { accent: string; border: string };
   active?: boolean;
+  historyRef?: ProgressHistoryRef;
 }) {
   const { reducedMotion } = useAccessibleAnimation();
-  const fill = useSharedValue(progress / 100);
-  const previousRef = useRef<{ seriesKey: string; progress: number } | null>(null);
+  const localHistoryRef = useRef<{ seriesKey: string; progress: number } | null>(null);
+  const previousRef = historyRef ?? localHistoryRef;
+  const [initialProgress] = useState(() => progressFillMotion(previousRef.current, { seriesKey, progress }).from);
+  const fill = useSharedValue(initialProgress / 100);
 
   useEffect(() => {
     const next = { seriesKey, progress };
@@ -188,7 +194,7 @@ export function AnimatedProgressBar({
     }
 
     fill.value = motion.to / 100;
-  }, [active, fill, progress, reducedMotion, seriesKey]);
+  }, [active, fill, previousRef, progress, reducedMotion, seriesKey]);
 
   useEffect(() => () => cancelAnimation(fill), [fill]);
 
@@ -920,10 +926,15 @@ interface MainCardProps {
   announceReady?: boolean;
   motionActive: boolean;
   seriesKey: string;
+  progressIdentity?: string;
 }
 
-function MainCard({ state, ambienceVisible, relaxHeroMinHeight, announceReady = false, motionActive, seriesKey }: MainCardProps) {
+function MainCard({ state, ambienceVisible, relaxHeroMinHeight, announceReady = false, motionActive, seriesKey, progressIdentity }: MainCardProps) {
   const { colors, isDark } = useTheme();
+  const localProgressHistoryRef = useRef<ProgressHistoryRef['current']>(null);
+  const progressHistoryRef = progressIdentity
+    ? getTodayProgressHistory(progressIdentity, seriesKey)
+    : localProgressHistoryRef;
   const { reducedMotion } = useAccessibleAnimation();
   const readyOpacity = useSharedValue(announceReady && !reducedMotion ? 0 : 1);
   const textCap = heroCopyCap(ambienceVisible);
@@ -1130,7 +1141,7 @@ function MainCard({ state, ambienceVisible, relaxHeroMinHeight, announceReady = 
                     {Math.round(progress)}%
                   </Text>
                 </View>
-                <AnimatedProgressBar progress={progress} seriesKey={seriesKey} colors={colors} active={motionActive} />
+                <AnimatedProgressBar progress={progress} seriesKey={seriesKey} colors={colors} active={motionActive} historyRef={progressHistoryRef} />
               </View>
             </HeroGround>
 
@@ -1237,6 +1248,7 @@ export function DevotionalCard({
   relaxHeroMinHeight = false,
   seriesId,
   screenFocused = true,
+  progressIdentity,
 }: Props) {
   const { entering } = useAccessibleAnimation();
   const appForegrounded = useAppForegrounded();
@@ -1322,6 +1334,7 @@ export function DevotionalCard({
           announceReady={announceReady}
           motionActive={motionActive}
           seriesKey={seriesKey}
+          progressIdentity={progressIdentity}
         />
       )}
     </Animated.View>
