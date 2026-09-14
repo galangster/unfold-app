@@ -43,6 +43,10 @@ import {
   saveOnboardingSampleJob,
 } from '@/lib/onboarding-sample-job-store';
 import type { ColorTheme } from '@/constants/colors';
+import { RevealGradientSurface } from '@/components/reveal/RevealBackdrop';
+import { useRevealActivity } from '@/hooks/useRevealActivity';
+import { useAccessibleAnimation } from '@/hooks/useAccessibility';
+import { useTheme } from '@/lib/theme';
 
 /* ── Types ─────────────────────────────────────────────────────────── */
 
@@ -364,7 +368,9 @@ export function DevotionalSegue({
   onContinue,
 }: Props) {
   const insets = useSafeAreaInsets();
-  const reducedMotion = useReducedMotion();
+  const { reducedMotion } = useAccessibleAnimation();
+  const active = useRevealActivity();
+  const { isDark } = useTheme();
 
   /* ── State ── */
   const [isReady, setIsReady] = useState(false);
@@ -743,6 +749,10 @@ export function DevotionalSegue({
   }));
 
   return (
+    <View style={styles.flex1}>
+    {showReadyReveal && !generationIssue && <RevealGradientSurface variant="sky"
+      accent={colors.accent} background={colors.background} isDark={isDark}
+      active={active} reducedMotion={reducedMotion} soften={15} />}
     <ScrollView
       style={styles.flex1}
       contentContainerStyle={styles.container}
@@ -894,6 +904,7 @@ export function DevotionalSegue({
         </Animated.View>
       )}
     </ScrollView>
+    </View>
   );
 }
 

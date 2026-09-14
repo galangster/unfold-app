@@ -13,6 +13,27 @@ import { logger } from '@/lib/logger';
 import { isQaToolsEnabled } from '@/lib/qa-tools';
 
 describe('redirectSystemPath', () => {
+  it('admits only known reveal preview values behind both QA gates', () => {
+    const path = 'unfold://dev/reveal-gradients?variant=prism&accent=lavender&theme=dark&motion=off';
+    jest.mocked(isQaToolsEnabled).mockReturnValue(false);
+    expect(redirectSystemPath({ path, initial: false })).toBe('/');
+    jest.mocked(isQaToolsEnabled).mockReturnValue(true);
+    expect(redirectSystemPath({ path, initial: false })).toBe(path);
+    for (const invalid of [
+      'unfold://dev/reveal-gradients?variant=forms',
+      'unfold://dev/reveal-gradients?accent=unknown',
+      'unfold://dev/reveal-gradients?variant=sky&variant=prism',
+      'unfold://dev/reveal-gradients?userId=123',
+      'unfold://dev/reveal-gradients/extra',
+    ]) expect(redirectSystemPath({ path: invalid, initial: false })).toBe('/');
+    const originalDev = Reflect.get(global, '__DEV__');
+    Reflect.set(global, '__DEV__', false);
+    try {
+      expect(redirectSystemPath({ path, initial: false })).toBe('/');
+    } finally {
+      Reflect.set(global, '__DEV__', originalDev);
+    }
+  });
   beforeEach(() => {
     jest.clearAllMocks();
     jest.restoreAllMocks();
