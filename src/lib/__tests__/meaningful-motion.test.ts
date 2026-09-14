@@ -1,4 +1,8 @@
 import {
+  BREATH_BUTTON_CLEARANCE,
+  BREATH_PEAK_SCALE,
+  BREATH_RESERVED_SIZE,
+  BREATH_RING_SIZE,
   progressFillMotion,
   reflectionCheckMode,
   shouldAnnounceReadingReady,
@@ -75,6 +79,12 @@ describe('meaningful motion contracts', () => {
       finishRevision: 4,
       savedRevision: 3,
     })).toBe('hidden');
+  });
+
+  it('reserves breath peak bounds above the rest ring', () => {
+    expect(BREATH_RESERVED_SIZE).toBe(Math.ceil(BREATH_RING_SIZE * BREATH_PEAK_SCALE));
+    expect(BREATH_RESERVED_SIZE).toBeGreaterThan(BREATH_RING_SIZE);
+    expect(BREATH_BUTTON_CLEARANCE).toBe(24);
   });
 
   it('only offers the breath guide on the breath prayer breathe step', () => {

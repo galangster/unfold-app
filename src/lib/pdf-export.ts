@@ -576,9 +576,11 @@ export function generateDevotionalHTML(devotional: Devotional, options?: PDFExpo
           margin-bottom: 0.06in;
         }
 
+    em, i { font-style: normal; font-weight: 500; }
+
         .scripture-text {
           font-family: Georgia, 'Times New Roman', serif;
-          font-style: italic;
+          font-style: normal;
           font-size: 11pt;
           color: #3A3A3C;
           line-height: 1.8;
@@ -678,7 +680,7 @@ export function generateDevotionalHTML(devotional: Devotional, options?: PDFExpo
         }
 
         .ref-text {
-          font-style: italic;
+          font-style: normal;
           font-size: 10pt;
           color: #555;
           line-height: 1.6;
@@ -698,7 +700,7 @@ export function generateDevotionalHTML(devotional: Devotional, options?: PDFExpo
         }
 
         blockquote p {
-          font-style: italic;
+          font-style: normal;
           font-size: 10pt;
           color: #444;
           line-height: 1.6;
@@ -863,7 +865,7 @@ export function generateDevotionalHTML(devotional: Devotional, options?: PDFExpo
 
         .prayer-text {
           font-family: Georgia, 'Times New Roman', serif;
-          font-style: italic;
+          font-style: normal;
           font-size: 11pt;
           line-height: 1.75;
           color: #555;

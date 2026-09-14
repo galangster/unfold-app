@@ -337,7 +337,7 @@ const styles = StyleSheet.create({
     fontSize: FontSize.sm,
     lineHeight: 20,
     marginBottom: Spacing['4'],
-    fontStyle: 'italic',
+    fontStyle: 'normal',
   },
   noteBody: {
     fontFamily: FontFamily.body,

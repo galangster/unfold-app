@@ -177,10 +177,18 @@ describe('InlineReflectionJournal', () => {
     });
 
     const labels = tree!.root.findAllByType(Text).map((node: any) => node.props.children).join(' ');
-    expect(labels).toContain('Optional reflection');
+    expect(labels).toContain('Reflection');
+    expect(labels).toContain('Optional');
+    expect(labels).not.toContain('Optional reflection');
+    expect(labels).not.toContain('reflected on');
     expect(labels).not.toContain('Saving...');
     expect(labels).not.toContain('Saved to Journal');
     expect(mockAddJournalEntry).not.toHaveBeenCalled();
+    expect(tree!.root.findByProps({ testID: 'reflection-save-slot-0' })).toBeTruthy();
+    expect(StyleSheet.flatten(tree!.root.findByProps({ testID: 'reflection-save-slot-0' }).props.style).minHeight).toBe(44);
+    expect(tree!.root.findByProps({ testID: 'reflection-journal-link-target' }).props.style.minHeight).toBe(44);
+    expect(tree!.root.findByProps({ testID: 'reflection-journal-link' }).findByType(Text).props.children)
+      .toBe('Continue in Journal →');
 
     act(() => tree!.unmount());
   });
@@ -441,6 +449,37 @@ describe('InlineReflectionJournal', () => {
     });
 
     expect(tree!.root.findByType(TextInput).props.value).toBe('');
+  });
+
+  it('uses a left-aligned serif heading, quiet optional label, and journal text link', () => {
+    const onOpenFullJournal = jest.fn();
+    let tree: any;
+
+    act(() => {
+      tree = renderer.create(
+        <InlineReflectionJournal
+          questions={['What stood out?']}
+          devotionalId="devotional"
+          dayNumber={2}
+          onOpenFullJournal={onOpenFullJournal}
+        />
+      );
+    });
+
+    const heading = tree!.root.findByProps({ testID: 'reflection-heading' });
+    const optional = tree!.root.findByProps({ testID: 'reflection-optional-label' });
+    expect(heading.props.children).toBe('Reflection');
+    expect(optional.props.children).toBe('Optional');
+    expect(StyleSheet.flatten(heading.props.style).fontFamily).toBe(FontFamily.display);
+    expect(StyleSheet.flatten(heading.props.style).textAlign).toBe('left');
+    expect(StyleSheet.flatten(optional.props.style).fontFamily).toBe(FontFamily.ui);
+
+    act(() => {
+      tree!.root.findByProps({ testID: 'reflection-journal-link' }).props.onPress();
+    });
+    expect(onOpenFullJournal).toHaveBeenCalledTimes(1);
+
+    act(() => tree!.unmount());
   });
 
   it('renders reflection questions in Inter instead of the selected reading font', () => {

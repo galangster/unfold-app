@@ -1,7 +1,11 @@
 export const PROCESSING_BAR_CYCLE_MS = 1600;
 export const PROCESSING_BAR_STAGGER_MS = 200;
 export const BREATH_HALF_MS = 4000;
-export const BREATH_PEAK_SCALE = 1.04;
+export const BREATH_RING_SIZE = 168;
+export const BREATH_INNER_RING_SIZE = 148;
+export const BREATH_PEAK_SCALE = 1.16;
+export const BREATH_RESERVED_SIZE = Math.ceil(BREATH_RING_SIZE * BREATH_PEAK_SCALE);
+export const BREATH_BUTTON_CLEARANCE = 24;
 
 export type ReflectionSaveState = 'saving' | 'saved' | 'error';
 export type ReflectionCheckMode = 'hidden' | 'static' | 'draw';

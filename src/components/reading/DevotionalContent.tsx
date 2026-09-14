@@ -171,7 +171,7 @@ export function DevotionalContent({
   const displayScripture = versedScripture?.text ?? day.scriptureText;
   const passage = versedScripture?.passage;
   const scriptureTextStyle = {
-    fontFamily: readingFont.bodyItalic,
+    fontFamily: readingFont.body,
     fontSize: fontSizes.scripture,
     color: isDark ? colors.text : colors.textMuted,
     lineHeight: fontSizes.scripture * 1.75,
@@ -462,7 +462,7 @@ export function DevotionalContent({
               </TouchableOpacity>
               <Text
                 style={{
-                  fontFamily: readingFont.bodyItalic,
+                  fontFamily: readingFont.body,
                   fontSize: Math.round(fontSizes.body * 1.15),
                   color: isDark ? colors.text : colors.textMuted,
                   lineHeight: Math.round(fontSizes.body * 1.15) * 1.7,
@@ -588,7 +588,7 @@ export function DevotionalContent({
           <ReaderSectionHeader label="A Prayer" textColor={colors.text} />
           <Text
             style={{
-              fontFamily: readingFont.bodyItalic,
+              fontFamily: readingFont.body,
               fontSize: fontSizes.body,
               color: colors.text,
               lineHeight: fontSizes.body * 1.8,
@@ -605,7 +605,7 @@ export function DevotionalContent({
       {day.carryLine && (
         <Text
           style={{
-            fontFamily: readingFont.bodyItalic,
+            fontFamily: readingFont.body,
             fontSize: fontSizes.body,
             color: colors.textMuted,
             lineHeight: fontSizes.body * 1.8,

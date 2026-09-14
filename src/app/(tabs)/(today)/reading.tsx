@@ -28,14 +28,13 @@ import Animated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import NetInfo from '@react-native-community/netinfo';
 import * as Haptics from 'expo-haptics';
-import { BookmarkSimpleIcon, ArrowsClockwiseIcon, CaretDownIcon, BookOpenIcon, CaretLeftIcon, PlayIcon, CheckIcon, UploadSimpleIcon, SunHorizonIcon, TextAaIcon } from '@/components/icons';
+import { BookmarkSimpleIcon, ArrowsClockwiseIcon, CaretDownIcon, BookOpenIcon, CaretLeftIcon, PlayIcon, CheckIcon, UploadSimpleIcon, TextAaIcon } from '@/components/icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { useUIState } from '@/lib/ui-state';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
-import { Typography } from '@/constants/typography';
 import { Shadow } from '@/constants/shadows';
 import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
@@ -79,6 +78,7 @@ import { readAutoTrialIntent, transitionAutoTrialIntent } from '@/lib/auto-trial
 import { trackAutoTrialCompleted } from '@/lib/auto-trial-telemetry';
 // ShareDevotionalModal removed — pull quote share now uses /share-card route
 import { DevotionalContent } from '@/components/reading/DevotionalContent';
+import { TomorrowPreview } from '@/components/reading/TomorrowPreview';
 import { ScripturePracticeSheet, buildPracticeBibleHref } from '@/components/reading/ScripturePracticeSheet';
 import { getScripturePractice } from '@/constants/scripture-practices';
 import { isQaToolsEnabled } from '@/lib/qa-tools';
@@ -2614,50 +2614,16 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                   {isCompleted && !showCelebration && tomorrowDayData && tomorrowTeaser && (
                     <Animated.View
                       entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(300).easing(Ease.out)}
-                      style={{
-                        marginTop: Spacing['8'],
-                        paddingVertical: 18,
-                        paddingHorizontal: Spacing['5'],
-                        borderRadius: Radius.card,
-                        backgroundColor: colors.inputBackground,
-                        borderWidth: 1,
-                        borderColor: colors.border,
-                      }}
                     >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing['2'], marginBottom: 10 }}>
-                        <SunHorizonIcon size={18} color={colors.accent} weight="light" />
-                        <Text
-                          style={{
-                            ...Typography.sectionHeader,
-                            color: colors.text,
-                          }}
-                        >
-                          Tomorrow
-                        </Text>
-                      </View>
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.display,
-                          fontSize: 18,
-                          color: colors.text,
-                          lineHeight: 23,
-                          marginBottom: Spacing['2'],
+                      <TomorrowPreview
+                        title={tomorrowDayData.title}
+                        teaser={tomorrowTeaser}
+                        colors={{
+                          text: colors.text,
+                          textMuted: colors.textMuted,
+                          border: colors.border,
                         }}
-                        numberOfLines={2}
-                      >
-                        {tomorrowDayData.title}
-                      </Text>
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.body,
-                          fontSize: FontSize.sm,
-                          color: colors.textMuted,
-                          lineHeight: 21,
-                        }}
-                        numberOfLines={3}
-                      >
-                        {tomorrowTeaser}
-                      </Text>
+                      />
                     </Animated.View>
                   )}
 

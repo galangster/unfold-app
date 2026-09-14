@@ -1,17 +1,15 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { RefObject } from 'react';
-import { AppState, View, Text, TextInput, Keyboard, TouchableOpacity, type ScrollView } from 'react-native';
+import { AppState, View, Text, TextInput, Keyboard, Pressable, StyleSheet, TouchableOpacity, type ScrollView } from 'react-native';
 import Animated, {
   FadeIn,
   FadeInDown,
   useReducedMotion,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { ArrowRightIcon, CaretDownIcon, CaretUpIcon, NotePencilIcon } from '@/components/icons';
+import { CaretDownIcon, CaretUpIcon } from '@/components/icons';
 import { FontFamily, FontSize as FontSizeTokens } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
-import { alpha } from '@/components/ui';
-import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
 import {
@@ -21,8 +19,6 @@ import {
   FontSize,
 } from '@/lib/store';
 import { getReflectionTypography, type ReflectionTypography } from '@/lib/reflection-typography';
-import { Typography } from '@/constants/typography';
-
 import { preventOrphan } from '@/lib/cn';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import {
@@ -459,58 +455,48 @@ export function InlineReflectionJournal({
     [localResponses, existingEntry]
   );
 
-  const answeredCount = useMemo(() => {
-    let count = 0;
-    for (let i = 0; i < questions.length; i++) {
-      const response = getResponse(i, questions[i]);
-      if (response.trim().length > 0) count++;
-    }
-    return count;
-  }, [questions, getResponse]);
-
   return (
     <View style={{ marginTop: Spacing['12'] }}>
-      {/* Header */}
       <View
         style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'center',
+          alignItems: 'flex-start',
           marginBottom: Spacing['7'],
         }}
       >
-        <Text
+        <View
           style={{
-            ...Typography.sectionHeader,
-            color: colors.text,
-            textAlign: 'center',
-          }}
-        >
-          Optional reflection
-        </Text>
-      </View>
-
-      {/* Progress indicator */}
-      {answeredCount > 0 && (
-        <Animated.View
-          entering={reducedMotion ? undefined : FadeIn.duration(Duration.slow).easing(Ease.out)}
-          style={{
-            alignItems: 'center',
-            marginBottom: Spacing['5'],
+            flexDirection: 'row',
+            alignItems: 'baseline',
+            flexWrap: 'wrap',
+            gap: Spacing['2'],
           }}
         >
           <Text
+            testID="reflection-heading"
+            style={{
+              fontFamily: FontFamily.display,
+              fontSize: 24,
+              lineHeight: 30,
+              color: colors.text,
+              textAlign: 'left',
+            }}
+          >
+            Reflection
+          </Text>
+          <Text
+            testID="reflection-optional-label"
             style={{
               fontFamily: FontFamily.ui,
               fontSize: 11,
-              color: answeredCount === questions.length ? colors.accent : colors.textSubtle,
-              letterSpacing: 0.3,
+              lineHeight: 14,
+              color: colors.textSubtle,
+              textAlign: 'left',
             }}
           >
-            {answeredCount} of {questions.length} reflected on
+            Optional
           </Text>
-        </Animated.View>
-      )}
+        </View>
+      </View>
 
       {/* Questions */}
       {questions.map((question, index) => {
@@ -551,41 +537,39 @@ export function InlineReflectionJournal({
         );
       })}
 
-      {/* Continue in Journal CTA */}
       <Animated.View
         entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out).delay(questions.length * 100 + 200)}
-        style={{ marginTop: Spacing['5'], alignItems: 'center' }}
+        style={{ marginTop: Spacing['5'], alignItems: 'flex-start' }}
       >
-        <TouchableOpacity
-          activeOpacity={0.6}
+        <Pressable
+          testID="reflection-journal-link"
+          accessibilityRole="button"
+          accessibilityLabel="Continue in Journal"
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             onOpenFullJournal();
           }}
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: Spacing['2'],
-            paddingVertical: 14,
-            paddingHorizontal: Spacing['6'],
-            borderRadius: Radius.md,
-            borderWidth: 1,
-            borderColor: alpha(colors.accent, 0.25),
-            backgroundColor: alpha(colors.accent, 0.03),
-          }}
+          style={{ alignSelf: 'flex-start' }}
         >
-          <NotePencilIcon size={16} color={colors.accent} weight="light" />
-          <Text
+          <View
+            testID="reflection-journal-link-target"
             style={{
-              fontFamily: FontFamily.uiMedium,
-              fontSize: FontSizeTokens.sm,
-              color: colors.accent,
+              minHeight: 44,
+              justifyContent: 'center',
             }}
           >
-            Continue in Journal
-          </Text>
-          <ArrowRightIcon size={14} color={colors.accent} weight="light" />
-        </TouchableOpacity>
+            <Text
+              style={{
+                fontFamily: FontFamily.uiMedium,
+                fontSize: FontSizeTokens.sm,
+                color: colors.accent,
+                textAlign: 'left',
+              }}
+            >
+              Continue in Journal →
+            </Text>
+          </View>
+        </Pressable>
       </Animated.View>
     </View>
   );
@@ -636,6 +620,7 @@ function ReflectionQuestionCard({
   reducedMotion?: boolean;
 }) {
   const playedCheckRef = useRef(0);
+  const [isFocused, setIsFocused] = useState(false);
   return (
     <Animated.View
       entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).easing(Ease.out).delay(index * 120)}
@@ -656,7 +641,7 @@ function ReflectionQuestionCard({
               flexDirection: 'row',
               alignItems: 'flex-start',
               gap: 10,
-              paddingLeft: 18,
+              paddingLeft: 0,
               paddingRight: 8,
               paddingVertical: Spacing['3'],
             },
@@ -692,16 +677,18 @@ function ReflectionQuestionCard({
           entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).easing(Ease.out)}
           style={{
             marginTop: Spacing['3'],
-            paddingHorizontal: 18,
+            paddingHorizontal: 0,
           }}
         >
           <View
+            testID={`reflection-ruled-input-${index}`}
             style={{
-              backgroundColor: colors.inputBackground,
-              borderRadius: Radius.md,
-              borderWidth: 1,
-              borderColor: editable ? colors.borderFocused ?? colors.border : colors.textHint,
-              padding: 14,
+              borderBottomWidth: StyleSheet.hairlineWidth,
+              borderBottomColor: isFocused
+                ? (colors.borderFocused ?? colors.accent)
+                : colors.border,
+              paddingTop: 8,
+              paddingBottom: 10,
               opacity: editable ? 1 : 0.5,
             }}
           >
@@ -709,8 +696,14 @@ function ReflectionQuestionCard({
               ref={(ref) => { inputRefs.current.set(index, ref); }}
               value={response}
               editable={editable}
-              onFocus={() => onInputFocus(index)}
-              onBlur={() => onInputBlur(index)}
+              onFocus={() => {
+                setIsFocused(true);
+                onInputFocus(index);
+              }}
+              onBlur={() => {
+                setIsFocused(false);
+                onInputBlur(index);
+              }}
               onChangeText={(text) => onResponseChange(index, question, text)}
               placeholder={editable ? 'Write your thoughts...' : 'Unlock Premium to journal your reflections'}
               placeholderTextColor={colors.textHint}
@@ -732,65 +725,68 @@ function ReflectionQuestionCard({
             />
           </View>
 
-          {editable && saveState === 'error' ? (
-            <TouchableOpacity
-              onPress={() => onRetrySave(index)}
-              accessibilityRole="button"
-              accessibilityLabel="Save failed. Tap to retry."
-              accessibilityLiveRegion="assertive"
-              style={{
-                minHeight: 44,
-                marginTop: Spacing['2'],
-                alignSelf: 'flex-end',
-                justifyContent: 'center',
-                paddingHorizontal: Spacing['2'],
-              }}
-            >
-              <Text
-                testID={`reflection-save-status-${index}`}
+          {editable ? (
+            saveState === 'error' ? (
+              <TouchableOpacity
+                onPress={() => onRetrySave(index)}
+                accessibilityRole="button"
+                accessibilityLabel="Save failed. Tap to retry."
+                accessibilityLiveRegion="assertive"
                 style={{
-                  fontFamily: FontFamily.ui,
-                  fontSize: 11,
-                  color: colors.error,
-                  textAlign: 'right',
+                  minHeight: 44,
+                  marginTop: Spacing['2'],
+                  alignSelf: 'flex-end',
+                  justifyContent: 'center',
+                  paddingHorizontal: Spacing['2'],
                 }}
               >
-                Save failed. Tap to retry.
-              </Text>
-            </TouchableOpacity>
-          ) : editable && (saveState || checkMode !== 'hidden') ? (
-            <View
-              style={{
-                minHeight: 44,
-                marginTop: Spacing['2'],
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'flex-end',
-                gap: 8,
-              }}
-            >
-              {checkMode !== 'hidden' ? <DrawnCheck
-                visible
-                playKey={checkMode === 'draw' ? checkPlayKey : 0}
-                playedKeyRef={playedCheckRef}
-                color={colors.accent}
-                testID={`reflection-save-check-${index}-${checkMode === 'draw' ? 'draw' : 'static'}`}
-              /> : null}
-              {saveState ? (
                 <Text
                   testID={`reflection-save-status-${index}`}
-                  accessibilityLiveRegion="polite"
                   style={{
                     fontFamily: FontFamily.ui,
                     fontSize: 11,
-                    color: colors.textHint,
+                    color: colors.error,
                     textAlign: 'right',
                   }}
                 >
-                  {saveState === 'saving' ? 'Saving...' : 'Saved to Journal'}
+                  Save failed. Tap to retry.
                 </Text>
-              ) : null}
-            </View>
+              </TouchableOpacity>
+            ) : (
+              <View
+                testID={`reflection-save-slot-${index}`}
+                style={{
+                  minHeight: 44,
+                  marginTop: Spacing['2'],
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'flex-end',
+                  gap: 8,
+                }}
+              >
+                {checkMode !== 'hidden' ? <DrawnCheck
+                  visible
+                  playKey={checkMode === 'draw' ? checkPlayKey : 0}
+                  playedKeyRef={playedCheckRef}
+                  color={colors.accent}
+                  testID={`reflection-save-check-${index}-${checkMode === 'draw' ? 'draw' : 'static'}`}
+                /> : null}
+                {saveState ? (
+                  <Text
+                    testID={`reflection-save-status-${index}`}
+                    accessibilityLiveRegion="polite"
+                    style={{
+                      fontFamily: FontFamily.ui,
+                      fontSize: 11,
+                      color: colors.textHint,
+                      textAlign: 'right',
+                    }}
+                  >
+                    {saveState === 'saving' ? 'Saving...' : 'Saved to Journal'}
+                  </Text>
+                ) : null}
+              </View>
+            )
           ) : null}
         </Animated.View>
       )}

@@ -925,7 +925,7 @@ const styles = StyleSheet.create({
     lineHeight: 32,
   },
   verse: {
-    fontFamily: FontFamily.bodyItalic,
+    fontFamily: FontFamily.body,
     fontSize: 18,
     lineHeight: 30,
   },

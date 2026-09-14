@@ -9,9 +9,10 @@ export const FontFamily = {
   display: 'PPEditorialNew-Light',
   displayItalic: 'PPEditorialNew-Light',
 
-  // Secondary sans (Inter) for body + UI. Variety comes from weights/italics, not more families.
+  // Secondary sans (Inter) for body + UI. App-owned presentation stays upright;
+  // user journal marks and CSS still use true italic independently.
   body: 'Inter_400Regular',
-  bodyItalic: 'Inter_400Regular_Italic',
+  bodyItalic: 'Inter_400Regular',
   bodyMedium: 'Inter_500Medium',
   bodyBold: 'Inter_700Bold',
 

@@ -1500,6 +1500,8 @@ export function DevotionalWebView({
     }
 
 
+    em, i { font-style: normal; font-weight: 500; }
+
     /* Horizontal rule from --- markdown */
     hr {
       border: none;
@@ -1513,7 +1515,7 @@ export function DevotionalWebView({
       font-family: ${displayFontStack};
       font-size: calc(var(--body-font-size) * 1.05);
       line-height: 1.5;
-      font-style: italic;
+      font-style: normal;
       color: var(--accent);
       text-align: center;
       margin: calc(var(--body-line-height) * 1.4) 8px;
@@ -1572,7 +1574,7 @@ export function DevotionalWebView({
     }
 
     blockquote p {
-      font-style: italic;
+      font-style: normal;
       margin-bottom: 14px;
       line-height: calc(var(--body-line-height) * 1.05);
       padding-left: 2px;
@@ -1628,7 +1630,7 @@ export function DevotionalWebView({
     }
     
     .original {
-      font-style: italic;
+      font-style: normal;
       font-size: calc(var(--body-font-size) - 2px);
       color: var(--accent);
       margin-left: 12px;
