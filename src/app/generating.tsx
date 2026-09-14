@@ -1,3 +1,4 @@
+import { useSuccessRevealCue } from '@/hooks/useSuccessRevealCue';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { View, Text, TouchableOpacity, AppState, AppStateStatus, AccessibilityInfo, ScrollView, StyleSheet, ActivityIndicator, Linking } from 'react-native';
 import { useRouter, useNavigation, useLocalSearchParams } from 'expo-router';
@@ -185,8 +186,9 @@ export default function GeneratingScreen() {
   const clearGenerationSession = useUnfoldStore((s) => s.clearGenerationSession);
 
   const [isComplete, setIsComplete] = useState(false);
-  const [devotionalTitle, setDevotionalTitle] = useState('');
   const [landedRevealId, setLandedRevealId] = useState<string | null>(null);
+  useSuccessRevealCue('new-series-revealed', landedRevealId, 1, isComplete);
+  const [devotionalTitle, setDevotionalTitle] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [canRetryJob, setCanRetry] = useState(true);
 
@@ -574,8 +576,8 @@ export default function GeneratingScreen() {
     const { devotionalId, seriesTitle, day1 } = applied;
 
     // Update UI state
-    setDevotionalTitle(seriesTitle);
     setLandedRevealId(devotionalId);
+    setDevotionalTitle(seriesTitle);
     setCurrentSeriesTitle(seriesTitle);
     setPendingNotification({ title: seriesTitle });
     setIsGenerating(false);

@@ -123,6 +123,9 @@ import { computeDevotionalState } from '@/components/home/compute-devotional-sta
 import { useCompletedDayReflection } from '@/components/home/use-completed-day-reflection';
 import { DevotionalCard } from '@/components/home/DevotionalCard';
 import { GreetingRow } from '@/components/home/GreetingRow';
+import { AmbientMusicEntry } from '@/components/ambient/AmbientMusicEntry';
+import { isAmbientAudioEnabled } from '@/lib/ambient-audio-feature';
+import { useAmbientPlayerScrollPadding, useAmbientSoundChrome } from '@/lib/ambient-sound-chrome';
 import { BentoGrid } from '@/components/home/BentoGrid';
 import { SeriesCarousel } from '@/components/home/SeriesCarousel';
 import { CompactStreakRow } from '@/components/home/CompactStreakRow';
@@ -1077,6 +1080,12 @@ export default function HomeScreen() {
   const storedNextPick = currentDevotional?.days?.find((row) => row.dayNumber === totalDays)?.nextPick ?? null;
   const homeDayData = getHomeDevotionalDayData(currentDevotional);
   const activeCurrentDayData = currentDevotional?.days.find((day) => day.dayNumber === currentDevotional.currentDay) ?? null;
+  const setTodayReadingAvailable = useAmbientSoundChrome((state) => state.setTodayReadingAvailable);
+  const ambientPlayerPadding = useAmbientPlayerScrollPadding(100);
+  useEffect(() => {
+    setTodayReadingAvailable(Boolean(currentDevotional && activeCurrentDayData));
+    return () => setTodayReadingAvailable(false);
+  }, [activeCurrentDayData, currentDevotional, setTodayReadingAvailable]);
   const isCurrentDevotionalComplete = currentDevotional ? totalDays > 0 && daysCompleted === totalDays : false;
   const currentDayData = !isCurrentDevotionalComplete && hasReadToday && activeCurrentDayData && !activeCurrentDayData.isRead
     ? activeCurrentDayData
@@ -1665,7 +1674,7 @@ export default function HomeScreen() {
         <Animated.ScrollView
           onScroll={scrollHandler}
           scrollEventThrottle={16}
-          contentContainerStyle={{ paddingBottom: 100 }}
+          contentContainerStyle={{ paddingBottom: ambientPlayerPadding }}
           showsVerticalScrollIndicator={false}
         >
           <View style={todayFrameStyle}>
@@ -1674,6 +1683,7 @@ export default function HomeScreen() {
             userName={user?.name}
             avatarTestID="home-avatar-button"
             onAvatarPress={() => router.push('/(tabs)/(you)')}
+            headerActions={isAmbientAudioEnabled() ? <AmbientMusicEntry /> : null}
           />
 
           <View style={todayColumnsStyle}>

@@ -1,3 +1,4 @@
+import { initializeAudioInterruptionHandling } from '@/lib/audio-interruption-events';
 import { ThemeProvider as NavigationThemeProvider } from 'expo-router/react-navigation';
 import { Stack, useNavigationContainerRef, usePathname, useRootNavigationState } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -39,6 +40,7 @@ import { flushLastFatalBreadcrumb, installGlobalErrorHandler } from '@/lib/globa
 import { initSentry, registerNavigationContainer, wrapRootComponent } from '@/lib/sentry';
 import { armHealthyBootTimer } from '@/lib/crash-marker';
 import { AudioPlayerOverlay } from '@/components/AudioPlayerOverlay';
+import { AmbientSoundOverlay } from '@/components/ambient/AmbientSoundOverlay';
 import { PrivacyShield } from '@/components/PrivacyShield';
 
 export const unstable_settings = {
@@ -99,6 +101,7 @@ AppState.addEventListener('change', (status) => {
 });
 
 function RootLayoutNav() {
+  useEffect(initializeAudioInterruptionHandling, []);
   const { colors, navigationTheme, isDark } = useTheme();
   const pathname = usePathname();
   const rootNavigationState = useRootNavigationState();
@@ -269,8 +272,16 @@ function RootLayoutNav() {
             gestureEnabled: false,
           }}
         />
+        <Stack.Screen
+          name="qa-ambient-sound"
+          options={{
+            animation: 'slide_from_right',
+            gestureEnabled: false,
+          }}
+        />
         </Stack>
         <AudioPlayerOverlay />
+        <AmbientSoundOverlay />
         <LaterEntryNotifySheet />
         <PrivacyShield />
       </View>

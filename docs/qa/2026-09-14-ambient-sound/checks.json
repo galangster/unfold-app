@@ -1,0 +1,129 @@
+{
+  "integrationBase": "92d458b3efe8d68252636e97db23c0f08a180f9a",
+  "sourceManifestSha256": "cdb5544ae27153ba0e9c905a0a5ca82fd4ae597e46b0cad458794c4985eec6f5",
+  "sourceFiles": 93,
+  "sourceUnchangedDuringFinalChecks": true,
+  "cueApproval": {
+    "authorization": "User approved all three remaining cue drafts. Root relayed approval during takeover.",
+    "productionChange": "Remove first-devotional-only gate. Emit all four defined events through unchanged owner.",
+    "publicTests": "15 tests passed. Four parameterized cases cover public event playback, deduplication, cancellation, and repeated cancellation.",
+    "assetsUnchanged": true,
+    "assetsChecked": 17
+  },
+  "jestSummary": {
+    "suitesPassed": 454,
+    "suitesSkipped": 1,
+    "testsPassed": 3915,
+    "testsSkipped": 1,
+    "testsFailed": 0,
+    "openHandlesReported": false,
+    "workerTeardownWarningReported": false
+  },
+  "lintSummary": {
+    "errors": 0,
+    "warnings": 3793,
+    "priorGrokWarningCount": 3793,
+    "suppressionsAdded": false
+  },
+  "affectedSummaryAfterSimplify": {
+    "suitesPassed": 9,
+    "testsPassed": 61,
+    "testsFailed": 0,
+    "openHandlesReported": false
+  },
+  "fullChecksReuse": "Full Jest passed before the two focus fallback removals and six local test mocks. Nine affected suites, typecheck, and lint passed afterward. Profiles and selectors inputs stayed unchanged.",
+  "existingSkippedSuite": "series-arc.live-smoke.test.ts. Production live smoke remains gated by LIVE.",
+  "lintAfterSimplify": {
+    "errors": 0,
+    "warnings": 3793,
+    "suppressionsAdded": false
+  },
+  "checks": {
+    "typecheck": {
+      "command": [
+        "bun",
+        "run",
+        "typecheck"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 12.61
+    },
+    "lint": {
+      "command": [
+        "bun",
+        "run",
+        "lint"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 28.85
+    },
+    "profiles": {
+      "command": [
+        "bun",
+        "run",
+        "verify:profiles"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 0.06
+    },
+    "jest": {
+      "command": [
+        "bun",
+        "run",
+        "test",
+        "--runInBand",
+        "--detectOpenHandles"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 112.44
+    },
+    "selectors": {
+      "command": [
+        "node",
+        "scripts/verify-maestro-selectors.mjs"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 0.64
+    }
+  },
+  "afterSimplifyChecks": {
+    "focus-affected": {
+      "command": [
+        "bun",
+        "run",
+        "test",
+        "--runInBand",
+        "--detectOpenHandles",
+        "src/lib/__tests__/generating-go-home.test.tsx",
+        "src/lib/__tests__/layout-permission-reconcile.test.tsx",
+        "src/lib/__tests__/today-auto-trial-focus.test.tsx",
+        "src/components/bible/__tests__/BibleHomeScreen.overview.test.tsx",
+        "src/components/bible/__tests__/BibleHomeScreen.book-pills.test.tsx",
+        "src/lib/__tests__/journal-hub-notebook-search.test.tsx",
+        "src/lib/__tests__/journal-hub-reflection-day.test.tsx",
+        "src/lib/__tests__/journal-hub-fab-motion.test.tsx",
+        "src/components/ambient/__tests__/AmbientSoundControls.test.tsx"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 11.24
+    },
+    "typecheck-focus": {
+      "command": [
+        "bun",
+        "run",
+        "typecheck"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 12.39
+    },
+    "lint-focus": {
+      "command": [
+        "bun",
+        "run",
+        "lint"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 32.8
+    }
+  }
+}

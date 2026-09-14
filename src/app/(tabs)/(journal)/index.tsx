@@ -70,6 +70,9 @@ import { prepareJournalFolderDelete } from '@/lib/journal-folder-delete';
 import { undoJournalDeletions, type JournalUndoAction } from '@/lib/journal-undo';
 import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
 import { ProfileEntryButton } from '@/components/ProfileEntryButton';
+import { AmbientMusicEntry } from '@/components/ambient/AmbientMusicEntry';
+import { isAmbientAudioEnabled } from '@/lib/ambient-audio-feature';
+import { useAmbientPlayerScrollPadding } from '@/lib/ambient-sound-chrome';
 import { logger } from '@/lib/logger';
 import {
   buildJournalMonthMarkers,
@@ -840,6 +843,7 @@ export default function JournalHubScreen() {
   const insets = useSafeAreaInsets();
   const adaptiveLayout = useAdaptiveLayout();
   const journalFrameStyle = adaptiveFrameStyle(adaptiveLayout.clusterMaxWidth);
+  const ambientPlayerPadding = useAmbientPlayerScrollPadding(100);
   const journalEntries = useUnfoldStore((s) => s.journalEntries);
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
@@ -1555,7 +1559,7 @@ export default function JournalHubScreen() {
           initialNumToRender={12}
           maxToRenderPerBatch={10}
           windowSize={11}
-          contentContainerStyle={{ paddingBottom: 100, alignItems: 'stretch' }}
+          contentContainerStyle={{ paddingBottom: ambientPlayerPadding, alignItems: 'stretch' }}
           showsVerticalScrollIndicator={false}
           onScroll={handleScroll}
           scrollEventThrottle={16}
@@ -1594,6 +1598,7 @@ export default function JournalHubScreen() {
               Journal
             </Text>
             <View style={mainStyles.headerActions}>
+              {isAmbientAudioEnabled() ? <AmbientMusicEntry /> : null}
               {hasContent && (
                 <TouchableOpacity
                   onPress={() => {
@@ -2223,6 +2228,8 @@ const mainStyles = StyleSheet.create({
     fontSize: 34,
     lineHeight: 40,
     letterSpacing: -0.25,
+    flexShrink: 1,
+    minWidth: 0,
   },
   headerActions: {
     flexDirection: 'row',

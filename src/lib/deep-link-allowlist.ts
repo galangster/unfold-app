@@ -181,6 +181,7 @@ export const EXTERNAL_ROUTE_BLOCKLIST: ReadonlySet<string> = new Set([
   '/generating', // transitional screen, meaningful only mid-flow
   '/day-menu', // in-reader sheet that needs reader context
   '/qa-method-readings', // QA sample library; in-app only behind the practice gate
+  '/qa-ambient-sound', // Future sound QA; explicit in-app entry only
 ]);
 
 /** Route groups that may appear as path segments; anything else is rejected. */

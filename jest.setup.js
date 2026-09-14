@@ -21,3 +21,35 @@ jest.mock('@react-native-masked-view/masked-view', () => {
   const View = require('react-native').View;
   return { __esModule: true, default: View, MaskedView: View };
 });
+
+jest.mock('expo-audio', () => ({
+  PermissionStatus: { GRANTED: 'granted', DENIED: 'denied', UNDETERMINED: 'undetermined' },
+  createAudioPlayer: jest.fn(() => ({
+    play: jest.fn(),
+    pause: jest.fn(),
+    remove: jest.fn(),
+    replace: jest.fn(),
+    seekTo: jest.fn(),
+    addListener: jest.fn(() => ({ remove: jest.fn() })),
+  })),
+  setAudioModeAsync: jest.fn(async () => undefined),
+  addAudioInterruptionListener: jest.fn(() => ({ remove: jest.fn() })),
+  requestRecordingPermissionsAsync: jest.fn(async () => ({ granted: true })),
+  useAudioPlayer: jest.fn(() => ({
+    replace: jest.fn(),
+    pause: jest.fn(),
+    play: jest.fn(),
+    seekTo: jest.fn(),
+  })),
+  useAudioPlayerStatus: jest.fn(() => ({ playing: false, didJustFinish: false })),
+  useAudioRecorder: jest.fn(() => ({
+    uri: null,
+    isRecording: false,
+    prepareToRecordAsync: jest.fn(async () => undefined),
+    record: jest.fn(),
+    stop: jest.fn(async () => undefined),
+    getStatus: jest.fn(() => ({ durationMillis: 0 })),
+  })),
+  useAudioRecorderState: jest.fn(() => ({ isRecording: false })),
+  RecordingPresets: { HIGH_QUALITY: {} },
+}));

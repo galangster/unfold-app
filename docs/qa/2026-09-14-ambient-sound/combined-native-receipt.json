@@ -1,0 +1,153 @@
+{
+  "status": "COMBINED_SIMULATOR_ROUTE_ACCEPTANCE_PASSED_WITH_LIMITS",
+  "createdAt": "2026-09-14T16:08:47.593440+00:00",
+  "integrationDirectory": "/Users/galangster/clawd/work/unfold/.worktrees/successor-integration-20260914",
+  "base": "92d458b3efe8d68252636e97db23c0f08a180f9a",
+  "sourceProvenance": "/Users/galangster/clawd/work/unfold/operations/2026-09-14-release-takeover/sound-final/combined-source-provenance-final.json",
+  "sourceProvenanceSha256": "e1f8c23fec676d98fc3f67800bf01a099e996ced5095436b6e27ffe1e9bc166e",
+  "integrationSourceHashesStableDuringFinalQa": true,
+  "canonicalSourceManifestSha256": "85714dde364c4b36074cd3a2805d0bf3be7954ab8c80b0fd0b643b8b92e23b9b",
+  "canonicalManifestPaths": 83,
+  "canonicalManifestMismatches": [],
+  "productionSourceEditsByDelegate": false,
+  "buildPerformed": false,
+  "publishingPerformed": false,
+  "nativeRuntime": {
+    "simulator": "407EF761-8DE7-43FD-81B1-8096E07B7CF9",
+    "platform": "iOS26.5 simulator",
+    "configuration": "Debug",
+    "scheme": "Unfold",
+    "incrementalBuildSucceededAt": "2026-09-14T14:58:42.424Z",
+    "buildLog": "/Users/galangster/clawd/work/unfold/operations/2026-09-14-release-takeover/sound-final/native-build-final.jsonl",
+    "derivedData": "/Users/galangster/clawd/work/unfold/operations/2026-09-14-release-takeover/sound-followup/native-derived",
+    "nativeDependencyReuse": "Canonical and integration package.json, bun.lock, expo-audio patch, and both patched Swift sources match. No native rebuild was required.",
+    "preReuseProof": "/Users/galangster/clawd/work/unfold/operations/2026-09-14-release-takeover/sound-final/combined-native-provenance.json",
+    "patchedSwiftHashes": {
+      "ios/AudioModule.swift": "166447e74c593fa7e60e4b0f36f0afe6b0af77fb2ffeaeb94ec2c6a0f982f0ca",
+      "ios/AudioRecorder.swift": "1fe5fa4eb47d3ca74dbd7336d0908a1113574eb85dff37487e1fd499d78b989c"
+    }
+  },
+  "routeChecks": {
+    "todayToReading": "PASS. Actual Today continue CTA opened reading for the seeded series.",
+    "todayMusic": "PASS. Visible nine-track sheet.",
+    "readingMusic": "PASS. Visible sheet and Still Waters native playing UI. Final source reopened reading music after the clearance boundary.",
+    "actualRevealGradient": "PASS. Allowed reveal deep link resolved the existing stored day2. Native Bars gradient rendered. Swipe lifted the curtain into reading.",
+    "completionNavigation": "PASS. Actual day1 and day2 Complete Day followed by Continue returned to Today.",
+    "earnedAndRetainedProgress": "PASS. Actual day2 completion returned to Today with2 of3 completed and67%. Background return and real quiet-ending return retained67%. This checks stored progress and rendered fill. Quantitative frame-time behavior was not measured.",
+    "goodnightWithActiveMusic": "PASS. Five swipes reach the final scroll limit. Full button bounds clear the measured dock.",
+    "actualQuietEndingReturn": "PASS. Evening Goodnight during active Still Waters playback opened the real AmbientQuietEnding. Return to Today used the production onClose navigation handler. Actual Today returned with music off and67% progress.",
+    "musicReopeningAfterQuietReturn": "PASS. Today sheet reopened. Reading sheet reopened on final frozen source."
+  },
+  "goodnightRedGreen": {
+    "red": "/Users/galangster/clawd/work/unfold/operations/2026-09-14-release-takeover/sound-final/combined-goodnight-red.json",
+    "green": "/Users/galangster/clawd/work/unfold/operations/2026-09-14-release-takeover/sound-final/combined-goodnight-green.json",
+    "redCenterY": 741,
+    "greenCenterY": 673,
+    "greenButtonBounds": {
+      "height": 50,
+      "width": 346,
+      "x": 28,
+      "y": 647
+    },
+    "dockBounds": {
+      "height": 66,
+      "width": 276,
+      "x": 17,
+      "y": 709
+    },
+    "clearancePoints": 12,
+    "maximumScrollSwipes": 5,
+    "clearanceChange": "Root integration owner added measured dock clearance to real scroll containers. Native Goodnight obstruction is resolved."
+  },
+  "developmentOverlay": {
+    "issue": "Expo floating Tools hit area intercepted evening music center taps.",
+    "centerTap": "x320,y96",
+    "successfulMusicTap": "x300,y96",
+    "failedCapture": "/Users/galangster/clawd/work/unfold/operations/2026-09-14-release-takeover/sound-final/combined-evening-music-tap.png",
+    "successfulCapture": "/Users/galangster/clawd/work/unfold/operations/2026-09-14-release-takeover/sound-final/combined-evening-music-reopen.png",
+    "classification": "Development overlay interception. The visible production sheet passed after avoiding that hit area."
+  },
+  "syntheticTransport": {
+    "port": 9197,
+    "session": 84356,
+    "source": "/Users/galangster/clawd/work/unfold/operations/2026-09-14-release-takeover/sound-final/combined_fixture_proxy.py",
+    "sourceSha256": "420fb0892e4ec3afecd70166d12b532f23e4b102fb902132ca1039e215cf4749",
+    "log": "/Users/galangster/clawd/work/unfold/operations/2026-09-14-release-takeover/sound-final/combined-fixture.log",
+    "schema": "POST /api/generate/go-deeper returns top-level movements with five title/prayer objects. Real examen-service parsing accepted180 words and cached the result.",
+    "preservedFixtures": [
+      9193,
+      9194
+    ],
+    "forwarding": "Jobs/config/sync use existing9194. Other endpoints use existing9193. Only the evening generation response is task-owned.",
+    "productionDataCreated": false,
+    "limit": "Synthetic responses establish production routing, parser, local state, navigation, and native UI behavior. They do not prove production service quality."
+  },
+  "metro": {
+    "integrationPort": 8196,
+    "integrationSession": 15184,
+    "backend": "http://127.0.0.1:9197",
+    "log": "/Users/galangster/clawd/work/unfold/operations/2026-09-14-release-takeover/sound-final/combined-metro-evening.log",
+    "canonicalPort": 8193,
+    "canonicalSession": 93698,
+    "canonicalBackend": "http://127.0.0.1:9194",
+    "keptRunningForRoot": true
+  },
+  "nativeCueEngineEvidence": "/Users/galangster/clawd/work/unfold/operations/2026-09-14-release-takeover/sound-final/cue-native-engine-receipt.json",
+  "cueMeaning": "All four approved assets passed real owner factory/native engine playback and cancellation. Actual first-reveal routing was established separately. Public emitter approval changes belong to root integration source checks.",
+  "selectedCaptures": [
+    "/Users/galangster/clawd/work/unfold/operations/2026-09-14-release-takeover/sound-final/combined-today-music.png",
+    "/Users/galangster/clawd/work/unfold/operations/2026-09-14-release-takeover/sound-final/combined-reading-music-playing.png",
+    "/Users/galangster/clawd/work/unfold/operations/2026-09-14-release-takeover/sound-final/combined-actual-reveal-day2-settled.png",
+    "/Users/galangster/clawd/work/unfold/operations/2026-09-14-release-takeover/sound-final/combined-earned-progress.png",
+    "/Users/galangster/clawd/work/unfold/operations/2026-09-14-release-takeover/sound-final/combined-background-retained-settled.png",
+    "/Users/galangster/clawd/work/unfold/operations/2026-09-14-release-takeover/sound-final/combined-green-goodnight-max-scroll.png",
+    "/Users/galangster/clawd/work/unfold/operations/2026-09-14-release-takeover/sound-final/combined-green-quiet-ending.png",
+    "/Users/galangster/clawd/work/unfold/operations/2026-09-14-release-takeover/sound-final/combined-green-quiet-return-today.png",
+    "/Users/galangster/clawd/work/unfold/operations/2026-09-14-release-takeover/sound-final/combined-green-music-reopen.png",
+    "/Users/galangster/clawd/work/unfold/operations/2026-09-14-release-takeover/sound-final/combined-green-reading-music-reopen.png",
+    "/Users/galangster/clawd/work/unfold/operations/2026-09-14-release-takeover/sound-final/combined-final-today.png"
+  ],
+  "captureHashes": {
+    "combined-today-music.png": "366557a0f4ccc1d558e37e5664bb340e246e8a151eb6d7962b0e491764413ef3",
+    "combined-reading-music-playing.png": "7f3c07dcf70b8cc1f98921331bdc250f8564b96517a1b00d6cfeb09b10a68a79",
+    "combined-actual-reveal-day2-settled.png": "2911193979578e94f1e9d0b3d089bb5d909426838cb1a6a561d015a5f3ee38ec",
+    "combined-earned-progress.png": "b0af5294fb8d585d6248bee1959d5648ef23f1e9870790a51d8f3df58a8bf1ad",
+    "combined-background-retained-settled.png": "b004f9d4dc5eeef38275261b89915ac771805acb79d861ab4de18e0ff1681a84",
+    "combined-green-goodnight-max-scroll.png": "d51da2024bc7f32e46faec0a0d599d7d35affc4faad6af0744713adc4227182c",
+    "combined-green-quiet-ending.png": "d241079474808dfeb5f445604dfd79c6070f7a7fe077e094ba3f12cebda0cabd",
+    "combined-green-quiet-return-today.png": "ef64450d76bb416590c374f594afba8d0011e893cbc2ea5bd0b4715e7cc731be",
+    "combined-green-music-reopen.png": "3ffc2a6fab780d64ed02f20068377c08b0e248e854de71f589438d9ee7f12e4f",
+    "combined-green-reading-music-reopen.png": "beeede2626717365aad53b294d55f60c424bf2107140452f24a99134900fe565",
+    "combined-final-today.png": "66e5eb27b208f903cc7080eb0b54ffda6e85892d48720b2c79cb2d678e4f6345"
+  },
+  "rejectedCaptures": [
+    {
+      "path": "/Users/galangster/clawd/work/unfold/operations/2026-09-14-release-takeover/sound-final/combined-background-retained.png",
+      "reason": "Home animation remained visible after an early foreground launch. Superseded by settled foreground capture."
+    },
+    {
+      "path": "/Users/galangster/clawd/work/unfold/operations/2026-09-14-release-takeover/sound-final/combined-actual-reveal-day2.png",
+      "reason": "Developer client connection failed during Metro restart. Superseded by settled native reveal capture."
+    }
+  ],
+  "limits": [
+    "Physical-device Silent mode, OS calls, headphone removal, microphone preparation/paused interruption, actual recording/review, and narration acceptance remain open.",
+    "No acoustic or hardware proof is claimed.",
+    "Native cue factory/engine proof and actual reveal routing are separate evidence. No production cue player instrumentation was added.",
+    "Native full timer expiry was not awaited. Prior native countdown and source expiry regressions remain its current evidence.",
+    "Native gradient capture proves rendered behavior. No GPU frame-time or energy measurement was performed.",
+    "Only evening maximum-scroll clearance was checked natively. The other clearance bindings rely on root source review and affected checks.",
+    "Source tests and publication gates remain owned by root. This receipt does not authorize packaging or publishing."
+  ],
+  "temporaryFixturesExcluded": [
+    "trial-series.cue-probe.tsx",
+    "trial-series.cue-probe.original.tsx",
+    "trial-series.cue-probe.diff",
+    "combined_fixture_proxy.py",
+    "all operations native evidence and DerivedData",
+    "incidental ios/Podfile.lock checksum drift"
+  ],
+  "fixtureRestoration": "Prior native cue probe route was restored byte-identically and cue ledger restoration was logged. No production source was changed for combined QA.",
+  "finalAppState": "Actual Today. Seeded series progress67%. Music off.",
+  "rootNextGate": "Use these captures for source seal review. Complete root checks and physical-device acceptance before release."
+}

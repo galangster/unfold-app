@@ -1,0 +1,842 @@
+diff --git a/android/src/main/java/expo/modules/audio/AudioModule.kt b/android/src/main/java/expo/modules/audio/AudioModule.kt
+--- a/android/src/main/java/expo/modules/audio/AudioModule.kt
++++ b/android/src/main/java/expo/modules/audio/AudioModule.kt
+@@ -1,8 +1,10 @@
+ package expo.modules.audio
+ 
+ import android.Manifest
++import android.content.BroadcastReceiver
+ import android.content.ContentResolver
+ import android.content.Context
++import android.content.Intent
+ import android.content.IntentFilter
+ import android.content.pm.PackageManager
+ import android.media.AudioAttributes
+@@ -65,6 +67,21 @@
+   private val allPlayables: Sequence<Playable>
+     get() = players.values.asSequence() + playlists.values.asSequence()
+ 
++  private fun canAutoResume(playable: Playable): Boolean {
++    return (playable as? AudioPlayer)?.autoResumeOnInterruption ?: true
++  }
++
++  private val becomingNoisyReceiver = object : BroadcastReceiver() {
++    override fun onReceive(context: Context, intent: Intent) {
++      if (intent.action != AudioManager.ACTION_AUDIO_BECOMING_NOISY) return
++      appContext.mainQueue.launch {
++        emitAudioInterruption(interrupted = true, canRetry = true)
++        allPlayables.forEach { it.pause() }
++        emitAudioInterruption(interrupted = false)
++      }
++    }
++  }
++
+   private val ringerModeReceiver = RingerModeReceiver {
+     if (playsInSilentMode) return@RingerModeReceiver
+     appContext.mainQueue.launch {
+@@ -77,36 +94,47 @@
+   }
+ 
+   private var audioFocusRequest: AudioFocusRequest? = null
++  private fun emitAudioInterruption(interrupted: Boolean, canRetry: Boolean = false) {
++    sendEvent(
++      "onAudioInterruption",
++      mapOf(
++        "interrupted" to interrupted,
++        "canRetry" to canRetry
++      )
++    )
++  }
++
+   private val audioFocusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
+     appContext.mainQueue.launch {
+       when (focusChange) {
+         AudioManager.AUDIOFOCUS_LOSS -> {
+           focusAcquired = false
++          emitAudioInterruption(interrupted = true, canRetry = true)
+           allPlayables.forEach { it.pause() }
+         }
+ 
+         AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
+           focusAcquired = false
++          emitAudioInterruption(interrupted = true)
+           allPlayables.forEach { playable ->
+             if (playable.isPlaying) {
+-              playable.isPaused = true
++              playable.isPaused = canAutoResume(playable)
+               playable.pause()
+             }
+           }
+         }
+ 
+         AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+-          if (interruptionMode == InterruptionMode.DUCK_OTHERS) {
+-            allPlayables.forEach { playable ->
++          emitAudioInterruption(interrupted = true)
++          allPlayables.forEach { playable ->
++            if (interruptionMode == InterruptionMode.DUCK_OTHERS && canAutoResume(playable)) {
+               if (playable.previousVolume != playable.volume) {
+                 playable.previousVolume = playable.volume
+               }
+               playable.setVolume(playable.previousVolume * 0.5f)
+-            }
+-          } else {
+-            allPlayables.forEach { playable ->
++            } else {
+               if (playable.isPlaying) {
+-                playable.isPaused = true
++                playable.isPaused = canAutoResume(playable)
+                 playable.pause()
+               }
+             }
+@@ -115,6 +143,7 @@
+ 
+         AudioManager.AUDIOFOCUS_GAIN -> {
+           focusAcquired = true
++          emitAudioInterruption(interrupted = false)
+ 
+           if (!shouldPlayInSilentMode()) {
+             return@launch
+@@ -124,7 +153,9 @@
+             playable.setVolume(playable.previousVolume)
+             if (playable.isPaused) {
+               playable.isPaused = false
+-              playable.play()
++              if (canAutoResume(playable)) {
++                playable.play()
++              }
+             }
+           }
+         }
+@@ -202,10 +233,12 @@
+   @OptIn(DelicateCoroutinesApi::class)
+   override fun definition() = ModuleDefinition {
+     Name("ExpoAudio")
++    Events("onAudioInterruption")
+ 
+     OnCreate {
+       audioManager = appContext.reactContext?.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+       context.registerReceiver(ringerModeReceiver, IntentFilter(AudioManager.RINGER_MODE_CHANGED_ACTION))
++      context.registerReceiver(becomingNoisyReceiver, IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY))
+     }
+ 
+     AsyncFunction("setAudioModeAsync") { mode: AudioMode ->
+@@ -288,7 +321,7 @@
+         releaseAudioFocus()
+         allPlayables.forEach { playable ->
+           if (playable.isPlaying) {
+-            playable.isPaused = true
++            playable.isPaused = canAutoResume(playable)
+             playable.pause()
+           }
+         }
+@@ -315,7 +348,9 @@
+         allPlayables.forEach { playable ->
+           if (playable.isPaused) {
+             playable.isPaused = false
+-            playable.play()
++            if (canAutoResume(playable)) {
++              playable.play()
++            }
+           }
+         }
+       }
+@@ -333,6 +368,7 @@
+ 
+     OnDestroy {
+       context.unregisterReceiver(ringerModeReceiver)
++      context.unregisterReceiver(becomingNoisyReceiver)
+       GlobalScope.launch(Dispatchers.Main) {
+         releaseAudioFocus()
+         players.values.forEach {
+@@ -351,7 +387,7 @@
+     }
+ 
+     Class(AudioPlayer::class) {
+-      Constructor { source: AudioSource?, updateInterval: Double, keepAudioSessionActive: Boolean, preferredForwardBufferDuration: Double ->
++      Constructor { source: AudioSource?, updateInterval: Double, keepAudioSessionActive: Boolean, preferredForwardBufferDuration: Double, autoResumeOnInterruption: Boolean ->
+         val mediaSource = createMediaItem(source)
+         val bufferDurationMs = (preferredForwardBufferDuration * 1000).toLong()
+         runOnMain {
+@@ -360,7 +396,8 @@
+             appContext,
+             mediaSource,
+             updateInterval,
+-            bufferDurationMs
++            bufferDurationMs,
++            autoResumeOnInterruption
+           )
+           player.onPlaybackStateChange = { isPlaying ->
+             if (!isPlaying && shouldReleaseFocus()) {
+@@ -473,6 +510,7 @@
+           return@Function
+         }
+         runOnMain {
++          player.isPaused = false
+           if (!focusAcquired) {
+             requestAudioFocus()
+           }
+diff --git a/android/src/main/java/expo/modules/audio/AudioPlayer.kt b/android/src/main/java/expo/modules/audio/AudioPlayer.kt
+--- a/android/src/main/java/expo/modules/audio/AudioPlayer.kt
++++ b/android/src/main/java/expo/modules/audio/AudioPlayer.kt
+@@ -32,7 +32,8 @@
+   appContext: AppContext,
+   source: MediaSource?,
+   updateInterval: Double,
+-  bufferDurationMs: Long = 0
++  bufferDurationMs: Long = 0,
++  val autoResumeOnInterruption: Boolean = true
+ ) : BaseAudioPlayer(
+   player = ExoPlayer.Builder(context)
+     .setLooper(context.mainLooper)
+@@ -84,6 +85,7 @@
+   }
+ 
+   init {
++    ref.setHandleAudioBecomingNoisy(true)
+     installPlayerListeners()
+     source?.let {
+       setMediaSource(source)
+diff --git a/build/Audio.types.d.ts b/build/Audio.types.d.ts
+--- a/build/Audio.types.d.ts
++++ b/build/Audio.types.d.ts
+@@ -117,6 +117,16 @@
+      */
+     keepAudioSessionActive?: boolean;
+     /**
++     * Whether playback can resume automatically after a native interruption or app background pause.
++     * Set this to `false` when playback must resume only after an explicit `play()` call.
++     *
++     * @default true
++     *
++     * @platform ios
++     * @platform android
++     */
++    autoResumeOnInterruption?: boolean;
++    /**
+      * The duration in seconds the player should buffer ahead of the current playback position.
+      * A higher value improves playback stability at the cost of more memory/network usage.
+      *
+@@ -130,6 +140,14 @@
+      * @platform android
+      */
+     preferredForwardBufferDuration?: number;
++};
++/**
++ * Native audio interruption payload. Begin events cancel pending owners.
++ * Permanent Android focus loss sets `canRetry` and has no guaranteed end event.
++ */
++export type AudioInterruptionEvent = {
++    interrupted: boolean;
++    canRetry?: boolean;
+ };
+ /**
+  * Options for configuring audio preloading behavior.
+diff --git a/build/AudioModule.types.d.ts b/build/AudioModule.types.d.ts
+--- a/build/AudioModule.types.d.ts
++++ b/build/AudioModule.types.d.ts
+@@ -26,7 +26,7 @@
+      * Initializes a new audio player instance with the given source.
+      * @hidden
+      */
+-    constructor(source: AudioSource, updateInterval: number, keepAudioSessionActive: boolean, preferredForwardBufferDuration: number);
++    constructor(source: AudioSource, updateInterval: number, keepAudioSessionActive: boolean, preferredForwardBufferDuration: number, autoResumeOnInterruption: boolean);
+     /**
+      * Unique identifier for the player object.
+      */
+diff --git a/build/ExpoAudio.d.ts b/build/ExpoAudio.d.ts
+--- a/build/ExpoAudio.d.ts
++++ b/build/ExpoAudio.d.ts
+@@ -1,5 +1,5 @@
+ import { type PermissionResponse } from 'expo';
+-import type { AudioMode, AudioPlayerOptions, AudioPlaylistOptions, AudioPlaylistStatus, AudioSource, AudioStatus, PreloadOptions, RecordingOptions, RecordingStatus } from './Audio.types';
++import type { AudioInterruptionEvent, AudioMode, AudioPlayerOptions, AudioPlaylistOptions, AudioPlaylistStatus, AudioSource, AudioStatus, PreloadOptions, RecordingOptions, RecordingStatus } from './Audio.types';
+ import AudioModule from './AudioModule';
+ import type { AudioPlayer, AudioPlaylist, AudioRecorder, AudioSample } from './AudioModule.types';
+ /**
+@@ -401,5 +401,14 @@
+  */
+ export declare function getPreloadedSources(): Promise<string[]>;
+ export { useAudioStream } from './AudioStream';
++/**
++ * Subscribe to native audio interruption begin and end events.
++ * Begin events fire even when no player is currently playing, so loading
++ * owners can be cancelled before they start.
++ */
++export declare function addAudioInterruptionListener(listener: (event: AudioInterruptionEvent) => void): {
++    remove(): void;
++};
+ export { AudioModule };
++export type { AudioInterruptionEvent };
+ //# sourceMappingURL=ExpoAudio.d.ts.mapdiff --git a/build/ExpoAudio.js b/build/ExpoAudio.js
+--- a/build/ExpoAudio.js
++++ b/build/ExpoAudio.js
+@@ -68,18 +68,19 @@
+  * ```
+  */
+ export function useAudioPlayer(source = null, options = {}) {
+-    const { updateInterval = 500, downloadFirst = false, keepAudioSessionActive = false, preferredForwardBufferDuration = 0, } = options;
++    const { updateInterval = 500, downloadFirst = false, keepAudioSessionActive = false, preferredForwardBufferDuration = 0, autoResumeOnInterruption = true, } = options;
+     // If downloadFirst is true, we don't need to resolve the source, because it will be resolved in the useEffect below.
+     // If downloadFirst is false, we resolve the source here.
+     // we call .replace() in the useEffect below to replace the source with the downloaded one.
+     const initialSource = useMemo(() => {
+         return downloadFirst ? null : resolveSource(source);
+     }, [JSON.stringify(source), downloadFirst]);
+-    const player = useReleasingSharedObject(() => new AudioModule.AudioPlayer(initialSource, updateInterval, keepAudioSessionActive, preferredForwardBufferDuration), [
++    const player = useReleasingSharedObject(() => new AudioModule.AudioPlayer(initialSource, updateInterval, keepAudioSessionActive, preferredForwardBufferDuration, autoResumeOnInterruption), [
+         JSON.stringify(initialSource),
+         updateInterval,
+         keepAudioSessionActive,
+         preferredForwardBufferDuration,
++        autoResumeOnInterruption,
+     ]);
+     // Handle async source resolution for downloadFirst
+     useEffect(() => {
+@@ -328,9 +329,9 @@
+  * @param options Audio player configuration options.
+  */
+ export function createAudioPlayer(source = null, options = {}) {
+-    const { updateInterval = 500, downloadFirst = false, keepAudioSessionActive = false, preferredForwardBufferDuration = 0, } = options;
++    const { updateInterval = 500, downloadFirst = false, keepAudioSessionActive = false, preferredForwardBufferDuration = 0, autoResumeOnInterruption = true, } = options;
+     const initialSource = downloadFirst ? null : resolveSource(source);
+-    const player = new AudioModule.AudioPlayer(initialSource, updateInterval, keepAudioSessionActive, preferredForwardBufferDuration);
++    const player = new AudioModule.AudioPlayer(initialSource, updateInterval, keepAudioSessionActive, preferredForwardBufferDuration, autoResumeOnInterruption);
+     if (downloadFirst && source) {
+         resolveSourceWithDownload(source)
+             .then((resolved) => {
+@@ -562,5 +563,13 @@
+     return AudioModule.getPreloadedSources();
+ }
+ export { useAudioStream } from './AudioStream';
++/**
++ * Subscribe to native audio interruption begin and end events.
++ * Begin events fire even when no player is currently playing, so loading
++ * owners can be cancelled before they start.
++ */
++export function addAudioInterruptionListener(listener) {
++    return AudioModule.addListener('onAudioInterruption', listener);
++}
+ export { AudioModule };
+ //# sourceMappingURL=ExpoAudio.js.mapdiff --git a/build/ExpoAudio.web.d.ts b/build/ExpoAudio.web.d.ts
+--- a/build/ExpoAudio.web.d.ts
++++ b/build/ExpoAudio.web.d.ts
+@@ -1,5 +1,5 @@
+ import { type PermissionResponse } from 'expo';
+-import type { AudioMode, AudioPlayerOptions, AudioPlaylistOptions, AudioPlaylistStatus, AudioSource, AudioStatus, PreloadOptions, RecordingOptions, RecordingStatus } from './Audio.types';
++import type { AudioInterruptionEvent, AudioMode, AudioPlayerOptions, AudioPlaylistOptions, AudioPlaylistStatus, AudioSource, AudioStatus, PreloadOptions, RecordingOptions, RecordingStatus } from './Audio.types';
+ import type { AudioPlayer, AudioSample } from './AudioModule.types';
+ import * as AudioModule from './AudioModule.web';
+ export declare function createAudioPlayer(source?: AudioSource | string | number | null, options?: AudioPlayerOptions): AudioPlayer;
+@@ -20,5 +20,9 @@
+ export declare function clearAllPreloadedSources(): void;
+ export declare function getPreloadedSources(): string[];
+ export { useAudioStream } from './AudioStream.web';
++export declare function addAudioInterruptionListener(_listener: (event: AudioInterruptionEvent) => void): {
++    remove(): void;
++};
+ export { AudioModule };
++export type { AudioInterruptionEvent };
+ //# sourceMappingURL=ExpoAudio.web.d.ts.mapdiff --git a/build/ExpoAudio.web.js b/build/ExpoAudio.web.js
+--- a/build/ExpoAudio.web.js
++++ b/build/ExpoAudio.web.js
+@@ -132,5 +132,8 @@
+     return AudioModule.getPreloadedSources();
+ }
+ export { useAudioStream } from './AudioStream.web';
++export function addAudioInterruptionListener(_listener) {
++    return { remove() { } };
++}
+ export { AudioModule };
+ //# sourceMappingURL=ExpoAudio.web.js.mapdiff --git a/ios/AudioModule.swift b/ios/AudioModule.swift
+--- a/ios/AudioModule.swift
++++ b/ios/AudioModule.swift
+@@ -17,6 +17,7 @@
+ 
+   public func definition() -> ModuleDefinition {
+     Name("ExpoAudio")
++    Events("onAudioInterruption")
+ 
+     OnCreate {
+       #if os(iOS)
+@@ -110,16 +111,11 @@
+       if !shouldPlayInBackground {
+         resumeAllPlayers()
+       }
+-      #if os(iOS)
+-      if !allowsBackgroundRecording {
+-        resumeAllRecorders()
+-      }
+-      #endif
+     }
+ 
+     // swiftlint:disable:next closure_body_length
+     Class(AudioPlayer.self) {
+-      Constructor { (source: AudioSource?, updateInterval: Double, keepAudioSessionActive: Bool, preferredForwardBufferDuration: Double) -> AudioPlayer in
++      Constructor { (source: AudioSource?, updateInterval: Double, keepAudioSessionActive: Bool, preferredForwardBufferDuration: Double, autoResumeOnInterruption: Bool) -> AudioPlayer in
+         let avPlayer: AVPlayer
+         if let uri = source?.uri?.absoluteString, let cachedPlayer = self.registry.removePreloadedPlayer(forKey: uri) {
+           avPlayer = cachedPlayer
+@@ -132,6 +128,7 @@
+         let player = AudioPlayer(avPlayer, interval: updateInterval, source: source)
+         player.owningRegistry = self.registry
+         player.keepAudioSessionActive = keepAudioSessionActive
++        player.autoResumeOnInterruption = autoResumeOnInterruption
+         player.onPlaybackComplete = { [weak self] in
+           if !keepAudioSessionActive {
+             self?.deactivateSession()
+@@ -211,6 +208,7 @@
+ 
+       Function("play") { player in
+         try activateSession()
++        player.wasPlaying = false
+         let rate = player.currentRate > 0 ? player.currentRate : 1.0
+         player.play(at: rate)
+       }
+@@ -586,18 +584,29 @@
+     }
+   }
+ 
++  private func emitAudioInterruption(interrupted: Bool, canRetry: Bool = false) {
++    sendEvent("onAudioInterruption", [
++      "interrupted": interrupted,
++      "canRetry": canRetry
++    ])
++  }
++
+   private func handleInterruptionBegan() {
++    emitAudioInterruption(interrupted: true)
+     interruptedPlayers.removeAll()
+     playerVolumes.removeAll()
+ 
+     registry.allPlayables.forEach { playable in
+       if playable.isPlaying {
+-        interruptedPlayers.insert(playable.id)
+-        switch interruptionMode {
+-        case .duckOthers:
++        let canAutoResume = canAutoResume(playable)
++        if canAutoResume {
++          interruptedPlayers.insert(playable.id)
++        }
++        switch (interruptionMode, canAutoResume) {
++        case (.duckOthers, true):
+           playerVolumes[playable.id] = playable.volume
+           playable.volume *= 0.5
+-        case .doNotMix, .mixWithOthers:
++        default:
+           playable.pause()
+         }
+       }
+@@ -605,14 +614,13 @@
+ 
+ #if os(iOS)
+     registry.allRecorders.values.forEach { recorder in
+-      if recorder.isRecording {
+-        recorder.pauseRecording()
+-      }
++      recorder.interruptRecording()
+     }
+ #endif
+   }
+ 
+   private func handleInterruptionEnded(with options: AVAudioSession.InterruptionOptions) {
++    emitAudioInterruption(interrupted: false)
+     do {
+       try AVAudioSession.sharedInstance().setActive(true)
+       if options.contains(.shouldResume) {
+@@ -632,7 +640,10 @@
+ 
+     switch reason {
+     case .oldDeviceUnavailable:
+-      pauseAllPlayers()
++      // Invalidate loading owners, then complete so future valid playback is not held.
++      emitAudioInterruption(interrupted: true, canRetry: true)
++      pauseAllPlayers(shouldResume: false)
++      emitAudioInterruption(interrupted: false)
+     default:
+       break
+     }
+@@ -640,6 +651,7 @@
+ 
+   #if os(iOS)
+   @objc private func handleMediaServicesReset(_ notification: Notification) {
++    emitAudioInterruption(interrupted: true, canRetry: true)
+     reconfigureAudioSession()
+ 
+     registry.allRecorders.values.forEach { recorder in
+@@ -648,10 +660,11 @@
+ 
+     registry.allPlayers.values.forEach { player in
+       if player.isPlaying {
+-        player.wasPlaying = true
++        player.wasPlaying = player.autoResumeOnInterruption
+       }
+       player.handleMediaServicesReset()
+     }
++    emitAudioInterruption(interrupted: false)
+   }
+ 
+   private func reconfigureAudioSession() {
+@@ -680,52 +693,37 @@
+       }
+     }
+ 
+-#if os(iOS)
+-    registry.allRecorders.values.forEach { recorder in
+-      if recorder.allowsRecording && !recorder.isRecording {
+-        _ = try? recorder.startRecording()
+-      }
+-    }
+-#endif
+-
+     interruptedPlayers.removeAll()
+     playerVolumes.removeAll()
+   }
+ 
+-  private func pauseAllPlayers() {
++  private func canAutoResume(_ playable: Playable) -> Bool {
++    return (playable as? AudioPlayer)?.autoResumeOnInterruption ?? true
++  }
++
++  private func pauseAllPlayers(shouldResume: Bool = true) {
+     registry.allPlayables.forEach { playable in
++      let wasPlaying = playable.isPlaying || playable.wasPlaying
+       if playable.isPlaying {
+-        playable.wasPlaying = true
+         playable.pause()
+       }
++      playable.wasPlaying = wasPlaying && shouldResume && canAutoResume(playable)
+     }
+   }
+ 
+   private func resumeAllPlayers() {
+     registry.allPlayables.forEach { playable in
+-      if playable.wasPlaying {
++      if playable.wasPlaying && canAutoResume(playable) {
+         playable.resumePlayback()
+-        playable.wasPlaying = false
+-      }
++      }
++      playable.wasPlaying = false
+     }
+   }
+ 
+   private func pauseAllRecorders() {
+ #if os(iOS)
+     registry.allRecorders.values.forEach { recorder in
+-      if recorder.isRecording {
+-        recorder.pauseRecording()
+-      }
+-    }
+-#endif
+-  }
+-
+-  private func resumeAllRecorders() {
+-#if os(iOS)
+-    registry.allRecorders.values.forEach { recorder in
+-      if recorder.allowsRecording && !recorder.isRecording {
+-        _ = try? recorder.startRecording()
+-      }
++      recorder.interruptRecording()
+     }
+ #endif
+   }
+diff --git a/ios/AudioPlayer.swift b/ios/AudioPlayer.swift
+--- a/ios/AudioPlayer.swift
++++ b/ios/AudioPlayer.swift
+@@ -24,6 +24,7 @@
+   }
+   var samplingEnabled = false
+   var keepAudioSessionActive = false
++  var autoResumeOnInterruption = true
+ 
+   var isLooping = false {
+     didSet {
+@@ -292,7 +293,7 @@
+     }
+ 
+     // Store these before we reset
+-    let shouldResume = wasPlaying
++    let shouldResume = wasPlaying && autoResumeOnInterruption
+     let savedTime = currentTime
+     let savedRate = currentRate > 0 ? currentRate : 1.0
+     let wasSamplingEnabled = samplingEnabled
+@@ -500,6 +501,9 @@
+   }
+ 
+   func resumePlayback() {
++    guard autoResumeOnInterruption else {
++      return
++    }
+     ref.play()
+   }
+ 
+diff --git a/ios/AudioRecorder.swift b/ios/AudioRecorder.swift
+--- a/ios/AudioRecorder.swift
++++ b/ios/AudioRecorder.swift
+@@ -20,6 +20,12 @@
+   private var recordingSession = AVAudioSession.sharedInstance()
+   var allowsRecording = false
+   weak var owningRegistry: AudioComponentRegistry?
++
++  /// System events revoke recording permission. Only an explicit JS path may enable it again.
++  func interruptRecording() {
++    allowsRecording = false
++    pauseRecording()
++  }
+   private var mediaServicesDidReset = false
+   private var currentOptions: RecordingOptions?
+   private var currentSessionOptions: AVAudioSession.CategoryOptions = []
+diff --git a/ios/MediaController.swift b/ios/MediaController.swift
+--- a/ios/MediaController.swift
++++ b/ios/MediaController.swift
+@@ -14,6 +14,7 @@
+   private var artworkLoadToken: UUID?
+   private var currentArtworkItemIdentifier: ObjectIdentifier?
+   private var isLiveStream = false
++  private var remoteCommandTargets: [(command: MPRemoteCommand, target: Any)] = []
+ 
+   func setActivePlayer(_ player: AudioPlayer?, options: LockScreenOptions? = nil) {
+     performOnMain {
+@@ -232,7 +233,9 @@
+   }
+ 
+   private func enableRemoteCommands(options: LockScreenOptions?) {
+-    remoteCommandCenter.playCommand.addTarget { [weak self] _ in
++    removeRemoteCommandTargets()
++
++    let playTarget = remoteCommandCenter.playCommand.addTarget { [weak self] _ in
+       guard let player = self?.activePlayer else {
+         return .commandFailed
+       }
+@@ -240,8 +243,9 @@
+       player.play(at: Float(player.currentRate > 0 ? player.currentRate : 1.0))
+       return .success
+     }
+-
+-    remoteCommandCenter.pauseCommand.addTarget { [weak self] _ in
++    remoteCommandTargets.append((remoteCommandCenter.playCommand, playTarget))
++
++    let pauseTarget = remoteCommandCenter.pauseCommand.addTarget { [weak self] _ in
+       guard let player = self?.activePlayer else {
+         return .commandFailed
+       }
+@@ -249,8 +253,9 @@
+       player.ref.pause()
+       return .success
+     }
+-
+-    remoteCommandCenter.togglePlayPauseCommand.addTarget { [weak self] _ in
++    remoteCommandTargets.append((remoteCommandCenter.pauseCommand, pauseTarget))
++
++    let toggleTarget = remoteCommandCenter.togglePlayPauseCommand.addTarget { [weak self] _ in
+       guard let player = self?.activePlayer else {
+         return .commandFailed
+       }
+@@ -262,8 +267,9 @@
+       }
+       return .success
+     }
+-
+-    remoteCommandCenter.changePlaybackPositionCommand.addTarget { [weak self] event in
++    remoteCommandTargets.append((remoteCommandCenter.togglePlayPauseCommand, toggleTarget))
++
++    let positionTarget = remoteCommandCenter.changePlaybackPositionCommand.addTarget { [weak self] event in
+       guard let player = self?.activePlayer,
+       let event = event as? MPChangePlaybackPositionCommandEvent else {
+         return .commandFailed
+@@ -274,9 +280,10 @@
+ 
+       return .success
+     }
++    remoteCommandTargets.append((remoteCommandCenter.changePlaybackPositionCommand, positionTarget))
+ 
+     remoteCommandCenter.skipForwardCommand.preferredIntervals = [10.0]
+-    remoteCommandCenter.skipForwardCommand.addTarget { [weak self] event in
++    let skipForwardTarget = remoteCommandCenter.skipForwardCommand.addTarget { [weak self] event in
+       guard let player = self?.activePlayer,
+       let event = event as? MPSkipIntervalCommandEvent else {
+         return .commandFailed
+@@ -288,9 +295,10 @@
+ 
+       return .success
+     }
++    remoteCommandTargets.append((remoteCommandCenter.skipForwardCommand, skipForwardTarget))
+ 
+     remoteCommandCenter.skipBackwardCommand.preferredIntervals = [10.0]
+-    remoteCommandCenter.skipBackwardCommand.addTarget { [weak self] event in
++    let skipBackwardTarget = remoteCommandCenter.skipBackwardCommand.addTarget { [weak self] event in
+       guard let player = self?.activePlayer,
+       let event = event as? MPSkipIntervalCommandEvent else {
+         return .commandFailed
+@@ -302,6 +310,7 @@
+ 
+       return .success
+     }
++    remoteCommandTargets.append((remoteCommandCenter.skipBackwardCommand, skipBackwardTarget))
+ 
+     remoteCommandCenter.playCommand.isEnabled = true
+     remoteCommandCenter.pauseCommand.isEnabled = true
+@@ -319,12 +328,13 @@
+     remoteCommandCenter.skipForwardCommand.isEnabled = false
+     remoteCommandCenter.skipBackwardCommand.isEnabled = false
+ 
+-    // Remove event targets
+-    remoteCommandCenter.playCommand.removeTarget(self)
+-    remoteCommandCenter.pauseCommand.removeTarget(self)
+-    remoteCommandCenter.togglePlayPauseCommand.removeTarget(self)
+-    remoteCommandCenter.changePlaybackPositionCommand.removeTarget(self)
+-    remoteCommandCenter.skipForwardCommand.removeTarget(self)
+-    remoteCommandCenter.skipBackwardCommand.removeTarget(self)
++    removeRemoteCommandTargets()
++  }
++
++  private func removeRemoteCommandTargets() {
++    remoteCommandTargets.forEach { entry in
++      entry.command.removeTarget(entry.target)
++    }
++    remoteCommandTargets.removeAll()
+   }
+ }
+diff --git a/src/Audio.types.ts b/src/Audio.types.ts
+--- a/src/Audio.types.ts
++++ b/src/Audio.types.ts
+@@ -125,6 +125,16 @@
+    */
+   keepAudioSessionActive?: boolean;
+   /**
++   * Whether playback can resume automatically after a native interruption or app background pause.
++   * Set this to `false` when playback must resume only after an explicit `play()` call.
++   *
++   * @default true
++   *
++   * @platform ios
++   * @platform android
++   */
++  autoResumeOnInterruption?: boolean;
++  /**
+    * The duration in seconds the player should buffer ahead of the current playback position.
+    * A higher value improves playback stability at the cost of more memory/network usage.
+    *
+@@ -138,6 +148,15 @@
+    * @platform android
+    */
+   preferredForwardBufferDuration?: number;
++};
++
++/**
++ * Native audio interruption payload. Begin events cancel pending owners.
++ * Permanent Android focus loss sets `canRetry` and has no guaranteed end event.
++ */
++export type AudioInterruptionEvent = {
++  interrupted: boolean;
++  canRetry?: boolean;
+ };
+ 
+ /**
+diff --git a/src/AudioModule.types.ts b/src/AudioModule.types.ts
+--- a/src/AudioModule.types.ts
++++ b/src/AudioModule.types.ts
+@@ -48,7 +48,8 @@
+     source: AudioSource,
+     updateInterval: number,
+     keepAudioSessionActive: boolean,
+-    preferredForwardBufferDuration: number
++    preferredForwardBufferDuration: number,
++    autoResumeOnInterruption: boolean
+   );
+ 
+   /**
+diff --git a/src/ExpoAudio.ts b/src/ExpoAudio.ts
+--- a/src/ExpoAudio.ts
++++ b/src/ExpoAudio.ts
+@@ -4,6 +4,7 @@
+ import { Platform } from 'react-native';
+ 
+ import type {
++  AudioInterruptionEvent,
+   AudioMode,
+   AudioPlayerOptions,
+   AudioPlaylistOptions,
+@@ -101,6 +102,7 @@
+     downloadFirst = false,
+     keepAudioSessionActive = false,
+     preferredForwardBufferDuration = 0,
++    autoResumeOnInterruption = true,
+   } = options;
+ 
+   // If downloadFirst is true, we don't need to resolve the source, because it will be resolved in the useEffect below.
+@@ -116,13 +118,15 @@
+         initialSource,
+         updateInterval,
+         keepAudioSessionActive,
+-        preferredForwardBufferDuration
++        preferredForwardBufferDuration,
++        autoResumeOnInterruption
+       ),
+     [
+       JSON.stringify(initialSource),
+       updateInterval,
+       keepAudioSessionActive,
+       preferredForwardBufferDuration,
++      autoResumeOnInterruption,
+     ]
+   );
+ 
+@@ -407,13 +411,15 @@
+     downloadFirst = false,
+     keepAudioSessionActive = false,
+     preferredForwardBufferDuration = 0,
++    autoResumeOnInterruption = true,
+   } = options;
+   const initialSource = downloadFirst ? null : resolveSource(source);
+   const player = new AudioModule.AudioPlayer(
+     initialSource,
+     updateInterval,
+     keepAudioSessionActive,
+-    preferredForwardBufferDuration
++    preferredForwardBufferDuration,
++    autoResumeOnInterruption
+   );
+ 
+   if (downloadFirst && source) {
+@@ -660,4 +666,16 @@
+ 
+ export { useAudioStream } from './AudioStream';
+ 
++/**
++ * Subscribe to native audio interruption begin and end events.
++ * Begin events fire even when no player is currently playing, so loading
++ * owners can be cancelled before they start.
++ */
++export function addAudioInterruptionListener(
++  listener: (event: AudioInterruptionEvent) => void
++): { remove(): void } {
++  return AudioModule.addListener('onAudioInterruption', listener);
++}
++
+ export { AudioModule };
++export type { AudioInterruptionEvent };
+diff --git a/src/ExpoAudio.web.ts b/src/ExpoAudio.web.ts
+--- a/src/ExpoAudio.web.ts
++++ b/src/ExpoAudio.web.ts
+@@ -3,6 +3,7 @@
+ import { useEffect, useMemo } from 'react';
+ 
+ import type {
++  AudioInterruptionEvent,
+   AudioMode,
+   AudioPlayerOptions,
+   AudioPlaylistOptions,
+@@ -205,4 +206,11 @@
+ 
+ export { useAudioStream } from './AudioStream.web';
+ 
++export function addAudioInterruptionListener(
++  _listener: (event: AudioInterruptionEvent) => void
++): { remove(): void } {
++  return { remove() {} };
++}
++
+ export { AudioModule };
++export type { AudioInterruptionEvent };

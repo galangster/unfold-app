@@ -8,6 +8,16 @@ const mockSpeechHandlers: Record<string, Array<(event?: any) => void>> = {};
 const mockStart = jest.fn();
 const mockStop = jest.fn();
 const mockRequestPermissionsAsync = jest.fn(async () => ({ granted: true }));
+const mockRecognitionLease = {
+  configure: jest.fn(async () => true),
+  isActive: jest.fn(() => true),
+  release: jest.fn(),
+};
+const mockAcquireSpeechRecognitionSession = jest.fn(() => mockRecognitionLease);
+
+jest.mock('@/lib/voice-audio-session', () => ({
+  acquireSpeechRecognitionSession: () => mockAcquireSpeechRecognitionSession(),
+}));
 
 jest.mock('expo-speech-recognition', () => ({
   ExpoSpeechRecognitionModule: {
@@ -123,6 +133,13 @@ describe('VoiceInputBar', () => {
     mockStop.mockClear();
     mockRequestPermissionsAsync.mockClear();
     mockRequestPermissionsAsync.mockResolvedValue({ granted: true });
+    mockRecognitionLease.configure.mockReset();
+    mockRecognitionLease.configure.mockResolvedValue(true);
+    mockRecognitionLease.isActive.mockReset();
+    mockRecognitionLease.isActive.mockReturnValue(true);
+    mockRecognitionLease.release.mockClear();
+    mockAcquireSpeechRecognitionSession.mockClear();
+    mockAcquireSpeechRecognitionSession.mockReturnValue(mockRecognitionLease);
   });
 
   afterEach(() => {
@@ -155,6 +172,32 @@ describe('VoiceInputBar', () => {
     expect(mockStart).not.toHaveBeenCalled();
   });
 
+  it('waits for the serialized mode barrier and cancels an obsolete start', async () => {
+    let releaseBarrier!: (ready: boolean) => void;
+    mockRecognitionLease.configure.mockImplementationOnce(
+      () => new Promise<boolean>((resolve) => { releaseBarrier = resolve; }),
+    );
+    let tree: any;
+    await act(async () => {
+      tree = renderer.create(<VoiceInputBar value="" onChangeText={jest.fn()} />);
+    });
+    await act(async () => {
+      void tree.root.findByProps({ accessibilityLabel: 'Tap to speak' }).props.onPress();
+      await Promise.resolve();
+    });
+    expect(mockStart).not.toHaveBeenCalled();
+
+    await act(async () => {
+      tree.unmount();
+    });
+    await act(async () => {
+      releaseBarrier(true);
+      await Promise.resolve();
+    });
+    expect(mockStart).not.toHaveBeenCalled();
+    expect(mockRecognitionLease.release).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps finalized speech from before a silence restart when accepting dictation', async () => {
     const onChangeText = jest.fn();
     let tree: any;
@@ -175,8 +218,9 @@ describe('VoiceInputBar', () => {
       });
     });
 
-    act(() => {
+    await act(async () => {
       dispatchSpeechEvent('end');
+      await Promise.resolve();
     });
 
     expect(mockStart).toHaveBeenCalledTimes(2);
@@ -328,8 +372,9 @@ describe('VoiceInputBar', () => {
 
       const startsBeforeEnd = mockStart.mock.calls.length;
 
-      act(() => {
+      await act(async () => {
         dispatchSpeechEvent('end');
+        await Promise.resolve();
       });
 
       expect(mockStart).toHaveBeenCalledTimes(startsBeforeEnd + 1);

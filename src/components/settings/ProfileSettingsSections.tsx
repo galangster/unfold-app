@@ -1,3 +1,4 @@
+import { SoundEffectsSection } from './SoundEffectsSection';
 import { useCallback, useState } from 'react';
 import { View, Text, Alert, ActivityIndicator, StyleSheet, type LayoutChangeEvent } from 'react-native';
 import type { SettingsSection } from '@/components/settings/settings-section-scroll';
@@ -105,6 +106,10 @@ export function ProfileSettingsSections({ onSectionLayout }: ProfileSettingsSect
 
       <View style={styles.sectionBlock} onLayout={onSectionLayout?.('appearance')}>
         <AppearanceSection onPremiumFeature={setPremiumFeature} />
+      </View>
+
+      <View style={styles.sectionBlock}>
+        <SoundEffectsSection />
       </View>
 
       <View style={styles.sectionBlock}>

@@ -1,3 +1,4 @@
+import { emitDayCompletionCueAfterSave } from '@/lib/day-completion-cue';
 import { getDailyGenerationNotice } from '@/lib/daily-generation-messages';
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useAutoHide } from '@/hooks/useAutoHide';
@@ -82,6 +83,9 @@ import { DevotionalContent } from '@/components/reading/DevotionalContent';
 import { ScripturePracticeSheet, buildPracticeBibleHref } from '@/components/reading/ScripturePracticeSheet';
 import { getScripturePractice } from '@/constants/scripture-practices';
 import { isQaToolsEnabled } from '@/lib/qa-tools';
+import { endAmbientReflection, setAmbientReadingContext } from '@/lib/ambient-audio-coordination';
+import { isAmbientAudioEnabled } from '@/lib/ambient-audio-feature';
+import { AmbientMusicEntry } from '@/components/ambient/AmbientMusicEntry';
 import { isScripturePracticeEnabled } from '@/lib/scripture-practice-feature';
 import {
   getPracticePassage, readingPracticeReturn,
@@ -345,6 +349,9 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   const [isPreparingAudio, setIsPreparingAudio] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
+  const completionCueVisible = useRef(false);
+  completionCueVisible.current = isReadingFocused && showCelebration;
+  useEffect(() => () => { completionCueVisible.current = false; }, []);
   const [scriptureSheetRef, setScriptureSheetRef] = useState<string | null>(null);
   const [celebrationType, setCelebrationType] = useState<'day' | 'series'>('day');
   const [showScrollHint, setShowScrollHint] = useState(true);
@@ -865,6 +872,10 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     };
   }, []);
 
+  useEffect(() => {
+    setAmbientReadingContext(effectiveDevotionalId, viewingDay);
+  }, [effectiveDevotionalId, viewingDay]);
+
   // Reset isCompleted when changing days
   useEffect(() => {
     setIsCompleted(isDayCompleted);
@@ -1264,6 +1275,10 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   });
 
   const handleComplete = useCallback(() => {
+    const existingDay = useUnfoldStore.getState().devotionals
+      .find((row) => row.id === effectiveDevotionalId)?.days?.find((row) => row.dayNumber === viewingDay);
+    if (!existingDay || existingDay.isRead) return;
+    const soundEnding = endAmbientReflection();
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setIsCompleted(true);
 
@@ -1298,6 +1313,8 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
       }
       setCelebrationType(completingLastDay ? 'series' : 'day');
       setShowCelebration(true);
+      completionCueVisible.current = isReadingFocused;
+      void emitDayCompletionCueAfterSave(effectiveDevotionalId, viewingDay, () => completionCueVisible.current, soundEnding);
 
       // Set flag for premium nudge system when series completes
       if (completingLastDay && currentDevotional?.title) {
@@ -1353,7 +1370,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
         }
       }
     }
-  }, [effectiveDevotionalId, isViewingActiveSeries, viewingDay, totalDays, user?.devotionalLength, currentDevotional, currentDayData, markDayAsRead, advanceDay, clearResumeContext, setScripturePracticeReturn, recordStreakRead, syncWidgets, journalEntries.length, reviewPromptLastDate, reviewPromptCount, hasReviewed, reviewPromptDaysAtLast, recordReviewPrompt]);
+  }, [isReadingFocused, effectiveDevotionalId, isViewingActiveSeries, viewingDay, totalDays, user?.devotionalLength, currentDevotional, currentDayData, markDayAsRead, advanceDay, clearResumeContext, setScripturePracticeReturn, recordStreakRead, syncWidgets, journalEntries.length, reviewPromptLastDate, reviewPromptCount, hasReviewed, reviewPromptDaysAtLast, recordReviewPrompt]);
 
   const generateRemainingDays = useCallback(async (
     options?: { navigateToNextDay?: boolean; withHaptics?: boolean }
@@ -2247,6 +2264,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
 
               {/* Right: Journal + Reading Settings */}
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                {isAmbientAudioEnabled() ? <AmbientMusicEntry /> : null}
                 {/* Contents / Highlights / Notes for this reading */}
                 <TouchableOpacity activeOpacity={0.7}
                   onPress={() => {
@@ -2673,6 +2691,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
       <CompletionCelebration
         visible={showCelebration}
         onDismiss={() => {
+          completionCueVisible.current = false;
           setShowCelebration(false);
           const dismissRoute = getCompletionDismissRoute(celebrationType, params.from, hostTab);
           const pending = pendingReviewRef.current;
