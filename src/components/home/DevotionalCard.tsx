@@ -8,7 +8,7 @@ import { getDailyGenerationNotice } from '@/lib/daily-generation-messages';
  * Extracted from (tabs)/(today)/index.tsx for single-responsibility and testability.
  */
 
-import React, { useEffect, useMemo, useCallback } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, View, Text, TouchableOpacity, StyleSheet, useWindowDimensions, Platform } from 'react-native';
 import { BlurView } from 'expo-blur';
 import Animated, {
@@ -18,13 +18,11 @@ import Animated, {
   withTiming,
   withDelay,
   withRepeat,
-  interpolate,
   interpolateColor,
   cancelAnimation,
   Easing,
   type SharedValue,
 } from 'react-native-reanimated';
-import { useFocusEffect } from 'expo-router';
 import { CheckIcon, PlusIcon } from '@/components/icons';
 
 import { FontFamily, FontSize } from '@/constants/fonts';
@@ -51,6 +49,9 @@ import { smartQuotes } from '@/lib/smart-quotes';
 import { titleWithPeriod } from '@/lib/display-title';
 import { stripOuterQuotes } from '@/lib/cn';
 import { Typography } from '@/constants/typography';
+import { PageMark } from '@/components/motion/PageMark';
+import { progressFillMotion, shouldAnnounceReadingReady } from '@/lib/meaningful-motion';
+import { useAppForegrounded } from '@/hooks/useAppForegrounded';
 
 // ─── Props ──────────────────────────────────────────────────────
 
@@ -68,6 +69,8 @@ interface Props {
   nonblockingResume?: { onResume: () => void } | null;
   /** Drop the tall hero min-height in the Today split so the column can size to copy. */
   relaxHeroMinHeight?: boolean;
+  seriesId?: string;
+  screenFocused?: boolean;
 }
 
 // ─── Character reveal for "Unfold" title (empty state) ──────────
@@ -153,46 +156,65 @@ function shuffleRevealOrder(length: number): number[] {
 
 // ─── AnimatedProgressBar ────────────────────────────────────────
 
-function AnimatedProgressBar({ progress, colors }: { progress: number; colors: { accent: string; border: string } }) {
+export function AnimatedProgressBar({
+  progress,
+  seriesKey,
+  colors,
+  active = true,
+}: {
+  progress: number;
+  seriesKey: string;
+  colors: { accent: string; border: string };
+  active?: boolean;
+}) {
   const { reducedMotion } = useAccessibleAnimation();
-  const animatedProgress = useSharedValue(0);
-  const shimmer = useSharedValue(0);
+  const fill = useSharedValue(progress / 100);
+  const previousRef = useRef<{ seriesKey: string; progress: number } | null>(null);
 
-  useFocusEffect(
-    useCallback(() => {
-      if (reducedMotion) {
-        animatedProgress.value = progress;
-        return;
-      }
-      const timer = setTimeout(() => {
-        animatedProgress.value = withTiming(progress, {
-          duration: 900,
-          easing: Easing.out(Easing.cubic),
-        });
-        shimmer.value = withDelay(
-          1200,
-          withRepeat(withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.ease) }), -1, false),
-        );
-      }, 400);
-      return () => clearTimeout(timer);
-    }, [progress, animatedProgress, shimmer, reducedMotion]),
-  );
+  useEffect(() => {
+    const next = { seriesKey, progress };
+    const motion = progressFillMotion(previousRef.current, next);
+    cancelAnimation(fill);
+    if (!active && motion.mode === 'advance') return;
+    previousRef.current = next;
+
+    if (motion.mode === 'advance' && !reducedMotion) {
+      fill.value = motion.from / 100;
+      fill.value = withTiming(motion.to / 100, {
+        duration: Duration.normal,
+        easing: Ease.out,
+      });
+      return;
+    }
+
+    fill.value = motion.to / 100;
+  }, [active, fill, progress, reducedMotion, seriesKey]);
+
+  useEffect(() => () => cancelAnimation(fill), [fill]);
 
   const barStyle = useAnimatedStyle(() => ({
-    width: `${animatedProgress.value}%`,
+    transform: [{ scaleX: fill.value }],
   }));
 
-  const shimmerStyle = useAnimatedStyle(() => {
-    const opacity = interpolate(shimmer.value, [0, 0.3, 0.5, 0.7, 1], [0, 0, 0.4, 0, 0]);
-    const translateX = interpolate(shimmer.value, [0, 1], [-40, 200]);
-    return { opacity, transform: [{ translateX }] };
-  });
-
   return (
-    <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
-      <Animated.View style={[styles.progressFill, { backgroundColor: colors.accent }, barStyle]}>
-        <Animated.View style={[styles.progressShimmer, shimmerStyle]} />
-      </Animated.View>
+    <View
+      testID="devotional-progress-bar"
+      accessible
+      accessibilityRole="progressbar"
+      accessibilityValue={{ min: 0, max: 100, now: Math.round(progress) }}
+      style={[styles.progressTrack, { backgroundColor: colors.border }]}
+    >
+      <Animated.View
+        style={[
+          styles.progressFill,
+          {
+            backgroundColor: colors.accent,
+            width: '100%',
+            transformOrigin: 'left center',
+          },
+          barStyle,
+        ]}
+      />
     </View>
   );
 }
@@ -480,14 +502,16 @@ function RevealReadyState({
   state,
   ambienceVisible,
   relaxHeroMinHeight,
+  announceReady = false,
 }: {
   state: Extract<DevotionalCardState, { type: 'reveal-ready' }>;
   ambienceVisible: boolean;
   relaxHeroMinHeight?: boolean;
+  announceReady?: boolean;
 }) {
   const { colors, isDark } = useTheme();
   const { width, fontScale } = useWindowDimensions();
-  const { entering } = useAccessibleAnimation();
+  const { entering, reducedMotion } = useAccessibleAnimation();
   const glassMode = isDark ? 'dark' : 'light';
   const textCap = heroCopyCap(ambienceVisible);
   const isYesterday = state.dayLabel === 'Overdue';
@@ -502,12 +526,15 @@ function RevealReadyState({
     : 'A new thread is ready, but the words stay quiet until you choose to open them.';
 
   return (
-    <Animated.View entering={entering(FadeIn.duration(Duration.normal).easing(Ease.out))}>
+    <Animated.View entering={announceReady ? entering(FadeIn.duration(Duration.normal).easing(Ease.out)) : undefined}>
       <View style={[styles.revealOpenHero, isCompactHero && styles.revealOpenHeroCompact, isVeryCompactHero && styles.revealOpenHeroVeryCompact, relaxHeroMinHeight && styles.heroMinHeightRelaxed]}>
         <View style={[styles.openHeroContent, isCompactHero && styles.openHeroContentCompact, isVeryCompactHero && styles.openHeroContentVeryCompact]}>
           <HeroGround active={ambienceVisible}>
+            <View style={styles.readyPageMark}>
+              <PageMark color={colors.accent} filled animate={announceReady && !reducedMotion} />
+            </View>
             <Text
-              style={[styles.heroSeriesEyebrow, { color: colors.textSubtle, textAlign: 'left' }]}
+              style={[styles.heroSeriesEyebrow, styles.pageMarkEyebrow, { color: colors.textSubtle, textAlign: 'left' }]}
               numberOfLines={1}
               maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}
             >
@@ -618,6 +645,9 @@ function PreparingState({
   ambienceVisible: boolean;
 }) {
   const { colors } = useTheme();
+  const { width, fontScale } = useWindowDimensions();
+  const isCompactHero = width < 400 || fontScale >= 1.18;
+  const isVeryCompactHero = width < 370 || fontScale >= 1.32;
   const textCap = heroCopyCap(ambienceVisible);
   const { reducedMotion } = useAccessibleAnimation();
   const shimmerOpacity = useSharedValue(0.55);
@@ -695,8 +725,11 @@ function PreparingState({
       style={[styles.preparingContainer, styles.heroStateBlock]}
     >
       <View style={styles.preparingContent}>
-        <HeroGround active={ambienceVisible}>
-          <Text style={[styles.heroSeriesEyebrow, { color: colors.textSubtle, textAlign: 'left' }]}>
+        <HeroGround active={ambienceVisible} style={[styles.openHeroContent, isCompactHero && styles.openHeroContentCompact, isVeryCompactHero && styles.openHeroContentVeryCompact]}>
+          <View style={styles.readyPageMark}>
+            <PageMark color={colors.accent} filled={false} animate={false} />
+          </View>
+          <Text style={[styles.heroSeriesEyebrow, styles.pageMarkEyebrow, { color: colors.textSubtle, textAlign: 'left' }]} numberOfLines={1}>
             {state.seriesTitle} · Preparing
           </Text>
 
@@ -884,10 +917,15 @@ interface MainCardProps {
   state: Extract<DevotionalCardState, { type: 'unread' | 'complete-today' | 'tomorrow-locked' }>;
   ambienceVisible: boolean;
   relaxHeroMinHeight?: boolean;
+  announceReady?: boolean;
+  motionActive: boolean;
+  seriesKey: string;
 }
 
-function MainCard({ state, ambienceVisible, relaxHeroMinHeight }: MainCardProps) {
+function MainCard({ state, ambienceVisible, relaxHeroMinHeight, announceReady = false, motionActive, seriesKey }: MainCardProps) {
   const { colors, isDark } = useTheme();
+  const { reducedMotion } = useAccessibleAnimation();
+  const readyOpacity = useSharedValue(announceReady && !reducedMotion ? 0 : 1);
   const textCap = heroCopyCap(ambienceVisible);
   const glassMode = isDark ? 'dark' : 'light';
   const { width, fontScale } = useWindowDimensions();
@@ -898,6 +936,19 @@ function MainCard({ state, ambienceVisible, relaxHeroMinHeight }: MainCardProps)
 
   const scaleStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
+  }));
+
+  useEffect(() => {
+    if (announceReady && !reducedMotion) {
+      readyOpacity.value = 0;
+      readyOpacity.value = withTiming(1, { duration: Duration.normal, easing: Ease.out });
+      return;
+    }
+    readyOpacity.value = 1;
+  }, [announceReady, readyOpacity, reducedMotion]);
+
+  const readyFadeStyle = useAnimatedStyle(() => ({
+    opacity: readyOpacity.value,
   }));
 
   const hasCompletedToday = state.type === 'complete-today';
@@ -981,13 +1032,18 @@ function MainCard({ state, ambienceVisible, relaxHeroMinHeight }: MainCardProps)
       : `Continue ${seriesTitle}, day ${dayData.dayNumber} of ${totalDays}`;
 
   return (
-    <Animated.View style={scaleStyle}>
+    <Animated.View style={[scaleStyle, readyFadeStyle]}>
       <View style={styles.heroTouchable}>
         <View style={[styles.openHero, isCompactHero && styles.openHeroCompact, isVeryCompactHero && styles.openHeroVeryCompact, relaxHeroMinHeight && styles.heroMinHeightRelaxed]}>
           <View style={[styles.openHeroContent, isCompactHero && styles.openHeroContentCompact, isVeryCompactHero && styles.openHeroContentVeryCompact, { alignItems: 'flex-start' }]}>
             <HeroGround active={ambienceVisible}>
+            {state.type === 'unread' ? (
+              <View style={styles.readyPageMark}>
+                <PageMark color={colors.accent} filled animate={announceReady && !reducedMotion} />
+              </View>
+            ) : null}
             <Text
-              style={[styles.heroSeriesEyebrow, { color: colors.textSubtle, textAlign: 'left' }]}
+              style={[styles.heroSeriesEyebrow, styles.pageMarkEyebrow, { color: colors.textSubtle, textAlign: 'left' }]}
               numberOfLines={1}
               maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}
             >
@@ -1065,8 +1121,7 @@ function MainCard({ state, ambienceVisible, relaxHeroMinHeight }: MainCardProps)
               </View>
             ) : null}
 
-            {showProgress && (
-              <View style={styles.heroProgressSection}>
+              <View style={[styles.heroProgressSection, !showProgress && styles.progressHidden]}>
                 <View style={styles.heroProgressHeader}>
                   <Text style={[styles.mainCardProgressLeft, { color: colors.textSubtle }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
                     {daysCompleted} of {totalDays} completed
@@ -1075,9 +1130,8 @@ function MainCard({ state, ambienceVisible, relaxHeroMinHeight }: MainCardProps)
                     {Math.round(progress)}%
                   </Text>
                 </View>
-                <AnimatedProgressBar progress={progress} colors={colors} />
+                <AnimatedProgressBar progress={progress} seriesKey={seriesKey} colors={colors} active={motionActive} />
               </View>
-            )}
             </HeroGround>
 
             {showInlineComposer && composer ? (
@@ -1181,8 +1235,29 @@ export function DevotionalCard({
   ambienceVisible = false,
   nonblockingResume = null,
   relaxHeroMinHeight = false,
+  seriesId,
+  screenFocused = true,
 }: Props) {
   const { entering } = useAccessibleAnimation();
+  const appForegrounded = useAppForegrounded();
+  const motionActive = screenFocused && appForegrounded;
+  const { width, fontScale } = useWindowDimensions();
+  const seriesKey = seriesId ?? ('dayData' in state ? state.dayData.devotionalId : undefined)
+    ?? ('seriesTitle' in state ? state.seriesTitle : 'empty');
+  const dayNumber = 'dayData' in state ? state.dayData.dayNumber : 'dayNumber' in state ? state.dayNumber : 0;
+  const readingKey = `${seriesKey}:${dayNumber}`;
+  const [readiness, setReadiness] = useState({ type: state.type, readingKey, announce: false });
+  if (readiness.type !== state.type || readiness.readingKey !== readingKey) {
+    setReadiness({
+      type: state.type,
+      readingKey,
+      announce: readiness.readingKey === readingKey && motionActive
+        && shouldAnnounceReadingReady(readiness.type, state.type),
+    });
+  }
+  const announceReady = readiness.announce;
+  const reservesReadySpace = state.type === 'preparing' || state.type === 'unread' || state.type === 'reveal-ready';
+  const heroMinHeight = width < 370 || fontScale >= 1.32 ? 360 : width < 400 || fontScale >= 1.18 ? 380 : 416;
 
   // Subtle parallax when scrollY is provided
   const parallaxStyle = useAnimatedStyle(() => {
@@ -1193,7 +1268,8 @@ export function DevotionalCard({
   return (
     <Animated.View
       entering={entering(FadeIn.delay(100).duration(Duration.normal).easing(Ease.out))}
-      style={[inStack ? styles.rootInStack : styles.root, parallaxStyle]}
+      style={[inStack ? styles.rootInStack : styles.root, parallaxStyle,
+        reservesReadySpace && !relaxHeroMinHeight && { minHeight: heroMinHeight }]}
     >
       {nonblockingResume && state.type !== 'pending-initial-resume' ? (
         <NonblockingInitialResume onResume={nonblockingResume.onResume} />
@@ -1229,12 +1305,24 @@ export function DevotionalCard({
         />
       )}
       {state.type === 'reveal-ready' && (
-        <RevealReadyState state={state} ambienceVisible={ambienceVisible} relaxHeroMinHeight={relaxHeroMinHeight} />
+        <RevealReadyState
+          state={state}
+          ambienceVisible={ambienceVisible}
+          relaxHeroMinHeight={relaxHeroMinHeight}
+          announceReady={announceReady}
+        />
       )}
       {(state.type === 'unread' ||
         state.type === 'complete-today' ||
         state.type === 'tomorrow-locked') && (
-        <MainCard state={state} ambienceVisible={ambienceVisible} relaxHeroMinHeight={relaxHeroMinHeight} />
+        <MainCard
+          state={state}
+          ambienceVisible={ambienceVisible}
+          relaxHeroMinHeight={relaxHeroMinHeight}
+          announceReady={announceReady}
+          motionActive={motionActive}
+          seriesKey={seriesKey}
+        />
       )}
     </Animated.View>
   );
@@ -1296,6 +1384,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 356,
     zIndex: 2,
+    position: 'relative',
   },
   openHeroContentCompact: {
     width: '100%',
@@ -1482,15 +1571,19 @@ const styles = StyleSheet.create({
   progressFill: {
     height: '100%',
     borderRadius: 1.5,
-    overflow: 'hidden',
   },
-  progressShimmer: {
+  readyPageMark: {
     position: 'absolute',
-    top: -1,
-    width: 40,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+    top: 0,
+    right: 0,
+    zIndex: 1,
+    pointerEvents: 'none',
+  },
+  pageMarkEyebrow: {
+    paddingRight: 30,
+  },
+  progressHidden: {
+    display: 'none',
   },
 
   // Empty state
@@ -1636,7 +1729,9 @@ const styles = StyleSheet.create({
     borderRadius: Radius.xl,
   },
   preparingContent: {
-    paddingVertical: Spacing['7'],
+    width: '100%',
+    paddingTop: Spacing['3'],
+    paddingBottom: Spacing['7'],
     paddingHorizontal: 0,
     alignItems: 'flex-start',
     zIndex: 2,

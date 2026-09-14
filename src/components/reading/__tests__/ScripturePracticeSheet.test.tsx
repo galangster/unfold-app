@@ -9,6 +9,7 @@ import type { DevotionalDay } from '@/lib/store';
 import type { ScripturePracticeSheetProps } from '../ScripturePracticeSheet';
 
 const mockFetchVerseLocal = jest.fn();
+jest.mock('@/hooks/useAppForegrounded', () => ({ useAppForegrounded: () => true }));
 let mockBibleDbStatus = 'ready';
 jest.mock('@/lib/bible-db', () => ({ getBibleDbStatus: () => ({ status: mockBibleDbStatus }) }));
 const mockUpdateScripturePractice = Object.assign(jest.fn(), {
@@ -80,6 +81,28 @@ jest.mock('@/components/icons', () => new Proxy({}, {
 
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+}));
+
+jest.mock('react-native-reanimated', () => {
+  const { View, Text } = jest.requireActual('react-native');
+  return {
+    __esModule: true,
+    default: { View, Text, createAnimatedComponent: (component: unknown) => component },
+    useSharedValue: (value: unknown) => ({ value }),
+    useAnimatedStyle: (factory: () => unknown) => factory(),
+    withTiming: (value: unknown) => value,
+    withRepeat: (value: unknown) => value,
+    cancelAnimation: jest.fn(),
+    Easing: { cubic: 'cubic', out: () => 'out', in: () => 'in', inOut: () => 'inOut' },
+  };
+});
+
+jest.mock('@/hooks/useAccessibility', () => ({
+  useAccessibleAnimation: () => ({
+    reducedMotion: false,
+    entering: (anim: unknown) => anim,
+    exiting: (anim: unknown) => anim,
+  }),
 }));
 
 function collectText(node: any): string[] {
@@ -411,5 +434,86 @@ describe('ScripturePracticeSheet', () => {
     expect(mockUpdateScripturePractice.sessions['devo-1:2:inductive_oia']?.answers.observe).toBe(
       'Keep this practice note',
     );
+  });
+
+  it('shows the optional breath guide only on the breath prayer breathe step', async () => {
+    mockUpdateScripturePractice.sessions['devo-1:2:breath_prayer'] = {
+      step: 1,
+      answers: { copy: 'The LORD is my shepherd' },
+      completed: false,
+      readingMode: 'physical',
+    };
+    let tree: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderSheet({ methodId: 'breath_prayer', assignedMethodId: 'breath_prayer' });
+    });
+    const text = collectText(tree!.toJSON()).join(' ');
+    expect(tree!.root.findByProps({ testID: 'breath-prayer-guide' })).toBeTruthy();
+    expect(tree!.root.findByProps({ testID: 'breath-prayer-phrase' }).props.children).toBe('The LORD is my shepherd');
+    expect(tree!.root.findByProps({ testID: 'breath-prayer-begin' })).toBeTruthy();
+    expect(text).toContain('Breathe the phrase');
+    expect(text).toContain('Optional note');
+  });
+
+  it('stops the breath guide when the user presses Stop and does not keep breathing cues', async () => {
+    mockUpdateScripturePractice.sessions['devo-1:2:breath_prayer'] = {
+      step: 1,
+      answers: { copy: 'I shall not want' },
+      completed: false,
+      readingMode: 'physical',
+    };
+    let tree: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderSheet({ methodId: 'breath_prayer', assignedMethodId: 'breath_prayer' });
+    });
+    await act(async () => {
+      tree!.root.findByProps({ testID: 'breath-prayer-begin' }).props.onPress();
+    });
+    expect(tree!.root.findByProps({ testID: 'breath-prayer-cue' }).props.children).toBe('Breathe in');
+    await act(async () => {
+      tree!.root.findByProps({ testID: 'breath-prayer-stop' }).props.onPress();
+    });
+    expect(tree!.root.findByProps({ testID: 'breath-prayer-begin' })).toBeTruthy();
+    expect(tree!.root.findByProps({ testID: 'breath-prayer-cue' }).props.children).toBe('At your own pace');
+    expect(tree!.root.findByType(TextInput).props.value).toBe('');
+  });
+
+  it('does not keep the breath guide running after the step changes', async () => {
+    mockUpdateScripturePractice.sessions['devo-1:2:breath_prayer'] = {
+      step: 1,
+      answers: { copy: 'The LORD is my shepherd' },
+      completed: false,
+      readingMode: 'physical',
+    };
+    let tree: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderSheet({ methodId: 'breath_prayer', assignedMethodId: 'breath_prayer' });
+    });
+    await act(async () => {
+      tree!.root.findByProps({ testID: 'breath-prayer-begin' }).props.onPress();
+    });
+    mockUpdateScripturePractice.sessions['devo-1:2:breath_prayer'] = {
+      step: 2,
+      answers: { copy: 'The LORD is my shepherd' },
+      completed: false,
+      readingMode: 'physical',
+    };
+    await act(async () => {
+      tree!.update(
+        <ScripturePracticeSheet
+          targetIdentity={identity}
+          methodId="breath_prayer"
+          assignedMethodId="breath_prayer"
+          day={day({ studyMethod: 'breath_prayer' })}
+          onChangeMethod={jest.fn()}
+          onClose={jest.fn()}
+          onOpenSamples={jest.fn()}
+          onSkipPractice={jest.fn()}
+          onOpenBible={jest.fn()}
+        />,
+      );
+    });
+    expect(tree!.root.findAllByProps({ testID: 'breath-prayer-guide' })).toHaveLength(0);
+    expect(tree!.root.findAllByProps({ testID: 'breath-prayer-stop' })).toHaveLength(0);
   });
 });

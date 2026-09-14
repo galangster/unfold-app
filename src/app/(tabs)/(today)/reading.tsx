@@ -2833,6 +2833,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
             methodId={activePracticeMethodId}
             assignedMethodId={currentDayData.studyMethod}
             day={currentDayData}
+            visible={practiceVisible}
             onChangeMethod={setPracticePreviewMethodId}
             onClose={closePractice}
             onOpenSamples={openSampleReadings}

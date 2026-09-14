@@ -19,7 +19,7 @@ jest.mock('react-native-reanimated', () => {
   const { View, Text } = require('react-native');
   return {
     __esModule: true,
-    default: { View, Text },
+    default: { View, Text, createAnimatedComponent: (component: unknown) => component },
     Extrapolation: { CLAMP: 'clamp' },
     FadeIn: animationChain,
     FadeOut: animationChain,
@@ -36,16 +36,17 @@ jest.mock('react-native-reanimated', () => {
     },
     interpolateColor: (_value: number, _input: number[], output: string[]) => output[output.length - 1],
     runOnJS: (fn: (...args: unknown[]) => unknown) => fn,
+    useAnimatedProps: (factory: () => unknown) => factory(),
     useAnimatedStyle: (factory: () => unknown) => factory(),
     useReducedMotion: () => false,
-    useSharedValue: (value: unknown) => ({ value }),
+    useSharedValue: (value: unknown) => require('react').useRef({ value }).current,
     withDelay: (_delay: unknown, value: unknown) => value,
     withRepeat: (value: unknown) => value,
     cancelAnimation: jest.fn(),
-    withTiming: (value: unknown, _config?: unknown, callback?: (finished: boolean) => void) => {
+    withTiming: jest.fn((value: unknown, _config?: unknown, callback?: (finished: boolean) => void) => {
       callback?.(true);
       return value;
-    },
+    }),
     Easing: {
       cubic: jest.fn(),
       bezier: jest.fn(() => 'ease-bezier'),
@@ -54,6 +55,13 @@ jest.mock('react-native-reanimated', () => {
       inOut: jest.fn(() => 'ease-in-out'),
     },
   };
+});
+
+jest.mock('react-native-svg', () => {
+  const ReactLib = require('react');
+  const { View } = require('react-native');
+  const Stub = (props: { children?: React.ReactNode }) => ReactLib.createElement(View, props, props.children);
+  return { __esModule: true, default: Stub, Path: Stub };
 });
 
 jest.mock('expo-blur', () => ({
@@ -104,6 +112,8 @@ jest.mock('@/lib/theme', () => ({
   }),
 }));
 
+jest.mock('@/hooks/useAppForegrounded', () => ({ useAppForegrounded: () => true }));
+
 jest.mock('@/hooks/useAccessibility', () => ({
   useAccessibleAnimation: () => ({
     reducedMotion: false,
@@ -128,7 +138,8 @@ jest.mock('@/lib/store', () => ({
   useUnfoldStore: (selector: (state: typeof mockStoreState) => unknown) => selector(mockStoreState),
 }));
 
-import { DevotionalCard } from '../DevotionalCard';
+import { DevotionalCard, AnimatedProgressBar } from '../DevotionalCard';
+import { PageMark } from '@/components/motion/PageMark';
 import type { DevotionalCardState } from '../compute-devotional-state';
 import type { DevotionalDay, JournalEntry } from '@/lib/store';
 
@@ -616,6 +627,80 @@ describe('DevotionalCard daily recovery', () => {
     expect(tree.root.findAll((node: any) => textContent(node).includes(title)).length).toBeGreaterThan(0);
     expect(tree.root.findAll((node: any) => textContent(node).includes('lost connection'))).toHaveLength(0);
     expect(findByLabel(tree, 'Check Again').length).toBeGreaterThan(0);
+  });
+});
+
+describe('DevotionalCard meaningful motion', () => {
+  it('plays a newly earned delta once when Home becomes visible, then remains still', () => {
+    const timing = jest.requireMock('react-native-reanimated').withTiming;
+    const tree = renderInAct(<AnimatedProgressBar progress={43} seriesKey="series-a" colors={mockTestColors} />);
+    timing.mockClear();
+    act(() => tree.update(<AnimatedProgressBar progress={57} seriesKey="series-a" colors={mockTestColors} active={false} />));
+    expect(timing).not.toHaveBeenCalled();
+    act(() => tree.update(<AnimatedProgressBar progress={57} seriesKey="series-a" colors={mockTestColors} />));
+    expect(timing).toHaveBeenCalledTimes(1);
+    expect(timing).toHaveBeenCalledWith(0.57, expect.objectContaining({ duration: 250 }));
+    timing.mockClear();
+    act(() => tree.update(<AnimatedProgressBar progress={57} seriesKey="series-a" colors={mockTestColors} active={false} />));
+    act(() => tree.update(<AnimatedProgressBar progress={57} seriesKey="series-a" colors={mockTestColors} />));
+    expect(timing).not.toHaveBeenCalled();
+    act(() => tree.update(<AnimatedProgressBar progress={86} seriesKey="series-b" colors={mockTestColors} />));
+    expect(timing).not.toHaveBeenCalled();
+    act(() => tree.unmount());
+  });
+
+  function makeUnreadState(
+    overrides: Partial<Extract<DevotionalCardState, { type: 'unread' }>> = {},
+  ): Extract<DevotionalCardState, { type: 'unread' }> {
+    return {
+      type: 'unread',
+      dayData: makeDayData({ isRead: false }),
+      dayLabel: 'Today',
+      seriesTitle: 'Faith Foundations',
+      progress: 42.9,
+      daysCompleted: 3,
+      totalDays: 7,
+      onContinue: noop,
+      onCreateNew: noop,
+      ctaText: 'Continue Reading',
+      ...overrides,
+    };
+  }
+
+  it('shows current progress immediately on an initial ready mount without a page-mark entrance', () => {
+    const tree = renderInAct(<DevotionalCard state={makeUnreadState()} />);
+
+    expect(tree.root.findByProps({ testID: 'devotional-progress-bar' }).props.accessibilityValue).toEqual({
+      min: 0,
+      max: 100,
+      now: 43,
+    });
+    expect(tree.root.findByType(PageMark).props.animate).toBe(false);
+  });
+
+  it('marks a live preparing-to-ready transition without changing the settled progress value', () => {
+    let tree: any;
+    act(() => {
+      tree = renderer.create(
+        <DevotionalCard
+          state={{
+            type: 'preparing',
+            progress: 0.4,
+            seriesTitle: 'Faith Foundations',
+            dayNumber: 4,
+            onCreateNew: noop,
+          }}
+        />,
+      );
+    });
+    expect(tree.root.findByType(PageMark).props.animate).toBe(false);
+
+    act(() => {
+      tree.update(<DevotionalCard state={makeUnreadState({ progress: 42.9, dayData: makeDayData({ dayNumber: 4, isRead: false }) })} />);
+    });
+
+    expect(tree.root.findByType(PageMark).props.animate).toBe(true);
+    expect(tree.root.findByProps({ testID: 'devotional-progress-bar' }).props.accessibilityValue.now).toBe(43);
   });
 });
 

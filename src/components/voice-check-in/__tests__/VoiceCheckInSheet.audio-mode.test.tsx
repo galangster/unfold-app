@@ -82,8 +82,30 @@ jest.mock('react-native-reanimated', () => {
     FadeIn: chainable(),
     FadeInDown: chainable(),
     useReducedMotion: () => true,
+    useSharedValue: (value: unknown) => ({ value }),
+    useAnimatedProps: (factory: () => unknown) => factory(),
+    useAnimatedStyle: (factory: () => unknown) => factory(),
+    withTiming: (value: unknown) => value,
+    withRepeat: (value: unknown) => value,
+    withDelay: (_delay: unknown, value: unknown) => value,
+    cancelAnimation: jest.fn(),
+    Easing: { cubic: 'cubic', out: () => 'out', in: () => 'in', inOut: () => 'inOut' },
   };
 });
+
+jest.mock('react-native-svg', () => {
+  const ReactLib = jest.requireActual('react');
+  const ReactNative = jest.requireActual('react-native');
+  const Stub = (props: { children?: React.ReactNode }) => ReactLib.createElement(ReactNative.View, props, props.children);
+  return { __esModule: true, default: Stub, Path: Stub };
+});
+jest.mock('@/hooks/useAccessibility', () => ({
+  useAccessibleAnimation: () => ({
+    reducedMotion: true,
+    entering: () => undefined,
+    exiting: () => undefined,
+  }),
+}));
 jest.mock('@/components/icons', () => new Proxy({}, {
   get: (_target, name) => (name === '__esModule' ? true : () => null),
 }));

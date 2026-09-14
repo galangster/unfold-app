@@ -13,7 +13,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
 import { adaptiveFrameStyle, adaptiveSafeGutterStyle } from '@/lib/adaptive-layout';
+import { BreathPrayerGuide } from '@/components/motion/BreathPrayerGuide';
 import { BookOpenIcon, CaretLeftIcon, XIcon } from '@/components/icons';
+import { shouldShowBreathGuide } from '@/lib/meaningful-motion';
 import { FontFamily } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
@@ -80,6 +82,7 @@ export interface ScripturePracticeSheetProps {
   onOpenSamples: () => void;
   onSkipPractice: () => void;
   onOpenBible: (reference: string) => void;
+  visible?: boolean;
 }
 
 export function ScripturePracticeSheet({
@@ -92,6 +95,7 @@ export function ScripturePracticeSheet({
   onOpenSamples,
   onSkipPractice,
   onOpenBible,
+  visible = true,
 }: ScripturePracticeSheetProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -376,6 +380,8 @@ export function ScripturePracticeSheet({
               onTogglePassage={() => setPassageHidden((value) => !value)}
               crossReferences={availableReferences}
               onOpenBible={onOpenBible}
+              methodId={methodId}
+              sheetVisible={visible}
             />
           ) : (
             <Text style={[styles.prompt, { color: colors.textMuted }]}>
@@ -573,6 +579,8 @@ function StepBody({
   onTogglePassage,
   crossReferences,
   onOpenBible,
+  methodId,
+  sheetVisible,
 }: {
   colors: ReturnType<typeof useTheme>['colors'];
   kind: ScripturePractice['kind'] | null;
@@ -591,6 +599,8 @@ function StepBody({
   onTogglePassage: () => void;
   crossReferences: readonly { reference: string; text: string }[];
   onOpenBible: (reference: string) => void;
+  methodId: string | null;
+  sheetVisible: boolean;
 }) {
   const notesKey = step.id;
   const choiceKey = `${step.id}__choice`;
@@ -650,6 +660,14 @@ function StepBody({
         <Text style={[styles.prompt, { color: colors.textMuted }]}>
           Take your time. Continue when you are ready.
         </Text>
+      ) : null}
+
+      {shouldShowBreathGuide(methodId, step.id) ? (
+        <BreathPrayerGuide
+          phrase={(answers.copy ?? '').trim()}
+          visible={sheetVisible}
+          colors={colors}
+        />
       ) : null}
 
       {kind === 'notice' && step.choices?.length ? (
