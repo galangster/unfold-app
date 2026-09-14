@@ -89,6 +89,7 @@ import { askNotificationPermissionInContext } from '@/lib/notification-ask';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
 import { Typography } from '@/constants/typography';
+import { RevealBackdrop } from '@/components/reveal/RevealBackdrop';
 
 // Soft copy once a job outlives LONG_RUNNING_AFTER_MS. Time alone is never a
 // failure: the server decides, and polling continues at the slow tier.
@@ -185,6 +186,7 @@ export default function GeneratingScreen() {
 
   const [isComplete, setIsComplete] = useState(false);
   const [devotionalTitle, setDevotionalTitle] = useState('');
+  const [landedRevealId, setLandedRevealId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [canRetryJob, setCanRetry] = useState(true);
 
@@ -276,6 +278,7 @@ export default function GeneratingScreen() {
   useEffect(() => {
     if (!autoTrialHandoffId) return;
     if (autoState.kind === 'revealed') {
+      setLandedRevealId(autoState.devotionalId);
       const landed = useUnfoldStore.getState().devotionals.find((row) => row.id === autoState.devotionalId);
       setDevotionalTitle(landed?.title ?? DEFAULT_SERIES_TITLE);
       setIsComplete(true);
@@ -572,6 +575,7 @@ export default function GeneratingScreen() {
 
     // Update UI state
     setDevotionalTitle(seriesTitle);
+    setLandedRevealId(devotionalId);
     setCurrentSeriesTitle(seriesTitle);
     setPendingNotification({ title: seriesTitle });
     setIsGenerating(false);
@@ -1173,7 +1177,8 @@ export default function GeneratingScreen() {
 
   if (isComplete) {
     return (
-      <View style={{ flex: 1, backgroundColor: 'transparent' }}>
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        {landedRevealId && <RevealBackdrop variant="prism" />}
         <SafeAreaView style={{ flex: 1, justifyContent: 'space-between' }} edges={['top', 'bottom']}>
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'flex-start', paddingHorizontal: Spacing['8'] }}>
             <Animated.View entering={entering(FadeIn.duration(600).delay(100))} style={{ marginBottom: Spacing['7'] }}>

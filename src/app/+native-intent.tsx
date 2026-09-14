@@ -16,12 +16,24 @@ import { DEEP_LINK_FALLBACK_PATH, resolveExternalDeepLink } from '@/lib/deep-lin
 import { logger } from '@/lib/logger';
 import { isQaToolsEnabled } from '@/lib/qa-tools';
 import { isTrialSeriesFixtureState } from '@/lib/trial-series-fixtures';
+import { isRevealGradientVariant } from '@/lib/reveal-gradient-palette';
 
 const DEV_PREVIEW_ROUTES: {
   pathname: string;
   params: Record<string, (value: string) => boolean>;
   required?: readonly string[];
 }[] = [
+  {
+    pathname: '/reveal-gradients',
+    params: {
+      variant: isRevealGradientVariant,
+      theme: (value) => ['dark', 'light'].includes(value),
+      accent: (value) => ['gold', 'lavender', 'forest', 'ocean', 'rose', 'ember', 'slate'].includes(value),
+      motion: (value) => ['on', 'off'].includes(value),
+      chrome: (value) => ['0', '1'].includes(value),
+      scene: (value) => ['series', 'daily'].includes(value),
+    },
+  },
   {
     pathname: '/voice-check-in',
     params: {

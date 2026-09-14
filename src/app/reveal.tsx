@@ -1,19 +1,19 @@
 import { useEffect, useCallback, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, useWindowDimensions, TouchableOpacity, AccessibilityInfo } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRevealActivity } from '@/hooks/useRevealActivity';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withRepeat,
-  withSequence,
   withTiming,
   withDelay,
   withSpring,
   Easing,
   FadeIn,
   runOnJS,
-  useReducedMotion,
+  cancelAnimation,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
@@ -23,12 +23,14 @@ import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { logger } from '@/lib/logger';
 import { useUIState } from '@/lib/ui-state';
-import { alpha } from '@/components/ui';
 import { ScatterTitle } from '@/components/ScatterTitle';
 import { ShimmerText } from '@/components/ShimmerText';
 import { buildReadingRouteFromRevealParams } from '@/lib/push-notification-helpers';
 import { resolveRevealTarget } from '@/lib/reveal-params';
 import { Typography } from '@/constants/typography';
+import { useAccessibleAnimation } from '@/hooks/useAccessibility';
+import { RevealBackdrop } from '@/components/reveal/RevealBackdrop';
+import { getDailyRevealVariant } from '@/lib/reveal-variant';
 
 // Gesture thresholds
 const APPROACH_THRESHOLD = -40;
@@ -46,7 +48,8 @@ export default function RevealScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
-  const reducedMotion = useReducedMotion();
+  const { reducedMotion } = useAccessibleAnimation();
+  const focused = useRevealActivity();
   const { height: screenHeight } = useWindowDimensions();
   const [contentHeight, setContentHeight] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(0);
@@ -92,7 +95,7 @@ export default function RevealScreen() {
       200,
       withTiming(1, { duration: 300, easing: Easing.out(Easing.cubic) }),
     );
-  }, [reducedMotion]);
+  }, [reducedMotion, dayCounterOpacity, eyebrowOpacity, promptOpacity]);
 
   // Called when ScatterTitle finishes all letters
   const onTitleComplete = useCallback(() => {
@@ -107,7 +110,7 @@ export default function RevealScreen() {
       300,
       withTiming(1, { duration: 300, easing: Easing.out(Easing.cubic) }),
     );
-  }, [reducedMotion]);
+  }, [reducedMotion, dayCounterOpacity, promptOpacity]);
 
   const eyebrowStyle = useAnimatedStyle(() => ({
     opacity: eyebrowOpacity.value,
@@ -123,13 +126,16 @@ export default function RevealScreen() {
   const chevronY = useSharedValue(0);
 
   useEffect(() => {
-    if (reducedMotion) return;
+    cancelAnimation(chevronY);
+    chevronY.value = 0;
+    if (reducedMotion || !focused) return;
     chevronY.value = withRepeat(
       withTiming(-8, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
       -1,
       true,
     );
-  }, [reducedMotion]);
+    return () => cancelAnimation(chevronY);
+  }, [reducedMotion, focused, chevronY]);
 
   const chevronStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: chevronY.value }],
@@ -234,7 +240,7 @@ export default function RevealScreen() {
         })
         .onUpdate((event) => {
           // Clamp to upward only
-          translateY.value = Math.min(0, event.translationY);
+          translateY.value = reducedMotion ? 0 : Math.min(0, event.translationY);
 
           // Approach haptic at -40px
           if (event.translationY < APPROACH_THRESHOLD && didTickApproach.value === 0) {
@@ -250,6 +256,10 @@ export default function RevealScreen() {
         })
         .onEnd((event) => {
           if (event.translationY < COMMIT_THRESHOLD) {
+            if (reducedMotion) {
+              runOnJS(navigateToReading)();
+              return;
+            }
             // Past threshold — spring off screen, then navigate after curtain clears
             translateY.value = withSpring(-screenHeight, CURTAIN_SPRING, (finished) => {
               if (finished) {
@@ -258,10 +268,10 @@ export default function RevealScreen() {
             });
           } else {
             // Before threshold — spring back
-            translateY.value = withSpring(0, CURTAIN_SPRING);
+            translateY.value = reducedMotion ? 0 : withSpring(0, CURTAIN_SPRING);
           }
         }),
-    [navigateToReading, fireApproachHaptic, fireCommitHaptic, didTickApproach, didTickCommit, translateY, screenHeight],
+    [navigateToReading, fireApproachHaptic, fireCommitHaptic, didTickApproach, didTickCommit, translateY, screenHeight, reducedMotion],
   );
   const panGesture = useMemo(
     () => createPanGesture(!contentOverflows),
@@ -307,7 +317,7 @@ export default function RevealScreen() {
   return (
     <GestureDetector gesture={panGesture}>
     <Animated.View
-        entering={FadeIn.duration(600)}
+        entering={reducedMotion ? undefined : FadeIn.duration(600)}
         style={[
           styles.container,
           {
@@ -327,6 +337,9 @@ export default function RevealScreen() {
           }
         }}
       >
+        {revealTarget && (
+          <RevealBackdrop variant={getDailyRevealVariant(revealTarget.devotionalId, revealTarget.dayNumber)} />
+        )}
         {/* Main content — centered */}
         <ScrollView
           style={{ flex: 1 }}
@@ -349,13 +362,18 @@ export default function RevealScreen() {
 
           {/* Day title — scatter-in animation */}
           <View style={styles.titleContainer}>
-            <ScatterTitle
+            {reducedMotion ? (
+              <Text style={{ fontFamily: FontFamily.display, fontSize: 42, lineHeight: 50, textAlign: 'center', color: colors.text }}>
+                {dayTitle ?? "Today's Reading"}
+              </Text>
+            ) : <ScatterTitle
               text={dayTitle ?? "Today's Reading"}
+              color={colors.text}
               fontSize={42}
               baseDelay={500}
               stagger={80}
               onComplete={onScatterComplete}
-            />
+            />}
 
           </View>
 
@@ -381,7 +399,11 @@ export default function RevealScreen() {
             <CaretUp size={24} color={colors.textMuted} weight="light" />
           </Animated.View>
 
-          <ShimmerText
+          {reducedMotion || !focused ? (
+            <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, lineHeight: 20, textAlign: 'center', color: colors.text }}>
+              Swipe up to reveal your devotional
+            </Text>
+          ) : <ShimmerText
             text="Swipe up to reveal your devotional"
             style={{
               fontFamily: FontFamily.ui,
@@ -395,7 +417,7 @@ export default function RevealScreen() {
             sweepDuration={800}
             pauseDuration={2200}
             initialDelay={1800}
-          />
+          />}
 
           {/* Always-reachable alternative to the swipe gesture — visually
               secondary since swiping is the primary affordance, but never

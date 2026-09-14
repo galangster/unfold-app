@@ -29,6 +29,11 @@ jest.mock('../logger', () => ({
   logger: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
 
+const mockRevealBackdrop = jest.fn((_props: { variant: string }) => null);
+jest.mock('@/components/reveal/RevealBackdrop', () => ({
+  RevealBackdrop: (props: { variant: string }) => mockRevealBackdrop(props),
+}));
+
 jest.mock('../mmkv-storage', () => {
   const store = new Map<string, string>();
   return {
@@ -744,5 +749,6 @@ describe('H10 generating auto-trial handoff', () => {
     const labels = tree.root.findAll((node) => joined(node.props?.children) === 'Your 3-day series');
     expect(labels.length).toBeGreaterThan(0);
     expect(tree.root.findAll((node) => joined(node.props?.children) === 'Your 7-day series')).toHaveLength(0);
+    expect(mockRevealBackdrop).toHaveBeenLastCalledWith({ variant: 'prism' });
   });
 });
