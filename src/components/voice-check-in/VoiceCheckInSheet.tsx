@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AppState,
-  ActivityIndicator,
   Keyboard,
   KeyboardAvoidingView,
   Modal,
@@ -17,7 +16,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeInDown, useReducedMotion } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import {
   requestRecordingPermissionsAsync,
@@ -40,7 +39,11 @@ import {
   WarningCircleIcon,
   XIcon,
 } from '@/components/icons';
+import { DrawnCheck } from '@/components/motion/DrawnCheck';
+import { ProcessingBars } from '@/components/motion/ProcessingBars';
 import { alpha } from '@/components/ui';
+import { useAccessibleAnimation } from '@/hooks/useAccessibility';
+import { useAppForegrounded } from '@/hooks/useAppForegrounded';
 import type { ColorTheme } from '@/constants/colors';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
@@ -130,7 +133,8 @@ export function VoiceCheckInSheet({
   const theme = useTheme();
   const colors = previewColors ?? theme.colors;
   const isDark = previewIsDark ?? theme.isDark;
-  const reducedMotion = useReducedMotion();
+  const { reducedMotion } = useAccessibleAnimation();
+  const appForegrounded = useAppForegrounded();
   const { height: windowHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [phase, setPhase] = useState<VoiceCheckInPhase>(demoMode ? initialDemoPhase : 'idle');
@@ -149,6 +153,10 @@ export function VoiceCheckInSheet({
   const [isEditingTranscript, setIsEditingTranscript] = useState(false);
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+  const [savePlayKey, setSavePlayKey] = useState(0);
+  const playedSaveRef = useRef(0);
+  const saveSequenceRef = useRef(0);
   const busyRef = useRef(false);
   const isClosingRef = useRef(false);
   const mountedRef = useRef(true);
@@ -454,6 +462,7 @@ export function VoiceCheckInSheet({
 
     busyRef.current = true;
     setIsBusy(true);
+    setIsSending(true);
     try {
       player.pause();
       const saved = await sendVoiceCheckInDraft(localDraft);
@@ -463,6 +472,11 @@ export function VoiceCheckInSheet({
       setTranscript(saved.transcript);
       setSavedCheckIns((current) => [saved, ...current.filter((item) => item.id !== saved.id)]);
       setPhase('saved');
+      if (mountedRef.current && visibleRef.current && AppState.currentState === 'active') {
+        setSavePlayKey(++saveSequenceRef.current);
+      } else {
+        setSavePlayKey(0);
+      }
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
       setDraft(readVoiceCheckInDraft());
@@ -477,6 +491,7 @@ export function VoiceCheckInSheet({
     } finally {
       busyRef.current = false;
       setIsBusy(false);
+      setIsSending(false);
     }
   }, [audioUri, demoMode, draft, player]);
 
@@ -544,6 +559,7 @@ export function VoiceCheckInSheet({
     if (phase === 'saved') {
       setPhase('idle');
       setSelectedCheckIn(null);
+      setSavePlayKey(0);
       setIsEditingTranscript(false);
       setAudioUri(null);
       setRecordedDurationMs(0);
@@ -587,6 +603,7 @@ export function VoiceCheckInSheet({
                 setSelectedCheckIn(item);
                 setTranscript(item.transcript);
                 setIsEditingTranscript(false);
+                setSavePlayKey(0);
                 setPhase('saved');
               }}
               style={[styles.historyRow, { borderColor: colors.border }]}
@@ -734,12 +751,24 @@ export function VoiceCheckInSheet({
             disabled={isBusy}
             accessibilityRole="button"
             accessibilityLabel="Send voice check-in"
+            accessibilityState={{ disabled: isBusy, busy: isSending }}
             accessibilityHint={demoMode ? 'Simulates a saved check-in' : 'Uploads the recording for transcription'}
             onPress={() => void sendCheckIn()}
-            style={[styles.sendButton, { backgroundColor: colors.accent, opacity: isBusy ? 0.55 : 1 }]}
+            style={[styles.sendButton, {
+              backgroundColor: isSending ? colors.backgroundElevated : colors.accent,
+              borderWidth: 1,
+              borderColor: isSending ? alpha(colors.accent, 0.25) : colors.accent,
+            }]}
           >
-            {isBusy ? <ActivityIndicator size="small" color={colors.background} /> : <CheckIcon size={17} color={colors.background} weight="bold" />}
-            <Text style={[styles.sendButtonText, { color: colors.background }]}>{isBusy ? 'Saving your check-in…' : 'Send'}</Text>
+            {isSending ? (
+              <ProcessingBars
+                active={visible && appForegrounded}
+                color={colors.accent}
+              />
+            ) : (
+              <CheckIcon size={17} color={colors.background} weight="bold" />
+            )}
+            <Text style={[styles.sendButtonText, { color: isSending ? colors.text : colors.background }]}>{isSending ? 'Saving…' : 'Send'}</Text>
           </TouchableOpacity>
         </View>
       </Animated.View>
@@ -749,7 +778,14 @@ export function VoiceCheckInSheet({
   const renderSaved = () => (
     <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(180)} style={styles.stateContent}>
       <View style={[styles.resultIcon, { backgroundColor: alpha(colors.success, 0.12), borderColor: alpha(colors.success, 0.24) }]}>
-        <CheckIcon size={28} color={colors.success} weight="bold" />
+        <DrawnCheck
+          visible
+          playKey={savePlayKey}
+          playedKeyRef={playedSaveRef}
+          color={colors.success}
+          size={22}
+          testID={savePlayKey > 0 ? 'voice-save-check-draw' : 'voice-save-check-static'}
+        />
       </View>
       <Text style={[styles.title, { color: colors.text }]}>{demoMode ? 'Simulated save complete' : 'Check-in saved'}</Text>
       <Text style={[styles.body, { color: colors.textMuted }]}>

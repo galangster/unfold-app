@@ -30,6 +30,8 @@ import {
   shouldFlushAutosaveOnAppState,
   type AutosaveController,
 } from '@/lib/autosave-controller';
+import { reflectionCheckMode } from '@/lib/meaningful-motion';
+import { DrawnCheck } from '@/components/motion/DrawnCheck';
 
 type MeasurableTextInput = TextInput & {
   measureLayout?: (
@@ -101,6 +103,8 @@ export function InlineReflectionJournal({
   // Local response state (before debounced save)
   const [localResponses, setLocalResponses] = useState<Map<number, string>>(new Map());
   const [saveStatuses, setSaveStatuses] = useState<Map<number, ReflectionSaveState>>(new Map());
+  const [persistedResponses, setPersistedResponses] = useState<Map<number, boolean>>(new Map());
+  const [checkSignals, setCheckSignals] = useState<Map<number, { finishRevision: number | null; savedRevision: number | null }>>(new Map());
   const localResponsesRef = useRef<Map<number, string>>(localResponses);
   localResponsesRef.current = localResponses;
   const hasPendingSaveRef = useRef(false);
@@ -152,17 +156,25 @@ export function InlineReflectionJournal({
     pendingResponseRef.current = null;
     failedResponsesRef.current.clear();
     hasPendingSaveRef.current = false;
-    setSaveStatuses(new Map());
+    setCheckSignals(new Map());
 
     const initial = new Map<number, string>();
+    const persisted = new Map<number, boolean>();
+    const initialStatuses = new Map<number, ReflectionSaveState>();
     if (existingEntry?.questionResponses) {
       for (const qr of existingEntry.questionResponses) {
         const idx = questions.findIndex((q) => q === qr.question);
         if (idx >= 0) {
           initial.set(idx, qr.response);
+          if (qr.response.trim().length > 0) {
+            persisted.set(idx, true);
+            initialStatuses.set(idx, 'saved');
+          }
         }
       }
     }
+    setPersistedResponses(persisted);
+    setSaveStatuses(initialStatuses);
 
     savedEntryRef.current = {
       devotionalId,
@@ -240,6 +252,12 @@ export function InlineReflectionJournal({
         if (isCurrentSaveAttempt(pending)) {
           failedResponsesRef.current.delete(index);
           setSaveStatuses((current) => new Map(current).set(index, 'saved'));
+          setCheckSignals((current) => {
+            const next = new Map(current);
+            const previous = next.get(index) ?? { finishRevision: null, savedRevision: null };
+            next.set(index, { ...previous, savedRevision: pending.revision });
+            return next;
+          });
         }
       } catch {
         if (isCurrentSaveAttempt(pending)) {
@@ -351,6 +369,20 @@ export function InlineReflectionJournal({
     if (focusedInputIndexRef.current === index) {
       focusedInputIndexRef.current = null;
       measurementRequestRef.current += 1;
+    }
+
+    const latest = latestRevisionsRef.current.get(index);
+    if (latest == null) return;
+
+    setCheckSignals((current) => {
+      const next = new Map(current);
+      const previous = next.get(index) ?? { finishRevision: null, savedRevision: null };
+      next.set(index, { ...previous, finishRevision: latest });
+      return next;
+    });
+
+    if (pendingResponseRef.current?.index === index) {
+      autoSaveControllerRef.current?.flush();
     }
   }, []);
 
@@ -485,10 +517,17 @@ export function InlineReflectionJournal({
         const isExpanded = expandedIndex === index;
         const response = getResponse(index, question);
         const isAnswered = response.trim().length > 0;
+        const signal = checkSignals.get(index);
+        const checkMode = reflectionCheckMode({
+          saveState: saveStatuses.get(index) ?? null,
+          hadPersistedResponse: persistedResponses.get(index) === true,
+          finishRevision: signal?.finishRevision ?? null,
+          savedRevision: signal?.savedRevision ?? null,
+        });
 
         return (
           <ReflectionQuestionCard
-            key={question}
+            key={`${devotionalId}:${dayNumber}:${question}`}
             index={index}
             question={question}
             isExpanded={isExpanded}
@@ -497,6 +536,8 @@ export function InlineReflectionJournal({
             onTap={handleQuestionTap}
             onResponseChange={handleResponseChange}
             saveState={saveStatuses.get(index) ?? null}
+            checkMode={checkMode}
+            checkPlayKey={signal?.savedRevision ?? 0}
             onRetrySave={handleRetrySave}
             inputRefs={inputRefs}
             onInputFocus={handleInputFocus}
@@ -562,6 +603,8 @@ function ReflectionQuestionCard({
   onTap,
   onResponseChange,
   saveState,
+  checkMode,
+  checkPlayKey,
   onRetrySave,
   inputRefs,
   onInputFocus,
@@ -580,6 +623,8 @@ function ReflectionQuestionCard({
   onTap: (index: number) => void;
   onResponseChange: (index: number, question: string, text: string) => void;
   saveState: ReflectionSaveState | null;
+  checkMode: ReturnType<typeof reflectionCheckMode>;
+  checkPlayKey: number;
   onRetrySave: (index: number) => void;
   inputRefs: React.MutableRefObject<Map<number, TextInput | null>>;
   onInputFocus: (index: number) => void;
@@ -590,6 +635,7 @@ function ReflectionQuestionCard({
   editable?: boolean;
   reducedMotion?: boolean;
 }) {
+  const playedCheckRef = useRef(0);
   return (
     <Animated.View
       entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).easing(Ease.out).delay(index * 120)}
@@ -712,20 +758,39 @@ function ReflectionQuestionCard({
                 Save failed. Tap to retry.
               </Text>
             </TouchableOpacity>
-          ) : editable && saveState ? (
-            <Text
-              testID={`reflection-save-status-${index}`}
-              accessibilityLiveRegion="polite"
+          ) : editable && (saveState || checkMode !== 'hidden') ? (
+            <View
               style={{
-                fontFamily: FontFamily.ui,
-                fontSize: 11,
-                color: colors.textHint,
+                minHeight: 44,
                 marginTop: Spacing['2'],
-                textAlign: 'right',
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'flex-end',
+                gap: 8,
               }}
             >
-              {saveState === 'saving' ? 'Saving...' : 'Saved to Journal'}
-            </Text>
+              {checkMode !== 'hidden' ? <DrawnCheck
+                visible
+                playKey={checkMode === 'draw' ? checkPlayKey : 0}
+                playedKeyRef={playedCheckRef}
+                color={colors.accent}
+                testID={`reflection-save-check-${index}-${checkMode === 'draw' ? 'draw' : 'static'}`}
+              /> : null}
+              {saveState ? (
+                <Text
+                  testID={`reflection-save-status-${index}`}
+                  accessibilityLiveRegion="polite"
+                  style={{
+                    fontFamily: FontFamily.ui,
+                    fontSize: 11,
+                    color: colors.textHint,
+                    textAlign: 'right',
+                  }}
+                >
+                  {saveState === 'saving' ? 'Saving...' : 'Saved to Journal'}
+                </Text>
+              ) : null}
+            </View>
           ) : null}
         </Animated.View>
       )}

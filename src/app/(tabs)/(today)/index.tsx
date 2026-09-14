@@ -1683,6 +1683,9 @@ export default function HomeScreen() {
             <Animated.View>
               <DevotionalCard
                 state={devotionalState}
+                seriesId={currentDevotional?.id}
+                progressIdentity={getDeviceId()}
+                screenFocused={isTodayFocused}
                 scrollY={scrollY}
                 isReturningUser={isReturningUser && !isQaPreparingLoadingPreview}
                 gateCreation={gate}

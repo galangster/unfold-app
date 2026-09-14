@@ -99,12 +99,12 @@ jest.mock('phosphor-react-native', () => ({
 }));
 
 jest.mock('react-native-reanimated', () => {
-  const React = require('react');
   const { View } = require('react-native');
   return {
     __esModule: true,
     default: {
       View,
+      createAnimatedComponent: (component: unknown) => component,
     },
     FadeIn: { duration: () => ({ easing: () => ({ delay: () => ({}) }) }) },
     FadeInDown: { duration: () => ({ delay: () => ({ easing: () => ({}) }) }) },
@@ -115,8 +115,28 @@ jest.mock('react-native-reanimated', () => {
       inOut: () => 'inOut',
     },
     useReducedMotion: () => true,
+    useSharedValue: (value: unknown) => ({ value }),
+    useAnimatedProps: (factory: () => unknown) => factory(),
+    useAnimatedStyle: (factory: () => unknown) => factory(),
+    withTiming: (value: unknown) => value,
+    cancelAnimation: jest.fn(),
   };
 });
+
+jest.mock('react-native-svg', () => {
+  const ReactLib = jest.requireActual('react');
+  const { View } = jest.requireActual('react-native');
+  const Stub = (props: { children?: React.ReactNode }) => ReactLib.createElement(View, props, props.children);
+  return { __esModule: true, default: Stub, Path: Stub };
+});
+
+jest.mock('@/hooks/useAccessibility', () => ({
+  useAccessibleAnimation: () => ({
+    reducedMotion: true,
+    entering: (anim: unknown) => anim,
+    exiting: (anim: unknown) => anim,
+  }),
+}));
 
 describe('InlineReflectionJournal', () => {
   let appStateListener: ((state: AppStateStatus) => void) | null = null;
@@ -378,6 +398,8 @@ describe('InlineReflectionJournal', () => {
     });
 
     expect(tree!.root.findByProps({ testID: 'reflection-save-status-0' }).props.children).toBe('Saving...');
+    expect(tree!.root.findAllByProps({ testID: 'reflection-save-check-0-draw' })).toHaveLength(0);
+    expect(tree!.root.findAllByProps({ testID: 'reflection-save-check-0-static' })).toHaveLength(0);
 
     act(() => tree!.unmount());
   });
@@ -765,6 +787,135 @@ describe('InlineReflectionJournal', () => {
     act(() => input.props.onBlur());
     act(() => measurementCallbacks[2](12, 900));
     expect(onFocusInput).toHaveBeenLastCalledWith(820);
+
+    act(() => tree!.unmount());
+  });
+
+  it('shows a static check for a previously saved response without drawing on mount', () => {
+    let tree: any;
+
+    act(() => {
+      tree = renderer.create(
+        <InlineReflectionJournal
+          questions={['What stood out?']}
+          devotionalId="devotional"
+          dayNumber={1}
+          onOpenFullJournal={jest.fn()}
+        />
+      );
+    });
+
+    expect(tree!.root.findByProps({ testID: 'reflection-save-check-0-static' })).toBeTruthy();
+    expect(tree!.root.findAllByProps({ testID: 'reflection-save-check-0-draw' })).toHaveLength(0);
+    expect(tree!.root.findByProps({ testID: 'reflection-save-status-0' }).props.children).toBe('Saved to Journal');
+
+    act(() => tree!.unmount());
+  });
+
+  it('does not draw a check for an autosave while the input stays focused', async () => {
+    mockFlushUnfoldStorePersistAsync.mockResolvedValue(true);
+    let tree: any;
+
+    act(() => {
+      tree = renderer.create(
+        <InlineReflectionJournal
+          questions={['What stood out?']}
+          devotionalId="devotional"
+          dayNumber={2}
+          onOpenFullJournal={jest.fn()}
+        />
+      );
+    });
+
+    const input = tree!.root.findByType(TextInput);
+    act(() => {
+      input.props.onFocus();
+      input.props.onChangeText('Still writing this.');
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(800);
+      await Promise.resolve();
+    });
+
+    expect(tree!.root.findByProps({ testID: 'reflection-save-status-0' }).props.children).toBe('Saved to Journal');
+    expect(tree!.root.findAllByProps({ testID: 'reflection-save-check-0-draw' })).toHaveLength(0);
+    expect(tree!.root.findAllByProps({ testID: 'reflection-save-check-0-static' })).toHaveLength(0);
+
+    act(() => tree!.unmount());
+  });
+
+  it('draws a check only after a changed response is finished and persisted', async () => {
+    mockFlushUnfoldStorePersistAsync.mockResolvedValue(true);
+    let tree: any;
+
+    act(() => {
+      tree = renderer.create(
+        <InlineReflectionJournal
+          questions={['What stood out?']}
+          devotionalId="devotional"
+          dayNumber={2}
+          onOpenFullJournal={jest.fn()}
+        />
+      );
+    });
+
+    const input = tree!.root.findByType(TextInput);
+    act(() => {
+      input.props.onFocus();
+      input.props.onChangeText('Finished thought.');
+    });
+    act(() => {
+      input.props.onBlur();
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(tree!.root.findByProps({ testID: 'reflection-save-status-0' }).props.children).toBe('Saved to Journal');
+    expect(tree!.root.findByProps({ testID: 'reflection-save-check-0-draw' })).toBeTruthy();
+
+    act(() => tree!.unmount());
+  });
+
+  it('keeps the failed retry path and does not show a check after a save error', async () => {
+    mockFlushUnfoldStorePersistAsync.mockRejectedValueOnce(new Error('disk unavailable'));
+    mockFlushUnfoldStorePersistAsync.mockResolvedValueOnce(true);
+    let tree: any;
+
+    act(() => {
+      tree = renderer.create(
+        <InlineReflectionJournal
+          questions={['What stood out?']}
+          devotionalId="devotional"
+          dayNumber={2}
+          onOpenFullJournal={jest.fn()}
+        />
+      );
+    });
+
+    const input = tree!.root.findByType(TextInput);
+    act(() => {
+      input.props.onFocus();
+      input.props.onChangeText('Keep this exact response.');
+      input.props.onBlur();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(tree!.root.findAllByProps({ testID: 'reflection-save-check-0-draw' })).toHaveLength(0);
+    const retry = tree!.root.findByProps({ accessibilityLabel: 'Save failed. Tap to retry.' });
+    expect(input.props.value).toBe('Keep this exact response.');
+
+    await act(async () => {
+      retry.props.onPress();
+      await Promise.resolve();
+    });
+
+    expect(tree!.root.findByProps({ testID: 'reflection-save-status-0' }).props.children).toBe('Saved to Journal');
+    expect(tree!.root.findByProps({ testID: 'reflection-save-check-0-draw' })).toBeTruthy();
+    expect(input.props.value).toBe('Keep this exact response.');
 
     act(() => tree!.unmount());
   });
