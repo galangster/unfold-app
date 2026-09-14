@@ -332,7 +332,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   ctaButtonCompact: {
-    alignSelf: 'flex-start',
+    alignSelf: 'stretch',
   },
   ctaText: {
     fontFamily: FontFamily.uiSemiBold,

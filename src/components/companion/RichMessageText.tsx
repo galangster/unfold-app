@@ -267,9 +267,9 @@ function InlineText({
     <Text
       style={{
         ...Typography.bodyRelaxed,
-        fontFamily: isBlockquote ? FontFamily.bodyItalic : FontFamily.body,
+        fontFamily: isBlockquote ? FontFamily.bodyMedium : FontFamily.body,
         color: colors.text,
-        fontStyle: isBlockquote ? 'italic' : 'normal',
+        fontStyle: 'normal',
       }}
     >
       {segments.map((seg, i) => {
@@ -316,7 +316,7 @@ function InlineText({
           return (
             <Text
               key={i}
-              style={{ fontStyle: 'italic' }}
+              style={{ fontFamily: FontFamily.bodyMedium, fontStyle: 'normal' }}
             >
               {seg.content}
             </Text>

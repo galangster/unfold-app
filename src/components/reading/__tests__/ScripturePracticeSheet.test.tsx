@@ -90,6 +90,8 @@ jest.mock('react-native-reanimated', () => {
     default: { View, Text, createAnimatedComponent: (component: unknown) => component },
     useSharedValue: (value: unknown) => ({ value }),
     useAnimatedStyle: (factory: () => unknown) => factory(),
+    useAnimatedReaction: jest.fn(),
+    runOnJS: (fn: unknown) => fn,
     withTiming: (value: unknown) => value,
     withRepeat: (value: unknown) => value,
     cancelAnimation: jest.fn(),
@@ -449,13 +451,16 @@ describe('ScripturePracticeSheet', () => {
     });
     const text = collectText(tree!.toJSON()).join(' ');
     expect(tree!.root.findByProps({ testID: 'breath-prayer-guide' })).toBeTruthy();
-    expect(tree!.root.findByProps({ testID: 'breath-prayer-phrase' }).props.children).toBe('The LORD is my shepherd');
-    expect(tree!.root.findByProps({ testID: 'breath-prayer-begin' })).toBeTruthy();
+    expect(tree!.root.findAllByProps({ testID: 'breath-prayer-phrase' })).toHaveLength(0);
+    expect(tree!.root.findByProps({ testID: 'breath-prayer-toggle' }).props.accessibilityLabel).toContain('The LORD is my shepherd');
+    expect(tree!.root.findByProps({ testID: 'breath-prayer-toggle' })).toBeTruthy();
     expect(text).toContain('Breathe the phrase');
-    expect(text).toContain('Optional note');
+    expect(text).not.toContain('Optional note');
+    expect(text).not.toContain('Notes stay on this device.');
+    expect(tree!.root.findAllByType(TextInput)).toHaveLength(0);
   });
 
-  it('stops the breath guide when the user presses Stop and does not keep breathing cues', async () => {
+  it('pauses the breath guide from the circle and does not keep breathing cues', async () => {
     mockUpdateScripturePractice.sessions['devo-1:2:breath_prayer'] = {
       step: 1,
       answers: { copy: 'I shall not want' },
@@ -467,15 +472,15 @@ describe('ScripturePracticeSheet', () => {
       tree = renderSheet({ methodId: 'breath_prayer', assignedMethodId: 'breath_prayer' });
     });
     await act(async () => {
-      tree!.root.findByProps({ testID: 'breath-prayer-begin' }).props.onPress();
+      tree!.root.findByProps({ testID: 'breath-prayer-toggle' }).props.onPress();
     });
     expect(tree!.root.findByProps({ testID: 'breath-prayer-cue' }).props.children).toBe('Breathe in');
     await act(async () => {
-      tree!.root.findByProps({ testID: 'breath-prayer-stop' }).props.onPress();
+      tree!.root.findByProps({ testID: 'breath-prayer-toggle' }).props.onPress();
     });
-    expect(tree!.root.findByProps({ testID: 'breath-prayer-begin' })).toBeTruthy();
-    expect(tree!.root.findByProps({ testID: 'breath-prayer-cue' }).props.children).toBe('At your own pace');
-    expect(tree!.root.findByType(TextInput).props.value).toBe('');
+    expect(tree!.root.findByProps({ testID: 'breath-prayer-toggle' }).props.accessibilityState.selected).toBe(false);
+    expect(tree!.root.findByProps({ testID: 'breath-prayer-cue' }).props.children).toBe('Tap to begin');
+    expect(tree!.root.findAllByType(TextInput)).toHaveLength(0);
   });
 
   it('does not keep the breath guide running after the step changes', async () => {
@@ -490,7 +495,7 @@ describe('ScripturePracticeSheet', () => {
       tree = renderSheet({ methodId: 'breath_prayer', assignedMethodId: 'breath_prayer' });
     });
     await act(async () => {
-      tree!.root.findByProps({ testID: 'breath-prayer-begin' }).props.onPress();
+      tree!.root.findByProps({ testID: 'breath-prayer-toggle' }).props.onPress();
     });
     mockUpdateScripturePractice.sessions['devo-1:2:breath_prayer'] = {
       step: 2,
@@ -514,6 +519,74 @@ describe('ScripturePracticeSheet', () => {
       );
     });
     expect(tree!.root.findAllByProps({ testID: 'breath-prayer-guide' })).toHaveLength(0);
-    expect(tree!.root.findAllByProps({ testID: 'breath-prayer-stop' })).toHaveLength(0);
+    expect(tree!.root.findAllByProps({ testID: 'breath-prayer-toggle' })).toHaveLength(0);
+  });
+
+  it('hides the breathe-step note field and retains saved notes on other steps', async () => {
+    mockUpdateScripturePractice.sessions['devo-1:2:breath_prayer'] = {
+      step: 0,
+      answers: { copy: 'The LORD is my shepherd', breathe: 'A kept breath note' },
+      completed: false,
+      readingMode: 'physical',
+    };
+    let tree: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderSheet({ methodId: 'breath_prayer', assignedMethodId: 'breath_prayer' });
+    });
+    expect(tree!.root.findByType(TextInput).props.value).toBe('The LORD is my shepherd');
+    expect(collectText(tree!.toJSON()).join(' ')).toContain('The phrase as written');
+
+    mockUpdateScripturePractice.sessions['devo-1:2:breath_prayer'] = {
+      step: 1,
+      answers: { copy: 'The LORD is my shepherd', breathe: 'A kept breath note' },
+      completed: false,
+      readingMode: 'physical',
+    };
+    await act(async () => {
+      tree!.update(
+        <ScripturePracticeSheet
+          targetIdentity={identity}
+          methodId="breath_prayer"
+          assignedMethodId="breath_prayer"
+          day={day({ studyMethod: 'breath_prayer' })}
+          onChangeMethod={jest.fn()}
+          onClose={jest.fn()}
+          onOpenSamples={jest.fn()}
+          onSkipPractice={jest.fn()}
+          onOpenBible={jest.fn()}
+        />,
+      );
+    });
+    expect(tree!.root.findAllByType(TextInput)).toHaveLength(0);
+    expect(collectText(tree!.toJSON()).join(' ')).not.toContain('Optional note');
+    expect(mockUpdateScripturePractice.sessions['devo-1:2:breath_prayer']?.answers.breathe)
+      .toBe('A kept breath note');
+
+    mockUpdateScripturePractice.sessions['devo-1:2:breath_prayer'] = {
+      step: 2,
+      answers: { copy: 'The LORD is my shepherd', breathe: 'A kept breath note' },
+      completed: false,
+      readingMode: 'physical',
+    };
+    await act(async () => {
+      tree!.update(
+        <ScripturePracticeSheet
+          targetIdentity={identity}
+          methodId="breath_prayer"
+          assignedMethodId="breath_prayer"
+          day={day({ studyMethod: 'breath_prayer' })}
+          onChangeMethod={jest.fn()}
+          onClose={jest.fn()}
+          onOpenSamples={jest.fn()}
+          onSkipPractice={jest.fn()}
+          onOpenBible={jest.fn()}
+        />,
+      );
+    });
+    expect(tree!.root.findByType(TextInput).props.accessibilityLabel).toBe('Keep, or leave');
+    expect(mockUpdateScripturePractice.sessions['devo-1:2:breath_prayer']?.answers).toEqual({
+      copy: 'The LORD is my shepherd',
+      breathe: 'A kept breath note',
+    });
   });
 });

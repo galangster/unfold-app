@@ -1,4 +1,10 @@
 import {
+  BREATH_BUTTON_CLEARANCE,
+  BREATH_PEAK_SCALE,
+  BREATH_RESERVED_SIZE,
+  BREATH_RING_SIZE,
+  BREATH_RING_SIZES,
+  breathCueFromPhaseDelta,
   progressFillMotion,
   reflectionCheckMode,
   shouldAnnounceReadingReady,
@@ -75,6 +81,22 @@ describe('meaningful motion contracts', () => {
       finishRevision: 4,
       savedRevision: 3,
     })).toBe('hidden');
+  });
+
+  it('keeps every concentric breath ring inside reserved peak bounds', () => {
+    expect(BREATH_RING_SIZES).toHaveLength(3);
+    expect(BREATH_RESERVED_SIZE).toBe(Math.ceil(BREATH_RING_SIZE * BREATH_PEAK_SCALE));
+    expect(BREATH_BUTTON_CLEARANCE).toBe(24);
+    for (const size of BREATH_RING_SIZES) {
+      expect(Math.ceil(size * BREATH_PEAK_SCALE)).toBeLessThanOrEqual(BREATH_RESERVED_SIZE);
+    }
+  });
+
+  it('maps one shared phase clock to inhale and exhale cues', () => {
+    expect(breathCueFromPhaseDelta(1.08, 1)).toBe('in');
+    expect(breathCueFromPhaseDelta(1, 1.08)).toBe('out');
+    expect(breathCueFromPhaseDelta(1.08, 1.08)).toBeNull();
+    expect(breathCueFromPhaseDelta(1, null)).toBeNull();
   });
 
   it('only offers the breath guide on the breath prayer breathe step', () => {

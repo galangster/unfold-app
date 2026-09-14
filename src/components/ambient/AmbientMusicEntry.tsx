@@ -12,13 +12,17 @@ import { AmbientText } from './AmbientText';
 export function AmbientMusicEntry() {
   const { colors } = useTheme();
   const focused = useIsFocused();
-  const state = useAmbientAudioState();
+  const status = useAmbientAudioState((state) => state.status);
+  const timerStatus = useAmbientAudioState((state) => state.timerStatus);
+  const remainingSeconds = useAmbientAudioState((state) =>
+    state.timerStatus === 'running' ? state.remainingSeconds : 0,
+  );
   const openSheet = useAmbientSoundChrome((chrome) => chrome.openSheet);
   const registerEntry = useAmbientSoundChrome((chrome) => chrome.registerEntry);
   const musicRef = useRef<View>(null);
   const timerRef = useRef<View>(null);
-  const playing = state.status === 'playing';
-  const timerRunning = state.timerStatus === 'running';
+  const playing = status === 'playing';
+  const timerRunning = timerStatus === 'running';
 
   useEffect(() => {
     if (!focused) return;
@@ -51,7 +55,7 @@ export function AmbientMusicEntry() {
         accessibilityRole="button"
         accessibilityLabel={
           timerRunning
-            ? `${formatAmbientRemaining(state.remainingSeconds)} remaining. Change timer`
+            ? `${formatAmbientRemaining(remainingSeconds)} remaining. Change timer`
             : 'Set a timer'
         }
         style={({ pressed }) => [styles.timerButton, pressed && styles.pressed]}
@@ -61,11 +65,20 @@ export function AmbientMusicEntry() {
           color={timerRunning ? colors.accent : colors.text}
           weight="light"
         />
-        {timerRunning ? (
-          <AmbientText style={[styles.timerLabel, { color: colors.accent }]}>
-            {formatAmbientRemaining(state.remainingSeconds)}
+        <View testID="ambient-timer-countdown-slot" style={styles.countdownSlot}>
+          <AmbientText
+            style={[styles.timerLabel, styles.countdownReserve]}
+            importantForAccessibility="no"
+            accessibilityElementsHidden
+          >
+            30:00
           </AmbientText>
-        ) : null}
+          {timerRunning ? (
+            <AmbientText style={[styles.timerLabel, styles.countdownValue, { color: colors.accent }]}>
+              {formatAmbientRemaining(remainingSeconds)}
+            </AmbientText>
+          ) : null}
+        </View>
       </Pressable>
     </View>
   );
@@ -88,6 +101,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
   },
+  countdownSlot: { justifyContent: 'center' },
   timerLabel: { fontFamily: FontFamily.ui, fontSize: 12, fontVariant: ['tabular-nums'] },
+  countdownReserve: { color: 'transparent' },
+  countdownValue: { position: 'absolute', left: 0, right: 0 },
   pressed: { opacity: 0.65 },
 });

@@ -40,9 +40,13 @@ export function AmbientQuietEnding({
   const [quiet, setQuiet] = useState(false);
   const [settings, setSettings] = useState(false);
   const settingsTrigger = useRef<View>(null);
-  const state = useAmbientAudioState();
+  const selectedTrackId = useAmbientAudioState((state) => state.selectedTrackId);
+  const status = useAmbientAudioState((state) => state.status);
+  const pauseReason = useAmbientAudioState((state) => state.pauseReason);
+  const volume = useAmbientAudioState((state) => state.volume);
   const toggle = useAmbientSoundActions();
-  const track = getAmbientTrack(state.selectedTrackId);
+  const track = getAmbientTrack(selectedTrackId);
+  const playback = { status, pauseReason, volume };
 
   useEffect(() => {
     if (visible) {
@@ -110,12 +114,12 @@ export function AmbientQuietEnding({
               </AmbientText>
               <Pressable
                 onPress={() => toggle()}
-                disabled={state.status === 'loading'}
+                disabled={status === 'loading'}
                 accessibilityRole="button"
-                accessibilityLabel={`${state.status === 'playing' ? 'Pause' : 'Play'} ${track.title}`}
+                accessibilityLabel={`${status === 'playing' ? 'Pause' : 'Play'} ${track.title}`}
                 style={[styles.play, { borderColor: colors.borderStrong }]}
               >
-                {state.status === 'playing' ? (
+                {status === 'playing' ? (
                   <PauseIcon size={27} color={colors.accent} />
                 ) : (
                   <PlayIcon size={27} color={colors.accent} />
@@ -137,9 +141,9 @@ export function AmbientQuietEnding({
                 accessibilityLiveRegion="polite"
                 style={[styles.label, { color: colors.textMuted }]}
               >
-                {state.status === 'off'
+                {status === 'off'
                   ? 'Play only if you would like'
-                  : ambientStatusText(state)}
+                  : ambientStatusText(playback)}
               </AmbientText>
               <Pressable onPress={finish} accessibilityRole="button" style={styles.finish}>
                 <AmbientText style={[styles.label, { color: colors.textMuted }]}>

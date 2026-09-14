@@ -21,7 +21,6 @@ import {
   stopAmbientSound,
 } from '@/lib/ambient-audio';
 import {
-  canAnnounceMusic,
   canStartAmbientPlayback,
   isAmbientVoiceActive,
   registerAmbientLifecycle,
@@ -30,14 +29,56 @@ import {
 import { isAmbientAudioEnabled } from '@/lib/ambient-audio-feature';
 import { useAmbientAudioState } from '@/lib/ambient-audio-state';
 import { useAmbientSoundChrome } from '@/lib/ambient-sound-chrome';
-import { hasSeenAnnouncement } from '@/lib/feature-announcements';
-import { MUSIC_ANNOUNCEMENT } from '@/lib/music-announcement';
+import {
+  canAnnounceFeatures,
+  listPendingAnnouncementPages,
+  type FeatureAnnouncementPage,
+} from '@/lib/feature-announcements';
+import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { isQaToolsEnabled } from '@/lib/qa-tools';
 import { useTheme } from '@/lib/theme';
 import { AmbientMusicEntry, AmbientSoundSheet } from './AmbientSoundControls';
 import { AmbientSoundPlayer } from './AmbientSoundPlayer';
 import { AmbientText } from './AmbientText';
-import { MusicAnnouncement } from './MusicAnnouncement';
+import { FeatureAnnouncement } from './FeatureAnnouncement';
+
+function EndedTimerNotice({
+  onDismiss,
+  onHeight,
+}: {
+  onDismiss: () => void;
+  onHeight: (height: number) => void;
+}) {
+  const { colors } = useTheme();
+  return (
+    <View
+      testID="ambient-ended-timer-notice"
+      accessibilityLiveRegion="polite"
+      onLayout={(event) => onHeight(event.nativeEvent.layout.height)}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        borderRadius: 14,
+        backgroundColor: colors.backgroundElevated,
+      }}
+    >
+      <AmbientText style={{ fontFamily: FontFamily.body, color: colors.text, flex: 1 }}>
+        Your time is up. Stay as long as you like.
+      </AmbientText>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Dismiss timer notice"
+        onPress={onDismiss}
+        style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+      >
+        <XIcon size={18} color={colors.textMuted} />
+      </Pressable>
+    </View>
+  );
+}
 
 function EnabledAmbientSoundOverlay() {
   const insets = useSafeAreaInsets();
@@ -55,17 +96,32 @@ function EnabledAmbientSoundOverlay() {
     appActive,
     narrationActive,
   } = useAmbientSoundVisibility();
-  const state = useAmbientAudioState();
+  const status = useAmbientAudioState((state) => state.status);
+  const hasUsed = useAmbientAudioState((state) => state.hasUsed);
+  const timerStatus = useAmbientAudioState((state) => state.timerStatus);
   const sheet = useAmbientSoundChrome((chrome) => chrome.sheet);
   const closeSheet = useAmbientSoundChrome((chrome) => chrome.closeSheet);
   const openSheet = useAmbientSoundChrome((chrome) => chrome.openSheet);
   const returnFocusRef = useAmbientSoundChrome((chrome) => chrome.returnFocusRef);
   const todayReadingAvailable = useAmbientSoundChrome((chrome) => chrome.todayReadingAvailable);
   const setPlayerDockHeight = useAmbientSoundChrome((chrome) => chrome.setPlayerDockHeight);
+  const premiumPolicy = usePremiumAccessPolicy();
+  const audioEnabled = isAmbientAudioEnabled();
   const [announcementOpen, setAnnouncementOpen] = useState(false);
+  const [announcementPages, setAnnouncementPages] = useState<FeatureAnnouncementPage[]>([]);
+  const announcedThisVisit = useRef(new Set<string>());
   const [voiceActive, setVoiceActive] = useState(isAmbientVoiceActive);
   const [playerDismissing, setPlayerDismissing] = useState(false);
-  const previousTimerStatus = useRef(state.timerStatus);
+  const previousTimerStatus = useRef(timerStatus);
+  const noticeHeightRef = useRef(0);
+  const playerHeightRef = useRef(0);
+
+  const commitDockHeight = useCallback(() => {
+    const notice = noticeHeightRef.current;
+    const player = playerHeightRef.current;
+    const gap = notice > 0 && player > 0 ? 8 : 0;
+    setPlayerDockHeight(notice + player + gap);
+  }, [setPlayerDockHeight]);
 
   const focusMusicEntry = useCallback(() => {
     const handle = findNodeHandle(returnFocusRef?.current ?? null);
@@ -73,6 +129,7 @@ function EnabledAmbientSoundOverlay() {
   }, [returnFocusRef]);
 
   useEffect(() => {
+    if (!audioEnabled) return;
     setAmbientPlaybackGuard(canStartAmbientPlayback);
     const unregister = registerAmbientLifecycle({
       interrupt: interruptAmbientSound,
@@ -88,62 +145,85 @@ function EnabledAmbientSoundOverlay() {
       unregister();
       cleanup();
     };
-  }, []);
+  }, [audioEnabled]);
 
   useEffect(() => subscribeAmbientVoiceActivity(setVoiceActive), []);
 
   useEffect(() => {
     if (
       Platform.OS === 'ios'
-      && state.timerStatus === 'ended'
+      && timerStatus === 'ended'
       && previousTimerStatus.current !== 'ended'
     ) {
       AccessibilityInfo.announceForAccessibility('Your time is up. Stay as long as you like.');
     }
-    previousTimerStatus.current = state.timerStatus;
-  }, [state.timerStatus]);
+    previousTimerStatus.current = timerStatus;
+  }, [timerStatus]);
 
   useEffect(() => {
     closeSheet();
   }, [closeSheet, pathname]);
 
   useEffect(() => {
+    if (timerStatus === 'ended') return;
+    if (noticeHeightRef.current === 0) return;
+    noticeHeightRef.current = 0;
+    commitDockHeight();
+  }, [commitDockHeight, timerStatus]);
+
+  useEffect(() => {
     if (playerVisible || playerDismissing) return;
-    setPlayerDockHeight(0);
-  }, [playerDismissing, playerVisible, setPlayerDockHeight]);
+    if (playerHeightRef.current === 0) return;
+    playerHeightRef.current = 0;
+    commitDockHeight();
+  }, [commitDockHeight, playerDismissing, playerVisible]);
 
   useEffect(() => () => setPlayerDockHeight(0), [setPlayerDockHeight]);
 
   useEffect(() => {
+    if (announcementOpen || sheet !== null) return;
+    const pending = listPendingAnnouncementPages({
+      bookshelf: true,
+      companion: true,
+      music: audioEnabled && !hasUsed,
+      reflection: premiumPolicy === 'granted',
+    }).filter((page) => !announcedThisVisit.current.has(page.id));
     if (
-      todayReadingAvailable
-      && canAnnounceMusic({
+      canAnnounceFeatures({
         isTodayHome: todayHome,
-        hasUsed: state.hasUsed,
-        soundOff: state.status === 'off',
-        timerIdle: state.timerStatus === 'idle',
-        alreadySeen: hasSeenAnnouncement(MUSIC_ANNOUNCEMENT.id),
+        todayReadingAvailable,
+        soundOff: !audioEnabled || status === 'off',
+        timerIdle: timerStatus === 'idle',
         narrationActive,
         voiceActive,
         keyboardVisible,
         appActive,
+        pendingCount: pending.length,
       })
     ) {
+      pending.forEach((page) => announcedThisVisit.current.add(page.id));
+      setAnnouncementPages(pending);
       setAnnouncementOpen(true);
     }
   }, [
+    announcementOpen,
     appActive,
+    audioEnabled,
+    hasUsed,
     keyboardVisible,
     narrationActive,
-    state.hasUsed,
-    state.status,
-    state.timerStatus,
+    premiumPolicy,
+    sheet,
+    status,
+    timerStatus,
     todayHome,
     todayReadingAvailable,
     voiceActive,
   ]);
 
-  const showSoundQa = isQaToolsEnabled() && pathname === '/' && !inTabs;
+  const showSoundQa = audioEnabled && isQaToolsEnabled() && pathname === '/' && !inTabs;
+  const timerEnded = audioEnabled && timerStatus === 'ended';
+  const showDock = audioEnabled && (timerEnded || playerVisible || playerDismissing);
 
   return (
     <>
@@ -166,7 +246,7 @@ function EnabledAmbientSoundOverlay() {
           </AmbientText>
         </Pressable>
       ) : null}
-      {headerVisible ? (
+      {audioEnabled && headerVisible ? (
         <View
           pointerEvents="box-none"
           style={{ position: 'absolute', top: insets.top + 4, right: 12 }}
@@ -174,70 +254,67 @@ function EnabledAmbientSoundOverlay() {
           <AmbientMusicEntry />
         </View>
       ) : null}
-      {state.timerStatus === 'ended' ? (
+      {showDock ? (
         <View
-          accessibilityLiveRegion="polite"
-          style={{
-            position: 'absolute',
-            top: insets.top + 52,
-            left: 16,
-            right: 16,
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            paddingHorizontal: 14,
-            paddingVertical: 10,
-            borderRadius: 14,
-            backgroundColor: colors.backgroundElevated,
-          }}
-        >
-          <AmbientText style={{ fontFamily: FontFamily.body, color: colors.text, flex: 1 }}>
-            Your time is up. Stay as long as you like.
-          </AmbientText>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Dismiss timer notice"
-            onPress={() => setAmbientTimer(0)}
-            style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
-          >
-            <XIcon size={18} color={colors.textMuted} />
-          </Pressable>
-        </View>
-      ) : null}
-      {playerVisible || playerDismissing ? (
-        <View
-          onLayout={(event) => setPlayerDockHeight(event.nativeEvent.layout.height)}
+          testID="ambient-bottom-dock"
+          pointerEvents="box-none"
           style={{
             position: 'absolute',
             left: (width - dockWidth) / 2,
             bottom: insets.bottom + 64,
             width: dockWidth,
+            gap: 8,
           }}
         >
-          <AmbientSoundPlayer
-            onOpen={() => openSheet('sounds')}
-            onDismissStart={() => {
-              setPlayerDismissing(true);
-              stopAmbientSound();
-            }}
-            onDismissEnd={() => setPlayerDismissing(false)}
-            onFocusReturn={focusMusicEntry}
-          />
+          {timerEnded ? (
+            <EndedTimerNotice
+              onDismiss={() => setAmbientTimer(0)}
+              onHeight={(height) => {
+                noticeHeightRef.current = height;
+                commitDockHeight();
+              }}
+            />
+          ) : null}
+          {playerVisible || playerDismissing ? (
+            <View
+              onLayout={(event) => {
+                playerHeightRef.current = event.nativeEvent.layout.height;
+                commitDockHeight();
+              }}
+            >
+              <AmbientSoundPlayer
+                onOpen={() => openSheet('sounds')}
+                onDismissStart={() => {
+                  setPlayerDismissing(true);
+                  stopAmbientSound();
+                }}
+                onDismissEnd={() => setPlayerDismissing(false)}
+                onFocusReturn={focusMusicEntry}
+              />
+            </View>
+          ) : null}
         </View>
       ) : null}
-      <AmbientSoundSheet
-        visible={sheet != null}
-        initialPanel={sheet ?? 'sounds'}
-        onClose={closeSheet}
-        returnFocusRef={returnFocusRef ?? undefined}
-      />
-      <MusicAnnouncement
+      {audioEnabled ? (
+        <AmbientSoundSheet
+          visible={sheet != null}
+          initialPanel={sheet ?? 'sounds'}
+          onClose={closeSheet}
+          returnFocusRef={returnFocusRef ?? undefined}
+        />
+      ) : null}
+      <FeatureAnnouncement
+        key={announcementPages.map((page) => page.id).join('|') || 'closed'}
         visible={announcementOpen}
+        pages={announcementPages}
         actionLabel="Read with music"
         previewAllowed={appActive && !keyboardVisible && !narrationActive && !voiceActive}
-        onClose={() => setAnnouncementOpen(false)}
+        onClose={() => {
+          setAnnouncementOpen(false);
+          setAnnouncementPages([]);
+        }}
         onTry={(songId) => {
-          if (!todayHome || !todayReadingAvailable || !canStartAmbientPlayback()) return false;
+          if (!audioEnabled || !todayHome || !todayReadingAvailable || !canStartAmbientPlayback()) return false;
           void playAmbientSound(songId);
           router.push('/(tabs)/(today)/reading');
           return true;
@@ -248,5 +325,5 @@ function EnabledAmbientSoundOverlay() {
 }
 
 export function AmbientSoundOverlay() {
-  return isAmbientAudioEnabled() ? <EnabledAmbientSoundOverlay /> : null;
+  return <EnabledAmbientSoundOverlay />;
 }

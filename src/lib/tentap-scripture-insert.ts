@@ -46,7 +46,6 @@ export function buildTenTapScriptureInsertJS({ reference, text }: TenTapScriptur
                 content: [
                   {
                     type: 'text',
-                    marks: [{ type: 'italic' }],
                     text: ${scriptureReference},
                   },
                 ],

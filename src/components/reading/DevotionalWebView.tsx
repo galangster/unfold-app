@@ -1253,7 +1253,7 @@ export function DevotionalWebView({
     // because `*` is not an HTML special char and survives escaping unchanged.
     const applyInlineMarkdown = (escaped: string): string => escaped
       .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*([^*]+)\*/g, '<em>$1</em>');
+      .replace(/\*([^*]+)\*/g, '<em class="devotional-emphasis">$1</em>');
 
     // Render a single paragraph, handling --- dividers and standalone bold headers
     const renderParagraph = (p: string, isFirst = false): string => {
@@ -1391,7 +1391,7 @@ export function DevotionalWebView({
       line-height: var(--body-line-height);
       color: var(--text);
       background: transparent;
-      padding: 0 ${CONTENT_PADDING}px 60px;
+      padding: 0 ${CONTENT_PADDING}px 24px;
       max-width: 100%;
       -webkit-user-select: text;
       user-select: text;
@@ -1499,6 +1499,14 @@ export function DevotionalWebView({
       margin-top: 8px;
     }
 
+    /* The floating toolbar follows the final content block. */
+    body > :nth-last-child(2) {
+      margin-bottom: 0;
+    }
+
+
+    /* Owner-approved upright emphasis retains semantic markup and visible weight. */
+    .devotional-emphasis { font-style: normal; font-weight: 600; }
 
     /* Horizontal rule from --- markdown */
     hr {
@@ -1513,7 +1521,7 @@ export function DevotionalWebView({
       font-family: ${displayFontStack};
       font-size: calc(var(--body-font-size) * 1.05);
       line-height: 1.5;
-      font-style: italic;
+      font-style: normal;
       color: var(--accent);
       text-align: center;
       margin: calc(var(--body-line-height) * 1.4) 8px;
@@ -1572,7 +1580,7 @@ export function DevotionalWebView({
     }
 
     blockquote p {
-      font-style: italic;
+      font-style: normal;
       margin-bottom: 14px;
       line-height: calc(var(--body-line-height) * 1.05);
       padding-left: 2px;
@@ -1628,7 +1636,7 @@ export function DevotionalWebView({
     }
     
     .original {
-      font-style: italic;
+      font-style: normal;
       font-size: calc(var(--body-font-size) - 2px);
       color: var(--accent);
       margin-left: 12px;
@@ -1918,7 +1926,7 @@ export function DevotionalWebView({
           || (reportGeneration === 0 && isFirstDocumentReport)
         ) {
           setHeightCommit({
-            height: Math.max(data.height, 200),
+            height: Math.max(data.height, 1),
             generation: reportGeneration,
           });
         }

@@ -1,7 +1,7 @@
 import { buildTenTapScriptureInsertJS } from '../tentap-scripture-insert';
 
 describe('buildTenTapScriptureInsertJS', () => {
-  it('inserts scripture text and italic reference at the saved selection', () => {
+  it('inserts scripture text and upright reference at the saved selection', () => {
     const js = buildTenTapScriptureInsertJS({
       reference: '1 Samuel 17:45-47',
       text: 'David said to the Philistine',
@@ -11,7 +11,7 @@ describe('buildTenTapScriptureInsertJS', () => {
     expect(js).toContain('.setTextSelection(pos)');
     expect(js).toContain("type: 'blockquote'");
     expect(js).toContain("text: \"David said to the Philistine\"");
-    expect(js).toContain("marks: [{ type: 'italic' }]");
+    expect(js).not.toContain("marks: [{ type: 'italic' }]");
     expect(js).toContain("text: \"\\u2014 1 Samuel 17:45-47\"");
     expect(js).toContain('delete window.__savedSelection');
   });

@@ -34,7 +34,7 @@ export function useReadingFont() {
 
     return {
       body: font.regular,
-      bodyItalic: font.italic,
+      bodyItalic: font.regular,
       bodyMedium: font.medium,
       bodyBold: font.bold,
       // Keep non-body fonts the same

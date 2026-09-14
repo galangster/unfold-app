@@ -218,7 +218,7 @@ function buildEditorCSS(colors: any, fontSize: ReflectionFontSize, webFontFamily
       padding: 12px 14px;
       margin: 10px 0;
       color: ${colors.textMuted};
-      font-style: italic;
+      font-style: normal;
     }
     strong { font-weight: 700; }
     em { font-style: italic; }
@@ -698,7 +698,6 @@ export default function NoteDetailScreen() {
                 content: [
                   {
                     type: 'text',
-                    marks: [{ type: 'italic' }],
                     text: '\\u2014 ${escapedRef}',
                   },
                 ],

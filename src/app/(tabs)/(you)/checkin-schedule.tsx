@@ -431,7 +431,7 @@ export default function CheckInScheduleScreen() {
                             fontFamily: FontFamily.ui,
                             fontSize: FontSize.sm,
                             color: colors.textMuted,
-                            fontStyle: 'italic',
+                            fontStyle: 'normal',
                           }}
                         >
                           Skipped

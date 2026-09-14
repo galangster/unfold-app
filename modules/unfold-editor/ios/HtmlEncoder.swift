@@ -73,7 +73,7 @@ enum HtmlEncoder {
       //
       // - Headings are rendered bold → suppress <b> (the <h1>/<h2>/<h3>
       //   tag carries the bold semantics).
-      // - Blockquotes are rendered italic → suppress <i>.
+      // Blockquotes use upright type. Preserve explicit inline italics.
       // - Checked checklist items are rendered with strikethrough +
       //   muted color → suppress <s> (data-checked="true" carries it).
       // - Code blocks suppress ALL inline formatting (literal text) and
@@ -87,7 +87,6 @@ enum HtmlEncoder {
         && checklistChecked(in: attributedString, at: paragraphRange.location)
       let suppressBold = (blockType == .heading1 || blockType == .heading2 || blockType == .heading3)
         || blockType == .codeBlock
-      let suppressItalic = (blockType == .blockquote)
       let suppressStrikethrough = checkedChecklist
       let suppressMonospace = (blockType == .codeBlock)
       let suppressInlineFormatting = (blockType == .codeBlock)
@@ -96,7 +95,6 @@ enum HtmlEncoder {
         range: paragraphRange,
         excludeTrailingNewline: true,
         suppressBold: suppressBold,
-        suppressItalic: suppressItalic,
         suppressStrikethrough: suppressStrikethrough,
         suppressMonospace: suppressMonospace,
         suppressInlineFormatting: suppressInlineFormatting)

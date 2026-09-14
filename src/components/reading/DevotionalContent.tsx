@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import type React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, type LayoutChangeEvent, type ScrollView } from 'react-native';
+import { View, TouchableOpacity, StyleSheet, type LayoutChangeEvent } from 'react-native';
+import { ReaderText as Text } from './ReaderText';
 import { BookOpenIcon, BookmarkSimpleIcon, CaretRightIcon } from '@/components/icons';
 import Animated, {
   useSharedValue,
@@ -27,6 +28,7 @@ import { ScripturePracticeEntry } from './ScripturePracticeEntry';
 import { DevotionalWebView } from './DevotionalWebView';
 import type { DevotionalWebViewCommands, HighlightsChangedEvent } from './DevotionalWebView';
 import { InlineReflectionJournal } from './InlineReflectionJournal';
+import type { ReflectionKeyboardToolbarState } from './ReflectionQuestionNav';
 import { getReflectionTypography } from '@/lib/reflection-typography';
 import { Typography } from '@/constants/typography';
 
@@ -56,8 +58,9 @@ interface DevotionalContentProps {
   dayNumber?: number;
   onOpenJournal?: (focusQuestion?: number) => void;
   onStudyMethodPress?: (methodId: string) => void;
-  scrollViewRef?: RefObject<ScrollView | null>;
+  scrollContentRef?: RefObject<View | null>;
   onReflectionInputFocus?: (contentY: number) => void;
+  onReflectionKeyboardToolbarChange?: (toolbar: ReflectionKeyboardToolbarState | null) => void;
   /** Scroll to the act section once it lays out (act reminder tap). */
   focusAct?: boolean;
   onActLocated?: (contentY: number) => void;
@@ -118,8 +121,9 @@ export function DevotionalContent({
   dayNumber,
   onOpenJournal,
   onStudyMethodPress,
-  scrollViewRef,
+  scrollContentRef,
   onReflectionInputFocus,
+  onReflectionKeyboardToolbarChange,
   focusAct,
   onActLocated,
   onActOutcome,
@@ -130,10 +134,11 @@ export function DevotionalContent({
   const layoutCommitFrameRef = useRef<number | null>(null);
   const [reflectionLayoutCommitSignal, setReflectionLayoutCommitSignal] = useState(0);
   const handleActLayout = useCallback((event: LayoutChangeEvent) => {
+    onSectionLayout?.('act', event.nativeEvent.layout.y, layoutGeneration ?? 0);
     if (!focusAct || actLocatedRef.current) return;
     actLocatedRef.current = true;
     onActLocated?.(event.nativeEvent.layout.y);
-  }, [focusAct, onActLocated]);
+  }, [focusAct, layoutGeneration, onActLocated, onSectionLayout]);
   const fontSizes = FONT_SIZE_VALUES[fontSize];
   const reflectionTypography = getReflectionTypography(fontSize);
   const readingFont = useReadingFont();
@@ -171,7 +176,7 @@ export function DevotionalContent({
   const displayScripture = versedScripture?.text ?? day.scriptureText;
   const passage = versedScripture?.passage;
   const scriptureTextStyle = {
-    fontFamily: readingFont.bodyItalic,
+    fontFamily: readingFont.body,
     fontSize: fontSizes.scripture,
     color: isDark ? colors.text : colors.textMuted,
     lineHeight: fontSizes.scripture * 1.75,
@@ -462,7 +467,7 @@ export function DevotionalContent({
               </TouchableOpacity>
               <Text
                 style={{
-                  fontFamily: readingFont.bodyItalic,
+                  fontFamily: readingFont.body,
                   fontSize: Math.round(fontSizes.body * 1.15),
                   color: isDark ? colors.text : colors.textMuted,
                   lineHeight: Math.round(fontSizes.body * 1.15) * 1.7,
@@ -477,7 +482,12 @@ export function DevotionalContent({
 
       {/* Reflection Questions Section */}
       {day.reflectionQuestions && day.reflectionQuestions.length > 0 && (
-        <View ref={reflectionSectionRef} collapsable={false}>
+        <View
+          ref={reflectionSectionRef}
+          testID="reading-reflection-section"
+          collapsable={false}
+          onLayout={(event) => onSectionLayout?.('reflection', event.nativeEvent.layout.y, layoutGeneration ?? 0)}
+        >
           <SectionDivider color={colors.textMuted} style={{ marginTop: 48, marginBottom: 32 }} />
 
           {devotionalId && dayNumber && onOpenJournal ? (
@@ -487,9 +497,10 @@ export function DevotionalContent({
               dayNumber={dayNumber}
               onOpenFullJournal={onOpenJournal}
               fontSize={fontSize}
-              scrollViewRef={scrollViewRef}
+              scrollContentRef={scrollContentRef}
               onFocusInput={onReflectionInputFocus}
               layoutCommitSignal={reflectionLayoutCommitSignal}
+              onKeyboardToolbarChange={onReflectionKeyboardToolbarChange}
             />
           ) : (
             <View>
@@ -529,7 +540,7 @@ export function DevotionalContent({
 
       {/* Act Section — the day's one concrete same-day act */}
       {day.act && (
-        <View ref={actSectionRef} collapsable={false} onLayout={handleActLayout}>
+        <View ref={actSectionRef} testID="reading-act-section" collapsable={false} onLayout={handleActLayout}>
           <SectionDivider color={colors.textMuted} style={{ marginTop: 48, marginBottom: 32 }} />
           <ReaderSectionHeader label="Today" textColor={colors.text} />
           <Text
@@ -539,7 +550,6 @@ export function DevotionalContent({
               color: colors.text,
               lineHeight: fontSizes.body * 1.8,
               textAlign: 'left',
-              paddingHorizontal: 16,
             }}
           >
             {preventOrphan(day.act)}
@@ -583,17 +593,22 @@ export function DevotionalContent({
 
       {/* Closing Prayer Section */}
       {day.closingPrayer && (
-        <View ref={prayerSectionRef} collapsable={false} style={dcStyles.prayerSection}>
+        <View
+          ref={prayerSectionRef}
+          testID="reading-prayer-section"
+          collapsable={false}
+          style={dcStyles.prayerSection}
+          onLayout={(event) => onSectionLayout?.('prayer', event.nativeEvent.layout.y, layoutGeneration ?? 0)}
+        >
           <SectionDivider color={colors.textMuted} style={{ marginTop: 0, marginBottom: 32 }} />
           <ReaderSectionHeader label="A Prayer" textColor={colors.text} />
           <Text
             style={{
-              fontFamily: readingFont.bodyItalic,
+              fontFamily: readingFont.body,
               fontSize: fontSizes.body,
               color: colors.text,
               lineHeight: fontSizes.body * 1.8,
               textAlign: 'left',
-              paddingHorizontal: 16,
             }}
           >
             {preventOrphan(day.closingPrayer)}
@@ -605,7 +620,7 @@ export function DevotionalContent({
       {day.carryLine && (
         <Text
           style={{
-            fontFamily: readingFont.bodyItalic,
+            fontFamily: readingFont.body,
             fontSize: fontSizes.body,
             color: colors.textMuted,
             lineHeight: fontSizes.body * 1.8,
@@ -665,12 +680,14 @@ const dcStyles = StyleSheet.create({
   ornamentalRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing['7'],
+    justifyContent: 'flex-start',
+    marginBottom: Spacing['4'],
   },
   ornamentalLabel: {
-    ...Typography.sectionHeader,
-    textAlign: 'center',
+    fontFamily: FontFamily.display,
+    fontSize: 24,
+    lineHeight: 30,
+    textAlign: 'left',
   },
   dayTitle: {
     fontFamily: FontFamily.display,

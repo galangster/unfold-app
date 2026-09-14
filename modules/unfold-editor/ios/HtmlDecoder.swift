@@ -245,7 +245,7 @@ enum HtmlDecoder {
         style.headIndent = 16
         style.paragraphSpacing = 8
         style.paragraphSpacingBefore = 8
-        return (UnfoldFonts.bodyItalic(), style, nil, UnfoldColors.textMuted)
+        return (UnfoldFonts.body(), style, nil, UnfoldColors.textMuted)
       case "pre":
         let style = NSMutableParagraphStyle()
         // 12pt padding on the left so text doesn't sit flush against the

@@ -59,7 +59,9 @@ describe('PDF word-study rendering', () => {
       meaning: 'Relief and restoration.',
     }));
 
-    expect(html).toContain('<strong>rest</strong> <em>(anapausis)</em>');
+    expect(html).toContain(
+      '<strong>rest</strong> <em class="export-emphasis">(anapausis)</em>',
+    );
     expect(html).toContain('<p>Relief and restoration.</p>');
   });
 });

@@ -1,17 +1,18 @@
+/** @jsxImportSource react */
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { RefObject } from 'react';
-import { AppState, View, Text, TextInput, Keyboard, TouchableOpacity, type ScrollView } from 'react-native';
+import { AppState, View, TextInput, Keyboard, Pressable, StyleSheet, TouchableOpacity } from 'react-native';
+import { ReaderText as Text } from './ReaderText';
+import type { ReflectionKeyboardToolbarState } from './ReflectionQuestionNav';
 import Animated, {
   FadeIn,
   FadeInDown,
   useReducedMotion,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { ArrowRightIcon, CaretDownIcon, CaretUpIcon, NotePencilIcon } from '@/components/icons';
+import { CaretDownIcon, CaretUpIcon } from '@/components/icons';
 import { FontFamily, FontSize as FontSizeTokens } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
-import { alpha } from '@/components/ui';
-import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
 import {
@@ -21,8 +22,6 @@ import {
   FontSize,
 } from '@/lib/store';
 import { getReflectionTypography, type ReflectionTypography } from '@/lib/reflection-typography';
-import { Typography } from '@/constants/typography';
-
 import { preventOrphan } from '@/lib/cn';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import {
@@ -47,9 +46,10 @@ interface InlineReflectionJournalProps {
   dayNumber: number;
   onOpenFullJournal: (focusQuestion?: number) => void;
   fontSize?: FontSize;
-  scrollViewRef?: RefObject<ScrollView | null>;
+  scrollContentRef?: RefObject<View | null>;
   onFocusInput?: (contentY: number) => void;
   layoutCommitSignal?: number;
+  onKeyboardToolbarChange?: (toolbar: ReflectionKeyboardToolbarState | null) => void;
 }
 
 type ReflectionSaveState = 'saving' | 'saved' | 'error';
@@ -74,9 +74,10 @@ export function InlineReflectionJournal({
   dayNumber,
   onOpenFullJournal,
   fontSize = 'medium',
-  scrollViewRef,
+  scrollContentRef,
   onFocusInput,
   layoutCommitSignal,
+  onKeyboardToolbarChange,
 }: InlineReflectionJournalProps) {
   const { colors, isDark } = useTheme();
   const reducedMotion = useReducedMotion();
@@ -122,10 +123,16 @@ export function InlineReflectionJournal({
       save: () => flushPendingResponseRef.current(),
     });
   }
-  const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const laidOutInputsRef = useRef(new Set<number>());
   const inputRefs = useRef<Map<number, TextInput | null>>(new Map());
   const focusedInputIndexRef = useRef<number | null>(null);
   const measurementRequestRef = useRef(0);
+  const [heldIndex, setHeldIndex] = useState<number | null>(null);
+  const [navFocusIndex, setNavFocusIndex] = useState<number | null>(null);
+  const [toolbarActive, setToolbarActive] = useState(false);
+  const heldIndexRef = useRef<number | null>(null);
+  const navFocusIndexRef = useRef<number | null>(null);
+  heldIndexRef.current = heldIndex;
 
   const questionsKey = useMemo(() => questions.join('\u001f'), [questions]);
 
@@ -147,10 +154,12 @@ export function InlineReflectionJournal({
   // swiping from an answered day to an unanswered day, because the component instance
   // is reused across devotional days.
   useEffect(() => {
-    if (focusTimerRef.current) {
-      clearTimeout(focusTimerRef.current);
-      focusTimerRef.current = null;
-    }
+    navFocusIndexRef.current = null;
+    heldIndexRef.current = null;
+    laidOutInputsRef.current.clear();
+    setNavFocusIndex(null);
+    setHeldIndex(null);
+    setToolbarActive(false);
     autoSaveControllerRef.current?.flush();
     latestRevisionsRef.current.clear();
     pendingResponseRef.current = null;
@@ -334,11 +343,11 @@ export function InlineReflectionJournal({
     (index: number) => {
       const request = ++measurementRequestRef.current;
       const input = inputRefs.current.get(index) as MeasurableTextInput | null | undefined;
-      const scrollView = scrollViewRef?.current;
-      if (!input || !scrollView || typeof input.measureLayout !== 'function') return;
+      const scrollContent = scrollContentRef?.current;
+      if (!input || !scrollContent || typeof input.measureLayout !== 'function') return;
 
       input.measureLayout(
-        scrollView,
+        scrollContent,
         (_x, y) => {
           if (
             measurementRequestRef.current === request
@@ -351,7 +360,7 @@ export function InlineReflectionJournal({
         () => {}
       );
     },
-    [onFocusInput, scrollViewRef]
+    [onFocusInput, scrollContentRef]
   );
 
   useEffect(() => {
@@ -362,6 +371,13 @@ export function InlineReflectionJournal({
 
   const handleInputFocus = useCallback((index: number) => {
     focusedInputIndexRef.current = index;
+    if (navFocusIndexRef.current === index) {
+      navFocusIndexRef.current = null;
+      heldIndexRef.current = null;
+      setNavFocusIndex(null);
+      setHeldIndex(null);
+    }
+    setToolbarActive(true);
     measureFocusedInput(index);
   }, [measureFocusedInput]);
 
@@ -369,6 +385,9 @@ export function InlineReflectionJournal({
     if (focusedInputIndexRef.current === index) {
       focusedInputIndexRef.current = null;
       measurementRequestRef.current += 1;
+      if (navFocusIndexRef.current === null && heldIndexRef.current === null) {
+        setToolbarActive(false);
+      }
     }
 
     const latest = latestRevisionsRef.current.get(index);
@@ -386,6 +405,40 @@ export function InlineReflectionJournal({
     }
   }, []);
 
+  const cancelPendingFocus = useCallback(() => {
+    navFocusIndexRef.current = null;
+    heldIndexRef.current = null;
+    setNavFocusIndex(null);
+    setHeldIndex(null);
+  }, []);
+
+  const handleInputRef = useCallback((index: number, input: TextInput | null) => {
+    inputRefs.current.set(index, input);
+    if (!input) laidOutInputsRef.current.delete(index);
+  }, []);
+
+  const handleInputReady = useCallback((index: number) => {
+    laidOutInputsRef.current.add(index);
+    if (navFocusIndexRef.current === index) inputRefs.current.get(index)?.focus();
+  }, []);
+
+  // An already mounted field may not emit another layout event.
+  useEffect(() => {
+    if (navFocusIndex !== null && laidOutInputsRef.current.has(navFocusIndex)) {
+      inputRefs.current.get(navFocusIndex)?.focus();
+    }
+  }, [navFocusIndex]);
+
+  const expandQuestion = useCallback((index: number) => {
+    autoSaveControllerRef.current?.flush();
+    const outgoing = focusedInputIndexRef.current;
+    heldIndexRef.current = outgoing !== index ? outgoing : null;
+    setHeldIndex(heldIndexRef.current);
+    navFocusIndexRef.current = index;
+    setNavFocusIndex(index);
+    setExpandedIndex(index);
+  }, []);
+
   const handleQuestionTap = useCallback(
     (index: number) => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -394,7 +447,8 @@ export function InlineReflectionJournal({
       }
 
       if (expandedIndex === index) {
-        // Collapse
+        cancelPendingFocus();
+        setToolbarActive(false);
         if (focusedInputIndexRef.current === index) {
           focusedInputIndexRef.current = null;
           measurementRequestRef.current += 1;
@@ -402,23 +456,73 @@ export function InlineReflectionJournal({
         Keyboard.dismiss();
         setExpandedIndex(null);
       } else {
-        // Expand and focus — 400ms delay lets the expand animation finish
-        // and layout settle before measuring against the reader scroll view.
-        setExpandedIndex(index);
-        if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
-        focusTimerRef.current = setTimeout(() => {
-          focusedInputIndexRef.current = index;
-          inputRefs.current.get(index)?.focus();
-        }, 400);
+        expandQuestion(index);
       }
     },
-    [expandedIndex]
+    [cancelPendingFocus, expandQuestion, expandedIndex]
   );
+
+  const handlePreviousQuestion = useCallback(() => {
+    if (expandedIndex === null || expandedIndex <= 0) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    expandQuestion(expandedIndex - 1);
+  }, [expandQuestion, expandedIndex]);
+
+  const handleNextQuestion = useCallback(() => {
+    if (expandedIndex === null || expandedIndex >= questions.length - 1) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    expandQuestion(expandedIndex + 1);
+  }, [expandQuestion, expandedIndex, questions.length]);
+
+  const handleDoneEditing = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    cancelPendingFocus();
+    focusedInputIndexRef.current = null;
+    measurementRequestRef.current += 1;
+    setToolbarActive(false);
+    autoSaveControllerRef.current?.flush();
+    Keyboard.dismiss();
+  }, [cancelPendingFocus]);
+
+  useEffect(() => {
+    const subscription = Keyboard.addListener('keyboardDidHide', () => {
+      cancelPendingFocus();
+      focusedInputIndexRef.current = null;
+      setToolbarActive(false);
+      autoSaveControllerRef.current?.flush();
+    });
+    return () => subscription.remove();
+  }, [cancelPendingFocus]);
+
+  useEffect(() => {
+    if (!onKeyboardToolbarChange) return;
+    if (!toolbarActive || expandedIndex === null) {
+      onKeyboardToolbarChange(null);
+      return;
+    }
+    onKeyboardToolbarChange({
+      questionIndex: expandedIndex,
+      questionCount: questions.length,
+      onPrevious: handlePreviousQuestion,
+      onNext: handleNextQuestion,
+      onDone: handleDoneEditing,
+    });
+  }, [
+    expandedIndex,
+    handleDoneEditing,
+    handleNextQuestion,
+    handlePreviousQuestion,
+    onKeyboardToolbarChange,
+    questions.length,
+    toolbarActive,
+  ]);
 
   // Save any pending responses on unmount
   useEffect(() => {
     return () => {
-      if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+      onKeyboardToolbarChange?.(null);
+      navFocusIndexRef.current = null;
+      heldIndexRef.current = null;
       autoSaveControllerRef.current?.cancel();
       // Flush all local responses on unmount if there's a pending debounced save.
       // Uses refs to access the latest values (not stale closure from mount time).
@@ -459,58 +563,48 @@ export function InlineReflectionJournal({
     [localResponses, existingEntry]
   );
 
-  const answeredCount = useMemo(() => {
-    let count = 0;
-    for (let i = 0; i < questions.length; i++) {
-      const response = getResponse(i, questions[i]);
-      if (response.trim().length > 0) count++;
-    }
-    return count;
-  }, [questions, getResponse]);
-
   return (
-    <View style={{ marginTop: Spacing['12'] }}>
-      {/* Header */}
+    <View>
       <View
         style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'center',
+          alignItems: 'flex-start',
           marginBottom: Spacing['7'],
         }}
       >
-        <Text
+        <View
           style={{
-            ...Typography.sectionHeader,
-            color: colors.text,
-            textAlign: 'center',
-          }}
-        >
-          Optional reflection
-        </Text>
-      </View>
-
-      {/* Progress indicator */}
-      {answeredCount > 0 && (
-        <Animated.View
-          entering={reducedMotion ? undefined : FadeIn.duration(Duration.slow).easing(Ease.out)}
-          style={{
-            alignItems: 'center',
-            marginBottom: Spacing['5'],
+            flexDirection: 'row',
+            alignItems: 'baseline',
+            flexWrap: 'wrap',
+            gap: Spacing['2'],
           }}
         >
           <Text
+            testID="reflection-heading"
             style={{
-              fontFamily: FontFamily.ui,
-              fontSize: 11,
-              color: answeredCount === questions.length ? colors.accent : colors.textSubtle,
-              letterSpacing: 0.3,
+              fontFamily: FontFamily.display,
+              fontSize: 24,
+              lineHeight: 30,
+              color: colors.text,
+              textAlign: 'left',
             }}
           >
-            {answeredCount} of {questions.length} reflected on
+            Reflection
           </Text>
-        </Animated.View>
-      )}
+          <Text
+            testID="reflection-optional-label"
+            style={{
+              fontFamily: FontFamily.ui,
+              fontSize: FontSizeTokens.xs,
+              lineHeight: 16,
+              color: colors.textMuted,
+              textAlign: 'left',
+            }}
+          >
+            Optional
+          </Text>
+        </View>
+      </View>
 
       {/* Questions */}
       {questions.map((question, index) => {
@@ -531,6 +625,7 @@ export function InlineReflectionJournal({
             index={index}
             question={question}
             isExpanded={isExpanded}
+            isHeld={heldIndex === index}
             isAnswered={isAnswered}
             response={response}
             onTap={handleQuestionTap}
@@ -539,9 +634,10 @@ export function InlineReflectionJournal({
             checkMode={checkMode}
             checkPlayKey={signal?.savedRevision ?? 0}
             onRetrySave={handleRetrySave}
-            inputRefs={inputRefs}
+            onInputRef={handleInputRef}
             onInputFocus={handleInputFocus}
             onInputBlur={handleInputBlur}
+            onInputLayout={handleInputReady}
             colors={colors}
             isDark={isDark}
             typography={typography}
@@ -551,41 +647,39 @@ export function InlineReflectionJournal({
         );
       })}
 
-      {/* Continue in Journal CTA */}
       <Animated.View
         entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out).delay(questions.length * 100 + 200)}
-        style={{ marginTop: Spacing['5'], alignItems: 'center' }}
+        style={{ marginTop: Spacing['5'], alignItems: 'flex-start' }}
       >
-        <TouchableOpacity
-          activeOpacity={0.6}
+        <Pressable
+          testID="reflection-journal-link"
+          accessibilityRole="button"
+          accessibilityLabel="Continue in Journal"
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             onOpenFullJournal();
           }}
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: Spacing['2'],
-            paddingVertical: 14,
-            paddingHorizontal: Spacing['6'],
-            borderRadius: Radius.md,
-            borderWidth: 1,
-            borderColor: alpha(colors.accent, 0.25),
-            backgroundColor: alpha(colors.accent, 0.03),
-          }}
+          style={{ alignSelf: 'flex-start' }}
         >
-          <NotePencilIcon size={16} color={colors.accent} weight="light" />
-          <Text
+          <View
+            testID="reflection-journal-link-target"
             style={{
-              fontFamily: FontFamily.uiMedium,
-              fontSize: FontSizeTokens.sm,
-              color: colors.accent,
+              minHeight: 44,
+              justifyContent: 'center',
             }}
           >
-            Continue in Journal
-          </Text>
-          <ArrowRightIcon size={14} color={colors.accent} weight="light" />
-        </TouchableOpacity>
+            <Text
+              style={{
+                fontFamily: FontFamily.uiMedium,
+                fontSize: FontSizeTokens.sm,
+                color: colors.accent,
+                textAlign: 'left',
+              }}
+            >
+              Continue in Journal →
+            </Text>
+          </View>
+        </Pressable>
       </Animated.View>
     </View>
   );
@@ -598,6 +692,7 @@ function ReflectionQuestionCard({
   index,
   question,
   isExpanded,
+  isHeld,
   isAnswered,
   response,
   onTap,
@@ -606,9 +701,10 @@ function ReflectionQuestionCard({
   checkMode,
   checkPlayKey,
   onRetrySave,
-  inputRefs,
+  onInputRef,
   onInputFocus,
   onInputBlur,
+  onInputLayout,
   colors,
   isDark,
   typography,
@@ -618,6 +714,7 @@ function ReflectionQuestionCard({
   index: number;
   question: string;
   isExpanded: boolean;
+  isHeld: boolean;
   isAnswered: boolean;
   response: string;
   onTap: (index: number) => void;
@@ -626,16 +723,19 @@ function ReflectionQuestionCard({
   checkMode: ReturnType<typeof reflectionCheckMode>;
   checkPlayKey: number;
   onRetrySave: (index: number) => void;
-  inputRefs: React.MutableRefObject<Map<number, TextInput | null>>;
+  onInputRef: (index: number, input: TextInput | null) => void;
   onInputFocus: (index: number) => void;
   onInputBlur: (index: number) => void;
+  onInputLayout: (index: number) => void;
   colors: any;
   isDark: boolean;
   typography: ReflectionTypography;
   editable?: boolean;
   reducedMotion?: boolean;
 }) {
+  const inputRef = useCallback((input: TextInput | null) => onInputRef(index, input), [index, onInputRef]);
   const playedCheckRef = useRef(0);
+  const [isFocused, setIsFocused] = useState(false);
   return (
     <Animated.View
       entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).easing(Ease.out).delay(index * 120)}
@@ -656,7 +756,7 @@ function ReflectionQuestionCard({
               flexDirection: 'row',
               alignItems: 'flex-start',
               gap: 10,
-              paddingLeft: 18,
+              paddingLeft: 0,
               paddingRight: 8,
               paddingVertical: Spacing['3'],
             },
@@ -686,37 +786,56 @@ function ReflectionQuestionCard({
         </Animated.View>
       </TouchableOpacity>
 
-      {/* Expanded: TextInput area */}
-      {isExpanded && (
+      {/* Expanded: TextInput area. A held prior field stays mounted until Next is ready. */}
+      {(isExpanded || isHeld) && (
         <Animated.View
-          entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).easing(Ease.out)}
-          style={{
+          entering={reducedMotion || isHeld ? undefined : FadeInDown.duration(Duration.normal).easing(Ease.out)}
+          style={isExpanded ? {
             marginTop: Spacing['3'],
-            paddingHorizontal: 18,
+            paddingHorizontal: 0,
+          } : {
+            position: 'absolute',
+            width: 1,
+            height: 1,
+            opacity: 0,
+            overflow: 'hidden',
           }}
+          importantForAccessibility={isExpanded ? 'yes' : 'no-hide-descendants'}
+          accessibilityElementsHidden={!isExpanded}
         >
           <View
+            testID={`reflection-ruled-input-${index}`}
             style={{
-              backgroundColor: colors.inputBackground,
-              borderRadius: Radius.md,
-              borderWidth: 1,
-              borderColor: editable ? colors.borderFocused ?? colors.border : colors.textHint,
-              padding: 14,
+              borderBottomWidth: StyleSheet.hairlineWidth,
+              borderBottomColor: isFocused
+                ? (colors.borderFocused ?? colors.accent)
+                : colors.border,
+              paddingTop: 8,
+              paddingBottom: 10,
               opacity: editable ? 1 : 0.5,
             }}
           >
             <TextInput
-              ref={(ref) => { inputRefs.current.set(index, ref); }}
+              ref={inputRef}
               value={response}
               editable={editable}
-              onFocus={() => onInputFocus(index)}
-              onBlur={() => onInputBlur(index)}
+              onLayout={() => onInputLayout(index)}
+              onFocus={() => {
+                setIsFocused(true);
+                onInputFocus(index);
+              }}
+              onBlur={() => {
+                setIsFocused(false);
+                onInputBlur(index);
+              }}
               onChangeText={(text) => onResponseChange(index, question, text)}
               placeholder={editable ? 'Write your thoughts...' : 'Unlock Premium to journal your reflections'}
-              placeholderTextColor={colors.textHint}
+              placeholderTextColor={colors.textMuted}
               selectionColor={colors.accent}
               cursorColor={colors.accent}
               multiline
+              submitBehavior="newline"
+              blurOnSubmit={false}
               textAlignVertical="top"
               keyboardAppearance={isDark ? 'dark' : 'light'}
               accessibilityLabel={`Your response to: ${question}`}
@@ -732,65 +851,68 @@ function ReflectionQuestionCard({
             />
           </View>
 
-          {editable && saveState === 'error' ? (
-            <TouchableOpacity
-              onPress={() => onRetrySave(index)}
-              accessibilityRole="button"
-              accessibilityLabel="Save failed. Tap to retry."
-              accessibilityLiveRegion="assertive"
-              style={{
-                minHeight: 44,
-                marginTop: Spacing['2'],
-                alignSelf: 'flex-end',
-                justifyContent: 'center',
-                paddingHorizontal: Spacing['2'],
-              }}
-            >
-              <Text
-                testID={`reflection-save-status-${index}`}
+          {isExpanded && editable ? (
+            saveState === 'error' ? (
+              <TouchableOpacity
+                onPress={() => onRetrySave(index)}
+                accessibilityRole="button"
+                accessibilityLabel="Save failed. Tap to retry."
+                accessibilityLiveRegion="assertive"
                 style={{
-                  fontFamily: FontFamily.ui,
-                  fontSize: 11,
-                  color: colors.error,
-                  textAlign: 'right',
+                  minHeight: 44,
+                  marginTop: Spacing['2'],
+                  alignSelf: 'flex-end',
+                  justifyContent: 'center',
+                  paddingHorizontal: Spacing['2'],
                 }}
               >
-                Save failed. Tap to retry.
-              </Text>
-            </TouchableOpacity>
-          ) : editable && (saveState || checkMode !== 'hidden') ? (
-            <View
-              style={{
-                minHeight: 44,
-                marginTop: Spacing['2'],
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'flex-end',
-                gap: 8,
-              }}
-            >
-              {checkMode !== 'hidden' ? <DrawnCheck
-                visible
-                playKey={checkMode === 'draw' ? checkPlayKey : 0}
-                playedKeyRef={playedCheckRef}
-                color={colors.accent}
-                testID={`reflection-save-check-${index}-${checkMode === 'draw' ? 'draw' : 'static'}`}
-              /> : null}
-              {saveState ? (
                 <Text
                   testID={`reflection-save-status-${index}`}
-                  accessibilityLiveRegion="polite"
                   style={{
                     fontFamily: FontFamily.ui,
-                    fontSize: 11,
-                    color: colors.textHint,
+                    fontSize: FontSizeTokens.xs,
+                    color: colors.error,
                     textAlign: 'right',
                   }}
                 >
-                  {saveState === 'saving' ? 'Saving...' : 'Saved to Journal'}
+                  Save failed. Tap to retry.
                 </Text>
-              ) : null}
-            </View>
+              </TouchableOpacity>
+            ) : (
+              <View
+                testID={`reflection-save-slot-${index}`}
+                style={{
+                  minHeight: 20,
+                  marginTop: Spacing['2'],
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'flex-end',
+                  gap: 8,
+                }}
+              >
+                {checkMode !== 'hidden' ? <DrawnCheck
+                  visible
+                  playKey={checkMode === 'draw' ? checkPlayKey : 0}
+                  playedKeyRef={playedCheckRef}
+                  color={colors.accent}
+                  testID={`reflection-save-check-${index}-${checkMode === 'draw' ? 'draw' : 'static'}`}
+                /> : null}
+                {saveState ? (
+                  <Text
+                    testID={`reflection-save-status-${index}`}
+                    accessibilityLiveRegion="polite"
+                    style={{
+                      fontFamily: FontFamily.ui,
+                      fontSize: FontSizeTokens.xs,
+                      color: colors.textMuted,
+                      textAlign: 'right',
+                    }}
+                  >
+                    {saveState === 'saving' ? 'Saving...' : 'Saved to Journal'}
+                  </Text>
+                ) : null}
+              </View>
+            )
           ) : null}
         </Animated.View>
       )}

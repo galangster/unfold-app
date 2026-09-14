@@ -8,7 +8,8 @@
  * item 9 of the Phase B handoff for the pending decision).
  */
 import { useCallback, useMemo, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, StyleSheet } from 'react-native';
+import { ReaderText as Text } from './ReaderText';
 import * as Haptics from 'expo-haptics';
 import { LockSimpleIcon, XIcon } from '@/components/icons';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
