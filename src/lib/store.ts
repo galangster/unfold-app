@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { AppState } from 'react-native';
+import { InterFontFamily, SourceSerifFontFamily } from '@/constants/fonts';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { ThemeCategory, DevotionalType } from '../constants/devotional-types';
@@ -100,10 +101,10 @@ export interface ReadingFont {
 }
 
 export const READING_FONTS: ReadingFont[] = [
-  { id: 'source-serif', name: 'Source Serif', preview: 'Classic & warm', regular: 'SourceSerifPro_400Regular', italic: 'SourceSerifPro_400Regular_Italic', medium: 'SourceSerifPro_600SemiBold', bold: 'SourceSerifPro_700Bold' },
+  { id: 'source-serif', name: 'Source Serif', preview: 'Classic & warm', ...SourceSerifFontFamily },
   { id: 'garamond', name: 'Garamond', preview: 'Elegant & timeless', regular: 'EBGaramond_400Regular', italic: 'EBGaramond_400Regular_Italic', medium: 'EBGaramond_600SemiBold', bold: 'EBGaramond_700Bold' },
   { id: 'lora', name: 'Lora', preview: 'Refined & modern', regular: 'Lora_400Regular', italic: 'Lora_400Regular_Italic', medium: 'Lora_600SemiBold', bold: 'Lora_700Bold' },
-  { id: 'inter', name: 'Inter', preview: 'Clean & minimal', regular: 'Inter_400Regular', italic: 'Inter_400Regular_Italic', medium: 'Inter_600SemiBold', bold: 'Inter_700Bold' },
+  { id: 'inter', name: 'Inter', preview: 'Clean & minimal', regular: InterFontFamily.regular, italic: InterFontFamily.italic, medium: InterFontFamily.semiBold, bold: InterFontFamily.bold },
   { id: 'crimson', name: 'Crimson', preview: 'Literary & poetic', regular: 'CrimsonText_400Regular', italic: 'CrimsonText_400Regular_Italic', medium: 'CrimsonText_600SemiBold', bold: 'CrimsonText_700Bold' },
   { id: 'merriweather', name: 'Merriweather', preview: 'Strong & readable', regular: 'Merriweather_400Regular', italic: 'Merriweather_400Regular_Italic', medium: 'Merriweather_700Bold', bold: 'Merriweather_900Black' },
 ];

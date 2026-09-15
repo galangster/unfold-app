@@ -7,7 +7,7 @@ module.exports = {
   },
   transform: {
     '^.+\\.(js|ts|tsx)$': 'babel-jest',
-    '\\.(m4a|mp3|wav)$': '<rootDir>/jest.audio-asset-transformer.js',
+    '\\.(m4a|mp3|wav|woff2)$': '<rootDir>/jest.audio-asset-transformer.js',
   },
   testMatch: [
     '**/__tests__/**/*.test.ts',

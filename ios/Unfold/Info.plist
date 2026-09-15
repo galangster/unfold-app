@@ -116,6 +116,19 @@
     <true/>
     <key>RCTRootViewBackgroundColor</key>
     <integer>4278848010</integer>
+    <key>UIAppFonts</key>
+    <array>
+      <string>PPEditorialNew-Light.otf</string>
+      <string>Inter_400Regular.ttf</string>
+      <string>Inter_400Regular_Italic.ttf</string>
+      <string>Inter_500Medium.ttf</string>
+      <string>Inter_600SemiBold.ttf</string>
+      <string>Inter_700Bold.ttf</string>
+      <string>SourceSerifPro_400Regular.ttf</string>
+      <string>SourceSerifPro_400Regular_Italic.ttf</string>
+      <string>SourceSerifPro_600SemiBold.ttf</string>
+      <string>SourceSerifPro_700Bold.ttf</string>
+    </array>
     <key>UIBackgroundModes</key>
     <array>
       <string>audio</string>

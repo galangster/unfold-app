@@ -126,7 +126,39 @@
       ],
       "@react-native-community/datetimepicker",
       "expo-asset",
-      "expo-font",
+      [
+        "expo-font",
+        {
+          "ios": {
+            "fonts": [
+              "./assets/fonts/PPEditorialNew-Light.otf",
+              "./assets/fonts/Inter_400Regular.ttf",
+              "./assets/fonts/Inter_400Regular_Italic.ttf",
+              "./assets/fonts/Inter_500Medium.ttf",
+              "./assets/fonts/Inter_600SemiBold.ttf",
+              "./assets/fonts/Inter_700Bold.ttf",
+              "./assets/fonts/SourceSerifPro_400Regular.ttf",
+              "./assets/fonts/SourceSerifPro_400Regular_Italic.ttf",
+              "./assets/fonts/SourceSerifPro_600SemiBold.ttf",
+              "./assets/fonts/SourceSerifPro_700Bold.ttf"
+            ]
+          },
+          "android": {
+            "fonts": [
+              { "fontFamily": "PPEditorialNew-Light", "fontDefinitions": [{ "path": "./assets/fonts/PPEditorialNew-Light.otf", "weight": 300 }] },
+              { "fontFamily": "Inter_400Regular", "fontDefinitions": [{ "path": "./assets/fonts/Inter_400Regular.ttf", "weight": 400 }] },
+              { "fontFamily": "Inter_400Regular_Italic", "fontDefinitions": [{ "path": "./assets/fonts/Inter_400Regular_Italic.ttf", "weight": 400, "style": "italic" }] },
+              { "fontFamily": "Inter_500Medium", "fontDefinitions": [{ "path": "./assets/fonts/Inter_500Medium.ttf", "weight": 500 }] },
+              { "fontFamily": "Inter_600SemiBold", "fontDefinitions": [{ "path": "./assets/fonts/Inter_600SemiBold.ttf", "weight": 600 }] },
+              { "fontFamily": "Inter_700Bold", "fontDefinitions": [{ "path": "./assets/fonts/Inter_700Bold.ttf", "weight": 700 }] },
+              { "fontFamily": "SourceSerifPro_400Regular", "fontDefinitions": [{ "path": "./assets/fonts/SourceSerifPro_400Regular.ttf", "weight": 400 }] },
+              { "fontFamily": "SourceSerifPro_400Regular_Italic", "fontDefinitions": [{ "path": "./assets/fonts/SourceSerifPro_400Regular_Italic.ttf", "weight": 400, "style": "italic" }] },
+              { "fontFamily": "SourceSerifPro_600SemiBold", "fontDefinitions": [{ "path": "./assets/fonts/SourceSerifPro_600SemiBold.ttf", "weight": 600 }] },
+              { "fontFamily": "SourceSerifPro_700Bold", "fontDefinitions": [{ "path": "./assets/fonts/SourceSerifPro_700Bold.ttf", "weight": 700 }] }
+            ]
+          }
+        }
+      ],
       "expo-image",
       "expo-mail-composer",
       "expo-sharing",

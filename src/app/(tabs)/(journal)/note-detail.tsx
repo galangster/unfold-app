@@ -131,6 +131,7 @@ const READING_FONT_WEB_FAMILY: Record<string, string> = {
   EBGaramond_400Regular: 'EB Garamond',
   Lora_400Regular: 'Lora',
   Inter_400Regular: 'Inter',
+  'Inter-Regular': 'Inter',
   CrimsonText_400Regular: 'Crimson Text',
   Merriweather_400Regular: 'Merriweather',
 };
