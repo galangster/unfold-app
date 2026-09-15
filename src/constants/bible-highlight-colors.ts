@@ -95,9 +95,11 @@ export const HIGHLIGHT_STROKE_FIT: Record<string, { top: number; height: number 
 /** Native reading-font family → the web family the fit table is keyed by. */
 export const READING_FONT_WEB_NAMES: Record<string, string> = {
   SourceSerifPro_400Regular: 'Source Serif 4',
+  'SourceSerifPro-Regular': 'Source Serif 4',
   EBGaramond_400Regular: 'EB Garamond',
   Lora_400Regular: 'Lora',
   Inter_400Regular: 'Inter',
+  'Inter-Regular': 'Inter',
   CrimsonText_400Regular: 'Crimson Text',
   Merriweather_400Regular: 'Merriweather',
 };

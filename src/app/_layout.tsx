@@ -14,6 +14,7 @@ import { AppState, Platform, Text as RNText, TextInput as RNTextInput, View } fr
 import { useFonts } from 'expo-font';
 
 import { Colors } from '@/constants/colors';
+import { shouldLoadBundledFontsAtRuntime } from '@/constants/fonts';
 import { LaterEntryNotifySheet } from '@/components/onboarding/LaterEntryNotifySheet';
 import { onNotificationPermissionMaybeChanged } from '@/lib/notification-ask';
 import { ensureDeviceCredential } from '@/lib/device-credential';
@@ -348,7 +349,7 @@ function StorageLockedGate() {
 }
 
 function RootLayout() {
-  const [fontsLoaded, fontError] = useFonts({
+  const [fontsLoaded, fontError] = useFonts(shouldLoadBundledFontsAtRuntime ? {
     'PPEditorialNew-Light': require('../../assets/fonts/PPEditorialNew-Light.otf'),
     'SourceSerifPro_400Regular': require('../../assets/fonts/SourceSerifPro_400Regular.ttf'),
     'SourceSerifPro_400Regular_Italic': require('../../assets/fonts/SourceSerifPro_400Regular_Italic.ttf'),
@@ -369,7 +370,7 @@ function RootLayout() {
     // than crashing, and `useReadingFont()` keeps serving Source Serif until
     // the requested family is registered, so there is no fallback-face flash
     // that never resolves.
-  });
+  } : {});
 
   // Route changes become navigation spans and breadcrumbs, and the native
   // app-start measurement attaches to the first of them. A no-op while crash

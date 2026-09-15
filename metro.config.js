@@ -55,7 +55,7 @@ config.transformer = {
 
 // Configure resolver with SVG support, shared folder resolution, and web platform mocking
 // "wasm" is required by expo-sqlite's web worker (wa-sqlite.wasm); native platforms never import .wasm
-const extraAssetExts = ["riv", "wasm"].filter((ext) => !assetExts.includes(ext));
+const extraAssetExts = ["riv", "wasm", "woff2"].filter((ext) => !assetExts.includes(ext));
 
 config.resolver = {
   ...config.resolver,

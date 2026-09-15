@@ -17,6 +17,10 @@ const storeSource = read('../store.ts');
 const availabilitySource = read('../reading-font-availability.ts');
 const loaderSource = read('../reading-fonts-loader.ts');
 const rootLayoutSource = read('../../app/_layout.tsx');
+const appConfig = JSON.parse(read('../../../app.json'));
+const fontConstantsSource = read('../../constants/fonts.ts');
+const devotionalWebFontsSource = read('../devotional-web-fonts.ts');
+const highlightFontSource = read('../../constants/bible-highlight-colors.ts');
 
 function readingFontsBlock(): string {
   const start = storeSource.indexOf('export const READING_FONTS');
@@ -56,7 +60,7 @@ describe('reading font eager/lazy split', () => {
   });
 
   it('keeps lazy families out of the splash-blocking useFonts call', () => {
-    const useFontsStart = rootLayoutSource.indexOf('useFonts({');
+    const useFontsStart = rootLayoutSource.indexOf('useFonts(shouldLoadBundledFontsAtRuntime ? {');
     const useFontsBlock = rootLayoutSource.slice(
       useFontsStart,
       rootLayoutSource.indexOf('});', useFontsStart),
@@ -74,5 +78,42 @@ describe('reading font eager/lazy split', () => {
       // legitimately names the lazy families.
       expect(useFontsBlock).not.toContain(`assets/fonts/${prefix}_`);
     }
+  });
+
+  it('embeds only the splash-critical families in native builds', () => {
+    const plugin = appConfig.expo.plugins.find(
+      (entry: unknown) => Array.isArray(entry) && entry[0] === 'expo-font',
+    );
+    expect(plugin).toBeDefined();
+    const iosFonts = plugin[1].ios.fonts as string[];
+    expect(iosFonts).toHaveLength(10);
+    expect(iosFonts).toEqual(expect.arrayContaining([
+      './assets/fonts/PPEditorialNew-Light.otf',
+      './assets/fonts/Inter_400Regular.ttf',
+      './assets/fonts/SourceSerifPro_400Regular.ttf',
+    ]));
+    for (const id of lazyIds) {
+      const prefix = readingFontsBlock().match(new RegExp(`id: '${id}'[^}]*regular: '([A-Za-z]+)_`))![1];
+      expect(iosFonts.join('\n')).not.toContain(prefix);
+    }
+  });
+
+  it('uses iOS PostScript names while retaining runtime aliases for Expo Go and web', () => {
+    expect(fontConstantsSource).toContain("'Inter-Regular'");
+    expect(fontConstantsSource).toContain("'Inter_400Regular'");
+    expect(fontConstantsSource).toContain('required.every((name) => loaded.has(name))');
+    expect(fontConstantsSource).toContain('shouldLoadBundledFontsAtRuntime = !embeddedStartupFontsAvailable');
+    expect(fontConstantsSource).toContain("'Inter_400Regular', 'Inter-Regular'");
+    expect(fontConstantsSource).toContain("'SourceSerifPro_400Regular', 'SourceSerifPro-Regular'");
+    expect(fontConstantsSource).toContain("'SourceSerifPro_400Regular_Italic', 'SourceSerifPro-It'");
+    expect(highlightFontSource).toContain("'SourceSerifPro-Regular': 'Source Serif 4'");
+    expect(highlightFontSource).toContain("'Inter-Regular': 'Inter'");
+  });
+
+  it('prepares only the selected devotional family and has no remote font dependency', () => {
+    expect(devotionalWebFontsSource).toContain('const assets = WEB_FONT_ASSETS[nativeFont]');
+    expect(devotionalWebFontsSource).toContain('Asset.loadAsync(moduleId)');
+    expect(devotionalWebFontsSource).not.toContain('fonts.googleapis.com');
+    expect(devotionalWebFontsSource).not.toContain('fonts.gstatic.com');
   });
 });
