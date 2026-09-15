@@ -5,6 +5,9 @@ const mockRegisterPushToken = jest.fn();
 const mockSyncTrialEnding = jest.fn(async (..._args: unknown[]) => undefined);
 const mockGetPermissions = jest.fn();
 
+jest.mock('@/components/bookshelf/ShelfOpeningOverlay', () => ({ ShelfOpeningOverlay: () => null }));
+jest.mock('@/components/book/BookOpeningOverlay', () => ({ BookOpeningOverlay: () => null }));
+
 jest.mock('expo-font', () => ({
   useFonts: () => [true, null],
 }));

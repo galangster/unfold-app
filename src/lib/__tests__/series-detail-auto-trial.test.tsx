@@ -13,6 +13,8 @@ import React from 'react';
 import { canonicalGeneratedDayId } from '../devotional-canonical-days';
 import type { Devotional, DevotionalDay } from '../store';
 
+jest.mock('react-native-gesture-handler', () => ({ GestureDetector: ({ children }: { children: React.ReactNode }) => children }));
+jest.mock('@/components/book/useBookPageOpening', () => ({ useBookPageOpening: ({ onContinue }: { onContinue: () => void }) => ({ open: onContinue, gesture: {}, showHint: false, hidden: false, onLayout: jest.fn() }) }));
 const renderer = require('react-test-renderer');
 const { act } = renderer;
 
@@ -160,6 +162,7 @@ jest.mock('react-native-svg', () => ({
   __esModule: true,
   default: 'Svg',
   Svg: 'Svg',
+  Defs: 'Defs', Stop: 'Stop', RadialGradient: 'RadialGradient', LinearGradient: 'LinearGradient', Ellipse: 'Ellipse',
   Circle: 'Circle',
   Path: 'Path',
 }));

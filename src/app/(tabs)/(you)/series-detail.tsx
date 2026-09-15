@@ -1,775 +1,122 @@
-import { useCallback, useMemo, useEffect } from 'react';
+import { useCallback, useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Haptics from 'expo-haptics';
+import { CaretLeftIcon, CaretRightIcon } from '@/components/icons';
+import { FontFamily } from '@/constants/fonts';
 import { useCrossTabBack } from '@/hooks/useCrossTabBack';
 import { useCalendarNow } from '@/hooks/useCalendarNow';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
 import { adaptiveFrameStyle } from '@/lib/adaptive-layout';
-import Animated, {
-  FadeIn,
-  useSharedValue,
-  useAnimatedStyle,
-  withRepeat,
-  withTiming,
-  withDelay,
-  interpolate,
-  Easing,
-  useReducedMotion,
-} from 'react-native-reanimated';
-import { LinearGradient } from 'expo-linear-gradient';
-import * as Haptics from 'expo-haptics';
-import {
-  CaretLeftIcon,
-  CheckCircleIcon,
-  LockSimpleIcon,
-  CircleIcon,
-} from '@/components/icons';
-import { format } from 'date-fns';
-import { FontFamily, FontSize } from '@/constants/fonts';
-import { Radius } from '@/constants/radius';
-import { Spacing } from '@/constants/spacing';
-import { Duration, Ease } from '@/constants/animations';
-import { Typography } from '@/constants/typography';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
-import {
-  getTodayReaderDayNumber,
-  isDevotionalDaySelectable,
-} from '@/lib/devotional-day-access';
-import { selectRenderableDevotionalDay } from '@/lib/devotional-canonical-days';
-import {
-  resolveStackRoute,
-  type TabGroup,
-} from '@/lib/tab-stack-routes';
-import { alpha } from '@/components/ui';
+import { resolveStackRoute, type TabGroup } from '@/lib/tab-stack-routes';
 import { ProfileEntryButton } from '@/components/ProfileEntryButton';
 import { addAppBreadcrumb } from '@/lib/sentry';
 import { BookOfSeasonsView } from '@/components/book/BookOfSeasonsView';
-import { listDaysInOrder } from '@/lib/book-of-seasons';
+import { markShelfContentsReady } from '@/lib/shelf-opening';
+import { getSeriesCover } from '@/lib/series-cover';
+import { seriesReadingProgress } from '@/lib/bookshelf';
 
-// ── Sealed letter tease lines for locked days ──────────────────
-const SEALED_LINES = [
-  'Your next chapter is being written\u2026',
-  'Something is being prepared for you\u2026',
-  'A new word awaits\u2026',
-  'This day is still unfolding\u2026',
-  'What comes next may surprise you\u2026',
-];
-
-function getSealedLine(dayNumber: number): string {
-  return SEALED_LINES[dayNumber % SEALED_LINES.length];
-}
-
-// ── Bottom glow for locked rows ────────────────────────────────
-// Accent-colored gradient that pulses from the bottom of the card,
-// matching the home screen's EmberSystem ambient glow style.
-function BottomGlow({
-  accentColor,
-  stagger,
-}: {
-  accentColor: string;
-  stagger: number;
-}) {
-  const pulse = useSharedValue(0);
-  const reducedMotion = useReducedMotion();
-
-  useEffect(() => {
-    if (reducedMotion) {
-      // Designed still: hold the glow at its midpoint instead of pulsing —
-      // this was the ember-glow loop that kept drifting under reduce motion.
-      pulse.value = 0.5;
-      return;
-    }
-    pulse.value = withDelay(
-      stagger,
-      withRepeat(
-        withTiming(1, { duration: 3000, easing: Easing.inOut(Easing.ease) }),
-        -1,
-        true,
-      ),
-    );
-  }, [pulse, stagger, reducedMotion]);
-
-  const glowStyle = useAnimatedStyle(() => {
-    const opacity = interpolate(pulse.value, [0, 1], [0.08, 0.5]);
-    return { opacity };
-  });
-
-  return (
-    <Animated.View
-      pointerEvents="none"
-      style={[
-        StyleSheet.absoluteFill,
-        { borderRadius: Radius.lg, overflow: 'hidden' },
-        glowStyle,
-      ]}
-    >
-      <LinearGradient
-        colors={[
-          'transparent',
-          alpha(accentColor, 0.7),
-        ]}
-        start={{ x: 0.5, y: 0.3 }}
-        end={{ x: 0.5, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
-    </Animated.View>
-  );
-}
-
-function DevotionalTabHeader({ onOpenPastSeries }: { onOpenPastSeries: () => void }) {
+function PastSeriesLink({ onPress }: { onPress: () => void }) {
   const { colors } = useTheme();
-  return (
-    <View testID="devotional-tab-header" style={[styles.header, styles.headerTabRoot]}>
-      <Text style={[styles.headerTitle, styles.headerTitleTabRoot, { color: colors.text }]}>
-        Devotional
-      </Text>
-      <View style={styles.headerActions}>
-        <TouchableOpacity
-          activeOpacity={0.7}
-          onPress={onOpenPastSeries}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          accessibilityRole="button"
-          accessibilityLabel="Past series"
-          accessibilityHint="Opens your library of past and in-progress series"
-          style={styles.headerAction}
-        >
-          <Text style={[styles.headerActionLabel, { color: colors.accent }]}>
-            Past series
-          </Text>
-        </TouchableOpacity>
-        <ProfileEntryButton testID="study-profile-button" />
-      </View>
-    </View>
-  );
+  return <TouchableOpacity testID="book-past-series" activeOpacity={0.7} onPress={onPress}
+    accessibilityRole="button" accessibilityLabel="Past series"
+    accessibilityHint="Opens your library of past and in-progress series" style={styles.pastSeriesLink}>
+    <Text style={[styles.pastSeriesLabel, { color: colors.textMuted }]}>Past series</Text>
+    <CaretRightIcon size={14} color={colors.textMuted} />
+  </TouchableOpacity>;
 }
-
-// ── Main screen ────────────────────────────────────────────────
-
 export type SeriesArcChrome = 'stack' | 'tabRoot';
-
-interface SeriesArcScreenProps {
-  /** Tab stack this mount lives in. Static, from the route file. */
-  hostTab?: TabGroup;
-  /** 'tabRoot' drops the back caret and falls back to the current series. */
-  chrome?: SeriesArcChrome;
-}
+interface SeriesArcScreenProps { hostTab?: TabGroup; chrome?: SeriesArcChrome }
 
 export function SeriesArcScreen({ hostTab, chrome = 'stack' }: SeriesArcScreenProps = {}) {
   const layout = useAdaptiveLayout();
   const frameStyle = adaptiveFrameStyle(layout.clusterMaxWidth);
   const router = useRouter();
-  const { id: paramId } = useLocalSearchParams<{ id?: string }>();
+  const { id: paramId, shelfOpening } = useLocalSearchParams<{ id?: string; shelfOpening?: string }>();
   const { colors, isDark } = useTheme();
-  const reducedMotion = useReducedMotion();
   const { handleBack } = useCrossTabBack();
-  const devotionals = useUnfoldStore((s) => s.devotionals);
-  const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
+  const devotionals = useUnfoldStore(s => s.devotionals);
+  const currentDevotionalId = useUnfoldStore(s => s.currentDevotionalId);
   const now = useCalendarNow();
-
-  // A tab root receives no params. Every stack mount is pushed with an id
-  // (past-devotionals' handleSelectDevotional is the sole in-app producer;
-  // deep-link-allowlist.ts marks id required on /series-detail), so the
-  // fallback is gated to the tab root and can never mask a genuine
-  // "not found" in the stack mounts.
   const id = paramId ?? (chrome === 'tabRoot' ? currentDevotionalId : undefined);
-
-  const devotional = useMemo(
-    () => devotionals.find((d) => d.id === id) ?? null,
-    [devotionals, id],
-  );
-
-  const completedDays = useMemo(
-    () => (devotional ? (devotional.days ?? []).filter((d) => d.isRead).length : 0),
-    [devotional],
-  );
-
-  const progress =
-    devotional && devotional.totalDays > 0
-      ? (completedDays / devotional.totalDays) * 100
-      : 0;
-
-  const isComplete = devotional ? completedDays >= devotional.totalDays : false;
-
-  // The day the reader will actually open right now. `devotional.currentDay` is
-  // NOT this: it is bumped to N+1 the moment day N is completed (advanceDay in
-  // reading.tsx), but that day stays calendar-gated until tomorrow. Using
-  // currentDay here made the list advertise a "Current" day that the reader
-  // then silently swapped back to the previous one
-  // (resolveInitialReadingDayNumber).
-  const todayReaderDayNumber = useMemo(
-    () => (devotional ? getTodayReaderDayNumber(devotional, now) : 1),
-    [devotional, now],
-  );
-
+  const devotional = useMemo(() => devotionals.find(d => d.id === id) ?? null, [devotionals, id]);
+  const paper = isDark ? '#1B1C17' : '#F5EEDF';
+  const cover = getSeriesCover(id ?? '');
   const openPastSeries = useCallback(() => {
-    router.push({
-      pathname: resolveStackRoute('(study)', 'past-devotionals'),
-      params: { from: 'study' },
-    });
+    router.push({ pathname: resolveStackRoute('(study)', 'past-devotionals'), params: { from: 'study' } });
   }, [router]);
+  const handleDayPress = useCallback((dayNumber: number, openingId?: string) => {
+    if (!devotional) return;
+    addAppBreadcrumb('series', 'opened-day');
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push({
+      pathname: resolveStackRoute(hostTab, 'reading'),
+      params: {
+        devotionalId: devotional.id, dayNumber: String(dayNumber),
+        ...(openingId ? { bookOpening: openingId } : {}),
+        ...(chrome !== 'tabRoot' ? { readOnly: '1' } : {}),
+      },
+    });
+  }, [devotional, router, hostTab, chrome]);
 
-  const handleDayPress = useCallback(
-    (dayNumber: number) => {
-      if (!devotional) return;
-      addAppBreadcrumb('series', 'opened-day');
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      // Viewing a series is not activating it. currentDevotionalId stays the
-      // live series so history cannot steal Today or background generation.
-      router.push({
-        pathname: resolveStackRoute(hostTab, 'reading'),
-        params: {
-          devotionalId: devotional.id,
-          dayNumber: String(dayNumber),
-          // readOnly only blocks missing-day generation. Stack mounts are
-          // library / history; the tab-root current series may recover.
-          ...(chrome !== 'tabRoot' ? { readOnly: '1' } : {}),
-        },
-      });
-    },
-    [devotional, router, hostTab, chrome],
-  );
-
-  if (!devotional && chrome === 'tabRoot') {
-    // A tab root has nothing to pop, and nothing to apologise for: the user
-    // simply has no study running. Create Series stays Today's hero (it carries
-    // a premium gate and an archive confirmation there), so this points at it
-    // rather than forking it.
-    return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
-          <View key={`series-empty-${layout.fontScale}`} style={[frameStyle, { flex: 1 }]}>
-          <DevotionalTabHeader onOpenPastSeries={openPastSeries} />
-          <View style={styles.emptyState}>
-            <Text style={[styles.seriesTitle, { color: colors.text }]}>
-              No series in progress.
-            </Text>
-            <Text style={[styles.emptyBody, { color: colors.textMuted }]}>
-              Begin a series on Today and its whole arc appears here.
-            </Text>
-            <TouchableOpacity
-              activeOpacity={0.85}
-              onPress={() => router.navigate('/(tabs)/(today)')}
-              accessibilityRole="button"
-              accessibilityLabel="Go to Today"
-              accessibilityHint="Opens the Today tab, where a new series begins"
-              style={[styles.emptyCta, { backgroundColor: colors.accent }]}
-            >
-              <Text style={[styles.emptyCtaLabel, { color: colors.background }]}>
-                Go to Today
-              </Text>
+  if (!devotional) return <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
+      <View style={[frameStyle, { flex: 1 }]} onLayout={() => markShelfContentsReady(shelfOpening)}>
+        {chrome === 'tabRoot' ? <View style={styles.emptyHeader}><ProfileEntryButton testID="study-profile-button" /></View>
+          : <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back" onPress={handleBack} style={styles.backButton}><CaretLeftIcon size={24} color={colors.textMuted} /></TouchableOpacity>}
+        <View style={styles.emptyState}>
+          <Text style={[styles.seriesTitle, { color: colors.text }]}>{chrome === 'tabRoot' ? 'No series in progress.' : 'Not Found'}</Text>
+          {chrome === 'tabRoot' && <>
+            <Text style={[styles.emptyBody, { color: colors.textMuted }]}>Begin a series on Today and its whole arc appears here.</Text>
+            <TouchableOpacity onPress={() => router.navigate('/(tabs)/(today)')} accessibilityRole="button" accessibilityLabel="Go to Today" style={[styles.emptyCta, { backgroundColor: colors.accent }]}>
+              <Text style={{ fontFamily: FontFamily.uiMedium, color: colors.background }}>Go to Today</Text>
             </TouchableOpacity>
-          </View>
+            <PastSeriesLink onPress={openPastSeries} />
+          </>}
         </View>
-        </SafeAreaView>
       </View>
-    );
-  }
+    </SafeAreaView>
+  </View>;
 
-  if (!devotional) {
-    return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
-          <View key={`series-missing-${layout.fontScale}`} style={[frameStyle, { flex: 1 }]}>
-          <View style={styles.header}>
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={handleBack}
-              accessibilityRole="button"
-              accessibilityLabel="Go back"
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              style={styles.backButton}
-            >
-              <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
-            </TouchableOpacity>
-            <Text style={[styles.headerTitle, { color: colors.text }]}>
-              Not Found
-            </Text>
-          </View>
-        </View>
-        </SafeAreaView>
-      </View>
-    );
-  }
-
-  const createdDate = format(new Date(devotional.createdAt), 'MMM d, yyyy');
-
-  return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
-          <View style={[frameStyle, { flex: 1 }]}>
-        {/* Header */}
-        {chrome === 'tabRoot' ? (
-          <DevotionalTabHeader
-            key={`devotional-header-${layout.fontScale}`}
-            onOpenPastSeries={openPastSeries}
-          />
-        ) : (
-          <View key={`series-header-${layout.fontScale}`} style={styles.header}>
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={handleBack}
-              accessibilityRole="button"
-              accessibilityLabel="Go back"
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              style={styles.backButton}
-            >
-              <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
-            </TouchableOpacity>
-            <Text style={[styles.headerTitle, { color: colors.text }]}>
-              Devotional Details
-            </Text>
-          </View>
-        )}
-
-        <ScrollView
-          testID="series-detail-scroll"
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
-        >
-          {chrome === 'tabRoot' ? (
-            <BookOfSeasonsView
-              key={`book-of-seasons-${layout.fontScale}`}
-              devotional={devotional}
-              now={now}
-              colors={colors}
-              isDark={isDark}
-              onOpenDay={handleDayPress}
-            />
-          ) : (
-            <>
-          {/* Series info */}
-          <Animated.View
-            key={`series-info-${layout.fontScale}`}
-            entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
-          >
-            <Text style={[styles.dateLabel, { color: colors.textHint }]}>
-              {createdDate}
-            </Text>
-            <Text style={[styles.seriesTitle, { color: colors.text }]}>
-              {devotional.title}
-            </Text>
-
-            {/* Progress summary */}
-            <View style={styles.progressRow}>
-              <View
-                style={[styles.progressTrack, { backgroundColor: colors.border }]}
-              >
-                <View
-                  style={[
-                    styles.progressFill,
-                    { backgroundColor: colors.accent, width: `${progress}%` },
-                  ]}
-                />
-              </View>
-              <Text style={[styles.progressLabel, { color: colors.textSubtle }]}>
-                {isComplete
-                  ? `${devotional.totalDays} days completed`
-                  : `${completedDays} of ${devotional.totalDays} completed`}
-              </Text>
-            </View>
-          </Animated.View>
-
-          {/* Day list — grouped under named movements when the arc has them */}
-          <View key={`series-days-${layout.fontScale}`} style={styles.dayList}>
-            {listDaysInOrder(devotional.days)
-              .map((day) => {
-                // A movement header renders above the first day of each act.
-                const act = devotional.seriesArc?.acts?.find(
-                  (a) => day.dayNumber === a.fromDay,
-                );
-                const isRead = day.isRead;
-                const isOpenable =
-                  isRead || isDevotionalDaySelectable(devotional, day.dayNumber, now);
-                const isCurrent =
-                  !isComplete &&
-                  !isRead &&
-                  isOpenable &&
-                  day.dayNumber === todayReaderDayNumber;
-                // "Tomorrow" is claimed ONLY when the content genuinely exists
-                // and the calendar is the sole thing withholding it. A day whose
-                // canonical content is missing or corrupt is NOT tomorrow's
-                // reading — calling it that would hide a real generation failure
-                // behind reassuring copy, so it falls through to the sealed
-                // "still being prepared" state instead.
-                const contentIsReady =
-                  selectRenderableDevotionalDay(devotional, day.dayNumber).status === 'ready';
-                const isTomorrow =
-                  !isComplete &&
-                  !isOpenable &&
-                  contentIsReady &&
-                  day.dayNumber === devotional.currentDay;
-                const isLocked = !isRead && !isCurrent && !isTomorrow;
-                const dayStateLabel = isRead
-                  ? 'completed'
-                  : isCurrent
-                  ? 'current'
-                  : isTomorrow
-                  ? 'available tomorrow'
-                  : 'locked';
-
-                return (
-                  <Animated.View
-                    key={day.dayNumber}
-                    entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(Math.min(day.dayNumber * 40, 400)).easing(Ease.out)}
-                  >
-                    {act && (
-                      <View style={styles.movementHeader}>
-                        <Text
-                          style={[styles.movementName, { color: colors.accent }]}
-                        >
-                          {act.name}
-                        </Text>
-                        <Text
-                          style={[styles.movementFunction, { color: colors.textMuted }]}
-                          numberOfLines={2}
-                        >
-                          {act.function}
-                        </Text>
-                      </View>
-                    )}
-                    <TouchableOpacity
-                      activeOpacity={isOpenable ? 0.7 : 1}
-                      disabled={!isOpenable}
-                      onPress={() => {
-                        if (isOpenable) handleDayPress(day.dayNumber);
-                      }}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Day ${day.dayNumber}, ${dayStateLabel}`}
-                      accessibilityState={{ disabled: !isOpenable }}
-                      style={[
-                        styles.dayRow,
-                        {
-                          backgroundColor: isCurrent
-                            ? alpha(colors.accent, 0.06)
-                            : colors.inputBackground,
-                          borderColor: isCurrent
-                            ? alpha(colors.accent, 0.2)
-                            : colors.border,
-                        },
-                      ]}
-                    >
-                      {/* Bottom glow for locked rows */}
-                      {isLocked && (
-                        <BottomGlow
-                          accentColor={colors.accent}
-                          stagger={Math.min(day.dayNumber * 800, 4000)}
-                        />
-                      )}
-
-                      {/* Left: status icon */}
-                      <View style={styles.dayStatusIcon}>
-                        {isRead ? (
-                          <CheckCircleIcon
-                            size={22}
-                            color={colors.accent}
-                            weight="fill"
-                          />
-                        ) : isCurrent ? (
-                          <CircleIcon
-                            size={22}
-                            color={colors.accent}
-                            weight="regular"
-                          />
-                        ) : (
-                          <LockSimpleIcon
-                            size={18}
-                            color={colors.textHint}
-                            weight="light"
-                          />
-                        )}
-                      </View>
-
-                      {/* Center: day info */}
-                      <View style={styles.dayInfo}>
-                        <Text
-                          style={[
-                            styles.dayNumber,
-                            {
-                              color: isLocked
-                                ? colors.textHint
-                                : isCurrent
-                                  ? colors.accent
-                                  : colors.textSubtle,
-                            },
-                          ]}
-                        >
-                          Day {day.dayNumber}
-                        </Text>
-
-                        {isLocked || (isTomorrow && !day.title) ? (
-                          <Text
-                            style={[
-                              styles.sealedText,
-                              { color: colors.textHint },
-                            ]}
-                            numberOfLines={1}
-                          >
-                            {getSealedLine(day.dayNumber)}
-                          </Text>
-                        ) : (
-                          <>
-                            <Text
-                              style={[styles.dayTitle, { color: colors.text }]}
-                              numberOfLines={1}
-                            >
-                              {day.title}
-                            </Text>
-                            {day.scriptureReference ? (
-                              <Text
-                                style={[
-                                  styles.dayScripture,
-                                  { color: colors.textMuted },
-                                ]}
-                                numberOfLines={1}
-                              >
-                                {day.scriptureReference}
-                              </Text>
-                            ) : null}
-                          </>
-                        )}
-                      </View>
-
-                      {/* Right: read date or current badge */}
-                      <View style={styles.dayRight}>
-                        {isRead && day.readAt ? (
-                          <Text
-                            style={[
-                              styles.dayReadDate,
-                              { color: colors.textHint },
-                            ]}
-                          >
-                            {format(new Date(day.readAt), 'MMM d')}
-                          </Text>
-                        ) : isCurrent ? (
-                          <View
-                            style={[
-                              styles.currentBadge,
-                              { backgroundColor: alpha(colors.accent, 0.12) },
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.currentBadgeText,
-                                { color: colors.accent },
-                              ]}
-                            >
-                              Current
-                            </Text>
-                          </View>
-                        ) : isTomorrow ? (
-                          <View
-                            style={[
-                              styles.currentBadge,
-                              { backgroundColor: alpha(colors.textHint, 0.12) },
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.currentBadgeText,
-                                { color: colors.textMuted },
-                              ]}
-                            >
-                              Tomorrow
-                            </Text>
-                          </View>
-                        ) : null}
-                      </View>
-                    </TouchableOpacity>
-                  </Animated.View>
-                );
-              })}
-          </View>
-            </>
-          )}
+  const progress = seriesReadingProgress(devotional);
+  const begun = new Date(devotional.seriesStartDate || devotional.createdAt);
+  const dateLabel = Number.isFinite(begun.getTime()) ? begun.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }) : '';
+  return <View style={{ flex: 1, backgroundColor: chrome === 'tabRoot' ? colors.background : paper }}>
+    <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
+      <View style={[frameStyle, { flex: 1 }]}>
+        {chrome !== 'tabRoot' && <View style={styles.header}>
+          <TouchableOpacity onPress={handleBack} accessibilityRole="button" accessibilityLabel="Close book" style={styles.backButton}><CaretLeftIcon size={22} color={colors.textMuted} /></TouchableOpacity>
+          <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, color: colors.textMuted }}>Your library</Text>
+          <Text style={{ marginLeft: 'auto', fontFamily: FontFamily.ui, fontSize: 12, color: colors.textMuted }}>{progress.complete ? `${progress.total} days completed` : `${progress.read} of ${progress.total} completed`}</Text>
+        </View>}
+        <ScrollView testID="series-detail-scroll" showsVerticalScrollIndicator={false} onContentSizeChange={() => markShelfContentsReady(shelfOpening)}
+          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: chrome === 'tabRoot' ? 24 : 18, paddingBottom: 120 }}>
+          {chrome !== 'tabRoot' && <View style={{ borderTopWidth: 1, borderColor: cover.gold + '66', paddingTop: 18, marginBottom: 14 }}>
+            {dateLabel ? <Text style={{ fontFamily: FontFamily.ui, fontSize: 12, color: colors.textMuted }}>Begun {dateLabel}</Text> : null}
+          </View>}
+          <BookOfSeasonsView key={`book-of-seasons-${layout.fontScale}`} devotional={devotional} showAllReadings={chrome !== 'tabRoot'} now={now} colors={colors} isDark={isDark} onOpenDay={handleDayPress}
+            headerAccessory={chrome === 'tabRoot' ? <ProfileEntryButton testID="study-profile-button" /> : undefined} />
+          {chrome === 'tabRoot' ? <PastSeriesLink key={`book-archive-${layout.fontScale}`} onPress={openPastSeries} /> : <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderColor: cover.gold + '66', marginTop: 24, paddingTop: 20, alignItems: 'center' }}>
+            <Text style={{ fontFamily: FontFamily.display, fontSize: 18, color: colors.textMuted }}>Unfold</Text>
+          </View>}
         </ScrollView>
       </View>
-        </SafeAreaView>
-    </View>
-  );
+    </SafeAreaView>
+  </View>;
 }
-
-/**
- * Default export = the plain stack mount. The (today) and (you) route files
- * re-export this. Study and Today pass hostTab from their route files.
- * A named export beside a route default has precedent in (today)/reading.tsx.
- */
-export default function SeriesDetailScreen() {
-  return <SeriesArcScreen />;
-}
+export default function SeriesDetailScreen() { return <SeriesArcScreen />; }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing['4'],
-    paddingVertical: Spacing['3'],
-  },
-  backButton: {
-    padding: Spacing['2'],
-  },
-  headerTitle: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: FontSize.base,
-    marginLeft: Spacing['2'],
-  },
-  // A tab root has no back caret, so the row keeps the stack header's height
-  // (24pt icon + Spacing['2'] padding) explicitly instead of collapsing to the
-  // title's line box.
-  headerTabRoot: {
-    minHeight: 64,
-    justifyContent: 'space-between',
-  },
-  // headerTitle's marginLeft Spacing['2'] on top of the row's Spacing['4'] puts
-  // the title at 24pt — flush with scrollContent's Spacing['6'] gutter below.
-  // flex: 1 pushes the trailing action to the right edge.
-  headerTitleTabRoot: {
-    flex: 1,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  headerAction: {
-    paddingVertical: Spacing['2'],
-    paddingLeft: Spacing['3'],
-    minHeight: 44,
-    justifyContent: 'center',
-  },
-  headerActionLabel: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: FontSize.sm,
-  },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: Spacing['6'],
-    paddingBottom: 120,
-  },
-  emptyBody: {
-    fontFamily: FontFamily.body,
-    fontSize: FontSize.base,
-    lineHeight: FontSize.base * 1.55,
-    marginBottom: Spacing['6'],
-  },
-  emptyCta: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: Spacing['6'],
-    paddingVertical: Spacing['3'],
-    borderRadius: Radius.full,
-  },
-  emptyCtaLabel: {
-    fontFamily: FontFamily.uiSemiBold,
-    fontSize: FontSize.sm,
-    letterSpacing: 0.2,
-  },
-  scrollContent: {
-    paddingHorizontal: Spacing['6'],
-    paddingBottom: 100,
-  },
-  dateLabel: {
-    ...Typography.cardMeta,
-    marginBottom: Spacing['2'],
-  },
-  seriesTitle: {
-    fontFamily: FontFamily.display,
-    fontSize: 28,
-    lineHeight: 33,
-    letterSpacing: -0.15,
-    marginBottom: Spacing['4'],
-  },
-  progressRow: {
-    marginBottom: Spacing['6'],
-  },
-  progressTrack: {
-    height: 3,
-    borderRadius: 1.5,
-    marginBottom: Spacing['2'],
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 1.5,
-  },
-  progressLabel: {
-    fontFamily: FontFamily.ui,
-    fontSize: FontSize.xs,
-  },
-  dayList: {
-    gap: Spacing['2'],
-  },
-  movementHeader: {
-    paddingTop: Spacing['5'],
-    paddingBottom: Spacing['2'],
-    paddingHorizontal: Spacing['1'],
-    gap: 2,
-  },
-  movementName: {
-    fontFamily: FontFamily.uiSemiBold,
-    fontSize: 13,
-    letterSpacing: 1.4,
-    textTransform: 'uppercase',
-  },
-  movementFunction: {
-    fontFamily: FontFamily.bodyItalic,
-    fontSize: FontSize.xs,
-    lineHeight: FontSize.xs * 1.5,
-  },
-  dayRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    paddingVertical: Spacing['4'],
-    paddingHorizontal: Spacing['4'],
-    minHeight: 84,
-  },
-  dayStatusIcon: {
-    width: 28,
-    alignItems: 'center',
-    marginRight: Spacing['3'],
-  },
-  dayInfo: {
-    flex: 1,
-  },
-  dayNumber: {
-    ...Typography.cardMeta,
-    marginBottom: 2,
-  },
-  dayTitle: {
-    fontFamily: FontFamily.display,
-    fontSize: 15,
-    lineHeight: 19,
-  },
-  dayScripture: {
-    fontFamily: FontFamily.bodyItalic,
-    fontSize: 13,
-    marginTop: 2,
-  },
-  sealedText: {
-    fontFamily: FontFamily.bodyItalic,
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  dayRight: {
-    marginLeft: Spacing['3'],
-    alignItems: 'flex-end',
-  },
-  dayReadDate: {
-    fontFamily: FontFamily.ui,
-    fontSize: 11,
-  },
-  currentBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  currentBadgeText: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 11,
-    letterSpacing: 0.3,
-  },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 6, gap: 4 },
+  backButton: { minHeight: 44, minWidth: 44, alignItems: 'center', justifyContent: 'center' },
+  seriesTitle: { fontFamily: FontFamily.display, fontSize: 30, lineHeight: 36 },
+  emptyHeader: { alignItems: 'flex-end', paddingHorizontal: 20, paddingTop: 12 },
+  emptyState: { flex: 1, paddingHorizontal: 28, alignItems: 'center', justifyContent: 'center', paddingBottom: 80 },
+  emptyBody: { fontFamily: FontFamily.ui, fontSize: 15, textAlign: 'center', lineHeight: 23, marginTop: 12 },
+  emptyCta: { minHeight: 48, paddingHorizontal: 26, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginTop: 24 },
+  pastSeriesLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 44, marginTop: 24, paddingHorizontal: 16 },
+  pastSeriesLabel: { fontFamily: FontFamily.ui, fontSize: 13 },
 });

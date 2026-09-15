@@ -48,6 +48,7 @@ interface DevotionalContentProps {
   existingHighlights?: Highlight[];
   targetHighlight?: Highlight | null;
   onTargetHighlightLocated?: (contentY: number) => void;
+  onContentReady?: (generation: number) => void;
   onWebViewLocations?: (paragraphYs: number[], layoutGeneration: number) => void;
   layoutGeneration?: number;
   targetBookmark?: Bookmark | null;
@@ -112,6 +113,7 @@ export function DevotionalContent({
   targetHighlight,
   onTargetHighlightLocated,
   onWebViewLocations,
+  onContentReady,
   layoutGeneration,
   targetBookmark,
   onTargetBookmarkLocated,
@@ -240,9 +242,10 @@ export function DevotionalContent({
       measureSection('reflection', reflectionSectionRef, reportGeneration);
       measureSection('act', actSectionRef, reportGeneration);
       measureSection('prayer', prayerSectionRef, reportGeneration);
+      onContentReady?.(reportGeneration);
       setReflectionLayoutCommitSignal((current) => current + 1);
     });
-  }, [measureSection]);
+  }, [measureSection, onContentReady]);
 
   useEffect(() => () => {
     if (layoutCommitFrameRef.current !== null) {

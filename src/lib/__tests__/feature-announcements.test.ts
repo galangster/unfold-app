@@ -1,11 +1,14 @@
 import {
   BOOKSHELF_ANNOUNCEMENT_ID,
+  BOOKSHELF_LIBRARY_ANNOUNCEMENT_ID,
   COMPANION_ANNOUNCEMENT_ID,
+  FEATURE_ANNOUNCEMENT_CATALOG,
   FEATURE_ANNOUNCEMENTS_KEY,
   REFLECTION_ANNOUNCEMENT_ID,
   canAnnounceFeatures,
   dismissAnnouncementPages,
   hasSeenAnnouncement,
+  isKnownAnnouncementId,
   listPendingAnnouncementPages,
   recordAnnouncement,
 } from '../feature-announcements';
@@ -60,12 +63,12 @@ describe('feature announcements', () => {
 
   it('keeps unseen features eligible and treats seen or dismissed as settled', () => {
     expect(listPendingAnnouncementPages(allAvailable).map((page) => page.id)).toEqual([
-      BOOKSHELF_ANNOUNCEMENT_ID,
+      BOOKSHELF_LIBRARY_ANNOUNCEMENT_ID,
       COMPANION_ANNOUNCEMENT_ID,
       MUSIC_ANNOUNCEMENT.id,
       REFLECTION_ANNOUNCEMENT_ID,
     ]);
-    recordAnnouncement(BOOKSHELF_ANNOUNCEMENT_ID, 'seen');
+    recordAnnouncement(BOOKSHELF_LIBRARY_ANNOUNCEMENT_ID, 'seen');
     recordAnnouncement(COMPANION_ANNOUNCEMENT_ID, 'seen');
     recordAnnouncement(REFLECTION_ANNOUNCEMENT_ID, 'dismissed');
     expect(listPendingAnnouncementPages(allAvailable).map((page) => page.id)).toEqual([
@@ -82,10 +85,30 @@ describe('feature announcements', () => {
     );
     expect(hasSeenAnnouncement(MUSIC_ANNOUNCEMENT.id)).toBe(true);
     expect(listPendingAnnouncementPages(allAvailable).map((page) => page.id)).toEqual([
-      BOOKSHELF_ANNOUNCEMENT_ID,
+      BOOKSHELF_LIBRARY_ANNOUNCEMENT_ID,
       COMPANION_ANNOUNCEMENT_ID,
       REFLECTION_ANNOUNCEMENT_ID,
     ]);
+  });
+
+  it('announces the redesigned bookshelf after bookshelf-v1 and keeps that older record', () => {
+    const bookshelfPages = FEATURE_ANNOUNCEMENT_CATALOG.filter((page) => page.kind === 'bookshelf');
+    expect(bookshelfPages).toHaveLength(1);
+    expect(bookshelfPages[0]?.id).toBe(BOOKSHELF_LIBRARY_ANNOUNCEMENT_ID);
+    expect(bookshelfPages[0]?.id).not.toBe(BOOKSHELF_ANNOUNCEMENT_ID);
+    expect(isKnownAnnouncementId(BOOKSHELF_ANNOUNCEMENT_ID)).toBe(true);
+    recordAnnouncement(BOOKSHELF_ANNOUNCEMENT_ID, 'seen');
+    expect(hasSeenAnnouncement(BOOKSHELF_ANNOUNCEMENT_ID)).toBe(true);
+    expect(listPendingAnnouncementPages(allAvailable).map((page) => page.id)).toEqual([
+      BOOKSHELF_LIBRARY_ANNOUNCEMENT_ID,
+      COMPANION_ANNOUNCEMENT_ID,
+      MUSIC_ANNOUNCEMENT.id,
+      REFLECTION_ANNOUNCEMENT_ID,
+    ]);
+    recordAnnouncement(BOOKSHELF_LIBRARY_ANNOUNCEMENT_ID, 'seen');
+    const stored = JSON.parse(mockValues.get(FEATURE_ANNOUNCEMENTS_KEY) ?? '{}');
+    expect(stored[BOOKSHELF_ANNOUNCEMENT_ID].status).toBe('seen');
+    expect(stored[BOOKSHELF_LIBRARY_ANNOUNCEMENT_ID].status).toBe('seen');
   });
 
   it('does not mark unknown or unavailable features', () => {
@@ -104,7 +127,7 @@ describe('feature announcements', () => {
   });
 
   it('closes remaining pages without nags and keeps existing music records valid', () => {
-    recordAnnouncement(BOOKSHELF_ANNOUNCEMENT_ID, 'seen');
+    recordAnnouncement(BOOKSHELF_LIBRARY_ANNOUNCEMENT_ID, 'seen');
     recordAnnouncement(COMPANION_ANNOUNCEMENT_ID, 'seen');
     dismissAnnouncementPages([MUSIC_ANNOUNCEMENT.id, REFLECTION_ANNOUNCEMENT_ID]);
     expect(hasSeenAnnouncement(MUSIC_ANNOUNCEMENT.id)).toBe(true);

@@ -1,956 +1,310 @@
-import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, TextInput, StyleSheet, LayoutChangeEvent, Alert, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
-import { useRouter } from 'expo-router';
-import { useCrossTabBack } from '@/hooks/useCrossTabBack';
-import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, {
-  FadeIn,
-  FadeOut,
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  interpolate,
-  clamp,
-  Easing,
-  useReducedMotion,
-} from 'react-native-reanimated';
-// Old Swipeable API removed — crashes on Fabric. Using Gesture.Pan() instead (see SwipeableStudyCard).
-import { FlashList, type ListRenderItem } from '@shopify/flash-list';
+import { forwardRef, memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View, type ScrollViewProps } from 'react-native';
+import { useRouter, useFocusEffect } from 'expo-router';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { FlashList } from '@shopify/flash-list';
+import Animated, { interpolate, runOnUI, scrollTo, useAnimatedRef, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, type SharedValue } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { CaretLeftIcon, BookOpenIcon, CheckIcon, DownloadSimpleIcon, MagnifyingGlassIcon, XCircleIcon, TrashIcon } from '@/components/icons';
-import { FontFamily, FontSize } from '@/constants/fonts';
-import { Radius } from '@/constants/radius';
-import { Spacing } from '@/constants/spacing';
-import { Duration, Ease } from '@/constants/animations';
-import { Typography } from '@/constants/typography';
-import { alpha } from '@/components/ui';
-import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
-import { adaptiveFrameStyle, PRIMARY_SAFE_AREA_EDGES } from '@/lib/adaptive-layout';
+import { SquaresFourIcon } from 'phosphor-react-native/src/icons/SquaresFour';
+import { BookOpenIcon, CaretDownIcon, CaretLeftIcon, CaretRightIcon, DotsThreeIcon, MagnifyingGlassIcon, XIcon } from '@/components/icons';
+import { SeriesBookCover } from '@/components/bookshelf/SeriesBookCover';
+import { SeriesBookShareSheet } from '@/components/bookshelf/SeriesBookShareSheet';
+import { ExportIcon } from 'phosphor-react-native/src/icons/Export';
+import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
-import { useUnfoldStore, Devotional } from '@/lib/store';
+import { useUnfoldStore, type Devotional } from '@/lib/store';
+import { useCrossTabBack } from '@/hooks/useCrossTabBack';
+import { useAccessibleAnimation } from '@/hooks/useAccessibility';
+import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
+import { filterShelf, resolveShelfSelection, seriesReadingProgress, type ShelfFilter } from '@/lib/bookshelf';
+import { clearShelfOpening, useShelfOpening } from '@/lib/shelf-opening';
 import { resolveStackRoute, type TabGroup } from '@/lib/tab-stack-routes';
-import { format } from 'date-fns';
 import { exportDevotionalToPDF, isPDFExportSupported } from '@/lib/pdf-export';
+import { mmkvStorage } from '@/lib/mmkv-storage';
 import { addAppBreadcrumb } from '@/lib/sentry';
 
-// ============================================================================
-// Segmented Control
-// ============================================================================
+const HINT_KEY = 'unfold.bookshelf-discovered.v1';
+const FILTER_LABELS = { all: 'All series', progress: 'In progress', completed: 'Completed' };
+type Rect = { x: number; y: number; width: number; height: number };
 
-type PastSeriesTab = 'progress' | 'completed';
+// Keep the native ref through the inner RN 0.86 function component. The outer
+// Animated.ScrollView bypass alone does not bypass NativeWind at that boundary.
+const NativeShelfScrollView = forwardRef<ScrollView, ScrollViewProps>((props, ref) =>
+  <ScrollView {...props} cssInterop={false} ref={ref} />);
+NativeShelfScrollView.displayName = 'NativeShelfScrollView';
+const AnimatedShelfScrollView = Animated.createAnimatedComponent(NativeShelfScrollView);
 
-interface SegmentedControlProps {
-  activeTab: PastSeriesTab;
-  onTabChange: (tab: PastSeriesTab) => void;
-}
-
-function SegmentedControl({ activeTab, onTabChange }: SegmentedControlProps) {
-  const { colors } = useTheme();
-  const [containerWidth, setContainerWidth] = useState(0);
-
-  const activeIndex = activeTab === 'progress' ? 0 : 1;
-  const segmentWidth = containerWidth > 0 ? (containerWidth - 4) / 2 : 0;
-
-  const indicatorTranslateX = useSharedValue(activeIndex * segmentWidth);
-
-  // Update animation when tab changes — fast ease-out, no bounce
-  const prevIndex = useRef(activeIndex);
-  const containerWidthRef = useRef(0);
-
-  useEffect(() => {
-    if (segmentWidth <= 0) return;
-
-    const widthChanged = containerWidthRef.current !== containerWidth;
-    const tabChanged = prevIndex.current !== activeIndex;
-    const targetX = activeIndex * segmentWidth;
-
-    // When containerWidth changes and we know the index, set position without animation.
-    if (widthChanged) {
-      containerWidthRef.current = containerWidth;
-      indicatorTranslateX.value = targetX;
-      prevIndex.current = activeIndex;
-      return;
-    }
-
-    if (tabChanged) {
-      indicatorTranslateX.value = withTiming(activeIndex * segmentWidth, {
-        duration: 220,
-        easing: Easing.out(Easing.cubic),
-      });
-      prevIndex.current = activeIndex;
-    }
-  }, [activeIndex, containerWidth, indicatorTranslateX, segmentWidth]);
-
-  const indicatorStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: indicatorTranslateX.value }],
-    width: segmentWidth,
-  }));
-
-  const handleLayout = useCallback((e: LayoutChangeEvent) => {
-    const width = e.nativeEvent.layout.width;
-    setContainerWidth(width);
-  }, []);
-
-  const handlePress = useCallback(
-    (tab: PastSeriesTab) => {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      onTabChange(tab);
-    },
-    [onTabChange],
-  );
-
-  return (
-    <View
-      onLayout={handleLayout}
-      style={[
-        segStyles.container,
-        {
-          backgroundColor: colors.inputBackground,
-          borderColor: colors.border,
-        },
-      ]}
-    >
-      {/* Sliding indicator */}
-      {segmentWidth > 0 && (
-        <Animated.View
-          style={[
-            segStyles.indicator,
-            {
-              backgroundColor: colors.glassBackground,
-              borderColor: colors.glassBorder,
-              shadowColor: '#000',
-            },
-            indicatorStyle,
-          ]}
-        />
-      )}
-
-      {/* Segments */}
-      <TouchableOpacity
-        onPress={() => handlePress('progress')}
-        style={segStyles.segment}
-        activeOpacity={0.7}
-        accessibilityRole="tab"
-        accessibilityState={{ selected: activeTab === 'progress' }}
-        accessibilityLabel="In Progress tab, 1 of 2"
-      >
-        <Text
-          style={[
-            segStyles.segmentText,
-            {
-              fontFamily:
-                activeTab === 'progress'
-                  ? FontFamily.uiMedium
-                  : FontFamily.ui,
-              color:
-                activeTab === 'progress'
-                  ? colors.text
-                  : colors.textSubtle,
-            },
-          ]}
-        >
-          In Progress
-        </Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        onPress={() => handlePress('completed')}
-        style={segStyles.segment}
-        activeOpacity={0.7}
-        accessibilityRole="tab"
-        accessibilityState={{ selected: activeTab === 'completed' }}
-        accessibilityLabel="Completed tab, 2 of 2"
-      >
-        <Text
-          style={[
-            segStyles.segmentText,
-            {
-              fontFamily:
-                activeTab === 'completed'
-                  ? FontFamily.uiMedium
-                  : FontFamily.ui,
-              color:
-                activeTab === 'completed'
-                  ? colors.text
-                  : colors.textSubtle,
-            },
-          ]}
-        >
-          Completed
-        </Text>
-      </TouchableOpacity>
-    </View>
-  );
-}
-
-const segStyles = StyleSheet.create({
-  container: {
-    minHeight: 44,
-    borderRadius: 18,
-    borderWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 2,
-    position: 'relative',
-  },
-  indicator: {
-    position: 'absolute',
-    top: 2,
-    left: 2,
-    bottom: 2,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  segment: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 40,
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-    zIndex: 1,
-  },
-  segmentText: {
-    textAlign: 'center',
-    fontSize: FontSize.sm,
-  },
-});
-
-// ============================================================================
-// Swipeable Study Card (Gesture.Pan — Fabric-compatible)
-// ============================================================================
-
-const SWIPE_ACTION_WIDTH = 56;
-const SWIPE_SNAP_THRESHOLD = SWIPE_ACTION_WIDTH * 0.35;
-const EASE_OUT = Easing.out(Easing.cubic);
-const SWIPE_TIMING_CONFIG = { duration: Duration.normal, easing: EASE_OUT };
-
-interface SwipeableStudyCardProps {
-  children: React.ReactNode;
-  onDelete: () => void;
-}
-
-function SwipeableStudyCard({ children, onDelete }: SwipeableStudyCardProps) {
-  const { colors } = useTheme();
-  const translateX = useSharedValue(0);
-  const contextX = useSharedValue(0);
-
-  const close = useCallback(() => {
-    translateX.value = withTiming(0, SWIPE_TIMING_CONFIG);
-  }, [translateX]);
-
-  const handleDelete = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    close();
-    onDelete();
-  }, [onDelete, close]);
-
-  const panGesture = Gesture.Pan()
-    .activeOffsetX([-10, 10])
-    .failOffsetY([-5, 5])
-    .onStart(() => {
-      contextX.value = translateX.value;
-    })
-    .onUpdate((e) => {
-      const raw = contextX.value + e.translationX;
-      translateX.value = clamp(raw, -SWIPE_ACTION_WIDTH, 0);
-    })
-    .onEnd((e) => {
-      const isOpen = translateX.value < -SWIPE_SNAP_THRESHOLD;
-      const isFlick = e.velocityX < -500;
-
-      if (isOpen || isFlick) {
-        translateX.value = withTiming(-SWIPE_ACTION_WIDTH, SWIPE_TIMING_CONFIG);
-      } else {
-        translateX.value = withTiming(0, SWIPE_TIMING_CONFIG);
-      }
-    });
-
-  const contentStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: translateX.value }],
-  }));
-
-  const actionsStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(
-      Math.abs(translateX.value),
-      [0, SWIPE_ACTION_WIDTH * 0.4, SWIPE_ACTION_WIDTH],
-      [0, 0.7, 1],
-    ),
-  }));
-
-  return (
-    <View style={swipeStyles.outerContainer}>
-      {/* Delete action — positioned behind the card, right-aligned */}
-      <View style={swipeStyles.cardArea}>
-        <Animated.View style={[swipeStyles.actionsContainer, actionsStyle]}>
-          <TouchableOpacity
-            onPress={handleDelete}
-            activeOpacity={0.7}
-            style={swipeStyles.actionButton}
-            accessibilityRole="button"
-            accessibilityLabel="Delete study"
-          >
-            <View style={[swipeStyles.actionCircle, { backgroundColor: colors.error }]}>
-              <TrashIcon size={17} color="#FFFFFF" weight="regular" />
-            </View>
-            <Text style={[swipeStyles.actionLabel, { color: colors.textSubtle }]}>Delete</Text>
-          </TouchableOpacity>
-        </Animated.View>
-      </View>
-
-      {/* Sliding card content */}
-      <GestureDetector gesture={panGesture}>
-        <Animated.View style={contentStyle}>
-          {children}
-        </Animated.View>
-      </GestureDetector>
-    </View>
-  );
-}
-
-const swipeStyles = StyleSheet.create({
-  outerContainer: {
-    position: 'relative',
-  },
-  cardArea: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: Spacing['3'], // match card marginBottom
-    overflow: 'hidden',
-    borderTopRightRadius: Radius.lg,
-    borderBottomRightRadius: Radius.lg,
-  },
-  actionsContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: SWIPE_ACTION_WIDTH,
-    paddingRight: 4,
-  },
-  actionButton: {
-    width: SWIPE_ACTION_WIDTH,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-  },
-  actionCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  actionLabel: {
-    fontFamily: FontFamily.ui,
-    fontSize: 10,
-  },
-});
-
-// ============================================================================
-// Devotional Card
-// ============================================================================
-
-interface DevotionalCardProps {
-  item: Devotional;
-  colors: ReturnType<typeof useTheme>['colors'];
-  exportingId: string | null;
-  exportSuccessId: string | null;
-  isCurrent?: boolean;
-  onSelect: (id: string) => void;
-  onExport: (devotional: Devotional) => void;
-  onDelete: (devotional: Devotional) => void;
-}
-
-function DevotionalCard({ item, colors, exportingId, exportSuccessId, isCurrent, onSelect, onExport, onDelete }: DevotionalCardProps) {
-  const completedDays = (item.days ?? []).filter((d) => d.isRead).length;
-  const isComplete = completedDays >= item.totalDays;
-  const progress = (completedDays / item.totalDays) * 100;
-  const createdDate = format(new Date(item.createdAt), 'MMM d, yyyy');
-
-  const handleAccessibilityAction = useCallback(
-    (event: { nativeEvent: { actionName: string } }) => {
-      if (event.nativeEvent.actionName === 'delete') {
-        onDelete(item);
-      }
-    },
-    [onDelete, item],
-  );
-
-  return (
-    <TouchableOpacity
-      activeOpacity={0.7}
-      onPress={() => onSelect(item.id)}
-      accessibilityRole="button"
-      accessibilityLabel={`${item.title}${isCurrent ? ', current series' : ''}, ${isComplete ? 'completed' : `day ${item.currentDay} of ${item.totalDays}`}`}
-      accessibilityActions={[{ name: 'delete', label: 'Delete devotional' }]}
-      onAccessibilityAction={handleAccessibilityAction}
-      style={{
-        backgroundColor: colors.inputBackground,
-        borderRadius: Radius.lg,
-        borderWidth: 1,
-        borderColor: colors.border,
-        padding: Spacing['5'],
-        marginBottom: Spacing['3'],
-      }}
-    >
-      {/* Top row: date + overflow (delete) + download circle */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <Text
-            style={{
-              ...Typography.cardMeta,
-              color: colors.textHint,
-            }}
-          >
-            {createdDate}
-          </Text>
-          {isCurrent && (
-            <View
-              style={{
-                backgroundColor: alpha(colors.accent, 0.12),
-                paddingHorizontal: 8,
-                paddingVertical: 3,
-                borderRadius: 6,
-              }}
-            >
-              <Text
-                style={{
-                  fontFamily: FontFamily.uiMedium,
-                  fontSize: 11,
-                  letterSpacing: 0.3,
-                  color: colors.accent,
-                }}
-              >
-                Current
-              </Text>
-            </View>
-          )}
+const ShelfBook = memo(function ShelfBook({ book, index, scroll, stride, width, height, selected, reducedMotion, onSelect, onOpen, onOptions }: {
+  book: Devotional; index: number; scroll: SharedValue<number>; stride: number; width: number; height: number;
+  selected: boolean; reducedMotion: boolean; onSelect: (index: number) => void;
+  onOpen: (book: Devotional, rect?: Rect) => void; onOptions: (book: Devotional) => void;
+}) {
+  const ref = useRef<View>(null);
+  const progress = seriesReadingProgress(book);
+  const openingThisBook = useShelfOpening(state => state.session?.book.id === book.id);
+  const style = useAnimatedStyle(() => {
+    const distance = (scroll.value - index * stride) / stride;
+    return { opacity: openingThisBook ? 0 : interpolate(Math.abs(distance), [0, 1], [1, 0.75], 'clamp'),
+      transform: reducedMotion ? [] : [{ perspective: 1200 },
+        { rotateY: `${interpolate(distance, [-1, 0, 1], [-5, 0, 5], 'clamp')}deg` }] };
+  });
+  return <View style={{ width: stride, height: height + 28, justifyContent: 'flex-end', paddingBottom: 14 }}>
+    <Animated.View style={[{ width, transformOrigin: 'center bottom' }, style]}>
+      <Pressable onPress={() => {
+        if (!selected) { onSelect(index); return; }
+        if (!ref.current) { onOpen(book); return; }
+        ref.current.measureInWindow((x, y, w, h) => onOpen(book, w > 0 && h > 0 ? { x, y, width: w, height: h } : undefined));
+      }} onLongPress={() => onOptions(book)} accessibilityRole="button"
+        accessibilityLabel={`${book.title}, book ${index + 1}, ${progress.read} of ${progress.total} readings completed`}
+        accessibilityHint={selected ? 'Opens this book' : 'Centers this book on the shelf'}
+        accessibilityActions={[{ name: 'options', label: 'Book options' }]} onAccessibilityAction={event => { if (event.nativeEvent.actionName === 'options') onOptions(book); }} accessibilityState={{ selected }} testID={`shelf-book-${index}`}>
+        <View ref={ref} cssInterop={false} collapsable={false} style={{ width, height }}>
+          <SeriesBookCover devotional={book} width={width} height={height} />
         </View>
-
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <TouchableOpacity activeOpacity={0.7}
-            onPress={(e) => { e.stopPropagation(); onDelete(item); }}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            style={{
-              width: 44,
-              height: 44,
-              justifyContent: 'center',
-              alignItems: 'center',
-            }}
-            accessibilityLabel="Delete devotional"
-            accessibilityRole="button"
-          >
-            <TrashIcon size={20} color={colors.textMuted} weight="light" />
-          </TouchableOpacity>
-
-        <TouchableOpacity activeOpacity={0.7}
-          onPress={(e) => { e.stopPropagation(); onExport(item); }}
-          disabled={exportingId !== null}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: 22,
-            backgroundColor: alpha(colors.accent, 0.08),
-            justifyContent: 'center',
-            alignItems: 'center',
-            opacity: exportingId !== null && exportingId !== item.id ? 0.3 : 1,
-          }}
-          accessibilityLabel="Export as PDF"
-          accessibilityRole="button"
-          accessibilityState={{ disabled: exportingId !== null }}
-        >
-          {exportingId === item.id ? (
-            <ActivityIndicator size={18} color={colors.accent} />
-          ) : exportSuccessId === item.id ? (
-            <CheckIcon size={22} color={colors.accent} weight="bold" />
-          ) : (
-            <DownloadSimpleIcon size={22} color={colors.accent} weight="regular" />
-          )}
-        </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Title + progress (progress bar only for in-progress studies) */}
-      <View>
-        <Text
-          style={{
-            fontFamily: FontFamily.display,
-            fontSize: 20,
-            color: colors.text,
-            lineHeight: 25,
-            marginBottom: isComplete ? 0 : Spacing['3'],
-          }}
-        >
-          {item.title}
-        </Text>
-
-        {!isComplete && (
-          <>
-            <View
-              style={{
-                height: 2,
-                backgroundColor: colors.border,
-                borderRadius: 1,
-                marginBottom: Spacing['2'],
-              }}
-            >
-              <View
-                style={{
-                  height: '100%',
-                  width: `${progress}%`,
-                  backgroundColor: colors.accent,
-                  borderRadius: 1,
-                }}
-              />
-            </View>
-
-            <Text
-              style={{
-                fontFamily: FontFamily.ui,
-                fontSize: 13,
-                color: colors.textSubtle,
-              }}
-            >
-              Day {item.currentDay} of {item.totalDays}
-            </Text>
-          </>
-        )}
-      </View>
-    </TouchableOpacity>
-  );
-}
-
-// ============================================================================
-// Main Screen
-// ============================================================================
-
-/** Static — hoisted so the FlashList doesn't see a new style object each render. */
-const LIST_CONTENT_STYLE = {
-  paddingHorizontal: Spacing['6'],
-  paddingTop: Spacing['1'],
-  paddingBottom: 100,
-} as const;
+      </Pressable>
+    </Animated.View>
+  </View>;
+});
 
 export function PastSeriesLibraryScreen({ hostTab }: { hostTab?: TabGroup } = {}) {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { handleBack, isFromHome } = useCrossTabBack();
-  const { colors } = useTheme();
-  const reducedMotion = useReducedMotion();
-  const adaptiveLayout = useAdaptiveLayout();
-  const clusterFrameStyle = adaptiveFrameStyle(adaptiveLayout.clusterMaxWidth);
-  const devotionals = useUnfoldStore((s) => s.devotionals);
-  const removeDevotional = useUnfoldStore((s) => s.removeDevotional);
-  const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
+  const { colors, isDark } = useTheme();
+  const { width: windowWidth, height: windowHeight, fontScale } = useWindowDimensions();
+  const { reducedMotion } = useAccessibleAnimation();
+  const devotionals = useUnfoldStore(s => s.devotionals);
+  const currentDevotionalId = useUnfoldStore(s => s.currentDevotionalId);
+  const removeDevotional = useUnfoldStore(s => s.removeDevotional);
   const premiumPolicy = usePremiumAccessPolicy();
-  const journalEntries = useUnfoldStore((s) => s.journalEntries);
-  const checkIns = useUnfoldStore((s) => s.checkIns);
-
-  const [activeTab, setActiveTab] = useState<PastSeriesTab>('progress');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [filter, setFilter] = useState<ShelfFilter>('all');
+  const [query, setQuery] = useState('');
+  const search = useDeferredValue(query);
   const [searchVisible, setSearchVisible] = useState(false);
+  const [grid, setGrid] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [exportingId, setExportingId] = useState<string | null>(null);
-  const [exportSuccessId, setExportSuccessId] = useState<string | null>(null);
-  const exportSuccessTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const searchInputRef = useRef<TextInput>(null);
-  const scrollY = useSharedValue(0);
-
+  const [sharingBook, setSharingBook] = useState<Devotional | null>(null);
+  const exporting = useRef(false);
+  const [hint, setHint] = useState(() => mmkvStorage.getItem(HINT_KEY) !== '1');
+  const [areaHeight, setAreaHeight] = useState(windowHeight - 260);
+  const previousIndex = useRef(0);
+  const selection = useRef<string | null>(null);
+  const list = useAnimatedRef<ScrollView>();
+  const searchInput = useRef<TextInput>(null);
+  const selectedCover = useRef<View>(null);
+  const opening = useRef(false);
+  const scroll = useSharedValue(0);
+  const books = useMemo(() => filterShelf(devotionals, filter, search), [devotionals, filter, search]);
+  const index = resolveShelfSelection(books, selectedId, previousIndex.current);
+  const selected = books[index];
+  // Keep adjacent covers mounted without routing scroll events through a list wrapper.
+  const firstVisible = Math.max(0, index - 2);
+  const lastVisible = Math.min(books.length, index + 3);
+  const width = Math.min(windowWidth, 600);
+  const coverWidth = Math.round(width * 0.81);
+  const stride = coverWidth + 22;
+  const coverHeight = Math.round(Math.min(coverWidth * 1.4, Math.max(240, areaHeight - 200 * Math.min(fontScale, 1.35))));
+  const textColor = isDark ? '#D5C6AC' : colors.text;
+  const quietColor = isDark ? '#AEA596' : colors.textMuted;
+  const background = isDark ? '#11120F' : '#F5F0E7';
+  const moveShelf = useCallback((x: number, animated: boolean) => {
+    if (!list.current) return;
+    runOnUI((offset: number, shouldAnimate: boolean) => {
+      'worklet';
+      scrollTo(list, offset, 0, shouldAnimate);
+    })(x, animated);
+  }, [list]);
+  const dismissHint = useCallback(() => { setHint(false); mmkvStorage.setItem(HINT_KEY, '1'); }, []);
+  const selectIndex = useCallback((next: number, animated = true) => {
+    const target = Math.max(0, Math.min(next, books.length - 1));
+    if (!books[target]) return;
+    previousIndex.current = target;
+    selection.current = books[target].id;
+    setSelectedId(books[target].id);
+    requestAnimationFrame(() => moveShelf(target * stride, animated && !reducedMotion));
+  }, [books, moveShelf, reducedMotion, stride]);
   useEffect(() => {
+    const next = resolveShelfSelection(books, selection.current, previousIndex.current);
+    previousIndex.current = next;
+    selection.current = books[next]?.id ?? null;
+    setSelectedId(selection.current);
+    scroll.value = next * stride;
+    const frame = requestAnimationFrame(() => moveShelf(next * stride, false));
+    return () => cancelAnimationFrame(frame);
+  }, [books, stride, grid, scroll, fontScale, moveShelf]);
+  useEffect(() => useShelfOpening.subscribe(state => { if (!state.session) opening.current = false; }), []);
+  useFocusEffect(useCallback(() => {
+    opening.current = false;
+    scroll.value = previousIndex.current * stride;
+    const frame = requestAnimationFrame(() => moveShelf(previousIndex.current * stride, false));
     return () => {
-      if (exportSuccessTimerRef.current) clearTimeout(exportSuccessTimerRef.current);
+      cancelAnimationFrame(frame);
+      const session = useShelfOpening.getState().session;
+      if (session && !session.committed) clearShelfOpening(session.id);
     };
-  }, []);
-
-  // Filter devotionals by tab and search query, most recent first
-  const filteredDevotionals = useMemo(() => {
-    const query = searchQuery.toLowerCase().trim();
-    return (devotionals ?? [])
-      .filter((d) => {
-        const days = d.days ?? [];
-        const completedDays = days.filter((day) => day.isRead).length;
-        const isComplete = completedDays >= d.totalDays;
-        const matchesTab = activeTab === 'completed' ? isComplete : !isComplete;
-        if (!matchesTab) return false;
-        // Search filter
-        if (query) {
-          const searchableText = [
-            d.title,
-            ...days.map((day) => day.title),
-            ...days.map((day) => day.scriptureReference),
-          ]
-            .filter(Boolean)
-            .join(' ')
-            .toLowerCase();
-          return searchableText.includes(query);
-        }
-        return true;
-      })
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [devotionals, activeTab, searchQuery]);
-
-  // Pull-down to reveal search — detect overscroll
-  const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const y = event.nativeEvent.contentOffset.y;
-    scrollY.value = y;
-    if (y < -50 && !searchVisible) {
-      setSearchVisible(true);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      // Focus the search input after a short delay for the animation
-      setTimeout(() => searchInputRef.current?.focus(), 200);
-    }
-  }, [searchVisible, scrollY]);
-
-  const handleClearSearch = useCallback(() => {
-    if (searchQuery) {
-      setSearchQuery('');
-    } else {
-      setSearchVisible(false);
-      searchInputRef.current?.blur();
-    }
-  }, [searchQuery]);
-
-  const handleHistoryTabChange = useCallback((tab: PastSeriesTab) => {
-    addAppBreadcrumb('history', tab === 'completed' ? 'switched-to-completed' : 'switched-to-progress');
-    setActiveTab(tab);
-  }, []);
-
-  const handleSelectDevotional = useCallback((id: string) => {
-    addAppBreadcrumb('history', 'opened-series');
+  }, [moveShelf, scroll, stride]));
+  const onScroll = useAnimatedScrollHandler({
+    onScroll: event => {
+      'worklet';
+      scroll.value = Math.abs(event.contentOffset.x);
+    },
+  });
+  const openBook = useCallback((book: Devotional, rect?: Rect) => {
+    if (opening.current || useShelfOpening.getState().session) return;
+    opening.current = true;
+    dismissHint(); Keyboard.dismiss();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push({
-      // A Study mount always supplies its host, so a Study visitor can never
-      // fall to the (you) arm and land in the href:null stack.
-      pathname: hostTab
-        ? resolveStackRoute(hostTab, 'series-detail')
-        : isFromHome
-          ? '/(tabs)/(today)/series-detail'
-          : '/(tabs)/(you)/series-detail',
-      params: { id },
-    });
-  }, [hostTab, isFromHome, router]);
-
-  const handleExportPDF = useCallback(async (devotional: Devotional) => {
-    if (exportingId) return;
-
-    if (premiumPolicy !== 'granted') {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      router.push('/paywall');
-      return;
-    }
-
-    if (!isPDFExportSupported()) {
-      return;
-    }
-
-    setExportingId(devotional.id);
-    try {
-      // Gather journal entries for this devotional
-      const devJournals = journalEntries
-        .filter((j) => j.devotionalId === devotional.id)
-        .map((j) => ({
-          dayNumber: j.dayNumber,
-          content: j.content,
-          questionResponses: j.questionResponses,
-        }));
-
-      // Gather check-ins for this devotional
-      const devCheckIns = checkIns
-        .filter((c) => c.devotionalId === devotional.id)
-        .map((c) => ({
-          dayNumber: c.dayNumber,
-          mood: c.mood,
-          moodLabel: c.moodLabel,
-        }));
-
-      const success = await exportDevotionalToPDF(devotional, {
-        accentColor: colors.accent,
-        journalEntries: devJournals,
-        checkIns: devCheckIns,
+    const navigate = (shelfOpening?: string) => {
+      addAppBreadcrumb('history', 'opened-series');
+      router.push({
+        pathname: hostTab ? resolveStackRoute(hostTab, 'series-detail') : isFromHome ? '/(tabs)/(today)/series-detail' : '/(tabs)/(you)/series-detail',
+        params: { id: book.id, ...(shelfOpening ? { shelfOpening } : {}) },
       });
-      if (success) {
-        setExportSuccessId(devotional.id);
-        if (exportSuccessTimerRef.current) clearTimeout(exportSuccessTimerRef.current);
-        exportSuccessTimerRef.current = setTimeout(() => setExportSuccessId(null), 2000);
-      }
-    } finally {
-      setExportingId(null);
-    }
-  }, [exportingId, premiumPolicy, router, journalEntries, checkIns, colors.accent]);
-
-  const handleDeleteDevotional = useCallback((devotional: Devotional) => {
-    const isCurrent = devotional.id === currentDevotionalId;
-    Alert.alert(
-      'Delete this devotional?',
-      isCurrent
-        ? "This is the series on your Today tab. This cannot be undone."
-        : 'This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            removeDevotional(devotional.id);
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          },
-        },
-      ],
-    );
-  }, [removeDevotional, currentDevotionalId]);
-
-  const renderItem = useCallback<ListRenderItem<Devotional>>(({ item }) => (
-    <SwipeableStudyCard onDelete={() => handleDeleteDevotional(item)}>
-      <DevotionalCard
-        item={item}
-        colors={colors}
-        exportingId={exportingId}
-        exportSuccessId={exportSuccessId}
-        isCurrent={item.id === currentDevotionalId}
-        onSelect={handleSelectDevotional}
-        onExport={handleExportPDF}
-        onDelete={handleDeleteDevotional}
-      />
-    </SwipeableStudyCard>
-  ), [colors, exportingId, exportSuccessId, currentDevotionalId, handleSelectDevotional, handleExportPDF, handleDeleteDevotional]);
-
-  const keyExtractor = useCallback((item: Devotional) => item.id, []);
-
-  if (devotionals.length === 0) {
-    return (
-      <View style={{ flex: 1, backgroundColor: colors.background }}>
-        <SafeAreaView style={{ flex: 1 }} edges={PRIMARY_SAFE_AREA_EDGES}>
-          <View style={[clusterFrameStyle, { flex: 1 }]}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing['4'], paddingVertical: Spacing['3'] }}>
-            <TouchableOpacity activeOpacity={0.7}
-              onPress={handleBack}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              style={{ padding: Spacing['2'] }}
-              accessibilityLabel="Go back"
-              accessibilityRole="button"
-            >
-              <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
-            </TouchableOpacity>
-
-            <Text
-              style={{
-                fontFamily: FontFamily.uiMedium,
-                fontSize: FontSize.base,
-                color: colors.text,
-                marginLeft: Spacing['2'],
+    };
+    if (!rect || reducedMotion) { navigate(); return; }
+    useShelfOpening.setState({ session: {
+      id: `shelf-${Date.now()}`, book, rect, background, ready: false, committed: false, navigate,
+      paperColor: isDark ? '#1B1C17' : '#F5EEDF', inkColor: isDark ? '#E6DCC9' : '#302C22',
+    } });
+  }, [background, dismissHint, hostTab, isDark, isFromHome, reducedMotion, router]);
+  const exportBook = useCallback(async (book: Devotional) => {
+    if (exporting.current) return;
+    if (premiumPolicy !== 'granted') { router.push('/paywall'); return; }
+    if (!isPDFExportSupported()) return;
+    exporting.current = true; setExportingId(book.id);
+    try {
+      const state = useUnfoldStore.getState();
+      await exportDevotionalToPDF(book, {
+        accentColor: colors.accent,
+        journalEntries: state.journalEntries.filter(j => j.devotionalId === book.id).map(j => ({ dayNumber: j.dayNumber, content: j.content, questionResponses: j.questionResponses })),
+        checkIns: state.checkIns.filter(c => c.devotionalId === book.id).map(c => ({ dayNumber: c.dayNumber, mood: c.mood, moodLabel: c.moodLabel })),
+      });
+    } catch { Alert.alert('Could not export this book', 'Please try again.'); }
+    finally { exporting.current = false; setExportingId(null); }
+  }, [colors.accent, premiumPolicy, router]);
+  const deleteBook = useCallback((book: Devotional) => {
+    Alert.alert('Delete this series?', `${book.id === currentDevotionalId ? 'This is your current series on Today. ' : ''}Its readings, journal entries, check-ins, highlights, and bookmarks will be removed. This cannot be undone.`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => removeDevotional(book.id) },
+    ]);
+  }, [currentDevotionalId, removeDevotional]);
+  const options = useCallback((book: Devotional) => {
+    Alert.alert(book.title, undefined, [
+      { text: 'Share cover', onPress: () => setSharingBook(book) },
+      ...(isPDFExportSupported() ? [{ text: exportingId === book.id ? 'Exporting…' : 'Export PDF', onPress: () => { void exportBook(book); } }] : []),
+      { text: 'Delete series', style: 'destructive', onPress: () => deleteBook(book) },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }, [deleteBook, exportBook, exportingId]);
+  const filterMenu = () => Alert.alert('Show series', undefined, [
+    ...(['all', 'progress', 'completed'] as const).map(value => ({ text: FILTER_LABELS[value], onPress: () => setFilter(value) })),
+    { text: 'Cancel', style: 'cancel' },
+  ]);
+  const progress = selected ? seriesReadingProgress(selected) : null;
+  const stateLabel = progress ? [
+    selected.id === currentDevotionalId ? 'Current series' : progress.complete ? 'Completed' : 'Paused',
+    `${progress.read} of ${progress.total} readings`,
+  ].join(' · ') : '';
+  const navigateSelected = () => {
+    if (!selected) return;
+    if (!selectedCover.current) { openBook(selected); return; }
+    selectedCover.current.measureInWindow((x, y) => openBook(selected, { x: x + 24, y: y + 14, width: coverWidth, height: coverHeight }));
+  };
+  const empty = devotionals.length === 0 ? 'Your collection begins here.' : query.trim() ? 'No books found.' : filter === 'completed' ? 'No completed series yet.' : 'No series in progress.';
+  return <View style={{ flex: 1, backgroundColor: background }}>
+    <SafeAreaView key={fontScale} edges={['top', 'left', 'right']} style={{ flex: 1, paddingBottom: Math.max(insets.bottom, 8) + 52 }}>
+      <View style={{ flex: 1, width: '100%', maxWidth: 600, alignSelf: 'center' }}>
+        <View style={styles.header}>
+          <Pressable onPress={handleBack} accessibilityRole="button" accessibilityLabel="Go back" style={styles.icon}><CaretLeftIcon size={23} color={quietColor} /></Pressable>
+          <Text accessibilityRole="header" style={[styles.heading, { color: textColor }]}>Your library</Text>
+          <Pressable onPress={() => { setSearchVisible(v => !v); if (!searchVisible) setGrid(true); else { setQuery(''); Keyboard.dismiss(); } }} accessibilityRole="button" accessibilityLabel={searchVisible ? 'Close search' : 'Search series'} style={styles.icon}><MagnifyingGlassIcon size={23} color={quietColor} /></Pressable>
+          <Pressable onPress={() => setGrid(v => !v)} accessibilityRole="button" accessibilityLabel={grid ? 'Show bookshelf' : 'Show grid'} style={styles.icon}>{grid ? <BookOpenIcon size={24} color={quietColor} /> : <SquaresFourIcon size={24} color={quietColor} />}</Pressable>
+        </View>
+        <View style={styles.filterRow}>
+          <Pressable onPress={filterMenu} style={styles.filter} accessibilityRole="button" accessibilityLabel={`Filter: ${FILTER_LABELS[filter]}`}>
+            <Text style={[styles.meta, { color: quietColor }]}>{FILTER_LABELS[filter]}</Text><CaretDownIcon size={13} color={quietColor} />
+          </Pressable>
+          {selected && <Pressable onPress={() => options(selected)} accessibilityRole="button" accessibilityLabel="Book options" style={styles.icon}><DotsThreeIcon size={24} color={quietColor} /></Pressable>}
+        </View>
+        {searchVisible && <View style={[styles.search, { borderColor: colors.border }]}>
+          <TextInput autoFocus ref={searchInput} defaultValue={query} onChangeText={setQuery} placeholder="Title, reading, or scripture" placeholderTextColor={quietColor} style={[styles.input, { color: textColor }]} accessibilityLabel="Search series" autoCorrect={false} autoCapitalize="none" returnKeyType="search" onSubmitEditing={Keyboard.dismiss} />
+          {query ? <Pressable onPress={() => { searchInput.current?.clear(); setQuery(''); }} accessibilityRole="button" accessibilityLabel="Clear search" style={styles.icon}><XIcon size={19} color={quietColor} /></Pressable> : null}
+        </View>}
+        {books.length === 0 ? <View style={styles.empty}>
+          <BookOpenIcon size={40} color={quietColor} weight="light" /><Text style={[styles.emptyTitle, { color: textColor }]}>{empty}</Text>
+          <Pressable style={styles.action} onPress={() => { if (!devotionals.length) router.navigate('/(tabs)/(today)'); else { searchInput.current?.clear(); setQuery(''); setFilter('all'); } }} accessibilityRole="button">
+            <Text style={[styles.actionText, { color: colors.accent }]}>{devotionals.length ? 'Show all series' : 'Go to Today'}</Text>
+          </Pressable>
+        </View> : grid ? <FlashList key="grid" numColumns={2} data={books} keyExtractor={book => book.id} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 24 }} renderItem={({ item, index: bookIndex }) => <Pressable accessibilityRole="button" accessibilityLabel={`View ${item.title} on shelf`} onPress={() => { Keyboard.dismiss(); selectIndex(bookIndex, false); setGrid(false); }} onLongPress={() => options(item)} accessibilityActions={[{ name: 'options', label: 'Book options' }]} onAccessibilityAction={event => { if (event.nativeEvent.actionName === 'options') options(item); }} style={{ padding: 8 }}>
+          <SeriesBookCover devotional={item} width={(width - 68) / 2} height={(width - 68) / 2 * 1.4} compact />
+        </Pressable>} /> : <View style={{ flex: 1 }} onLayout={event => setAreaHeight(event.nativeEvent.layout.height)}>
+          <View ref={selectedCover} cssInterop={false} collapsable={false} style={{ height: coverHeight + 28, marginTop: 8 }}>
+            <AnimatedShelfScrollView ref={list} horizontal
+              showsHorizontalScrollIndicator={false} snapToInterval={stride} decelerationRate="fast" disableIntervalMomentum
+              contentContainerStyle={{ paddingLeft: 24, paddingRight: Math.max(0, width - stride - 24) }}
+              onScroll={onScroll} scrollEventThrottle={16} onScrollBeginDrag={dismissHint}
+              onMomentumScrollEnd={event => {
+                if (opening.current) return;
+                const next = Math.max(0, Math.min(books.length - 1, Math.round(Math.abs(event.nativeEvent.contentOffset.x) / stride)));
+                if (next !== previousIndex.current) Haptics.selectionAsync();
+                previousIndex.current = next; selection.current = books[next]?.id ?? null; setSelectedId(selection.current);
               }}
             >
-              Past Devotionals
-            </Text>
+              <View style={{ width: firstVisible * stride }} />
+              {books.slice(firstVisible, lastVisible).map((book, offset) => <ShelfBook key={book.id} book={book} index={firstVisible + offset} scroll={scroll} stride={stride} width={coverWidth} height={coverHeight}
+                selected={book.id === selected?.id} reducedMotion={reducedMotion} onSelect={selectIndex} onOpen={openBook} onOptions={options} />)}
+              <View style={{ width: (books.length - lastVisible) * stride }} />
+            </AnimatedShelfScrollView>
           </View>
-
-          <Animated.View
-            entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
-            style={{ alignItems: 'center', paddingTop: 60 }}
-          >
-            <BookOpenIcon size={48} color={colors.textHint} weight="light" />
-            <Text
-              style={{
-                fontFamily: FontFamily.body,
-                fontSize: FontSize.base,
-                color: colors.textMuted,
-                textAlign: 'center',
-                marginTop: Spacing['4'],
-              }}
-            >
-              No devotionals yet
-            </Text>
-          </Animated.View>
+          <View pointerEvents="none" style={{ height: 24, marginTop: -14 }}>
+            <LinearGradient colors={isDark ? ['#B18C482A', '#66512C44', '#17181100'] : ['#B18C483A', '#AE936431', '#F5F0E700']} locations={[0, 0.3, 1]} style={StyleSheet.absoluteFill} />
+            <View style={{ height: 1, backgroundColor: isDark ? '#B2985D70' : '#B29C6C80' }} />
           </View>
-        </SafeAreaView>
+          <View style={styles.caption}>
+            <Text style={[styles.status, { color: quietColor }]}>{stateLabel}</Text>
+            <View style={styles.actions}>
+              <Pressable onPress={navigateSelected} accessibilityRole="button" accessibilityLabel="Open book" testID="shelf-open-book" style={styles.action}>
+                <Text style={[styles.actionText, { color: colors.accent }]}>Open book</Text><CaretRightIcon size={20} color={colors.accent} weight="light" />
+              </Pressable>
+              <Pressable cssInterop={false} onPress={() => setSharingBook(selected)} accessibilityRole="button" accessibilityLabel="Share cover" accessibilityHint="Previews an image of this book" testID="shelf-share-cover" style={({ pressed }) => [styles.share, { opacity: pressed ? 0.6 : 1 }]}>
+                <ExportIcon size={18} color={quietColor} /><Text style={[styles.meta, { color: quietColor }]}>Share cover</Text>
+              </Pressable>
+            </View>
+            {exportingId && <ActivityIndicator color={colors.accent} size="small" accessibilityLabel="Exporting book" />}
+            {hint && <Text style={[styles.hint, { color: quietColor }]}>{books.length > 1 ? 'Swipe to browse. Tap to open.' : 'Tap the cover to open your book.'}</Text>}
+            {books.length > 1 && <View style={styles.pagination}>
+              <Pressable onPress={() => selectIndex(index - 1)} disabled={index === 0} accessibilityRole="button" accessibilityLabel="Previous book" style={[styles.icon, { opacity: index === 0 ? 0.2 : 0.8 }]}><CaretLeftIcon size={15} color={quietColor} /></Pressable>
+              <Text style={[styles.position, { color: quietColor }]} accessibilityLiveRegion="polite">{index + 1} of {books.length}</Text>
+              <Pressable onPress={() => selectIndex(index + 1)} disabled={index === books.length - 1} accessibilityRole="button" accessibilityLabel="Next book" style={[styles.icon, { opacity: index === books.length - 1 ? 0.2 : 0.8 }]}><CaretRightIcon size={15} color={quietColor} /></Pressable>
+            </View>}
+          </View>
+        </View>}
       </View>
-    );
-  }
-
-  const emptyLabel = searchQuery.trim()
-    ? `No devotionals match "${searchQuery}"`
-    : activeTab === 'completed'
-      ? 'No completed devotionals yet'
-      : 'No devotionals in progress';
-
-  return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <SafeAreaView style={{ flex: 1 }} edges={PRIMARY_SAFE_AREA_EDGES}>
-        <View style={[clusterFrameStyle, { flex: 1 }]}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing['4'], paddingVertical: Spacing['3'] }}>
-          <TouchableOpacity activeOpacity={0.7}
-            onPress={handleBack}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            style={{ padding: Spacing['2'] }}
-            accessibilityLabel="Go back"
-            accessibilityRole="button"
-          >
-            <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
-          </TouchableOpacity>
-
-          <Text
-            style={{
-              fontFamily: FontFamily.uiMedium,
-              fontSize: FontSize.base,
-              color: colors.text,
-              marginLeft: Spacing['2'],
-            }}
-          >
-            Past Devotionals
-          </Text>
-        </View>
-
-        {/* Segmented Control */}
-        <View style={{ paddingHorizontal: Spacing['6'], marginBottom: Spacing['4'] }}>
-          <SegmentedControl activeTab={activeTab} onTabChange={handleHistoryTabChange} />
-        </View>
-
-        {/* Pull-down search bar */}
-        {searchVisible && (
-          <Animated.View
-            entering={reducedMotion ? undefined : FadeIn.duration(Duration.fast).easing(Ease.out)}
-            exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
-            style={searchStyles.container}
-          >
-            <View
-              style={[
-                searchStyles.inputRow,
-                {
-                  backgroundColor: colors.inputBackground,
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <MagnifyingGlassIcon size={16} color={colors.textMuted} weight="light" />
-              <TextInput
-                ref={searchInputRef}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                placeholder="Search devotionals, days, scriptures..."
-                placeholderTextColor={colors.textHint}
-                selectionColor={colors.accent}
-                cursorColor={colors.accent}
-                style={[
-                  searchStyles.input,
-                  { color: colors.text },
-                ]}
-                autoCorrect={false}
-                autoCapitalize="none"
-                returnKeyType="search"
-                accessibilityLabel="Search studies"
-              />
-              <TouchableOpacity
-                activeOpacity={0.7}
-                onPress={handleClearSearch}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                accessibilityLabel="Clear search"
-                accessibilityRole="button"
-              >
-                <XCircleIcon size={18} color={colors.textMuted} weight="fill" />
-              </TouchableOpacity>
-            </View>
-          </Animated.View>
-        )}
-
-        {filteredDevotionals.length === 0 ? (
-          <Animated.View
-            entering={reducedMotion ? undefined : FadeIn.duration(Duration.slow).easing(Ease.out)}
-            style={{ alignItems: 'center', paddingTop: 48 }}
-          >
-            <BookOpenIcon size={36} color={colors.textHint} weight="light" />
-            <Text
-              style={{
-                fontFamily: FontFamily.body,
-                fontSize: 15,
-                color: colors.textMuted,
-                textAlign: 'center',
-                marginTop: Spacing['3'],
-              }}
-            >
-              {emptyLabel}
-            </Text>
-          </Animated.View>
-        ) : (
-          <>
-          {!searchVisible && filteredDevotionals.length > 3 && (
-            <View style={{ alignItems: 'center', paddingBottom: Spacing['2'] }}>
-              <Text
-                style={{
-                  fontFamily: FontFamily.ui,
-                  fontSize: 12,
-                  color: colors.textHint,
-                }}
-              >
-                Pull down to search
-              </Text>
-            </View>
-          )}
-          <FlashList
-            data={filteredDevotionals}
-            renderItem={renderItem}
-            keyExtractor={keyExtractor}
-            contentContainerStyle={LIST_CONTENT_STYLE}
-            showsVerticalScrollIndicator={false}
-            onScroll={handleScroll}
-            scrollEventThrottle={16}
-          />
-          </>
-        )}
-        </View>
-      </SafeAreaView>
-    </View>
-  );
+    </SafeAreaView>
+    {sharingBook && <SeriesBookShareSheet book={sharingBook} onClose={() => setSharingBook(null)} />}
+  </View>;
 }
-
-/**
- * Default export = the plain stack mount (no host tab). (today) and (you)
- * re-export this; the Study mount uses the named export and supplies its host.
- */
-export default function PastDevotionalsScreen() {
-  return <PastSeriesLibraryScreen />;
-}
-
-// ============================================================================
-// Search Bar Styles
-// ============================================================================
-
-const searchStyles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing['6'],
-    marginBottom: Spacing['3'],
-    gap: Spacing['2'],
-  },
-  inputRow: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing['2'],
-    minHeight: 44,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    paddingHorizontal: Spacing['3'],
-  },
-  input: {
-    flex: 1,
-    fontFamily: FontFamily.body,
-    fontSize: FontSize.sm,
-    paddingVertical: 8,
-  },
-  cancelButton: {
-    paddingVertical: Spacing['2'],
-    paddingHorizontal: Spacing['1'],
-  },
-  cancelText: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: FontSize.sm,
-  },
+export default function PastDevotionalsScreen() { return <PastSeriesLibraryScreen />; }
+const styles = StyleSheet.create({
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingTop: 8, paddingBottom: 4 },
+  icon: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  heading: { flex: 1, fontFamily: FontFamily.display, fontSize: 27, paddingLeft: 4 },
+  filterRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, minHeight: 44 },
+  filter: { flexDirection: 'row', gap: 9, alignItems: 'center', minHeight: 44 },
+  meta: { fontFamily: FontFamily.ui, fontSize: 13 },
+  search: { marginHorizontal: 24, marginBottom: 8, flexDirection: 'row', borderBottomWidth: StyleSheet.hairlineWidth },
+  input: { flex: 1, minWidth: 0, fontFamily: FontFamily.ui, fontSize: 16, paddingVertical: 12 },
+  caption: { alignItems: 'center', paddingHorizontal: 24, flex: 1, paddingTop: 8 },
+  status: { fontFamily: FontFamily.ui, fontSize: 12, textAlign: 'center', lineHeight: 19 },
+  action: { minHeight: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingHorizontal: 14 },
+  actionText: { fontFamily: FontFamily.display, fontSize: 28 },
+  actions: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', columnGap: 8 },
+  share: { minHeight: 44, minWidth: 44, flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 12 },
+  hint: { fontFamily: FontFamily.ui, fontSize: 11, textAlign: 'center', marginTop: 2 },
+  pagination: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 20, marginTop: 'auto' },
+  position: { fontFamily: FontFamily.ui, fontSize: 12, fontVariant: ['tabular-nums'] },
+  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 18, padding: 28 },
+  emptyTitle: { fontFamily: FontFamily.display, fontSize: 30, textAlign: 'center' },
 });

@@ -1,4 +1,6 @@
 import { initializeAudioInterruptionHandling } from '@/lib/audio-interruption-events';
+import { ShelfOpeningOverlay } from '@/components/bookshelf/ShelfOpeningOverlay';
+import { BookOpeningOverlay } from '@/components/book/BookOpeningOverlay';
 import { ThemeProvider as NavigationThemeProvider } from 'expo-router/react-navigation';
 import { Stack, useNavigationContainerRef, usePathname, useRootNavigationState } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -283,6 +285,8 @@ function RootLayoutNav() {
         <AudioPlayerOverlay />
         <AmbientSoundOverlay />
         <LaterEntryNotifySheet />
+        <BookOpeningOverlay />
+        <ShelfOpeningOverlay />
         <PrivacyShield />
       </View>
       <StatusBar style={isDark ? 'light' : 'dark'} />

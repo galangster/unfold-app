@@ -15,6 +15,8 @@ import { canonicalGeneratedDayId } from '../devotional-canonical-days';
 import { resolveInitialReadingDayNumber } from '../devotional-day-access';
 import type { Devotional, DevotionalDay } from '../store';
 
+jest.mock('react-native-gesture-handler', () => ({ GestureDetector: ({ children }: { children: React.ReactNode }) => children }));
+jest.mock('@/components/book/useBookPageOpening', () => ({ useBookPageOpening: ({ onContinue }: { onContinue: () => void }) => ({ open: onContinue, gesture: {}, showHint: false, hidden: false, onLayout: jest.fn() }) }));
 const renderer = require('react-test-renderer');
 const { act } = renderer;
 
@@ -202,19 +204,11 @@ function textContent(node: { props: Record<string, unknown> }): string {
 }
 
 function findRowContaining(tree: ReturnType<typeof renderScreen>, needle: string) {
-  // Locate the pressable ancestor whose subtree renders `needle`.
-  const candidates = tree.root.findAll((node) => {
+  const dayNumber = needle.replace('Day ', '');
+  return tree.root.findAll((node) => {
     const n = node as { props?: Record<string, unknown> };
-    return Boolean(n.props && typeof n.props.onPress === 'function' && n.props.style);
-  }) as { props: Record<string, unknown>; findAll: (p: (n: unknown) => boolean) => unknown[] }[];
-
-  return candidates.find((c) => {
-    const texts = c.findAll((node) => {
-      const n = node as { props?: Record<string, unknown> };
-      return Boolean(n.props && 'children' in (n.props ?? {}));
-    }) as { props: Record<string, unknown> }[];
-    return texts.some((t) => textContent(t).includes(needle));
-  });
+    return n.props?.testID === `book-day-${dayNumber}` && typeof n.props?.onPress === 'function';
+  })[0] as { props: Record<string, unknown> } | undefined;
 }
 
 function allRenderedText(tree: ReturnType<typeof renderScreen>): string {

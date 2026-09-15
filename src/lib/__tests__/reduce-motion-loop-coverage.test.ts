@@ -79,15 +79,5 @@ describe('reduce-motion loop coverage', () => {
     expect(src).not.toContain('function SparkleBurst(');
   });
 
-  it('holds the series-detail locked-row glow static under reduce motion', () => {
-    const src = readSource('app/(tabs)/(you)/series-detail.tsx');
-    const fnStart = src.indexOf('function BottomGlow');
-    expect(fnStart).toBeGreaterThan(-1);
-    const gate = src.indexOf('if (reducedMotion) {', fnStart);
-    const still = src.indexOf('pulse.value = 0.5;', fnStart);
-    const loop = src.indexOf('withRepeat(', fnStart);
-    expect(gate).toBeGreaterThan(fnStart);
-    expect(still).toBeGreaterThan(gate);
-    expect(gate).toBeLessThan(loop);
-  });
+
 });

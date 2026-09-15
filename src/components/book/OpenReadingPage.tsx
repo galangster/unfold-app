@@ -1,3 +1,8 @@
+import { useRef } from 'react';
+import Animated from 'react-native-reanimated';
+import { GestureDetector } from 'react-native-gesture-handler';
+import { bookDayCaption } from '@/lib/book-opening';
+import { useBookPageOpening } from './useBookPageOpening';
 import { TouchableOpacity, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient as PageGradient } from 'expo-linear-gradient';
 import Svg, { Defs, Ellipse, LinearGradient, Path, RadialGradient, Stop } from 'react-native-svg';
@@ -13,19 +18,11 @@ const ACTION_LABEL: Record<Exclude<BookTodayPage['action'], null>, string> = {
   'read-again': 'Read again',
 };
 
-function chapterCaption(page: BookTodayPage): string {
-  if (page.totalDays < 1) return 'Your next reading';
-  if (page.chapterName && page.chapterDayNumber && page.chapterDayCount) {
-    return `${page.chapterName} · Day ${page.chapterDayNumber} of ${page.chapterDayCount}`;
-  }
-  return `Day ${page.dayNumber} of ${page.totalDays}`;
-}
-
-function placeLine(page: BookTodayPage): string {
+function placeLine(page: BookTodayPage): string | undefined {
   if (page.seriesComplete) return 'You can return to any page.';
   if (page.completedToday) return 'Your next reading will be here tomorrow.';
   if (!page.contentReady) return 'This page is still being prepared.';
-  return 'Your place is saved.';
+  return undefined;
 }
 
 function PageEngraving({ color }: { color: string }) {
@@ -40,19 +37,6 @@ function PageEngraving({ color }: { color: string }) {
         <Path d="M105 51a19 19 0 0 1 38 0M124 20v4M99 29l3 3M149 29l-3 3" stroke={color} strokeWidth="0.7" fill="none" />
         <Path d="M30 52h188" stroke="url(#book-dawn-horizon)" strokeWidth="0.7" />
         <Path d="M103 59q21 2 42 0" stroke={color} strokeWidth="0.7" strokeOpacity={0.2} fill="none" />
-      </Svg>
-    </View>
-  );
-}
-
-function BookmarkRibbon({ page }: { page: BookPageColors }) {
-  return (
-    <View pointerEvents="none" accessibilityElementsHidden style={styles.ribbon}>
-      <Svg width={17} height={33} viewBox="0 0 17 33">
-        <Path
-          d="M0 0h17v33l-8.5-6.6L0 33z"
-          fill={page.accent}
-        />
       </Svg>
     </View>
   );
@@ -83,19 +67,27 @@ export function OpenReadingPage({
   page: BookTodayPage;
   colors: ColorTheme;
   isDark: boolean;
-  onContinue: () => void;
+  onContinue: (openingId?: string) => void;
 }) {
+  const pageRef = useRef<View>(null);
+  const opening = useBookPageOpening({ pageRef, page, colors, isDark, onContinue });
   const paper = bookPageColors(colors, isDark);
   const actionLabel = page.action ? ACTION_LABEL[page.action] : null;
+  const statusLine = placeLine(page);
 
   return (
     <View style={styles.book} accessibilityLabel="Your current reading">
+      <Animated.View style={[styles.frame, { borderColor: paper.rim, opacity: opening.hidden ? 0 : 1 }, opening.sourceStyle]}>
       <View
+        ref={pageRef}
+        testID="book-page-capture"
+        cssInterop={false}
+        collapsable={false}
+        onLayout={(event) => opening.onLayout(event.nativeEvent.layout.width, event.nativeEvent.layout.height)}
         style={[
           styles.page,
           {
             backgroundColor: paper.surface,
-            borderColor: paper.rim,
           },
         ]}
       >
@@ -107,11 +99,11 @@ export function OpenReadingPage({
           pointerEvents="none"
         />
         <View style={[styles.gutter, { backgroundColor: paper.rule }]} pointerEvents="none" />
-        <BookmarkRibbon page={paper} />
         <PageEngraving color={paper.accent} />
         <Text style={[styles.caption, { color: paper.muted }]}>
-          {chapterCaption(page)}
+          {bookDayCaption(page)}
         </Text>
+        {page.chapterName ? <Text style={[styles.chapter, { color: paper.muted }]}>{page.chapterName}</Text> : null}
         {page.title ? (
           <Text style={[styles.title, { color: paper.ink }]}>{page.title}</Text>
         ) : null}
@@ -130,23 +122,39 @@ export function OpenReadingPage({
             testID="book-continue-reading"
             accessibilityRole="button"
             accessibilityLabel={actionLabel}
-            accessibilityHint={placeLine(page)}
-            onPress={onContinue}
-            activeOpacity={0.8}
+            accessibilityHint={statusLine}
+            onPress={opening.open}
+            activeOpacity={1}
             style={styles.readingTurn}
           >
             <View style={styles.turnLine}>
               <Text style={[styles.turnLabel, { color: paper.ink, textDecorationColor: paper.accent }]}>{actionLabel}</Text>
-              <Svg width={24} height={24} viewBox="0 0 24 24">
-                <Path d="M3 14c5-7 12-7 17-3m-6-1 6 1-2 6" stroke={paper.accent} strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-              </Svg>
+
             </View>
-            <Text style={[styles.savedPlace, { color: paper.muted }]}>{placeLine(page)}</Text>
-            <PageTurnCorner page={paper} />
+            {statusLine ? <Text style={[styles.savedPlace, { color: paper.muted }]}>{statusLine}</Text> : null}
           </TouchableOpacity>
         ) : null}
-        {!actionLabel || !page.canOpen ? <Text style={[styles.place, { color: paper.muted }]}>{placeLine(page)}</Text> : null}
+        {(!actionLabel || !page.canOpen) && statusLine ? <Text style={[styles.place, { color: paper.muted }]}>{statusLine}</Text> : null}
       </View>
+        {actionLabel && page.canOpen ? (
+          <>
+            {opening.showHint ? <Text style={[styles.hint, { color: paper.muted }]} pointerEvents="none">Tap or drag the corner to read</Text> : null}
+            <GestureDetector gesture={opening.gesture}>
+              <TouchableOpacity
+                testID="book-page-corner"
+                accessibilityRole="button"
+                accessibilityLabel={actionLabel}
+                accessibilityHint="Opens this reading. You can also drag this corner to the left."
+                onPress={opening.open}
+                activeOpacity={0.85}
+                style={styles.cornerButton}
+              >
+                <PageTurnCorner page={paper} />
+              </TouchableOpacity>
+            </GestureDetector>
+          </>
+        ) : null}
+      </Animated.View>
     </View>
   );
 }
@@ -157,17 +165,19 @@ const styles = StyleSheet.create({
     marginLeft: Spacing['1'],
     marginBottom: Spacing['8'],
   },
-  page: {
-    position: 'relative',
+  frame: {
     overflow: 'hidden',
-    paddingTop: Spacing['5'],
-    paddingRight: Spacing['5'],
-    paddingBottom: Spacing['3.5'],
-    paddingLeft: Spacing['6'],
     borderRadius: 3,
     borderTopRightRadius: 14,
     borderBottomRightRadius: 14,
     borderWidth: 1,
+  },
+  page: {
+    position: 'relative',
+    paddingTop: Spacing['5'],
+    paddingRight: Spacing['5'],
+    paddingBottom: Spacing['3.5'],
+    paddingLeft: Spacing['6'],
   },
   pageWash: {
     ...StyleSheet.absoluteFill,
@@ -179,14 +189,6 @@ const styles = StyleSheet.create({
     left: 7,
     width: 1,
     opacity: 0.65,
-  },
-  ribbon: {
-    position: 'absolute',
-    top: -1,
-    right: 20,
-    width: 17,
-    height: 33,
-    zIndex: 2,
   },
   engraving: {
     height: 70,
@@ -224,7 +226,7 @@ const styles = StyleSheet.create({
     marginBottom: -Spacing['3.5'],
     paddingLeft: Spacing['6'],
     paddingRight: Spacing['5'],
-    paddingBottom: 22,
+    paddingBottom: 44,
     minHeight: 92,
   },
   turnLine: {
@@ -245,11 +247,14 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   savedPlace: {
-    paddingRight: 42,
+    paddingRight: 62,
     fontFamily: FontFamily.ui,
     fontSize: 10,
     lineHeight: 14,
   },
+  chapter: { ...Typography.cardMeta, marginBottom: Spacing['2'] },
+  hint: { position: 'absolute', left: 24, right: 78, bottom: 12, fontFamily: FontFamily.ui, fontSize: 11, lineHeight: 15 },
+  cornerButton: { position: 'absolute', right: 0, bottom: 0, width: 76, height: 76 },
   turnCorner: {
     position: 'absolute',
     right: 0,

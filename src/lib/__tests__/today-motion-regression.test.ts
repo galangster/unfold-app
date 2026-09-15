@@ -47,13 +47,6 @@ describe('Today tab motion guardrails', () => {
     expect(myContentSource).toContain('cancelAnimation(iconPulse);');
   });
 
-  it('keeps My Devotionals segmented indicator shared-value writes out of render', () => {
-    expect(pastDevotionalsSource).not.toContain('if (prevIndex.current !== activeIndex && segmentWidth > 0) {\n    indicatorTranslateX.value');
-    expect(pastDevotionalsSource).not.toContain('if (containerWidth > 0 && containerWidthRef.current !== containerWidth) {\n    containerWidthRef.current = containerWidth;\n    indicatorTranslateX.value');
-    expect(pastDevotionalsSource).toContain('useEffect(() => {\n    if (segmentWidth <= 0) return;');
-    expect(pastDevotionalsSource).toContain('indicatorTranslateX.value = withTiming(activeIndex * segmentWidth');
-  });
-
   it('orders Today section entrances from hero to context to streak to bento', () => {
     expect(bentoGridSource).toContain('FadeIn.duration(Duration.normal).delay(260).easing(Ease.out)');
   });
@@ -194,8 +187,8 @@ describe('Today tab motion guardrails', () => {
     // from two tabs to three when the Study tab landed: the (today)/(you) arms
     // are still the fallback, and a Study mount resolves through the host table.
     expect(pastDevotionalsSource).toContain("resolveStackRoute(hostTab, 'series-detail')");
-    expect(pastDevotionalsSource).toContain("isFromHome\n          ? '/(tabs)/(today)/series-detail'\n          : '/(tabs)/(you)/series-detail',");
-    expect(pastDevotionalsSource).toContain('params: { id }');
+    expect(pastDevotionalsSource).toMatch(/isFromHome\s*\? '\/\(tabs\)\/\(today\)\/series-detail'\s*:\s*'\/\(tabs\)\/\(you\)\/series-detail'/);
+    expect(pastDevotionalsSource).toContain('params: { id: book.id,');
   });
 
   it('respects reduced motion for the first-time Today title character reveal', () => {

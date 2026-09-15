@@ -4,8 +4,10 @@ import { MUSIC_ANNOUNCEMENT } from './music-announcement';
 export const FEATURE_ANNOUNCEMENTS_KEY = 'feature-announcements';
 
 export const BOOKSHELF_ANNOUNCEMENT_ID = 'bookshelf-v1';
+export const BOOKSHELF_LIBRARY_ANNOUNCEMENT_ID = 'bookshelf-library-v1';
 export const COMPANION_ANNOUNCEMENT_ID = 'companion-v1';
 export const REFLECTION_ANNOUNCEMENT_ID = 'reflection-navigation-v1';
+const LEGACY_ANNOUNCEMENT_IDS = [BOOKSHELF_ANNOUNCEMENT_ID] as const;
 
 export type FeatureAnnouncementKind = 'bookshelf' | 'companion' | 'music' | 'reflection';
 
@@ -25,10 +27,10 @@ export type FeatureAnnouncementAvailability = {
 
 export const FEATURE_ANNOUNCEMENT_CATALOG: readonly FeatureAnnouncementPage[] = [
   {
-    id: BOOKSHELF_ANNOUNCEMENT_ID,
+    id: BOOKSHELF_LIBRARY_ANNOUNCEMENT_ID,
     kind: 'bookshelf',
     title: 'Your new bookshelf.',
-    body: 'Open your devotional series to find today’s reading and return to earlier days, chapter by chapter.',
+    body: 'Find your bookshelf in You, under Past Devotionals. Open a book, swipe its page into your reading, or share its cover.',
   },
   {
     id: COMPANION_ANNOUNCEMENT_ID,
@@ -50,7 +52,10 @@ export const FEATURE_ANNOUNCEMENT_CATALOG: readonly FeatureAnnouncementPage[] = 
   },
 ];
 
-const KNOWN_IDS = new Set(FEATURE_ANNOUNCEMENT_CATALOG.map((page) => page.id));
+const KNOWN_IDS = new Set([
+  ...FEATURE_ANNOUNCEMENT_CATALOG.map((page) => page.id),
+  ...LEGACY_ANNOUNCEMENT_IDS,
+]);
 const KNOWN_STATUSES = new Set(['seen', 'dismissed', 'tried']);
 
 export type FeatureAnnouncementRecord = {

@@ -14,6 +14,7 @@ import { debugFireTrialEndingNotification } from '@/lib/trial-notification';
 import { mmkvStorage } from '@/lib/mmkv-storage';
 import { useUIState } from '@/lib/ui-state';
 import { scheduleDevotionalReadyTapTestNotification } from '@/lib/notifications';
+import { seedBookshelfExamples } from '@/lib/bookshelf-qa';
 import { buildDevotionalSeed } from '@/lib/dev-seed';
 import { SettingsSectionHeader } from './SettingsSectionHeader';
 
@@ -46,6 +47,14 @@ export function QaToolsSection() {
     <>
       {/* --- QA Tools --- Internal QA affordances for notification/reveal verification builds. */}
       <SettingsSectionHeader label={__DEV__ ? "Dev Tools" : "QA Tools"} />
+      <TouchableOpacity activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Seed bookshelf examples" style={QA_ROW_STYLE}
+        onPress={() => {
+          try { seedBookshelfExamples(); router.push({ pathname: '/(tabs)/(study)/past-devotionals', params: { from: 'study' } }); }
+          catch (error) { Alert.alert('Bookshelf fixture unavailable', error instanceof Error ? error.message : 'Use the local QA environment.'); }
+        }}>
+        <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 14, color: colors.accent }}>Seed bookshelf examples</Text>
+      </TouchableOpacity>
+
 
       {/* Grants premium locally so gated surfaces (notes, journal, premium fonts)
           can be exercised on a build with no RevenueCat keys. Session-only —

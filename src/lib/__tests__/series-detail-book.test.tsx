@@ -3,6 +3,11 @@ import type { ReactTestRenderer } from 'react-test-renderer';
 import { canonicalGeneratedDayId } from '../devotional-canonical-days';
 import type { Devotional, DevotionalDay } from '../store';
 
+jest.mock('react-native-gesture-handler', () => ({ GestureDetector: ({ children }: { children: React.ReactNode }) => children }));
+jest.mock('@/components/book/useBookPageOpening', () => ({
+  useBookPageOpening: ({ onContinue }: { onContinue: () => void }) => ({ open: onContinue, gesture: {}, showHint: false, hidden: false, onLayout: jest.fn() }),
+}));
+
 const renderer = require('react-test-renderer');
 const { act } = renderer;
 
@@ -227,14 +232,14 @@ describe('Book of Seasons tab root', () => {
     act(() => { tree = renderer.create(screen()); });
 
     const scroll = tree.root.findByProps({ testID: 'series-detail-scroll' });
-    const header = tree.root.findByProps({ testID: 'devotional-tab-header' });
+    const archive = tree.root.findByProps({ testID: 'book-past-series' });
     const book = tree.root.findByProps({ testID: 'book-of-seasons' });
 
     mockFontScale = 2;
     act(() => { tree.update(screen()); });
 
     expect(tree.root.findByProps({ testID: 'series-detail-scroll' })).toBe(scroll);
-    expect(tree.root.findByProps({ testID: 'devotional-tab-header' })).not.toBe(header);
+    expect(tree.root.findByProps({ testID: 'book-past-series' })).not.toBe(archive);
     expect(tree.root.findByProps({ testID: 'book-of-seasons' })).not.toBe(book);
   });
 
@@ -251,7 +256,7 @@ describe('Book of Seasons tab root', () => {
       params: { devotionalId: 'devo-1', dayNumber: '1' },
     });
     expect(mockSetCurrentDevotional).not.toHaveBeenCalled();
-    expect(allRenderedText(tree)).toContain('In this series');
+    expect(allRenderedText(tree)).not.toContain('In this series');
   });
 
   it('keeps upcoming real days disabled in the legacy list', () => {
@@ -314,12 +319,21 @@ describe('Book of Seasons tab root', () => {
     expect(tree.root.findAllByProps({ testID: 'study-profile-button' })).toHaveLength(1);
     const text = allRenderedText(tree);
     expect(text).toContain('Past series');
+    expect(text.split('|')).not.toContain('Devotional');
+    const archive = tree.root.findAllByProps({ testID: 'book-past-series' })[0] as { props: { onPress: () => void } };
+    act(() => archive.props.onPress());
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/(tabs)/(study)/past-devotionals', params: { from: 'study' } });
 
     mockDevotionals = [];
     mockCurrentDevotionalId = null;
-    const empty = allRenderedText(renderTab());
+    const emptyTree = renderTab();
+    const empty = allRenderedText(emptyTree);
     expect(empty).toContain('No series in progress.');
     expect(empty).toContain('Go to Today');
+    expect(empty).toContain('Past series');
+    const emptyArchive = emptyTree.root.findAllByProps({ testID: 'book-past-series' })[0] as { props: { onPress: () => void } };
+    act(() => emptyArchive.props.onPress());
+    expect(mockPush).toHaveBeenCalledTimes(2);
   });
 
   it('offers recovery when today has no canonical content', () => {
@@ -375,4 +389,13 @@ describe('Book of Seasons tab root', () => {
     expect(text).toContain('Read again');
     expect(text).not.toContain('Season 03');
   });
+});
+
+
+it('uses the planned series total for history progress', () => {
+  mockParams = { id: 'devo-1' };
+  mockDevotionals = [withActs({ totalDays: 7, seriesArc: { ...withActs().seriesArc!, totalDaysPlanned: 3 }, days: [day(1, { isRead: true }), day(2, { isRead: true })] })];
+  let tree!: ReactTestRenderer;
+  act(() => { tree = renderer.create(React.createElement(SeriesArcScreen)); });
+  expect(allRenderedText(tree)).toContain('2 of 3 completed');
 });
