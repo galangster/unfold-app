@@ -22,7 +22,6 @@ export type TodayCompletionAmbience =
   | 'ember'
   | 'campfire-rive'
   | 'canopy-lights-rive'
-  | 'clouds-rive'
   | 'doors-rive'
   | 'tree-rive'
   | 'waterfall-rive'
@@ -34,7 +33,6 @@ export type TodayCompletionAmbience =
 export const TODAY_COMPLETION_AMBIENCE_OPTIONS: readonly TodayCompletionAmbience[] = [
   'campfire-rive',
   'canopy-lights-rive',
-  'clouds-rive',
   'doors-rive',
   'tree-rive',
   'waterfall-rive',
