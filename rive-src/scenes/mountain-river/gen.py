@@ -1,17 +1,17 @@
 """today-mountain-river: the designer's engraved massif and river (art.svg) converted exactly, with keyframed life.
-Life: star twinkle, breathing bokeh, light drifting across the hatched slopes, mist wisps between the
+Life: star twinkle, light drifting across the hatched slopes, mist wisps between the
 ridges, light flowing down the four river lines, rising valley motes, two rare flocks of birds.
 Rules: rive-src/DESIGN-REFERENCE.md. Build: PYTHONPATH=../../lib python3 gen.py && rive . --once"""
 import bisect, math, random
 from unfold_rml import *
-from svg_rml import Svg, fill_shape, flatten, points_path, radial_disc
+from svg_rml import Svg, fill_shape, flatten, points_path
 from life_rml import Life, shimmer
 
 S = 390 / 768
 svg = Svg('art.svg', S)
 sc = Scene("Unfold_mountain_river", seed=9); life = Life(sc); rnd = random.Random(33)
-ACC, ART, GLOW = VM['accent'], VM['artwork'], VM['glow']
-stars, bokeh, hatch, river, ridges = (svg.layer(L) for L in ('Layer_9', 'Layer_4', 'Layer_11', 'Layer_12', 'Layer_10'))
+ACC, ART = VM['accent'], VM['artwork']
+stars, hatch, river, ridges = (svg.layer(L) for L in ('Layer_9', 'Layer_11', 'Layer_12', 'Layer_10'))
 
 # ---- front: birds (rare), valley motes, mist ----
 life.flock("FlockA", 138, 7200, 2700, 1200, [(0, 0, 4.2, 0), (-12, -5, 3.8, 9), (-24, 4, 3.6, 17), (-37, -3, 3.4, 25)])
@@ -49,11 +49,7 @@ for el in hatch:
 for g, (L, ph) in enumerate([(600, 0), (900, 300), (720, 150), (1200, 600)]):
     sc.node(f"Slope{g}", ''.join(fill_shape(el, ART, f"H{g}_{k}") for k, el in enumerate(groups[g])), 0, 0, sway(OPACITY, 0.7, 0.3, L, ph))
 
-# moonlight: a soft patch of light drifting over the peaks, behind the linework
-sc.add(lambda i: radial_disc(GLOW, "Moonlight", 125, 0.12, x=300, y=210, sid=i),
-       sway(X, 300, -60, 1800, 0), sway(Y, 210, 18, 1200, 300), sway(OPACITY, 0.55, 0.45, 900, 0), sway(SX, 0.9, 0.2, 1200, 0), sway(SY, 0.9, 0.2, 1200, 0))
-
-# ---- bokeh and star field ----
-life.bokeh(bokeh, ART, rnd); life.stars(stars, ART, rnd)
+# ---- star field (Layer_4 orbs and Moonlight disc removed: Nick, 2026-09-15) ----
+life.stars(stars, ART, rnd)
 
 print(sc.write())
