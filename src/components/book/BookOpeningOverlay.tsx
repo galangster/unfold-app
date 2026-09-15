@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AppState, Platform, StyleSheet, useWindowDimensions } from 'react-native';
-import { Canvas, Fill, ImageShader, Shader, Skia, useCanvasRef } from '@shopify/react-native-skia';
+import { Canvas, Fill, ImageShader, Shader, Skia } from '@shopify/react-native-skia';
 import Animated, { cancelAnimation, runOnJS, useAnimatedStyle, useAnimatedReaction, useDerivedValue, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
 import { FullWindowOverlay } from 'react-native-screens';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
@@ -21,21 +21,9 @@ function Opening({ session }: { session: BookOpeningSession }) {
   const [curlFinished, setCurlFinished] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const canvasSize = useSharedValue({ width: 0, height: 0 });
-  const canvasRef = useCanvasRef();
   const color = useMemo(() => Array.from(Skia.Color(session.paperColor)), [session.paperColor]);
   const { rect, progress, id, cover, sourceHidden } = session;
   const hasCover = cover != null;
-  const confirmPresentation = useCallback(async () => {
-    if (hasCover) {
-      try {
-        // Validate that the shader can render offscreen before starting motion.
-        const frame = await canvasRef.current?.makeImageSnapshotAsync();
-        if (!frame) { failBookOverlay(id); return; }
-        frame.dispose();
-      } catch { failBookOverlay(id); return; }
-    }
-    presentAfterPaint(id);
-  }, [canvasRef, hasCover, id]);
   const uniforms = useDerivedValue(() => ({
     viewport: [width, height],
     startRect: [rect.x, rect.y, rect.width, rect.height],
@@ -52,7 +40,7 @@ function Opening({ session }: { session: BookOpeningSession }) {
   );
   useAnimatedReaction(
     () => canvasSize.value.width > 0 && canvasSize.value.height > 0,
-    (ready, wasReady) => { if (ready && !wasReady) runOnJS(confirmPresentation)(); },
+    (ready, wasReady) => { if (ready && !wasReady) runOnJS(presentAfterPaint)(id); },
   );
   const preview = useAnimatedStyle(() => ({ opacity: Math.min(1, progress.value * 2) * (1 - backgroundReveal.value) }));
 
@@ -96,13 +84,13 @@ function Opening({ session }: { session: BookOpeningSession }) {
 
   // Keep the display list intact while presentation and reader readiness change.
   const canvas = useMemo(() => effect ? (
-    <Canvas ref={canvasRef} style={StyleSheet.absoluteFill} pointerEvents="none" onSize={canvasSize}>
+    <Canvas style={StyleSheet.absoluteFill} pointerEvents="none" onSize={canvasSize}>
       <Fill><Shader source={effect} uniforms={uniforms}>
         <ImageShader image={session.image} fit="fill" rect={{ x: 0, y: 0, width: rect.width, height: rect.height }} tx="clamp" ty="clamp" />
         <ImageShader image={session.coverImage ?? session.image} fit="fill" rect={{ x: 0, y: 0, width: rect.width, height: rect.height }} tx="clamp" ty="clamp" />
       </Shader></Fill>
     </Canvas>
-  ) : null, [canvasRef, canvasSize, rect.height, rect.width, session.coverImage, session.image, uniforms]);
+  ) : null, [canvasSize, rect.height, rect.width, session.coverImage, session.image, uniforms]);
 
   if (session.failed) return null;
 
