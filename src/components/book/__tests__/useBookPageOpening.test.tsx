@@ -1,7 +1,17 @@
 import { act, renderHook } from '@testing-library/react-native';
 import { View } from 'react-native';
 import { Colors } from '@/constants/colors';
-import { useBookOpening, failBookOverlay, markBookOverlayPresented, bookOpeningProgress, shouldOpenBook } from '@/lib/book-opening';
+import {
+  useBookOpening,
+  failBookOverlay,
+  markBookOverlayPresented,
+  markBookReaderReady,
+  setBookReaderImage,
+  bookOpeningCancelDuration,
+  bookOpeningProgress,
+  bookOpeningTurnDuration,
+  shouldOpenBook,
+} from '@/lib/book-opening';
 import { useBookPageOpening } from '../useBookPageOpening';
 import type { BookTodayPage } from '@/lib/book-of-seasons';
 
@@ -10,6 +20,7 @@ let mockReducedMotion = false;
 const mockSnapshot = jest.fn();
 const mockGestureHandlers: Record<string, (event: { translationX: number; velocityX: number }) => void> = {};
 const mockFinishes: ((finished: boolean) => void)[] = [];
+const mockTimings: { value: number; config?: { duration?: number; easing?: unknown } }[] = [];
 
 jest.mock('expo-router', () => ({ useIsFocused: () => mockFocused }));
 jest.mock('@/hooks/useAccessibility', () => ({ useAccessibleAnimation: () => ({ reducedMotion: mockReducedMotion }) }));
@@ -19,8 +30,12 @@ jest.mock('react-native-reanimated', () => ({
   useAnimatedStyle: (style: () => unknown) => style(),
   cancelAnimation: jest.fn(),
   runOnJS: (fn: unknown) => fn,
-  withTiming: (value: number, _config: unknown, finish: (finished: boolean) => void) => { if (finish) mockFinishes.push(finish); return value; },
-  Easing: { bezier: jest.fn() },
+  withTiming: (value: number, config: { duration?: number; easing?: unknown } | undefined, finish?: (finished: boolean) => void) => {
+    mockTimings.push({ value, config });
+    if (finish) mockFinishes.push(finish);
+    return value;
+  },
+  Easing: { bezier: jest.fn((...args: number[]) => args) },
 }));
 jest.mock('react-native-gesture-handler', () => {
   const gesture = new Proxy({}, { get: (_target, key: string) => (handler: typeof mockGestureHandlers[string]) => {
@@ -55,6 +70,7 @@ beforeEach(() => {
   mockReducedMotion = false;
   mockSnapshot.mockReset().mockResolvedValue({});
   mockFinishes.length = 0;
+  mockTimings.length = 0;
   useBookOpening.setState({ session: null });
 });
 
@@ -196,7 +212,7 @@ it('keeps paper sessions free of hardcover data', async () => {
   expect(mockSnapshot).toHaveBeenCalledTimes(1);
 });
 
-it('keeps the interior and cover separate and waits for the opening before navigation', async () => {
+it('keeps the interior and cover separate and navigates on commit before the turn', async () => {
   const coverImage = { source: 'cover' };
   const paperImage = { source: 'paper' };
   mockSnapshot.mockResolvedValueOnce(paperImage).mockResolvedValueOnce(coverImage);
@@ -208,16 +224,17 @@ it('keeps the interior and cover separate and waits for the opening before navig
   expect(session?.image).toBe(paperImage);
   expect(session?.coverImage).toBe(coverImage);
   act(() => { if (session) markBookOverlayPresented(session.id); });
+  // The press pose answers the tap while the paper backdrop covers the tab; navigation follows that fade.
+  expect(session?.progress.value).toBe(0.08);
   expect(hook.onContinue).not.toHaveBeenCalled();
-  expect(useBookOpening.getState().session?.committed).toBe(false);
-  act(() => mockFinishes[0](true));
+  expect(mockTimings.some((timing) => timing.value === 1 && timing.config?.duration === 100)).toBe(true);
+  act(() => mockFinishes[mockFinishes.length - 1](true));
   expect(hook.onContinue).toHaveBeenCalledTimes(1);
   expect(useBookOpening.getState().session?.committed).toBe(true);
   mockFocused = false;
   hook.rerender({});
   expect(session?.sourceHidden.value).toBe(true);
-  expect(session?.progress.value).toBe(1);
-  expect(hook.onContinue).toHaveBeenCalledTimes(1);
+  expect(session?.progress.value).toBe(0.08);
   expect(useBookOpening.getState().session?.sourceHidden.value).toBe(true);
 });
 
@@ -225,20 +242,19 @@ it.each(['blur', 'unmount'] as const)('cancels hardcover completion on source %s
   const hook = setup(true);
   await act(async () => hook.result.current.open());
   const session = useBookOpening.getState().session!;
-  act(() => markBookOverlayPresented(session.id));
-  expect(hook.onContinue).not.toHaveBeenCalled();
   if (interruption === 'unmount') hook.unmount();
   else {
     mockFocused = false;
     hook.rerender({});
   }
+  expect(hook.onContinue).not.toHaveBeenCalled();
   expect(useBookOpening.getState().session).toBeNull();
-  act(() => mockFinishes[0](true));
+  act(() => markBookOverlayPresented(session.id));
   expect(hook.onContinue).not.toHaveBeenCalled();
   expect(session.sourceHidden.value).toBe(false);
 });
 
-it('holds a hardcover drag closed until the overlay can present', async () => {
+it('holds a hardcover drag closed until the overlay can present, then navigates', async () => {
   const hook = setup(true);
   await act(async () => mockGestureHandlers.onStart({ translationX: 0, velocityX: 0 }));
   act(() => {
@@ -252,9 +268,62 @@ it('holds a hardcover drag closed until the overlay can present', async () => {
   expect(mockSnapshot).toHaveBeenCalledTimes(2);
   act(() => markBookOverlayPresented(session.id));
   expect(session.sourceHidden.value).toBe(true);
-  expect(session.progress.value).toBe(1);
-  act(() => mockFinishes[0](true));
+  expect(session.progress.value).toBe(0.08);
+  act(() => mockFinishes[mockFinishes.length - 1](true));
   expect(hook.onContinue).toHaveBeenCalledTimes(1);
+  expect(useBookOpening.getState().session?.committed).toBe(true);
+});
+
+it('cracks the cover open on commit and holds until the reader snapshot arrives', async () => {
+  const hook = setup(true);
+  await act(async () => hook.result.current.open());
+  const session = useBookOpening.getState().session!;
+  act(() => markBookOverlayPresented(session.id));
+  expect(session.progress.value).toBe(0.08);
+  expect(mockTimings.some((timing) => timing.value === 0.08 && timing.config?.duration === 120)).toBe(true);
+  // Once the press pose lands, the cover keeps creeping open while the reader prepares.
+  act(() => mockFinishes[0](true));
+  expect(mockTimings.some((timing) => timing.value === 0.18 && timing.config?.duration === 1080)).toBe(true);
+  act(() => mockFinishes[1](true));
+  act(() => markBookReaderReady(session.id));
+  // Readiness alone does not start the turn; the creep pose holds until the snapshot lands.
+  expect(session.progress.value).toBe(0.18);
+  act(() => setBookReaderImage(session.id, { width: () => 1206, height: () => 2622 } as never));
+  expect(session.progress.value).toBe(1);
+  expect(mockTimings.some((timing) => timing.value === 1 && timing.config?.duration === bookOpeningTurnDuration(0.18))).toBe(true);
+  expect(require('react-native-reanimated').Easing.bezier).toHaveBeenCalledWith(0.25, 0.46, 0.45, 0.94);
+});
+
+it('releases the hardcover hold after 1200 ms if the reader snapshot never arrives', async () => {
+  jest.useFakeTimers();
+  try {
+    const hook = setup(true);
+    await act(async () => hook.result.current.open());
+    const session = useBookOpening.getState().session!;
+    act(() => markBookOverlayPresented(session.id));
+    expect(session.progress.value).toBe(0.08);
+    act(() => mockFinishes[mockFinishes.length - 1](true));
+    act(() => jest.advanceTimersByTime(1199));
+    expect(session.progress.value).toBe(0.08);
+    act(() => jest.advanceTimersByTime(1));
+    expect(session.progress.value).toBe(1);
+    expect(mockTimings.some((timing) => timing.value === 1 && timing.config?.duration === 650)).toBe(true);
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+it('returns a hardcover cover with a duration that scales with progress', async () => {
+  const hook = setup(true);
+  await act(async () => mockGestureHandlers.onStart({ translationX: 0, velocityX: 0 }));
+  const session = useBookOpening.getState().session!;
+  act(() => markBookOverlayPresented(session.id));
+  act(() => {
+    mockGestureHandlers.onUpdate({ translationX: -80, velocityX: 0 });
+    mockGestureHandlers.onEnd({ translationX: -80, velocityX: 0 });
+  });
+  const expected = bookOpeningCancelDuration(bookOpeningProgress(-80, 320));
+  expect(mockTimings.some((timing) => timing.value === 0 && timing.config?.duration === expected)).toBe(true);
 });
 
 it('navigates after a stalled capture and ignores its late image', async () => {
@@ -273,4 +342,16 @@ it('navigates after a stalled capture and ignores its late image', async () => {
   } finally {
     jest.useRealTimers();
   }
+});
+
+it('keeps a full hardcover drag short of edge-on so the reader can land under the board', async () => {
+  const hook = setup(true);
+  await act(async () => mockGestureHandlers.onStart({ translationX: 0, velocityX: 0 }));
+  const session = useBookOpening.getState().session!;
+  act(() => markBookOverlayPresented(session.id));
+  act(() => mockGestureHandlers.onUpdate({ translationX: -320, velocityX: 0 }));
+  expect(session.progress.value).toBeCloseTo(0.6625);
+  act(() => mockGestureHandlers.onUpdate({ translationX: -100, velocityX: 0 }));
+  expect(session.progress.value).toBeCloseTo(bookOpeningProgress(-100, 320));
+  void hook;
 });

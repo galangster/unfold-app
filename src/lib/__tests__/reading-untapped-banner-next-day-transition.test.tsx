@@ -285,6 +285,7 @@ jest.mock('@/lib/tts-service', () => ({
   buildTtsText: () => '',
 }));
 jest.mock('@/lib/day-completion-cue', () => ({ emitDayCompletionCueAfterSave: jest.fn() }));
+jest.mock('@/lib/book-opening-capture', () => ({ markBookReaderReadyWithSnapshot: jest.fn() }));
 jest.mock('@/lib/book-opening', () => ({
   clearBookOpening: jest.fn(),
   markBookReaderReady: jest.fn(),

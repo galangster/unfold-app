@@ -1,8 +1,11 @@
 // Cylindrical paper fold. All distances use logical points, including the
 // snapshot shader. The diagonal normal lifts the lower-right corner first.
+// Hardcover interiors never curl: the cover is the only turning plane, and the
+// sheet under it shows the paper capture, then the reader snapshot.
 export const PAGE_CURL_SHADER = `
 uniform shader pageImage;
 uniform shader coverImage;
+uniform shader readerImage;
 uniform float2 viewport;
 uniform float4 startRect;
 uniform float expansion;
@@ -12,6 +15,24 @@ uniform float curlProgress;
 uniform float4 paperColor;
 uniform float backgroundOpacity;
 uniform float coverBoardRight;
+uniform float readerFade;
+uniform float readerWidth;
+
+// The sheet grows from the book rect to the viewport. Every pass shares this geometry.
+float2 sheetOrigin() {
+  return mix(startRect.xy, float2(0.0), expansion);
+}
+
+float2 sheetSize() {
+  return mix(startRect.zw, viewport, expansion);
+}
+
+// Signed distance to the rounded sheet edge; positive is outside.
+float sheetEdge(float2 q, float2 size) {
+  float corner = mix(12.0, 0.0, expansion);
+  float2 box = abs(q - size * 0.5) - size * 0.5 + corner;
+  return length(max(box, 0.0)) + min(max(box.x, box.y), 0.0) - corner;
+}
 
 half4 front(float2 p, float2 size) {
   float2 source = p / (size.x / startRect.z);
@@ -26,14 +47,9 @@ bool insidePage(float2 p, float2 size) {
 
 half4 paper(float2 xy) {
   float p = clamp(curlProgress, 0.0, 1.0);
-  float expand = expansion;
-  float2 origin = mix(startRect.xy, float2(0.0), expand);
-  float2 size = mix(startRect.zw, viewport, expand);
-  float2 q = xy - origin;
-  float corner = mix(12.0, 0.0, expand);
-  float2 box = abs(q - size * 0.5) - size * 0.5 + corner;
-  float edge = length(max(box, 0.0)) + min(max(box.x, box.y), 0.0) - corner;
-  if (edge > 0.5) return half4(0.0);
+  float2 size = sheetSize();
+  float2 q = xy - sheetOrigin();
+  if (sheetEdge(q, size) > 0.5) return half4(0.0);
   float2 normal = normalize(float2(1.0, 0.48));
   float radius = max(1.0, min(size.x * 0.13, 65.0) * sin(p * 2.2));
   float reach = dot(size, normal);
@@ -59,9 +75,22 @@ half4 paper(float2 xy) {
   return half4(0.0);
 }
 
-// The paper expands into the reader. The cover keeps its proportions around the left hinge.
+// The reader snapshot is width-scaled and top-aligned, so the small book shows the
+// top of the real page and grows into it. Uniform branches skip the unused sample.
+half4 hardcoverInterior(float2 xy) {
+  float2 size = sheetSize();
+  float2 q = xy - sheetOrigin();
+  if (sheetEdge(q, size) > 0.5) return half4(0.0);
+  float fade = clamp(readerFade, 0.0, 1.0);
+  if (fade <= 0.0) return front(q, size);
+  half4 reader = readerImage.eval(q * (readerWidth / max(size.x, 1.0)));
+  if (fade >= 1.0) return reader;
+  return mix(front(q, size), reader, half(fade));
+}
+
+// The sheet expands into the reader. The cover keeps its proportions around the left hinge.
 half4 main(float2 xy) {
-  half4 underneath = paper(xy);
+  half4 underneath = hardcover > 0.5 ? hardcoverInterior(xy) : paper(xy);
   if (hardcover < 0.5) return underneath;
   half paperCoverage = underneath.a;
   // The backdrop and book must arrive in the same onscreen frame.
@@ -71,8 +100,8 @@ half4 main(float2 xy) {
   float c = cos(angle);
   if (c <= 0.0) return underneath;
   float s = sin(angle);
-  float2 origin = mix(startRect.xy, float2(0.0), expansion);
-  float2 size = mix(startRect.zw, viewport, expansion);
+  float2 origin = sheetOrigin();
+  float2 size = sheetSize();
   float scale = size.x / startRect.z;
   float coverHeight = startRect.w * scale;
   float2 coverOrigin = origin + float2(0.0, (size.y - coverHeight) * 0.5);

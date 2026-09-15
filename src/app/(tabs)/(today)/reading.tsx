@@ -1,6 +1,7 @@
 /** @jsxImportSource react */
 import { emitDayCompletionCueAfterSave } from '@/lib/day-completion-cue';
-import { clearBookOpening, markBookReaderReady } from '@/lib/book-opening';
+import { clearBookOpening } from '@/lib/book-opening';
+import { markBookReaderReadyWithSnapshot } from '@/lib/book-opening-capture';
 import { getDailyGenerationNotice } from '@/lib/daily-generation-messages';
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useAutoHide } from '@/hooks/useAutoHide';
@@ -412,6 +413,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   const readerScrollYRef = useRef(0);
   const userScrollActiveRef = useRef(false);
   const layoutGenerationRef = useRef(1);
+  const readerRootRef = useRef<View>(null);
   const sectionLocationsRef = useRef(createVersionedSectionLocations(1));
   const paragraphLocationsRef = useRef(createVersionedParagraphLocations());
   const reflowAnchorRef = useRef<ReaderScrollAnchor | null>(null);
@@ -1803,15 +1805,19 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     };
   }, [isReadingFocused, params.bookOpening]);
 
+  const captureBookReader = useCallback((openingId: string | undefined) => {
+    markBookReaderReadyWithSnapshot(openingId, readerRootRef);
+  }, []);
+
   const handleBookContentReady = useCallback((generation: number) => {
-    if (isReadingFocused && generation === layoutGenerationRef.current) markBookReaderReady(params.bookOpening);
-  }, [isReadingFocused, params.bookOpening]);
+    if (isReadingFocused && generation === layoutGenerationRef.current) captureBookReader(params.bookOpening);
+  }, [captureBookReader, isReadingFocused, params.bookOpening]);
 
   useEffect(() => {
     if (!params.bookOpening || currentDayData || !isReadingFocused) return;
-    const frame = requestAnimationFrame(() => markBookReaderReady(params.bookOpening));
+    const frame = requestAnimationFrame(() => captureBookReader(params.bookOpening));
     return () => cancelAnimationFrame(frame);
-  }, [params.bookOpening, currentDayData, isReadingFocused]);
+  }, [captureBookReader, params.bookOpening, currentDayData, isReadingFocused]);
 
   // Early returns after all hooks
   if (!currentDevotional) {
@@ -2199,7 +2205,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }} testID="devotional-reader-screen">
+    <View ref={readerRootRef} collapsable={false} style={{ flex: 1, backgroundColor: colors.background }} testID="devotional-reader-screen">
       <GestureDetector gesture={panGesture}>
         <Animated.View style={[{ flex: 1 }, contentStyle]}>
           <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'left', 'right']}>
