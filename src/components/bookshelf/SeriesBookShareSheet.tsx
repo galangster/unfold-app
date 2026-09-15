@@ -10,25 +10,35 @@ import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { shareBookCover } from '@/lib/share-book-cover';
+import { mmkvStorage } from '@/lib/mmkv-storage';
 
 type Book = SeriesBookCoverProps['devotional'];
-const DESCRIPTION_GAP = 22;
+const BACKGROUND_GAP = 22;
 const CONTENT_BOTTOM_PADDING = 20;
+const BACKGROUND_KEY = 'unfold.book-share-background.v1';
+const BACKGROUNDS = [
+  { id: 'parchment', name: 'Parchment', colors: ['#FBF7EF', '#F1E4D0', '#D7C1A0'] },
+  { id: 'sage', name: 'Sage', colors: ['#EEF3EA', '#CAD7C8', '#91A99A'] },
+  { id: 'rose', name: 'Rose', colors: ['#FBF0E8', '#E8C8BD', '#B98888'] },
+  { id: 'mist', name: 'Mist', colors: ['#EEF3F8', '#CFDCE7', '#91ABC3'] },
+  { id: 'dusk', name: 'Dusk', colors: ['#F1EBF5', '#D5C6E1', '#9D8DAF'] },
+  { id: 'midnight', name: 'Midnight', colors: ['#617487', '#344457', '#142233'] },
+] as const;
+type Background = typeof BACKGROUNDS[number];
+
+function BackgroundGradient({ background }: { background: Background }) {
+  return <LinearGradient colors={background.colors} locations={[0, 0.5, 1]} start={{ x: 0.05, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />;
+}
 
 /** Fixed editorial proportions keep the exported artwork independent of device text size. */
-function CoverPortrait({ book, width, onTextureLoad }: { book: Book; width: number; onTextureLoad: () => void }) {
-  const bookWidth = width * 0.72;
+function CoverPortrait({ book, width, background, onTextureLoad }: { book: Book; width: number; background: Background; onTextureLoad: () => void }) {
+  const bookWidth = width * 0.74;
   const bookHeight = bookWidth * 1.4;
-  return <View pointerEvents="none" style={{ width, height: width * 1.25, backgroundColor: '#F3EBDC', overflow: 'hidden' }}>
-    <LinearGradient colors={['#FBF6EB', '#E9DCC5', '#F7F0E4']} locations={[0, 0.8, 1]} style={StyleSheet.absoluteFill} />
-    <View style={{ position: 'absolute', top: width * 0.068, left: (width - bookWidth) / 2 }}>
+  return <View pointerEvents="none" style={{ width, height: width * 1.25, backgroundColor: background.colors[1], overflow: 'hidden' }}>
+    <BackgroundGradient background={background} />
+    <View style={{ position: 'absolute', top: (width * 1.25 - bookHeight) / 2, left: (width - bookWidth) / 2 }}>
       <SeriesBookCover devotional={book} width={bookWidth} height={bookHeight} allowFontScaling={false} onTextureLoad={onTextureLoad} />
     </View>
-    <View style={{ position: 'absolute', top: width * 0.068 + bookHeight, height: width * 0.07, left: 0, right: 0 }}>
-      <LinearGradient colors={['#AC8A4F38', '#F7F0E400']} style={StyleSheet.absoluteFill} />
-      <View style={{ height: 0.5, backgroundColor: '#AA8C5355' }} />
-    </View>
-    <Text allowFontScaling={false} style={{ position: 'absolute', bottom: width * 0.058, width: '100%', textAlign: 'center', color: '#76664D', fontFamily: FontFamily.ui, fontSize: width * 0.027, letterSpacing: width * 0.001 }}>From my Unfold library</Text>
   </View>;
 }
 
@@ -36,36 +46,48 @@ export function SeriesBookShareSheet({ book, onClose }: { book: Book; onClose: (
   const { reducedMotion } = useAccessibleAnimation();
   const { fontScale } = useWindowDimensions();
   const busy = useRef(false);
+  const [background, setBackground] = useState<Background>(() => {
+    const saved = mmkvStorage.getItem(BACKGROUND_KEY);
+    return BACKGROUNDS.find(option => option.id === saved) ?? BACKGROUNDS[0];
+  });
+  const changeBackground = (next: Background) => {
+    if (busy.current) return;
+    setBackground(next);
+    mmkvStorage.setItem(BACKGROUND_KEY, next.id);
+  };
   return <Modal visible animationType={reducedMotion ? 'none' : 'fade'} onRequestClose={() => { if (!busy.current) onClose(); }}>
     <SafeAreaProvider initialMetrics={initialWindowMetrics}>
-      <ShareContent key={fontScale} book={book} onClose={onClose} busy={busy} />
+      <ShareContent key={fontScale} book={book} onClose={onClose} busy={busy} background={background} onBackgroundChange={changeBackground} />
     </SafeAreaProvider>
   </Modal>;
 }
 
-function ShareContent({ book, onClose, busy }: { book: Book; onClose: () => void; busy: RefObject<boolean> }) {
+function ShareContent({ book, onClose, busy, background, onBackgroundChange }: { book: Book; onClose: () => void; busy: RefObject<boolean>; background: Background; onBackgroundChange: (background: Background) => void }) {
   const { colors } = useTheme();
   const { width } = useWindowDimensions();
   const [viewportHeight, setViewportHeight] = useState(0);
-  const [descriptionHeight, setDescriptionHeight] = useState(0);
-  const artworkHeight = viewportHeight - descriptionHeight - DESCRIPTION_GAP - CONTENT_BOTTOM_PADDING;
-  const previewWidth = Math.min(width - 48, 400, Math.max(180, artworkHeight / 1.25));
+  const [backgroundPickerHeight, setBackgroundPickerHeight] = useState(0);
+  const contentWidth = Math.min(width - 48, 400);
+  const artworkHeight = viewportHeight - backgroundPickerHeight - BACKGROUND_GAP - CONTENT_BOTTOM_PADDING;
+  const previewWidth = Math.min(contentWidth, Math.max(180, artworkHeight / 1.25));
   const canvas = useRef<View>(null);
+  const captureReady = useRef(false);
   const [sharing, setSharing] = useState(false);
   const [textureLoaded, setTextureLoaded] = useState(false);
   const [laidOut, setLaidOut] = useState(false);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
+    captureReady.current = false;
     setReady(false);
     if (!textureLoaded || !laidOut) return;
     // Allow native text fitting and the image to paint after layout completes.
-    let frame = requestAnimationFrame(() => { frame = requestAnimationFrame(() => setReady(true)); });
+    let frame = requestAnimationFrame(() => { frame = requestAnimationFrame(() => { captureReady.current = true; setReady(true); }); });
     return () => cancelAnimationFrame(frame);
-  }, [textureLoaded, laidOut, previewWidth]);
+  }, [textureLoaded, laidOut, previewWidth, background.id]);
 
   const share = async () => {
-    if (busy.current || !ready || !canvas.current) return;
+    if (busy.current || !captureReady.current || !canvas.current) return;
     busy.current = true;
     setSharing(true);
     try {
@@ -89,13 +111,30 @@ function ShareContent({ book, onClose, busy }: { book: Book; onClose: () => void
         <Text accessibilityRole="header" style={[styles.title, { color: colors.text }]}>Share your book</Text>
         <Pressable onPress={onClose} disabled={sharing} accessibilityRole="button" accessibilityLabel="Close share preview" accessibilityState={{ disabled: sharing }} style={[styles.close, { opacity: sharing ? 0.4 : 1 }]}><XIcon size={23} color={colors.textMuted} /></Pressable>
       </View>
-      <ScrollView style={styles.viewport} onLayout={(event) => setViewportHeight(event.nativeEvent.layout.height)} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.artwork} accessible accessibilityRole="image" accessibilityLabel={`Share image: ${book.title}. Book cover, begun date, and Unfold imprint.`}>
+      <ScrollView style={styles.viewport} onLayout={event => setViewportHeight(event.nativeEvent.layout.height)} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View accessible style={styles.artwork} accessibilityRole="image" accessibilityLabel={`Share image: ${book.title}. Book cover on a ${background.name.toLowerCase()} gradient.`}>
           <View ref={canvas} cssInterop={false} collapsable={false} onLayout={() => setLaidOut(true)} style={{ width: previewWidth, height: previewWidth * 1.25 }}>
-            <CoverPortrait book={book} width={previewWidth} onTextureLoad={() => setTextureLoaded(true)} />
+            <CoverPortrait book={book} width={previewWidth} background={background} onTextureLoad={() => setTextureLoaded(true)} />
           </View>
         </View>
-        <Text onLayout={(event) => setDescriptionHeight(event.nativeEvent.layout.height)} style={[styles.description, { color: colors.textMuted }]}>A book worth keeping. A cover worth sharing.</Text>
+        <View onLayout={event => setBackgroundPickerHeight(event.nativeEvent.layout.height)} style={[styles.backgroundPicker, { width: contentWidth }]}>
+          <View style={styles.backgroundLabel}>
+            <Text style={[styles.label, { color: colors.textMuted }]}>Background</Text>
+            <Text style={[styles.label, { color: colors.text }]}>{background.name}</Text>
+          </View>
+          <View style={styles.swatches} accessibilityRole="radiogroup" accessibilityLabel="Background">
+            {BACKGROUNDS.map(option => <Pressable key={option.id} cssInterop={false} disabled={sharing} accessibilityRole="radio" accessibilityLabel={`${option.name} background`} accessibilityState={{ selected: option.id === background.id, disabled: sharing }} onPress={() => {
+              if (busy.current || option.id === background.id) return;
+              captureReady.current = false;
+              setReady(false);
+              onBackgroundChange(option);
+            }} style={({ pressed }) => [styles.swatchTarget, { transform: [{ scale: pressed ? 0.96 : 1 }], opacity: sharing ? 0.5 : 1 }]}>
+              <View style={[styles.swatchRing, { borderColor: option.id === background.id ? colors.text : 'transparent' }]}>
+                <View style={styles.swatch}><BackgroundGradient background={option} /></View>
+              </View>
+            </Pressable>)}
+          </View>
+        </View>
       </ScrollView>
       <View style={styles.footer}>
         <Pressable cssInterop={false} onPress={() => { void share(); }} disabled={!ready || sharing} accessibilityRole="button" accessibilityLabel={!ready || sharing ? 'Preparing cover' : 'Share image'} accessibilityState={{ disabled: !ready || sharing, busy: sharing }} testID="share-book-image" style={({ pressed }) => [styles.share, { backgroundColor: colors.accent, opacity: !ready || sharing ? 0.55 : pressed ? 0.8 : 1 }]}>
@@ -108,13 +147,19 @@ function ShareContent({ book, onClose, busy }: { book: Book; onClose: () => void
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: { flexDirection: 'row', flexShrink: 0, alignItems: 'center', paddingLeft: 24, paddingRight: 12, paddingTop: 8, paddingBottom: 16 },
+  header: { flexShrink: 0, flexDirection: 'row', alignItems: 'center', paddingLeft: 24, paddingRight: 12, paddingTop: 8, paddingBottom: 16 },
   title: { fontFamily: FontFamily.display, fontSize: 30, flex: 1 },
   close: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   viewport: { flex: 1 },
-  content: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24, paddingBottom: CONTENT_BOTTOM_PADDING },
   artwork: { flexShrink: 0 },
-  description: { flexShrink: 0, fontFamily: FontFamily.ui, fontSize: 14, lineHeight: 22, textAlign: 'center', marginTop: DESCRIPTION_GAP, maxWidth: 280 },
+  content: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24, paddingBottom: CONTENT_BOTTOM_PADDING },
+  backgroundPicker: { flexShrink: 0, marginTop: BACKGROUND_GAP },
+  backgroundLabel: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', columnGap: 12, rowGap: 4, marginBottom: 10 },
+  label: { fontFamily: FontFamily.ui, fontSize: 13 },
+  swatches: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 8 },
+  swatchTarget: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  swatchRing: { width: 42, height: 42, padding: 3, borderRadius: 21, borderWidth: 1.5 },
+  swatch: { flex: 1, borderRadius: 18, overflow: 'hidden' },
   footer: { flexShrink: 0, paddingHorizontal: 24, paddingTop: 12, paddingBottom: 12, alignItems: 'center' },
   share: { width: '100%', maxWidth: 400, minHeight: 56, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 14 },
   shareText: { fontFamily: FontFamily.uiMedium, fontSize: 16, color: '#17150F' },
