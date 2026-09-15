@@ -31,6 +31,7 @@ import { Duration, Ease } from '@/constants/animations';
 import { BIBLE_STUDY_METHODS } from '@/constants/bible-study-methods';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
+import { GlassSurface } from '@/components/ui/GlassSurface';
 import { GLASS, HERO_GROUND } from '@/constants/today-surfaces';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { RecommendedSeriesCard } from './RecommendedSeriesCard';
@@ -515,10 +516,9 @@ function RevealReadyState({
   relaxHeroMinHeight?: boolean;
   announceReady?: boolean;
 }) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const { width, fontScale } = useWindowDimensions();
   const { entering, reducedMotion } = useAccessibleAnimation();
-  const glassMode = isDark ? 'dark' : 'light';
   const textCap = heroCopyCap(ambienceVisible);
   const isYesterday = state.dayLabel === 'Overdue';
   const isLargeTextHero = fontScale >= 1.18;
@@ -579,29 +579,15 @@ function RevealReadyState({
             accessibilityRole="button"
             accessibilityLabel={isYesterday ? `Catch up on ${state.seriesTitle}, day ${state.dayNumber}` : `Reveal ${state.seriesTitle}, day ${state.dayNumber}`}
             accessibilityHint="Opens the reveal screen for this devotional reading"
-            style={[
-              styles.heroActions,
-              {
-                borderColor: alpha(colors.accent, 0.24),
-                backgroundColor: Platform.OS === 'ios'
-                  ? alpha(colors.backgroundElevated, GLASS.tintAlpha[glassMode])
-                  : alpha(colors.backgroundElevated, GLASS.androidTintAlpha),
-              },
-            ]}
           >
-            {Platform.OS === 'ios' && (
-              <BlurView
-                intensity={GLASS.blurIntensity[glassMode]}
-                tint={glassMode}
-                style={StyleSheet.absoluteFill}
-              />
-            )}
-            <View style={styles.heroActionContent}>
-              <Text style={[styles.heroActionText, { color: colors.text }]} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}>
-                {isYesterday ? 'Catch Up on Yesterday’s Reading' : 'Reveal Today’s Devotional'}
-              </Text>
-              <Text style={[styles.heroActionArrow, { color: colors.accent }]}>→</Text>
-            </View>
+            <GlassSurface radius={Radius.full} style={[styles.heroActions, { borderColor: alpha(colors.accent, 0.24) }]}>
+              <View style={styles.heroActionContent}>
+                <Text style={[styles.heroActionText, { color: colors.text }]} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}>
+                  {isYesterday ? 'Catch Up on Yesterday’s Reading' : 'Reveal Today’s Devotional'}
+                </Text>
+                <Text style={[styles.heroActionArrow, { color: colors.accent }]}>→</Text>
+              </View>
+            </GlassSurface>
           </TouchableOpacity>
         </View>
       </View>

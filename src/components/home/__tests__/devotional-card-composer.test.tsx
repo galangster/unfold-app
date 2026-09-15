@@ -64,12 +64,22 @@ jest.mock('react-native-svg', () => {
   return { __esModule: true, default: Stub, Path: Stub };
 });
 
-jest.mock('expo-blur', () => ({
-  BlurView: ({ children, ...props }: any) => {
-    const { View } = require('react-native');
+jest.mock('expo-blur', () => {
+  const ReactLib = require('react');
+  const { View } = require('react-native');
+  const stats = { mounts: 0, renders: 0 };
+  function BlurView({ children, ...props }: any) {
+    stats.renders += 1;
+    const isFirstMount = ReactLib.useRef(true);
+    if (isFirstMount.current) {
+      isFirstMount.current = false;
+      stats.mounts += 1;
+    }
     return <View {...props}>{children}</View>;
-  },
-}));
+  }
+  BlurView.stats = stats;
+  return { BlurView };
+});
 
 jest.mock('phosphor-react-native', () => ({
   CheckIcon: () => null,
@@ -1328,6 +1338,63 @@ describe('DevotionalCard meaningful motion', () => {
 
     expect(tree.root.findByType(PageMark).props.animate).toBe(true);
     expect(tree.root.findByProps({ testID: 'devotional-progress-bar' }).props.accessibilityValue.now).toBe(43);
+  });
+});
+
+describe('DevotionalCard reveal-ready blur host', () => {
+  const originalOS = require('react-native').Platform.OS;
+
+  afterEach(() => {
+    Object.defineProperty(require('react-native').Platform, 'OS', {
+      configurable: true,
+      value: originalOS,
+    });
+  });
+
+  it('keeps BlurView mounts bounded when reveal-ready layout dimensions change', () => {
+    Object.defineProperty(require('react-native').Platform, 'OS', {
+      configurable: true,
+      value: 'ios',
+    });
+
+    const blurStats = require('expo-blur').BlurView.stats as { mounts: number; renders: number };
+    blurStats.mounts = 0;
+    blurStats.renders = 0;
+
+    const dimensions = jest.spyOn(jest.requireActual('react-native'), 'useWindowDimensions');
+    dimensions.mockReturnValue({ width: 390, height: 844, scale: 3, fontScale: 1 });
+
+    const tree = renderInAct(
+      <DevotionalCard
+        state={makeRevealReadyState()}
+        seriesId="series-faith"
+      />,
+    );
+
+    expect(
+      tree.root.findAll((node: any) => node.type === 'Text' && textContent(node).includes('Reveal Today')).length,
+    ).toBeGreaterThan(0);
+    expect(tree.root.findAll((node: any) => typeof node.type === 'string' && node.props?.testID === 'glass-surface-blur')).toHaveLength(1);
+
+    const mountsAfterFirst = blurStats.mounts;
+    expect(mountsAfterFirst).toBe(1);
+    expect(blurStats.renders).toBeLessThan(5);
+
+    dimensions.mockReturnValue({ width: 844, height: 390, scale: 3, fontScale: 1 });
+    act(() => {
+      tree.update(
+        <DevotionalCard
+          state={makeRevealReadyState()}
+          seriesId="series-faith"
+        />,
+      );
+    });
+
+    expect(blurStats.mounts).toBe(mountsAfterFirst);
+    expect(blurStats.renders).toBeLessThan(8);
+    expect(tree.root.findAll((node: any) => typeof node.type === 'string' && node.props?.testID === 'glass-surface-blur')).toHaveLength(1);
+
+    dimensions.mockRestore();
   });
 });
 
