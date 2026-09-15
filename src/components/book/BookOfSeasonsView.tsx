@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
@@ -17,12 +18,16 @@ export function BookOfSeasonsView({
   colors,
   isDark,
   onOpenDay,
+  headerAccessory,
+  showAllReadings = false,
 }: {
   devotional: Devotional;
   now: Date;
   colors: ColorTheme;
   isDark: boolean;
-  onOpenDay: (dayNumber: number) => void;
+  onOpenDay: (dayNumber: number, openingId?: string) => void;
+  headerAccessory?: ReactNode;
+  showAllReadings?: boolean;
 }) {
   const model = buildBookOfSeasonsModel(devotional, now);
   const today = model?.page;
@@ -32,11 +37,10 @@ export function BookOfSeasonsView({
   return (
     <View testID="book-of-seasons">
       <View style={styles.season}>
-        <Text
-          style={[styles.title, { color: colors.text }]}
-        >
-          {devotional.title}
-        </Text>
+        <View style={styles.titleRow}>
+          <Text style={[styles.title, { color: colors.text }]}>{devotional.title}</Text>
+          {headerAccessory}
+        </View>
         {theme ? (
           <Text
             style={[styles.subtitle, { color: colors.textMuted }]}
@@ -50,10 +54,10 @@ export function BookOfSeasonsView({
           page={today}
           colors={colors}
           isDark={isDark}
-          onContinue={() => onOpenDay(today.dayNumber)}
+          onContinue={(openingId) => onOpenDay(today.dayNumber, openingId)}
         />
       ) : null}
-      {chapters.length > 0 ? <ChapterJourney
+      {chapters.length > 0 && !showAllReadings ? <ChapterJourney
         chapters={chapters}
         colors={colors}
         canOpenChapter={(chapter) => resolveBookOpenDayNumber(devotional, chapter, now) != null}
@@ -70,7 +74,14 @@ const styles = StyleSheet.create({
   season: {
     marginBottom: Spacing['6'],
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing['3'],
+  },
   title: {
+    flex: 1,
+    minWidth: 0,
     fontFamily: FontFamily.display,
     fontSize: FontSize['3xl'],
     lineHeight: 36,

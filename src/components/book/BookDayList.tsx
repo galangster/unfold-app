@@ -24,7 +24,6 @@ export function BookDayList({ devotional, now, colors, onOpenDay }: {
 
   return (
     <View testID="book-day-list">
-      <Text style={[styles.heading, { color: colors.text }]}>In this series</Text>
       {dayNumbers.map((dayNumber) => {
         const isRead = devotional.days.some((day) => day.dayNumber === dayNumber && day.isRead);
         const ready = selectRenderableDevotionalDay(devotional, dayNumber).status === 'ready';
@@ -60,7 +59,6 @@ export function BookDayList({ devotional, now, colors, onOpenDay }: {
 }
 
 const styles = StyleSheet.create({
-  heading: { fontFamily: FontFamily.display, fontSize: 22, marginBottom: Spacing['2'] },
   row: { flexDirection: 'row', alignItems: 'center', gap: Spacing['3'], minHeight: 60, paddingVertical: Spacing['4'], borderBottomWidth: StyleSheet.hairlineWidth },
   number: { fontFamily: FontFamily.ui, fontSize: FontSize.sm, minWidth: 24, fontVariant: ['tabular-nums'] },
   copy: { flex: 1, minWidth: 0 },

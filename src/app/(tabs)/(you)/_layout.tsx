@@ -15,7 +15,7 @@ export default function YouLayout() {
       <Stack.Screen name="past-devotionals" options={{ animation: 'ios_from_right', gestureEnabled: true }} />
       <Stack.Screen name="my-content" options={{ animation: 'ios_from_right', gestureEnabled: true }} />
       <Stack.Screen name="checkin-schedule" options={{ animation: 'ios_from_right', gestureEnabled: true }} />
-      <Stack.Screen name="series-detail" options={{ animation: 'ios_from_right', gestureEnabled: true }} />
+      <Stack.Screen name="series-detail" options={({ route }) => ({ animation: route.params && 'shelfOpening' in route.params ? 'none' : 'ios_from_right', gestureEnabled: true })} />
     </Stack>
   );
 }

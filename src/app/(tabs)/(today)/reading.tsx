@@ -1,5 +1,6 @@
 /** @jsxImportSource react */
 import { emitDayCompletionCueAfterSave } from '@/lib/day-completion-cue';
+import { clearBookOpening, markBookReaderReady } from '@/lib/book-opening';
 import { getDailyGenerationNotice } from '@/lib/daily-generation-messages';
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useAutoHide } from '@/hooks/useAutoHide';
@@ -256,7 +257,7 @@ export function maybeCompleteAutoTrialOnLastDay(i: {
 export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = {}) {
   const router = useRouter();
   const isReadingFocused = useIsFocused();
-  const params = useLocalSearchParams<{ dayNumber?: string; devotionalId?: string; highlightId?: string; bookmarkId?: string; readOnly?: string; focus?: string; from?: string; practice?: string; practiceMethod?: string }>();
+  const params = useLocalSearchParams<{ bookOpening?: string; dayNumber?: string; devotionalId?: string; highlightId?: string; bookmarkId?: string; readOnly?: string; focus?: string; from?: string; practice?: string; practiceMethod?: string }>();
   const { handleBack: handleReaderBack } = useCrossTabBack();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
@@ -1783,6 +1784,27 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
 
   const fallbackBottomPadding = Math.max(insets.bottom + 96, 112);
 
+  useEffect(() => {
+    if (!params.bookOpening || !isReadingFocused) return;
+    const openingId = params.bookOpening;
+    const previous = useUIState.getState();
+    previous.setTabBarHidden(true, 'instant');
+    return () => {
+      clearBookOpening(openingId);
+      useUIState.getState().setTabBarHidden(previous.tabBarHidden, previous.tabBarHideMode);
+    };
+  }, [isReadingFocused, params.bookOpening]);
+
+  const handleBookContentReady = useCallback((generation: number) => {
+    if (isReadingFocused && generation === layoutGenerationRef.current) markBookReaderReady(params.bookOpening);
+  }, [isReadingFocused, params.bookOpening]);
+
+  useEffect(() => {
+    if (!params.bookOpening || currentDayData || !isReadingFocused) return;
+    const frame = requestAnimationFrame(() => markBookReaderReady(params.bookOpening));
+    return () => cancelAnimationFrame(frame);
+  }, [params.bookOpening, currentDayData, isReadingFocused]);
+
   // Early returns after all hooks
   if (!currentDevotional) {
     const shouldShowMissingSeriesRecovery = Boolean(
@@ -2339,6 +2361,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                 targetHighlight={targetHighlight}
                 onTargetHighlightLocated={handleTargetHighlightLocated}
                 onWebViewLocations={handleWebViewLocations}
+                onContentReady={handleBookContentReady}
                 layoutGeneration={layoutGeneration}
                 onSectionLayout={handleSectionLayout}
                 targetBookmark={targetBookmark}

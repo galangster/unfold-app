@@ -2,7 +2,7 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { FeatureAnnouncement } from '../FeatureAnnouncement';
 import {
-  BOOKSHELF_ANNOUNCEMENT_ID,
+  BOOKSHELF_LIBRARY_ANNOUNCEMENT_ID,
   COMPANION_ANNOUNCEMENT_ID,
   FEATURE_ANNOUNCEMENT_CATALOG,
   FEATURE_ANNOUNCEMENTS_KEY,
@@ -121,7 +121,8 @@ describe('feature announcement sequence', () => {
     renderAnnouncement();
     expect(screen.getByLabelText('Page 1 of 4')).toBeTruthy();
     expect(screen.getByText('Your new bookshelf.')).toBeTruthy();
-    expect(hasSeenAnnouncement(BOOKSHELF_ANNOUNCEMENT_ID)).toBe(true);
+    expect(screen.getByText('Find your bookshelf in You, under Past Devotionals. Open a book, swipe its page into your reading, or share its cover.')).toBeTruthy();
+    expect(hasSeenAnnouncement(BOOKSHELF_LIBRARY_ANNOUNCEMENT_ID)).toBe(true);
     expect(hasSeenAnnouncement(COMPANION_ANNOUNCEMENT_ID)).toBe(false);
     fireEvent.press(screen.getByLabelText('Next'));
     expect(screen.getByLabelText('Page 2 of 4')).toBeTruthy();
