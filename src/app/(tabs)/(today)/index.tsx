@@ -1713,7 +1713,7 @@ export default function HomeScreen() {
             userName={user?.name}
             avatarTestID="home-avatar-button"
             onAvatarPress={() => router.push('/(tabs)/(you)')}
-            headerActions={isAmbientAudioEnabled() ? <AmbientMusicEntry /> : null}
+            headerActions={devotionalState.type !== 'preparing' && isAmbientAudioEnabled() ? <AmbientMusicEntry /> : null}
           />
 
           <View style={todayColumnsStyle}>

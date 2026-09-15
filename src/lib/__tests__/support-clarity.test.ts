@@ -175,14 +175,15 @@ describe('copy is wired where the questions arise', () => {
 
   it('uses neutral close copy until a server job is accepted', () => {
     const generating = readSrc('app/generating.tsx');
-    expect(generating).toContain('resolveGeneratingCloseCopy(pendingJobId != null)');
+    expect(generating).toContain('resolveAcceptedGenerationExitCopy(notifyControl)');
+    expect(generating).toContain('resolveGeneratingCloseCopy(false)');
     expect(GENERATING_CAN_CLOSE_COPY).toBe(
       'You can close Unfold and come back when you are ready.',
     );
     expect(resolveGeneratingCloseCopy(false)).toBe(GENERATING_CAN_CLOSE_COPY);
     expect(resolveGeneratingCloseCopy(true)).toContain(GENERATING_WRITING_CONTINUES_COPY);
     expect(resolveGeneratingGoHomeLabel(false)).toBe('Go home');
-    expect(resolveGeneratingGoHomeLabel(true)).toContain('keep writing');
+    expect(resolveGeneratingGoHomeLabel(true)).toBe('Go to Today');
   });
 
   it('keeps Today on a resume card instead of replacing into /generating', () => {

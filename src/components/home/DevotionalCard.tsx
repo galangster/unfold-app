@@ -17,7 +17,6 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
   withDelay,
-  withRepeat,
   interpolateColor,
   cancelAnimation,
   Easing,
@@ -50,6 +49,7 @@ import { titleWithPeriod } from '@/lib/display-title';
 import { stripOuterQuotes } from '@/lib/cn';
 import { Typography } from '@/constants/typography';
 import { PageMark } from '@/components/motion/PageMark';
+import { GenerationPulse } from '@/components/generating/GenerationPulse';
 import { progressFillMotion, shouldAnnounceReadingReady } from '@/lib/meaningful-motion';
 import { useAppForegrounded } from '@/hooks/useAppForegrounded';
 import { getTodayProgressHistory, type ProgressHistoryRef } from '@/lib/today-progress-session';
@@ -609,79 +609,27 @@ function RevealReadyState({
   );
 }
 
-// ─── Preparing progress bar ─────────────────────────────────────
-
-function PreparingProgressBar({ progress, colors }: { progress: number; colors: { accent: string; border: string } }) {
-  const { reducedMotion } = useAccessibleAnimation();
-  const animatedProgress = useSharedValue(0.05);
-
-  useEffect(() => {
-    // Map 0-1 progress to percentage; default to 5% so the bar is always visible
-    const target = Math.max(5, progress * 100);
-    if (reducedMotion) {
-      animatedProgress.value = target;
-      return;
-    }
-    animatedProgress.value = withTiming(target, {
-      duration: 900,
-      easing: Easing.out(Easing.cubic),
-    });
-  }, [progress, animatedProgress, reducedMotion]);
-
-  const barStyle = useAnimatedStyle(() => ({
-    width: `${animatedProgress.value}%`,
-  }));
-
-  return (
-    <View style={[styles.preparingProgressTrack, { backgroundColor: colors.border }]}>
-      <Animated.View
-        style={[styles.preparingProgressFill, { backgroundColor: colors.accent }, barStyle]}
-      />
-    </View>
-  );
-}
-
 // ─── Preparing state ────────────────────────────────────────────
 
 function PreparingState({
   state,
   ambienceVisible,
+  motionActive,
 }: {
   state: Extract<DevotionalCardState, { type: 'preparing' }>;
   ambienceVisible: boolean;
+  motionActive: boolean;
 }) {
   const { colors } = useTheme();
   const { width, fontScale } = useWindowDimensions();
   const isCompactHero = width < 400 || fontScale >= 1.18;
   const isVeryCompactHero = width < 370 || fontScale >= 1.32;
   const textCap = heroCopyCap(ambienceVisible);
-  const { reducedMotion } = useAccessibleAnimation();
-  const shimmerOpacity = useSharedValue(0.55);
   const isRecoveryBlocked = state.recovery?.status === 'failed'
     || state.recovery?.status === 'offline'
     || state.recovery?.status === 'blocked'
     || state.recovery?.status === 'service-error';
 
-  useEffect(() => {
-    if (isRecoveryBlocked) {
-      shimmerOpacity.value = 1;
-      return;
-    }
-    if (reducedMotion) {
-      shimmerOpacity.value = 0.78;
-      return;
-    }
-    // Six gentle cycles (~26s) then settle — decorative motion shouldn't run
-    // forever on a static value (audit #11).
-    shimmerOpacity.value = withRepeat(
-      withTiming(0.92, { duration: 2200, easing: Easing.inOut(Easing.ease) }),
-      6,
-      true,
-    );
-    return () => cancelAnimation(shimmerOpacity);
-  }, [shimmerOpacity, reducedMotion, isRecoveryBlocked]);
-
-  const shimmerStyle = useAnimatedStyle(() => ({ opacity: shimmerOpacity.value }));
   const recovery = state.recovery;
   const notice = getDailyGenerationNotice(recovery, state.dayNumber);
   const isChecking = recovery?.status === 'checking';
@@ -710,7 +658,9 @@ function PreparingState({
           ? `Looking for Day ${state.dayNumber}.`
           : recovery?.status === 'running'
             ? `Preparing Day ${state.dayNumber}.`
-            : `Day ${state.dayNumber} is almost ready.`;
+            : state.dayNumber === 1
+              ? 'Writing your first devotional.'
+              : `Writing Day ${state.dayNumber}.`;
   const subtitle = notice
     ? notice.body
     : isFailed
@@ -721,35 +671,28 @@ function PreparingState({
         : 'Check again so we can find the right reading for your series.'
       : recovery?.status === 'slow'
         ? `This is taking longer than usual. You can leave ${state.seriesTitle} here and come back later.`
-        : `We’re getting your next reading for ${state.seriesTitle}. It’ll appear here automatically.`;
+        : 'It’ll appear here when it’s ready.\nYou can explore Unfold while we write.';
 
   return (
     <View
       accessible={!action}
       accessibilityRole={action ? undefined : 'text'}
       accessibilityLabel={action ? undefined : title}
+      accessibilityHint={action ? undefined : subtitle}
+      accessibilityState={{ busy: !isRecoveryBlocked }}
       style={[styles.preparingContainer, styles.heroStateBlock]}
     >
       <View style={styles.preparingContent}>
-        <HeroGround active={ambienceVisible} style={[styles.openHeroContent, isCompactHero && styles.openHeroContentCompact, isVeryCompactHero && styles.openHeroContentVeryCompact]}>
-          <View style={styles.readyPageMark}>
-            <PageMark color={colors.accent} filled={false} animate={false} />
+        <HeroGround active={ambienceVisible} style={[styles.openHeroContent, isCompactHero && styles.openHeroContentCompact, isVeryCompactHero && styles.openHeroContentVeryCompact, styles.preparingHero]}>
+          <View style={styles.preparingPulse}>
+            <GenerationPulse color={isRecoveryBlocked ? colors.textMuted : colors.accent} size={128} active={motionActive && !isRecoveryBlocked} />
           </View>
-          <Text style={[styles.heroSeriesEyebrow, styles.pageMarkEyebrow, { color: colors.textSubtle, textAlign: 'left' }]} numberOfLines={1}>
-            {state.seriesTitle} · Preparing
-          </Text>
-
-          <Animated.Text style={[styles.preparingTitle, { color: colors.text }, textCap, shimmerStyle]}>
+          <Text style={[styles.preparingTitle, { color: colors.text }, textCap]}>
             {title}
-          </Animated.Text>
-
+          </Text>
           <Text style={[styles.preparingSubtitle, { color: colors.textMuted }, textCap]}>
             {subtitle}
           </Text>
-
-          {action ? null : (
-            <PreparingProgressBar progress={state.progress} colors={{ accent: alpha(colors.accent, 0.58), border: alpha(colors.border, 0.45) }} />
-          )}
         </HeroGround>
 
         {action ? (
@@ -1296,7 +1239,7 @@ export function DevotionalCard({
         />
       )}
       {state.type === 'preparing' && (
-        <PreparingState state={state} ambienceVisible={ambienceVisible} />
+        <PreparingState state={state} ambienceVisible={ambienceVisible} motionActive={motionActive} />
       )}
       {state.type === 'first-series-failed' && (
         <FirstSeriesFailedState state={state} ambienceVisible={ambienceVisible} />
@@ -1753,18 +1696,26 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     zIndex: 2,
   },
+  preparingHero: {
+    alignItems: 'center',
+    alignSelf: 'center',
+    width: '100%',
+  },
+  preparingPulse: {
+    marginBottom: Spacing['6'],
+  },
   preparingTitle: {
     fontFamily: FontFamily.display,
-    fontSize: 21,
-    lineHeight: 27,
-    textAlign: 'left',
+    fontSize: 27,
+    lineHeight: 35,
+    textAlign: 'center',
     marginBottom: Spacing['2'],
   },
   preparingSubtitle: {
     fontFamily: FontFamily.body,
     fontSize: 15,
     lineHeight: 23,
-    textAlign: 'left',
+    textAlign: 'center',
     marginBottom: Spacing['4'],
     maxWidth: 310,
   },
@@ -1810,16 +1761,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     lineHeight: 20,
     marginLeft: Spacing['1'],
-  },
-  preparingProgressTrack: {
-    height: 2,
-    borderRadius: 1,
-    width: 112,
-    maxWidth: '42%',
-  },
-  preparingProgressFill: {
-    height: '100%',
-    borderRadius: 1,
   },
   preparingRecoveryButton: {
     width: '100%',

@@ -176,7 +176,7 @@ import { mmkvStorage } from '../mmkv-storage';
 import { useUnfoldStore, type Devotional, type UserProfile } from '../store';
 import { useUIState } from '@/lib/ui-state';
 
-const GO_HOME_LABEL = 'Go home while your devotional is prepared';
+const GO_HOME_LABEL = 'Go to Today';
 const EXPO_LOST_CONNECTION = 'fetch failed: UnexpectedException: The network connection was lost. (at ExpoModulesCore/Promise.swift:56)';
 
 const user = {

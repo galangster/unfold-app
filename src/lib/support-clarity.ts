@@ -19,12 +19,12 @@ export const GENERATING_CAN_CLOSE_COPY =
   'You can close Unfold and come back when you are ready.';
 
 export const GENERATING_WRITING_CONTINUES_COPY =
-  "We'll keep writing while you're away.";
+  "Your first devotional will keep preparing while you're away.";
 
 export const GENERATING_GO_HOME_COPY = 'Go home';
 
 export const GENERATING_GO_HOME_WRITING_COPY =
-  "Go home — we'll keep writing";
+  'Go to Today';
 
 export const PERSONAL_CONTEXT_FUTURE_DAYS_COPY =
   "The next days we write will use what you save here. A day that's already written stays as it is.";

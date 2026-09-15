@@ -6,23 +6,21 @@ import { FontFamily } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import type { NotifyControlState } from '@/lib/generating-notify-state';
 
-/** Copy for the nudge notes under the notify control: one tree, three states. */
-export const NOTIFY_NOTE_COPY: Record<Extract<NotifyControlState, 'pending' | 'denied' | 'registration-failed'>, string> = {
-  pending: 'Setting up your nudge\u2026',
-  denied: 'Notifications are off for Unfold. Turn them on in Settings and we\u2019ll nudge you when it\u2019s\u00A0ready.',
-  'registration-failed': 'We couldn\u2019t set up the nudge. Check your connection and tap Notify me\u00A0again.',
+/** Notification status below the generation actions. */
+export const NOTIFY_NOTE_COPY: Record<Extract<NotifyControlState, 'pending' | 'denied' | 'registration-failed' | 'registration-unavailable'>, string> = {
+  pending: 'Setting up your notification\u2026',
+  denied: 'Notifications are off. You can turn them on in\u00A0Settings.',
+  'registration-failed': 'We couldn\u2019t set up notifications.',
+  'registration-unavailable': 'Notifications aren\u2019t available here.',
 };
 
 export type NotifyNoteColors = {
-  inputBackground: string;
-  border: string;
   textMuted: string;
-  textSubtle: string;
 };
 
 /**
  * A boxless note under the notify control: an icon (the bell unless given)
- * beside muted copy, with optional content — the Settings link — below it.
+ * beside muted copy, with an optional action below it.
  */
 export function NotifyNote({
   entering,
@@ -42,10 +40,12 @@ export function NotifyNote({
   return (
     <Animated.View
       entering={entering}
-      style={{ marginTop: Spacing['10'], width: '100%', alignItems: 'flex-start', ...(gap === undefined ? {} : { gap }) }}
+      style={{ marginTop: Spacing['4'], width: '100%', alignItems: 'center', gap }}
     >
       <View style={styles.notifyNote}>
-        {icon ?? <BellIcon size={14} color={colors.textSubtle} weight="light" />}
+        <View style={styles.icon}>
+          {icon ?? <BellIcon size={14} color={colors.textMuted} weight="light" />}
+        </View>
         <Text style={[styles.notifyNoteText, { color: colors.textMuted }]}>{text}</Text>
       </View>
       {children}
@@ -57,14 +57,19 @@ const styles = StyleSheet.create({
   notifyNote: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    width: '100%',
+    justifyContent: 'center',
+    maxWidth: '100%',
+    gap: Spacing['2'],
+  },
+  icon: {
+    minHeight: 20,
+    justifyContent: 'center',
   },
   notifyNoteText: {
-    flex: 1,
+    flexShrink: 1,
     fontFamily: FontFamily.ui,
     fontSize: 13,
-    lineHeight: 18,
-    marginLeft: Spacing['2'],
-    textAlign: 'left',
+    lineHeight: 20,
+    textAlign: 'center',
   },
 });
