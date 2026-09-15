@@ -349,6 +349,7 @@ export default function BibleHomeScreen() {
       <View style={[styles.container, hubFrameStyle]}>
       <View style={[styles.header, headerStacks && styles.headerStacked]}>
         <Text
+          key={fontScale}
           style={[styles.title, { color: colors.text, fontFamily: FontFamily.display }]}
           maxFontSizeMultiplier={0}
           numberOfLines={1}
@@ -396,7 +397,12 @@ export default function BibleHomeScreen() {
           accessibilityLabel="Search the Bible"
         />
         {query.length > 0 && (
-          <TouchableOpacity onPress={() => setQuery('')} accessibilityLabel="Clear search" hitSlop={8}>
+          <TouchableOpacity
+            onPress={() => setQuery('')}
+            accessibilityLabel="Clear search"
+            accessibilityRole="button"
+            style={styles.clearSearch}
+          >
             <XCircleIcon size={18} color={colors.textSubtle} weight="fill" />
           </TouchableOpacity>
         )}
@@ -448,12 +454,12 @@ export default function BibleHomeScreen() {
             >
               <View style={styles.continueLeft}>
                 <ClockIcon size={14} color={colors.textSubtle} weight="light" />
-                <Text style={[styles.continueLabel, { color: colors.textSubtle }]}>
+                <Text key={fontScale} style={[styles.continueLabel, { color: colors.textSubtle }]}>
                   Continue
                 </Text>
               </View>
               <View style={styles.continueRight}>
-                <Text style={[styles.continueRef, { color: colors.text }]}>
+                <Text key={fontScale} style={[styles.continueRef, { color: colors.text }]}>
                   {citationBookName(lastPosition.bookName)} {lastPosition.chapter}
                 </Text>
                 <CaretRightIcon size={12} color={colors.textSubtle} weight="light" />
@@ -462,12 +468,12 @@ export default function BibleHomeScreen() {
           </Animated.View>
         )}
 
-        <Text style={[styles.sectionHeader, { color: colors.text }]}>
+        <Text key={`ot-${fontScale}`} style={[styles.sectionHeader, { color: colors.text }]}>
           Old Testament
         </Text>
         {viewMode === 'grid' ? renderCanonicalGrid(OT_BOOKS) : renderCategorizedBooks(OT_BOOKS)}
 
-        <Text style={[styles.sectionHeader, { color: colors.text }]}>
+        <Text key={`nt-${fontScale}`} style={[styles.sectionHeader, { color: colors.text }]}>
           New Testament
         </Text>
         {viewMode === 'grid' ? renderCanonicalGrid(NT_BOOKS) : renderCategorizedBooks(NT_BOOKS)}
@@ -597,10 +603,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginHorizontal: Spacing['6'],
     paddingHorizontal: 14,
-    paddingVertical: 11,
+    minHeight: 44,
     borderRadius: 10,
     gap: Spacing['2'],
     marginBottom: Spacing['5'],
+  },
+  clearSearch: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
   searchInput: {
     flex: 1,

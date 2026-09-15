@@ -18,14 +18,15 @@ function day(dayNumber: number, devotionalId = 'devo-1'): DevotionalDay {
 }
 
 function devotional(overrides: Partial<Devotional> = {}): Devotional {
+  const seriesStartDate = new Date(2026, 8, 1, 9, 0, 0).toISOString();
   return {
     id: 'devo-1',
     title: 'Rooted',
     totalDays: 7,
     currentDay: 2,
     days: [day(1)],
-    createdAt: '2026-09-01T08:00:00.000Z',
-    seriesStartDate: '2026-09-01T08:00:00.000Z',
+    createdAt: seriesStartDate,
+    seriesStartDate,
     generationMode: 'progressive',
     userContext: { name: 'Nick', aboutMe: '', currentSituation: '', emotionalState: '' },
     ...overrides,

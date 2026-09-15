@@ -79,7 +79,7 @@ export function FeatureAnnouncement({
 }) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const { height } = useWindowDimensions();
+  const { height, fontScale } = useWindowDimensions();
   const reducedMotion = useReducedMotion();
   const timerStatus = useAmbientAudioState((state) => state.timerStatus);
   const [index, setIndex] = useState(0);
@@ -319,6 +319,7 @@ export function FeatureAnnouncement({
             </AmbientText>
           ) : null}
           <ScrollView
+            key={page?.id}
             bounces={false}
             showsVerticalScrollIndicator={false}
             style={{ maxHeight: Math.max(160, height - insets.top - insets.bottom - 120), flexShrink: 1 }}
@@ -334,7 +335,7 @@ export function FeatureAnnouncement({
               <AmbientText
                 ref={headingRef}
                 accessibilityRole="header"
-                style={[styles.heading, { color: colors.text }]}
+                style={[styles.heading, { color: colors.text, maxWidth: 280 * Math.min(fontScale, 2) }]}
               >
                 {page.title}
               </AmbientText>
@@ -473,7 +474,6 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.display,
     fontSize: 34,
     lineHeight: 38,
-    maxWidth: 280,
     marginBottom: 16,
   },
   body: { fontFamily: FontFamily.body, fontSize: 15, lineHeight: 25 },

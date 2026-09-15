@@ -27,7 +27,7 @@ describe('reading swipe navigation source contract', () => {
   });
 
   it('shows a toast instead of only a haptic on a blocked forward swipe past the locked day', () => {
-    const onEndBlock = readingSource.match(/\.onEnd\(\(event\) => \{[\s\S]{0,900}?\}\),/)?.[0] ?? '';
+    const onEndBlock = readingSource.match(/\.onEnd\(\(event, success\) => \{[\s\S]{0,1100}?\}\),/)?.[0] ?? '';
 
     // The toast only fires for a deliberate forward swipe with nothing left
     // to advance to — not for a swipe backward at day 1, and not for a
@@ -42,6 +42,20 @@ describe('reading swipe navigation source contract', () => {
     const lockedToastBlock = readingSource.match(/\{lockedDayToast && \([\s\S]{0,600}?<\/Animated\.View>\s*\)\}/)?.[0] ?? '';
     expect(lockedToastBlock).toContain('styles.toastContainer');
     expect(lockedToastBlock).toContain('styles.toastText');
+  });
+
+  it('ignores cancelled page pans and disables page swipes during reflection editing', () => {
+    const panGestureBlock = readingSource.match(
+      /Gesture\.Pan\(\)[\s\S]{0,1500}?\[viewingDay, availableDays, reflectionToolbar/,
+    )?.[0] ?? '';
+
+    expect(panGestureBlock).toContain('.enabled(reflectionToolbar === null)');
+    expect(panGestureBlock).toContain('.onEnd((event, success) => {');
+    expect(panGestureBlock).toContain('if (!success) return;');
+    expect(panGestureBlock).toContain('.onFinalize((_event, success) => {');
+    expect(panGestureBlock).toMatch(
+      /\.onFinalize\(\(_event, success\) => \{[\s\S]{0,180}?if \(!success\)[\s\S]{0,120}?translateX\.value = withTiming\(0/,
+    );
   });
 
   it('uses authoritative day recovery for progressive series and keeps batch continuation separate', () => {

@@ -143,6 +143,11 @@ jest.mock('@/lib/store', () => ({
 import { DevotionalCard, AnimatedProgressBar } from '../DevotionalCard';
 import { PageMark } from '@/components/motion/PageMark';
 import { clearTodayProgressHistory, getTodayProgressHistory } from '@/lib/today-progress-session';
+import {
+  beginLocalResetSession,
+  endLocalResetSession,
+  resetSyncSessionFenceForTesting,
+} from '@/lib/sync-session-fence';
 import type { DevotionalCardState } from '../compute-devotional-state';
 import type { DevotionalDay, JournalEntry } from '@/lib/store';
 
@@ -202,6 +207,27 @@ function makeTomorrowLockedState(
     onReflect: noop,
     onCreateNew: noop,
     onSaveFreeWrite: noop,
+    ...overrides,
+  };
+}
+
+function makeRevealReadyState(
+  overrides: Partial<Extract<DevotionalCardState, { type: 'reveal-ready' }>> = {},
+): Extract<DevotionalCardState, { type: 'reveal-ready' }> {
+  return {
+    type: 'reveal-ready',
+    dayData: makeDayData({
+      dayNumber: 4,
+      title: 'The Next Thread',
+      scriptureReference: 'Hebrews 12:1',
+      isRead: false,
+      isRevealed: false,
+    }),
+    dayLabel: 'Today',
+    seriesTitle: 'Faith Foundations',
+    dayNumber: 4,
+    totalDays: 7,
+    onReveal: noop,
     ...overrides,
   };
 }
@@ -431,6 +457,433 @@ describe('DevotionalCard composer integration', () => {
     expect(onSaveFreeWrite).toHaveBeenCalledWith(3, 'What stayed with me today.');
 
     jest.useRealTimers();
+  });
+});
+
+describe('DevotionalCard completed-day hold while editing', () => {
+  beforeEach(() => {
+    mockStoreState.journalEntries = [];
+    resetSyncSessionFenceForTesting();
+  });
+
+  afterEach(() => {
+    resetSyncSessionFenceForTesting();
+  });
+
+  it('keeps the Day 3 composer when focused as calendar-eligible Day 4 becomes reveal-ready', () => {
+    jest.useFakeTimers();
+    const onSaveFreeWrite = jest.fn();
+    const onReflect = jest.fn();
+    const day3 = makeCompleteTodayState({
+      reflectionStatus: 'empty',
+      freeWriteDraft: 'Day 3 still with me.',
+      onSaveFreeWrite,
+      onReflect,
+      dayData: makeDayData({ dayNumber: 3, title: 'Walking by Faith', isRead: true }),
+    });
+    const tree = renderInAct(
+      <DevotionalCard state={day3} seriesId="series-faith" progressIdentity="account-a" />,
+    );
+
+    const composer = tree.root.findByProps({ testID: 'home-reflect-composer' });
+    act(() => {
+      composer.props.onFocus();
+      composer.props.onChangeText('Day 3 still with me. More to say.');
+    });
+
+    act(() => {
+      tree.update(
+        <DevotionalCard
+          state={makeRevealReadyState()}
+          seriesId="series-faith"
+          progressIdentity="account-a"
+        />,
+      );
+    });
+
+    const heldComposer = tree.root.findByProps({ testID: 'home-reflect-composer' });
+    expect(heldComposer.props.value).toBe('Day 3 still with me. More to say.');
+    expect(
+      tree.root.findAll((node: any) => node.type === 'Text' && textContent(node).includes('Walking by Faith')).length,
+    ).toBeGreaterThan(0);
+    expect(
+      tree.root.findAll((node: any) => node.type === 'Text' && textContent(node).includes('Reveal Today')).length,
+    ).toBe(0);
+
+    act(() => {
+      jest.advanceTimersByTime(2100);
+    });
+    expect(onSaveFreeWrite).toHaveBeenCalledWith(3, 'Day 3 still with me. More to say.');
+
+    act(() => {
+      findByLabel(tree, 'Open full reflection')[0].props.onPress();
+    });
+    expect(onReflect).toHaveBeenCalledWith(3);
+
+    jest.useRealTimers();
+  });
+
+  it('defers same-day save presentation until blur without replacing in-flight typing', () => {
+    const onSaveFreeWrite = jest.fn();
+    const tree = renderInAct(
+      <DevotionalCard
+        state={makeCompleteTodayState({
+          reflectionStatus: 'empty',
+          freeWriteDraft: '',
+          onSaveFreeWrite,
+          dayData: makeDayData({ dayNumber: 3 }),
+        })}
+        seriesId="series-faith"
+        progressIdentity="account-a"
+      />,
+    );
+
+    const composer = tree.root.findByProps({ testID: 'home-reflect-composer' });
+    act(() => {
+      composer.props.onFocus();
+      composer.props.onChangeText('Typed before the store echoed the save.');
+    });
+
+    act(() => {
+      tree.update(
+        <DevotionalCard
+          state={makeCompleteTodayState({
+            reflectionStatus: 'started',
+            freeWriteDraft: 'Saved echo from the store.',
+            onSaveFreeWrite,
+            dayData: makeDayData({ dayNumber: 3 }),
+          })}
+          seriesId="series-faith"
+          progressIdentity="account-a"
+        />,
+      );
+    });
+
+    expect(tree.root.findByProps({ testID: 'home-reflect-composer' }).props.value).toBe(
+      'Typed before the store echoed the save.',
+    );
+    act(() => {
+      tree.root.findByProps({ testID: 'home-reflect-composer' }).props.onBlur();
+    });
+    expect(onSaveFreeWrite).toHaveBeenCalledTimes(1);
+    expect(onSaveFreeWrite).toHaveBeenCalledWith(
+      3,
+      'Typed before the store echoed the save.',
+    );
+    expect(
+      tree.root.findAll(
+        (node: any) => node.type === 'Text' && textContent(node).includes('Finish your reflection'),
+      ).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it('shows reveal-ready after blur ends the held Day 3 edit', () => {
+    const tree = renderInAct(
+      <DevotionalCard
+        state={makeCompleteTodayState({ dayData: makeDayData({ dayNumber: 3 }) })}
+        seriesId="series-faith"
+        progressIdentity="account-a"
+      />,
+    );
+
+    act(() => {
+      tree.root.findByProps({ testID: 'home-reflect-composer' }).props.onFocus();
+    });
+    act(() => {
+      tree.update(
+        <DevotionalCard
+          state={makeRevealReadyState()}
+          seriesId="series-faith"
+          progressIdentity="account-a"
+        />,
+      );
+    });
+    expect(tree.root.findAll((node: any) => node.props.testID === 'home-reflect-composer').length).toBeGreaterThan(0);
+
+    act(() => {
+      tree.root.findByProps({ testID: 'home-reflect-composer' }).props.onBlur();
+    });
+
+    expect(tree.root.findAll((node: any) => node.props.testID === 'home-reflect-composer')).toHaveLength(0);
+    expect(
+      tree.root.findAll((node: any) => node.type === 'Text' && textContent(node).includes('Reveal Today')).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it('shows reveal-ready when Today loses screen focus during a held Day 3 edit', () => {
+    const tree = renderInAct(
+      <DevotionalCard
+        state={makeCompleteTodayState({ dayData: makeDayData({ dayNumber: 3 }) })}
+        seriesId="series-faith"
+        progressIdentity="account-a"
+      />,
+    );
+
+    act(() => {
+      tree.root.findByProps({ testID: 'home-reflect-composer' }).props.onFocus();
+    });
+    act(() => {
+      tree.update(
+        <DevotionalCard
+          state={makeRevealReadyState()}
+          seriesId="series-faith"
+          progressIdentity="account-a"
+        />,
+      );
+    });
+    expect(tree.root.findAll((node: any) => node.props.testID === 'home-reflect-composer').length).toBeGreaterThan(0);
+
+    act(() => {
+      tree.update(
+        <DevotionalCard
+          state={makeRevealReadyState()}
+          seriesId="series-faith"
+          progressIdentity="account-a"
+          screenFocused={false}
+        />,
+      );
+    });
+
+    expect(tree.root.findAll((node: any) => node.props.testID === 'home-reflect-composer')).toHaveLength(0);
+    expect(
+      tree.root.findAll((node: any) => node.type === 'Text' && textContent(node).includes('Reveal Today')).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it('does not keep a held Day 3 draft after the series identity changes', () => {
+    const onSaveFreeWrite = jest.fn();
+    const tree = renderInAct(
+      <DevotionalCard
+        state={makeCompleteTodayState({
+          freeWriteDraft: 'First series draft.',
+          onSaveFreeWrite,
+          dayData: makeDayData({ dayNumber: 3 }),
+        })}
+        seriesId="series-faith"
+        progressIdentity="account-a"
+      />,
+    );
+
+    act(() => {
+      const composer = tree.root.findByProps({ testID: 'home-reflect-composer' });
+      composer.props.onFocus();
+      composer.props.onChangeText('First series draft. Still typing.');
+    });
+    act(() => {
+      tree.update(
+        <DevotionalCard
+          state={makeRevealReadyState({ seriesTitle: 'New Mercy' })}
+          seriesId="series-mercy"
+          progressIdentity="account-a"
+        />,
+      );
+    });
+
+    expect(tree.root.findAll((node: any) => node.props.testID === 'home-reflect-composer')).toHaveLength(0);
+    expect(
+      tree.root.findAll((node: any) => node.type === 'Text' && textContent(node).includes('Reveal Today')).length,
+    ).toBeGreaterThan(0);
+    expect(JSON.stringify(tree.toJSON())).not.toContain('First series draft. Still typing.');
+    expect(onSaveFreeWrite).toHaveBeenCalledTimes(1);
+    expect(onSaveFreeWrite).toHaveBeenCalledWith(
+      3,
+      'First series draft. Still typing.',
+    );
+  });
+
+  it('does not keep an old account draft after identity replacement', () => {
+    const tree = renderInAct(
+      <DevotionalCard
+        state={makeCompleteTodayState({
+          freeWriteDraft: 'Account A draft.',
+          dayData: makeDayData({ dayNumber: 3 }),
+        })}
+        seriesId="series-faith"
+        progressIdentity="account-a"
+      />,
+    );
+
+    act(() => {
+      const composer = tree.root.findByProps({ testID: 'home-reflect-composer' });
+      composer.props.onFocus();
+      composer.props.onChangeText('Account A draft. Private words.');
+    });
+    act(() => {
+      tree.update(
+        <DevotionalCard
+          state={makeCompleteTodayState({
+            freeWriteDraft: 'Account B empty start.',
+            dayData: makeDayData({ dayNumber: 3, title: 'Other Ground' }),
+            seriesTitle: 'Other Ground Series',
+          })}
+          seriesId="series-other"
+          progressIdentity="account-b"
+        />,
+      );
+    });
+
+    const nextComposer = tree.root.findByProps({ testID: 'home-reflect-composer' });
+    expect(nextComposer.props.value).toBe('Account B empty start.');
+    expect(nextComposer.props.value).not.toContain('Private words.');
+  });
+
+  it('does not flush an old account draft after a completed account reset', () => {
+    jest.useFakeTimers();
+    const onSaveAccountA = jest.fn();
+    const onSaveAccountB = jest.fn();
+    const tree = renderInAct(
+      <DevotionalCard
+        state={makeCompleteTodayState({
+          freeWriteDraft: 'Account A draft.',
+          onSaveFreeWrite: onSaveAccountA,
+          dayData: makeDayData({ dayNumber: 3 }),
+        })}
+        seriesId="series-faith"
+        progressIdentity="account-a"
+      />,
+    );
+
+    act(() => {
+      const composer = tree.root.findByProps({ testID: 'home-reflect-composer' });
+      composer.props.onFocus();
+      composer.props.onChangeText('Account A draft. Pending private words.');
+    });
+
+    const resetToken = beginLocalResetSession();
+    endLocalResetSession(resetToken);
+    act(() => {
+      tree.update(
+        <DevotionalCard
+          state={makeCompleteTodayState({
+            freeWriteDraft: '',
+            onSaveFreeWrite: onSaveAccountB,
+            dayData: makeDayData({ dayNumber: 1, title: 'A New Start' }),
+          })}
+          seriesId="series-new"
+          progressIdentity="account-b"
+        />,
+      );
+      jest.runOnlyPendingTimers();
+    });
+
+    expect(onSaveAccountA).not.toHaveBeenCalled();
+    expect(onSaveAccountB).not.toHaveBeenCalled();
+    jest.useRealTimers();
+  });
+
+  it('flushes a focused draft when Today exits without changing card state', () => {
+    jest.useFakeTimers();
+    const onSaveFreeWrite = jest.fn();
+    const state = makeCompleteTodayState({
+      freeWriteDraft: '',
+      onSaveFreeWrite,
+      dayData: makeDayData({ dayNumber: 3 }),
+    });
+    const tree = renderInAct(
+      <DevotionalCard
+        state={state}
+        seriesId="series-faith"
+        progressIdentity="account-a"
+      />,
+    );
+
+    act(() => {
+      const composer = tree.root.findByProps({ testID: 'home-reflect-composer' });
+      composer.props.onFocus();
+      composer.props.onChangeText('Save this before Today exits.');
+    });
+    act(() => {
+      tree.update(
+        <DevotionalCard
+          state={state}
+          seriesId="series-faith"
+          progressIdentity="account-a"
+          screenFocused={false}
+        />,
+      );
+    });
+
+    expect(onSaveFreeWrite).toHaveBeenCalledTimes(1);
+    expect(onSaveFreeWrite).toHaveBeenCalledWith(3, 'Save this before Today exits.');
+    act(() => {
+      jest.runOnlyPendingTimers();
+    });
+    expect(onSaveFreeWrite).toHaveBeenCalledTimes(1);
+    jest.useRealTimers();
+  });
+
+  it('keeps a focused tomorrow-locked reflection on its completed day when that day becomes reveal-ready', () => {
+    jest.useFakeTimers();
+    const onSaveFreeWrite = jest.fn();
+    const tomorrowLocked = makeTomorrowLockedState({
+      devotionalId: 'dev-1',
+      daysCompleted: 3,
+      completedDayData: makeDayData({ dayNumber: 3, isRead: true }),
+      dayData: makeDayData({ dayNumber: 4, isRead: false }),
+      onSaveFreeWrite,
+    });
+    const tree = renderInAct(
+      <DevotionalCard
+        state={tomorrowLocked}
+        seriesId="series-faith"
+        progressIdentity="account-a"
+      />,
+    );
+
+    act(() => {
+      const composer = tree.root.findByProps({ testID: 'home-reflect-composer' });
+      composer.props.onFocus();
+      composer.props.onChangeText('A Day 3 thought at midnight.');
+    });
+    act(() => {
+      tree.update(
+        <DevotionalCard
+          state={makeRevealReadyState()}
+          seriesId="series-faith"
+          progressIdentity="account-a"
+        />,
+      );
+      jest.advanceTimersByTime(2100);
+    });
+
+    expect(tree.root.findByProps({ testID: 'home-reflect-composer' }).props.value).toBe(
+      'A Day 3 thought at midnight.',
+    );
+    expect(onSaveFreeWrite).toHaveBeenCalledWith(3, 'A Day 3 thought at midnight.');
+
+    act(() => {
+      tree.root.findByProps({ testID: 'home-reflect-composer' }).props.onBlur();
+    });
+    expect(tree.root.findAll((node: any) => node.props.testID === 'home-reflect-composer')).toHaveLength(0);
+    expect(
+      tree.root.findAll((node: any) => node.type === 'Text' && textContent(node).includes('Reveal Today')).length,
+    ).toBeGreaterThan(0);
+    jest.useRealTimers();
+  });
+
+  it('does not suppress reveal-ready when the Day 3 composer was never focused', () => {
+    const tree = renderInAct(
+      <DevotionalCard
+        state={makeCompleteTodayState({ dayData: makeDayData({ dayNumber: 3 }) })}
+        seriesId="series-faith"
+        progressIdentity="account-a"
+      />,
+    );
+
+    act(() => {
+      tree.update(
+        <DevotionalCard
+          state={makeRevealReadyState()}
+          seriesId="series-faith"
+          progressIdentity="account-a"
+        />,
+      );
+    });
+
+    expect(tree.root.findAll((node: any) => node.props.testID === 'home-reflect-composer')).toHaveLength(0);
+    expect(
+      tree.root.findAll((node: any) => node.type === 'Text' && textContent(node).includes('Reveal Today')).length,
+    ).toBeGreaterThan(0);
   });
 });
 
