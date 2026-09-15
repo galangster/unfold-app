@@ -8,8 +8,8 @@ describe('resolveNotifyRequestOutcome', () => {
     expect(resolveNotifyRequestOutcome({ granted: true, registration: 'registered' })).toBe('confirmed');
   });
 
-  it('treats a skipped registration (simulator, no project id) as confirmed', () => {
-    expect(resolveNotifyRequestOutcome({ granted: true, registration: 'skipped' })).toBe('confirmed');
+  it('does not promise a nudge when registration is unavailable', () => {
+    expect(resolveNotifyRequestOutcome({ granted: true, registration: 'skipped' })).toBe('registration_unavailable');
   });
 
   it('reports a denied permission whatever the registration did', () => {
@@ -94,6 +94,17 @@ describe('getNotifyControlState', () => {
         outcome: 'registration_failed',
       }),
     ).toBe('registration-failed');
+  });
+
+  it('reports an unavailable registration without promising a nudge', () => {
+    expect(
+      getNotifyControlState({
+        ...base,
+        permission: 'granted',
+        hasAskedPermission: true,
+        outcome: 'registration_unavailable',
+      }),
+    ).toBe('registration-unavailable');
   });
 
   it('shows nothing during the ask itself, while the card is still flagged visible', () => {

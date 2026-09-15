@@ -8,6 +8,7 @@ import { syncTrialEndingNotification } from '@/lib/trial-notification';
 import { useUIState } from '@/lib/ui-state';
 
 export type NotificationPermissionState = 'granted' | 'undetermined' | 'denied';
+export type NotificationAskResult = 'granted' | 'denied' | 'registration_failed' | 'registration_unavailable';
 export type NotificationAskTrigger =
   | 'reminder_time'
   | 'series_reveal'
@@ -45,7 +46,7 @@ export async function readNotificationPermissionState(): Promise<NotificationPer
 export async function askNotificationPermissionInContext(o: {
   trigger: NotificationAskTrigger;
   registration: 'await' | 'background';
-}): Promise<'granted' | 'denied' | 'registration_failed'> {
+}): Promise<NotificationAskResult> {
   const priorStatus = await readNotificationPermissionState();
   const granted = await requestNotificationPermissions();
   lastKnownPermission = granted ? 'granted' : 'not_granted';
@@ -96,7 +97,7 @@ export async function askNotificationPermissionInContext(o: {
       result: 'granted',
       prior_status: priorStatus,
     });
-    return 'granted';
+    return result === 'registered' ? 'granted' : 'registration_unavailable';
   } catch {
     trackNotificationPermissionAnswered({
       trigger: o.trigger,
