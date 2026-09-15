@@ -18,6 +18,8 @@ import {
   markBookTurnStarted,
   hardcoverDragProgress,
   HARDCOVER_DRAG_MAX,
+  clearBookOpening,
+  BOOK_OPENING_DISPOSE_DELAY_MS,
 } from '../book-opening';
 import type { BookTodayPage } from '../book-of-seasons';
 import type { SkImage } from '@shopify/react-native-skia';
@@ -161,4 +163,32 @@ it('stops a dragged hardcover short of edge-on with a rubber band beyond the sto
   expect(hardcoverDragProgress(0.75)).toBeCloseTo(0.6);
   expect(hardcoverDragProgress(1)).toBeCloseTo(0.6625);
   expect(hardcoverDragProgress(5)).toBeCloseTo(0.6625);
+});
+
+it('disposes every session image two frames after the session clears, and survives a second clear', () => {
+  jest.useFakeTimers();
+  try {
+    const dispose = jest.fn();
+    const throwingDispose = jest.fn(() => { throw new Error('already disposed'); });
+    const session = {
+      id: 'opening-dispose', image: { dispose } as never, coverImage: { dispose: throwingDispose } as never,
+      readerImage: { dispose, width: () => 1206 } as never, readerWidth: 1206,
+      rect: { x: 0, y: 0, width: 200, height: 280 },
+      progress: { value: 1 } as never, sourceHidden: { value: true } as never, backdrop: { value: 1 } as never,
+      paperColor: '#fff', presented: true, committed: true, readerReady: true,
+      cover: { id: 'book', title: 'Book', createdAt: '2026-09-15' },
+    } as BookOpeningSession;
+    useBookOpening.setState({ session });
+    clearBookOpening('opening-dispose');
+    expect(useBookOpening.getState().session).toBeNull();
+    expect(dispose).not.toHaveBeenCalled();
+    jest.advanceTimersByTime(BOOK_OPENING_DISPOSE_DELAY_MS);
+    expect(dispose).toHaveBeenCalledTimes(2);
+    expect(throwingDispose).toHaveBeenCalledTimes(1);
+    clearBookOpening('opening-dispose');
+    jest.advanceTimersByTime(BOOK_OPENING_DISPOSE_DELAY_MS);
+    expect(dispose).toHaveBeenCalledTimes(2);
+  } finally {
+    jest.useRealTimers();
+  }
 });

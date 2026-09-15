@@ -147,11 +147,26 @@ export interface BookOpeningSession {
 
 export const useBookOpening = create<{ session: BookOpeningSession | null }>(() => ({ session: null }));
 
+/** Frees a session's native snapshots once the Canvas that drew them has unmounted. Safe to call twice. */
+function disposeSessionImages(session: BookOpeningSession): void {
+  for (const image of [session.image, session.coverImage, session.readerImage]) {
+    try {
+      if (image && typeof image.dispose === 'function') image.dispose();
+    } catch {
+      // Already disposed by a concurrent clear; nothing to free.
+    }
+  }
+}
+
+/** Two frames: the overlay unmounts on this store update, and Skia may still be drawing the last frame. */
+export const BOOK_OPENING_DISPOSE_DELAY_MS = 40;
+
 export function clearBookOpening(id: string): void {
   const session = useBookOpening.getState().session;
   if (session?.id === id) {
     session.sourceHidden.value = false;
     useBookOpening.setState({ session: null });
+    setTimeout(() => disposeSessionImages(session), BOOK_OPENING_DISPOSE_DELAY_MS);
   }
 }
 
