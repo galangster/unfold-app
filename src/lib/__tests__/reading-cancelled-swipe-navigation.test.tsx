@@ -32,11 +32,18 @@ const mockExpoNotif: {
 };
 
 const mockReplace = jest.fn();
+const mockWithTiming = jest.fn(
+  (value: unknown, _config?: unknown, callback?: (finished: boolean) => void) => {
+    callback?.(true);
+    return value;
+  },
+);
 const mockPanGesture = {
   enabledValues: [] as boolean[],
   onStart: null as null | ((event: { translationX: number }) => void),
   onUpdate: null as null | ((event: { translationX: number }) => void),
   onEnd: null as null | ((event: { translationX: number }, success: boolean) => void),
+  onFinalize: null as null | ((event: { translationX: number }, success: boolean) => void),
 };
 const routeParams: { devotionalId: string; dayNumber?: string } = {
   devotionalId: DEVOTIONAL_ID,
@@ -182,6 +189,10 @@ jest.mock('react-native-gesture-handler', () => {
       mockPanGesture.onEnd = callback;
       return api;
     };
+    api.onFinalize = (callback: typeof mockPanGesture.onFinalize) => {
+      mockPanGesture.onFinalize = callback;
+      return api;
+    };
     return api;
   };
   return {
@@ -223,14 +234,7 @@ jest.mock('react-native-reanimated', () => {
     useAnimatedProps: (factory: () => unknown) => factory(),
     cancelAnimation: jest.fn(),
     useAnimatedScrollHandler: () => ({}),
-    withTiming: (
-      value: unknown,
-      _config?: unknown,
-      callback?: (finished: boolean) => void,
-    ) => {
-      callback?.(true);
-      return value;
-    },
+    withTiming: mockWithTiming,
     withRepeat: (value: unknown) => value,
     withSequence: (value: unknown) => value,
     withSpring: (value: unknown) => value,
@@ -506,6 +510,7 @@ describe('reader swipe cancellation', () => {
     mockPanGesture.onStart = null;
     mockPanGesture.onUpdate = null;
     mockPanGesture.onEnd = null;
+    mockPanGesture.onFinalize = null;
     useUnfoldStore.getState().reset();
   });
 
@@ -539,12 +544,34 @@ describe('reader swipe cancellation', () => {
 
     expect(readerSnapshot(tree)).toEqual(expectedDay3Draft());
     expect(mockPanGesture.onEnd).toEqual(expect.any(Function));
+    expect(mockPanGesture.onFinalize).toEqual(expect.any(Function));
 
+    mockWithTiming.mockClear();
     act(() => {
+      mockPanGesture.onUpdate?.({ translationX: -100 });
       mockPanGesture.onEnd?.({ translationX: -100 }, false);
+    });
+    expect(mockWithTiming).not.toHaveBeenCalled();
+    act(() => {
+      mockPanGesture.onFinalize?.({ translationX: -100 }, false);
     });
 
     expect(readerSnapshot(tree)).toEqual(expectedDay3Draft());
+    expect(mockWithTiming).toHaveBeenCalledWith(0, { duration: 250 });
+    act(() => tree.unmount());
+  });
+
+  it('cleans up a pan that fails before activation without invoking navigation', async () => {
+    const tree = await renderWithDayFour();
+
+    expect(mockPanGesture.onFinalize).toEqual(expect.any(Function));
+    mockWithTiming.mockClear();
+    act(() => {
+      mockPanGesture.onFinalize?.({ translationX: -10 }, false);
+    });
+
+    expect(readerSnapshot(tree).dayLabel).toBe('Day 3 of 7');
+    expect(mockWithTiming).toHaveBeenCalledWith(0, { duration: 250 });
     act(() => tree.unmount());
   });
 
@@ -561,11 +588,18 @@ describe('reader swipe cancellation', () => {
 
     expect(mockPanGesture.enabledValues.at(-1)).toBe(true);
     expect(mockPanGesture.onEnd).toEqual(expect.any(Function));
+    expect(mockPanGesture.onFinalize).toEqual(expect.any(Function));
+    mockWithTiming.mockClear();
     act(() => {
       mockPanGesture.onEnd?.({ translationX: -100 }, true);
     });
 
     expect(readerSnapshot(tree).dayLabel).toBe('Day 4 of 7');
+    const timingCallsAfterSuccessfulEnd = mockWithTiming.mock.calls.length;
+    act(() => {
+      mockPanGesture.onFinalize?.({ translationX: -100 }, true);
+    });
+    expect(mockWithTiming).toHaveBeenCalledTimes(timingCallsAfterSuccessfulEnd);
     act(() => tree.unmount());
   });
 });

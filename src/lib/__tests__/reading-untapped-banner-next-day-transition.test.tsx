@@ -165,7 +165,7 @@ jest.mock('react-native-gesture-handler', () => {
   const { View } = require('react-native');
   const chain = () => {
     const api: Record<string, unknown> = {};
-    for (const method of ['hitSlop', 'activeOffsetX', 'enabled', 'onStart', 'onUpdate', 'onEnd']) {
+    for (const method of ['hitSlop', 'activeOffsetX', 'enabled', 'onStart', 'onUpdate', 'onEnd', 'onFinalize']) {
       api[method] = () => api;
     }
     return api;

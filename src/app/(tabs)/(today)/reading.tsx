@@ -1199,10 +1199,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
         translateX.value = event.translationX * 0.3;
       })
       .onEnd((event, success) => {
-        if (!success) {
-          translateX.value = withTiming(0, { duration: Duration.normal });
-          return;
-        }
+        if (!success) return;
 
         const goBack = event.translationX > 80 && viewingDay > 1;
         const goForward = event.translationX < -80 && viewingDay < availableDays;
@@ -1222,6 +1219,11 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
           }
         }
         translateX.value = withTiming(0, { duration: Duration.normal });
+      })
+      .onFinalize((_event, success) => {
+        if (!success) {
+          translateX.value = withTiming(0, { duration: Duration.normal });
+        }
       }),
     [viewingDay, availableDays, reflectionToolbar, handlePrevious, handleNext, dismissKeyboardForSwipe]
   );

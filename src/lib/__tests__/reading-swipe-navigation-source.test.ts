@@ -51,7 +51,11 @@ describe('reading swipe navigation source contract', () => {
 
     expect(panGestureBlock).toContain('.enabled(reflectionToolbar === null)');
     expect(panGestureBlock).toContain('.onEnd((event, success) => {');
-    expect(panGestureBlock).toMatch(/if \(!success\) \{[\s\S]{0,160}?return;/);
+    expect(panGestureBlock).toContain('if (!success) return;');
+    expect(panGestureBlock).toContain('.onFinalize((_event, success) => {');
+    expect(panGestureBlock).toMatch(
+      /\.onFinalize\(\(_event, success\) => \{[\s\S]{0,180}?if \(!success\)[\s\S]{0,120}?translateX\.value = withTiming\(0/,
+    );
   });
 
   it('uses authoritative day recovery for progressive series and keeps batch continuation separate', () => {
