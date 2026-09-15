@@ -124,9 +124,6 @@ export function useBookPageOpening({ pageRef, coverRef, page, colors, isDark, on
       return;
     }
     // Keep navigation behind the fully opened page, including the canvas's first frame.
-    if (commit && hardcover && current) {
-      useBookOpening.setState({ session: { ...current, committed: true } });
-    }
     progress.value = withTiming(commit ? 1 : 0, {
       duration: commit ? Math.max(120, (hardcover ? 420 : 280) * (1 - progress.value)) : 190,
       easing: Easing.bezier(0.22, 0.72, 0, 1),

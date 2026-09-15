@@ -209,15 +209,33 @@ it('keeps the interior and cover separate and waits for the opening before navig
   expect(session?.coverImage).toBe(coverImage);
   act(() => { if (session) markBookOverlayPresented(session.id); });
   expect(hook.onContinue).not.toHaveBeenCalled();
-  expect(useBookOpening.getState().session?.committed).toBe(true);
+  expect(useBookOpening.getState().session?.committed).toBe(false);
   act(() => mockFinishes[0](true));
   expect(hook.onContinue).toHaveBeenCalledTimes(1);
+  expect(useBookOpening.getState().session?.committed).toBe(true);
   mockFocused = false;
   hook.rerender({});
   expect(session?.sourceHidden.value).toBe(true);
   expect(session?.progress.value).toBe(1);
   expect(hook.onContinue).toHaveBeenCalledTimes(1);
   expect(useBookOpening.getState().session?.sourceHidden.value).toBe(true);
+});
+
+it.each(['blur', 'unmount'] as const)('cancels hardcover completion on source %s before navigation', async (interruption) => {
+  const hook = setup(true);
+  await act(async () => hook.result.current.open());
+  const session = useBookOpening.getState().session!;
+  act(() => markBookOverlayPresented(session.id));
+  expect(hook.onContinue).not.toHaveBeenCalled();
+  if (interruption === 'unmount') hook.unmount();
+  else {
+    mockFocused = false;
+    hook.rerender({});
+  }
+  expect(useBookOpening.getState().session).toBeNull();
+  act(() => mockFinishes[0](true));
+  expect(hook.onContinue).not.toHaveBeenCalled();
+  expect(session.sourceHidden.value).toBe(false);
 });
 
 it('holds a hardcover drag closed until the overlay can present', async () => {
