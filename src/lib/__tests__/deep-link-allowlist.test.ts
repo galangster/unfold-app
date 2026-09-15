@@ -32,6 +32,9 @@ describe('deep-link allowlist — legitimate producers', () => {
   it('opens the gated replay fixture without accepting action parameters', () => {
     expectAllowed('unfold://qa-replay-check', '/qa-replay-check');
     expectRejected('unfold://qa-replay-check?send=true');
+    expectAllowed('unfold://qa-rive-ambience?scene=moon-stars-rive', '/qa-rive-ambience');
+    expectRejected('unfold://qa-rive-ambience?scene=nope');
+    expectRejected('unfold://qa-rive-ambience?scene=ember');
   });
 
   it('accepts the exact widgetURL literal every iOS widget source declares', () => {

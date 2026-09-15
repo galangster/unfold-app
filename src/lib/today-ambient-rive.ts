@@ -23,6 +23,8 @@ export type TodayCompletionAmbience =
   | 'campfire-rive'
   | 'canopy-lights-rive'
   | 'doors-rive'
+  | 'moon-stars-rive'
+  | 'mountain-river-rive'
   | 'tree-rive'
   | 'waterfall-rive'
   | 'wind-leaves-rive';
@@ -34,6 +36,8 @@ export const TODAY_COMPLETION_AMBIENCE_OPTIONS: readonly TodayCompletionAmbience
   'campfire-rive',
   'canopy-lights-rive',
   'doors-rive',
+  'moon-stars-rive',
+  'mountain-river-rive',
   'tree-rive',
   'waterfall-rive',
   'wind-leaves-rive',
@@ -74,6 +78,11 @@ export function selectTodayCompletionAmbience({
 }
 
 const TODAY_COMPLETION_AMBIENCE_OPTION_COUNT = TODAY_COMPLETION_AMBIENCE_OPTIONS.length;
+
+/** The options backed by a bundled `.riv`; `ember` is the native look. */
+export type RiveAmbience = Exclude<TodayCompletionAmbience, 'ember'>;
+export const RIVE_AMBIENCE_OPTIONS: readonly RiveAmbience[] = TODAY_COMPLETION_AMBIENCE_OPTIONS
+  .filter((option): option is RiveAmbience => option !== 'ember');
 
 /** FNV-1a 32-bit hash: tiny, deterministic, and stable across app launches. */
 export function stableHash(value: string): number {

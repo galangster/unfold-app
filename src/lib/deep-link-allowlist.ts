@@ -29,6 +29,8 @@
  * un-onboarded user directly on Today would skip onboarding.
  */
 
+import { RIVE_AMBIENCE_OPTIONS } from '@/lib/today-ambient-rive';
+
 export const DEEP_LINK_FALLBACK_PATH = '/';
 
 // ─── Limits ──────────────────────────────────────────────────────────────────
@@ -123,6 +125,8 @@ export const EXTERNAL_ROUTE_ALLOWLIST: Readonly<Record<string, RouteSchema>> = {
   '/how-it-works': { params: {} },
   // The screen requires the replay pilot profile and an explicit test press.
   '/qa-replay-check': { params: {} },
+  // Dev-only Rive ambience preview; the screen redirects home unless QA tools are enabled.
+  '/qa-rive-ambience': { params: { scene: oneOf(RIVE_AMBIENCE_OPTIONS) } },
   '/streak-settings': { params: {} },
   // `source=onboarding|onboarding_early` reroutes paywall completion into the
   // onboarding flow and has no in-app URL producer — external links get the
