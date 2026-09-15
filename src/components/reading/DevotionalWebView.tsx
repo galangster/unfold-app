@@ -13,8 +13,9 @@ import { stripOuterQuotes } from '@/lib/cn';
 import { isStructuredWordStudy, normalizeWordStudy } from '@/lib/word-study';
 import { DISPLAY_SERIF_WOFF2_BASE64 } from '@/lib/display-font-base64';
 import { RANGY_BUNDLE } from './rangy-bundle';
-import { highlightInk, highlighterStroke, strokeFitFor, webFontNameFor } from '@/constants/bible-highlight-colors';
+import { highlightInk, highlighterStroke, HIGHLIGHT_STROKE_FIT, webFontNameFor } from '@/constants/bible-highlight-colors';
 import { parseWebViewLayoutGeneration, parseWebViewParagraphYs, WEBVIEW_COLLECT_PARAGRAPH_YS_JS } from '@/lib/reader-scroll-anchor';
+import { useDevotionalWebFont } from '@/lib/devotional-web-fonts';
 
 /** The document is the source of truth: every mutation reports the diff of
  *  live highlights before and after, and the store reconciles from it. */
@@ -215,6 +216,7 @@ export function DevotionalWebView({
 }: DevotionalWebViewProps) {
   const { colors, isDark } = useTheme();
   const readingFont = useReadingFont();
+  const devotionalWebFont = useDevotionalWebFont(readingFont.body);
   const webViewRef = useRef<WebView>(null);
 
   const [heightCommit, setHeightCommit] = useState({ height: 200, generation: 0 });
@@ -1221,8 +1223,9 @@ export function DevotionalWebView({
   // properties on the <html> start tag, added by webViewDocument below) so
   // this markup only changes with the content or the reading font family.
   const documentMarkup = useMemo(() => {
-    const webFont = webFontNameFor(readingFont.body);
-    const strokeFit = strokeFitFor(readingFont.body);
+    const webFont = devotionalWebFont?.family ?? webFontNameFor(readingFont.body);
+    const readingFontCss = devotionalWebFont?.css ?? '';
+    const strokeFit = HIGHLIGHT_STROKE_FIT[webFont] ?? HIGHLIGHT_STROKE_FIT.Georgia;
     const uiFontStack = "-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif";
     const displayFontStack = "'PP Editorial New', Georgia, serif";
 
@@ -1356,13 +1359,8 @@ export function DevotionalWebView({
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <!-- Rangy 1.3.0 (core + classapplier + highlighter) for robust text highlighting, inlined from
-       rangy-bundle.ts so saved highlights restore offline. It sits ahead of the Google Fonts
-       stylesheet on purpose: a script after a pending stylesheet waits for it, and that request
-       may hang when the device is offline. -->
+       rangy-bundle.ts so saved highlights restore offline. -->
   <script>${RANGY_BUNDLE}</script>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=${encodeURIComponent(webFont)}:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
   
   <style>
     /* Aa font size + theme live in custom properties on the <html> element
@@ -1377,6 +1375,8 @@ export function DevotionalWebView({
       font-style: normal;
       font-display: swap;
     }
+
+    ${readingFontCss}
 
     * {
       margin: 0;
@@ -1788,7 +1788,7 @@ export function DevotionalWebView({
 </body>
 </html>
     `;
-  }, [day, readingFont.body]);
+  }, [day, devotionalWebFont, readingFont.body]);
 
   // Remount only for a different day or a new My Library landing target.
   // Aa font size and theme are deliberately NOT part of the key: they are
@@ -1997,6 +1997,13 @@ export function DevotionalWebView({
       logger.error('WebView message parse error:', e);
     }
   };
+
+  // Prepare only the active family's local faces before mounting the document.
+  // This avoids a Georgia-to-custom-font reflow that would invalidate Rangy
+  // offsets and the reader's initial height measurement.
+  if (!devotionalWebFont) {
+    return <View style={[styles.container, { height: webViewHeight }]} />;
+  }
 
   return (
     <View style={styles.container}>

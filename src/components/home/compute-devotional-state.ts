@@ -23,7 +23,7 @@ export type DailyRecoveryCardState = DailyGenerationRecoveryState & {
 
 export type DevotionalCardState =
   | { type: 'empty'; onCreateNew: () => void }
-  | { type: 'preparing'; progress: number; seriesTitle: string; dayNumber: number; onCreateNew: () => void; recovery?: DailyRecoveryCardState }
+  | { type: 'preparing'; progress: number; seriesTitle: string; dayNumber: number; activity: 'active' | 'idle' | 'unknown'; onCreateNew: () => void; recovery?: DailyRecoveryCardState }
   | { type: 'first-series-failed'; message: string; onTryAgain: () => void; onDismiss: () => void }
   | { type: 'pending-initial-resume'; onResume: () => void }
   | {
@@ -226,6 +226,7 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
       progress: 0,
       seriesTitle: preparingInflightSeries.seriesTitle,
       dayNumber: 1,
+      activity: 'active',
       onCreateNew,
     });
   }
@@ -274,6 +275,15 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
       progress: 0,
       seriesTitle,
       dayNumber: currentDevotional.currentDay,
+      activity: dailyRecovery
+        ? dailyRecovery.status === 'checking' || dailyRecovery.status === 'running' || dailyRecovery.status === 'slow'
+          ? 'active'
+          : dailyRecovery.status === 'idle'
+            ? 'idle'
+            : 'unknown'
+        : isPreparing
+          ? 'active'
+          : 'unknown',
       onCreateNew,
       ...(dailyRecovery ? { recovery: dailyRecovery } : {}),
     });

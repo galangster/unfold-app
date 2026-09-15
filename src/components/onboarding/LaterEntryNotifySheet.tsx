@@ -9,7 +9,7 @@ import {
 import { useTheme } from '@/lib/theme';
 import { useUIState } from '@/lib/ui-state';
 
-type LaterEntryNotifyPhase = 'idle' | 'requesting' | 'registration_failed';
+type LaterEntryNotifyPhase = 'idle' | 'requesting' | 'registration_failed' | 'registration_unavailable';
 
 export function LaterEntryNotifySheet() {
   const pending = useUIState((state) => state.laterEntryNotifyAskPending);
@@ -40,9 +40,9 @@ export function LaterEntryNotifySheet() {
       trigger: 'later_entry_fallback',
       registration: 'await',
     });
-    if (result === 'registration_failed') {
+    if (result === 'registration_failed' || result === 'registration_unavailable') {
       setPermission('granted');
-      setPhase('registration_failed');
+      setPhase(result);
       return;
     }
     hide();
@@ -52,10 +52,13 @@ export function LaterEntryNotifySheet() {
 
   const denied = permission === 'denied';
   const failed = phase === 'registration_failed';
+  const unavailable = phase === 'registration_unavailable';
   const noteText = denied
     ? NOTIFY_NOTE_COPY.denied
     : failed
       ? NOTIFY_NOTE_COPY['registration-failed']
+      : unavailable
+        ? NOTIFY_NOTE_COPY['registration-unavailable']
       : 'We\u2019ll nudge you when it\u2019s\u00A0ready.';
 
   return (
@@ -82,7 +85,7 @@ export function LaterEntryNotifySheet() {
                 void onAsk();
               }}
             >
-              <Text>{failed ? 'Notify me again' : 'Notify me'}</Text>
+              <Text>{failed || unavailable ? 'Notify me again' : 'Notify me'}</Text>
             </Pressable>
           )}
         </NotifyNote>

@@ -11,6 +11,7 @@ jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(() => Promise.resol
 jest.mock('expo-haptics', () => ({ impactAsync: jest.fn(), ImpactFeedbackStyle: { Light: 'light' } }));
 jest.mock('@/lib/theme', () => ({ useTheme: () => ({ colors: {}, isDark: false }) }));
 jest.mock('@/lib/useReadingFont', () => ({ useReadingFont: () => ({ body: 'System' }) }));
+jest.mock('@/lib/devotional-web-fonts', () => ({ useDevotionalWebFont: () => null }));
 jest.mock('@/lib/store', () => ({
   FONT_SIZE_VALUES: { md: { body: 17 } },
   HIGHLIGHT_COLOR_LABELS: { yellow: 'Yellow', green: 'Green', blue: 'Blue', purple: 'Purple', red: 'Red' },

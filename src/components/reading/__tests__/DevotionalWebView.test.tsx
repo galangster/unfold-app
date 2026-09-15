@@ -11,6 +11,10 @@ const { act } = renderer;
 
 let mockIsDark = false;
 const mockInjectJavaScript = jest.fn();
+let mockDevotionalWebFont: { family: string; css: string } | null = {
+  family: 'Source Serif 4',
+  css: "@font-face { font-family: 'Source Serif 4'; src: url(data:font/woff2;base64,LOCAL); }",
+};
 
 // Host 'WebView' element (so findByType('WebView') keeps working) wrapped in a
 // forwardRef that exposes the one imperative method the component uses.
@@ -52,6 +56,10 @@ jest.mock('@/lib/theme', () => ({
 
 jest.mock('@/lib/useReadingFont', () => ({
   useReadingFont: () => ({ body: 'SourceSerifPro_400Regular' }),
+}));
+
+jest.mock('@/lib/devotional-web-fonts', () => ({
+  useDevotionalWebFont: () => mockDevotionalWebFont,
 }));
 
 jest.mock('@/lib/store', () => ({
@@ -130,6 +138,32 @@ describe('DevotionalWebView highlight interactions', () => {
   beforeEach(() => {
     mockIsDark = false;
     mockInjectJavaScript.mockClear();
+    mockDevotionalWebFont = {
+      family: 'Source Serif 4',
+      css: "@font-face { font-family: 'Source Serif 4'; src: url(data:font/woff2;base64,LOCAL); }",
+    };
+  });
+
+  it('reserves the initial reader height while the selected local font is pending', () => {
+    mockDevotionalWebFont = null;
+    let tree: any;
+    act(() => {
+      tree = renderer.create(<DevotionalWebView day={day} fontSize="medium" />);
+    });
+    expect(tree.root.findByType('View').props.style).toEqual(expect.arrayContaining([{ height: 200 }]));
+    expect(tree.root.findAllByType('WebView')).toHaveLength(0);
+  });
+
+  it('fits highlights to the displayed fallback when the selected font fails to load', () => {
+    mockDevotionalWebFont = { family: 'Georgia', css: '' };
+    let tree: any;
+    act(() => {
+      tree = renderer.create(<DevotionalWebView day={day} fontSize="medium" />);
+    });
+    const html = getWebViewProps(tree).source.html as string;
+    expect(html).toContain("font-family: 'Georgia'");
+    expect(html).toContain('background-size: 100% 1.1em');
+    expect(html).toContain('background-position: 0 0.2em');
   });
 
   it('refreshes injected highlight-location script when targetHighlight appears after route state settles', () => {
@@ -939,8 +973,10 @@ describe('DevotionalWebView Aa / theme updates without remounting', () => {
     expect(html).toContain(`<script>${RANGY_BUNDLE}</script>`);
     expect(html).not.toContain('cdn.jsdelivr.net');
     expect(html).not.toMatch(/<script\s+src=/);
-    // Ahead of the Google Fonts stylesheet so an offline font request can't delay it.
-    expect(html.indexOf('<script>')).toBeLessThan(html.indexOf('fonts.googleapis.com/css2'));
+    expect(html).toContain("font-family: 'Source Serif 4'");
+    expect(html).toContain('base64,LOCAL');
+    expect(html).not.toContain('fonts.googleapis.com');
+    expect(html).not.toContain('fonts.gstatic.com');
 
     expect(RANGY_BUNDLE).toContain('Original file: /npm/rangy@1.3.0/lib/rangy-core.js');
     expect(RANGY_BUNDLE).toContain('Original file: /npm/rangy@1.3.0/lib/rangy-classapplier.js');

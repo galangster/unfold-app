@@ -41,7 +41,7 @@ jest.mock('react-native-reanimated', () => {
     useReducedMotion: () => false,
     useSharedValue: (value: unknown) => require('react').useRef({ value }).current,
     withDelay: (_delay: unknown, value: unknown) => value,
-    withRepeat: (value: unknown) => value,
+    withRepeat: jest.fn((value: unknown) => value),
     cancelAnimation: jest.fn(),
     withTiming: jest.fn((value: unknown, _config?: unknown, callback?: (finished: boolean) => void) => {
       callback?.(true);
@@ -112,11 +112,13 @@ jest.mock('@/lib/theme', () => ({
   }),
 }));
 
-jest.mock('@/hooks/useAppForegrounded', () => ({ useAppForegrounded: () => true }));
+let mockAppForegrounded = true;
+let mockReducedMotion = false;
+jest.mock('@/hooks/useAppForegrounded', () => ({ useAppForegrounded: () => mockAppForegrounded }));
 
 jest.mock('@/hooks/useAccessibility', () => ({
   useAccessibleAnimation: () => ({
-    reducedMotion: false,
+    reducedMotion: mockReducedMotion,
     entering: (anim: any) => anim,
     exiting: (anim: any) => anim,
   }),
@@ -508,14 +510,74 @@ describe('DevotionalCard first-series-failed', () => {
   });
 });
 
+describe('DevotionalCard preparing activity', () => {
+  const state: Extract<DevotionalCardState, { type: 'preparing' }> = {
+    type: 'preparing', progress: 0, seriesTitle: 'your devotional', dayNumber: 1, activity: 'active', onCreateNew: noop,
+  };
+
+  afterEach(() => {
+    mockAppForegrounded = true;
+    mockReducedMotion = false;
+  });
+
+  it('shows activity without a paper icon or an almost-ready promise', () => {
+    const tree = renderInAct(<DevotionalCard state={state} />);
+    expect(tree.root.findAllByType(PageMark)).toHaveLength(0);
+    expect(tree.root.findAll((node: any) => typeof node.type === 'string' && node.props.testID === 'generation-pulse')).toHaveLength(1);
+    expect(textContent(tree.root)).toContain('Writing your first devotional.');
+    expect(textContent(tree.root)).not.toContain('almost ready');
+    expect(textContent(tree.root)).not.toContain('· Preparing');
+  });
+
+  it.each(['hidden', 'background', 'reduced-motion'])('keeps the activity still when %s', (condition) => {
+    mockAppForegrounded = condition !== 'background';
+    mockReducedMotion = condition === 'reduced-motion';
+    const { withRepeat } = require('react-native-reanimated');
+    withRepeat.mockClear();
+    const tree = renderInAct(<DevotionalCard state={state} screenFocused={condition !== 'hidden'} />);
+    expect(withRepeat).not.toHaveBeenCalled();
+    expect(textContent(tree.root)).toContain('Writing your first devotional.');
+  });
+
+  it('cancels the active pulse when Today loses focus', () => {
+    const { withRepeat, cancelAnimation } = require('react-native-reanimated');
+    withRepeat.mockClear();
+    const tree = renderInAct(<DevotionalCard state={state} />);
+    expect(withRepeat).toHaveBeenCalled();
+    const cancellations = cancelAnimation.mock.calls.length;
+    withRepeat.mockClear();
+    act(() => tree.update(<DevotionalCard state={state} screenFocused={false} />));
+    expect(cancelAnimation.mock.calls.length).toBeGreaterThan(cancellations);
+    expect(withRepeat).not.toHaveBeenCalled();
+  });
+});
+
 describe('DevotionalCard daily recovery', () => {
   const baseState: Extract<DevotionalCardState, { type: 'preparing' }> = {
     type: 'preparing',
     progress: 0,
     seriesTitle: 'Faith Foundations',
     dayNumber: 2,
+    activity: 'active',
     onCreateNew: noop,
   };
+
+  it.each(['idle', 'unknown'] as const)('keeps an %s missing day neutral and still', (activity) => {
+    const { withRepeat } = require('react-native-reanimated');
+    withRepeat.mockClear();
+    const tree = renderInAct(
+      <DevotionalCard state={{ ...baseState, activity, recovery: activity === 'idle' ? {
+        status: 'idle',
+        onCheckAgain: jest.fn(async () => undefined),
+        onRetry: jest.fn(async () => undefined),
+      } : undefined }} />,
+    );
+
+    expect(textContent(tree.root)).toContain('Day 2 isn’t available yet.');
+    expect(textContent(tree.root)).not.toContain('Writing Day 2.');
+    expect(withRepeat).not.toHaveBeenCalled();
+    expect(tree.root.findByProps({ testID: 'home-preparing-state' }).props.accessibilityState).toEqual({ busy: false });
+  });
 
   it('shows a safe failed-job message and routes Try Again to the job retry', () => {
     const onRetry = jest.fn(async () => undefined);
@@ -799,12 +861,13 @@ describe('DevotionalCard meaningful motion', () => {
             progress: 0.4,
             seriesTitle: 'Faith Foundations',
             dayNumber: 4,
+            activity: 'active',
             onCreateNew: noop,
           }}
         />,
       );
     });
-    expect(tree.root.findByType(PageMark).props.animate).toBe(false);
+    expect(tree.root.findAllByType(PageMark)).toHaveLength(0);
 
     act(() => {
       tree.update(<DevotionalCard state={makeUnreadState({ progress: 42.9, dayData: makeDayData({ dayNumber: 4, isRead: false }) })} />);

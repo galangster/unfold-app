@@ -11,7 +11,12 @@ export type NotificationPermission = 'unknown' | 'granted' | 'denied';
  * registration itself: the permission is granted but the server holds no
  * token yet, so nothing may promise a nudge until it resolves.
  */
-export type NotifyRequestOutcome = 'pending' | 'confirmed' | 'denied' | 'registration_failed';
+export type NotifyRequestOutcome =
+  | 'pending'
+  | 'confirmed'
+  | 'denied'
+  | 'registration_failed'
+  | 'registration_unavailable';
 
 /** Which notification block the generating screen renders. */
 export type NotifyControlState =
@@ -20,14 +25,15 @@ export type NotifyControlState =
   | 'pending'
   | 'denied'
   | 'registration-failed'
+  | 'registration-unavailable'
   | 'confirmed'
   | 'granted-note'
   | 'link';
 
 /**
  * A granted permission whose token never reached the backend is not a
- * nudge, so the screen must not promise one. 'skipped' counts as confirmed:
- * it is the simulator / no-project-id path, where nothing is wrong.
+ * nudge, so the screen must not promise one. A skipped registration is also
+ * unavailable: the server has not confirmed that it holds a token.
  */
 export function resolveNotifyRequestOutcome({
   granted,
@@ -38,7 +44,8 @@ export function resolveNotifyRequestOutcome({
 }): Exclude<NotifyRequestOutcome, 'pending'> {
   if (!granted) return 'denied';
   if (registration === 'failed') return 'registration_failed';
-  return 'confirmed';
+  if (registration === 'registered') return 'confirmed';
+  return 'registration_unavailable';
 }
 
 export function getNotifyControlState({
@@ -59,6 +66,7 @@ export function getNotifyControlState({
   if (outcome === 'pending') return 'pending';
   if (outcome === 'denied') return 'denied';
   if (outcome === 'registration_failed') return 'registration-failed';
+  if (outcome === 'registration_unavailable') return 'registration-unavailable';
   // Only a registered token confirms the nudge. A granted permission on its
   // own promises what the server cannot send while the registration is still
   // in flight, so it renders nothing after an ask and the gentle note before.
@@ -66,4 +74,12 @@ export function getNotifyControlState({
   if (permission === 'granted') return hasAskedPermission ? 'none' : 'granted-note';
   if (!showNotificationPrompt) return 'link';
   return 'none';
+}
+
+/** Copy below the accepted-job exit. Only confirmed registration promises a notification. */
+export function resolveAcceptedGenerationExitCopy(state: NotifyControlState): string {
+  if (state === 'confirmed') {
+    return 'We\u2019ll keep writing your first devotional.\nWe\u2019ll notify you when it\u2019s ready.';
+  }
+  return 'We\u2019ll keep writing your first devotional.\nCome back whenever you\u2019re ready.';
 }

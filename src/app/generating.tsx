@@ -4,17 +4,8 @@ import { View, Text, TouchableOpacity, AppState, AppStateStatus, AccessibilityIn
 import { useRouter, useNavigation, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withRepeat,
-  withDelay,
-  Easing,
   FadeIn,
-  FadeInUp,
   FadeOut,
-  interpolate,
-  cancelAnimation,
-  withTiming,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { BellIcon, BookOpenTextIcon, WarningCircleIcon } from '@/components/icons';
@@ -75,10 +66,12 @@ import {
 import { registerPushToken } from '@/lib/push-notifications';
 import {
   getNotifyControlState,
+  resolveAcceptedGenerationExitCopy,
   resolveNotifyRequestOutcome,
   type NotifyRequestOutcome,
 } from '@/lib/generating-notify-state';
 import { NOTIFY_NOTE_COPY, NotifyNote } from '@/components/generating/NotifyNote';
+import { GenerationPulse } from '@/components/generating/GenerationPulse';
 import { GlassSurface } from '@/components/ui/GlassSurface';
 import { useAutoTrialGeneration } from '@/hooks/useAutoTrialGeneration';
 import { readAutoTrialIntent } from '@/lib/auto-trial-intent';
@@ -123,10 +116,6 @@ const WAITING_MESSAGES = [
   'Crafting something\u00A0personal',
 ];
 
-// Ripple animation
-const RIPPLE_DURATION = 2800;
-const RIPPLE_COUNT = 3;
-const RIPPLE_STAGGER = 900;
 const MESSAGE_CYCLE_MS = 3800;
 
 function autoTrialErrorMessage(state: Extract<SeriesRevealState, { kind: 'failed' | 'retry_exhausted' }>): string {
@@ -174,7 +163,7 @@ export default function GeneratingScreen() {
     autoTrialIntentId?: string;
   }>();
   const { colors: themeColors, isDark } = useTheme();
-  const { reducedMotion, entering, exiting } = useAccessibleAnimation();
+  const { entering, exiting } = useAccessibleAnimation();
 
   const colors = resolveGeneratingPalette(themeColors, isDark);
 
@@ -348,11 +337,6 @@ export default function GeneratingScreen() {
 
   const devotionalLength = user?.devotionalLength ?? 7;
 
-  // Ripple animation -- rings expand outward from center
-  const ripple0 = useSharedValue(0);
-  const ripple1 = useSharedValue(0);
-  const ripple2 = useSharedValue(0);
-
   // Rotate through waiting messages
   useEffect(() => {
     if (!isGenerating || isComplete) return;
@@ -384,7 +368,7 @@ export default function GeneratingScreen() {
         // the common case free.
         setNotifyOutcome('pending');
         const registration = await registerPushToken();
-        setNotifyOutcome(registration === 'failed' ? 'registration_failed' : null);
+        setNotifyOutcome(resolveNotifyRequestOutcome({ granted: true, registration }));
       } else {
         notificationPromptTimerRef.current = setTimeout(() => {
           setShowNotificationPrompt(true);
@@ -449,54 +433,6 @@ export default function GeneratingScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingJobId, isComplete, error]);
 
-  // Ripple animations -- staggered rings expanding outward (skip if reduced motion)
-  useEffect(() => {
-    if (reducedMotion) return;
-
-    const startRipple = (sv: typeof ripple0, delay: number) => {
-      sv.value = withDelay(
-        delay,
-        withRepeat(
-          withTiming(1, { duration: RIPPLE_DURATION, easing: Easing.out(Easing.cubic) }),
-          -1,
-          false
-        )
-      );
-    };
-
-    startRipple(ripple0, 0);
-    startRipple(ripple1, RIPPLE_STAGGER);
-    startRipple(ripple2, RIPPLE_STAGGER * 2);
-
-    return () => {
-      cancelAnimation(ripple0);
-      cancelAnimation(ripple1);
-      cancelAnimation(ripple2);
-    };
-  }, [reducedMotion]);
-
-  // Each ripple: starts small at center, expands outward, fades as it grows
-  const rippleStyle0 = useAnimatedStyle(() => ({
-    opacity: interpolate(ripple0.value, [0, 0.3, 1], [0.25, 0.15, 0]),
-    transform: [{ scale: interpolate(ripple0.value, [0, 1], [0.1, 1]) }],
-  }));
-
-  const rippleStyle1 = useAnimatedStyle(() => ({
-    opacity: interpolate(ripple1.value, [0, 0.3, 1], [0.25, 0.15, 0]),
-    transform: [{ scale: interpolate(ripple1.value, [0, 1], [0.1, 1]) }],
-  }));
-
-  const rippleStyle2 = useAnimatedStyle(() => ({
-    opacity: interpolate(ripple2.value, [0, 0.3, 1], [0.25, 0.15, 0]),
-    transform: [{ scale: interpolate(ripple2.value, [0, 1], [0.1, 1]) }],
-  }));
-
-  // Core dot -- gentle pulse
-  const coreStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(ripple0.value, [0, 0.5, 1], [0.6, 1, 0.6]),
-    transform: [{ scale: interpolate(ripple0.value, [0, 0.5, 1], [0.9, 1.1, 0.9]) }],
-  }));
-
   const handleRequestNotifications = async () => {
     if (notificationPromptTimerRef.current) {
       clearTimeout(notificationPromptTimerRef.current);
@@ -511,12 +447,18 @@ export default function GeneratingScreen() {
       trigger: 'generating',
       registration: 'await',
     });
-    const granted = result === 'granted' || result === 'registration_failed';
+    const granted = result !== 'denied';
     setNotificationPermission(granted ? 'granted' : 'denied');
     setShowNotificationPrompt(false);
     setNotifyOutcome(resolveNotifyRequestOutcome({
       granted,
-      registration: result === 'registration_failed' ? 'failed' : result === 'granted' ? 'registered' : null,
+      registration: result === 'registration_failed'
+        ? 'failed'
+        : result === 'registration_unavailable'
+          ? 'skipped'
+          : result === 'granted'
+            ? 'registered'
+            : null,
     }));
   };
 
@@ -1276,40 +1218,23 @@ export default function GeneratingScreen() {
         <ScrollView
           contentContainerStyle={{
             flexGrow: 1,
-            justifyContent: 'center',
+            justifyContent: 'flex-start',
             alignItems: 'center',
+            paddingTop: Spacing['6'],
             paddingHorizontal: Spacing['8'],
             paddingBottom: Spacing['10'],
           }}
           showsVerticalScrollIndicator={false}
         >
 
-          {/* Water ripple -- rings expanding from center (or simple spinner if reduced motion) */}
-          {reducedMotion ? (
-            <View style={genStyles.rippleContainer}>
-              <ActivityIndicator size="large" color={colors.accent} />
-            </View>
-          ) : (
-            <View style={genStyles.rippleContainer}>
-              <Animated.View
-                style={[genStyles.rippleRing, { borderWidth: 1.5, borderColor: colors.accent }, rippleStyle0]}
-              />
-              <Animated.View
-                style={[genStyles.rippleRing, { borderWidth: 1, borderColor: colors.accent }, rippleStyle1]}
-              />
-              <Animated.View
-                style={[genStyles.rippleRing, { borderWidth: 0.5, borderColor: colors.accent }, rippleStyle2]}
-              />
-              <Animated.View
-                style={[genStyles.coreDot, { backgroundColor: colors.accent }, coreStyle]}
-              />
-            </View>
-          )}
+          <View style={genStyles.rippleContainer}>
+            <GenerationPulse color={colors.accent} active={isGenerating && !isComplete} />
+          </View>
 
           {/* Rotating contemplative message -- swapped for reconnecting msg when
               auto-retrying, or for the soft "still writing" line once the job
               outlives the long-running threshold (never an error). */}
-          <View style={{ minHeight: 28, alignSelf: 'stretch', justifyContent: 'center', marginBottom: Spacing['3'] }}>
+          <View style={{ minHeight: 28, width: '100%', maxWidth: 420, justifyContent: 'center', marginBottom: Spacing['3'] }}>
             {isReconnecting ? (
               <Animated.Text
                 key="reconnecting"
@@ -1360,7 +1285,7 @@ export default function GeneratingScreen() {
           {currentSeriesTitle ? (
             <Animated.View
               entering={entering(FadeIn.duration(800))}
-              style={{ alignItems: 'center', marginBottom: Spacing['3'] }}
+              style={{ width: '100%', maxWidth: 420, alignItems: 'center', marginBottom: Spacing['3'] }}
             >
               <Text
                 style={{
@@ -1377,267 +1302,133 @@ export default function GeneratingScreen() {
             </Animated.View>
           ) : null}
 
-          {/* Notification prompt -- appears after a delay */}
-          {notifyControl === 'prompt' && (
-            <Animated.View
-              entering={entering(FadeInUp.duration(500))}
-              style={{
-                marginTop: 56,
-                width: '100%',
-                alignItems: 'flex-start',
-              }}
-            >
-              {/* No box (Nick, 2026-09-11): the note reads as a left-aligned row. */}
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  width: '100%',
-                }}
-              >
-                <View
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 18,
-                    backgroundColor: 'rgba(200, 165, 92, 0.1)',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    marginRight: 14,
-                  }}
-                >
-                  <BellIcon size={16} color={colors.accent} weight="light" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={{
-                      fontFamily: FontFamily.uiMedium,
-                      fontSize: 15,
-                      color: colors.text,
-                      marginBottom: 3,
-                    }}
-                  >
-                    {"You don\u2019t have to\u00A0wait"}
-                  </Text>
-                  <Text
-                    style={{
-                      fontFamily: FontFamily.body,
-                      fontSize: 13,
-                      color: colors.textMuted,
-                      lineHeight: 18,
-                    }}
-                  >
-                    {"We\u2019ll nudge you when it\u2019s\u00A0ready."}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={[genStyles.startAligned, { flexDirection: 'row', gap: Spacing['3'], marginTop: 14 }]}>
-                <TouchableOpacity activeOpacity={0.7}
-                  onPress={handleRequestNotifications}
-                  accessibilityLabel="Notify me when ready"
-                  accessibilityRole="button"
-                  style={{
-                    backgroundColor: colors.buttonBackground,
-                    paddingVertical: Spacing['3'],
-                    paddingHorizontal: Spacing['6'],
-                    borderRadius: Radius.full,
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontFamily: FontFamily.uiMedium,
-                      fontSize: FontSize.sm,
-                      color: colors.background,
-                    }}
-                  >
-                    Notify me
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity activeOpacity={0.7}
-                  onPress={handleDismissNotificationPrompt}
-                  accessibilityLabel="I'll wait"
-                  accessibilityRole="button"
-                  style={{
-                    paddingVertical: Spacing['3'],
-                    paddingHorizontal: Spacing['5'],
-                    borderRadius: Radius.full,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    backgroundColor: 'transparent',
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontFamily: FontFamily.ui,
-                      fontSize: FontSize.sm,
-                      color: colors.textMuted,
-                    }}
-                  >
-                    I'll wait
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </Animated.View>
-          )}
-
-          {/* Token registration in flight -- nothing promises a nudge yet. The
-              entrance delay hides the state when the session dedupe resolves it
-              within a frame. */}
-          {notifyControl === 'pending' && (
-            <NotifyNote
-              entering={entering(FadeIn.duration(400).delay(300))}
-              colors={colors}
-              icon={<ActivityIndicator size="small" color={colors.textSubtle} />}
-              text={NOTIFY_NOTE_COPY.pending}
-            />
-          )}
-
-          {/* After enabling notifications */}
-          {notifyControl === 'confirmed' && (
-            <Animated.View
-              entering={entering(FadeIn.duration(400))}
-              style={{
-                marginTop: Spacing['10'],
-                flexDirection: 'row',
-                alignItems: 'center',
-                alignSelf: 'flex-start',
-              }}
-            >
-              <BellIcon size={14} color={colors.accent} weight="light" />
-              <Text
-                style={{
-                  fontFamily: FontFamily.ui,
-                  fontSize: 13,
-                  color: colors.textMuted,
-                  marginLeft: Spacing['2'],
-                }}
-              >
-                {"We\u2019ll let you know when it\u2019s\u00A0ready"}
-              </Text>
-            </Animated.View>
-          )}
-
-          {/* Permission denied -- say so, and point at Settings */}
-          {notifyControl === 'denied' && (
-            <NotifyNote entering={entering(FadeIn.duration(400))} colors={colors} gap={Spacing['3']} text={NOTIFY_NOTE_COPY.denied}>
-              <TouchableOpacity
-                activeOpacity={0.7}
-                onPress={handleOpenNotificationSettings}
-                accessibilityRole="button"
-                accessibilityLabel="Open Settings to turn on notifications"
-                hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}
-              >
-                <Text
-                  style={{
-                    fontFamily: FontFamily.ui,
-                    fontSize: FontSize.sm,
-                    color: colors.textMuted,
-                    textDecorationLine: 'underline',
-                  }}
-                >
-                  Open Settings
-                </Text>
-              </TouchableOpacity>
-            </NotifyNote>
-          )}
-
-          {/* Permission granted but the token never reached the server */}
-          {notifyControl === 'registration-failed' && (
-            <NotifyNote entering={entering(FadeIn.duration(400))} colors={colors} text={NOTIFY_NOTE_COPY['registration-failed']} />
-          )}
-
-          {/* Already had notifications -- gentle note */}
-          {notifyControl === 'granted-note' && (
-            <Animated.View
-              entering={entering(FadeIn.duration(600).delay(4000))}
-              style={{ marginTop: Spacing['10'] }}
-            >
-              <Text
-                style={{
-                  fontFamily: FontFamily.bodyItalic,
-                  fontSize: FontSize.sm,
-                  color: colors.textSubtle,
-                  textAlign: 'center',
-                  lineHeight: 21,
-                }}
-              >
-                {'Feel free to step away \u2014 we\u2019ll\u00A0notify\u00A0you.'}
-              </Text>
-            </Animated.View>
-          )}
-
-          {/* ========== GO HOME \u2014 the waiting state must never be a dead end ========== */}
-          {/* Dino (build 245): after "I'll wait" there was no way back. Leaving is
-              fully safe \u2014 the job is persisted to MMKV and continues server-side;
-              Today shows the preparing card and watches the job until it lands.
-              Jordan (1.1.0): the record is marked leftForHome on the way out,
-              otherwise Today read it as app-kill recovery and bounced straight
-              back here, which looked like a dead link. */}
+          {/* The exit stays above notification updates so its position is stable. */}
           {isGenerating && !isComplete && (
             <Animated.View
               entering={entering(FadeIn.duration(600).delay(1200))}
-              style={[genStyles.startAligned, { marginTop: Spacing['8'], alignItems: 'flex-start', gap: Spacing['3'] }]}
+              style={genStyles.waitingActions}
             >
               <TouchableOpacity
                 activeOpacity={0.7}
                 onPress={handleLeaveForHome}
                 accessibilityRole="button"
-                accessibilityLabel={
-                  pendingJobId
-                    ? 'Go home while your devotional is prepared'
-                    : 'Go home'
-                }
-                hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}
+                accessibilityLabel={resolveGeneratingGoHomeLabel(pendingJobId != null)}
+                accessibilityHint={pendingJobId ? resolveAcceptedGenerationExitCopy(notifyControl) : undefined}
+                style={pendingJobId
+                  ? [genStyles.continueButton, { backgroundColor: colors.buttonBackground }]
+                  : genStyles.secondaryAction}
               >
-                <Text
-                  style={{
-                    fontFamily: FontFamily.ui,
-                    fontSize: FontSize.sm,
-                    color: colors.textMuted,
-                    textDecorationLine: 'underline',
-                  }}
+                <Text style={pendingJobId
+                  ? [genStyles.continueButtonText, { color: colors.contrastText }]
+                  : [genStyles.secondaryActionText, { color: colors.textMuted }]}
                 >
-                  {pendingJobId
-                    ? 'Go home \u2014 we\u2019ll keep\u00A0writing'
-                    : resolveGeneratingGoHomeLabel(false)}
+                  {resolveGeneratingGoHomeLabel(pendingJobId != null)}
                 </Text>
               </TouchableOpacity>
-              <Text
-                style={{
-                  fontFamily: FontFamily.ui,
-                  fontSize: FontSize.sm,
-                  lineHeight: 20,
-                  color: colors.textSubtle,
-                  flexShrink: 1,
-                }}
-              >
-                {resolveGeneratingCloseCopy(pendingJobId != null)}
+              <Text style={[genStyles.exitNote, { color: colors.textMuted }]}>
+                {pendingJobId
+                  ? resolveAcceptedGenerationExitCopy(notifyControl)
+                  : resolveGeneratingCloseCopy(false)}
               </Text>
 
-              {/* Second chance at the ready-notification for "I'll wait" users.
-                  Hidden while the main notification prompt above is already
-                  showing its own Notify me control, so the two never duplicate.
-                  Kept after a failed registration so the reader can retry. */}
-              {(notifyControl === 'link' || notifyControl === 'registration-failed') && (
+              {notifyControl === 'prompt' && (
+                <Animated.View
+                  entering={entering(FadeIn.duration(Duration.normal))}
+                  style={genStyles.notificationPrompt}
+                >
+                  {/* Keep the notification prompt unboxed. */}
+                  <View style={genStyles.notificationHeading}>
+                    <BellIcon size={16} color={colors.textMuted} weight="light" />
+                    <Text style={[genStyles.notificationPromptText, { color: colors.textMuted }]}>
+                      Want a nudge when it’s ready?
+                    </Text>
+                  </View>
+                  <View style={genStyles.notificationChoices}>
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      onPress={handleRequestNotifications}
+                      accessibilityLabel="Notify me when ready"
+                      accessibilityRole="button"
+                      style={[genStyles.notificationOptIn, { borderColor: colors.border }]}
+                    >
+                      <Text style={[genStyles.secondaryActionText, { color: colors.text }]}>
+                        Notify me
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      onPress={handleDismissNotificationPrompt}
+                      accessibilityLabel="I'll wait"
+                      accessibilityRole="button"
+                      style={genStyles.secondaryAction}
+                    >
+                      <Text style={[genStyles.secondaryActionText, { color: colors.textMuted }]}>
+                        I’ll wait
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </Animated.View>
+              )}
+
+              {notifyControl === 'pending' && (
+                <NotifyNote
+                  entering={entering(FadeIn.duration(Duration.normal).delay(300))}
+                  colors={colors}
+                  text={NOTIFY_NOTE_COPY.pending}
+                  icon={<ActivityIndicator size="small" color={colors.textMuted} />}
+                />
+              )}
+
+              {notifyControl === 'denied' && (
+                <NotifyNote
+                  entering={entering(FadeIn.duration(Duration.normal))}
+                  colors={colors}
+                  text={NOTIFY_NOTE_COPY.denied}
+                  gap={Spacing['1']}
+                >
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={handleOpenNotificationSettings}
+                    accessibilityRole="button"
+                    accessibilityLabel="Open Settings to turn on notifications"
+                    style={genStyles.secondaryAction}
+                  >
+                    <Text style={[genStyles.secondaryActionText, { color: colors.text }]}>
+                      Open Settings
+                    </Text>
+                  </TouchableOpacity>
+                </NotifyNote>
+              )}
+
+              {(notifyControl === 'registration-failed' || notifyControl === 'registration-unavailable') && (
+                <NotifyNote
+                  entering={entering(FadeIn.duration(Duration.normal))}
+                  colors={colors}
+                  text={NOTIFY_NOTE_COPY[notifyControl]}
+                />
+              )}
+
+              {/* A confirmed accepted job already includes the notification promise above. */}
+              {notifyControl === 'confirmed' && !pendingJobId && (
+                <NotifyNote
+                  entering={entering(FadeIn.duration(Duration.normal))}
+                  colors={colors}
+                  text="We’ll notify you when your first devotional is ready."
+                />
+              )}
+
+              {(notifyControl === 'link'
+                || notifyControl === 'registration-failed'
+                || notifyControl === 'registration-unavailable') && (
                 <TouchableOpacity
                   activeOpacity={0.7}
                   onPress={handleRequestNotifications}
                   accessibilityRole="button"
                   accessibilityLabel="Notify me when ready"
-                  hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+                  style={genStyles.secondaryAction}
                 >
-                  <BellIcon size={13} color={colors.textSubtle} weight="light" />
-                  <Text
-                    style={{
-                      fontFamily: FontFamily.ui,
-                      fontSize: 13,
-                      color: colors.textSubtle,
-                    }}
-                  >
-                    Notify me when it&apos;s ready
+                  <Text style={[genStyles.secondaryActionText, { color: colors.textMuted }]}>
+                    {notifyControl === 'link' ? 'Notify me when it’s ready' : 'Try notifications again'}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -1650,8 +1441,9 @@ export default function GeneratingScreen() {
             <Animated.View
               entering={entering(FadeIn.duration(800))}
               style={{
-                marginTop: Spacing['12'],
+                marginTop: Spacing['10'],
                 width: '100%',
+                maxWidth: 420,
                 alignItems: 'flex-start',
               }}
             >
@@ -1673,11 +1465,12 @@ export default function GeneratingScreen() {
                   style={{
                     fontFamily: FontFamily.uiMedium,
                     fontSize: 13,
-                    color: colors.textSubtle,
-                    letterSpacing: 0.5,
+                    color: colors.textMuted,
+                    flexShrink: 1,
+                    lineHeight: 20,
                   }}
                 >
-                  {"Here\u2019s a taste of what yours will feel\u00A0like"}
+                  A sample while you wait
                 </Text>
               </View>
 
@@ -1854,22 +1647,86 @@ const genStyles = StyleSheet.create({
     justifyContent: 'flex-start',
     alignSelf: 'flex-start',
   },
+  waitingActions: {
+    width: '100%',
+    maxWidth: 420,
+    alignItems: 'center',
+    marginTop: Spacing['6'],
+  },
+  exitNote: {
+    fontFamily: FontFamily.ui,
+    fontSize: FontSize.sm,
+    lineHeight: 22,
+    textAlign: 'center',
+    marginTop: Spacing['4'],
+  },
+  notificationPrompt: {
+    width: '100%',
+    alignItems: 'center',
+    marginTop: Spacing['6'],
+  },
+  notificationHeading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing['2'],
+  },
+  notificationPromptText: {
+    fontFamily: FontFamily.ui,
+    fontSize: FontSize.sm,
+    lineHeight: 22,
+    flexShrink: 1,
+    textAlign: 'center',
+  },
+  notificationChoices: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: Spacing['2'],
+    marginTop: Spacing['2'],
+  },
+  notificationOptIn: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: Spacing['5'],
+    paddingVertical: Spacing['3'],
+    borderWidth: 1,
+    borderRadius: Radius.full,
+  },
+  secondaryAction: {
+    minHeight: 44,
+    minWidth: 44,
+    paddingHorizontal: Spacing['4'],
+    paddingVertical: Spacing['3'],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  secondaryActionText: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: FontSize.sm,
+    lineHeight: 20,
+    textAlign: 'center',
+  },
+  continueButton: {
+    width: '100%',
+    minHeight: 52,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing['6'],
+    paddingVertical: Spacing['4'],
+  },
+  continueButtonText: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: FontSize.base,
+    textAlign: 'center',
+  },
   rippleContainer: {
     width: 200,
     height: 200,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: Spacing['12'],
+    marginBottom: Spacing['6'],
   },
-  rippleRing: {
-    position: 'absolute',
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-  },
-  coreDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
+
 });

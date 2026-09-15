@@ -1,0 +1,142 @@
+[
+  {
+    "theme": "light",
+    "pair": "body",
+    "ratio": 16.66,
+    "minimum": 4.5,
+    "passed": true
+  },
+  {
+    "theme": "light",
+    "pair": "editor",
+    "ratio": 15.39,
+    "minimum": 4.5,
+    "passed": true
+  },
+  {
+    "theme": "light",
+    "pair": "outside labels",
+    "ratio": 5.04,
+    "minimum": 4.5,
+    "passed": true
+  },
+  {
+    "theme": "light",
+    "pair": "placeholder",
+    "ratio": 5.42,
+    "minimum": 4.5,
+    "passed": true
+  },
+  {
+    "theme": "light",
+    "pair": "action",
+    "ratio": 4.73,
+    "minimum": 4.5,
+    "passed": true
+  },
+  {
+    "theme": "light",
+    "pair": "reference over conservative gradient maximum",
+    "ratio": 5.07,
+    "minimum": 4.5,
+    "passed": true
+  },
+  {
+    "theme": "light",
+    "pair": "seated label over maximum art",
+    "ratio": 4.87,
+    "minimum": 4.5,
+    "passed": true
+  },
+  {
+    "theme": "light",
+    "pair": "focus on outside",
+    "ratio": 10.61,
+    "minimum": 3,
+    "passed": true
+  },
+  {
+    "theme": "light",
+    "pair": "focus on page",
+    "ratio": 12.35,
+    "minimum": 3,
+    "passed": true
+  },
+  {
+    "theme": "light",
+    "pair": "focus on panel",
+    "ratio": 11.41,
+    "minimum": 3,
+    "passed": true
+  },
+  {
+    "theme": "dark",
+    "pair": "body",
+    "ratio": 16.69,
+    "minimum": 4.5,
+    "passed": true
+  },
+  {
+    "theme": "dark",
+    "pair": "editor",
+    "ratio": 15.56,
+    "minimum": 4.5,
+    "passed": true
+  },
+  {
+    "theme": "dark",
+    "pair": "outside labels",
+    "ratio": 8.48,
+    "minimum": 4.5,
+    "passed": true
+  },
+  {
+    "theme": "dark",
+    "pair": "placeholder",
+    "ratio": 7.49,
+    "minimum": 4.5,
+    "passed": true
+  },
+  {
+    "theme": "dark",
+    "pair": "action",
+    "ratio": 8.09,
+    "minimum": 4.5,
+    "passed": true
+  },
+  {
+    "theme": "dark",
+    "pair": "reference over conservative gradient maximum",
+    "ratio": 6.7,
+    "minimum": 4.5,
+    "passed": true
+  },
+  {
+    "theme": "dark",
+    "pair": "seated label over maximum art",
+    "ratio": 6.46,
+    "minimum": 4.5,
+    "passed": true
+  },
+  {
+    "theme": "dark",
+    "pair": "focus on outside",
+    "ratio": 16.28,
+    "minimum": 3,
+    "passed": true
+  },
+  {
+    "theme": "dark",
+    "pair": "focus on page",
+    "ratio": 15.43,
+    "minimum": 3,
+    "passed": true
+  },
+  {
+    "theme": "dark",
+    "pair": "focus on panel",
+    "ratio": 14.38,
+    "minimum": 3,
+    "passed": true
+  }
+]

@@ -133,6 +133,20 @@ describe('G8 notification ask', () => {
     });
   });
 
+  it('preserves an unavailable registration when registerPushToken skips', async () => {
+    mockRegisterPushToken.mockResolvedValue('skipped');
+
+    await expect(
+      askNotificationPermissionInContext({ trigger: 'generating', registration: 'await' }),
+    ).resolves.toBe('registration_unavailable');
+
+    expect(mockTrackNotificationPermissionAnswered).toHaveBeenCalledWith({
+      trigger: 'generating',
+      result: 'granted',
+      prior_status: 'undetermined',
+    });
+  });
+
   it('returns before background registration settles and emits once after it settles', async () => {
     let resolveRegistration: (value: 'registered') => void = () => undefined;
     mockRegisterPushToken.mockReturnValue(new Promise((resolve) => {
