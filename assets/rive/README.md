@@ -1,13 +1,9 @@
 # Today Rive assets
 
-Bundled assets:
+Bundled assets (every completion scene in the rotation is owner-approved; in-house Rive CLI scenes stay under `rive-src/` and unbundled until Nick approves their QA clips). Filmstrip QA for unbundled scenes generates the `.riv` from source — see **Unbundled in-house QA** below. Do not look for `today-clouds.riv` here.
 
-- `today-clouds.riv`
-  - Today state: completed/rest ambience option (`clouds-rive`). Line-art clouds with a soft glow drifting right to left on a 120 s seamless loop, three parallax speeds.
-  - Authored in-house with the Rive CLI (RML), not the editor. Source: `rive-src/today-clouds/` (`gen.py` writes `scene.rml`; `rive . --once` builds the `.riv`). Regenerate there, never hand-edit the binary.
-  - Artboard `Unfold_clouds` 390x844, state machine `State Machine 1`, ViewModel `ViewModel1`.
-  - Color slots: `accentColor` (crisp line), `artwork_color` (body fill), `glow_color` (feathered glow), `background_color`, `mask_gradient_start`, `mask_gradient_end`. All follow the existing app contract with zero code changes.
-  - Verified with `rive . --screenshot --advance=N` at three offsets plus light, dark, and magenta accent probes.
+- `today-campfire.riv`, `today-canopy-lights.riv`, `today-doors.riv`, `today-tree.riv`, `today-waterfall.riv`
+  - Today completed-day ambience rotation (`campfire-rive`, `canopy-lights-rive`, `doors-rive`, `tree-rive`, `waterfall-rive`). Owner-approved animator exports.
 - `today-wind-leaves.riv`
   - Today state: completed/rest ambience option (`complete-today`, `tomorrow-locked`, `journey-complete` after the person has read today).
   - Source handoff: `wind_v3_unfold.riv` from Desktop intake, SHA-256 `57aa5348b877a034845b10a567b627317233b7037087f5c56405842026ae63b8`, size `19,810` bytes.
@@ -25,9 +21,10 @@ Current production behavior:
 
 ```txt
 Completed Today ambience slot
-  options: EmberSystem | today-wind-leaves.riv
+  options: EmberSystem | campfire | canopy-lights | doors | tree | waterfall | wind-leaves
   selection: deterministic hash of devotional/day/date completion key
   pre-completion: no ambient Rive/embers
+  in-house (clouds, moon, mountains, …): rive-src/ only until Nick approves clips
 ```
 
 Implementation notes:
@@ -61,3 +58,16 @@ Implementation notes:
 - Runtime-proof theme interactions across all production accents in both dark and light mode before declaring the visual final.
 - Use a red/blue extreme probe or full accent matrix if a future animator file changes the exposed ViewModel contract.
 - Use `strings assets/rive/<file>.riv` to verify runtime names if the Rive authoring contract drifts.
+
+## Unbundled in-house QA
+
+`today-clouds.riv` is not in this folder. The filmstrip harness copies bundled binaries from `assets/rive/` and must generate or copy in-house binaries from `rive-src/`:
+
+```sh
+cd rive-src/today-clouds
+PYTHONPATH=../lib python3 gen.py
+PATH="$HOME/.rive/bin:$PATH" rive . --once    # writes build/today-clouds.riv
+cp build/today-clouds.riv ../harness/riv/
+```
+
+Then follow `rive-src/harness/README.md` (`film('today-clouds.riv', …)`). Same generate-then-copy path for `rive-src/scenes/*`. Do not copy an in-house `.riv` into `assets/rive/` until Nick approves the clips.
