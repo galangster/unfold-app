@@ -61,6 +61,9 @@ jest.mock('@/lib/generation-api', () => ({
 }));
 
 const mockGetPermissionsAsync = jest.fn(async (..._args: unknown[]) => ({ status: 'granted' }));
+const mockRequestNotificationPermissions = jest.fn(async () => false);
+const mockAreNotificationsEnabled = jest.fn(async () => false);
+const mockRegisterPushToken = jest.fn(async (): Promise<'registered' | 'skipped' | 'failed'> => 'registered');
 jest.mock('react-native-purchases', () => ({ __esModule: true, default: { getCustomerInfo: jest.fn(async () => ({ entitlements: { active: {} } })) } }));
 jest.mock('expo-notifications', () => ({
   getPermissionsAsync: (...args: unknown[]) => mockGetPermissionsAsync(...args),
@@ -70,12 +73,12 @@ jest.mock('expo-file-system/legacy', () => ({ documentDirectory: '', cacheDirect
 jest.mock('expo-file-system', () => ({ File: jest.fn(), Paths: { cache: '' }, Directory: jest.fn() }));
 jest.mock('expo-application', () => ({ nativeApplicationVersion: '1.0.0', nativeBuildVersion: '1' }));
 jest.mock('@/lib/notifications', () => ({
-  requestNotificationPermissions: jest.fn(async () => false),
-  areNotificationsEnabled: jest.fn(async () => false),
+  requestNotificationPermissions: () => mockRequestNotificationPermissions(),
+  areNotificationsEnabled: () => mockAreNotificationsEnabled(),
 }));
 
 jest.mock('@/lib/push-notifications', () => ({
-  registerPushToken: jest.fn(async () => 'registered'),
+  registerPushToken: () => mockRegisterPushToken(),
 }));
 
 const mockReplace = jest.fn();
@@ -243,6 +246,9 @@ beforeEach(() => {
   mockPollJobStatus.mockReset();
   mockRetryJob.mockReset();
   mockSubmitGenerationJob.mockReset();
+  mockRequestNotificationPermissions.mockReset().mockResolvedValue(false);
+  mockAreNotificationsEnabled.mockReset().mockResolvedValue(false);
+  mockRegisterPushToken.mockReset().mockResolvedValue('registered');
   delete mockSearchParams.jobId;
   delete mockSearchParams.devotionalId;
   delete mockSearchParams.autoTrialIntentId;
@@ -269,6 +275,19 @@ afterEach(async () => {
 });
 
 describe('regression: Jordan item 6 — Go home from /generating', () => {
+  it('keeps the actual notification handler unavailable when token registration skips', async () => {
+    mockSubmitGenerationJob.mockReturnValue(new Promise(() => undefined));
+    mockRequestNotificationPermissions.mockResolvedValue(true);
+    mockRegisterPushToken.mockResolvedValue('skipped');
+
+    const tree = await renderScreen();
+    mounted.push(tree);
+    await press(tree, 'Notify me when ready');
+
+    expect(JSON.stringify(tree.toJSON())).toContain('Notifications aren’t available here.');
+    expect(JSON.stringify(tree.toJSON())).not.toContain('We’ll notify you when your first devotional is ready.');
+  });
+
   it('automatically retries the exact Expo connection loss with the same request id', async () => {
     mockSubmitGenerationJob
       .mockRejectedValueOnce(new Error(EXPO_LOST_CONNECTION))

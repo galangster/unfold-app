@@ -447,12 +447,18 @@ export default function GeneratingScreen() {
       trigger: 'generating',
       registration: 'await',
     });
-    const granted = result === 'granted' || result === 'registration_failed';
+    const granted = result !== 'denied';
     setNotificationPermission(granted ? 'granted' : 'denied');
     setShowNotificationPrompt(false);
     setNotifyOutcome(resolveNotifyRequestOutcome({
       granted,
-      registration: result === 'registration_failed' ? 'failed' : result === 'granted' ? 'registered' : null,
+      registration: result === 'registration_failed'
+        ? 'failed'
+        : result === 'registration_unavailable'
+          ? 'skipped'
+          : result === 'granted'
+            ? 'registered'
+            : null,
     }));
   };
 

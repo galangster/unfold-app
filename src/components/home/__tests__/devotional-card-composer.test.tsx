@@ -512,7 +512,7 @@ describe('DevotionalCard first-series-failed', () => {
 
 describe('DevotionalCard preparing activity', () => {
   const state: Extract<DevotionalCardState, { type: 'preparing' }> = {
-    type: 'preparing', progress: 0, seriesTitle: 'your devotional', dayNumber: 1, onCreateNew: noop,
+    type: 'preparing', progress: 0, seriesTitle: 'your devotional', dayNumber: 1, activity: 'active', onCreateNew: noop,
   };
 
   afterEach(() => {
@@ -558,8 +558,26 @@ describe('DevotionalCard daily recovery', () => {
     progress: 0,
     seriesTitle: 'Faith Foundations',
     dayNumber: 2,
+    activity: 'active',
     onCreateNew: noop,
   };
+
+  it.each(['idle', 'unknown'] as const)('keeps an %s missing day neutral and still', (activity) => {
+    const { withRepeat } = require('react-native-reanimated');
+    withRepeat.mockClear();
+    const tree = renderInAct(
+      <DevotionalCard state={{ ...baseState, activity, recovery: activity === 'idle' ? {
+        status: 'idle',
+        onCheckAgain: jest.fn(async () => undefined),
+        onRetry: jest.fn(async () => undefined),
+      } : undefined }} />,
+    );
+
+    expect(textContent(tree.root)).toContain('Day 2 isn’t available yet.');
+    expect(textContent(tree.root)).not.toContain('Writing Day 2.');
+    expect(withRepeat).not.toHaveBeenCalled();
+    expect(tree.root.findByProps({ testID: 'home-preparing-state' }).props.accessibilityState).toEqual({ busy: false });
+  });
 
   it('shows a safe failed-job message and routes Try Again to the job retry', () => {
     const onRetry = jest.fn(async () => undefined);
@@ -843,6 +861,7 @@ describe('DevotionalCard meaningful motion', () => {
             progress: 0.4,
             seriesTitle: 'Faith Foundations',
             dayNumber: 4,
+            activity: 'active',
             onCreateNew: noop,
           }}
         />,

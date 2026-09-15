@@ -625,10 +625,7 @@ function PreparingState({
   const isCompactHero = width < 400 || fontScale >= 1.18;
   const isVeryCompactHero = width < 370 || fontScale >= 1.32;
   const textCap = heroCopyCap(ambienceVisible);
-  const isRecoveryBlocked = state.recovery?.status === 'failed'
-    || state.recovery?.status === 'offline'
-    || state.recovery?.status === 'blocked'
-    || state.recovery?.status === 'service-error';
+  const isActivityActive = state.activity === 'active';
 
   const recovery = state.recovery;
   const notice = getDailyGenerationNotice(recovery, state.dayNumber);
@@ -658,9 +655,13 @@ function PreparingState({
           ? `Looking for Day ${state.dayNumber}.`
           : recovery?.status === 'running'
             ? `Preparing Day ${state.dayNumber}.`
-            : state.dayNumber === 1
-              ? 'Writing your first devotional.'
-              : `Writing Day ${state.dayNumber}.`;
+            : isActivityActive
+              ? state.dayNumber === 1
+                ? 'Writing your first devotional.'
+                : `Writing Day ${state.dayNumber}.`
+              : state.dayNumber === 1
+                ? 'Your first devotional isn’t available yet.'
+                : `Day ${state.dayNumber} isn’t available yet.`;
   const subtitle = notice
     ? notice.body
     : isFailed
@@ -671,7 +672,9 @@ function PreparingState({
         : 'Check again so we can find the right reading for your series.'
       : recovery?.status === 'slow'
         ? `This is taking longer than usual. You can leave ${state.seriesTitle} here and come back later.`
-        : 'It’ll appear here when it’s ready.\nYou can explore Unfold while we write.';
+        : isActivityActive
+          ? 'It’ll appear here when it’s ready.\nYou can explore Unfold while we write.'
+          : 'Check back in a moment.';
 
   return (
     <View
@@ -679,13 +682,14 @@ function PreparingState({
       accessibilityRole={action ? undefined : 'text'}
       accessibilityLabel={action ? undefined : title}
       accessibilityHint={action ? undefined : subtitle}
-      accessibilityState={{ busy: !isRecoveryBlocked }}
+      accessibilityState={{ busy: isActivityActive }}
+      testID="home-preparing-state"
       style={[styles.preparingContainer, styles.heroStateBlock]}
     >
       <View style={styles.preparingContent}>
         <HeroGround active={ambienceVisible} style={[styles.openHeroContent, isCompactHero && styles.openHeroContentCompact, isVeryCompactHero && styles.openHeroContentVeryCompact, styles.preparingHero]}>
           <View style={styles.preparingPulse}>
-            <GenerationPulse color={isRecoveryBlocked ? colors.textMuted : colors.accent} size={128} active={motionActive && !isRecoveryBlocked} />
+            <GenerationPulse color={isActivityActive ? colors.accent : colors.textMuted} size={128} active={motionActive && isActivityActive} />
           </View>
           <Text style={[styles.preparingTitle, { color: colors.text }, textCap]}>
             {title}

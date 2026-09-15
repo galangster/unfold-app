@@ -81,6 +81,7 @@ describe('computeDevotionalState', () => {
       expect(state.onCreateNew).toBe(onCreateNew);
       expect(state.seriesTitle).toBe('Faith Foundations');
       expect(state.dayNumber).toBe(1);
+      expect(state.activity).toBe('active');
     }
   });
 
@@ -96,7 +97,27 @@ describe('computeDevotionalState', () => {
       expect(state.onCreateNew).toBe(onCreateNew);
       expect(state.seriesTitle).toBe('Faith Foundations');
       expect(state.dayNumber).toBe(1);
+      expect(state.activity).toBe('unknown');
     }
+  });
+
+  it.each([
+    [{ status: 'running', jobId: 'job-1' } as const, 'active'],
+    [{ status: 'idle' } as const, 'idle'],
+  ] as const)('maps a %s day recovery to %s activity', (dailyRecovery, activity) => {
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDayData: null,
+      isPreparing: true,
+      dailyRecovery: {
+        ...dailyRecovery,
+        onCheckAgain: async () => undefined,
+        onRetry: async () => undefined,
+      },
+    });
+
+    expect(state.type).toBe('preparing');
+    if (state.type === 'preparing') expect(state.activity).toBe(activity);
   });
 
   it('returns premium-paused instead of preparing when premium is denied and the next day is missing', () => {
@@ -577,6 +598,7 @@ describe('computeDevotionalState — preparingInflightSeries', () => {
       progress: 0,
       seriesTitle: 'your devotional',
       dayNumber: 1,
+      activity: 'active',
       onCreateNew: noop,
     });
   });
@@ -614,6 +636,7 @@ describe('computeDevotionalState — preparingInflightSeries', () => {
       progress: 0,
       seriesTitle: 'Learning to Trust Again',
       dayNumber: 1,
+      activity: 'active',
       onCreateNew: noop,
     });
   });

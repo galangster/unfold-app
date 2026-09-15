@@ -157,4 +157,21 @@ describe('G10 LaterEntryNotifySheet and requestLaterEntryNotifyAsk', () => {
     await requestLaterEntryNotifyAsk({ entitlements: { active: {} } } as CustomerInfo);
     expect(useUIState.getState().laterEntryNotifyAskPending).toBe(false);
   });
+
+  it('keeps the sheet open without promising a nudge when registration is unavailable', async () => {
+    useUIState.getState().setLaterEntryNotifyAskPending(true);
+    mockRegisterPushToken.mockResolvedValue('skipped');
+
+    let tree: { toJSON: () => unknown; root: { findAll: (fn: (n: { props?: { accessibilityLabel?: string; onPress?: () => void } }) => boolean) => { props: { onPress: () => void } }[] }; unmount: () => void };
+    await act(async () => {
+      tree = renderer.create(<LaterEntryNotifySheet />);
+    });
+    mounted.push(tree!);
+
+    await pressByLabel(tree!, 'Notify me');
+    await waitFor(() => textOf(tree!).includes('Notifications aren’t available here.'), 'the unavailable notification state');
+
+    expect(useUIState.getState().laterEntryNotifyAskPending).toBe(true);
+    expect(textOf(tree!)).not.toContain('We’ll nudge you');
+  });
 });

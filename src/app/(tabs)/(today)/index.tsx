@@ -1630,7 +1630,7 @@ export default function HomeScreen() {
     hasReadToday,
     dayLabel: getReadingDayLabel(),
     isJourneyComplete,
-    isPreparing: !hasReadToday && (isPreparingCurrentDay || (!currentDayData && !!currentDevotional && premiumPolicy !== 'denied')),
+    isPreparing: !hasReadToday && isPreparingCurrentDay,
     dailyRecovery: isPreparingCurrentDay
       ? {
           ...dailyGeneration.state,
