@@ -13,7 +13,9 @@ A short swipe cancels. Reading availability and the current day still come from 
 The cover remains a rigid plane around its left spine. Only the interior image enters the paper curl.
 Expansion, hinge, and curl use one shared progress value on the UI thread.
 
-The source hides after the overlay paints.
+The hardcover source remains behind the canvas until navigation.
+The canvas composites the backdrop and book together, so a native background cannot obscure an unpainted book.
+The paper source hides after the overlay paints.
 Committing the hardcover opening prepares the reader while motion finishes.
 The overlay remains until expansion, curl, and reader layout are ready.
 Cancellation, resizing, backgrounding, capture failure, and presentation failure restore a usable screen.

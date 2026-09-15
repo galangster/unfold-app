@@ -1,6 +1,5 @@
 import React from 'react';
 import { act, render } from '@testing-library/react-native';
-import { StyleSheet } from 'react-native';
 import { BookOpeningOverlay } from '../BookOpeningOverlay';
 import { useBookOpening, type BookOpeningSession } from '@/lib/book-opening';
 
@@ -45,7 +44,7 @@ beforeEach(() => {
   useBookOpening.setState({ session });
 });
 
-it('keeps the source and backdrop unchanged until the renderer confirms a frame', async () => {
+it('confirms a renderer frame without inserting a native backdrop over the source', async () => {
   jest.useFakeTimers();
   try {
     let finishFrame!: () => void;
@@ -53,15 +52,15 @@ it('keeps the source and backdrop unchanged until the renderer confirms a frame'
       finishFrame = () => resolve({ dispose: jest.fn() });
     }));
     const view = render(<BookOpeningOverlay />);
-    const backdrop = () => view.getByTestId('book-opening-backdrop', { includeHiddenElements: true });
+    const backdrop = () => view.queryByTestId('book-opening-backdrop', { includeHiddenElements: true });
     await act(async () => mockReactions[1](true, false));
     act(() => jest.advanceTimersByTime(40));
     expect(session.sourceHidden.value).toBe(false);
-    expect(StyleSheet.flatten(backdrop().props.style).opacity).toBe(0);
+    expect(backdrop()).toBeNull();
     await act(async () => finishFrame());
     act(() => jest.advanceTimersByTime(48));
     expect(session.sourceHidden.value).toBe(true);
-    expect(StyleSheet.flatten(backdrop().props.style).opacity).toBe(1);
+    expect(backdrop()).toBeNull();
   } finally { jest.useRealTimers(); }
 });
 

@@ -10,6 +10,7 @@ uniform float hardcover;
 uniform float hingeDegrees;
 uniform float curlProgress;
 uniform float4 paperColor;
+uniform float backgroundOpacity;
 
 half4 front(float2 p, float2 size) {
   float2 source = p / (size.x / startRect.z);
@@ -61,6 +62,9 @@ half4 paper(float2 xy) {
 half4 main(float2 xy) {
   half4 underneath = paper(xy);
   if (hardcover < 0.5) return underneath;
+  // The backdrop and book must arrive in the same onscreen frame.
+  half4 background = half4(paperColor.rgb * backgroundOpacity, backgroundOpacity);
+  underneath = underneath + background * (1.0 - underneath.a);
   float angle = hingeDegrees * 0.0174532925;
   float c = cos(angle);
   if (c <= 0.0) return underneath;

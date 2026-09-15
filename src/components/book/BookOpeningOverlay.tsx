@@ -28,7 +28,7 @@ function Opening({ session }: { session: BookOpeningSession }) {
   const confirmPresentation = useCallback(async () => {
     if (hasCover) {
       try {
-        // Layout can precede texture upload. Wait for a completed renderer frame.
+        // Validate that the shader can render offscreen before starting motion.
         const frame = await canvasRef.current?.makeImageSnapshotAsync();
         if (!frame) { failBookOverlay(id); return; }
         frame.dispose();
@@ -44,6 +44,7 @@ function Opening({ session }: { session: BookOpeningSession }) {
     hingeDegrees: hardcoverHingeDegrees(progress.value),
     curlProgress: (hasCover ? hardcoverPaperCurlProgress(progress.value) : progress.value) * (0.6 + 0.4 * reveal.value),
     paperColor: color,
+    backgroundOpacity: hasCover && sourceHidden.value ? 1 - backgroundReveal.value : 0,
   }));
   useAnimatedReaction(
     () => progress.value >= 1,
@@ -53,7 +54,7 @@ function Opening({ session }: { session: BookOpeningSession }) {
     () => canvasSize.value.width > 0 && canvasSize.value.height > 0,
     (ready, wasReady) => { if (ready && !wasReady) runOnJS(confirmPresentation)(); },
   );
-  const preview = useAnimatedStyle(() => ({ opacity: (hasCover ? (sourceHidden.value ? 1 : 0) : Math.min(1, progress.value * 2)) * (1 - backgroundReveal.value) }));
+  const preview = useAnimatedStyle(() => ({ opacity: Math.min(1, progress.value * 2) * (1 - backgroundReveal.value) }));
 
   useEffect(() => {
     if (session.presented || session.failed) return;
@@ -107,7 +108,7 @@ function Opening({ session }: { session: BookOpeningSession }) {
 
   const content = (
     <Animated.View cssInterop={false} pointerEvents={session.committed ? 'auto' : 'none'} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={[StyleSheet.absoluteFill, styles.overlay]}>
-      <Animated.View cssInterop={false} testID="book-opening-backdrop" style={[StyleSheet.absoluteFill, { backgroundColor: session.paperColor }, preview]} />
+      {!hasCover && <Animated.View cssInterop={false} testID="book-opening-backdrop" style={[StyleSheet.absoluteFill, { backgroundColor: session.paperColor }, preview]} />}
       {canvas}
     </Animated.View>
   );

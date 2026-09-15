@@ -1,6 +1,5 @@
 import { useRef } from 'react';
 import { TouchableOpacity, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import Animated from 'react-native-reanimated';
 import { GestureDetector } from 'react-native-gesture-handler';
 import { bookActionLabel, bookDayCaption, bookPlaceLine, heroBookSize, type BookOpeningCover } from '@/lib/book-opening';
 import { useBookPageOpening } from './useBookPageOpening';
@@ -38,7 +37,8 @@ export function ActiveSeriesBookHero({
 
   return (
     <View testID="active-series-book" accessibilityLabel="Your current reading" style={styles.hero}>
-      <Animated.View cssInterop={false} style={[styles.coverWrap, { opacity: opening.hidden ? 0 : 1 }, opening.sourceStyle]}>
+      {/* The canvas covers this source atomically with its book and backdrop. */}
+      <View style={styles.coverWrap}>
         <GestureDetector gesture={opening.gesture}>
           <TouchableOpacity
             testID="active-series-cover"
@@ -69,7 +69,7 @@ export function ActiveSeriesBookHero({
             </View>
           </TouchableOpacity>
         </GestureDetector>
-      </Animated.View>
+      </View>
       <Text style={[styles.caption, { color: colors.textMuted }]}>{bookDayCaption(page)}</Text>
       {page.chapterName ? <Text style={[styles.chapter, { color: colors.textMuted }]}>{page.chapterName}</Text> : null}
       {page.title ? <Text accessibilityRole="header" style={[styles.title, { color: colors.text }]}>{page.title}</Text> : null}
