@@ -7,6 +7,7 @@
  * Local-only by design: it works for every reader with permission, token or
  * not, and it never repeats — one act, one nudge, then silence.
  */
+import type { PremiumAccessPolicy } from './premium-access-policy';
 import type { Devotional, DevotionalDay } from './store';
 import { truncateNotificationBody } from './daily-reminder-content';
 import { localDayKey, localDayKeyFromIso } from './home-devotional-state';
@@ -41,6 +42,14 @@ export interface ActReminderPlanInput {
   middayTime?: string | null;
   /** "HH:mm" store value for the evening wind-down. */
   eveningTime?: string | null;
+  /** Master toggle for the evening wind-down check-in. */
+  eveningWindDownEnabled?: boolean;
+  /** Per-weekday wind-down times. null means every weekday uses eveningTime. */
+  eveningWindDownByDay?: Record<string, string | null> | null;
+  /** OS permission, from the sync owner at plan time. */
+  notificationsEnabled?: boolean;
+  /** Check-in slots only write when this is granted. */
+  premiumPolicy?: PremiumAccessPolicy;
   /** "h:mm AM" reminder time from the profile. */
   morningTime?: string | null;
 }
@@ -92,6 +101,46 @@ function atClock(base: Date, clock: { hour: number; minute: number }, dayOffset 
   return date;
 }
 
+/** JS Date.getDay() (Sun=0) to the key `eveningWindDownByDay` is written with. */
+const JS_DAY_TO_KEY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+
+/**
+ * Whether the evening wind-down check-in will write an occurrence at `fireAt`.
+ * Mirrors the gates in `scheduleCheckInSlot` / `buildCheckInSchedule` for
+ * today's evening slot only: permission, premium, master toggle, weekday,
+ * and a still-ahead clock that matches the act reminder.
+ */
+function isEveningWindDownScheduledAt(
+  fireAt: Date,
+  now: Date,
+  {
+    eveningWindDownEnabled,
+    eveningWindDownByDay,
+    eveningTime,
+    notificationsEnabled,
+    premiumPolicy,
+  }: Pick<
+    ActReminderPlanInput,
+    | 'eveningWindDownEnabled'
+    | 'eveningWindDownByDay'
+    | 'eveningTime'
+    | 'notificationsEnabled'
+    | 'premiumPolicy'
+  >,
+): boolean {
+  if (!notificationsEnabled) return false;
+  if (premiumPolicy !== 'granted') return false;
+  if (!eveningWindDownEnabled) return false;
+  const time =
+    eveningWindDownByDay == null
+      ? (eveningTime || '20:30')
+      : eveningWindDownByDay[JS_DAY_TO_KEY[fireAt.getDay()]];
+  if (time == null) return false;
+  const windDownAt = atClock(fireAt, parseReminderClock(time, DEFAULT_EVENING));
+  if (windDownAt.getTime() <= now.getTime()) return false;
+  return windDownAt.getTime() === fireAt.getTime();
+}
+
 /**
  * Picks the fire time for a slot, or null when the moment has passed for
  * good (a midnight nudge helps nobody).
@@ -128,6 +177,10 @@ export function buildActReminderPlan({
   now = new Date(),
   middayTime,
   eveningTime,
+  eveningWindDownEnabled,
+  eveningWindDownByDay,
+  notificationsEnabled,
+  premiumPolicy,
   morningTime,
 }: ActReminderPlanInput): ActReminderPlan | null {
   if (!devotional || !day) return null;
@@ -142,6 +195,21 @@ export function buildActReminderPlan({
     morning: parseReminderClock(morningTime, DEFAULT_MORNING),
   });
   if (!fireAt) return null;
+  // The wind-down body already carries the act. Two banners at the same
+  // instant is the collision. A missed midday that rolled into the evening
+  // clock collides the same way, so the guard keys off the fire time, not
+  // the slot name. Morning-next never matches an evening clock.
+  if (
+    isEveningWindDownScheduledAt(fireAt, now, {
+      eveningWindDownEnabled,
+      eveningWindDownByDay,
+      eveningTime,
+      notificationsEnabled,
+      premiumPolicy,
+    })
+  ) {
+    return null;
+  }
 
   return {
     fireAt,
@@ -172,6 +240,10 @@ export function buildActReminderFingerprint(input: ActReminderPlanInput & { enab
     day?.actOutcome ?? '',
     input.middayTime ?? '',
     input.eveningTime ?? '',
+    input.eveningWindDownEnabled ? '1' : '0',
+    input.eveningWindDownByDay ?? null,
+    input.notificationsEnabled ? '1' : '0',
+    input.premiumPolicy ?? '',
     input.morningTime ?? '',
   ]);
 }

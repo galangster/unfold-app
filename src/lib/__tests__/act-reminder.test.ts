@@ -125,6 +125,103 @@ describe('buildActReminderPlan', () => {
     expect(buildActReminderPlan({ devotional: devotional(), day: day({ actOutcome: 'done' }), now })).toBeNull();
     expect(buildActReminderPlan({ devotional: null, day: day(), now })).toBeNull();
   });
+
+  it('does not schedule an evening act reminder when wind-down is scheduled at the same time', () => {
+    const plan = buildActReminderPlan({
+      devotional: devotional(),
+      day: day(),
+      now,
+      eveningTime: '20:30',
+      eveningWindDownEnabled: true,
+      eveningWindDownByDay: null,
+      notificationsEnabled: true,
+      premiumPolicy: 'granted',
+    });
+    expect(plan).toBeNull();
+  });
+
+  it('drops a missed midday that rolled into a scheduled wind-down clock', () => {
+    const afternoon = new Date(2026, 8, 8, 14, 0);
+    const plan = buildActReminderPlan({
+      devotional: devotional(),
+      day: day({ actSlot: 'midday' }),
+      now: afternoon,
+      eveningTime: '20:30',
+      eveningWindDownEnabled: true,
+      eveningWindDownByDay: null,
+      notificationsEnabled: true,
+      premiumPolicy: 'granted',
+    });
+    expect(plan).toBeNull();
+  });
+
+  it('still schedules an evening act reminder when wind-down is disabled for that day', () => {
+    const plan = buildActReminderPlan({
+      devotional: devotional(),
+      day: day(),
+      now,
+      eveningTime: '20:30',
+      eveningWindDownEnabled: true,
+      eveningWindDownByDay: {
+        Mon: '20:30',
+        Tue: null,
+        Wed: '20:30',
+        Thu: '20:30',
+        Fri: '20:30',
+        Sat: '20:30',
+        Sun: '20:30',
+      },
+      notificationsEnabled: true,
+      premiumPolicy: 'granted',
+    });
+    expect(plan).not.toBeNull();
+    expect(plan!.slot).toBe('evening');
+    expect(plan!.fireAt).toEqual(new Date(2026, 8, 8, 20, 30));
+  });
+
+  it('keeps a late evening act reminder once today\'s wind-down time has passed', () => {
+    const late = new Date(2026, 8, 8, 20, 45);
+    const plan = buildActReminderPlan({
+      devotional: devotional(),
+      day: day(),
+      now: late,
+      eveningTime: '20:30',
+      eveningWindDownEnabled: true,
+      eveningWindDownByDay: null,
+      notificationsEnabled: true,
+      premiumPolicy: 'granted',
+    });
+    expect(plan).not.toBeNull();
+    expect(plan!.slot).toBe('evening');
+    expect(plan!.fireAt).toEqual(new Date(2026, 8, 8, 21, 30));
+  });
+
+  it('keeps midday and morning-next act reminders when evening wind-down is scheduled', () => {
+    const midday = buildActReminderPlan({
+      devotional: devotional(),
+      day: day({ act: 'At lunch, text the friend you thought of.' }),
+      now,
+      eveningTime: '20:30',
+      eveningWindDownEnabled: true,
+      notificationsEnabled: true,
+      premiumPolicy: 'granted',
+    });
+    expect(midday!.slot).toBe('midday');
+    expect(midday!.fireAt).toEqual(new Date(2026, 8, 8, 12, 30));
+
+    const morning = buildActReminderPlan({
+      devotional: devotional(),
+      day: day({ act: 'Tomorrow, first thing, read Psalm 132 aloud.' }),
+      now,
+      eveningTime: '20:30',
+      morningTime: '8:00 AM',
+      eveningWindDownEnabled: true,
+      notificationsEnabled: true,
+      premiumPolicy: 'granted',
+    });
+    expect(morning!.slot).toBe('morning-next');
+    expect(morning!.fireAt).toEqual(new Date(2026, 8, 9, 8, 0));
+  });
 });
 
 describe('fingerprint', () => {
@@ -135,5 +232,17 @@ describe('fingerprint', () => {
     expect(buildActReminderFingerprint({ ...base, eveningTime: '21:00' })).not.toBe(a);
     expect(buildActReminderFingerprint({ ...base, enabled: false })).not.toBe(a);
     expect(buildActReminderFingerprint(base)).toBe(a);
+  });
+
+  it('changes when evening wind-down enablement changes', () => {
+    const base = {
+      devotional: devotional(),
+      day: day(),
+      enabled: true,
+      eveningTime: '20:30',
+      eveningWindDownEnabled: false,
+    };
+    const a = buildActReminderFingerprint(base);
+    expect(buildActReminderFingerprint({ ...base, eveningWindDownEnabled: true })).not.toBe(a);
   });
 });
