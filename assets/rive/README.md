@@ -2,6 +2,12 @@
 
 Bundled assets:
 
+- `today-clouds.riv`
+  - Today state: completed/rest ambience option (`clouds-rive`). Line-art clouds with a soft glow drifting right to left on a 120 s seamless loop, three parallax speeds.
+  - Authored in-house with the Rive CLI (RML), not the editor. Source: `rive-src/today-clouds/` (`gen.py` writes `scene.rml`; `rive . --once` builds the `.riv`). Regenerate there, never hand-edit the binary.
+  - Artboard `Unfold_clouds` 390x844, state machine `State Machine 1`, ViewModel `ViewModel1`.
+  - Color slots: `accentColor` (crisp line), `artwork_color` (body fill), `glow_color` (feathered glow), `background_color`, `mask_gradient_start`, `mask_gradient_end`. All follow the existing app contract with zero code changes.
+  - Verified with `rive . --screenshot --advance=N` at three offsets plus light, dark, and magenta accent probes.
 - `today-wind-leaves.riv`
   - Today state: completed/rest ambience option (`complete-today`, `tomorrow-locked`, `journey-complete` after the person has read today).
   - Source handoff: `wind_v3_unfold.riv` from Desktop intake, SHA-256 `57aa5348b877a034845b10a567b627317233b7037087f5c56405842026ae63b8`, size `19,810` bytes.

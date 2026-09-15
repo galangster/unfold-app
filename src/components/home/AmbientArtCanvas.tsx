@@ -21,6 +21,7 @@ import {
 import type { ExclusionZone } from '@/lib/ember-system';
 import todayCampfireSource from '../../../assets/rive/today-campfire.riv';
 import todayCanopyLightsSource from '../../../assets/rive/today-canopy-lights.riv';
+import todayCloudsSource from '../../../assets/rive/today-clouds.riv';
 import todayDoorsSource from '../../../assets/rive/today-doors.riv';
 import todayTreeSource from '../../../assets/rive/today-tree.riv';
 import todayWaterfallSource from '../../../assets/rive/today-waterfall.riv';
@@ -40,6 +41,7 @@ import todayWindLeavesSource from '../../../assets/rive/today-wind-leaves.riv';
 const RIVE_SCENE_SOURCES: Record<Exclude<TodayCompletionAmbience, 'ember'>, RiveFileInput> = {
   'campfire-rive': todayCampfireSource as RiveFileInput,
   'canopy-lights-rive': todayCanopyLightsSource as RiveFileInput,
+  'clouds-rive': todayCloudsSource as RiveFileInput,
   'doors-rive': todayDoorsSource as RiveFileInput,
   'tree-rive': todayTreeSource as RiveFileInput,
   'waterfall-rive': todayWaterfallSource as RiveFileInput,

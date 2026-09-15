@@ -136,6 +136,7 @@ describe('Rive accent theming', () => {
     expect(riveFiles).toEqual([
       'today-campfire.riv',
       'today-canopy-lights.riv',
+      'today-clouds.riv',
       'today-doors.riv',
       'today-light-rays.riv',
       'today-rain-particles.riv',
