@@ -2,11 +2,16 @@
 // snapshot shader. The diagonal normal lifts the lower-right corner first.
 export const PAGE_CURL_SHADER = `
 uniform shader pageImage;
+uniform shader coverImage;
 uniform float2 viewport;
 uniform float4 startRect;
-uniform float progress;
+uniform float expansion;
+uniform float hardcover;
+uniform float hingeDegrees;
 uniform float curlProgress;
 uniform float4 paperColor;
+uniform float backgroundOpacity;
+uniform float coverBoardRight;
 
 half4 front(float2 p, float2 size) {
   float2 source = p / (size.x / startRect.z);
@@ -19,9 +24,9 @@ bool insidePage(float2 p, float2 size) {
   return p.x >= 0.0 && p.y >= 0.0 && p.x <= size.x && p.y <= size.y;
 }
 
-half4 main(float2 xy) {
+half4 paper(float2 xy) {
   float p = clamp(curlProgress, 0.0, 1.0);
-  float expand = smoothstep(0.0, 0.82, progress);
+  float expand = expansion;
   float2 origin = mix(startRect.xy, float2(0.0), expand);
   float2 size = mix(startRect.zw, viewport, expand);
   float2 q = xy - origin;
@@ -52,5 +57,40 @@ half4 main(float2 xy) {
     return half4(face.rgb * light, face.a);
   }
   return half4(0.0);
+}
+
+// The paper expands into the reader. The cover keeps its proportions around the left hinge.
+half4 main(float2 xy) {
+  half4 underneath = paper(xy);
+  if (hardcover < 0.5) return underneath;
+  half paperCoverage = underneath.a;
+  // The backdrop and book must arrive in the same onscreen frame.
+  half4 background = half4(paperColor.rgb * backgroundOpacity, backgroundOpacity);
+  underneath = underneath + background * (1.0 - underneath.a);
+  float angle = hingeDegrees * 0.0174532925;
+  float c = cos(angle);
+  if (c <= 0.0) return underneath;
+  float s = sin(angle);
+  float2 origin = mix(startRect.xy, float2(0.0), expansion);
+  float2 size = mix(startRect.zw, viewport, expansion);
+  float scale = size.x / startRect.z;
+  float coverHeight = startRect.w * scale;
+  float2 coverOrigin = origin + float2(0.0, (size.y - coverHeight) * 0.5);
+  // The exposed page edges belong to the stationary book, never to the turning board.
+  float2 flatSource = (xy - coverOrigin) / scale;
+  if (flatSource.x >= coverBoardRight && insidePage(flatSource, startRect.zw)) {
+    half4 pages = coverImage.eval(flatSource) * paperCoverage * c;
+    underneath = pages + underneath * (1.0 - pages.a);
+  }
+  float2 q = xy - origin;
+  float perspective = 1600.0;
+  float denominator = scale * (c - q.x * s / perspective);
+  if (denominator <= 0.0) return underneath;
+  float u = q.x / denominator;
+  float depth = 1.0 + u * scale * s / perspective;
+  float v = startRect.w * 0.5 + (q.y - size.y * 0.5) * depth / scale;
+  if (u < 0.0 || u > coverBoardRight || v < 0.0 || v > startRect.w) return underneath;
+  half4 cover = coverImage.eval(float2(u, v));
+  return cover + underneath * (1.0 - cover.a);
 }
 `;

@@ -17,6 +17,7 @@ import type { Devotional, DevotionalDay } from '../store';
 
 jest.mock('react-native-gesture-handler', () => ({ GestureDetector: ({ children }: { children: React.ReactNode }) => children }));
 jest.mock('@/components/book/useBookPageOpening', () => ({ useBookPageOpening: ({ onContinue }: { onContinue: () => void }) => ({ open: onContinue, gesture: {}, showHint: false, hidden: false, onLayout: jest.fn() }) }));
+jest.mock('@/components/bookshelf/SeriesBookCover', () => ({ SeriesBookCover: 'SeriesBookCover' }));
 const renderer = require('react-test-renderer');
 const { act } = renderer;
 

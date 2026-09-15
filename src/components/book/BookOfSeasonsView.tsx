@@ -10,6 +10,7 @@ import {
   resolveBookOpenDayNumber,
 } from '@/lib/book-of-seasons';
 import { OpenReadingPage } from './OpenReadingPage';
+import { ActiveSeriesBookHero } from './ActiveSeriesBookHero';
 import { ChapterJourney } from './ChapterJourney';
 import { BookDayList } from './BookDayList';
 
@@ -37,7 +38,7 @@ export function BookOfSeasonsView({
 
   return (
     <View testID="book-of-seasons">
-      <View style={styles.season}>
+      {showAllReadings ? <View style={styles.season}>
         {firstReadingLabel(devotional) ? (
           <Text style={[styles.subtitle, { color: colors.textMuted, marginTop: 0, marginBottom: Spacing['2'] }]}>
             {firstReadingLabel(devotional)}
@@ -54,14 +55,24 @@ export function BookOfSeasonsView({
             {theme}
           </Text>
         ) : null}
-      </View>
+      </View> : headerAccessory ? <View style={styles.accessoryRow}>{headerAccessory}</View> : null}
       {today ? (
-        <OpenReadingPage
-          page={today}
-          colors={colors}
-          isDark={isDark}
-          onContinue={(openingId) => onOpenDay(today.dayNumber, openingId)}
-        />
+        showAllReadings ? (
+          <OpenReadingPage
+            page={today}
+            colors={colors}
+            isDark={isDark}
+            onContinue={(openingId) => onOpenDay(today.dayNumber, openingId)}
+          />
+        ) : (
+          <ActiveSeriesBookHero
+            page={today}
+            book={devotional}
+            colors={colors}
+            isDark={isDark}
+            onContinue={(openingId) => onOpenDay(today.dayNumber, openingId)}
+          />
+        )
       ) : null}
       {chapters.length > 0 && !showAllReadings ? <ChapterJourney
         chapters={chapters}
@@ -77,6 +88,11 @@ export function BookOfSeasonsView({
 }
 
 const styles = StyleSheet.create({
+  accessoryRow: {
+    alignItems: 'flex-end',
+    minHeight: 44,
+    marginBottom: Spacing['3'],
+  },
   season: {
     marginBottom: Spacing['6'],
   },

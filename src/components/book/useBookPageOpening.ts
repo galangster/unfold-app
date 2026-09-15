@@ -6,20 +6,24 @@ import { makeImageFromView } from '@shopify/react-native-skia';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { cancelAnimation, Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
-import { bookOpeningProgress, clearBookOpening, shouldOpenBook, useBookOpening } from '@/lib/book-opening';
+import { bookOpeningProgress, clearBookOpening, shouldOpenBook, useBookOpening, type BookOpeningCover } from '@/lib/book-opening';
 import type { BookTodayPage } from '@/lib/book-of-seasons';
 import { bookPageColors } from './book-page-colors';
 import type { ColorTheme } from '@/constants/colors';
 
-const HINT_KEY = 'unfold.book-corner-discovered.v1';
+function hintStorageKey(hardcover: boolean): string {
+  return hardcover ? 'unfold.book-cover-discovered.v1' : 'unfold.book-corner-discovered.v1';
+}
 let nextOpening = 0;
 
-export function useBookPageOpening({ pageRef, page, colors, isDark, onContinue }: {
+export function useBookPageOpening({ pageRef, coverRef, page, colors, isDark, onContinue, cover }: {
   pageRef: RefObject<View | null>;
+  coverRef?: RefObject<View | null>;
   page: BookTodayPage;
   colors: ColorTheme;
   isDark: boolean;
   onContinue: (openingId?: string) => void;
+  cover?: BookOpeningCover;
 }) {
   const focused = useIsFocused();
   const { reducedMotion } = useAccessibleAnimation();
@@ -36,13 +40,11 @@ export function useBookPageOpening({ pageRef, page, colors, isDark, onContinue }
   const capturing = useRef<string | null>(null);
   const pendingSettle = useRef<boolean | null>(null);
   const [showHint, setShowHint] = useState(false);
+  const hardcover = Boolean(cover);
   const session = useBookOpening((state) => state.session);
 
   useEffect(() => {
     mounted.current = true;
-    AsyncStorage.getItem(HINT_KEY).then((seen) => {
-      if (mounted.current && !discovered.current) setShowHint(seen !== '1');
-    }).catch(() => {});
     return () => {
       mounted.current = false;
       if (activeId.current && !useBookOpening.getState().session?.committed) {
@@ -51,6 +53,12 @@ export function useBookPageOpening({ pageRef, page, colors, isDark, onContinue }
       activeId.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    AsyncStorage.getItem(hintStorageKey(hardcover)).then((seen) => {
+      if (mounted.current && !discovered.current) setShowHint(seen !== '1');
+    }).catch(() => {});
+  }, [hardcover]);
 
   const reset = useCallback(() => {
     dragging.value = false;
@@ -81,13 +89,13 @@ export function useBookPageOpening({ pageRef, page, colors, isDark, onContinue }
 
   useEffect(() => () => {
     if (!useBookOpening.getState().session?.committed) reset();
-  }, [page.dayNumber, page.totalDays, page.title, page.invitation, page.scriptureReference, colors, isDark, reset]);
+  }, [page.dayNumber, page.totalDays, page.title, page.invitation, page.scriptureReference, colors, isDark, cover?.id, reset]);
 
   function open(id: string) {
     if (!focused || !mounted.current || activeId.current !== id) return;
     discovered.current = true;
     setShowHint(false);
-    void AsyncStorage.setItem(HINT_KEY, '1').catch(() => {});
+    void AsyncStorage.setItem(hintStorageKey(hardcover), '1').catch(() => {});
     const current = useBookOpening.getState().session;
     if (current?.id === id && !current.failed) {
       useBookOpening.setState({ session: { ...current, committed: true } });
@@ -115,14 +123,14 @@ export function useBookPageOpening({ pageRef, page, colors, isDark, onContinue }
       open(id);
       return;
     }
-    // Mount the reader after expansion. Keep the paper until its text is ready.
+    // Keep navigation behind the fully opened page, including the canvas's first frame.
     progress.value = withTiming(commit ? 1 : 0, {
-      duration: commit ? Math.max(120, 280 * (1 - progress.value)) : 190,
+      duration: commit ? Math.max(120, (hardcover ? 420 : 280) * (1 - progress.value)) : 190,
       easing: Easing.bezier(0.22, 0.72, 0, 1),
     }, (finished) => {
       if (!finished) return;
-      if (commit) runOnJS(open)(id);
-      else runOnJS(reset)();
+      if (!commit) runOnJS(reset)();
+      else runOnJS(open)(id);
     });
   }
 
@@ -150,12 +158,15 @@ export function useBookPageOpening({ pageRef, page, colors, isDark, onContinue }
         if (!pageRef.current) return resolve(null);
         pageRef.current.measureInWindow((x, y, width, height) => resolve({ x, y, width, height }));
       });
+      const paperColor = bookPageColors(colors, isDark).surface;
       const image = rect && rect.width > 0 && rect.height > 0 ? await makeImageFromView(pageRef) : null;
+      const coverImage = cover && image && coverRef ? await makeImageFromView(coverRef) : undefined;
       if (captureExpired || !mounted.current || activeId.current !== id) return;
-      if (rect && image) {
+      if (rect && image && (!cover || coverImage)) {
         useBookOpening.setState({ session: {
-          id, rect, image, paperColor: bookPageColors(colors, isDark).surface,
+          id, rect, image, paperColor,
           progress, sourceHidden, presented: false, committed: false, readerReady: false,
+          ...(cover && coverImage ? { cover, coverImage } : {}),
           onPresented: () => {
             const pending = pendingSettle.current;
             pendingSettle.current = null;
