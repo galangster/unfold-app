@@ -386,6 +386,12 @@ describe('D14 predicates', () => {
       devotionalIds: ['real-series'],
       inflightJob: null,
     })).toBe(true);
+    expect(hasSupersedingUserSeries({
+      intent,
+      devotionalIds: ['6f1d2c8a-4b9e-4d21-a7c3-9f0e1b2a3c4d'],
+      inflightJob: null,
+      firstReadingIds: ['6f1d2c8a-4b9e-4d21-a7c3-9f0e1b2a3c4d'],
+    })).toBe(false);
   });
 });
 

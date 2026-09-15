@@ -77,8 +77,8 @@ function createDeps() {
       saveProfile: () => {
         order.push(`saveProfile:${profile.devotionalLength}`);
       },
-      addDeferredSample: () => {
-        order.push('addDeferredSample');
+      persistFirstReading: () => {
+        order.push('persistFirstReading');
       },
       flushStoreAsync: async () => {
         order.push('flushStoreAsync');
@@ -109,6 +109,7 @@ describe('G4 onboarding completion order and guard', () => {
       'clearSampleJob',
       'applyProfileOverrides',
       'saveProfile:3',
+      'persistFirstReading',
       'flushStoreAsync',
       'clearDraft',
       'trackCompleted:auto_trial',
@@ -126,6 +127,7 @@ describe('G4 onboarding completion order and guard', () => {
       'retireDraftAutosave',
       'clearSampleJob',
       'saveProfile:7',
+      'persistFirstReading',
       'flushStoreAsync',
       'clearDraft',
       'trackCompleted:generated',
@@ -140,7 +142,7 @@ describe('G4 onboarding completion order and guard', () => {
       'retireDraftAutosave',
       'clearSampleJob',
       'saveProfile:7',
-      'addDeferredSample',
+      'persistFirstReading',
       'flushStoreAsync',
       'clearDraft',
       'trackCompleted:deferred',

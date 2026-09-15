@@ -154,9 +154,9 @@ describe('paywall "I\'ll decide later" exit', () => {
     expect(handler).not.toContain('setPurchasedDuringOnboarding(true)');
   });
 
-  it('hands over the sample devotional with a seriesStartDate', () => {
-    expect(handler).toContain('addDevotional({');
-    expect(handler).toContain('seriesStartDate: createdAt');
+  it('hands over the sample devotional through first-reading persist', () => {
+    expect(handler).toContain('persistFirstReading');
+    expect(src).toContain('persistOnboardingFirstReading({');
   });
 
   it('clears the draft and the sample job', () => {

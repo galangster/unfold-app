@@ -121,7 +121,7 @@ describe('feature announcement sequence', () => {
     renderAnnouncement();
     expect(screen.getByLabelText('Page 1 of 4')).toBeTruthy();
     expect(screen.getByText('Your new bookshelf.')).toBeTruthy();
-    expect(screen.getByText('Find your bookshelf in You, under Past Devotionals. Open a book, swipe its page into your reading, or share its cover.')).toBeTruthy();
+    expect(screen.getByText('Find your bookshelf in You, under Past Devotionals. Open a book, swipe its page into your reading, or share its cover. New readers can return to their first devotional here, too.')).toBeTruthy();
     expect(hasSeenAnnouncement(BOOKSHELF_LIBRARY_ANNOUNCEMENT_ID)).toBe(true);
     expect(hasSeenAnnouncement(COMPANION_ANNOUNCEMENT_ID)).toBe(false);
     fireEvent.press(screen.getByLabelText('Next'));

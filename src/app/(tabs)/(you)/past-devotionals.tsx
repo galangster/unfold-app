@@ -17,7 +17,7 @@ import { useUnfoldStore, type Devotional } from '@/lib/store';
 import { useCrossTabBack } from '@/hooks/useCrossTabBack';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
-import { filterShelf, resolveShelfSelection, seriesReadingProgress, type ShelfFilter } from '@/lib/bookshelf';
+import { firstReadingLabel, filterShelf, resolveShelfSelection, seriesReadingProgress, type ShelfFilter } from '@/lib/bookshelf';
 import { clearShelfOpening, useShelfOpening } from '@/lib/shelf-opening';
 import { resolveStackRoute, type TabGroup } from '@/lib/tab-stack-routes';
 import { exportDevotionalToPDF, isPDFExportSupported } from '@/lib/pdf-export';
@@ -56,7 +56,7 @@ const ShelfBook = memo(function ShelfBook({ book, index, scroll, stride, width, 
         if (!ref.current) { onOpen(book); return; }
         ref.current.measureInWindow((x, y, w, h) => onOpen(book, w > 0 && h > 0 ? { x, y, width: w, height: h } : undefined));
       }} onLongPress={() => onOptions(book)} accessibilityRole="button"
-        accessibilityLabel={`${book.title}, book ${index + 1}, ${progress.read} of ${progress.total} readings completed`}
+        accessibilityLabel={[book.title, firstReadingLabel(book), `book ${index + 1}, ${progress.read} of ${progress.total} readings completed`].filter(Boolean).join(', ')}
         accessibilityHint={selected ? 'Opens this book' : 'Centers this book on the shelf'}
         accessibilityActions={[{ name: 'options', label: 'Book options' }]} onAccessibilityAction={event => { if (event.nativeEvent.actionName === 'options') onOptions(book); }} accessibilityState={{ selected }} testID={`shelf-book-${index}`}>
         <View ref={ref} cssInterop={false} collapsable={false} style={{ width, height }}>
@@ -247,8 +247,9 @@ export function PastSeriesLibraryScreen({ hostTab }: { hostTab?: TabGroup } = {}
           <Pressable style={styles.action} onPress={() => { if (!devotionals.length) router.navigate('/(tabs)/(today)'); else { searchInput.current?.clear(); setQuery(''); setFilter('all'); } }} accessibilityRole="button">
             <Text style={[styles.actionText, { color: colors.accent }]}>{devotionals.length ? 'Show all series' : 'Go to Today'}</Text>
           </Pressable>
-        </View> : grid ? <FlashList key="grid" numColumns={2} data={books} keyExtractor={book => book.id} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 24 }} renderItem={({ item, index: bookIndex }) => <Pressable accessibilityRole="button" accessibilityLabel={`View ${item.title} on shelf`} onPress={() => { Keyboard.dismiss(); selectIndex(bookIndex, false); setGrid(false); }} onLongPress={() => options(item)} accessibilityActions={[{ name: 'options', label: 'Book options' }]} onAccessibilityAction={event => { if (event.nativeEvent.actionName === 'options') options(item); }} style={{ padding: 8 }}>
+        </View> : grid ? <FlashList key="grid" numColumns={2} data={books} keyExtractor={book => book.id} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 24 }} renderItem={({ item, index: bookIndex }) => <Pressable accessibilityRole="button" accessibilityLabel={[`View ${item.title} on shelf`, firstReadingLabel(item)].filter(Boolean).join(', ')} onPress={() => { Keyboard.dismiss(); selectIndex(bookIndex, false); setGrid(false); }} onLongPress={() => options(item)} accessibilityActions={[{ name: 'options', label: 'Book options' }]} onAccessibilityAction={event => { if (event.nativeEvent.actionName === 'options') options(item); }} style={{ padding: 8 }}>
           <SeriesBookCover devotional={item} width={(width - 68) / 2} height={(width - 68) / 2 * 1.4} compact />
+          {firstReadingLabel(item) ? <Text style={[styles.meta, { color: quietColor, marginTop: 8 }]}>{firstReadingLabel(item)}</Text> : null}
         </Pressable>} /> : <View style={{ flex: 1 }} onLayout={event => setAreaHeight(event.nativeEvent.layout.height)}>
           <View ref={selectedCover} cssInterop={false} collapsable={false} style={{ height: coverHeight + 28, marginTop: 8 }}>
             <AnimatedShelfScrollView ref={list} horizontal
@@ -273,6 +274,7 @@ export function PastSeriesLibraryScreen({ hostTab }: { hostTab?: TabGroup } = {}
             <View style={{ height: 1, backgroundColor: isDark ? '#B2985D70' : '#B29C6C80' }} />
           </View>
           <View style={styles.caption}>
+            {selected && firstReadingLabel(selected) ? <Text style={[styles.meta, { color: quietColor, marginBottom: 8 }]}>{firstReadingLabel(selected)}</Text> : null}
             <Text style={[styles.status, { color: quietColor }]}>{stateLabel}</Text>
             <View style={styles.actions}>
               <Pressable onPress={navigateSelected} accessibilityRole="button" accessibilityLabel="Open book" testID="shelf-open-book" style={styles.action}>

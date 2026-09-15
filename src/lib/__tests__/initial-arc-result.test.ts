@@ -362,7 +362,7 @@ describe('H8 applyInitialArcResult auto-trial settle', () => {
     expect(readAutoTrialIntent()?.status).toBe('landed');
   });
 
-  it('retires samples when a matching auto intent lands', () => {
+  it('archives the current first sample when a matching auto intent lands', () => {
     seedSubmittedIntent();
     const sample = {
       id: 'onboarding-sample-anon_x',
@@ -380,7 +380,11 @@ describe('H8 applyInitialArcResult auto-trial settle', () => {
     };
     useUnfoldStore.setState({ devotionals: [sample], currentDevotionalId: sample.id });
     applyInitialArcResult(result, { user, devotionalLength: 3, session: captureSyncSession() });
-    expect(useUnfoldStore.getState().devotionals.some((row) => row.id === sample.id)).toBe(false);
+    const state = useUnfoldStore.getState();
+    const retained = state.devotionals.find((row) => row.id === sample.id);
+    expect(retained?.days[0]?.bodyText).toBe(day1.bodyText);
+    expect(retained?.archivedAt).toBeTruthy();
+    expect(state.currentDevotionalId).toBe(result.devotionalId);
   });
 });
 

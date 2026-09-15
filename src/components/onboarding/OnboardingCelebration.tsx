@@ -1,9 +1,20 @@
+import { useEffect, useState } from 'react';
 import { CompletionCelebration } from '@/components/CompletionCelebration';
 import type { ColorTheme } from '@/constants/colors';
+import {
+  ONBOARDING_FIRST_READING_COMPLETE_MESSAGE,
+  ONBOARDING_FIRST_READING_SAVED_MESSAGE,
+  persistOnboardingFirstReading,
+} from '@/lib/onboarding-first-reading';
+import { flushUnfoldStorePersistAsync, type Devotional } from '@/lib/store';
+import { logger } from '@/lib/logger';
 
 interface Props {
   colors: ColorTheme;
   onContinue: () => void;
+  firstReadingId?: string;
+  firstReadingDay?: unknown;
+  userContext?: Devotional['userContext'];
 }
 
 /**
@@ -18,13 +29,34 @@ interface Props {
  * request now happens only from the Today screen, where someone has come back
  * of their own accord (see (tabs)/(today)/index.tsx).
  */
-export function OnboardingCelebration({ colors: _colors, onContinue }: Props) {
+export function OnboardingCelebration({
+  colors: _colors,
+  onContinue,
+  firstReadingId,
+  firstReadingDay,
+  userContext,
+}: Props) {
+  const [savedId, setSavedId] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    const save = async () => {
+      if (!persistOnboardingFirstReading({ id: firstReadingId, day: firstReadingDay, userContext })) return;
+      await flushUnfoldStorePersistAsync();
+      if (active && firstReadingId) setSavedId(firstReadingId);
+    };
+    void save().catch(() => {
+      logger.warn('[onboarding] Could not persist the first reading at completion.');
+    });
+    return () => { active = false; };
+  }, [firstReadingId, firstReadingDay, userContext]);
+
   return (
     <CompletionCelebration
       visible={true}
       onDismiss={onContinue}
       type="day"
-      message="Your first devotional, complete."
+      message={ONBOARDING_FIRST_READING_COMPLETE_MESSAGE}
+      detail={savedId && savedId === firstReadingId ? ONBOARDING_FIRST_READING_SAVED_MESSAGE : undefined}
     />
   );
 }

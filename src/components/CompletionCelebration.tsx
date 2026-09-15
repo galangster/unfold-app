@@ -13,6 +13,7 @@ import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { EmberSystem } from '@/components/EmberSystem';
 import { formatSeriesCompletionSummary } from '@/lib/series-completion-summary';
@@ -101,6 +102,7 @@ interface CompletionCelebrationProps {
   onDismiss: () => void;
   type: 'day' | 'series';
   message?: string;
+  detail?: string;
   seriesReflectionSummary?: string;
 }
 
@@ -109,9 +111,11 @@ export function CompletionCelebration({
   onDismiss,
   type,
   message,
+  detail,
   seriesReflectionSummary,
 }: CompletionCelebrationProps) {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const { reducedMotion } = useAccessibleAnimation();
 
   // Pick a random message on each render when visible
@@ -195,13 +199,17 @@ export function CompletionCelebration({
     <Modal visible={visible} transparent animationType="none" statusBarTranslucent>
       <Animated.View style={[{ flex: 1 }, overlayStyle]}>
         <EmberSystem variant="celebration" motes active />
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, paddingVertical: Spacing['8'] }}>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{
+          flexGrow: 1,
+          paddingTop: Math.max(insets.top, Spacing['8']),
+          paddingBottom: Math.max(insets.bottom, Spacing['8']),
+        }}>
       <TouchableOpacity
         activeOpacity={1}
         style={{ flexGrow: 1 }}
         onPress={onDismiss}
         accessibilityRole="button"
-        accessibilityLabel="Continue"
+        accessibilityLabel={[title, subtitle, detail, seriesSummaryExcerpt, 'Continue'].filter(Boolean).join('. ')}
         accessibilityHint="Tap anywhere to continue"
       >
           {/* Content — left aligned */}
@@ -243,6 +251,22 @@ export function CompletionCelebration({
                 {subtitle}
               </Text>
             </Animated.View>
+
+            {detail ? (
+              <Animated.View style={[{ marginTop: Spacing['4'], alignSelf: 'stretch' }, subtitleStyle]}>
+                <Text
+                  style={{
+                    fontFamily: FontFamily.body,
+                    fontSize: 17,
+                    color: colors.textMuted,
+                    textAlign: 'left',
+                    lineHeight: 26,
+                  }}
+                >
+                  {detail}
+                </Text>
+              </Animated.View>
+            ) : null}
 
             {/* Series reflection summary */}
             {type === 'series' && seriesSummaryExcerpt && (

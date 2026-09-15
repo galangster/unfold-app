@@ -30,7 +30,7 @@ export const FEATURE_ANNOUNCEMENT_CATALOG: readonly FeatureAnnouncementPage[] = 
     id: BOOKSHELF_LIBRARY_ANNOUNCEMENT_ID,
     kind: 'bookshelf',
     title: 'Your new bookshelf.',
-    body: 'Find your bookshelf in You, under Past Devotionals. Open a book, swipe its page into your reading, or share its cover.',
+    body: 'Find your bookshelf in You, under Past Devotionals. Open a book, swipe its page into your reading, or share its cover. New readers can return to their first devotional here, too.',
   },
   {
     id: COMPANION_ANNOUNCEMENT_ID,
