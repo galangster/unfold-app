@@ -210,6 +210,9 @@ export type ReadingRoute = {
 
 export type TodayNotificationRoute = {
   pathname: '/(tabs)/(today)';
+  params?: {
+    focus?: 'midday';
+  };
 };
 
 export type EveningWindDownNotificationRoute = {
@@ -308,7 +311,7 @@ export function buildNotificationNavigationRoute(
   if (revealRoute) return revealRoute;
 
   if (data?.type === 'midday-checkin' || data?.type === 'midday_checkin') {
-    return { pathname: '/(tabs)/(today)' };
+    return { pathname: '/(tabs)/(today)', params: { focus: 'midday' } };
   }
 
   if (data?.type === 'evening-winddown' || data?.type === 'evening_winddown') {
