@@ -39,14 +39,14 @@ for r in reversed(RIDGES):   # nearest first so it draws on top
     line=path(ridge_line(r['pts']))
     paints=(tapered(VM['accent'],r['op'],r['w'],taper=(0.35,0.7),glow=True) if r['tier']=='accent' else stroke(VM[r['tier']],r['op'],r['w']))
     massif+=hatch(r['pts'],r['op'],r['tier'])+shape("ridge",line+paints)
-sc.node("Massif",massif,0,0,sway(Y,0,2,4800,0))
+sc.node("Massif",massif,0,0,sway(Y,0,2,3600,0))
 # low sun: disc with hairline rays that turn very slowly, breathing
 rays=''
 for k in range(16):
     a=k*math.pi*2/16; r0,r1=22,(46 if k%2==0 else 36)
     rays+=shape(f"ray{k}",path([straight(math.cos(a)*r0,math.sin(a)*r0),straight(math.cos(a)*r1,math.sin(a)*r1)])+stroke(VM['artwork'],0.3 if k%2==0 else 0.16,0.5))
 sun=shape("disc",ellipse(30)+halo(8)+stroke(VM['accent'],0.85,0.8)+stroke(VM['accent'],0.85,1.8,trim=(0.55,0.85)))
-sc.node("Sun",sun+f'<Node name="rays" id="0:61">{rays}</Node>',300,232,sway(Y,232,4,4800,0),twinkle(0.75,1,3600,0))
+sc.node("Sun",sun+f'<Node name="rays" id="0:61">{rays}</Node>',300,232,sway(Y,232,4,3600,0),twinkle(0.75,1,3600,0))
 sc.keyed.append(f'<KeyedObject objectId="0:61">{spin(0,0.5)}</KeyedObject>')
 # scripts: birds far back, mist in front of the far ridges but behind the near one
 sc.script("birds","birds.luau"); sc.script("mist","mist.luau")

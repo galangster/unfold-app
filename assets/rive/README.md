@@ -4,6 +4,12 @@ Bundled assets (every completion scene in the rotation is owner-approved; in-hou
 
 - `today-campfire.riv`, `today-canopy-lights.riv`, `today-doors.riv`, `today-tree.riv`, `today-waterfall.riv`
   - Today completed-day ambience rotation (`campfire-rive`, `canopy-lights-rive`, `doors-rive`, `tree-rive`, `waterfall-rive`). Owner-approved animator exports.
+- `today-moon-stars.riv` and `today-mountain-river.riv`
+  - Today completed-day ambience options (`moon-stars-rive`, `mountain-river-rive`). Nick approved the QA clips on 2026-09-15 after the floating orbs and glow discs were removed.
+  - Built from the designer's SVGs with the Rive CLI: source `rive-src/scenes/moon-stars/` and `rive-src/scenes/mountain-river/` (`art.svg` + `gen.py` write `scene.rml`; `rive . --once` builds). Regenerate there, never hand-edit the binary.
+  - Every line of the art is the SVG's own geometry (Illustrator outlined strokes converted exactly by `rive-src/lib/svg_rml.py`); the life is keyframed RML only (`rive-src/lib/life_rml.py`), no Luau, so `--once` builds ship without a Rive login.
+  - Artboards `Unfold_moon_stars` / `Unfold_mountain_river` 390x844, state machine `State Machine 1`, ViewModel `ViewModel1` with `artwork_color`, `glow_color`, `background_color`, `mask_gradient_start`, `mask_gradient_end`, `accentColor`.
+  - 120 s seamless loop (seam PSNR equals the adjacent-frame PSNR); verified with `--screenshot --advance=N` at several offsets plus light and magenta probes.
 - `today-wind-leaves.riv`
   - Today state: completed/rest ambience option (`complete-today`, `tomorrow-locked`, `journey-complete` after the person has read today).
   - Source handoff: `wind_v3_unfold.riv` from Desktop intake, SHA-256 `57aa5348b877a034845b10a567b627317233b7037087f5c56405842026ae63b8`, size `19,810` bytes.
@@ -21,10 +27,10 @@ Current production behavior:
 
 ```txt
 Completed Today ambience slot
-  options: EmberSystem | campfire | canopy-lights | doors | tree | waterfall | wind-leaves
+  options: EmberSystem | campfire | canopy-lights | doors | tree | waterfall | wind-leaves | moon-stars | mountain-river
   selection: deterministic hash of devotional/day/date completion key
   pre-completion: no ambient Rive/embers
-  in-house (clouds, moon, mountains, …): rive-src/ only until Nick approves clips
+  in-house (clouds, …): rive-src/ only until Nick approves clips
 ```
 
 Implementation notes:

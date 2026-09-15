@@ -1,7 +1,7 @@
 from unfold_rml import *
 sc=Scene("Unfold_ripples"); CX,CY=250,300
 # expanding rings: scale 0.1 -> 1, opacity 0.8 -> 0, staggered
-N=5; L=3000
+N=5; L=3600
 for k in range(N):
     ph=k*L//N; r=200
     ring=shape("R",f'<Ellipse width="{2*r}" height="{2*r*0.62}" originX="0.5" originY="0.5" name="E"/>'+stroke(VM['accent'] if k%3==0 else VM['artwork'],1,0.9 if k%3==0 else 0.7))

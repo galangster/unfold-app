@@ -138,6 +138,8 @@ describe('Rive accent theming', () => {
       'today-canopy-lights.riv',
       'today-doors.riv',
       'today-light-rays.riv',
+      'today-moon-stars.riv',
+      'today-mountain-river.riv',
       'today-rain-particles.riv',
       'today-tree.riv',
       'today-waterfall.riv',

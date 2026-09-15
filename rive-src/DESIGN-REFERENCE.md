@@ -95,3 +95,42 @@ Nick on the first set: "none of these feel cohesive, like actual art pieces... t
 - **Detail is engraving.** Fine clipped hatching, cross-hatch, and slope strokes give a drawn hero the density of an illustration while staying hairline and stroke-only. `ClippingShape` clips a hatch field to a silhouette; feathered fills do not render, so glows are radial gradients with a transparent outer stop.
 - **Judge motion on a one-second contact sheet of the clip** (`ffmpeg select+tile`), never on the 8-frame strip alone.
 - Scripts read the accent through a `ScriptInputColor` bound to `accentColor`; light and dark still work with no app change.
+
+## Designer SVG scenes (2026-09-15): moon-stars and mountain-river
+
+Nick's designer delivered two backgrounds as Illustrator SVGs (`svg-moon-stars.svg`,
+`svg-mountains.svg`). They are the composition; the job was conversion plus life.
+
+- **Conversion is exact.** Every line in the files is an outlined stroke (a 1 px filled
+  sliver), the moon hatching is hollow stripe rings, the river is four clip-path shapes.
+  `lib/svg_rml.py` parses the SVG (paths, polygons, rotated rects, circles, gradients with
+  `gradientTransform`, clip-paths) and emits the same geometry as filled `PointsPath`
+  shapes with cubic handles, plus fades as local-space `LinearGradient`s. Map with scale
+  390/768, top anchored. `fill_shape(weight=0.3)` emboldens hero slivers with a same-paint
+  stroke so they sit nearer the shipped 0.75 to 1.25 px weight. Source SVG lives beside
+  `gen.py` as `art.svg`.
+- **Keyframes only, no Luau.** `rive whoami` is signed out and unsigned scripts are rejected
+  by production runtimes, so scripted life (the moon/mountains v2 candidates) cannot ship.
+  `lib/life_rml.py` gives keyframed life instead: irregular per-star `shimmer`, `glint`
+  (a bright TrimPath window travelling a line, one keyed `TrimPath.offset` in a
+  `GroupEffect` driving the crisp stroke and its feathered halo), `streak` (shooting
+  star), `flock` (two-arc birds with wing beats in bouts). Rare events use `envelope` +
+  `travel` on cycle lengths that divide 7200.
+- **Loop seams are measured, not assumed.** Two seam bugs surfaced: `sway()` ended a
+  phased wave at `v0` instead of its frame-0 value, and a 4800-frame period (which does
+  not divide 7200) popped the moon. Both helpers now assert `DUR % period == 0`. The check
+  is PSNR between frames 7200 and 7201 versus frames 600 and 601 (both about 65 dB), plus
+  a script that compares every keyed property's frame-0 and frame-7200 values (zero
+  mismatches).
+- **Authored attributes equal frame 0.** `Scene.register` writes every keyed property's
+  frame-0 value into the element's own attributes (`rest_pose`), so the un-advanced artboard
+  (the runtime's first paint, and `--advance=0`) is frame 0 of the loop and nothing flashes.
+- **Verified in the app runtime.** `src/app/qa-rive-ambience.tsx` (dev-only, allowlisted
+  with a `scene` param) renders any bundled scene through `TodayCompletionRive`. Both
+  scenes played on the iPhone simulator on 2026-09-15 with TrimPath, Feather,
+  GroupEffect + TargetEffect, RadialGradient and data binding all working on
+  `@rive-app/react-native` 0.4.6.
+- **Where the art departs from the rubric by design:** the massif spans about 70 percent
+  of the width and the lower constellation sits under the text mask. Both come from the
+  designer's composition and read as intended: the lower art fades into the glow the way
+  the tree's roots do.
