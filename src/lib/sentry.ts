@@ -794,9 +794,30 @@ export function isSentryEnabled(): boolean {
 }
 
 /** Report a handled failure. `source` identifies the call site, e.g. 'onboarding'. */
+/**
+ * Radio-level failures the app already handles with retries and offline
+ * states. They are recorded at `warning` so a flaky cell connection never
+ * pages as an app defect, but the rate stays visible in Sentry.
+ */
+const TRANSIENT_NETWORK_PATTERN =
+  /network connection was lost|network request failed|internet connection appears to be offline|could not connect to the server|software caused connection abort/i;
+
+export function isTransientNetworkError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
+  return TRANSIENT_NETWORK_PATTERN.test(message);
+}
+
 export function captureAppError(source: string, error: Error, extra?: Record<string, unknown>): void {
   if (!enabled || sentryModule === null) return;
   try {
+    if (isTransientNetworkError(error)) {
+      sentryModule.captureException(error, {
+        level: 'warning',
+        tags: { source: truncate(source), transient: 'network' },
+        extra: extra ?? {},
+      });
+      return;
+    }
     sentryModule.captureException(error, {
       tags: { source: truncate(source) },
       extra: extra ?? {},

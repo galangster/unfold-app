@@ -942,6 +942,38 @@ describe('navigation and root wrapping', () => {
 });
 
 describe('capture helpers', () => {
+  it('records a lost radio connection as a warning tagged transient network', () => {
+    const sentry = bootEnabled();
+    const lost = new Error(
+      'fetch failed: UnexpectedException: The network connection was lost. (at ExpoModulesCore/Promise.swift:56)',
+    );
+
+    sentry.captureAppError('devotional-generation', lost, { phase: 'full-generation' });
+
+    expect(mockCaptureException).toHaveBeenCalledWith(lost, {
+      level: 'warning',
+      tags: { source: 'devotional-generation', transient: 'network' },
+      extra: { phase: 'full-generation' },
+    });
+
+    const server = new Error('fetch failed: 500 Internal Server Error');
+    sentry.captureAppError('devotional-generation', server, { phase: 'full-generation' });
+    expect(mockCaptureException).toHaveBeenLastCalledWith(server, {
+      tags: { source: 'devotional-generation' },
+      extra: { phase: 'full-generation' },
+    });
+  });
+
+  it('classifies transient network messages without touching other errors', () => {
+    const sentry = bootEnabled();
+    expect(sentry.isTransientNetworkError(new Error('Network request failed'))).toBe(true);
+    expect(sentry.isTransientNetworkError('The Internet connection appears to be offline.')).toBe(true);
+    expect(sentry.isTransientNetworkError(new Error('Could not connect to the server.'))).toBe(true);
+    expect(sentry.isTransientNetworkError(new Error('Request timed out'))).toBe(false);
+    expect(sentry.isTransientNetworkError(new Error('Maximum update depth exceeded'))).toBe(false);
+    expect(sentry.isTransientNetworkError(undefined)).toBe(false);
+  });
+
   it('tag the call site and hand the payload to the SDK for scrubbing', () => {
     const sentry = bootEnabled();
     const error = new Error('onboarding answers discarded');
