@@ -12,7 +12,7 @@ export async function runOnboardingCompletion(
     clearSampleJob(): void;
     applyProfileOverrides(): void;
     saveProfile(): void;
-    addDeferredSample?(): void;
+    persistFirstReading?(): void;
     flushStoreAsync(): Promise<void>;
     clearDraft(): void;
     trackCompleted(outcome: 'generated' | 'deferred' | 'auto_trial'): boolean;
@@ -30,9 +30,7 @@ export async function runOnboardingCompletion(
     deps.applyProfileOverrides();
   }
   deps.saveProfile();
-  if (mode === 'deferred') {
-    deps.addDeferredSample?.();
-  }
+  deps.persistFirstReading?.();
   await deps.flushStoreAsync();
   deps.clearDraft();
   deps.trackCompleted(mode);

@@ -126,6 +126,46 @@ describe('J12 full-sync sample guard', () => {
     expect(useUnfoldStore.getState().devotionals.map((item) => item.id)).toEqual(['auto-1']);
   });
 
+  it('inserts a first reading with durable origin beside an auto-trial series', () => {
+    useUnfoldStore.setState({
+      devotionals: [autoSeries()],
+      currentDevotionalId: 'auto-1',
+    });
+    applyPulledUserData({
+      timestamp: '2026-07-01T12:00:00.000Z',
+      changes: {
+        devotionals: [{
+          id: '6f1d2c8a-4b9e-4d21-a7c3-9f0e1b2a3c4d',
+          updatedAt: '2026-07-01T12:00:00.000Z',
+          deleted: false,
+          data: {
+            title: 'Called by name',
+            totalDays: 1,
+            currentDay: 1,
+            createdAt: '2026-07-01T00:00:00.000Z',
+            seriesArc: {
+              totalDaysPlanned: 1,
+              overarchingTheme: '',
+              narrativeShape: '',
+              dayHints: [],
+              isOpenEnded: false,
+              createdAt: '2026-07-01T00:00:00.000Z',
+              origin: 'onboarding_first',
+            },
+          },
+        }],
+      },
+    });
+    const state = useUnfoldStore.getState();
+    expect(state.currentDevotionalId).toBe('auto-1');
+    expect(state.devotionals.map((item) => item.id).sort()).toEqual([
+      '6f1d2c8a-4b9e-4d21-a7c3-9f0e1b2a3c4d',
+      'auto-1',
+    ].sort());
+    expect(state.devotionals.find((item) => item.id === '6f1d2c8a-4b9e-4d21-a7c3-9f0e1b2a3c4d')?.seriesArc?.origin)
+      .toBe('onboarding_first');
+  });
+
   it('removes a deleted sample', () => {
     useUnfoldStore.setState({
       devotionals: [{

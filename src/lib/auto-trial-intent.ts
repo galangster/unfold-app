@@ -368,9 +368,11 @@ export function hasSupersedingUserSeries(i: {
   intent: AutoTrialIntentV1;
   devotionalIds: readonly string[];
   inflightJob: InflightGenerationJob | null;
+  firstReadingIds?: readonly string[];
 }): boolean {
+  const firstReadings = new Set(i.firstReadingIds ?? []);
   const hasOtherSeries = i.devotionalIds.some((id) => (
-    !isOnboardingSampleDevotionalId(id) && id !== i.intent.devotionalId
+    id !== i.intent.devotionalId && !isOnboardingSampleDevotionalId(id) && !firstReadings.has(id)
   ));
   const otherJob = i.inflightJob != null
     && !i.inflightJob.superseded
@@ -413,6 +415,7 @@ export function reconcileAutoTrialIntentOnLaunch(i: {
   landedDevotionalIds: readonly string[];
   inflightJob: InflightGenerationJob | null;
   revealGuardKey: string | null;
+  firstReadingIds?: readonly string[];
 }): AutoTrialLaunchAction {
   const { intent, deviceId, nowMs, hasCompletedOnboarding, landedDevotionalIds, inflightJob, revealGuardKey } = i;
   if (!intent || isEphemeralDeviceId(deviceId)) return { action: 'none' };
@@ -428,7 +431,12 @@ export function reconcileAutoTrialIntentOnLaunch(i: {
 
   if (
     intent.status === 'purchased'
-    && hasSupersedingUserSeries({ intent, devotionalIds: landedDevotionalIds, inflightJob })
+    && hasSupersedingUserSeries({
+      intent,
+      devotionalIds: landedDevotionalIds,
+      inflightJob,
+      firstReadingIds: i.firstReadingIds,
+    })
   ) {
     return { action: 'abandon', reason: 'superseded_by_user_series' };
   }
@@ -470,8 +478,8 @@ export function settleLandedAutoTrialSeries(intent: AutoTrialIntentV1, devotiona
   const series = store.devotionals.find((row) => row.id === devotionalId);
   if (!series || !series.days.some((day) => day.dayNumber === 1)) return;
 
-  store.setCurrentDevotional(devotionalId);
   store.retireOnboardingSamples({ keepId: devotionalId });
+  store.setCurrentDevotional(devotionalId);
 
   const inflight = readInflightGenerationJob();
   if (inflight?.jobId === intent.jobId) clearInflightGenerationJob();

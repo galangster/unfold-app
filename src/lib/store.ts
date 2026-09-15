@@ -33,7 +33,8 @@ import { enqueueSyncChanges } from './sync-outbox';
 import type { SyncTable } from './sync-types';
 import type { WordStudy } from './word-study';
 import { flushCheckInToServer } from './check-in-flush';
-import { isOnboardingSampleDevotionalId } from './auto-trial-series';
+import { isOnboardingFirstReading, isOnboardingSampleDevotionalId, withOnboardingFirstReadingArc } from './auto-trial-series';
+import { isUsableSampleDevotionalDay } from './onboarding-sample-day-shape';
 import { applyArchiveIntent, applyUnarchiveIntent, isDevotionalArchived } from './devotional-lifecycle';
 import { selectSyncedCurrentDevotionalId } from './devotional-resume-selection';
 import {
@@ -497,6 +498,8 @@ export interface SeriesArc {
   /** Named movements for series >= 14 days; groups the series-detail day list. */
   acts?: { name: string; fromDay: number; toDay: number; function: string }[];
   seriesKind?: 'auto_trial';
+  /** Durable first-reading mark. Synced inside seriesArc, not inferred from title or length. */
+  origin?: 'onboarding_first';
   promise?: string;
 }
 
@@ -1006,7 +1009,10 @@ export function updateSyncedDevotionals(updater: (devotionals: Devotional[]) => 
 }
 
 function enqueueDevotionalRow(devotional: Devotional): void {
-  const clientUpdatedAt = devotional.archivedStateAt ?? devotional.updatedAt ?? new Date().toISOString();
+  const clientUpdatedAt = [devotional.updatedAt, devotional.archivedStateAt]
+    .filter((value): value is string => typeof value === 'string' && value.length > 0)
+    .reduce((latest, value) => (value > latest ? value : latest), '')
+    || new Date().toISOString();
   enqueueSyncChanges([
     buildPersonalDataSyncChange('devotionals', devotional.id, devotionalSyncData(devotional), clientUpdatedAt),
   ]);
@@ -1138,18 +1144,71 @@ export const useUnfoldStore = create<UnfoldState>()(
 
       retireOnboardingSamples: ({ keepId }) =>
         set((state) => {
-          const retiringIds = new Set(
-            state.devotionals
-              .filter((d) => isOnboardingSampleDevotionalId(d.id) && d.id !== keepId)
-              .map((d) => d.id),
-          );
-          if (retiringIds.size === 0) return state;
+          const now = new Date().toISOString();
+          let changed = false;
+          const nextCurrent = (
+            state.currentDevotionalId && state.currentDevotionalId !== keepId
+              && (
+                isOnboardingSampleDevotionalId(state.currentDevotionalId)
+                || state.devotionals.some((row) => (
+                  row.id === state.currentDevotionalId && isOnboardingFirstReading(row)
+                ))
+              )
+          ) ? (keepId ?? null) : state.currentDevotionalId;
+
+          const genuineUnmarked = state.devotionals.filter((row) => (
+            row.id !== keepId
+            && !isOnboardingFirstReading(row)
+            && isOnboardingSampleDevotionalId(row.id)
+            && isUsableSampleDevotionalDay(row.days.find((day) => day.dayNumber === 1))
+          ));
+          const displacedId = state.currentDevotionalId === keepId && genuineUnmarked.length === 1
+            ? genuineUnmarked[0].id
+            : null;
+
+          const devotionals = state.devotionals.flatMap((row) => {
+            if (row.id === keepId) return [row];
+            const retain = isOnboardingFirstReading(row)
+              || row.id === displacedId
+              || (
+                isOnboardingSampleDevotionalId(row.id)
+                && row.id === state.currentDevotionalId
+                && isUsableSampleDevotionalDay(row.days.find((day) => day.dayNumber === 1))
+              );
+            if (retain) {
+              const stamped = isOnboardingFirstReading(row)
+                ? row
+                : {
+                    ...row,
+                    seriesArc: withOnboardingFirstReadingArc(row.seriesArc, row.createdAt),
+                  };
+              if (isDevotionalArchived(stamped)) {
+                if (stamped !== row) {
+                  changed = true;
+                  const synced = { ...stamped, updatedAt: now };
+                  enqueueSyncChanges([
+                    buildPersonalDataSyncChange('devotionals', synced.id, devotionalSyncData(synced), now),
+                  ]);
+                  return [synced];
+                }
+                return [stamped];
+              }
+              changed = true;
+              const archived = applyArchiveIntent(stamped, now);
+              enqueueDevotionalRow(archived);
+              return [archived];
+            }
+            if (isOnboardingSampleDevotionalId(row.id)) {
+              changed = true;
+              return [];
+            }
+            return [row];
+          });
+
+          if (!changed && nextCurrent === state.currentDevotionalId) return state;
           return {
-            devotionals: state.devotionals.filter((d) => !retiringIds.has(d.id)),
-            currentDevotionalId:
-              state.currentDevotionalId && retiringIds.has(state.currentDevotionalId)
-                ? (keepId ?? null)
-                : state.currentDevotionalId,
+            devotionals,
+            currentDevotionalId: nextCurrent,
           };
         }),
 

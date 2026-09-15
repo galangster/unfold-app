@@ -58,7 +58,7 @@ import {
   type AutoTrialLaunchAction,
   type IntentStorage,
 } from '@/lib/auto-trial-intent';
-import { isAutoTrialSeries } from '@/lib/auto-trial-series';
+import { isAutoTrialSeries, isOnboardingFirstReading } from '@/lib/auto-trial-series';
 import { getDeviceId } from '@/lib/mmkv-storage';
 import { getServerOwnedSeriesTotalDays } from '@/lib/devotional-series-boundary';
 import { countReadDaysWithinBoundary } from '@/lib/series-path';
@@ -164,6 +164,7 @@ export function applyTodayAutoTrialFocus(i: {
   landedDevotionalIds: readonly string[];
   inflightJob: InflightGenerationJob | null;
   revealGuardKey: string | null;
+  firstReadingIds?: readonly string[];
   generationSessionStatus: import('@/lib/store').GenerationSessionStatus;
   resolveInflight?: (
     job: InflightGenerationJob | null,
@@ -194,6 +195,7 @@ export function applyTodayAutoTrialFocus(i: {
     landedDevotionalIds: i.landedDevotionalIds,
     inflightJob: i.inflightJob,
     revealGuardKey: i.revealGuardKey,
+    firstReadingIds: i.firstReadingIds,
   });
 
   if (launchAction.action === 'open_reveal') {
@@ -501,6 +503,9 @@ export default function HomeScreen() {
       nowMs: Date.now(),
       hasCompletedOnboarding: user?.hasCompletedOnboarding === true,
       landedDevotionalIds: useUnfoldStore.getState().devotionals.map((row) => row.id),
+      firstReadingIds: useUnfoldStore.getState().devotionals
+        .filter(isOnboardingFirstReading)
+        .map((row) => row.id),
       inflightJob,
       revealGuardKey: useUIState.getState().autoTrialRevealGuardKey,
       generationSessionStatus,

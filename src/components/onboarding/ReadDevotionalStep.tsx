@@ -2,8 +2,8 @@
  * ReadDevotionalStep — Inline reading experience during onboarding.
  *
  * Shows the actual generated devotional content using DevotionalContent,
- * with a fixed "Mark as complete" button at the bottom. On mount, creates
- * the Devotional shell in the Zustand store so it persists after onboarding.
+ * with a fixed "Mark as complete" button at the bottom. On mount, persists
+ * the first reading so the completion screen can tell the truth.
  */
 
 import { useEffect, useState } from 'react';
@@ -15,9 +15,9 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { DevotionalContent } from '@/components/reading/DevotionalContent';
+import { persistOnboardingFirstReading } from '@/lib/onboarding-first-reading';
 import { useUnfoldStore } from '@/lib/store';
 import type { ColorTheme } from '@/constants/colors';
-import type { Devotional } from '@/lib/store';
 
 interface Props {
   devotionalDay: any | null;
@@ -37,22 +37,11 @@ export function ReadDevotionalStep({
   onRetry,
 }: Props) {
   const insets = useSafeAreaInsets();
-  const addDevotional = useUnfoldStore((s) => s.addDevotional);
   const markDayAsRead = useUnfoldStore((s) => s.markDayAsRead);
   const [showRecovery, setShowRecovery] = useState(false);
 
-  // On mount, add the devotional to the store if not already present
   useEffect(() => {
-    if (!devotionalDay || !devotionalId) return;
-    addDevotional({
-      id: devotionalId,
-      title: 'Your First Devotional',
-      totalDays: 1,
-      currentDay: 1,
-      days: [{ ...devotionalDay, dayNumber: 1, isRead: false }],
-      createdAt: new Date().toISOString(),
-      generationMode: 'progressive',
-    } as Devotional);
+    persistOnboardingFirstReading({ id: devotionalId, day: devotionalDay });
   }, [devotionalDay, devotionalId]);
 
   useEffect(() => {
@@ -67,6 +56,7 @@ export function ReadDevotionalStep({
 
   const handleComplete = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    persistOnboardingFirstReading({ id: devotionalId, day: devotionalDay });
     markDayAsRead(devotionalId, 1);
     onComplete();
   };

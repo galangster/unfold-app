@@ -74,11 +74,12 @@ describe('J11 retireOnboardingSamples', () => {
     useUnfoldStore.getState().reset();
   });
 
-  it('removes only sample devotionals and their days, keeps workbook rows, and repoints current', () => {
+  it('archives the current first sample, removes leftover samples, keeps workbook rows, and repoints current', () => {
     const sample = devotional('onboarding-sample-user-1', 'Sample');
+    const leftover = devotional('onboarding-sample-user-2', 'Leftover');
     const kept = devotional('auto-trial-1', 'Auto');
     useUnfoldStore.setState({
-      devotionals: [sample, kept],
+      devotionals: [sample, leftover, kept],
       currentDevotionalId: sample.id,
       journalEntries: [{
         id: 'journal-1',
@@ -121,8 +122,12 @@ describe('J11 retireOnboardingSamples', () => {
     useUnfoldStore.getState().retireOnboardingSamples({ keepId: kept.id });
 
     const state = useUnfoldStore.getState();
-    expect(state.devotionals.map((d) => d.id)).toEqual([kept.id]);
-    expect(state.devotionals[0].days).toHaveLength(1);
+    expect(state.devotionals.map((d) => d.id).sort()).toEqual([kept.id, sample.id].sort());
+    expect(state.devotionals.find((d) => d.id === leftover.id)).toBeUndefined();
+    const retained = state.devotionals.find((d) => d.id === sample.id);
+    expect(retained?.archivedAt).toBeTruthy();
+    expect(retained?.seriesArc?.origin).toBe('onboarding_first');
+    expect(retained?.days).toHaveLength(1);
     expect(state.currentDevotionalId).toBe(kept.id);
     expect(state.journalEntries).toHaveLength(1);
     expect(state.checkIns).toHaveLength(1);

@@ -53,7 +53,7 @@ import { VoiceInputBar } from '@/components/VoiceInputBar';
 import { OnboardingVoiceAnswerSheet } from '@/components/onboarding/OnboardingVoiceAnswerSheet';
 import { VoiceAnswerButton } from '@/components/onboarding/VoiceAnswerButton';
 import { isVoiceCheckInsEnabled } from '@/lib/voice-feature';
-import { useUnfoldStore, flushUnfoldStorePersistAsync, type Devotional, UserProfile, BibleTranslation, ThemeCategory, DevotionalType, WritingTone, ContentDepth, FaithBackground, LifeStage, RelationshipWithGod, BibleFrequency } from '@/lib/store';
+import { useUnfoldStore, flushUnfoldStorePersistAsync, UserProfile, BibleTranslation, ThemeCategory, DevotionalType, WritingTone, ContentDepth, FaithBackground, LifeStage, RelationshipWithGod, BibleFrequency } from '@/lib/store';
 import { generateAdaptiveQuestion, generateDiagnosticQuestions, generateMirrorBackText, type MirrorBackContent } from '@/lib/devotional-service';
 import { THEME_CATEGORIES, DEVOTIONAL_TYPES, BIBLICAL_CHARACTERS, BIBLE_BOOKS_FOR_STUDY, ThemeCategoryInfo, DevotionalTypeInfo, getThemeById, getDevotionalTypeById } from '@/constants/devotional-types';
 import {
@@ -138,6 +138,7 @@ import { CommitmentStep } from '@/components/onboarding/CommitmentStep';
 import { ThreeStepPaywall } from '@/components/onboarding/ThreeStepPaywall';
 import { WelcomeBackStep } from '@/components/onboarding/WelcomeBackStep';
 import { isUsableSampleDevotionalDay } from '@/lib/onboarding-sample-day-shape';
+import { persistOnboardingFirstReading } from '@/lib/onboarding-first-reading';
 import { stripOuterQuotes } from '@/lib/cn';
 import { Typography } from '@/constants/typography';
 import { useOnboardingDarkColors } from '@/hooks/useOnboardingDarkColors';
@@ -631,7 +632,6 @@ export default function OnboardingScreen() {
   const setUser = useUnfoldStore((s) => s.setUser);
   const updateUser = useUnfoldStore((s) => s.updateUser);
   const setCompanionName = useUnfoldStore((s) => s.setCompanionName);
-  const addDevotional = useUnfoldStore((s) => s.addDevotional);
 
   // ONB-RESUME-1: the answers this person already gave, from a walk-through
   // they left. Read once via a lazy initializer so getDeviceId() isn't hit on
@@ -1470,6 +1470,21 @@ export default function OnboardingScreen() {
     router.replace(target);
   }, [router]);
 
+  const persistFirstReading = useCallback(() => {
+    if (!isUsableSampleDevotionalDay(onboardingDevotionalDay) || !onboardingDevotionalId) return;
+    const answers = dataRef.current;
+    persistOnboardingFirstReading({
+      id: onboardingDevotionalId,
+      day: onboardingDevotionalDay,
+      userContext: {
+        name: answers.name,
+        aboutMe: answers.aboutMe,
+        currentSituation: answers.currentSituation,
+        emotionalState: '',
+      },
+    });
+  }, [onboardingDevotionalDay, onboardingDevotionalId]);
+
   // Complete onboarding: save data + navigate through runOnboardingCompletion.
   const proceedToGeneration = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -1489,6 +1504,7 @@ export default function OnboardingScreen() {
       saveProfile: () => {
         saveOnboardingData();
       },
+      persistFirstReading,
       flushStoreAsync: async () => {
         await flushUnfoldStorePersistAsync();
       },
@@ -1498,7 +1514,7 @@ export default function OnboardingScreen() {
       trackCompleted: (outcome) => trackOnboardingCompleted(outcome, { isFirstRun: true }),
       navigate: navigateCompletion,
     });
-  }, [autoTrialMode, navigateCompletion, retireDraftAutosave, saveOnboardingData]);
+  }, [autoTrialMode, navigateCompletion, persistFirstReading, retireDraftAutosave, saveOnboardingData]);
 
   /**
    * "I'll decide later" on the three-step paywall.
@@ -1520,28 +1536,7 @@ export default function OnboardingScreen() {
       saveProfile: () => {
         saveOnboardingData();
       },
-      addDeferredSample: () => {
-        if (onboardingDevotionalDay && onboardingDevotionalId) {
-          const createdAt = new Date().toISOString();
-          const answers = dataRef.current;
-          addDevotional({
-            id: onboardingDevotionalId,
-            title: 'Your First Devotional',
-            totalDays: 1,
-            currentDay: 1,
-            days: [{ ...onboardingDevotionalDay, dayNumber: 1, isRead: false }],
-            createdAt,
-            seriesStartDate: createdAt,
-            userContext: {
-              name: answers.name,
-              aboutMe: answers.aboutMe,
-              currentSituation: answers.currentSituation,
-              emotionalState: '',
-            },
-            generationMode: 'progressive',
-          } as Devotional);
-        }
-      },
+      persistFirstReading,
       flushStoreAsync: async () => {
         await flushUnfoldStorePersistAsync();
       },
@@ -1552,10 +1547,8 @@ export default function OnboardingScreen() {
       navigate: navigateCompletion,
     });
   }, [
-    addDevotional,
     navigateCompletion,
-    onboardingDevotionalDay,
-    onboardingDevotionalId,
+    persistFirstReading,
     retireDraftAutosave,
     saveOnboardingData,
   ]);
@@ -3845,6 +3838,14 @@ export default function OnboardingScreen() {
         <OnboardingCelebration
           colors={colors}
           onContinue={advanceToNextStep}
+          firstReadingId={onboardingDevotionalId}
+          firstReadingDay={onboardingDevotionalDay}
+          userContext={{
+            name: data.name,
+            aboutMe: data.aboutMe,
+            currentSituation: data.currentSituation,
+            emotionalState: '',
+          }}
         />
       );
     }

@@ -1,4 +1,5 @@
 import {
+  firstReadingLabel,
   filterShelf,
   resolveShelfSelection,
   seriesReadingProgress,
@@ -178,6 +179,22 @@ describe("bookshelf reading progress", () => {
     expect(
       listSeriesActs(arc({ acts: [{ ...first, fromDay: 0 }, second] }), 3),
     ).toEqual([]);
+  });
+});
+
+describe("bookshelf first-reading label", () => {
+  it("names only an origin-marked book Your first devotional", () => {
+    const first = book({
+      title: "The Name That Found You",
+      totalDays: 1,
+      seriesArc: arc({ totalDaysPlanned: 1, origin: "onboarding_first" }),
+    });
+    const ordinary = book({ id: "ordinary", title: "A Quiet Hour", totalDays: 1 });
+    expect(firstReadingLabel(first)).toBe("Your first devotional");
+    expect(firstReadingLabel(ordinary)).toBeUndefined();
+    expect(filterShelf([first], "all", "name that found")[0]?.title).toBe("The Name That Found You");
+    expect(filterShelf([first, ordinary], "all", "first devotional").map((item) => item.id)).toEqual([first.id]);
+    expect(filterShelf([first, ordinary], "all", "quiet hour").map((item) => item.id)).toEqual([ordinary.id]);
   });
 });
 

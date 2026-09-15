@@ -10,6 +10,7 @@ import {
   transitionAutoTrialIntent,
   type AutoTrialIntentV1,
 } from '@/lib/auto-trial-intent';
+import { isOnboardingFirstReading } from '@/lib/auto-trial-series';
 import {
   trackAutoTrialFailed,
   trackAutoTrialRevealed,
@@ -190,6 +191,7 @@ export function useAutoTrialGeneration(intentId: string | null): {
       intent,
       devotionalIds: store.devotionals.map((row) => row.id),
       inflightJob: readInflightGenerationJob(),
+      firstReadingIds: store.devotionals.filter(isOnboardingFirstReading).map((row) => row.id),
     })) {
       apply({ type: 'submit_blocked', reason: 'superseded' });
       return;
@@ -413,6 +415,7 @@ export function useAutoTrialGeneration(intentId: string | null): {
             intent,
             devotionalIds: store.devotionals.map((row) => row.id),
             inflightJob: inflight,
+            firstReadingIds: store.devotionals.filter(isOnboardingFirstReading).map((row) => row.id),
           })
         : false,
     });

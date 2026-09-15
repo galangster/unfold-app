@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
+import { firstReadingLabel } from '@/lib/bookshelf';
 import { Spacing } from '@/constants/spacing';
 import type { ColorTheme } from '@/constants/colors';
 import type { Devotional } from '@/lib/store';
@@ -37,6 +38,11 @@ export function BookOfSeasonsView({
   return (
     <View testID="book-of-seasons">
       <View style={styles.season}>
+        {firstReadingLabel(devotional) ? (
+          <Text style={[styles.subtitle, { color: colors.textMuted, marginTop: 0, marginBottom: Spacing['2'] }]}>
+            {firstReadingLabel(devotional)}
+          </Text>
+        ) : null}
         <View style={styles.titleRow}>
           <Text style={[styles.title, { color: colors.text }]}>{devotional.title}</Text>
           {headerAccessory}

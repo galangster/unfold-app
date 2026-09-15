@@ -524,6 +524,7 @@ export function SeriesBookCover({
                 styles.dateArea,
                 {
                   top: height * 0.72,
+                  height: height * 0.14,
                   left: faceWidth * 0.12,
                   right: faceWidth * 0.12,
                 },
@@ -541,10 +542,11 @@ export function SeriesBookCover({
                 accessible={false}
                 allowFontScaling={allowFontScaling}
                 adjustsFontSizeToFit
+                minimumFontScale={0.5}
                 numberOfLines={2}
                 style={[
                   styles.date,
-                  { color: cover.gold, fontSize: width * 0.035 },
+                  { color: cover.gold, fontSize: width * 0.035, maxHeight: height * 0.1 },
                 ]}
               >
                 {date}
@@ -555,12 +557,14 @@ export function SeriesBookCover({
             accessible={false}
             allowFontScaling={allowFontScaling}
             adjustsFontSizeToFit
+            minimumFontScale={0.5}
             numberOfLines={1}
             style={[
               styles.imprint,
               {
                 color: cover.gold,
                 fontSize: width * 0.037,
+                maxHeight: height * 0.055,
                 bottom: height * 0.075,
               },
             ]}
