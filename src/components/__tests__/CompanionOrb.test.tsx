@@ -208,8 +208,8 @@ describe('CompanionOrb', () => {
       tree = renderer.create(<CompanionOrb accentColor="#C8A55C" size={64} idleStyle="calm" />);
     });
     expect(mockWithTiming).toHaveBeenCalledWith(
-      44_000,
-      expect.objectContaining({ duration: 7_000 }),
+      11_200,
+      expect.objectContaining({ duration: 600 }),
     );
 
     mockWithTiming.mockClear();
@@ -217,7 +217,7 @@ describe('CompanionOrb', () => {
       tree!.update(<CompanionOrb accentColor="#C8A55C" size={64} idleStyle="calm" thinking />);
     });
     expect(mockWithTiming).not.toHaveBeenCalledWith(
-      44_000,
+      11_200,
       expect.anything(),
     );
   });

@@ -4,6 +4,7 @@ import {
   COMPANION_IDENTITY_IN_DELAY_MS,
   COMPANION_IDENTITY_IN_MS,
   COMPANION_IDENTITY_OUT_MS,
+  COMPANION_REUNION_CENTER_DELAY_MS,
   COMPANION_IDLE_CYCLES,
   COMPANION_IDLE_NEUTRAL,
   COMPANION_MORPH_MS,
@@ -51,12 +52,13 @@ describe('companion avatar model', () => {
     expect(new Set(signatures).size).toBe(COMPANION_EXPRESSIONS.length);
   });
 
-  it('holds the 520ms morph and staggered identity return', () => {
+  it('returns eyes with the reuniting center sphere, not after it', () => {
     expect(COMPANION_MORPH_MS).toBe(520);
     expect(COMPANION_IDENTITY_OUT_MS).toBe(140);
-    expect(COMPANION_IDENTITY_IN_MS).toBe(210);
-    expect(COMPANION_IDENTITY_IN_DELAY_MS).toBeGreaterThanOrEqual(
-      COMPANION_MORPH_MS,
+    expect(COMPANION_IDENTITY_IN_DELAY_MS).toBe(COMPANION_REUNION_CENTER_DELAY_MS);
+    expect(COMPANION_IDENTITY_IN_MS).toBe(COMPANION_MORPH_MS);
+    expect(COMPANION_IDENTITY_IN_DELAY_MS + COMPANION_IDENTITY_IN_MS).toBe(
+      COMPANION_REUNION_CENTER_DELAY_MS + COMPANION_MORPH_MS,
     );
     expect(COMPANION_SPHERE_SCALE).toBe(0.27);
     expect(COMPANION_SPLIT_X).toBe(17.5);
@@ -107,6 +109,17 @@ describe('companion avatar model', () => {
       expect(haloGlance.find((frame) => frame.faceY < 0)!.timeMs).toBeLessThan(
         haloGlance.find((frame) => frame.haloY < 0)!.timeMs,
       );
+    }
+  });
+
+  it('starts moving immediately and keeps rests short so the tab never sits still', () => {
+    for (const cycle of Object.values(COMPANION_IDLE_CYCLES)) {
+      expect(cycle.gestures[0].startMs).toBe(0);
+      cycle.gestures.forEach((gesture, index) => {
+        if (index === 0) return;
+        expect(gesture.startMs - cycle.gestures[index - 1].endMs).toBeLessThanOrEqual(600);
+      });
+      expect(cycle.durationMs - cycle.gestures.at(-1)!.endMs).toBeLessThanOrEqual(600);
     }
   });
 

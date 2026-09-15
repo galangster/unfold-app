@@ -177,13 +177,13 @@ export const CompanionAvatar = memo(function CompanionAvatar({
       bobRight.value = withLiveMotion(withTiming(0, { duration: 240, easing: LIFE_EASE }));
       morphLeft.value = withLiveMotion(withTiming(0, { duration: COMPANION_MORPH_MS, easing: MORPH_EASE }));
       morphRight.value = withLiveMotion(withDelay(35, withTiming(0, { duration: COMPANION_MORPH_MS, easing: MORPH_EASE })));
-      morphCenter.value = withLiveMotion(withDelay(75, withTiming(0, { duration: COMPANION_MORPH_MS, easing: MORPH_EASE })));
+      morphCenter.value = withLiveMotion(withDelay(COMPANION_IDENTITY_IN_DELAY_MS, withTiming(0, { duration: COMPANION_MORPH_MS, easing: MORPH_EASE })));
       identity.value = withLiveMotion(withDelay(COMPANION_IDENTITY_IN_DELAY_MS, withTiming(1, { duration: COMPANION_IDENTITY_IN_MS, easing: LIFE_EASE })));
 
       if (idleStyle !== 'off') {
         blink.value = withLiveMotion(withRepeat(withSequence(
           withTiming(0, { duration: 120, easing: LIFE_EASE }),
-          withDelay(idleStyle === 'joyful' ? 4700 : 6700, withTiming(1, { duration: 85, easing: LIFE_EASE })),
+          withDelay(idleStyle === 'joyful' ? 1600 : 2200, withTiming(1, { duration: 85, easing: LIFE_EASE })),
           withTiming(0, { duration: 115, easing: LIFE_EASE }),
         ), -1, false));
         const nextIdleCycle = withLiveMotion(withRepeat(
