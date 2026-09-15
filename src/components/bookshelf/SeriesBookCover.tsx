@@ -1,9 +1,4 @@
-import {
-  Image,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { Image, StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Circle, G, Path, Rect } from "react-native-svg";
 import { FontFamily } from "@/constants/fonts";
@@ -30,59 +25,194 @@ const CORNERS = [
   "translate(186 266) scale(-1 -1)",
 ];
 
-function LeafSprig({
-  wheat = false,
-  fern = false,
-  curved = false,
-}: {
-  wheat?: boolean;
-  fern?: boolean;
-  curved?: boolean;
-}) {
-  const count = fern ? 10 : wheat ? 9 : 5;
+const BOTANICAL_RADIUS = 44;
+
+function BotanicalFrame({ variant }: { variant: number }) {
+  const radius = BOTANICAL_RADIUS;
+  const wheat = variant === 1;
+  const olive = variant === 2;
+  const fern = variant === 4;
+  const count = variant === 3 ? 0 : wheat ? 7 : olive ? 4 : fern ? 9 : 7;
+  const length = wheat ? 4 : olive ? 8 : fern ? 3 : 8;
+  const breadth = wheat ? 1.3 : olive ? 2.6 : fern ? 1.6 : 3;
+  const paired = wheat || olive || fern;
+  const leaves = Array.from({ length: count }, (_, index) => {
+    const t = 0.23 + (index / (count - 1)) * 0.51;
+    // Positions and tangents come from the same quadratic as the frame.
+    const x = radius * t * t;
+    const y = radius * (1 - t) * (1 - t);
+    const magnitude = Math.hypot(t, 1 - t);
+    const tx = t / magnitude;
+    const ty = (t - 1) / magnitude;
+    return (paired ? [-1, 1] : [index % 2 === 0 ? 1 : -1]).map((side) => {
+      const vector = (along: number, across: number) => [
+        tx * length * along - ty * breadth * across * side,
+        ty * length * along + tx * breadth * across * side,
+      ];
+      const vectors = [vector(0.2, 1.3), vector(1, 1.4), vector(0.8, 0.45)];
+      // Taper terminal leaves to keep the entire ornament inside its corner cell.
+      let scale = 1;
+      for (const [dx, dy] of vectors) {
+        if (dx < 0) scale = Math.min(scale, (x - 1) / -dx);
+        if (dx > 0) scale = Math.min(scale, (radius - 1 - x) / dx);
+        if (dy < 0) scale = Math.min(scale, (y - 1) / -dy);
+        if (dy > 0) scale = Math.min(scale, (radius - 1 - y) / dy);
+      }
+      const [first, tip, second] = vectors.map(
+        ([dx, dy]) => `${x + dx * scale} ${y + dy * scale}`,
+      );
+      return (
+        <Path
+          key={`${index}-${side}`}
+          d={`M${x} ${y} Q${first} ${tip} Q${second} ${x} ${y}Z`}
+        />
+      );
+    });
+  });
   return (
     <G>
-      <Path d={curved ? "M0 47 Q2 12 42 0" : "M0 47 Q3 17 28 0"} />
-      {Array.from({ length: count }, (_, i) => {
-        const y = 40 - i * (36 / count);
-        const x = curved ? i * i * 0.85 : i * 2.8;
-        const length = fern ? 9 : wheat ? 6 : 12;
-        return (
-          <G key={i}>
-            <Path
-              d={`M${x} ${y} Q${x - 7} ${y - 4} ${x - 3} ${y - length} Q${x + 1} ${y - 5} ${x} ${y}`}
-            />
-            <Path
-              d={`M${x + 1} ${y - 2} Q${x + 8} ${y - 9} ${x + length} ${y - 5} Q${x + 7} ${y + 1} ${x + 1} ${y - 2}`}
-            />
-          </G>
-        );
-      })}
+      <Path d="M58 14 H142 Q186 14 186 58 V222 Q186 266 142 266 H58 Q14 266 14 222 V58 Q14 14 58 14Z" />
+      {CORNERS.map((transform) => (
+        <G key={transform} transform={transform}>
+          {variant === 3 ? (
+            <G transform={`translate(${radius / 4} ${radius / 4}) rotate(-45)`}>
+              <Path d="M0 0 C0 5 4 10 9 10 C14 10 15 5 11 5 C8 5 7 8 10 8" />
+            </G>
+          ) : (
+            leaves
+          )}
+        </G>
+      ))}
     </G>
   );
 }
 
+const BORDER_RADIUS = 14;
+const BORDER_HORIZONTAL = 68;
+const BORDER_VERTICAL = 108;
+const BORDER_QUARTER =
+  BORDER_HORIZONTAL + (Math.PI * BORDER_RADIUS) / 2 + BORDER_VERTICAL;
+const BORDER_LENGTH = BORDER_QUARTER * 4;
+
+/** Closed rounded frame, parameterized by distance so corner joins share one rhythm. */
+function borderPoint(distance: number, inset: number) {
+  const wrapped = ((distance % BORDER_LENGTH) + BORDER_LENGTH) % BORDER_LENGTH;
+  const quarter = Math.floor(wrapped / BORDER_QUARTER);
+  let progress = wrapped - quarter * BORDER_QUARTER;
+  if (quarter % 2 === 1) progress = BORDER_QUARTER - progress;
+  let x: number;
+  let y: number;
+  let tx: number;
+  let ty: number;
+  if (progress <= BORDER_HORIZONTAL) {
+    x = 100 + progress;
+    y = 18;
+    tx = 1;
+    ty = 0;
+  } else if (progress < BORDER_HORIZONTAL + (Math.PI * BORDER_RADIUS) / 2) {
+    const angle = -Math.PI / 2 + (progress - BORDER_HORIZONTAL) / BORDER_RADIUS;
+    x = 168 + BORDER_RADIUS * Math.cos(angle);
+    y = 32 + BORDER_RADIUS * Math.sin(angle);
+    tx = -Math.sin(angle);
+    ty = Math.cos(angle);
+  } else {
+    x = 182;
+    y = 32 + progress - BORDER_HORIZONTAL - (Math.PI * BORDER_RADIUS) / 2;
+    tx = 0;
+    ty = 1;
+  }
+  if (quarter === 1) {
+    y = 280 - y;
+    tx = -tx;
+  }
+  if (quarter === 2) {
+    x = 200 - x;
+    y = 280 - y;
+    tx = -tx;
+    ty = -ty;
+  }
+  if (quarter === 3) {
+    x = 200 - x;
+    ty = -ty;
+  }
+  return `${(x - ty * inset).toFixed(3)} ${(y + tx * inset).toFixed(3)}`;
+}
+
+function scallopedBorderPaths() {
+  const cornerLength = (Math.PI * BORDER_RADIUS) / 2;
+  const bottomCenter = BORDER_LENGTH / 2;
+  // The opening ends at whole scallops, with matching space around the imprint.
+  const opening = BORDER_HORIZONTAL / 2;
+  return [0, 1, 2].map((layer) =>
+    [
+      [0, bottomCenter - opening],
+      [bottomCenter + opening, BORDER_LENGTH],
+    ]
+      .map(([start, end]) => {
+        const samples = Math.ceil(end - start);
+        return Array.from({ length: samples + 1 }, (_, index) => {
+          const distance = start + ((end - start) * index) / samples;
+          const quarter = Math.min(3, Math.floor(distance / BORDER_QUARTER));
+          let progress = distance - quarter * BORDER_QUARTER;
+          if (quarter % 2 === 1) progress = BORDER_QUARTER - progress;
+          const phase =
+            progress <= BORDER_HORIZONTAL
+              ? progress / (BORDER_HORIZONTAL / 4)
+              : progress >= BORDER_HORIZONTAL + cornerLength
+                ? (progress - BORDER_HORIZONTAL - cornerLength) /
+                  (BORDER_VERTICAL / 6)
+                : 0;
+          const depth = Math.sin(phase * Math.PI) ** 2;
+          return `${index === 0 ? "M" : "L"}${borderPoint(distance, layer * 2 + (6 - layer) * depth)}`;
+        }).join(" ");
+      })
+      .join(" "),
+  );
+}
+
+function repeatedBorderPaths(variant: number) {
+  const count = variant === 10 ? 44 : 32;
+  const step = BORDER_LENGTH / count;
+  const gap = Math.ceil(22 / step);
+  const segments = Array.from({ length: count }, (_, index) => index).filter(
+    (index) => index < count / 2 - gap || index >= count / 2 + gap,
+  );
+  if (variant === 10) {
+    return [
+      segments
+        .map(
+          (index) =>
+            Array.from({ length: 33 }, (_, sample) => {
+              const angle = (sample / 32) * Math.PI * 2;
+              const distance = (index + (1 - Math.cos(angle)) / 2) * step;
+              return `${sample === 0 ? "M" : "L"}${borderPoint(distance, Math.sin(angle) * 3)}`;
+            }).join(" ") + "Z",
+        )
+        .join(" "),
+    ];
+  }
+  return [-1, 1].map((layer) =>
+    segments
+      .map((index) => {
+        return Array.from({ length: 25 }, (_, sample) => {
+          const fraction = sample / 24;
+          const offset = layer * 2.5 * Math.sin(fraction * Math.PI * 2);
+          return `${sample === 0 ? "M" : "L"}${borderPoint((index + fraction) * step, offset)}`;
+        }).join(" ");
+      })
+      .join(" "),
+  );
+}
+
+// Generate repeated borders once, outside render and animation callbacks.
+const REPEATED_BORDERS: Partial<Record<number, string[]>> = {
+  10: repeatedBorderPaths(10),
+  12: repeatedBorderPaths(12),
+  15: scallopedBorderPaths(),
+};
+
 function CornerOrnament({ variant }: { variant: number }) {
   switch (variant) {
-    case 0:
-      return <LeafSprig />;
-    case 1:
-      return (
-        <G transform="translate(0 0) scale(.7 1.15)">
-          <LeafSprig wheat />
-        </G>
-      );
-    case 2:
-      return <LeafSprig curved />;
-    case 3:
-      return (
-        <G>
-          <Path d="M0 58 C14 43 -12 35 1 24 C14 13 8 -8 42 0 M0 24 C18 32 24 15 16 12 C5 6 5 25 16 21 M12 3 C7 -8 18 -10 20 -2 M30 0 C31 -10 41 -10 41 -3" />
-          <Path d="M3 48 q10 -8 10 -2 q-2 8 -10 2 M29 0 q-4 12 3 10 q8 -4 -3 -10" />
-        </G>
-      );
-    case 4:
-      return <LeafSprig fern curved />;
     case 5:
       return (
         <G>
@@ -141,30 +271,11 @@ function CornerOrnament({ variant }: { variant: number }) {
           ))}
         </G>
       );
-    case 10:
-      return (
-        <G>
-          {[0, 1, 2].map((i) => (
-            <Path
-              key={i}
-              d={`M${i * 3} 17 Q${i * 3 - 5} ${i * 3 - 5} 17 ${i * 3}`}
-            />
-          ))}
-        </G>
-      );
     case 11:
       return (
         <G>
           {[14, 18, 22].map((r) => (
             <Path key={r} d={`M0 ${r} Q${r} ${r} ${r} 0`} />
-          ))}
-        </G>
-      );
-    case 12:
-      return (
-        <G>
-          {[0, 5, 10].map((x) => (
-            <Path key={x} d={`M${x} 32 Q-7 19 6 9 Q19 -7 32 ${x}`} />
           ))}
         </G>
       );
@@ -186,14 +297,6 @@ function CornerOrnament({ variant }: { variant: number }) {
         <G>
           <Path d="M0 10 L10 0 20 10 10 20 Z M5 10 L10 5 15 10 10 15 Z" />
           <Circle cx="10" cy="10" r="1" />
-        </G>
-      );
-    case 15:
-      return (
-        <G>
-          {[3, 6, 9, 12].map((r) => (
-            <Path key={r} d={`M0 ${r} A${r} ${r} 0 0 0 ${r} 0`} />
-          ))}
         </G>
       );
     case 16:
@@ -251,47 +354,6 @@ function CornerOrnament({ variant }: { variant: number }) {
 }
 
 function EdgeOrnaments({ variant }: { variant: number }) {
-  if (variant === 10 || variant === 12 || variant === 15) {
-    const step = variant === 15 ? 16 : 20;
-    const path =
-      variant === 12
-        ? "M0 0 Q10 -10 20 0 Q10 10 0 0 M0 0 Q10 10 20 0"
-        : variant === 15
-          ? "M0 0 Q8 17 16 0 M2 0 Q8 12 14 0 M4 0 Q8 8 12 0"
-          : "M0 0 Q10 -14 20 0 M0 0 Q10 14 20 0";
-    return (
-      <G>
-        {[false, true].map((bottom) => (
-          <G
-            key={String(bottom)}
-            transform={bottom ? "translate(0 280) scale(1 -1)" : undefined}
-          >
-            {Array.from({ length: Math.floor(160 / step) }, (_, i) => (
-              <Path
-                key={i}
-                transform={`translate(${20 + i * step} 14)`}
-                d={path}
-              />
-            ))}
-          </G>
-        ))}
-        {[false, true].map((right) => (
-          <G
-            key={String(right)}
-            transform={right ? "translate(200 0) scale(-1 1)" : undefined}
-          >
-            {Array.from({ length: Math.floor(240 / step) }, (_, i) => (
-              <Path
-                key={i}
-                transform={`translate(14 ${20 + i * step}) rotate(90)`}
-                d={path}
-              />
-            ))}
-          </G>
-        ))}
-      </G>
-    );
-  }
   if (variant === 14)
     return (
       <G>
@@ -326,7 +388,8 @@ function EdgeOrnaments({ variant }: { variant: number }) {
 
 function CoverFoil({ variant, gold }: { variant: number; gold: string }) {
   const cornerSpace = variant <= 9 ? 45 : variant === 13 ? 39 : 25;
-  const inset = variant === 10 || variant === 12 || variant === 15 ? 25 : 14;
+  const inset = 14;
+  const repeatedBorder = REPEATED_BORDERS[variant];
   return (
     <Svg
       pointerEvents="none"
@@ -353,26 +416,34 @@ function CoverFoil({ variant, gold }: { variant: number; gold: string }) {
           strokeWidth=".5"
           opacity=".65"
         />
-        {variant === 17 ? (
-          <Rect
-            x="14"
-            y="14"
-            width="172"
-            height="252"
-            strokeDasharray=".1 4.5"
-            strokeWidth="1.5"
-          />
+        {variant <= 4 ? (
+          <BotanicalFrame variant={variant} />
+        ) : repeatedBorder ? (
+          repeatedBorder.map((path, index) => <Path key={index} d={path} />)
         ) : (
-          <Path
-            d={`M${14 + cornerSpace} ${inset} H${186 - cornerSpace} M${14 + cornerSpace} ${280 - inset} H${186 - cornerSpace} M${inset} ${14 + cornerSpace} V${266 - cornerSpace} M${200 - inset} ${14 + cornerSpace} V${266 - cornerSpace}`}
-          />
+          <>
+            {variant === 17 ? (
+              <Rect
+                x="14"
+                y="14"
+                width="172"
+                height="252"
+                strokeDasharray=".1 4.5"
+                strokeWidth="1.5"
+              />
+            ) : (
+              <Path
+                d={`M${14 + cornerSpace} ${inset} H${186 - cornerSpace} M${14 + cornerSpace} ${280 - inset} H${186 - cornerSpace} M${inset} ${14 + cornerSpace} V${266 - cornerSpace} M${200 - inset} ${14 + cornerSpace} V${266 - cornerSpace}`}
+              />
+            )}
+            {CORNERS.map((transform) => (
+              <G key={transform} transform={transform}>
+                <CornerOrnament variant={variant} />
+              </G>
+            ))}
+            <EdgeOrnaments variant={variant} />
+          </>
         )}
-        {CORNERS.map((transform) => (
-          <G key={transform} transform={transform}>
-            <CornerOrnament variant={variant} />
-          </G>
-        ))}
-        <EdgeOrnaments variant={variant} />
       </G>
     </Svg>
   );
@@ -401,7 +472,7 @@ export function SeriesBookCover({
   const spineWidth = width * 0.065;
   const paperWidth = width * 0.032;
   const faceWidth = width - spineWidth - paperWidth;
-  const titleWidth = faceWidth * 0.75;
+  const titleWidth = faceWidth * (REPEATED_BORDERS[cover.variant] ? 0.7 : 0.75);
   const titleHeight = height * (compact ? 0.5 : 0.43);
   const fontSize = Math.min(
     width * 0.14,
@@ -492,7 +563,7 @@ export function SeriesBookCover({
               style={[
                 styles.titleArea,
                 {
-                  left: faceWidth * 0.125,
+                  left: (faceWidth - titleWidth) / 2,
                   width: titleWidth,
                   top: height * (compact ? 0.23 : 0.25),
                   height: titleHeight,
@@ -546,7 +617,11 @@ export function SeriesBookCover({
                 numberOfLines={2}
                 style={[
                   styles.date,
-                  { color: cover.gold, fontSize: width * 0.035, maxHeight: height * 0.1 },
+                  {
+                    color: cover.gold,
+                    fontSize: width * 0.035,
+                    maxHeight: height * 0.1,
+                  },
                 ]}
               >
                 {date}
