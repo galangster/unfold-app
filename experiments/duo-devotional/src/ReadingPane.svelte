@@ -12,11 +12,13 @@
   let article;
   let restoring = false;
   let pendingScroll = false;
+  let restoredScrollTop = 0;
   let scrollFrame;
   let restoreFrame;
 
   export function capture(force = false) {
-    if (!scroller || hidden || restoring || !scroller.clientHeight || (!force && !pendingScroll)) return;
+    if (!scroller || hidden || !scroller.clientHeight || (!force && !pendingScroll)) return;
+    if (restoring && !pendingScroll) return;
     pendingScroll = false;
     if (scroller.scrollTop <= 1) {
       setAnchor({ id: 'start', offset: 0, inset: 0 });
@@ -46,6 +48,8 @@
   export async function restore() {
     await tick();
     if (!scroller || hidden || !scroller.clientHeight) return;
+    // Commit any user scroll before another restore can overwrite it.
+    if (restoring && pendingScroll) capture();
     restoring = true;
     const anchor = get(session).anchor;
     if (anchor.id === 'start') scroller.scrollTop = 0;
@@ -67,8 +71,12 @@
       }
       scroller.scrollTop += top - scroller.getBoundingClientRect().top - anchor.inset;
     }
+    restoredScrollTop = scroller.scrollTop;
     cancelAnimationFrame(restoreFrame);
-    restoreFrame = requestAnimationFrame(() => { restoring = false; });
+    restoreFrame = requestAnimationFrame(() => {
+      restoring = false;
+      capture();
+    });
   }
 
   export function focusPane() {
@@ -76,7 +84,8 @@
   }
 
   function onScroll() {
-    if (restoring) return;
+    // Ignore the restoration's own scroll event, but retain intervening input.
+    if (restoring && scroller.scrollTop === restoredScrollTop) return;
     setPane('read');
     if (document.activeElement?.closest('.reflection-pane')) focusPane();
     pendingScroll = true;

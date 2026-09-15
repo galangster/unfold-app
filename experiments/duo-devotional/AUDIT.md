@@ -33,6 +33,13 @@ These are resolved findings from the review passes. Locations identify the final
 | 10 | MEDIUM | ui | src/session.js:119, src/App.svelte:22 | Presentation controls reset on reload. | Recover valid preferences before first render and persist changes. | The returned session should use the person's chosen presentation. |
 | 11 | LOW | layout | src/App.svelte:108, src/style.css:140 | A large repeated heading, motivational captions, fake home indicator, and deep hinge shadows competed with the task. | Use compact study chrome and quiet gutters. Retain only the subtle seated artwork relationship. | The reading and response should carry the composition. |
 
+### PR review follow-up
+
+- Reading restoration discarded scroll input during its animation frame. It now distinguishes its own scroll event from new input. Pending input survives an immediate second restore or collapse. Two component cases cover those boundaries.
+- Continuity depended on one manual browser run. Component checks now cover question drafts, selection, concealment, presentation changes, Today return, focus, composition deferral, and save retry.
+- Vendored lint rules had no direct check. Strict TypeScript validates their implementation. Real Oxlint fixtures check prohibited access, assertion diagnostics, typed access, and local name binding.
+- Workflow action tags could change upstream. The three actions now use full commit hashes resolved from their official repositories.
+
 ## Considered but Rejected
 
 | Location | Candidate | Rejected because |
@@ -48,7 +55,7 @@ These are resolved findings from the review passes. Locations identify the final
 
 | Check | Command or interaction | Result |
 | --- | --- | --- |
-| Prototype gates | bun run lint; bun run check; bun run test; bun run build | Zero lint errors. Zero Svelte errors or warnings. Three recovery tests pass. Vite builds. |
+| Prototype gates | bun run lint; bun run check; bun run test; bun run build | Zero lint errors. Zero Svelte errors or warnings. Eleven tests pass: three recovery tests, six component cases, and two lint fixtures. The vendored TypeScript also passes its own strict check. Vite builds. |
 | Mobile repository gates | bun run typecheck; bun run lint; bun run test -- --runInBand; bun run verify:profiles | Typecheck and profile safety pass. Lint has zero errors and 3,805 existing warnings. 469 suites / 4,025 tests pass, with one suite and test skipped. |
 | All seven arrangements | Seed p5 / character 128. Select characters 0–2 of a 40-character response. Change through every position. | Anchor, draft, revision, and selection remain identical. |
 | Active reading | Edit a response, scroll the reading, then close the layout | Reading remains visible. The editor is hidden. Focus remains on reading-pane. |
@@ -62,7 +69,7 @@ These are resolved findings from the review passes. Locations identify the final
 | Targets and contrast | Inspect rendered control bounds and computed colors in both themes | Main controls are at least 44px. Twenty contrast pairs pass. The conservative light artwork case is 5.07:1. |
 | Visual inspection | Light paired reading, dark seated reading, Today, empty/populated editor, narrow large text, save error | Hierarchy, wrapping, question context, and reachable controls inspected in the browser. |
 
-Browser tests use synthetic responses on a separate localhost origin. They do not overwrite the owner's existing preview drafts. No loading state is present because this experiment uses static content.
+Manual browser checks use synthetic responses on a separate localhost origin. They do not overwrite the owner's existing preview drafts. No loading state is present because this experiment uses static content. Automated component tests use JSDOM with explicit frame and geometry boundaries. They check event ordering, drafts, selection, composition, and focus. They do not establish real browser geometry or native IME acceptance.
 
 The initial mobile typecheck exposed an outdated shared expo-audio dependency. A separate frozen-lockfile install supplied this worktree's dependencies. The shared checkout remained unchanged.
 

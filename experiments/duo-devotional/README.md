@@ -36,6 +36,8 @@ Storage is local to this browser origin. A failed write keeps the latest draft i
 
 The scoped GitHub workflow runs these package checks. The repository's existing CVL workflow still runs its mobile gates.
 
+The test command runs store recovery, Svelte component, and real Oxlint fixture checks. The component environment controls frames and geometry. Use the browser walkthrough above for actual layout acceptance. The check command also validates the vendored lint rules with strict TypeScript.
+
 ## Scope
 
 This is a browser design experiment. Position choices simulate layouts with illustrative dimensions. Native hinge sensing, reserved regions, SDK access, keyboard geometry, VoiceOver, native input composition, and process recovery remain unverified. Bible, Companion, and Journal remain design proposals in DESIGN.md. Native implementation resumes after SDK and runtime access are verified.
