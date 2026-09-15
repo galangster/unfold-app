@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AppState, Platform, StyleSheet, useWindowDimensions } from 'react-native';
-import { Canvas, Fill, ImageShader, Shader, Skia } from '@shopify/react-native-skia';
+import { Canvas, Fill, ImageShader, Shader, Skia, useCanvasRef } from '@shopify/react-native-skia';
 import Animated, { cancelAnimation, runOnJS, useAnimatedStyle, useAnimatedReaction, useDerivedValue, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
 import { FullWindowOverlay } from 'react-native-screens';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
@@ -21,9 +21,21 @@ function Opening({ session }: { session: BookOpeningSession }) {
   const [curlFinished, setCurlFinished] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const canvasSize = useSharedValue({ width: 0, height: 0 });
-  const color = Array.from(Skia.Color(session.paperColor));
+  const canvasRef = useCanvasRef();
+  const color = useMemo(() => Array.from(Skia.Color(session.paperColor)), [session.paperColor]);
   const { rect, progress, id, cover, sourceHidden } = session;
   const hasCover = cover != null;
+  const confirmPresentation = useCallback(async () => {
+    if (hasCover) {
+      try {
+        // Layout can precede texture upload. Wait for a completed renderer frame.
+        const frame = await canvasRef.current?.makeImageSnapshotAsync();
+        if (!frame) { failBookOverlay(id); return; }
+        frame.dispose();
+      } catch { failBookOverlay(id); return; }
+    }
+    presentAfterPaint(id);
+  }, [canvasRef, hasCover, id]);
   const uniforms = useDerivedValue(() => ({
     viewport: [width, height],
     startRect: [rect.x, rect.y, rect.width, rect.height],
@@ -39,16 +51,16 @@ function Opening({ session }: { session: BookOpeningSession }) {
   );
   useAnimatedReaction(
     () => canvasSize.value.width > 0 && canvasSize.value.height > 0,
-    (ready, wasReady) => { if (ready && !wasReady) runOnJS(presentAfterPaint)(id); },
+    (ready, wasReady) => { if (ready && !wasReady) runOnJS(confirmPresentation)(); },
   );
   const preview = useAnimatedStyle(() => ({ opacity: (hasCover ? (sourceHidden.value ? 1 : 0) : Math.min(1, progress.value * 2)) * (1 - backgroundReveal.value) }));
 
   useEffect(() => {
     if (session.presented || session.failed) return;
     if (!effect) { failBookOverlay(id); return; }
-    const timeout = setTimeout(() => failBookOverlay(id), 500);
+    const timeout = setTimeout(() => failBookOverlay(id), hasCover ? 1000 : 500);
     return () => clearTimeout(timeout);
-  }, [id, session.presented, session.failed]);
+  }, [hasCover, id, session.presented, session.failed]);
 
   useEffect(() => {
     if (!session.committed || !expanded) return;
@@ -81,17 +93,22 @@ function Opening({ session }: { session: BookOpeningSession }) {
     return () => clearBookOpening(id);
   }, [height, id, width]);
 
+  // Keep the display list intact while presentation and reader readiness change.
+  const canvas = useMemo(() => effect ? (
+    <Canvas ref={canvasRef} style={StyleSheet.absoluteFill} pointerEvents="none" onSize={canvasSize}>
+      <Fill><Shader source={effect} uniforms={uniforms}>
+        <ImageShader image={session.image} fit="fill" rect={{ x: 0, y: 0, width: rect.width, height: rect.height }} tx="clamp" ty="clamp" />
+        <ImageShader image={session.coverImage ?? session.image} fit="fill" rect={{ x: 0, y: 0, width: rect.width, height: rect.height }} tx="clamp" ty="clamp" />
+      </Shader></Fill>
+    </Canvas>
+  ) : null, [canvasRef, canvasSize, rect.height, rect.width, session.coverImage, session.image, uniforms]);
+
   if (session.failed) return null;
 
   const content = (
     <Animated.View cssInterop={false} pointerEvents={session.committed ? 'auto' : 'none'} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={[StyleSheet.absoluteFill, styles.overlay]}>
       <Animated.View cssInterop={false} testID="book-opening-backdrop" style={[StyleSheet.absoluteFill, { backgroundColor: session.paperColor }, preview]} />
-      {effect ? <Canvas style={StyleSheet.absoluteFill} pointerEvents="none" onSize={session.presented ? undefined : canvasSize}>
-        <Fill><Shader source={effect} uniforms={uniforms}>
-          <ImageShader image={session.image} fit="fill" rect={{ x: 0, y: 0, width: rect.width, height: rect.height }} tx="clamp" ty="clamp" />
-          <ImageShader image={session.coverImage ?? session.image} fit="fill" rect={{ x: 0, y: 0, width: rect.width, height: rect.height }} tx="clamp" ty="clamp" />
-        </Shader></Fill>
-      </Canvas> : null}
+      {canvas}
     </Animated.View>
   );
   return Platform.OS === 'ios' ? <FullWindowOverlay>{content}</FullWindowOverlay> : content;

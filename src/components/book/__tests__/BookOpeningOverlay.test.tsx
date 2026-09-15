@@ -4,14 +4,16 @@ import { StyleSheet } from 'react-native';
 import { BookOpeningOverlay } from '../BookOpeningOverlay';
 import { useBookOpening, type BookOpeningSession } from '@/lib/book-opening';
 
-const mockReactions: Array<(value: boolean, previous: boolean | null) => void> = [];
+const mockReactions: ((value: boolean, previous: boolean | null) => void)[] = [];
 const mockTiming = jest.fn((value: number) => value);
+const mockCanvasSnapshot = jest.fn(() => Promise.resolve({ dispose: jest.fn() }));
 jest.mock('@/hooks/useAccessibility', () => ({ useAccessibleAnimation: () => ({ reducedMotion: false }) }));
 jest.mock('react-native-screens', () => ({ FullWindowOverlay: ({ children }: { children: React.ReactNode }) => children }));
 jest.mock('@shopify/react-native-skia', () => {
   const container = ({ children }: { children: React.ReactNode }) => children;
   return {
     Canvas: container, Fill: container, Shader: container, ImageShader: () => null,
+    useCanvasRef: () => jest.requireActual('react').useRef({ makeImageSnapshotAsync: () => mockCanvasSnapshot() }),
     Skia: { RuntimeEffect: { Make: () => ({}) }, Color: () => [0, 0, 0, 1] },
   };
 });
@@ -32,6 +34,7 @@ let session: BookOpeningSession;
 beforeEach(() => {
   mockReactions.length = 0;
   mockTiming.mockClear();
+  mockCanvasSnapshot.mockReset().mockResolvedValue({ dispose: jest.fn() });
   session = {
     id: 'opening-test', image: {}, coverImage: {},
     cover: { id: 'book', title: 'Ordinary Hours', createdAt: '2026-09-14' },
@@ -42,15 +45,32 @@ beforeEach(() => {
   useBookOpening.setState({ session });
 });
 
-it('keeps the backdrop transparent until the replacement has painted', () => {
-  const view = render(<BookOpeningOverlay />);
-  const backdrop = () => view.getByTestId('book-opening-backdrop', { includeHiddenElements: true });
-  expect(StyleSheet.flatten(backdrop().props.style).opacity).toBe(0);
-  act(() => {
-    session.sourceHidden.value = true;
-    useBookOpening.setState({ session: { ...session, presented: true } });
-  });
-  expect(StyleSheet.flatten(backdrop().props.style).opacity).toBe(1);
+it('keeps the source and backdrop unchanged until the renderer confirms a frame', async () => {
+  jest.useFakeTimers();
+  try {
+    let finishFrame!: () => void;
+    mockCanvasSnapshot.mockImplementationOnce(() => new Promise(resolve => {
+      finishFrame = () => resolve({ dispose: jest.fn() });
+    }));
+    const view = render(<BookOpeningOverlay />);
+    const backdrop = () => view.getByTestId('book-opening-backdrop', { includeHiddenElements: true });
+    await act(async () => mockReactions[1](true, false));
+    act(() => jest.advanceTimersByTime(40));
+    expect(session.sourceHidden.value).toBe(false);
+    expect(StyleSheet.flatten(backdrop().props.style).opacity).toBe(0);
+    await act(async () => finishFrame());
+    act(() => jest.advanceTimersByTime(48));
+    expect(session.sourceHidden.value).toBe(true);
+    expect(StyleSheet.flatten(backdrop().props.style).opacity).toBe(1);
+  } finally { jest.useRealTimers(); }
+});
+
+it('keeps the source visible when renderer confirmation fails', async () => {
+  mockCanvasSnapshot.mockRejectedValueOnce(new Error('Renderer unavailable'));
+  render(<BookOpeningOverlay />);
+  await act(async () => mockReactions[1](true, false));
+  expect(useBookOpening.getState().session?.failed).toBe(true);
+  expect(session.sourceHidden.value).toBe(false);
 });
 
 it('waits for expansion again after a full drag reverses before committing', () => {
