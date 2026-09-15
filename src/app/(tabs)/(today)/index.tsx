@@ -13,7 +13,7 @@ import { useTheme } from '@/lib/theme';
 import { logger } from '@/lib/logger';
 import { isQaToolsEnabled } from '@/lib/qa-tools';
 import { isVoiceCheckInsEnabled } from '@/lib/voice-feature';
-import { updateSyncedDevotionals, useUnfoldStore, type MoodLevel } from '@/lib/store';
+import { updateSyncedDevotionals, useUnfoldStore, useHasHydrated, type MoodLevel } from '@/lib/store';
 import { requestReviewOncePerVersion } from '@/lib/review-prompt';
 import { useQuery } from '@tanstack/react-query';
 import { StreakBox } from '@/components/StreakBox';
@@ -28,6 +28,7 @@ import { syncWidgets } from '@/lib/widget-bridge';
 import { generateBridge, type BridgeCheckIn } from '@/lib/bridge-service';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { useCreationGate } from '@/hooks/useCreationGate';
+import { useMiddayNotificationOpen } from '@/hooks/useMiddayNotificationOpen';
 import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
 import { getPremiumNudgeCardTone } from '@/components/PremiumNudgeCard';
 import { usePremiumNudge } from '@/hooks/usePremiumNudge';
@@ -264,7 +265,11 @@ export function abandonPurchasedIntentBeforeNewSeries(i: {
 
 export default function HomeScreen() {
   const router = useRouter();
-  const routeParams = useLocalSearchParams<{ voiceCheckInPrototype?: string | string[]; voiceCheckInDemo?: string }>();
+  const routeParams = useLocalSearchParams<{
+    voiceCheckInPrototype?: string | string[];
+    voiceCheckInDemo?: string;
+    focus?: string | string[];
+  }>();
   const { colors } = useTheme();
   const adaptiveLayout = useAdaptiveLayout();
   const todayUsesSplit = adaptiveLayout.usesSplit;
@@ -312,6 +317,7 @@ export default function HomeScreen() {
   const setDismissedRememberThisCardDate = useUnfoldStore((s) => s.setDismissedRememberThisCardDate);
 
   const checkIns = useUnfoldStore((s) => s.checkIns);
+  const hasHydrated = useHasHydrated();
 
   // Auto-navigate to reading when coming from the reveal screen.
   // The reveal sets resumeContext with a fresh touchedAt timestamp,
@@ -944,11 +950,19 @@ export default function HomeScreen() {
     }
   };
 
-  const handleCheckIn = useCallback(() => {
-    if (!gate()) return;
+  const openCheckInSheet = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setShowCheckInSheet(true);
-  }, [gate]);
+  }, []);
+
+  const handleCheckIn = useCallback(() => {
+    if (!gate()) return;
+    openCheckInSheet();
+  }, [gate, openCheckInSheet]);
+
+  const clearMiddayNotificationFocus = useCallback(() => {
+    router.setParams({ focus: '' });
+  }, [router]);
 
   const handleVoiceCheckIn = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1014,6 +1028,17 @@ export default function HomeScreen() {
   const todayCheckIn = currentDevotional && middayCheckInDay != null
     ? getCheckIn(currentDevotional.id, middayCheckInDay, 'midday')
     : undefined;
+  useMiddayNotificationOpen({
+    focus: routeParams.focus,
+    hasHydrated,
+    isTodayFocused,
+    policy: premiumPolicy,
+    currentDevotionalId: currentDevotional?.id ?? null,
+    hasCompletedMiddayCheckIn: Boolean(todayCheckIn),
+    gate,
+    openCheckIn: openCheckInSheet,
+    clearFocus: clearMiddayNotificationFocus,
+  });
   const todayEveningCheckIn = currentDevotional && eveningCheckInDay != null
     ? getCheckIn(currentDevotional.id, eveningCheckInDay, 'evening')
     : undefined;

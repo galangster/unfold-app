@@ -170,10 +170,13 @@ describe('push notification helpers', () => {
   });
 
   describe('buildNotificationNavigationRoute', () => {
-    it('routes local midday check-in notifications back to Today', () => {
-      expect(buildNotificationNavigationRoute({ type: 'midday-checkin' })).toEqual({
+    it('routes local midday check-in notifications back to Today with midday focus', () => {
+      const route = {
         pathname: '/(tabs)/(today)',
-      });
+        params: { focus: 'midday' },
+      };
+      expect(buildNotificationNavigationRoute({ type: 'midday-checkin' })).toEqual(route);
+      expect(buildNotificationNavigationRoute({ type: 'midday_checkin' })).toEqual(route);
     });
 
     it('routes a lapse re-entry push to Today', () => {
@@ -460,6 +463,7 @@ describe('push notification helpers', () => {
 
       expect(replace).toHaveBeenCalledWith({
         pathname: '/(tabs)/(today)',
+        params: { focus: 'midday' },
       });
     });
 
