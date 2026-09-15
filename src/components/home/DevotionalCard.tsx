@@ -8,7 +8,7 @@ import { getDailyGenerationNotice } from '@/lib/daily-generation-messages';
  * Extracted from (tabs)/(today)/index.tsx for single-responsibility and testability.
  */
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, View, Text, TouchableOpacity, StyleSheet, useWindowDimensions, Platform } from 'react-native';
 import { BlurView } from 'expo-blur';
 import Animated, {
@@ -873,10 +873,13 @@ interface MainCardProps {
   announceReady?: boolean;
   motionActive: boolean;
   seriesKey: string;
+  identityKey: string;
+  screenFocused: boolean;
   progressIdentity?: string;
+  onComposerFocusChange: (focused: boolean) => void;
 }
 
-function MainCard({ state, ambienceVisible, relaxHeroMinHeight, announceReady = false, motionActive, seriesKey, progressIdentity }: MainCardProps) {
+function MainCard({ state, ambienceVisible, relaxHeroMinHeight, announceReady = false, motionActive, seriesKey, identityKey, screenFocused, progressIdentity, onComposerFocusChange }: MainCardProps) {
   const { colors, isDark } = useTheme();
   const localProgressHistoryRef = useRef<ProgressHistoryRef['current']>(null);
   const progressHistoryRef = progressIdentity
@@ -1095,12 +1098,15 @@ function MainCard({ state, ambienceVisible, relaxHeroMinHeight, announceReady = 
             {showInlineComposer && composer ? (
               <View style={styles.heroComposerBlock}>
                 <InlineReflectComposer
-                  key={`reflect-${composer.dayNumber}`}
+                  key={`reflect-${identityKey}:${seriesKey}:${composer.dayNumber}`}
                   initialDraft={composer.draft}
                   reflectionStatus={composer.status}
                   onSaveDraft={(text) => composer.onSave(composer.dayNumber, text)}
                   onOpenFull={() => composer.onOpenFull(composer.dayNumber)}
                   onReadAgain={onPress}
+                  onFocus={() => onComposerFocusChange(true)}
+                  onBlur={() => onComposerFocusChange(false)}
+                  screenFocused={screenFocused}
                 />
               </View>
             ) : (
@@ -1203,19 +1209,40 @@ export function DevotionalCard({
   const { width, fontScale } = useWindowDimensions();
   const seriesKey = seriesId ?? ('dayData' in state ? state.dayData.devotionalId : undefined)
     ?? ('seriesTitle' in state ? state.seriesTitle : 'empty');
-  const dayNumber = 'dayData' in state ? state.dayData.dayNumber : 'dayNumber' in state ? state.dayNumber : 0;
+  const identityKey = progressIdentity ?? '';
+  // Keep the context captured by the field's focus event until editing ends.
+  const [focusedCard, setFocusedCard] = useState<{
+    identityKey: string;
+    seriesKey: string;
+    state: Extract<DevotionalCardState, { type: 'complete-today' | 'tomorrow-locked' }>;
+  } | null>(null);
+  const holdsContext = screenFocused
+    && focusedCard?.identityKey === identityKey
+    && focusedCard?.seriesKey === seriesKey;
+  if (focusedCard && !holdsContext) {
+    setFocusedCard(null);
+  }
+  const cardState = focusedCard && holdsContext ? focusedCard.state : state;
+  const handleComposerFocusChange = useCallback((focused: boolean) => {
+    if (!focused) {
+      setFocusedCard(null);
+    } else if (cardState.type === 'complete-today' || cardState.type === 'tomorrow-locked') {
+      setFocusedCard({ identityKey, seriesKey, state: cardState });
+    }
+  }, [cardState, identityKey, seriesKey]);
+  const dayNumber = 'dayData' in cardState ? cardState.dayData.dayNumber : 'dayNumber' in cardState ? cardState.dayNumber : 0;
   const readingKey = `${seriesKey}:${dayNumber}`;
-  const [readiness, setReadiness] = useState({ type: state.type, readingKey, announce: false });
-  if (readiness.type !== state.type || readiness.readingKey !== readingKey) {
+  const [readiness, setReadiness] = useState({ type: cardState.type, readingKey, announce: false });
+  if (readiness.type !== cardState.type || readiness.readingKey !== readingKey) {
     setReadiness({
-      type: state.type,
+      type: cardState.type,
       readingKey,
       announce: readiness.readingKey === readingKey && motionActive
-        && shouldAnnounceReadingReady(readiness.type, state.type),
+        && shouldAnnounceReadingReady(readiness.type, cardState.type),
     });
   }
   const announceReady = readiness.announce;
-  const reservesReadySpace = state.type === 'preparing' || state.type === 'unread' || state.type === 'reveal-ready';
+  const reservesReadySpace = cardState.type === 'preparing' || cardState.type === 'unread' || cardState.type === 'reveal-ready';
   const heroMinHeight = width < 370 || fontScale >= 1.32 ? 360 : width < 400 || fontScale >= 1.18 ? 380 : 416;
 
   // Subtle parallax when scrollY is provided
@@ -1230,58 +1257,61 @@ export function DevotionalCard({
       style={[inStack ? styles.rootInStack : styles.root, parallaxStyle,
         reservesReadySpace && !relaxHeroMinHeight && { minHeight: heroMinHeight }]}
     >
-      {nonblockingResume && state.type !== 'pending-initial-resume' ? (
+      {nonblockingResume && cardState.type !== 'pending-initial-resume' ? (
         <NonblockingInitialResume onResume={nonblockingResume.onResume} />
       ) : null}
-      {state.type === 'empty' && (
+      {cardState.type === 'empty' && (
         <EmptyState
-          onCreateNew={state.onCreateNew}
+          onCreateNew={cardState.onCreateNew}
           isReturningUser={isReturningUser}
           gateCreation={gateCreation}
           storedPick={storedPick}
           ambienceVisible={ambienceVisible}
         />
       )}
-      {state.type === 'preparing' && (
-        <PreparingState state={state} ambienceVisible={ambienceVisible} motionActive={motionActive} />
+      {cardState.type === 'preparing' && (
+        <PreparingState state={cardState} ambienceVisible={ambienceVisible} motionActive={motionActive} />
       )}
-      {state.type === 'first-series-failed' && (
-        <FirstSeriesFailedState state={state} ambienceVisible={ambienceVisible} />
+      {cardState.type === 'first-series-failed' && (
+        <FirstSeriesFailedState state={cardState} ambienceVisible={ambienceVisible} />
       )}
-      {state.type === 'pending-initial-resume' && (
-        <PendingInitialResumeState state={state} ambienceVisible={ambienceVisible} />
+      {cardState.type === 'pending-initial-resume' && (
+        <PendingInitialResumeState state={cardState} ambienceVisible={ambienceVisible} />
       )}
-      {state.type === 'premium-paused' && (
-        <PremiumPausedState state={state} ambienceVisible={ambienceVisible} />
+      {cardState.type === 'premium-paused' && (
+        <PremiumPausedState state={cardState} ambienceVisible={ambienceVisible} />
       )}
-      {state.type === 'journey-complete' && (
+      {cardState.type === 'journey-complete' && (
         <JourneyCompleteState
-          seriesTitle={state.seriesTitle}
-          onCreateNew={state.onCreateNew}
+          seriesTitle={cardState.seriesTitle}
+          onCreateNew={cardState.onCreateNew}
           gateCreation={gateCreation}
           storedPick={storedPick}
           ambienceVisible={ambienceVisible}
         />
       )}
-      {state.type === 'reveal-ready' && (
+      {cardState.type === 'reveal-ready' && (
         <RevealReadyState
-          state={state}
+          state={cardState}
           ambienceVisible={ambienceVisible}
           relaxHeroMinHeight={relaxHeroMinHeight}
           announceReady={announceReady}
         />
       )}
-      {(state.type === 'unread' ||
-        state.type === 'complete-today' ||
-        state.type === 'tomorrow-locked') && (
+      {(cardState.type === 'unread' ||
+        cardState.type === 'complete-today' ||
+        cardState.type === 'tomorrow-locked') && (
         <MainCard
-          state={state}
+          state={cardState}
           ambienceVisible={ambienceVisible}
           relaxHeroMinHeight={relaxHeroMinHeight}
           announceReady={announceReady}
           motionActive={motionActive}
           seriesKey={seriesKey}
+          identityKey={identityKey}
+          screenFocused={screenFocused}
           progressIdentity={progressIdentity}
+          onComposerFocusChange={handleComposerFocusChange}
         />
       )}
     </Animated.View>

@@ -8,6 +8,10 @@ import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { GlassSurface } from '@/components/ui/GlassSurface';
 import { createAutosaveController } from '@/lib/autosave-controller';
+import {
+  captureSyncSession,
+  isSyncSessionCurrent,
+} from '@/lib/sync-session-fence';
 import type { ReflectionStatus } from './compute-devotional-state';
 
 // Cap growth so a long entry pushes the user into the full journal instead of
@@ -25,6 +29,11 @@ interface Props {
   onOpenFull: () => void;
   /** Demoted re-read action, rendered as a quiet link beside the reflect link. */
   onReadAgain?: () => void;
+  /** Today uses focus as the edit-session boundary for a completed day. */
+  onFocus?: () => void;
+  onBlur?: () => void;
+  /** False when Today is no longer the active screen. */
+  screenFocused?: boolean;
 }
 
 /**
@@ -41,6 +50,9 @@ export function InlineReflectComposer({
   onSaveDraft,
   onOpenFull,
   onReadAgain,
+  onFocus,
+  onBlur,
+  screenFocused = true,
 }: Props) {
   const { colors, isDark } = useTheme();
   const [text, setText] = useState(initialDraft);
@@ -52,31 +64,46 @@ export function InlineReflectComposer({
   const savedRef = useRef(initialDraft);
   const onSaveDraftRef = useRef(onSaveDraft);
   onSaveDraftRef.current = onSaveDraft;
+  const [syncSession] = useState(captureSyncSession);
 
   const autosave = useMemo(
     () =>
       createAutosaveController({
         save: () => {
+          if (!isSyncSessionCurrent(syncSession)) return;
           if (textRef.current === savedRef.current) return;
           savedRef.current = textRef.current;
           onSaveDraftRef.current(textRef.current);
         },
       }),
-    [],
+    [syncSession],
   );
 
   // Flush pending text on unmount (tab switch, state change) so nothing is lost.
   useEffect(() => () => { autosave.flush(); }, [autosave]);
+
+  useEffect(() => {
+    if (screenFocused) return;
+    setIsFocused(false);
+    autosave.flush();
+    onBlur?.();
+  }, [autosave, onBlur, screenFocused]);
 
   const handleChange = useCallback((value: string) => {
     setText(value);
     autosave.schedule();
   }, [autosave]);
 
+  const handleFocus = useCallback(() => {
+    setIsFocused(true);
+    onFocus?.();
+  }, [onFocus]);
+
   const handleBlur = useCallback(() => {
     setIsFocused(false);
     autosave.flush();
-  }, [autosave]);
+    onBlur?.();
+  }, [autosave, onBlur]);
 
   const fullLinkLabel = reflectionStatus === 'started'
     ? 'Finish your reflection'
@@ -91,7 +118,7 @@ export function InlineReflectComposer({
         <TextInput
           value={text}
           onChangeText={handleChange}
-          onFocus={() => setIsFocused(true)}
+          onFocus={handleFocus}
           onBlur={handleBlur}
           onContentSizeChange={(e) =>
             setInputHeight(Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, e.nativeEvent.contentSize.height + 28)))

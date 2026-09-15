@@ -115,14 +115,17 @@ const JOURNAL_SWIPE_DIRECTION_LIMIT = 100_000;
 interface SegmentedControlProps {
   activeSegment: Segment;
   onSegmentChange: (segment: Segment) => void;
+  fontScale: number;
 }
 
-function SegmentedControl({ activeSegment, onSegmentChange }: SegmentedControlProps) {
+function SegmentedControl({ activeSegment, onSegmentChange, fontScale }: SegmentedControlProps) {
   const { colors } = useTheme();
   const [containerWidth, setContainerWidth] = useState(0);
 
   const activeIndex = Math.max(0, SEGMENTS.findIndex((segment) => segment.id === activeSegment));
   const segmentWidth = containerWidth > 0 ? containerWidth / SEGMENTS.length : 0;
+  const minimumLabelWidth = Math.ceil(14 * Math.min(fontScale, 1.8) * 0.62 * 11) + 16;
+  const stacked = segmentWidth > 0 && segmentWidth < minimumLabelWidth;
 
   const indicatorTranslateX = useSharedValue(activeIndex * segmentWidth);
 
@@ -171,6 +174,7 @@ function SegmentedControl({ activeSegment, onSegmentChange }: SegmentedControlPr
       onLayout={handleLayout}
       style={[
         segStyles.container,
+        stacked && segStyles.containerStacked,
         {
           backgroundColor: 'transparent',
           borderColor: colors.border,
@@ -178,7 +182,7 @@ function SegmentedControl({ activeSegment, onSegmentChange }: SegmentedControlPr
       ]}
     >
       {/* Sliding indicator */}
-      {segmentWidth > 0 && (
+      {segmentWidth > 0 && !stacked && (
         <Animated.View
           style={[
             segStyles.indicator,
@@ -196,17 +200,23 @@ function SegmentedControl({ activeSegment, onSegmentChange }: SegmentedControlPr
           <TouchableOpacity
             key={segment.id}
             onPress={() => handlePress(segment.id)}
-            style={segStyles.segment}
+            style={[
+              segStyles.segment,
+              stacked && segStyles.segmentStacked,
+              stacked && { borderBottomColor: isActive ? colors.accent : 'transparent' },
+            ]}
             activeOpacity={0.7}
             accessibilityRole="tab"
             accessibilityState={{ selected: isActive }}
             accessibilityLabel={`${segment.label} tab, ${index + 1} of ${SEGMENTS.length}`}
           >
             <Text
+              key={fontScale}
+              numberOfLines={1}
               style={[
                 segStyles.segmentText,
                 {
-                  fontFamily: isActive ? FontFamily.uiMedium : FontFamily.ui,
+                  fontFamily: FontFamily.uiMedium,
                   color: isActive ? colors.text : colors.textSubtle,
                 },
               ]}
@@ -221,6 +231,10 @@ function SegmentedControl({ activeSegment, onSegmentChange }: SegmentedControlPr
 }
 
 const segStyles = StyleSheet.create({
+  containerStacked: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+  },
   container: {
     minHeight: 44,
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -245,6 +259,12 @@ const segStyles = StyleSheet.create({
   segmentText: {
     fontSize: 14,
     letterSpacing: 0.1,
+  },
+  segmentStacked: {
+    flex: 0,
+    alignItems: 'flex-start',
+    paddingVertical: 8,
+    borderBottomWidth: 2,
   },
 });
 
@@ -1593,6 +1613,7 @@ export default function JournalHubScreen() {
             style={mainStyles.headerRow}
           >
             <Text
+              key={adaptiveLayout.fontScale}
               style={[mainStyles.headerTitle, { color: colors.text }]}
             >
               Journal
@@ -1674,6 +1695,7 @@ export default function JournalHubScreen() {
               <SegmentedControl
                 activeSegment={activeSegment}
                 onSegmentChange={setActiveSegment}
+                fontScale={adaptiveLayout.fontScale}
               />
             </View>
           </GestureDetector>
@@ -2220,6 +2242,8 @@ const mainStyles = StyleSheet.create({
     paddingTop: Spacing['4'],
     paddingBottom: Spacing['2'],
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing['3'],
     alignItems: 'center',
     justifyContent: 'space-between',
   },
@@ -2228,11 +2252,15 @@ const mainStyles = StyleSheet.create({
     fontSize: 34,
     lineHeight: 40,
     letterSpacing: -0.25,
-    flexShrink: 1,
+    flexShrink: 0,
     minWidth: 0,
   },
   headerActions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    flexShrink: 0,
+    marginLeft: 'auto',
+    maxWidth: '100%',
     alignItems: 'center',
   },
   headerAction: {

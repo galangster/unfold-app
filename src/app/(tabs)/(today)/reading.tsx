@@ -1191,13 +1191,19 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
       // Reserve the leading edge for the native stack back gesture.
       .hitSlop({ left: -24 })
       .activeOffsetX([-20, 20])
+      .enabled(reflectionToolbar === null)
       .onStart(() => {
         runOnJS(dismissKeyboardForSwipe)();
       })
       .onUpdate((event) => {
         translateX.value = event.translationX * 0.3;
       })
-      .onEnd((event) => {
+      .onEnd((event, success) => {
+        if (!success) {
+          translateX.value = withTiming(0, { duration: Duration.normal });
+          return;
+        }
+
         const goBack = event.translationX > 80 && viewingDay > 1;
         const goForward = event.translationX < -80 && viewingDay < availableDays;
 
@@ -1217,7 +1223,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
         }
         translateX.value = withTiming(0, { duration: Duration.normal });
       }),
-    [viewingDay, availableDays, handlePrevious, handleNext, dismissKeyboardForSwipe]
+    [viewingDay, availableDays, reflectionToolbar, handlePrevious, handleNext, dismissKeyboardForSwipe]
   );
 
   const handleShare = useCallback(() => {

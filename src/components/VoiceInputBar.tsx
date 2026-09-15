@@ -20,7 +20,7 @@ import Animated, {
   FadeIn,
   FadeOut,
   Easing,
-  useReducedMotion,
+  cancelAnimation,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import {
@@ -33,6 +33,7 @@ import { Duration, Ease } from '@/constants/animations';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
+import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { alpha } from '@/components/ui';
 import { pauseForVoiceInput, resumeAfterVoiceInput } from '@/hooks/useGlobalAudioPlayer';
 import {
@@ -46,14 +47,21 @@ import {
  *   Idle       mic icon button — tap to start
  *   0ms        recording bar fades in (200ms)
  *   +80ms ea.  5 bars stagger into their breathing loops
- *   loop       each bar cycles min→max→min height every 600-900ms
+ *   loop       each bar scaleY-cycles min→max→min every 600-900ms
+ *   reduce     static waveform, repeating motion cancelled
  *   on stop    bars freeze, transcript merged into field value
  * ───────────────────────────────────────────────────────── */
 
 const BAR_COUNT = 5;
 const BAR_MIN_H = 4;
 const BAR_MAX_H = 26;
+const BAR_MIN_SCALE = BAR_MIN_H / BAR_MAX_H;
+const BAR_STATIC_SCALES = [0.38, 0.72, 1, 0.55, 0.88] as const;
 const FINAL_RESULT_FLUSH_MS = 200;
+const HIT_TARGET = 44;
+const MIC_VISUAL = 36;
+const ACTION_VISUAL = 34;
+const INLINE_MIC_INSET = 8;
 
 const BAR_DURATIONS = [700, 550, 800, 600, 720] as const;
 const BAR_DELAYS    = [0,   80,  160, 40,  240] as const;
@@ -83,19 +91,35 @@ function joinTranscriptParts(...parts: string[]): string {
 }
 
 // ── Single animated bar ──────────────────────────────────
-function WaveBar({ barIndex, accent }: { barIndex: number; accent: string }) {
-  const height = useSharedValue(BAR_MIN_H);
+function WaveBar({
+  barIndex,
+  accent,
+  reducedMotion,
+}: {
+  barIndex: number;
+  accent: string;
+  reducedMotion: boolean;
+}) {
+  const scaleY = useSharedValue(reducedMotion ? BAR_STATIC_SCALES[barIndex] : BAR_MIN_SCALE);
 
   useEffect(() => {
-    height.value = withDelay(
+    if (reducedMotion) {
+      cancelAnimation(scaleY);
+      scaleY.value = BAR_STATIC_SCALES[barIndex];
+      return () => {
+        cancelAnimation(scaleY);
+      };
+    }
+
+    scaleY.value = withDelay(
       BAR_DELAYS[barIndex],
       withRepeat(
         withSequence(
-          withTiming(BAR_MAX_H, {
+          withTiming(1, {
             duration: BAR_DURATIONS[barIndex],
             easing: Easing.inOut(Easing.sin),
           }),
-          withTiming(BAR_MIN_H, {
+          withTiming(BAR_MIN_SCALE, {
             duration: BAR_DURATIONS[barIndex],
             easing: Easing.inOut(Easing.sin),
           }),
@@ -104,10 +128,15 @@ function WaveBar({ barIndex, accent }: { barIndex: number; accent: string }) {
         false,
       ),
     );
-    return () => { height.value = BAR_MIN_H; };
-  }, [barIndex]);
+    return () => {
+      cancelAnimation(scaleY);
+      scaleY.value = BAR_MIN_SCALE;
+    };
+  }, [barIndex, reducedMotion, scaleY]);
 
-  const barStyle = useAnimatedStyle(() => ({ height: height.value }));
+  const barStyle = useAnimatedStyle(() => ({
+    transform: [{ scaleY: scaleY.value }],
+  }));
 
   return (
     <Animated.View style={[styles.bar, barStyle, { backgroundColor: accent }]} />
@@ -133,7 +162,7 @@ interface VoiceInputBarProps {
 // ── Component ────────────────────────────────────────────
 export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoStart, onCancel, onPermissionDenied }: VoiceInputBarProps) {
   const { colors } = useTheme();
-  const reducedMotion = useReducedMotion();
+  const { reducedMotion } = useAccessibleAnimation();
   const accent = accentColor ?? colors.accent;
 
   const [isRecording, setIsRecording] = useState(false);
@@ -428,7 +457,12 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoSt
       <View style={styles.waveformArea}>
         <View style={styles.barsContainer}>
           {Array.from({ length: BAR_COUNT }, (_, i) => (
-            <WaveBar key={i} barIndex={i} accent={accent} />
+            <WaveBar
+              key={i}
+              barIndex={i}
+              accent={accent}
+              reducedMotion={reducedMotion}
+            />
           ))}
         </View>
         <Text style={[styles.timer, { color: colors.textSubtle }]}>
@@ -457,16 +491,24 @@ const styles = StyleSheet.create({
   micButton: {
     alignSelf: 'flex-end',
     marginTop: Spacing['2'],
+    width: HIT_TARGET,
+    height: HIT_TARGET,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   micButtonInline: {
     position: 'absolute',
-    bottom: 8,
-    right: 8,
+    bottom: INLINE_MIC_INSET - (HIT_TARGET - MIC_VISUAL) / 2,
+    right: INLINE_MIC_INSET - (HIT_TARGET - MIC_VISUAL) / 2,
+    width: HIT_TARGET,
+    height: HIT_TARGET,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   micInner: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: MIC_VISUAL,
+    height: MIC_VISUAL,
+    borderRadius: MIC_VISUAL / 2,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -495,6 +537,7 @@ const styles = StyleSheet.create({
   },
   bar: {
     width: 4,
+    height: BAR_MAX_H,
     borderRadius: 2,
   },
   timer: {
@@ -503,12 +546,16 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   actionButton: {
+    width: HIT_TARGET,
+    height: HIT_TARGET,
+    alignItems: 'center',
+    justifyContent: 'center',
     flexShrink: 0,
   },
   actionInner: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: ACTION_VISUAL,
+    height: ACTION_VISUAL,
+    borderRadius: ACTION_VISUAL / 2,
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -248,6 +248,8 @@ function SheetSoundsList({
   choose: ReturnType<typeof useAmbientSoundActions>;
 }) {
   const { colors } = useTheme();
+  const { fontScale } = useWindowDimensions();
+  const songNumberWidth = Math.ceil(22 * Math.min(fontScale, 2));
   const selectedTrackId = useAmbientAudioState((state) => state.selectedTrackId);
   const status = useAmbientAudioState((state) => state.status);
   const hasUsed = useAmbientAudioState((state) => state.hasUsed);
@@ -273,13 +275,23 @@ function SheetSoundsList({
               pressed && styles.pressed,
             ]}
           >
-            <AmbientText style={[styles.songNumber, { color: colors.textMuted }]}>
+            <AmbientText
+              numberOfLines={1}
+              style={[
+                styles.songNumber,
+                styles.tabular,
+                { color: colors.textMuted, width: songNumberWidth },
+              ]}
+            >
               {String(index + 1).padStart(2, '0')}
             </AmbientText>
             <AmbientText style={[styles.optionTitle, styles.flex, { color: colors.text }]}>
               {track.title}
             </AmbientText>
-            <AmbientText style={[styles.subtitle, { color: colors.textMuted }]}>
+            <AmbientText
+              numberOfLines={1}
+              style={[styles.subtitle, styles.duration, { color: colors.textMuted }]}
+            >
               {loading ? 'Starting…' : formatTrackDuration(track.duration)}
             </AmbientText>
             {loading ? (
@@ -700,9 +712,10 @@ const styles = StyleSheet.create({
     minHeight: 52,
     paddingVertical: 8,
   },
-  songNumber: { fontFamily: FontFamily.ui, fontSize: 12, width: 22 },
-  optionTitle: { fontFamily: FontFamily.uiMedium, fontSize: 14 },
+  songNumber: { fontFamily: FontFamily.ui, fontSize: 12, flexShrink: 0 },
+  optionTitle: { fontFamily: FontFamily.uiMedium, fontSize: 14, minWidth: 0 },
   subtitle: { fontFamily: FontFamily.ui, fontSize: 12 },
+  duration: { flexShrink: 0 },
   volumeLabel: {
     flexDirection: 'row',
     justifyContent: 'space-between',

@@ -7,6 +7,9 @@ const { TouchableOpacity } = require('react-native');
 const mockSpeechHandlers: Record<string, Array<(event?: any) => void>> = {};
 const mockStart = jest.fn();
 const mockStop = jest.fn();
+let mockReducedMotion = true;
+const mockCancelAnimation = jest.fn();
+const mockWithRepeat = jest.fn((animation: unknown) => animation);
 const mockRequestPermissionsAsync = jest.fn(async () => ({ granted: true }));
 const mockRecognitionLease = {
   configure: jest.fn(async () => true),
@@ -49,6 +52,10 @@ jest.mock('@/hooks/useGlobalAudioPlayer', () => ({
   resumeAfterVoiceInput: (shouldResume: boolean) => mockResumeAfterVoiceInput(shouldResume),
 }));
 
+jest.mock('@/hooks/useAccessibility', () => ({
+  useAccessibleAnimation: () => ({ reducedMotion: mockReducedMotion }),
+}));
+
 jest.mock('expo-haptics', () => ({
   notificationAsync: jest.fn(),
   impactAsync: jest.fn(),
@@ -87,6 +94,7 @@ jest.mock('@/lib/theme', () => ({
 }));
 
 jest.mock('react-native-reanimated', () => {
+  const React = jest.requireActual<typeof import('react')>('react');
   const { View } = require('react-native');
 
   return {
@@ -105,9 +113,10 @@ jest.mock('react-native-reanimated', () => {
     },
     useAnimatedStyle: (factory: () => unknown) => factory(),
     useReducedMotion: () => true,
-    useSharedValue: (value: unknown) => ({ value }),
+    useSharedValue: (value: unknown) => React.useRef({ value }).current,
+    cancelAnimation: mockCancelAnimation,
     withDelay: (_delay: number, animation: unknown) => animation,
-    withRepeat: (animation: unknown) => animation,
+    withRepeat: mockWithRepeat,
     withSequence: (...animations: unknown[]) => animations[animations.length - 1],
     withTiming: (value: unknown) => value,
   };
@@ -131,6 +140,9 @@ describe('VoiceInputBar', () => {
     Object.keys(mockSpeechHandlers).forEach((key) => { delete mockSpeechHandlers[key]; });
     mockStart.mockClear();
     mockStop.mockClear();
+    mockReducedMotion = true;
+    mockCancelAnimation.mockClear();
+    mockWithRepeat.mockClear();
     mockRequestPermissionsAsync.mockClear();
     mockRequestPermissionsAsync.mockResolvedValue({ granted: true });
     mockRecognitionLease.configure.mockReset();
@@ -145,6 +157,44 @@ describe('VoiceInputBar', () => {
   afterEach(() => {
     jest.runOnlyPendingTimers();
     jest.useRealTimers();
+  });
+
+  it('keeps recording static when Reduce Motion is enabled', async () => {
+    let tree: any;
+    await act(async () => {
+      tree = renderer.create(<VoiceInputBar value="" onChangeText={jest.fn()} />);
+    });
+    await act(async () => {
+      await findPressablesByLabel(tree.root, 'Tap to speak')[0].props.onPress();
+    });
+    expect(mockStart).toHaveBeenCalled();
+    expect(mockWithRepeat).not.toHaveBeenCalled();
+    await act(async () => tree.unmount());
+  });
+
+  it('stops waveform loops after a live motion preference change without stopping dictation', async () => {
+    mockReducedMotion = false;
+    const onChangeText = jest.fn();
+    let tree: any;
+    await act(async () => {
+      tree = renderer.create(<VoiceInputBar value="" onChangeText={onChangeText} />);
+    });
+    await act(async () => {
+      await findPressablesByLabel(tree.root, 'Tap to speak')[0].props.onPress();
+    });
+    expect(mockWithRepeat).toHaveBeenCalled();
+    const startedLoops = mockWithRepeat.mock.calls.length;
+    const starts = mockStart.mock.calls.length;
+    mockCancelAnimation.mockClear();
+    mockReducedMotion = true;
+    await act(async () => {
+      tree.update(<VoiceInputBar value="" onChangeText={onChangeText} />);
+    });
+    expect(mockCancelAnimation).toHaveBeenCalled();
+    expect(mockWithRepeat).toHaveBeenCalledTimes(startedLoops);
+    expect(mockStart).toHaveBeenCalledTimes(starts);
+    expect(mockStop).not.toHaveBeenCalled();
+    await act(async () => tree.unmount());
   });
 
   it('does not start recognition when the bar unmounts during the permission prompt (Greptile A11)', async () => {
