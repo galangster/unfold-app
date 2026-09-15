@@ -10,7 +10,7 @@ import Animated, {
   useReducedMotion,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { CaretDownIcon, CaretUpIcon } from '@/components/icons';
+import { ArrowRightIcon, CaretDownIcon, CaretUpIcon } from '@/components/icons';
 import { FontFamily, FontSize as FontSizeTokens } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { Spacing } from '@/constants/spacing';
@@ -629,6 +629,7 @@ export function InlineReflectionJournal({
             isAnswered={isAnswered}
             response={response}
             onTap={handleQuestionTap}
+            isLastQuestion={index === questions.length - 1}
             onResponseChange={handleResponseChange}
             saveState={saveStatuses.get(index) ?? null}
             checkMode={checkMode}
@@ -696,6 +697,7 @@ function ReflectionQuestionCard({
   isAnswered,
   response,
   onTap,
+  isLastQuestion,
   onResponseChange,
   saveState,
   checkMode,
@@ -718,6 +720,7 @@ function ReflectionQuestionCard({
   isAnswered: boolean;
   response: string;
   onTap: (index: number) => void;
+  isLastQuestion: boolean;
   onResponseChange: (index: number, question: string, text: string) => void;
   saveState: ReflectionSaveState | null;
   checkMode: ReturnType<typeof reflectionCheckMode>;
@@ -852,67 +855,104 @@ function ReflectionQuestionCard({
           </View>
 
           {isExpanded && editable ? (
-            saveState === 'error' ? (
+            <View
+              style={{
+                marginTop: Spacing['2'],
+                minHeight: 44,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: Spacing['2'],
+              }}
+            >
+              {saveState === 'error' ? (
+                <TouchableOpacity
+                  onPress={() => onRetrySave(index)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Save failed. Tap to retry."
+                  accessibilityLiveRegion="assertive"
+                  style={{
+                    minHeight: 44,
+                    flexShrink: 1,
+                    justifyContent: 'center',
+                    paddingHorizontal: Spacing['2'],
+                  }}
+                >
+                  <Text
+                    testID={`reflection-save-status-${index}`}
+                    style={{
+                      fontFamily: FontFamily.ui,
+                      fontSize: FontSizeTokens.xs,
+                      color: colors.error,
+                      textAlign: 'left',
+                    }}
+                  >
+                    Save failed. Tap to retry.
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                <View
+                  testID={`reflection-save-slot-${index}`}
+                  style={{
+                    minHeight: 20,
+                    flexShrink: 1,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 8,
+                  }}
+                >
+                  {checkMode !== 'hidden' ? <DrawnCheck
+                    visible
+                    playKey={checkMode === 'draw' ? checkPlayKey : 0}
+                    playedKeyRef={playedCheckRef}
+                    color={colors.accent}
+                    testID={`reflection-save-check-${index}-${checkMode === 'draw' ? 'draw' : 'static'}`}
+                  /> : null}
+                  {saveState ? (
+                    <Text
+                      testID={`reflection-save-status-${index}`}
+                      accessibilityLiveRegion="polite"
+                      style={{
+                        fontFamily: FontFamily.ui,
+                        fontSize: FontSizeTokens.xs,
+                        color: colors.textMuted,
+                        textAlign: 'left',
+                      }}
+                    >
+                      {saveState === 'saving' ? 'Saving...' : 'Saved to Journal'}
+                    </Text>
+                  ) : null}
+                </View>
+              )}
               <TouchableOpacity
-                onPress={() => onRetrySave(index)}
+                testID={isLastQuestion ? `reflection-done-question-${index}` : `reflection-next-question-${index}`}
                 accessibilityRole="button"
-                accessibilityLabel="Save failed. Tap to retry."
-                accessibilityLiveRegion="assertive"
+                accessibilityLabel={isLastQuestion ? 'Done' : 'Next question'}
+                onPress={() => onTap(isLastQuestion ? index : index + 1)}
+                activeOpacity={0.7}
                 style={{
                   minHeight: 44,
-                  marginTop: Spacing['2'],
-                  alignSelf: 'flex-end',
+                  flexDirection: 'row',
+                  alignItems: 'center',
                   justifyContent: 'center',
+                  gap: Spacing['1'],
                   paddingHorizontal: Spacing['2'],
                 }}
               >
                 <Text
-                  testID={`reflection-save-status-${index}`}
                   style={{
-                    fontFamily: FontFamily.ui,
+                    fontFamily: FontFamily.uiMedium,
                     fontSize: FontSizeTokens.xs,
-                    color: colors.error,
-                    textAlign: 'right',
+                    color: colors.accent,
                   }}
                 >
-                  Save failed. Tap to retry.
+                  {isLastQuestion ? 'Done' : 'Next question'}
                 </Text>
+                {isLastQuestion ? null : (
+                  <ArrowRightIcon size={12} color={colors.accent} weight="light" />
+                )}
               </TouchableOpacity>
-            ) : (
-              <View
-                testID={`reflection-save-slot-${index}`}
-                style={{
-                  minHeight: 20,
-                  marginTop: Spacing['2'],
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'flex-end',
-                  gap: 8,
-                }}
-              >
-                {checkMode !== 'hidden' ? <DrawnCheck
-                  visible
-                  playKey={checkMode === 'draw' ? checkPlayKey : 0}
-                  playedKeyRef={playedCheckRef}
-                  color={colors.accent}
-                  testID={`reflection-save-check-${index}-${checkMode === 'draw' ? 'draw' : 'static'}`}
-                /> : null}
-                {saveState ? (
-                  <Text
-                    testID={`reflection-save-status-${index}`}
-                    accessibilityLiveRegion="polite"
-                    style={{
-                      fontFamily: FontFamily.ui,
-                      fontSize: FontSizeTokens.xs,
-                      color: colors.textMuted,
-                      textAlign: 'right',
-                    }}
-                  >
-                    {saveState === 'saving' ? 'Saving...' : 'Saved to Journal'}
-                  </Text>
-                ) : null}
-              </View>
-            )
+            </View>
           ) : null}
         </Animated.View>
       )}
