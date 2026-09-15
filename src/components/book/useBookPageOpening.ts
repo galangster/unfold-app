@@ -6,7 +6,23 @@ import { makeImageFromView } from '@shopify/react-native-skia';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { cancelAnimation, Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
-import { bookOpeningProgress, clearBookOpening, shouldOpenBook, useBookOpening, type BookOpeningCover } from '@/lib/book-opening';
+import {
+  BOOK_OPENING_BACKDROP_MS,
+  BOOK_OPENING_CREEP_MS,
+  BOOK_OPENING_CREEP_PROGRESS,
+  BOOK_OPENING_PRESS_MS,
+  BOOK_OPENING_PRESS_PROGRESS,
+  BOOK_OPENING_READY_HOLD_MS,
+  bookOpeningCancelDuration,
+  bookOpeningProgress,
+  bookOpeningTurnDuration,
+  clearBookOpening,
+  hardcoverDragProgress,
+  markBookTurnStarted,
+  shouldOpenBook,
+  useBookOpening,
+  type BookOpeningCover,
+} from '@/lib/book-opening';
 import type { BookTodayPage } from '@/lib/book-of-seasons';
 import { bookPageColors } from './book-page-colors';
 import type { ColorTheme } from '@/constants/colors';
@@ -15,6 +31,9 @@ function hintStorageKey(hardcover: boolean): string {
   return hardcover ? 'unfold.book-cover-discovered.v1' : 'unfold.book-corner-discovered.v1';
 }
 let nextOpening = 0;
+// Quad-out: the board stays visible for most of the turn instead of flipping in the first frames.
+const HARDCOVER_TURN_EASING = Easing.bezier(0.25, 0.46, 0.45, 0.94);
+const PAPER_EASING = Easing.bezier(0.22, 0.72, 0, 1);
 
 export function useBookPageOpening({ pageRef, coverRef, page, colors, isDark, onContinue, cover }: {
   pageRef: RefObject<View | null>;
@@ -30,6 +49,7 @@ export function useBookPageOpening({ pageRef, coverRef, page, colors, isDark, on
   const progress = useSharedValue(0);
   const dragProgress = useSharedValue(0);
   const sourceHidden = useSharedValue(false);
+  const backdrop = useSharedValue(0);
   const pageWidth = useSharedValue(320);
   const dragging = useSharedValue(false);
   const busy = useSharedValue(false);
@@ -64,12 +84,13 @@ export function useBookPageOpening({ pageRef, coverRef, page, colors, isDark, on
     dragging.value = false;
     busy.value = false;
     sourceHidden.value = false;
+    backdrop.value = 0;
     pendingSettle.current = null;
     cancelAnimation(progress);
     if (activeId.current) clearBookOpening(activeId.current);
     activeId.current = null;
     progress.value = 0;
-  }, [busy, dragging, progress, sourceHidden]);
+  }, [backdrop, busy, dragging, progress, sourceHidden]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
@@ -123,16 +144,57 @@ export function useBookPageOpening({ pageRef, coverRef, page, colors, isDark, on
       open(id);
       return;
     }
+    if (!commit) {
+      progress.value = withTiming(0, {
+        duration: hardcover ? bookOpeningCancelDuration(progress.value) : 190,
+        easing: hardcover ? HARDCOVER_TURN_EASING : PAPER_EASING,
+      }, (finished) => {
+        if (finished) runOnJS(reset)();
+      });
+      return;
+    }
+    if (hardcover) {
+      // Answer the press at once: the cover cracks open and holds there until the reader snapshot exists.
+      if (progress.value < BOOK_OPENING_PRESS_PROGRESS) {
+        progress.value = withTiming(BOOK_OPENING_PRESS_PROGRESS, { duration: BOOK_OPENING_PRESS_MS, easing: HARDCOVER_TURN_EASING }, (finished) => {
+          // Then keep creeping open while the reader prepares; the turn retargets from wherever this is.
+          if (finished) progress.value = withTiming(BOOK_OPENING_CREEP_PROGRESS, { duration: BOOK_OPENING_CREEP_MS, easing: HARDCOVER_TURN_EASING });
+        });
+      }
+      // Paper covers the tab before the reader mounts behind the overlay, so nothing leaks through the hold.
+      backdrop.value = withTiming(1, { duration: BOOK_OPENING_BACKDROP_MS, easing: HARDCOVER_TURN_EASING }, (finished) => {
+        if (finished) runOnJS(open)(id);
+      });
+      return;
+    }
     // Keep navigation behind the fully opened page, including the canvas's first frame.
-    progress.value = withTiming(commit ? 1 : 0, {
-      duration: commit ? Math.max(120, (hardcover ? 420 : 280) * (1 - progress.value)) : 190,
-      easing: Easing.bezier(0.22, 0.72, 0, 1),
+    progress.value = withTiming(1, {
+      duration: Math.max(120, 280 * (1 - progress.value)),
+      easing: PAPER_EASING,
     }, (finished) => {
-      if (!finished) return;
-      if (!commit) runOnJS(reset)();
-      else runOnJS(open)(id);
+      if (finished) runOnJS(open)(id);
     });
   }
+
+  useEffect(() => {
+    if (!hardcover || !session?.committed || session.id !== activeId.current || session.turnStarted) return;
+    const openingId = session.id;
+    const startTurn = () => {
+      if (activeId.current !== openingId || useBookOpening.getState().session?.turnStarted) return;
+      markBookTurnStarted(openingId);
+      progress.value = withTiming(1, {
+        duration: bookOpeningTurnDuration(progress.value),
+        easing: HARDCOVER_TURN_EASING,
+      });
+    };
+    // The interior under the board must already be the reader, so the turn waits for the snapshot, not just readiness.
+    if (session.readerImage) {
+      startTurn();
+      return;
+    }
+    const timeout = setTimeout(startTurn, BOOK_OPENING_READY_HOLD_MS);
+    return () => clearTimeout(timeout);
+  }, [hardcover, progress, session?.committed, session?.id, session?.readerImage, session?.turnStarted]);
 
   async function begin(tap: boolean) {
     if (!focused || !page.canOpen || activeId.current || useBookOpening.getState().session) return;
@@ -165,7 +227,7 @@ export function useBookPageOpening({ pageRef, coverRef, page, colors, isDark, on
       if (rect && image && (!cover || coverImage)) {
         useBookOpening.setState({ session: {
           id, rect, image, paperColor,
-          progress, sourceHidden, presented: false, committed: false, readerReady: false,
+          progress, sourceHidden, backdrop, presented: false, committed: false, readerReady: false,
           ...(cover && coverImage ? { cover, coverImage } : {}),
           onPresented: () => {
             const pending = pendingSettle.current;
@@ -204,7 +266,8 @@ export function useBookPageOpening({ pageRef, coverRef, page, colors, isDark, on
     })
     .onUpdate((event) => {
       if (!dragging.value) return;
-      dragProgress.value = bookOpeningProgress(event.translationX, pageWidth.value);
+      const raw = bookOpeningProgress(event.translationX, pageWidth.value);
+      dragProgress.value = hardcover ? hardcoverDragProgress(raw) : raw;
       if (sourceHidden.value) progress.value = dragProgress.value;
     })
     .onEnd((event) => {
