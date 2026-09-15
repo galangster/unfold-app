@@ -37,12 +37,16 @@ const page: BookTodayPage = {
   dayNumber: 2, totalDays: 3, title: 'The Middle Hour', contentReady: true,
   completedToday: true, seriesComplete: false, canOpen: true, action: 'read-again', eyebrow: 'today-complete',
 };
-function setup() {
+const cover = { id: 'devo-1', title: 'Ordinary Hours', createdAt: '2026-05-01T00:00:00.000Z' };
+function setup(hardcover = false) {
   const view = new View({});
   view.measureInWindow = (callback) => callback(20, 150, 350, 350);
   const pageRef = { current: view };
   const onContinue = jest.fn();
-  const hook = renderHook(() => useBookPageOpening({ pageRef, page, colors: Colors, isDark: true, onContinue }));
+  const hook = renderHook(() => useBookPageOpening({
+    pageRef, coverRef: hardcover ? { current: new View({}) } : undefined,
+    page, colors: Colors, isDark: true, onContinue, cover: hardcover ? cover : undefined,
+  }));
   return { ...hook, onContinue };
 }
 
@@ -182,6 +186,56 @@ it('restores the source after a short drag ends during capture', async () => {
   expect(session.sourceHidden.value).toBe(false);
   expect(useBookOpening.getState().session).toBeNull();
   expect(hook.onContinue).not.toHaveBeenCalled();
+});
+
+it('keeps paper sessions free of hardcover data', async () => {
+  const hook = setup();
+  await act(async () => hook.result.current.open());
+  const session = useBookOpening.getState().session;
+  expect(session?.cover).toBeUndefined();
+  expect(mockSnapshot).toHaveBeenCalledTimes(1);
+});
+
+it('keeps the interior and cover separate and prepares the reader during opening', async () => {
+  const coverImage = { source: 'cover' };
+  const paperImage = { source: 'paper' };
+  mockSnapshot.mockResolvedValueOnce(paperImage).mockResolvedValueOnce(coverImage);
+  const hook = setup(true);
+  await act(async () => hook.result.current.open());
+  const session = useBookOpening.getState().session;
+  expect(session?.cover).toEqual(cover);
+  expect(mockSnapshot).toHaveBeenCalledTimes(2);
+  expect(session?.image).toBe(paperImage);
+  expect(session?.coverImage).toBe(coverImage);
+  act(() => { if (session) markBookOverlayPresented(session.id); });
+  expect(hook.onContinue).toHaveBeenCalledTimes(1);
+  expect(useBookOpening.getState().session?.committed).toBe(true);
+  mockFocused = false;
+  hook.rerender({});
+  expect(session?.sourceHidden.value).toBe(true);
+  expect(session?.progress.value).toBe(1);
+  act(() => mockFinishes[0](true));
+  expect(hook.onContinue).toHaveBeenCalledTimes(1);
+  expect(useBookOpening.getState().session?.sourceHidden.value).toBe(true);
+});
+
+it('holds a hardcover drag closed until the overlay can present', async () => {
+  const hook = setup(true);
+  await act(async () => mockGestureHandlers.onStart({ translationX: 0, velocityX: 0 }));
+  act(() => {
+    mockGestureHandlers.onUpdate({ translationX: -240, velocityX: -800 });
+    mockGestureHandlers.onEnd({ translationX: -240, velocityX: -800 });
+  });
+  const session = useBookOpening.getState().session!;
+  expect(session.cover).toEqual(cover);
+  expect(session.progress.value).toBe(0);
+  expect(session.sourceHidden.value).toBe(false);
+  expect(mockSnapshot).toHaveBeenCalledTimes(2);
+  act(() => markBookOverlayPresented(session.id));
+  expect(session.sourceHidden.value).toBe(true);
+  expect(session.progress.value).toBe(1);
+  act(() => mockFinishes[0](true));
+  expect(hook.onContinue).toHaveBeenCalledTimes(1);
 });
 
 it('navigates after a stalled capture and ignores its late image', async () => {

@@ -4,7 +4,7 @@ import { Canvas, Fill, ImageShader, Shader, Skia } from '@shopify/react-native-s
 import Animated, { cancelAnimation, runOnJS, useAnimatedStyle, useAnimatedReaction, useDerivedValue, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
 import { FullWindowOverlay } from 'react-native-screens';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
-import { clearBookOpening, failBookOverlay, markBookOverlayPresented, useBookOpening, type BookOpeningSession } from '@/lib/book-opening';
+import { bookOpeningExpand, clearBookOpening, failBookOverlay, hardcoverHingeDegrees, hardcoverPaperCurlProgress, markBookOverlayPresented, useBookOpening, type BookOpeningSession } from '@/lib/book-opening';
 import { PAGE_CURL_SHADER } from './page-curl-shader';
 
 const effect = Skia.RuntimeEffect.Make(PAGE_CURL_SHADER);
@@ -19,21 +19,29 @@ function Opening({ session }: { session: BookOpeningSession }) {
   const reveal = useSharedValue(0);
   const backgroundReveal = useSharedValue(0);
   const [curlFinished, setCurlFinished] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const canvasSize = useSharedValue({ width: 0, height: 0 });
   const color = Array.from(Skia.Color(session.paperColor));
-  const { rect, progress, id } = session;
+  const { rect, progress, id, cover, sourceHidden } = session;
+  const hasCover = cover != null;
   const uniforms = useDerivedValue(() => ({
     viewport: [width, height],
     startRect: [rect.x, rect.y, rect.width, rect.height],
-    progress: progress.value,
-    curlProgress: progress.value * (0.6 + 0.4 * reveal.value),
+    expansion: bookOpeningExpand(progress.value),
+    hardcover: hasCover ? 1 : 0,
+    hingeDegrees: hardcoverHingeDegrees(progress.value),
+    curlProgress: (hasCover ? hardcoverPaperCurlProgress(progress.value) : progress.value) * (0.6 + 0.4 * reveal.value),
     paperColor: color,
   }));
+  useAnimatedReaction(
+    () => progress.value >= 1,
+    (done, wasDone) => { if (done !== wasDone) runOnJS(setExpanded)(done); },
+  );
   useAnimatedReaction(
     () => canvasSize.value.width > 0 && canvasSize.value.height > 0,
     (ready, wasReady) => { if (ready && !wasReady) runOnJS(presentAfterPaint)(id); },
   );
-  const preview = useAnimatedStyle(() => ({ opacity: Math.min(1, progress.value * 2) * (1 - backgroundReveal.value) }));
+  const preview = useAnimatedStyle(() => ({ opacity: (hasCover ? (sourceHidden.value ? 1 : 0) : Math.min(1, progress.value * 2)) * (1 - backgroundReveal.value) }));
 
   useEffect(() => {
     if (session.presented || session.failed) return;
@@ -43,13 +51,13 @@ function Opening({ session }: { session: BookOpeningSession }) {
   }, [id, session.presented, session.failed]);
 
   useEffect(() => {
-    if (!session.committed) return;
+    if (!session.committed || !expanded) return;
     // Finish the turn while the reader prepares. Never hold a half-turned page for text layout.
     reveal.value = withDelay(reducedMotion ? 0 : 80, withTiming(1, { duration: reducedMotion ? 0 : 240 }, finished => {
       if (finished) runOnJS(setCurlFinished)(true);
     }));
     return () => cancelAnimation(reveal);
-  }, [reducedMotion, reveal, session.committed]);
+  }, [expanded, reducedMotion, reveal, session.committed]);
 
   useEffect(() => {
     if (!curlFinished || !session.readerReady) return;
@@ -76,11 +84,12 @@ function Opening({ session }: { session: BookOpeningSession }) {
   if (session.failed) return null;
 
   const content = (
-    <Animated.View pointerEvents={session.committed ? 'auto' : 'none'} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={[StyleSheet.absoluteFill, styles.overlay]}>
-      <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: session.paperColor }, preview]} />
+    <Animated.View cssInterop={false} pointerEvents={session.committed ? 'auto' : 'none'} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={[StyleSheet.absoluteFill, styles.overlay]}>
+      <Animated.View cssInterop={false} testID="book-opening-backdrop" style={[StyleSheet.absoluteFill, { backgroundColor: session.paperColor }, preview]} />
       {effect ? <Canvas style={StyleSheet.absoluteFill} pointerEvents="none" onSize={session.presented ? undefined : canvasSize}>
         <Fill><Shader source={effect} uniforms={uniforms}>
           <ImageShader image={session.image} fit="fill" rect={{ x: 0, y: 0, width: rect.width, height: rect.height }} tx="clamp" ty="clamp" />
+          <ImageShader image={session.coverImage ?? session.image} fit="fill" rect={{ x: 0, y: 0, width: rect.width, height: rect.height }} tx="clamp" ty="clamp" />
         </Shader></Fill>
       </Canvas> : null}
     </Animated.View>

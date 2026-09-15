@@ -2,9 +2,12 @@
 // snapshot shader. The diagonal normal lifts the lower-right corner first.
 export const PAGE_CURL_SHADER = `
 uniform shader pageImage;
+uniform shader coverImage;
 uniform float2 viewport;
 uniform float4 startRect;
-uniform float progress;
+uniform float expansion;
+uniform float hardcover;
+uniform float hingeDegrees;
 uniform float curlProgress;
 uniform float4 paperColor;
 
@@ -19,9 +22,9 @@ bool insidePage(float2 p, float2 size) {
   return p.x >= 0.0 && p.y >= 0.0 && p.x <= size.x && p.y <= size.y;
 }
 
-half4 main(float2 xy) {
+half4 paper(float2 xy) {
   float p = clamp(curlProgress, 0.0, 1.0);
-  float expand = smoothstep(0.0, 0.82, progress);
+  float expand = expansion;
   float2 origin = mix(startRect.xy, float2(0.0), expand);
   float2 size = mix(startRect.zw, viewport, expand);
   float2 q = xy - origin;
@@ -52,5 +55,28 @@ half4 main(float2 xy) {
     return half4(face.rgb * light, face.a);
   }
   return half4(0.0);
+}
+
+// Project one rigid plane around its left spine. Its paper uses the same frame.
+half4 main(float2 xy) {
+  half4 underneath = paper(xy);
+  if (hardcover < 0.5) return underneath;
+  float angle = hingeDegrees * 0.0174532925;
+  float c = cos(angle);
+  if (c <= 0.0) return underneath;
+  float s = sin(angle);
+  float2 origin = mix(startRect.xy, float2(0.0), expansion);
+  float2 size = mix(startRect.zw, viewport, expansion);
+  float2 scale = size / startRect.zw;
+  float2 q = xy - origin;
+  float perspective = 1600.0;
+  float denominator = c * scale.x - q.x * s / perspective;
+  if (denominator <= 0.0) return underneath;
+  float u = q.x / denominator;
+  float depth = 1.0 + u * s / perspective;
+  float v = startRect.w * 0.5 + (q.y - size.y * 0.5) * depth / scale.y;
+  if (u < 0.0 || u > startRect.z || v < 0.0 || v > startRect.w) return underneath;
+  half4 cover = coverImage.eval(float2(u, v));
+  return cover + underneath * (1.0 - cover.a);
 }
 `;

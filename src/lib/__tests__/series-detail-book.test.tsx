@@ -7,6 +7,9 @@ jest.mock('react-native-gesture-handler', () => ({ GestureDetector: ({ children 
 jest.mock('@/components/book/useBookPageOpening', () => ({
   useBookPageOpening: ({ onContinue }: { onContinue: () => void }) => ({ open: onContinue, gesture: {}, showHint: false, hidden: false, onLayout: jest.fn() }),
 }));
+jest.mock('@/components/bookshelf/SeriesBookCover', () => ({
+  SeriesBookCover: 'SeriesBookCover',
+}));
 
 const renderer = require('react-test-renderer');
 const { act } = renderer;
@@ -271,9 +274,10 @@ describe('Book of Seasons tab root', () => {
     expect(mockPush).not.toHaveBeenCalled();
   });
   it('shows the real series, today page, and act journey', () => {
-    const text = allRenderedText(renderTab());
-    expect(text).toContain('Ordinary Hours');
-    expect(text).toContain('God in ordinary hours');
+    const tree = renderTab();
+    const text = allRenderedText(tree);
+    const cover = tree.root.findAllByProps({ testID: 'active-series-cover' })[0] as { props: { accessibilityLabel: string } };
+    expect(cover.props.accessibilityLabel).toContain('Ordinary Hours');
     expect(text).toContain('Be still');
     expect(text).toContain('Continue reading');
     expect(text).toContain('Wilderness');
@@ -391,6 +395,18 @@ describe('Book of Seasons tab root', () => {
   });
 });
 
+
+it('shows the hardcover on the active tab and paper in archived contents', () => {
+  const tab = renderTab();
+  expect(tab.root.findAllByProps({ testID: 'active-series-cover' }).length).toBeGreaterThan(0);
+  expect(tab.root.findAllByProps({ testID: 'book-page-capture' })).toHaveLength(0);
+
+  mockParams = { id: 'devo-1' };
+  let tree!: ReactTestRenderer;
+  act(() => { tree = renderer.create(React.createElement(SeriesArcScreen)); });
+  expect(tree.root.findAllByProps({ testID: 'book-page-capture' }).length).toBeGreaterThan(0);
+  expect(tree.root.findAllByProps({ testID: 'active-series-cover' })).toHaveLength(0);
+});
 
 it('uses the planned series total for history progress', () => {
   mockParams = { id: 'devo-1' };

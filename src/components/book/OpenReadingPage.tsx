@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import Animated from 'react-native-reanimated';
 import { GestureDetector } from 'react-native-gesture-handler';
-import { bookDayCaption } from '@/lib/book-opening';
+import { bookActionLabel, bookDayCaption, bookPlaceLine } from '@/lib/book-opening';
 import { useBookPageOpening } from './useBookPageOpening';
 import { TouchableOpacity, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient as PageGradient } from 'expo-linear-gradient';
@@ -12,18 +12,6 @@ import { Typography } from '@/constants/typography';
 import type { BookTodayPage } from '@/lib/book-of-seasons';
 import { bookPageColors, type BookPageColors } from './book-page-colors';
 import type { ColorTheme } from '@/constants/colors';
-
-const ACTION_LABEL: Record<Exclude<BookTodayPage['action'], null>, string> = {
-  continue: 'Continue reading',
-  'read-again': 'Read again',
-};
-
-function placeLine(page: BookTodayPage): string | undefined {
-  if (page.seriesComplete) return 'You can return to any page.';
-  if (page.completedToday) return 'Your next reading will be here tomorrow.';
-  if (!page.contentReady) return 'This page is still being prepared.';
-  return undefined;
-}
 
 function PageEngraving({ color }: { color: string }) {
   return (
@@ -72,8 +60,8 @@ export function OpenReadingPage({
   const pageRef = useRef<View>(null);
   const opening = useBookPageOpening({ pageRef, page, colors, isDark, onContinue });
   const paper = bookPageColors(colors, isDark);
-  const actionLabel = page.action ? ACTION_LABEL[page.action] : null;
-  const statusLine = placeLine(page);
+  const actionLabel = bookActionLabel(page.action);
+  const statusLine = bookPlaceLine(page);
 
   return (
     <View style={styles.book} accessibilityLabel="Your current reading">
