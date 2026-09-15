@@ -56,7 +56,7 @@ rim=shape("Rim",ellipse(2*R)+halo(9)+stroke(VM['accent'],0.95,0.9,trim=(0.86,1.0
 # inner terminator: faint line where shadow meets light
 term=shape("Term",f'<Node x="{IX:.1f}" y="{IY:.1f}" name="n">{shape("i",ellipse(2*IR)+stroke(VM["artwork"],0.45,0.6,trim=(0.86,1.0))+stroke(VM["artwork"],0.45,0.6,trim=(0.0,0.2)))}</Node>')
 moon=crescent_clip+hatch+term+rim
-sc.node("Moon",moon,MX,MY,sway(Y,MY,5,4800,0),sway(ROT,0,0.02,3600,600))
+sc.node("Moon",moon,MX,MY,sway(Y,MY,5,3600,0),sway(ROT,0,0.02,3600,600))
 # a thin haze arc under the moon (atmosphere), breathing
 glowdisc=(f'<Shape name="Hz"><Ellipse width="{R*3.2:.0f}" height="{R*3.2:.0f}" originX="0.5" originY="0.5" name="E"/><Fill name="F">'
           f'<RadialGradient startX="0" startY="0" endX="{R*1.6:.0f}" endY="0" opacity="0.28" name="RG"><GradientStop colorValue="{GOLD}" position="0">{bind(VM["glow"],38)}</GradientStop>'

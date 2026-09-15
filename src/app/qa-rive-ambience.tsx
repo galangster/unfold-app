@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { Redirect, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -18,7 +18,11 @@ export default function RiveAmbienceQaScreen() {
   const { scene } = useLocalSearchParams<{ scene?: string }>();
   const { colors, isDark } = useTheme();
   const { width, height } = useWindowDimensions();
-  const [index, setIndex] = useState(() => Math.max(0, RIVE_AMBIENCE_OPTIONS.indexOf(scene as RiveAmbience)));
+  const fromParam = Math.max(0, RIVE_AMBIENCE_OPTIONS.indexOf(scene as RiveAmbience));
+  const [index, setIndex] = useState(fromParam);
+  useEffect(() => {
+    setIndex(fromParam);
+  }, [fromParam]);
   if (!isQaToolsEnabled()) return <Redirect href="/" />;
   const ambience = RIVE_AMBIENCE_OPTIONS[index] ?? RIVE_AMBIENCE_OPTIONS[0];
   const step = (delta: number) => setIndex((current) => (current + delta + RIVE_AMBIENCE_OPTIONS.length) % RIVE_AMBIENCE_OPTIONS.length);

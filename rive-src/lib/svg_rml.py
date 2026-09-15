@@ -189,7 +189,11 @@ class Svg:
         tag = e.tag.replace(NS, ''); cls = e.get('class'); info = self.cls.get(cls, {}) if cls else {}
         op = op * float(info.get('opacity', 1)); clip = info.get('clip', clip)
         if tag == 'g':
-            for ch in e: self._walk(ch, op, clip, out)
+            saved, self.world = self.world, mmul(self.world, parse_transform(e.get('transform')))
+            try:
+                for ch in e: self._walk(ch, op, clip, out)
+            finally:
+                self.world = saved
             return
         if clip:   # the designer's river: a fill rect clipped to a winding shape. Emit the clip shape once.
             if clip in self._clips_done: return

@@ -9,7 +9,7 @@ group=shape("Links",links+stroke(VM['artwork'],0.3,0.6))
 for k,(x,y) in enumerate(pts):
     r=random.choice([1.4,1.8,2.4,3.0]); group+=shape(f"N{k}",ellipse(2*r)+fill(VM['accent'],0.9)+(halo(5) if r>=2.4 else ''),x,y)
     group+=shape(f"H{k}",ellipse(2*r+8)+stroke(VM['artwork'],0.25,0.5),x,y)
-sc.node("Cluster",group,CX,CY,sway(X,CX,10,4800,0),sway(Y,CY,7,3600,900),sway(ROT,0,0.025,7200,0))
+sc.node("Cluster",group,CX,CY,sway(X,CX,10,3600,0),sway(Y,CY,7,3600,900),sway(ROT,0,0.025,7200,0))
 # background stars twinkling
 for k in range(40):
     x=random.uniform(20,375); y=random.uniform(30,500); r=random.choice([0.8,1.1,1.5]); per=random.choice(CYCLES[:5])
