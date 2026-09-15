@@ -3,7 +3,7 @@ import { ActivityIndicator, Alert, Keyboard, Pressable, ScrollView, StyleSheet, 
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
-import Animated, { interpolate, runOnUI, scrollTo, useAnimatedRef, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, type SharedValue } from 'react-native-reanimated';
+import Animated, { interpolate, runOnJS, runOnUI, scrollTo, useAnimatedRef, useAnimatedReaction, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, type SharedValue } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { SquaresFourIcon } from 'phosphor-react-native/src/icons/SquaresFour';
@@ -84,6 +84,7 @@ export function PastSeriesLibraryScreen({ hostTab }: { hostTab?: TabGroup } = {}
   const [searchVisible, setSearchVisible] = useState(false);
   const [grid, setGrid] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [viewportIndex, setViewportIndex] = useState(0);
   const [exportingId, setExportingId] = useState<string | null>(null);
   const [sharingBook, setSharingBook] = useState<Devotional | null>(null);
   const exporting = useRef(false);
@@ -99,13 +100,21 @@ export function PastSeriesLibraryScreen({ hostTab }: { hostTab?: TabGroup } = {}
   const books = useMemo(() => filterShelf(devotionals, filter, search), [devotionals, filter, search]);
   const index = resolveShelfSelection(books, selectedId, previousIndex.current);
   const selected = books[index];
-  // Keep adjacent covers mounted without routing scroll events through a list wrapper.
-  const firstVisible = Math.max(0, index - 2);
-  const lastVisible = Math.min(books.length, index + 3);
+  // Follow the viewport during a drag, before the selected book settles.
+  const bookCount = books.length;
+  const windowCenter = Math.min(viewportIndex, Math.max(0, bookCount - 1));
+  const firstVisible = Math.max(0, windowCenter - 2);
+  const lastVisible = Math.min(bookCount, windowCenter + 3);
   const width = Math.min(windowWidth, 600);
   const coverWidth = Math.round(width * 0.81);
   const stride = coverWidth + 22;
   const coverHeight = Math.round(Math.min(coverWidth * 1.4, Math.max(240, areaHeight - 200 * Math.min(fontScale, 1.35))));
+  useAnimatedReaction(
+    () => Math.max(0, Math.min(bookCount - 1, Math.round(scroll.value / stride))),
+    (next, previous) => {
+      if (next !== previous) runOnJS(setViewportIndex)(next);
+    },
+  );
   const textColor = isDark ? '#D5C6AC' : colors.text;
   const quietColor = isDark ? '#AEA596' : colors.textMuted;
   const background = isDark ? '#11120F' : '#F5F0E7';
@@ -130,6 +139,7 @@ export function PastSeriesLibraryScreen({ hostTab }: { hostTab?: TabGroup } = {}
     previousIndex.current = next;
     selection.current = books[next]?.id ?? null;
     setSelectedId(selection.current);
+    setViewportIndex(next);
     scroll.value = next * stride;
     const frame = requestAnimationFrame(() => moveShelf(next * stride, false));
     return () => cancelAnimationFrame(frame);
