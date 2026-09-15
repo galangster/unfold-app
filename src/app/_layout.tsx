@@ -9,7 +9,7 @@ import { QueryClient, QueryClientProvider, onlineManager, focusManager } from '@
 import NetInfo from '@react-native-community/netinfo';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Platform, Text as RNText, TextInput as RNTextInput, View } from 'react-native';
 import { useFonts } from 'expo-font';
 
@@ -42,6 +42,7 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { flushLastFatalBreadcrumb, installGlobalErrorHandler } from '@/lib/global-error-handler';
 import { initSentry, registerNavigationContainer, wrapRootComponent } from '@/lib/sentry';
 import { armHealthyBootTimer } from '@/lib/crash-marker';
+import { createSplashGate } from '@/lib/splash-gate';
 import { AudioPlayerOverlay } from '@/components/AudioPlayerOverlay';
 import { AmbientSoundOverlay } from '@/components/ambient/AmbientSoundOverlay';
 import { PrivacyShield } from '@/components/PrivacyShield';
@@ -349,6 +350,13 @@ function StorageLockedGate() {
 }
 
 function RootLayout() {
+  const splashGateRef = useRef<ReturnType<typeof createSplashGate> | null>(null);
+  if (splashGateRef.current === null) {
+    splashGateRef.current = createSplashGate({
+      hideAsync: () => SplashScreen.hideAsync(),
+    });
+  }
+
   const [fontsLoaded, fontError] = useFonts(shouldLoadBundledFontsAtRuntime ? {
     'PPEditorialNew-Light': require('../../assets/fonts/PPEditorialNew-Light.otf'),
     'SourceSerifPro_400Regular': require('../../assets/fonts/SourceSerifPro_400Regular.ttf'),
@@ -381,12 +389,21 @@ function RootLayout() {
   }, [navigationContainerRef]);
 
   useEffect(() => {
+    const gate = splashGateRef.current;
+    if (!gate) return;
+    gate.startFailsafe();
+    const subscription = AppState.addEventListener('change', gate.onAppStateChange);
+    return () => {
+      gate.dispose();
+      subscription.remove();
+    };
+  }, []);
+
+  useEffect(() => {
     if (fontsLoaded || fontError) {
       // Wait one frame for the first render to paint before hiding splash
       // This prevents a white flash between splash dismissal and first JS frame
-      requestAnimationFrame(() => {
-        SplashScreen.hideAsync();
-      });
+      splashGateRef.current?.onFontsSettled();
     }
   }, [fontsLoaded, fontError]);
 

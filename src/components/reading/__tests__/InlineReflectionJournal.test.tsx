@@ -1,5 +1,5 @@
 import React from 'react';
-import { AppState, type AppStateStatus, Keyboard, StyleSheet, Text, TextInput } from 'react-native';
+import { AppState, type AppStateStatus, Keyboard, StyleSheet, Text, TextInput, TouchableOpacity } from 'react-native';
 import { ReflectionQuestionNav, type ReflectionKeyboardToolbarState } from '../ReflectionQuestionNav';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import { FontFamily } from '@/constants/fonts';
@@ -1076,5 +1076,112 @@ describe('InlineReflectionJournal', () => {
     act(() => tree.update(<ReflectionQuestionNav {...props} questionIndex={1} />));
     expect(tree.root.findAllByProps({ testID: 'reflection-nav-next' }).find((node: any) => node.props.accessibilityRole === 'button').props.accessibilityState.disabled).toBe(true);
     act(() => tree.unmount());
+  });
+
+  it('expands the next question and focuses its input after Next question is pressed', () => {
+    let tree: any;
+
+    act(() => {
+      tree = renderer.create(
+        <InlineReflectionJournal
+          questions={['What stood out?', 'How will you respond?']}
+          devotionalId="devotional"
+          dayNumber={2}
+          onOpenFullJournal={jest.fn()}
+        />
+      );
+    });
+
+    const first = tree!.root.findByType(TextInput);
+    first.instance.focus = jest.fn();
+    act(() => {
+      first.props.onLayout();
+      first.props.onFocus();
+    });
+
+    const next = tree!.root.findByProps({ accessibilityLabel: 'Next question' });
+    expect(next.props.accessibilityRole).toBe('button');
+    act(() => {
+      next.props.onPress();
+      jest.advanceTimersByTime(400);
+    });
+
+    expect(
+      tree!.root.findByProps({
+        accessibilityLabel: 'Reflection question 2: How will you respond?',
+      }).props.accessibilityState.expanded
+    ).toBe(true);
+
+    const incoming = tree!.root.findByProps({
+      accessibilityLabel: 'Your response to: How will you respond?',
+    });
+    incoming.instance.focus = jest.fn();
+    act(() => incoming.props.onLayout());
+    expect(incoming.instance.focus).toHaveBeenCalled();
+
+    act(() => tree!.unmount());
+  });
+
+  it('shows Done and not Next on the last question', () => {
+    let tree: any;
+
+    act(() => {
+      tree = renderer.create(
+        <InlineReflectionJournal
+          questions={['What stood out?', 'How will you respond?']}
+          devotionalId="devotional"
+          dayNumber={2}
+          onOpenFullJournal={jest.fn()}
+        />
+      );
+    });
+
+    act(() => {
+      tree!.root
+        .findByProps({ accessibilityLabel: 'Reflection question 2: How will you respond?' })
+        .props.onPress();
+    });
+
+    expect(tree!.root.findAllByProps({ accessibilityLabel: 'Next question' })).toHaveLength(0);
+    const done = tree!.root.findByProps({ accessibilityLabel: 'Done' });
+    expect(done.props.accessibilityRole).toBe('button');
+    expect(tree!.root.findAllByType(TouchableOpacity).filter((node: any) => node.props.accessibilityLabel === 'Done')).toHaveLength(1);
+
+    act(() => tree!.unmount());
+  });
+
+  it('collapses the last question when Done is pressed', () => {
+    let tree: any;
+
+    act(() => {
+      tree = renderer.create(
+        <InlineReflectionJournal
+          questions={['What stood out?', 'How will you respond?']}
+          devotionalId="devotional"
+          dayNumber={2}
+          onOpenFullJournal={jest.fn()}
+        />
+      );
+    });
+
+    act(() => {
+      tree!.root
+        .findByProps({ accessibilityLabel: 'Reflection question 2: How will you respond?' })
+        .props.onPress();
+    });
+
+    act(() => {
+      tree!.root.findByProps({ accessibilityLabel: 'Done' }).props.onPress();
+    });
+
+    expect(
+      tree!.root.findByProps({
+        accessibilityLabel: 'Reflection question 2: How will you respond?',
+      }).props.accessibilityState.expanded
+    ).toBe(false);
+    expect(tree!.root.findAllByType(TextInput)).toHaveLength(0);
+    expect(Keyboard.dismiss).toHaveBeenCalled();
+
+    act(() => tree!.unmount());
   });
 });

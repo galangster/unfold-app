@@ -9,9 +9,11 @@
  */
 import { useEffect, useRef } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
+import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { useUnfoldStore, useHasHydrated } from '@/lib/store';
 import { getCurrentDevotional, getDaysReadToday } from '@/lib/home-devotional-state';
 import { buildActReminderFingerprint, buildActReminderPlan, type ActReminderPlanInput } from '@/lib/act-reminder';
+import { getEffectivePremiumAccessPolicy } from '@/lib/premium-state';
 import { areNotificationsEnabled, cancelActReminder, scheduleActReminder } from '@/lib/notifications';
 import { logger } from '@/lib/logger';
 
@@ -19,13 +21,16 @@ const DEBOUNCE_MS = 500;
 
 type StoreState = ReturnType<typeof useUnfoldStore.getState>;
 
-function readPlanInput(state: StoreState): ActReminderPlanInput & { enabled: boolean } {
+export function readActReminderPlanInput(state: StoreState): ActReminderPlanInput & { enabled: boolean } {
   const devotional = getCurrentDevotional(state.devotionals, state.currentDevotionalId);
   return {
     devotional,
     day: getDaysReadToday(devotional)[0] ?? null,
     middayTime: state.middayCheckInTime,
     eveningTime: state.eveningWindDownTime,
+    eveningWindDownEnabled: state.eveningWindDownEnabled,
+    eveningWindDownByDay: state.eveningWindDownByDay,
+    premiumPolicy: getEffectivePremiumAccessPolicy(),
     morningTime: state.user?.reminderTime,
     // Rides on the daily-reminder preference: a reader who switched
     // reminders off asked for silence, not a new kind of nudge.
@@ -46,11 +51,14 @@ function createFingerprintSelector(): (state: StoreState) => string {
       state.currentDevotionalId,
       state.middayCheckInTime,
       state.eveningWindDownTime,
+      state.eveningWindDownEnabled,
+      state.eveningWindDownByDay,
       state.user?.reminderTime,
       state.user?.dailyReminderEnabled,
+      state.user?.isPremium,
     ];
     if (last && last.keys.every((key, index) => Object.is(key, keys[index]))) return last.fingerprint;
-    const fingerprint = buildActReminderFingerprint(readPlanInput(state));
+    const fingerprint = buildActReminderFingerprint(readActReminderPlanInput(state));
     last = { keys, fingerprint };
     return fingerprint;
   };
@@ -58,8 +66,10 @@ function createFingerprintSelector(): (state: StoreState) => string {
 
 export function useActReminderSync() {
   const hasHydrated = useHasHydrated();
+  const premiumPolicy = usePremiumAccessPolicy();
   const selectorRef = useRef(createFingerprintSelector());
-  const fingerprint = useUnfoldStore(selectorRef.current);
+  const storeFingerprint = useUnfoldStore(selectorRef.current);
+  const fingerprint = `${storeFingerprint}|${premiumPolicy}`;
 
   const lastAppliedRef = useRef('');
   const lastAppliedDayRef = useRef('');
@@ -82,13 +92,16 @@ export function useActReminderSync() {
     }
     inFlightRef.current = true;
     try {
-      const input = readPlanInput(useUnfoldStore.getState());
+      const input = readActReminderPlanInput(useUnfoldStore.getState());
       // Cancel-then-write: every run clears the pending act reminder so a
       // replan never leaves an orphan for a day that changed.
       await cancelActReminder();
 
-      const plan = input.enabled ? buildActReminderPlan(input) : null;
-      if (plan && (await areNotificationsEnabled())) {
+      const notificationsEnabled = await areNotificationsEnabled();
+      const plan = input.enabled
+        ? buildActReminderPlan({ ...input, notificationsEnabled })
+        : null;
+      if (plan && notificationsEnabled) {
         await scheduleActReminder(plan);
       }
       lastAppliedRef.current = target;
