@@ -4,6 +4,7 @@ require File.join(File.dirname(`node --print "require.resolve('expo/package.json
 require File.join(File.dirname(`node --print "require.resolve('react-native/package.json')"`), "scripts/react_native_pods")
 
 require 'json'
+require_relative '../scripts/fix-revenuecat-xcode27'
 podfile_properties = JSON.parse(File.read(File.join(__dir__, 'Podfile.properties.json'))) rescue {}
 
 def ccache_enabled?(podfile_properties)
@@ -66,6 +67,9 @@ target 'Unfold' do
 
   post_install do |installer|
     expo_widgets_post_install(installer)
+    UnfoldRevenueCatCompatibility.apply(
+      installer.sandbox.root.join('RevenueCat/Sources/Paywalls/PaywallColor.swift')
+    )
 
     react_native_post_install(
       installer,
