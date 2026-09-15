@@ -196,7 +196,7 @@ it('keeps paper sessions free of hardcover data', async () => {
   expect(mockSnapshot).toHaveBeenCalledTimes(1);
 });
 
-it('keeps the interior and cover separate and prepares the reader during opening', async () => {
+it('keeps the interior and cover separate and waits for the opening before navigation', async () => {
   const coverImage = { source: 'cover' };
   const paperImage = { source: 'paper' };
   mockSnapshot.mockResolvedValueOnce(paperImage).mockResolvedValueOnce(coverImage);
@@ -208,13 +208,14 @@ it('keeps the interior and cover separate and prepares the reader during opening
   expect(session?.image).toBe(paperImage);
   expect(session?.coverImage).toBe(coverImage);
   act(() => { if (session) markBookOverlayPresented(session.id); });
-  expect(hook.onContinue).toHaveBeenCalledTimes(1);
+  expect(hook.onContinue).not.toHaveBeenCalled();
   expect(useBookOpening.getState().session?.committed).toBe(true);
+  act(() => mockFinishes[0](true));
+  expect(hook.onContinue).toHaveBeenCalledTimes(1);
   mockFocused = false;
   hook.rerender({});
   expect(session?.sourceHidden.value).toBe(true);
   expect(session?.progress.value).toBe(1);
-  act(() => mockFinishes[0](true));
   expect(hook.onContinue).toHaveBeenCalledTimes(1);
   expect(useBookOpening.getState().session?.sourceHidden.value).toBe(true);
 });

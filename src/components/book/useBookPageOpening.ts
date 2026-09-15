@@ -123,16 +123,18 @@ export function useBookPageOpening({ pageRef, coverRef, page, colors, isDark, on
       open(id);
       return;
     }
-    // Prepare the reader behind the hardcover while the committed motion finishes.
+    // Keep navigation behind the fully opened page, including the canvas's first frame.
+    if (commit && hardcover && current) {
+      useBookOpening.setState({ session: { ...current, committed: true } });
+    }
     progress.value = withTiming(commit ? 1 : 0, {
       duration: commit ? Math.max(120, (hardcover ? 420 : 280) * (1 - progress.value)) : 190,
       easing: Easing.bezier(0.22, 0.72, 0, 1),
     }, (finished) => {
       if (!finished) return;
       if (!commit) runOnJS(reset)();
-      else if (!hardcover) runOnJS(open)(id);
+      else runOnJS(open)(id);
     });
-    if (commit && hardcover) open(id);
   }
 
   async function begin(tap: boolean) {

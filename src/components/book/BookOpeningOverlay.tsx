@@ -6,6 +6,7 @@ import { FullWindowOverlay } from 'react-native-screens';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { bookOpeningExpand, clearBookOpening, failBookOverlay, hardcoverHingeDegrees, hardcoverPaperCurlProgress, markBookOverlayPresented, useBookOpening, type BookOpeningSession } from '@/lib/book-opening';
 import { PAGE_CURL_SHADER } from './page-curl-shader';
+import { SERIES_BOOK_PAPER_FRACTION } from '@/lib/series-book-geometry';
 
 const effect = Skia.RuntimeEffect.Make(PAGE_CURL_SHADER);
 
@@ -31,6 +32,7 @@ function Opening({ session }: { session: BookOpeningSession }) {
     expansion: bookOpeningExpand(progress.value),
     hardcover: hasCover ? 1 : 0,
     hingeDegrees: hardcoverHingeDegrees(progress.value),
+    coverBoardRight: rect.width * (1 - SERIES_BOOK_PAPER_FRACTION),
     curlProgress: hasCover
       ? hardcoverPaperCurlProgress(progress.value) * (0.35 + 0.65 * reveal.value)
       : progress.value * (0.6 + 0.4 * reveal.value),

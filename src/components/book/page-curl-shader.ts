@@ -11,6 +11,7 @@ uniform float hingeDegrees;
 uniform float curlProgress;
 uniform float4 paperColor;
 uniform float backgroundOpacity;
+uniform float coverBoardRight;
 
 half4 front(float2 p, float2 size) {
   float2 source = p / (size.x / startRect.z);
@@ -58,10 +59,11 @@ half4 paper(float2 xy) {
   return half4(0.0);
 }
 
-// Project one rigid plane around its left spine. Its paper uses the same frame.
+// The paper expands into the reader. The cover keeps its proportions around the left hinge.
 half4 main(float2 xy) {
   half4 underneath = paper(xy);
   if (hardcover < 0.5) return underneath;
+  half paperCoverage = underneath.a;
   // The backdrop and book must arrive in the same onscreen frame.
   half4 background = half4(paperColor.rgb * backgroundOpacity, backgroundOpacity);
   underneath = underneath + background * (1.0 - underneath.a);
@@ -71,15 +73,23 @@ half4 main(float2 xy) {
   float s = sin(angle);
   float2 origin = mix(startRect.xy, float2(0.0), expansion);
   float2 size = mix(startRect.zw, viewport, expansion);
-  float2 scale = size / startRect.zw;
+  float scale = size.x / startRect.z;
+  float coverHeight = startRect.w * scale;
+  float2 coverOrigin = origin + float2(0.0, (size.y - coverHeight) * 0.5);
+  // The exposed page edges belong to the stationary book, never to the turning board.
+  float2 flatSource = (xy - coverOrigin) / scale;
+  if (flatSource.x >= coverBoardRight && insidePage(flatSource, startRect.zw)) {
+    half4 pages = coverImage.eval(flatSource) * paperCoverage * c;
+    underneath = pages + underneath * (1.0 - pages.a);
+  }
   float2 q = xy - origin;
   float perspective = 1600.0;
-  float denominator = c * scale.x - q.x * s / perspective;
+  float denominator = scale * (c - q.x * s / perspective);
   if (denominator <= 0.0) return underneath;
   float u = q.x / denominator;
-  float depth = 1.0 + u * s / perspective;
-  float v = startRect.w * 0.5 + (q.y - size.y * 0.5) * depth / scale.y;
-  if (u < 0.0 || u > startRect.z || v < 0.0 || v > startRect.w) return underneath;
+  float depth = 1.0 + u * scale * s / perspective;
+  float v = startRect.w * 0.5 + (q.y - size.y * 0.5) * depth / scale;
+  if (u < 0.0 || u > coverBoardRight || v < 0.0 || v > startRect.w) return underneath;
   half4 cover = coverImage.eval(float2(u, v));
   return cover + underneath * (1.0 - cover.a);
 }

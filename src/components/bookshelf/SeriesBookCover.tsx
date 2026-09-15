@@ -3,6 +3,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Circle, G, Path, Rect } from "react-native-svg";
 import { FontFamily } from "@/constants/fonts";
 import { getSeriesCover } from "@/lib/series-cover";
+import { SERIES_BOOK_PAPER_FRACTION } from "@/lib/series-book-geometry";
 import type { Devotional } from "@/lib/store";
 
 export interface SeriesBookCoverProps {
@@ -470,7 +471,7 @@ export function SeriesBookCover({
 }: SeriesBookCoverProps) {
   const cover = getSeriesCover(devotional.id);
   const spineWidth = width * 0.065;
-  const paperWidth = width * 0.032;
+  const paperWidth = width * SERIES_BOOK_PAPER_FRACTION;
   const faceWidth = width - spineWidth - paperWidth;
   const titleWidth = faceWidth * (REPEATED_BORDERS[cover.variant] ? 0.7 : 0.75);
   const titleHeight = height * (compact ? 0.5 : 0.43);

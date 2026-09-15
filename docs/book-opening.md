@@ -11,12 +11,15 @@ A short swipe cancels. Reading availability and the current day still come from 
 `ActiveSeriesBookHero` captures separate cover and interior views.
 `BookOpeningOverlay` renders both images in one Skia shader.
 The cover remains a rigid plane around its left spine. Only the interior image enters the paper curl.
+One uniform scale preserves the cover artwork before perspective projection.
+The exposed page-edge strip stays beneath the turning board.
+The paper's expansion into the reader is a deliberate interface transition, not a rigid-body simulation.
 Expansion, hinge, and curl use one shared progress value on the UI thread.
 
 The hardcover source remains behind the canvas until navigation.
 The canvas composites the backdrop and book together, so a native background cannot obscure an unpainted book.
 The paper source hides after the overlay paints.
-Committing the hardcover opening prepares the reader while motion finishes.
+The hardcover completes its opening before navigation starts, so the reader cannot flash through the first canvas frame.
 The hardcover holds a readable paper page until reader layout is ready.
 The backdrop then reveals the reader during the final curl, preventing an empty interval between them.
 Cancellation, resizing, backgrounding, capture failure, and presentation failure restore a usable screen.
