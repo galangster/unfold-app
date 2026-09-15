@@ -4,7 +4,7 @@ import { BookOpeningOverlay } from '../BookOpeningOverlay';
 import { clearBookOpening, useBookOpening, type BookOpeningSession } from '@/lib/book-opening';
 
 const mockReactions: ((value: boolean, previous: boolean | null) => void)[] = [];
-const mockTiming = jest.fn((value: number) => value);
+const mockTiming = jest.fn((value: number, _config?: { duration: number }, _finished?: (finished: boolean) => void) => value);
 jest.mock('@/hooks/useAccessibility', () => ({ useAccessibleAnimation: () => ({ reducedMotion: false }) }));
 jest.mock('react-native-screens', () => ({ FullWindowOverlay: ({ children }: { children: React.ReactNode }) => children }));
 jest.mock('@shopify/react-native-skia', () => {
@@ -83,8 +83,36 @@ it('waits for expansion again after a full drag reverses before committing', () 
   const expansionChanged = mockReactions[0];
   act(() => expansionChanged(true, false));
   act(() => expansionChanged(false, true));
-  act(() => useBookOpening.setState({ session: { ...session, committed: true } }));
+  act(() => useBookOpening.setState({ session: { ...session, committed: true, readerReady: true } }));
   expect(mockTiming).not.toHaveBeenCalled();
   act(() => expansionChanged(true, false));
   expect(mockTiming).toHaveBeenCalledWith(1, { duration: 240 }, expect.any(Function));
+});
+
+
+it('keeps the paper visible until the reader is ready, then reveals beneath the final turn', () => {
+  render(<BookOpeningOverlay />);
+  act(() => mockReactions[0](true, false));
+  act(() => useBookOpening.setState({ session: { ...session, committed: true } }));
+  expect(mockTiming).not.toHaveBeenCalled();
+  act(() => useBookOpening.setState({ session: { ...session, committed: true, readerReady: true } }));
+  expect(mockTiming).toHaveBeenCalledWith(1, { duration: 180 });
+  expect(mockTiming).toHaveBeenCalledWith(1, { duration: 240 }, expect.any(Function));
+  // The mocked backdrop already reaches its target, but the paper still owns the overlay.
+  expect(useBookOpening.getState().session).not.toBeNull();
+  const finishCurl = mockTiming.mock.calls.find(([, config]) => config?.duration === 240)?.[2];
+  expect(finishCurl).toBeDefined();
+  act(() => finishCurl?.(true));
+  expect(useBookOpening.getState().session).toBeNull();
+});
+
+
+it('does not restart the legacy paper turn when reader readiness changes', () => {
+  const paperSession = { ...session, cover: undefined, coverImage: undefined, committed: true };
+  useBookOpening.setState({ session: paperSession });
+  render(<BookOpeningOverlay />);
+  act(() => mockReactions[0](true, false));
+  expect(mockTiming).toHaveBeenCalledTimes(1);
+  act(() => useBookOpening.setState({ session: { ...paperSession, readerReady: true } }));
+  expect(mockTiming).toHaveBeenCalledTimes(1);
 });

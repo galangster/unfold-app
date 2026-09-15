@@ -24,13 +24,16 @@ function Opening({ session }: { session: BookOpeningSession }) {
   const color = useMemo(() => Array.from(Skia.Color(session.paperColor)), [session.paperColor]);
   const { rect, progress, id, cover, sourceHidden } = session;
   const hasCover = cover != null;
+  const readyToFinish = !hasCover || session.readerReady;
   const uniforms = useDerivedValue(() => ({
     viewport: [width, height],
     startRect: [rect.x, rect.y, rect.width, rect.height],
     expansion: bookOpeningExpand(progress.value),
     hardcover: hasCover ? 1 : 0,
     hingeDegrees: hardcoverHingeDegrees(progress.value),
-    curlProgress: (hasCover ? hardcoverPaperCurlProgress(progress.value) : progress.value) * (0.6 + 0.4 * reveal.value),
+    curlProgress: hasCover
+      ? hardcoverPaperCurlProgress(progress.value) * (0.35 + 0.65 * reveal.value)
+      : progress.value * (0.6 + 0.4 * reveal.value),
     paperColor: color,
     backgroundOpacity: hasCover && sourceHidden.value ? 1 - backgroundReveal.value : 0,
   }));
@@ -52,21 +55,26 @@ function Opening({ session }: { session: BookOpeningSession }) {
   }, [hasCover, id, session.presented, session.failed]);
 
   useEffect(() => {
-    if (!session.committed || !expanded) return;
-    // Finish the turn while the reader prepares. Never hold a half-turned page for text layout.
+    if (!session.committed || !expanded || !readyToFinish) return;
+    // Keep the paper readable until the real reader can appear underneath its final turn.
+    if (hasCover) backgroundReveal.value = withTiming(1, { duration: reducedMotion ? 0 : 180 });
     reveal.value = withDelay(reducedMotion ? 0 : 80, withTiming(1, { duration: reducedMotion ? 0 : 240 }, finished => {
       if (finished) runOnJS(setCurlFinished)(true);
     }));
-    return () => cancelAnimation(reveal);
-  }, [expanded, reducedMotion, reveal, session.committed]);
+    return () => {
+      cancelAnimation(reveal);
+      if (hasCover) cancelAnimation(backgroundReveal);
+    };
+  }, [backgroundReveal, expanded, hasCover, readyToFinish, reducedMotion, reveal, session.committed]);
 
   useEffect(() => {
     if (!curlFinished || !session.readerReady) return;
+    if (hasCover) { clearBookOpening(id); return; }
     backgroundReveal.value = withTiming(1, { duration: reducedMotion ? 0 : 140 }, done => {
       if (done) runOnJS(clearBookOpening)(id);
     });
     return () => cancelAnimation(backgroundReveal);
-  }, [backgroundReveal, curlFinished, id, reducedMotion, session.readerReady]);
+  }, [backgroundReveal, curlFinished, hasCover, id, reducedMotion, session.readerReady]);
 
   useEffect(() => {
     const listener = AppState.addEventListener('change', (state) => {

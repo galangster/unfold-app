@@ -17,7 +17,8 @@ The hardcover source remains behind the canvas until navigation.
 The canvas composites the backdrop and book together, so a native background cannot obscure an unpainted book.
 The paper source hides after the overlay paints.
 Committing the hardcover opening prepares the reader while motion finishes.
-The overlay remains until expansion, curl, and reader layout are ready.
+The hardcover holds a readable paper page until reader layout is ready.
+The backdrop then reveals the reader during the final curl, preventing an empty interval between them.
 Cancellation, resizing, backgrounding, capture failure, and presentation failure restore a usable screen.
 Reduce Motion opens the reader directly. The existing paper opening remains the default for archived contents.
 
