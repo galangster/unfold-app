@@ -1,5 +1,6 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert } from 'react-native';
+import { triggerUserDataPull } from '@/lib/full-sync-pull';
 import type { PremiumAccessPolicy } from '@/lib/premium-access-policy';
 
 function readFocusParam(focus: string | string[] | undefined): string | undefined {
@@ -22,7 +23,7 @@ export type MiddayNotificationOpenInput = {
  * Opens Today's existing midday CheckInSheet from a notification
  * `focus=midday` route param. The ordinary midday card still ends at 17:00.
  *
- * Waits for store hydration, Today focus, and a resolved premium policy.
+ * Waits for hydration, focus, access, and any missing-series sync.
  * Consumes the param once so closing the sheet, rerenders, or a later
  * Today visit cannot reopen it. A later independent tap can set it again.
  * A leftover param after a series switch is dropped, not reopened.
@@ -39,9 +40,28 @@ export function useMiddayNotificationOpen({
   clearFocus,
 }: MiddayNotificationOpenInput): void {
   const consumedRef = useRef(false);
+  const [missingSeriesSyncSettled, setMissingSeriesSyncSettled] = useState(false);
+  const resolvedFocus = readFocusParam(focus);
 
   useEffect(() => {
-    const resolvedFocus = readFocusParam(focus);
+    if (resolvedFocus !== 'midday') {
+      setMissingSeriesSyncSettled(false);
+      return;
+    }
+    if (!hasHydrated || !isTodayFocused || currentDevotionalId || policy !== 'granted' || consumedRef.current) {
+      return;
+    }
+
+    // Reuse the startup pull in flight. A hydrated store can still be empty
+    // while remote restoration is applying the user's current series.
+    let cancelled = false;
+    void triggerUserDataPull('midday-notification').then(() => {
+      if (!cancelled) setMissingSeriesSyncSettled(true);
+    });
+    return () => { cancelled = true; };
+  }, [currentDevotionalId, hasHydrated, isTodayFocused, policy, resolvedFocus]);
+
+  useEffect(() => {
     if (resolvedFocus !== 'midday') {
       consumedRef.current = false;
       return;
@@ -50,6 +70,7 @@ export function useMiddayNotificationOpen({
     if (!isTodayFocused || !hasHydrated || policy === 'unknown') {
       return;
     }
+    if (policy === 'granted' && !currentDevotionalId && !missingSeriesSyncSettled) return;
 
     if (consumedRef.current) return;
 
@@ -72,11 +93,12 @@ export function useMiddayNotificationOpen({
   }, [
     clearFocus,
     currentDevotionalId,
-    focus,
+    resolvedFocus,
     gate,
     hasCompletedMiddayCheckIn,
     hasHydrated,
     isTodayFocused,
+    missingSeriesSyncSettled,
     openCheckIn,
     policy,
   ]);

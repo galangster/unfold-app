@@ -1,5 +1,6 @@
 import React from 'react';
 import { Alert } from 'react-native';
+import { triggerUserDataPull } from '@/lib/full-sync-pull';
 import {
   useMiddayNotificationOpen,
   type MiddayNotificationOpenInput,
@@ -7,6 +8,9 @@ import {
 
 const renderer = jest.requireActual('react-test-renderer');
 const { act } = renderer;
+
+jest.mock('@/lib/full-sync-pull', () => ({ triggerUserDataPull: jest.fn() }));
+const mockPull = jest.mocked(triggerUserDataPull);
 
 function Harness(props: MiddayNotificationOpenInput) {
   useMiddayNotificationOpen(props);
@@ -49,6 +53,7 @@ describe('useMiddayNotificationOpen', () => {
 
   beforeEach(() => {
     alertSpy.mockClear();
+    mockPull.mockReset().mockResolvedValue(undefined);
   });
 
   afterAll(() => {
@@ -129,6 +134,7 @@ describe('useMiddayNotificationOpen', () => {
     const clearFocus = jest.fn();
     renderOpen(readyInput({
       policy: 'denied',
+      currentDevotionalId: null,
       gate,
       openCheckIn,
       clearFocus,
@@ -138,14 +144,32 @@ describe('useMiddayNotificationOpen', () => {
     expect(openCheckIn).not.toHaveBeenCalled();
     expect(clearFocus).toHaveBeenCalledTimes(1);
     expect(alertSpy).not.toHaveBeenCalled();
+    expect(mockPull).not.toHaveBeenCalled();
   });
 
-  it('alerts when the current series is genuinely absent', () => {
+  it('keeps the notification while the missing current series is still syncing', async () => {
+    let finishPull!: () => void;
+    mockPull.mockReturnValue(new Promise<void>((resolve) => { finishPull = resolve; }));
+    const input = readyInput({ currentDevotionalId: null });
+    const tree = renderOpen(input);
+
+    expect(input.clearFocus).not.toHaveBeenCalled();
+    expect(alertSpy).not.toHaveBeenCalled();
+
+    tree.update({ ...input, currentDevotionalId: 'restored-series' });
+    expect(input.openCheckIn).toHaveBeenCalledTimes(1);
+    await act(async () => { finishPull(); });
+    expect(input.openCheckIn).toHaveBeenCalledTimes(1);
+    expect(alertSpy).not.toHaveBeenCalled();
+  });
+
+  it('alerts when the current series is absent after sync settles', async () => {
     const openCheckIn = jest.fn();
     renderOpen(readyInput({
       currentDevotionalId: null,
       openCheckIn,
     }));
+    await act(async () => {});
 
     expect(openCheckIn).not.toHaveBeenCalled();
     expect(alertSpy).toHaveBeenCalledWith(
