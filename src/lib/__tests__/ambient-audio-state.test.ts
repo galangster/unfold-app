@@ -100,6 +100,7 @@ describe('ambient audio persisted state', () => {
     expect(state.remainingSeconds).toBe(0);
     expect(state.pauseReason).toBeNull();
     expect(state.error).toBeNull();
+    expect(state.shuffle).toBe(false);
   });
 
   it('rejects invalid persisted values and never stores private text', async () => {

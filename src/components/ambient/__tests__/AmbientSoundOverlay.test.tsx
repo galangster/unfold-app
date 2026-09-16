@@ -8,7 +8,7 @@ import {
   useAmbientAudioState,
 } from '@/lib/ambient-audio-state';
 import { useAmbientSoundChrome } from '@/lib/ambient-sound-chrome';
-import { setAmbientTimer } from '@/lib/ambient-audio';
+import { interruptAmbientSound, setAmbientTimer, stopAmbientSound } from '@/lib/ambient-audio';
 
 jest.mock('expo-router', () => ({
   usePathname: () => '/',
@@ -36,10 +36,20 @@ jest.mock('@/lib/ambient-audio', () => ({
   setAmbientTimer: jest.fn(),
   stopAmbientSound: jest.fn(),
 }));
+let mockRegisteredLifecycle: {
+  interrupt: (reason: string) => void;
+  stop: () => void | Promise<void>;
+  finish?: () => void | Promise<void>;
+} | null = null;
 jest.mock('@/lib/ambient-audio-coordination', () => ({
   canStartAmbientPlayback: () => true,
   isAmbientVoiceActive: () => false,
-  registerAmbientLifecycle: () => () => undefined,
+  registerAmbientLifecycle: (next: NonNullable<typeof mockRegisteredLifecycle>) => {
+    mockRegisteredLifecycle = next;
+    return () => {
+      if (mockRegisteredLifecycle === next) mockRegisteredLifecycle = null;
+    };
+  },
   subscribeAmbientVoiceActivity: () => () => undefined,
 }));
 jest.mock('@/lib/feature-announcements', () => ({
@@ -107,6 +117,7 @@ describe('ambient overlay timer notice', () => {
       todayReadingAvailable: false,
       playerDockHeight: 0,
     });
+    mockRegisteredLifecycle = null;
     (setAmbientTimer as jest.Mock).mockImplementation((minutes: number) => {
       if (minutes === 0) {
         useAmbientAudioState.setState({
@@ -136,6 +147,14 @@ describe('ambient overlay timer notice', () => {
     expect(setAmbientTimer).toHaveBeenCalledWith(0);
     expect(screen.queryByTestId('ambient-ended-timer-notice')).toBeNull();
     expect(useAmbientSoundChrome.getState().playerDockHeight).toBe(0);
+  });
+
+  it('yields the ambient session when a reflection ends so a completion cue can play', () => {
+    render(<AmbientSoundOverlay />);
+    expect(mockRegisteredLifecycle?.finish).toBe(interruptAmbientSound);
+    mockRegisteredLifecycle?.finish?.();
+    expect(interruptAmbientSound).toHaveBeenCalledTimes(1);
+    expect(stopAmbientSound).not.toHaveBeenCalled();
   });
 
   it('does not reopen this visit when announcement history cannot persist', () => {

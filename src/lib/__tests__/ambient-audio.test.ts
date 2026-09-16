@@ -3,6 +3,7 @@ import type { AudioStatus } from 'expo-audio/build/Audio.types';
 import {
   AMBIENT_FADE_MS,
   AMBIENT_LOAD_WATCHDOG_MS,
+  AMBIENT_STOP_FADE_MS,
   disposeAmbientAudio,
   initializeAmbientAudio,
   interruptAmbientSound,
@@ -77,6 +78,12 @@ jest.mock('@/lib/logger', () => ({
   logger: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
 
+jest.mock('../ambient-timer-signal', () => ({
+  cancelAmbientTimerNotification: jest.fn().mockResolvedValue(undefined),
+  scheduleAmbientTimerNotification: jest.fn().mockResolvedValue(undefined),
+  signalAmbientTimerFinished: jest.fn().mockResolvedValue(undefined),
+}));
+
 const mockPersistValues = jest.requireMock('../mmkv-storage')
   .ambientAudioTestPersistValues as Map<string, string>;
 const mockIsAmbientAudioEnabled = jest.requireMock('../ambient-audio-feature')
@@ -87,6 +94,15 @@ const {
 } = jest.requireMock('expo-audio') as {
   createAudioPlayer: jest.Mock;
   setAudioModeAsync: jest.Mock;
+};
+const {
+  cancelAmbientTimerNotification: mockCancelAmbientTimerNotification,
+  scheduleAmbientTimerNotification: mockScheduleAmbientTimerNotification,
+  signalAmbientTimerFinished: mockSignalAmbientTimerFinished,
+} = jest.requireMock('../ambient-timer-signal') as {
+  cancelAmbientTimerNotification: jest.Mock;
+  scheduleAmbientTimerNotification: jest.Mock;
+  signalAmbientTimerFinished: jest.Mock;
 };
 
 type MockPlayer = {
@@ -187,6 +203,9 @@ describe('ambient audio controller', () => {
     mockCreateAudioPlayer.mockImplementation((source: number) => makePlayer(source));
     mockSetAudioModeAsync.mockReset();
     mockSetAudioModeAsync.mockImplementation(async () => undefined);
+    mockCancelAmbientTimerNotification.mockClear();
+    mockScheduleAmbientTimerNotification.mockClear();
+    mockSignalAmbientTimerFinished.mockClear();
     (AppState.addEventListener as unknown as jest.Mock).mockClear();
     (AppState as { currentState: string }).currentState = 'active';
     disposeAmbientAudio();
@@ -245,6 +264,7 @@ describe('ambient audio controller', () => {
     setAmbientTimer(5);
     expect(useAmbientAudioState.getState().timerStatus).toBe('running');
     expect(useAmbientAudioState.getState().deadline).not.toBeNull();
+    expect(mockScheduleAmbientTimerNotification).toHaveBeenCalledTimes(1);
     expect(mockCreateAudioPlayer).not.toHaveBeenCalled();
 
     playAmbientSound('river-thread');
@@ -260,6 +280,8 @@ describe('ambient audio controller', () => {
     stopAmbientSound();
     expect(useAmbientAudioState.getState().status).toBe('off');
     expect(useAmbientAudioState.getState().timerStatus).toBe('running');
+    setAmbientTimer(0);
+    expect(mockCancelAmbientTimerNotification).toHaveBeenCalled();
   });
 
   it('replaces the active track without restarting the elapsed timer', async () => {
@@ -322,6 +344,15 @@ describe('ambient audio controller', () => {
     await flush();
   });
 
+  it('signals a finished timer immediately when nothing is playing', async () => {
+    setAmbientTimer(5);
+    await jest.advanceTimersByTimeAsync(5 * 60_000);
+    await flush();
+    expect(useAmbientAudioState.getState().timerStatus).toBe('ended');
+    expect(mockSignalAmbientTimerFinished).toHaveBeenCalledTimes(1);
+    expect(mockCreateAudioPlayer).not.toHaveBeenCalled();
+  });
+
   it('ends sound when the independent timer expires and leaves reading alone', async () => {
     playAmbientSound('river-thread');
     await flush();
@@ -331,10 +362,13 @@ describe('ambient audio controller', () => {
     setAmbientTimer(5);
     pauseAmbientSound('user');
     await jest.advanceTimersByTimeAsync(5 * 60_000);
-    await jest.advanceTimersByTimeAsync(AMBIENT_FADE_MS);
+    expect(mockSignalAmbientTimerFinished).not.toHaveBeenCalled();
+    await jest.advanceTimersByTimeAsync(AMBIENT_STOP_FADE_MS);
     expect(useAmbientAudioState.getState().status).toBe('off');
     expect(useAmbientAudioState.getState().timerStatus).toBe('ended');
     expect(useAmbientAudioState.getState().selectedTrackId).toBe('river-thread');
+    await flush();
+    expect(mockSignalAmbientTimerFinished).toHaveBeenCalledTimes(1);
   });
 
   it('records a native interruption and does not auto-resume', async () => {
@@ -366,9 +400,12 @@ describe('ambient audio controller', () => {
       shouldPlayInBackground: true,
     }));
     await jest.advanceTimersByTimeAsync(5 * 60_000);
-    await jest.advanceTimersByTimeAsync(AMBIENT_FADE_MS);
+    expect(mockSignalAmbientTimerFinished).not.toHaveBeenCalled();
+    await jest.advanceTimersByTimeAsync(AMBIENT_STOP_FADE_MS);
     expect(useAmbientAudioState.getState().status).toBe('off');
     expect(useAmbientAudioState.getState().timerStatus).toBe('ended');
+    await flush();
+    expect(mockSignalAmbientTimerFinished).toHaveBeenCalledTimes(1);
     emitAppState('active');
     await flush();
     expect(useAmbientAudioState.getState().status).toBe('off');
@@ -423,6 +460,48 @@ describe('ambient audio controller', () => {
     expect(useAmbientAudioState.getState().selectedTrackId).toBe('a-lifetime-spent-with-you');
     expect(useAmbientAudioState.getState().shuffle).toBe(true);
     expect(mockCreateAudioPlayer).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the remaining shuffle bag across automatic advances', async () => {
+    setAmbientShuffle(true);
+    playAmbientSound('river-thread');
+    await flush();
+    const first = lastPlayer();
+    first.isLoaded = true;
+    first.emit({ isLoaded: true, playing: false });
+    first.emit({ isLoaded: true, playing: false, didJustFinish: true });
+    await jest.advanceTimersByTimeAsync(AMBIENT_FADE_MS);
+    await flush();
+    const second = lastPlayer();
+    second.isLoaded = true;
+    second.emit({ isLoaded: true, playing: false });
+    second.emit({ isLoaded: true, playing: false, didJustFinish: true });
+    await jest.advanceTimersByTimeAsync(AMBIENT_FADE_MS);
+    await flush();
+    expect(useAmbientAudioState.getState().selectedTrackId).toBe('tideglass-drift');
+    expect(mockCreateAudioPlayer).toHaveBeenCalledTimes(3);
+  });
+
+  it('rebuilds the shuffle bag after a user picks another piece', async () => {
+    setAmbientShuffle(true);
+    playAmbientSound('river-thread');
+    await flush();
+    const first = lastPlayer();
+    first.isLoaded = true;
+    first.emit({ isLoaded: true, playing: false });
+    first.emit({ isLoaded: true, playing: false, didJustFinish: true });
+    await jest.advanceTimersByTimeAsync(AMBIENT_FADE_MS);
+    await flush();
+    playAmbientSound('tideglass-drift');
+    await jest.advanceTimersByTimeAsync(AMBIENT_FADE_MS);
+    await flush();
+    const chosen = lastPlayer();
+    chosen.isLoaded = true;
+    chosen.emit({ isLoaded: true, playing: false });
+    chosen.emit({ isLoaded: true, playing: false, didJustFinish: true });
+    await jest.advanceTimersByTimeAsync(AMBIENT_FADE_MS);
+    await flush();
+    expect(useAmbientAudioState.getState().selectedTrackId).toBe('a-lifetime-spent-with-you');
   });
 
   it('previews volume without persistence and commits only the settled value', async () => {

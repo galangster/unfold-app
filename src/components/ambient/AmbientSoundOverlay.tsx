@@ -134,7 +134,7 @@ function EnabledAmbientSoundOverlay() {
     const unregister = registerAmbientLifecycle({
       interrupt: interruptAmbientSound,
       stop: stopAmbientSound,
-      finish: () => {},
+      finish: interruptAmbientSound,
     });
     const cleanup = initializeAmbientAudio();
     return () => {

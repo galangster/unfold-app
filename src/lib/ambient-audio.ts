@@ -10,6 +10,11 @@ import {
   type AmbientTrackId,
 } from './ambient-audio-catalog';
 import { isAmbientAudioEnabled } from './ambient-audio-feature';
+import {
+  cancelAmbientTimerNotification,
+  scheduleAmbientTimerNotification,
+  signalAmbientTimerFinished,
+} from './ambient-timer-signal';
 import { logger } from './logger';
 import { acquireAudioSession, retryAudioAfterPermanentInterruption, type AudioSessionLease } from './audio-session-registry';
 import {
@@ -359,9 +364,8 @@ function expireTimer(): void {
     remainingSeconds: 0,
   });
   clearTicker();
-  if (status !== 'off') {
-    haltPlayback();
-  }
+  const ending = status !== 'off' ? haltPlayback() : Promise.resolve();
+  void ending.then(() => signalAmbientTimerFinished());
 }
 
 function onAppStateChange(_next: AppStateStatus): void {
@@ -490,6 +494,7 @@ export function disposeAmbientAudio(): void {
   playbackGuard = null;
   shuffleQueue = [];
   clearTicker();
+  void cancelAmbientTimerNotification();
   destroyPlayer();
   appStateSubscription?.remove();
   appStateSubscription = null;
@@ -503,7 +508,7 @@ export function playAmbientSound(trackId?: AmbientTrackId, userInitiated = true)
 
   if (trackId !== undefined) {
     if (!isAmbientTrackId(trackId)) return;
-    if (trackId !== store().selectedTrackId) shuffleQueue = [];
+    if (userInitiated && trackId !== store().selectedTrackId) shuffleQueue = [];
     store().patch({ selectedTrackId: trackId });
   }
 
@@ -625,6 +630,7 @@ export function setAmbientTimer(minutes: number): void {
       remainingSeconds: 0,
     });
     clearTicker();
+    void cancelAmbientTimerNotification();
     return;
   }
 
@@ -636,4 +642,5 @@ export function setAmbientTimer(minutes: number): void {
     remainingSeconds: timerMinutes * 60,
   });
   ensureTicker();
+  void scheduleAmbientTimerNotification(deadline);
 }
