@@ -43,6 +43,72 @@ describe('parseSegments — emphasis markers around verse references', () => {
     const segments = parseSegments('Romans 5:8 stands on its own.');
     expect(segments.some((s) => s.type === 'verse' && s.reference === 'Romans 5:8')).toBe(true);
   });
+
+  it('keeps **Read …verse… aloud** as one bold span with a pill inside', () => {
+    const segments = parseSegments('1. **Read Acts 5:27-32 aloud together.**');
+    expect(segments).toEqual([
+      { type: 'text', content: '1. ' },
+      { type: 'bold', content: 'Read ' },
+      { type: 'verse', reference: 'Acts 5:27-32' },
+      { type: 'bold', content: ' aloud together.' },
+    ]);
+  });
+
+  it('does the same when the verse is wrapped in brackets', () => {
+    const segments = parseSegments('1. **Read [Acts 5:27-32] aloud together.**');
+    expect(segments).toEqual([
+      { type: 'text', content: '1. ' },
+      { type: 'bold', content: 'Read ' },
+      { type: 'verse', reference: 'Acts 5:27-32' },
+      { type: 'bold', content: ' aloud together.' },
+    ]);
+  });
+
+  it('chips Acts 5-7 as one chapter-range pill, not Acts 5 plus leftover -7', () => {
+    const segments = parseSegments('Acts 5-7 is not theoretical.');
+    expect(segments).toEqual([
+      { type: 'verse', reference: 'Acts 5-7' },
+      { type: 'text', content: ' is not theoretical.' },
+    ]);
+  });
+});
+
+describe('parseSegments — Jordan study list (items 1 / 3 / 4)', () => {
+  const JORDAN_ITEMS = [
+    '1. **Read Acts 5:27-32 aloud together.** Peter\'s answer to the council. Ask: What would you have said in that moment? What is he risking?',
+    '3. **Read Stephen\'s speech (Acts 7:1-53) or at least the ending (Acts 7:51-53).** He does not soften his words to save his life.',
+    '4. **The hard one: Acts 7:54-60.** Stephen is murdered. Ask directly: Does that change anything about whether following Jesus is worth it? If your faithfulness leads to suffering, does that mean you chose wrong?',
+  ];
+
+  it.each(JORDAN_ITEMS)('does not leak asterisks: %s', (item) => {
+    const segments = parseSegments(item);
+    for (const seg of segments) {
+      if (seg.type !== 'verse') {
+        expect(seg.content).not.toContain('*');
+      }
+    }
+  });
+
+  it('keeps the clipped item-4 sentence in the parse tree', () => {
+    const segments = parseSegments(JORDAN_ITEMS[2]);
+    const joined = segments
+      .map((seg) => (seg.type === 'verse' ? seg.reference : seg.content))
+      .join('');
+    expect(joined).toContain('does that mean you chose wrong?');
+    expect(segments.some((s) => s.type === 'verse' && s.reference === 'Acts 7:54-60')).toBe(true);
+  });
+
+  it('stream→stable promotion of the same items still has no literal **', () => {
+    // WR-18 hides ** while the list is the streaming tail. Completing the
+    // reply promotes it into RichMessageText — that swap must not put the
+    // markers back.
+    const promoted = JORDAN_ITEMS.flatMap((item) => parseSegments(item));
+    for (const seg of promoted) {
+      if (seg.type !== 'verse') {
+        expect(seg.content).not.toContain('*');
+      }
+    }
+  });
 });
 
 describe('preprocessMarkdown — list handling', () => {

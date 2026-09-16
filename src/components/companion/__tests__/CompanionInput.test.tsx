@@ -174,6 +174,23 @@ describe('CompanionInput send clearing', () => {
     expect(input.props.maxFontSizeMultiplier).toBe(1.8);
   });
 
+  it('centers the empty field in the 44pt pill so the placeholder is not low', () => {
+    const tree = renderInput(jest.fn(() => true));
+    const input = tree.root.findByType(TextInput);
+    expect(input.parent.props.style).toEqual(
+      expect.objectContaining({
+        alignItems: 'center',
+        minHeight: 44,
+      }),
+    );
+    expect(input.props.style).toEqual(
+      expect.objectContaining({
+        paddingTop: 0,
+        paddingBottom: 0,
+      }),
+    );
+  });
+
   it.each([
     ['Voice input', false, ''],
     ['Send message', false, 'Ready to send'],

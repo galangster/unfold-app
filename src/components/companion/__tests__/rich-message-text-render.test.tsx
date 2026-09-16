@@ -62,4 +62,75 @@ describe('RichMessageText verse pills', () => {
     // since nested Text ignores padding on iOS/Android.
     expect(pill.props.style.lineHeight).toBeGreaterThan(pill.props.style.fontSize * 1.4);
   });
+
+  it('renders Acts 5-7 as a single chapter-range pill', () => {
+    const tree = render('Acts 5-7 is not theoretical.');
+    const pills = tree.root
+      .findAllByType(Text)
+      .filter((node: any) => node.props.accessibilityRole === 'button');
+    expect(pills.map((node: any) => node.props.children.join(''))).toEqual([
+      `${VERSE_PILL_PAD}Acts 5-7${VERSE_PILL_PAD}`,
+    ]);
+    expect(visibleText(tree.toJSON()).split(VERSE_PILL_PAD).join('')).toBe(
+      'Acts 5-7 is not theoretical.',
+    );
+  });
+});
+
+function instanceVisibleText(node: any): string {
+  if (node == null || typeof node === 'boolean') return '';
+  if (typeof node === 'string' || typeof node === 'number') return String(node);
+  const children = node.props?.children ?? node.children;
+  if (children == null) return '';
+  if (Array.isArray(children)) return children.map(instanceVisibleText).join('');
+  return instanceVisibleText(children);
+}
+
+function outermostTextContaining(root: any, needle: string) {
+  return root.findAllByType(Text).find((node: any) => {
+    const text = instanceVisibleText(node);
+    if (!text.includes(needle)) return false;
+    let parent = node.parent;
+    while (parent) {
+      if (parent.type === Text && instanceVisibleText(parent).includes(needle)) {
+        return false;
+      }
+      parent = parent.parent;
+    }
+    return true;
+  });
+}
+
+describe('RichMessageText list items', () => {
+  const ITEM_4 =
+    '4. **The hard one: Acts 7:54-60.** Stephen is murdered. Ask directly: Does that change anything about whether following Jesus is worth it? If your faithfulness leads to suffering, does that mean you chose wrong?';
+  const ITEM_5 =
+    '5. **Close with Acts 7:59-60.** Stephen\'s last words echo Jesus on the cross.';
+
+  it('keeps Jordan item 4\'s missing sentence in the tree', () => {
+    const tree = render(`${ITEM_4}\n${ITEM_5}`);
+    expect(visibleText(tree.toJSON())).toContain('does that mean you chose wrong?');
+  });
+
+  it('renders each numbered item as its own Text so a pill cannot clip the last line', () => {
+    const tree = render(`${ITEM_4}\n${ITEM_5}`);
+    const item4 = outermostTextContaining(tree.root, 'does that mean you chose wrong?');
+    const item5 = outermostTextContaining(tree.root, 'Close with');
+    expect(item4).toBeTruthy();
+    expect(item5).toBeTruthy();
+    expect(item4).not.toBe(item5);
+    expect(instanceVisibleText(item4)).not.toContain('5.');
+    expect(instanceVisibleText(item5)).not.toContain('does that mean you chose wrong?');
+  });
+
+  it('does not reintroduce ** on the stable Jordan list', () => {
+    const tree = render(
+      [
+        '1. **Read Acts 5:27-32 aloud together.** Peter\'s answer to the council.',
+        '3. **Read Stephen\'s speech (Acts 7:1-53) or at least the ending (Acts 7:51-53).**',
+        ITEM_4,
+      ].join('\n'),
+    );
+    expect(visibleText(tree.toJSON())).not.toContain('*');
+  });
 });

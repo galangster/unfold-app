@@ -28,11 +28,12 @@ interface Props {
 
 // ── Segment types ─────────────────────────────────────────────────────────
 
-type TextSegment =
+type InlineSegment =
   | { type: 'text'; content: string }
   | { type: 'bold'; content: string }
-  | { type: 'italic'; content: string }
-  | { type: 'verse'; reference: string };
+  | { type: 'italic'; content: string };
+
+type TextSegment = InlineSegment | { type: 'verse'; reference: string };
 
 /**
  * U+202F NARROW NO-BREAK SPACE — the glue on each side of a verse pill's
@@ -127,8 +128,17 @@ export function preprocessMarkdown(text: string): string {
 
 // ── Parse text into segments with bold, italic, and verse refs ───────────
 
+/**
+ * Markdown first, then verse pills. Cutting refs first splits a pair like
+ * `**Read Acts 5:27-32 aloud together.**` into `**Read ` + pill + ` aloud…**`,
+ * so the leftover asterisks render literally. Parsing emphasis first keeps
+ * the span intact; pills are restored inside each text/bold/italic run.
+ */
 export function parseSegments(text: string): TextSegment[] {
-  // First, find scripture references (bracket and bare)
+  return parseInlineMarkdown(text).flatMap(splitVersesInSegment);
+}
+
+function extractVerseRefs(text: string): ScriptureRef[] {
   const bracketRefs: ScriptureRef[] = [];
   const bracketRegex = /\[([^\]]+)\]/g;
   let match: RegExpExecArray | null;
@@ -145,10 +155,8 @@ export function parseSegments(text: string): TextSegment[] {
     }
   }
 
-  const bareRefs = parseScriptureReferences(text);
-
   const allRefs = [...bracketRefs];
-  for (const bare of bareRefs) {
+  for (const bare of parseScriptureReferences(text)) {
     const overlaps = bracketRefs.some(
       (br) => bare.startIndex >= br.startIndex && bare.endIndex <= br.endIndex
     );
@@ -158,50 +166,32 @@ export function parseSegments(text: string): TextSegment[] {
   }
 
   allRefs.sort((a, b) => a.startIndex - b.startIndex);
+  return allRefs;
+}
 
-  // AI responses routinely bold or italicize verse references (**Psalm 46:10**).
-  // The refs are cut out before inline markdown runs, so a marker pair that
-  // directly wraps a reference would be split across two chunks and render as
-  // literal asterisks. The pill already carries the emphasis — swallow the
-  // wrapping markers into the reference bounds instead.
-  for (const ref of allRefs) {
-    for (const marker of ['**', '*']) {
-      if (
-        ref.startIndex >= marker.length &&
-        text.slice(ref.startIndex - marker.length, ref.startIndex) === marker &&
-        text.startsWith(marker, ref.endIndex)
-      ) {
-        ref.startIndex -= marker.length;
-        ref.endIndex += marker.length;
-      }
-    }
-  }
+function splitVersesInSegment(seg: InlineSegment): TextSegment[] {
+  const refs = extractVerseRefs(seg.content);
+  if (refs.length === 0) return [seg];
 
-  // Split text around verse refs first, then parse inline markdown in each text chunk
   const chunks: TextSegment[] = [];
   let cursor = 0;
 
-  for (const ref of allRefs) {
+  for (const ref of refs) {
     if (ref.startIndex > cursor) {
-      chunks.push(...parseInlineMarkdown(text.slice(cursor, ref.startIndex)));
+      chunks.push({ type: seg.type, content: seg.content.slice(cursor, ref.startIndex) });
     }
     chunks.push({ type: 'verse', reference: ref.reference });
     cursor = ref.endIndex;
   }
-  if (cursor < text.length) {
-    chunks.push(...parseInlineMarkdown(text.slice(cursor)));
+  if (cursor < seg.content.length) {
+    chunks.push({ type: seg.type, content: seg.content.slice(cursor) });
   }
-
-  if (chunks.length === 0) {
-    return parseInlineMarkdown(text);
-  }
-
   return chunks;
 }
 
 // ── Parse inline bold/italic markdown within a text chunk ────────────────
 
-function parseInlineMarkdown(text: string): TextSegment[] {
+function parseInlineMarkdown(text: string): InlineSegment[] {
   // Match **bold** and *italic* (bold first since ** contains *)
   const regex = /\*\*(.+?)\*\*|\*(.+?)\*/g;
   const result: TextSegment[] = [];
@@ -250,17 +240,54 @@ function InlineText({
   isBlockquote?: boolean;
 }) {
   const { colors } = useTheme();
-  const [flashIndex, setFlashIndex] = useState<number | null>(null);
+  const [flashKey, setFlashKey] = useState<string | null>(null);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const handleVersePress = useCallback((index: number, reference: string) => {
+  const handleVersePress = useCallback((key: string, reference: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setFlashIndex(index);
+    setFlashKey(key);
     if (flashTimer.current) clearTimeout(flashTimer.current);
-    flashTimer.current = setTimeout(() => setFlashIndex(null), 300);
+    flashTimer.current = setTimeout(() => setFlashKey(null), 300);
     onVersePress(reference);
   }, [onVersePress]);
 
+  const lines = useMemo(() => text.split('\n'), [text]);
+
+  // Numbered/bullet items stay one paragraph in preprocessMarkdown but each
+  // line must be its own Text. iOS nested Text with a smaller tinted pill
+  // routinely drops the last wrapped line of a long run (Jordan item 4).
+  return (
+    <>
+      {lines.map((line, lineIndex) => (
+        <MessageLine
+          key={lineIndex}
+          text={line}
+          lineIndex={lineIndex}
+          onVersePress={handleVersePress}
+          flashKey={flashKey}
+          isBlockquote={isBlockquote}
+          colors={colors}
+        />
+      ))}
+    </>
+  );
+}
+
+function MessageLine({
+  text,
+  lineIndex,
+  onVersePress,
+  flashKey,
+  isBlockquote,
+  colors,
+}: {
+  text: string;
+  lineIndex: number;
+  onVersePress: (key: string, reference: string) => void;
+  flashKey: string | null;
+  isBlockquote?: boolean;
+  colors: { text: string; accent: string };
+}) {
   const segments = useMemo(() => parseSegments(text), [text]);
 
   return (
@@ -273,6 +300,7 @@ function InlineText({
       }}
     >
       {segments.map((seg, i) => {
+        const key = `${lineIndex}-${i}`;
         if (seg.type === 'verse') {
           // The pill's breathing room is a narrow no-break space on each side
           // of the reference, not ordinary spaces: ordinary spaces doubled the
@@ -283,8 +311,8 @@ function InlineText({
           // the glyphs there; the small web-only padding rounds it out.
           return (
             <Text
-              key={i}
-              onPress={() => handleVersePress(i, seg.reference)}
+              key={key}
+              onPress={() => onVersePress(key, seg.reference)}
               accessibilityRole="button"
               accessibilityLabel={`Open ${seg.reference}`}
               style={{
@@ -292,7 +320,7 @@ function InlineText({
                 fontSize: FontSize.sm,
                 lineHeight: FontSize.sm * 1.8,
                 color: colors.accent,
-                backgroundColor: alpha(colors.accent, flashIndex === i ? 0.30 : 0.10),
+                backgroundColor: alpha(colors.accent, flashKey === key ? 0.30 : 0.10),
                 borderRadius: 6,
                 paddingHorizontal: 6,
                 paddingVertical: 4,
@@ -305,7 +333,7 @@ function InlineText({
         if (seg.type === 'bold') {
           return (
             <Text
-              key={i}
+              key={key}
               style={{ fontFamily: FontFamily.bodyBold ?? FontFamily.uiSemiBold }}
             >
               {seg.content}
@@ -315,14 +343,14 @@ function InlineText({
         if (seg.type === 'italic') {
           return (
             <Text
-              key={i}
+              key={key}
               style={{ fontFamily: FontFamily.bodyMedium, fontStyle: 'normal' }}
             >
               {seg.content}
             </Text>
           );
         }
-        return <Text key={i}>{seg.content}</Text>;
+        return <Text key={key}>{seg.content}</Text>;
       })}
     </Text>
   );
