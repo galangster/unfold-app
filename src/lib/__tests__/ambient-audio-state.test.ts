@@ -65,6 +65,7 @@ describe('ambient audio persisted state', () => {
       timerStatus: 'idle',
       deadline: null,
       remainingSeconds: 0,
+      shuffle: false,
     });
     await rehydrate();
   });
@@ -133,7 +134,22 @@ describe('ambient audio persisted state', () => {
     expect(raw).not.toContain('should not persist');
     expect(raw).not.toContain('secret');
     const parsed = JSON.parse(raw!) as { state: Record<string, unknown> };
-    expect(Object.keys(parsed.state).sort()).toEqual(['hasUsed', 'selectedTrackId', 'volume']);
+    expect(Object.keys(parsed.state).sort()).toEqual(['hasUsed', 'selectedTrackId', 'shuffle', 'volume']);
+  });
+
+  it('persists shuffle without starting playback', async () => {
+    useAmbientAudioState.getState().patch({ shuffle: true, hasUsed: true });
+    await Promise.resolve();
+    const persisted = mockPersistValues.get(AMBIENT_AUDIO_PERSIST_NAME);
+    useAmbientAudioState.setState({
+      shuffle: false,
+      hasUsed: false,
+      status: 'off',
+    });
+    mockPersistValues.set(AMBIENT_AUDIO_PERSIST_NAME, persisted!);
+    await rehydrate();
+    expect(useAmbientAudioState.getState().shuffle).toBe(true);
+    expect(useAmbientAudioState.getState().status).toBe('off');
   });
 
   it('restores volume without autoplay', async () => {

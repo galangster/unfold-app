@@ -98,6 +98,7 @@ export { ScalesIcon } from 'phosphor-react-native/src/icons/Scales';
 export { ShareNetworkIcon } from 'phosphor-react-native/src/icons/ShareNetwork';
 export { ShieldIcon } from 'phosphor-react-native/src/icons/Shield';
 export { ShieldCheckIcon } from 'phosphor-react-native/src/icons/ShieldCheck';
+export { ShuffleIcon } from 'phosphor-react-native/src/icons/Shuffle';
 export { SmileyIcon } from 'phosphor-react-native/src/icons/Smiley';
 export { SmileyBlankIcon } from 'phosphor-react-native/src/icons/SmileyBlank';
 export { SmileyMehIcon } from 'phosphor-react-native/src/icons/SmileyMeh';

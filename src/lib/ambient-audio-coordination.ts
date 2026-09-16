@@ -8,7 +8,6 @@ interface AmbientLifecycle {
 let lifecycle: AmbientLifecycle | null = null;
 let voiceInputActive = false;
 const voiceListeners = new Set<(active: boolean) => void>();
-let readingContext: string | null = null;
 
 export function registerAmbientLifecycle(next: AmbientLifecycle): () => void {
   lifecycle = next;
@@ -51,16 +50,6 @@ export function notifyNarrationPlayback(): void {
 
 export function endAmbientReflection(): Promise<void> {
   return Promise.resolve(lifecycle?.finish ? lifecycle.finish() : lifecycle?.stop());
-}
-
-export function setAmbientReadingContext(
-  devotionalId: string | null | undefined,
-  day: number,
-): void {
-  if (!devotionalId) return;
-  const next = `${devotionalId}:${day}`;
-  if (readingContext !== null && readingContext !== next) lifecycle?.stop();
-  readingContext = next;
 }
 
 export type MusicAnnouncementGateInput = {

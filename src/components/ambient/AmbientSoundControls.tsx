@@ -36,6 +36,7 @@ import {
   ClockIcon,
   PauseIcon,
   PlayIcon,
+  ShuffleIcon,
   SpeakerHighIcon,
 } from '@/components/icons';
 import { AmbientText } from './AmbientText';
@@ -55,6 +56,7 @@ import {
   pauseAmbientSound,
   playAmbientSound,
   previewAmbientVolume,
+  setAmbientShuffle,
   setAmbientTimer,
   setAmbientVolume,
   stopAmbientSound,
@@ -312,6 +314,37 @@ function SheetSoundsList({
           {error || 'This sound could not play. Try again or choose another.'}
         </AmbientText>
       ) : null}
+    </>
+  );
+}
+
+function SheetShuffleRow() {
+  const { colors } = useTheme();
+  const shuffle = useAmbientAudioState((state) => state.shuffle);
+
+  return (
+    <>
+      <AmbientText style={[styles.note, { color: colors.textMuted }]}>
+        {shuffle ? 'The next piece is mixed in.' : 'The next piece follows softly.'}
+      </AmbientText>
+      <Pressable
+        onPress={() => {
+          setAmbientShuffle(!shuffle);
+          void Haptics.selectionAsync();
+        }}
+        accessibilityRole="switch"
+        accessibilityState={{ checked: shuffle }}
+        accessibilityLabel="Shuffle"
+        style={[styles.timerRow, { borderColor: colors.borderFocused }]}
+      >
+        <ShuffleIcon size={18} color={shuffle ? colors.accent : colors.textMuted} />
+        <AmbientText style={[styles.actionText, styles.flex, { color: colors.text }]}>
+          Shuffle
+        </AmbientText>
+        <AmbientText style={[styles.actionText, { color: colors.textMuted }]}>
+          {shuffle ? 'On' : 'Off'}
+        </AmbientText>
+      </Pressable>
     </>
   );
 }
@@ -647,9 +680,7 @@ export function AmbientSoundSheet({
           ) : (
             <>
               <SheetSoundsList choose={choose} />
-              <AmbientText style={[styles.note, { color: colors.textMuted }]}>
-                The next piece follows softly.
-              </AmbientText>
+              <SheetShuffleRow />
               <AmbientVolumeControl />
               <SheetTimerStatusRow onPress={() => setTimerPanel(true)} />
               <Pressable

@@ -95,6 +95,34 @@ export function nextAmbientTrackId(id: AmbientTrackId): AmbientTrackId {
   return AMBIENT_TRACK_IDS[(index + 1) % AMBIENT_TRACK_IDS.length];
 }
 
+export function createAmbientShuffleOrder(
+  current: AmbientTrackId,
+  random: () => number = Math.random,
+): AmbientTrackId[] {
+  const rest = AMBIENT_TRACK_IDS.filter((id) => id !== current);
+  for (let i = rest.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(random() * (i + 1));
+    const swap = rest[i];
+    rest[i] = rest[j]!;
+    rest[j] = swap!;
+  }
+  return rest;
+}
+
+export function takeNextAmbientTrack(
+  current: AmbientTrackId,
+  shuffle: boolean,
+  queue: readonly AmbientTrackId[],
+  random: () => number = Math.random,
+): { next: AmbientTrackId; queue: AmbientTrackId[] } {
+  if (!shuffle) {
+    return { next: nextAmbientTrackId(current), queue: [] };
+  }
+  const remaining = queue.length > 0 ? [...queue] : createAmbientShuffleOrder(current, random);
+  const next = remaining.shift() ?? nextAmbientTrackId(current);
+  return { next, queue: remaining };
+}
+
 export function formatTrackDuration(seconds: number): string {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 }

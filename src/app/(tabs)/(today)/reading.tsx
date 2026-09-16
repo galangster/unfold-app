@@ -88,7 +88,7 @@ import { TomorrowPreview } from '@/components/reading/TomorrowPreview';
 import { ScripturePracticeSheet, buildPracticeBibleHref } from '@/components/reading/ScripturePracticeSheet';
 import { getScripturePractice } from '@/constants/scripture-practices';
 import { isQaToolsEnabled } from '@/lib/qa-tools';
-import { endAmbientReflection, setAmbientReadingContext } from '@/lib/ambient-audio-coordination';
+import { endAmbientReflection } from '@/lib/ambient-audio-coordination';
 import { isAmbientAudioEnabled } from '@/lib/ambient-audio-feature';
 import { AmbientMusicEntry } from '@/components/ambient/AmbientMusicEntry';
 import { isScripturePracticeEnabled } from '@/lib/scripture-practice-feature';
@@ -871,10 +871,6 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
       autoRetryTimersRef.current = {};
     };
   }, []);
-
-  useEffect(() => {
-    setAmbientReadingContext(effectiveDevotionalId, viewingDay);
-  }, [effectiveDevotionalId, viewingDay]);
 
   useEffect(() => {
     if (!isReadingFocused || !isViewingActiveSeries || !effectiveDevotionalId) return;

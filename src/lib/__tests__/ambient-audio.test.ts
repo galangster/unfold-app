@@ -10,6 +10,7 @@ import {
   playAmbientSound,
   previewAmbientVolume,
   setAmbientPlaybackGuard,
+  setAmbientShuffle,
   setAmbientTimer,
   setAmbientVolume,
   stopAmbientSound,
@@ -51,6 +52,19 @@ jest.mock('../ambient-audio-catalog', () => {
     isAmbientTrackId: (id: unknown) => id === 'river-thread' || id === 'tideglass-drift' || id === 'a-lifetime-spent-with-you',
     getAmbientTrack: (id: string) => tracks.find((track) => track.id === id) ?? tracks[0],
     nextAmbientTrackId: (id: string) => (id === 'river-thread' ? 'tideglass-drift' : 'a-lifetime-spent-with-you'),
+    takeNextAmbientTrack: (current: string, shuffle: boolean, queue: string[]) => {
+      if (!shuffle) {
+        return {
+          next: current === 'river-thread' ? 'tideglass-drift' : 'a-lifetime-spent-with-you',
+          queue: [],
+        };
+      }
+      const remaining = queue.length > 0
+        ? [...queue]
+        : ['a-lifetime-spent-with-you', 'tideglass-drift'].filter((id) => id !== current);
+      const next = remaining.shift() ?? 'river-thread';
+      return { next, queue: remaining };
+    },
   };
 });
 
@@ -160,6 +174,7 @@ function resetStore() {
     timerStatus: 'idle',
     deadline: null,
     remainingSeconds: 0,
+    shuffle: false,
   });
 }
 
@@ -336,18 +351,27 @@ describe('ambient audio controller', () => {
     expect(player.play).toHaveBeenCalledTimes(1);
   });
 
-  it('pauses on background and does not resume on foreground', async () => {
+  it('keeps playing in the background and still ends when the timer expires', async () => {
     initializeAmbientAudio();
     playAmbientSound('river-thread');
     await flush();
     const player = lastPlayer();
     player.isLoaded = true;
     player.emit({ isLoaded: true, playing: false });
+    setAmbientTimer(5);
     emitAppState('background');
-    expect(useAmbientAudioState.getState().pauseReason).toBe('Paused while you were away');
+    expect(useAmbientAudioState.getState().status).toBe('playing');
+    expect(useAmbientAudioState.getState().pauseReason).toBeNull();
+    expect(mockSetAudioModeAsync).toHaveBeenCalledWith(expect.objectContaining({
+      shouldPlayInBackground: true,
+    }));
+    await jest.advanceTimersByTimeAsync(5 * 60_000);
+    await jest.advanceTimersByTimeAsync(AMBIENT_FADE_MS);
+    expect(useAmbientAudioState.getState().status).toBe('off');
+    expect(useAmbientAudioState.getState().timerStatus).toBe('ended');
     emitAppState('active');
     await flush();
-    expect(useAmbientAudioState.getState().status).toBe('paused');
+    expect(useAmbientAudioState.getState().status).toBe('off');
     expect(player.play).toHaveBeenCalledTimes(1);
   });
 
@@ -383,6 +407,21 @@ describe('ambient audio controller', () => {
     await jest.advanceTimersByTimeAsync(AMBIENT_FADE_MS);
     await flush();
     expect(useAmbientAudioState.getState().selectedTrackId).toBe('tideglass-drift');
+    expect(mockCreateAudioPlayer).toHaveBeenCalledTimes(2);
+  });
+
+  it('advances through a shuffled order when shuffle is on', async () => {
+    setAmbientShuffle(true);
+    playAmbientSound('river-thread');
+    await flush();
+    const first = lastPlayer();
+    first.isLoaded = true;
+    first.emit({ isLoaded: true, playing: false });
+    first.emit({ isLoaded: true, playing: false, didJustFinish: true });
+    await jest.advanceTimersByTimeAsync(AMBIENT_FADE_MS);
+    await flush();
+    expect(useAmbientAudioState.getState().selectedTrackId).toBe('a-lifetime-spent-with-you');
+    expect(useAmbientAudioState.getState().shuffle).toBe(true);
     expect(mockCreateAudioPlayer).toHaveBeenCalledTimes(2);
   });
 

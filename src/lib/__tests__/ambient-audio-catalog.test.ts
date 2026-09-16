@@ -5,6 +5,8 @@ import {
   getAmbientTrack,
   isAmbientTrackId,
   nextAmbientTrackId,
+  createAmbientShuffleOrder,
+  takeNextAmbientTrack,
 } from '../ambient-audio-catalog';
 
 jest.mock('../../../assets/audio/piano/a-lifetime-spent-with-you.m4a', () => 11, { virtual: true });
@@ -51,5 +53,23 @@ describe('ambient audio catalog', () => {
     expect(getAmbientTrack('river-thread').title).toBe('Still Waters');
     expect(nextAmbientTrackId('silent-warmth')).toBe('a-lifetime-spent-with-you');
     expect(formatTrackDuration(195)).toBe('3:15');
+  });
+
+  it('builds a shuffle order that skips the current piece', () => {
+    const order = createAmbientShuffleOrder('river-thread', () => 0);
+    expect(order).not.toContain('river-thread');
+    expect(order).toHaveLength(AMBIENT_TRACKS.length - 1);
+    expect(new Set(order).size).toBe(order.length);
+  });
+
+  it('advances sequentially unless shuffle is on', () => {
+    expect(takeNextAmbientTrack('silent-warmth', false, ['river-thread']).next).toBe(
+      'a-lifetime-spent-with-you',
+    );
+    expect(takeNextAmbientTrack('silent-warmth', true, ['galactic-drift', 'river-thread'])).toEqual({
+      next: 'galactic-drift',
+      queue: ['river-thread'],
+    });
+    expect(takeNextAmbientTrack('silent-warmth', true, []).queue).not.toContain('silent-warmth');
   });
 });

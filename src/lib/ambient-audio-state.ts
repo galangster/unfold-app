@@ -14,6 +14,7 @@ export type AmbientAudioPersisted = {
   selectedTrackId: AmbientTrackId;
   volume: number;
   hasUsed: boolean;
+  shuffle: boolean;
 };
 
 export type AmbientAudioState = AmbientAudioPersisted & {
@@ -41,6 +42,7 @@ export const AMBIENT_AUDIO_INITIAL_STATE: AmbientAudioPersisted & typeof AMBIENT
   selectedTrackId: DEFAULT_AMBIENT_TRACK_ID,
   volume: AMBIENT_DEFAULT_VOLUME,
   hasUsed: false,
+  shuffle: false,
   ...AMBIENT_AUDIO_RUNTIME_DEFAULTS,
 };
 
@@ -97,6 +99,10 @@ export function sanitizeAmbientAudioPersisted(raw: unknown): Partial<AmbientAudi
     next.hasUsed = input.hasUsed;
   }
 
+  if (typeof input.shuffle === 'boolean') {
+    next.shuffle = input.shuffle;
+  }
+
   return next;
 }
 
@@ -122,6 +128,7 @@ export const useAmbientAudioState = create<AmbientAudioState>()(
         selectedTrackId: state.selectedTrackId,
         volume: state.volume,
         hasUsed: state.hasUsed,
+        shuffle: state.shuffle,
       }),
       merge: (persistedState, currentState) => ({
         ...currentState,

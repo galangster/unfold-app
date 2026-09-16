@@ -1,4 +1,4 @@
-/** Foreground ambient music. Sound effects use a different owner. */
+/** Ambient music. Sound effects use a different owner. */
 import { createAudioPlayer } from 'expo-audio';
 import type { AudioStatus } from 'expo-audio/build/Audio.types';
 import type { AudioPlayer } from 'expo-audio/build/AudioModule.types';
@@ -6,7 +6,7 @@ import { AppState, type AppStateStatus } from 'react-native';
 import {
   getAmbientTrack,
   isAmbientTrackId,
-  nextAmbientTrackId,
+  takeNextAmbientTrack,
   type AmbientTrackId,
 } from './ambient-audio-catalog';
 import { isAmbientAudioEnabled } from './ambient-audio-feature';
@@ -46,6 +46,7 @@ let watchdogTimer: { generation: number; timer: ReturnType<typeof setTimeout> } 
 let tickTimer: ReturnType<typeof setInterval> | null = null;
 let appStateSubscription: { remove: () => void } | null = null;
 let initCount = 0;
+let shuffleQueue: AmbientTrackId[] = [];
 
 function store() {
   return useAmbientAudioState.getState();
@@ -53,15 +54,6 @@ function store() {
 
 function isCurrent(generation: number): boolean {
   return generation === startGeneration;
-}
-
-function getAppState(): string {
-  const raw = AppState.currentState as unknown;
-  return typeof raw === 'string' ? raw : 'active';
-}
-
-function isInactiveState(status: string): boolean {
-  return status === 'background' || status === 'inactive';
 }
 
 function canStartPlayback(): boolean {
@@ -77,10 +69,6 @@ function shouldAbortStart(generation: number): boolean {
   if (!isCurrent(generation) || !isAmbientAudioEnabled()) return true;
   if (isDeadlineExpired()) {
     expireTimer();
-    return true;
-  }
-  if (isInactiveState(getAppState())) {
-    pauseForAppState();
     return true;
   }
   if (canStartPlayback()) return false;
@@ -238,7 +226,7 @@ async function configureAudioSession(): Promise<boolean> {
       owner: 'ambient',
       mode: {
         playsInSilentMode: true,
-        shouldPlayInBackground: false,
+        shouldPlayInBackground: true,
         allowsRecording: false,
         allowsBackgroundRecording: false,
         shouldRouteThroughEarpiece: false,
@@ -288,7 +276,13 @@ function attachStatusListener(target: AudioPlayer, generation: number): void {
     }
 
     if (status.didJustFinish && store().status === 'playing') {
-      playAmbientSound(nextAmbientTrackId(store().selectedTrackId), false);
+      const { next, queue } = takeNextAmbientTrack(
+        store().selectedTrackId,
+        store().shuffle,
+        shuffleQueue,
+      );
+      shuffleQueue = queue;
+      playAmbientSound(next, false);
       return;
     }
 
@@ -370,22 +364,12 @@ function expireTimer(): void {
   }
 }
 
-function pauseForAppState(): void {
-  pauseAmbientSound('background');
-}
-
-function onAppStateChange(next: AppStateStatus): void {
-  if (isInactiveState(next)) {
-    pauseForAppState();
+function onAppStateChange(_next: AppStateStatus): void {
+  if (isDeadlineExpired()) {
+    expireTimer();
     return;
   }
-  if (next === 'active') {
-    if (isDeadlineExpired()) {
-      expireTimer();
-      return;
-    }
-    syncRemaining();
-  }
+  syncRemaining();
 }
 
 async function startNewPlayback(generation: number): Promise<void> {
@@ -504,6 +488,7 @@ export function disposeAmbientAudio(): void {
   startGeneration += 1;
   initCount = 0;
   playbackGuard = null;
+  shuffleQueue = [];
   clearTicker();
   destroyPlayer();
   appStateSubscription?.remove();
@@ -518,6 +503,7 @@ export function playAmbientSound(trackId?: AmbientTrackId, userInitiated = true)
 
   if (trackId !== undefined) {
     if (!isAmbientTrackId(trackId)) return;
+    if (trackId !== store().selectedTrackId) shuffleQueue = [];
     store().patch({ selectedTrackId: trackId });
   }
 
@@ -555,7 +541,6 @@ export function playAmbientSound(trackId?: AmbientTrackId, userInitiated = true)
 function readablePauseReason(reason: string): string {
   if (reason.startsWith('Paused')) return reason;
   if (reason === 'user') return 'Paused';
-  if (reason === 'background') return 'Paused while you were away';
   return 'Paused by another audio source';
 }
 
@@ -621,6 +606,12 @@ export function previewAmbientVolume(volume: number): void {
   } catch (error) {
     logger.warn('[AmbientAudio] preview volume failed', error);
   }
+}
+
+export function setAmbientShuffle(enabled: boolean): void {
+  if (store().shuffle === enabled) return;
+  store().patch({ shuffle: enabled });
+  shuffleQueue = [];
 }
 
 export function setAmbientTimer(minutes: number): void {

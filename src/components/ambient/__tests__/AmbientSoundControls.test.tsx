@@ -20,6 +20,7 @@ import {
   pauseAmbientSound,
   playAmbientSound,
   previewAmbientVolume,
+  setAmbientShuffle,
   setAmbientTimer,
   setAmbientVolume,
 } from '@/lib/ambient-audio';
@@ -59,6 +60,7 @@ jest.mock('@/lib/ambient-audio', () => ({
   pauseAmbientSound: jest.fn(),
   playAmbientSound: jest.fn(),
   previewAmbientVolume: jest.fn(),
+  setAmbientShuffle: jest.fn(),
   setAmbientTimer: jest.fn(),
   setAmbientVolume: jest.fn(),
   stopAmbientSound: jest.fn(),
@@ -129,6 +131,7 @@ jest.mock('@/components/icons', () => {
     MusicNotesIcon: View,
     PauseIcon: View,
     PlayIcon: View,
+    ShuffleIcon: View,
     SpeakerHighIcon: View,
   };
 });
@@ -183,6 +186,12 @@ describe('native sound controls', () => {
     expect(alert).toHaveBeenCalledWith('Recording in progress', expect.any(String));
     expect(playAmbientSound).not.toHaveBeenCalled();
     alert.mockRestore();
+  });
+
+  it('toggles shuffle from the sounds sheet', () => {
+    render(<AmbientSoundSheet visible onClose={jest.fn()} />);
+    fireEvent.press(screen.getByLabelText('Shuffle'));
+    expect(setAmbientShuffle).toHaveBeenCalledWith(true);
   });
 
   it('starts the chosen timer from the timer panel', () => {

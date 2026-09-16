@@ -7,7 +7,6 @@ import {
   isTodayHomeRoute,
   notifyNarrationPlayback,
   registerAmbientLifecycle,
-  setAmbientReadingContext,
   subscribeAmbientVoiceActivity,
 } from '../ambient-audio-coordination';
 
@@ -59,18 +58,6 @@ describe('ambient audio ownership', () => {
     cleanup();
     endAmbientReflection();
     expect(stop).toHaveBeenCalledTimes(1);
-  });
-
-  it('retains the current reading context across remounts and stops on a new day', () => {
-    const stop = jest.fn();
-    const cleanup = registerAmbientLifecycle({ interrupt: jest.fn(), stop });
-    setAmbientReadingContext('sound-qa-series', 1);
-    stop.mockClear();
-    setAmbientReadingContext('sound-qa-series', 1);
-    expect(stop).not.toHaveBeenCalled();
-    setAmbientReadingContext('sound-qa-series', 2);
-    expect(stop).toHaveBeenCalledTimes(1);
-    cleanup();
   });
 
   it('does not let old cleanup detach a newer lifecycle owner', () => {
