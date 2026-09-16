@@ -3,7 +3,6 @@ import type { AudioStatus } from 'expo-audio/build/Audio.types';
 import {
   AMBIENT_FADE_MS,
   AMBIENT_LOAD_WATCHDOG_MS,
-  AMBIENT_STOP_FADE_MS,
   disposeAmbientAudio,
   initializeAmbientAudio,
   interruptAmbientSound,
@@ -363,7 +362,7 @@ describe('ambient audio controller', () => {
     pauseAmbientSound('user');
     await jest.advanceTimersByTimeAsync(5 * 60_000);
     expect(mockSignalAmbientTimerFinished).not.toHaveBeenCalled();
-    await jest.advanceTimersByTimeAsync(AMBIENT_STOP_FADE_MS);
+    await jest.advanceTimersByTimeAsync(AMBIENT_FADE_MS);
     expect(useAmbientAudioState.getState().status).toBe('off');
     expect(useAmbientAudioState.getState().timerStatus).toBe('ended');
     expect(useAmbientAudioState.getState().selectedTrackId).toBe('river-thread');
@@ -401,7 +400,7 @@ describe('ambient audio controller', () => {
     }));
     await jest.advanceTimersByTimeAsync(5 * 60_000);
     expect(mockSignalAmbientTimerFinished).not.toHaveBeenCalled();
-    await jest.advanceTimersByTimeAsync(AMBIENT_STOP_FADE_MS);
+    await jest.advanceTimersByTimeAsync(AMBIENT_FADE_MS);
     expect(useAmbientAudioState.getState().status).toBe('off');
     expect(useAmbientAudioState.getState().timerStatus).toBe('ended');
     await flush();
