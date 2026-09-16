@@ -36,19 +36,13 @@ import {
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { getCurrentDevotional } from '@/lib/home-devotional-state';
-import { getTodayReaderDayNumber } from '@/lib/devotional-day-access';
-import {
-  appendJournalContent,
-  buildCompanionJournalBlock,
-  isReplyAlreadyInJournal,
-} from '@/lib/companion-journal';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import { resolveCompanionPersonality } from '@/lib/companion-personality';
 import { ProfileEntryButton } from '@/components/ProfileEntryButton';
 import { COMPANION_MESSAGE_MAX_CHARS, useCompanionChat, type SendOutcome } from '@/lib/use-companion-chat';
-import { selectActiveMessages, useCompanionChatStore, type CompanionMessage } from '@/lib/companion-chat-store';
+import type { CompanionMessage } from '@/lib/companion-chat-store';
 import {
   CompanionDrawer,
   useDrawerGesture,
@@ -84,8 +78,6 @@ const MessageItem = React.memo(function MessageItem({
   reducedMotion,
   onVersePress,
   onRetry,
-  onRegenerate,
-  onSaveToJournal,
 }: {
   item: CompanionMessage;
   isFirstInGroup: boolean;
@@ -96,8 +88,6 @@ const MessageItem = React.memo(function MessageItem({
   reducedMotion: boolean;
   onVersePress: (reference: string) => void;
   onRetry?: () => void;
-  onRegenerate?: (reason?: string) => void;
-  onSaveToJournal?: (messageId: string) => boolean;
 }) {
   const gapStyle = isFirstInGroup ? { marginTop: 16 } : { marginTop: 6 };
 
@@ -125,13 +115,7 @@ const MessageItem = React.memo(function MessageItem({
       />
       {showActions && (
         <CompanionActions
-          messageId={item.id}
           content={item.content}
-          feedback={item.feedback ?? null}
-          feedbackReason={item.feedbackReason ?? null}
-          onRegenerate={onRegenerate}
-          onSaveToJournal={onSaveToJournal}
-          visible
           motionActive={motionActive}
           reducedMotion={reducedMotion}
         />
@@ -142,17 +126,13 @@ const MessageItem = React.memo(function MessageItem({
   prev.item.id === next.item.id &&
   prev.item.content === next.item.content &&
   prev.item.status === next.item.status &&
-  prev.item.feedback === next.item.feedback &&
-  prev.item.feedbackReason === next.item.feedbackReason &&
   prev.isStreaming === next.isStreaming &&
   prev.fontScale === next.fontScale &&
   prev.motionActive === next.motionActive &&
   prev.reducedMotion === next.reducedMotion &&
   prev.isFirstInGroup === next.isFirstInGroup &&
   prev.isLastMessage === next.isLastMessage &&
-  prev.onRetry === next.onRetry &&
-  prev.onRegenerate === next.onRegenerate &&
-  prev.onSaveToJournal === next.onSaveToJournal
+  prev.onRetry === next.onRetry
 );
 
 // Memoized mounts: the screen re-renders on every streaming token flush —
@@ -215,8 +195,6 @@ export default function CompanionScreen() {
     if (!currentDevotional) return undefined;
     return currentDevotional.days?.find((d) => d.dayNumber === currentDevotional.currentDay)?.title;
   }, [currentDevotional]);
-  // Save-to-journal needs a series to file the entry under.
-  const hasCurrentDevotional = currentDevotional != null;
 
   // P1: dismissible error banner. Dismissal is per-error-message; a new
   // stream clears it so the next failure surfaces again.
@@ -344,14 +322,6 @@ export default function CompanionScreen() {
   );
 
   // The hook returns 'noop' while a stream is in flight, so no guard here.
-  const handleRegenerate = useCallback(
-    (reason?: string) => {
-      runWithQuota(() => regenerateReply({ reason }));
-    },
-    [regenerateReply, runWithQuota]
-  );
-  const handleRegenerateRef = useRef(handleRegenerate);
-  handleRegenerateRef.current = handleRegenerate;
   const handleRetry = useCallback(
     (companionId: string) => {
       runWithQuota(() => regenerateReply({ companionId }));
@@ -360,34 +330,6 @@ export default function CompanionScreen() {
   );
   const handleRetryRef = useRef(handleRetry);
   handleRetryRef.current = handleRetry;
-  // Identity-stable so the MessageItem memo comparator stays quiet.
-  const onRegenerate = useCallback((reason?: string) => handleRegenerateRef.current(reason), []);
-
-  // Files the reply under today's day of the current series: append to the
-  // day's entry when one exists, else create it. Idempotent per reply.
-  const handleSaveToJournal = useCallback((messageId: string): boolean => {
-    const chatMessages = selectActiveMessages(useCompanionChatStore.getState());
-    const index = chatMessages.findIndex((m) => m.id === messageId);
-    if (index < 0) return false;
-    const reply = chatMessages[index];
-    let question: CompanionMessage | undefined;
-    for (let i = index - 1; i >= 0 && !question; i -= 1) {
-      if (chatMessages[i].role === 'user') question = chatMessages[i];
-    }
-    const store = useUnfoldStore.getState();
-    const devotional = getCurrentDevotional(store.devotionals, store.currentDevotionalId);
-    if (!devotional) return false;
-    const dayNumber = getTodayReaderDayNumber(devotional);
-    const entry = store.getJournalEntry(devotional.id, dayNumber);
-    if (entry && isReplyAlreadyInJournal(entry.content, reply.content)) return true;
-    const block = buildCompanionJournalBlock({ question: question?.content ?? '', reply: reply.content });
-    if (entry) {
-      store.updateJournalEntry(entry.id, appendJournalContent(entry.content, block));
-    } else {
-      store.addJournalEntry({ devotionalId: devotional.id, dayNumber, content: block });
-    }
-    return true;
-  }, []);
   const retryHandlersRef = useRef(new Map<string, () => void>());
 
   const handleChipSelect = useCallback(
@@ -442,12 +384,10 @@ export default function CompanionScreen() {
           reducedMotion={reducedMotion}
           onVersePress={handleVersePress}
           onRetry={onRetry}
-          onRegenerate={onRegenerate}
-          onSaveToJournal={hasCurrentDevotional ? handleSaveToJournal : undefined}
         />
       );
     },
-    [activeRequestCompanionId, isStreaming, fontScale, isFocused, drawerOpen, reducedMotion, handleVersePress, onRegenerate, handleSaveToJournal, hasCurrentDevotional]
+    [activeRequestCompanionId, isStreaming, fontScale, isFocused, drawerOpen, reducedMotion, handleVersePress]
   );
 
   const keyExtractor = useCallback((item: CompanionMessage) => item.id, []);

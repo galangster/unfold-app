@@ -1,7 +1,8 @@
 /**
  * Regenerate-reply and thumbs-down reason helpers for the companion chat.
- * Pure: the hook (use-companion-chat.ts) and the action row
- * (CompanionActions.tsx) consume these.
+ * Pure: use-companion-chat.ts consumes pickRegenerateTarget for in-place
+ * retries. FEEDBACK_REASONS stay for store/sync of existing thumbs-down
+ * records; they are not shown on the action row.
  */
 import type { CompanionMessage } from './companion-chat-store';
 

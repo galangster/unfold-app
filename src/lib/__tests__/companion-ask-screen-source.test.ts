@@ -95,6 +95,39 @@ describe('Companion response motion', () => {
   });
 });
 
+describe('Companion action row chrome', () => {
+  it('keeps only copy and native iOS share', () => {
+    expect(actionsSource).toContain('Copy response');
+    expect(actionsSource).toContain('Share response');
+    expect(actionsSource).toContain('square.and.arrow.up');
+    expect(actionsSource).toContain('ios_share');
+    expect(actionsSource).not.toContain('ShareNetworkIcon');
+    expect(actionsSource).not.toContain('ThumbsUpIcon');
+    expect(actionsSource).not.toContain('ThumbsDownIcon');
+    expect(actionsSource).not.toContain('NotePencilIcon');
+    expect(actionsSource).not.toContain('ArrowsClockwiseIcon');
+    expect(actionsSource).not.toContain('What was off?');
+    expect(actionsSource).not.toContain('Save to journal');
+    expect(actionsSource).not.toContain('Try another reply');
+    expect(source).not.toContain('onRegenerate');
+    expect(source).not.toContain('onSaveToJournal');
+  });
+
+  it('uses skill press, copy swap, and 44pt hit targets', () => {
+    expect(actionsSource).toContain('const PRESS_SCALE = 0.96');
+    expect(actionsSource).toContain('duration: Duration.fast');
+    expect(actionsSource).toContain('easing: Ease.out');
+    expect(actionsSource).toContain('duration: 300, dampingRatio: 1');
+    expect(actionsSource).toContain('[1, 0.25]');
+    expect(actionsSource).toContain('[0.25, 1]');
+    expect(actionsSource).toContain('[0, 4]');
+    expect(actionsSource).toContain('[4, 0]');
+    expect(actionsSource).toContain('const HIT = 44');
+    expect(actionsSource).toMatch(/width: HIT/);
+    expect(actionsSource).toMatch(/height: HIT/);
+  });
+});
+
 describe('drawer edge-swipe gesture wired at the screen root', () => {
   it('imports and calls useDrawerGesture with the screen\'s own drawer state', () => {
     expect(source).toContain('useDrawerGesture');

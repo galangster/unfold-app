@@ -1,286 +1,258 @@
 /**
  * CompanionActions — post-response action row.
- * Copy, share, save to journal, try another reply, thumbs up/down.
+ * Copy and native iOS share only.
  * Staggered 80ms fade-in per Storyboard D.
- * A thumbs-down opens a "What was off?" row of reason chips; picking one
- * records the reason and offers a regenerate that carries it.
  */
-import { useEffect, useState } from 'react';
-import { AccessibilityInfo, Share, Text, TouchableOpacity, View } from 'react-native';
+import { useEffect, useState, type ReactNode } from 'react';
+import { AccessibilityInfo, Pressable, Share, StyleSheet, View } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
+import { SymbolView } from 'expo-symbols';
 import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  withDelay,
   cancelAnimation,
-  Easing,
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withSpring,
+  withTiming,
 } from 'react-native-reanimated';
-import {
-  ArrowsClockwiseIcon,
-  CopyIcon,
-  NotePencilIcon,
-  ShareNetworkIcon,
-  ThumbsUpIcon,
-  ThumbsDownIcon,
-  CheckIcon,
-} from '@/components/icons';
-import { Chip } from '@/components/ui';
-import { useTheme } from '@/lib/theme';
-import { Duration } from '@/constants/animations';
-import { FontFamily, FontSize } from '@/constants/fonts';
+import { CheckIcon, CopyIcon } from '@/components/icons';
+import { Duration, Ease, Stagger } from '@/constants/animations';
 import { Spacing } from '@/constants/spacing';
-import { useCompanionChatStore } from '@/lib/companion-chat-store';
-import { FEEDBACK_REASONS } from '@/lib/companion-regenerate';
+import { useTheme } from '@/lib/theme';
 import { COMPANION_TEXT_INDENT } from './CompanionMessageContent';
 
-const EASE_OUT = Easing.out(Easing.cubic);
-const STAGGER = 80;
 const CONFIRMATION_MS = 2000;
+const HIT = 44;
+const ICON = 18;
+const PRESS_SCALE = 0.96;
+/** better-ui/icon-transitions: spring duration 0.3, bounce 0. */
+const ICON_SWAP_SPRING = { duration: 300, dampingRatio: 1 } as const;
 
 interface Props {
-  messageId: string;
   content: string;
-  feedback: 'positive' | 'negative' | null;
-  /** Reason chip id recorded with a thumbs-down (FEEDBACK_REASONS). */
-  feedbackReason?: string | null;
-  /** Present only on a reply that can be regenerated (the last finished one). */
-  onRegenerate?: (reason?: string) => void;
-  /** Present only when a current series exists to file the entry under. Returns true when saved. */
-  onSaveToJournal?: (messageId: string) => boolean;
-  visible: boolean;
   motionActive?: boolean;
   reducedMotion?: boolean;
 }
 
-function ActionButton({
-  icon: Icon,
-  activeIcon: ActiveIcon,
-  delay,
-  isActive,
+function ShareUpFallback({ color, size }: { color: string; size: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" pointerEvents="none">
+      <Path
+        d="M9 8.25H7.5A2.25 2.25 0 0 0 5.25 10.5v9A2.25 2.25 0 0 0 7.5 21.75h9a2.25 2.25 0 0 0 2.25-2.25v-9A2.25 2.25 0 0 0 16.5 8.25H15M9 12l3-3m0 0 3 3m-3-3V2.25"
+        stroke={color}
+        strokeWidth={1.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+function NativeShareIcon({ color }: { color: string }) {
+  return (
+    <SymbolView
+      name={{ ios: 'square.and.arrow.up', android: 'ios_share', web: 'ios_share' }}
+      size={ICON}
+      tintColor={color}
+      weight="regular"
+      pointerEvents="none"
+      fallback={<ShareUpFallback color={color} size={ICON} />}
+    />
+  );
+}
+
+function CopySwap({
+  copied,
+  color,
   activeColor,
-  onPress,
-  accessibilityLabel,
-  hintColor,
-  motionActive,
   reducedMotion,
 }: {
-  icon: React.ComponentType<any>;
-  activeIcon?: React.ComponentType<any>;
-  delay: number;
-  isActive: boolean;
+  copied: boolean;
+  color: string;
   activeColor: string;
-  onPress: () => void;
-  accessibilityLabel: string;
-  hintColor: string;
-  motionActive: boolean;
   reducedMotion: boolean;
 }) {
+  const progress = useSharedValue(copied ? 1 : 0);
+
+  useEffect(() => {
+    cancelAnimation(progress);
+    progress.value = reducedMotion
+      ? copied ? 1 : 0
+      : withSpring(copied ? 1 : 0, ICON_SWAP_SPRING);
+    return () => cancelAnimation(progress);
+  }, [copied, progress, reducedMotion]);
+
+  const idleStyle = useAnimatedStyle(() => ({
+    opacity: 1 - progress.value,
+    transform: [{ scale: interpolate(progress.value, [0, 1], [1, 0.25]) }],
+    filter: [{ blur: interpolate(progress.value, [0, 1], [0, 4]) }],
+  }));
+
+  const activeStyle = useAnimatedStyle(() => ({
+    opacity: progress.value,
+    transform: [{ scale: interpolate(progress.value, [0, 1], [0.25, 1]) }],
+    filter: [{ blur: interpolate(progress.value, [0, 1], [4, 0]) }],
+  }));
+
+  return (
+    <View style={styles.iconSlot}>
+      <Animated.View style={idleStyle}>
+        <CopyIcon size={ICON} color={color} weight="regular" />
+      </Animated.View>
+      <Animated.View style={[styles.iconOverlay, activeStyle]}>
+        <CheckIcon size={ICON} color={activeColor} weight="regular" />
+      </Animated.View>
+    </View>
+  );
+}
+
+function ActionButton({
+  delay,
+  onPress,
+  accessibilityLabel,
+  motionActive,
+  reducedMotion,
+  children,
+}: {
+  delay: number;
+  onPress: () => void;
+  accessibilityLabel: string;
+  motionActive: boolean;
+  reducedMotion: boolean;
+  children: ReactNode;
+}) {
   const opacity = useSharedValue(motionActive && !reducedMotion ? 0 : 1);
+  const scale = useSharedValue(1);
 
   useEffect(() => {
     cancelAnimation(opacity);
     opacity.value = motionActive && !reducedMotion
-      ? withDelay(delay, withTiming(1, { duration: Duration.fast, easing: EASE_OUT }))
+      ? withDelay(delay, withTiming(1, { duration: Duration.fast, easing: Ease.out }))
       : 1;
-    return () => cancelAnimation(opacity);
-  }, [delay, motionActive, opacity, reducedMotion]);
+    return () => {
+      cancelAnimation(opacity);
+      cancelAnimation(scale);
+    };
+  }, [delay, motionActive, opacity, reducedMotion, scale]);
 
-  const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
+  const style = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ scale: scale.value }],
+  }));
 
-  const CurrentIcon = isActive && ActiveIcon ? ActiveIcon : Icon;
-  const color = isActive ? activeColor : hintColor;
-  const weight = isActive ? 'fill' : ('regular' as const);
+  const pressIn = () => {
+    if (reducedMotion) return;
+    cancelAnimation(scale);
+    scale.value = withTiming(PRESS_SCALE, { duration: Duration.fast, easing: Ease.out });
+  };
+
+  const pressOut = () => {
+    if (reducedMotion) return;
+    cancelAnimation(scale);
+    scale.value = withTiming(1, { duration: Duration.fast, easing: Ease.out });
+  };
 
   return (
     <Animated.View style={style}>
-      <TouchableOpacity
-        activeOpacity={0.6}
+      <Pressable
         onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           onPress();
         }}
+        onPressIn={pressIn}
+        onPressOut={pressOut}
         accessibilityLabel={accessibilityLabel}
         accessibilityRole="button"
-        hitSlop={4}
-        style={{
-          width: 36,
-          height: 36,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
+        android_ripple={{ color: 'transparent' }}
+        style={styles.hit}
       >
-        <CurrentIcon size={18} color={color} weight={weight} />
-      </TouchableOpacity>
+        {children}
+      </Pressable>
     </Animated.View>
   );
 }
 
 export function CompanionActions({
-  messageId,
   content,
-  feedback,
-  feedbackReason = null,
-  onRegenerate,
-  onSaveToJournal,
-  visible,
   motionActive = true,
   reducedMotion = false,
 }: Props) {
   const { colors } = useTheme();
-  const setFeedback = useCompanionChatStore((s) => s.setFeedback);
   const [copied, setCopied] = useState(false);
-  const [saved, setSaved] = useState(false);
 
-  if (!visible) return null;
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), CONFIRMATION_MS);
+    return () => clearTimeout(timer);
+  }, [copied]);
 
-  const handleCopy = async () => {
-    await Clipboard.setStringAsync(content);
-    setCopied(true);
-    AccessibilityInfo.announceForAccessibility('Copied');
-    setTimeout(() => setCopied(false), CONFIRMATION_MS);
+  const handleCopy = () => {
+    void Clipboard.setStringAsync(content).then(() => {
+      setCopied(true);
+      AccessibilityInfo.announceForAccessibility('Copied');
+    });
   };
 
-  const handleShare = async () => {
-    try {
-      await Share.share({ message: content });
-    } catch {
+  const handleShare = () => {
+    void Share.share({ message: content }).catch(() => {
       // Share cancelled or failed
-    }
+    });
   };
-
-  const handleSaveToJournal = () => {
-    if (!onSaveToJournal || !onSaveToJournal(messageId)) return;
-    setSaved(true);
-    AccessibilityInfo.announceForAccessibility('Saved to journal');
-    setTimeout(() => setSaved(false), CONFIRMATION_MS);
-  };
-
-  const selectedReason = FEEDBACK_REASONS.find((reason) => reason.id === feedbackReason) ?? null;
-
-  // Buttons in row order; delays follow the position so optional buttons
-  // never leave a gap in the stagger.
-  const buttons = [
-    {
-      key: 'copy',
-      icon: copied ? CheckIcon : CopyIcon,
-      isActive: copied,
-      activeColor: colors.success,
-      onPress: handleCopy,
-      accessibilityLabel: copied ? 'Copied' : 'Copy response',
-    },
-    {
-      key: 'share',
-      icon: ShareNetworkIcon,
-      isActive: false,
-      activeColor: colors.accent,
-      onPress: handleShare,
-      accessibilityLabel: 'Share response',
-    },
-    ...(onSaveToJournal
-      ? [{
-          key: 'journal',
-          icon: saved ? CheckIcon : NotePencilIcon,
-          isActive: saved,
-          activeColor: colors.success,
-          onPress: handleSaveToJournal,
-          accessibilityLabel: saved ? 'Saved to journal' : 'Save to journal',
-        }]
-      : []),
-    ...(onRegenerate
-      ? [{
-          key: 'regenerate',
-          icon: ArrowsClockwiseIcon,
-          isActive: false,
-          activeColor: colors.accent,
-          onPress: () => onRegenerate(),
-          accessibilityLabel: 'Try another reply',
-        }]
-      : []),
-    {
-      key: 'up',
-      icon: ThumbsUpIcon,
-      isActive: feedback === 'positive',
-      activeColor: colors.accent,
-      onPress: () => setFeedback(messageId, 'positive'),
-      accessibilityLabel: 'Helpful',
-    },
-    {
-      key: 'down',
-      icon: ThumbsDownIcon,
-      isActive: feedback === 'negative',
-      activeColor: colors.error,
-      onPress: () => setFeedback(messageId, 'negative'),
-      accessibilityLabel: 'Not helpful',
-    },
-  ];
 
   return (
-    <View style={{ paddingLeft: COMPANION_TEXT_INDENT, marginTop: Spacing['2'] }}>
-      <View style={{ flexDirection: 'row', gap: Spacing['4'] }}>
-        {buttons.map((button, index) => (
-          <ActionButton
-            key={button.key}
-            icon={button.icon}
-            delay={index * STAGGER}
-            isActive={button.isActive}
-            activeColor={button.activeColor}
-            onPress={button.onPress}
-            accessibilityLabel={button.accessibilityLabel}
-            hintColor={colors.textMuted}
-            motionActive={motionActive}
-            reducedMotion={reducedMotion}
-          />
-        ))}
-      </View>
-
-      {feedback === 'negative' && (
-        <View style={{ marginTop: Spacing['2'], gap: Spacing['2'] }}>
-          <Text
-            style={{
-              fontFamily: FontFamily.body,
-              fontSize: FontSize.xs,
-              color: colors.textMuted,
-            }}
-          >
-            What was off?
-          </Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing['2'] }}>
-            {FEEDBACK_REASONS.map((reason) => (
-              <Chip
-                key={reason.id}
-                variant="filter"
-                label={reason.label}
-                selected={reason.id === feedbackReason}
-                onPress={() => setFeedback(messageId, 'negative', reason.id)}
-              />
-            ))}
-          </View>
-          {selectedReason && onRegenerate && (
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel="Try another reply"
-              hitSlop={4}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                onRegenerate(selectedReason.id);
-              }}
-              style={{ alignSelf: 'flex-start', paddingVertical: Spacing['1'] }}
-            >
-              <Text
-                style={{
-                  fontFamily: FontFamily.uiMedium,
-                  fontSize: FontSize.sm,
-                  color: colors.accent,
-                }}
-              >
-                Try another reply
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      )}
+    <View style={styles.row}>
+      <ActionButton
+        delay={0}
+        onPress={handleCopy}
+        accessibilityLabel={copied ? 'Copied' : 'Copy response'}
+        motionActive={motionActive}
+        reducedMotion={reducedMotion}
+      >
+        <CopySwap
+          copied={copied}
+          color={colors.textMuted}
+          activeColor={colors.success}
+          reducedMotion={reducedMotion}
+        />
+      </ActionButton>
+      <ActionButton
+        delay={Stagger.normal}
+        onPress={handleShare}
+        accessibilityLabel="Share response"
+        motionActive={motionActive}
+        reducedMotion={reducedMotion}
+      >
+        <NativeShareIcon color={colors.textMuted} />
+      </ActionButton>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    gap: Spacing['4'],
+    marginTop: Spacing['2'],
+    paddingLeft: COMPANION_TEXT_INDENT,
+  },
+  hit: {
+    alignItems: 'center',
+    height: HIT,
+    justifyContent: 'center',
+    width: HIT,
+  },
+  iconSlot: {
+    alignItems: 'center',
+    height: ICON,
+    justifyContent: 'center',
+    width: ICON,
+  },
+  iconOverlay: {
+    ...StyleSheet.absoluteFill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});
