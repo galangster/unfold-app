@@ -34,7 +34,7 @@ describe('companionMessageSyncData interrupted flag', () => {
     expect(data.errorCopy).toBe('Companion is over capacity. Try again in a moment.');
   });
 
-  it('omits errorCopy when the user stopped or no cause was stored', () => {
-    expect('errorCopy' in companionMessageSyncData({ ...base, interrupted: true }, 'c1')).toBe(false);
+  it('sends empty errorCopy when the user stopped so pull can clear a prior cause', () => {
+    expect(companionMessageSyncData({ ...base, interrupted: true }, 'c1').errorCopy).toBe('');
   });
 });

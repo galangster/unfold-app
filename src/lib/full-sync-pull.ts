@@ -657,9 +657,9 @@ function mapMessage(
     feedbackReason: asString(row.feedbackReason) ?? null,
     deepLinks: asArray(row.deepLinks) as CompanionMessage['deepLinks'],
     interrupted: remoteInterrupted === undefined ? current?.interrupted : remoteInterrupted,
-    errorCopy: asString(row.errorCopy) ?? (
-      status === 'complete' || remoteInterrupted === false ? undefined : current?.errorCopy
-    ),
+    // A newer user-stop omits the cause on purpose. Do not keep a prior
+    // local connection/capacity line — that would blame the network for a stop.
+    errorCopy: asString(row.errorCopy),
     updatedAt: recordUpdatedAt(record),
   };
 }

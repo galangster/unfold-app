@@ -226,6 +226,7 @@ export function companionMessageSyncData(message: CompanionMessage, conversation
     deepLinks: message.deepLinks,
     // Explicit false after a successful retry clears a prior true on pull.
     interrupted: message.interrupted === true ? true : message.interrupted === false ? false : undefined,
-    errorCopy: message.errorCopy || undefined,
+    // Empty string on a user-stop so pull can clear a prior cause.
+    errorCopy: message.errorCopy || (message.interrupted === true ? '' : undefined),
   });
 }
