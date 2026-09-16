@@ -10,6 +10,7 @@ describe('ritual session calendar day', () => {
   const mondayNight = new Date(2026, 8, 14, 23, 50, 0);
   const tuesdayMorning = new Date(2026, 8, 15, 0, 20, 0);
   const tuesdayAfternoon = new Date(2026, 8, 15, 15, 0, 0);
+  const thursdayMorning = new Date(2026, 8, 17, 8, 0, 0);
 
   it('keeps a same-day completion on the finish instant', () => {
     const start = new Date(2026, 8, 14, 20, 0, 0);
@@ -148,5 +149,51 @@ describe('ritual session calendar day', () => {
     });
     expect(clock.iso).toBe(tuesdayMorning.toISOString());
     expect(clock.localYmd).toBe('2026-09-15');
+  });
+
+  it('starts a new session when the same identity is reopened days later', () => {
+    const abandoned = beginRitualSessionRecord(null, {
+      kind: 'reading',
+      devotionalId: 'dev-1',
+      dayNumber: 5,
+      now: mondayNight,
+      timeZone: 'Pacific/Honolulu',
+    });
+    const reopened = beginRitualSessionRecord(abandoned, {
+      kind: 'reading',
+      devotionalId: 'dev-1',
+      dayNumber: 5,
+      now: thursdayMorning,
+      timeZone: 'Pacific/Honolulu',
+    });
+    expect(reopened).not.toBe(abandoned);
+    expect(reopened.startedAt).toBe(thursdayMorning.toISOString());
+  });
+
+  it('does not backdate a completion from an abandoned session days later', () => {
+    const abandoned = beginRitualSessionRecord(null, {
+      kind: 'reading',
+      devotionalId: 'dev-1',
+      dayNumber: 5,
+      now: mondayNight,
+      timeZone: 'Pacific/Honolulu',
+    });
+    const at = resolveRitualCompletionInstant({
+      startedAt: mondayNight,
+      completedAt: thursdayMorning,
+      startedTimeZone: 'Pacific/Honolulu',
+      completedTimeZone: 'Pacific/Honolulu',
+    });
+    expect(at).toBe(thursdayMorning);
+
+    const clock = resolveRitualCompletion({
+      session: abandoned,
+      identity: { kind: 'reading', devotionalId: 'dev-1', dayNumber: 5 },
+      completedAt: thursdayMorning,
+      completedTimeZone: 'Pacific/Honolulu',
+    });
+    expect(clock.iso).toBe(thursdayMorning.toISOString());
+    expect(clock.localYmd).toBe('2026-09-17');
+    expect(clock.dayNumber).toBe(5);
   });
 });

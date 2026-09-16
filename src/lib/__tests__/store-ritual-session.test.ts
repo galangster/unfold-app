@@ -45,6 +45,7 @@ import { useUnfoldStore, type Devotional, type DevotionalDay } from '../store';
 
 const MONDAY_NIGHT = new Date(2026, 8, 14, 23, 50, 0);
 const TUESDAY_MORNING = new Date(2026, 8, 15, 0, 20, 0);
+const THURSDAY_MORNING = new Date(2026, 8, 17, 8, 0, 0);
 
 function day(overrides: Partial<DevotionalDay> = {}): DevotionalDay {
   return {
@@ -106,6 +107,27 @@ describe('store ritual session stamps', () => {
       dayNumber: 5,
     });
     expect(useUnfoldStore.getState().ritualSessions.reading).toEqual(first);
+  });
+
+  it('starts a new reading clock when the same day is reopened days later', () => {
+    jest.useFakeTimers().setSystemTime(MONDAY_NIGHT);
+    useUnfoldStore.getState().beginRitualSession({
+      kind: 'reading',
+      devotionalId: 'dev-1',
+      dayNumber: 5,
+    });
+    const abandoned = useUnfoldStore.getState().ritualSessions.reading;
+    expect(abandoned?.startedAt).toBe(MONDAY_NIGHT.toISOString());
+
+    jest.setSystemTime(THURSDAY_MORNING);
+    useUnfoldStore.getState().beginRitualSession({
+      kind: 'reading',
+      devotionalId: 'dev-1',
+      dayNumber: 5,
+    });
+    const reopened = useUnfoldStore.getState().ritualSessions.reading;
+    expect(reopened).not.toEqual(abandoned);
+    expect(reopened?.startedAt).toBe(THURSDAY_MORNING.toISOString());
   });
 
   it('stamps readAt, streak, and check-in from the start calendar day', () => {

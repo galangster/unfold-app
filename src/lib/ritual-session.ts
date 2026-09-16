@@ -3,8 +3,9 @@
  * stay the start calendar day. Completing after 00:00 used to stamp `readAt`
  * / check-in dates as "today", which consumed the next local day.
  *
- * Travel is unchanged: if the device IANA zone changes mid-session, completion
- * keeps the finish instant.
+ * Reuse only covers that night: the same local day, or the next one. An
+ * abandoned session days later starts fresh. Travel is unchanged: if the
+ * device IANA zone changes mid-session, completion keeps the finish instant.
  */
 
 export type RitualSessionKind = 'reading' | 'midday' | 'evening';
@@ -35,6 +36,18 @@ export function isRitualSessionIdentity(
     && session.dayNumber === identity.dayNumber;
 }
 
+function localCalendarDayDelta(from: Date, to: Date): number {
+  const start = new Date(from.getFullYear(), from.getMonth(), from.getDate()).getTime();
+  const end = new Date(to.getFullYear(), to.getMonth(), to.getDate()).getTime();
+  return Math.round((end - start) / 86_400_000);
+}
+
+function isWithinMidnightCrossingWindow(startedAt: Date, now: Date): boolean {
+  if (!Number.isFinite(startedAt.getTime()) || !Number.isFinite(now.getTime())) return false;
+  const delta = localCalendarDayDelta(startedAt, now);
+  return delta === 0 || delta === 1;
+}
+
 export function beginRitualSessionRecord(
   existing: RitualSession | null | undefined,
   input: RitualSessionIdentity & {
@@ -42,8 +55,13 @@ export function beginRitualSessionRecord(
     timeZone?: string | null;
   },
 ): RitualSession {
-  if (isRitualSessionIdentity(existing, input)) return existing;
   const now = input.now ?? new Date();
+  if (
+    isRitualSessionIdentity(existing, input)
+    && isWithinMidnightCrossingWindow(new Date(existing.startedAt), now)
+  ) {
+    return existing;
+  }
   return {
     kind: input.kind,
     startedAt: now.toISOString(),
@@ -63,7 +81,7 @@ export function resolveRitualCompletionInstant(input: {
   if (startedTimeZone && completedTimeZone && startedTimeZone !== completedTimeZone) {
     return completedAt;
   }
-  if (startedAt.toDateString() !== completedAt.toDateString()) {
+  if (localCalendarDayDelta(startedAt, completedAt) === 1) {
     return startedAt;
   }
   return completedAt;
@@ -86,10 +104,11 @@ export function resolveRitualCompletion(input: {
   const session = input.session
     && input.session.kind === input.identity.kind
     && input.session.devotionalId === input.identity.devotionalId
+    && isWithinMidnightCrossingWindow(new Date(input.session.startedAt), completedAt)
     ? input.session
     : null;
   const startedAt = session ? new Date(session.startedAt) : completedAt;
-  const at = session && Number.isFinite(startedAt.getTime())
+  const at = session
     ? resolveRitualCompletionInstant({
         startedAt,
         completedAt,
