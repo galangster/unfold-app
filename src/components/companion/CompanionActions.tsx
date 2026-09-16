@@ -4,19 +4,22 @@
  * Staggered 80ms fade-in per Storyboard D.
  */
 import { useEffect, useState, type ReactNode } from 'react';
-import { AccessibilityInfo, Pressable, Share, StyleSheet, View } from 'react-native';
+import { AccessibilityInfo, Platform, Pressable, Share, StyleSheet, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { SymbolView } from 'expo-symbols';
+import { BackdropBlur, Canvas, Fill } from '@shopify/react-native-skia';
 import Animated, {
   cancelAnimation,
   interpolate,
   useAnimatedStyle,
+  useDerivedValue,
   useSharedValue,
   withDelay,
   withSpring,
   withTiming,
+  type SharedValue,
 } from 'react-native-reanimated';
 import { CheckIcon, CopyIcon } from '@/components/icons';
 import { Duration, Ease, Stagger } from '@/constants/animations';
@@ -64,6 +67,18 @@ function NativeShareIcon({ color }: { color: string }) {
   );
 }
 
+/** RN `filter` blur is Android/web only. iOS applies the same 4px via Skia. */
+function IconBlur({ blur }: { blur: SharedValue<number> }) {
+  if (Platform.OS !== 'ios') return null;
+  return (
+    <Canvas style={StyleSheet.absoluteFill} pointerEvents="none">
+      <BackdropBlur blur={blur}>
+        <Fill color="transparent" />
+      </BackdropBlur>
+    </Canvas>
+  );
+}
+
 function CopySwap({
   copied,
   color,
@@ -85,25 +100,40 @@ function CopySwap({
     return () => cancelAnimation(progress);
   }, [copied, progress, reducedMotion]);
 
-  const idleStyle = useAnimatedStyle(() => ({
-    opacity: 1 - progress.value,
-    transform: [{ scale: interpolate(progress.value, [0, 1], [1, 0.25]) }],
-    filter: [{ blur: interpolate(progress.value, [0, 1], [0, 4]) }],
-  }));
+  const idleBlur = useDerivedValue(() =>
+    interpolate(progress.value, [0, 1], [0, 4]),
+  );
+  const activeBlur = useDerivedValue(() =>
+    interpolate(progress.value, [0, 1], [4, 0]),
+  );
 
-  const activeStyle = useAnimatedStyle(() => ({
-    opacity: progress.value,
-    transform: [{ scale: interpolate(progress.value, [0, 1], [0.25, 1]) }],
-    filter: [{ blur: interpolate(progress.value, [0, 1], [4, 0]) }],
-  }));
+  const idleStyle = useAnimatedStyle(() => {
+    const blur = interpolate(progress.value, [0, 1], [0, 4]);
+    return {
+      opacity: 1 - progress.value,
+      transform: [{ scale: interpolate(progress.value, [0, 1], [1, 0.25]) }],
+      ...(Platform.OS !== 'ios' ? { filter: [{ blur }] } : {}),
+    };
+  });
+
+  const activeStyle = useAnimatedStyle(() => {
+    const blur = interpolate(progress.value, [0, 1], [4, 0]);
+    return {
+      opacity: progress.value,
+      transform: [{ scale: interpolate(progress.value, [0, 1], [0.25, 1]) }],
+      ...(Platform.OS !== 'ios' ? { filter: [{ blur }] } : {}),
+    };
+  });
 
   return (
     <View style={styles.iconSlot}>
       <Animated.View style={idleStyle}>
         <CopyIcon size={ICON} color={color} weight="regular" />
+        <IconBlur blur={idleBlur} />
       </Animated.View>
       <Animated.View style={[styles.iconOverlay, activeStyle]}>
         <CheckIcon size={ICON} color={activeColor} weight="regular" />
+        <IconBlur blur={activeBlur} />
       </Animated.View>
     </View>
   );
@@ -132,6 +162,10 @@ function ActionButton({
     opacity.value = motionActive && !reducedMotion
       ? withDelay(delay, withTiming(1, { duration: Duration.fast, easing: Ease.out }))
       : 1;
+    if (reducedMotion) {
+      cancelAnimation(scale);
+      scale.value = 1;
+    }
     return () => {
       cancelAnimation(opacity);
       cancelAnimation(scale);
@@ -150,9 +184,10 @@ function ActionButton({
   };
 
   const pressOut = () => {
-    if (reducedMotion) return;
     cancelAnimation(scale);
-    scale.value = withTiming(1, { duration: Duration.fast, easing: Ease.out });
+    scale.value = reducedMotion
+      ? 1
+      : withTiming(1, { duration: Duration.fast, easing: Ease.out });
   };
 
   return (

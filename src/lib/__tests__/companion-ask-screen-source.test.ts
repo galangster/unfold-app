@@ -122,6 +122,9 @@ describe('Companion action row chrome', () => {
     expect(actionsSource).toContain('[0.25, 1]');
     expect(actionsSource).toContain('[0, 4]');
     expect(actionsSource).toContain('[4, 0]');
+    expect(actionsSource).toContain('BackdropBlur');
+    expect(actionsSource).toContain("Platform.OS !== 'ios'");
+    expect(actionsSource).toContain('scale.value = reducedMotion');
     expect(actionsSource).toContain('const HIT = 44');
     expect(actionsSource).toMatch(/width: HIT/);
     expect(actionsSource).toMatch(/height: HIT/);
