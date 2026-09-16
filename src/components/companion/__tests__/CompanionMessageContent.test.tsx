@@ -3,8 +3,12 @@ import { Text } from 'react-native';
 import renderer, { act } from 'react-test-renderer';
 import { CompanionMessageContent } from '../CompanionMessageContent';
 import type { CompanionMessage } from '@/lib/companion-chat-store';
+import {
+  COMPANION_ERROR_CAPACITY,
+  COMPANION_ERROR_CONNECTION,
+} from '@/lib/companion-error-copy';
 
-const ERROR_COLOR = '#FF0000';
+const MUTED_COLOR = '#666666';
 
 jest.mock('@/lib/theme', () => ({
   useTheme: () => ({
@@ -18,10 +22,6 @@ jest.mock('@/lib/theme', () => ({
       textMuted: '#666666',
     },
   }),
-}));
-
-jest.mock('@/components/ui', () => ({
-  alpha: (color: string, opacity: number) => `${color}${opacity}`,
 }));
 
 jest.mock('react-native-reanimated', () => {
@@ -119,7 +119,7 @@ function replyTexts(tree: any): string[] {
 function errorTexts(tree: any): string[] {
   return tree.root
     .findAllByType(Text)
-    .filter((node: any) => node.props.style?.color === ERROR_COLOR)
+    .filter((node: any) => node.props.style?.color === MUTED_COLOR)
     .map((node: any) => node.props.children);
 }
 
@@ -136,12 +136,12 @@ describe('CompanionMessageContent error rows', () => {
     const tree = render(errorMessage({ content: partial, interrupted: true }), onRetry);
 
     expect(replyTexts(tree)).toEqual([partial]);
-    expect(errorTexts(tree)).toEqual(['Something interrupted this reply. Tap to retry.']);
+    expect(errorTexts(tree)).toEqual([COMPANION_ERROR_CONNECTION]);
     // The partial must not be painted in the error color.
     expect(errorTexts(tree)).not.toContain(partial);
 
     act(() => {
-      tree.root.findByProps({ accessibilityLabel: 'Retry sending your message' }).props.onPress();
+      tree.root.findByProps({ accessibilityLabel: `Retry. ${COMPANION_ERROR_CONNECTION}` }).props.onPress();
     });
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
@@ -150,24 +150,36 @@ describe('CompanionMessageContent error rows', () => {
     const tree = render(errorMessage({ content: 'A partial answer', interrupted: true }));
 
     expect(replyTexts(tree)).toEqual(['A partial answer']);
-    expect(errorTexts(tree)).toEqual(['Something interrupted this reply. Try again?']);
-    expect(tree.root.findAllByProps({ accessibilityLabel: 'Retry sending your message' })).toHaveLength(0);
+    expect(errorTexts(tree)).toEqual([COMPANION_ERROR_CONNECTION]);
+    expect(tree.root.findAllByProps({ accessibilityLabel: `Retry. ${COMPANION_ERROR_CONNECTION}` })).toHaveLength(0);
   });
 
-  it('keeps an app-authored error string in the error line, not as reply text', () => {
-    const copy = 'You appear to be offline. Please check your connection and try again.';
-    const tree = render(errorMessage({ content: copy }), jest.fn());
+  it('maps stored network copy onto the bubble, not as reply text', () => {
+    const tree = render(
+      errorMessage({ content: 'You appear to be offline. Please check your connection and try again.' }),
+      jest.fn(),
+    );
 
     expect(replyTexts(tree)).toEqual([]);
-    expect(errorTexts(tree)).toEqual([copy]);
+    expect(errorTexts(tree)).toEqual([COMPANION_ERROR_CONNECTION]);
   });
 
-  it('falls back to generic copy when the error row has no content', () => {
-    expect(errorTexts(render(errorMessage(), jest.fn()))).toEqual(['Something went wrong. Tap to retry.']);
-    expect(errorTexts(render(errorMessage()))).toEqual(['Something went wrong. Try again?']);
+  it('maps capacity copy onto the bubble', () => {
+    const tree = render(
+      errorMessage({ content: 'The companion is over capacity right now.' }),
+      jest.fn(),
+    );
+
+    expect(replyTexts(tree)).toEqual([]);
+    expect(errorTexts(tree)).toEqual([COMPANION_ERROR_CAPACITY]);
+  });
+
+  it('falls back to connection copy when the error row has no content', () => {
+    expect(errorTexts(render(errorMessage(), jest.fn()))).toEqual([COMPANION_ERROR_CONNECTION]);
+    expect(errorTexts(render(errorMessage()))).toEqual([COMPANION_ERROR_CONNECTION]);
     // An interrupted row that never received any text reads the same way.
     expect(errorTexts(render(errorMessage({ interrupted: true }), jest.fn()))).toEqual([
-      'Something went wrong. Tap to retry.',
+      COMPANION_ERROR_CONNECTION,
     ]);
     expect(replyTexts(render(errorMessage({ interrupted: true }), jest.fn()))).toEqual([]);
   });
@@ -239,7 +251,7 @@ describe('CompanionMessageContent streaming bubble', () => {
     expect(pendingEllipses(tree)).toHaveLength(0);
     const visibleText = tree.root.findAllByType(Text).map((node: any) => node.props.children);
     expect(visibleText).not.toContain('Thinking…');
-    expect(errorTexts(tree)).toEqual(['Stopped']);
+    expect(errorTexts(tree)).toEqual([COMPANION_ERROR_CONNECTION]);
   });
 
   it('disables bubble growth motion while the Ask route is hidden', () => {

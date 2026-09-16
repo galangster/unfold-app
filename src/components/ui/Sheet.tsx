@@ -36,6 +36,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ADAPTIVE_SHEET_MEASURE, adaptiveSafeGutterStyle } from '@/lib/adaptive-layout';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/lib/theme';
+import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { Shadow } from '@/constants/shadows';
 import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
@@ -77,30 +78,47 @@ export function Sheet({
   bottomPadding = 200,
 }: SheetProps) {
   const { colors } = useTheme();
+  const { reducedMotion } = useAccessibleAnimation();
   const insets = useSafeAreaInsets();
   const translateY = useSharedValue(OFFSCREEN);
   const backdropOpacity = useSharedValue(0);
+  const reduceMotionSV = useSharedValue(reducedMotion);
   const dismissing = useRef(false);
 
-  // Slide in when sheet opens
+  useEffect(() => {
+    reduceMotionSV.value = reducedMotion;
+  }, [reducedMotion, reduceMotionSV]);
+
+  // Slide in when sheet opens. Reduced motion snaps the panel and scrim.
   useEffect(() => {
     if (visible) {
       dismissing.current = false;
+      if (reducedMotion) {
+        translateY.value = 0;
+        backdropOpacity.value = 0.4;
+        return;
+      }
       translateY.value = OFFSCREEN;
       backdropOpacity.value = 0;
       translateY.value = withTiming(0, SLIDE_IN);
       backdropOpacity.value = withTiming(0.4, SLIDE_IN);
     }
-  }, [visible, translateY, backdropOpacity]);
+  }, [visible, translateY, backdropOpacity, reducedMotion]);
 
   const dismissSheet = useCallback(() => {
     if (dismissing.current) return;
     dismissing.current = true;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (reducedMotion) {
+      translateY.value = OFFSCREEN;
+      backdropOpacity.value = 0;
+      onClose();
+      return;
+    }
     translateY.value = withTiming(OFFSCREEN, { duration: DISMISS_DURATION });
     backdropOpacity.value = withTiming(0, { duration: DISMISS_DURATION });
     setTimeout(onClose, DISMISS_DURATION);
-  }, [onClose, translateY, backdropOpacity]);
+  }, [onClose, translateY, backdropOpacity, reducedMotion]);
 
   const panGesture = useMemo(
     () =>
@@ -116,15 +134,18 @@ export function Sheet({
         })
         .onEnd((e) => {
           if (e.translationY > SWIPE_THRESHOLD || e.velocityY > VELOCITY_THRESHOLD) {
-            translateY.value = withTiming(OFFSCREEN, { duration: DISMISS_DURATION });
-            backdropOpacity.value = withTiming(0, { duration: DISMISS_DURATION });
             runOnJS(dismissSheet)();
-          } else {
-            translateY.value = withTiming(0, SLIDE_IN);
-            backdropOpacity.value = withTiming(0.4, SLIDE_IN);
+            return;
           }
+          if (reduceMotionSV.value) {
+            translateY.value = 0;
+            backdropOpacity.value = 0.4;
+            return;
+          }
+          translateY.value = withTiming(0, SLIDE_IN);
+          backdropOpacity.value = withTiming(0.4, SLIDE_IN);
         }),
-    [dismissSheet, translateY, backdropOpacity],
+    [dismissSheet, translateY, backdropOpacity, reduceMotionSV],
   );
 
   const sheetAnimatedStyle = useAnimatedStyle(() => ({

@@ -12,7 +12,6 @@ import type { TextStyle, ViewStyle } from 'react-native';
 import Animated, { FadeIn, LinearTransition, ReduceMotion, useReducedMotion } from 'react-native-reanimated';
 import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
-import { alpha } from '@/components/ui';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { FontFamily, FontSize } from '@/constants/fonts';
@@ -20,6 +19,7 @@ import { Typography } from '@/constants/typography';
 import { RichMessageText } from './RichMessageText';
 import { DevotionalCard } from './DevotionalCard';
 import type { CompanionMessage } from '@/lib/companion-chat-store';
+import { COMPANION_ERROR_CONNECTION, companionFacingError } from '@/lib/companion-error-copy';
 import { smartQuotes } from '@/lib/smart-quotes';
 import { splitStreamingParagraphs } from '@/lib/streaming-paragraphs';
 
@@ -126,18 +126,15 @@ export function CompanionMessageContent({
   // every other error row stores the error string itself in `content`.
   const interruptedReply = message.status === 'error' && message.interrupted ? message.content : '';
   const errorText = interruptedReply
-    ? `Something interrupted this reply. ${onRetry ? 'Tap to retry.' : 'Try again?'}`
-    : message.content || (onRetry ? 'Something went wrong. Tap to retry.' : 'Something went wrong. Try again?');
+    ? COMPANION_ERROR_CONNECTION
+    : companionFacingError(message.content);
   const errorBoxStyle: ViewStyle = {
-    backgroundColor: alpha(colors.error, 0.10),
-    borderRadius: Radius.md,
-    padding: Spacing['3'],
     marginTop: interruptedReply ? Spacing['3'] : undefined,
   };
   const errorTextStyle: TextStyle = {
     fontFamily: FontFamily.body,
     fontSize: FontSize.sm,
-    color: colors.error,
+    color: colors.textMuted,
     lineHeight: 20,
   };
 
@@ -189,13 +186,16 @@ export function CompanionMessageContent({
               <Pressable
                 onPress={onRetry}
                 accessibilityRole="button"
-                accessibilityLabel="Retry sending your message"
+                accessibilityLabel={`Retry. ${errorText}`}
                 style={errorBoxStyle}
               >
                 <Text key={`error-font-scale-${fontScale}`} style={errorTextStyle}>{errorText}</Text>
               </Pressable>
             ) : (
-              <View style={errorBoxStyle}>
+              <View
+                accessibilityRole="alert"
+                style={errorBoxStyle}
+              >
                 <Text key={`error-font-scale-${fontScale}`} style={errorTextStyle}>{errorText}</Text>
               </View>
             )}

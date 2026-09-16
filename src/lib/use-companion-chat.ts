@@ -20,6 +20,7 @@ import { useUnfoldStore } from '@/lib/store';
 import { logger } from '@/lib/logger';
 import { analyzeNetworkError } from '@/lib/network-error-handler';
 import { AiBudgetError, readAiBudgetError } from '@/lib/ai-budget-error';
+import { COMPANION_ERROR_CONNECTION, companionFacingError } from '@/lib/companion-error-copy';
 import { parseDeepLinks } from './parse-deep-links';
 import { generateConversationTitle } from './companion-service';
 import { companionReplyAnnouncement } from '@/lib/companion-announcements';
@@ -262,7 +263,7 @@ async function consumeSSE(
       return 'done';
     }
     if (event.error) {
-      onError(typeof event.error === 'string' ? event.error : 'The companion ran into a problem answering.');
+      onError(typeof event.error === 'string' ? event.error : undefined);
       return 'error';
     }
     return null;
@@ -438,8 +439,8 @@ export function useCompanionChat() {
     checkAndArchiveStale();
   }, [checkAndArchiveStale]);
 
-  // P0-4: transient chrome (suggestions, error banner, searching indicator)
-  // belongs to the conversation it came from — clear it on switch.
+  // P0-4: transient chrome (suggestions, searching indicator) belongs to
+  // the conversation it came from — clear it on switch.
   //
   // Only a switch *between* conversations counts. The first send of a session
   // creates the conversation (null → id) while its own reply is already
@@ -598,7 +599,7 @@ export function useCompanionChat() {
       // used to leave the indicator on until the stream finished.
       let searchingIndicatorOn = false;
 
-      // P0-4: transient UI state (suggestions banner, error banner, searching
+      // P0-4: transient UI state (suggestions, searching
       // indicator) belongs to the visible conversation — a background stream
       // finishing must not repaint chrome over whatever the user switched to.
       const isStreamConversationVisible = () =>
@@ -692,7 +693,7 @@ export function useCompanionChat() {
                 announceCompanionReply(cleanContent);
               },
               onError: (msg) => {
-                serverErrorMessage = msg || 'The companion ran into a problem answering.';
+                serverErrorMessage = companionFacingError(msg);
               },
             }
           );
@@ -756,7 +757,7 @@ export function useCompanionChat() {
             interrupted: true,
           }, streamConversationId);
           if (isStreamConversationVisible()) {
-            setError('The connection dropped mid-reply. Your reply may be incomplete.');
+            setError(`${COMPANION_ERROR_CONNECTION} Your reply may be incomplete.`);
           }
           announceCompanionReply(accumulatedText);
           streamSucceeded = true; // partial kept — skip the fallback below
@@ -859,7 +860,9 @@ export function useCompanionChat() {
           const analyzed = analyzeNetworkError(err);
           // The budget copy (with its reset estimate) beats the generic classifier.
           const userFriendlyMessage =
-            err instanceof AiBudgetError ? err.message : analyzed.userFriendlyMessage;
+            err instanceof AiBudgetError
+              ? err.message
+              : companionFacingError(analyzed.userFriendlyMessage, analyzed.type);
           logger.warn('[CompanionChat] Error:', err, analyzed.type);
           if (accumulatedText) {
             // Preserve partial text with a durable interruption flag and retry control.

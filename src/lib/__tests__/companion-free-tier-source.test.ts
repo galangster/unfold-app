@@ -6,10 +6,11 @@ function readSource(relativePath: string): string {
 }
 
 // Free-tier contradiction (0706 QA observation, resolved 0707): the screen
-// promises "N of 5 free messages left today" — sends must be governed by the
-// daily quota, not the all-or-nothing creation gate that paywalls every
-// non-premium user before their first message. The creation gate belongs to
-// creation actions (devotional generation), not companion sends.
+// promises remaining free messages after a send — those sends must be
+// governed by the daily quota, not the all-or-nothing creation gate that
+// paywalls every non-premium user before their first message. The creation
+// gate belongs to creation actions (devotional generation), not companion
+// sends.
 describe('companion free tier source contract', () => {
   const source = readSource('src/app/(tabs)/(ask)/index.tsx');
 
@@ -25,6 +26,6 @@ describe('companion free tier source contract', () => {
   });
 
   it('still shows the free-quota indicator it now honors', () => {
-    expect(source).toContain('free messages left today');
+    expect(source).toContain('of ${FREE_COMPANION_DAILY_LIMIT} left');
   });
 });

@@ -26,7 +26,6 @@ import {
   CrownIcon,
   List,
   NotePencil,
-  XIcon,
 } from '@/components/icons';
 import * as Haptics from 'expo-haptics';
 import {
@@ -37,7 +36,6 @@ import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { getCurrentDevotional } from '@/lib/home-devotional-state';
 import { FontFamily, FontSize } from '@/constants/fonts';
-import { Radius } from '@/constants/radius';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import { resolveCompanionPersonality } from '@/lib/companion-personality';
 import { ProfileEntryButton } from '@/components/ProfileEntryButton';
@@ -55,7 +53,6 @@ import { CompanionActions } from '@/components/companion/CompanionActions';
 import { SuggestionChips } from '@/components/companion/SuggestionChips';
 import { ScriptureTapSheet } from '@/components/ScriptureTapSheet';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
-import { alpha } from '@/components/ui';
 import { Spacing } from '@/constants/spacing';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import {
@@ -175,7 +172,6 @@ export default function CompanionScreen() {
     isStreaming,
     activeRequestCompanionId,
     suggestions,
-    error,
     sendMessage,
     regenerateReply,
     stopGeneration,
@@ -196,14 +192,9 @@ export default function CompanionScreen() {
     return currentDevotional.days?.find((d) => d.dayNumber === currentDevotional.currentDay)?.title;
   }, [currentDevotional]);
 
-  // P1: dismissible error banner. Dismissal is per-error-message; a new
-  // stream clears it so the next failure surfaces again.
-  const [dismissedError, setDismissedError] = useState<string | null>(null);
-  const visibleError = error && error !== dismissedError ? error : null;
   React.useEffect(() => {
-    if (isStreaming) {
-      setDismissedError(null);
-      if (Platform.OS === 'ios') AccessibilityInfo.announceForAccessibility('Companion is replying');
+    if (isStreaming && Platform.OS === 'ios') {
+      AccessibilityInfo.announceForAccessibility('Companion is replying');
     }
   }, [isStreaming]);
 
@@ -273,7 +264,7 @@ export default function CompanionScreen() {
   // Every model call (send, regenerate) runs through the free daily quota.
   // The guard runs synchronously: paywall on exhaustion, NOT the creation
   // gate — that gate paywalls every non-premium user, which contradicted the
-  // visible "N of 5 free messages" promise. Creation actions (devotional
+  // remaining-count promise after a send. Creation actions (devotional
   // generation) keep the creation gate. Quota is charged ONLY on a successful
   // response (NET-2): a free message is consumed iff a reply was received.
   // The in-flight guard inside the hook prevents concurrent over-spend.
@@ -393,11 +384,11 @@ export default function CompanionScreen() {
   const keyExtractor = useCallback((item: CompanionMessage) => item.id, []);
 
   const isEmpty = messages.length === 0;
-  const dailyLimitAccessibilityLabel = dailyRemaining === 0
+  const showDailyLimit = !isPremium && dailyRemaining < FREE_COMPANION_DAILY_LIMIT;
+  const dailyLimitExhausted = dailyRemaining === 0;
+  const dailyLimitAccessibilityLabel = dailyLimitExhausted
     ? 'Daily message limit reached. Tap to upgrade.'
-    : dailyRemaining === FREE_COMPANION_DAILY_LIMIT
-      ? `${FREE_COMPANION_DAILY_LIMIT} free messages today`
-      : `${dailyRemaining} of ${FREE_COMPANION_DAILY_LIMIT} free messages remaining today`;
+    : `${dailyRemaining} of ${FREE_COMPANION_DAILY_LIMIT} left`;
   const dailyLimitStyle = {
     flexDirection: 'row' as const,
     flexShrink: 0,
@@ -407,9 +398,10 @@ export default function CompanionScreen() {
     paddingVertical: 6,
     paddingHorizontal: Spacing['4'],
     gap: 6,
-    backgroundColor: dailyRemaining === 0 ? alpha(colors.accent, 0.12) : 'transparent',
   };
-  const dailyLimitContent = isPremium ? null : dailyRemaining === 0 ? (
+  const dailyLimitContent = !showDailyLimit
+    ? null
+    : dailyLimitExhausted ? (
     <>
       <CrownIcon size={13} color={colors.accent} weight="fill" />
       <Text
@@ -417,35 +409,23 @@ export default function CompanionScreen() {
         style={{
           fontFamily: FontFamily.uiMedium,
           fontSize: FontSize.xs,
-          color: colors.accent,
+          color: colors.textMuted,
         }}
       >
         Daily limit reached. Upgrade for unlimited.
       </Text>
     </>
-  ) : dailyRemaining === FREE_COMPANION_DAILY_LIMIT ? (
-    <Text
-      key={`quota-font-${fontScale}`}
-      style={{
-        fontFamily: FontFamily.ui,
-        fontSize: FontSize.xs,
-        color: colors.textSubtle,
-        fontVariant: ['tabular-nums'],
-      }}
-    >
-      {FREE_COMPANION_DAILY_LIMIT} free messages today
-    </Text>
   ) : (
     <Text
       key={`quota-font-${fontScale}`}
       style={{
         fontFamily: FontFamily.ui,
         fontSize: FontSize.xs,
-        color: colors.textSubtle,
+        color: colors.textMuted,
         fontVariant: ['tabular-nums'],
       }}
     >
-      {dailyRemaining} of {FREE_COMPANION_DAILY_LIMIT} free messages left today
+      {dailyRemaining} of {FREE_COMPANION_DAILY_LIMIT} left
     </Text>
   );
 
@@ -576,50 +556,9 @@ export default function CompanionScreen() {
         </View>
       )}
 
-      {/* Error banner — announced as an alert, dismissible (P1) */}
-      {!isEmpty && visibleError && (
-        <View
-          accessibilityRole="alert"
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            alignSelf: 'center',
-            width: '100%',
-            maxWidth: Math.max(0, adaptiveLayout.readableMaxWidth - Spacing['4'] * 2),
-            marginHorizontal: Spacing['4'],
-            marginBottom: Spacing['2'],
-            backgroundColor: alpha(colors.error, 0.10),
-            borderRadius: Radius.md,
-            padding: Spacing['3'],
-            gap: Spacing['2'],
-          }}
-        >
-          <Text
-            style={{
-              flex: 1,
-              fontFamily: FontFamily.body,
-              fontSize: FontSize.sm,
-              color: colors.error,
-              textAlign: 'center',
-            }}
-          >
-            {visibleError}
-          </Text>
-          <TouchableOpacity
-            onPress={() => setDismissedError(visibleError)}
-            hitSlop={8}
-            activeOpacity={0.7}
-            accessibilityRole="button"
-            accessibilityLabel="Dismiss error"
-          >
-            <XIcon size={16} color={colors.error} weight="bold" />
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Daily limit indicator for free users — shown at full quota too, not
-          only once some has been spent */}
-      {!isPremium && dailyRemaining === 0 && (
+      {/* Daily limit — after a send, or the exhausted upgrade row. Idle
+          full quota stays mute. */}
+      {showDailyLimit && (dailyLimitExhausted ? (
         <TouchableOpacity
           activeOpacity={0.7}
           accessibilityRole="button"
@@ -632,8 +571,7 @@ export default function CompanionScreen() {
         >
           {dailyLimitContent}
         </TouchableOpacity>
-      )}
-      {!isPremium && dailyRemaining > 0 && (
+      ) : (
         <View
           accessible
           accessibilityLabel={dailyLimitAccessibilityLabel}
@@ -641,7 +579,7 @@ export default function CompanionScreen() {
         >
           {dailyLimitContent}
         </View>
-      )}
+      ))}
 
       {/* Input bar */}
       <View style={adaptiveSafeGutterStyle(insets.left, insets.right)}>

@@ -12,9 +12,6 @@ export const COMPANION_INTRO_BODY =
 export const COMPANION_NAME_LATER_HINT =
   'You can change this name later in Profile.';
 
-export const COMPANION_EMPTY_STATE_NOTE =
-  "Explore Scripture, pray, or talk through what's on your mind.";
-
 export const GENERATING_CAN_CLOSE_COPY =
   'You can close Unfold and come back when you are ready.';
 

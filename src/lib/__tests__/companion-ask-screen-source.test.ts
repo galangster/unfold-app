@@ -13,30 +13,34 @@ const actionsSource = readFileSync(
   'utf8',
 );
 
-describe('free quota line shown at full quota too', () => {
-  it('no longer gates the quota indicator on some quota being spent', () => {
-    expect(source).not.toMatch(/\{!isPremium && dailyRemaining < FREE_COMPANION_DAILY_LIMIT/);
-    expect(source).toContain('{!isPremium && dailyRemaining > 0 && (');
+describe('free quota chrome after a send, not at idle', () => {
+  it('hides the idle full-quota line', () => {
+    expect(source).toContain('dailyRemaining < FREE_COMPANION_DAILY_LIMIT');
+    expect(source).not.toContain('${FREE_COMPANION_DAILY_LIMIT} free messages today');
+    expect(source).not.toContain('free messages today');
+    expect(source).not.toContain('free messages left today');
   });
 
-  it('shows "N free messages today" at full quota, distinct from the "left today" copy', () => {
-    expect(source).toContain('${FREE_COMPANION_DAILY_LIMIT} free messages today');
-    expect(source).toContain('free messages left today');
+  it('shows remaining count only after some quota is spent', () => {
+    expect(source).toContain('{dailyRemaining} of {FREE_COMPANION_DAILY_LIMIT} left');
+    expect(source).toContain('showDailyLimit && (dailyLimitExhausted ? (');
   });
 
-  it('uses FontSize tokens for the quota copy instead of a raw 11-12px', () => {
-    const quotaBlock = source.slice(
-      source.indexOf('const dailyLimitContent'),
-      source.indexOf('Daily limit indicator') + 2200,
-    );
+  it('uses textMuted for quota copy and FontSize tokens', () => {
+    const quotaStart = source.indexOf('const showDailyLimit');
+    const quotaBlock = source.slice(quotaStart, source.indexOf('return (', quotaStart));
+    expect(quotaBlock).toContain('colors.textMuted');
+    expect(quotaBlock).not.toContain('colors.textSubtle');
+    expect(quotaBlock).not.toContain('colors.textHint');
+    expect(quotaBlock).not.toContain('alpha(');
     expect(quotaBlock).not.toMatch(/fontSize:\s*1[12],/);
     expect(quotaBlock).toMatch(/fontSize: FontSize\.(xs|sm)/);
   });
 
   it('exposes upgrade touch semantics only when the quota is exhausted', () => {
-    expect(source).toContain('{!isPremium && dailyRemaining === 0 && (');
-    expect(source).toContain('{!isPremium && dailyRemaining > 0 && (');
-    expect(source).toMatch(/dailyRemaining > 0 && \(\s*<View\s+accessible/);
+    expect(source).toContain('showDailyLimit && (dailyLimitExhausted ? (');
+    expect(source).toMatch(/dailyLimitExhausted \? \(\s*<TouchableOpacity/);
+    expect(source).toMatch(/: \(\s*<View\s+accessible/);
   });
 });
 
@@ -145,10 +149,12 @@ describe('drawer edge-swipe gesture wired at the screen root', () => {
   });
 });
 
-describe('error banner stays inside the readable column', () => {
-  it('subtracts both horizontal margins from readableMaxWidth', () => {
-    expect(source).toContain('maxWidth: Math.max(0, adaptiveLayout.readableMaxWidth - Spacing[\'4\'] * 2)');
-    expect(source).toContain('marginHorizontal: Spacing[\'4\']');
+describe('errors live on the bubble, not a banner', () => {
+  it('does not mount a dismissible error banner', () => {
+    expect(source).not.toContain('visibleError');
+    expect(source).not.toContain('Dismiss error');
+    expect(source).not.toContain('alpha(colors.error');
+    expect(source).not.toContain("accessibilityRole=\"alert\"");
   });
 });
 

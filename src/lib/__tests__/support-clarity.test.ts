@@ -2,7 +2,6 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { UserProfile } from '../store';
 import {
-  COMPANION_EMPTY_STATE_NOTE,
   COMPANION_INTRO_BODY,
   GENERATING_CAN_CLOSE_COPY,
   GENERATING_WRITING_CONTINUES_COPY,
@@ -168,7 +167,8 @@ describe('copy is wired where the questions arise', () => {
     expect(carousel).toContain('flexShrink: 1');
     expect(carousel).not.toContain('Companion name');
     expect(carousel).not.toContain('TextInput');
-    expect(empty).toContain('COMPANION_EMPTY_STATE_NOTE');
+    expect(empty).not.toContain('COMPANION_EMPTY_STATE_NOTE');
+    expect(empty).not.toContain('Explore Scripture');
     expect(profile).toContain('PERSONAL_CONTEXT_FUTURE_DAYS_COPY');
     expect(settings).toContain('PersonalContextSection');
   });

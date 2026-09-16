@@ -92,6 +92,7 @@ jest.mock('../companion-service', () => ({
 
 import { useCompanionChat } from '../use-companion-chat';
 import { useCompanionChatStore } from '../companion-chat-store';
+import { COMPANION_ERROR_CAPACITY } from '../companion-error-copy';
 
 const completedMockUser = (): MockUser => ({
   name: 'Nick',
@@ -1267,8 +1268,8 @@ describe('server error events never trigger the non-streaming fallback (P0-3)', 
     const reply = useCompanionChatStore.getState().conversations[0]
       ?.messages.find((m) => m.role === 'companion');
     expect(reply?.status).toBe('error');
-    expect(reply?.content).toBe('The companion is over capacity right now.');
-    expect(hook!.error).toBe('The companion is over capacity right now.');
+    expect(reply?.content).toBe(COMPANION_ERROR_CAPACITY);
+    expect(hook!.error).toBe(COMPANION_ERROR_CAPACITY);
   });
 
   it('keeps partial text when a server {error} event arrives mid-stream', async () => {

@@ -1,5 +1,5 @@
 /**
- * CompanionEmptyState — greeting, subtext, and 4 starter cards.
+ * CompanionEmptyState — greeting and 4 starter cards.
  * Staggered fade-in animation per Storyboard A.
  */
 import { useEffect, useMemo } from 'react';
@@ -24,13 +24,11 @@ import {
   HandsPrayingIcon,
 } from '@/components/icons';
 import { useTheme } from '@/lib/theme';
-import { alpha } from '@/components/ui';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Duration, Ease } from '@/constants/animations';
 import { Spacing } from '@/constants/spacing';
 import { useUnfoldStore } from '@/lib/store';
-import { COMPANION_EMPTY_STATE_NOTE } from '@/lib/support-clarity';
 
 const EASE_OUT = Easing.out(Easing.cubic);
 
@@ -207,24 +205,6 @@ export function CompanionEmptyState({ onSelectStarter, todayTheme }: Props) {
             }}
           >
             {greeting}
-          </Text>
-        </FadeSlideIn>
-
-        {/* Subtext */}
-        <FadeSlideIn delay={350} translateY={6}>
-          <Text
-            style={{
-              fontFamily: FontFamily.body,
-              fontSize: FontSize.base,
-              color: colors.textMuted,
-              textAlign: 'center',
-              maxWidth: 300,
-              alignSelf: 'center',
-              marginTop: Spacing['3'],
-              lineHeight: 24,
-            }}
-          >
-            {COMPANION_EMPTY_STATE_NOTE}
           </Text>
         </FadeSlideIn>
 
