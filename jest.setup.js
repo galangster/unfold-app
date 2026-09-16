@@ -22,6 +22,19 @@ jest.mock('@react-native-masked-view/masked-view', () => {
   return { __esModule: true, default: View, MaskedView: View };
 });
 
+jest.mock('expo-background-fetch', () => ({
+  BackgroundFetchResult: { NewData: 2, NoData: 1, Failed: 3 },
+  registerTaskAsync: jest.fn(async () => undefined),
+  unregisterTaskAsync: jest.fn(async () => undefined),
+  getStatusAsync: jest.fn(async () => 3),
+}));
+
+jest.mock('expo-task-manager', () => ({
+  defineTask: jest.fn(),
+  isTaskDefined: jest.fn(() => true),
+  isTaskRegisteredAsync: jest.fn(async () => false),
+}));
+
 jest.mock('expo-audio', () => ({
   PermissionStatus: { GRANTED: 'granted', DENIED: 'denied', UNDETERMINED: 'undetermined' },
   createAudioPlayer: jest.fn(() => ({

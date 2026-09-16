@@ -2,6 +2,7 @@
 const mockRefreshRemoteConfig = jest.fn(async (..._args: unknown[]) => undefined);
 const mockOnPermissionChanged = jest.fn(async (..._args: unknown[]) => undefined);
 const mockRegisterPushToken = jest.fn();
+const mockRegisterCheckInBackgroundTopup = jest.fn(async (..._args: unknown[]) => undefined);
 const mockSyncTrialEnding = jest.fn(async (..._args: unknown[]) => undefined);
 const mockGetPermissions = jest.fn();
 
@@ -103,6 +104,9 @@ jest.mock('@/lib/theme', () => ({
 
 jest.mock('@/hooks/useRevenueCatSync', () => ({ useRevenueCatSync: jest.fn() }));
 jest.mock('@/hooks/useCheckInNotifications', () => ({ useCheckInNotifications: jest.fn() }));
+jest.mock('@/lib/check-in-background-task', () => ({
+  registerCheckInBackgroundTopup: () => mockRegisterCheckInBackgroundTopup(),
+}));
 jest.mock('@/hooks/useDailyReminderSync', () => ({ useDailyReminderSync: jest.fn() }));
 jest.mock('@/hooks/useActReminderSync', () => ({ useActReminderSync: jest.fn() }));
 jest.mock('@/hooks/useStreakReconcile', () => ({ useStreakReconcile: jest.fn() }));
@@ -206,6 +210,7 @@ describe('G11 layout AppState reconcile', () => {
       });
       expect(mockRefreshRemoteConfig).toHaveBeenCalled();
       expect(mockOnPermissionChanged).toHaveBeenCalled();
+      expect(mockRegisterCheckInBackgroundTopup).toHaveBeenCalled();
 
       mockRefreshRemoteConfig.mockClear();
       mockOnPermissionChanged.mockClear();

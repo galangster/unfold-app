@@ -15,14 +15,16 @@
  *
  * So this builder emits one dated occurrence per day across a short horizon,
  * and the caller gives each its own copy for the day it actually lands on.
- * `useCheckInNotifications` tops the queue back up on every foreground, so in
- * normal use the horizon never drains.
+ * `useCheckInNotifications` tops the queue back up on every foreground, and
+ * the BGAppRefresh task (`check-in-background-task`) runs the same write
+ * without an open, so in normal use the horizon never drains.
  *
- * The trade this accepts: a reader who does not open the app for
- * PRE_ROLL_DAYS stops receiving local check-ins, where before they received
- * a repeat. That is deliberate. Check-ins are premium-only, the server owns
- * the lapsed-reader path (backend lib/lapse-reentry.ts), and a fortnight of
- * identical banners is how an app gets its notifications switched off.
+ * The remaining trade: iOS may skip BGAppRefresh for a force-quit or a
+ * starved refresh budget, and that reader still goes quiet after
+ * PRE_ROLL_DAYS. That is still better than a longer horizon. Check-ins are
+ * premium-only, the server owns the lapsed-reader path (backend
+ * lib/lapse-reentry.ts), and a fortnight of identical banners is how an app
+ * gets its notifications switched off.
  *
  * DO NOT RAISE THIS NUMBER TO "FIX" THE DRAIN. 14 was ruled over 21 on
  * 2026-09-12: days 15-21 recover almost nobody (such a reader has already
@@ -30,8 +32,8 @@
  * re-entry push), and the extra 14 pending slots would eat headroom that
  * protects the trial-ending notice. iOS keeps only the 64 soonest pending
  * requests, nothing in this app enforces a shared budget, and a dropped
- * trial notice means a surprise charge. The real fix for the drain is a
- * background top-up, not a longer horizon.
+ * trial notice means a surprise charge. The drain is refilled by background
+ * top-up (`check-in-background-task`), not by lengthening this horizon.
  *
  * ## Sizing the horizon
  *

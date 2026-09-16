@@ -26,7 +26,8 @@
         "NSPhotoLibraryUsageDescription": "Allow Unfold to access your photos for sharing devotional content.",
         "UIBackgroundModes": [
           "audio",
-          "remote-notification"
+          "remote-notification",
+          "fetch"
         ]
       }
     },
@@ -83,6 +84,8 @@
           "enableBackgroundRemoteNotifications": true
         }
       ],
+      "expo-task-manager",
+      "expo-background-fetch",
       [
         "expo-audio",
         {

@@ -2,6 +2,7 @@ import React from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import renderer, { act } from 'react-test-renderer';
 import { useCheckInNotifications } from '../useCheckInNotifications';
+import { resetCheckInNotificationSyncForTests } from '@/lib/check-in-notification-sync';
 
 const mockScheduleMidday = jest.fn<Promise<{ ids: string[]; complete: boolean }>, unknown[]>();
 const mockScheduleEvening = jest.fn<Promise<{ ids: string[]; complete: boolean }>, unknown[]>();
@@ -26,7 +27,10 @@ let emitAppState: ((next: AppStateStatus) => void) | null = null;
 jest.mock('@/lib/store', () => ({
   useUnfoldStore: Object.assign(
     (selector: (state: typeof mockStoreState) => unknown) => selector(mockStoreState),
-    { getState: () => mockStoreState },
+    {
+      getState: () => mockStoreState,
+      persist: { hasHydrated: () => true, onFinishHydration: () => () => undefined },
+    },
   ),
   useHasHydrated: () => true,
 }));
@@ -47,10 +51,15 @@ jest.mock('@/lib/device-timezone', () => ({
   getDeviceTimezone: () => 'Pacific/Honolulu',
 }));
 
-jest.mock('@/lib/ui-state', () => ({
-  useUIState: (selector: (state: { notificationPermissionEpoch: number; trialNoticeEpoch: number }) => unknown) =>
-    selector({ notificationPermissionEpoch: 0, trialNoticeEpoch: 0 }),
-}));
+jest.mock('@/lib/ui-state', () => {
+  const state = { notificationPermissionEpoch: 0, trialNoticeEpoch: 0 };
+  return {
+    useUIState: Object.assign(
+      (selector: (s: typeof state) => unknown) => selector(state),
+      { getState: () => state },
+    ),
+  };
+});
 
 jest.mock('@/lib/trial-notification', () => ({
   readTrialCheckInSkipDate: () => null,
@@ -85,6 +94,7 @@ describe('useCheckInNotifications incomplete-write retry', () => {
   let tree: renderer.ReactTestRenderer | null = null;
 
   beforeEach(() => {
+    resetCheckInNotificationSyncForTests();
     jest.useFakeTimers();
     emitAppState = null;
     mockStoreState.middayCheckInEnabled = true;

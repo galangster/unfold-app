@@ -25,6 +25,7 @@ import { isRecoverySession } from '@/lib/mmkv-storage';
 import { ThemeProvider, useTheme } from '@/lib/theme';
 import { useRevenueCatSync } from '@/hooks/useRevenueCatSync';
 import { useCheckInNotifications } from '@/hooks/useCheckInNotifications';
+import { registerCheckInBackgroundTopup } from '@/lib/check-in-background-task';
 import { useDailyReminderSync } from '@/hooks/useDailyReminderSync';
 import { useActReminderSync } from '@/hooks/useActReminderSync';
 import { useStreakReconcile } from '@/hooks/useStreakReconcile';
@@ -128,6 +129,12 @@ function RootLayoutNav() {
 
   // Schedule/cancel midday check-in and evening wind-down notifications
   useCheckInNotifications();
+
+  // Ask iOS to wake the same write via BGAppRefresh so the 14-day horizon
+  // refills without an open. defineTask lives in index.ts; this only registers.
+  useEffect(() => {
+    void registerCheckInBackgroundTopup();
+  }, []);
 
   // Keep the 8am daily reminder payload fresh as devotional state changes.
   // Without this, the iOS/Android recurring trigger fires stale copy forever.

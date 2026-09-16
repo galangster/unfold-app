@@ -40,47 +40,18 @@
  *   schedule was silently broken. See
  *   ~/vault/standards/grep-read-path-when-touching-ui.md
  *
- * We mirror the fingerprint function here as a pure helper so we can test it
- * without mocking React, Zustand, and the whole notification stack.
+ * The encoding lives in `buildCheckInFingerprint` so the hook, the
+ * background task, and this suite cannot drift.
  */
 
-type Policy = 'granted' | 'denied' | 'unknown';
-type ByDay = Record<string, string | null> | null;
+import {
+  buildCheckInFingerprint,
+  type CheckInFingerprintInputs,
+} from '@/lib/check-in-notification-fingerprint';
 
-interface FingerprintInputs {
-  policy: Policy;
-  middayEnabled: boolean;
-  eveningEnabled: boolean;
-  middayTime: string;
-  eveningTime: string;
-  middayByDay: ByDay;
-  eveningByDay: ByDay;
-  hasCompletedOnboarding: boolean;
-  todayCarryLine: string;
-  notificationPermissionEpoch: number;
-  trialNoticeEpoch: number;
-  deviceTimezone: string;
-}
+const buildFingerprint = buildCheckInFingerprint;
 
-function buildFingerprint(inputs: FingerprintInputs): string {
-  // Mirrors `useCheckInFingerprint` in src/hooks/useCheckInNotifications.ts.
-  return JSON.stringify([
-    inputs.policy,
-    inputs.middayEnabled ? '1' : '0',
-    inputs.eveningEnabled ? '1' : '0',
-    inputs.middayTime,
-    inputs.eveningTime,
-    inputs.middayByDay,
-    inputs.eveningByDay,
-    inputs.hasCompletedOnboarding ? '1' : '0',
-    inputs.todayCarryLine,
-    inputs.notificationPermissionEpoch,
-    inputs.trialNoticeEpoch,
-    inputs.deviceTimezone,
-  ]);
-}
-
-const baseline: FingerprintInputs = {
+const baseline: CheckInFingerprintInputs = {
   policy: 'granted',
   middayEnabled: true,
   eveningEnabled: true,
