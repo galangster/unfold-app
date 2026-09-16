@@ -4,8 +4,9 @@ import * as Notifications from 'expo-notifications';
 import { AppState, Platform } from 'react-native';
 import { acquireAudioSession } from './audio-session-registry';
 import { logger } from './logger';
+import { mmkvStorage } from './mmkv-storage';
 import { SUCCESS_CUE_SOURCES } from './success-cue-assets';
-import { getSoundEffectsEnabled } from './success-cues';
+import { SOUND_EFFECTS_ENABLED_KEY } from './success-cue-storage';
 
 export const AMBIENT_TIMER_NOTIFICATION_ID = 'unfold-ambient-timer';
 export const AMBIENT_TIMER_CHANNEL_ID = 'ambient-timer';
@@ -15,6 +16,11 @@ export const AMBIENT_TIMER_CUE_VOLUME = 0.55;
 export const AMBIENT_TIMER_NOTIFICATION_BACKUP_MS = 1_000;
 export const AMBIENT_TIMER_CUE_LOAD_MS = 3_000;
 export const AMBIENT_TIMER_CUE_PLAY_MS = 7_000;
+
+function soundEffectsEnabled(): boolean {
+  const value = mmkvStorage.getItem(SOUND_EFFECTS_ENABLED_KEY);
+  return (typeof value === 'string' ? value : null) !== 'false';
+}
 
 function notificationContent(sound: boolean, channelId?: string) {
   return {
@@ -66,7 +72,7 @@ export async function scheduleAmbientTimerNotification(deadline: number): Promis
   try {
     await Notifications.scheduleNotificationAsync({
       identifier: AMBIENT_TIMER_NOTIFICATION_ID,
-      content: notificationContent(getSoundEffectsEnabled(), channelId),
+      content: notificationContent(soundEffectsEnabled(), channelId),
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
         seconds,
@@ -94,7 +100,7 @@ async function presentAmbientTimerNotification(sound: boolean): Promise<void> {
 }
 
 export async function playAmbientTimerCue(): Promise<void> {
-  if (!getSoundEffectsEnabled()) return;
+  if (!soundEffectsEnabled()) return;
 
   const lease = acquireAudioSession({
     owner: 'success-cue',

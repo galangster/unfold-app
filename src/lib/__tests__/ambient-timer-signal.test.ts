@@ -18,7 +18,7 @@ const mockGetPermissions = jest.fn();
 const mockSetChannel = jest.fn();
 const mockCreateAudioPlayer = jest.fn();
 const mockAcquire = jest.fn();
-const mockSoundEffects = jest.fn();
+const mockGetItem = jest.fn();
 
 jest.mock('expo-notifications', () => ({
   cancelScheduledNotificationAsync: (...args: unknown[]) => mockCancel(...args),
@@ -37,8 +37,10 @@ jest.mock('../audio-session-registry', () => ({
   acquireAudioSession: (...args: unknown[]) => mockAcquire(...args),
 }));
 
-jest.mock('../success-cues', () => ({
-  getSoundEffectsEnabled: () => mockSoundEffects(),
+jest.mock('../mmkv-storage', () => ({
+  mmkvStorage: {
+    getItem: (...args: unknown[]) => mockGetItem(...args),
+  },
 }));
 
 jest.mock('../success-cue-assets', () => ({
@@ -59,7 +61,7 @@ describe('ambient timer signal', () => {
     mockSetChannel.mockReset().mockResolvedValue(undefined);
     mockCreateAudioPlayer.mockReset();
     mockAcquire.mockReset();
-    mockSoundEffects.mockReset().mockReturnValue(true);
+    mockGetItem.mockReset().mockReturnValue(null);
     (AppState as { currentState: string }).currentState = 'active';
     Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
   });
@@ -92,7 +94,7 @@ describe('ambient timer signal', () => {
   });
 
   it('schedules a silent backup when sound effects are off', async () => {
-    mockSoundEffects.mockReturnValue(false);
+    mockGetItem.mockReturnValue('false');
     jest.useFakeTimers();
     jest.setSystemTime(1_700_000_000_000);
     await scheduleAmbientTimerNotification(1_700_000_000_000 + 60_000);
@@ -151,14 +153,14 @@ describe('ambient timer signal', () => {
   });
 
   it('skips the cue when sound effects are off', async () => {
-    mockSoundEffects.mockReturnValue(false);
+    mockGetItem.mockReturnValue('false');
     await playAmbientTimerCue();
     expect(mockAcquire).not.toHaveBeenCalled();
     expect(mockCreateAudioPlayer).not.toHaveBeenCalled();
   });
 
   it('cancels the backup, plays the cue, and only banners when the app is away', async () => {
-    mockSoundEffects.mockReturnValue(false);
+    mockGetItem.mockReturnValue('false');
     (AppState as { currentState: string }).currentState = 'background';
     await signalAmbientTimerFinished();
     expect(mockCancel).toHaveBeenCalledWith(AMBIENT_TIMER_NOTIFICATION_ID);
@@ -170,7 +172,7 @@ describe('ambient timer signal', () => {
   });
 
   it('does not present a lock-screen banner while the app is active', async () => {
-    mockSoundEffects.mockReturnValue(false);
+    mockGetItem.mockReturnValue('false');
     await signalAmbientTimerFinished();
     expect(mockCancel).toHaveBeenCalledTimes(1);
     expect(mockSchedule).not.toHaveBeenCalled();
