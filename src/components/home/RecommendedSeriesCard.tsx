@@ -42,7 +42,6 @@ interface RecommendedSeriesCardProps {
   /** "completion" renders inside journey-complete, "empty" renders standalone */
   variant: 'completion' | 'empty';
   onChooseOther: () => void;
-  completedSeriesTitle?: string;
   /** Optional fallback rendered when the recommendation fetch fails */
   renderFallback?: () => ReactNode;
   gateCreation?: () => boolean;
@@ -80,7 +79,6 @@ const QA_TODAY_RECOMMENDATION: Recommendation = {
 export function RecommendedSeriesCard({
   variant,
   onChooseOther,
-  completedSeriesTitle,
   renderFallback,
   gateCreation = () => true,
   storedPick,
@@ -190,9 +188,6 @@ export function RecommendedSeriesCard({
   }
 
   const isCompletion = variant === 'completion';
-  const introCopy = isCompletion
-    ? `${completedSeriesTitle ?? 'This series'} is complete. Here’s a next thread for the season you’re carrying now.`
-    : 'A quiet next thread shaped around the season you named.';
 
   if (loading) {
     return (
@@ -248,8 +243,6 @@ export function RecommendedSeriesCard({
         ]}
       >
         <View style={styles.contentColumn}>
-          <Text style={[styles.introCopy, { color: colors.textMuted }]}>{introCopy}</Text>
-
           <Text style={[styles.themeName, { color: colors.text }]}>
             {recommendation!.themeName}
           </Text>
@@ -317,13 +310,6 @@ const styles = StyleSheet.create({
   },
   contentColumn: {
     zIndex: 2,
-  },
-  introCopy: {
-    width: '100%',
-    fontFamily: FontFamily.body,
-    fontSize: 14,
-    lineHeight: 21,
-    marginBottom: Spacing['4'],
   },
   loadingTitle: {
     width: '100%',

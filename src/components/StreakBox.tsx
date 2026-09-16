@@ -7,7 +7,6 @@ import { useTheme } from '@/lib/theme';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { Duration, Ease } from '@/constants/animations';
-import { Typography } from '@/constants/typography';
 import { alpha } from '@/components/ui';
 import { GlassSurface } from '@/components/ui/GlassSurface';
 import { useUnfoldStore, type Devotional } from '@/lib/store';
@@ -128,7 +127,6 @@ export function StreakBox({ streakCount, hasReadToday = false, onPress }: Streak
                 />
               </View>
               <View style={styles.copyColumn}>
-                <Text style={[styles.kicker, { color: colors.accent }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>Daily rhythm</Text>
                 <Text style={[styles.motivationText, { color: colors.textMuted }]} numberOfLines={2} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}>
                   {rhythmCopy}
                 </Text>
@@ -157,7 +155,7 @@ export function StreakBox({ streakCount, hasReadToday = false, onPress }: Streak
                       },
                     ]}
                   />
-                  <Text style={[styles.dayLabel, { color: day.isToday ? colors.text : colors.textSubtle }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
+                  <Text style={[styles.dayLabel, { color: day.isToday ? colors.text : colors.textMuted }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
                     {day.day}
                   </Text>
                 </View>
@@ -167,7 +165,7 @@ export function StreakBox({ streakCount, hasReadToday = false, onPress }: Streak
 
           {!fromRealReads && streakCount > 0 && (
             <Text
-              style={[styles.calendarCaption, { color: colors.textSubtle }]}
+              style={[styles.calendarCaption, { color: colors.textMuted }]}
               maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}
             >
               Shows your streak, not which days you read
@@ -205,10 +203,6 @@ const styles = StyleSheet.create({
   },
   copyColumn: {
     flex: 1,
-  },
-  kicker: {
-    ...Typography.cardMeta,
-    marginBottom: 3,
   },
   motivationText: {
     fontFamily: FontFamily.body,

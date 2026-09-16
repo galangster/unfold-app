@@ -406,7 +406,7 @@ export function ScripturePracticeSheet({
                       Explore sample readings
                     </Text>
                   </TouchableOpacity>
-                  <Text style={[styles.pickerHint, { color: colors.textHint }]}>
+                  <Text style={[styles.pickerHint, { color: colors.textMuted }]}>
                     Does not change this day.
                   </Text>
                 </View>
@@ -418,10 +418,10 @@ export function ScripturePracticeSheet({
                 testID="scripture-practice-qa-picker"
                 style={[styles.pickerToggle, { borderColor: colors.border }]}
               >
-                <Text style={[styles.pickerLabel, { color: colors.textSubtle }]}>
+                <Text style={[styles.pickerLabel, { color: colors.textMuted }]}>
                   Preview another method
                 </Text>
-                <Text style={[styles.pickerHint, { color: colors.textHint }]}>
+                <Text style={[styles.pickerHint, { color: colors.textMuted }]}>
                   Uses this passage. Does not change the assigned day.
                 </Text>
               </TouchableOpacity>
@@ -443,7 +443,7 @@ export function ScripturePracticeSheet({
                   >
                     <Text style={[styles.pickerRowTitle, { color: colors.text }]}>{item.title}</Text>
                     {assignedMethodId === item.id ? (
-                      <Text style={[styles.pickerAssigned, { color: colors.textSubtle }]}>Assigned</Text>
+                      <Text style={[styles.pickerAssigned, { color: colors.textMuted }]}>Assigned</Text>
                     ) : null}
                   </TouchableOpacity>
                 );
@@ -609,7 +609,7 @@ function StepBody({
 
   return (
     <View style={styles.block}>
-      <Text style={[styles.stepCount, { color: colors.textSubtle }]}>
+      <Text style={[styles.stepCount, { color: colors.textMuted }]}>
         {`${stepIndex + 1} of ${stepCount}`}
       </Text>
       <Text style={[styles.stepTitle, { color: colors.text }]}>{step.title}</Text>
@@ -737,7 +737,7 @@ function StepBody({
       ) : null}
 
       {!shouldShowBreathGuide(methodId, step.id) ? (
-        <Text style={[styles.deviceNote, { color: colors.textHint }]}>{DEVICE_NOTE}</Text>
+        <Text style={[styles.deviceNote, { color: colors.textMuted }]}>{DEVICE_NOTE}</Text>
       ) : null}
     </View>
   );
@@ -792,7 +792,7 @@ function LabeledVerse({
 }) {
   return (
     <View testID={testID} style={styles.verseStack}>
-      <Text style={[styles.translationLabel, { color: colors.textSubtle }]}>{label}</Text>
+      <Text style={[styles.translationLabel, { color: colors.textMuted }]}>{label}</Text>
       {text ? (
         <Text style={[styles.verse, { color: colors.text }]}>{text}</Text>
       ) : (
@@ -849,7 +849,7 @@ function AnswerField({
 }) {
   return (
     <View style={styles.field}>
-      <Text style={[styles.fieldLabel, { color: colors.textSubtle }]}>{label}</Text>
+      <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>{label}</Text>
       <TextInput
         value={value}
         onChangeText={onChange}
@@ -1007,8 +1007,6 @@ const styles = StyleSheet.create({
   },
   translationLabel: {
     ...Typography.uiSm,
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
   },
   pickerBlock: {
     gap: Spacing['2'],

@@ -66,7 +66,6 @@ import {
 import {
   getLockedTodayDayNumber,
   getSelectableDayLimit,
-  getTodayReaderDayNumber,
   resolveInitialReadingDayNumber,
 } from '@/lib/devotional-day-access';
 import { shouldWatchForGeneratedDay } from '@/lib/generated-day-watch';
@@ -454,10 +453,6 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   );
   const selectableDayLimit = useMemo(
     () => getSelectableDayLimit(currentDevotional),
-    [currentDevotional],
-  );
-  const todayReaderDayNumber = useMemo(
-    () => getTodayReaderDayNumber(currentDevotional),
     [currentDevotional],
   );
   const lockedTodayDayNumber = useMemo(
@@ -1858,7 +1853,8 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     );
     // While the series is hydrating, show a serif-toned reader skeleton instead
     // of a bare spinner so the screen reads as "your reading is arriving" rather
-    // than an empty/crashed state. The genuine empty case keeps its quiet copy.
+    // than an empty/crashed state. After hydration finishes empty, say what
+    // happened and how to leave.
     if (shouldShowMissingSeriesRecovery) {
       return (
         <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -1869,10 +1865,64 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
       );
     }
     return (
-      <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center', gap: Spacing['3'] }}>
-        <Text style={{ fontFamily: FontFamily.body, color: colors.textMuted }}>
-          No series found
-        </Text>
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'bottom', 'left', 'right']}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing['4'], paddingVertical: Spacing['3'] }}>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={handleReaderBack}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+              accessibilityHint="Return to Today"
+              style={{ padding: Spacing['2'] }}
+            >
+              <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
+            </TouchableOpacity>
+          </View>
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 36 }}>
+            <Text
+              style={{
+                fontFamily: FontFamily.display,
+                fontSize: 25,
+                letterSpacing: -0.15,
+                color: colors.text,
+                textAlign: 'center',
+                marginBottom: 14,
+              }}
+            >
+              This series isn’t on the device.
+            </Text>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={handleReaderBack}
+              accessibilityRole="button"
+              accessibilityLabel="Go to Today"
+              accessibilityHint="Returns to the Today tab"
+              style={{
+                backgroundColor: retryCtaButtonBg,
+                paddingVertical: 18,
+                paddingHorizontal: Spacing['7'],
+                borderRadius: Radius.card,
+                borderWidth: 1,
+                borderColor: retryCtaButtonBorder,
+                alignItems: 'center',
+                justifyContent: 'center',
+                minWidth: 200,
+              }}
+            >
+              <Text
+                style={{
+                  fontFamily: FontFamily.uiSemiBold,
+                  fontSize: 15,
+                  color: btnText,
+                }}
+              >
+                Go to Today
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
       </View>
     );
   }
@@ -2061,7 +2111,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                 style={{
                   fontFamily: FontFamily.ui,
                   fontSize: FontSize.xs,
-                  color: colors.textSubtle,
+                  color: colors.textMuted,
                   textAlign: 'center',
                   marginTop: 10,
                 }}
@@ -2075,7 +2125,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                 style={{
                   fontFamily: FontFamily.ui,
                   fontSize: FontSize.xs,
-                  color: colors.textSubtle,
+                  color: colors.textMuted,
                   textAlign: 'center',
                   marginTop: 10,
                 }}
@@ -2294,27 +2344,6 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                 >
                   Day {viewingDay} of {totalDays}
                 </Text>
-                {viewingDay === todayReaderDayNumber && adaptiveLayout.fontScale <= 1.2 && adaptiveLayout.width >= 440 && (
-                  <View
-                    style={{
-                      backgroundColor: alpha(colors.accent, 0.13),
-                      paddingHorizontal: 6,
-                      paddingVertical: 2,
-                      borderRadius: 4,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontFamily: FontFamily.uiMedium,
-                        fontSize: 9,
-                        color: colors.accent,
-                        letterSpacing: 0.3,
-                      }}
-                    >
-                      Today
-                    </Text>
-                  </View>
-                )}
                 <CaretDownIcon size={14} color={colors.textMuted} weight="bold" />
               </TouchableOpacity>
 
@@ -2593,7 +2622,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                           style={{
                             fontFamily: FontFamily.ui,
                             fontSize: FontSize.xs,
-                            color: colors.textSubtle,
+                            color: colors.textMuted,
                             textAlign: 'center',
                             marginBottom: Spacing['4'],
                           }}
@@ -2606,7 +2635,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                           style={{
                             fontFamily: FontFamily.ui,
                             fontSize: FontSize.xs,
-                            color: colors.textSubtle,
+                            color: colors.textMuted,
                             textAlign: 'center',
                             marginBottom: Spacing['4'],
                           }}

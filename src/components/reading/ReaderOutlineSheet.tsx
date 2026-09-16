@@ -115,12 +115,12 @@ export function ReaderOutlineSheet({
               <Text
                 style={[
                   styles.tabLabel,
-                  { color: active ? colors.text : colors.textSubtle, fontFamily: active ? FontFamily.uiMedium : FontFamily.ui },
+                  { color: active ? colors.text : colors.textMuted, fontFamily: active ? FontFamily.uiMedium : FontFamily.ui },
                 ]}
               >
                 {t.label}
               </Text>
-              <Text style={[styles.tabCount, { color: active ? colors.textMuted : colors.textSubtle }]}>{counts[t.id]}</Text>
+              <Text style={[styles.tabCount, { color: colors.textMuted }]}>{counts[t.id]}</Text>
             </TouchableOpacity>
           );
         })}

@@ -47,7 +47,7 @@ export function GreetingRow({ userName, onAvatarPress, avatarTestID, headerActio
           style={{
             fontFamily: FontFamily.bodyItalic,
             fontSize: 15,
-            color: colors.textSubtle,
+            color: colors.textMuted,
             marginBottom: 6,
           }}
         >

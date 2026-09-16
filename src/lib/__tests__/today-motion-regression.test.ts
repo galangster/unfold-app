@@ -158,12 +158,14 @@ describe('Today tab motion guardrails', () => {
     const revealStart = devotionalCardSource.indexOf('function RevealReadyState');
     const revealEnd = devotionalCardSource.indexOf('// ─── Preparing progress bar', revealStart);
     const revealSource = devotionalCardSource.slice(revealStart, revealEnd);
-    const heroSeriesStyleStart = devotionalCardSource.indexOf('heroSeriesEyebrow: {');
+    const heroSeriesStyleStart = devotionalCardSource.indexOf('heroSeriesMeta: {');
     const heroSeriesStyleEnd = devotionalCardSource.indexOf('heroDayMeta:', heroSeriesStyleStart);
     const heroSeriesStyle = devotionalCardSource.slice(heroSeriesStyleStart, heroSeriesStyleEnd);
     const heroDayMetaStyleStart = devotionalCardSource.indexOf('heroDayMeta: {');
     const heroDayMetaStyleEnd = devotionalCardSource.indexOf('heroDayMetaRow:', heroDayMetaStyleStart);
     const heroDayMetaStyle = devotionalCardSource.slice(heroDayMetaStyleStart, heroDayMetaStyleEnd);
+    const titleIndex = revealSource.indexOf('styles.heroDayTitle');
+    const seriesMetaIndex = revealSource.indexOf('styles.heroSeriesMeta');
 
     expect(mainCardStart).toBeGreaterThan(-1);
     expect(mainCardEnd).toBeGreaterThan(mainCardStart);
@@ -175,10 +177,17 @@ describe('Today tab motion guardrails', () => {
     expect(revealSource).toContain('const displaySeriesTitle = formatHeroSeriesTitle(state.seriesTitle);');
     expect(revealSource).toContain('{displaySeriesTitle}');
     expect(devotionalCardSource).toContain('function formatHeroSeriesTitle(title: string): string');
+    expect(devotionalCardSource).not.toContain('heroSeriesEyebrow');
+    expect(devotionalCardSource).not.toContain('Needs attention');
+    expect(devotionalCardSource).not.toContain('Still with you');
+    expect(titleIndex).toBeGreaterThan(-1);
+    expect(seriesMetaIndex).toBeGreaterThan(titleIndex);
+    expect(heroSeriesStyle).toContain('...Typography.cardMeta');
     expect(heroSeriesStyle).not.toContain("textTransform: 'uppercase'");
+    expect(heroDayMetaStyle).toContain('...Typography.cardMeta');
     expect(heroDayMetaStyle).not.toContain("textTransform: 'uppercase'");
-    expect(heroSeriesStyle).toContain('letterSpacing: 0.45');
-    expect(heroDayMetaStyle).toContain('letterSpacing: 0.35');
+    expect(heroSeriesStyle).not.toContain('letterSpacing:');
+    expect(heroDayMetaStyle).not.toContain('letterSpacing:');
   });
 
   it('keeps devotional detail navigation in the Today stack when My Devotionals was opened from Today', () => {

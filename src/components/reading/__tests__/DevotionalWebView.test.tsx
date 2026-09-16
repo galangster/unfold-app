@@ -485,6 +485,10 @@ describe('DevotionalWebView highlight interactions', () => {
     expect(html).not.toContain("font-family: 'Inter', sans-serif;");
     expect(html).not.toContain('family=Inter');
     expect(html).toContain("-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif");
+    expect(html).toContain('prefers-reduced-motion: no-preference');
+    expect(html).not.toContain('text-transform: uppercase');
+    expect(html).toContain('p.section-header');
+    expect(html).toContain('color: var(--muted)');
   });
 
   it('renders and escapes the backend string word-study contract without crashing', () => {

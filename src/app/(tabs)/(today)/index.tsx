@@ -1188,9 +1188,9 @@ export default function HomeScreen() {
   //
   // They used to diverge: the card took only the content-aware path while the
   // notification preferred the companion nudge and then the carry line. So the
-  // card labelled "Companion note" was the one surface that never showed the
-  // companion nudge, which is generated per reader per day and names something
-  // real from their life. Fixed 2026-09-12 at Nick's call.
+  // midday card was the one surface that never showed the companion nudge,
+  // which is generated per reader per day and names something real from their
+  // life. Fixed 2026-09-12 at Nick's call.
   // Stable within a local day, so the memos below actually memoise. The seed
   // is cached after its first read; dayIndexFor is arithmetic on today's date,
   // so recomputing it per render is free and it rolls over at local midnight
@@ -1410,7 +1410,7 @@ export default function HomeScreen() {
         priority: 500,
         eyebrow: resumeProps.label,
         title: resumeProps.title,
-        body: `${resumeProps.timeAgo}. Your place is saved quietly.`,
+        body: resumeProps.timeAgo,
         actionLabel: isJournalResume ? 'Open reflection' : 'Continue reading',
         onPress: resumeProps.onPress,
         onDismiss: handleDismissResumeCard,
@@ -1427,7 +1427,6 @@ export default function HomeScreen() {
         id: 'today-stack-voice-check-in-prototype',
         kind: 'voice-check-in',
         priority: 450,
-        eyebrow: 'Companion note',
         title: 'How’s your day going?',
         body: 'Record, review, and choose when to send a voice check-in for transcription.',
         actions: [
@@ -1456,13 +1455,12 @@ export default function HomeScreen() {
         id: 'today-stack-evening',
         kind: 'evening',
         priority: 400,
-        eyebrow: 'Evening check-in',
         title: 'Wind down with today’s reading',
         body: eveningMessage,
         actionLabel: 'Wind down',
         onPress: handleEveningWindDown,
         onDismiss: handleDismissEveningCard,
-        accessibilityLabel: `Evening check-in. ${eveningMessage}`,
+        accessibilityLabel: `Wind down with today’s reading. ${eveningMessage}`,
         accessibilityHint: 'Opens the evening wind-down reflection',
         dismissAccessibilityLabel: 'Dismiss evening stack card',
         dismissAccessibilityHint: 'Hides this evening check-in card for today',
@@ -1475,13 +1473,12 @@ export default function HomeScreen() {
         id: 'today-stack-midday',
         kind: 'midday',
         priority: 300,
-        eyebrow: 'Companion note',
         title: 'Check in with today’s reading',
         body: middayMessage,
         actionLabel: 'Reflect',
         onPress: handleCheckIn,
         onDismiss: handleDismissMiddayCard,
-        accessibilityLabel: `Companion note. ${middayMessage}`,
+        accessibilityLabel: `Check in with today’s reading. ${middayMessage}`,
         accessibilityHint: 'Opens the midday check-in reflection',
         dismissAccessibilityLabel: 'Dismiss midday stack card',
         dismissAccessibilityHint: 'Hides this midday check-in card for today',
@@ -1494,11 +1491,10 @@ export default function HomeScreen() {
         id: 'today-stack-bridge',
         kind: 'bridge',
         priority: 200,
-        eyebrow: 'Daily thread',
         title: 'A thread from yesterday to today',
         body: validBridgeText,
         onDismiss: handleDismissBridgeCard,
-        accessibilityLabel: `Daily thread. ${validBridgeText}`,
+        accessibilityLabel: validBridgeText,
         accessibilityHint: 'A personal bridge into today’s reading',
         dismissAccessibilityLabel: 'Dismiss bridge stack card',
         dismissAccessibilityHint: 'Hides this bridge text for today',
@@ -1511,7 +1507,6 @@ export default function HomeScreen() {
         id: 'today-stack-bridge-loading',
         kind: 'bridge-loading',
         priority: 100,
-        eyebrow: 'Daily thread',
         title: 'Preparing today’s thread…',
         body: 'A quiet bridge from yesterday to today will appear here when it is ready.',
         onDismiss: handleDismissBridgeCard,
@@ -1529,7 +1524,6 @@ export default function HomeScreen() {
         id: `today-stack-remember-this-${rememberedPick.highlight.id}`,
         kind: 'remember-this',
         priority: 80,
-        eyebrow: 'Saved echo',
         title: 'A line worth carrying',
         // Quoted highlight is genuinely variable-length — keep a real-overflow
         // clamp (de-slop #15: authored copy wraps; only true overflow clamps).
@@ -1541,8 +1535,8 @@ export default function HomeScreen() {
         onDismiss: handleDismissRememberThisCard,
         accessibilityLabel: `Saved highlight from ${rememberedSource}: ${quote}`,
         accessibilityHint: rememberedPick.kind === 'bible' ? 'Opens the Bible at this verse' : 'Opens the reading at this highlighted passage',
-        dismissAccessibilityLabel: 'Dismiss saved echo stack card',
-        dismissAccessibilityHint: 'Hides this saved echo card for today without deleting the highlight',
+        dismissAccessibilityLabel: 'Dismiss saved highlight stack card',
+        dismissAccessibilityHint: 'Hides this saved highlight card for today without deleting the highlight',
         testID: 'today-stack-card-remember-this',
       });
     }
@@ -1552,9 +1546,8 @@ export default function HomeScreen() {
         id: 'today-stack-day1-review',
         kind: 'day1-review',
         priority: 70,
-        eyebrow: 'Day 1 reflection',
         title: 'Did today’s reading feel personal?',
-        body: 'One quiet response helps Unfold shape the next few days. No pressure — just a pulse check after your first reading.',
+        body: 'One response helps shape the next few days.',
         actions: [
           {
             label: 'This helped me',

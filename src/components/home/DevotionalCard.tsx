@@ -398,9 +398,6 @@ function FirstSeriesFailedState({
       style={styles.heroStateBlock}
     >
       <HeroGround active={ambienceVisible}>
-        <Text style={[styles.heroSeriesEyebrow, { color: colors.textSubtle, textAlign: 'left' }]}>
-          Needs attention
-        </Text>
         <Text style={[styles.returningTitle, { color: colors.text, textAlign: 'left' }, textCap]}>We couldn’t finish your devotional.</Text>
         <Text style={[styles.returningSubtitle, { color: colors.textMuted, textAlign: 'left' }, textCap]}>{state.message}</Text>
       </HeroGround>
@@ -425,7 +422,7 @@ function FirstSeriesFailedState({
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           style={styles.failedDismiss}
         >
-          <Text style={[styles.failedDismissText, { color: colors.textSubtle }]}>Not now</Text>
+          <Text style={[styles.failedDismissText, { color: colors.textMuted }]}>Not now</Text>
         </TouchableOpacity>
       </View>
     </Animated.View>
@@ -476,9 +473,6 @@ function PendingInitialResumeState({
       style={styles.heroStateBlock}
     >
       <HeroGround active={ambienceVisible}>
-        <Text style={[styles.heroSeriesEyebrow, { color: colors.textSubtle, textAlign: 'left' }]}>
-          Still with you
-        </Text>
         <Text style={[styles.returningTitle, { color: colors.text, textAlign: 'left' }, textCap]}>
           {PENDING_INITIAL_RESUME_TITLE}
         </Text>
@@ -528,8 +522,8 @@ function RevealReadyState({
   const statusLabel = isYesterday ? 'Still waiting' : 'Ready to reveal';
   const displaySeriesTitle = formatHeroSeriesTitle(state.seriesTitle);
   const revealMessage = isYesterday
-    ? 'This thread is still sealed for you. Open it gently before moving on.'
-    : 'A new thread is ready, but the words stay quiet until you choose to open them.';
+    ? 'Yesterday’s reading is still here.'
+    : 'Today’s reading is ready.';
 
   return (
     <Animated.View entering={announceReady ? entering(FadeIn.duration(Duration.normal).easing(Ease.out)) : undefined}>
@@ -539,24 +533,24 @@ function RevealReadyState({
             <View style={styles.readyPageMark}>
               <PageMark color={colors.accent} filled animate={announceReady && !reducedMotion} />
             </View>
+
             <Text
-              style={[styles.heroSeriesEyebrow, styles.pageMarkEyebrow, { color: colors.textSubtle, textAlign: 'left' }]}
-              numberOfLines={1}
+              style={[styles.heroDayTitle, styles.pageMarkClearance, isCompactHero && styles.heroDayTitleCompact, isVeryCompactHero && styles.heroDayTitleVeryCompact, { color: colors.text, textAlign: 'left' }, textCap]}
+              numberOfLines={3}
+              maxFontSizeMultiplier={DISPLAY_TEXT_MAX_SCALE}
+            >
+              {titleWithPeriod(smartQuotes(state.dayData.title))}
+            </Text>
+
+            <Text
+              style={[styles.heroSeriesMeta, { color: colors.textMuted, textAlign: 'left' }]}
               maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}
             >
               {displaySeriesTitle}
             </Text>
 
-            <Text style={[styles.heroDayMeta, { color: colors.accent, textAlign: 'left' }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
+            <Text style={[styles.heroDayMeta, { color: colors.textMuted, textAlign: 'left' }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
               {statusLabel} · Day {state.dayNumber} of {state.totalDays}
-            </Text>
-
-            <Text
-              style={[styles.heroDayTitle, isCompactHero && styles.heroDayTitleCompact, isVeryCompactHero && styles.heroDayTitleVeryCompact, { color: colors.text, textAlign: 'left' }, textCap]}
-              numberOfLines={3}
-              maxFontSizeMultiplier={DISPLAY_TEXT_MAX_SCALE}
-            >
-              {titleWithPeriod(smartQuotes(state.dayData.title))}
             </Text>
 
             <View style={styles.heroQuoteBlock}>
@@ -739,12 +733,15 @@ function PremiumPausedState({
       style={styles.heroStateBlock}
     >
       <HeroGround active={ambienceVisible}>
-        <Text style={[styles.heroSeriesEyebrow, { color: colors.textSubtle, textAlign: 'left' }]}>
+        <Text style={[styles.returningTitle, { color: colors.text, textAlign: 'left' }, textCap]}>Your series is waiting.</Text>
+        <Text
+          style={[styles.heroSeriesMeta, { color: colors.textMuted, textAlign: 'left' }]}
+          maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}
+        >
           {state.seriesTitle} · Paused
         </Text>
-        <Text style={[styles.returningTitle, { color: colors.text, textAlign: 'left' }, textCap]}>Your series is waiting.</Text>
         <Text style={[styles.returningSubtitle, { color: colors.textMuted, textAlign: 'left' }, textCap]}>New personal readings pause while Premium is inactive. You can still read scripture today, or renew Premium when you’re ready.</Text>
-        <Text style={[styles.premiumPausedProgress, { color: colors.textSubtle, textAlign: 'left' }]}>{progressLabel}</Text>
+        <Text style={[styles.premiumPausedProgress, { color: colors.textMuted, textAlign: 'left' }]}>{progressLabel}</Text>
       </HeroGround>
 
       <View style={styles.heroCtaRow}>
@@ -790,10 +787,13 @@ function JourneyCompleteStateFallback({
   return (
     <View style={styles.heroStateBlock}>
       <HeroGround active={ambienceVisible}>
-        <Text style={[styles.heroSeriesEyebrow, { color: colors.textSubtle, textAlign: 'left' }]}>
+        <Text style={[styles.journeyCompleteTitle, { color: colors.text }, textCap]}>Carry the thread forward.</Text>
+        <Text
+          style={[styles.heroSeriesMeta, { color: colors.textMuted, textAlign: 'left' }]}
+          maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}
+        >
           {seriesTitle} · Complete
         </Text>
-        <Text style={[styles.journeyCompleteTitle, { color: colors.text }, textCap]}>Carry the thread forward.</Text>
 
         <Text style={[styles.journeyCompleteSubtitle, { color: colors.textMuted }, textCap]}>
           {seriesTitle} is complete. Rest with what God surfaced here, then begin another study when you’re ready.
@@ -840,7 +840,6 @@ function JourneyCompleteState({
       <View style={styles.heroFollowCard}>
         <RecommendedSeriesCard
           variant="completion"
-          completedSeriesTitle={seriesTitle}
           onChooseOther={onCreateNew}
           gateCreation={gateCreation}
           storedPick={storedPick}
@@ -989,12 +988,20 @@ function MainCard({ state, ambienceVisible, relaxHeroMinHeight, announceReady = 
                 <PageMark color={colors.accent} filled animate={announceReady && !reducedMotion} />
               </View>
             ) : null}
+
             <Text
-              style={[styles.heroSeriesEyebrow, styles.pageMarkEyebrow, { color: colors.textSubtle, textAlign: 'left' }]}
-              numberOfLines={1}
+              style={[styles.heroDayTitle, state.type === 'unread' && styles.pageMarkClearance, isCompactHero && styles.heroDayTitleCompact, isVeryCompactHero && styles.heroDayTitleVeryCompact, { color: colors.text, textAlign: 'left' }, textCap]}
+              numberOfLines={3}
+              maxFontSizeMultiplier={DISPLAY_TEXT_MAX_SCALE}
+            >
+              {titleWithPeriod(smartQuotes(dayData.title))}
+            </Text>
+
+            <Text
+              style={[styles.heroSeriesMeta, { color: colors.textMuted, textAlign: 'left' }]}
               maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}
             >
-              {seriesTitle}
+              {formatHeroSeriesTitle(seriesTitle)}
             </Text>
 
             {hasCompletedToday ? (
@@ -1026,23 +1033,15 @@ function MainCard({ state, ambienceVisible, relaxHeroMinHeight, announceReady = 
                     Completed
                   </Text>
                 </View>
-                <Text style={[styles.heroDayMetaDayText, { color: colors.textSubtle }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
+                <Text style={[styles.heroDayMetaDayText, { color: colors.textMuted }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
                   Day {dayData.dayNumber} of {totalDays}
                 </Text>
               </View>
             ) : (
-              <Text style={[styles.heroDayMeta, { color: colors.accent }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
+              <Text style={[styles.heroDayMeta, { color: colors.textMuted }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
                 {statusLabel} · Day {dayData.dayNumber} of {totalDays}
               </Text>
             )}
-
-            <Text
-              style={[styles.heroDayTitle, isCompactHero && styles.heroDayTitleCompact, isVeryCompactHero && styles.heroDayTitleVeryCompact, { color: colors.text, textAlign: 'left' }, textCap]}
-              numberOfLines={3}
-              maxFontSizeMultiplier={DISPLAY_TEXT_MAX_SCALE}
-            >
-              {titleWithPeriod(smartQuotes(dayData.title))}
-            </Text>
 
             <View style={styles.heroQuoteBlock}>
               <Text style={[styles.heroQuoteMark, { color: colors.accent }]}>“</Text>
@@ -1070,7 +1069,7 @@ function MainCard({ state, ambienceVisible, relaxHeroMinHeight, announceReady = 
 
               <View style={[styles.heroProgressSection, !showProgress && styles.progressHidden]}>
                 <View style={styles.heroProgressHeader}>
-                  <Text style={[styles.mainCardProgressLeft, { color: colors.textSubtle }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
+                  <Text style={[styles.mainCardProgressLeft, { color: colors.textMuted }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
                     {daysCompleted} of {totalDays} completed
                   </Text>
                   <Text style={[styles.mainCardProgressRight, { color: colors.accent }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
@@ -1370,19 +1369,13 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 320,
   },
-  heroSeriesEyebrow: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 12,
-    letterSpacing: 0.45,
-    lineHeight: 17,
-    marginBottom: Spacing['5'],
+  heroSeriesMeta: {
+    ...Typography.cardMeta,
+    marginBottom: Spacing['2'],
   },
   heroDayMeta: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 12,
-    letterSpacing: 0.35,
-    lineHeight: 18,
-    marginBottom: Spacing['3'],
+    ...Typography.cardMeta,
+    marginBottom: Spacing['5'],
   },
   heroDayMetaRow: {
     flexDirection: 'row',
@@ -1390,7 +1383,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     flexWrap: 'wrap',
     gap: Spacing['2'],
-    marginBottom: Spacing['3'],
+    marginBottom: Spacing['5'],
   },
   completedStatusPill: {
     flexDirection: 'row',
@@ -1414,7 +1407,7 @@ const styles = StyleSheet.create({
     fontSize: 37,
     lineHeight: 42,
     letterSpacing: -0.35,
-    marginBottom: Spacing['5'],
+    marginBottom: Spacing['3'],
   },
   heroDayTitleCompact: {
     fontSize: 32,
@@ -1557,7 +1550,7 @@ const styles = StyleSheet.create({
     zIndex: 1,
     pointerEvents: 'none',
   },
-  pageMarkEyebrow: {
+  pageMarkClearance: {
     paddingRight: 30,
   },
   progressHidden: {

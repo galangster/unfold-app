@@ -77,10 +77,12 @@ describe('reading.tsx server-side generation migration', () => {
     expect(readingSource).toContain('missingDevotionalHydrationAttemptRef');
     expect(readingSource).toContain('pullDevotionalContent(devotionalId)');
     expect(readingSource).toContain('hydrated-missing-devotional-from-sync-pull');
-    // While hydrating, the reader shows a serif-toned loading skeleton (PR4 #24),
-    // distinct from the quiet "No series found" fallback for the genuine empty case.
+    // While hydrating, the reader shows a serif-toned loading skeleton (PR4 #24).
+    // After hydration finishes empty, the fallback names the miss and how to leave.
     expect(readingSource).toContain('<ReaderLoadingSkeleton colors={colors} />');
-    expect(readingSource).toContain('No series found');
+    expect(readingSource).toContain('This series isn’t on the device.');
+    expect(readingSource).toContain('Go to Today');
+    expect(readingSource).not.toContain('No series found');
   });
 
   it('does not ship unguarded Reading debug console logs (FE-04)', () => {

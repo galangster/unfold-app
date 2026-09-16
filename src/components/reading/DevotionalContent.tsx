@@ -16,6 +16,7 @@ import * as Haptics from 'expo-haptics';
 import { FontFamily, FontSize as FontSizeTokens } from '@/constants/fonts';
 import { BIBLE_STUDY_METHODS } from '@/constants/bible-study-methods';
 import { useTheme } from '@/lib/theme';
+import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { useReadingFont } from '@/lib/useReadingFont';
@@ -268,13 +269,19 @@ export function DevotionalContent({
   }, [onTargetBookmarkLocated]);
 
   // Accent line grow animation -- editorial entrance
-  const accentLineWidth = useSharedValue(0);
+  const { reducedMotion } = useAccessibleAnimation();
+  const accentLineWidth = useSharedValue(reducedMotion ? 36 : 0);
   useEffect(() => {
+    if (reducedMotion) {
+      accentLineWidth.value = 36;
+      return;
+    }
+    accentLineWidth.value = 0;
     accentLineWidth.value = withDelay(
       200,
       withTiming(36, { duration: 600, easing: Easing.out(Easing.cubic) })
     );
-  }, [accentLineWidth]);
+  }, [accentLineWidth, reducedMotion]);
 
   const accentLineStyle = useAnimatedStyle(() => ({
     width: accentLineWidth.value,
@@ -343,7 +350,7 @@ export function DevotionalContent({
           accessibilityRole="button"
           accessibilityLabel={`Study method: ${BIBLE_STUDY_METHODS[day.studyMethod].name}. Tap for details.`}
         >
-          <Text style={[dcStyles.methodName, { color: isDark ? colors.text : colors.textSubtle }]}>
+          <Text style={[dcStyles.methodName, { color: colors.textMuted }]}>
             {BIBLE_STUDY_METHODS[day.studyMethod].name}
           </Text>
           <CaretRightIcon size={14} color={isDark ? colors.text : colors.textMuted} weight="light" />

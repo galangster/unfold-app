@@ -1413,10 +1413,9 @@ export function DevotionalWebView({
       }
     }
 
-    p, blockquote, .context-box, .word-study-box {
-      opacity: 0;
-      animation: fadeInUp 750ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
-      will-change: opacity, transform;
+    p, blockquote, .context-box, .word-study-box, .section-divider {
+      opacity: 1;
+      animation: none;
     }
 
     /* 90ms stagger, capped: only what's plausibly on the first screen gets a
@@ -1425,18 +1424,31 @@ export function DevotionalWebView({
        to 1860ms on long devotionals). */
     /* nth-of-type, not nth-child: the pull-quote <aside> and <hr> dividers
        are interleaved siblings and would shift every later paragraph's slot */
-    p:nth-of-type(1)  { animation-delay:   60ms; }
-    p:nth-of-type(2)  { animation-delay:  150ms; }
-    p:nth-of-type(3)  { animation-delay:  240ms; }
-    p:nth-of-type(4)  { animation-delay:  330ms; }
-    p:nth-of-type(5)  { animation-delay:  420ms; }
-    p:nth-of-type(6)  { animation-delay:  510ms; }
-    p:nth-of-type(n+7) { animation-delay:  560ms; }
+    @media (prefers-reduced-motion: no-preference) {
+      p, blockquote, .context-box, .word-study-box {
+        opacity: 0;
+        animation: fadeInUp 750ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        will-change: opacity, transform;
+      }
 
-    aside.pull-quote { animation-delay: 240ms; }
-    blockquote     { animation-delay: 560ms; }
-    .context-box   { animation-delay: 560ms; }
-    .word-study-box { animation-delay: 560ms; }
+      p:nth-of-type(1)  { animation-delay:   60ms; }
+      p:nth-of-type(2)  { animation-delay:  150ms; }
+      p:nth-of-type(3)  { animation-delay:  240ms; }
+      p:nth-of-type(4)  { animation-delay:  330ms; }
+      p:nth-of-type(5)  { animation-delay:  420ms; }
+      p:nth-of-type(6)  { animation-delay:  510ms; }
+      p:nth-of-type(n+7) { animation-delay:  560ms; }
+
+      aside.pull-quote { animation-delay: 240ms; }
+      blockquote     { animation-delay: 560ms; }
+      .context-box   { animation-delay: 560ms; }
+      .word-study-box { animation-delay: 560ms; }
+      .section-divider {
+        opacity: 0;
+        animation: fadeInUp 0.5s ease-out forwards;
+        animation-delay: 0.35s;
+      }
+    }
     
     /* Selection styling. Keep iOS text callout available so WKWebView still
        creates a real text selection; the custom highlight picker is positioned
@@ -1531,11 +1543,11 @@ export function DevotionalWebView({
     /* Study method headers — standalone **BOLD** paragraphs */
     p.section-header {
       font-family: ${uiFontStack};
-      font-size: calc(var(--body-font-size) * 0.72);
+      font-size: calc(var(--body-font-size) * 0.85);
       font-weight: 600;
-      letter-spacing: 1.2px;
-      text-transform: uppercase;
-      color: var(--accent);
+      letter-spacing: 0;
+      text-transform: none;
+      color: var(--muted);
       margin-top: calc(var(--body-line-height) * 1.2);
       margin-bottom: calc(var(--body-line-height) * 0.4);
     }
@@ -1544,9 +1556,6 @@ export function DevotionalWebView({
     .section-divider {
       text-align: center;
       margin: 36px 0 32px;
-      opacity: 0;
-      animation: fadeInUp 0.5s ease-out forwards;
-      animation-delay: 0.35s;
     }
 
     .divider-dots {
@@ -1591,8 +1600,8 @@ export function DevotionalWebView({
       font-size: 12px;
       color: var(--muted);
       font-style: normal;
-      letter-spacing: 0.8px;
-      text-transform: uppercase;
+      letter-spacing: 0;
+      text-transform: none;
       display: block;
       padding-left: 2px;
     }
@@ -1609,12 +1618,12 @@ export function DevotionalWebView({
     
     h3 {
       font-family: ${uiFontStack};
-      font-size: 11px;
+      font-size: 13px;
       color: var(--muted);
-      letter-spacing: 1.2px;
-      text-transform: uppercase;
+      letter-spacing: 0;
+      text-transform: none;
       margin-bottom: 14px;
-      font-weight: 500;
+      font-weight: 600;
     }
     
     .context-box p, .word-study-box p {
