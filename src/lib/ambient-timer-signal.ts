@@ -17,6 +17,17 @@ export const AMBIENT_TIMER_NOTIFICATION_BACKUP_MS = 1_000;
 export const AMBIENT_TIMER_CUE_LOAD_MS = 3_000;
 export const AMBIENT_TIMER_CUE_PLAY_MS = 7_000;
 
+let notificationGeneration = 0;
+
+function beginNotificationGeneration(): number {
+  notificationGeneration += 1;
+  return notificationGeneration;
+}
+
+function isCurrentNotification(generation: number): boolean {
+  return generation === notificationGeneration;
+}
+
 function soundEffectsEnabled(): boolean {
   const value = mmkvStorage.getItem(SOUND_EFFECTS_ENABLED_KEY);
   return (typeof value === 'string' ? value : null) !== 'false';
@@ -54,7 +65,7 @@ async function androidChannel(): Promise<{ channelId?: string }> {
   return { channelId: AMBIENT_TIMER_CHANNEL_ID };
 }
 
-export async function cancelAmbientTimerNotification(): Promise<void> {
+async function cancelScheduledBackup(): Promise<void> {
   if (Platform.OS === 'web') return;
   try {
     await Notifications.cancelScheduledNotificationAsync(AMBIENT_TIMER_NOTIFICATION_ID);
@@ -63,12 +74,21 @@ export async function cancelAmbientTimerNotification(): Promise<void> {
   }
 }
 
+export async function cancelAmbientTimerNotification(): Promise<void> {
+  beginNotificationGeneration();
+  await cancelScheduledBackup();
+}
+
 export async function scheduleAmbientTimerNotification(deadline: number): Promise<void> {
+  const generation = beginNotificationGeneration();
   if (Platform.OS === 'web' || !Number.isFinite(deadline)) return;
-  await cancelAmbientTimerNotification();
+  await cancelScheduledBackup();
+  if (!isCurrentNotification(generation)) return;
   if (!(await notificationsGranted())) return;
+  if (!isCurrentNotification(generation)) return;
   const seconds = Math.max(1, Math.ceil((deadline + AMBIENT_TIMER_NOTIFICATION_BACKUP_MS - Date.now()) / 1000));
   const { channelId } = await androidChannel();
+  if (!isCurrentNotification(generation)) return;
   try {
     await Notifications.scheduleNotificationAsync({
       identifier: AMBIENT_TIMER_NOTIFICATION_ID,
@@ -85,10 +105,12 @@ export async function scheduleAmbientTimerNotification(deadline: number): Promis
   }
 }
 
-async function presentAmbientTimerNotification(sound: boolean): Promise<void> {
-  if (Platform.OS === 'web') return;
+async function presentAmbientTimerNotification(sound: boolean, generation: number): Promise<void> {
+  if (Platform.OS === 'web' || !isCurrentNotification(generation)) return;
   if (!(await notificationsGranted())) return;
+  if (!isCurrentNotification(generation)) return;
   const { channelId } = await androidChannel();
+  if (!isCurrentNotification(generation)) return;
   try {
     await Notifications.scheduleNotificationAsync({
       content: notificationContent(sound, channelId),
@@ -201,9 +223,12 @@ export async function playAmbientTimerCue(): Promise<void> {
 }
 
 export async function signalAmbientTimerFinished(): Promise<void> {
-  await cancelAmbientTimerNotification();
+  const generation = beginNotificationGeneration();
+  await cancelScheduledBackup();
+  if (!isCurrentNotification(generation)) return;
   await playAmbientTimerCue();
+  if (!isCurrentNotification(generation)) return;
   if (AppState.currentState !== 'active') {
-    await presentAmbientTimerNotification(false);
+    await presentAmbientTimerNotification(false, generation);
   }
 }

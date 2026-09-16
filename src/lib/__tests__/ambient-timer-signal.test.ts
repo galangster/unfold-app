@@ -177,4 +177,47 @@ describe('ambient timer signal', () => {
     expect(mockCancel).toHaveBeenCalledTimes(1);
     expect(mockSchedule).not.toHaveBeenCalled();
   });
+
+  it('does not restore a cancelled backup after a later cancel wins', async () => {
+    let releasePermissions!: (value: { status: string }) => void;
+    mockGetPermissions.mockImplementationOnce(() => new Promise((resolve) => {
+      releasePermissions = resolve;
+    }));
+
+    const first = scheduleAmbientTimerNotification(Date.now() + 60_000);
+    await Promise.resolve();
+    await cancelAmbientTimerNotification();
+    releasePermissions({ status: 'granted' });
+    await first;
+
+    expect(mockSchedule).not.toHaveBeenCalled();
+  });
+
+  it('keeps only the latest backup when timers replace before scheduling finishes', async () => {
+    let releaseFirst!: (value: { status: string }) => void;
+    mockGetPermissions
+      .mockImplementationOnce(() => new Promise((resolve) => {
+        releaseFirst = resolve;
+      }))
+      .mockResolvedValue({ status: 'granted' });
+    jest.useFakeTimers();
+    jest.setSystemTime(1_700_000_000_000);
+
+    const first = scheduleAmbientTimerNotification(1_700_000_000_000 + 5 * 60_000);
+    const second = scheduleAmbientTimerNotification(1_700_000_000_000 + 15 * 60_000);
+    await second;
+    releaseFirst({ status: 'granted' });
+    await first;
+
+    const backups = mockSchedule.mock.calls.filter((call) => {
+      const request = call[0] as { trigger?: { seconds?: number } | null };
+      return request.trigger != null;
+    });
+    expect(backups).toHaveLength(1);
+    expect(backups[0]?.[0]).toEqual(expect.objectContaining({
+      trigger: expect.objectContaining({
+        seconds: Math.ceil((15 * 60_000 + AMBIENT_TIMER_NOTIFICATION_BACKUP_MS) / 1000),
+      }),
+    }));
+  });
 });
