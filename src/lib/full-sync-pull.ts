@@ -635,6 +635,17 @@ function mapConversation(record: SyncPulledRecord, current?: Conversation): Conv
   };
 }
 
+/** Absent `errorCopy` is a legacy record — keep the local cause. `''` is a user-stop clear. */
+function pulledCompanionErrorCopy(
+  row: Record<string, unknown>,
+  status: CompanionMessage['status'],
+  currentErrorCopy?: string,
+): string | undefined {
+  if (status === 'complete') return undefined;
+  if (!('errorCopy' in row)) return currentErrorCopy;
+  return asString(row.errorCopy);
+}
+
 function mapMessage(
   record: SyncPulledRecord,
   current?: CompanionMessage,
@@ -657,9 +668,7 @@ function mapMessage(
     feedbackReason: asString(row.feedbackReason) ?? null,
     deepLinks: asArray(row.deepLinks) as CompanionMessage['deepLinks'],
     interrupted: remoteInterrupted === undefined ? current?.interrupted : remoteInterrupted,
-    // A newer user-stop omits the cause on purpose. Do not keep a prior
-    // local connection/capacity line — that would blame the network for a stop.
-    errorCopy: asString(row.errorCopy),
+    errorCopy: pulledCompanionErrorCopy(row, status, current?.errorCopy),
     updatedAt: recordUpdatedAt(record),
   };
 }

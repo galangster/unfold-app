@@ -478,7 +478,7 @@ describe('full user-data sync', () => {
     expect(message?.errorCopy).toBeUndefined();
   });
 
-  it('clears a stale local interrupt cause when a newer pull omits errorCopy', () => {
+  it('clears a stale local interrupt cause when a newer pull sends the empty sentinel', () => {
     useCompanionChatStore.setState({
       conversations: [{
         id: 'conv-1',
@@ -512,6 +512,7 @@ describe('full user-data sync', () => {
             timestamp: '2026-07-01T12:00:00.000Z',
             status: 'error',
             interrupted: true,
+            errorCopy: '',
           },
           updatedAt: '2026-07-01T12:01:00.000Z',
           deleted: false,
@@ -522,6 +523,50 @@ describe('full user-data sync', () => {
     expect(message?.interrupted).toBe(true);
     expect(message?.content).toBe('A stopped regenerate');
     expect(message?.errorCopy).toBeUndefined();
+  });
+
+  it('keeps a local interrupt cause when a legacy pull omits errorCopy', () => {
+    useCompanionChatStore.setState({
+      conversations: [{
+        id: 'conv-1',
+        messages: [{
+          id: 'msg-1',
+          role: 'companion',
+          content: 'Partial thought',
+          timestamp: Date.parse('2026-07-01T12:00:00.000Z'),
+          status: 'error',
+          interrupted: true,
+          errorCopy: 'Companion is over capacity. Try again in a moment.',
+          updatedAt: '2026-07-01T12:00:00.000Z',
+        }],
+        createdAt: Date.now(),
+        lastMessageAt: Date.now(),
+        title: null,
+        topicTags: [],
+        archived: false,
+        updatedAt: '2026-07-01T12:00:00.000Z',
+      } as never],
+    });
+    applyPulledUserData({
+      timestamp: '2026-07-01T12:01:00.000Z',
+      changes: {
+        companion_messages: [{
+          id: 'msg-1',
+          data: {
+            conversationId: 'conv-1',
+            role: 'companion',
+            content: 'Partial thought',
+            timestamp: '2026-07-01T12:00:00.000Z',
+            status: 'error',
+            interrupted: true,
+          },
+          updatedAt: '2026-07-01T12:01:00.000Z',
+          deleted: false,
+        }],
+      },
+    });
+    const message = useCompanionChatStore.getState().conversations[0]?.messages[0];
+    expect(message?.errorCopy).toBe('Companion is over capacity. Try again in a moment.');
   });
 
   it('applies a remote interrupt cause when pull sends errorCopy', () => {
