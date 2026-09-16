@@ -1296,6 +1296,8 @@ export default function NoteDetailScreen() {
               onPress={exitToJournal}
               style={styles.headerButton}
               activeOpacity={0.6}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
             >
               <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
             </TouchableOpacity>
@@ -1420,12 +1422,12 @@ export default function NoteDetailScreen() {
         <View style={[readableFrameStyle, styles.editorColumn]}>
         {/* ── Metadata row ── */}
         <View style={styles.metadataRow}>
-          <Text style={[styles.metadataText, { color: colors.textHint }]}>
+          <Text style={[styles.metadataText, { color: colors.textMuted }]}>
             {currentDate}
           </Text>
           {currentFolder && (
             <View style={styles.metadataGroup}>
-              <Text style={[styles.metadataDot, { color: colors.textHint }]}>
+              <Text style={[styles.metadataDot, { color: colors.textMuted }]}>
                 {'\u00B7'}
               </Text>
               {currentFolder.color && (
@@ -1438,14 +1440,14 @@ export default function NoteDetailScreen() {
                   }}
                 />
               )}
-              <Text style={[styles.metadataText, { color: colors.textHint }]}>
+              <Text style={[styles.metadataText, { color: colors.textMuted }]}>
                 {currentFolder.name}
               </Text>
             </View>
           )}
           {isFavorite && (
             <View style={styles.metadataGroup}>
-              <Text style={[styles.metadataDot, { color: colors.textHint }]}>
+              <Text style={[styles.metadataDot, { color: colors.textMuted }]}>
                 {'\u00B7'}
               </Text>
               <StarIcon size={12} color={colors.accent} weight="fill" />
@@ -1599,9 +1601,6 @@ export default function NoteDetailScreen() {
             exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
             style={styles.tagsSection}
           >
-            <Text style={[styles.tagsSectionLabel, { color: colors.textSubtle }]}>
-              Tags
-            </Text>
             <View style={styles.tagsWrap}>
               {liveNote.tags.map((tag) => (
                 <View
@@ -2069,12 +2068,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing['6'],
     marginTop: Spacing['2'],
     paddingBottom: Spacing['6'],
-  },
-  tagsSectionLabel: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 10,
-    letterSpacing: 0.2,
-    marginBottom: Spacing['3'],
   },
   tagsWrap: {
     flexDirection: 'row',

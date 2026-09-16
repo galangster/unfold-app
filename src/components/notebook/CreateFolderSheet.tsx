@@ -49,6 +49,7 @@ import {
 import * as Haptics from 'expo-haptics';
 import { FolderSimplePlusIcon } from '@/components/icons';
 import { FontFamily, FontSize } from '@/constants/fonts';
+import { Typography } from '@/constants/typography';
 import { Shadow } from '@/constants/shadows';
 import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
@@ -303,7 +304,7 @@ export function CreateFolderSheet({ visible, onClose, onSubmit, parentFolderId, 
                 {/* Color selection */}
                 <View style={styles.colorSection}>
                   <Text style={[styles.colorLabel, { color: colors.textSubtle }]}>
-                    COLOR (OPTIONAL)
+                    Color (optional)
                   </Text>
                   <View style={styles.colorRow}>
                     {FOLDER_COLORS.map((color) => {
@@ -410,9 +411,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing['5'],
   },
   colorLabel: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 10,
-    letterSpacing: 1,
+    ...Typography.cardMeta,
     marginBottom: 10,
   },
   colorRow: {

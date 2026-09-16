@@ -10,6 +10,7 @@ import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated'
 import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon, ArrowCounterClockwiseIcon } from '@/components/icons';
 import { FontFamily } from '@/constants/fonts';
+import { Typography } from '@/constants/typography';
 import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
@@ -64,7 +65,7 @@ export default function RecentlyDeletedScreen() {
           >
             <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Recently Deleted</Text>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Recently deleted</Text>
         </View>
 
         <ScrollView
@@ -94,7 +95,7 @@ export default function RecentlyDeletedScreen() {
                   {marker ? (
                     <View style={styles.monthHeader} accessibilityRole="header">
                       <Text style={[styles.monthTitle, { color: colors.text }]}>{marker.label}</Text>
-                      <Text style={[styles.monthCount, { color: colors.textSubtle }]}>{marker.countLabel}</Text>
+                      <Text style={[styles.monthCount, { color: colors.textMuted }]}>{marker.countLabel}</Text>
                     </View>
                   ) : null}
                   <View style={[styles.noteRow, { borderBottomColor: colors.border }]}>
@@ -104,7 +105,7 @@ export default function RecentlyDeletedScreen() {
                     <View style={styles.noteContent}>
                       <Text numberOfLines={2} style={[styles.noteTitle, { color: colors.text }]}>{note.title || 'Untitled note'}</Text>
                       {preview ? <Text numberOfLines={2} style={[styles.preview, { color: colors.textMuted }]}>{preview.trim()}</Text> : null}
-                      <Text style={[styles.expiry, { color: colors.textSubtle }]}>{remaining === 0 ? 'Expires today' : `${remaining} days left`}</Text>
+                      <Text style={[styles.expiry, { color: colors.textMuted }]}>{remaining === 0 ? 'Expires today' : `${remaining} days left`}</Text>
                     </View>
                     <TouchableOpacity
                       activeOpacity={0.7}
@@ -139,7 +140,7 @@ const styles = StyleSheet.create({
   emptyBody: { fontFamily: FontFamily.body, fontSize: 15, lineHeight: 22, textAlign: 'center' },
   monthHeader: { minHeight: 48, paddingTop: Spacing['5'], paddingBottom: Spacing['2'], flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' },
   monthTitle: { flex: 1, fontFamily: FontFamily.display, fontSize: 22, lineHeight: 28 },
-  monthCount: { fontFamily: FontFamily.uiMedium, fontSize: 11, lineHeight: 18, letterSpacing: 0.35, textTransform: 'uppercase' },
+  monthCount: { ...Typography.cardMeta },
   noteRow: { minHeight: 122, paddingVertical: Spacing['4'], borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: 'row', alignItems: 'flex-start', gap: Spacing['3'] },
   dateColumn: { minWidth: 34, alignItems: 'center' },
   day: { fontFamily: FontFamily.display, fontSize: 23, lineHeight: 28 },

@@ -5,10 +5,12 @@ jest.mock('@/components/ProfileEntryButton', () => ({ ProfileEntryButton: () => 
  * `currentDevotional.currentDay`, which has already advanced to the next day
  * once a day is finished. The questions, counts and "Write today" card
  * already used currentDayData; the "N more reflections" row pushed the next
- * day's editor and the COMPLETED/CONTINUE badge looked for the next day's
- * entry, so after finishing day 1 the row opened day 2 and the badge never
- * left REFLECT. This drives the REAL hub screen.
+ * day's editor and the Completed/Continue meta looked for the next day's
+ * entry, so after finishing day 1 the row opened day 2 and the meta never
+ * left Reflect. This drives the REAL hub screen.
  */
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import React from 'react';
 import { Text, TouchableOpacity } from 'react-native';
 
@@ -220,8 +222,34 @@ describe('journal hub: the day the reflections row and badge point at', () => {
 
     expect(findTouchable(tree, (node) => node.props.accessibilityLabel === "Continue today's reflection")).toBeTruthy();
     expect(findTouchable(tree, (node) => node.props.accessibilityLabel === "Start today's reflection")).toBeUndefined();
-    const badges = tree.root.findAll((node: any) => node.type === Text && textOf(node) === 'CONTINUE');
-    expect(badges.length).toBe(1);
+    const dayMeta = tree.root.findAll((node: any) => node.type === Text && /^Day \d+\//.test(textOf(node)));
+    expect(dayMeta.length).toBe(1);
     act(() => tree.unmount());
+  });
+});
+
+describe('journal hub leftover eyebrow copy', () => {
+  it('deletes leftover eyebrow copy instead of restyling it quieter', () => {
+    const hub = readFileSync(join(process.cwd(), 'src/app/(tabs)/(journal)/index.tsx'), 'utf8');
+    const compose = readFileSync(join(process.cwd(), 'src/app/(tabs)/(today)/journal.tsx'), 'utf8');
+    const detail = readFileSync(join(process.cwd(), 'src/app/(tabs)/(today)/journal-detail.tsx'), 'utf8');
+
+    expect(hub).not.toContain('FROM YOUR BIBLE');
+    expect(hub).not.toContain('From your Bible');
+    expect(hub).not.toContain('WRITTEN REFLECTIONS');
+    expect(hub).not.toContain('Written reflections');
+    expect(hub).not.toContain("'COMPLETED'");
+    expect(hub).not.toContain("'CONTINUE'");
+    expect(hub).not.toContain("'REFLECT'");
+    expect(hub).not.toContain("textTransform: 'uppercase'");
+    expect(hub).not.toContain('Your story is unfolding');
+    expect(compose).not.toContain('DAY {');
+    expect(compose).not.toContain('SOAP Journal');
+    expect(compose).not.toContain('Take a moment to reflect');
+    expect(compose).not.toContain('Beautiful reflection');
+    expect(compose).not.toContain('Prayer Requests');
+    expect(detail).not.toContain('Journal Entry');
+    expect(detail).not.toContain('Prayer Requests');
+    expect(detail).not.toContain('label="Scripture"');
   });
 });

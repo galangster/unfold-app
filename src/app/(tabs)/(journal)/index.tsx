@@ -31,12 +31,10 @@ import Animated, {
 import { Gesture, GestureDetector, Directions } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import {
-  PencilLineIcon,
   PencilSimpleIcon,
   BookOpenIcon,
   MagnifyingGlassIcon,
   ArrowBendDownRightIcon,
-  CheckCircleIcon,
   CheckIcon,
   XIcon,
   PlusIcon,
@@ -46,6 +44,7 @@ import {
   TrashIcon,
 } from '@/components/icons';
 import { FontFamily, FontSize } from '@/constants/fonts';
+import { Typography } from '@/constants/typography';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Shadow } from '@/constants/shadows';
@@ -93,6 +92,7 @@ function isSegment(value: unknown): value is Segment {
   return SEGMENTS.some((segment) => segment.id === value);
 }
 
+const JOURNAL_UNDO_MS = 5000;
 const JOURNAL_SWIPE_ACTIVE_OFFSET = 18;
 
 // Stable empty list for the reflections segment — the notebook rows are the
@@ -120,6 +120,7 @@ interface SegmentedControlProps {
 
 function SegmentedControl({ activeSegment, onSegmentChange, fontScale }: SegmentedControlProps) {
   const { colors } = useTheme();
+  const reducedMotion = useReducedMotion();
   const [containerWidth, setContainerWidth] = useState(0);
 
   const activeIndex = Math.max(0, SEGMENTS.findIndex((segment) => segment.id === activeSegment));
@@ -134,13 +135,15 @@ function SegmentedControl({ activeSegment, onSegmentChange, fontScale }: Segment
   const prevIndex = useRef(activeIndex);
   useEffect(() => {
     if (prevIndex.current !== activeIndex && segmentWidth > 0) {
-      indicatorTranslateX.value = withTiming(activeIndex * segmentWidth, {
-        duration: 220,
-        easing: Easing.out(Easing.cubic),
-      });
+      indicatorTranslateX.value = reducedMotion
+        ? activeIndex * segmentWidth
+        : withTiming(activeIndex * segmentWidth, {
+            duration: 220,
+            easing: Easing.out(Easing.cubic),
+          });
       prevIndex.current = activeIndex;
     }
-  }, [activeIndex, indicatorTranslateX, segmentWidth]);
+  }, [activeIndex, indicatorTranslateX, reducedMotion, segmentWidth]);
 
   const indicatorStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: indicatorTranslateX.value }],
@@ -217,7 +220,7 @@ function SegmentedControl({ activeSegment, onSegmentChange, fontScale }: Segment
                 segStyles.segmentText,
                 {
                   fontFamily: FontFamily.uiMedium,
-                  color: isActive ? colors.text : colors.textSubtle,
+                  color: isActive ? colors.text : colors.textMuted,
                 },
               ]}
             >
@@ -273,7 +276,7 @@ function JournalMonthHeader({ marker }: { marker: JournalMonthMarker }) {
   return (
     <View style={archiveStyles.monthHeader} accessibilityRole="header">
       <Text style={[archiveStyles.monthTitle, { color: colors.text }]}>{marker.label}</Text>
-      <Text style={[archiveStyles.monthCount, { color: colors.textSubtle }]}>
+      <Text style={[archiveStyles.monthCount, { color: colors.textMuted }]}>
         {marker.countLabel}
       </Text>
     </View>
@@ -379,7 +382,7 @@ function NotebookEmptyState({ onCreateNote }: NotebookEmptyStateProps) {
           },
         ]}
       >
-        <Text style={emptyStyles.ctaText}>Write your first note</Text>
+        <Text style={[emptyStyles.ctaText, { color: colors.background }]}>Write your first note</Text>
       </TouchableOpacity>
     </Animated.View>
   );
@@ -430,7 +433,6 @@ const emptyStyles = StyleSheet.create({
   ctaText: {
     fontFamily: FontFamily.uiMedium,
     fontSize: 15,
-    color: '#FFFFFF',
   },
 });
 
@@ -497,7 +499,7 @@ function VerseNoteResultCard({ highlight, onPress }: VerseNoteResultCardProps) {
         </Text>
         {highlight.text ? (
           <Text
-            style={[verseNoteStyles.verseText, { color: colors.textSubtle }]}
+            style={[verseNoteStyles.verseText, { color: colors.textMuted }]}
             numberOfLines={1}
           >
             {highlight.text}
@@ -509,13 +511,6 @@ function VerseNoteResultCard({ highlight, onPress }: VerseNoteResultCardProps) {
 }
 
 const verseNoteStyles = StyleSheet.create({
-  sectionHeader: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 11,
-    letterSpacing: 1,
-    marginTop: Spacing['4'],
-    marginBottom: Spacing['3'],
-  },
   card: {
     borderRadius: Radius.card,
     padding: Spacing['4'],
@@ -561,7 +556,8 @@ function FloatingActionButton({ onPress, visible, tabBarHeight }: FABProps) {
   const { colors } = useTheme();
   const reducedMotion = useReducedMotion();
   const scale = useSharedValue(1);
-  const translateY = useSharedValue(visible ? 0 : 200);
+  const translateY = useSharedValue(0);
+  const opacity = useSharedValue(visible ? 1 : 0);
 
   // Animate visibility. Keep shared-value writes out of render (same rule the
   // sibling SegmentedControl follows): a write from the render body is a side
@@ -569,12 +565,19 @@ function FloatingActionButton({ onPress, visible, tabBarHeight }: FABProps) {
   const prevVisible = useRef(visible);
   useEffect(() => {
     if (prevVisible.current !== visible) {
-      translateY.value = withTiming(visible ? 0 : 200, { duration: Duration.normal });
+      if (reducedMotion) {
+        translateY.value = 0;
+        opacity.value = visible ? 1 : 0;
+      } else {
+        translateY.value = withTiming(visible ? 0 : 12, { duration: Duration.normal });
+        opacity.value = withTiming(visible ? 1 : 0, { duration: Duration.normal });
+      }
       prevVisible.current = visible;
     }
-  }, [visible, translateY]);
+  }, [opacity, reducedMotion, translateY, visible]);
 
   const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
     transform: [{ scale: scale.value }, { translateY: translateY.value }],
   }));
 
@@ -594,6 +597,7 @@ function FloatingActionButton({ onPress, visible, tabBarHeight }: FABProps) {
   return (
     <Animated.View
       entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(300).easing(Ease.out)}
+      pointerEvents={visible ? 'auto' : 'none'}
       style={[
         fabStyles.container,
         {
@@ -614,7 +618,7 @@ function FloatingActionButton({ onPress, visible, tabBarHeight }: FABProps) {
         accessibilityLabel="Create new note"
         style={fabStyles.touchable}
       >
-        <PlusIcon size={24} color="#FFFFFF" weight="bold" />
+        <PlusIcon size={24} color={colors.background} weight="bold" />
       </TouchableOpacity>
     </Animated.View>
   );
@@ -749,7 +753,7 @@ function FolderActionsSheet({
               },
             ]}
           >
-            <CheckIcon size={20} color="#FFFFFF" weight="bold" />
+            <CheckIcon size={20} color={colors.background} weight="bold" />
           </TouchableOpacity>
         </View>
       ) : (
@@ -1006,10 +1010,10 @@ export default function JournalHubScreen() {
     return answeredReflectionCount >= reflectionQuestions.length;
   }, [reflectionQuestions, answeredReflectionCount]);
 
-  // Same day as todayEntry and the questions above: the badge describes the
-  // entry for the day being reflected on. currentDay has already advanced to
-  // the next day, whose entry never exists yet, so COMPLETED/CONTINUE could
-  // never show.
+  // Same day as todayEntry and the questions above: the card meta describes
+  // the entry for the day being reflected on. currentDay has already advanced
+  // to the next day, whose entry never exists yet, so Completed/Continue
+  // could never show.
   const hasExistingEntry = useMemo(() => {
     if (!currentDevotional) return false;
     const reflectionDay = currentDayData?.dayNumber ?? currentDevotional.currentDay;
@@ -1317,10 +1321,9 @@ export default function JournalHubScreen() {
       setCurrentParentId(plan.navigation.currentParentId);
     }
 
-    // Auto-dismiss undo after 4s
     deleteTimerRef.current = setTimeout(() => {
       setUndoActions([]);
-    }, 4000);
+    }, JOURNAL_UNDO_MS);
   }, [folderForActions, storeDeleteFolder, activeFolderId, currentParentId, folders, notes, getDescendantFolderIds]);
 
   const handleNoteDelete = useCallback(
@@ -1332,7 +1335,7 @@ export default function JournalHubScreen() {
 
       deleteTimerRef.current = setTimeout(() => {
         setUndoActions([]);
-      }, 3000);
+      }, JOURNAL_UNDO_MS);
     },
     [deleteNote],
   );
@@ -1588,13 +1591,8 @@ export default function JournalHubScreen() {
             searchQuery.trim().length > 0 &&
             verseNoteMatches.length > 0 ? (
               <Animated.View
-                style={[notebookSwipeStyle, mainStyles.notesListContainer, journalFrameStyle]}
+                style={[notebookSwipeStyle, mainStyles.notesListContainer, journalFrameStyle, { paddingTop: Spacing['4'] }]}
               >
-                <Text
-                  style={[verseNoteStyles.sectionHeader, { color: colors.textSubtle }]}
-                >
-                  FROM YOUR BIBLE
-                </Text>
                 {verseNoteMatches.map((h) => (
                   <VerseNoteResultCard
                     key={h.id}
@@ -1753,11 +1751,11 @@ export default function JournalHubScreen() {
                                 {preview}
                               </Text>
                             ) : null}
-                              <Text style={[archiveStyles.entryMeta, { color: colors.textSubtle }]}>
+                              <Text style={[archiveStyles.entryMeta, { color: colors.textMuted }]}>
                                 {`Day ${entry.dayNumber} · ${formatRelativeDate(entry.updatedAt)}`}
                               </Text>
                             </View>
-                            <CaretRightIcon size={15} color={colors.textSubtle} weight="light" />
+                            <CaretRightIcon size={15} color={colors.textMuted} weight="light" />
                           </View>
                         </TouchableOpacity>
                         </View>
@@ -1793,74 +1791,30 @@ export default function JournalHubScreen() {
                         borderColor: alpha(colors.accent, 0.14),
                       }}
                     >
-                      <View
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          marginBottom: Spacing['3'],
-                        }}
-                      >
-                        <View
-                          style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            gap: Spacing['2'],
-                          }}
-                        >
-                          {isAllReflectionsDone && hasExistingEntry ? (
-                            <CheckCircleIcon
-                              size={16}
-                              color={colors.accent}
-                              weight="fill"
-                            />
-                          ) : (
-                            <PencilLineIcon
-                              size={16}
-                              color={colors.accent}
-                              weight="light"
-                            />
-                          )}
-                          <Text
-                            style={{
-                              fontFamily: FontFamily.uiMedium,
-                              fontSize: 11,
-                              color: colors.accent,
-                              letterSpacing: 1,
-                            }}
-                          >
-                            {isAllReflectionsDone && hasExistingEntry
-                              ? 'COMPLETED'
-                              : hasExistingEntry
-                                ? 'CONTINUE'
-                                : 'REFLECT'}
-                          </Text>
-                        </View>
-                        <Text
-                          style={{
-                            fontFamily: FontFamily.ui,
-                            fontSize: FontSize.xs,
-                            color: colors.textSubtle,
-                          }}
-                        >
-                          Day {currentDayData?.dayNumber ?? currentDevotional.currentDay}/
-                          {Math.max(currentDevotional.totalDays, currentDevotional.days.length)}
-                        </Text>
-                      </View>
-
                       <Text
                         style={{
                           fontFamily: FontFamily.display,
                           fontSize: 18,
                           lineHeight: 23,
                           color: colors.text,
-                          marginBottom: Spacing['1.5'],
+                          marginBottom: Spacing['1'],
                         }}
                         numberOfLines={2}
                       >
                         {currentDayData?.title
                           ? currentDayData.title
                           : `Day ${currentDevotional.currentDay}`}
+                      </Text>
+                      <Text
+                        style={{
+                          ...Typography.cardMeta,
+                          color: colors.textMuted,
+                          marginBottom: currentDayData?.scriptureReference || firstUnansweredQuestion
+                            ? Spacing['1.5']
+                            : 0,
+                        }}
+                      >
+                        {`Day ${currentDayData?.dayNumber ?? currentDevotional.currentDay}/${Math.max(currentDevotional.totalDays, currentDevotional.days.length)}`}
                       </Text>
 
                       {currentDayData?.scriptureReference && (
@@ -1887,7 +1841,7 @@ export default function JournalHubScreen() {
                           }}
                           numberOfLines={2}
                         >
-                          "{firstUnansweredQuestion.question}"
+                          {`“${firstUnansweredQuestion.question}”`}
                         </Text>
                       )}
 
@@ -1963,16 +1917,15 @@ export default function JournalHubScreen() {
                   style={archiveStyles.archiveSection}
                 >
                   <View style={archiveStyles.archiveHeadingRow}>
-                    <Text style={[archiveStyles.archiveKicker, { color: colors.textSubtle }]}>WRITTEN REFLECTIONS</Text>
                     <TouchableOpacity
                       activeOpacity={0.7}
                       onPress={() => router.push('/(tabs)/(you)/past-devotionals')}
                       accessibilityRole="link"
-                      accessibilityLabel="View all studies"
+                      accessibilityLabel="See all studies"
                       style={archiveStyles.viewAllAction}
                     >
-                      <Text style={[archiveStyles.viewAllText, { color: colors.accent }]}>View All</Text>
-                      <CaretRightIcon size={12} color={colors.accent} weight="bold" />
+                      <Text style={[archiveStyles.viewAllText, { color: colors.textMuted }]}>See all</Text>
+                      <CaretRightIcon size={12} color={colors.textMuted} weight="bold" />
                     </TouchableOpacity>
                   </View>
                   {filteredEntries.map((entry, index) => {
@@ -2004,11 +1957,11 @@ export default function JournalHubScreen() {
                                   {preview}
                                 </Text>
                               ) : null}
-                              <Text style={[archiveStyles.entryMeta, { color: colors.textSubtle }]}>
+                              <Text style={[archiveStyles.entryMeta, { color: colors.textMuted }]}>
                                 {`Day ${entry.dayNumber} · ${entryDevotional?.title ?? 'Reflection'}`}
                               </Text>
                             </View>
-                            <CaretRightIcon size={15} color={colors.textSubtle} weight="light" />
+                            <CaretRightIcon size={15} color={colors.textMuted} weight="light" />
                           </View>
                         </TouchableOpacity>
                       </View>
@@ -2018,8 +1971,8 @@ export default function JournalHubScreen() {
               )}
               {!isSearchingReflections && filteredEntries.length === 0 && !currentDevotional && (
                 <View style={mainStyles.noResultsContainer}>
-                  <Text style={[archiveStyles.emptyTitle, { color: colors.text }]}>Your story is unfolding.</Text>
-                  <Text style={[mainStyles.noResultsText, { color: colors.textMuted }]}>Your written reflections will gather here by month.</Text>
+                  <Text style={[archiveStyles.emptyTitle, { color: colors.text }]}>No written reflections yet</Text>
+                  <Text style={[mainStyles.noResultsText, { color: colors.textMuted }]}>They gather here by month.</Text>
                 </View>
               )}
               </Animated.View>
@@ -2073,10 +2026,10 @@ export default function JournalHubScreen() {
                     marginTop: Spacing['2'],
                   }}
                 >
-                  <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 12, color: colors.textHint }}>
-                    {`Recently Deleted (${deletedNotesCount})`}
+                  <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.sm, color: colors.textMuted }}>
+                    {`Recently deleted (${deletedNotesCount})`}
                   </Text>
-                  <CaretRightIcon size={12} color={colors.textHint} weight="bold" />
+                  <CaretRightIcon size={12} color={colors.textMuted} weight="bold" />
                 </TouchableOpacity>
               )}
 
@@ -2144,7 +2097,7 @@ export default function JournalHubScreen() {
           }
           onUndo={handleUndoAction}
           onDismiss={handleUndoDismiss}
-          duration={undoActions.length > 0 && undoActions[undoActions.length - 1]?.type === 'folder' ? 4000 : 3000}
+          duration={JOURNAL_UNDO_MS}
         />
 
         {/* Undo toast for Saved removals (highlights, Bible notes, bookmarks) */}
@@ -2219,7 +2172,7 @@ export default function JournalHubScreen() {
             if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
             deleteTimerRef.current = setTimeout(() => {
               setUndoActions([]);
-            }, 4000);
+            }, JOURNAL_UNDO_MS);
           }}
         />
 
@@ -2324,12 +2277,7 @@ const archiveStyles = StyleSheet.create({
     minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  archiveKicker: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 11,
-    letterSpacing: 1.1,
+    justifyContent: 'flex-end',
   },
   viewAllAction: {
     minHeight: 44,
@@ -2340,7 +2288,7 @@ const archiveStyles = StyleSheet.create({
     gap: 3,
   },
   viewAllText: {
-    fontFamily: FontFamily.uiMedium,
+    fontFamily: FontFamily.ui,
     fontSize: FontSize.sm,
   },
   monthHeader: {
@@ -2358,11 +2306,7 @@ const archiveStyles = StyleSheet.create({
     lineHeight: 28,
   },
   monthCount: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 11,
-    lineHeight: 18,
-    letterSpacing: 0.35,
-    textTransform: 'uppercase',
+    ...Typography.cardMeta,
   },
   entryRow: {
     minHeight: 112,

@@ -5,8 +5,7 @@ jest.mock('@/components/ProfileEntryButton', () => ({ ProfileEntryButton: () => 
  * body when `visible` changed — a side effect during render, which Reanimated
  * warns about and React may run more than once or discard. Its sibling
  * SegmentedControl had already moved the same write into an effect; the FAB
- * now matches. The animation itself is unchanged: hidden slides to 200,
- * shown back to 0.
+ * now matches. Under reduced motion the hide is opacity only — no 200px travel.
  */
 import fs from 'fs';
 import path from 'path';
@@ -207,11 +206,12 @@ describe('notebook FAB visibility animation', () => {
     sharedWrites().length = 0;
 
     scrollTo(tree, 120); // scrolling down, past the 50px threshold
-    expect(sharedWrites()).toContain(200);
+    expect(sharedWrites()).not.toContain(200);
+    expect(sharedWrites()).toContain(0);
 
     sharedWrites().length = 0;
     scrollTo(tree, 0); // back to the top
-    expect(sharedWrites()).toContain(0);
+    expect(sharedWrites()).toContain(1);
     act(() => tree.unmount());
   });
 

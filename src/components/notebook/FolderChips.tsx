@@ -7,7 +7,7 @@
  */
 
 import { useCallback, useMemo } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, type AccessibilityActionEvent } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { PlusIcon, CaretRightIcon } from '@/components/icons';
 import { FontFamily, FontSize } from '@/constants/fonts';
@@ -269,7 +269,27 @@ function FolderChip({ folderId, folder, label, color, isActive, hasChildren, onP
         activeOpacity={0.7}
         accessibilityRole="button"
         accessibilityLabel={`Filter by ${label}`}
+        accessibilityHint={folder && onLongPress ? 'Shows rename, add subfolder, and delete' : undefined}
         accessibilityState={{ selected: isActive }}
+        accessibilityActions={
+          folder && onLongPress
+            ? [
+                { name: 'rename', label: 'Rename' },
+                { name: 'addSubfolder', label: 'Add subfolder' },
+                { name: 'delete', label: 'Delete folder' },
+              ]
+            : undefined
+        }
+        onAccessibilityAction={
+          folder && onLongPress
+            ? (event: AccessibilityActionEvent) => {
+                const action = event.nativeEvent.actionName;
+                if (action === 'rename' || action === 'addSubfolder' || action === 'delete') {
+                  onLongPress(folder);
+                }
+              }
+            : undefined
+        }
         style={styles.pillLabelTouchable}
       >
         {/* Color dot for folders with a color */}

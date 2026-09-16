@@ -38,18 +38,13 @@ import {
   CheckCircleIcon,
   CaretDownIcon,
   CaretUpIcon,
-  BookOpenIcon,
   ArrowRightIcon,
-  EyeIcon,
-  HandsPrayingIcon,
-  PencilSimpleIcon,
   PlusIcon,
 } from '@/components/icons';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
-import { Typography } from '@/constants/typography';
 import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
 import { adaptiveFrameStyle, PRIMARY_SAFE_AREA_EDGES } from '@/lib/adaptive-layout';
 import { useTheme } from '@/lib/theme';
@@ -82,57 +77,50 @@ import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
 import { getReflectionTypography } from '@/lib/reflection-typography';
 import { resolveStackRoute, type TabGroup } from '@/lib/tab-stack-routes';
 
-const SOAP_SECTIONS: { key: keyof SoapResponses; letter: string; label: string; placeholder: string; icon: 'BookOpen' | 'Eye' | 'PencilSimple' | 'HandsPraying' }[] = [
+const SOAP_SECTIONS: { key: keyof SoapResponses; letter: string; label: string; placeholder: string }[] = [
   {
     key: 'scripture',
     letter: 'S',
     label: 'Scripture',
     placeholder: 'Write or paste the verse that stood out to you...',
-    icon: 'BookOpen',
   },
   {
     key: 'observation',
     letter: 'O',
     label: 'Observation',
     placeholder: 'What does this passage say? What details do you notice?',
-    icon: 'Eye',
   },
   {
     key: 'application',
     letter: 'A',
     label: 'Application',
     placeholder: 'How does this apply to your life right now?',
-    icon: 'PencilSimple',
   },
   {
     key: 'prayer',
     letter: 'P',
     label: 'Prayer',
     placeholder: 'Write a prayer response to what you\'ve read...',
-    icon: 'HandsPraying',
   },
 ];
 
-function SoapIcon({ name, size, color }: { name: string; size: number; color: string }) {
-  switch (name) {
-    case 'BookOpen': return <BookOpenIcon size={size} color={color} weight="light" />;
-    case 'Eye': return <EyeIcon size={size} color={color} weight="light" />;
-    case 'PencilSimple': return <PencilSimpleIcon size={size} color={color} weight="light" />;
-    case 'HandsPraying': return <HandsPrayingIcon size={size} color={color} weight="light" />;
-    default: return null;
-  }
-}
-
 /** Animated prayer circle — fills with accent color + checkmark when answered */
-function AnimatedPrayerCircle({ isAnswered, accentColor, hintColor }: {
+function AnimatedPrayerCircle({ isAnswered, accentColor, hintColor, checkColor }: {
   isAnswered: boolean;
   accentColor: string;
   hintColor: string;
+  checkColor: string;
 }) {
+  const reducedMotion = useReducedMotion();
   const fillProgress = useSharedValue(isAnswered ? 1 : 0);
   const checkScale = useSharedValue(isAnswered ? 1 : 0);
 
   useEffect(() => {
+    if (reducedMotion) {
+      fillProgress.value = isAnswered ? 1 : 0;
+      checkScale.value = isAnswered ? 1 : 0;
+      return;
+    }
     if (isAnswered) {
       fillProgress.value = withTiming(1, { duration: Duration.slow });
       checkScale.value = withDelay(100, withSpring(1, { damping: 25, stiffness: 300, mass: 0.5 }));
@@ -140,7 +128,7 @@ function AnimatedPrayerCircle({ isAnswered, accentColor, hintColor }: {
       fillProgress.value = withTiming(0, { duration: Duration.normal });
       checkScale.value = withTiming(0, { duration: Duration.fast });
     }
-  }, [isAnswered, fillProgress, checkScale]);
+  }, [isAnswered, reducedMotion, fillProgress, checkScale]);
 
   const circleStyle = useAnimatedStyle(() => ({
     width: 20,
@@ -161,7 +149,7 @@ function AnimatedPrayerCircle({ isAnswered, accentColor, hintColor }: {
   return (
     <Animated.View style={circleStyle}>
       <Animated.View style={checkStyle}>
-        <CheckIcon size={12} color="#fff" weight="bold" />
+        <CheckIcon size={12} color={checkColor} weight="bold" />
       </Animated.View>
     </Animated.View>
   );
@@ -866,10 +854,6 @@ Their journal entry:
               <XIcon size={22} color={colors.textMuted} weight="light" />
             </TouchableOpacity>
 
-            <Text style={[jStyles.dayLabel, { color: colors.textSubtle }]}>
-              DAY {dayNumber}
-            </Text>
-
             <TouchableOpacity
               onPress={handleDone}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -899,7 +883,7 @@ Their journal entry:
                     jStyles.modeTabText,
                     {
                       fontFamily: activeMode === mode ? FontFamily.uiMedium : FontFamily.ui,
-                      color: activeMode === mode ? colors.text : colors.textSubtle,
+                      color: activeMode === mode ? colors.text : colors.textMuted,
                     },
                   ]}
                 >
@@ -954,9 +938,6 @@ Their journal entry:
                 <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}>
                   <Text style={[jStyles.freewriteTitle, { color: colors.text }]}>
                     What's stirring?
-                  </Text>
-                  <Text style={[jStyles.freewriteSubtitle, { color: colors.textMuted }]}>
-                    Take a moment to reflect. This is just for you.
                   </Text>
                 </Animated.View>
 
@@ -1029,14 +1010,9 @@ Their journal entry:
                 {allQuestions.length > 0 && (
                   <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).easing(Ease.out)} style={jStyles.deeperPromptsSection}>
                     <View style={jStyles.deeperHeaderRow}>
-                      <Text style={[jStyles.deeperLabel, { color: colors.text }]}>
-                        Go Deeper
+                      <Text style={[jStyles.deeperProgress, { color: answeredCount === allQuestions.length ? colors.accent : colors.textMuted }]}>
+                        {answeredCount} of {allQuestions.length} complete
                       </Text>
-                      {allQuestions.length > 0 && (
-                        <Text style={[jStyles.deeperProgress, { color: answeredCount === allQuestions.length ? colors.accent : colors.textSubtle }]}>
-                          {answeredCount} of {allQuestions.length} complete
-                        </Text>
-                      )}
                     </View>
 
                     {allQuestions.map((prompt, index) => {
@@ -1091,6 +1067,7 @@ Their journal entry:
                                   multiline
                                   textAlignVertical="top"
                                   keyboardAppearance={isDark ? 'dark' : 'light'}
+                                  accessibilityLabel={`Response to prompt ${index + 1}`}
                                   style={[jStyles.questionTextInput, { color: colors.text, paddingBottom: 40, fontSize: typography.responseFontSize, lineHeight: typography.responseLineHeight }]}
                                 />
                                 <VoiceInputBar
@@ -1131,23 +1108,6 @@ Their journal entry:
             {/* ===== SOAP MODE ===== */}
             {activeMode === 'soap' && (
               <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}>
-                <Text style={[jStyles.soapTitle, { color: colors.text }]}>
-                  SOAP Journal
-                </Text>
-                <Text style={[jStyles.soapSubtitle, { color: colors.textMuted }]}>
-                  Scripture, Observation, Application, Prayer
-                </Text>
-
-                {/* SOAP progress */}
-                <View style={jStyles.soapProgressRow}>
-                  {SOAP_SECTIONS.map((section) => (
-                    <View
-                      key={section.key}
-                      style={[jStyles.soapProgressBar, { backgroundColor: soapValues[section.key].trim() ? colors.accent : colors.border }]}
-                    />
-                  ))}
-                </View>
-
                 {/* SOAP Sections */}
                 {SOAP_SECTIONS.map((section, idx) => {
                   const isExpanded = expandedSoapSection === section.key;
@@ -1183,12 +1143,10 @@ Their journal entry:
                       >
                         {/* Letter badge */}
                         <View style={[jStyles.soapLetterBadge, { backgroundColor: hasContent ? colors.accent : alpha(colors.border, 0.50) }]}>
-                          <Text style={[jStyles.soapLetterText, { color: hasContent ? '#fff' : colors.textSubtle }]}>
+                          <Text style={[jStyles.soapLetterText, { color: hasContent ? colors.background : colors.textSubtle }]}>
                             {section.letter}
                           </Text>
                         </View>
-
-                        <SoapIcon name={section.icon} size={16} color={hasContent ? colors.accent : colors.textSubtle} />
 
                         <Text style={[jStyles.soapSectionLabel, { color: colors.text }]}>
                           {section.label}
@@ -1226,9 +1184,6 @@ Their journal entry:
                               onChangeText={(text) => handleSoapChange(section.key, text)}
                             />
                           </View>
-                          <Text style={[jStyles.autoSavedLabel, { color: justSaved ? colors.accent : colors.textHint }]}>
-                            {hasChanges ? 'Saving...' : justSaved ? 'Saved' : 'Auto-saved'}
-                          </Text>
                         </Animated.View>
                       )}
 
@@ -1242,14 +1197,6 @@ Their journal entry:
                   );
                 })}
 
-                {/* SOAP completion message */}
-                {soapCompletedCount === 4 && (
-                  <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)} style={jStyles.soapCompleteWrapper}>
-                    <Text style={[jStyles.soapCompleteText, { color: colors.accent }]}>
-                      Beautiful reflection. All sections complete.
-                    </Text>
-                  </Animated.View>
-                )}
               </Animated.View>
             )}
 
@@ -1258,14 +1205,6 @@ Their journal entry:
               entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(400).easing(Ease.out)}
               style={{ marginTop: activeMode === 'soap' ? 32 : allQuestions.length > 0 ? 0 : 40 }}
             >
-              {/* Divider */}
-              <View style={jStyles.prayerDivider}>
-                <HandsPrayingIcon size={14} color={colors.accent} weight="light" style={jStyles.prayerDividerIcon} />
-                <Text style={[jStyles.prayerDividerLabel, { color: colors.text }]}>
-                  Prayer Requests
-                </Text>
-              </View>
-
               {/* Existing prayer requests */}
               {prayerRequests.map((prayer) => (
                 <Animated.View
@@ -1289,6 +1228,7 @@ Their journal entry:
                       isAnswered={prayer.isAnswered}
                       accentColor={colors.accent}
                       hintColor={colors.textHint}
+                      checkColor={colors.background}
                     />
                     <Text
                       style={[
@@ -1301,11 +1241,6 @@ Their journal entry:
                     >
                       {prayer.text}
                     </Text>
-                    {prayer.isAnswered && (
-                      <Text style={[jStyles.prayerAnsweredLabel, { color: colors.accent }]}>
-                        Answered
-                      </Text>
-                    )}
                   </TouchableOpacity>
                 </Animated.View>
               ))}
@@ -1326,6 +1261,7 @@ Their journal entry:
                       textAlignVertical="top"
                       autoFocus
                       keyboardAppearance={isDark ? 'dark' : 'light'}
+                      accessibilityLabel="New prayer request"
                       style={[jStyles.prayerTextInput, { color: colors.text, paddingBottom: 40, fontSize: typography.responseFontSize, lineHeight: typography.responseLineHeight }]}
                       onSubmitEditing={handleAddPrayer}
                       blurOnSubmit
@@ -1339,7 +1275,7 @@ Their journal entry:
                       activeOpacity={0.6}
                       hitSlop={8}
                     >
-                      <Text style={[jStyles.prayerCancelText, { color: colors.textSubtle }]}>
+                      <Text style={[jStyles.prayerCancelText, { color: colors.textMuted }]}>
                         Cancel
                       </Text>
                     </TouchableOpacity>
@@ -1359,8 +1295,8 @@ Their journal entry:
                       accessibilityRole="button"
                       accessibilityState={{ disabled: !newPrayerText.trim() }}
                     >
-                      <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: '#fff' }}>
-                        Add Prayer
+                      <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.background }}>
+                        Add prayer
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -1375,8 +1311,8 @@ Their journal entry:
                   activeOpacity={0.6}
                   style={jStyles.addPrayerButton}
                 >
-                  <PlusIcon size={14} color={colors.textSubtle} weight="light" />
-                  <Text style={[jStyles.addPrayerText, { color: colors.textSubtle }]}>
+                  <PlusIcon size={14} color={colors.textMuted} weight="light" />
+                  <Text style={[jStyles.addPrayerText, { color: colors.textMuted }]}>
                     Add a prayer request
                   </Text>
                 </TouchableOpacity>
@@ -1393,7 +1329,7 @@ Their journal entry:
               key={hasChanges ? 'saving' : justSaved ? 'saved' : 'idle'}
               entering={reducedMotion ? undefined : FadeIn.duration(Duration.slow).easing(Ease.out)}
               exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
-              style={[jStyles.bottomHintText, { color: justSaved ? colors.accent : colors.textHint }]}
+              style={[jStyles.bottomHintText, { color: justSaved ? colors.accent : colors.textMuted }]}
             >
               {hasChanges ? 'Saving...' : justSaved ? 'Saved' : 'Your response is saved automatically'}
             </Animated.Text>
@@ -1429,9 +1365,6 @@ const jStyles = StyleSheet.create({
   },
   headerButton: {
     padding: Spacing['2'],
-  },
-  dayLabel: {
-    ...Typography.cardMeta,
   },
   modeSelector: {
     flexDirection: 'row',
@@ -1474,11 +1407,6 @@ const jStyles = StyleSheet.create({
     // "What's stirring?" is short enough not to wrap at common widths.
     fontSize: 27,
     letterSpacing: -0.15,
-    marginBottom: Spacing['2'],
-  },
-  freewriteSubtitle: {
-    fontFamily: FontFamily.body,
-    fontSize: 15,
     marginBottom: Spacing['8'],
   },
   freewriteInput: {
@@ -1525,10 +1453,6 @@ const jStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: Spacing['4'],
-  },
-  deeperLabel: {
-    ...Typography.sectionHeader,
-    opacity: 0.8,
   },
   deeperProgress: {
     fontFamily: FontFamily.ui,
@@ -1582,29 +1506,6 @@ const jStyles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 20,
   },
-  soapTitle: {
-    fontFamily: FontFamily.display,
-    // Rescaled from 30 (ex-FontSize['3xl']) for the display serif's larger optical size.
-    // "SOAP Journal" is short enough not to wrap at common widths.
-    fontSize: 27,
-    letterSpacing: -0.15,
-    marginBottom: 4,
-  },
-  soapSubtitle: {
-    fontFamily: FontFamily.body,
-    fontSize: FontSize.sm,
-    marginBottom: Spacing['2'],
-  },
-  soapProgressRow: {
-    flexDirection: 'row',
-    gap: Spacing['1'],
-    marginBottom: Spacing['7'],
-  },
-  soapProgressBar: {
-    flex: 1,
-    height: 3,
-    borderRadius: 1.5,
-  },
   soapSectionButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1629,7 +1530,6 @@ const jStyles = StyleSheet.create({
     flex: 1,
     fontFamily: FontFamily.uiMedium,
     fontSize: 15,
-    marginLeft: 10,
   },
   soapExpandedWrapper: {
     marginTop: 10,
@@ -1647,12 +1547,6 @@ const jStyles = StyleSheet.create({
     lineHeight: 24,
     padding: 0,
   },
-  autoSavedLabel: {
-    fontFamily: FontFamily.ui,
-    fontSize: 11,
-    marginTop: 6,
-    textAlign: 'right',
-  },
   soapPreview: {
     fontFamily: FontFamily.body,
     fontSize: 13,
@@ -1660,27 +1554,6 @@ const jStyles = StyleSheet.create({
     marginTop: 6,
     marginLeft: 54,
     marginRight: Spacing['2'],
-  },
-  soapCompleteWrapper: {
-    alignItems: 'center',
-    marginTop: Spacing['4'],
-  },
-  soapCompleteText: {
-    fontFamily: FontFamily.ui,
-    fontSize: 13,
-  },
-  prayerDivider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing['5'],
-  },
-  prayerDividerIcon: {
-    marginRight: Spacing['3'],
-  },
-  prayerDividerLabel: {
-    ...Typography.sectionHeader,
-    opacity: 0.75,
   },
   prayerItemWrapper: {
     marginBottom: 10,
@@ -1700,12 +1573,6 @@ const jStyles = StyleSheet.create({
     fontFamily: FontFamily.body,
     fontSize: FontSize.sm,
     lineHeight: 21,
-  },
-  prayerAnsweredLabel: {
-    fontFamily: FontFamily.ui,
-    fontSize: 10,
-    letterSpacing: 0.5,
-    marginTop: 3,
   },
   prayerInputMargin: {
     marginTop: 4,

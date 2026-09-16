@@ -26,6 +26,17 @@ describe('#12 — folder long-press uses the branded sheet, not the OS Alert', (
     expect(screenSrc).not.toContain('Alert.prompt');
   });
 
+  it('exposes folder actions to assistive tech, not long-press alone', () => {
+    const chipsSrc = fs.readFileSync(
+      path.join(__dirname, '../../components/notebook/FolderChips.tsx'),
+      'utf-8',
+    );
+    expect(chipsSrc).toContain("name: 'rename'");
+    expect(chipsSrc).toContain("name: 'addSubfolder'");
+    expect(chipsSrc).toContain("name: 'delete'");
+    expect(chipsSrc).toContain('onAccessibilityAction');
+  });
+
   it('long-press opens the branded FolderActionsSheet instead of an Alert', () => {
     expect(screenSrc).toContain('function FolderActionsSheet');
     expect(screenSrc).toContain('<FolderActionsSheet');

@@ -32,7 +32,7 @@ import {
 } from '@/components/saved/SavedRows';
 import { SwipeToDeleteRow } from '@/components/saved/SwipeToDeleteRow';
 
-const UNDO_DURATION_MS = 3000;
+const UNDO_DURATION_MS = 5000;
 
 const SOURCE_CHIPS: { id: SavedSourceFilter; label: string }[] = [
   { id: 'all', label: 'All' },

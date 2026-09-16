@@ -6,11 +6,6 @@ import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import {
   CaretLeftIcon,
-  ChatCircleDotsIcon,
-  BookOpenIcon,
-  EyeIcon,
-  PencilSimpleIcon,
-  HandsPrayingIcon,
   CheckCircleIcon,
 } from '@/components/icons';
 import { FontFamily, FontSize } from '@/constants/fonts';
@@ -24,43 +19,24 @@ import { useGuardedBack } from '@/hooks/useGuardedBack';
 import { useUnfoldStore } from '@/lib/store';
 import { normalizeSoapResponses } from '@/lib/journal-entry-state';
 import { format } from 'date-fns';
-import { alpha } from '@/components/ui';
 import { Typography } from '@/constants/typography';
 
 function SoapSectionDisplay({
-  soapKey,
-  label,
   value,
   colors,
-  icon,
 }: {
-  soapKey: string;
-  label: string;
   value: string;
-  colors: any;
-  icon: React.ReactNode;
+  colors: { text: string };
 }) {
   if (!value.trim()) return null;
   return (
     <View style={{ marginBottom: Spacing['6'] }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing['2'], marginBottom: 10 }}>
-        {icon}
-        <Text
-          style={{
-            ...Typography.cardMeta,
-            color: colors.accent,
-          }}
-        >
-          {label}
-        </Text>
-      </View>
       <Text
         style={{
           fontFamily: FontFamily.body,
           fontSize: FontSize.base,
           color: colors.text,
           lineHeight: 26,
-          paddingLeft: Spacing['1'],
         }}
       >
         {value}
@@ -115,7 +91,7 @@ export default function JournalDetailScreen() {
             <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.base, color: colors.textMuted, marginBottom: Spacing['1'] }}>
               Entry not found
             </Text>
-            <Text style={{ fontFamily: FontFamily.body, fontSize: FontSize.sm, color: colors.textHint, textAlign: 'center' }}>
+            <Text style={{ fontFamily: FontFamily.body, fontSize: FontSize.sm, color: colors.textMuted, textAlign: 'center' }}>
               This entry may have been removed.
             </Text>
           </View>
@@ -127,9 +103,6 @@ export default function JournalDetailScreen() {
 
   const entryDate = format(new Date(entry.createdAt), 'MMMM d, yyyy');
   const dayTitle = devotional?.days.find((d) => d.dayNumber === entry.dayNumber)?.title ?? '';
-  const isSoap = entry.journalMode === 'soap';
-  // A sync-restored entry can carry `{}` or a partial object; normalise before
-  // reading the four fields.
   const soapResponses = normalizeSoapResponses(entry.soapResponses);
   const hasSoapContent = soapResponses && (
     soapResponses.scripture.trim() ||
@@ -141,7 +114,6 @@ export default function JournalDetailScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SafeAreaView style={{ flex: 1 }} edges={PRIMARY_SAFE_AREA_EDGES}>
-        {/* Header */}
         <View style={clusterFrameStyle}>
         <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing['4'], paddingVertical: Spacing['3'] }}>
           <TouchableOpacity
@@ -154,39 +126,6 @@ export default function JournalDetailScreen() {
           >
             <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
           </TouchableOpacity>
-
-          <Text
-            style={{
-              fontFamily: FontFamily.uiMedium,
-              fontSize: FontSize.base,
-              color: colors.text,
-              marginLeft: Spacing['2'],
-            }}
-          >
-            Journal Entry
-          </Text>
-
-          {isSoap && (
-            <View
-              style={{
-                marginLeft: Spacing['2'],
-                paddingHorizontal: Spacing['1.5'],
-                paddingVertical: 1,
-                borderRadius: 4,
-                backgroundColor: alpha(colors.accent, 0.08),
-              }}
-            >
-              <Text
-                style={{
-                  fontFamily: FontFamily.uiMedium,
-                  fontSize: FontSize.xs,
-                  color: colors.accent,
-                }}
-              >
-                SOAP
-              </Text>
-            </View>
-          )}
         </View>
         </View>
 
@@ -196,18 +135,7 @@ export default function JournalDetailScreen() {
         >
           <View style={readableFrameStyle}>
           <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}>
-            {/* Meta info */}
             <View style={{ marginBottom: Spacing['6'] }}>
-              <Text
-                style={{
-                  ...Typography.cardMeta,
-                  color: colors.textHint,
-                  marginBottom: Spacing['2'],
-                }}
-              >
-                Day {entry.dayNumber} · {entryDate}
-              </Text>
-
               <Text
                 style={{
                   fontFamily: FontFamily.display,
@@ -216,23 +144,32 @@ export default function JournalDetailScreen() {
                   marginBottom: Spacing['1'],
                 }}
               >
-                {devotional?.title ?? 'Journal Entry'}
+                {devotional?.title ?? 'Journal entry'}
               </Text>
 
-              {dayTitle && (
+              {dayTitle ? (
                 <Text
                   style={{
                     fontFamily: FontFamily.ui,
                     fontSize: FontSize.sm,
-                    color: colors.textSubtle,
+                    color: colors.textMuted,
+                    marginBottom: Spacing['2'],
                   }}
                 >
                   {dayTitle}
                 </Text>
-              )}
+              ) : null}
+
+              <Text
+                style={{
+                  ...Typography.cardMeta,
+                  color: colors.textMuted,
+                }}
+              >
+                {`Day ${entry.dayNumber} · ${entryDate}`}
+              </Text>
             </View>
 
-            {/* Divider */}
             <View
               style={{
                 width: 40,
@@ -242,7 +179,6 @@ export default function JournalDetailScreen() {
               }}
             />
 
-            {/* Free-form Content */}
             {entry.content.trim().length > 0 && (
               <Text
                 style={{
@@ -256,58 +192,17 @@ export default function JournalDetailScreen() {
               </Text>
             )}
 
-            {/* SOAP Responses */}
             {hasSoapContent && soapResponses && (
               <View style={{ marginTop: entry.content.trim().length > 0 ? Spacing['8'] : 0 }}>
-                <SoapSectionDisplay
-                  soapKey="scripture"
-                  label="Scripture"
-                  value={soapResponses.scripture}
-                  colors={colors}
-                  icon={<BookOpenIcon size={14} color={colors.accent} weight="light" />}
-                />
-                <SoapSectionDisplay
-                  soapKey="observation"
-                  label="Observation"
-                  value={soapResponses.observation}
-                  colors={colors}
-                  icon={<EyeIcon size={14} color={colors.accent} weight="light" />}
-                />
-                <SoapSectionDisplay
-                  soapKey="application"
-                  label="Application"
-                  value={soapResponses.application}
-                  colors={colors}
-                  icon={<PencilSimpleIcon size={14} color={colors.accent} weight="light" />}
-                />
-                <SoapSectionDisplay
-                  soapKey="prayer"
-                  label="Prayer"
-                  value={soapResponses.prayer}
-                  colors={colors}
-                  icon={<HandsPrayingIcon size={14} color={colors.accent} weight="light" />}
-                />
+                <SoapSectionDisplay value={soapResponses.scripture} colors={colors} />
+                <SoapSectionDisplay value={soapResponses.observation} colors={colors} />
+                <SoapSectionDisplay value={soapResponses.application} colors={colors} />
+                <SoapSectionDisplay value={soapResponses.prayer} colors={colors} />
               </View>
             )}
 
-            {/* Question Responses */}
             {entry.questionResponses && entry.questionResponses.length > 0 && (
               <View style={{ marginTop: entry.content.trim().length > 0 || hasSoapContent ? Spacing['8'] : 0 }}>
-                {(entry.content.trim().length > 0 || hasSoapContent) && (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing['2'], marginBottom: Spacing['5'] }}>
-                    <ChatCircleDotsIcon size={14} color={colors.accent} weight="light" />
-                    <Text
-                      style={{
-                        ...Typography.cardMeta,
-                        color: colors.accent,
-                        opacity: 0.8,
-                      }}
-                    >
-                      Reflections
-                    </Text>
-                  </View>
-                )}
-
                 {entry.questionResponses
                   .filter((qr) => qr.response.trim().length > 0)
                   .map((qr) => (
@@ -343,22 +238,8 @@ export default function JournalDetailScreen() {
               </View>
             )}
 
-            {/* Prayer Requests */}
             {entry.prayerRequests && entry.prayerRequests.length > 0 && (
               <View style={{ marginTop: Spacing['8'] }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing['2'], marginBottom: Spacing['5'] }}>
-                  <HandsPrayingIcon size={14} color={colors.accent} weight="light" />
-                  <Text
-                    style={{
-                      ...Typography.cardMeta,
-                      color: colors.accent,
-                      opacity: 0.8,
-                    }}
-                  >
-                    Prayer Requests
-                  </Text>
-                </View>
-
                 {entry.prayerRequests.map((prayer) => (
                   <View
                     key={prayer.id}
@@ -399,13 +280,12 @@ export default function JournalDetailScreen() {
                       {prayer.isAnswered && prayer.answeredAt && (
                         <Text
                           style={{
-                            fontFamily: FontFamily.ui,
-                            fontSize: 11,
-                            color: colors.accent,
+                            ...Typography.cardMeta,
+                            color: colors.textMuted,
                             marginTop: Spacing['1'],
                           }}
                         >
-                          Answered {format(new Date(prayer.answeredAt), 'MMM d, yyyy')}
+                          {format(new Date(prayer.answeredAt), 'MMM d, yyyy')}
                         </Text>
                       )}
                     </View>

@@ -26,6 +26,8 @@ describe('JA-1 journal composer keyboard-dismiss wrapper', () => {
     expect(composer).toContain("label: 'SOAP'");
     expect(composer).toContain('<VoiceInputBar');
     expect(composer).toContain('accessibilityLabel="Add prayer"');
+    expect(composer).toContain('accessibilityLabel="New prayer request"');
+    expect(composer).toContain('accessibilityLabel={`Response to prompt ${index + 1}`}');
     expect(composer).not.toContain('accessibilityElementsHidden');
   });
 });
