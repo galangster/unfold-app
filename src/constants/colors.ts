@@ -11,10 +11,14 @@ export interface ColorTheme {
   backgroundPure: string;
   backgroundElevated: string;
 
-  // Text hierarchy
+  // Text hierarchy — use each token only in its contrast role
+  /** Body copy. Dark 17.49:1 / light 16.66:1 on `background`. */
   text: string;
+  /** Readable meta (12–15px). Dark 6.56:1 / light 5.94:1. Use this for real secondary copy. */
   textMuted: string;
+  /** Icons and placeholders only. Dark 3.46:1 / light 3.88:1 — fails 4.5:1 as text. */
   textSubtle: string;
+  /** Non-text chrome. Dark 2.04:1 / light 2.52:1. */
   textHint: string;
 
   // Interactive elements
@@ -35,10 +39,9 @@ export interface ColorTheme {
   // Accent (minimal use)
   accent: string;
   /**
-   * Text color for accent backgrounds. NOT universally WCAG-safe: white on
-   * the dark-theme gold accent (#C8A55C) is ~2.34:1. Prefer
-   * `colors.background` as ink on accent fills (see GlowingCTA in
-   * ThreeStepPaywall) and verify contrast per surface.
+   * Ink on accent fills. Same value as `background` so filled accent
+   * controls do not paint white on gold (2.34:1). Dark 8.48:1 / light 4.73:1
+   * on the theme accent.
    */
   contrastText?: string;
 
@@ -77,7 +80,7 @@ export const DarkColors: ColorTheme = {
 
   // Accent - warm gold (the signature)
   accent: '#C8A55C',
-  contrastText: '#FFFFFF',
+  contrastText: '#0A0A0A',
 
   // Status
   success: 'rgba(74, 222, 128, 0.9)',
@@ -92,7 +95,6 @@ export const LightColors: ColorTheme = {
   backgroundElevated: '#FFFFFF',
 
   // Text hierarchy - warm dark tones
-  // Contrast ratios on #FAF7F2: text 16.7:1, muted 5.9:1, subtle 3.9:1, hint 2.5:1
   text: '#1C1710',
   textMuted: 'rgba(28, 23, 16, 0.68)',
   textSubtle: 'rgba(28, 23, 16, 0.55)',
@@ -115,11 +117,12 @@ export const LightColors: ColorTheme = {
 
   // Accent - deep warm gold for light mode (4.73:1 on cream — WCAG AA)
   accent: '#866B2F',
-  contrastText: '#FFFFFF',
+  contrastText: '#FAF7F2',
 
   // Status
   success: 'rgba(34, 197, 94, 0.9)',
-  error: 'rgba(239, 68, 68, 0.9)',
+  // 4.70:1 on #FAF7F2 — same hue as #EF4444, darker lightness
+  error: 'rgba(204, 25, 38, 0.9)',
 };
 
 // Default export for backwards compatibility - will be overridden by theme context
