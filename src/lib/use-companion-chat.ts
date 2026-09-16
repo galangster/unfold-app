@@ -263,7 +263,7 @@ async function consumeSSE(
       return 'done';
     }
     if (event.error) {
-      onError(typeof event.error === 'string' ? event.error : undefined);
+      onError(typeof event.error === 'string' ? event.error : '');
       return 'error';
     }
     return null;
