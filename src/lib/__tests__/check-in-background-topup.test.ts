@@ -20,6 +20,7 @@ const mockState = {
   user: { hasCompletedOnboarding: true, isPremium: true },
   middayEnabled: true,
   eveningEnabled: true,
+  resetDuringCustomerInfo: false,
 };
 
 const mockScheduleMidday = jest.fn(async (_clock?: unknown) => ({ ids: ['mid-0'], complete: true }));
@@ -42,10 +43,15 @@ jest.mock('@/lib/mmkv-storage', () => ({
 jest.mock('@/lib/sync-session-fence', () => ({
   isLocalResetInProgress: () => mockState.reset,
 }));
+const mockGetCustomerInfo = jest.fn(async () => {
+  if (mockState.resetDuringCustomerInfo) mockState.reset = true;
+  return mockState.customerInfo;
+});
+
 jest.mock('@/lib/revenuecatClient', () => ({
   isRevenueCatEnabled: () => mockState.revenueCatEnabled,
   hasRevenueCatConfigurationAttemptFailed: () => mockState.configureFailed,
-  getCustomerInfo: jest.fn(async () => mockState.customerInfo),
+  getCustomerInfo: () => mockGetCustomerInfo(),
 }));
 jest.mock('@/lib/premium-state', () => ({
   getEffectivePremiumAccessPolicy: () => {
@@ -131,6 +137,8 @@ function resetMocks() {
   mockState.user = { hasCompletedOnboarding: true, isPremium: true };
   mockState.middayEnabled = true;
   mockState.eveningEnabled = true;
+  mockState.resetDuringCustomerInfo = false;
+  mockGetCustomerInfo.mockClear();
   mockScheduleMidday.mockClear();
   mockScheduleEvening.mockClear();
   mockCancelMidday.mockClear();
@@ -180,6 +188,18 @@ describe('check-in background top-up', () => {
     );
     expect(mockScheduleMidday).not.toHaveBeenCalled();
     expect(mockCancelMidday).not.toHaveBeenCalled();
+  });
+
+  it('does not recreate check-ins when a reset starts during the RevenueCat read', async () => {
+    mockState.resetDuringCustomerInfo = true;
+    await expect(runCheckInBackgroundTopup()).resolves.toBe(
+      BackgroundFetch.BackgroundFetchResult.NoData,
+    );
+    expect(mockGetCustomerInfo).toHaveBeenCalled();
+    expect(mockUpdateUser).not.toHaveBeenCalled();
+    expect(mockScheduleMidday).not.toHaveBeenCalled();
+    expect(mockCancelMidday).not.toHaveBeenCalled();
+    expect(mockCancelEvening).not.toHaveBeenCalled();
   });
 
   it('defers when the store has not hydrated', async () => {

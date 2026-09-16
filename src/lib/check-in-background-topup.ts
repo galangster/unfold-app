@@ -64,7 +64,12 @@ export async function waitForUnfoldStoreHydration(): Promise<boolean> {
  *
  * Returns false when the source has not spoken — caller must not write.
  */
+function shouldAbortBackgroundTopup(): boolean {
+  return isRecoverySession() || isLocalResetInProgress();
+}
+
 export async function prepareCheckInBackgroundPremium(): Promise<boolean> {
+  if (shouldAbortBackgroundTopup()) return false;
   if (useUIState.getState().revenueCatResolved) return true;
 
   if (!isRevenueCatEnabled()) {
@@ -72,11 +77,18 @@ export async function prepareCheckInBackgroundPremium(): Promise<boolean> {
       logger.log('[check-in-topup] RevenueCat configure failed; leaving policy unresolved');
       return false;
     }
+    if (shouldAbortBackgroundTopup()) return false;
     useUIState.getState().setRevenueCatResolved();
     return true;
   }
 
   const result = await getCustomerInfo();
+  // Reset can start while Purchases is in flight. Do not write the old
+  // profile's entitlement onto a store that Delete Everything is wiping.
+  if (shouldAbortBackgroundTopup()) {
+    logger.log('[check-in-topup] Reset began during RevenueCat read; not applying');
+    return false;
+  }
   if (!result.ok) {
     logger.log(`[check-in-topup] Customer info unavailable (${result.reason}); deferring`);
     return false;
@@ -93,12 +105,8 @@ export async function runCheckInBackgroundTopup(): Promise<BackgroundFetch.Backg
     if (Platform.OS === 'web') {
       return BackgroundFetch.BackgroundFetchResult.NoData;
     }
-    if (isRecoverySession()) {
-      logger.log('[check-in-topup] Recovery session; not touching OS queue');
-      return BackgroundFetch.BackgroundFetchResult.NoData;
-    }
-    if (isLocalResetInProgress()) {
-      logger.log('[check-in-topup] Local reset in progress; not touching OS queue');
+    if (shouldAbortBackgroundTopup()) {
+      logger.log('[check-in-topup] Recovery or reset; not touching OS queue');
       return BackgroundFetch.BackgroundFetchResult.NoData;
     }
 
@@ -107,9 +115,13 @@ export async function runCheckInBackgroundTopup(): Promise<BackgroundFetch.Backg
       logger.log('[check-in-topup] Store not hydrated; deferring');
       return BackgroundFetch.BackgroundFetchResult.NoData;
     }
+    if (shouldAbortBackgroundTopup()) {
+      logger.log('[check-in-topup] Reset began during hydration; not touching OS queue');
+      return BackgroundFetch.BackgroundFetchResult.NoData;
+    }
 
     const premiumReady = await prepareCheckInBackgroundPremium();
-    if (!premiumReady) {
+    if (!premiumReady || shouldAbortBackgroundTopup()) {
       return BackgroundFetch.BackgroundFetchResult.NoData;
     }
 
