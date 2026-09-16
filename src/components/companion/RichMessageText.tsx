@@ -194,7 +194,7 @@ function splitVersesInSegment(seg: InlineSegment): TextSegment[] {
 function parseInlineMarkdown(text: string): InlineSegment[] {
   // Match **bold** and *italic* (bold first since ** contains *)
   const regex = /\*\*(.+?)\*\*|\*(.+?)\*/g;
-  const result: TextSegment[] = [];
+  const result: InlineSegment[] = [];
   let cursor = 0;
   let inlineMatch: RegExpExecArray | null;
 
