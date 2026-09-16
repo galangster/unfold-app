@@ -64,6 +64,15 @@ describe('parseSegments — emphasis markers around verse references', () => {
     ]);
   });
 
+  it('still chips a citation when emphasis splits the book from the chapter', () => {
+    const segments = parseSegments('**Read Acts** 5:27-32 tonight.');
+    expect(segments).toEqual([
+      { type: 'bold', content: 'Read ' },
+      { type: 'verse', reference: 'Acts 5:27-32' },
+      { type: 'text', content: ' tonight.' },
+    ]);
+  });
+
   it('chips Acts 5-7 as one chapter-range pill, not Acts 5 plus leftover -7', () => {
     const segments = parseSegments('Acts 5-7 is not theoretical.');
     expect(segments).toEqual([

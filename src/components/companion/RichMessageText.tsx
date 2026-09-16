@@ -132,10 +132,51 @@ export function preprocessMarkdown(text: string): string {
  * Markdown first, then verse pills. Cutting refs first splits a pair like
  * `**Read Acts 5:27-32 aloud together.**` into `**Read ` + pill + ` aloud…**`,
  * so the leftover asterisks render literally. Parsing emphasis first keeps
- * the span intact; pills are restored inside each text/bold/italic run.
+ * the span intact; pills are restored by scanning the concatenated runs so a
+ * citation split across markers (`**Read Acts** 5:27-32`) still chips.
  */
 export function parseSegments(text: string): TextSegment[] {
-  return parseInlineMarkdown(text).flatMap(splitVersesInSegment);
+  const inline = parseInlineMarkdown(text);
+  const concatenated = inline.map((seg) => seg.content).join('');
+  const refs = extractVerseRefs(concatenated);
+  if (refs.length === 0) return inline;
+
+  const starts: number[] = [];
+  let offset = 0;
+  for (const seg of inline) {
+    starts.push(offset);
+    offset += seg.content.length;
+  }
+
+  const chunks: TextSegment[] = [];
+  let cursor = 0;
+  let segIndex = 0;
+
+  const emitPlain = (end: number) => {
+    while (cursor < end && segIndex < inline.length) {
+      const seg = inline[segIndex];
+      const segStart = starts[segIndex];
+      const segEnd = segStart + seg.content.length;
+      const from = cursor - segStart;
+      const to = Math.min(end, segEnd) - segStart;
+      if (to > from) {
+        chunks.push({ type: seg.type, content: seg.content.slice(from, to) });
+      }
+      cursor = segStart + to;
+      if (cursor >= segEnd) segIndex += 1;
+    }
+  };
+
+  for (const ref of refs) {
+    emitPlain(ref.startIndex);
+    chunks.push({ type: 'verse', reference: ref.reference });
+    cursor = ref.endIndex;
+    while (segIndex < inline.length && starts[segIndex] + inline[segIndex].content.length <= cursor) {
+      segIndex += 1;
+    }
+  }
+  emitPlain(concatenated.length);
+  return chunks;
 }
 
 function extractVerseRefs(text: string): ScriptureRef[] {
@@ -167,26 +208,6 @@ function extractVerseRefs(text: string): ScriptureRef[] {
 
   allRefs.sort((a, b) => a.startIndex - b.startIndex);
   return allRefs;
-}
-
-function splitVersesInSegment(seg: InlineSegment): TextSegment[] {
-  const refs = extractVerseRefs(seg.content);
-  if (refs.length === 0) return [seg];
-
-  const chunks: TextSegment[] = [];
-  let cursor = 0;
-
-  for (const ref of refs) {
-    if (ref.startIndex > cursor) {
-      chunks.push({ type: seg.type, content: seg.content.slice(cursor, ref.startIndex) });
-    }
-    chunks.push({ type: 'verse', reference: ref.reference });
-    cursor = ref.endIndex;
-  }
-  if (cursor < seg.content.length) {
-    chunks.push({ type: seg.type, content: seg.content.slice(cursor) });
-  }
-  return chunks;
 }
 
 // ── Parse inline bold/italic markdown within a text chunk ────────────────
