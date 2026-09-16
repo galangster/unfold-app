@@ -643,19 +643,23 @@ function mapMessage(
   const conversationId = asString(row.conversationId);
   if (!conversationId) return null;
   const remoteInterrupted = asBoolean(row.interrupted);
+  const status = (asString(row.status) ?? 'complete') as CompanionMessage['status'];
   return {
     id: record.id,
     conversationId,
     role: (asString(row.role) === 'user' ? 'user' : 'companion'),
     content: asString(row.content) ?? '',
     timestamp: Date.parse(asString(row.timestamp) ?? recordUpdatedAt(record)),
-    status: (asString(row.status) ?? 'complete') as CompanionMessage['status'],
+    status,
     citations: asArray(row.citations) as CompanionMessage['citations'],
     suggestions: asArray<string>(row.suggestions),
     feedback: (asString(row.feedback) as CompanionMessage['feedback']) ?? null,
     feedbackReason: asString(row.feedbackReason) ?? null,
     deepLinks: asArray(row.deepLinks) as CompanionMessage['deepLinks'],
     interrupted: remoteInterrupted === undefined ? current?.interrupted : remoteInterrupted,
+    errorCopy: asString(row.errorCopy) ?? (
+      status === 'complete' || remoteInterrupted === false ? undefined : current?.errorCopy
+    ),
     updatedAt: recordUpdatedAt(record),
   };
 }

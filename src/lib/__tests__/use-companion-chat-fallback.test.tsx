@@ -92,7 +92,7 @@ jest.mock('../companion-service', () => ({
 
 import { useCompanionChat } from '../use-companion-chat';
 import { useCompanionChatStore } from '../companion-chat-store';
-import { COMPANION_ERROR_CAPACITY } from '../companion-error-copy';
+import { COMPANION_ERROR_CAPACITY, COMPANION_ERROR_CONNECTION } from '../companion-error-copy';
 
 const completedMockUser = (): MockUser => ({
   name: 'Nick',
@@ -1101,6 +1101,7 @@ describe('active request cancellation', () => {
       status: 'error',
       interrupted: true,
     });
+    expect(stoppedReply?.errorCopy).toBeUndefined();
 
     mockFetch.mockResolvedValueOnce(streamingResponseFromChunks([
       'data: {"t":"A complete retry"}\n\n',
@@ -1299,6 +1300,7 @@ describe('server error events never trigger the non-streaming fallback (P0-3)', 
     expect(reply?.status).toBe('error');
     expect(reply?.interrupted).toBe(true);
     expect(reply?.content).toBe('Partial thought'); // never rewound
+    expect(reply?.errorCopy).toBe(COMPANION_ERROR_CAPACITY);
     expect(hook!.error).toMatch(/incomplete/i);
   });
 
@@ -1329,6 +1331,7 @@ describe('server error events never trigger the non-streaming fallback (P0-3)', 
     expect(reply?.status).toBe('error');
     expect(reply?.interrupted).toBe(true);
     expect(reply?.content).toBe('Half an answer');
+    expect(reply?.errorCopy).toBe(COMPANION_ERROR_CONNECTION);
     expect(hook!.error).toMatch(/incomplete/i);
   });
 
@@ -1439,6 +1442,7 @@ describe('network-drop resilience (WR-11)', () => {
     expect(reply?.status).toBe('error');
     expect(reply?.interrupted).toBe(true);
     expect(reply?.content).toBe('Partial answer');
+    expect(reply?.errorCopy).toBe(COMPANION_ERROR_CONNECTION);
     expect(outcome).toBe('sent');
     expect(hook!.error).toMatch(/incomplete/i);
     expect(hook!.error).not.toMatch(/Something went wrong/);
@@ -1516,6 +1520,7 @@ describe('foreground resume reconciliation', () => {
       interrupted: true,
       content: 'Elijah heard a gentle whisper',
     });
+    expect(reply?.errorCopy).toBeUndefined();
   });
 
   it('preserves a short suspension and aborts a request after the existing stall budget', async () => {

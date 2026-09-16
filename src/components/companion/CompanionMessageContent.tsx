@@ -19,7 +19,7 @@ import { Typography } from '@/constants/typography';
 import { RichMessageText } from './RichMessageText';
 import { DevotionalCard } from './DevotionalCard';
 import type { CompanionMessage } from '@/lib/companion-chat-store';
-import { COMPANION_ERROR_CONNECTION, companionFacingError } from '@/lib/companion-error-copy';
+import { companionFacingError, companionInterruptedFacingError } from '@/lib/companion-error-copy';
 import { smartQuotes } from '@/lib/smart-quotes';
 import { splitStreamingParagraphs } from '@/lib/streaming-paragraphs';
 
@@ -122,11 +122,14 @@ export function CompanionMessageContent({
   if (isStreaming) wasStreamingRef.current = true;
 
   // Error rows: an interrupted reply keeps its partial text in `content`
-  // (rendered below as normal reply text, with a short error line beneath);
-  // every other error row stores the error string itself in `content`.
-  const interruptedReply = message.status === 'error' && message.interrupted ? message.content : '';
-  const errorText = interruptedReply
-    ? COMPANION_ERROR_CONNECTION
+  // (rendered below as normal reply text, with a short error line beneath
+  // when a cause was stored). User-stop and unknown causes have no line —
+  // do not invent a connection error. Every other error row stores the
+  // error string itself in `content`.
+  const isInterrupted = message.status === 'error' && Boolean(message.interrupted);
+  const interruptedReply = isInterrupted ? message.content : '';
+  const errorText = isInterrupted
+    ? companionInterruptedFacingError(message.errorCopy)
     : companionFacingError(message.content);
   const errorBoxStyle: ViewStyle = {
     marginTop: interruptedReply ? Spacing['3'] : undefined,
@@ -182,7 +185,7 @@ export function CompanionMessageContent({
                 onVersePress={onVersePress ?? noopVersePress}
               />
             )}
-            {onRetry ? (
+            {errorText.length > 0 && (onRetry ? (
               <Pressable
                 onPress={onRetry}
                 accessibilityRole="button"
@@ -198,7 +201,7 @@ export function CompanionMessageContent({
               >
                 <Text key={`error-font-scale-${fontScale}`} style={errorTextStyle}>{errorText}</Text>
               </View>
-            )}
+            ))}
           </>
         ) : isComplete && onVersePress ? (
           // Complete message — rich text with verse pills + blockquotes

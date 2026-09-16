@@ -531,6 +531,7 @@ export function useCompanionChat() {
           suggestions: [],
           deepLinks: [],
           interrupted: false,
+          errorCopy: undefined,
         }, streamConversationId);
       } else {
         // User message — uuid ids: Date.now() collides when two messages land
@@ -720,11 +721,12 @@ export function useCompanionChat() {
           cancelThrottle();
           if (isStreamConversationVisible()) setIsSearching(false);
           if (accumulatedText) {
-            // Preserve the partial text and its interruption state across launches.
+            // Preserve the partial text and its classified cause across launches.
             updateMessage(companionId, {
               content: accumulatedText,
               status: 'error',
               interrupted: true,
+              errorCopy: serverErrorMessage,
             }, streamConversationId);
             if (isStreamConversationVisible()) {
               setError(`${serverErrorMessage} Your reply may be incomplete.`);
@@ -755,6 +757,7 @@ export function useCompanionChat() {
             content: accumulatedText,
             status: 'error',
             interrupted: true,
+            errorCopy: COMPANION_ERROR_CONNECTION,
           }, streamConversationId);
           if (isStreamConversationVisible()) {
             setError(`${COMPANION_ERROR_CONNECTION} Your reply may be incomplete.`);
@@ -851,11 +854,17 @@ export function useCompanionChat() {
           const streamConv = useCompanionChatStore.getState().conversations
             .find((c) => c.id === streamConversationId);
           const current = (streamConv?.messages ?? []).find((m) => m.id === companionId);
+          const hasPartial = Boolean(current?.content);
           updateMessage(companionId, {
             status: 'error',
-            interrupted: Boolean(current?.content),
+            interrupted: hasPartial,
+            // User-stop must not invent a connection error. Other aborts
+            // (stall, background abort) keep connection copy on the partial.
+            errorCopy: inFlightRequest.stoppedByUser || !hasPartial
+              ? undefined
+              : COMPANION_ERROR_CONNECTION,
           }, streamConversationId);
-          return current?.content ? 'sent' : 'error';
+          return hasPartial ? 'sent' : 'error';
         } else {
           const analyzed = analyzeNetworkError(err);
           // The budget copy (with its reset estimate) beats the generic classifier.
@@ -870,6 +879,7 @@ export function useCompanionChat() {
               content: accumulatedText,
               status: 'error',
               interrupted: true,
+              errorCopy: userFriendlyMessage,
             }, streamConversationId);
             if (isStreamConversationVisible()) {
               setError(`${userFriendlyMessage} Your reply may be incomplete.`);

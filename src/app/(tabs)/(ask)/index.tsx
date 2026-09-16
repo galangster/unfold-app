@@ -123,6 +123,8 @@ const MessageItem = React.memo(function MessageItem({
   prev.item.id === next.item.id &&
   prev.item.content === next.item.content &&
   prev.item.status === next.item.status &&
+  prev.item.interrupted === next.item.interrupted &&
+  prev.item.errorCopy === next.item.errorCopy &&
   prev.isStreaming === next.isStreaming &&
   prev.fontScale === next.fontScale &&
   prev.motionActive === next.motionActive &&

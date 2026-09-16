@@ -24,4 +24,17 @@ describe('companionMessageSyncData interrupted flag', () => {
   it('leaves omitted interrupted rows without the key', () => {
     expect('interrupted' in companionMessageSyncData(base, 'c1')).toBe(false);
   });
+
+  it('carries a stored interrupt cause so another device can keep capacity vs connection', () => {
+    const data = companionMessageSyncData({
+      ...base,
+      interrupted: true,
+      errorCopy: 'Companion is over capacity. Try again in a moment.',
+    }, 'c1');
+    expect(data.errorCopy).toBe('Companion is over capacity. Try again in a moment.');
+  });
+
+  it('omits errorCopy when the user stopped or no cause was stored', () => {
+    expect('errorCopy' in companionMessageSyncData({ ...base, interrupted: true }, 'c1')).toBe(false);
+  });
 });

@@ -19,3 +19,9 @@ export function companionFacingError(
   if (raw && CAPACITY_HINT.test(raw.toLowerCase())) return COMPANION_ERROR_CAPACITY;
   return COMPANION_ERROR_CONNECTION;
 }
+
+/** Stored interrupt cause, or empty when the user stopped / the cause was never saved. */
+export function companionInterruptedFacingError(errorCopy?: string | null): string {
+  if (!errorCopy) return '';
+  return companionFacingError(errorCopy);
+}

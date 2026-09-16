@@ -3,6 +3,7 @@ import {
   COMPANION_ERROR_CAPACITY,
   COMPANION_ERROR_CONNECTION,
   companionFacingError,
+  companionInterruptedFacingError,
 } from '../companion-error-copy';
 
 describe('companionFacingError', () => {
@@ -33,5 +34,19 @@ describe('companionFacingError', () => {
   it('passes daily AI budget copy through', () => {
     const budget = dailyAiBudgetMessage(3600);
     expect(companionFacingError(budget)).toBe(budget);
+  });
+});
+
+describe('companionInterruptedFacingError', () => {
+  it('shows nothing when the user stopped or no cause was stored', () => {
+    expect(companionInterruptedFacingError(undefined)).toBe('');
+    expect(companionInterruptedFacingError(null)).toBe('');
+    expect(companionInterruptedFacingError('')).toBe('');
+  });
+
+  it('keeps capacity and connection copy when a cause was stored', () => {
+    expect(companionInterruptedFacingError(COMPANION_ERROR_CAPACITY)).toBe(COMPANION_ERROR_CAPACITY);
+    expect(companionInterruptedFacingError('Model overloaded')).toBe(COMPANION_ERROR_CAPACITY);
+    expect(companionInterruptedFacingError(COMPANION_ERROR_CONNECTION)).toBe(COMPANION_ERROR_CONNECTION);
   });
 });

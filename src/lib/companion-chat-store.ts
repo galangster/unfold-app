@@ -66,6 +66,12 @@ export interface CompanionMessage {
    * Travels with the sync record so another device renders it the same way.
    */
   interrupted?: boolean;
+  /**
+   * Facing copy for an interrupted partial. Empty/omitted when the user
+   * stopped the stream or the cause was never known — the bubble must not
+   * invent a connection error in those cases.
+   */
+  errorCopy?: string;
 }
 
 export interface Conversation {
@@ -353,10 +359,16 @@ export const useCompanionChatStore = create<CompanionChatState>()(
                     : updates.interrupted !== undefined
                       ? updates.interrupted
                       : m.interrupted;
+                  const nextErrorCopy = updates.status === 'complete' && !('errorCopy' in updates)
+                    ? undefined
+                    : 'errorCopy' in updates
+                      ? updates.errorCopy
+                      : m.errorCopy;
                   changedMessage = {
                     ...m,
                     ...updates,
                     interrupted: nextInterrupted,
+                    errorCopy: nextErrorCopy,
                     updatedAt: now,
                   };
                   return changedMessage;

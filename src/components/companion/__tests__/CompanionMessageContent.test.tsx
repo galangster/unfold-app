@@ -133,7 +133,10 @@ describe('CompanionMessageContent error rows', () => {
   it('renders an interrupted partial reply as reply text with a separate error line', () => {
     const onRetry = jest.fn();
     const partial = 'Elijah heard a gentle whisper in 1 Kings 19:12, and';
-    const tree = render(errorMessage({ content: partial, interrupted: true }), onRetry);
+    const tree = render(
+      errorMessage({ content: partial, interrupted: true, errorCopy: COMPANION_ERROR_CONNECTION }),
+      onRetry,
+    );
 
     expect(replyTexts(tree)).toEqual([partial]);
     expect(errorTexts(tree)).toEqual([COMPANION_ERROR_CONNECTION]);
@@ -146,8 +149,31 @@ describe('CompanionMessageContent error rows', () => {
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps a stored capacity cause on an interrupted partial', () => {
+    const partial = 'The companion began to answer, then';
+    const tree = render(
+      errorMessage({ content: partial, interrupted: true, errorCopy: COMPANION_ERROR_CAPACITY }),
+      jest.fn(),
+    );
+
+    expect(replyTexts(tree)).toEqual([partial]);
+    expect(errorTexts(tree)).toEqual([COMPANION_ERROR_CAPACITY]);
+  });
+
+  it('does not invent a connection error when the user stopped the stream', () => {
+    const tree = render(errorMessage({ content: 'A partial answer', interrupted: true }), jest.fn());
+
+    expect(replyTexts(tree)).toEqual(['A partial answer']);
+    expect(errorTexts(tree)).toEqual([]);
+    expect(tree.root.findAllByProps({ accessibilityLabel: `Retry. ${COMPANION_ERROR_CONNECTION}` })).toHaveLength(0);
+  });
+
   it('offers no retry affordance for an interrupted reply without a handler', () => {
-    const tree = render(errorMessage({ content: 'A partial answer', interrupted: true }));
+    const tree = render(errorMessage({
+      content: 'A partial answer',
+      interrupted: true,
+      errorCopy: COMPANION_ERROR_CONNECTION,
+    }));
 
     expect(replyTexts(tree)).toEqual(['A partial answer']);
     expect(errorTexts(tree)).toEqual([COMPANION_ERROR_CONNECTION]);
@@ -177,10 +203,8 @@ describe('CompanionMessageContent error rows', () => {
   it('falls back to connection copy when the error row has no content', () => {
     expect(errorTexts(render(errorMessage(), jest.fn()))).toEqual([COMPANION_ERROR_CONNECTION]);
     expect(errorTexts(render(errorMessage()))).toEqual([COMPANION_ERROR_CONNECTION]);
-    // An interrupted row that never received any text reads the same way.
-    expect(errorTexts(render(errorMessage({ interrupted: true }), jest.fn()))).toEqual([
-      COMPANION_ERROR_CONNECTION,
-    ]);
+    // An interrupted row with no stored cause must not blame the network.
+    expect(errorTexts(render(errorMessage({ interrupted: true }), jest.fn()))).toEqual([]);
     expect(replyTexts(render(errorMessage({ interrupted: true }), jest.fn()))).toEqual([]);
   });
 
