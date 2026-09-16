@@ -177,7 +177,8 @@
       "expo-sqlite",
       "expo-status-bar",
       "expo-video",
-      "expo-web-browser"
+      "expo-web-browser",
+      "@config-plugins/expo-uiscene-lifecycle"
     ],
     "experiments": {
       "typedRoutes": true,

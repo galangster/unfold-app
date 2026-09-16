@@ -1,0 +1,18 @@
+{
+  "name": "@config-plugins/expo-uiscene-lifecycle",
+  "version": "0.1.1",
+  "description": "Official Expo SDK 57 UIScene plugin, vendored: unpublished on npm, plus expo/config-plugins#329 so the installed expo version is checked and the SDK 57 #if os(iOS) AppDelegate block is stripped cleanly.",
+  "main": "index.js",
+  "license": "MIT",
+  "homepage": "https://github.com/expo/config-plugins/tree/main/packages/expo-uiscene-lifecycle",
+  "files": [
+    "app.plugin.js",
+    "index.js"
+  ],
+  "peerDependencies": {
+    "expo": "*"
+  },
+  "dependencies": {
+    "semver": "^7.8.1"
+  }
+}
