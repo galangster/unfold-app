@@ -29,6 +29,7 @@ import { useBibleChapter } from '@/hooks/useBibleChapter';
 import { buildBibleReaderLayoutKey, findVisibleVerseAnchor, isCurrentBibleLayoutReport, resolveActiveVerseScrollTarget, resolveBibleReaderLocation, resolveBibleResizeVerseAnchor, resolveInitialVerseAnchor, resolveRecordedVerseAnchor, resolveTargetVerse, resolveTranslationRefreshVerse, resolveVerseScrollTarget, shouldFlashVerseForScroll } from '@/lib/bible-reader-params';
 import { useBibleDb } from '@/hooks/useBibleDb';
 import { BIBLE_BOOKS, getNextChapter, getPreviousChapter, formatScriptureReference } from '@/lib/bible-constants';
+import { accentFillInk } from '@/lib/bible-hub-category-palette';
 import type { BibleTranslation } from '@/lib/bible-db';
 import { ReadingSettingsSheet } from '@/components/bible/ReadingSettingsSheet';
 import { BookChapterNavigator } from '@/components/bible/BookChapterNavigator';
@@ -432,6 +433,7 @@ const VerseItem = React.memo(function VerseItem({
 
 export default function BibleReaderScreen() {
   const { colors, isDark } = useTheme();
+  const accentInk = accentFillInk(colors.accent, colors.contrastText ?? colors.background);
   const reducedMotion = useReducedMotion();
   const adaptiveLayout = useAdaptiveLayout();
   const swipeMetrics = useMemo(
@@ -1701,7 +1703,7 @@ export default function BibleReaderScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Save note"
                 >
-                  <Text style={[styles.noteButtonText, { color: colors.background }]}>Save</Text>
+                  <Text style={[styles.noteButtonText, { color: accentInk }]}>Save</Text>
                 </TouchableOpacity>
               </View>
             </View>

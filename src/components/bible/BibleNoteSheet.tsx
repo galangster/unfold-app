@@ -45,6 +45,7 @@ import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import type { BibleHighlight } from '@/lib/store';
 import { formatScriptureReference } from '@/lib/bible-constants';
+import { accentFillInk } from '@/lib/bible-hub-category-palette';
 
 interface BibleNoteSheetProps {
   highlight: BibleHighlight | null;
@@ -58,6 +59,7 @@ const RUBBER_BAND_FACTOR = 0.3;
 
 export function BibleNoteSheet({ highlight, onClose, onSave, onDelete }: BibleNoteSheetProps) {
   const { colors, isDark } = useTheme();
+  const accentInk = accentFillInk(colors.accent, colors.contrastText ?? colors.background);
   const reducedMotion = useReducedMotion();
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState('');
@@ -270,7 +272,7 @@ export function BibleNoteSheet({ highlight, onClose, onSave, onDelete }: BibleNo
                     activeOpacity={0.7}
                     testID="bible-note-save"
                   >
-                    <Text style={[styles.saveText, { color: colors.background }]}>Save</Text>
+                    <Text style={[styles.saveText, { color: accentInk }]}>Save</Text>
                   </TouchableOpacity>
                 ) : (
                   <TouchableOpacity

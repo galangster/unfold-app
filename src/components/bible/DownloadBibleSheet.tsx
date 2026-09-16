@@ -7,6 +7,7 @@ import type { ColorTheme } from '@/constants/colors';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
+import { accentFillInk } from '@/lib/bible-hub-category-palette';
 
 const GENERIC_DOWNLOAD_ERROR = "Something went wrong. Please try again.";
 
@@ -69,6 +70,7 @@ export function DownloadBibleSheet({
   onDownload,
 }: DownloadBibleSheetProps) {
   const reducedMotion = useReducedMotion();
+  const accentInk = accentFillInk(colors.accent, colors.contrastText ?? colors.background);
 
   if (!visible) return null;
 
@@ -135,7 +137,7 @@ export function DownloadBibleSheet({
             accessibilityLabel={error ? 'Try again' : 'Download Bible'}
             accessibilityRole="button"
           >
-            <Text style={[styles.downloadButtonText, { fontFamily: FontFamily.uiMedium, color: colors.background }]}>
+            <Text style={[styles.downloadButtonText, { fontFamily: FontFamily.uiMedium, color: accentInk }]}>
               {error ? 'Try again' : 'Download'}
             </Text>
           </TouchableOpacity>

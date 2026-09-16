@@ -91,6 +91,12 @@ export function bibleHubContrastInk(background: string): typeof BIBLE_HUB_INK_BL
   return white > black ? BIBLE_HUB_INK_WHITE : BIBLE_HUB_INK_BLACK;
 }
 
+/** Ink on an accent fill. Keep theme `contrastText` when it is AA; otherwise pick black or white. */
+export function accentFillInk(accent: string, preferred: string): string {
+  if (contrastRatio(preferred, accent) >= BIBLE_HUB_MIN_TEXT_CONTRAST) return preferred;
+  return bibleHubContrastInk(accent);
+}
+
 function compositeHex(foreground: string, background: string, opacity: number): string {
   const [fr, fg, fb] = hexRgb(foreground);
   const [br, bg, bb] = hexRgb(background);

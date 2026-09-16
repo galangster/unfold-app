@@ -236,11 +236,12 @@ describe('ScriptureExplainSheet', () => {
     expect(content).toContain('Romans 8:28-30');
     expect(content).toContain('BSB');
     expect(content).toContain(baseProps.passageText);
-    expect(content).toContain('Meaning');
+    expect(content).not.toContain('Meaning');
+    expect(content).not.toContain('Study note');
     expect(content).toContain(successResponse.explanation.plainMeaning);
     expect(content).toContain(successResponse.explanation.contextNote);
     expect(content).toContain(successResponse.explanation.personalConnection);
-    expect(content).toContain('Carry this');
+    expect(content).not.toContain('Carry this');
     expect(content).toContain(successResponse.explanation.reflectionPrompt);
 
     expect(mockLogEvent).toHaveBeenCalledWith(AnalyticsEvents.SCRIPTURE_EXPLAIN_COMPLETED, expect.objectContaining({
@@ -269,7 +270,7 @@ describe('ScriptureExplainSheet', () => {
       await Promise.resolve();
     });
 
-    expect(textContent(tree)).toContain("The study note didn't load. Try again in a moment.");
+    expect(textContent(tree)).toContain("This didn't load. Try again in a moment.");
     expect(mockLogEvent).toHaveBeenCalledWith(AnalyticsEvents.SCRIPTURE_EXPLAIN_ERROR, expect.objectContaining({
       source: 'bible-reader',
       translation: 'BSB',

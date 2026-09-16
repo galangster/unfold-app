@@ -4,6 +4,7 @@ import {
   BIBLE_HUB_CATEGORY_TEXT_DARK,
   BIBLE_HUB_CATEGORY_TEXT_LIGHT,
   BIBLE_HUB_MIN_TEXT_CONTRAST,
+  accentFillInk,
   bibleHubBookChrome,
   bibleHubCategoryFill,
   bibleHubCategoryText,
@@ -11,6 +12,17 @@ import {
 } from '../bible-hub-category-palette';
 
 const CATEGORIES = Object.keys(BIBLE_HUB_CATEGORY_TEXT_DARK) as BibleCategory[];
+
+/** Mirrors `ACCENT_THEMES` in store.ts so this suite does not load NetInfo. */
+const ACCENT_THEMES = [
+  { id: 'gold', dark: '#C8A55C', light: '#9A7B3C' },
+  { id: 'ocean', dark: '#5B9BD5', light: '#3A6FA0' },
+  { id: 'rose', dark: '#D4828F', light: '#A8596A' },
+  { id: 'forest', dark: '#6DAF7B', light: '#4A8A5A' },
+  { id: 'lavender', dark: '#9B8EC4', light: '#6A5C9E' },
+  { id: 'ember', dark: '#D4895C', light: '#A86840' },
+  { id: 'slate', dark: '#7796C5', light: '#395D93' },
+] as const;
 
 describe('bible hub category palette contrast', () => {
   it('keeps historical dark text and restored light hues at 4.5:1 on composited fills', () => {
@@ -87,5 +99,27 @@ describe('bible hub category palette contrast', () => {
     expect(rest.backgroundColor).toBe(DarkColors.inputBackground);
     expect(rest.color).toBe(DarkColors.text);
     expect(rest.borderColor).toBe('transparent');
+  });
+
+  it('keeps accent-fill ink at 4.5:1, using black on Gold/Forest/Ember light', () => {
+    const cream = LightColors.contrastText ?? LightColors.background;
+    const nearBlack = DarkColors.contrastText ?? DarkColors.background;
+
+    expect(accentFillInk(LightColors.accent, cream)).toBe(cream);
+    expect(contrastRatio(accentFillInk(DarkColors.accent, nearBlack), DarkColors.accent))
+      .toBeGreaterThanOrEqual(BIBLE_HUB_MIN_TEXT_CONTRAST);
+
+    for (const theme of ACCENT_THEMES) {
+      const lightInk = accentFillInk(theme.light, cream);
+      const darkInk = accentFillInk(theme.dark, nearBlack);
+      expect(contrastRatio(lightInk, theme.light)).toBeGreaterThanOrEqual(BIBLE_HUB_MIN_TEXT_CONTRAST);
+      expect(contrastRatio(darkInk, theme.dark)).toBeGreaterThanOrEqual(BIBLE_HUB_MIN_TEXT_CONTRAST);
+    }
+
+    for (const id of ['gold', 'forest', 'ember'] as const) {
+      const theme = ACCENT_THEMES.find((item) => item.id === id);
+      if (!theme) throw new Error(`missing ${id} accent`);
+      expect(accentFillInk(theme.light, cream)).toBe('#000000');
+    }
   });
 });
