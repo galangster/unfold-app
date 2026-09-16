@@ -127,28 +127,33 @@ function escapeRegex(str: string): string {
  * (bookName)          — One of the 66+ Bible book name variants
  * \s+                 — Whitespace between book name and chapter
  * (\d{1,3})           — Chapter number (1-3 digits)
- * :                   — Chapter:verse separator
- * (\d{1,3})           — Verse number (1-3 digits)
- * (?:\s*[-–—]\s*\d{1,3})? — Optional verse range (e.g. "-17" or "–17")
- * (?:,\s*\d{1,3}(?:\s*[-–—]\s*\d{1,3})?)* — Optional additional verses/ranges (e.g. ", 19, 21-23")
+ * Then one of:
+ *   :verse[-verse][, verse[-verse]]*  — verse citation (e.g. "John 3:16-17")
+ *   [-–—]chapter                      — chapter range (e.g. "Acts 5-7")
+ *   (omitted)                         — chapter-only (e.g. "Psalm 23")
+ *
+ * Chapter ranges must be consumed here. Otherwise a chapter-only match
+ * chips "Acts 5" and leaves a dangling "-7".
  *
  * The 'g' and 'i' flags enable global matching and case-insensitivity.
  */
 function buildScriptureRegex(): RegExp {
   const bookPattern = buildBookPattern();
-  // Match: BookName chapter:verse[-verse][, verse[-verse]]*
+  // Match: BookName chapter[:verse[-verse][, verse[-verse]]* | -chapter]
   // Also matches references without a verse (just chapter), e.g. "Psalm 23"
   const pattern =
     `(?:${bookPattern})` +               // Book name
     `\\s+` +                              // Required space
     `\\d{1,3}` +                          // Chapter number
-    `(?:` +                               // Optional verse portion
+    `(?:` +                               // Optional verse or chapter-range
       `:\\d{1,3}` +                       // :verse
       `(?:\\s*[-–—]\\s*\\d{1,3})?` +      // Optional range end
       `(?:,\\s*\\d{1,3}` +               // Optional additional verse
         `(?:\\s*[-–—]\\s*\\d{1,3})?` +    // Optional range on additional verse
       `)*` +                              // Zero or more additional verses
-    `)?`;                                 // Verse portion is optional (chapter-only refs)
+      `|` +
+      `\\s*[-–—]\\s*\\d{1,3}` +            // Chapter range (Acts 5-7)
+    `)?`;                                 // Both portions optional (chapter-only refs)
 
   return new RegExp(pattern, 'gi');
 }

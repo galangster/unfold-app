@@ -15,6 +15,7 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
+  Platform,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import Animated, {
@@ -176,7 +177,7 @@ export const CompanionInput = memo(function CompanionInput({ onSend, onStop, isS
       <View
         style={{
           flexDirection: 'row',
-          alignItems: 'flex-end',
+          alignItems: 'center',
           backgroundColor: colors.inputBackground,
           borderWidth: 1,
           borderColor: colors.border,
@@ -211,8 +212,13 @@ export const CompanionInput = memo(function CompanionInput({ onSend, onStop, isS
             fontFamily: FontFamily.body,
             fontSize: FontSize.base,
             color: colors.text,
-            paddingTop: Spacing['2'],
-            paddingBottom: Spacing['2'],
+            // iOS multiline TextInput adds its own top inset; extra padding
+            // plus the old flex-end row sat the placeholder ~8pt low in the
+            // 44pt pill. Center the row and drop iOS padding so empty /
+            // 1-line sit on the mic's optical center. Parent still grows
+            // with the field, so 5-line + counter stay usable.
+            paddingTop: Platform.OS === 'ios' ? 0 : Spacing['2'],
+            paddingBottom: Platform.OS === 'ios' ? 0 : Spacing['2'],
             maxHeight: 120,
           }}
         />
@@ -224,7 +230,6 @@ export const CompanionInput = memo(function CompanionInput({ onSend, onStop, isS
               fontFamily: FontFamily.ui,
               fontSize: FontSize.xs,
               color: isOverMessageLimit ? colors.error : colors.textHint,
-              marginBottom: 9,
               marginLeft: Spacing['1.5'],
               minWidth: 74,
               textAlign: 'right',
