@@ -125,6 +125,8 @@ import { ScriptureTapSheet } from '@/components/ScriptureTapSheet';
 import { DevotionalReaderPreferencesSheet } from '@/components/reading/DevotionalReaderPreferencesSheet';
 import { getDefaultVoice, prefetchDevotionalAudio, streamDevotionalAudio, buildTtsText } from '@/lib/tts-service';
 import { syncWidgets, startReadingSession, endReadingSession } from '@/lib/widget-bridge';
+import { resolveRitualCompletion } from '@/lib/ritual-session';
+import { getDeviceTimezone } from '@/lib/device-timezone';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { PremiumNudgeCard } from '@/components/PremiumNudgeCard';
 import { usePremiumNudge } from '@/hooks/usePremiumNudge';
@@ -316,6 +318,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   const reviewPromptDaysAtLast = useUnfoldStore((s) => s.reviewPromptDaysAtLast);
   const recordReviewPrompt = useUnfoldStore((s) => s.recordReviewPrompt);
   const recordStreakRead = useUnfoldStore((s) => s.recordStreakRead);
+  const beginRitualSession = useUnfoldStore((s) => s.beginRitualSession);
 
   const premiumPolicy = usePremiumAccessPolicy();
   const isPremium = premiumPolicy === 'granted';
@@ -878,6 +881,23 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     setAmbientReadingContext(effectiveDevotionalId, viewingDay);
   }, [effectiveDevotionalId, viewingDay]);
 
+  useEffect(() => {
+    if (!isReadingFocused || !isViewingActiveSeries || !effectiveDevotionalId) return;
+    if (!currentDayData || currentDayData.isRead) return;
+    beginRitualSession({
+      kind: 'reading',
+      devotionalId: effectiveDevotionalId,
+      dayNumber: viewingDay,
+    });
+  }, [
+    isReadingFocused,
+    isViewingActiveSeries,
+    effectiveDevotionalId,
+    viewingDay,
+    currentDayData,
+    beginRitualSession,
+  ]);
+
   // Reset isCompleted when changing days
   useEffect(() => {
     setIsCompleted(isDayCompleted);
@@ -1281,11 +1301,22 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     setIsCompleted(true);
 
     if (effectiveDevotionalId) {
-      markDayAsRead(effectiveDevotionalId, viewingDay);
+      const store = useUnfoldStore.getState();
+      const clock = resolveRitualCompletion({
+        session: store.ritualSessions.reading,
+        identity: {
+          kind: 'reading',
+          devotionalId: effectiveDevotionalId,
+          dayNumber: viewingDay,
+        },
+        completedTimeZone: getDeviceTimezone(),
+      });
+      markDayAsRead(effectiveDevotionalId, viewingDay, clock.iso);
       if (currentDevotional && currentDayData) {
         void syncDevotionalDayRead({
           devotional: currentDevotional,
           day: currentDayData,
+          readAt: clock.iso,
         }).catch((err) => {
           logger.warn('[reading] Failed to sync read state:', err instanceof Error ? err.message : err);
           void logBugError('reading', err, {
@@ -1335,8 +1366,8 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
         refreshDailyReminder();
       }
 
-      // Record streak read & sync widgets
-      recordStreakRead();
+      recordStreakRead(clock.at);
+      store.clearRitualSession('reading');
       syncWidgets();
 
       // Check for review prompt eligibility at high-dopamine moments

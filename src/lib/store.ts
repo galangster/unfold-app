@@ -63,6 +63,13 @@ import {
   practiceSessionKey,
   resolvePracticeReturn,
 } from './scripture-practice';
+import {
+  beginRitualSessionRecord,
+  type RitualSessionIdentity,
+  type RitualSessionKind,
+  type RitualSessions,
+} from './ritual-session';
+import { getDeviceTimezone } from './device-timezone';
 
 // Types
 export type FontSize = 'small' | 'medium' | 'large';
@@ -657,7 +664,7 @@ interface UnfoldState {
   archiveCurrentDevotional: () => void;
   hasEverCreatedDevotional: boolean;
   isReturningUser: () => boolean;
-  markDayAsRead: (devotionalId: string, dayNumber: number) => void;
+  markDayAsRead: (devotionalId: string, dayNumber: number, readAt?: string) => void;
   setActOutcome: (devotionalId: string, dayNumber: number, outcome: 'done' | 'skipped') => void;
   markDayAsRevealed: (devotionalId: string, dayNumber: number) => void;
   advanceDay: (devotionalId: string) => void;
@@ -726,7 +733,7 @@ interface UnfoldState {
   streakWeekStart: string | null; // ISO date of current week start (Sunday)
   streakWeekendAmnesty: boolean;
   streakFreezes: number;
-  recordStreakRead: () => void;
+  recordStreakRead: (at?: Date) => void;
   reconcileStreakState: () => void;
   resetStreakGraceDays: () => void;
   toggleWeekendAmnesty: () => void;
@@ -741,7 +748,7 @@ interface UnfoldState {
 
   // Check-ins (Phase 2)
   checkIns: CheckIn[];
-  addCheckIn: (checkIn: Omit<CheckIn, 'id' | 'createdAt'>) => void;
+  addCheckIn: (checkIn: Omit<CheckIn, 'id' | 'createdAt'> & { createdAt?: string }) => void;
   getCheckIn: (devotionalId: string, dayNumber: number, timeOfDay: CheckInTimeOfDay) => CheckIn | undefined;
   getRecentCheckIns: (count: number) => CheckIn[];
 
@@ -884,8 +891,11 @@ interface UnfoldState {
   // fingerprint to avoid spurious re-runs on every completion.
   lastMiddayCompletedDate: string | null;
   lastEveningCompletedDate: string | null;
-  markMiddayCheckInCompleted: () => void;
-  markEveningWindDownCompleted: () => void;
+  markMiddayCheckInCompleted: (localYmd?: string) => void;
+  markEveningWindDownCompleted: (localYmd?: string) => void;
+  ritualSessions: RitualSessions;
+  beginRitualSession: (identity: RitualSessionIdentity) => void;
+  clearRitualSession: (kind: RitualSessionKind) => void;
 
   // Story deduplication
   addUsedStoryId: (devotionalId: string, storyId: string) => void;
@@ -961,6 +971,7 @@ const initialState = {
   eveningWindDownByDay: null,
   lastMiddayCompletedDate: null as string | null,
   lastEveningCompletedDate: null as string | null,
+  ritualSessions: {} as RitualSessions,
   // Notebook
   notes: [] as Note[],
   deletedNotes: [] as { note: Note; deletedAt: string }[],
@@ -1316,9 +1327,13 @@ export const useUnfoldStore = create<UnfoldState>()(
         }),
       isReturningUser: () => get().hasEverCreatedDevotional || get().devotionals.length > 0,
 
-      markDayAsRead: (devotionalId, dayNumber) =>
+      markDayAsRead: (devotionalId, dayNumber, readAt) =>
         set((state) => ({
-          ...updateDay(state, devotionalId, dayNumber, (now) => ({ isRead: true, readAt: now, isRevealed: true })),
+          ...updateDay(state, devotionalId, dayNumber, (now) => ({
+            isRead: true,
+            readAt: readAt ?? now,
+            isRevealed: true,
+          })),
           scripturePracticeReturn: state.scripturePracticeReturn?.target.devotionalId === devotionalId
             && state.scripturePracticeReturn.target.dayNumber === dayNumber ? null : state.scripturePracticeReturn,
         })),
@@ -1731,7 +1746,7 @@ export const useUnfoldStore = create<UnfoldState>()(
       setHasSeenDay1Review: () => set({ hasSeenDay1Review: true }),
 
       // Streak actions
-      recordStreakRead: () =>
+      recordStreakRead: (at) =>
         set((state) => {
           const result = applyStreakRead(
             {
@@ -1753,7 +1768,7 @@ export const useUnfoldStore = create<UnfoldState>()(
               ),
               streakLongest: state.streakLongest,
             },
-            new Date()
+            at ?? new Date()
           );
           // null = already read today — no change.
           return result ?? state;
@@ -1815,8 +1830,9 @@ export const useUnfoldStore = create<UnfoldState>()(
 
       // Check-ins (Phase 2)
       addCheckIn: (checkIn) => {
-        const now = new Date().toISOString();
-        const newCheckIn: CheckIn = { ...checkIn, id: newId(), createdAt: now, updatedAt: now };
+        const now = checkIn.createdAt ?? new Date().toISOString();
+        const { createdAt: _ignored, ...fields } = checkIn;
+        const newCheckIn: CheckIn = { ...fields, id: newId(), createdAt: now, updatedAt: now };
         set((state) => {
           enqueuePersonalDataSyncChange('check_ins', newCheckIn.id, checkInSyncData(newCheckIn), now);
           return {
@@ -1895,10 +1911,27 @@ export const useUnfoldStore = create<UnfoldState>()(
       // the design rationale. Use `en-CA` locale to get YYYY-MM-DD format in
       // the device's local timezone (NOT UTC — notifications are scheduled
       // against local calendar, so the completion date must also be local).
-      markMiddayCheckInCompleted: () =>
-        set({ lastMiddayCompletedDate: new Date().toLocaleDateString('en-CA') }),
-      markEveningWindDownCompleted: () =>
-        set({ lastEveningCompletedDate: new Date().toLocaleDateString('en-CA') }),
+      markMiddayCheckInCompleted: (localYmd) =>
+        set({ lastMiddayCompletedDate: localYmd ?? new Date().toLocaleDateString('en-CA') }),
+      markEveningWindDownCompleted: (localYmd) =>
+        set({ lastEveningCompletedDate: localYmd ?? new Date().toLocaleDateString('en-CA') }),
+      beginRitualSession: (identity) =>
+        set((state) => ({
+          ritualSessions: {
+            ...state.ritualSessions,
+            [identity.kind]: beginRitualSessionRecord(state.ritualSessions[identity.kind], {
+              ...identity,
+              timeZone: getDeviceTimezone(),
+            }),
+          },
+        })),
+      clearRitualSession: (kind) =>
+        set((state) => {
+          if (!state.ritualSessions[kind]) return state;
+          const next = { ...state.ritualSessions };
+          delete next[kind];
+          return { ritualSessions: next };
+        }),
 
       // Deferred generation
       addUsedStoryId: (devotionalId, storyId) => set((state) => {
@@ -2324,7 +2357,7 @@ export const useUnfoldStore = create<UnfoldState>()(
     {
       name: 'unfold-storage',
       storage: unfoldPersistStorage,
-      version: 43, // v43: globally unique bible reading position ids
+      version: 44, // v44: ritual session start clocks for midnight-crossing completions
       // WR-23: drop session-scoped flags from the persisted blob.
       partialize: (state): PersistedUnfoldState => {
         const { nudgeShownThisSession, streakJustReset, ...persisted } = state;

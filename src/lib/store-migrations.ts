@@ -787,5 +787,19 @@ if (version < 43) {
   }
 }
 
+// Migration from version 43 to 44: start clocks for midnight-crossing
+// reading / check-in completions.
+if (version < 44) {
+  try {
+    const sessions = (state as any).ritualSessions;
+    if (!sessions || typeof sessions !== 'object' || Array.isArray(sessions)) {
+      (state as any).ritualSessions = {};
+    }
+    logger.log('[store] Migration v43→44: Added ritual session start clocks');
+  } catch (err) {
+    reportMigrationFailure('v43→44', err);
+  }
+}
+
 return state;
 }

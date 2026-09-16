@@ -32,6 +32,8 @@ import { adaptiveFrameStyle, PRIMARY_SAFE_AREA_EDGES } from '@/lib/adaptive-layo
 import { useTheme } from '@/lib/theme';
 import { useGuardedBack } from '@/hooks/useGuardedBack';
 import { useUnfoldStore } from '@/lib/store';
+import { resolveRitualCompletion } from '@/lib/ritual-session';
+import { getDeviceTimezone } from '@/lib/device-timezone';
 import { generateExamen } from '@/lib/examen-service';
 import { fetchVerse } from '@/lib/bible-api';
 import { EVENING_CELEBRATION_MESSAGES } from '@/constants/check-in-messages';
@@ -165,6 +167,7 @@ export default function EveningWindDownScreen() {
   const checkIns = useUnfoldStore((s) => s.checkIns);
   const addCheckIn = useUnfoldStore((s) => s.addCheckIn);
   const markEveningWindDownCompleted = useUnfoldStore((s) => s.markEveningWindDownCompleted);
+  const beginRitualSession = useUnfoldStore((s) => s.beginRitualSession);
 
   const { gate, policy, showExclusiveOffer, dismissOffer, handleOfferVerifiedExit } = useCreationGate();
 
@@ -277,16 +280,36 @@ export default function EveningWindDownScreen() {
 
   const scriptureText = scripture?.text;
 
+  useEffect(() => {
+    if (!currentDevotional || !currentDay) return;
+    beginRitualSession({
+      kind: 'evening',
+      devotionalId: currentDevotional.id,
+      dayNumber: currentDay.dayNumber,
+    });
+  }, [beginRitualSession, currentDay, currentDevotional]);
+
   const handleShowCelebration = useCallback(() => {
     if (!gate()) return;
     endAmbientReflection();
     if (currentDevotional && currentDay) {
+      const store = useUnfoldStore.getState();
+      const clock = resolveRitualCompletion({
+        session: store.ritualSessions.evening,
+        identity: {
+          kind: 'evening',
+          devotionalId: currentDevotional.id,
+          dayNumber: currentDay.dayNumber,
+        },
+        completedTimeZone: getDeviceTimezone(),
+      });
       addCheckIn({
         devotionalId: currentDevotional.id,
-        dayNumber: currentDay.dayNumber,
+        dayNumber: clock.dayNumber,
         timeOfDay: 'evening',
         mood: 3 as const,
         moodLabel: 'completed',
+        createdAt: clock.iso,
       });
       // Record the completion date. The single-owner useCheckInNotifications
       // hook keeps the DAILY trigger recurring on its schedule — the trigger
@@ -294,7 +317,8 @@ export default function EveningWindDownScreen() {
       // cancelAndRescheduleEveningForTomorrow() helper which silently
       // downgraded the DAILY trigger to a one-shot DATE trigger.
       // See ~/vault/gotchas/expo-reschedule-helpers-silent-one-shot-downgrade.md
-      markEveningWindDownCompleted();
+      markEveningWindDownCompleted(clock.localYmd);
+      store.clearRitualSession('evening');
     }
     const msg = EVENING_CELEBRATION_MESSAGES[Math.floor(Math.random() * EVENING_CELEBRATION_MESSAGES.length)];
     setCelebrationMessage(msg);
