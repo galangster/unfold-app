@@ -4,7 +4,7 @@ import ReactAppDependencyProvider
 import Sentry
 
 @main
-class AppDelegate: ExpoAppDelegate {
+class AppDelegate: ExpoAppDelegate, ExpoReactNativeFactoryProvider {
   var window: UIWindow?
 
   var reactNativeDelegate: ExpoReactNativeFactoryDelegate?
@@ -28,15 +28,8 @@ class AppDelegate: ExpoAppDelegate {
 
     reactNativeDelegate = delegate
     reactNativeFactory = factory
-
-#if os(iOS) || os(tvOS)
-    window = UIWindow(frame: UIScreen.main.bounds)
-    window?.backgroundColor = UIColor(red: 10.0/255.0, green: 10.0/255.0, blue: 10.0/255.0, alpha: 1.0) // #0A0A0A — prevent white flash on startup
-    factory.startReactNative(
-      withModuleName: "main",
-      in: window,
-      launchOptions: launchOptions)
-#endif
+    // UIWindow + startReactNative live on EXExpoAppSceneDelegate
+    // (@config-plugins/expo-uiscene-lifecycle). Do not recreate them here.
 
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
