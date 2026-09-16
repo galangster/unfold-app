@@ -28,11 +28,9 @@
  *      "do not schedule new premium reminders yet; preserve existing OS
  *      schedules until the source resolves."
  *   2. Single reactive owner — one hook mounted once at the root layout.
- *      Every write to the OS queue flows through `runSync`. No imperative
- *      "just reschedule tomorrow" helpers at call sites (those were deleted
- *      for downgrading a repeating trigger to a one-shot behind the caller's
- *      back — the schedule is now deliberately a set of one-shots, but it is
- *      still this hook that owns them, and it rewrites the whole horizon).
+ *      Every write to the OS queue flows through `runCheckInNotificationSync`.
+ *      The BGAppRefresh task calls that same write so the 14-day horizon
+ *      refills without an open. No second scheduler.
  *   3. Fingerprint + debounce — coalesce rapid changes, serialize in-flight
  *      runs, re-read state at execution time, stale-check after await.
  *   4. Passive permission — never prompt from sync, only use existing state.
@@ -53,26 +51,17 @@ import { AppState, type AppStateStatus } from 'react-native';
 import { useUnfoldStore, useHasHydrated } from '@/lib/store';
 import { getTodayCarryLine } from '@/lib/home-devotional-state';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
-import { getEffectivePremiumAccessPolicy } from '@/lib/premium-state';
-import {
-  scheduleMiddayCheckIn,
-  scheduleEveningWindDown,
-  cancelMiddayCheckIn,
-  cancelEveningWindDown,
-  areNotificationsEnabled,
-} from '@/lib/notifications';
-import { readTrialCheckInSkipDate } from '@/lib/trial-notification';
-import { logger } from '@/lib/logger';
-import { getCheckInNotificationGatePlan } from '@/lib/check-in-notification-sync-policy';
 import { useUIState } from '@/lib/ui-state';
 import { getDeviceTimezone } from '@/lib/device-timezone';
+import { buildCheckInFingerprint } from '@/lib/check-in-notification-fingerprint';
+import { runCheckInNotificationSync } from '@/lib/check-in-notification-sync';
 
 const DEBOUNCE_MS = 500;
 
 /**
  * Build a fingerprint of every piece of state that affects whether or when
- * check-in notifications should fire. If you add a new branch to `runSync`,
- * add its inputs here.
+ * check-in notifications should fire. If you add a new branch to
+ * `runCheckInNotificationSync`, add its inputs here.
  *
  * Deliberately EXCLUDES `lastMiddayCompletedDate` / `lastEveningCompletedDate`:
  * those fields track completion for analytics — they do NOT change the
@@ -118,34 +107,27 @@ function useCheckInFingerprint(): string {
   // fired on clock-time components and needed no such rewrite.
   const deviceTimezone = getDeviceTimezone() ?? '';
 
-  return JSON.stringify([
+  return buildCheckInFingerprint({
     policy,
-    middayEnabled ? '1' : '0',
-    eveningEnabled ? '1' : '0',
+    middayEnabled,
+    eveningEnabled,
     middayTime,
     eveningTime,
     middayByDay,
     eveningByDay,
-    hasCompletedOnboarding ? '1' : '0',
+    hasCompletedOnboarding,
     todayCarryLine,
     notificationPermissionEpoch,
     trialNoticeEpoch,
     deviceTimezone,
-  ]);
+  });
 }
 
 export function useCheckInNotifications() {
   const hasHydrated = useHasHydrated();
   const fingerprint = useCheckInFingerprint();
 
-  // Coordination refs for debounce + in-flight serialization.
-  // See useDailyReminderSync for the rationale on each ref.
-  const lastAppliedRef = useRef<string>('');
-  const lastAppliedDayRef = useRef<string>('');
-  const needsRetryRef = useRef(false);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const inFlightRef = useRef(false);
-  const pendingRef = useRef(false);
   const latestFingerprintRef = useRef<string>(fingerprint);
 
   // Keep the latest fingerprint in a ref so queued runs read the freshest
@@ -154,150 +136,10 @@ export function useCheckInNotifications() {
 
   async function runSync(reason: 'hydration' | 'fingerprint' | 'foreground'): Promise<void> {
     if (!hasHydrated) return;
-
-    const target = latestFingerprintRef.current;
-    const todayStr = new Date().toDateString();
-
-    // Skip no-op runs. A sync is a no-op iff:
-    //   - fingerprint is unchanged (same inputs), AND
-    //   - the wall-clock day is unchanged, AND
-    //   - the last write for that fingerprint actually completed
-    // Hydration runs always proceed so we establish the baseline in lastApplied.
-    // `needsRetryRef` is sticky: inferring failure from unchanged refs loses
-    // the retry when a later same-day fingerprint reverts to a stamped value.
-    if (
-      reason !== 'hydration'
-      && !needsRetryRef.current
-      && target === lastAppliedRef.current
-      && todayStr === lastAppliedDayRef.current
-    ) {
-      return;
-    }
-
-    if (inFlightRef.current) {
-      pendingRef.current = true;
-      return;
-    }
-
-    inFlightRef.current = true;
-    try {
-      // Re-read state at execution time so queued runs pick up the freshest
-      // values — not whatever was current when they were enqueued.
-      const state = useUnfoldStore.getState();
-      const hasCompletedOnboarding = !!state.user?.hasCompletedOnboarding;
-      const middayEnabled = state.middayCheckInEnabled;
-      const eveningEnabled = state.eveningWindDownEnabled;
-
-      // Tri-state premium gate. Re-read via the non-React getter so we get
-      // the freshest values at execution time (not whatever was captured in
-      // the hook closure when the fingerprint was built).
-      const policy = getEffectivePremiumAccessPolicy();
-      const gatePlan = getCheckInNotificationGatePlan({
-        hasCompletedOnboarding,
-        policy,
-      });
-
-      if (gatePlan.kind === 'cancel-both') {
-        // Onboarding incomplete means the user is not ready for check-in
-        // reminders at all. Premium denied means RevenueCat has definitively
-        // told us to remove premium-only reminders. Both are hard cancels.
-        await cancelMiddayCheckIn();
-        await cancelEveningWindDown();
-        needsRetryRef.current = false;
-        lastAppliedRef.current = target;
-        lastAppliedDayRef.current = todayStr;
-        logger.log(
-          `[useCheckInNotifications] ${gatePlan.reason}; cancelled both (reason=${reason})`,
-        );
-        return;
-      }
-
-      if (gatePlan.kind === 'defer') {
-        // RevenueCat has not reported in this session yet. Do not schedule new
-        // premium reminders from a potentially stale persisted mirror — but
-        // also do not delete the existing OS schedule. Deleting on
-        // every cold start/foreground can make active premium users miss the
-        // same-day midday/evening reminder if RC is slow, offline, or still
-        // migrating identity. When RC resolves, the policy fingerprint changes
-        // and this owner will either schedule fresh reminders (granted) or
-        // cancel both (denied). Deliberately do NOT mark this fingerprint as
-        // applied, so foreground reconciles keep checking while unresolved.
-        logger.log(`[useCheckInNotifications] Policy unknown; deferred without touching OS queue (reason=${reason})`);
-        return;
-      }
-
-      // policy === 'granted'
-      // Passive permission check — NEVER prompt from sync. Do NOT mark applied
-      // on this branch: if the user later grants permission in iOS Settings and
-      // foregrounds the app, we want the foreground reconcile to re-run and
-      // converge. Marking applied here would leave the skip check at the top
-      // of runSync matching (F1, D1) and silently bail out, stranding the user
-      // without check-in notifications until the fingerprint changes for an
-      // unrelated reason.
-      const hasPermission = await areNotificationsEnabled();
-      if (!hasPermission) {
-        logger.log('[useCheckInNotifications] No OS permission; skipping schedule');
-        return;
-      }
-
-      const clock = { localDate: readTrialCheckInSkipDate(), now: new Date() };
-      // The two slots share no mutable state and write disjoint identifiers,
-      // so they run together rather than one after the other.
-      const [midday, evening] = await Promise.all([
-        middayEnabled
-          ? scheduleMiddayCheckIn(clock)
-          : cancelMiddayCheckIn().then(() => ({ ids: [], complete: true })),
-        eveningEnabled
-          ? scheduleEveningWindDown(clock)
-          : cancelEveningWindDown().then(() => ({ ids: [], complete: true })),
-      ]);
-
-      // Post-schedule stale-check: if state changed during any of the awaits
-      // above (e.g. user churned mid-flight and RC callback fired, or user
-      // tapped "Delete Everything"), the just-scheduled notifications may be
-      // against dead state. Cancel both and let the next run converge on
-      // the new state. Without this, a scheduleNotificationAsync() call
-      // racing with a churn event can leak notifications to a non-premium
-      // user.
-      const freshPolicy = getEffectivePremiumAccessPolicy();
-      if (latestFingerprintRef.current !== target || freshPolicy !== 'granted') {
-        await cancelMiddayCheckIn();
-        await cancelEveningWindDown();
-        needsRetryRef.current = true;
-        pendingRef.current = true;
-        logger.log('[useCheckInNotifications] State changed during schedule; cancelled and re-queuing');
-        return;
-      }
-
-      // Only record the sync when the OS queue actually holds what we asked
-      // for. A run that cancelled a slot and then failed to rewrite it leaves
-      // nothing pending; stamping that would strand the reader until some
-      // unrelated change moved the fingerprint. Leaving it unstamped is not
-      // enough: if the fingerprint later reverts to an already-stamped value
-      // on the same day, the skip gate would treat the broken queue as done.
-      if (!midday.complete || !evening.complete) {
-        needsRetryRef.current = true;
-        logger.error('[useCheckInNotifications] Incomplete write; leaving unsynced to retry');
-        return;
-      }
-
-      needsRetryRef.current = false;
-      lastAppliedRef.current = target;
-      lastAppliedDayRef.current = todayStr;
-      logger.log(
-        `[useCheckInNotifications] Synced (reason=${reason}, midday=${midday.ids.length}, evening=${evening.ids.length})`,
-      );
-    } catch (error) {
-      needsRetryRef.current = true;
-      logger.error('[useCheckInNotifications] Sync failed:', error);
-    } finally {
-      inFlightRef.current = false;
-      if (pendingRef.current) {
-        pendingRef.current = false;
-        // Drain the pending run without re-awaiting from the caller.
-        void runSync('fingerprint');
-      }
-    }
+    await runCheckInNotificationSync(reason, {
+      fingerprint: latestFingerprintRef.current,
+      getLiveFingerprint: () => latestFingerprintRef.current,
+    });
   }
 
   // First run after hydration. Before hydration the store is empty — we'd
