@@ -894,7 +894,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     isViewingActiveSeries,
     effectiveDevotionalId,
     viewingDay,
-    currentDayData?.isRead,
+    currentDayData,
     beginRitualSession,
   ]);
 
