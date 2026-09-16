@@ -29,9 +29,6 @@ class AppDelegate: ExpoAppDelegate, ExpoReactNativeFactoryProvider {
     reactNativeDelegate = delegate
     reactNativeFactory = factory
 
-    // UIWindow + startReactNative live on EXExpoAppSceneDelegate
-    // (@config-plugins/expo-uiscene-lifecycle). Do not recreate them here.
-
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 

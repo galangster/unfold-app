@@ -83,10 +83,7 @@ function updateAppDelegate(contents, enabled) {
 
 function restoreLegacyStartup(contents) {
   const withoutProvider = contents.replace(SCENE_APP_DELEGATE, ORIGINAL_APP_DELEGATE);
-  if (
-    withoutProvider.includes(LEGACY_STARTUP_BLOCK) ||
-    withoutProvider.includes(LEGACY_STARTUP)
-  ) {
+  if (withoutProvider.includes(LEGACY_STARTUP)) {
     return withoutProvider;
   }
 
@@ -98,17 +95,11 @@ function restoreLegacyStartup(contents) {
   }
 
   const insertAt = assignmentAt + FACTORY_ASSIGNMENT.length;
-  const restored =
+  return (
     withoutProvider.slice(0, insertAt) +
     `\n\n${LEGACY_STARTUP_BLOCK}` +
-    withoutProvider.slice(insertAt);
-
-  if (!restored.includes('factory.startReactNative(')) {
-    throw new Error(
-      `${PLUGIN_NAME} cannot disable because the legacy UIWindow / startReactNative block could not be restored.`,
-    );
-  }
-  return restored;
+    withoutProvider.slice(insertAt)
+  );
 }
 
 const withExpoUIScene = (config, options) => {
@@ -145,7 +136,4 @@ const withExpoUIScene = (config, options) => {
 };
 
 module.exports = withExpoUIScene;
-module.exports.assertSdk57 = assertSdk57;
 module.exports.updateAppDelegate = updateAppDelegate;
-module.exports.isOwnedManifest = isOwnedManifest;
-module.exports.SCENE_MANIFEST = SCENE_MANIFEST;
