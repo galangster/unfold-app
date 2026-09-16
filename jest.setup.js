@@ -35,6 +35,20 @@ jest.mock('expo-task-manager', () => ({
   isTaskRegisteredAsync: jest.fn(async () => false),
 }));
 
+jest.mock('expo-notifications', () => ({
+  cancelScheduledNotificationAsync: jest.fn(async () => undefined),
+  scheduleNotificationAsync: jest.fn(async () => 'id'),
+  getPermissionsAsync: jest.fn(async () => ({ status: 'undetermined' })),
+  setNotificationChannelAsync: jest.fn(async () => undefined),
+  setNotificationHandler: jest.fn(),
+  addNotificationReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
+  addNotificationResponseReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
+  getLastNotificationResponse: jest.fn(() => null),
+  getLastNotificationResponseAsync: jest.fn(async () => null),
+  SchedulableTriggerInputTypes: { TIME_INTERVAL: 'timeInterval', DAILY: 'daily', DATE: 'date' },
+  AndroidImportance: { DEFAULT: 5, HIGH: 6 },
+}));
+
 jest.mock('expo-audio', () => ({
   PermissionStatus: { GRANTED: 'granted', DENIED: 'denied', UNDETERMINED: 'undetermined' },
   createAudioPlayer: jest.fn(() => ({
