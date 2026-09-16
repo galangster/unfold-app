@@ -78,12 +78,37 @@ function updateAppDelegate(contents, enabled) {
       .replace(startup, '');
   }
 
-  return contents
-    .replace(SCENE_APP_DELEGATE, ORIGINAL_APP_DELEGATE)
-    .replace(
-      `${FACTORY_ASSIGNMENT}\n\n`,
-      `${FACTORY_ASSIGNMENT}\n\n${LEGACY_STARTUP_BLOCK}\n`,
+  return restoreLegacyStartup(contents);
+}
+
+function restoreLegacyStartup(contents) {
+  const withoutProvider = contents.replace(SCENE_APP_DELEGATE, ORIGINAL_APP_DELEGATE);
+  if (
+    withoutProvider.includes(LEGACY_STARTUP_BLOCK) ||
+    withoutProvider.includes(LEGACY_STARTUP)
+  ) {
+    return withoutProvider;
+  }
+
+  const assignmentAt = withoutProvider.indexOf(FACTORY_ASSIGNMENT);
+  if (assignmentAt === -1) {
+    throw new Error(
+      `${PLUGIN_NAME} cannot disable because the AppDelegate factory assignment was not found.`,
     );
+  }
+
+  const insertAt = assignmentAt + FACTORY_ASSIGNMENT.length;
+  const restored =
+    withoutProvider.slice(0, insertAt) +
+    `\n\n${LEGACY_STARTUP_BLOCK}` +
+    withoutProvider.slice(insertAt);
+
+  if (!restored.includes('factory.startReactNative(')) {
+    throw new Error(
+      `${PLUGIN_NAME} cannot disable because the legacy UIWindow / startReactNative block could not be restored.`,
+    );
+  }
+  return restored;
 }
 
 const withExpoUIScene = (config, options) => {

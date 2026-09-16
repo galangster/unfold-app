@@ -78,4 +78,28 @@ describe('iOS UIScene lifecycle (regression: Xcode 27 / iOS 27 launch kill)', ()
     expect(appDelegate).toContain('RCTLinkingManager.application(app, open: url, options: options)');
     expect(appDelegate).toContain('continue userActivity');
   });
+
+  it('leaves a blank line after the factory assignment so disable can restore startup', () => {
+    expect(appDelegate).toContain('    reactNativeFactory = factory\n\n');
+  });
+
+  it('restores UIWindow + startReactNative when the plugin is disabled, even with a comment after the factory assignment', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const plugin = require(join(root, 'plugins/expo-uiscene-lifecycle')) as {
+      updateAppDelegate: (contents: string, enabled: boolean) => string;
+    };
+
+    expect(plugin.updateAppDelegate(appDelegate, true)).toBe(appDelegate);
+
+    const commented = appDelegate.replace(
+      '    reactNativeFactory = factory\n\n',
+      '    reactNativeFactory = factory\n    // comment sits on the next line\n',
+    );
+    const disabled = plugin.updateAppDelegate(commented, false);
+    expect(disabled).toContain('class AppDelegate: ExpoAppDelegate {');
+    expect(disabled).not.toContain('ExpoReactNativeFactoryProvider');
+    expect(disabled).toContain('UIWindow(frame: UIScreen.main.bounds)');
+    expect(disabled).toContain('factory.startReactNative(');
+    expect(disabled).toContain('#if os(iOS) || os(tvOS)');
+  });
 });
