@@ -45,6 +45,7 @@ jest.mock('react-native-reanimated', () => {
     default: { View },
     Easing: { out: () => 'out', in: () => 'in', inOut: () => 'inOut', cubic: 'cubic' },
     useAnimatedStyle: (factory: () => unknown) => factory(),
+    useReducedMotion: () => false,
     useSharedValue: (value: unknown) => ({ value }),
     withTiming: (v: unknown) => v,
     withDelay: (_d: number, a: unknown) => a,

@@ -82,6 +82,7 @@ describe('reading.tsx server-side generation migration', () => {
     expect(readingSource).toContain('<ReaderLoadingSkeleton colors={colors} />');
     expect(readingSource).toContain('This series isn’t on the device.');
     expect(readingSource).toContain('Go to Today');
+    expect(readingSource).toContain("router.navigate('/(tabs)/(today)')");
     expect(readingSource).not.toContain('No series found');
   });
 

@@ -1874,7 +1874,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               accessibilityRole="button"
               accessibilityLabel="Go back"
-              accessibilityHint="Return to Today"
+              accessibilityHint="Closes this reading"
               style={{ padding: Spacing['2'] }}
             >
               <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
@@ -1895,7 +1895,10 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
             </Text>
             <TouchableOpacity
               activeOpacity={0.7}
-              onPress={handleReaderBack}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.navigate('/(tabs)/(today)');
+              }}
               accessibilityRole="button"
               accessibilityLabel="Go to Today"
               accessibilityHint="Returns to the Today tab"
