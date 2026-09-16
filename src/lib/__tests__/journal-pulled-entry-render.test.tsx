@@ -33,6 +33,14 @@ jest.mock('react-native-keyboard-controller', () => {
   return { KeyboardAwareScrollView: ScrollView };
 });
 
+jest.mock('@/hooks/useAccessibility', () => ({
+  useAccessibleAnimation: () => ({
+    reducedMotion: true,
+    entering: () => undefined,
+    exiting: () => undefined,
+  }),
+}));
+
 jest.mock('react-native-reanimated', () => {
   const { View, Text: RNText } = require('react-native');
   const chainable = () => {

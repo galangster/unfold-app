@@ -27,8 +27,8 @@ import Animated, {
   withSequence,
   withDelay,
   interpolateColor,
-  useReducedMotion,
 } from 'react-native-reanimated';
+import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import * as Haptics from 'expo-haptics';
 import {
   XIcon,
@@ -111,7 +111,7 @@ function AnimatedPrayerCircle({ isAnswered, accentColor, hintColor, checkColor }
   hintColor: string;
   checkColor: string;
 }) {
-  const reducedMotion = useReducedMotion();
+  const { reducedMotion } = useAccessibleAnimation();
   const fillProgress = useSharedValue(isAnswered ? 1 : 0);
   const checkScale = useSharedValue(isAnswered ? 1 : 0);
 
@@ -161,7 +161,7 @@ export default function JournalScreen({ hostTab }: { hostTab?: TabGroup } = {}) 
   const segments = useSegments();
   const navigation = useNavigation();
   const { colors, isDark } = useTheme();
-  const reducedMotion = useReducedMotion();
+  const { reducedMotion } = useAccessibleAnimation();
   const adaptiveLayout = useAdaptiveLayout();
   const clusterFrameStyle = adaptiveFrameStyle(adaptiveLayout.clusterMaxWidth);
   const readableFrameStyle = adaptiveFrameStyle(adaptiveLayout.readableMaxWidth);
@@ -1216,6 +1216,12 @@ Their journal entry:
                     onPress={() => handleTogglePrayer(prayer.id)}
                     activeOpacity={0.6}
                     hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+                    accessibilityRole="checkbox"
+                    accessibilityLabel={prayer.text}
+                    accessibilityState={{ checked: prayer.isAnswered }}
+                    accessibilityHint={
+                      prayer.isAnswered ? 'Marks the prayer as unanswered' : 'Marks the prayer as answered'
+                    }
                     style={[
                       jStyles.prayerItemButton,
                       {

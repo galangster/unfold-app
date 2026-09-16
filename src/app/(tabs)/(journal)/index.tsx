@@ -28,6 +28,7 @@ import Animated, {
   Easing,
   useReducedMotion,
 } from 'react-native-reanimated';
+import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { Gesture, GestureDetector, Directions } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import {
@@ -55,7 +56,7 @@ import { formatScriptureReference } from '@/lib/bible-constants';
 import { useUIState } from '@/lib/ui-state';
 import { NoteCard } from '@/components/notebook/NoteCard';
 import { SwipeableNoteCard } from '@/components/notebook/SwipeableNoteCard';
-import { FolderChips } from '@/components/notebook/FolderChips';
+import { FolderChips, type FolderChipAction } from '@/components/notebook/FolderChips';
 // FolderChips — horizontal scrollable folder filter pills
 import { CreateFolderSheet } from '@/components/notebook/CreateFolderSheet';
 import { MoveFolderSheet } from '@/components/notebook/MoveFolderSheet';
@@ -120,7 +121,7 @@ interface SegmentedControlProps {
 
 function SegmentedControl({ activeSegment, onSegmentChange, fontScale }: SegmentedControlProps) {
   const { colors } = useTheme();
-  const reducedMotion = useReducedMotion();
+  const { reducedMotion } = useAccessibleAnimation();
   const [containerWidth, setContainerWidth] = useState(0);
 
   const activeIndex = Math.max(0, SEGMENTS.findIndex((segment) => segment.id === activeSegment));
@@ -554,7 +555,7 @@ interface FABProps {
 
 function FloatingActionButton({ onPress, visible, tabBarHeight }: FABProps) {
   const { colors } = useTheme();
-  const reducedMotion = useReducedMotion();
+  const { reducedMotion } = useAccessibleAnimation();
   const scale = useSharedValue(1);
   const translateY = useSharedValue(0);
   const opacity = useSharedValue(visible ? 1 : 0);
@@ -652,6 +653,7 @@ const fabStyles = StyleSheet.create({
 interface FolderActionsSheetProps {
   visible: boolean;
   folderName: string;
+  startRenaming?: boolean;
   onClose: () => void;
   onRename: (newName: string) => void;
   onAddSubfolder: () => void;
@@ -667,6 +669,7 @@ interface FolderActionsSheetProps {
 function FolderActionsSheet({
   visible,
   folderName,
+  startRenaming = false,
   onClose,
   onRename,
   onAddSubfolder,
@@ -680,10 +683,10 @@ function FolderActionsSheet({
   // Reset local state whenever the sheet opens for a (possibly different) folder.
   useEffect(() => {
     if (visible) {
-      setIsRenaming(false);
+      setIsRenaming(startRenaming);
       setDraftName(folderName);
     }
-  }, [visible, folderName]);
+  }, [visible, folderName, startRenaming]);
 
   const isRenameEnabled = draftName.trim().length > 0;
 
@@ -692,6 +695,12 @@ function FolderActionsSheet({
     setIsRenaming(true);
     setTimeout(() => renameInputRef.current?.focus(), 120);
   }, []);
+
+  useEffect(() => {
+    if (visible && startRenaming) {
+      setTimeout(() => renameInputRef.current?.focus(), 120);
+    }
+  }, [visible, startRenaming]);
 
   const handleSubmitRename = useCallback(() => {
     const trimmed = draftName.trim();
@@ -920,6 +929,7 @@ export default function JournalHubScreen() {
 
   // Folder long-press actions sheet (#12 — branded replacement for the OS Alert)
   const [folderForActions, setFolderForActions] = useState<NoteFolder | null>(null);
+  const [folderActionsStartRenaming, setFolderActionsStartRenaming] = useState(false);
 
   // Hide tab bar when any sheet is open so it doesn't show through the Modal
   const setTabBarHidden = useUIState((s) => s.setTabBarHidden);
@@ -1268,11 +1278,13 @@ export default function JournalHubScreen() {
   // Open the branded folder-actions sheet (#12 — replaces the OS long-press Alert)
   const handleFolderLongPress = useCallback((folder: NoteFolder) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setFolderActionsStartRenaming(false);
     setFolderForActions(folder);
   }, []);
 
   const closeFolderActions = useCallback(() => {
     setFolderForActions(null);
+    setFolderActionsStartRenaming(false);
   }, []);
 
   const handleFolderRename = useCallback(
@@ -1282,22 +1294,22 @@ export default function JournalHubScreen() {
       updateFolder(folderForActions.id, { name: newName });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setFolderForActions(null);
+      setFolderActionsStartRenaming(false);
     },
     [folderForActions, gate, updateFolder],
   );
 
-  const handleFolderAddSubfolder = useCallback(() => {
-    if (!folderForActions) return;
+  const handleFolderAddSubfolder = useCallback((folder: NoteFolder) => {
     if (!gate()) return;
-    setCreateFolderParent({ id: folderForActions.id, name: folderForActions.name });
+    setCreateFolderParent({ id: folder.id, name: folder.name });
     setFolderForActions(null);
+    setFolderActionsStartRenaming(false);
     setShowCreateFolderSheet(true);
-  }, [folderForActions, gate]);
+  }, [gate]);
 
-  const handleFolderDelete = useCallback(() => {
-    const folder = folderForActions;
-    if (!folder) return;
+  const performFolderDelete = useCallback((folder: NoteFolder) => {
     setFolderForActions(null);
+    setFolderActionsStartRenaming(false);
 
     if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
 
@@ -1324,7 +1336,26 @@ export default function JournalHubScreen() {
     deleteTimerRef.current = setTimeout(() => {
       setUndoActions([]);
     }, JOURNAL_UNDO_MS);
-  }, [folderForActions, storeDeleteFolder, activeFolderId, currentParentId, folders, notes, getDescendantFolderIds]);
+  }, [storeDeleteFolder, activeFolderId, currentParentId, folders, notes, getDescendantFolderIds]);
+
+  const handleFolderDelete = useCallback(() => {
+    if (!folderForActions) return;
+    performFolderDelete(folderForActions);
+  }, [folderForActions, performFolderDelete]);
+
+  const handleFolderAction = useCallback((folder: NoteFolder, action: FolderChipAction) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (action === 'rename') {
+      setFolderActionsStartRenaming(true);
+      setFolderForActions(folder);
+      return;
+    }
+    if (action === 'addSubfolder') {
+      handleFolderAddSubfolder(folder);
+      return;
+    }
+    performFolderDelete(folder);
+  }, [handleFolderAddSubfolder, performFolderDelete]);
 
   const handleNoteDelete = useCallback(
     (note: Note) => {
@@ -2000,6 +2031,7 @@ export default function JournalHubScreen() {
                     setShowCreateFolderSheet(true);
                   }}
                   onFolderLongPress={handleFolderLongPress}
+                  onFolderAction={handleFolderAction}
                   currentParentId={currentParentId}
                   onDrillInto={(folderId) => {
                     setCurrentParentId(folderId);
@@ -2113,9 +2145,12 @@ export default function JournalHubScreen() {
         <FolderActionsSheet
           visible={folderForActions !== null}
           folderName={folderForActions?.name ?? ''}
+          startRenaming={folderActionsStartRenaming}
           onClose={closeFolderActions}
           onRename={handleFolderRename}
-          onAddSubfolder={handleFolderAddSubfolder}
+          onAddSubfolder={() => {
+            if (folderForActions) handleFolderAddSubfolder(folderForActions);
+          }}
           onDelete={handleFolderDelete}
         />
 

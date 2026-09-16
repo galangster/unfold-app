@@ -36,6 +36,14 @@ jest.mock('react-native-safe-area-context', () => {
   };
 });
 
+jest.mock('@/hooks/useAccessibility', () => ({
+  useAccessibleAnimation: () => ({
+    reducedMotion: true,
+    entering: () => undefined,
+    exiting: () => undefined,
+  }),
+}));
+
 jest.mock('react-native-reanimated', () => {
   const { View, Text: RNText, FlatList, ScrollView } = require('react-native');
   const chainable = () => {

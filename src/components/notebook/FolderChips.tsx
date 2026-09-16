@@ -17,6 +17,8 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import type { NoteFolder } from '@/lib/store';
 
+export type FolderChipAction = 'rename' | 'addSubfolder' | 'delete';
+
 interface FolderChipsProps {
   folders: NoteFolder[];
   activeFolderId: string | null;
@@ -25,6 +27,8 @@ interface FolderChipsProps {
   onCreateFolder?: () => void;
   /** Called on long-press of a folder chip (for rename/delete menu) */
   onFolderLongPress?: (folder: NoteFolder) => void;
+  /** VoiceOver / TalkBack actions dispatch the named operation, not the menu */
+  onFolderAction?: (folder: NoteFolder, action: FolderChipAction) => void;
   /** Remove left padding when used inline alongside other elements */
   compact?: boolean;
   /** Current parent folder for subfolder navigation (null = top-level) */
@@ -39,6 +43,7 @@ export function FolderChips({
   onSelectFolder,
   onCreateFolder,
   onFolderLongPress,
+  onFolderAction,
   compact = false,
   currentParentId = null,
   onDrillInto,
@@ -170,6 +175,7 @@ export function FolderChips({
             onPress={handleFolderPress}
             onDrillIn={onDrillInto ? handleDrillIn : undefined}
             onLongPress={onFolderLongPress}
+            onAction={onFolderAction}
             colors={colors}
           />
         ))}
@@ -214,10 +220,11 @@ interface FolderChipProps {
   onPress: (folderId: string | null) => void;
   onDrillIn?: (folderId: string) => void;
   onLongPress?: (folder: NoteFolder) => void;
+  onAction?: (folder: NoteFolder, action: FolderChipAction) => void;
   colors: ReturnType<typeof useTheme>['colors'];
 }
 
-function FolderChip({ folderId, folder, label, color, isActive, hasChildren, onPress, onDrillIn, onLongPress, colors }: FolderChipProps) {
+function FolderChip({ folderId, folder, label, color, isActive, hasChildren, onPress, onDrillIn, onLongPress, onAction, colors }: FolderChipProps) {
   const handlePress = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (folderId) {
@@ -269,10 +276,14 @@ function FolderChip({ folderId, folder, label, color, isActive, hasChildren, onP
         activeOpacity={0.7}
         accessibilityRole="button"
         accessibilityLabel={`Filter by ${label}`}
-        accessibilityHint={folder && onLongPress ? 'Shows rename, add subfolder, and delete' : undefined}
+        accessibilityHint={
+          folder && (onAction || onLongPress)
+            ? 'Rename, add a subfolder, or delete this folder'
+            : undefined
+        }
         accessibilityState={{ selected: isActive }}
         accessibilityActions={
-          folder && onLongPress
+          folder && (onAction || onLongPress)
             ? [
                 { name: 'rename', label: 'Rename' },
                 { name: 'addSubfolder', label: 'Add subfolder' },
@@ -281,12 +292,17 @@ function FolderChip({ folderId, folder, label, color, isActive, hasChildren, onP
             : undefined
         }
         onAccessibilityAction={
-          folder && onLongPress
+          folder && (onAction || onLongPress)
             ? (event: AccessibilityActionEvent) => {
                 const action = event.nativeEvent.actionName;
-                if (action === 'rename' || action === 'addSubfolder' || action === 'delete') {
-                  onLongPress(folder);
+                if (action !== 'rename' && action !== 'addSubfolder' && action !== 'delete') {
+                  return;
                 }
+                if (onAction) {
+                  onAction(folder, action);
+                  return;
+                }
+                onLongPress?.(folder);
               }
             : undefined
         }

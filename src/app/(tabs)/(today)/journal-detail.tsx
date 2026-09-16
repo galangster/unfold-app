@@ -22,15 +22,30 @@ import { format } from 'date-fns';
 import { Typography } from '@/constants/typography';
 
 function SoapSectionDisplay({
+  label,
   value,
   colors,
 }: {
+  label: string;
   value: string;
-  colors: { text: string };
+  colors: { text: string; textMuted: string };
 }) {
   if (!value.trim()) return null;
   return (
-    <View style={{ marginBottom: Spacing['6'] }}>
+    <View
+      accessible
+      accessibilityLabel={`${label}. ${value}`}
+      style={{ marginBottom: Spacing['6'] }}
+    >
+      <Text
+        style={{
+          ...Typography.cardMeta,
+          color: colors.textMuted,
+          marginBottom: Spacing['2'],
+        }}
+      >
+        {label}
+      </Text>
       <Text
         style={{
           fontFamily: FontFamily.body,
@@ -194,10 +209,10 @@ export default function JournalDetailScreen() {
 
             {hasSoapContent && soapResponses && (
               <View style={{ marginTop: entry.content.trim().length > 0 ? Spacing['8'] : 0 }}>
-                <SoapSectionDisplay value={soapResponses.scripture} colors={colors} />
-                <SoapSectionDisplay value={soapResponses.observation} colors={colors} />
-                <SoapSectionDisplay value={soapResponses.application} colors={colors} />
-                <SoapSectionDisplay value={soapResponses.prayer} colors={colors} />
+                <SoapSectionDisplay label="Scripture" value={soapResponses.scripture} colors={colors} />
+                <SoapSectionDisplay label="Observation" value={soapResponses.observation} colors={colors} />
+                <SoapSectionDisplay label="Application" value={soapResponses.application} colors={colors} />
+                <SoapSectionDisplay label="Prayer" value={soapResponses.prayer} colors={colors} />
               </View>
             )}
 
@@ -243,6 +258,14 @@ export default function JournalDetailScreen() {
                 {entry.prayerRequests.map((prayer) => (
                   <View
                     key={prayer.id}
+                    accessible
+                    accessibilityRole="text"
+                    accessibilityLabel={
+                      prayer.isAnswered && prayer.answeredAt
+                        ? `${prayer.text}. Answered ${format(new Date(prayer.answeredAt), 'MMM d, yyyy')}`
+                        : prayer.text
+                    }
+                    accessibilityState={{ checked: prayer.isAnswered }}
                     style={{
                       flexDirection: 'row',
                       alignItems: 'flex-start',
@@ -285,7 +308,7 @@ export default function JournalDetailScreen() {
                             marginTop: Spacing['1'],
                           }}
                         >
-                          {format(new Date(prayer.answeredAt), 'MMM d, yyyy')}
+                          {`Answered ${format(new Date(prayer.answeredAt), 'MMM d, yyyy')}`}
                         </Text>
                       )}
                     </View>

@@ -38,6 +38,14 @@ jest.mock('react-native-safe-area-context', () => {
   };
 });
 
+jest.mock('@/hooks/useAccessibility', () => ({
+  useAccessibleAnimation: () => ({
+    reducedMotion: true,
+    entering: () => undefined,
+    exiting: () => undefined,
+  }),
+}));
+
 jest.mock('react-native-reanimated', () => {
   const { View, Text: RNText, FlatList, ScrollView } = require('react-native');
   const chainable = () => {
@@ -186,6 +194,16 @@ describe('notebook FAB visibility animation', () => {
     (globalThis as any).__sharedWrites = [];
     useUnfoldStore.getState().reset();
     useUnfoldStore.setState({ notes: NOTES });
+  });
+
+  it('uses the live accessibility hook for segment and FAB motion', () => {
+    expect(HUB_SOURCE).toContain("import { useAccessibleAnimation } from '@/hooks/useAccessibility'");
+    const segment = HUB_SOURCE.slice(HUB_SOURCE.indexOf('function SegmentedControl'), HUB_SOURCE.indexOf('function SegmentedControl') + 500);
+    expect(segment).toContain('useAccessibleAnimation()');
+    expect(segment).not.toContain('useReducedMotion()');
+    const fab = HUB_SOURCE.slice(HUB_SOURCE.indexOf('function FloatingActionButton'), HUB_SOURCE.indexOf('function FloatingActionButton') + 500);
+    expect(fab).toContain('useAccessibleAnimation()');
+    expect(fab).not.toContain('useReducedMotion()');
   });
 
   it('writes the shared value from an effect, never from the render body', () => {

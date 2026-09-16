@@ -35,6 +35,8 @@ describe('#12 — folder long-press uses the branded sheet, not the OS Alert', (
     expect(chipsSrc).toContain("name: 'addSubfolder'");
     expect(chipsSrc).toContain("name: 'delete'");
     expect(chipsSrc).toContain('onAccessibilityAction');
+    expect(chipsSrc).toContain('onFolderAction');
+    expect(chipsSrc).toMatch(/onAction\(folder, action\)/);
   });
 
   it('long-press opens the branded FolderActionsSheet instead of an Alert', () => {
@@ -69,8 +71,16 @@ describe('#12 — folder long-press uses the branded sheet, not the OS Alert', (
   });
 
   it('preserves the folder-delete undo wiring (delete pushes an undo action)', () => {
-    expect(screenSrc).toMatch(/handleFolderDelete[\s\S]*?prepareJournalFolderDelete/);
-    expect(screenSrc).toMatch(/handleFolderDelete[\s\S]*?plan\.undoAction/);
+    expect(screenSrc).toMatch(/performFolderDelete[\s\S]*?prepareJournalFolderDelete/);
+    expect(screenSrc).toMatch(/performFolderDelete[\s\S]*?plan\.undoAction/);
+    expect(screenSrc).toMatch(/handleFolderDelete[\s\S]*?performFolderDelete/);
+  });
+
+  it('VoiceOver folder actions dispatch the named operation', () => {
+    expect(screenSrc).toContain('onFolderAction={handleFolderAction}');
+    expect(screenSrc).toMatch(/action === 'rename'[\s\S]*?setFolderActionsStartRenaming\(true\)/);
+    expect(screenSrc).toMatch(/action === 'addSubfolder'[\s\S]*?handleFolderAddSubfolder\(folder\)/);
+    expect(screenSrc).toMatch(/performFolderDelete\(folder\)/);
   });
 });
 

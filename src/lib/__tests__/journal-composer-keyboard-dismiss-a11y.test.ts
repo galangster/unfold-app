@@ -27,6 +27,11 @@ describe('JA-1 journal composer keyboard-dismiss wrapper', () => {
     expect(composer).toContain('<VoiceInputBar');
     expect(composer).toContain('accessibilityLabel="Add prayer"');
     expect(composer).toContain('accessibilityLabel="New prayer request"');
+    expect(composer).toContain('accessibilityRole="checkbox"');
+    expect(composer).toContain('accessibilityState={{ checked: prayer.isAnswered }}');
+    expect(src).toContain("import { useAccessibleAnimation } from '@/hooks/useAccessibility'");
+    expect(src).toContain('function AnimatedPrayerCircle');
+    expect(src.slice(src.indexOf('function AnimatedPrayerCircle'), src.indexOf('function AnimatedPrayerCircle') + 400)).toContain('useAccessibleAnimation()');
     expect(composer).toContain('accessibilityLabel={`Response to prompt ${index + 1}`}');
     expect(composer).not.toContain('accessibilityElementsHidden');
   });

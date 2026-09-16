@@ -40,6 +40,14 @@ jest.mock('react-native-safe-area-context', () => {
   };
 });
 
+jest.mock('@/hooks/useAccessibility', () => ({
+  useAccessibleAnimation: () => ({
+    reducedMotion: true,
+    entering: () => undefined,
+    exiting: () => undefined,
+  }),
+}));
+
 jest.mock('react-native-reanimated', () => {
   const { View, Text: RNText, FlatList, ScrollView } = require('react-native');
   const chainable = () => {
@@ -250,6 +258,11 @@ describe('journal hub leftover eyebrow copy', () => {
     expect(compose).not.toContain('Prayer Requests');
     expect(detail).not.toContain('Journal Entry');
     expect(detail).not.toContain('Prayer Requests');
-    expect(detail).not.toContain('label="Scripture"');
+    expect(detail).toContain('label="Scripture"');
+    expect(detail).toContain('label="Observation"');
+    expect(detail).toContain('label="Application"');
+    expect(detail).toContain('label="Prayer"');
+    expect(detail).toMatch(/SoapSectionDisplay[\s\S]*?Typography\.cardMeta[\s\S]*?colors\.textMuted/);
+    expect(detail).toContain("Answered ${format(new Date(prayer.answeredAt), 'MMM d, yyyy')}");
   });
 });
