@@ -51,6 +51,12 @@ jest.mock('../logger', () => ({
   logger: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
 
+async function flushUntil(predicate: () => boolean): Promise<void> {
+  for (let i = 0; i < 10 && !predicate(); i += 1) {
+    await Promise.resolve();
+  }
+}
+
 describe('ambient timer signal', () => {
   const originalOS = Platform.OS;
 
@@ -179,34 +185,33 @@ describe('ambient timer signal', () => {
   });
 
   it('does not restore a cancelled backup after a later cancel wins', async () => {
-    let releasePermissions!: (value: { status: string }) => void;
-    mockGetPermissions.mockImplementationOnce(() => new Promise((resolve) => {
-      releasePermissions = resolve;
+    let releaseCancel: () => void = () => undefined;
+    mockCancel.mockImplementationOnce(() => new Promise<void>((resolve) => {
+      releaseCancel = () => resolve();
     }));
 
     const first = scheduleAmbientTimerNotification(Date.now() + 60_000);
-    await Promise.resolve();
-    await cancelAmbientTimerNotification();
-    releasePermissions({ status: 'granted' });
+    await flushUntil(() => mockCancel.mock.calls.length > 0);
+    const cancelled = cancelAmbientTimerNotification();
+    releaseCancel();
     await first;
+    await cancelled;
 
     expect(mockSchedule).not.toHaveBeenCalled();
   });
 
   it('keeps only the latest backup when timers replace before scheduling finishes', async () => {
-    let releaseFirst!: (value: { status: string }) => void;
-    mockGetPermissions
-      .mockImplementationOnce(() => new Promise((resolve) => {
-        releaseFirst = resolve;
-      }))
-      .mockResolvedValue({ status: 'granted' });
-    jest.useFakeTimers();
-    jest.setSystemTime(1_700_000_000_000);
+    let releaseFirst: () => void = () => undefined;
+    mockCancel.mockImplementationOnce(() => new Promise<void>((resolve) => {
+      releaseFirst = () => resolve();
+    }));
+    const now = Date.now();
 
-    const first = scheduleAmbientTimerNotification(1_700_000_000_000 + 5 * 60_000);
-    const second = scheduleAmbientTimerNotification(1_700_000_000_000 + 15 * 60_000);
+    const first = scheduleAmbientTimerNotification(now + 5 * 60_000);
+    await flushUntil(() => mockCancel.mock.calls.length > 0);
+    const second = scheduleAmbientTimerNotification(now + 15 * 60_000);
     await second;
-    releaseFirst({ status: 'granted' });
+    releaseFirst();
     await first;
 
     const backups = mockSchedule.mock.calls.filter((call) => {
