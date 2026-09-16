@@ -93,6 +93,8 @@ import {
   getMiddayCheckInDayNumber,
 } from '@/lib/today-companion-state';
 import { getCalendarDayNumber } from '@/lib/devotional-day-access';
+import { resolveRitualCompletion } from '@/lib/ritual-session';
+import { getDeviceTimezone } from '@/lib/device-timezone';
 import { useGeneratedDayWatch } from '@/hooks/useGeneratedDayWatch';
 import { getQaTodayProfileMarker } from '@/lib/qa-today-marker';
 import { getStreakDayKey, shouldCelebrateStreakDayFlip } from '@/lib/streak-helpers';
@@ -299,6 +301,7 @@ export default function HomeScreen() {
   const streakLastReadDate = useUnfoldStore((s) => s.streakLastReadDate);
   const addCheckIn = useUnfoldStore((s) => s.addCheckIn);
   const markMiddayCheckInCompleted = useUnfoldStore((s) => s.markMiddayCheckInCompleted);
+  const beginRitualSession = useUnfoldStore((s) => s.beginRitualSession);
   const getCheckIn = useUnfoldStore((s) => s.getCheckIn);
   const hasSeenDay1Review = useUnfoldStore((s) => s.hasSeenDay1Review);
   const setHasSeenDay1Review = useUnfoldStore((s) => s.setHasSeenDay1Review);
@@ -957,8 +960,15 @@ export default function HomeScreen() {
 
   const openCheckInSheet = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (currentDevotional) {
+      beginRitualSession({
+        kind: 'midday',
+        devotionalId: currentDevotional.id,
+        dayNumber: getMiddayCheckInDayNumber(currentDevotional) ?? currentDevotional.currentDay,
+      });
+    }
     setShowCheckInSheet(true);
-  }, []);
+  }, [beginRitualSession, currentDevotional]);
 
   const handleCheckIn = useCallback(() => {
     if (!gate()) return;
@@ -988,15 +998,26 @@ export default function HomeScreen() {
     freeText?: string;
   }) => {
     if (!currentDevotional) return;
-    const targetDayNumber = getMiddayCheckInDayNumber(currentDevotional) ?? currentDevotional.currentDay;
+    const fallbackDay = getMiddayCheckInDayNumber(currentDevotional) ?? currentDevotional.currentDay;
+    const store = useUnfoldStore.getState();
+    const clock = resolveRitualCompletion({
+      session: store.ritualSessions.midday,
+      identity: {
+        kind: 'midday',
+        devotionalId: currentDevotional.id,
+        dayNumber: fallbackDay,
+      },
+      completedTimeZone: getDeviceTimezone(),
+    });
     addCheckIn({
       devotionalId: currentDevotional.id,
-      dayNumber: targetDayNumber,
+      dayNumber: clock.dayNumber,
       mood: data.mood,
       moodLabel: data.moodLabel,
       chipAnswer: data.chipAnswer,
       freeText: data.freeText,
       timeOfDay: 'midday',
+      createdAt: clock.iso,
     });
     // Record the completion date. The single-owner useCheckInNotifications
     // hook does NOT react to this field — we keep the DAILY trigger on its
@@ -1004,7 +1025,8 @@ export default function HomeScreen() {
     // replaces the old cancelAndRescheduleMiddayForTomorrow() helper which
     // silently downgraded the DAILY trigger to a one-shot DATE trigger.
     // See ~/vault/gotchas/expo-reschedule-helpers-silent-one-shot-downgrade.md
-    markMiddayCheckInCompleted();
+    markMiddayCheckInCompleted(clock.localYmd);
+    store.clearRitualSession('midday');
     setShowCheckInSheet(false);
   };
 
