@@ -16,7 +16,7 @@ import {
   CrownIcon,
   SparkleIcon,
 } from '@/components/icons';
-import { FontFamily, FontSize } from '@/constants/fonts';
+import { FontFamily } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Shadow } from '@/constants/shadows';
 import { useTheme } from '@/lib/theme';
@@ -90,19 +90,17 @@ export default function YouScreen() {
   const menuItems: MenuItem[] = [
     {
       icon: BookOpenIcon,
-      label: 'Past Devotionals',
+      label: 'Past devotionals',
       subtitle: `${devotionals.length} ${devotionals.length === 1 ? 'devotional' : 'devotionals'}`,
       route: '/(tabs)/(you)/past-devotionals',
     },
     {
       icon: PencilLineIcon,
-      label: 'My Library',
+      label: 'My library',
       subtitle: `${journalEntries.length + bookmarks.length + highlights.length} saved items`,
       route: '/(tabs)/(you)/my-content',
     },
   ];
-
-  const accountStatus = isPremium ? 'Premium' : 'Free plan';
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }} testID="you-screen">
@@ -196,39 +194,8 @@ export default function YouScreen() {
                 </Text>
               </TouchableOpacity>
             )}
-            <View
-              style={{
-                flexDirection: 'row',
-                flexWrap: 'wrap',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: Spacing['3'],
-                marginTop: Spacing['2'],
-              }}
-            >
+            <View style={{ marginTop: Spacing['2'] }}>
               <StreakDisplay compact hideDayLabel />
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: Spacing['1'],
-                  backgroundColor: isPremium ? alpha(colors.accent, 0.13) : alpha(colors.text, 0.06),
-                  paddingHorizontal: 10,
-                  paddingVertical: Spacing['1'],
-                  borderRadius: Radius.md,
-                }}
-              >
-                {isPremium ? <CrownIcon size={12} color={colors.accent} weight="fill" /> : null}
-                <Text
-                  style={{
-                    fontFamily: FontFamily.uiMedium,
-                    fontSize: 11,
-                    color: isPremium ? colors.accent : colors.textMuted,
-                  }}
-                >
-                  {accountStatus}
-                </Text>
-              </View>
             </View>
           </Animated.View>
 
@@ -262,7 +229,7 @@ export default function YouScreen() {
                       borderRadius: Radius.xl,
                     }}
                   >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 }}>
                         <CrownIcon size={20} color={colors.background} weight="fill" />
                         <Text
@@ -279,17 +246,6 @@ export default function YouScreen() {
                       </View>
                       <SparkleIcon size={16} color={alpha(colors.background, 0.67)} weight="fill" />
                     </View>
-                    <Text
-                      style={{
-                        fontFamily: FontFamily.body,
-                        fontSize: FontSize.sm,
-                        color: colors.background,
-                        opacity: 0.85,
-                        lineHeight: 20,
-                      }}
-                    >
-                      Unlock unlimited series, themes, and more
-                    </Text>
                   </LinearGradient>
                 </View>
               </TouchableOpacity>
@@ -356,7 +312,7 @@ export default function YouScreen() {
                           style={{
                             fontFamily: FontFamily.ui,
                             fontSize: 13,
-                            color: colors.textSubtle,
+                            color: colors.textMuted,
                             marginTop: 2,
                           }}
                         >

@@ -63,7 +63,6 @@ interface DownloadBibleSheetProps {
 export function DownloadBibleSheet({
   visible,
   colors,
-  isDark,
   progress,
   isDownloading,
   error,
@@ -82,13 +81,13 @@ export function DownloadBibleSheet({
           Set up your Bible
         </Text>
 
-        <Text style={[styles.subtitle, { color: colors.textSubtle }]}>
+        <Text style={[styles.subtitle, { color: colors.textMuted }]}>
           Download the Bible for offline reading. This only happens once.
         </Text>
 
         <View style={styles.sizeRow}>
-          <WifiHighIcon size={14} color={colors.textSubtle} weight="light" />
-          <Text style={[styles.sizeText, { color: colors.textSubtle }]}>
+          <WifiHighIcon size={14} color={colors.textMuted} weight="light" />
+          <Text style={[styles.sizeText, { color: colors.textMuted }]}>
             ~14 MB — BSB + KJV translations
           </Text>
         </View>
@@ -124,7 +123,7 @@ export function DownloadBibleSheet({
                 ]}
               />
             </View>
-            <Text style={[styles.progressText, { color: colors.textSubtle }]}>
+            <Text style={[styles.progressText, { color: colors.textMuted }]}>
               {progress != null && progress < 0 ? 'Downloading…' : `${Math.round((progress ?? 0) * 100)}%`}
             </Text>
           </View>
@@ -136,7 +135,7 @@ export function DownloadBibleSheet({
             accessibilityLabel={error ? 'Try again' : 'Download Bible'}
             accessibilityRole="button"
           >
-            <Text style={[styles.downloadButtonText, { fontFamily: FontFamily.uiMedium, color: isDark ? '#FFFFFF' : colors.backgroundPure }]}>
+            <Text style={[styles.downloadButtonText, { fontFamily: FontFamily.uiMedium, color: colors.background }]}>
               {error ? 'Try again' : 'Download'}
             </Text>
           </TouchableOpacity>

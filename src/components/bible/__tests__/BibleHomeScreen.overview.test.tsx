@@ -5,13 +5,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { StyleSheet, Text } from 'react-native';
 import { DarkColors, LightColors } from '@/constants/colors';
-import { BIBLE_BOOKS, CATEGORY_LABELS, getBookCategory } from '@/lib/bible-constants';
+import { BIBLE_BOOKS, CATEGORY_LABELS } from '@/lib/bible-constants';
 import {
   BIBLE_HUB_INK_BLACK,
   BIBLE_HUB_INK_WHITE,
   BIBLE_HUB_MIN_TEXT_CONTRAST,
   bibleHubBookChrome,
-  bibleHubCategoryText,
   bibleHubContrastInk,
   contrastRatio,
 } from '@/lib/bible-hub-category-palette';
@@ -354,31 +353,31 @@ describe('Bible hub overview restoration', () => {
     expect(bibleHomeMeta().get(BIBLE_HUB_VIEW_STORAGE_KEY)).toBe('cards');
   });
 
-  it('applies theme category colors and selected accent chrome in both views', () => {
+  it('applies single-accent chrome in both views', () => {
     const tree = createHome();
     const genesis = bookTarget(tree, 'Genesis');
     const acts = bookTarget(tree, 'Acts');
     const expectedGenesis = bibleHubBookChrome({
-      category: getBookCategory(1),
       isDark: true,
       isSelected: false,
       background: DarkColors.background,
       accent: DarkColors.accent,
       text: DarkColors.text,
+      inputBackground: DarkColors.inputBackground,
     });
     const expectedActs = bibleHubBookChrome({
-      category: getBookCategory(44),
       isDark: true,
       isSelected: false,
       background: DarkColors.background,
       accent: DarkColors.accent,
       text: DarkColors.text,
+      inputBackground: DarkColors.inputBackground,
     });
     expect(flatten(genesis.props.style).backgroundColor).toBe(expectedGenesis.backgroundColor);
     expect(flatten(genesis.findAllByType(Text)[0].props.style).color).toBe(expectedGenesis.color);
     expect(flatten(acts.findAllByType(Text)[0].props.style).color).toBe(expectedActs.color);
-    expect(expectedGenesis.color).toBe(bibleHubCategoryText('pentateuch', true));
-    expect(expectedActs.color).toBe(bibleHubCategoryText('acts', true));
+    expect(expectedGenesis.color).toBe(DarkColors.text);
+    expect(expectedActs.color).toBe(DarkColors.text);
 
     act(() => {
       genesis.props.onPress();
@@ -396,9 +395,7 @@ describe('Bible hub overview restoration', () => {
     const lightNames = createHome();
     selectView(lightNames, 'Names');
     const lightGenesis = bookTarget(lightNames, 'Genesis');
-    expect(flatten(lightGenesis.findAllByType(Text)[0].props.style).color).toBe(
-      bibleHubCategoryText('pentateuch', false),
-    );
+    expect(flatten(lightGenesis.findAllByType(Text)[0].props.style).color).toBe(LightColors.text);
     expect(flatten(lightGenesis.props.style).minHeight).toBeGreaterThanOrEqual(44);
   });
 
@@ -440,12 +437,12 @@ describe('Bible hub overview restoration', () => {
     });
     const selected = bookTarget(tree, 'Genesis');
     const chrome = bibleHubBookChrome({
-      category: getBookCategory(1),
       isDark: false,
       isSelected: true,
       background: LightColors.background,
       accent: LightColors.accent,
       text: LightColors.text,
+      inputBackground: LightColors.inputBackground,
     });
     expect(flatten(selected.findAllByType(Text)[0].props.style).color).toBe(LightColors.text);
     expect(flatten(selected.props.style).backgroundColor).toBe(chrome.backgroundColor);

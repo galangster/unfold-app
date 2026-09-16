@@ -219,7 +219,7 @@ export function AppearanceSection({ onPremiumFeature }: AppearanceSectionProps) 
               setExpandedPremium(expandedPremium === 'colors' ? null : 'colors');
             }}
             accessibilityRole="button"
-            accessibilityLabel="Accent Colors"
+            accessibilityLabel="Accent colors"
             accessibilityState={{ expanded: expandedPremium === 'colors' }}
             style={{
               flexDirection: 'row',
@@ -237,7 +237,7 @@ export function AppearanceSection({ onPremiumFeature }: AppearanceSectionProps) 
                   color: colors.text,
                 }}
               >
-                Accent Colors
+                Accent colors
               </Text>
               {!isPremium && (
                 <LockIcon size={12} color={colors.textSubtle} weight="light" />
@@ -321,7 +321,7 @@ export function AppearanceSection({ onPremiumFeature }: AppearanceSectionProps) 
               setExpandedPremium(expandedPremium === 'fonts' ? null : 'fonts');
             }}
             accessibilityRole="button"
-            accessibilityLabel="Reading Font"
+            accessibilityLabel="Reading font"
             accessibilityState={{ expanded: expandedPremium === 'fonts' }}
             style={{
               flexDirection: stackPreferenceRows ? 'column' : 'row',
@@ -353,7 +353,7 @@ export function AppearanceSection({ onPremiumFeature }: AppearanceSectionProps) 
                   minWidth: 0,
                 }}
               >
-                Reading Font
+                Reading font
               </Text>
             </View>
             <View

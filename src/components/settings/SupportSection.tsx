@@ -254,7 +254,7 @@ export function SupportSection() {
             activeOpacity={0.7}
             onPress={() => Linking.openURL('https://apps.apple.com/account/subscriptions')}
             accessibilityRole="link"
-            accessibilityLabel="Manage Subscription"
+            accessibilityLabel="Manage subscription"
             style={{
               flexDirection: 'row',
               alignItems: 'center',
@@ -274,7 +274,7 @@ export function SupportSection() {
             </View>
             <View style={{ marginLeft: Spacing['3.5'], flex: 1, minWidth: 0 }}>
               <Text style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.text }}>
-                Manage Subscription
+                Manage subscription
               </Text>
             </View>
             <CaretRightIcon size={16} color={colors.textMuted} weight="light" />

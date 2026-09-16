@@ -2466,8 +2466,8 @@ export default function OnboardingScreen() {
                   <View key={groupName} style={{ gap: Spacing['3'] }}>
                     <Text
                       style={{
-                        ...Typography.cardMeta,
-                        color: colors.textSubtle,
+                        ...Typography.sectionHeader,
+                        color: colors.text,
                       }}
                     >
                       {groupName}
@@ -3457,9 +3457,8 @@ export default function OnboardingScreen() {
                         )}
                       </View>
                       {isLockedOption && (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 8 }}>
+                        <View style={{ marginLeft: 8 }}>
                           <LockIcon size={14} color={colors.accent} weight="light" />
-                          <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 11, color: colors.accent }}>Premium</Text>
                         </View>
                       )}
                     </View>

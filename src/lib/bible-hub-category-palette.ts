@@ -111,12 +111,12 @@ export function bibleHubCategoryFill(
 }
 
 export function bibleHubBookChrome(input: {
-  category: BibleCategory;
   isDark: boolean;
   isSelected: boolean;
   background: string;
   accent: string;
   text: string;
+  inputBackground: string;
 }): { backgroundColor: string; borderColor: string; color: string } {
   if (input.isSelected) {
     return {
@@ -131,8 +131,8 @@ export function bibleHubBookChrome(input: {
   }
 
   return {
-    backgroundColor: bibleHubCategoryFill(input.category, input.isDark, input.background),
+    backgroundColor: input.inputBackground,
     borderColor: 'transparent',
-    color: bibleHubCategoryText(input.category, input.isDark),
+    color: input.text,
   };
 }

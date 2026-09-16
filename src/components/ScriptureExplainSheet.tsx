@@ -19,7 +19,6 @@ import { alpha } from '@/components/ui';
 import { AnalyticsEvents, logEvent } from '@/lib/analytics';
 import { useTheme } from '@/lib/theme';
 import { useLatestRequest } from '@/hooks/useLatestRequest';
-import { Typography } from '@/constants/typography';
 import {
   fetchScriptureExplanation,
   type ScriptureExplainApiErrorCode,
@@ -216,7 +215,6 @@ export function ScriptureExplainSheet({
 
           <View style={styles.header}>
             <View style={styles.headerTextGroup}>
-              <Text style={[styles.eyebrow, { color: colors.accent }]}>Study note</Text>
               <View style={styles.referenceRow}>
                 <Text style={[styles.reference, { color: colors.text }]} numberOfLines={1}>
                   {response?.reference ?? reference}
@@ -232,12 +230,11 @@ export function ScriptureExplainSheet({
             <TouchableOpacity
               activeOpacity={0.6}
               onPress={onClose}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               style={styles.iconButton}
               accessibilityLabel="Close scripture explanation"
               accessibilityRole="button"
             >
-              <XIcon size={18} color={colors.textSubtle} weight="light" />
+              <XIcon size={18} color={colors.textMuted} weight="light" />
             </TouchableOpacity>
           </View>
 
@@ -256,9 +253,6 @@ export function ScriptureExplainSheet({
                 },
               ]}
             >
-              <View style={styles.scriptureLabelRow}>
-                <Text style={[styles.scriptureLabel, { color: colors.accent }]}>Scripture</Text>
-              </View>
               <Text style={[styles.scriptureText, { color: colors.text }]} numberOfLines={6}>
                 {passageText.trim() || 'Select a verse first.'}
               </Text>
@@ -276,7 +270,6 @@ export function ScriptureExplainSheet({
                 entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
                 style={styles.explanationWrap}
               >
-                <Text style={[styles.sectionLabel, { color: colors.accent }]}>Meaning</Text>
                 <View style={styles.explanationBody}>
                   {explanationParagraphs(response).map((paragraph, index) => (
                     <Text
@@ -297,7 +290,6 @@ export function ScriptureExplainSheet({
                       },
                     ]}
                   >
-                    <Text style={[styles.sectionLabel, { color: colors.accent }]}>Carry this</Text>
                     <Text style={[styles.promptText, { color: colors.text }]}>
                       {response.explanation.reflectionPrompt}
                     </Text>
@@ -312,7 +304,7 @@ export function ScriptureExplainSheet({
                 <Text style={[styles.errorText, { color: colors.text }]}>
                   {errorCode === 'SCRIPTURE_EXPLAIN_INVALID_INPUT'
                     ? 'Select a verse first.'
-                    : "The study note didn't load. Try again in a moment."}
+                    : "This didn't load. Try again in a moment."}
                 </Text>
                 {showRetry ? (
                   <TouchableOpacity
@@ -371,10 +363,6 @@ const styles = StyleSheet.create({
   },
   headerTextGroup: {
     flex: 1,
-    gap: 5,
-  },
-  eyebrow: {
-    ...Typography.cardMeta,
   },
   referenceRow: {
     flexDirection: 'row',
@@ -394,12 +382,12 @@ const styles = StyleSheet.create({
   },
   translationPillText: {
     fontFamily: FontFamily.uiMedium,
-    fontSize: 10,
-    letterSpacing: 0.7,
+    fontSize: FontSize.xs,
+    letterSpacing: 0,
   },
   iconButton: {
-    width: 34,
-    height: 34,
+    width: 44,
+    height: 44,
     borderRadius: Radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
@@ -418,14 +406,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing['1'],
     paddingVertical: Spacing['5'],
   },
-  scriptureLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: Spacing['3'],
-  },
-  scriptureLabel: {
-    ...Typography.cardMeta,
-  },
   scriptureText: {
     fontFamily: FontFamily.display,
     fontSize: 18,
@@ -443,9 +423,6 @@ const styles = StyleSheet.create({
   },
   explanationWrap: {
     gap: Spacing['4'],
-  },
-  sectionLabel: {
-    ...Typography.cardMeta,
   },
   explanationBody: {
     gap: Spacing['4'],

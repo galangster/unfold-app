@@ -382,7 +382,7 @@ export default function MyContentScreen({ hostTab }: { hostTab?: TabGroup } = {}
               color: colors.text,
             }}
           >
-            My Library
+            My library
           </Text>
         </View>
         <TouchableOpacity

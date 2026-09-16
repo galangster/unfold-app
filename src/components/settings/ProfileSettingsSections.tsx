@@ -51,7 +51,7 @@ export function ProfileSettingsSections({ onSectionLayout }: ProfileSettingsSect
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Continue',
+          text: 'Reset all data',
           onPress: () => {
             Alert.alert(
               'Are you absolutely sure?',
@@ -130,7 +130,7 @@ export function ProfileSettingsSections({ onSectionLayout }: ProfileSettingsSect
             disabled={isDeletingAccount}
             accessibilityState={{ disabled: isDeletingAccount }}
             accessibilityRole="button"
-            accessibilityLabel="Reset all data (deletes your account)"
+            accessibilityLabel="Reset all data"
           >
             <View
               style={{
@@ -156,7 +156,7 @@ export function ProfileSettingsSections({ onSectionLayout }: ProfileSettingsSect
                   flexShrink: 1,
                 }}
               >
-                {isDeletingAccount ? 'Resetting...' : 'Reset all data (deletes your account)'}
+                {isDeletingAccount ? 'Resetting...' : 'Reset all data'}
               </Text>
             </View>
           </TouchableOpacity>

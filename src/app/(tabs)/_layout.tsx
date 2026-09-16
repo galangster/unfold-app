@@ -7,7 +7,6 @@ import { HouseIcon, BookBookmarkIcon, BookOpenIcon, UserIcon, ChatCircleIcon, St
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
   withTiming,
   FadeInDown,
   FadeOutDown,
@@ -16,9 +15,9 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { elevated } from '@/constants/shadows';
-import { Duration, Spring } from '@/constants/animations';
+import { Duration } from '@/constants/animations';
 import { Spacing } from '@/constants/spacing';
 import { useUIState } from '@/lib/ui-state';
 import { useAudioPlayerState } from '@/lib/audio-player-state';
@@ -32,13 +31,10 @@ type TabBarProps = {
   navigation: { emit: (event: any) => any; navigate: (...args: any[]) => void };
 };
 
-const SPRING_CONFIG = Spring.snappy;
-
-// Dynamic Type cap for the tiny tab labels. Without a cap the iOS XXL/AX
-// traits clip "Companion" → "Compani" / "Today" → "Toda" mid-word; with the
-// cap + numberOfLines the label truncates at a glyph boundary instead of
-// splitting a word, and the row never blows out its fixed height (brief §3
-// #14b). Mirrors the per-file *_MAX_SCALE pattern used elsewhere.
+// Dynamic Type cap for tab labels. Without a cap the iOS XXL/AX traits clip
+// "Companion" → "Compani" / "Today" → "Toda" mid-word; with the cap +
+// numberOfLines the label truncates at a glyph boundary instead of splitting
+// a word, and the row never blows out its fixed height (brief §3 #14b).
 const TAB_LABEL_MAX_SCALE = 1.2;
 
 // Opacity of the solid plane painted UNDER the blur so the gold "Complete Day"
@@ -123,44 +119,6 @@ function NoteDraftDock() {
         <Text style={[styles.draftDockAction, { color: colors.accent }]}>Restore</Text>
       </TouchableOpacity>
     </Animated.View>
-  );
-}
-
-/** Animated wrapper for each tab icon -- handles scale spring + dot indicator */
-function AnimatedTabIcon({
-  focused,
-  children,
-}: {
-  focused: boolean;
-  children: React.ReactNode;
-}) {
-  const reducedMotion = useReducedMotion();
-  const scale = useSharedValue(focused ? 1 : 1);
-
-  useEffect(() => {
-    if (reducedMotion) {
-      // Jump cut — no spring pop when motion is reduced.
-      scale.value = focused ? 1.12 : 1;
-      return;
-    }
-    if (focused) {
-      // Spring pop on select
-      scale.value = withSpring(1.12, SPRING_CONFIG);
-    } else {
-      scale.value = withSpring(1, SPRING_CONFIG);
-    }
-  }, [focused, scale, reducedMotion]);
-
-  const iconAnimStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
-  return (
-    <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-      <Animated.View style={iconAnimStyle}>
-        {children}
-      </Animated.View>
-    </View>
   );
 }
 
@@ -289,7 +247,7 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
           const isFocused = state.index === index;
 
           const activeColor = colors.accent;
-          const inactiveColor = colors.textSubtle;
+          const inactiveColor = colors.textMuted;
           const currentColor = isFocused ? activeColor : inactiveColor;
 
           const label =
@@ -373,11 +331,7 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
                 paddingVertical: 2,
               }}
             >
-              <AnimatedTabIcon
-                focused={isFocused}
-              >
-                {renderIcon()}
-              </AnimatedTabIcon>
+              {renderIcon()}
               <Text
                 numberOfLines={1}
                 maxFontSizeMultiplier={TAB_LABEL_MAX_SCALE}
@@ -385,10 +339,10 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
                   alignSelf: 'stretch',
                   paddingHorizontal: 4,
                   fontFamily: FontFamily.uiMedium,
-                  fontSize: 10,
+                  fontSize: FontSize.xs,
                   color: currentColor,
                   marginTop: 2,
-                  letterSpacing: 0.2,
+                  letterSpacing: 0,
                   textAlign: 'center',
                 }}
               >

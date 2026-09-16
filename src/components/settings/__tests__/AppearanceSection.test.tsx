@@ -148,17 +148,17 @@ describe('AppearanceSection preference rows', () => {
     expect(shouldStackSettingsPreferenceRow(0, 1)).toBe(true);
   });
 
-  it('renders complete Theme, Reading Font, and Font size labels at 402pt default text', () => {
+  it('renders complete Theme, Reading font, and Font size labels at 402pt default text', () => {
     const tree = createSection();
     expect(labelNode(tree, 'Theme').props.children).toBe('Theme');
-    expect(labelNode(tree, 'Reading Font').props.children).toBe('Reading Font');
+    expect(labelNode(tree, 'Reading font').props.children).toBe('Reading font');
     expect(labelNode(tree, 'Font size').props.children).toBe('Font size');
     expect(labelNode(tree, 'Source Serif').props.children).toBe('Source Serif');
     expect(labelNode(tree, 'Theme').props.numberOfLines).toBeUndefined();
     expect(labelNode(tree, 'Font size').props.numberOfLines).toBeUndefined();
     expect(chipRowStyle(tree, 'Theme').flexDirection).toBe('row');
     expect(chipRowStyle(tree, 'Font size').flexDirection).toBe('row');
-    expect(flatten(tree.root.findByProps({ accessibilityLabel: 'Reading Font' }).props.style).flexDirection).toBe('row');
+    expect(flatten(tree.root.findByProps({ accessibilityLabel: 'Reading font' }).props.style).flexDirection).toBe('row');
     expect(shouldStackSettingsPreferenceRow(402, 1)).toBe(false);
   });
 
@@ -183,7 +183,7 @@ describe('AppearanceSection preference rows', () => {
   it('opens the family selector and writes the chosen reading font when premium', () => {
     const { loadReadingFont } = jest.requireMock('@/lib/reading-fonts-loader');
     const tree = createSection();
-    const toggle = tree.root.findByProps({ accessibilityLabel: 'Reading Font' });
+    const toggle = tree.root.findByProps({ accessibilityLabel: 'Reading font' });
     expect(toggle.props.accessibilityRole).toBe('button');
     expect(toggle.props.accessibilityState).toEqual({ expanded: false });
 
@@ -191,7 +191,7 @@ describe('AppearanceSection preference rows', () => {
       toggle.props.onPress();
     });
 
-    expect(tree.root.findByProps({ accessibilityLabel: 'Reading Font' }).props.accessibilityState).toEqual({
+    expect(tree.root.findByProps({ accessibilityLabel: 'Reading font' }).props.accessibilityState).toEqual({
       expanded: true,
     });
     const garamond = tree.root.findAllByType(Text).find((node: { props: { children?: unknown } }) => node.props.children === 'Garamond');
@@ -214,7 +214,7 @@ describe('AppearanceSection preference rows', () => {
     });
 
     act(() => {
-      tree.root.findByProps({ accessibilityLabel: 'Reading Font' }).props.onPress();
+      tree.root.findByProps({ accessibilityLabel: 'Reading font' }).props.onPress();
     });
     const garamond = tree!.root.findAllByType(Text).find((node: { props: { children?: unknown } }) => node.props.children === 'Garamond');
     act(() => {
@@ -241,10 +241,10 @@ describe('AppearanceSection preference rows', () => {
       expect(shouldStackSettingsPreferenceRow(width, fontScale)).toBe(true);
       expect(chipRowStyle(tree, 'Theme').flexDirection).toBe('column');
       expect(chipRowStyle(tree, 'Font size').flexDirection).toBe('column');
-      expect(flatten(tree.root.findByProps({ accessibilityLabel: 'Reading Font' }).props.style).flexDirection).toBe('column');
+      expect(flatten(tree.root.findByProps({ accessibilityLabel: 'Reading font' }).props.style).flexDirection).toBe('column');
       expect(labelNode(tree, 'Theme').props.children).toBe('Theme');
       expect(labelNode(tree, 'Font size').props.children).toBe('Font size');
-      expect(labelNode(tree, 'Reading Font').props.children).toBe('Reading Font');
+      expect(labelNode(tree, 'Reading font').props.children).toBe('Reading font');
       expect(labelNode(tree, 'Theme').props.maxFontSizeMultiplier).toBe(1.4);
       expect(labelNode(tree, 'Font size').props.maxFontSizeMultiplier).toBe(1.4);
       expect(flatten(labelNode(tree, 'Theme').props.style).flexShrink).toBe(0);
@@ -256,11 +256,11 @@ describe('AppearanceSection preference rows', () => {
     }
   });
 
-  it('lets the Reading Font label shrink-wrap at 320pt and fontScale 3.0 while the icon and chevron stay unsqueezed', () => {
+  it('lets the Reading font label shrink-wrap at 320pt and fontScale 3.0 while the icon and chevron stay unsqueezed', () => {
     mockAppearanceState.window = { width: 320, height: 874, scale: 3, fontScale: 3 };
     const tree = createSection();
-    const label = labelNode(tree, 'Reading Font');
-    expect(label.props.children).toBe('Reading Font');
+    const label = labelNode(tree, 'Reading font');
+    expect(label.props.children).toBe('Reading font');
     expect(flatten(label.props.style)).toEqual(expect.objectContaining({ flexShrink: 1, minWidth: 0 }));
     const leading = label.parent;
     expect(flatten(leading.props.style)).toEqual(

@@ -6,7 +6,7 @@ import Animated, { FadeIn, FadeInDown, useReducedMotion } from 'react-native-rea
 import * as Haptics from 'expo-haptics';
 import { MMKV } from 'react-native-mmkv';
 import SegmentedControl from '@react-native-segmented-control/segmented-control';
-import { MagnifyingGlassIcon, ClockIcon, CaretRightIcon, XIcon, XCircleIcon } from '@/components/icons';
+import { MagnifyingGlassIcon, CaretRightIcon, XIcon, XCircleIcon } from '@/components/icons';
 import { FontFamily } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { elevated } from '@/constants/shadows';
@@ -27,10 +27,7 @@ import {
 import { bibleHubBookPillColumnCount, bibleHubBookPillWidthStyle } from '@/lib/bible-hub-book-pill-layout';
 import {
   bibleHubBookChrome,
-  bibleHubCategoryText,
   bibleHubContrastInk,
-  BIBLE_HUB_NT_LEGEND,
-  BIBLE_HUB_OT_LEGEND,
 } from '@/lib/bible-hub-category-palette';
 import {
   BIBLE_HUB_OVERVIEW_MIN_TILE,
@@ -207,12 +204,12 @@ export default function BibleHomeScreen() {
   const renderBook = useCallback((book: BibleBookInfo) => {
     const isSelected = selectedBook?.id === book.id;
     const chrome = bibleHubBookChrome({
-      category: getBookCategory(book.id),
       isDark,
       isSelected,
       background: colors.background,
       accent: colors.accent,
       text: colors.text,
+      inputBackground: colors.inputBackground,
     });
     const isGrid = viewMode === 'grid';
     return (
@@ -250,6 +247,7 @@ export default function BibleHomeScreen() {
     bookPillWidth,
     colors.accent,
     colors.background,
+    colors.inputBackground,
     colors.text,
     handleBookPress,
     isDark,
@@ -282,7 +280,7 @@ export default function BibleHomeScreen() {
         {groups.map((group) => (
           <View key={group.category} style={{ marginBottom: Spacing['4'] }}>
             <Text
-              style={[styles.categoryLabel, { color: bibleHubCategoryText(group.category, isDark) }]}
+              style={[styles.categoryLabel, { color: colors.text }]}
               maxFontSizeMultiplier={0}
             >
               {CATEGORY_LABELS[group.category]}
@@ -294,31 +292,7 @@ export default function BibleHomeScreen() {
         ))}
       </View>
     );
-  }, [isDark, renderBook]);
-
-  const renderCategoryLegend = useCallback((
-    categories: BibleCategory[],
-    testamentLabel: string,
-  ) => (
-    <View style={styles.legendBlock}>
-      <Text style={[styles.legendContext, { color: colors.text }]}>
-        {testamentLabel}
-      </Text>
-      <View style={styles.legendItems}>
-        {categories.map((category) => {
-          const color = bibleHubCategoryText(category, isDark);
-          return (
-            <View key={category} style={styles.legendItem}>
-              <View style={[styles.legendSwatch, { backgroundColor: color }]} />
-              <Text style={[styles.legendLabel, { color }]} maxFontSizeMultiplier={0}>
-                {CATEGORY_LABELS[category]}
-              </Text>
-            </View>
-          );
-        })}
-      </View>
-    </View>
-  ), [colors.text, isDark]);
+  }, [colors.text, renderBook]);
 
   // Show download prompt if Bible not ready (including during download)
   if (!isReady) {
@@ -403,7 +377,7 @@ export default function BibleHomeScreen() {
             accessibilityRole="button"
             style={styles.clearSearch}
           >
-            <XCircleIcon size={18} color={colors.textSubtle} weight="fill" />
+            <XCircleIcon size={18} color={colors.textMuted} weight="fill" />
           </TouchableOpacity>
         )}
       </View>
@@ -450,20 +424,13 @@ export default function BibleHomeScreen() {
                 backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
               }]}
               activeOpacity={0.6}
+              accessibilityRole="button"
               accessibilityLabel={`Continue reading ${citationBookName(lastPosition.bookName)} ${lastPosition.chapter}`}
             >
-              <View style={styles.continueLeft}>
-                <ClockIcon size={14} color={colors.textSubtle} weight="light" />
-                <Text key={fontScale} style={[styles.continueLabel, { color: colors.textSubtle }]}>
-                  Continue
-                </Text>
-              </View>
-              <View style={styles.continueRight}>
-                <Text key={fontScale} style={[styles.continueRef, { color: colors.text }]}>
-                  {citationBookName(lastPosition.bookName)} {lastPosition.chapter}
-                </Text>
-                <CaretRightIcon size={12} color={colors.textSubtle} weight="light" />
-              </View>
+              <Text key={fontScale} style={[styles.continueRef, { color: colors.text }]}>
+                {citationBookName(lastPosition.bookName)} {lastPosition.chapter}
+              </Text>
+              <CaretRightIcon size={12} color={colors.textMuted} weight="light" />
             </TouchableOpacity>
           </Animated.View>
         )}
@@ -477,13 +444,6 @@ export default function BibleHomeScreen() {
           New Testament
         </Text>
         {viewMode === 'grid' ? renderCanonicalGrid(NT_BOOKS) : renderCategorizedBooks(NT_BOOKS)}
-
-        {viewMode === 'grid' && (
-          <View style={styles.legendSection}>
-            {renderCategoryLegend(BIBLE_HUB_OT_LEGEND, 'Old Testament')}
-            {renderCategoryLegend(BIBLE_HUB_NT_LEGEND, 'New Testament')}
-          </View>
-        )}
 
         <View style={{ height: 100 }} />
           </>
@@ -526,7 +486,7 @@ export default function BibleHomeScreen() {
                   hitSlop={8}
                   style={styles.closeButton}
                 >
-                  <XIcon size={18} color={colors.textSubtle} weight="light" />
+                  <XIcon size={18} color={colors.textMuted} weight="light" />
                 </TouchableOpacity>
               </View>
 
@@ -657,20 +617,6 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     marginBottom: Spacing['7'],
   },
-  continueLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  continueLabel: {
-    fontFamily: FontFamily.ui,
-    fontSize: 13,
-  },
-  continueRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
   continueRef: {
     fontFamily: FontFamily.uiMedium,
     fontSize: 15,
@@ -722,36 +668,6 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.ui,
     fontSize: 11,
     textAlign: 'center',
-  },
-  legendSection: {
-    gap: Spacing['3'],
-    marginTop: Spacing['1'],
-  },
-  legendBlock: {
-    gap: Spacing['2'],
-  },
-  legendContext: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 12,
-  },
-  legendItems: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing['2'],
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  legendSwatch: {
-    width: 8,
-    height: 8,
-    borderRadius: 2,
-  },
-  legendLabel: {
-    fontFamily: FontFamily.ui,
-    fontSize: 11,
   },
   modalOverlay: {
     flex: 1,

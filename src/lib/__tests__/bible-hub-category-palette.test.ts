@@ -39,20 +39,20 @@ describe('bible hub category palette contrast', () => {
 
   it('keeps selected accent fills legible in both themes', () => {
     const darkSelected = bibleHubBookChrome({
-      category: getBookCategory(1),
       isDark: true,
       isSelected: true,
       background: DarkColors.background,
       accent: DarkColors.accent,
       text: DarkColors.text,
+      inputBackground: DarkColors.inputBackground,
     });
     const lightSelected = bibleHubBookChrome({
-      category: getBookCategory(1),
       isDark: false,
       isSelected: true,
       background: LightColors.background,
       accent: LightColors.accent,
       text: LightColors.text,
+      inputBackground: LightColors.inputBackground,
     });
 
     expect(darkSelected.borderColor).toBe(DarkColors.accent);
@@ -72,5 +72,20 @@ describe('bible hub category palette contrast', () => {
     expect(bibleHubCategoryText(getBookCategory(44), false)).toBe('#2D7667');
     expect(bibleHubCategoryText(getBookCategory(6), true)).toBe('#B8B0A2');
     expect(bibleHubCategoryText(getBookCategory(44), true)).toBe('#7ED0BE');
+  });
+
+  it('uses single-accent rest chrome instead of category fills', () => {
+    const rest = bibleHubBookChrome({
+      isDark: true,
+      isSelected: false,
+      background: DarkColors.background,
+      accent: DarkColors.accent,
+      text: DarkColors.text,
+      inputBackground: DarkColors.inputBackground,
+    });
+
+    expect(rest.backgroundColor).toBe(DarkColors.inputBackground);
+    expect(rest.color).toBe(DarkColors.text);
+    expect(rest.borderColor).toBe('transparent');
   });
 });

@@ -103,6 +103,8 @@ export default function BibleSearchScreen() {
       onPress={() => handleResultPress(item)}
       style={[styles.resultItem, { borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }]}
       activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityLabel={`${item.reference}. ${item.text}`}
     >
       <Text style={[styles.resultRef, { color: colors.accent }]}>
         {item.reference}
@@ -121,18 +123,19 @@ export default function BibleSearchScreen() {
           onPress={guardedBack}
           style={styles.backButton}
           accessibilityLabel="Go back"
+          accessibilityRole="button"
         >
           <CaretLeftIcon size={20} color={colors.text} weight="light" />
         </TouchableOpacity>
 
         <View style={[styles.searchInput, { backgroundColor: colors.inputBackground }]}>
-          <MagnifyingGlassIcon size={16} color={colors.textSubtle} weight="light" />
+          <MagnifyingGlassIcon size={16} color={colors.textMuted} weight="light" />
           <TextInput
             ref={inputRef}
             value={query}
             onChangeText={setQuery}
             placeholder="Search the Bible..."
-            placeholderTextColor={colors.textSubtle}
+            placeholderTextColor={colors.textMuted}
             selectionColor={colors.accent}
             cursorColor={colors.accent}
             style={[styles.input, { color: colors.text }]}
@@ -140,10 +143,17 @@ export default function BibleSearchScreen() {
             returnKeyType="search"
             autoCapitalize="none"
             autoCorrect={false}
+            accessibilityLabel="Search the Bible"
+            accessibilityRole="search"
           />
           {query.length > 0 && (
-            <TouchableOpacity onPress={() => setQuery('')} accessibilityLabel="Clear search" hitSlop={8}>
-              <XCircleIcon size={18} color={colors.textSubtle} weight="fill" />
+            <TouchableOpacity
+              onPress={() => setQuery('')}
+              accessibilityLabel="Clear search"
+              accessibilityRole="button"
+              style={styles.clearSearch}
+            >
+              <XCircleIcon size={18} color={colors.textMuted} weight="fill" />
             </TouchableOpacity>
           )}
         </View>
@@ -182,7 +192,17 @@ const styles = StyleSheet.create({
     gap: Spacing['2'],
   },
   backButton: {
-    padding: Spacing['1'],
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  clearSearch: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
   searchInput: {
     flex: 1,

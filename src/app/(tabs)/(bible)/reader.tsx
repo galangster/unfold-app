@@ -1,12 +1,12 @@
 /** @jsxImportSource react */
 import React, { useState, useCallback, useMemo, useRef, useEffect, useLayoutEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, TextInput, Platform, Keyboard, UIManager, type LayoutChangeEvent, type NativeSyntheticEvent, type NativeScrollEvent, type ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, TextInput, Platform, Keyboard, UIManager, type LayoutChangeEvent, type NativeSyntheticEvent, type NativeScrollEvent, type ScrollView } from 'react-native';
 import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
 import { adaptiveFrameStyle, chapterSwipeMetrics } from '@/lib/adaptive-layout';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useGuardedBack } from '@/hooks/useGuardedBack';
-import Animated, { FadeIn, FadeOut, useSharedValue, useAnimatedStyle, useAnimatedScrollHandler, withTiming, withDelay, withSpring, withSequence, Easing, runOnJS, useReducedMotion } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut, useSharedValue, useAnimatedStyle, useAnimatedScrollHandler, withTiming, withDelay, withSpring, withSequence, withRepeat, Easing, runOnJS, useReducedMotion } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
@@ -128,6 +128,42 @@ const VERSE_TAP_MAX_DISTANCE = 8;
 
 // Shared "no measurement" value so setting it again is a no-op for React.
 const EMPTY_LINES: BibleTextLine[] = [];
+
+const CHAPTER_SKELETON_WIDTHS = ['100%', '94%', '88%', '100%', '76%', '96%', '90%', '62%'] as const;
+
+function BibleChapterSkeleton({ colors }: { colors: { text: string } }) {
+  const reducedMotion = useReducedMotion();
+  const pulse = useSharedValue(reducedMotion ? 0.55 : 0.38);
+  const pulseStyle = useAnimatedStyle(() => ({ opacity: pulse.value }));
+
+  useEffect(() => {
+    if (reducedMotion) return;
+    pulse.value = withRepeat(
+      withSequence(
+        withTiming(0.62, { duration: 900, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0.38, { duration: 900, easing: Easing.inOut(Easing.ease) }),
+      ),
+      -1,
+      false,
+    );
+  }, [pulse, reducedMotion]);
+
+  const block = alpha(colors.text, 0.07);
+  return (
+    <View
+      accessibilityRole="progressbar"
+      accessibilityLabel="Loading chapter"
+      style={styles.loadingContainer}
+    >
+      {CHAPTER_SKELETON_WIDTHS.map((width, index) => (
+        <Animated.View
+          key={index}
+          style={[styles.loadingLine, { width, backgroundColor: block }, pulseStyle]}
+        />
+      ))}
+    </View>
+  );
+}
 
 // PERF: every prop below must be referentially stable across parent renders or
 // React.memo is defeated and a single selection/toast/keyboard state change
@@ -1407,7 +1443,7 @@ export default function BibleReaderScreen() {
         >
           <Text key={adaptiveLayout.fontScale} style={[styles.headerBook, { color: colors.text, fontFamily: FontFamily.uiMedium }]} numberOfLines={1} maxFontSizeMultiplier={1.4}>
             {book?.name ?? ''}{' '}
-            <Text maxFontSizeMultiplier={1.4} style={[styles.headerChapter, { color: colors.textSubtle }]}>{chapter}</Text>
+            <Text maxFontSizeMultiplier={1.4} style={[styles.headerChapter, { color: colors.textMuted }]}>{chapter}</Text>
           </Text>
         </TouchableOpacity>
 
@@ -1469,9 +1505,7 @@ export default function BibleReaderScreen() {
             />
           </View>
         ) : isLoading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator color={colors.textSubtle} size="small" />
-          </View>
+          <BibleChapterSkeleton colors={colors} />
         ) : (
           <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(ANIM.verseFade).easing(Ease.out)}>
             {/* PERF: no inline closures here — `handleVersePress` and
@@ -1512,7 +1546,7 @@ export default function BibleReaderScreen() {
             {/* Next chapter prompt */}
             {isEndOfBible ? (
               <View style={styles.endOfBibleContainer}>
-                <Text style={[styles.endOfBibleText, { color: colors.textSubtle }]}>
+                <Text style={[styles.endOfBibleText, { color: colors.textMuted }]}>
                   You've reached the end of the Bible
                 </Text>
               </View>
@@ -1654,6 +1688,8 @@ export default function BibleReaderScreen() {
                   style={styles.noteCancelButton}
                   activeOpacity={0.7}
                   testID="bible-verse-note-cancel"
+                  accessibilityRole="button"
+                  accessibilityLabel="Cancel note"
                 >
                   <Text style={[styles.noteButtonText, { color: colors.textMuted }]}>Cancel</Text>
                 </TouchableOpacity>
@@ -1662,27 +1698,29 @@ export default function BibleReaderScreen() {
                   style={[styles.noteSaveButton, { backgroundColor: colors.accent }]}
                   activeOpacity={0.7}
                   testID="bible-verse-note-save"
+                  accessibilityRole="button"
+                  accessibilityLabel="Save note"
                 >
-                  <Text style={[styles.noteButtonText, { color: '#FFF' }]}>Save</Text>
+                  <Text style={[styles.noteButtonText, { color: colors.background }]}>Save</Text>
                 </TouchableOpacity>
               </View>
             </View>
           ) : (
             /* Main options — 4 icon buttons */
             <View style={styles.contextIconRow}>
-              <TouchableOpacity onPress={handleExplain} style={styles.contextIconButton} activeOpacity={0.6} hitSlop={6}>
+              <TouchableOpacity onPress={handleExplain} style={styles.contextIconButton} activeOpacity={0.6} hitSlop={6} accessibilityRole="button" accessibilityLabel="Explain">
                 <BookOpenIcon size={22} color={colors.text} weight="light" />
                 <Text style={[styles.contextIconLabel, { color: colors.textMuted }]}>Explain</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => setShowColorPicker(true)} style={styles.contextIconButton} activeOpacity={0.6} testID="bible-verse-action-highlight" hitSlop={6}>
+              <TouchableOpacity onPress={() => setShowColorPicker(true)} style={styles.contextIconButton} activeOpacity={0.6} testID="bible-verse-action-highlight" hitSlop={6} accessibilityRole="button" accessibilityLabel="Highlight">
                 <HighlighterCircleIcon size={22} color={colors.text} weight="light" />
                 <Text style={[styles.contextIconLabel, { color: colors.textMuted }]}>Highlight</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={handleNote} style={styles.contextIconButton} activeOpacity={0.6} testID="bible-verse-action-note" hitSlop={6}>
+              <TouchableOpacity onPress={handleNote} style={styles.contextIconButton} activeOpacity={0.6} testID="bible-verse-action-note" hitSlop={6} accessibilityRole="button" accessibilityLabel="Note">
                 <NotePencilIcon size={22} color={colors.text} weight="light" />
                 <Text style={[styles.contextIconLabel, { color: colors.textMuted }]}>Note</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={handleShare} style={styles.contextIconButton} activeOpacity={0.6} hitSlop={6}>
+              <TouchableOpacity onPress={handleShare} style={styles.contextIconButton} activeOpacity={0.6} hitSlop={6} accessibilityRole="button" accessibilityLabel="Share">
                 <UploadSimpleIcon size={22} color={colors.text} weight="light" />
                 <Text style={[styles.contextIconLabel, { color: colors.textMuted }]}>Share</Text>
               </TouchableOpacity>
@@ -1787,7 +1825,7 @@ export default function BibleReaderScreen() {
                   </Text>
                 ) : null}
               </View>
-              <CaretRightIcon size={14} color={colors.textSubtle} weight="light" />
+              <CaretRightIcon size={14} color={colors.textMuted} weight="light" />
             </TouchableOpacity>
           );
         })}
@@ -1874,7 +1912,8 @@ const styles = StyleSheet.create({
 
   // Verses
   versesContent: { paddingHorizontal: Spacing['8'] },
-  loadingContainer: { paddingTop: 60, alignItems: 'center' },
+  loadingContainer: { paddingTop: 8, gap: 12 },
+  loadingLine: { height: 18, borderRadius: 3 },
   verseRow: { paddingVertical: Spacing['2'] },
 
   // Section headings
@@ -1939,8 +1978,8 @@ const styles = StyleSheet.create({
   },
   contextIconLabel: {
     fontFamily: FontFamily.uiMedium,
-    fontSize: 10,
-    letterSpacing: 0.2,
+    fontSize: FontSize.xs,
+    letterSpacing: 0,
     marginTop: 2,
   },
   // Note input mode

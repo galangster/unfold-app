@@ -270,7 +270,7 @@ export function BibleNoteSheet({ highlight, onClose, onSave, onDelete }: BibleNo
                     activeOpacity={0.7}
                     testID="bible-note-save"
                   >
-                    <Text style={[styles.saveText, { color: '#FFFFFF' }]}>Save</Text>
+                    <Text style={[styles.saveText, { color: colors.background }]}>Save</Text>
                   </TouchableOpacity>
                 ) : (
                   <TouchableOpacity

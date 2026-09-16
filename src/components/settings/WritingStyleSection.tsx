@@ -59,7 +59,7 @@ export function WritingStyleSection() {
 
   return (
     <>
-      <SettingsSectionHeader label="Writing Style" />
+      <SettingsSectionHeader label="Writing style" />
 
       <Text
         style={{
@@ -283,7 +283,7 @@ export function WritingStyleSection() {
             setExpandedPreference(expandedPreference === 'faith' ? null : 'faith');
           }}
           accessibilityRole="button"
-          accessibilityLabel="Faith Background"
+          accessibilityLabel="Faith background"
           accessibilityState={{ expanded: expandedPreference === 'faith' }}
           style={{
             flexDirection: 'row',
@@ -304,7 +304,7 @@ export function WritingStyleSection() {
           </View>
           <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
             <Text style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.text }}>
-              Faith Background
+              Faith background
             </Text>
             <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textMuted, marginTop: Spacing['0.5'] }}>
               {FAITH_OPTIONS.find((o) => o.value === user?.writingStyle?.faithBackground)?.label ?? "I'm growing"}
@@ -383,7 +383,7 @@ export function WritingStyleSection() {
             setExpandedPreference(expandedPreference === 'lifeStage' ? null : 'lifeStage');
           }}
           accessibilityRole="button"
-          accessibilityLabel="Life Stage"
+          accessibilityLabel="Life stage"
           accessibilityState={{ expanded: expandedPreference === 'lifeStage' }}
           style={{
             flexDirection: 'row',
@@ -402,7 +402,7 @@ export function WritingStyleSection() {
           </View>
           <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
             <Text style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.text }}>
-              Life Stage
+              Life stage
             </Text>
             <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textMuted, marginTop: Spacing['0.5'] }}>
               {LIFE_STAGE_OPTIONS.find((o) => o.value === user?.writingStyle?.lifeStage)?.label ?? "I'm building my life"}
