@@ -11,14 +11,17 @@ Greptile indexes this repository as `galangster/unfold-app`. Its stable handle
 is `d3a00b8a-47fd-4402-a5e3-45b250a53d6c`.
 
 1. Call `get_knowledge_base_document` with `path: "index.md"`.
-2. Read the routing table. It names one module document per change area.
-3. Read that module document. Then write code.
+2. Read the routing table. It maps change areas to module documents.
+3. Read every module document whose row matches your change. Most changes
+   match one row. Then write code.
 
 Call `search_knowledge_base` for a named symbol, endpoint, or convention. Stop
-after the module document for most work. Do not read every document.
+after the matching module documents for most work. Do not read every document.
 
-Trivial mechanical edits are exempt. A version bump, a string change, a lint
-fix, and a rename are exempt.
+Trivial mechanical edits are exempt. A string change, a lint fix, and a rename
+are exempt. A version or build-number change is not exempt. It spans
+`app.json`, `app.config.js`, and the native iOS metadata under `ios/`. Read the
+app-shell module document first.
 
 The index carries five codebase-wide invariants. These four gate common work.
 
