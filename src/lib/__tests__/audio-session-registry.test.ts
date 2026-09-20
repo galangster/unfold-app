@@ -244,14 +244,17 @@ describe("audio interruption coordinator", () => {
     await expect(later!.configure()).resolves.toBe(true);
   });
 
-  it("does not treat a transient end as permission to retry during the call", () => {
+  it("lets explicit playback recover when an interruption end event is lost", () => {
     const registry = createAudioSessionRegistry(
       jest.fn().mockResolvedValue(undefined),
     );
     const coordinator = createAudioInterruptionCoordinator(registry);
     coordinator.handle({ interrupted: true, canRetry: false });
     coordinator.retryExplicitPlayback();
-    expect(registry.getSnapshot().owner).toBe("system-interruption");
+    expect(registry.getSnapshot().owner).toBeNull();
+    expect(
+      registry.acquire({ owner: "ambient", mode: { label: "music" } }),
+    ).not.toBeNull();
   });
 });
 

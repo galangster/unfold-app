@@ -1,9 +1,9 @@
-import { acquireAudioSession, retryAudioAfterPermanentInterruption, type AudioSessionLease } from './audio-session-registry';
+import { acquireAudioSession, retryAudioAfterInterruption, type AudioSessionLease } from './audio-session-registry';
 
 export type { AudioSessionLease } from './audio-session-registry';
 
 export function acquireVoiceRecordingSession(onInvalidated?: () => void): AudioSessionLease | null {
-  retryAudioAfterPermanentInterruption();
+  retryAudioAfterInterruption();
   return acquireAudioSession({
     owner: 'voice-recording',
     onInvalidated,
@@ -17,7 +17,7 @@ export function acquireVoiceRecordingSession(onInvalidated?: () => void): AudioS
 }
 
 export function acquireVoiceReviewSession(onInvalidated?: () => void): AudioSessionLease | null {
-  retryAudioAfterPermanentInterruption();
+  retryAudioAfterInterruption();
   return acquireAudioSession({
     owner: 'voice-review',
     onInvalidated,
@@ -31,6 +31,6 @@ export function acquireVoiceReviewSession(onInvalidated?: () => void): AudioSess
 }
 
 export function acquireSpeechRecognitionSession(onInvalidated?: () => void): AudioSessionLease | null {
-  retryAudioAfterPermanentInterruption();
+  retryAudioAfterInterruption();
   return acquireAudioSession({ owner: 'speech-recognition', onInvalidated });
 }

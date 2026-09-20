@@ -27,7 +27,7 @@ import {
 } from '@/lib/feature-announcements';
 import { stopAmbientSound } from '@/lib/ambient-audio';
 import { useAmbientAudioState } from '@/lib/ambient-audio-state';
-import { acquireAudioSession, retryAudioAfterPermanentInterruption, type AudioSessionLease } from '@/lib/audio-session-registry';
+import { acquireAudioSession, retryAudioAfterInterruption, type AudioSessionLease } from '@/lib/audio-session-registry';
 import { AmbientText } from './AmbientText';
 
 type PreviewStatus = 'idle' | 'loading' | 'playing' | 'ended' | 'error';
@@ -165,7 +165,7 @@ export function FeatureAnnouncement({
       stopPreview();
       return;
     }
-    retryAudioAfterPermanentInterruption();
+    retryAudioAfterInterruption();
     stopPreview();
     stopAmbientSound();
     const attempt = ++revision.current;
