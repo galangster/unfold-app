@@ -376,12 +376,74 @@ describe('ambient audio controller', () => {
     const player = lastPlayer();
     player.isLoaded = true;
     player.emit({ isLoaded: true, playing: false });
-    player.emit({ isLoaded: true, playing: true });
+    player.emit({ isLoaded: true, playing: true, timeControlStatus: 'playing' });
     player.playing = false;
-    player.emit({ isLoaded: true, playing: false });
+    player.emit({ isLoaded: true, playing: false, timeControlStatus: 'paused' });
     expect(useAmbientAudioState.getState().status).toBe('paused');
     expect(useAmbientAudioState.getState().pauseReason).toBe('Paused by another audio source');
     expect(player.play).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not mistake native waiting for an interruption', async () => {
+    playAmbientSound('river-thread');
+    await flush();
+    const player = lastPlayer();
+    player.isLoaded = true;
+    player.emit({ isLoaded: true, playing: false });
+    player.emit({ isLoaded: true, playing: true, timeControlStatus: 'playing' });
+
+    player.emit({
+      isLoaded: true,
+      playing: false,
+      isBuffering: true,
+      timeControlStatus: 'waitingToPlayAtSpecifiedRate',
+    });
+
+    expect(useAmbientAudioState.getState().status).toBe('playing');
+    expect(useAmbientAudioState.getState().pauseReason).toBeNull();
+  });
+
+  it('keeps a manual retry alive until native playback is confirmed', async () => {
+    playAmbientSound('river-thread');
+    await flush();
+    const player = lastPlayer();
+    player.isLoaded = true;
+    player.emit({ isLoaded: true, playing: false });
+    player.emit({ isLoaded: true, playing: true, timeControlStatus: 'playing' });
+    player.playing = false;
+    player.emit({ isLoaded: true, playing: false, timeControlStatus: 'paused' });
+    expect(useAmbientAudioState.getState().status).toBe('paused');
+
+    toggleAmbientSound();
+    await flush();
+    expect(player.play).toHaveBeenCalledTimes(2);
+    expect(useAmbientAudioState.getState().status).toBe('playing');
+
+    player.emit({ isLoaded: true, playing: false, timeControlStatus: 'paused' });
+    expect(useAmbientAudioState.getState().status).toBe('playing');
+    expect(useAmbientAudioState.getState().pauseReason).toBeNull();
+
+    player.emit({ isLoaded: true, playing: true, timeControlStatus: 'playing' });
+    expect(useAmbientAudioState.getState().status).toBe('playing');
+  });
+
+  it('times out a manual retry when native playback is never confirmed', async () => {
+    playAmbientSound('river-thread');
+    await flush();
+    const player = lastPlayer();
+    player.isLoaded = true;
+    player.emit({ isLoaded: true, playing: false });
+    player.emit({ isLoaded: true, playing: true, timeControlStatus: 'playing' });
+    player.playing = false;
+    player.emit({ isLoaded: true, playing: false, timeControlStatus: 'paused' });
+
+    toggleAmbientSound();
+    await flush();
+    player.emit({ isLoaded: true, playing: false, timeControlStatus: 'paused' });
+    await jest.advanceTimersByTimeAsync(AMBIENT_LOAD_WATCHDOG_MS);
+
+    expect(useAmbientAudioState.getState().status).toBe('error');
+    expect(player.remove).toHaveBeenCalledTimes(1);
   });
 
   it('keeps playing in the background and still ends when the timer expires', async () => {
@@ -391,6 +453,7 @@ describe('ambient audio controller', () => {
     const player = lastPlayer();
     player.isLoaded = true;
     player.emit({ isLoaded: true, playing: false });
+    player.emit({ isLoaded: true, playing: true, timeControlStatus: 'playing' });
     setAmbientTimer(5);
     emitAppState('background');
     expect(useAmbientAudioState.getState().status).toBe('playing');

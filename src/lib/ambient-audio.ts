@@ -16,7 +16,7 @@ import {
   signalAmbientTimerFinished,
 } from './ambient-timer-signal';
 import { logger } from './logger';
-import { acquireAudioSession, retryAudioAfterPermanentInterruption, type AudioSessionLease } from './audio-session-registry';
+import { acquireAudioSession, retryAudioAfterInterruption, type AudioSessionLease } from './audio-session-registry';
 import {
   AMBIENT_AUDIO_RUNTIME_DEFAULTS,
   useAmbientAudioState,
@@ -269,6 +269,7 @@ function attachStatusListener(target: AudioPlayer, generation: number): void {
 
     if (status.playing) {
       sawNativePlaying = true;
+      clearWatchdog(generation);
     }
 
     if (store().status === 'loading' && status.isLoaded) {
@@ -297,6 +298,7 @@ function attachStatusListener(target: AudioPlayer, generation: number): void {
       && status.isLoaded
       && !status.playing
       && !status.didJustFinish
+      && status.timeControlStatus === 'paused'
     ) {
       sawNativePlaying = false;
       pauseAmbientSound('interruption');
@@ -309,8 +311,6 @@ function beginPlayback(target: AudioPlayer, generation: number): void {
 
   try {
     target.play();
-    sawNativePlaying = true;
-    clearWatchdog(generation);
     store().patch({ status: 'playing', pauseReason: null, error: null });
     void fadeTo(target, () => store().volume, generation);
   } catch (error) {
@@ -431,9 +431,8 @@ async function resumeExisting(generation: number): Promise<void> {
     if (player !== current || shouldAbortStart(generation)) return;
 
     current.volume = 0;
+    sawNativePlaying = false;
     current.play();
-    sawNativePlaying = true;
-    clearWatchdog(generation);
     store().patch({ status: 'playing', pauseReason: null, error: null });
     await fadeTo(current, () => store().volume, generation);
   } catch (error) {
@@ -504,7 +503,7 @@ export function disposeAmbientAudio(): void {
 export function playAmbientSound(trackId?: AmbientTrackId, userInitiated = true): void {
   if (!isAmbientAudioEnabled()) return;
   if (!canStartPlayback()) return;
-  if (userInitiated) retryAudioAfterPermanentInterruption();
+  if (userInitiated) retryAudioAfterInterruption();
 
   if (trackId !== undefined) {
     if (!isAmbientTrackId(trackId)) return;
@@ -555,6 +554,7 @@ export function pauseAmbientSound(reason = 'user'): void {
   releaseSession();
   clearWatchdog();
   clearFade();
+  sawNativePlaying = false;
   if (player) {
     try {
       player.pause();

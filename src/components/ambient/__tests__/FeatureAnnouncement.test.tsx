@@ -49,7 +49,7 @@ jest.mock('@/lib/audio-session-registry', () => ({
     isActive: () => true,
     release: mockRelease,
   })),
-  retryAudioAfterPermanentInterruption: jest.fn(),
+  retryAudioAfterInterruption: jest.fn(),
 }));
 jest.mock('@/lib/ambient-audio', () => ({
   stopAmbientSound: jest.fn(),

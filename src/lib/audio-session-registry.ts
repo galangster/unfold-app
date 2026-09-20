@@ -142,30 +142,25 @@ export type AudioInterruption = { interrupted: boolean; canRetry?: boolean };
 
 export function createAudioInterruptionCoordinator(registry: AudioSessionRegistry) {
   let interruption: AudioSessionLease | null = null;
-  let permitsExplicitRetry = false;
   return {
     handle(event: AudioInterruption): void {
       if (event.interrupted) {
-        permitsExplicitRetry = event.canRetry === true;
         if (!interruption?.isActive()) {
           interruption = registry.acquire({ owner: 'system-interruption' });
         }
       } else {
         interruption?.release();
         interruption = null;
-        permitsExplicitRetry = false;
       }
     },
     retryExplicitPlayback(): void {
-      if (!permitsExplicitRetry) return;
       interruption?.release();
       interruption = null;
-      permitsExplicitRetry = false;
     },
   };
 }
 
 const interruptions = createAudioInterruptionCoordinator(audioSessionRegistry);
 export const handleAudioInterruption = interruptions.handle;
-/** Android permanent focus loss has no guaranteed end event. Only a new user action retries. */
-export const retryAudioAfterPermanentInterruption = interruptions.retryExplicitPlayback;
+/** Interruption end events are not guaranteed. An explicit user action may retry native activation. */
+export const retryAudioAfterInterruption = interruptions.retryExplicitPlayback;

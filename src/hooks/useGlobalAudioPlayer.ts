@@ -25,7 +25,7 @@ import {
 } from '@/lib/audio-player-state';
 import { Duration } from '@/constants/animations';
 import { logger } from '@/lib/logger';
-import { acquireAudioSession, retryAudioAfterPermanentInterruption, type AudioSessionLease } from '@/lib/audio-session-registry';
+import { acquireAudioSession, retryAudioAfterInterruption, type AudioSessionLease } from '@/lib/audio-session-registry';
 import { endReadingSession } from '@/lib/widget-bridge';
 import {
   beginAmbientVoiceInterruption,
@@ -267,7 +267,7 @@ export function useGlobalAudioPlayer() {
 
   const startAudio = useCallback(
     (uri: string, metadata: DevotionalAudioMetadata) => {
-      retryAudioAfterPermanentInterruption();
+      retryAudioAfterInterruption();
       notifyNarrationPlayback();
       clearCascadeTimers();
       const generation = ++startGeneration;
@@ -388,7 +388,7 @@ export function useGlobalAudioPlayer() {
         player.pause();
         invalidateNarrationAudioSession();
       } else {
-        retryAudioAfterPermanentInterruption();
+        retryAudioAfterInterruption();
         notifyNarrationPlayback();
         const generation = startGeneration;
         if (!(await ensureAudioSession())) return;
