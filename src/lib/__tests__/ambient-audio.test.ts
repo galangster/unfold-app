@@ -427,6 +427,25 @@ describe('ambient audio controller', () => {
     expect(useAmbientAudioState.getState().status).toBe('playing');
   });
 
+  it('times out a manual retry when native playback is never confirmed', async () => {
+    playAmbientSound('river-thread');
+    await flush();
+    const player = lastPlayer();
+    player.isLoaded = true;
+    player.emit({ isLoaded: true, playing: false });
+    player.emit({ isLoaded: true, playing: true, timeControlStatus: 'playing' });
+    player.playing = false;
+    player.emit({ isLoaded: true, playing: false, timeControlStatus: 'paused' });
+
+    toggleAmbientSound();
+    await flush();
+    player.emit({ isLoaded: true, playing: false, timeControlStatus: 'paused' });
+    await jest.advanceTimersByTimeAsync(AMBIENT_LOAD_WATCHDOG_MS);
+
+    expect(useAmbientAudioState.getState().status).toBe('error');
+    expect(player.remove).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps playing in the background and still ends when the timer expires', async () => {
     initializeAmbientAudio();
     playAmbientSound('river-thread');
@@ -434,6 +453,7 @@ describe('ambient audio controller', () => {
     const player = lastPlayer();
     player.isLoaded = true;
     player.emit({ isLoaded: true, playing: false });
+    player.emit({ isLoaded: true, playing: true, timeControlStatus: 'playing' });
     setAmbientTimer(5);
     emitAppState('background');
     expect(useAmbientAudioState.getState().status).toBe('playing');

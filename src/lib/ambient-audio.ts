@@ -269,6 +269,7 @@ function attachStatusListener(target: AudioPlayer, generation: number): void {
 
     if (status.playing) {
       sawNativePlaying = true;
+      clearWatchdog(generation);
     }
 
     if (store().status === 'loading' && status.isLoaded) {
@@ -310,7 +311,6 @@ function beginPlayback(target: AudioPlayer, generation: number): void {
 
   try {
     target.play();
-    clearWatchdog(generation);
     store().patch({ status: 'playing', pauseReason: null, error: null });
     void fadeTo(target, () => store().volume, generation);
   } catch (error) {
@@ -433,7 +433,6 @@ async function resumeExisting(generation: number): Promise<void> {
     current.volume = 0;
     sawNativePlaying = false;
     current.play();
-    clearWatchdog(generation);
     store().patch({ status: 'playing', pauseReason: null, error: null });
     await fadeTo(current, () => store().volume, generation);
   } catch (error) {
