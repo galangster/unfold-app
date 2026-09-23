@@ -8,7 +8,7 @@ import type { ColorTheme } from '@/constants/colors';
 import { FontFamily } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 
-export function VoiceAnswerButton({ colors, onPress }: { colors: ColorTheme; onPress: () => void }) {
+export function VoiceAnswerButton({ colors, onPress, label = 'Record your answer' }: { colors: ColorTheme; onPress: () => void; label?: string }) {
   const reducedMotion = useReducedMotion();
   const shine = useSharedValue(0);
   useEffect(() => {
@@ -30,7 +30,7 @@ export function VoiceAnswerButton({ colors, onPress }: { colors: ColorTheme; onP
   return (
     <TouchableOpacity
       accessibilityRole="button"
-      accessibilityLabel="Record your answer"
+      accessibilityLabel={label}
       accessibilityHint="Record a short answer, then review the text before using it."
       activeOpacity={0.76}
       onPress={() => { cancelAnimation(shine); shine.value = 1; onPress(); }}
@@ -45,7 +45,7 @@ export function VoiceAnswerButton({ colors, onPress }: { colors: ColorTheme; onP
         )}
       </View>
       <View style={styles.copy}>
-        <Text style={[styles.label, { color: colors.text }]}>Record your answer</Text>
+        <Text style={[styles.label, { color: colors.text }]}>{label}</Text>
         <Text style={[styles.hint, { color: colors.textMuted }]}>Up to 2 minutes. Your words, at your pace.</Text>
       </View>
     </TouchableOpacity>

@@ -173,7 +173,7 @@ describe('RecommendedSeriesCard initial generation identity', () => {
     const removeItem = mmkvStorage.removeItem as jest.Mock;
     expect(readInitialGenerationRequestId()).toBeNull();
     expect(removeItem).toHaveBeenCalledWith(INITIAL_GENERATION_REQUEST_ID_KEY);
-    expect(mockNavigate).toHaveBeenCalledWith('/generating');
+    expect(mockNavigate).toHaveBeenCalledWith({ pathname: '/life-update', params: { next: 'series' } });
     expect(mockPush).not.toHaveBeenCalled();
     expect(removeItem.mock.invocationCallOrder[0])
       .toBeLessThan(mockNavigate.mock.invocationCallOrder[0]);
@@ -239,7 +239,7 @@ describe('J10 RecommendedSeriesCard start-study gate', () => {
 
     expect(gateCreation).toHaveBeenCalledTimes(1);
     expect(mockUpdateUser).toHaveBeenCalledTimes(1);
-    expect(mockNavigate).toHaveBeenCalledWith('/generating');
+    expect(mockNavigate).toHaveBeenCalledWith({ pathname: '/life-update', params: { next: 'series' } });
     expect(mockPush).not.toHaveBeenCalled();
     expect(gateCreation.mock.invocationCallOrder[0])
       .toBeLessThan((mmkvStorage.removeItem as jest.Mock).mock.invocationCallOrder[0]);

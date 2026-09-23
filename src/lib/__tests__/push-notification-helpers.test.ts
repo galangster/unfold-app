@@ -170,10 +170,9 @@ describe('push notification helpers', () => {
   });
 
   describe('buildNotificationNavigationRoute', () => {
-    it('routes local midday check-in notifications back to Today with midday focus', () => {
+    it('routes midday reminders to the shared life update', () => {
       const route = {
-        pathname: '/(tabs)/(today)',
-        params: { focus: 'midday' },
+        pathname: '/life-update',
       };
       expect(buildNotificationNavigationRoute({ type: 'midday-checkin' })).toEqual(route);
       expect(buildNotificationNavigationRoute({ type: 'midday_checkin' })).toEqual(route);
@@ -193,9 +192,9 @@ describe('push notification helpers', () => {
       expect(buildNotificationNavigationRoute({ type: 'act_reminder', dayNumber: 4 })).toBeNull();
     });
 
-    it('routes local evening wind-down notifications to the evening flow', () => {
+    it('routes evening reminders to the shared life update', () => {
       expect(buildNotificationNavigationRoute({ type: 'evening-winddown' })).toEqual({
-        pathname: '/(tabs)/(today)/evening-wind-down',
+        pathname: '/life-update',
       });
     });
 
@@ -462,8 +461,7 @@ describe('push notification helpers', () => {
       coordinator.setNavigationReady(true);
 
       expect(replace).toHaveBeenCalledWith({
-        pathname: '/(tabs)/(today)',
-        params: { focus: 'midday' },
+        pathname: '/life-update',
       });
     });
 

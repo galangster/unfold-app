@@ -919,8 +919,10 @@ export async function scheduleMiddayCheckIn(clock?: CheckInClock): Promise<Check
       dataType: 'midday-checkin',
       logNoun: 'Midday check-in',
       eventType: 'midday_checkin',
-      copyFor: (today, variation) =>
-        getMiddayCheckInCopy(today, today ? carryLine : null, variation),
+      copyFor: (today, variation) => {
+        const copy = getMiddayCheckInCopy(today, today ? carryLine : null, variation);
+        return { ...copy, body: `${copy.body} Tap to talk or write an update.` };
+      },
     },
     getTodayDayContext(currentDevotional),
     dayIndexFor(clock?.now ?? new Date()),
@@ -941,7 +943,10 @@ export async function scheduleEveningWindDown(clock?: CheckInClock): Promise<Che
       dataType: 'evening-winddown',
       logNoun: 'Evening wind-down',
       eventType: 'evening_winddown',
-      copyFor: getEveningWindDownCopy,
+      copyFor: (today, variation) => {
+        const copy = getEveningWindDownCopy(today, variation);
+        return { ...copy, body: `${copy.body} Tap to talk or write an update.` };
+      },
     },
     getTodayDayContext(currentDevotional),
     dayIndexFor(clock?.now ?? new Date()),

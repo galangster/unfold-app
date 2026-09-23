@@ -233,6 +233,7 @@ function RootLayoutNav() {
         <Stack.Screen name="index" options={{ animation: 'fade', contentStyle: { backgroundColor: 'transparent' } }} />
         <Stack.Screen name="how-it-works" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="onboarding" options={{ animation: 'slide_from_right', gestureEnabled: false }} />
+        <Stack.Screen name="life-update" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="generating" options={{ animation: 'fade_from_bottom', gestureEnabled: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false, animation: 'none', gestureEnabled: false, contentStyle: { backgroundColor: 'transparent' } }} />
         <Stack.Screen

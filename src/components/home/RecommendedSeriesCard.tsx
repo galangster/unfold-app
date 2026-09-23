@@ -180,7 +180,7 @@ export function RecommendedSeriesCard({
       selectedStudySubject: recommendation.subject,
       devotionalLength: recommendation.suggestedLength as any,
     });
-    router.navigate('/generating');
+    router.navigate({ pathname: '/life-update', params: { next: 'series' } });
   };
 
   if (error || (!loading && !recommendation)) {

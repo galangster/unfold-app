@@ -979,6 +979,10 @@ export default function HomeScreen() {
     router.setParams({ focus: '' });
   }, [router]);
 
+  const handleLifeUpdate = useCallback(() => {
+    router.push('/life-update');
+  }, [router]);
+
   const handleVoiceCheckIn = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setVoiceCheckInAutoStart(true);
@@ -1455,13 +1459,15 @@ export default function HomeScreen() {
         id: 'today-stack-evening',
         kind: 'evening',
         priority: 400,
-        title: 'Wind down with today’s reading',
+        title: 'How has your day been?',
         body: eveningMessage,
-        actionLabel: 'Wind down',
-        onPress: handleEveningWindDown,
+        actions: [
+          { label: 'Share an update', onPress: handleLifeUpdate, accessibilityLabel: 'Share a life update', accessibilityHint: 'Record or write what is happening in your life' },
+          { label: 'Wind down', onPress: handleEveningWindDown, accessibilityLabel: 'Wind down with today’s reading', accessibilityHint: 'Opens the evening reflection', tone: 'secondary' },
+        ],
         onDismiss: handleDismissEveningCard,
-        accessibilityLabel: `Wind down with today’s reading. ${eveningMessage}`,
-        accessibilityHint: 'Opens the evening wind-down reflection',
+        accessibilityLabel: `How has your day been? ${eveningMessage}`,
+        accessibilityHint: 'Share a life update or open the evening reflection',
         dismissAccessibilityLabel: 'Dismiss evening stack card',
         dismissAccessibilityHint: 'Hides this evening check-in card for today',
         testID: 'today-stack-card-evening',
@@ -1473,13 +1479,15 @@ export default function HomeScreen() {
         id: 'today-stack-midday',
         kind: 'midday',
         priority: 300,
-        title: 'Check in with today’s reading',
+        title: 'What’s happening in your life?',
         body: middayMessage,
-        actionLabel: 'Reflect',
-        onPress: handleCheckIn,
+        actions: [
+          { label: 'Share an update', onPress: handleLifeUpdate, accessibilityLabel: 'Share a life update', accessibilityHint: 'Record or write what is happening in your life' },
+          { label: 'Reflect', onPress: handleCheckIn, accessibilityLabel: 'Reflect on today’s reading', accessibilityHint: 'Opens the midday reflection', tone: 'secondary' },
+        ],
         onDismiss: handleDismissMiddayCard,
-        accessibilityLabel: `Check in with today’s reading. ${middayMessage}`,
-        accessibilityHint: 'Opens the midday check-in reflection',
+        accessibilityLabel: `What’s happening in your life? ${middayMessage}`,
+        accessibilityHint: 'Share a life update or reflect on today’s reading',
         dismissAccessibilityLabel: 'Dismiss midday stack card',
         dismissAccessibilityHint: 'Hides this midday check-in card for today',
         testID: 'today-stack-card-midday',
@@ -1602,6 +1610,7 @@ export default function HomeScreen() {
 
     return cards;
   }, [
+    handleLifeUpdate,
     eveningMessage,
     handleCheckIn,
     handleDay1ReviewOption,

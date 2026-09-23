@@ -649,6 +649,8 @@ export interface ResumeContext {
 
 interface UnfoldState {
   // User profile
+  lifeContextDraft: string | null;
+  setLifeContextDraft: (text: string | null) => void;
   user: UserProfile | null;
   setUser: (user: UserProfile) => void;
   updateUser: (updates: Partial<UserProfile>) => void;
@@ -915,6 +917,7 @@ interface UnfoldState {
 }
 
 const initialState = {
+  lifeContextDraft: null as string | null,
   user: null as UserProfile | null,
   devotionals: [],
   currentDevotionalId: null,
@@ -1062,6 +1065,7 @@ export const useUnfoldStore = create<UnfoldState>()(
       ...initialState,
 
       // User actions
+      setLifeContextDraft: (text) => set({ lifeContextDraft: text }),
       setUser: (user) => set({ user, userUpdatedAt: new Date().toISOString() }),
       updateUser: (updates) => {
         const current = get().user;

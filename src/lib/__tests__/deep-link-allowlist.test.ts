@@ -29,6 +29,11 @@ function expectRejected(url: string, reason?: string) {
 }
 
 describe('deep-link allowlist — legitimate producers', () => {
+  it('opens life updates without accepting an external generation shortcut', () => {
+    expectAllowed('unfold://life-update', '/life-update');
+    expectRejected('unfold://life-update?next=series');
+  });
+
   it('opens the gated replay fixture without accepting action parameters', () => {
     expectAllowed('unfold://qa-replay-check', '/qa-replay-check');
     expectRejected('unfold://qa-replay-check?send=true');

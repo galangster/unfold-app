@@ -86,6 +86,9 @@ export interface OnboardingVoiceAnswerSheetProps {
   autoStart?: boolean;
   onClose: () => void;
   existingText: string;
+  maxLength?: number;
+  prompt?: string;
+  acceptHint?: string;
   onAccept: (text: string) => void;
   demoMode?: boolean;
   initialDemoPhase?: OnboardingVoiceAnswerPhase;
@@ -132,6 +135,9 @@ export function OnboardingVoiceAnswerSheet({
   autoStart = false,
   onClose,
   existingText,
+  maxLength = ONBOARDING_VOICE_ANSWER_MAX_LENGTH,
+  prompt = 'Speak a little about yourself. You can review the text before it is added.',
+  acceptHint = 'Adds the reviewed text to Tell us about yourself',
   onAccept,
   demoMode = false,
   initialDemoPhase = 'idle',
@@ -367,7 +373,7 @@ export function OnboardingVoiceAnswerSheet({
     () => buildWaveform(phase === 'recording' ? meterLevel : 0.56, Math.floor((phase === 'recording' ? activeDurationMs : playbackMs) / 100)),
     [activeDurationMs, meterLevel, phase, playbackMs],
   );
-  const acceptance = voiceAnswerAcceptance(draft);
+  const acceptance = voiceAnswerAcceptance(draft, maxLength);
 
   const startRecording = useCallback(async () => {
     if (busyRef.current) return;
@@ -598,7 +604,7 @@ export function OnboardingVoiceAnswerSheet({
 
   const acceptAnswer = useCallback(() => {
     recordingCaptureRef.current = null;
-    if (busyRef.current || !voiceAnswerAcceptance(draft).canAccept) return;
+    if (busyRef.current || !voiceAnswerAcceptance(draft, maxLength).canAccept) return;
     Keyboard.dismiss();
     acceptedRef.current = true;
     if (!demoMode) deleteLocalVoiceAudio(audioUriRef.current);
@@ -610,7 +616,7 @@ export function OnboardingVoiceAnswerSheet({
     onAccept(accepted);
     onClose();
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  }, [demoMode, draft, invalidateAsync, onAccept, onClose, releaseRecordingLease, releaseReviewLease, resetSession]);
+  }, [demoMode, draft, maxLength, invalidateAsync, onAccept, onClose, releaseRecordingLease, releaseReviewLease, resetSession]);
 
   const retryAfterError = useCallback(() => {
     if (recordedDurationMs > 0 || audioUri || demoMode) {
@@ -650,7 +656,7 @@ export function OnboardingVoiceAnswerSheet({
       </View>
       <Text style={[styles.title, { color: colors.text }]}>Record your answer</Text>
       <Text style={[styles.body, { color: colors.textMuted }]}>
-        Speak a little about yourself. You can review the text before it is added.
+        {prompt}
       </Text>
       <TouchableOpacity
         activeOpacity={0.76}
@@ -810,7 +816,7 @@ export function OnboardingVoiceAnswerSheet({
           accessibilityRole="text"
           style={[styles.countLabel, { color: acceptance.overLimit ? colors.error : colors.textMuted }]}
         >
-          {voiceAnswerCountLabel(acceptance.count, ONBOARDING_VOICE_ANSWER_MAX_LENGTH)}
+          {voiceAnswerCountLabel(acceptance.count, maxLength)}
         </Text>
         {acceptance.empty ? (
           <Text accessibilityRole="alert" style={[styles.limitNote, { color: colors.textMuted }]}>
@@ -819,7 +825,7 @@ export function OnboardingVoiceAnswerSheet({
         ) : null}
         {acceptance.overLimit ? (
           <Text accessibilityRole="alert" style={[styles.limitNote, { color: colors.error }]}>
-            This answer is over the {ONBOARDING_VOICE_ANSWER_MAX_LENGTH}-character limit. Shorten it to use it.
+            This answer is over the {maxLength}-character limit. Shorten it to use it.
           </Text>
         ) : null}
       </View>
@@ -840,7 +846,7 @@ export function OnboardingVoiceAnswerSheet({
           accessibilityRole="button"
           accessibilityLabel="Use this answer"
           accessibilityState={{ disabled: !acceptance.canAccept }}
-          accessibilityHint="Adds the reviewed text to Tell us about yourself"
+          accessibilityHint={acceptHint}
           onPress={acceptAnswer}
           style={[styles.sendButton, {
             backgroundColor: colors.accent,
