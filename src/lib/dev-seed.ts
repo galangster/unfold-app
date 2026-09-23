@@ -188,6 +188,10 @@ function fictionalDay(
     scriptureReference: row.reference,
     scriptureText: row.scripture,
     bodyText: row.body,
+    reflectionQuestions: [
+      'Think about an ordinary moment from this week when someone offered you help. What made it difficult to receive their kindness, and what might change if you let yourself accept it?',
+      'What is one small way you could make room for quiet tomorrow?',
+    ],
     quotableLine: row.quote,
     isRead: readAt != null,
     readAt,

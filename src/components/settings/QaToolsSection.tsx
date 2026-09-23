@@ -15,7 +15,7 @@ import { mmkvStorage } from '@/lib/mmkv-storage';
 import { useUIState } from '@/lib/ui-state';
 import { scheduleDevotionalReadyTapTestNotification } from '@/lib/notifications';
 import { seedBookshelfExamples } from '@/lib/bookshelf-qa';
-import { buildDevotionalSeed } from '@/lib/dev-seed';
+import { assertTrialSeriesFixtureEnvironment, buildDevotionalSeed } from '@/lib/dev-seed';
 import { SettingsSectionHeader } from './SettingsSectionHeader';
 
 const QA_ROW_STYLE = {
@@ -47,6 +47,22 @@ export function QaToolsSection() {
     <>
       {/* --- QA Tools --- Internal QA affordances for notification/reveal verification builds. */}
       <SettingsSectionHeader label={__DEV__ ? "Dev Tools" : "QA Tools"} />
+      {(['today-day2', 'today-day3'] as const).map((state) => (
+        <TouchableOpacity key={state} accessibilityRole="button" style={QA_ROW_STYLE}
+          accessibilityLabel={state === 'today-day2' ? 'Seed reader day completion' : 'Seed reader series completion'}
+          onPress={() => {
+            try {
+              assertTrialSeriesFixtureEnvironment();
+              router.push({ pathname: '/dev/trial-series', params: { state } });
+            } catch (error) {
+              Alert.alert('Reader fixture unavailable', error instanceof Error ? error.message : 'Use the local QA environment.');
+            }
+          }}>
+          <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 14, color: colors.accent }}>
+            {state === 'today-day2' ? 'Seed reader day completion' : 'Seed reader series completion'}
+          </Text>
+        </TouchableOpacity>
+      ))}
       <TouchableOpacity activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Seed bookshelf examples" style={QA_ROW_STYLE}
         onPress={() => {
           try { seedBookshelfExamples(); router.push({ pathname: '/(tabs)/(study)/past-devotionals', params: { from: 'study' } }); }

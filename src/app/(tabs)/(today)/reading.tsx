@@ -66,6 +66,7 @@ import {
 import {
   getLockedTodayDayNumber,
   getSelectableDayLimit,
+  isDevotionalDaySelectable,
   resolveInitialReadingDayNumber,
 } from '@/lib/devotional-day-access';
 import { shouldWatchForGeneratedDay } from '@/lib/generated-day-watch';
@@ -75,7 +76,8 @@ import { isTransientGenerationError, toFriendlyRemainingDaysGenerationError } fr
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
 import { CompletionCelebration } from '@/components/CompletionCelebration';
-import { getCompletionDismissRoute } from '@/lib/completion-dismiss-route';
+import { getCompletionDismissRoute, type CompletionDismissTarget } from '@/lib/completion-dismiss-route';
+import { getCompletionNextStep } from '@/lib/completion-next-step';
 import { useCrossTabBack } from '@/hooks/useCrossTabBack';
 import { resolveStackRoute, tabGroupToFrom, type TabGroup } from '@/lib/tab-stack-routes';
 import { readAutoTrialIntent, transitionAutoTrialIntent } from '@/lib/auto-trial-intent';
@@ -1396,6 +1398,25 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
       }
     }
   }, [isReadingFocused, isOnline, effectiveDevotionalId, isViewingActiveSeries, viewingDay, totalDays, user?.devotionalLength, currentDevotional, currentDayData, markDayAsRead, advanceDay, clearResumeContext, setScripturePracticeReturn, recordStreakRead, syncWidgets, journalEntries.length, reviewPromptLastDate, reviewPromptCount, hasReviewed, reviewPromptDaysAtLast, recordReviewPrompt]);
+
+  const completionNextStep = getCompletionNextStep(currentDevotional, viewingDay, celebrationType);
+  const completionDismissTarget = getCompletionDismissRoute(celebrationType, params.from, hostTab);
+  const completionReturnLabel = completionDismissTarget === '/(tabs)/(study)'
+    ? 'Return to Study'
+    : 'Return to Today';
+  const dismissCelebration = (target: CompletionDismissTarget | null = completionDismissTarget) => {
+    completionCueVisible.current = false;
+    setShowCelebration(false);
+    const pending = pendingReviewRef.current;
+    pendingReviewRef.current = null;
+    if (target) router.replace(target);
+    if (pending) {
+      void (async () => {
+        const shown = await pending.manager.showPrompt();
+        if (shown) recordReviewPrompt(pending.totalDaysCompleted);
+      })();
+    }
+  };
 
   const generateRemainingDays = useCallback(async (
     options?: { navigateToNextDay?: boolean; withHaptics?: boolean }
@@ -2765,23 +2786,26 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
       {/* Completion Celebration */}
       <CompletionCelebration
         visible={showCelebration}
-        onDismiss={() => {
-          completionCueVisible.current = false;
-          setShowCelebration(false);
-          const dismissRoute = getCompletionDismissRoute(celebrationType, params.from, hostTab);
-          const pending = pendingReviewRef.current;
-          pendingReviewRef.current = null;
-          if (pending) {
-            void (async () => {
-              const shown = await pending.manager.showPrompt();
-              if (shown) {
-                recordReviewPrompt(pending.totalDaysCompleted);
-              }
-            })();
-          }
-          if (dismissRoute) {
-            router.replace(dismissRoute);
-          }
+        onDismiss={() => dismissCelebration()}
+        nextStep={{
+          ...completionNextStep,
+          primaryLabel: celebrationType === 'series'
+            ? 'Choose next study'
+            : completionNextStep.nextDay
+              ? `Continue to Day ${completionNextStep.nextDay}`
+              : completionReturnLabel,
+          onPrimary: () => {
+            const nextDay = completionNextStep.nextDay;
+            const latest = useUnfoldStore.getState().devotionals.find((row) => row.id === effectiveDevotionalId);
+            if (nextDay && isDevotionalDaySelectable(latest, nextDay)) {
+              dismissCelebration(null);
+              goToDay(nextDay);
+            } else {
+              dismissCelebration();
+            }
+          },
+          secondaryLabel: completionNextStep.nextDay ? completionReturnLabel : 'Keep reflecting',
+          onSecondary: () => dismissCelebration(completionNextStep.nextDay ? undefined : null),
         }}
         type={celebrationType}
         seriesReflectionSummary={
