@@ -1,6 +1,6 @@
 import { SoundEffectsSection } from './SoundEffectsSection';
 import { useCallback, useState } from 'react';
-import { View, Text, Alert, ActivityIndicator, StyleSheet, type LayoutChangeEvent } from 'react-native';
+import { View, Text, Alert, ActivityIndicator, Platform, StyleSheet, type LayoutChangeEvent } from 'react-native';
 import type { SettingsSection } from '@/components/settings/settings-section-scroll';
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
@@ -95,6 +95,23 @@ export function ProfileSettingsSections({ onSectionLayout }: ProfileSettingsSect
       <View style={styles.sectionBlock}>
         <SupportSection />
       </View>
+
+      {Platform.OS === 'ios' && <View style={styles.sectionBlock}>
+        <SettingsSectionHeader label="Premium" />
+        <View style={getSettingsCardStyle(colors)}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => router.push('/(tabs)/(you)/gifts')}
+            accessibilityRole="button"
+            accessibilityLabel="Gift a year of Unfold or claim a gift"
+            style={{ minHeight: 48, justifyContent: 'center', paddingHorizontal: Spacing['4'] }}
+          >
+            <Text style={{ color: colors.text, fontFamily: FontFamily.ui, fontSize: 15 }}>
+              Gift a year of Unfold
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>}
 
       <View style={styles.sectionBlock} onLayout={onSectionLayout?.('reminders')}>
         <RemindersSection />

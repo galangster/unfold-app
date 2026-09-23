@@ -966,6 +966,33 @@ export const purchasePackage = (
   });
 };
 
+/** Consumable gift purchase. It deliberately skips the Premium entitlement wait. */
+export const purchaseGiftPackage = (
+  giftPackage: PurchasesPackage,
+): Promise<RevenueCatResult<{ transactionId: string | null }>> => {
+  if (giftPackage.product.identifier !== 'unfold_premium_gift_year') {
+    return Promise.resolve({ ok: false, reason: 'sdk_error', error: new Error('Invalid gift product') });
+  }
+  return guardRevenueCatUsage('purchaseGiftPackage', async () => {
+    const epochAtStart = identityEpoch;
+    const purchase = await withTimeout(enqueueAfterNativeOps(async () => {
+      throwIfOrdinaryUseBlocked();
+      if (identityEpoch !== epochAtStart || nativeIdentityMutationsPending > 0) {
+        throw new RevenueCatIdentityEpochError();
+      }
+      await assertSdkMatchesTarget(epochAtStart);
+      return Purchases.purchasePackage(giftPackage);
+    }), PURCHASE_TIMEOUT_MS, 'purchaseGiftPackage');
+    return { transactionId: purchase.transaction?.transactionIdentifier ?? null };
+  });
+};
+
+export const refreshGiftEntitlement = (): Promise<RevenueCatResult<CustomerInfo>> =>
+  guardRevenueCatUsage('refreshGiftEntitlement', async () => {
+    await Purchases.invalidateCustomerInfoCache();
+    return Purchases.getCustomerInfo();
+  });
+
 /**
  * Get current customer info including active entitlements
  *

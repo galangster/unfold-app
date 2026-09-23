@@ -137,6 +137,32 @@ describe('RevenueCat entitlement refresh after store actions', () => {
     expect(purchasesMock.getCustomerInfo).not.toHaveBeenCalled();
   });
 
+  it('returns a gift transaction without waiting for buyer Premium access', async () => {
+    const { client, purchasesMock } = await setup();
+    purchasesMock.purchasePackage.mockResolvedValueOnce({
+      productIdentifier: 'unfold_premium_gift_year',
+      transaction: { transactionIdentifier: 'gift-transaction-1' },
+      customerInfo: emptyCustomerInfo,
+    });
+
+    const result = await client.purchaseGiftPackage({
+      product: { identifier: 'unfold_premium_gift_year' },
+    } as any);
+
+    expect(result).toEqual({ ok: true, data: { transactionId: 'gift-transaction-1' } });
+    expect(purchasesMock.invalidateCustomerInfoCache).not.toHaveBeenCalled();
+    expect(purchasesMock.getCustomerInfo).not.toHaveBeenCalled();
+  });
+
+  it('refuses to purchase an ordinary subscription through the gift path', async () => {
+    const { client, purchasesMock } = await setup();
+    const result = await client.purchaseGiftPackage({
+      product: { identifier: 'unfold_premium_yearly' },
+    } as any);
+    expect(result).toMatchObject({ ok: false, reason: 'sdk_error' });
+    expect(purchasesMock.purchasePackage).not.toHaveBeenCalled();
+  });
+
   // The quick refresh above covers ~2.25 s. A new trial's grant can land later
   // than that, and the onboarding paywall used to report those purchases as
   // failed with Restore as the only exit. The paywall owns the longer wait
