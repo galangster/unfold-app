@@ -1,29 +1,45 @@
-/**
- * Pure once-per-version policy for the native App Store review prompt.
- *
- * Apple only renders `SKStoreReviewController` a handful of times per year and
- * silently drops extras — so the only honest signal we control is "don't even
- * ask more than once per shipped binary". We key the prompt by app
- * version + build so a TestFlight/App Store update re-arms exactly one prompt.
- *
- * Kept pure (no AsyncStorage / expo imports) so the policy is unit-testable.
- */
+const DAY_MS = 86_400_000;
+export const REVIEW_COOLDOWN_DAYS = 60;
 
-/** Stable storage/comparison key for a given app version + build number. */
-export function getReviewPromptVersionKey(
-  version: string | null,
-  build: string | null,
-): string {
-  return `${version ?? 'unknown'}:${build ?? 'unknown'}`;
+export interface ReviewPromptHistory {
+  reviewPromptDates?: string[];
+  reviewPromptLastDate: string | null;
+  reviewPromptCount: number;
+  reviewPromptDaysAtLast: number;
+  hasReviewed: boolean;
 }
 
-/**
- * True only when we have NOT already prompted for this exact version/build.
- * A null last-prompted key means we have never prompted on this binary.
- */
-export function shouldRequestReviewForVersion(
-  lastPromptedKey: string | null,
-  currentKey: string,
+export interface ReviewCompletion {
+  totalDaysCompleted: number;
+  currentStreak: number;
+  justCompletedSeries: boolean;
+}
+
+export function getRecentReviewRequests(history: ReviewPromptHistory, now = new Date()): string[] {
+  // Older builds retained only a count and the latest request. Keep that budget
+  // conservatively until its latest request leaves the rolling year.
+  const dates = history.reviewPromptDates?.length
+    ? history.reviewPromptDates
+    : Array.from({ length: Math.min(3, Math.max(0, history.reviewPromptCount)) }, () => history.reviewPromptLastDate ?? '');
+  return dates.filter((date) => {
+    const timestamp = Date.parse(date);
+    return Number.isFinite(timestamp) && now.getTime() - timestamp < 365 * DAY_MS;
+  });
+}
+
+export function shouldRequestReview(
+  history: ReviewPromptHistory,
+  completion: ReviewCompletion,
+  now = new Date(),
 ): boolean {
-  return lastPromptedKey !== currentKey;
+  if (history.hasReviewed || completion.totalDaysCompleted < 3) return false;
+  if (completion.totalDaysCompleted <= history.reviewPromptDaysAtLast) return false;
+  const dates = getRecentReviewRequests(history, now);
+  if (dates.length >= 3) return false;
+  const latest = Math.max(0, ...dates.map((date) => Date.parse(date)));
+  if (now.getTime() - latest < REVIEW_COOLDOWN_DAYS * DAY_MS) return false;
+  return dates.length === 0
+    || completion.justCompletedSeries
+    || [7, 14, 30].includes(completion.currentStreak)
+    || completion.totalDaysCompleted - history.reviewPromptDaysAtLast >= 7;
 }

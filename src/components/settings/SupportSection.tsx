@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, Alert, Linking, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, Alert, Linking, Platform, ActivityIndicator, Share } from 'react-native';
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import {
@@ -10,6 +10,7 @@ import {
   LockIcon,
   BookIcon,
   CaretRightIcon,
+  ShareNetworkIcon,
 } from '@/components/icons';
 import * as Sharing from 'expo-sharing';
 import * as Clipboard from 'expo-clipboard';
@@ -25,12 +26,25 @@ import { PRIMARY_BACKEND_URL, getAuthHeaders } from '@/lib/api-config';
 import { authenticatedFetch } from '@/lib/device-credential';
 import { getRevenueCatSupportId } from '@/lib/revenuecatClient';
 import { SettingsSectionHeader, getSettingsCardStyle } from './SettingsSectionHeader';
+import { AppFeedbackSheet } from '@/components/AppFeedbackSheet';
 
 export function SupportSection() {
   const { colors } = useTheme();
   const isPremium = usePremiumAccessPolicy() === 'granted';
 
   const [isExportingData, setIsExportingData] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
+
+  const handleShareApp = async () => {
+    try {
+      await Share.share({
+        title: 'Unfold',
+        message: 'A little space for Scripture, every day. Try Unfold: https://unfoldapp.co',
+      });
+    } catch {
+      Alert.alert('Couldn’t open sharing', 'Please try again.');
+    }
+  };
 
   const handleRateApp = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -175,6 +189,28 @@ export function SupportSection() {
       <SettingsSectionHeader label="Support" />
 
       <View style={getSettingsCardStyle(colors)}>
+        {[
+          { label: 'Share feedback', detail: 'Help shape what comes next', icon: ChatDotsIcon, onPress: () => setShowFeedback(true) },
+          { label: 'Share Unfold', detail: 'Invite someone to read with you', icon: ShareNetworkIcon, onPress: () => { void handleShareApp(); } },
+        ].map(({ label, detail, icon: Icon, onPress }) => (
+          <TouchableOpacity
+            key={label}
+            activeOpacity={0.7}
+            onPress={onPress}
+            accessibilityRole="button"
+            accessibilityLabel={label}
+            style={{ flexDirection: 'row', alignItems: 'center', padding: Spacing['4'], borderBottomWidth: 1, borderBottomColor: colors.border }}
+          >
+            <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: colors.buttonBackground, justifyContent: 'center', alignItems: 'center' }}>
+              <Icon size={18} color={colors.text} weight="light" />
+            </View>
+            <View style={{ marginLeft: Spacing['3.5'], flex: 1, minWidth: 0 }}>
+              <Text style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.text }}>{label}</Text>
+              <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textMuted, marginTop: Spacing['0.5'] }}>{detail}</Text>
+            </View>
+            <CaretRightIcon size={16} color={colors.textMuted} weight="light" />
+          </TouchableOpacity>
+        ))}
         <TouchableOpacity
           activeOpacity={0.7}
           onPress={handleCopySupportId}
@@ -283,6 +319,8 @@ export function SupportSection() {
 
         <TouchableOpacity activeOpacity={0.7}
           onPress={handleRateApp}
+          accessibilityRole="link"
+          accessibilityLabel="Rate Unfold"
           style={{
             flexDirection: 'row',
             alignItems: 'center',
@@ -364,6 +402,7 @@ export function SupportSection() {
           </View>
         </TouchableOpacity>
       </View>
+      <AppFeedbackSheet visible={showFeedback} onClose={() => setShowFeedback(false)} source="profile" />
     </>
   );
 }

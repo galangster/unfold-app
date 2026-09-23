@@ -119,7 +119,9 @@ import {
   shouldApplyPassiveReflowRestore,
   type ReaderScrollAnchor,
 } from '@/lib/reader-scroll-anchor';
-import { createReviewPromptManager, type ReviewPromptManager } from '@/lib/review-prompt';
+import { requestReviewAfterCompletion } from '@/lib/review-prompt';
+import type { ReviewCompletion } from '@/lib/review-prompt-policy';
+import { countReadDaysWithinBoundary } from '@/lib/series-path';
 import { useGlobalAudioPlayer } from '@/hooks/useGlobalAudioPlayer';
 import { useAudioPlayerState } from '@/lib/audio-player-state';
 import { ScriptureTapSheet } from '@/components/ScriptureTapSheet';
@@ -312,12 +314,6 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   const highlights = useUnfoldStore((s) => s.highlights);
   const journalEntries = useUnfoldStore((s) => s.journalEntries);
 
-  // Review prompt state
-  const reviewPromptLastDate = useUnfoldStore((s) => s.reviewPromptLastDate);
-  const reviewPromptCount = useUnfoldStore((s) => s.reviewPromptCount);
-  const hasReviewed = useUnfoldStore((s) => s.hasReviewed);
-  const reviewPromptDaysAtLast = useUnfoldStore((s) => s.reviewPromptDaysAtLast);
-  const recordReviewPrompt = useUnfoldStore((s) => s.recordReviewPrompt);
   const recordStreakRead = useUnfoldStore((s) => s.recordStreakRead);
   const beginRitualSession = useUnfoldStore((s) => s.beginRitualSession);
 
@@ -402,7 +398,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   const [studyMethodVisible, setStudyMethodVisible] = useState(false);
   const [practiceVisible, setPracticeVisible] = useState(false);
   const [practicePreviewMethodId, setPracticePreviewMethodId] = useState<string | null>(null);
-  const pendingReviewRef = useRef<{ manager: ReviewPromptManager; totalDaysCompleted: number } | null>(null);
+  const pendingReviewRef = useRef<ReviewCompletion | null>(null);
   const autoBackgroundKickoffRef = useRef<Record<string, number>>({});
   const autoRetryAttemptsRef = useRef<Record<string, number>>({});
   const autoRetryTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -1368,36 +1364,15 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
       store.clearRitualSession('reading');
       syncWidgets();
 
-      // Check for review prompt eligibility at high-dopamine moments
-      {
-        const reviewManager = createReviewPromptManager({
-          reviewPromptLastDate,
-          reviewPromptCount,
-          hasReviewed,
-          reviewPromptDaysAtLast,
-        });
-
-        // Calculate total days completed across all devotionals
-        const totalDaysCompleted = useUnfoldStore.getState().devotionals.reduce((sum, d) =>
-          sum + (d.days ?? []).filter(day => day.isRead).length, 0
-        );
-
-        const streakCurrent = useUnfoldStore.getState().streakCurrent;
-
-        if (reviewManager.shouldPrompt({
-          totalDaysCompleted,
-          journalEntryCount: journalEntries.length,
-          justCompletedDay: true,
-          currentStreak: streakCurrent,
-          justCompletedSeries: completingLastDay,
-        })) {
-          // Defer the rating sheet until the celebration is dismissed —
-          // consumed in CompletionCelebration's onDismiss below.
-          pendingReviewRef.current = { manager: reviewManager, totalDaysCompleted };
-        }
-      }
+      const completedState = useUnfoldStore.getState();
+      pendingReviewRef.current = {
+        totalDaysCompleted: completedState.devotionals.reduce((sum, devotional) =>
+          sum + countReadDaysWithinBoundary(devotional), 0),
+        currentStreak: completedState.streakCurrent,
+        justCompletedSeries: completingLastDay,
+      };
     }
-  }, [isReadingFocused, isOnline, effectiveDevotionalId, isViewingActiveSeries, viewingDay, totalDays, user?.devotionalLength, currentDevotional, currentDayData, markDayAsRead, advanceDay, clearResumeContext, setScripturePracticeReturn, recordStreakRead, syncWidgets, journalEntries.length, reviewPromptLastDate, reviewPromptCount, hasReviewed, reviewPromptDaysAtLast, recordReviewPrompt]);
+  }, [isReadingFocused, isOnline, effectiveDevotionalId, isViewingActiveSeries, viewingDay, totalDays, user?.devotionalLength, currentDevotional, currentDayData, markDayAsRead, advanceDay, clearResumeContext, setScripturePracticeReturn, recordStreakRead, syncWidgets]);
 
   const completionNextStep = getCompletionNextStep(currentDevotional, viewingDay, celebrationType);
   const completionDismissTarget = getCompletionDismissRoute(celebrationType, params.from, hostTab);
@@ -1410,12 +1385,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     const pending = pendingReviewRef.current;
     pendingReviewRef.current = null;
     if (target) router.replace(target);
-    if (pending) {
-      void (async () => {
-        const shown = await pending.manager.showPrompt();
-        if (shown) recordReviewPrompt(pending.totalDaysCompleted);
-      })();
-    }
+    if (pending) void requestReviewAfterCompletion(pending);
   };
 
   const generateRemainingDays = useCallback(async (

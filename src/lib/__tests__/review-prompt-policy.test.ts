@@ -1,74 +1,29 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import {
-  getReviewPromptVersionKey,
-  shouldRequestReviewForVersion,
-} from '@/lib/review-prompt-policy';
-
-const sourceRoot = path.join(__dirname, '../..');
-
-describe('review prompt version policy', () => {
-  it('keys prompts by app version and build number', () => {
-    expect(getReviewPromptVersionKey('1.2.3', '45')).toBe('1.2.3:45');
-    expect(getReviewPromptVersionKey(null, null)).toBe('unknown:unknown');
-  });
-
-  it('allows only one native prompt per app version/build', () => {
-    expect(shouldRequestReviewForVersion(null, '1.2.3:45')).toBe(true);
-    expect(shouldRequestReviewForVersion('1.2.3:44', '1.2.3:45')).toBe(true);
-    expect(shouldRequestReviewForVersion('1.2.3:45', '1.2.3:45')).toBe(false);
-  });
+import { getRecentReviewRequests, shouldRequestReview, type ReviewPromptHistory } from '../review-prompt-policy';
+const now = new Date('2026-09-23T12:00:00Z');
+const ago = (days: number) => new Date(now.getTime() - days * 86_400_000).toISOString();
+const empty: ReviewPromptHistory = { reviewPromptDates: [], reviewPromptLastDate: null, reviewPromptCount: 0, reviewPromptDaysAtLast: 0, hasReviewed: false };
+const completion = { totalDaysCompleted: 3, currentStreak: 3, justCompletedSeries: false };
+it('waits for three readings and catches an opportunity missed on exactly day three', () => {
+  expect(shouldRequestReview(empty, { ...completion, totalDaysCompleted: 1 }, now)).toBe(false);
+  expect(shouldRequestReview(empty, completion, now)).toBe(true);
+  expect(shouldRequestReview(empty, { ...completion, totalDaysCompleted: 4 }, now)).toBe(true);
 });
-
-describe('review prompt call-site contract', () => {
-  const reviewPromptSource = fs.readFileSync(
-    path.join(sourceRoot, 'lib/review-prompt.ts'),
-    'utf-8',
-  );
-  const todaySource = fs.readFileSync(
-    path.join(sourceRoot, 'app/(tabs)/(today)/index.tsx'),
-    'utf-8',
-  );
-  const onboardingCelebrationSource = fs.readFileSync(
-    path.join(sourceRoot, 'components/onboarding/OnboardingCelebration.tsx'),
-    'utf-8',
-  );
-  const onboardingSource = fs.readFileSync(
-    path.join(sourceRoot, 'app/onboarding.tsx'),
-    'utf-8',
-  );
-
-  it('keeps native review calls behind the shared once-per-version helper', () => {
-    expect(reviewPromptSource).toContain("import * as StoreReview from 'expo-store-review'");
-    expect(reviewPromptSource).toContain('export async function requestReviewOncePerVersion()');
-    expect(reviewPromptSource).toContain('REVIEW_PROMPT_VERSION_STORAGE_KEY');
-    expect(todaySource).not.toContain("expo-store-review");
-    expect(onboardingCelebrationSource).not.toContain("expo-store-review");
-    expect(onboardingSource).not.toContain("expo-store-review");
-  });
-
-  it('routes the Today prompt through the shared helper', () => {
-    expect(todaySource).toContain(
-      "import { requestReviewOncePerVersion } from '@/lib/review-prompt';",
-    );
-    expect(todaySource).toContain('await requestReviewOncePerVersion()');
-  });
-
-  it('asks once right after the onboarding reading is completed, not on the celebration', () => {
-    // Ruled by Nick 2026-09-04: the rating sheet lands the moment the reader
-    // completes their first devotional inside onboarding, over the celebration.
-    // The celebration itself stays silent (its dismiss used to fire the sheet
-    // over the next step), and the call goes through the once-per-version helper.
-    expect(onboardingSource).toContain(
-      "import { requestReviewOncePerVersion } from '@/lib/review-prompt';",
-    );
-    const readStep = onboardingSource.slice(
-      onboardingSource.indexOf('<ReadDevotionalStep'),
-      onboardingSource.indexOf('<OnboardingCelebration'),
-    );
-    expect(readStep).toContain('advanceToNextStep();');
-    expect(readStep).toContain('void requestReviewOncePerVersion();');
-    expect(onboardingCelebrationSource).not.toContain('requestReviewOncePerVersion');
-    expect(onboardingCelebrationSource).not.toContain('@/lib/review-prompt');
-  });
+it('shares a cooldown across completion milestones and app versions', () => {
+  const history = { ...empty, reviewPromptDates: [ago(59)], reviewPromptDaysAtLast: 3 };
+  expect(shouldRequestReview(history, { ...completion, totalDaysCompleted: 10, justCompletedSeries: true }, now)).toBe(false);
+  expect(shouldRequestReview({ ...history, reviewPromptDates: [ago(60)] }, { ...completion, totalDaysCompleted: 10 }, now)).toBe(true);
+});
+it('enforces three attempts within a rolling year, then frees the expired slot', () => {
+  const history = { ...empty, reviewPromptDates: [ago(364), ago(200), ago(90)], reviewPromptDaysAtLast: 10 };
+  expect(shouldRequestReview(history, { ...completion, totalDaysCompleted: 20 }, now)).toBe(false);
+  expect(shouldRequestReview({ ...history, reviewPromptDates: [ago(366), ago(200), ago(90)] }, { ...completion, totalDaysCompleted: 20 }, now)).toBe(true);
+});
+it('migrates legacy counters conservatively without blocking forever', () => {
+  const legacy = { ...empty, reviewPromptCount: 3, reviewPromptLastDate: ago(90) };
+  expect(getRecentReviewRequests(legacy, now)).toHaveLength(3);
+  expect(getRecentReviewRequests({ ...legacy, reviewPromptLastDate: ago(366) }, now)).toEqual([]);
+});
+it('requires new progress and respects a known completed review', () => {
+  expect(shouldRequestReview({ ...empty, reviewPromptDaysAtLast: 3 }, completion, now)).toBe(false);
+  expect(shouldRequestReview({ ...empty, hasReviewed: true }, completion, now)).toBe(false);
 });

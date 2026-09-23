@@ -53,6 +53,7 @@ jest.mock('@/components/HomeOnboardingTooltips', () => ({ HomeOnboardingTooltips
 jest.mock('@/components/RippleLoader', () => ({ RippleLoader: () => null }));
 jest.mock('@/components/StreakCelebration', () => ({ StreakCelebration: () => null }));
 jest.mock('@/components/CheckInSheet', () => ({ CheckInSheet: () => null }));
+jest.mock('@/components/AppFeedbackSheet', () => ({ AppFeedbackSheet: () => null }));
 jest.mock('@/components/voice-check-in/VoiceCheckInSheet', () => ({ VoiceCheckInSheet: () => null }));
 jest.mock('@/components/PremiumFeatureSheet', () => ({ PremiumFeatureSheet: () => null }));
 jest.mock('@/components/ExclusiveOfferSheet', () => ({ ExclusiveOfferSheet: () => null }));

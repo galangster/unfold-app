@@ -3,6 +3,7 @@
  * P3-4 item 3 — the once-per-version review-prompt marker is cleared by the
  * full reset and the clear is best-effort.
  */
+jest.mock('@/lib/store', () => ({ useUnfoldStore: { getState: jest.fn() } }));
 jest.mock('expo-store-review', () => ({
   isAvailableAsync: jest.fn(async () => false),
   requestReview: jest.fn(async () => undefined),

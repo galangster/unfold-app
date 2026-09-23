@@ -14,7 +14,8 @@ import { logger } from '@/lib/logger';
 import { isQaToolsEnabled } from '@/lib/qa-tools';
 import { isVoiceCheckInsEnabled } from '@/lib/voice-feature';
 import { updateSyncedDevotionals, useUnfoldStore, useHasHydrated, type MoodLevel } from '@/lib/store';
-import { requestReviewOncePerVersion } from '@/lib/review-prompt';
+import { AppFeedbackSheet } from '@/components/AppFeedbackSheet';
+import { getFeedbackProgress, shouldOfferAppFeedback } from '@/lib/app-feedback-policy';
 import { useQuery } from '@tanstack/react-query';
 import { StreakBox } from '@/components/StreakBox';
 import { HomeOnboardingTooltips } from '@/components/HomeOnboardingTooltips';
@@ -304,6 +305,12 @@ export default function HomeScreen() {
   const beginRitualSession = useUnfoldStore((s) => s.beginRitualSession);
   const getCheckIn = useUnfoldStore((s) => s.getCheckIn);
   const hasSeenDay1Review = useUnfoldStore((s) => s.hasSeenDay1Review);
+  const feedbackLastDate = useUnfoldStore((s) => s.appFeedbackPromptLastDate);
+  const feedbackReadingsAtLast = useUnfoldStore((s) => s.appFeedbackReadingsAtLast);
+  const feedbackSeriesAtLast = useUnfoldStore((s) => s.appFeedbackSeriesAtLast);
+  const lastReviewDate = useUnfoldStore((s) => s.reviewPromptLastDate);
+  const recordAppFeedbackPrompt = useUnfoldStore((s) => s.recordAppFeedbackPrompt);
+  const [showAppFeedback, setShowAppFeedback] = useState(false);
   const setHasSeenDay1Review = useUnfoldStore((s) => s.setHasSeenDay1Review);
   const hasSeenHomeTooltips = useUnfoldStore((s) => s.hasSeenHomeTooltips);
   const addGeneratedDay = useUnfoldStore((s) => s.addGeneratedDay);
@@ -1057,7 +1064,7 @@ export default function HomeScreen() {
     [devotionals, rememberedPick],
   );
 
-  const handleDay1ReviewOption = useCallback(async (option: 'love' | 'okay' | 'not-for-me') => {
+  const handleDay1ReviewOption = useCallback((option: 'love' | 'okay' | 'not-for-me') => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setHasSeenDay1Review();
     // The card promises "one quiet response helps Unfold shape the next few
@@ -1083,9 +1090,6 @@ export default function HomeScreen() {
         chipAnswer: `day1-pulse:${option}`,
         timeOfDay: 'morning',
       });
-    }
-    if (option === 'love') {
-      await requestReviewOncePerVersion();
     }
   }, [setHasSeenDay1Review, addCheckIn]);
 
@@ -1367,6 +1371,22 @@ export default function HomeScreen() {
     };
   }, [handleResume, resumeContext, resumeDevotional, shouldShowResumeCard]);
 
+  const feedbackProgress = useMemo(() => getFeedbackProgress(devotionals), [devotionals]);
+  const showAppFeedbackCard = hasReadToday && shouldOfferAppFeedback({
+    ...feedbackProgress,
+    lastDate: feedbackLastDate,
+    readingsAtLast: feedbackReadingsAtLast,
+    seriesAtLast: feedbackSeriesAtLast,
+    lastReviewDate,
+  }, clockNow);
+  const dismissAppFeedbackCard = useCallback(() => {
+    recordAppFeedbackPrompt(feedbackProgress.readings, feedbackProgress.series);
+  }, [recordAppFeedbackPrompt, feedbackProgress]);
+  const openAppFeedback = useCallback(() => {
+    dismissAppFeedbackCard();
+    setShowAppFeedback(true);
+  }, [dismissAppFeedbackCard]);
+
   const todayStackCards = useMemo<TodayCardStackCard[]>(() => {
     const cards: TodayCardStackCard[] = [];
 
@@ -1513,6 +1533,23 @@ export default function HomeScreen() {
       });
     }
 
+    if (showAppFeedbackCard) {
+      cards.push({
+        id: 'today-app-feedback',
+        kind: 'app-feedback',
+        priority: 65,
+        title: 'Help shape Unfold',
+        body: 'What’s been helpful? What could be better?',
+        actionLabel: 'Share feedback',
+        onPress: openAppFeedback,
+        onDismiss: dismissAppFeedbackCard,
+        accessibilityLabel: 'Help shape Unfold. Share feedback with the team.',
+        dismissAccessibilityLabel: 'Dismiss feedback invitation',
+        dismissAccessibilityHint: 'Waits at least 30 days before another invitation',
+        testID: 'today-stack-card-app-feedback',
+      });
+    }
+
     if (showDay1Review) {
       cards.push({
         id: 'today-stack-day1-review',
@@ -1525,7 +1562,7 @@ export default function HomeScreen() {
             label: 'This helped me',
             onPress: () => { void handleDay1ReviewOption('love'); },
             accessibilityLabel: 'This reading helped me',
-            accessibilityHint: 'Records a positive response and may open the App Store review prompt if available',
+            accessibilityHint: 'Records what helped and shapes future readings',
             tone: 'primary',
           },
           {
@@ -1597,6 +1634,9 @@ export default function HomeScreen() {
     shouldShowBridgeLoadingStackCard,
     shouldShowBridgeStackCard,
     showDay1Review,
+    showAppFeedbackCard,
+    openAppFeedback,
+    dismissAppFeedbackCard,
     shouldShowEveningStackCard,
     shouldShowMiddayStackCard,
     validBridgeText,
@@ -1780,6 +1820,8 @@ export default function HomeScreen() {
           dayNumber={middayCheckInDay ?? currentDevotional.currentDay}
         />
       )}
+
+      <AppFeedbackSheet visible={showAppFeedback} onClose={() => setShowAppFeedback(false)} source="reading-milestone" />
 
       {voiceCheckInsEnabled && (
         <VoiceCheckInSheet

@@ -7,6 +7,7 @@ export const TODAY_STACK_CARD_KINDS = [
   'bridge-loading',
   'remember-this',
   'day1-review',
+  'app-feedback',
   'premium-nudge',
 ] as const;
 

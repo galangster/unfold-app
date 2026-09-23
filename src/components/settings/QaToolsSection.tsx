@@ -47,19 +47,26 @@ export function QaToolsSection() {
     <>
       {/* --- QA Tools --- Internal QA affordances for notification/reveal verification builds. */}
       <SettingsSectionHeader label={__DEV__ ? "Dev Tools" : "QA Tools"} />
-      {(['today-day2', 'today-day3'] as const).map((state) => (
+      {([
+        { state: 'today-day2', label: 'Seed reader day completion' },
+        { state: 'today-day3', label: 'Seed reader series completion' },
+        { state: 'series-complete', label: 'Seed feedback invitation' },
+      ] as const).map(({ state, label }) => (
         <TouchableOpacity key={state} accessibilityRole="button" style={QA_ROW_STYLE}
-          accessibilityLabel={state === 'today-day2' ? 'Seed reader day completion' : 'Seed reader series completion'}
+          accessibilityLabel={label}
           onPress={() => {
             try {
               assertTrialSeriesFixtureEnvironment();
+              if (state === 'series-complete') {
+                useUnfoldStore.setState({ appFeedbackPromptLastDate: null, reviewPromptLastDate: null });
+              }
               router.push({ pathname: '/dev/trial-series', params: { state } });
             } catch (error) {
               Alert.alert('Reader fixture unavailable', error instanceof Error ? error.message : 'Use the local QA environment.');
             }
           }}>
           <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 14, color: colors.accent }}>
-            {state === 'today-day2' ? 'Seed reader day completion' : 'Seed reader series completion'}
+            {label}
           </Text>
         </TouchableOpacity>
       ))}
