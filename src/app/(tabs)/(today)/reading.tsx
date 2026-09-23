@@ -1410,7 +1410,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     const pending = pendingReviewRef.current;
     pendingReviewRef.current = null;
     if (target) router.replace(target);
-    if (pending && target) {
+    if (pending && target && celebrationType === 'day') {
       void (async () => {
         const shown = await pending.manager.showPrompt();
         if (shown) recordReviewPrompt(pending.totalDaysCompleted);
