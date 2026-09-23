@@ -21,7 +21,7 @@
     <key>CFBundlePackageType</key>
     <string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.1.13</string>
+    <string>1.1.14</string>
     <key>CFBundleSignature</key>
     <string>????</string>
     <key>CFBundleURLTypes</key>
@@ -41,7 +41,7 @@
       </dict>
     </array>
     <key>CFBundleVersion</key>
-    <string>183</string>
+    <string>297</string>
     <key>ExpoWidgetsAppGroupIdentifier</key>
     <string>group.com.unfoldapp.ios</string>
     <key>ExpoWidgets_EnablePushNotifications</key>

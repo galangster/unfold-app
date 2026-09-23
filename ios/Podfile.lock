@@ -12,7 +12,7 @@ PODS:
   - EXJSONUtils (57.0.1)
   - EXManifests (57.0.1):
     - ExpoModulesCore
-  - Expo (57.0.16):
+  - Expo (57.0.23):
     - ExpoModulesCore
     - ExpoModulesJSI
     - hermes-engine
@@ -273,7 +273,7 @@ PODS:
     - React-Core
   - ExpoMeshGradient (57.0.1):
     - ExpoModulesCore
-  - ExpoModulesCore (57.0.13):
+  - ExpoModulesCore (57.0.18):
     - ExpoModulesJSI
     - hermes-engine
     - RCTRequired
@@ -297,13 +297,13 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
-  - ExpoModulesJSI (57.0.5):
+  - ExpoModulesJSI (57.1.0):
     - React-Core
     - ReactCommon
-  - ExpoModulesWorklets (57.0.13):
+  - ExpoModulesWorklets (57.0.18):
     - ExpoModulesCore
     - ExpoModulesJSI
-  - ExpoModulesWorkletsAdapter (57.0.13):
+  - ExpoModulesWorkletsAdapter (57.0.18):
     - ExpoModulesCore
     - ExpoModulesJSI
     - ExpoModulesWorklets
@@ -3701,7 +3701,7 @@ SPEC CHECKSUMS:
   EXConstants: 0023ccf3213a49042510a7a63e58a911cea6be8d
   EXJSONUtils: 7a1683cfa2cbe6d11fca97097d51a496755b0287
   EXManifests: f9888c0bf5aaa6ddb7e3d4b224d6d54ac4ca84a4
-  Expo: eecd9b51b1dc9da115fae1c6c1fc23fcabafd940
+  Expo: d06878ab7512dbcb2deec84c4d56f07af8a8b765
   expo-dev-client: 48fb5d17877e9a4ef01fe590a80ff213a8ad9ccd
   expo-dev-launcher: 73017bf0d882d4cd6d805bca5d301592c0bedee8
   expo-dev-menu: 69faedeb0c6c32828da84f6f578d029334f4ac40
@@ -3735,10 +3735,10 @@ SPEC CHECKSUMS:
   ExpoMailComposer: 101933dc6bdb4d7a46495d1dd87420365325adb9
   ExpoMediaLibrary: 344f5b528a71f34794e9d7396e32589531df146e
   ExpoMeshGradient: ade33604a92081a2deda41c6107e7d080493012d
-  ExpoModulesCore: 7aac5a11658e5b704ce89c3f57104db290597801
-  ExpoModulesJSI: ea64813990c7650f3a2d469f176a54c3c7b2c66a
-  ExpoModulesWorklets: ba8252c1824dce38008bdbd1de28566c6591ab7b
-  ExpoModulesWorkletsAdapter: 6e8c680fe80f88dd9845e9f5822b0fca293c3daa
+  ExpoModulesCore: 859b593d784f53f2a55224dd0b21e7c80556465e
+  ExpoModulesJSI: 9df8e7c9719f59e8c001ec33611774137fc1484a
+  ExpoModulesWorklets: 986cf72c18400743869b4642d243115f831e404d
+  ExpoModulesWorkletsAdapter: 45b4ea99adb80abaa012b45e9a9543b4763275c9
   ExpoNetwork: 973d523fe9b1f99223dd945fed9ad1226ae64920
   ExpoNotifications: 6c0393cf9fe8dd90e85dc51585aacbe93372b79b
   ExpoPrint: 7e7a9bc7c12b9b336f34c4458d0c9ba14f243759
@@ -3758,11 +3758,11 @@ SPEC CHECKSUMS:
   ExpoVideo: b1d9a325ddcd4f3ed8ccb374c01b688e98bc6a04
   ExpoVideoThumbnails: 0a7d37113fe51af5c302461ad0344dc529161316
   ExpoWebBrowser: 9b98d939d5f1c5dd8f523f0a0683056fb1204434
-  ExpoWidgets: b8937049449ae8da296f58c24de5b2fd0973a3d9
+  ExpoWidgets: 20ea90446fd0279d791c0ba23e539da95e8b11c7
   EXUpdatesInterface: 92d2aa5194b6fb93ca8ab749db75665cb28b2e60
   FBLazyVector: 3c3be9a019176b5699455f7f66c5444b78a411c6
   Galeria: 8c40b795c085be6ba9ff40277830fa6ac15ddf10
-  hermes-engine: eb42384183735ef767881cbb132aa5bf2827f595
+  hermes-engine: 15af0a59acedebef2d9649dfcc93bfe7d90392a1
   ImageColors: e12eb73e29bc1feaa3c228db8c174a1b25acb59d
   libavif: 5f8e715bea24debec477006f21ef9e95432e254d
   libdav1d: 23581a4d8ec811ff171ed5e2e05cd27bad64c39f

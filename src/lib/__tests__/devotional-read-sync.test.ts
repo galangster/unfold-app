@@ -17,12 +17,14 @@ jest.mock('../mmkv-storage', () => {
 });
 
 import { buildDevotionalReadSyncChanges, syncDevotionalDayRead } from '@/lib/devotional-read-sync';
-const { peekSyncOutbox, resetDrainStateForTesting } = jest.requireActual('@/lib/sync-outbox') as typeof import('@/lib/sync-outbox');
+const { drainSyncOutbox, peekSyncOutbox, resetDrainStateForTesting, OUTBOX_KEY } = jest.requireActual('@/lib/sync-outbox') as typeof import('@/lib/sync-outbox');
 const {
   beginLocalResetSession,
   endLocalResetSession,
   resetSyncSessionFenceForTesting,
 } = jest.requireActual('@/lib/sync-session-fence') as typeof import('@/lib/sync-session-fence');
+import { getAuthHeaders } from '@/lib/api-config';
+import { mmkvStorage } from '@/lib/mmkv-storage';
 import type { Devotional, DevotionalDay } from '@/lib/store';
 
 const day: DevotionalDay = {
@@ -175,6 +177,8 @@ describe('syncDevotionalDayRead', () => {
   const originalFetch = global.fetch;
 
   beforeEach(() => {
+    jest.clearAllMocks();
+    mmkvStorage.removeItem(OUTBOX_KEY);
     resetDrainStateForTesting();
     resetSyncSessionFenceForTesting();
   });
@@ -197,6 +201,57 @@ describe('syncDevotionalDayRead', () => {
     const body = JSON.parse((fetchMock.mock.calls[0] as unknown as [string, { body: string }])[1].body);
     expect(body.changes).toHaveLength(2);
     expect(body.deviceTimezone).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  });
+
+  it('persists offline completion without auth or transport, then delivers the queued changes', async () => {
+    const fetchMock = jest.fn();
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const readAt = '2026-04-25T12:00:00.000Z';
+
+    await expect(syncDevotionalDayRead({ devotional, day, readAt, isOnline: false })).resolves.toBe('queued');
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(getAuthHeaders).not.toHaveBeenCalled();
+    const queued = peekSyncOutbox();
+    expect(queued).toEqual(buildDevotionalReadSyncChanges({ devotional, day, readAt }));
+    expect(JSON.parse((await mmkvStorage.getItem(OUTBOX_KEY))!)).toEqual(queued);
+
+    // A new drain lifecycle must recover the persisted changes after connectivity returns.
+    resetDrainStateForTesting();
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ results: queued.map(({ table, id }) => ({ table, id, status: 'accepted', serverUpdatedAt: readAt })) }),
+    });
+    await drainSyncOutbox();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).changes).toEqual(queued);
+    expect(peekSyncOutbox()).toEqual([]);
+  });
+
+  it('keeps an online TLS failure reportable and preserves the retry', async () => {
+    const error = new Error('A TLS error caused the secure connection to fail.');
+    global.fetch = jest.fn().mockRejectedValue(error) as unknown as typeof fetch;
+
+    await expect(syncDevotionalDayRead({ devotional, day, isOnline: true })).rejects.toBe(error);
+    expect(peekSyncOutbox()).toHaveLength(2);
+  });
+
+  it('keeps server rejections reportable and preserves the retry', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ results: [{ status: 'rejected' }] }),
+    }) as unknown as typeof fetch;
+
+    await expect(syncDevotionalDayRead({ devotional, day, isOnline: true })).rejects.toThrow('Sync read state rejected');
+    expect(peekSyncOutbox()).toHaveLength(2);
+  });
+
+  it('does not queue offline completion while the session is resetting', async () => {
+    const resetToken = beginLocalResetSession();
+    await expect(syncDevotionalDayRead({ devotional, day, isOnline: false })).rejects.toThrow();
+    expect(peekSyncOutbox()).toEqual([]);
+    endLocalResetSession(resetToken);
   });
 
   it('does not enqueue a delayed read-sync failure after the captured session is reset', async () => {
