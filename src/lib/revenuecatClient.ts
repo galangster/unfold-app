@@ -991,6 +991,12 @@ export const refreshGiftEntitlement = (): Promise<RevenueCatResult<CustomerInfo>
   guardRevenueCatUsage('refreshGiftEntitlement', async () =>
     (await readPremiumGrant(identityEpoch)).customerInfo);
 
+export const confirmGiftPremiumAccess = async (): Promise<boolean> => {
+  const refreshed = await refreshGiftEntitlement();
+  if (refreshed.ok && hasUnfoldPremiumEntitlement(refreshed.data)) return true;
+  return Boolean(await waitForUnfoldPremiumEntitlement(POST_PURCHASE_ENTITLEMENT_WAIT_MS));
+};
+
 /**
  * Get current customer info including active entitlements
  *

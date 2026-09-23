@@ -23,9 +23,10 @@ import {
   restoreMyGift,
   signInForGifts,
   startGiftIntent,
+  type GiftClaim,
   type GiftPurchase,
 } from '@/lib/gift-api';
-import { getOfferings, purchaseGiftPackage, refreshGiftEntitlement } from '@/lib/revenuecatClient';
+import { confirmGiftPremiumAccess, getOfferings, purchaseGiftPackage } from '@/lib/revenuecatClient';
 import { useTheme } from '@/lib/theme';
 import { useGuardedBack } from '@/hooks/useGuardedBack';
 
@@ -40,6 +41,23 @@ function message(error: unknown): string {
 
 function giftSessionExpired(error: unknown): boolean {
   return error instanceof GiftApiError && error.code === 'GIFT_SIGN_IN_REQUIRED';
+}
+
+async function giftAccessNotice(gift: GiftClaim, action: 'claim' | 'restore'): Promise<string> {
+  if (gift.environment === 'SANDBOX') {
+    return action === 'claim'
+      ? 'Test gift claimed. Sandbox gifts do not unlock Premium.'
+      : 'Test gift restored. Sandbox gifts do not unlock Premium.';
+  }
+  if (!await confirmGiftPremiumAccess()) {
+    return action === 'claim'
+      ? 'Gift claimed. Premium is still activating. Tap Restore a claimed gift in a moment.'
+      : 'Gift found. Premium is still activating. Tap Restore a claimed gift in a moment.';
+  }
+  const date = new Date(gift.expiresAt).toLocaleDateString();
+  return action === 'claim'
+    ? `Gift claimed. Your access runs through ${date}.`
+    : `Gift restored through ${date}.`;
 }
 
 export default function GiftsScreen() {
@@ -110,12 +128,7 @@ export default function GiftsScreen() {
     const pending = await refreshGifts();
     const restored = await restoreMyGift();
     if (restored) {
-      if (restored.environment === 'PRODUCTION') {
-        await refreshGiftEntitlement();
-        setNotice(`Your gift access runs through ${new Date(restored.expiresAt).toLocaleDateString()}.`);
-      } else {
-        setNotice('Test gift restored. Sandbox gifts do not unlock Premium.');
-      }
+      setNotice(await giftAccessNotice(restored, 'restore'));
     } else if (pending === 'pending') {
       setNotice('Your purchase is still being confirmed. Do not buy again.');
     } else if (pending === 'expired') {
@@ -148,7 +161,7 @@ export default function GiftsScreen() {
       const pending = await refreshGifts();
       if (pending === null) setPendingPurchase(true);
       setNotice(pending === 'ready'
-        ? 'Purchase received. Your code is ready. Sandbox codes are for testing and do not unlock Premium.'
+        ? 'Purchase received. Your gift code is ready to share.'
         : pending === 'refunded'
           ? 'This purchase was refunded. Check your App Store purchase history before buying again.'
           : pending === 'expired'
@@ -163,11 +176,8 @@ export default function GiftsScreen() {
 
   const claim = () => run('claim', async () => {
     const claimed = await claimGiftCode(code);
-    if (claimed.environment === 'PRODUCTION') await refreshGiftEntitlement();
     setCode('');
-    setNotice(claimed.environment === 'PRODUCTION'
-      ? `Gift claimed. Your access runs through ${new Date(claimed.expiresAt).toLocaleDateString()}.`
-      : 'Test gift claimed. Sandbox gifts do not unlock Premium.');
+    setNotice(await giftAccessNotice(claimed, 'claim'));
   });
 
   const restore = () => run('restore', async () => {
@@ -176,10 +186,7 @@ export default function GiftsScreen() {
       setNotice('No active claimed gift was found for this Apple account.');
       return;
     }
-    if (restored.environment === 'PRODUCTION') await refreshGiftEntitlement();
-    setNotice(restored.environment === 'PRODUCTION'
-      ? `Gift restored through ${new Date(restored.expiresAt).toLocaleDateString()}.`
-      : 'Test gift restored. Sandbox gifts do not unlock Premium.');
+    setNotice(await giftAccessNotice(restored, 'restore'));
   });
 
   const refresh = () => run('refresh', async () => {
