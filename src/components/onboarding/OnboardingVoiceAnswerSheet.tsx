@@ -17,7 +17,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { Easing, FadeIn, FadeInDown } from 'react-native-reanimated';
+import Animated, { Easing, FadeIn, FadeInDown, FadeOut, FadeOutDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import {
   requestRecordingPermissionsAsync,
@@ -103,6 +103,7 @@ export interface OnboardingVoiceAnswerSheetProps {
 const DEMO_DURATION_MS = 24_000;
 const DEMO_TRANSCRIPT = 'I am a parent figuring out how to stay present, and I want my mornings to start more quietly.';
 const WAVEFORM_BARS = VOICE_WAVEFORM_BARS;
+const SHEET_EXIT_PRESENCE_MS = 200;
 
 function RoundIconButton({
   label,
@@ -170,6 +171,8 @@ export function OnboardingVoiceAnswerSheet({
   const [errorMessage, setErrorMessage] = useState('Your recording is still on this device. Try again.');
   const [errorKind, setErrorKind] = useState<OnboardingVoiceErrorKind>('transcribe');
   const [isBusy, setIsBusy] = useState(false);
+  const [modalVisible, setModalVisible] = useState(visible);
+  const [modalContentVisible, setModalContentVisible] = useState(visible);
 
   const busyRef = useRef(false);
   const isClosingRef = useRef(false);
@@ -187,6 +190,7 @@ export function OnboardingVoiceAnswerSheet({
   const reviewWasPlayingRef = useRef(false);
   const acceptedRef = useRef(false);
   const wasVisibleRef = useRef(false);
+  const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   visibleRef.current = visible;
   audioUriRef.current = audioUri;
 
@@ -198,6 +202,30 @@ export function OnboardingVoiceAnswerSheet({
     autoResumeOnInterruption: false,
   });
   const playerStatus = useAudioPlayerStatus(player);
+
+  useEffect(() => {
+    if (exitTimerRef.current) {
+      clearTimeout(exitTimerRef.current);
+      exitTimerRef.current = null;
+    }
+    if (visible) {
+      setModalVisible(true);
+      setModalContentVisible(true);
+      return;
+    }
+    if (!modalVisible) return;
+    setModalContentVisible(false);
+    exitTimerRef.current = setTimeout(() => {
+      exitTimerRef.current = null;
+      if (!visibleRef.current) setModalVisible(false);
+    }, SHEET_EXIT_PRESENCE_MS);
+    return () => {
+      if (exitTimerRef.current) {
+        clearTimeout(exitTimerRef.current);
+        exitTimerRef.current = null;
+      }
+    };
+  }, [modalVisible, visible]);
 
   const invalidateAsync = useCallback(() => {
     generationRef.current += 1;
@@ -905,11 +933,12 @@ export function OnboardingVoiceAnswerSheet({
   );
 
   return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={() => void closeSheet()} onShow={() => StatusBar.setBarStyle(isDark ? 'light-content' : 'dark-content')} statusBarTranslucent>
-      <View style={styles.modalRoot}>
+    <Modal visible={modalVisible} transparent animationType="none" onRequestClose={() => void closeSheet()} onShow={() => StatusBar.setBarStyle(isDark ? 'light-content' : 'dark-content')} statusBarTranslucent>
+      {modalContentVisible ? <View collapsable={false} pointerEvents={visible ? 'auto' : 'none'} style={styles.modalRoot}>
         <Animated.View
           pointerEvents="none"
           entering={FadeIn.duration(180).easing(Easing.bezier(0.19, 1, 0.22, 1))}
+          exiting={FadeOut.duration(160).easing(Easing.bezier(0.4, 0, 1, 1))}
           style={[styles.backdrop, { backgroundColor: alpha('#000000', isDark ? 0.46 : 0.28) }]}
         />
         <Pressable
@@ -924,6 +953,9 @@ export function OnboardingVoiceAnswerSheet({
             entering={reducedMotion
               ? FadeIn.duration(180).easing(Easing.bezier(0.19, 1, 0.22, 1))
               : FadeInDown.duration(280).easing(Easing.bezier(0.32, 0.72, 0, 1))}
+            exiting={reducedMotion
+              ? FadeOut.duration(160).easing(Easing.bezier(0.4, 0, 1, 1))
+              : FadeOutDown.duration(180).easing(Easing.bezier(0.4, 0, 1, 1))}
             accessibilityViewIsModal
             style={[
               styles.sheet,
@@ -991,7 +1023,7 @@ export function OnboardingVoiceAnswerSheet({
           </Animated.View>
           </View>
         </KeyboardAvoidingView>
-      </View>
+      </View> : null}
     </Modal>
   );
 }

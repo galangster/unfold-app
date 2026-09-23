@@ -1,5 +1,5 @@
 import React from 'react';
-import { AppState, TextInput } from 'react-native';
+import { AppState, Modal, TextInput } from 'react-native';
 
 import * as renderer from 'react-test-renderer';
 import { OnboardingVoiceAnswerSheet } from '../OnboardingVoiceAnswerSheet';
@@ -155,6 +155,8 @@ jest.mock('react-native-reanimated', () => {
     },
     FadeIn: chainable(),
     FadeInDown: chainable(),
+    FadeOut: chainable(),
+    FadeOutDown: chainable(),
     Easing: { bezier: jest.fn(() => 'bezier') },
   };
 });
@@ -331,6 +333,36 @@ describe('OnboardingVoiceAnswerSheet', () => {
     expect(waveformHeights(tree.root)).toEqual(reducedHeights);
     expect(findByLabel(tree.root, 'Stop and review recording')).toBeDefined();
     await act(async () => tree.unmount());
+  });
+
+  it('keeps the modal present for exit and cancels that exit on rapid reopen', async () => {
+    jest.useFakeTimers();
+    const props = { existingText: '', onClose: jest.fn(), onAccept: jest.fn() };
+    const tree = await renderSheet(props);
+    const modalVisible = () => tree.root.findByType(Modal).props.visible;
+
+    await act(async () => {
+      tree.update(<OnboardingVoiceAnswerSheet {...props} visible={false} />);
+    });
+    expect(modalVisible()).toBe(true);
+    expect(findByLabel(tree.root, 'Close voice answer')).toBeUndefined();
+
+    await act(async () => {
+      tree.update(<OnboardingVoiceAnswerSheet {...props} visible />);
+      jest.advanceTimersByTime(250);
+    });
+    expect(modalVisible()).toBe(true);
+    expect(findByLabel(tree.root, 'Close voice answer')).toBeDefined();
+
+    await act(async () => {
+      tree.update(<OnboardingVoiceAnswerSheet {...props} visible={false} />);
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(250);
+    });
+    expect(modalVisible()).toBe(false);
+    await act(async () => tree.unmount());
+    jest.useRealTimers();
   });
 
   it('starts recording once when opened from the microphone button', async () => {
