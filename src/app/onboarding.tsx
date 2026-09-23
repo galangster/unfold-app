@@ -39,7 +39,6 @@ import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon, XIcon, HandIcon, FingerprintIcon, MoonIcon, CompassIcon, HeartIcon, EyeIcon, FireIcon, SparkleIcon, CloudRainIcon, ScalesIcon, CrosshairIcon, BookOpenIcon, UsersIcon, MusicNotesIcon, CrownIcon, LeafIcon, ChatCircleIcon, CalendarIcon, MagicWandIcon, SmileyIcon, GiftIcon, BinocularsIcon, CloudIcon, ShieldIcon, ShieldCheckIcon, SpeakerHighIcon, LockIcon, GavelIcon } from '@/components/icons';
 import { logger } from '@/lib/logger';
 import { useGuardedBack } from '@/hooks/useGuardedBack';
-import { requestReviewOncePerVersion } from '@/lib/review-prompt';
 
 import { useTheme } from '@/lib/theme';
 import { FontFamily, FontSize } from '@/constants/fonts';
@@ -3820,14 +3819,7 @@ export default function OnboardingScreen() {
           devotionalDay={onboardingDevotionalDay}
           devotionalId={onboardingDevotionalId}
           colors={colors}
-          onComplete={() => {
-            advanceToNextStep();
-            // Ruled by Nick 2026-09-04: the native rating sheet lands right
-            // after the first devotional is completed inside onboarding, over
-            // the celebration. Once per shipped binary; Apple shows it at most
-            // three times a year and never in TestFlight builds.
-            void requestReviewOncePerVersion();
-          }}
+          onComplete={advanceToNextStep}
           onRetry={() => {
             setCurrentStepId('devotionalSegue');
           }}

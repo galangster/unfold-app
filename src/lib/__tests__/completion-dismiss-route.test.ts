@@ -5,8 +5,8 @@ describe('getCompletionDismissRoute', () => {
     expect(getCompletionDismissRoute('day')).toBe('/(tabs)/(today)');
   });
 
-  it('keeps series completion in the reader', () => {
-    expect(getCompletionDismissRoute('series')).toBeNull();
+  it('returns to next-study choices after series completion', () => {
+    expect(getCompletionDismissRoute('series')).toBe('/(tabs)/(today)');
   });
 
   it('returns the Study arc when the day was opened from the Study tab', () => {
@@ -18,7 +18,7 @@ describe('getCompletionDismissRoute', () => {
     expect(getCompletionDismissRoute('day', undefined, '(today)')).toBe('/(tabs)/(today)');
   });
 
-  it('keeps series completion in the reader regardless of origin', () => {
-    expect(getCompletionDismissRoute('series', 'study')).toBeNull();
+  it('returns to next-study choices regardless of series origin', () => {
+    expect(getCompletionDismissRoute('series', 'study')).toBe('/(tabs)/(today)');
   });
 });

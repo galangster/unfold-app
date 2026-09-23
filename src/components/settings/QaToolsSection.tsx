@@ -15,7 +15,7 @@ import { mmkvStorage } from '@/lib/mmkv-storage';
 import { useUIState } from '@/lib/ui-state';
 import { scheduleDevotionalReadyTapTestNotification } from '@/lib/notifications';
 import { seedBookshelfExamples } from '@/lib/bookshelf-qa';
-import { buildDevotionalSeed } from '@/lib/dev-seed';
+import { assertTrialSeriesFixtureEnvironment, buildDevotionalSeed } from '@/lib/dev-seed';
 import { SettingsSectionHeader } from './SettingsSectionHeader';
 
 const QA_ROW_STYLE = {
@@ -47,6 +47,29 @@ export function QaToolsSection() {
     <>
       {/* --- QA Tools --- Internal QA affordances for notification/reveal verification builds. */}
       <SettingsSectionHeader label={__DEV__ ? "Dev Tools" : "QA Tools"} />
+      {([
+        { state: 'today-day2', label: 'Seed reader day completion' },
+        { state: 'today-day3', label: 'Seed reader series completion' },
+        { state: 'series-complete', label: 'Seed feedback invitation' },
+      ] as const).map(({ state, label }) => (
+        <TouchableOpacity key={state} accessibilityRole="button" style={QA_ROW_STYLE}
+          accessibilityLabel={label}
+          onPress={() => {
+            try {
+              assertTrialSeriesFixtureEnvironment();
+              if (state === 'series-complete') {
+                useUnfoldStore.setState({ appFeedbackPromptLastDate: null, reviewPromptLastDate: null });
+              }
+              router.push({ pathname: '/dev/trial-series', params: { state } });
+            } catch (error) {
+              Alert.alert('Reader fixture unavailable', error instanceof Error ? error.message : 'Use the local QA environment.');
+            }
+          }}>
+          <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 14, color: colors.accent }}>
+            {label}
+          </Text>
+        </TouchableOpacity>
+      ))}
       <TouchableOpacity activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Seed bookshelf examples" style={QA_ROW_STYLE}
         onPress={() => {
           try { seedBookshelfExamples(); router.push({ pathname: '/(tabs)/(study)/past-devotionals', params: { from: 'study' } }); }

@@ -1,4 +1,4 @@
-import type { Devotional } from './store';
+import type { Devotional, DevotionalDay } from './store';
 import {
   getHighestContiguousRenderableDayNumber,
   selectRenderableDevotionalDay,
@@ -25,6 +25,19 @@ export function getCalendarDayNumber(
   const dayNumber = Math.floor((today - startDay) / (24 * 60 * 60 * 1000)) + 1;
 
   return Math.max(1, dayNumber);
+}
+
+/** Generation time is preparation metadata, not the date a reading is due. */
+export function getReadingDayLabel(
+  devotional: Devotional | null | undefined,
+  day: DevotionalDay | null | undefined,
+  now = new Date(),
+): 'Overdue' | 'Today' | 'Tomorrow' {
+  if (!devotional || !day || day.isRead) return 'Today';
+  const calendarDay = getCalendarDayNumber(devotional, now);
+  if (calendarDay == null) return 'Today';
+  if (day.dayNumber > calendarDay) return 'Tomorrow';
+  return day.dayNumber < calendarDay ? 'Overdue' : 'Today';
 }
 
 function isCurrentDayAfterCalendarDay(

@@ -1,5 +1,5 @@
-import { useEffect, useMemo } from 'react';
-import { View, Text, TouchableOpacity, Dimensions, Modal, ScrollView } from 'react-native';
+import { useEffect, useMemo, useRef } from 'react';
+import { View, Text, TouchableOpacity, Modal, ScrollView } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -17,8 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { EmberSystem } from '@/components/EmberSystem';
 import { formatSeriesCompletionSummary } from '@/lib/series-completion-summary';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+import { Button } from '@/components/ui/Button';
 
 // ─── Pre-baked completion messages ───────────────────────────────────────────
 // God/Jesus-focused: glory goes to Him, not to the reader.
@@ -104,6 +103,14 @@ interface CompletionCelebrationProps {
   message?: string;
   detail?: string;
   seriesReflectionSummary?: string;
+  nextStep?: {
+    title: string;
+    detail: string;
+    primaryLabel: string;
+    onPrimary: () => void;
+    secondaryLabel: string;
+    onSecondary: () => void;
+  };
 }
 
 export function CompletionCelebration({
@@ -113,10 +120,18 @@ export function CompletionCelebration({
   message,
   detail,
   seriesReflectionSummary,
+  nextStep,
 }: CompletionCelebrationProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { reducedMotion } = useAccessibleAnimation();
+  const handledAction = useRef(false);
+  useEffect(() => { handledAction.current = false; }, [visible]);
+  const runAction = (action: () => void) => {
+    if (handledAction.current) return;
+    handledAction.current = true;
+    action();
+  };
 
   // Pick a random message on each render when visible
   const subtitle = useMemo(() => {
@@ -196,7 +211,7 @@ export function CompletionCelebration({
   const seriesSummaryExcerpt = formatSeriesCompletionSummary(seriesReflectionSummary);
 
   return (
-    <Modal visible={visible} transparent animationType="none" statusBarTranslucent>
+    <Modal visible={visible} transparent animationType="none" statusBarTranslucent onRequestClose={() => runAction(onDismiss)}>
       <Animated.View style={[{ flex: 1 }, overlayStyle]}>
         <EmberSystem variant="celebration" motes active />
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{
@@ -205,9 +220,11 @@ export function CompletionCelebration({
           paddingBottom: Math.max(insets.bottom, Spacing['8']),
         }}>
       <TouchableOpacity
+        disabled={!!nextStep}
+        accessible={!nextStep}
         activeOpacity={1}
         style={{ flexGrow: 1 }}
-        onPress={onDismiss}
+        onPress={() => runAction(onDismiss)}
         accessibilityRole="button"
         accessibilityLabel={[title, subtitle, detail, seriesSummaryExcerpt, 'Continue'].filter(Boolean).join('. ')}
         accessibilityHint="Tap anywhere to continue"
@@ -270,7 +287,7 @@ export function CompletionCelebration({
 
             {/* Series reflection summary */}
             {type === 'series' && seriesSummaryExcerpt && (
-              <Animated.View style={[{ marginTop: Spacing['4'], maxWidth: SCREEN_WIDTH - Spacing['8'] * 2 }, subtitleStyle]}>
+              <Animated.View style={[{ marginTop: Spacing['4'], alignSelf: 'stretch' }, subtitleStyle]}>
                 {/* No line clamp. Four lines holds ~170 characters at iPhone
                     widths, but formatSeriesCompletionSummary allows 220, so the
                     clamp re-truncated the reflection mid-word. The overlay is
@@ -290,8 +307,7 @@ export function CompletionCelebration({
             )}
           </View>
 
-          {/* Dismiss hint */}
-          <Animated.View
+          {!nextStep && <Animated.View
             style={[
               {
                 paddingTop: Spacing['8'],
@@ -310,8 +326,20 @@ export function CompletionCelebration({
             >
               Tap anywhere to continue
             </Text>
-          </Animated.View>
+          </Animated.View>}
       </TouchableOpacity>
+          {nextStep && (
+            <Animated.View style={[{ padding: Spacing['8'], gap: Spacing['4'] }, hintStyle]}>
+              <Text accessibilityRole="header" style={{ fontFamily: FontFamily.display, fontSize: 25, lineHeight: 32, color: colors.text }}>
+                {nextStep.title}
+              </Text>
+              <Text style={{ fontFamily: FontFamily.body, fontSize: 16, lineHeight: 25, color: colors.textMuted }}>
+                {nextStep.detail}
+              </Text>
+              <Button fullWidth size="lg" label={nextStep.primaryLabel} onPress={() => runAction(nextStep.onPrimary)} />
+              <Button fullWidth variant="ghost" label={nextStep.secondaryLabel} onPress={() => runAction(nextStep.onSecondary)} />
+            </Animated.View>
+          )}
         </ScrollView>
       </Animated.View>
     </Modal>

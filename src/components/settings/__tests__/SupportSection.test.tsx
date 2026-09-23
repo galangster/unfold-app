@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, Share, Linking } from 'react-native';
 import { SupportSection } from '../SupportSection';
 import { exportBugReportBundleToFile } from '@/lib/bug-logger';
 import { getAuthHeaders } from '@/lib/api-config';
@@ -14,6 +14,7 @@ const mockSupport = {
   copy: jest.fn(async (_value: string) => undefined),
 };
 
+jest.mock('@/components/AppFeedbackSheet', () => ({ AppFeedbackSheet: () => null }));
 jest.mock('react-native-gesture-handler', () => {
   const { TouchableOpacity } = jest.requireActual('react-native');
   return { TouchableOpacity };
@@ -223,5 +224,25 @@ describe('SupportSection bug report request', () => {
         signal: expect.any(AbortSignal),
       }),
     );
+  });
+});
+
+
+describe('SupportSection sharing and rating', () => {
+  it('offers sharing without adding personal content', async () => {
+    const share = jest.spyOn(Share, 'share').mockResolvedValue({ action: Share.dismissedAction });
+    const tree = createSection();
+    await act(async () => tree.root.findByProps({ accessibilityLabel: 'Share Unfold' }).props.onPress());
+    expect(share).toHaveBeenCalledWith({ title: 'Unfold', message: 'A little space for Scripture, every day. Try Unfold: https://unfoldapp.co' });
+    act(() => tree.unmount());
+    share.mockRestore();
+  });
+  it('keeps a manual App Store review link available', async () => {
+    const link = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+    const tree = createSection();
+    await act(async () => tree.root.findByProps({ accessibilityLabel: 'Rate Unfold' }).props.onPress());
+    expect(link).toHaveBeenCalledWith('https://apps.apple.com/app/id6760814444?action=write-review');
+    act(() => tree.unmount());
+    link.mockRestore();
   });
 });

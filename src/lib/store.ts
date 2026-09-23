@@ -7,6 +7,7 @@ import type { ThemeCategory, DevotionalType } from '../constants/devotional-type
 import type { CompanionPersonality } from './companion-personality';
 import { logBugError, logBugEvent } from './bug-logger';
 import { logger } from './logger';
+import { getRecentReviewRequests } from './review-prompt-policy';
 import { applyUndoActionsWithSync } from './journal-undo';
 import { mmkvStorage } from './mmkv-storage';
 import { createDebouncedJSONStorage } from './debounced-persist-storage';
@@ -720,12 +721,19 @@ interface UnfoldState {
   // Review prompt tracking
   reviewPromptLastDate: string | null;
   reviewPromptCount: number;
+  reviewPromptDates: string[];
   hasReviewed: boolean;
   hasSeenDay1Review: boolean;
   reviewPromptDaysAtLast: number;
   recordReviewPrompt: (daysCompleted: number) => void;
   markAsReviewed: () => void;
   setHasSeenDay1Review: () => void;
+  appFeedbackDraft: string;
+  appFeedbackPromptLastDate: string | null;
+  appFeedbackReadingsAtLast: number;
+  appFeedbackSeriesAtLast: number;
+  setAppFeedbackDraft: (draft: string) => void;
+  recordAppFeedbackPrompt: (readings: number, series: number) => void;
 
   // Streak tracking
   streakLastReadDate: string | null;
@@ -935,9 +943,14 @@ const initialState = {
   resumeContext: null as ResumeContext | null,
   reviewPromptLastDate: null as string | null,
   reviewPromptCount: 0,
+  reviewPromptDates: [] as string[],
   hasReviewed: false,
   hasSeenDay1Review: false,
   reviewPromptDaysAtLast: 0,
+  appFeedbackDraft: '',
+  appFeedbackPromptLastDate: null as string | null,
+  appFeedbackReadingsAtLast: 0,
+  appFeedbackSeriesAtLast: 0,
   streakLastReadDate: null as string | null,
   streakCurrent: 0,
   streakLongest: 0,
@@ -1741,13 +1754,24 @@ export const useUnfoldStore = create<UnfoldState>()(
 
       // Review prompt actions
       recordReviewPrompt: (daysCompleted) =>
-        set((state) => ({
-          reviewPromptLastDate: new Date().toISOString(),
-          reviewPromptCount: state.reviewPromptCount + 1,
-          reviewPromptDaysAtLast: daysCompleted,
-        })),
+        set((state) => {
+          const now = new Date();
+          const dates = [...getRecentReviewRequests(state, now), now.toISOString()];
+          return {
+            reviewPromptLastDate: now.toISOString(),
+            reviewPromptCount: dates.length,
+            reviewPromptDates: dates,
+            reviewPromptDaysAtLast: daysCompleted,
+          };
+        }),
       markAsReviewed: () => set({ hasReviewed: true }),
       setHasSeenDay1Review: () => set({ hasSeenDay1Review: true }),
+      setAppFeedbackDraft: (draft) => set({ appFeedbackDraft: draft }),
+      recordAppFeedbackPrompt: (readings, series) => set({
+        appFeedbackPromptLastDate: new Date().toISOString(),
+        appFeedbackReadingsAtLast: readings,
+        appFeedbackSeriesAtLast: series,
+      }),
 
       // Streak actions
       recordStreakRead: (at) =>
