@@ -4291,7 +4291,7 @@ export default function OnboardingScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: 'transparent' }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
 
       {/* Currents — one continuous particle layer across intro screens */}
       {(currentStepId === 'hook' || currentStepId === 'solution' || currentStepId === 'unfoldIntro' || currentStepId === 'purchaseConfirmation' || currentStepId === 'shockStat' || currentStepId === 'growthGraph') && (
