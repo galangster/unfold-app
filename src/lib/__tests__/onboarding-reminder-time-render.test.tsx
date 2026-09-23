@@ -111,6 +111,8 @@ jest.mock('@/hooks/useOnboardingDarkColors', () => ({
 const mockStoreState = {
   user: null,
   updateUser: jest.fn(),
+  lifeContextDraft: null,
+  setLifeContextDraft: jest.fn(),
   setUser: jest.fn(),
   setCompanionName: jest.fn(),
   addDevotional: jest.fn(),

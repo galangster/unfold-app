@@ -232,7 +232,8 @@ export type NotificationNavigationRoute =
   | ReadingRoute
   | TodayNotificationRoute
   | EveningWindDownNotificationRoute
-  | GeneratingNotificationRoute;
+  | GeneratingNotificationRoute
+  | { pathname: '/life-update' };
 
 export function buildRevealNotificationRoute(
   data: Record<string, unknown> | null | undefined,
@@ -311,11 +312,11 @@ export function buildNotificationNavigationRoute(
   if (revealRoute) return revealRoute;
 
   if (data?.type === 'midday-checkin' || data?.type === 'midday_checkin') {
-    return { pathname: '/(tabs)/(today)', params: { focus: 'midday' } };
+    return { pathname: '/life-update' };
   }
 
   if (data?.type === 'evening-winddown' || data?.type === 'evening_winddown') {
-    return { pathname: '/(tabs)/(today)/evening-wind-down' };
+    return { pathname: '/life-update' };
   }
 
   // Lapse re-entry: the series is waiting on Today.

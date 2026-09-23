@@ -2,7 +2,7 @@
   "expo": {
     "name": "Unfold",
     "slug": "unfold-app",
-    "version": "1.1.14",
+    "version": "1.1.15",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "backgroundColor": "#0A0A0A",
@@ -13,7 +13,7 @@
       "backgroundColor": "#0A0A0A",
       "supportsTablet": true,
       "bundleIdentifier": "com.unfoldapp.ios",
-      "buildNumber": "297",
+      "buildNumber": "298",
       "deploymentTarget": "16.4",
       "usesAppleSignIn": true,
       "config": {

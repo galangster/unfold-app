@@ -132,6 +132,7 @@ export const EXTERNAL_ROUTE_ALLOWLIST: Readonly<Record<string, RouteSchema>> = {
   // onboarding flow and has no in-app URL producer — external links get the
   // plain paywall only.
   '/paywall': { params: {} },
+  '/life-update': { params: {} },
   '/onboarding': { params: { startAt: slug(), flow: oneOf(['newSeries']) } },
   '/share-card': {
     params: { text: text(1000), reference: text(160), translation: text(24), type: oneOf(['verse']) },

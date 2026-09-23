@@ -9,7 +9,7 @@ export function composeOnboardingVoiceDraft(existingText: string, transcript: st
   return `${existing}${joiner}${transcript}`;
 }
 
-export function voiceAnswerAcceptance(text: string, maxLength = ONBOARDING_VOICE_ANSWER_MAX_LENGTH): {
+export function voiceAnswerAcceptance(text: string, maxLength: number = ONBOARDING_VOICE_ANSWER_MAX_LENGTH): {
   empty: boolean;
   overLimit: boolean;
   canAccept: boolean;
@@ -25,6 +25,6 @@ export function voiceAnswerAcceptance(text: string, maxLength = ONBOARDING_VOICE
   };
 }
 
-export function voiceAnswerCountLabel(count: number, maxLength = ONBOARDING_VOICE_ANSWER_MAX_LENGTH): string {
+export function voiceAnswerCountLabel(count: number, maxLength: number = ONBOARDING_VOICE_ANSWER_MAX_LENGTH): string {
   return `${count} / ${maxLength}`;
 }

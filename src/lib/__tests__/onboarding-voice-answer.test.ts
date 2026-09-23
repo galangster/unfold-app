@@ -39,3 +39,10 @@ describe('onboarding voice answer draft rules', () => {
   });
 });
 
+
+  it('accepts a full life update while retaining the shorter about-me limit', () => {
+    const text = 'a'.repeat(6000);
+    expect(voiceAnswerAcceptance(text, 6000).canAccept).toBe(true);
+    expect(voiceAnswerAcceptance(text).canAccept).toBe(false);
+    expect(voiceAnswerAcceptance(text + 'b', 6000).canAccept).toBe(false);
+  });

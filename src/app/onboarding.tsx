@@ -50,6 +50,8 @@ import { INPUT_LIMITS } from '@/lib/validation';
 import { TypewriterText } from '@/components/TypewriterText';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
+import { LifeContextInput } from '@/components/LifeContextInput';
+import { canSaveLifeContext, LIFE_CONTEXT_QUESTION, LIFE_CONTEXT_INVITATION } from '@/lib/life-context';
 import { OnboardingVoiceAnswerSheet } from '@/components/onboarding/OnboardingVoiceAnswerSheet';
 import { VoiceAnswerButton } from '@/components/onboarding/VoiceAnswerButton';
 import { isVoiceCheckInsEnabled } from '@/lib/voice-feature';
@@ -457,7 +459,7 @@ const ALL_STEPS = [
   // SUBJECT SELECTION: After choosing a study type, pick the specific subject (book, character, etc.)
   { id: 'studySubject', question: 'Which would you like to study?', subtext: 'Pick one to walk through together.', type: 'studySubject' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false, conditionalOn: 'selectedType' },
   // DISCOVERY STEP 1: Opening - Where are you right now?
-  { id: 'currentSituation', question: "What's been on your\u00A0heart\u00A0lately?", subtext: "The thing that's there when the noise\u00A0quiets\u00A0down.", type: 'multiline' as const, placeholder: "Lately, I've been thinking about...", adaptive: true, skipIfHasValue: false, hasVariations: true },
+  { id: 'currentSituation', question: LIFE_CONTEXT_QUESTION, subtext: LIFE_CONTEXT_INVITATION, type: 'multiline' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // DIAGNOSTIC ROUND: 3 targeted AI follow-up questions, asked one at a time. Auto-skips
   // if generation fails or the user left currentSituation empty entirely.
   { id: 'diagnosticRound', question: '', subtext: '', type: 'diagnosticRound' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
@@ -691,7 +693,9 @@ export default function OnboardingScreen() {
     selectedThemes: [],
     selectedType: undefined,
     selectedStudySubject: undefined,
-    currentSituation: '',
+    currentSituation: existingUser?.hasCompletedOnboarding
+      ? useUnfoldStore.getState().lifeContextDraft ?? existingUser.currentSituation
+      : '',
     diagnosticAnswers: [],
     spiritualSeeking: '',
     upcomingEvent: { label: '', date: '' },
@@ -1316,6 +1320,7 @@ export default function OnboardingScreen() {
   // Check if current step can proceed
   const canProceed = () => {
     if (!step) return false;
+    if (step.id === 'currentSituation') return canSaveLifeContext(data.currentSituation);
 
     // For themeType step
     if (baseStep?.type === 'themeType') {
@@ -1381,6 +1386,8 @@ export default function OnboardingScreen() {
     // Read through the ref, never the closure — see dataRef above.
     const data = dataRef.current;
     const companionName = resolveCompanionNameToPersist(companionNameInputRef.current);
+    const lifeDraftState = useUnfoldStore.getState();
+    if (lifeDraftState.lifeContextDraft === data.currentSituation) lifeDraftState.setLifeContextDraft(null);
 
     if (existingUser) {
       updateUser({
@@ -1701,7 +1708,7 @@ export default function OnboardingScreen() {
     // Merge discovery chips into the text value before advancing
     // Also compute the merged value synchronously for adaptive question generation
     let mergedCurrentAnswer: string | undefined;
-    const discoveryStepIds = ['currentSituation', 'spiritualSeeking'];
+    const discoveryStepIds = ['spiritualSeeking'];
     if (discoveryStepIds.includes(currentStepId)) {
       const chips = selectedChips[currentStepId] ?? [];
       const currentText = (data[currentStepId as keyof OnboardingData] as string || '').trim();
@@ -1840,7 +1847,7 @@ export default function OnboardingScreen() {
   };
 
   // Prepare discovery by generating adaptive questions
-  const startDiscoveryPreparation = async (selectionType: 'theme' | 'type' | 'guided') => {
+  const startDiscoveryPreparation = async (_selectionType: 'theme' | 'type' | 'guided') => {
     setIsPreparingDiscovery(true);
     setPreparingQuip(getRandomLoadingQuip());
 
@@ -1850,34 +1857,7 @@ export default function OnboardingScreen() {
     }, 2000);
 
     try {
-      // Pre-seed first discovery question based on selection type
-      const themeName = data.selectedThemes.length > 0
-        ? getThemeById(data.selectedThemes[0])?.name ?? data.selectedThemes[0]
-        : '';
-      const typeName = data.selectedType
-        ? getDevotionalTypeById(data.selectedType)?.name ?? data.selectedType.replace(/_/g, ' ')
-        : '';
-
-      // Get contextual pills from the lookup table
-      const contextualChips = getContextualSituationChips({
-        selectedMainOption: selectionType === 'theme' ? 'theme' : selectionType === 'type' ? 'type' : 'guided',
-        selectedThemes: data.selectedThemes,
-        selectedType: data.selectedType,
-      });
-
-      const firstQuestion: { question: string; subtext: string; chips?: string[] } = selectionType === 'theme' ? {
-        question: `When you think about ${themeName.toLowerCase()}, where do you find\u00A0yourself?`,
-        subtext: "The honest, unfiltered reality of where you are.",
-        chips: contextualChips,
-      } : selectionType === 'type' ? {
-        question: `As you begin your ${typeName} journey, what's on your heart?`,
-        subtext: "The thing that's there when the noise quiets down.",
-        chips: contextualChips,
-      } : {
-        question: "What's been on your heart lately?",
-        subtext: "The thing that's there when the noise quiets down.",
-        chips: contextualChips,
-      };
+      const firstQuestion = { question: LIFE_CONTEXT_QUESTION, subtext: LIFE_CONTEXT_INVITATION };
 
       // Set the first adaptive question immediately
       setAdaptedSteps((prev) => ({ ...prev, currentSituation: firstQuestion }));
@@ -2767,6 +2747,30 @@ export default function OnboardingScreen() {
               setNameInputResetKey((k) => k + 1);
             }}
           />
+        </View>
+      );
+    }
+
+    if (step.id === 'currentSituation') {
+      return (
+        <View style={{ gap: 16 }}>
+          <LifeContextInput
+            value={data.currentSituation}
+            colors={colors}
+            isDark={isDark}
+            onChangeText={(text) => {
+              setData((prev) => ({ ...prev, currentSituation: text }));
+              if (existingUser?.hasCompletedOnboarding) useUnfoldStore.getState().setLifeContextDraft(text);
+            }}
+          />
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Skip life update" style={{ minHeight: 44, justifyContent: 'center', alignItems: 'center' }} onPress={() => {
+            const kept = existingUser?.currentSituation ?? '';
+            dataRef.current = { ...dataRef.current, currentSituation: kept };
+            setData((prev) => ({ ...prev, currentSituation: kept }));
+            advanceToNextStep();
+          }}>
+            <Text style={{ color: colors.textMuted, fontFamily: FontFamily.ui, fontSize: 15 }}>Skip for now</Text>
+          </TouchableOpacity>
         </View>
       );
     }
@@ -4287,7 +4291,7 @@ export default function OnboardingScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: 'transparent' }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
 
       {/* Currents — one continuous particle layer across intro screens */}
       {(currentStepId === 'hook' || currentStepId === 'solution' || currentStepId === 'unfoldIntro' || currentStepId === 'purchaseConfirmation' || currentStepId === 'shockStat' || currentStepId === 'growthGraph') && (

@@ -20,12 +20,11 @@ const todayAfterMiddayWindow: ContextSlotInput = {
 };
 
 const middayTodayRoute = {
-  pathname: '/(tabs)/(today)',
-  params: { focus: 'midday' },
+  pathname: '/life-update',
 } as const;
 
 describe('midday notification open', () => {
-  it('keeps a midday-named destination when a midday check-in is opened after 17:00 from a cold start', () => {
+  it('opens a life update when a midday reminder is tapped after 17:00 from a cold start', () => {
     expect(getContextSlotType(todayAfterMiddayWindow)).not.toBe('midday');
 
     const replace = jest.fn();
@@ -52,7 +51,7 @@ describe('midday notification open', () => {
       }),
     ).toBe('skip');
     expect(buildNotificationNavigationRoute({ type: 'evening-winddown' })).toEqual({
-      pathname: '/(tabs)/(today)/evening-wind-down',
+      pathname: '/life-update',
     });
 
     coordinator.setNavigationReady(true);
@@ -64,7 +63,7 @@ describe('midday notification open', () => {
     expect(replace).toHaveBeenCalledTimes(1);
   });
 
-  it('preserves midday focus for both live payload spellings', () => {
+  it('opens a life update for both live payload spellings', () => {
     expect(buildNotificationNavigationRoute({ type: 'midday-checkin' })).toEqual(middayTodayRoute);
     expect(buildNotificationNavigationRoute({ type: 'midday_checkin' })).toEqual(middayTodayRoute);
   });
