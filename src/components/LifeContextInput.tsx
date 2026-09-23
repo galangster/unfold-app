@@ -1,4 +1,6 @@
 import { useRef, useState } from 'react';
+import { useIsFocused } from 'expo-router';
+import { CompanionAvatar } from '@/components/companion/CompanionAvatar';
 import { Keyboard, StyleSheet, Text, TextInput, View } from 'react-native';
 import { VoiceAnswerButton } from '@/components/onboarding/VoiceAnswerButton';
 import { OnboardingVoiceAnswerSheet } from '@/components/onboarding/OnboardingVoiceAnswerSheet';
@@ -15,12 +17,17 @@ export function LifeContextInput({ value, onChangeText, colors, isDark }: {
   isDark: boolean;
 }) {
   const [recording, setRecording] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const isFocused = useIsFocused();
   const [inputKey, setInputKey] = useState(0);
   const session = useRef(captureSyncSession());
   const overLimit = value.length > LIFE_CONTEXT_MAX_LENGTH;
 
   return (
     <View style={styles.container}>
+      <View style={styles.companion} accessible={false} importantForAccessibility="no-hide-descendants">
+        <CompanionAvatar size={120} expression="welcome" idleStyle="inviting" active={isFocused && !recording && !editing} />
+      </View>
       <VoiceAnswerButton
         colors={colors}
         label="Record an update"
@@ -31,6 +38,8 @@ export function LifeContextInput({ value, onChangeText, colors, isDark }: {
         key={inputKey}
         defaultValue={value}
         onChangeText={onChangeText}
+        onFocus={() => setEditing(true)}
+        onBlur={() => setEditing(false)}
         accessibilityLabel="Your life update"
         placeholder="A life update, a question, something you're learning…"
         placeholderTextColor={colors.textMuted}
@@ -52,6 +61,7 @@ export function LifeContextInput({ value, onChangeText, colors, isDark }: {
         <OnboardingVoiceAnswerSheet
           visible
           autoStart
+          companion
           existingText={value}
           maxLength={LIFE_CONTEXT_MAX_LENGTH}
           prompt="Talk about your life, your questions, or what you're learning. You can review the text before adding it."
@@ -72,6 +82,7 @@ export function LifeContextInput({ value, onChangeText, colors, isDark }: {
 
 const styles = StyleSheet.create({
   container: { gap: 12 },
+  companion: { height: 126, alignItems: 'center', justifyContent: 'center' },
   label: { fontFamily: FontFamily.ui, fontSize: 14, marginTop: 8 },
   input: { minHeight: 180, maxHeight: 320, padding: 16, borderWidth: 1, borderRadius: Radius.lg, borderCurve: 'continuous', fontFamily: FontFamily.body, fontSize: 17, lineHeight: 25, textAlignVertical: 'top' },
   note: { fontFamily: FontFamily.ui, fontSize: 13, lineHeight: 19 },

@@ -70,6 +70,15 @@ export function QaToolsSection() {
           </Text>
         </TouchableOpacity>
       ))}
+      <TouchableOpacity
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel="Preview companion voice update"
+        style={QA_ROW_STYLE}
+        onPress={() => router.push({ pathname: '/dev/onboarding-voice-answer', params: { state: 'recording' } })}
+      >
+        <Text style={{ fontFamily: FontFamily.bodyMedium, fontSize: 14, color: colors.accent }}>Preview companion voice update (microphone off)</Text>
+      </TouchableOpacity>
       <TouchableOpacity activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Seed bookshelf examples" style={QA_ROW_STYLE}
         onPress={() => {
           try { seedBookshelfExamples(); router.push({ pathname: '/(tabs)/(study)/past-devotionals', params: { from: 'study' } }); }

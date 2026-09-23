@@ -117,6 +117,7 @@ export default function OnboardingVoiceAnswerPreviewScreen() {
       </SafeAreaView>
 
       <OnboardingVoiceAnswerSheet
+        companion
         key={previewKey}
         visible={sheetVisible}
         onClose={() => setSheetVisible(false)}

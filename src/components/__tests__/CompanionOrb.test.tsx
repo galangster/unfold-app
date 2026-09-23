@@ -29,6 +29,20 @@ jest.mock('react-native-reanimated', () => {
       }
       return sharedValue.current;
     },
+    useDerivedValue: (factory: () => unknown) => {
+      const React = require('react');
+      const factoryRef = React.useRef(factory) as { current: () => unknown };
+      factoryRef.current = factory;
+      const derivedValue = React.useRef(null) as { current: { readonly value: unknown } | null };
+      if (derivedValue.current === null) {
+        derivedValue.current = {
+          get value() {
+            return factoryRef.current();
+          },
+        };
+      }
+      return derivedValue.current;
+    },
     useAnimatedStyle: (fn: () => unknown) => {
       try {
         return fn();
