@@ -271,6 +271,35 @@ function findByLabel(tree: any, label: string) {
 // ─── Tests ──────────────────────────────────────────────────────
 
 describe('DevotionalCard composer integration', () => {
+  it('opens the same next reading without assigning it to yesterday', () => {
+    const onReveal = jest.fn();
+    const state = makeRevealReadyState({ dayLabel: 'Overdue', onReveal });
+    const tree = renderInAct(<DevotionalCard state={state} />);
+    const copy = textContent(tree.root);
+    expect(copy).toContain('Your next reading is ready.');
+    expect(copy).toContain('Reveal Your Devotional');
+    expect(copy).not.toMatch(/yesterday|catch up|still waiting/i);
+    act(() => { findByLabel(tree, `Reveal ${state.seriesTitle}, day ${state.dayNumber}`)[0].props.onPress(); });
+    expect(onReveal).toHaveBeenCalledTimes(1);
+    act(() => tree.unmount());
+  });
+
+  it('continues an already-revealed earlier reading without calling it yesterday', () => {
+    const onContinue = jest.fn();
+    const state: DevotionalCardState = {
+      ...makeCompleteTodayState(), type: 'unread', dayLabel: 'Overdue',
+      dayData: makeDayData({ dayNumber: 5, isRead: false, isRevealed: true }),
+      ctaText: 'Keep Going', onContinue,
+    };
+    const tree = renderInAct(<DevotionalCard state={state} />);
+    const copy = textContent(tree.root);
+    expect(copy).toContain('Ready to read');
+    expect(copy).not.toMatch(/yesterday|still waiting/i);
+    act(() => tree.root.findAllByProps({ testID: 'home-devotional-cta' })[0].props.onPress());
+    expect(onContinue).toHaveBeenCalledWith(5);
+    act(() => tree.unmount());
+  });
+
   beforeEach(() => {
     mockStoreState.journalEntries = [];
   });
@@ -517,7 +546,7 @@ describe('DevotionalCard completed-day hold while editing', () => {
       tree.root.findAll((node: any) => node.type === 'Text' && textContent(node).includes('Walking by Faith')).length,
     ).toBeGreaterThan(0);
     expect(
-      tree.root.findAll((node: any) => node.type === 'Text' && textContent(node).includes('Reveal Today')).length,
+      tree.root.findAll((node: any) => node.type === 'Text' && textContent(node).includes('Reveal Your Devotional')).length,
     ).toBe(0);
 
     act(() => {
@@ -616,7 +645,7 @@ describe('DevotionalCard completed-day hold while editing', () => {
 
     expect(tree.root.findAll((node: any) => node.props.testID === 'home-reflect-composer')).toHaveLength(0);
     expect(
-      tree.root.findAll((node: any) => node.type === 'Text' && textContent(node).includes('Reveal Today')).length,
+      tree.root.findAll((node: any) => node.type === 'Text' && textContent(node).includes('Reveal Your Devotional')).length,
     ).toBeGreaterThan(0);
   });
 
@@ -656,7 +685,7 @@ describe('DevotionalCard completed-day hold while editing', () => {
 
     expect(tree.root.findAll((node: any) => node.props.testID === 'home-reflect-composer')).toHaveLength(0);
     expect(
-      tree.root.findAll((node: any) => node.type === 'Text' && textContent(node).includes('Reveal Today')).length,
+      tree.root.findAll((node: any) => node.type === 'Text' && textContent(node).includes('Reveal Your Devotional')).length,
     ).toBeGreaterThan(0);
   });
 
@@ -691,7 +720,7 @@ describe('DevotionalCard completed-day hold while editing', () => {
 
     expect(tree.root.findAll((node: any) => node.props.testID === 'home-reflect-composer')).toHaveLength(0);
     expect(
-      tree.root.findAll((node: any) => node.type === 'Text' && textContent(node).includes('Reveal Today')).length,
+      tree.root.findAll((node: any) => node.type === 'Text' && textContent(node).includes('Reveal Your Devotional')).length,
     ).toBeGreaterThan(0);
     expect(JSON.stringify(tree.toJSON())).not.toContain('First series draft. Still typing.');
     expect(onSaveFreeWrite).toHaveBeenCalledTimes(1);
@@ -866,7 +895,7 @@ describe('DevotionalCard completed-day hold while editing', () => {
     });
     expect(tree.root.findAll((node: any) => node.props.testID === 'home-reflect-composer')).toHaveLength(0);
     expect(
-      tree.root.findAll((node: any) => node.type === 'Text' && textContent(node).includes('Reveal Today')).length,
+      tree.root.findAll((node: any) => node.type === 'Text' && textContent(node).includes('Reveal Your Devotional')).length,
     ).toBeGreaterThan(0);
     jest.useRealTimers();
   });
@@ -892,7 +921,7 @@ describe('DevotionalCard completed-day hold while editing', () => {
 
     expect(tree.root.findAll((node: any) => node.props.testID === 'home-reflect-composer')).toHaveLength(0);
     expect(
-      tree.root.findAll((node: any) => node.type === 'Text' && textContent(node).includes('Reveal Today')).length,
+      tree.root.findAll((node: any) => node.type === 'Text' && textContent(node).includes('Reveal Your Devotional')).length,
     ).toBeGreaterThan(0);
   });
 });
@@ -1372,7 +1401,7 @@ describe('DevotionalCard reveal-ready blur host', () => {
     );
 
     expect(
-      tree.root.findAll((node: any) => node.type === 'Text' && textContent(node).includes('Reveal Today')).length,
+      tree.root.findAll((node: any) => node.type === 'Text' && textContent(node).includes('Reveal Your Devotional')).length,
     ).toBeGreaterThan(0);
     expect(tree.root.findAll((node: any) => typeof node.type === 'string' && node.props?.testID === 'glass-surface-blur')).toHaveLength(1);
 

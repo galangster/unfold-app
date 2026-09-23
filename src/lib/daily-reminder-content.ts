@@ -1,3 +1,4 @@
+import { getReadingDayLabel } from './devotional-day-access';
 import { getServerOwnedSeriesTotalDays } from './devotional-series-boundary';
 import type { PremiumAccessPolicy } from './premium-access-policy';
 import type { Devotional, DevotionalDay } from './store';
@@ -135,11 +136,7 @@ export function getDailyReminderContent({
   // may still have a readable day in their local store; the misleading case is
   // a missing next day, not already-generated content.
   if (currentDay) {
-    const todayStr = now.toDateString();
-    const isOverdue =
-      !currentDay.isRead &&
-      currentDay.generatedAt &&
-      new Date(currentDay.generatedAt).toDateString() !== todayStr;
+    const isOverdue = getReadingDayLabel(currentDevotional, currentDay, now) === 'Overdue';
 
     if (isOverdue) {
       return {
@@ -201,6 +198,7 @@ export function buildDailyReminderFingerprint({
   // JSON.stringify prevents collisions from content containing separators.
   // Keep this aligned with getDailyReminderContent().
   return JSON.stringify([
+    'reading-calendar-v1',
     dailyReminderEnabled ? 'enabled' : 'disabled',
     reminderTime ?? '',
     premiumPolicy,
@@ -209,6 +207,7 @@ export function buildDailyReminderFingerprint({
     currentDevotional?.id ?? '',
     currentDevotional?.title ?? '',
     currentDevotional?.currentDay ?? '',
+    currentDevotional?.seriesStartDate ?? '',
     currentDevotional ? getServerOwnedSeriesTotalDays(currentDevotional) : '',
     currentDay?.dayNumber ?? '',
     currentDay ? 'day' : currentDevotional ? 'pending' : 'empty',

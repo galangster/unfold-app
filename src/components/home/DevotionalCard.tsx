@@ -514,16 +514,13 @@ function RevealReadyState({
   const { width, fontScale } = useWindowDimensions();
   const { entering, reducedMotion } = useAccessibleAnimation();
   const textCap = heroCopyCap(ambienceVisible);
-  const isYesterday = state.dayLabel === 'Overdue';
   const isLargeTextHero = fontScale >= 1.18;
   const isCompactHero = width < 400 || isLargeTextHero;
   const isVeryCompactHero = width < 370 || fontScale >= 1.32;
   const scriptureReference = state.dayData.scriptureReference || 'Today’s reading';
-  const statusLabel = isYesterday ? 'Still waiting' : 'Ready to reveal';
+  const statusLabel = 'Ready to reveal';
   const displaySeriesTitle = formatHeroSeriesTitle(state.seriesTitle);
-  const revealMessage = isYesterday
-    ? 'Yesterday’s reading is still here.'
-    : 'Today’s reading is ready.';
+  const revealMessage = 'Your next reading is ready.';
 
   return (
     <Animated.View entering={announceReady ? entering(FadeIn.duration(Duration.normal).easing(Ease.out)) : undefined}>
@@ -571,13 +568,13 @@ function RevealReadyState({
             activeOpacity={0.74}
             onPress={state.onReveal}
             accessibilityRole="button"
-            accessibilityLabel={isYesterday ? `Catch up on ${state.seriesTitle}, day ${state.dayNumber}` : `Reveal ${state.seriesTitle}, day ${state.dayNumber}`}
+            accessibilityLabel={`Reveal ${state.seriesTitle}, day ${state.dayNumber}`}
             accessibilityHint="Opens the reveal screen for this devotional reading"
           >
             <GlassSurface radius={Radius.full} style={[styles.heroActions, { borderColor: alpha(colors.accent, 0.24) }]}>
               <View style={styles.heroActionContent}>
                 <Text style={[styles.heroActionText, { color: colors.text }]} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}>
-                  {isYesterday ? 'Catch Up on Yesterday’s Reading' : 'Reveal Today’s Devotional'}
+                  Reveal Your Devotional
                 </Text>
                 <Text style={[styles.heroActionArrow, { color: colors.accent }]}>→</Text>
               </View>
@@ -902,14 +899,14 @@ function MainCard({ state, ambienceVisible, relaxHeroMinHeight, announceReady = 
   const usesEmberState = hasCompletedToday || isTomorrowLocked;
   const dayData = state.dayData;
   const dayLabel = state.dayLabel;
-  const isYesterday = dayLabel === 'Overdue';
+  const isEarlierReading = dayLabel === 'Overdue';
 
   const progress = state.progress;
   const daysCompleted = state.daysCompleted;
   const showProgress = daysCompleted > 0;
   const totalDays = state.totalDays;
   const seriesTitle = state.seriesTitle;
-  const statusLabel = hasCompletedToday ? 'Completed' : isTomorrowLocked ? 'Tomorrow' : isYesterday ? 'Still waiting' : dayLabel;
+  const statusLabel = hasCompletedToday ? 'Completed' : isTomorrowLocked ? 'Tomorrow' : isEarlierReading ? 'Ready to read' : dayLabel;
   const studyMethodName = dayData.studyMethod && BIBLE_STUDY_METHODS[dayData.studyMethod]
     ? BIBLE_STUDY_METHODS[dayData.studyMethod].name
     : null;
@@ -926,8 +923,8 @@ function MainCard({ state, ambienceVisible, relaxHeroMinHeight, announceReady = 
     ? 'Read Again'
     : isTomorrowLocked
       ? 'Return to Today’s Reading'
-      : isYesterday
-        ? 'Finish Yesterday’s Devotional'
+      : isEarlierReading
+        ? 'Continue Reading'
         : state.type === 'unread'
           ? state.ctaText
           : 'Continue Reading';

@@ -43,6 +43,28 @@ function devotional(overrides: Partial<Devotional> = {}): Devotional {
 }
 
 describe('daily reminder content', () => {
+  it('keeps an overnight-prepared reading specific when no calendar anchor exists', () => {
+    const currentDay = day({ generatedAt: new Date(2026, 4, 13, 23).toISOString() });
+    const content = getDailyReminderContent({ currentDevotional: devotional({ currentDay: 6, days: [currentDay] }), premiumPolicy: 'granted', now });
+    expect(content.title).toBe(currentDay.title);
+    expect(content.body).toBe(currentDay.quotableLine);
+  });
+
+  it('uses the series calendar for a reading generated ahead of its reading date', () => {
+    const currentDay = day({ generatedAt: new Date(2026, 4, 12, 23).toISOString() });
+    const series = devotional({ currentDay: 6, days: [currentDay], seriesStartDate: new Date(2026, 4, 9, 12).toISOString() });
+    expect(getDailyReminderContent({ currentDevotional: series, premiumPolicy: 'granted', now }).title).toBe(currentDay.title);
+    expect(getDailyReminderContent({ currentDevotional: series, premiumPolicy: 'granted', now: new Date(2026, 4, 16, 9) }).title).toBe('Pick up where you left off');
+  });
+
+  it('refreshes notification copy when a calendar anchor arrives from sync', () => {
+    const series = devotional({ currentDay: 6, days: [day()] });
+    const first = buildDailyReminderFingerprint({ currentDevotional: series, premiumPolicy: 'granted', reminderTime: '08:00' });
+    const synced = buildDailyReminderFingerprint({ currentDevotional: { ...series, seriesStartDate: now.toISOString() }, premiumPolicy: 'granted', reminderTime: '08:00' });
+    expect(synced).not.toBe(first);
+    expect(JSON.parse(first)[0]).toBe('reading-calendar-v1');
+  });
+
   it('uses a non-generative Bible/Premium message for churned users whose next day is missing', () => {
     const content = getDailyReminderContent({
       currentDevotional: devotional({ currentDay: 7, days: [day({ dayNumber: 6, isRead: true })] }),
