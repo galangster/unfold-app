@@ -1308,6 +1308,11 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
           devotional: currentDevotional,
           day: currentDayData,
           readAt: clock.iso,
+          isOnline,
+        }).then((result) => {
+          if (result === 'queued') {
+            addAppBreadcrumb('reading', 'read-state-queued-offline', { dayNumber: viewingDay });
+          }
         }).catch((err) => {
           logger.warn('[reading] Failed to sync read state:', err instanceof Error ? err.message : err);
           void logBugError('reading', err, {
@@ -1390,7 +1395,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
         }
       }
     }
-  }, [isReadingFocused, effectiveDevotionalId, isViewingActiveSeries, viewingDay, totalDays, user?.devotionalLength, currentDevotional, currentDayData, markDayAsRead, advanceDay, clearResumeContext, setScripturePracticeReturn, recordStreakRead, syncWidgets, journalEntries.length, reviewPromptLastDate, reviewPromptCount, hasReviewed, reviewPromptDaysAtLast, recordReviewPrompt]);
+  }, [isReadingFocused, isOnline, effectiveDevotionalId, isViewingActiveSeries, viewingDay, totalDays, user?.devotionalLength, currentDevotional, currentDayData, markDayAsRead, advanceDay, clearResumeContext, setScripturePracticeReturn, recordStreakRead, syncWidgets, journalEntries.length, reviewPromptLastDate, reviewPromptCount, hasReviewed, reviewPromptDaysAtLast, recordReviewPrompt]);
 
   const generateRemainingDays = useCallback(async (
     options?: { navigateToNextDay?: boolean; withHaptics?: boolean }

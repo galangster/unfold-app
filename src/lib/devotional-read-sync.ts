@@ -77,7 +77,8 @@ export async function syncDevotionalDayRead(params: {
   devotional: Devotional;
   day: DevotionalDay;
   readAt?: string;
-}): Promise<void> {
+  isOnline?: boolean;
+}): Promise<'synced' | 'queued'> {
   const session = captureSyncSession();
   assertSyncSessionCurrent(session, 'devotional read sync');
   const readAt = params.readAt ?? new Date().toISOString();
@@ -86,6 +87,11 @@ export async function syncDevotionalDayRead(params: {
     day: params.day,
     readAt,
   });
+
+  if (params.isOnline === false) {
+    enqueueSyncChanges(changes);
+    return 'queued';
+  }
 
   const controller = new AbortController();
   const unregister = registerSyncTransport(controller);
@@ -111,6 +117,7 @@ export async function syncDevotionalDayRead(params: {
     if (rejected.length > 0) {
       throw new Error(`Sync read state rejected ${rejected.length} change(s)`);
     }
+    return 'synced';
   } catch (err) {
     if (!isSyncSessionCurrent(session)) {
       throw err instanceof SyncSessionInvalidatedError
