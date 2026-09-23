@@ -22,7 +22,6 @@ import {
   FontSize,
 } from '@/lib/store';
 import { getReflectionTypography, type ReflectionTypography } from '@/lib/reflection-typography';
-import { preventOrphan } from '@/lib/cn';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import {
   createAutosaveController,
@@ -753,40 +752,33 @@ function ReflectionQuestionCard({
         accessibilityHint={isExpanded ? 'Tap to collapse' : 'Tap to write your thoughts'}
         accessibilityState={{ expanded: isExpanded }}
       >
-        <Animated.View
-          style={[
-            {
-              flexDirection: 'row',
-              alignItems: 'flex-start',
-              gap: 10,
-              paddingLeft: 0,
-              paddingRight: 8,
-              paddingVertical: Spacing['3'],
-            },
-          ]}
-        >
+        <View style={{ paddingVertical: Spacing['3'], paddingRight: 32 }}>
           {/* Question text */}
           <Text
+            testID={`reflection-question-text-${index}`}
+            textBreakStrategy="highQuality"
+            lineBreakStrategyIOS="standard"
             style={{
-              flex: 1,
+              // Leave room for native line rounding without constraining prompt height.
+              paddingBottom: 2,
               fontFamily: FontFamily.body,
               fontSize: typography.questionFontSize,
               color: colors.text,
               lineHeight: typography.questionLineHeight,
             }}
           >
-            {preventOrphan(question)}
+            {question}
           </Text>
 
           {/* Expand affordance — matches journal.tsx's Go Deeper prompts */}
-          <View style={{ marginTop: 3 }}>
+          <View style={{ position: 'absolute', top: Spacing['3'] + 3, right: 8 }}>
             {isExpanded ? (
               <CaretUpIcon size={14} color={colors.textSubtle} weight="light" />
             ) : (
               <CaretDownIcon size={14} color={colors.textSubtle} weight="light" />
             )}
           </View>
-        </Animated.View>
+        </View>
       </TouchableOpacity>
 
       {/* Expanded: TextInput area. A held prior field stays mounted until Next is ready. */}
