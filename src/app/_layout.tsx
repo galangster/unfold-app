@@ -299,7 +299,7 @@ function RootLayoutNav() {
         <ShelfOpeningOverlay />
         <PrivacyShield />
       </View>
-      <StatusBar style={isDark ? 'light' : 'dark'} />
+      <StatusBar style={isDark || pathname === '/onboarding' ? 'light' : 'dark'} />
     </NavigationThemeProvider>
   );
 }
