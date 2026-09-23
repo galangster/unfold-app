@@ -284,9 +284,6 @@ export default function GiftsScreen() {
               <Text style={{ color: colors.textMuted, fontFamily: FontFamily.ui, fontSize: 14, lineHeight: 21 }}>
                 You receive a code to share after the App Store confirms your purchase.
               </Text>
-              <Text style={{ color: colors.textMuted, fontFamily: FontFamily.ui, fontSize: 13, lineHeight: 19 }}>
-                Apple sandbox purchases create test codes only. Test codes can be claimed but do not unlock Premium.
-              </Text>
               {button(giftPackage ? `Buy gift · ${giftPackage.product.priceString}` : 'Gift purchase unavailable', buy, !signedIn || !giftPackage || pendingPurchase)}
             </View>
           </View>
