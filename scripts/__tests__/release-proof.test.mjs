@@ -312,7 +312,9 @@ function makeHarness(overrides = {}) {
           simulator: overrides.screenSimulator || SIM,
           label: overrides.screenLabel,
           elementCount: overrides.elementCount,
-          timestamp: overrides.screenTimestamp,
+          timestamp: typeof overrides.screenTimestamp === 'function'
+            ? overrides.screenTimestamp(created.waitMs.at(-1))
+            : overrides.screenTimestamp,
           splashOnly: overrides.splashOnly,
         }),
       };
@@ -366,7 +368,7 @@ test('matching observed FlowDeck fixture captures and evaluates; release stays i
   assert.match(captured.record.artifact.infoPlistSha256, /^[0-9a-f]{64}$/);
   assert.ok(captured.record.notProven.includes('dependency-tree'));
   assert.ok(captured.record.notProven.includes('ignored-environment'));
-  assert.deepEqual(fx.created.waitMs, [HEALTHY_BOOT_MS]);
+  assert.deepEqual(fx.created.waitMs, [HEALTHY_BOOT_MS + 1_000]);
   for (const row of fx.created.envs.filter((entry) => entry.cmd === 'build' || entry.cmd === 'run')) {
     assert.equal(row.env.SENTRY_DISABLE_AUTO_UPLOAD, 'true');
   }
@@ -592,6 +594,15 @@ test('evaluation succeeds after native overlay restore; candidate/manifest/log/a
   const artifactDrift = evaluateSimulatorReleaseProof({ recordPath: captured.recordPath });
   assert.equal(artifactDrift.ok, false);
   assert.equal(artifactDrift.code, 'stale-hash');
+});
+
+test('whole-second screen timestamps preserve the full healthy boot interval', () => {
+  const registeredAt = Date.parse('2026-09-05T22:31:39.534Z');
+  const fx = makeHarness({
+    screenTimestamp: (waitMs) => new Date(Math.floor((registeredAt + waitMs) / 1_000) * 1_000).toISOString(),
+  });
+  const captured = fx.capture();
+  assert.equal(captured.ok, true, captured.reason);
 });
 
 test('too-early and splash-only observations cannot pass', () => {

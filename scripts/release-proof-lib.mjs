@@ -590,7 +590,8 @@ export function captureSimulatorReleaseProof(options) {
   const launch = analyzeLaunchLog(launchRun.stdout || '', { derivedData, simulator: options.simulator, nativeDir });
   if (!launch.ok) return launch;
   const wait = options.wait || defaultWait;
-  wait(HEALTHY_BOOT_MS);
+  // FlowDeck UI timestamps omit milliseconds. Allow for that rounding.
+  wait(HEALTHY_BOOT_MS + 1_000);
   const screenArgs = ['ui', 'simulator', 'screen', '-S', options.simulator, '--json'];
   const screenRun = runFlowDeck(screenArgs, { cwd: nativeDir, env: commandEnv });
   writeFileSync(livenessLogPath, screenRun.stdout || '');
