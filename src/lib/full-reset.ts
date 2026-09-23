@@ -63,6 +63,7 @@ import {
   type ServerEraseResult,
 } from '@/lib/account-erase';
 import { clearDeviceCredential } from '@/lib/device-credential';
+import { clearGiftSession, clearPendingGiftPurchase } from '@/lib/gift-storage';
 import { logger } from '@/lib/logger';
 import { cacheDirectory, deleteAsync, documentDirectory, readDirectoryAsync } from 'expo-file-system/legacy';
 // RS13-1: import the canonical keys — don't repeat the string literals here.
@@ -370,6 +371,8 @@ async function runFullLocalReset(options: FullResetOptions): Promise<FullResetRe
   //     confirm) becomes permanently unreachable from this install. Drop the
   //     credential bound to the old id before the new id is minted.
   await clearDeviceCredential();
+  await bestEffort('clear gift session', clearGiftSession);
+  await bestEffort('clear pending gift purchase', clearPendingGiftPurchase);
   rotateDeviceId();
 
   // 13. Log in to the new deterministic id. The timeout only stops waiting;

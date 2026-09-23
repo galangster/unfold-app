@@ -1,6 +1,6 @@
 import { SoundEffectsSection } from './SoundEffectsSection';
 import { useCallback, useState } from 'react';
-import { View, Text, Alert, ActivityIndicator, StyleSheet, type LayoutChangeEvent } from 'react-native';
+import { View, Text, Alert, ActivityIndicator, Platform, StyleSheet, type LayoutChangeEvent } from 'react-native';
 import type { SettingsSection } from '@/components/settings/settings-section-scroll';
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
@@ -46,20 +46,20 @@ export function ProfileSettingsSections({ onSectionLayout }: ProfileSettingsSect
     if (isDeletingAccount) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     Alert.alert(
-      'Reset all data?',
+      'Reset app data?',
       'This will permanently delete all your devotionals, journal entries, and settings.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Reset all data',
+          text: 'Continue',
           onPress: () => {
             Alert.alert(
               'Are you absolutely sure?',
-              "This will permanently delete your data from this device and ask Unfold's servers to delete your synced data. This cannot be undone.",
+              "This deletes app data and asks Unfold to erase synced content. Gift records remain unless you first use Profile > Gift a year of Unfold > Delete gift account. This cannot be undone.",
               [
                 { text: 'Go Back', style: 'cancel' },
                 {
-                  text: 'Delete Everything',
+                  text: 'Reset app data',
                   style: 'destructive',
                   onPress: async () => {
                     setIsDeletingAccount(true);
@@ -96,6 +96,23 @@ export function ProfileSettingsSections({ onSectionLayout }: ProfileSettingsSect
         <SupportSection />
       </View>
 
+      {Platform.OS === 'ios' && <View style={styles.sectionBlock}>
+        <SettingsSectionHeader label="Premium" />
+        <View style={getSettingsCardStyle(colors)}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => router.push('/(tabs)/(you)/gifts')}
+            accessibilityRole="button"
+            accessibilityLabel="Gift a year of Unfold or claim a gift"
+            style={{ minHeight: 48, justifyContent: 'center', paddingHorizontal: Spacing['4'] }}
+          >
+            <Text style={{ color: colors.text, fontFamily: FontFamily.ui, fontSize: 15 }}>
+              Gift a year of Unfold
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>}
+
       <View style={styles.sectionBlock} onLayout={onSectionLayout?.('reminders')}>
         <RemindersSection />
       </View>
@@ -130,7 +147,7 @@ export function ProfileSettingsSections({ onSectionLayout }: ProfileSettingsSect
             disabled={isDeletingAccount}
             accessibilityState={{ disabled: isDeletingAccount }}
             accessibilityRole="button"
-            accessibilityLabel="Reset all data"
+            accessibilityLabel="Reset app data"
           >
             <View
               style={{
@@ -156,7 +173,7 @@ export function ProfileSettingsSections({ onSectionLayout }: ProfileSettingsSect
                   flexShrink: 1,
                 }}
               >
-                {isDeletingAccount ? 'Resetting...' : 'Reset all data'}
+                {isDeletingAccount ? 'Resetting...' : 'Reset app data'}
               </Text>
             </View>
           </TouchableOpacity>

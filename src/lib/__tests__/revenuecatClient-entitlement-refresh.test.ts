@@ -137,6 +137,82 @@ describe('RevenueCat entitlement refresh after store actions', () => {
     expect(purchasesMock.getCustomerInfo).not.toHaveBeenCalled();
   });
 
+  it('returns a gift transaction without waiting for buyer Premium access', async () => {
+    const { client, purchasesMock } = await setup();
+    purchasesMock.purchasePackage.mockResolvedValueOnce({
+      productIdentifier: 'unfold_premium_gift_year',
+      transaction: { transactionIdentifier: 'gift-transaction-1' },
+      customerInfo: emptyCustomerInfo,
+    });
+
+    const result = await client.purchaseGiftPackage({
+      product: { identifier: 'unfold_premium_gift_year' },
+    } as any);
+
+    expect(result).toEqual({ ok: true, data: { transactionId: 'gift-transaction-1' } });
+    expect(purchasesMock.invalidateCustomerInfoCache).not.toHaveBeenCalled();
+    expect(purchasesMock.getCustomerInfo).not.toHaveBeenCalled();
+  });
+
+  it('refuses to purchase an ordinary subscription through the gift path', async () => {
+    const { client, purchasesMock } = await setup();
+    const result = await client.purchaseGiftPackage({
+      product: { identifier: 'unfold_premium_yearly' },
+    } as any);
+    expect(result).toMatchObject({ ok: false, reason: 'sdk_error' });
+    expect(purchasesMock.purchasePackage).not.toHaveBeenCalled();
+  });
+
+  describe('gift Premium confirmation', () => {
+    beforeEach(() => jest.useFakeTimers());
+    afterEach(() => jest.useRealTimers());
+
+    it('confirms access from a fresh entitled read', async () => {
+      const { client, purchasesMock } = await setup();
+
+      await expect(client.confirmGiftPremiumAccess()).resolves.toBe(true);
+      expect(purchasesMock.invalidateCustomerInfoCache).toHaveBeenCalledTimes(1);
+      expect(purchasesMock.addCustomerInfoUpdateListener).not.toHaveBeenCalled();
+    });
+
+    it('waits for a delayed gift grant before confirming access', async () => {
+      const { client, purchasesMock } = await setup({ refreshedCustomerInfo: emptyCustomerInfo });
+      purchasesMock.getCustomerInfo
+        .mockResolvedValueOnce(emptyCustomerInfo)
+        .mockResolvedValueOnce(emptyCustomerInfo)
+        .mockResolvedValueOnce(activeCustomerInfo);
+
+      let settled = false;
+      const pending = client.confirmGiftPremiumAccess().then((value) => { settled = true; return value; });
+      await jest.advanceTimersByTimeAsync(2_000);
+      expect(settled).toBe(false);
+      await jest.advanceTimersByTimeAsync(2_000);
+      await expect(pending).resolves.toBe(true);
+    });
+
+    it('recovers when the first refresh fails but a later grant appears', async () => {
+      const { client, purchasesMock } = await setup({ refreshedCustomerInfo: emptyCustomerInfo });
+      purchasesMock.getCustomerInfo
+        .mockRejectedValueOnce(new Error('RevenueCat unavailable'))
+        .mockResolvedValueOnce(emptyCustomerInfo)
+        .mockResolvedValueOnce(activeCustomerInfo);
+
+      const pending = client.confirmGiftPremiumAccess();
+      await jest.advanceTimersByTimeAsync(4_000);
+      await expect(pending).resolves.toBe(true);
+    });
+
+    it('does not confirm access when refresh and bounded wait fail', async () => {
+      const { client, purchasesMock } = await setup({ refreshedCustomerInfo: emptyCustomerInfo });
+      purchasesMock.getCustomerInfo.mockRejectedValueOnce(new Error('RevenueCat unavailable'));
+
+      const pending = client.confirmGiftPremiumAccess();
+      await jest.advanceTimersByTimeAsync(client.POST_PURCHASE_ENTITLEMENT_WAIT_MS);
+      await expect(pending).resolves.toBe(false);
+      expect(purchasesMock.removeCustomerInfoUpdateListener).toHaveBeenCalledTimes(1);
+    });
+  });
+
   // The quick refresh above covers ~2.25 s. A new trial's grant can land later
   // than that, and the onboarding paywall used to report those purchases as
   // failed with Restore as the only exit. The paywall owns the longer wait
