@@ -46,20 +46,20 @@ export function ProfileSettingsSections({ onSectionLayout }: ProfileSettingsSect
     if (isDeletingAccount) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     Alert.alert(
-      'Reset all data?',
+      'Reset app data?',
       'This will permanently delete all your devotionals, journal entries, and settings.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Reset all data',
+          text: 'Continue',
           onPress: () => {
             Alert.alert(
               'Are you absolutely sure?',
-              "This will permanently delete your data from this device and ask Unfold's servers to delete your synced data. This cannot be undone.",
+              "This deletes app data and asks Unfold to erase synced content. Gift records remain unless you first use Profile > Gift a year of Unfold > Delete gift account. This cannot be undone.",
               [
                 { text: 'Go Back', style: 'cancel' },
                 {
-                  text: 'Delete Everything',
+                  text: 'Reset app data',
                   style: 'destructive',
                   onPress: async () => {
                     setIsDeletingAccount(true);
@@ -147,7 +147,7 @@ export function ProfileSettingsSections({ onSectionLayout }: ProfileSettingsSect
             disabled={isDeletingAccount}
             accessibilityState={{ disabled: isDeletingAccount }}
             accessibilityRole="button"
-            accessibilityLabel="Reset all data"
+            accessibilityLabel="Reset app data"
           >
             <View
               style={{
@@ -173,7 +173,7 @@ export function ProfileSettingsSections({ onSectionLayout }: ProfileSettingsSect
                   flexShrink: 1,
                 }}
               >
-                {isDeletingAccount ? 'Resetting...' : 'Reset all data'}
+                {isDeletingAccount ? 'Resetting...' : 'Reset app data'}
               </Text>
             </View>
           </TouchableOpacity>

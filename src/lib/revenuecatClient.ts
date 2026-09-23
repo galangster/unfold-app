@@ -988,10 +988,8 @@ export const purchaseGiftPackage = (
 };
 
 export const refreshGiftEntitlement = (): Promise<RevenueCatResult<CustomerInfo>> =>
-  guardRevenueCatUsage('refreshGiftEntitlement', async () => {
-    await Purchases.invalidateCustomerInfoCache();
-    return Purchases.getCustomerInfo();
-  });
+  guardRevenueCatUsage('refreshGiftEntitlement', async () =>
+    (await readPremiumGrant(identityEpoch)).customerInfo);
 
 /**
  * Get current customer info including active entitlements

@@ -13,6 +13,7 @@ import {
   cancelGiftIntent,
   claimGiftCode,
   clearPendingGiftPurchase,
+  deleteGiftAccount,
   GiftApiError,
   hasGiftSession,
   loadMyGifts,
@@ -56,7 +57,7 @@ export default function GiftsScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const refreshGifts = useCallback(async () => {
-    let pending: 'ready' | 'pending' | 'refunded' | null;
+    let pending: 'ready' | 'pending' | 'refunded' | 'expired' | null;
     try { pending = await resumePendingGiftPurchase(); }
     catch (caught) {
       setPendingPurchase(true);
@@ -81,6 +82,7 @@ export default function GiftsScreen() {
       setSignedIn(present);
       if (present) void refreshGifts().then((pending) => {
         if (active && pending === 'pending') setNotice('Your purchase is still being confirmed. Do not buy again.');
+        if (active && pending === 'expired') setNotice('Your pending purchase request expired. You can try again.');
       }).catch((caught) => {
         if (giftSessionExpired(caught)) setSignedIn(false);
         setError(message(caught));
@@ -106,12 +108,18 @@ export default function GiftsScreen() {
     await signInForGifts();
     setSignedIn(true);
     const pending = await refreshGifts();
-    const expiresAt = await restoreMyGift();
-    if (expiresAt) {
-      await refreshGiftEntitlement();
-      setNotice(`Your gift access runs through ${new Date(expiresAt).toLocaleDateString()}.`);
+    const restored = await restoreMyGift();
+    if (restored) {
+      if (restored.environment === 'PRODUCTION') {
+        await refreshGiftEntitlement();
+        setNotice(`Your gift access runs through ${new Date(restored.expiresAt).toLocaleDateString()}.`);
+      } else {
+        setNotice('Test gift restored. Sandbox gifts do not unlock Premium.');
+      }
     } else if (pending === 'pending') {
       setNotice('Your purchase is still being confirmed. Do not buy again.');
+    } else if (pending === 'expired') {
+      setNotice('Your pending purchase request expired. You can try again.');
     }
   });
 
@@ -140,9 +148,11 @@ export default function GiftsScreen() {
       const pending = await refreshGifts();
       if (pending === null) setPendingPurchase(true);
       setNotice(pending === 'ready'
-        ? 'Purchase received. Your gift code is ready to share.'
+        ? 'Purchase received. Your code is ready. Sandbox codes are for testing and do not unlock Premium.'
         : pending === 'refunded'
           ? 'This purchase was refunded. Check your App Store purchase history before buying again.'
+          : pending === 'expired'
+            ? 'The pending purchase request expired. Check your App Store purchase history before trying again.'
         : 'Purchase received. Refresh your gifts after confirmation. Do not buy again.');
     } catch (caught) {
       setPendingPurchase(true);
@@ -152,33 +162,61 @@ export default function GiftsScreen() {
   });
 
   const claim = () => run('claim', async () => {
-    const expiresAt = await claimGiftCode(code);
-    await refreshGiftEntitlement();
+    const claimed = await claimGiftCode(code);
+    if (claimed.environment === 'PRODUCTION') await refreshGiftEntitlement();
     setCode('');
-    setNotice(`Gift claimed. Your access runs through ${new Date(expiresAt).toLocaleDateString()}.`);
+    setNotice(claimed.environment === 'PRODUCTION'
+      ? `Gift claimed. Your access runs through ${new Date(claimed.expiresAt).toLocaleDateString()}.`
+      : 'Test gift claimed. Sandbox gifts do not unlock Premium.');
   });
 
   const restore = () => run('restore', async () => {
-    const expiresAt = await restoreMyGift();
-    if (!expiresAt) {
+    const restored = await restoreMyGift();
+    if (!restored) {
       setNotice('No active claimed gift was found for this Apple account.');
       return;
     }
-    await refreshGiftEntitlement();
-    setNotice(`Gift restored through ${new Date(expiresAt).toLocaleDateString()}.`);
+    if (restored.environment === 'PRODUCTION') await refreshGiftEntitlement();
+    setNotice(restored.environment === 'PRODUCTION'
+      ? `Gift restored through ${new Date(restored.expiresAt).toLocaleDateString()}.`
+      : 'Test gift restored. Sandbox gifts do not unlock Premium.');
   });
 
   const refresh = () => run('refresh', async () => {
     const pending = await refreshGifts();
     setNotice(pending === 'pending'
       ? 'Your purchase is still being confirmed. Do not buy again.'
-      : pending === 'refunded' ? 'This purchase was refunded.' : 'Your gifts are up to date.');
+      : pending === 'refunded' ? 'This purchase was refunded.'
+        : pending === 'expired' ? 'Your pending purchase request expired. You can try again.'
+          : 'Your gifts are up to date.');
   });
 
   const share = (gift: GiftPurchase) => {
     void Share.share({
-      message: `A year of Unfold is yours. Open Unfold and enter gift code ${gift.code}. Your year begins when you claim it.`,
+      message: gift.environment === 'SANDBOX'
+        ? `Test gift code ${gift.code}. Open Unfold to try claiming it. Sandbox gifts do not unlock Premium.`
+        : `A year of Unfold is yours. Open Unfold and enter gift code ${gift.code}. Your year begins when you claim it.`,
     }).catch(() => Alert.alert('Could not share gift', 'Please try again.'));
+  };
+
+  const confirmDeleteAccount = () => {
+    Alert.alert(
+      'Delete gift account?',
+      'You will lose gift purchase history, any unshared codes, and any claimed gift access. Codes you shared remain usable, and gifts already claimed by others stay active. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete gift account', style: 'destructive', onPress: () => {
+          void run('delete-account', async () => {
+            await deleteGiftAccount();
+            setSignedIn(false);
+            setGifts([]);
+            setPendingPurchase(false);
+            setCode('');
+            setNotice('Gift account deleted. To remove Apple authorization, open Settings > your name > Sign in with Apple > Unfold > Delete.');
+          });
+        } },
+      ],
+    );
   };
 
   const button = (label: string, onPress: () => void, disabled = false) => (
@@ -246,6 +284,9 @@ export default function GiftsScreen() {
               <Text style={{ color: colors.textMuted, fontFamily: FontFamily.ui, fontSize: 14, lineHeight: 21 }}>
                 You receive a code to share after the App Store confirms your purchase.
               </Text>
+              <Text style={{ color: colors.textMuted, fontFamily: FontFamily.ui, fontSize: 13, lineHeight: 19 }}>
+                Apple sandbox purchases create test codes only. Test codes can be claimed but do not unlock Premium.
+              </Text>
               {button(giftPackage ? `Buy gift · ${giftPackage.product.priceString}` : 'Gift purchase unavailable', buy, !signedIn || !giftPackage || pendingPurchase)}
             </View>
           </View>
@@ -259,13 +300,28 @@ export default function GiftsScreen() {
                   {gifts.map((gift) => (
                     <View key={gift.transactionId} style={{ gap: Spacing['2'], paddingBottom: Spacing['3'], borderBottomWidth: 1, borderBottomColor: colors.border }}>
                       <Text style={{ color: colors.text, fontFamily: FontFamily.uiMedium }}>
-                        {gift.status === 'available' ? gift.code : gift.status === 'claimed' ? 'Gift claimed' : 'Gift refunded'}
+                        {gift.status === 'available'
+                          ? `${gift.environment === 'SANDBOX' ? 'Test code · ' : ''}${gift.code}`
+                          : gift.status === 'claimed'
+                            ? gift.environment === 'SANDBOX' ? 'Test gift claimed' : 'Gift claimed'
+                            : 'Gift refunded'}
                       </Text>
-                      {gift.expiresAt && <Text style={{ color: colors.textMuted, fontFamily: FontFamily.ui }}>Access ends {new Date(gift.expiresAt).toLocaleDateString()}</Text>}
+                      {gift.expiresAt && gift.environment === 'PRODUCTION' && <Text style={{ color: colors.textMuted, fontFamily: FontFamily.ui }}>Access ends {new Date(gift.expiresAt).toLocaleDateString()}</Text>}
                       {gift.status === 'available' && button('Share gift code', () => share(gift))}
                     </View>
                   ))}
                   {button('Refresh gifts', refresh)}
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel="Delete gift account"
+                    disabled={Boolean(busy)}
+                    onPress={confirmDeleteAccount}
+                    style={{ minHeight: 48, justifyContent: 'center' }}
+                  >
+                    <Text style={{ color: colors.error, fontFamily: FontFamily.uiMedium, textAlign: 'center' }}>
+                      Delete gift account
+                    </Text>
+                  </TouchableOpacity>
                 </View>
               </View>
             </>

@@ -2,21 +2,24 @@ import * as AppleAuthentication from 'expo-apple-authentication';
 import * as SecureStore from 'expo-secure-store';
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from '@/lib/api-config';
 import { authenticatedFetch } from '@/lib/device-credential';
+import { GIFT_PENDING_PURCHASE_KEY, GIFT_SESSION_KEY, clearGiftSession, clearPendingGiftPurchase } from '@/lib/gift-storage';
 import { getDeviceId } from '@/lib/mmkv-storage';
 
-const SESSION_KEY = 'unfold-gift-session';
-const PENDING_PURCHASE_KEY = 'unfold-gift-pending-purchase';
 const API = `${PRIMARY_BACKEND_URL}/api/gifts`;
+
+export { clearGiftSession, clearPendingGiftPurchase };
 
 export type GiftPurchase = {
   transactionId: string;
   code: string;
+  environment: 'PRODUCTION' | 'SANDBOX';
   status: 'available' | 'claimed' | 'refunded';
   claimedAt: string | null;
   expiresAt: string | null;
 };
 
-type PurchaseConfirmation = 'ready' | 'pending' | 'refunded';
+type PurchaseConfirmation = 'ready' | 'pending' | 'refunded' | 'expired';
+export type GiftClaim = { expiresAt: string; environment: 'PRODUCTION' | 'SANDBOX' };
 
 export class GiftApiError extends Error {
   constructor(readonly code: string, readonly status: number, message: string) {
@@ -25,7 +28,7 @@ export class GiftApiError extends Error {
 }
 
 async function sessionToken(): Promise<string | null> {
-  const raw = await SecureStore.getItemAsync(SESSION_KEY);
+  const raw = await SecureStore.getItemAsync(GIFT_SESSION_KEY);
   if (!raw) return null;
   try {
     const session = JSON.parse(raw) as { uid?: unknown; token?: unknown } | null;
@@ -40,7 +43,7 @@ export async function hasGiftSession(): Promise<boolean> {
   return Boolean(await sessionToken());
 }
 
-async function callGiftApi<T>(path: string, method: 'GET' | 'POST', body?: unknown, withSession = true): Promise<T> {
+async function callGiftApi<T>(path: string, method: 'GET' | 'POST' | 'DELETE', body?: unknown, withSession = true): Promise<T> {
   const headers = await getAuthHeaders();
   if (withSession) {
     const token = await sessionToken();
@@ -59,7 +62,7 @@ async function callGiftApi<T>(path: string, method: 'GET' | 'POST', body?: unkno
     const data = await response.json() as T & { error?: { code?: string; message?: string } };
     if (!response.ok) {
       if (response.status === 401 && withSession && data.error?.code === 'GIFT_SIGN_IN_REQUIRED') {
-        await SecureStore.deleteItemAsync(SESSION_KEY);
+        await clearGiftSession();
       }
       throw new GiftApiError(
         data.error?.code ?? 'GIFT_REQUEST_FAILED',
@@ -86,7 +89,7 @@ export async function signInForGifts(): Promise<void> {
     '/auth/session', 'POST', { nonce, identityToken: credential.identityToken }, false,
   );
   await SecureStore.setItemAsync(
-    SESSION_KEY,
+    GIFT_SESSION_KEY,
     JSON.stringify({ uid: getDeviceId(), token: session.token }),
     { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK },
   );
@@ -110,7 +113,7 @@ export async function attachGiftPurchase(transactionId: string): Promise<Purchas
 
 export async function rememberGiftIntent(intentId: string): Promise<void> {
   await SecureStore.setItemAsync(
-    PENDING_PURCHASE_KEY,
+    GIFT_PENDING_PURCHASE_KEY,
     JSON.stringify({ uid: getDeviceId(), intentId }),
     { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK },
   );
@@ -118,18 +121,19 @@ export async function rememberGiftIntent(intentId: string): Promise<void> {
 
 export async function rememberGiftPurchase(intentId: string, transactionId: string): Promise<void> {
   await SecureStore.setItemAsync(
-    PENDING_PURCHASE_KEY,
+    GIFT_PENDING_PURCHASE_KEY,
     JSON.stringify({ uid: getDeviceId(), intentId, transactionId }),
     { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK },
   );
 }
 
-export async function clearPendingGiftPurchase(): Promise<void> {
-  await SecureStore.deleteItemAsync(PENDING_PURCHASE_KEY);
+export async function deleteGiftAccount(): Promise<void> {
+  await callGiftApi<{ deleted: true }>('/account', 'DELETE');
+  await Promise.allSettled([clearGiftSession(), clearPendingGiftPurchase()]);
 }
 
 export async function resumePendingGiftPurchase(): Promise<PurchaseConfirmation | null> {
-  const raw = await SecureStore.getItemAsync(PENDING_PURCHASE_KEY);
+  const raw = await SecureStore.getItemAsync(GIFT_PENDING_PURCHASE_KEY);
   if (!raw) return null;
   let pending: { uid?: unknown; intentId?: unknown; transactionId?: unknown } | null;
   try { pending = JSON.parse(raw); }
@@ -147,7 +151,7 @@ export async function resumePendingGiftPurchase(): Promise<PurchaseConfirmation 
   } else {
     return null;
   }
-  if (state !== 'pending') await SecureStore.deleteItemAsync(PENDING_PURCHASE_KEY);
+  if (state !== 'pending') await clearPendingGiftPurchase();
   return state;
 }
 
@@ -156,12 +160,11 @@ export async function loadMyGifts(): Promise<GiftPurchase[]> {
   return data.gifts;
 }
 
-export async function claimGiftCode(code: string): Promise<string> {
-  const data = await callGiftApi<{ expiresAt: string }>('/claim', 'POST', { code });
-  return data.expiresAt;
+export async function claimGiftCode(code: string): Promise<GiftClaim> {
+  return callGiftApi<GiftClaim>('/claim', 'POST', { code });
 }
 
-export async function restoreMyGift(): Promise<string | null> {
-  const data = await callGiftApi<{ expiresAt: string | null }>('/restore', 'POST', {});
-  return data.expiresAt;
+export async function restoreMyGift(): Promise<GiftClaim | null> {
+  const data = await callGiftApi<{ expiresAt: string | null; environment: GiftClaim['environment'] | null }>('/restore', 'POST', {});
+  return data.expiresAt && data.environment ? { expiresAt: data.expiresAt, environment: data.environment } : null;
 }

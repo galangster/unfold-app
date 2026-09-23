@@ -56,6 +56,11 @@ jest.mock('../device-credential', () => ({
   authenticatedFetch: (url: string, init?: RequestInit) => fetch(url, init),
 }));
 
+jest.mock('../gift-storage', () => ({
+  clearGiftSession: jest.fn(async () => undefined),
+  clearPendingGiftPurchase: jest.fn(async () => undefined),
+}));
+
 jest.mock('../mmkv-storage', () => ({
   mmkvStorage: {
     getItem: jest.fn((key: string) => mockStore.get(key) ?? null),
@@ -179,6 +184,7 @@ import { clearReviewPromptState } from '../review-prompt';
 import { clearPaywallDiagnosticsFile } from '../paywall-diagnostics';
 import { clearAudioCache } from '../tts-service';
 import { clearWidgets } from '../widget-bridge';
+import { clearGiftSession, clearPendingGiftPurchase } from '../gift-storage';
 import {
   establishRevenueCatIdentityForCurrentDevice,
   invalidateRevenueCatIdentityReadiness,
@@ -316,6 +322,8 @@ describe('performFullLocalReset', () => {
     expect(clearPaywallDiagnosticsFile).toHaveBeenCalledTimes(1);
     expect(clearAudioCache).toHaveBeenCalledTimes(1);
     expect(clearWidgets).toHaveBeenCalledTimes(1);
+    expect(clearGiftSession).toHaveBeenCalledTimes(1);
+    expect(clearPendingGiftPurchase).toHaveBeenCalledTimes(1);
     expect(invalidateRevenueCatIdentityReadiness).toHaveBeenCalledTimes(1);
     expect(logoutUser).toHaveBeenCalledTimes(1);
     expect(rotateDeviceId).toHaveBeenCalledTimes(1);

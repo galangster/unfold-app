@@ -16,7 +16,7 @@ jest.mock('@/lib/api-config', () => ({
 jest.mock('@/lib/device-credential', () => ({ authenticatedFetch: (...args: unknown[]) => mockFetch(...args) }));
 jest.mock('@/lib/mmkv-storage', () => ({ getDeviceId: () => mockDeviceId }));
 
-import { rememberGiftIntent, rememberGiftPurchase, resumePendingGiftPurchase } from '../gift-api';
+import { deleteGiftAccount, rememberGiftIntent, rememberGiftPurchase, resumePendingGiftPurchase } from '../gift-api';
 
 beforeEach(() => {
   mockStore.clear();
@@ -61,6 +61,16 @@ it('clears the pending marker after a confirmed refund', async () => {
   expect(mockStore.has('unfold-gift-pending-purchase')).toBe(false);
 });
 
+it('clears an expired Ask to Buy request so the buyer can try again', async () => {
+  await rememberGiftIntent('d58f65f8-6e5f-4f39-8f53-e9400625c251');
+  mockFetch.mockResolvedValueOnce({
+    ok: true, status: 200, json: async () => ({ state: 'expired' }),
+  });
+
+  await expect(resumePendingGiftPurchase()).resolves.toBe('expired');
+  expect(mockStore.has('unfold-gift-pending-purchase')).toBe(false);
+});
+
 it('does not attach a pending purchase after the device identity changes', async () => {
   await rememberGiftPurchase('d58f65f8-6e5f-4f39-8f53-e9400625c251', '2000000012345678');
   mockDeviceId = 'other-device';
@@ -74,4 +84,26 @@ it('ignores an invalid pending purchase record', async () => {
 
   await expect(resumePendingGiftPurchase()).resolves.toBeNull();
   expect(mockFetch).not.toHaveBeenCalled();
+});
+
+it('deletes the gift account with its session and pending purchase marker', async () => {
+  await rememberGiftIntent('d58f65f8-6e5f-4f39-8f53-e9400625c251');
+  mockFetch.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ deleted: true }) });
+
+  await deleteGiftAccount();
+
+  expect(mockFetch.mock.calls[0][0]).toContain('/api/gifts/account');
+  expect(mockFetch.mock.calls[0][1]).toMatchObject({ method: 'DELETE' });
+  expect(mockStore.has('unfold-gift-session')).toBe(false);
+  expect(mockStore.has('unfold-gift-pending-purchase')).toBe(false);
+});
+
+it('keeps the gift session if account deletion fails', async () => {
+  mockFetch.mockResolvedValueOnce({
+    ok: false, status: 503,
+    json: async () => ({ error: { code: 'GIFT_SERVICE_UNAVAILABLE', message: 'Try again.' } }),
+  });
+
+  await expect(deleteGiftAccount()).rejects.toMatchObject({ code: 'GIFT_SERVICE_UNAVAILABLE' });
+  expect(mockStore.has('unfold-gift-session')).toBe(true);
 });
