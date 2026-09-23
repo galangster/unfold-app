@@ -92,7 +92,7 @@ import {
   getEveningWindDownDayNumber,
   getMiddayCheckInDayNumber,
 } from '@/lib/today-companion-state';
-import { getCalendarDayNumber } from '@/lib/devotional-day-access';
+import { getReadingDayLabel } from '@/lib/devotional-day-access';
 import { resolveRitualCompletion } from '@/lib/ritual-session';
 import { getDeviceTimezone } from '@/lib/device-timezone';
 import { useGeneratedDayWatch } from '@/hooks/useGeneratedDayWatch';
@@ -835,43 +835,6 @@ export default function HomeScreen() {
     return resumeContext.dayNumber !== resumeDevotional.currentDay;
   }, [resumeContext, resumeDevotional]);
 
-  const getReadingDayLabel = (): 'Overdue' | 'Today' | 'Tomorrow' => {
-    if (!currentDevotional) return 'Today';
-    const dayData = (currentDevotional.days ?? []).find(d => d.dayNumber === currentDevotional.currentDay);
-    if (!dayData) return 'Today';
-
-    const todayStr = new Date().toDateString();
-    const calendarDayNumber = getCalendarDayNumber(currentDevotional);
-
-    // If the current pointer is ahead of the user's calendar pace, it is the
-    // generated-ahead reading and should stay locked as tomorrow after today's
-    // completion. Otherwise, a generated day whose number is due today remains
-    // today's reading even if it was generated earlier.
-    if (!dayData.isRead && calendarDayNumber != null) {
-      if (currentDevotional.currentDay > calendarDayNumber) return 'Tomorrow';
-      return currentDevotional.currentDay < calendarDayNumber ? 'Overdue' : 'Today';
-    }
-
-    // Case 1: Current day already read today — it's today's completed reading.
-    // (In the old system this returned 'Tomorrow' because currentDay advanced immediately.
-    // Now currentDay stays put until the server cron advances it overnight.)
-    if (dayData.isRead && dayData.readAt && new Date(dayData.readAt).toDateString() === todayStr) {
-      return 'Today';
-    }
-
-    // Case 2: Current day NOT read — check if it's overdue.
-    // If the content was generated before today, the user missed it on a prior day.
-    if (!dayData.isRead && dayData.generatedAt) {
-      const genDate = new Date(dayData.generatedAt);
-      if (genDate.toDateString() !== todayStr) {
-        return 'Overdue';
-      }
-    }
-
-    // Case 3: Content generated today or just now — it's today's reading
-    return 'Today';
-  };
-
   const handleContinueReading = (dayNumber?: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (dayNumber) {
@@ -1134,7 +1097,7 @@ export default function HomeScreen() {
   );
   const autoTrialActive = isAutoTrialSeries(currentDevotional) || inflightMatchesAuto;
   const storedNextPick = currentDevotional?.days?.find((row) => row.dayNumber === totalDays)?.nextPick ?? null;
-  const homeDayData = getHomeDevotionalDayData(currentDevotional);
+  const homeDayData = getHomeDevotionalDayData(currentDevotional, clockNow);
   const activeCurrentDayData = currentDevotional?.days.find((day) => day.dayNumber === currentDevotional.currentDay) ?? null;
   const setTodayReadingAvailable = useAmbientSoundChrome((state) => state.setTodayReadingAvailable);
   const ambientPlayerPadding = useAmbientPlayerScrollPadding(100);
@@ -1146,6 +1109,7 @@ export default function HomeScreen() {
   const currentDayData = !isCurrentDevotionalComplete && hasReadToday && activeCurrentDayData && !activeCurrentDayData.isRead
     ? activeCurrentDayData
     : homeDayData;
+  const readingDayLabel = getReadingDayLabel(currentDevotional, currentDayData, clockNow);
 
   const completionAmbienceKey = useMemo(() => {
     if (!currentDevotional || !hasReadToday) return null;
@@ -1244,7 +1208,7 @@ export default function HomeScreen() {
   const showDay1Review = daysCompleted >= 1 && !hasSeenDay1Review && !isJourneyComplete;
 
   // True when today's reading is done and the card is previewing tomorrow's content
-  const isTomorrow = currentDevotional ? !isJourneyComplete && getReadingDayLabel() === 'Tomorrow' : false;
+  const isTomorrow = currentDevotional ? !isJourneyComplete && readingDayLabel === 'Tomorrow' : false;
 
   // Extract a teaser sentence from tomorrow's bodyText to surface on the home card
   const homeTomorrowTeaser = useMemo(() => {
@@ -1652,7 +1616,7 @@ export default function HomeScreen() {
     currentDevotional: currentDevotional ?? null,
     currentDayData,
     hasReadToday,
-    dayLabel: getReadingDayLabel(),
+    dayLabel: readingDayLabel,
     isJourneyComplete,
     isPreparing: !hasReadToday && isPreparingCurrentDay,
     dailyRecovery: isPreparingCurrentDay

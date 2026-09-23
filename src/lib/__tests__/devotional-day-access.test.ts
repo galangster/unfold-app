@@ -1,5 +1,6 @@
 import {
   getCalendarDayNumber,
+  getReadingDayLabel,
   getDayMenuPresentation,
   getLatestReadDayNumberToday,
   getLockedTodayDayNumber,
@@ -49,6 +50,31 @@ function devotional(overrides: Partial<Devotional> = {}): Devotional {
 }
 
 describe('devotional day access', () => {
+  it.each([undefined, 'invalid-date'])('does not date a prepared reading from generatedAt when the series anchor is %s', (seriesStartDate) => {
+    const previous = day({ dayNumber: 4, isRead: true, readAt: yesterdayIso });
+    const next = day({ dayNumber: 5, generatedAt: yesterdayIso });
+    const series = devotional({ currentDay: 5, seriesStartDate, days: [previous, next] });
+    expect(getReadingDayLabel(series, next, now)).toBe('Today');
+    expect(getTodayReaderDayNumber(series, now)).toBe(5);
+  });
+
+  it('labels a pre-generated reading by its local calendar day', () => {
+    const next = day({ dayNumber: 5, generatedAt: yesterdayIso });
+    const series = devotional({ currentDay: 5, seriesStartDate: new Date(2026, 4, 6, 12).toISOString(), days: [next] });
+    expect(getReadingDayLabel(series, next, now)).toBe('Today');
+    expect(getReadingDayLabel(series, next, new Date(2026, 4, 11, 0, 1))).toBe('Overdue');
+  });
+
+  it('keeps a pre-generated future reading locked after today is complete', () => {
+    const finished = day({ dayNumber: 4, isRead: true, readAt: todayIso });
+    const next = day({ dayNumber: 5, generatedAt: yesterdayIso });
+    const series = devotional({ currentDay: 5, seriesStartDate: new Date(2026, 4, 7, 12).toISOString(), days: [finished, next] });
+    expect(getReadingDayLabel(series, next, now)).toBe('Tomorrow');
+    expect(getReadingDayLabel(series, finished, now)).toBe('Today');
+    expect(getTodayReaderDayNumber(series, now)).toBe(4);
+    expect(isDevotionalDaySelectable(series, 5, now)).toBe(false);
+  });
+
   it('counts local calendar dates across the spring-forward boundary', () => {
     const series = devotional({
       seriesStartDate: new Date(2026, 2, 7, 12, 0, 0).toISOString(),
