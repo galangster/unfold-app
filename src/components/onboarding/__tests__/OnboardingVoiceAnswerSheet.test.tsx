@@ -6,6 +6,7 @@ import { OnboardingVoiceAnswerSheet } from '../OnboardingVoiceAnswerSheet';
 
 const { act } = renderer;
 
+let mockReducedMotion = false;
 const mockRequestPermissions = jest.fn(async () => ({ granted: true }));
 const mockSetAudioMode = jest.fn(async (..._args: unknown[]) => undefined);
 const mockTranscribe = jest.fn();
@@ -87,6 +88,10 @@ jest.mock('@/hooks/useGlobalAudioPlayer', () => ({
   resumeAfterVoiceInput: (shouldResume: boolean) => mockResumeAfterVoiceInput(shouldResume),
 }));
 
+jest.mock('@/hooks/useAccessibility', () => ({
+  useAccessibleAnimation: () => ({ reducedMotion: mockReducedMotion }),
+}));
+
 jest.mock('@/lib/voice-input', () => ({
   transcribeVoiceInput: (...args: unknown[]) => mockTranscribe(...args),
   deleteLocalVoiceAudio: (...args: unknown[]) => mockDeleteAudio(...args),
@@ -122,6 +127,10 @@ jest.mock('@/lib/theme', () => ({
   }),
 }));
 
+jest.mock('@/components/companion/CompanionAvatar', () => ({
+  CompanionAvatar: (props: object) => jest.requireActual('react').createElement('CompanionAvatar', props),
+}));
+
 jest.mock('@/components/ui', () => ({ alpha: (color: string) => color }));
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -146,7 +155,7 @@ jest.mock('react-native-reanimated', () => {
     },
     FadeIn: chainable(),
     FadeInDown: chainable(),
-    useReducedMotion: () => true,
+    Easing: { bezier: jest.fn(() => 'bezier') },
   };
 });
 
@@ -195,6 +204,21 @@ function findByLabel(root: TestNode, label: string) {
   return found;
 }
 
+function findByRole(root: TestNode, role: string) {
+  let found: TestNode | undefined;
+  walk(root, (node) => {
+    if (!found && node.props?.accessibilityRole === role) found = node;
+  });
+  return found;
+}
+
+function waveformHeights(root: TestNode): number[] {
+  const waveform = findByRole(root, 'progressbar');
+  return React.Children.toArray(waveform?.props.children).map((child) => (
+    (child as React.ReactElement<{ style: { height: number } }>).props.style.height
+  ));
+}
+
 async function renderSheet(props: Record<string, unknown> = {}) {
   let tree: renderer.ReactTestRenderer;
   await act(async () => {
@@ -215,6 +239,7 @@ async function renderSheet(props: Record<string, unknown> = {}) {
 describe('OnboardingVoiceAnswerSheet', () => {
   beforeEach(() => {
     AppState.currentState = 'active';
+    mockReducedMotion = false;
     mockRequestPermissions.mockReset();
     mockRequestPermissions.mockResolvedValue({ granted: true });
     mockSetAudioMode.mockReset();
@@ -224,6 +249,7 @@ describe('OnboardingVoiceAnswerSheet', () => {
     mockPauseForVoiceInput.mockReset();
     mockResumeAfterVoiceInput.mockReset();
     mockRecorder.isRecording = false;
+    mockRecorderState.isRecording = false;
     mockRecorder.prepareToRecordAsync.mockClear();
     mockRecorder.record.mockClear();
     mockRecorder.stop.mockClear();
@@ -237,6 +263,74 @@ describe('OnboardingVoiceAnswerSheet', () => {
     mockReviewLease.isActive.mockReturnValue(true);
     mockReviewLease.release.mockClear();
     mockAppStateListeners.length = 0;
+  });
+
+  it('shows listening only while native capture is active and settles after stopping', async () => {
+    const tree = await renderSheet({ companion: true });
+    const companion = () => tree.root.findByType('CompanionAvatar' as React.ElementType).props;
+    expect(companion().idleStyle).toBe('inviting');
+
+    await act(async () => {
+      findByLabel(tree.root, 'Start recording your answer')?.props?.onPress?.();
+    });
+    expect(companion().idleStyle).toBe('off');
+    expect(companion().listeningLevel).toBe(0);
+
+    mockRecorderState.isRecording = true;
+    await act(async () => {
+      tree.update(<OnboardingVoiceAnswerSheet visible companion existingText="" onClose={jest.fn()} onAccept={jest.fn()} />);
+    });
+    expect(companion().idleStyle).toBe('listening');
+    expect(companion().listeningLevel).toBeGreaterThan(0);
+
+    await act(async () => {
+      findByLabel(tree.root, 'Stop and review recording')?.props?.onPress?.();
+    });
+    expect(companion().idleStyle).toBe('off');
+    expect(companion().listeningLevel).toBe(0);
+    await act(async () => tree.unmount());
+  });
+
+  it('does not show a listening companion after microphone permission is denied', async () => {
+    mockRequestPermissions.mockResolvedValue({ granted: false });
+    const tree = await renderSheet({ companion: true, autoStart: true });
+    expect(tree.root.findByType('CompanionAvatar' as React.ElementType).props.idleStyle).toBe('off');
+    expect(mockRecorder.record).not.toHaveBeenCalled();
+    await act(async () => tree.unmount());
+  });
+
+  it('freezes waveform geometry when reduced motion changes while the sheet stays open', async () => {
+    const tree = await renderSheet({ companion: true });
+
+    await act(async () => {
+      findByLabel(tree.root, 'Start recording your answer')?.props?.onPress?.();
+    });
+    mockRecorderState.isRecording = true;
+    mockRecorderState.durationMillis = 4_800;
+    mockRecorderState.metering = -8;
+    await act(async () => {
+      tree.update(<OnboardingVoiceAnswerSheet visible companion existingText="" onClose={jest.fn()} onAccept={jest.fn()} />);
+    });
+    const movingHeights = waveformHeights(tree.root);
+
+    mockReducedMotion = true;
+    mockRecorderState.durationMillis = 5_400;
+    mockRecorderState.metering = -3;
+    await act(async () => {
+      tree.update(<OnboardingVoiceAnswerSheet visible companion existingText="" onClose={jest.fn()} onAccept={jest.fn()} />);
+    });
+    const reducedHeights = waveformHeights(tree.root);
+
+    mockRecorderState.durationMillis = 6_100;
+    mockRecorderState.metering = -30;
+    await act(async () => {
+      tree.update(<OnboardingVoiceAnswerSheet visible companion existingText="" onClose={jest.fn()} onAccept={jest.fn()} />);
+    });
+
+    expect(reducedHeights).not.toEqual(movingHeights);
+    expect(waveformHeights(tree.root)).toEqual(reducedHeights);
+    expect(findByLabel(tree.root, 'Stop and review recording')).toBeDefined();
+    await act(async () => tree.unmount());
   });
 
   it('starts recording once when opened from the microphone button', async () => {

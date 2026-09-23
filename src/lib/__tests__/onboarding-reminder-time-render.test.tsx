@@ -53,6 +53,7 @@ jest.mock('react-native-keyboard-controller', () => {
 });
 jest.mock('@react-native-community/datetimepicker', () => ({ __esModule: true, default: 'DateTimePicker' }));
 jest.mock('expo-router', () => ({
+  useIsFocused: () => true,
   useRouter: () => ({ canGoBack: () => true, replace: (...args: unknown[]) => mockReplace(...args), back: jest.fn(), push: jest.fn() }),
   useSegments: () => [],
   useNavigation: () => ({ getState: () => ({ index: 1, routes: [] }) }),
@@ -175,6 +176,7 @@ jest.mock('@/components/TypewriterText', () => {
 });
 jest.mock('@/components/onboarding/ThreeStepPaywall', () => ({ ThreeStepPaywall: () => null }));
 jest.mock('@/components/EmberSystem', () => ({ EmberSystem: () => null }));
+jest.mock('@/components/companion/CompanionAvatar', () => ({ CompanionAvatar: () => null }));
 jest.mock('@/components/CompanionOrb', () => ({ CompanionOrb: () => null }));
 jest.mock('@/components/VoiceInputBar', () => ({ VoiceInputBar: () => null }));
 jest.mock('@/components/Current', () => ({ Current: () => null }));

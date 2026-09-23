@@ -17,7 +17,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeInDown, useReducedMotion } from 'react-native-reanimated';
+import Animated, { Easing, FadeIn, FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import {
   requestRecordingPermissionsAsync,
@@ -39,6 +39,7 @@ import {
   XIcon,
 } from '@/components/icons';
 import { alpha } from '@/components/ui';
+import { CompanionAvatar } from '@/components/companion/CompanionAvatar';
 import type { ColorTheme } from '@/constants/colors';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
@@ -46,6 +47,7 @@ import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { ADAPTIVE_SHEET_MEASURE, adaptiveSafeGutterStyle } from '@/lib/adaptive-layout';
 import { pauseForVoiceInput, resumeAfterVoiceInput } from '@/hooks/useGlobalAudioPlayer';
+import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import {
   acquireVoiceRecordingSession,
   acquireVoiceReviewSession,
@@ -84,6 +86,7 @@ type OnboardingVoiceErrorKind = 'microphone' | 'recording' | 'transcribe';
 export interface OnboardingVoiceAnswerSheetProps {
   visible: boolean;
   autoStart?: boolean;
+  companion?: boolean;
   onClose: () => void;
   existingText: string;
   maxLength?: number;
@@ -133,6 +136,7 @@ function RoundIconButton({
 export function OnboardingVoiceAnswerSheet({
   visible,
   autoStart = false,
+  companion = false,
   onClose,
   existingText,
   maxLength = ONBOARDING_VOICE_ANSWER_MAX_LENGTH,
@@ -148,7 +152,7 @@ export function OnboardingVoiceAnswerSheet({
   const theme = useTheme();
   const colors = previewColors ?? theme.colors;
   const isDark = previewIsDark ?? theme.isDark;
-  const reducedMotion = useReducedMotion();
+  const { reducedMotion } = useAccessibleAnimation();
   const { height: windowHeight, fontScale } = useWindowDimensions();
   const insets = useSafeAreaInsets();
 
@@ -370,10 +374,13 @@ export function OnboardingVoiceAnswerSheet({
     ? 0.48 + Math.sin(demoElapsedMs / 480) * 0.22
     : meterToLevel(recorderState.metering);
   const waveform = useMemo(
-    () => buildWaveform(phase === 'recording' ? meterLevel : 0.56, Math.floor((phase === 'recording' ? activeDurationMs : playbackMs) / 100)),
-    [activeDurationMs, meterLevel, phase, playbackMs],
+    () => reducedMotion
+      ? buildWaveform(0.56, 0)
+      : buildWaveform(phase === 'recording' ? meterLevel : 0.56, Math.floor((phase === 'recording' ? activeDurationMs : playbackMs) / 100)),
+    [activeDurationMs, meterLevel, phase, playbackMs, reducedMotion],
   );
   const acceptance = voiceAnswerAcceptance(draft, maxLength);
+  const isListening = phase === 'recording' && !isBusy && (demoMode || recorderState.isRecording);
 
   const startRecording = useCallback(async () => {
     if (busyRef.current) return;
@@ -650,7 +657,7 @@ export function OnboardingVoiceAnswerSheet({
   }, [demoMode, invalidateAsync, isPlaying, onClose, phase, player, recorder, releaseRecordingLease, releaseReviewLease, resetSession, stopRecording]);
 
   const renderIdle = () => (
-    <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(180)} style={styles.stateContent}>
+    <View style={styles.stateContent}>
       <View style={[styles.micWell, { backgroundColor: alpha(colors.accent, 0.12), borderColor: alpha(colors.accent, 0.24) }]}>
         <MicrophoneIcon size={28} color={colors.accent} weight="regular" />
       </View>
@@ -670,11 +677,11 @@ export function OnboardingVoiceAnswerSheet({
         <MicrophoneIcon size={18} color={colors.background} weight="fill" />
         <Text style={[styles.primaryButtonText, { color: colors.background }]}>Start recording</Text>
       </TouchableOpacity>
-    </Animated.View>
+    </View>
   );
 
   const renderRecording = () => (
-    <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(180)} style={styles.stateContent}>
+    <View style={styles.stateContent}>
       <View style={styles.recordingStatusRow}>
         <View style={[styles.liveDot, { backgroundColor: colors.error }]} />
         <Text style={[styles.kicker, { color: colors.textMuted }]}>LISTENING</Text>
@@ -710,13 +717,13 @@ export function OnboardingVoiceAnswerSheet({
         <StopCircleIcon size={20} color={colors.background} weight="fill" />
         <Text style={[styles.stopButtonText, { color: colors.background }]}>Stop & review</Text>
       </TouchableOpacity>
-    </Animated.View>
+    </View>
   );
 
   const renderReview = () => {
     const progress = recordedDurationMs > 0 ? Math.min(1, playbackMs / recordedDurationMs) : 0;
     return (
-      <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(180)} style={styles.stateContent}>
+      <View style={styles.stateContent}>
         <Text style={[styles.kicker, { color: colors.textMuted }]}>READY TO REVIEW</Text>
         <Text style={[styles.timer, { color: colors.text }]}>{formatRecordingTime(isPlaying ? playbackMs : recordedDurationMs)}</Text>
         <Pressable
@@ -775,22 +782,22 @@ export function OnboardingVoiceAnswerSheet({
             <Text style={[styles.sendButtonText, { color: colors.background }]}>Transcribe</Text>
           </TouchableOpacity>
         </View>
-      </Animated.View>
+      </View>
     );
   };
 
   const renderTranscribing = () => (
-    <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(180)} style={styles.stateContent}>
+    <View style={styles.stateContent}>
       <ActivityIndicator size="large" color={colors.accent} />
       <Text style={[styles.title, { color: colors.text }]}>Transcribing</Text>
       <Text style={[styles.body, { color: colors.textMuted }]}>
         Turning your recording into text. This usually takes a few seconds.
       </Text>
-    </Animated.View>
+    </View>
   );
 
   const renderTranscript = () => (
-    <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(180)} style={styles.stateContent}>
+    <View style={styles.stateContent}>
       <Text style={[styles.kicker, { color: colors.textMuted }]}>REVIEW THE TEXT</Text>
       <Text style={[styles.body, { color: colors.textMuted }]}>
         Edit anything that needs a correction. This is not added until you use it.
@@ -857,11 +864,11 @@ export function OnboardingVoiceAnswerSheet({
           <Text style={[styles.sendButtonText, { color: colors.background }]}>Use this answer</Text>
         </TouchableOpacity>
       </View>
-    </Animated.View>
+    </View>
   );
 
   const renderError = () => (
-    <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(180)} style={styles.stateContent}>
+    <View style={styles.stateContent}>
       <View style={[styles.resultIcon, { backgroundColor: alpha(colors.error, 0.1), borderColor: alpha(colors.error, 0.22) }]}>
         <WarningCircleIcon size={28} color={colors.error} weight="regular" />
       </View>
@@ -894,22 +901,29 @@ export function OnboardingVoiceAnswerSheet({
       >
         <Text style={[styles.textButtonLabel, { color: colors.textMuted }]}>Discard recording</Text>
       </TouchableOpacity>
-    </Animated.View>
+    </View>
   );
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={() => void closeSheet()} onShow={() => StatusBar.setBarStyle(isDark ? 'light-content' : 'dark-content')} statusBarTranslucent>
+    <Modal visible={visible} transparent animationType="none" onRequestClose={() => void closeSheet()} onShow={() => StatusBar.setBarStyle(isDark ? 'light-content' : 'dark-content')} statusBarTranslucent>
       <View style={styles.modalRoot}>
+        <Animated.View
+          pointerEvents="none"
+          entering={FadeIn.duration(180).easing(Easing.bezier(0.19, 1, 0.22, 1))}
+          style={[styles.backdrop, { backgroundColor: alpha('#000000', isDark ? 0.46 : 0.28) }]}
+        />
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Close voice answer"
           onPress={() => void closeSheet()}
-          style={[styles.backdrop, { backgroundColor: alpha('#000000', isDark ? 0.46 : 0.28) }]}
+          style={styles.backdrop}
         />
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} pointerEvents="box-none">
           <View pointerEvents="box-none" style={[adaptiveSafeGutterStyle(insets.left, insets.right), { width: '100%' }]}>
           <Animated.View
-            entering={reducedMotion ? undefined : FadeInDown.duration(280)}
+            entering={reducedMotion
+              ? FadeIn.duration(180).easing(Easing.bezier(0.19, 1, 0.22, 1))
+              : FadeInDown.duration(280).easing(Easing.bezier(0.32, 0.72, 0, 1))}
             accessibilityViewIsModal
             style={[
               styles.sheet,
@@ -949,6 +963,18 @@ export function OnboardingVoiceAnswerSheet({
               keyboardShouldPersistTaps="handled"
               bounces={false}
             >
+              {companion && (
+                <View style={styles.companion} accessible={false} importantForAccessibility="no-hide-descendants">
+                  <CompanionAvatar
+                    size={132}
+                    active={visible}
+                    expression={phase === 'idle' || phase === 'transcript' ? 'welcome' : 'gentle'}
+                    idleStyle={isListening ? 'listening' : phase === 'idle' && !isBusy ? 'inviting' : 'off'}
+                    listeningLevel={isListening ? meterLevel : 0}
+                    thinking={phase === 'transcribing'}
+                  />
+                </View>
+              )}
               {phase === 'idle' && renderIdle()}
               {phase === 'recording' && renderRecording()}
               {phase === 'review' && renderReview()}
@@ -971,6 +997,7 @@ export function OnboardingVoiceAnswerSheet({
 }
 
 const styles = StyleSheet.create({
+  companion: { alignItems: 'center', height: 138, justifyContent: 'center' },
   modalRoot: { flex: 1, justifyContent: 'flex-end' },
   backdrop: { ...StyleSheet.absoluteFill },
   sheet: {

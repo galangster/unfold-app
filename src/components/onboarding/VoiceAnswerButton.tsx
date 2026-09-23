@@ -1,18 +1,20 @@
 import { useEffect } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { cancelAnimation, Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withSequence, withTiming } from 'react-native-reanimated';
+import Animated, { cancelAnimation, Easing, useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming } from 'react-native-reanimated';
 import { MicrophoneIcon } from '@/components/icons';
 import { alpha } from '@/components/ui';
 import type { ColorTheme } from '@/constants/colors';
 import { FontFamily } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 
 export function VoiceAnswerButton({ colors, onPress, label = 'Record your answer' }: { colors: ColorTheme; onPress: () => void; label?: string }) {
-  const reducedMotion = useReducedMotion();
+  const { reducedMotion } = useAccessibleAnimation();
   const shine = useSharedValue(0);
   useEffect(() => {
     if (reducedMotion) {
+      cancelAnimation(shine);
       shine.value = 0;
       return;
     }

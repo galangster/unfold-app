@@ -6,6 +6,7 @@ import Animated, {
   cancelAnimation,
   interpolate,
   useAnimatedStyle,
+  useDerivedValue,
   useSharedValue,
   withDelay,
   withRepeat,
@@ -27,6 +28,7 @@ import {
   COMPANION_THINKING_Y,
   HALO,
   VIEWBOX,
+  companionInvitingTurnPose,
   companionLayout,
   type CompanionExpression,
   type CompanionIdleMotionCycle,
@@ -34,7 +36,7 @@ import {
 import { CompanionIdentity } from './CompanionIdentity';
 import { CompanionPearl } from './CompanionPearl';
 
-export type CompanionIdleStyle = 'calm' | 'joyful' | 'off';
+export type CompanionIdleStyle = keyof typeof COMPANION_IDLE_CYCLES | 'off';
 
 export interface CompanionAvatarProps {
   size: number;
@@ -43,6 +45,7 @@ export interface CompanionAvatarProps {
   idleStyle?: CompanionIdleStyle;
   animated?: boolean;
   active?: boolean;
+  listeningLevel?: number;
 }
 
 const MORPH_EASE = Easing.bezier(0.22, 1.16, 0.36, 1);
@@ -111,8 +114,13 @@ function idleMotionChannels(cycle: CompanionIdleMotionCycle) {
   };
 }
 
-const CALM_IDLE = idleMotionChannels(COMPANION_IDLE_CYCLES.calm);
-const JOYFUL_IDLE = idleMotionChannels(COMPANION_IDLE_CYCLES.joyful);
+const IDLE_MODE = { calm: 0, joyful: 1, inviting: 2, listening: 3, off: 0 } as const;
+const IDLE_MOTIONS = [
+  idleMotionChannels(COMPANION_IDLE_CYCLES.calm),
+  idleMotionChannels(COMPANION_IDLE_CYCLES.joyful),
+  idleMotionChannels(COMPANION_IDLE_CYCLES.inviting),
+  idleMotionChannels(COMPANION_IDLE_CYCLES.listening),
+];
 
 /** Warm pearl with a single eye pair and overhead gold halo. */
 export const CompanionAvatar = memo(function CompanionAvatar({
@@ -122,13 +130,15 @@ export const CompanionAvatar = memo(function CompanionAvatar({
   idleStyle = 'calm',
   animated = true,
   active = true,
+  listeningLevel = 0,
 }: CompanionAvatarProps) {
   const { reducedMotion } = useAccessibleAnimation();
   const isAppActive = useIsAppActive();
   const rawId = useId().replace(/[^a-zA-Z0-9]/g, '');
   const faceId = rawId.length > 0 ? rawId : 'companion';
   const layout = useMemo(() => companionLayout(size), [size]);
-  const live = animated && active && isAppActive && !reducedMotion;
+  const mayAnimate = animated && isAppActive && !reducedMotion;
+  const live = mayAnimate && active;
 
   const morphLeft = useSharedValue(thinking ? 1 : 0);
   const morphCenter = useSharedValue(thinking ? 1 : 0);
@@ -140,8 +150,23 @@ export const CompanionAvatar = memo(function CompanionAvatar({
   const blink = useSharedValue(0);
   const idleTime = useSharedValue(0);
   const idleWeight = useSharedValue(0);
-  const idleMode = useSharedValue(idleStyle === 'joyful' ? 1 : 0);
-  const idleCycle = COMPANION_IDLE_CYCLES[idleStyle === 'joyful' ? 'joyful' : 'calm'];
+  const idleMode = useSharedValue<number>(IDLE_MODE[idleStyle]);
+  const voiceLevel = useSharedValue(0);
+  const idleCycle = COMPANION_IDLE_CYCLES[idleStyle === 'off' ? 'calm' : idleStyle];
+  const invitingTurnPose = useDerivedValue(() => (
+    idleMode.value === IDLE_MODE.inviting ? companionInvitingTurnPose(idleTime.value) : null
+  ));
+
+  useEffect(() => {
+    cancelAnimation(voiceLevel);
+    if (!live || thinking || idleStyle !== 'listening') {
+      voiceLevel.value = 0;
+    } else {
+      const level = Number.isFinite(listeningLevel) ? Math.max(0, Math.min(1, listeningLevel)) : 0;
+      voiceLevel.value = withLiveMotion(withTiming(level, { duration: 160, easing: LIFE_EASE }));
+    }
+    return () => cancelAnimation(voiceLevel);
+  }, [idleStyle, listeningLevel, live, thinking, voiceLevel]);
 
   useEffect(() => {
     const morphValues = [morphLeft, morphCenter, morphRight];
@@ -149,10 +174,30 @@ export const CompanionAvatar = memo(function CompanionAvatar({
     const stopAll = () => cancelValues(identity, ...morphValues, ...motionValues);
     stopAll();
 
-    if (!live) {
+    if (!mayAnimate) {
       morphValues.forEach((value) => { value.value = thinking ? 1 : 0; });
       motionValues.forEach((value) => { value.value = 0; });
       identity.value = thinking ? 0 : 1;
+      return stopAll;
+    }
+
+    if (!active) {
+      if (idleStyle === 'inviting' && !thinking) {
+        morphValues.forEach((value) => { value.value = 0; });
+        [bobLeft, bobCenter, bobRight].forEach((value) => { value.value = 0; });
+        identity.value = 1;
+        blink.value = withLiveMotion(withTiming(0, { duration: 120, easing: LIFE_EASE }));
+        idleWeight.value = withLiveMotion(withTiming(0, { duration: 180, easing: LIFE_EASE }, (finished) => {
+          if (finished) {
+            idleTime.value = 0;
+            idleMode.value = IDLE_MODE.off;
+          }
+        }));
+      } else {
+        morphValues.forEach((value) => { value.value = thinking ? 1 : 0; });
+        motionValues.forEach((value) => { value.value = 0; });
+        identity.value = thinking ? 0 : 1;
+      }
       return stopAll;
     }
 
@@ -191,7 +236,7 @@ export const CompanionAvatar = memo(function CompanionAvatar({
           -1,
           false,
         ));
-        const nextIdleMode = idleStyle === 'joyful' ? 1 : 0;
+        const nextIdleMode = IDLE_MODE[idleStyle];
         idleWeight.value = withLiveMotion(withTiming(0, { duration: IDLE_TRANSITION_MS, easing: LIFE_EASE }, (finished) => {
           if (finished) {
             idleTime.value = 0;
@@ -209,7 +254,7 @@ export const CompanionAvatar = memo(function CompanionAvatar({
       }
     }
     return stopAll;
-  }, [bobCenter, bobLeft, bobRight, blink, identity, idleCycle, idleMode, idleStyle, idleTime, idleWeight, layout.viewScale, live, morphCenter, morphLeft, morphRight, thinking]);
+  }, [active, bobCenter, bobLeft, bobRight, blink, identity, idleCycle, idleMode, idleStyle, idleTime, idleWeight, layout.viewScale, mayAnimate, morphCenter, morphLeft, morphRight, thinking]);
 
   const leftStyle = useAnimatedStyle(() => ({
     opacity: morphLeft.value,
@@ -231,37 +276,50 @@ export const CompanionAvatar = memo(function CompanionAvatar({
   const rightBobStyle = useAnimatedStyle(() => ({ transform: [{ translateY: bobRight.value }] }));
   const identityStyle = useAnimatedStyle(() => ({ opacity: identity.value }));
   const eyesStyle = useAnimatedStyle(() => {
-    const idle = idleMode.value === 1 ? JOYFUL_IDLE : CALM_IDLE;
+    const idle = IDLE_MOTIONS[idleMode.value];
+    const turn = invitingTurnPose.value;
+    const faceOpacity = turn?.faceOpacity ?? interpolate(idleTime.value, idle.times, idle.faceOpacity);
+    const faceX = turn?.faceX ?? interpolate(idleTime.value, idle.times, idle.faceX);
+    const faceY = turn?.faceY ?? interpolate(idleTime.value, idle.times, idle.faceY);
+    const faceScaleX = turn?.faceScaleX ?? interpolate(idleTime.value, idle.times, idle.faceScaleX);
     return {
-      opacity: 1 + (interpolate(idleTime.value, idle.times, idle.faceOpacity) - 1) * idleWeight.value,
+      opacity: 1 + (faceOpacity - 1) * idleWeight.value,
       transformOrigin: [layout.stageWidth / 2, layout.headCenterY, 0],
       transform: [
-        { translateX: interpolate(idleTime.value, idle.times, idle.faceX) * idleWeight.value * layout.viewScale },
-        { translateY: interpolate(idleTime.value, idle.times, idle.faceY) * idleWeight.value * layout.viewScale },
-        { scaleX: 1 + (interpolate(idleTime.value, idle.times, idle.faceScaleX) - 1) * idleWeight.value },
+        { translateX: faceX * idleWeight.value * layout.viewScale },
+        { translateY: faceY * idleWeight.value * layout.viewScale },
+        { scaleX: 1 + (faceScaleX - 1) * idleWeight.value },
         { scaleY: interpolate(blink.value, [0, 1], [1, 0.12]) },
       ],
     };
   });
   const haloStyle = useAnimatedStyle(() => {
-    const idle = idleMode.value === 1 ? JOYFUL_IDLE : CALM_IDLE;
+    const idle = IDLE_MOTIONS[idleMode.value];
+    const turn = invitingTurnPose.value;
+    const haloY = turn?.haloY ?? interpolate(idleTime.value, idle.times, idle.haloY);
+    const haloRotate = turn?.haloRotate ?? interpolate(idleTime.value, idle.times, idle.haloRotate);
     return {
       transformOrigin: [layout.stageWidth / 2, (HALO.cy - VIEWBOX.y - 2.4) * layout.viewScale, 0],
       transform: [
-        { translateY: interpolate(idleTime.value, idle.times, idle.haloY) * idleWeight.value * layout.viewScale },
-        { rotate: `${interpolate(idleTime.value, idle.times, idle.haloRotate) * idleWeight.value}deg` },
+        { translateY: haloY * idleWeight.value * layout.viewScale },
+        { rotate: `${haloRotate * idleWeight.value + voiceLevel.value * 2}deg` },
       ],
     };
   });
   const bodyStyle = useAnimatedStyle(() => {
-    const idle = idleMode.value === 1 ? JOYFUL_IDLE : CALM_IDLE;
+    const idle = IDLE_MOTIONS[idleMode.value];
+    const turn = invitingTurnPose.value;
+    const bodyX = turn?.bodyX ?? interpolate(idleTime.value, idle.times, idle.bodyX);
+    const bodyY = turn?.bodyY ?? interpolate(idleTime.value, idle.times, idle.bodyY);
+    const bodyScaleX = turn?.bodyScaleX ?? interpolate(idleTime.value, idle.times, idle.bodyScaleX);
+    const bodyScaleY = turn?.bodyScaleY ?? interpolate(idleTime.value, idle.times, idle.bodyScaleY);
     return {
       transformOrigin: [layout.headCenterX, layout.headCenterY, 0],
       transform: [
-        { translateX: interpolate(idleTime.value, idle.times, idle.bodyX) * idleWeight.value * layout.viewScale },
-        { translateY: interpolate(idleTime.value, idle.times, idle.bodyY) * idleWeight.value * layout.viewScale },
-        { scaleX: 1 + (interpolate(idleTime.value, idle.times, idle.bodyScaleX) - 1) * idleWeight.value },
-        { scaleY: 1 + (interpolate(idleTime.value, idle.times, idle.bodyScaleY) - 1) * idleWeight.value },
+        { translateX: bodyX * idleWeight.value * layout.viewScale },
+        { translateY: bodyY * idleWeight.value * layout.viewScale },
+        { scaleX: 1 + (bodyScaleX - 1) * idleWeight.value + voiceLevel.value * 0.018 },
+        { scaleY: 1 + (bodyScaleY - 1) * idleWeight.value + voiceLevel.value * 0.018 },
       ],
     };
   });

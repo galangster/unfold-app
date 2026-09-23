@@ -47,7 +47,8 @@ export type CompanionIdleGestureName =
   | 'curiousPeek'
   | 'softDoubleHop'
   | 'haloGlance'
-  | 'uprightSpin';
+  | 'uprightSpin'
+  | 'attentiveNod';
 
 export type CompanionIdleMotionFrame = {
   readonly timeMs: number;
@@ -62,6 +63,8 @@ export type CompanionIdleMotionFrame = {
   readonly haloY: number;
   readonly haloRotate: number;
 };
+
+export type CompanionIdleMotionPose = Omit<CompanionIdleMotionFrame, 'timeMs'>;
 
 export type CompanionIdleMotionCycle = {
   readonly durationMs: number;
@@ -188,7 +191,79 @@ export const COMPANION_IDLE_CYCLES = {
       idleFrame(9_920),
     ],
   },
-} as const satisfies Record<'calm' | 'joyful', CompanionIdleMotionCycle>;
+  inviting: {
+    durationMs: 8_800,
+    gestures: [
+      { name: 'softDoubleHop', startMs: 0, endMs: 1_720 },
+      { name: 'uprightSpin', startMs: 2_080, endMs: 4_120 },
+      { name: 'curiousPeek', startMs: 5_200, endMs: 6_400 },
+    ],
+    frames: [
+      idleFrame(0),
+      idleFrame(200, { bodyY: 1.2, bodyScaleX: 1.065, bodyScaleY: 0.94, faceY: 0.4 }),
+      idleFrame(470, { bodyX: -2, bodyY: -8, bodyScaleX: 0.96, bodyScaleY: 1.04, haloY: 1.5, haloRotate: -6 }),
+      idleFrame(760, { bodyX: -2, bodyY: 1, bodyScaleX: 1.06, bodyScaleY: 0.94, haloY: -0.8 }),
+      idleFrame(1_040, { bodyX: 1.5, bodyY: -4.8, bodyScaleX: 0.98, bodyScaleY: 1.02, haloY: 0.9, haloRotate: 4 }),
+      idleFrame(1_360, { bodyX: 1.5, bodyY: 0.6, bodyScaleX: 1.03, bodyScaleY: 0.97, haloY: -0.35 }),
+      idleFrame(1_720),
+      idleFrame(2_080),
+      idleFrame(2_280, { bodyY: 0.8, bodyScaleX: 1.02, bodyScaleY: 0.98 }),
+      idleFrame(3_520, { bodyY: 0.8, bodyScaleX: 1.02, bodyScaleY: 0.98 }),
+      idleFrame(4_120),
+      idleFrame(5_200),
+      idleFrame(5_520, { bodyX: 0.8, faceX: 1.3, faceY: -0.4, haloRotate: 3 }),
+      idleFrame(5_980, { bodyX: 0.8, faceX: 1.3, faceY: -0.4, haloRotate: 3 }),
+      idleFrame(6_400),
+      idleFrame(8_800),
+    ],
+  },
+  listening: {
+    durationMs: 6_400,
+    gestures: [{ name: 'attentiveNod', startMs: 0, endMs: 6_400 }],
+    frames: [
+      idleFrame(0),
+      idleFrame(600, { faceY: -0.5, haloRotate: -3 }),
+      idleFrame(1_800, { faceY: -0.5, haloRotate: -3 }),
+      idleFrame(2_120, { bodyY: 0.55, faceY: 0.9, bodyScaleY: 0.99, haloY: -0.2, haloRotate: -2 }),
+      idleFrame(2_480, { faceY: -0.4, haloY: 0.25, haloRotate: -3 }),
+      idleFrame(2_800, { bodyY: 0.3, faceY: 0.5, haloRotate: -2 }),
+      idleFrame(3_400, { faceY: -0.5, haloRotate: -3 }),
+      idleFrame(5_600, { faceY: -0.5, haloRotate: -3 }),
+      idleFrame(6_400),
+    ],
+  },
+} as const satisfies Record<'calm' | 'joyful' | 'inviting' | 'listening', CompanionIdleMotionCycle>;
+
+export function companionInvitingTurnPose(timeMs: number): CompanionIdleMotionPose | null {
+  'worklet';
+  if (timeMs < 2_280 || timeMs > 3_520) return null;
+  if (timeMs === 2_280 || timeMs === 3_520) {
+    return {
+      ...COMPANION_IDLE_NEUTRAL,
+      bodyY: 0.8,
+      bodyScaleX: 1.02,
+      bodyScaleY: 0.98,
+    };
+  }
+
+  const p = Math.max(0, Math.min(1, (timeMs - 2_280) / 1_240));
+  const angularProgress = p * p * (3 - 2 * p);
+  const angle = 2 * Math.PI * angularProgress;
+  const lift = Math.sin(Math.PI * p) ** 2;
+  const front = Math.max(0, Math.min(1, Math.cos(angle) / 0.25));
+
+  return {
+    ...COMPANION_IDLE_NEUTRAL,
+    bodyY: 0.8 - 6.8 * lift,
+    bodyScaleX: 1.02 - 0.04 * lift,
+    bodyScaleY: 0.98 + 0.04 * lift,
+    faceX: 20 * Math.sin(angle),
+    faceScaleX: Math.max(0.08, Math.abs(Math.cos(angle))),
+    faceOpacity: front * front * (3 - 2 * front),
+    haloY: 0.5 * Math.sin(angle),
+    haloRotate: -4 * Math.sin(angle),
+  };
+}
 
 type EyeDials = {
   readonly w: number;

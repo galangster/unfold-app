@@ -14,6 +14,7 @@ import {
   HEAD,
   PEARL,
   VIEWBOX,
+  companionInvitingTurnPose,
   companionLayout,
 } from '@/lib/companion-avatar-model';
 
@@ -84,7 +85,7 @@ describe('companion avatar model', () => {
   });
 
   it('authors the three new gestures with the intended lead and follow timing', () => {
-    for (const cycle of Object.values(COMPANION_IDLE_CYCLES)) {
+    for (const cycle of [COMPANION_IDLE_CYCLES.calm, COMPANION_IDLE_CYCLES.joyful]) {
       const framesFor = (name: (typeof cycle.gestures)[number]['name']) => {
         const gesture = cycle.gestures.find((candidate) => candidate.name === name)!;
         return cycle.frames.filter(
@@ -113,7 +114,7 @@ describe('companion avatar model', () => {
   });
 
   it('starts moving immediately and keeps rests short so the tab never sits still', () => {
-    for (const cycle of Object.values(COMPANION_IDLE_CYCLES)) {
+    for (const cycle of [COMPANION_IDLE_CYCLES.calm, COMPANION_IDLE_CYCLES.joyful]) {
       expect(cycle.gestures[0].startMs).toBe(0);
       cycle.gestures.forEach((gesture, index) => {
         if (index === 0) return;
@@ -133,6 +134,48 @@ describe('companion avatar model', () => {
     expect(amplitude(calm, 'bodyX')).toBeLessThan(amplitude(joyful, 'bodyX'));
     expect(amplitude(calm, 'bodyY')).toBeLessThan(amplitude(joyful, 'bodyY'));
     expect(amplitude(calm, 'haloY')).toBeLessThan(amplitude(joyful, 'haloY'));
+  });
+
+  it('keeps the listener face visible and grounded throughout its cycle', () => {
+    for (const frame of COMPANION_IDLE_CYCLES.listening.frames) {
+      expect(frame.faceOpacity).toBe(1);
+      expect(frame.faceScaleX).toBe(1);
+      expect(Math.abs(frame.bodyY)).toBeLessThan(1);
+    }
+    expect(companionInvitingTurnPose(2_900)?.bodyY).toBe(-6);
+  });
+
+  it('projects one continuous inviting turn between matching boundary poses', () => {
+    const boundary = {
+      ...COMPANION_IDLE_NEUTRAL,
+      bodyY: 0.8,
+      bodyScaleX: 1.02,
+      bodyScaleY: 0.98,
+    };
+    expect(companionInvitingTurnPose(2_279.999)).toBeNull();
+    expect(companionInvitingTurnPose(2_280)).toEqual(boundary);
+    expect(companionInvitingTurnPose(3_521)).toBeNull();
+
+    const afterStart = companionInvitingTurnPose(2_280.001)!;
+    const beforeEnd = companionInvitingTurnPose(3_519.999)!;
+    for (const key of Object.keys(boundary) as (keyof typeof boundary)[]) {
+      expect(afterStart[key]).toBeCloseTo(boundary[key], 3);
+      expect(beforeEnd[key]).toBeCloseTo(boundary[key], 3);
+    }
+
+    expect(companionInvitingTurnPose(2_700)?.faceOpacity).toBeCloseTo(0, 10);
+    expect(companionInvitingTurnPose(2_900)?.faceOpacity).toBeCloseTo(0, 10);
+    expect(companionInvitingTurnPose(3_100)?.faceOpacity).toBeCloseTo(0, 10);
+  });
+
+  it('eases angular velocity to zero at both inviting-turn boundaries', () => {
+    const faceStep = (fromMs: number, toMs: number) => Math.abs(
+      companionInvitingTurnPose(toMs)!.faceX - companionInvitingTurnPose(fromMs)!.faceX,
+    );
+    const middleStep = faceStep(2_900, 2_901);
+
+    expect(faceStep(2_280, 2_281)).toBeLessThan(middleStep / 100);
+    expect(faceStep(3_519, 3_520)).toBeLessThan(middleStep / 100);
   });
 
   it('keeps a square layout whose split fits inside the view box', () => {
