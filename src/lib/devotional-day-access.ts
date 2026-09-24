@@ -196,7 +196,9 @@ export function getDayMenuPresentation(
   }
 
   const calendarDayNumber = getCalendarDayNumber(devotional, now);
-  const isDueToday = calendarDayNumber != null && dayNumber <= calendarDayNumber;
+  const isDueToday = calendarDayNumber != null
+    && dayNumber <= calendarDayNumber
+    && dayNumber <= getTodayReaderDayNumber(devotional, now);
 
   return isDueToday
     ? { kind: 'preparing', title: 'Being prepared…' }

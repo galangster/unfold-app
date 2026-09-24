@@ -237,6 +237,25 @@ describe('missing seriesStartDate anchor', () => {
 // (a selectable day with a missing title falling back to placeholder copy
 // instead of `Day N`).
 describe('getDayMenuPresentation', () => {
+  it('keeps missing upcoming content distinct from content due after local midnight', () => {
+    const series = devotional({
+      currentDay: 2,
+      seriesStartDate: new Date(2026, 4, 1, 12).toISOString(),
+      days: [day({ dayNumber: 1, isRead: true, readAt: todayIso })],
+    });
+
+    expect(getDayMenuPresentation(series, 2, now)).toEqual({
+      kind: 'coming-soon', title: 'Coming soon',
+    });
+    const tomorrow = new Date(2026, 4, 11, 0, 1);
+    expect(getDayMenuPresentation(series, 2, tomorrow)).toEqual({
+      kind: 'preparing', title: 'Being prepared…',
+    });
+    expect(getDayMenuPresentation(series, 3, tomorrow)).toEqual({
+      kind: 'coming-soon', title: 'Coming soon',
+    });
+  });
+
   it('shows the real title for a selectable day', () => {
     const series = devotional({
       currentDay: 3,
@@ -348,7 +367,7 @@ describe('getDayMenuPresentation', () => {
     const series = devotional({
       currentDay: 2,
       seriesStartDate: new Date(2026, 4, 9, 12, 0, 0).toISOString(),
-      days: [day({ dayNumber: 1, isRead: true, readAt: todayIso })],
+      days: [day({ dayNumber: 1, isRead: true, readAt: yesterdayIso })],
     });
 
     expect(getCalendarDayNumber(series, now)).toBe(2);
