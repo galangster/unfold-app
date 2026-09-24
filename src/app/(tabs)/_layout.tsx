@@ -23,6 +23,8 @@ import { useUIState } from '@/lib/ui-state';
 import { useAudioPlayerState } from '@/lib/audio-player-state';
 import { getNoteDraftDockOffset, useNoteDraftDock } from '@/lib/note-draft-dock';
 import { TAB_BAR_HORIZONTAL_PADDING, titleForVisibleTab } from '@/lib/visible-tabs';
+import { useUnfoldStore } from '@/lib/store';
+import { resolveCompanionDisplayName } from '@/lib/support-clarity';
 // Expo Router owns its tab navigator types in SDK 56+. Use structural typing
 // here so this custom tab bar stays decoupled from router internals.
 type TabBarProps = {
@@ -317,7 +319,7 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
               onPress={onPress}
               onLongPress={onLongPress}
               accessible
-              testID={`bottom-tab-${label.toLowerCase()}`}
+              testID={`bottom-tab-${(titleForVisibleTab(route.name) ?? label).toLowerCase()}`}
               importantForAccessibility="yes"
               accessibilityRole="button"
               accessibilityState={{ selected: isFocused }}
@@ -359,6 +361,7 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
 
 export default function TabLayout() {
   const { colors } = useTheme();
+  const companionName = useUnfoldStore((s) => resolveCompanionDisplayName(s.user?.companionName, s.companionName));
 
   // Subscription gate state
   // DEV bypass: force premium in dev so the overlay doesn't block routine
@@ -399,8 +402,8 @@ export default function TabLayout() {
         <Tabs.Screen
           name="(ask)"
           options={{
-            title: 'Companion',
-            tabBarAccessibilityLabel: 'Companion',
+            title: companionName ?? 'Companion',
+            tabBarAccessibilityLabel: companionName ? `${companionName}, your companion` : 'Companion',
           }}
         />
         <Tabs.Screen

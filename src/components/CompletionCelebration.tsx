@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react';
-import { View, Text, TouchableOpacity, Modal, ScrollView } from 'react-native';
+import { AppState, View, Text, TouchableOpacity, Modal, ScrollView } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -150,9 +150,24 @@ export function CompletionCelebration({
   const hintOpacity = useSharedValue(0);
 
   useEffect(() => {
-    if (visible) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    if (!visible || AppState.currentState !== 'active') return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft);
+    const secondTap = setTimeout(() => {
+      if (AppState.currentState === 'active') {
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+    }, 100);
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') clearTimeout(secondTap);
+    });
+    return () => {
+      clearTimeout(secondTap);
+      subscription.remove();
+    };
+  }, [visible]);
 
+  useEffect(() => {
+    if (visible) {
       if (reducedMotion) {
         overlayOpacity.value = 1;
         titleOpacity.value = 1;

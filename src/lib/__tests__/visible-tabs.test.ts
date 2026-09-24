@@ -27,6 +27,8 @@ describe('visible tab registry', () => {
     expect(VISIBLE_TAB_COUNT).toBe(5);
     expect(VISIBLE_TAB_TITLES['(study)']).toBe('Devotional');
     expect(titleForVisibleTab('(study)')).toBe('Devotional');
+    expect(titleForVisibleTab('(ask)')).toBe('Companion');
+    expect(`bottom-tab-${titleForVisibleTab('(ask)')?.toLowerCase()}`).toBe('bottom-tab-companion');
     expect(titleForVisibleTab('(you)')).toBeUndefined();
   });
 
