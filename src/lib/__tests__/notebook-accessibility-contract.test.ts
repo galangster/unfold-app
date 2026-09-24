@@ -12,7 +12,7 @@ describe('notebook accessibility source contract', () => {
     expect(source).toContain('importantForAccessibility="yes"');
     expect(source).toContain('accessibilityRole="button"');
     expect(source).toContain('accessibilityLabel={`${options.tabBarAccessibilityLabel ?? label} tab`}');
-    expect(source).toContain('testID={`bottom-tab-${label.toLowerCase()}`}');
+    expect(source).toContain('testID={`bottom-tab-${(titleForVisibleTab(route.name) ?? label).toLowerCase()}`}');
   });
 
   it('keeps notebook more-menu rows targetable by label and test id', () => {
