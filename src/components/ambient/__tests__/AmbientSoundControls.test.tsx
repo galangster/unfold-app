@@ -25,6 +25,8 @@ import {
   setAmbientVolume,
 } from '@/lib/ambient-audio';
 
+jest.mock('../AmbientPlaybackControls', () => ({ AmbientPlaybackControls: () => null }));
+
 jest.mock('expo-router', () => ({ useIsFocused: () => true }));
 
 const mockStopNarration = jest.fn();
@@ -133,6 +135,8 @@ jest.mock('@/components/icons', () => {
     PlayIcon: View,
     ShuffleIcon: View,
     SpeakerHighIcon: View,
+    SkipBackIcon: View,
+    SkipForwardIcon: View,
   };
 });
 jest.mock('expo-haptics', () => ({

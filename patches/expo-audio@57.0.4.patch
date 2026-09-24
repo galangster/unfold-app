@@ -1,4 +1,5 @@
 diff --git a/android/src/main/java/expo/modules/audio/AudioModule.kt b/android/src/main/java/expo/modules/audio/AudioModule.kt
+index 992239b..bb9ecbf 100644
 --- a/android/src/main/java/expo/modules/audio/AudioModule.kt
 +++ b/android/src/main/java/expo/modules/audio/AudioModule.kt
 @@ -1,8 +1,10 @@
@@ -12,7 +13,7 @@ diff --git a/android/src/main/java/expo/modules/audio/AudioModule.kt b/android/s
  import android.content.IntentFilter
  import android.content.pm.PackageManager
  import android.media.AudioAttributes
-@@ -65,6 +67,21 @@
+@@ -65,6 +67,21 @@ class AudioModule : Module() {
    private val allPlayables: Sequence<Playable>
      get() = players.values.asSequence() + playlists.values.asSequence()
  
@@ -34,7 +35,7 @@ diff --git a/android/src/main/java/expo/modules/audio/AudioModule.kt b/android/s
    private val ringerModeReceiver = RingerModeReceiver {
      if (playsInSilentMode) return@RingerModeReceiver
      appContext.mainQueue.launch {
-@@ -77,36 +94,47 @@
+@@ -77,36 +94,47 @@ class AudioModule : Module() {
    }
  
    private var audioFocusRequest: AudioFocusRequest? = null
@@ -89,7 +90,7 @@ diff --git a/android/src/main/java/expo/modules/audio/AudioModule.kt b/android/s
                  playable.pause()
                }
              }
-@@ -115,6 +143,7 @@
+@@ -115,6 +143,7 @@ class AudioModule : Module() {
  
          AudioManager.AUDIOFOCUS_GAIN -> {
            focusAcquired = true
@@ -97,7 +98,7 @@ diff --git a/android/src/main/java/expo/modules/audio/AudioModule.kt b/android/s
  
            if (!shouldPlayInSilentMode()) {
              return@launch
-@@ -124,7 +153,9 @@
+@@ -124,7 +153,9 @@ class AudioModule : Module() {
              playable.setVolume(playable.previousVolume)
              if (playable.isPaused) {
                playable.isPaused = false
@@ -108,7 +109,7 @@ diff --git a/android/src/main/java/expo/modules/audio/AudioModule.kt b/android/s
              }
            }
          }
-@@ -202,10 +233,12 @@
+@@ -202,10 +233,12 @@ class AudioModule : Module() {
    @OptIn(DelicateCoroutinesApi::class)
    override fun definition() = ModuleDefinition {
      Name("ExpoAudio")
@@ -121,7 +122,7 @@ diff --git a/android/src/main/java/expo/modules/audio/AudioModule.kt b/android/s
      }
  
      AsyncFunction("setAudioModeAsync") { mode: AudioMode ->
-@@ -288,7 +321,7 @@
+@@ -288,7 +321,7 @@ class AudioModule : Module() {
          releaseAudioFocus()
          allPlayables.forEach { playable ->
            if (playable.isPlaying) {
@@ -130,7 +131,7 @@ diff --git a/android/src/main/java/expo/modules/audio/AudioModule.kt b/android/s
              playable.pause()
            }
          }
-@@ -315,7 +348,9 @@
+@@ -315,7 +348,9 @@ class AudioModule : Module() {
          allPlayables.forEach { playable ->
            if (playable.isPaused) {
              playable.isPaused = false
@@ -141,7 +142,7 @@ diff --git a/android/src/main/java/expo/modules/audio/AudioModule.kt b/android/s
            }
          }
        }
-@@ -333,6 +368,7 @@
+@@ -333,6 +368,7 @@ class AudioModule : Module() {
  
      OnDestroy {
        context.unregisterReceiver(ringerModeReceiver)
@@ -149,7 +150,7 @@ diff --git a/android/src/main/java/expo/modules/audio/AudioModule.kt b/android/s
        GlobalScope.launch(Dispatchers.Main) {
          releaseAudioFocus()
          players.values.forEach {
-@@ -351,7 +387,7 @@
+@@ -351,7 +387,7 @@ class AudioModule : Module() {
      }
  
      Class(AudioPlayer::class) {
@@ -158,7 +159,7 @@ diff --git a/android/src/main/java/expo/modules/audio/AudioModule.kt b/android/s
          val mediaSource = createMediaItem(source)
          val bufferDurationMs = (preferredForwardBufferDuration * 1000).toLong()
          runOnMain {
-@@ -360,7 +396,8 @@
+@@ -360,7 +396,8 @@ class AudioModule : Module() {
              appContext,
              mediaSource,
              updateInterval,
@@ -168,7 +169,7 @@ diff --git a/android/src/main/java/expo/modules/audio/AudioModule.kt b/android/s
            )
            player.onPlaybackStateChange = { isPlaying ->
              if (!isPlaying && shouldReleaseFocus()) {
-@@ -473,6 +510,7 @@
+@@ -473,6 +510,7 @@ class AudioModule : Module() {
            return@Function
          }
          runOnMain {
@@ -177,9 +178,10 @@ diff --git a/android/src/main/java/expo/modules/audio/AudioModule.kt b/android/s
              requestAudioFocus()
            }
 diff --git a/android/src/main/java/expo/modules/audio/AudioPlayer.kt b/android/src/main/java/expo/modules/audio/AudioPlayer.kt
+index c76a9fd..c1a0e05 100644
 --- a/android/src/main/java/expo/modules/audio/AudioPlayer.kt
 +++ b/android/src/main/java/expo/modules/audio/AudioPlayer.kt
-@@ -32,7 +32,8 @@
+@@ -32,7 +32,8 @@ class AudioPlayer(
    appContext: AppContext,
    source: MediaSource?,
    updateInterval: Double,
@@ -189,7 +191,7 @@ diff --git a/android/src/main/java/expo/modules/audio/AudioPlayer.kt b/android/s
  ) : BaseAudioPlayer(
    player = ExoPlayer.Builder(context)
      .setLooper(context.mainLooper)
-@@ -84,6 +85,7 @@
+@@ -84,6 +85,7 @@ class AudioPlayer(
    }
  
    init {
@@ -198,12 +200,14 @@ diff --git a/android/src/main/java/expo/modules/audio/AudioPlayer.kt b/android/s
      source?.let {
        setMediaSource(source)
 diff --git a/build/Audio.types.d.ts b/build/Audio.types.d.ts
+index 2560478..377d1d9 100644
 --- a/build/Audio.types.d.ts
 +++ b/build/Audio.types.d.ts
-@@ -117,6 +117,16 @@
+@@ -116,6 +116,16 @@ export type AudioPlayerOptions = {
+      * @default false
       */
      keepAudioSessionActive?: boolean;
-     /**
++    /**
 +     * Whether playback can resume automatically after a native interruption or app background pause.
 +     * Set this to `false` when playback must resume only after an explicit `play()` call.
 +     *
@@ -213,15 +217,13 @@ diff --git a/build/Audio.types.d.ts b/build/Audio.types.d.ts
 +     * @platform android
 +     */
 +    autoResumeOnInterruption?: boolean;
-+    /**
+     /**
       * The duration in seconds the player should buffer ahead of the current playback position.
       * A higher value improves playback stability at the cost of more memory/network usage.
-      *
-@@ -130,6 +140,14 @@
-      * @platform android
+@@ -131,6 +141,14 @@ export type AudioPlayerOptions = {
       */
      preferredForwardBufferDuration?: number;
-+};
+ };
 +/**
 + * Native audio interruption payload. Begin events cancel pending owners.
 + * Permanent Android focus loss sets `canRetry` and has no guaranteed end event.
@@ -229,13 +231,15 @@ diff --git a/build/Audio.types.d.ts b/build/Audio.types.d.ts
 +export type AudioInterruptionEvent = {
 +    interrupted: boolean;
 +    canRetry?: boolean;
- };
++};
  /**
   * Options for configuring audio preloading behavior.
+  */
 diff --git a/build/AudioModule.types.d.ts b/build/AudioModule.types.d.ts
+index f3ae4ee..17a43f0 100644
 --- a/build/AudioModule.types.d.ts
 +++ b/build/AudioModule.types.d.ts
-@@ -26,7 +26,7 @@
+@@ -26,7 +26,7 @@ export declare class AudioPlayer extends SharedObject<AudioEvents> {
       * Initializes a new audio player instance with the given source.
       * @hidden
       */
@@ -245,6 +249,7 @@ diff --git a/build/AudioModule.types.d.ts b/build/AudioModule.types.d.ts
       * Unique identifier for the player object.
       */
 diff --git a/build/ExpoAudio.d.ts b/build/ExpoAudio.d.ts
+index 0e75373..57742c0 100644
 --- a/build/ExpoAudio.d.ts
 +++ b/build/ExpoAudio.d.ts
 @@ -1,5 +1,5 @@
@@ -254,7 +259,7 @@ diff --git a/build/ExpoAudio.d.ts b/build/ExpoAudio.d.ts
  import AudioModule from './AudioModule';
  import type { AudioPlayer, AudioPlaylist, AudioRecorder, AudioSample } from './AudioModule.types';
  /**
-@@ -401,5 +401,14 @@
+@@ -401,5 +401,14 @@ export declare function clearAllPreloadedSources(): Promise<void>;
   */
  export declare function getPreloadedSources(): Promise<string[]>;
  export { useAudioStream } from './AudioStream';
@@ -268,10 +273,13 @@ diff --git a/build/ExpoAudio.d.ts b/build/ExpoAudio.d.ts
 +};
  export { AudioModule };
 +export type { AudioInterruptionEvent };
- //# sourceMappingURL=ExpoAudio.d.ts.mapdiff --git a/build/ExpoAudio.js b/build/ExpoAudio.js
+ //# sourceMappingURL=ExpoAudio.d.ts.map
+\ No newline at end of file
+diff --git a/build/ExpoAudio.js b/build/ExpoAudio.js
+index 977ef78..fbdaaf9 100644
 --- a/build/ExpoAudio.js
 +++ b/build/ExpoAudio.js
-@@ -68,18 +68,19 @@
+@@ -68,18 +68,19 @@ if (!Platform.isTV || Platform.OS !== 'ios') {
   * ```
   */
  export function useAudioPlayer(source = null, options = {}) {
@@ -293,7 +301,7 @@ diff --git a/build/ExpoAudio.d.ts b/build/ExpoAudio.d.ts
      ]);
      // Handle async source resolution for downloadFirst
      useEffect(() => {
-@@ -328,9 +329,9 @@
+@@ -328,9 +329,9 @@ export function createAudioPlaylist(options = {}) {
   * @param options Audio player configuration options.
   */
  export function createAudioPlayer(source = null, options = {}) {
@@ -305,7 +313,7 @@ diff --git a/build/ExpoAudio.d.ts b/build/ExpoAudio.d.ts
      if (downloadFirst && source) {
          resolveSourceWithDownload(source)
              .then((resolved) => {
-@@ -562,5 +563,13 @@
+@@ -562,5 +563,13 @@ export async function getPreloadedSources() {
      return AudioModule.getPreloadedSources();
  }
  export { useAudioStream } from './AudioStream';
@@ -318,7 +326,10 @@ diff --git a/build/ExpoAudio.d.ts b/build/ExpoAudio.d.ts
 +    return AudioModule.addListener('onAudioInterruption', listener);
 +}
  export { AudioModule };
- //# sourceMappingURL=ExpoAudio.js.mapdiff --git a/build/ExpoAudio.web.d.ts b/build/ExpoAudio.web.d.ts
+ //# sourceMappingURL=ExpoAudio.js.map
+\ No newline at end of file
+diff --git a/build/ExpoAudio.web.d.ts b/build/ExpoAudio.web.d.ts
+index 3320fd9..7d076cc 100644
 --- a/build/ExpoAudio.web.d.ts
 +++ b/build/ExpoAudio.web.d.ts
 @@ -1,5 +1,5 @@
@@ -328,7 +339,7 @@ diff --git a/build/ExpoAudio.d.ts b/build/ExpoAudio.d.ts
  import type { AudioPlayer, AudioSample } from './AudioModule.types';
  import * as AudioModule from './AudioModule.web';
  export declare function createAudioPlayer(source?: AudioSource | string | number | null, options?: AudioPlayerOptions): AudioPlayer;
-@@ -20,5 +20,9 @@
+@@ -20,5 +20,9 @@ export declare function clearPreloadedSource(source: AudioSource): void;
  export declare function clearAllPreloadedSources(): void;
  export declare function getPreloadedSources(): string[];
  export { useAudioStream } from './AudioStream.web';
@@ -337,10 +348,13 @@ diff --git a/build/ExpoAudio.d.ts b/build/ExpoAudio.d.ts
 +};
  export { AudioModule };
 +export type { AudioInterruptionEvent };
- //# sourceMappingURL=ExpoAudio.web.d.ts.mapdiff --git a/build/ExpoAudio.web.js b/build/ExpoAudio.web.js
+ //# sourceMappingURL=ExpoAudio.web.d.ts.map
+\ No newline at end of file
+diff --git a/build/ExpoAudio.web.js b/build/ExpoAudio.web.js
+index 77e8bdd..2dce8c7 100644
 --- a/build/ExpoAudio.web.js
 +++ b/build/ExpoAudio.web.js
-@@ -132,5 +132,8 @@
+@@ -132,5 +132,8 @@ export function getPreloadedSources() {
      return AudioModule.getPreloadedSources();
  }
  export { useAudioStream } from './AudioStream.web';
@@ -348,10 +362,13 @@ diff --git a/build/ExpoAudio.d.ts b/build/ExpoAudio.d.ts
 +    return { remove() { } };
 +}
  export { AudioModule };
- //# sourceMappingURL=ExpoAudio.web.js.mapdiff --git a/ios/AudioModule.swift b/ios/AudioModule.swift
+ //# sourceMappingURL=ExpoAudio.web.js.map
+\ No newline at end of file
+diff --git a/ios/AudioModule.swift b/ios/AudioModule.swift
+index d265606..a129da6 100644
 --- a/ios/AudioModule.swift
 +++ b/ios/AudioModule.swift
-@@ -17,6 +17,7 @@
+@@ -17,6 +17,7 @@ public class AudioModule: Module {
  
    public func definition() -> ModuleDefinition {
      Name("ExpoAudio")
@@ -359,7 +376,7 @@ diff --git a/build/ExpoAudio.d.ts b/build/ExpoAudio.d.ts
  
      OnCreate {
        #if os(iOS)
-@@ -110,16 +111,11 @@
+@@ -110,16 +111,11 @@ public class AudioModule: Module {
        if !shouldPlayInBackground {
          resumeAllPlayers()
        }
@@ -377,7 +394,7 @@ diff --git a/build/ExpoAudio.d.ts b/build/ExpoAudio.d.ts
          let avPlayer: AVPlayer
          if let uri = source?.uri?.absoluteString, let cachedPlayer = self.registry.removePreloadedPlayer(forKey: uri) {
            avPlayer = cachedPlayer
-@@ -132,6 +128,7 @@
+@@ -132,6 +128,7 @@ public class AudioModule: Module {
          let player = AudioPlayer(avPlayer, interval: updateInterval, source: source)
          player.owningRegistry = self.registry
          player.keepAudioSessionActive = keepAudioSessionActive
@@ -385,7 +402,7 @@ diff --git a/build/ExpoAudio.d.ts b/build/ExpoAudio.d.ts
          player.onPlaybackComplete = { [weak self] in
            if !keepAudioSessionActive {
              self?.deactivateSession()
-@@ -211,6 +208,7 @@
+@@ -211,6 +208,7 @@ public class AudioModule: Module {
  
        Function("play") { player in
          try activateSession()
@@ -393,7 +410,91 @@ diff --git a/build/ExpoAudio.d.ts b/build/ExpoAudio.d.ts
          let rate = player.currentRate > 0 ? player.currentRate : 1.0
          player.play(at: rate)
        }
-@@ -586,18 +584,29 @@
+@@ -265,15 +263,16 @@ public class AudioModule: Module {
+       Function("updateLockScreenMetadata") { (player: AudioPlayer, metadata: Metadata?) in
+         if player.isActiveForLockScreen {
+           player.metadata = metadata
+-          MediaController.shared.updateNowPlayingInfo(for: player)
++          MediaController.shared.refreshActivePlayable(player, options: player.lockScreenOptions)
+         }
+       }
+ 
+       Function("clearLockScreenControls") { (player: AudioPlayer) in
+         if player.isActiveForLockScreen {
+           player.metadata = nil
++          player.lockScreenOptions = nil
+           player.isActiveForLockScreen = false
+-          MediaController.shared.setActivePlayer(nil)
++          MediaController.shared.setActivePlayable(nil)
+         }
+       }
+ 
+@@ -301,6 +300,25 @@ public class AudioModule: Module {
+         playlist.id
+       }
+ 
++      Property("autoResumeOnInterruption") { playlist in
++        playlist.autoResumeOnInterruption
++      }.set { (playlist, enabled: Bool) in
++        playlist.autoResumeOnInterruption = enabled
++      }
++
++      Function("setStopDeadline") { (playlist: AudioPlaylist, milliseconds: Double?) in
++        playlist.setStopDeadline(milliseconds)
++      }
++
++      Function("setTrackMetadata") { (playlist: AudioPlaylist, metadata: [Metadata]) in
++        playlist.trackMetadata = metadata
++        playlist.updateStatus(with: [:])
++      }
++
++      Function("setPlaybackOrder") { (playlist: AudioPlaylist, order: [Int]) in
++        playlist.setPlaybackOrder(order)
++      }
++
+       Property("currentIndex") { playlist in
+         playlist.currentTrackIndex
+       }
+@@ -363,6 +381,7 @@ public class AudioModule: Module {
+ 
+       Function("play") { playlist in
+         try activateSession()
++        playlist.wasPlaying = false
+         playlist.play(at: playlist.currentRate)
+       }
+ 
+@@ -402,7 +421,30 @@ public class AudioModule: Module {
+         playlist.clear()
+       }
+ 
++      Function("setActiveForLockScreen") { (playlist: AudioPlaylist, active: Bool, metadata: Metadata?, options: LockScreenOptions?) in
++        playlist.setActiveForLockScreen(active, metadata: metadata, options: options)
++      }
++
++      Function("updateLockScreenMetadata") { (playlist: AudioPlaylist, metadata: Metadata?) in
++        if playlist.isActiveForLockScreen {
++          playlist.metadata = metadata
++          MediaController.shared.refreshActivePlayable(playlist, options: playlist.lockScreenOptions)
++        }
++      }
++
++      Function("clearLockScreenControls") { (playlist: AudioPlaylist) in
++        if playlist.isActiveForLockScreen {
++          playlist.metadata = nil
++          playlist.lockScreenOptions = nil
++          playlist.isActiveForLockScreen = false
++          MediaController.shared.setActivePlayable(nil)
++        }
++      }
++
+       Function("destroy") { playlist in
++        if playlist.isActiveForLockScreen {
++          playlist.setActiveForLockScreen(false, metadata: nil, options: nil)
++        }
+         self.registry.remove(playlist)
+       }
+     }
+@@ -586,18 +628,29 @@ public class AudioModule: Module {
      }
    }
  
@@ -427,7 +528,7 @@ diff --git a/build/ExpoAudio.d.ts b/build/ExpoAudio.d.ts
            playable.pause()
          }
        }
-@@ -605,14 +614,13 @@
+@@ -605,14 +658,13 @@ public class AudioModule: Module {
  
  #if os(iOS)
      registry.allRecorders.values.forEach { recorder in
@@ -444,7 +545,7 @@ diff --git a/build/ExpoAudio.d.ts b/build/ExpoAudio.d.ts
      do {
        try AVAudioSession.sharedInstance().setActive(true)
        if options.contains(.shouldResume) {
-@@ -632,7 +640,10 @@
+@@ -632,7 +684,10 @@ public class AudioModule: Module {
  
      switch reason {
      case .oldDeviceUnavailable:
@@ -456,7 +557,7 @@ diff --git a/build/ExpoAudio.d.ts b/build/ExpoAudio.d.ts
      default:
        break
      }
-@@ -640,6 +651,7 @@
+@@ -640,6 +695,7 @@ public class AudioModule: Module {
  
    #if os(iOS)
    @objc private func handleMediaServicesReset(_ notification: Notification) {
@@ -464,7 +565,7 @@ diff --git a/build/ExpoAudio.d.ts b/build/ExpoAudio.d.ts
      reconfigureAudioSession()
  
      registry.allRecorders.values.forEach { recorder in
-@@ -648,10 +660,11 @@
+@@ -648,10 +704,11 @@ public class AudioModule: Module {
  
      registry.allPlayers.values.forEach { player in
        if player.isPlaying {
@@ -477,7 +578,7 @@ diff --git a/build/ExpoAudio.d.ts b/build/ExpoAudio.d.ts
    }
  
    private func reconfigureAudioSession() {
-@@ -680,52 +693,37 @@
+@@ -680,52 +737,38 @@ public class AudioModule: Module {
        }
      }
  
@@ -495,7 +596,8 @@ diff --git a/build/ExpoAudio.d.ts b/build/ExpoAudio.d.ts
  
 -  private func pauseAllPlayers() {
 +  private func canAutoResume(_ playable: Playable) -> Bool {
-+    return (playable as? AudioPlayer)?.autoResumeOnInterruption ?? true
++    return (playable as? AudioPlayer)?.autoResumeOnInterruption
++      ?? (playable as? AudioPlaylist)?.autoResumeOnInterruption ?? true
 +  }
 +
 +  private func pauseAllPlayers(shouldResume: Bool = true) {
@@ -515,8 +617,7 @@ diff --git a/build/ExpoAudio.d.ts b/build/ExpoAudio.d.ts
 +      if playable.wasPlaying && canAutoResume(playable) {
          playable.resumePlayback()
 -        playable.wasPlaying = false
--      }
-+      }
+       }
 +      playable.wasPlaying = false
      }
    }
@@ -542,9 +643,25 @@ diff --git a/build/ExpoAudio.d.ts b/build/ExpoAudio.d.ts
  #endif
    }
 diff --git a/ios/AudioPlayer.swift b/ios/AudioPlayer.swift
+index 0742943..786a6c7 100644
 --- a/ios/AudioPlayer.swift
 +++ b/ios/AudioPlayer.swift
-@@ -24,6 +24,7 @@
+@@ -6,12 +6,13 @@ private enum AudioConstants {
+   static let audioSample = "audioSampleUpdate"
+ }
+ 
+-public class AudioPlayer: SharedRef<AVPlayer>, Playable {
++public class AudioPlayer: SharedRef<AVPlayer>, Playable, LockScreenPlayable {
+   let id = UUID().uuidString
+   var shouldCorrectPitch = true
+   var pitchCorrectionQuality: AVAudioTimePitchAlgorithm = .timeDomain
+   var isActiveForLockScreen = false
+   var metadata: Metadata?
++  var lockScreenOptions: LockScreenOptions?
+   var currentRate: Float = 1.0 {
+     didSet {
+       currentRate = max(0, currentRate)
+@@ -24,6 +25,7 @@ public class AudioPlayer: SharedRef<AVPlayer>, Playable {
    }
    var samplingEnabled = false
    var keepAudioSessionActive = false
@@ -552,7 +669,32 @@ diff --git a/ios/AudioPlayer.swift b/ios/AudioPlayer.swift
  
    var isLooping = false {
      didSet {
-@@ -292,7 +293,7 @@
+@@ -68,6 +70,10 @@ public class AudioPlayer: SharedRef<AVPlayer>, Playable {
+     ref.currentItem?.duration.isIndefinite ?? false
+   }
+ 
++  var lockScreenPlayer: AVPlayer {
++    ref
++  }
++
+   var currentOffsetFromLive: Double? {
+     guard let currentDate = ref.currentItem?.currentDate() else {
+       return nil
+@@ -157,10 +163,11 @@ public class AudioPlayer: SharedRef<AVPlayer>, Playable {
+   func setActiveForLockScreen(_ active: Bool = true, metadata: Metadata? = nil, options: LockScreenOptions?) {
+     self.metadata = metadata
+     self.isActiveForLockScreen = active
++    self.lockScreenOptions = active ? options : nil
+     if active {
+-      MediaController.shared.setActivePlayer(self, options: options)
++      MediaController.shared.setActivePlayable(self, options: options)
+     } else {
+-      MediaController.shared.setActivePlayer(nil)
++      MediaController.shared.setActivePlayable(nil)
+     }
+   }
+ 
+@@ -292,7 +299,7 @@ public class AudioPlayer: SharedRef<AVPlayer>, Playable {
      }
  
      // Store these before we reset
@@ -561,7 +703,7 @@ diff --git a/ios/AudioPlayer.swift b/ios/AudioPlayer.swift
      let savedTime = currentTime
      let savedRate = currentRate > 0 ? currentRate : 1.0
      let wasSamplingEnabled = samplingEnabled
-@@ -500,6 +501,9 @@
+@@ -500,6 +507,9 @@ public class AudioPlayer: SharedRef<AVPlayer>, Playable {
    }
  
    func resumePlayback() {
@@ -571,10 +713,220 @@ diff --git a/ios/AudioPlayer.swift b/ios/AudioPlayer.swift
      ref.play()
    }
  
+@@ -508,7 +518,7 @@ public class AudioPlayer: SharedRef<AVPlayer>, Playable {
+     owningRegistry?.remove(self)
+ 
+     if isActiveForLockScreen {
+-      MediaController.shared.setActivePlayer(nil)
++      MediaController.shared.setActivePlayable(nil)
+     }
+ 
+     teardownPlayer()
+diff --git a/ios/AudioPlaylist.swift b/ios/AudioPlaylist.swift
+index 98dabcf..5467e5b 100644
+--- a/ios/AudioPlaylist.swift
++++ b/ios/AudioPlaylist.swift
+@@ -7,13 +7,20 @@ private enum PlaylistConstants {
+   static let trackChanged = "trackChanged"
+ }
+ 
+-public class AudioPlaylist: SharedRef<AVQueuePlayer>, Playable {
++public class AudioPlaylist: SharedRef<AVQueuePlayer>, Playable, LockScreenPlayable {
+   let id = UUID().uuidString
+   private let interval: Double
+   private(set) var currentRate: Float = 1.0
++  var isActiveForLockScreen = false
++  var metadata: Metadata?
++  var lockScreenOptions: LockScreenOptions?
+ 
+   var loopMode: LoopMode = .none
+   var wasPlaying = false
++  var autoResumeOnInterruption = true
++  var trackMetadata: [Metadata] = []
++  private var stopWorkItem: DispatchWorkItem?
++  private var stopDeadline: Date?
+ 
+   private(set) var sources: [AudioSource] = []
+ 
+@@ -55,6 +62,22 @@ public class AudioPlaylist: SharedRef<AVQueuePlayer>, Playable {
+     ref.timeControlStatus == .playing
+   }
+ 
++  var isLive: Bool {
++    ref.currentItem?.duration.isIndefinite ?? false
++  }
++
++  var lockScreenPlayer: AVPlayer {
++    ref
++  }
++
++  var supportsNextTrack: Bool {
++    true
++  }
++
++  var supportsPreviousTrack: Bool {
++    true
++  }
++
+   var isBuffering: Bool {
+     ref.isBuffering(isPlaying: isPlaying)
+   }
+@@ -75,13 +98,39 @@ public class AudioPlaylist: SharedRef<AVQueuePlayer>, Playable {
+     addPlaybackEndNotification()
+   }
+ 
++  func setStopDeadline(_ milliseconds: Double?) {
++    stopWorkItem?.cancel()
++    stopWorkItem = nil
++    stopDeadline = milliseconds.map { Date(timeIntervalSince1970: $0 / 1000) }
++    guard let deadline = stopDeadline else { return }
++    let work = DispatchWorkItem { [weak self] in
++      guard let self else { return }
++      self.pause()
++      if self.isActiveForLockScreen {
++        self.setActiveForLockScreen(false, metadata: nil, options: nil)
++      }
++    }
++    stopWorkItem = work
++    DispatchQueue.main.asyncAfter(deadline: .now() + max(0, deadline.timeIntervalSinceNow), execute: work)
++  }
++
+   func play(at rate: Float) {
++    if let deadline = stopDeadline, deadline <= Date() { return }
++
+     registerTimeObserver()
+     ref.playImmediately(atRate: rate)
++
++    if isActiveForLockScreen {
++      MediaController.shared.updateNowPlayingInfo(for: self)
++    }
+   }
+ 
+   func pause() {
+     ref.pause()
++
++    if isActiveForLockScreen {
++      MediaController.shared.updateNowPlayingInfo(for: self)
++    }
+   }
+ 
+   func next() {
+@@ -104,6 +153,14 @@ public class AudioPlaylist: SharedRef<AVQueuePlayer>, Playable {
+     }
+   }
+ 
++  func nextTrack() {
++    next()
++  }
++
++  func previousTrack() {
++    previous()
++  }
++
+   func skipTo(index: Int) {
+     guard validIndex(index) else {
+       return
+@@ -222,6 +279,17 @@ public class AudioPlaylist: SharedRef<AVQueuePlayer>, Playable {
+     }
+   }
+ 
++  func setActiveForLockScreen(_ active: Bool = true, metadata: Metadata? = nil, options: LockScreenOptions?) {
++    self.metadata = metadata
++    self.isActiveForLockScreen = active
++    self.lockScreenOptions = active ? options : nil
++    if active {
++      MediaController.shared.setActivePlayable(self, options: options)
++    } else {
++      MediaController.shared.setActivePlayable(nil)
++    }
++  }
++
+   func currentStatus() -> [String: Any] {
+     return [
+       "id": id,
+@@ -236,14 +304,23 @@ public class AudioPlaylist: SharedRef<AVQueuePlayer>, Playable {
+       "muted": ref.isMuted,
+       "volume": ref.volume,
+       "loop": loopMode.rawValue,
++      "timeControlStatus": timeControlStatusString(status: ref.timeControlStatus),
++      "error": ref.currentItem?.error?.localizedDescription as Any,
+       "didJustFinish": false
+     ]
+   }
+ 
+   func updateStatus(with dict: [String: Any]) {
++    if trackMetadata.indices.contains(currentTrackIndex) {
++      metadata = trackMetadata[currentTrackIndex]
++    }
+     var arguments = currentStatus()
+     arguments.merge(dict) { _, new in new }
+     self.emit(event: PlaylistConstants.playlistStatusUpdate, payload: arguments)
++
++    if isActiveForLockScreen {
++      MediaController.shared.updateNowPlayingInfo(for: self)
++    }
+   }
+ 
+   private func validIndex(_ index: Int) -> Bool {
+@@ -273,7 +350,29 @@ public class AudioPlaylist: SharedRef<AVQueuePlayer>, Playable {
+     }
+   }
+ 
++  // Keep the current AVPlayerItem so changing shuffle never restarts the song.
++  func setPlaybackOrder(_ order: [Int]) {
++    guard order.count == sources.count,
++          Set(order) == Set(sources.indices),
++          order.first == currentTrackIndex,
++          let currentItem = ref.currentItem else { return }
++    sources = order.map { sources[$0] }
++    if trackMetadata.count == order.count {
++      trackMetadata = order.map { trackMetadata[$0] }
++    }
++    let items = [currentItem] + sources.dropFirst().compactMap { AudioUtils.createAVPlayerItem(from: $0) }
++    playerItems = items
++    previousTrackIndex = 0
++    for item in ref.items().dropFirst() { ref.remove(item) }
++    for item in items.dropFirst() { ref.insert(item, after: nil) }
++    updateStatus(with: [:])
++  }
++
+   private func setupPublisher() {
++    ref.publisher(for: \.timeControlStatus)
++      .sink { [weak self] _ in self?.updateStatus(with: [:]) }
++      .store(in: &cancellables)
++
+     ref.publisher(for: \.currentItem?.status)
+       .sink { [weak self] status in
+         guard let self, let status else {
+@@ -359,10 +458,12 @@ public class AudioPlaylist: SharedRef<AVQueuePlayer>, Playable {
+   }
+ 
+   func resumePlayback() {
++    guard autoResumeOnInterruption else { return }
+     play(at: currentRate)
+   }
+ 
+   public override func sharedObjectWillRelease() {
++    stopWorkItem?.cancel()
+     ref.currentItem?.cancelPendingSeeks()
+     owningRegistry?.remove(self)
+     cancellables.removeAll()
+@@ -375,6 +476,10 @@ public class AudioPlaylist: SharedRef<AVQueuePlayer>, Playable {
+       NotificationCenter.default.removeObserver(endObserver)
+     }
+ 
++    if isActiveForLockScreen {
++      MediaController.shared.setActivePlayable(nil)
++    }
++
+     ref.pause()
+     ref.removeAllItems()
+   }
 diff --git a/ios/AudioRecorder.swift b/ios/AudioRecorder.swift
+index 20020bf..09c3cfc 100644
 --- a/ios/AudioRecorder.swift
 +++ b/ios/AudioRecorder.swift
-@@ -20,6 +20,12 @@
+@@ -20,6 +20,12 @@ class AudioRecorder: SharedRef<AVAudioRecorder>, RecordingResultHandler {
    private var recordingSession = AVAudioSession.sharedInstance()
    var allowsRecording = false
    weak var owningRegistry: AudioComponentRegistry?
@@ -587,77 +939,318 @@ diff --git a/ios/AudioRecorder.swift b/ios/AudioRecorder.swift
    private var mediaServicesDidReset = false
    private var currentOptions: RecordingOptions?
    private var currentSessionOptions: AVAudioSession.CategoryOptions = []
+diff --git a/ios/AudioRecords.swift b/ios/AudioRecords.swift
+index 33db27c..a756246 100644
+--- a/ios/AudioRecords.swift
++++ b/ios/AudioRecords.swift
+@@ -69,6 +69,8 @@ struct Metadata: Record {
+ struct LockScreenOptions: Record {
+   @Field var showSeekForward: Bool = false
+   @Field var showSeekBackward: Bool = false
++  @Field var showNextTrack: Bool = false
++  @Field var showPreviousTrack: Bool = false
+   @Field var isLiveStream: Bool? = false
+ }
+ 
 diff --git a/ios/MediaController.swift b/ios/MediaController.swift
+index e977f57..1f7ca7e 100644
 --- a/ios/MediaController.swift
 +++ b/ios/MediaController.swift
-@@ -14,6 +14,7 @@
-   private var artworkLoadToken: UUID?
-   private var currentArtworkItemIdentifier: ObjectIdentifier?
-   private var isLiveStream = false
+@@ -2,12 +2,46 @@ import MediaPlayer
+ import AVFoundation
+ import ExpoModulesCore
+ 
++protocol LockScreenPlayable: AnyObject {
++  var id: String { get }
++  var isActiveForLockScreen: Bool { get set }
++  var metadata: Metadata? { get set }
++  var lockScreenPlayer: AVPlayer { get }
++  var duration: Double { get }
++  var currentTime: Double { get }
++  var isPlaying: Bool { get }
++  var currentRate: Float { get }
++  var isLive: Bool { get }
++  var supportsNextTrack: Bool { get }
++  var supportsPreviousTrack: Bool { get }
++
++  func play(at rate: Float)
++  func pause()
++  func nextTrack()
++  func previousTrack()
++}
++
++extension LockScreenPlayable {
++  var supportsNextTrack: Bool {
++    false
++  }
++
++  var supportsPreviousTrack: Bool {
++    false
++  }
++
++  func nextTrack() {}
++
++  func previousTrack() {}
++}
++
+ class MediaController {
+   static let shared = MediaController()
+ 
+-  private var activePlayer: AudioPlayer?
++  private var activePlayable: (any LockScreenPlayable)?
+   private var remoteCommandCenter = MPRemoteCommandCenter.shared()
+   private var nowPlayingInfoCenter = MPNowPlayingInfoCenter.default()
 +  private var remoteCommandTargets: [(command: MPRemoteCommand, target: Any)] = []
  
-   func setActivePlayer(_ player: AudioPlayer?, options: LockScreenOptions? = nil) {
+   private var currentArtworkUrl: URL?
+   private var cachedArtwork: MPMediaItemArtwork?
+@@ -15,44 +49,56 @@ class MediaController {
+   private var currentArtworkItemIdentifier: ObjectIdentifier?
+   private var isLiveStream = false
+ 
+-  func setActivePlayer(_ player: AudioPlayer?, options: LockScreenOptions? = nil) {
++  func setActivePlayable(_ playable: (any LockScreenPlayable)?, options: LockScreenOptions? = nil) {
      performOnMain {
-@@ -232,7 +233,9 @@
+-      self.setActivePlayerOnMain(player, options: options)
++      self.setActivePlayableOnMain(playable, options: options)
+     }
+   }
+ 
+-  func updateNowPlayingInfo(for player: AudioPlayer) {
++  func updateNowPlayingInfo(for playable: any LockScreenPlayable) {
+     performOnMain {
+-      self.updateNowPlayingInfoOnMain(for: player)
++      self.updateNowPlayingInfoOnMain(for: playable)
+     }
+   }
+ 
+-  private func setActivePlayerOnMain(_ player: AudioPlayer?, options: LockScreenOptions? = nil) {
+-    if let previous = activePlayer, previous.id != player?.id {
++  func refreshActivePlayable(_ playable: any LockScreenPlayable, options: LockScreenOptions?) {
++    performOnMain {
++      guard playable.id == self.activePlayable?.id else {
++        return
++      }
++
++      self.disableRemoteCommands()
++      self.clearNowPlayingInfoOnMain()
++      self.setActivePlayableOnMain(playable, options: options)
++    }
++  }
++
++  private func setActivePlayableOnMain(_ playable: (any LockScreenPlayable)?, options: LockScreenOptions? = nil) {
++    if let previous = activePlayable, previous.id != playable?.id {
+       previous.isActiveForLockScreen = false
+       resetArtworkState()
+       currentArtworkItemIdentifier = nil
+     }
+ 
+-    activePlayer = player
+-    player?.isActiveForLockScreen = true
+-    isLiveStream = options?.isLiveStream ?? player?.isLive ?? false
++    activePlayable = playable
++    playable?.isActiveForLockScreen = true
++    isLiveStream = options?.isLiveStream ?? playable?.isLive ?? false
+ 
+-    if let player {
++    if let playable {
+       enableRemoteCommands(options: options)
+-      updateNowPlayingInfoOnMain(for: player)
++      updateNowPlayingInfoOnMain(for: playable)
+     } else {
+       disableRemoteCommands()
+       clearNowPlayingInfoOnMain()
+     }
+   }
+ 
+-  private func updateNowPlayingInfoOnMain(for player: AudioPlayer) {
+-    guard player.id == activePlayer?.id else {
++  private func updateNowPlayingInfoOnMain(for playable: any LockScreenPlayable) {
++    guard playable.id == activePlayable?.id else {
+       return
+     }
+ 
+-    let nextArtworkItemIdentifier = player.ref.currentItem.map { ObjectIdentifier($0) }
++    let nextArtworkItemIdentifier = playable.lockScreenPlayer.currentItem.map { ObjectIdentifier($0) }
+     if currentArtworkItemIdentifier != nextArtworkItemIdentifier {
+       resetArtworkState()
+       currentArtworkItemIdentifier = nextArtworkItemIdentifier
+@@ -60,47 +106,49 @@ class MediaController {
+ 
+     var nowPlayingInfo = nowPlayingInfoCenter.nowPlayingInfo ?? [String: Any]()
+ 
+-    applyPlaybackInfo(&nowPlayingInfo, for: player)
++    applyPlaybackInfo(&nowPlayingInfo, for: playable)
+ 
+-    if let userMetadata = player.metadata {
++    if let userMetadata = playable.metadata {
+       applyUserMetadata(&nowPlayingInfo, from: userMetadata)
+-      applyArtwork(&nowPlayingInfo, from: userMetadata, for: player, currentItemIdentifier: nextArtworkItemIdentifier)
++      applyArtwork(&nowPlayingInfo, from: userMetadata, for: playable, currentItemIdentifier: nextArtworkItemIdentifier)
+     } else {
+       resetArtworkState()
+       nowPlayingInfo.removeValue(forKey: MPMediaItemPropertyArtwork)
+-      applyAssetMetadata(&nowPlayingInfo, for: player)
++      applyAssetMetadata(&nowPlayingInfo, for: playable)
+     }
+ 
+     nowPlayingInfoCenter.nowPlayingInfo = nowPlayingInfo
+   }
+ 
+-  private func applyPlaybackInfo(_ info: inout [String: Any], for player: AudioPlayer) {
++  private func applyPlaybackInfo(_ info: inout [String: Any], for playable: any LockScreenPlayable) {
+     if isLiveStream {
+       info[MPNowPlayingInfoPropertyIsLiveStream] = true
+       info.removeValue(forKey: MPMediaItemPropertyPlaybackDuration)
+       info.removeValue(forKey: MPNowPlayingInfoPropertyElapsedPlaybackTime)
+     } else {
+-      info[MPMediaItemPropertyPlaybackDuration] = player.duration
+-      info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = player.currentTime
++      info[MPMediaItemPropertyPlaybackDuration] = playable.duration
++      info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = playable.currentTime
+     }
+-    info[MPNowPlayingInfoPropertyPlaybackRate] = player.isPlaying ? player.ref.rate : 0.0
++    info[MPNowPlayingInfoPropertyPlaybackRate] = playable.isPlaying ? playable.lockScreenPlayer.rate : 0.0
+     info[MPNowPlayingInfoPropertyMediaType] = MPNowPlayingInfoMediaType.audio.rawValue
+   }
+ 
+   private func applyUserMetadata(_ info: inout [String: Any], from metadata: Metadata) {
+-    if let title = metadata.title {
+-      info[MPMediaItemPropertyTitle] = title
+-    }
+-    if let artist = metadata.artist {
+-      info[MPMediaItemPropertyArtist] = artist
+-    }
+-    if let album = metadata.albumTitle {
+-      info[MPMediaItemPropertyAlbumTitle] = album
++    updateInfo(&info, key: MPMediaItemPropertyTitle, value: metadata.title)
++    updateInfo(&info, key: MPMediaItemPropertyArtist, value: metadata.artist)
++    updateInfo(&info, key: MPMediaItemPropertyAlbumTitle, value: metadata.albumTitle)
++  }
++
++  private func updateInfo(_ info: inout [String: Any], key: String, value: Any?) {
++    if let value {
++      info[key] = value
++    } else {
++      info.removeValue(forKey: key)
+     }
+   }
+ 
+-  private func applyAssetMetadata(_ info: inout [String: Any], for player: AudioPlayer) {
+-    guard let currentItem = player.ref.currentItem,
++  private func applyAssetMetadata(_ info: inout [String: Any], for playable: any LockScreenPlayable) {
++    guard let currentItem = playable.lockScreenPlayer.currentItem,
+       let asset = currentItem.asset as? AVURLAsset else {
+       return
+     }
+@@ -133,7 +181,7 @@ class MediaController {
+   private func applyArtwork(
+     _ info: inout [String: Any],
+     from metadata: Metadata,
+-    for player: AudioPlayer,
++    for playable: any LockScreenPlayable,
+     currentItemIdentifier: ObjectIdentifier?
+   ) {
+     guard let artworkUrl = metadata.artworkUrl else {
+@@ -167,7 +215,7 @@ class MediaController {
+ 
+       self.artworkLoadToken = nil
+ 
+-      guard self.activePlayer?.id == player.id,
++      guard self.activePlayable?.id == playable.id,
+             self.currentArtworkUrl == artworkUrl,
+             self.currentArtworkItemIdentifier == currentItemIdentifier else {
+         return
+@@ -187,7 +235,7 @@ class MediaController {
+ 
+   private func clearNowPlayingInfoOnMain() {
+     nowPlayingInfoCenter.nowPlayingInfo = nil
+-    activePlayer = nil
++    activePlayable = nil
+     isLiveStream = false
+     resetArtworkState()
+     currentArtworkItemIdentifier = nil
+@@ -232,83 +280,127 @@ class MediaController {
    }
  
    private func enableRemoteCommands(options: LockScreenOptions?) {
 -    remoteCommandCenter.playCommand.addTarget { [weak self] _ in
+-      guard let player = self?.activePlayer else {
 +    removeRemoteCommandTargets()
 +
 +    let playTarget = remoteCommandCenter.playCommand.addTarget { [weak self] _ in
-       guard let player = self?.activePlayer else {
++      guard let playable = self?.activePlayable else {
          return .commandFailed
        }
-@@ -240,8 +243,9 @@
-       player.play(at: Float(player.currentRate > 0 ? player.currentRate : 1.0))
+ 
+-      player.play(at: Float(player.currentRate > 0 ? player.currentRate : 1.0))
++      playable.play(at: Float(playable.currentRate > 0 ? playable.currentRate : 1.0))
        return .success
      }
--
--    remoteCommandCenter.pauseCommand.addTarget { [weak self] _ in
 +    remoteCommandTargets.append((remoteCommandCenter.playCommand, playTarget))
-+
+ 
+-    remoteCommandCenter.pauseCommand.addTarget { [weak self] _ in
+-      guard let player = self?.activePlayer else {
 +    let pauseTarget = remoteCommandCenter.pauseCommand.addTarget { [weak self] _ in
-       guard let player = self?.activePlayer else {
++      guard let playable = self?.activePlayable else {
          return .commandFailed
        }
-@@ -249,8 +253,9 @@
-       player.ref.pause()
+ 
+-      player.ref.pause()
++      playable.pause()
        return .success
      }
--
--    remoteCommandCenter.togglePlayPauseCommand.addTarget { [weak self] _ in
 +    remoteCommandTargets.append((remoteCommandCenter.pauseCommand, pauseTarget))
-+
-+    let toggleTarget = remoteCommandCenter.togglePlayPauseCommand.addTarget { [weak self] _ in
-       guard let player = self?.activePlayer else {
+ 
+-    remoteCommandCenter.togglePlayPauseCommand.addTarget { [weak self] _ in
+-      guard let player = self?.activePlayer else {
++    let togglePlayPauseTarget = remoteCommandCenter.togglePlayPauseCommand.addTarget { [weak self] _ in
++      guard let playable = self?.activePlayable else {
          return .commandFailed
        }
-@@ -262,8 +267,9 @@
+ 
+-      if player.isPlaying {
+-        player.ref.pause()
++      if playable.isPlaying {
++        playable.pause()
+       } else {
+-        player.play(at: Float(player.currentRate > 0 ? player.currentRate : 1.0))
++        playable.play(at: Float(playable.currentRate > 0 ? playable.currentRate : 1.0))
        }
        return .success
      }
--
++    remoteCommandTargets.append((remoteCommandCenter.togglePlayPauseCommand, togglePlayPauseTarget))
+ 
 -    remoteCommandCenter.changePlaybackPositionCommand.addTarget { [weak self] event in
-+    remoteCommandTargets.append((remoteCommandCenter.togglePlayPauseCommand, toggleTarget))
-+
-+    let positionTarget = remoteCommandCenter.changePlaybackPositionCommand.addTarget { [weak self] event in
-       guard let player = self?.activePlayer,
+-      guard let player = self?.activePlayer,
++    let changePlaybackPositionTarget = remoteCommandCenter.changePlaybackPositionCommand.addTarget { [weak self] event in
++      guard let playable = self?.activePlayable,
        let event = event as? MPChangePlaybackPositionCommandEvent else {
          return .commandFailed
-@@ -274,9 +280,10 @@
+       }
+ 
+       let seekTime = CMTime(seconds: event.positionTime, preferredTimescale: 1)
+-      player.ref.seek(to: seekTime)
++      playable.lockScreenPlayer.seek(to: seekTime)
  
        return .success
      }
-+    remoteCommandTargets.append((remoteCommandCenter.changePlaybackPositionCommand, positionTarget))
++    remoteCommandTargets.append((remoteCommandCenter.changePlaybackPositionCommand, changePlaybackPositionTarget))
  
      remoteCommandCenter.skipForwardCommand.preferredIntervals = [10.0]
 -    remoteCommandCenter.skipForwardCommand.addTarget { [weak self] event in
+-      guard let player = self?.activePlayer,
 +    let skipForwardTarget = remoteCommandCenter.skipForwardCommand.addTarget { [weak self] event in
-       guard let player = self?.activePlayer,
++      guard let playable = self?.activePlayable,
        let event = event as? MPSkipIntervalCommandEvent else {
          return .commandFailed
-@@ -288,9 +295,10 @@
+       }
+ 
+-      let currentTime = player.ref.currentTime()
++      let currentTime = playable.lockScreenPlayer.currentTime()
+       let seekTime = currentTime + CMTime(seconds: event.interval, preferredTimescale: 1)
+-      player.ref.seek(to: seekTime, toleranceBefore: .zero, toleranceAfter: .zero)
++      playable.lockScreenPlayer.seek(to: seekTime, toleranceBefore: .zero, toleranceAfter: .zero)
  
        return .success
      }
@@ -665,21 +1258,76 @@ diff --git a/ios/MediaController.swift b/ios/MediaController.swift
  
      remoteCommandCenter.skipBackwardCommand.preferredIntervals = [10.0]
 -    remoteCommandCenter.skipBackwardCommand.addTarget { [weak self] event in
+-      guard let player = self?.activePlayer,
 +    let skipBackwardTarget = remoteCommandCenter.skipBackwardCommand.addTarget { [weak self] event in
-       guard let player = self?.activePlayer,
++      guard let playable = self?.activePlayable,
        let event = event as? MPSkipIntervalCommandEvent else {
          return .commandFailed
-@@ -302,6 +310,7 @@
+       }
  
+-      let currentTime = player.ref.currentTime()
++      let currentTime = playable.lockScreenPlayer.currentTime()
+       let seekTime = currentTime - CMTime(seconds: event.interval, preferredTimescale: 1)
+-      player.ref.seek(to: seekTime, toleranceBefore: .zero, toleranceAfter: .zero)
++      playable.lockScreenPlayer.seek(to: seekTime, toleranceBefore: .zero, toleranceAfter: .zero)
++
++      return .success
++    }
++    remoteCommandTargets.append((remoteCommandCenter.skipBackwardCommand, skipBackwardTarget))
++
++    let nextTrackTarget = remoteCommandCenter.nextTrackCommand.addTarget { [weak self] _ in
++      guard let playable = self?.activePlayable,
++            playable.supportsNextTrack else {
++        return .commandFailed
++      }
+ 
++      playable.nextTrack()
        return .success
      }
-+    remoteCommandTargets.append((remoteCommandCenter.skipBackwardCommand, skipBackwardTarget))
++    remoteCommandTargets.append((remoteCommandCenter.nextTrackCommand, nextTrackTarget))
++
++    let previousTrackTarget = remoteCommandCenter.previousTrackCommand.addTarget { [weak self] _ in
++      guard let playable = self?.activePlayable,
++            playable.supportsPreviousTrack else {
++        return .commandFailed
++      }
++
++      playable.previousTrack()
++      return .success
++    }
++    remoteCommandTargets.append((remoteCommandCenter.previousTrackCommand, previousTrackTarget))
  
      remoteCommandCenter.playCommand.isEnabled = true
      remoteCommandCenter.pauseCommand.isEnabled = true
-@@ -319,12 +328,13 @@
+     remoteCommandCenter.togglePlayPauseCommand.isEnabled = true
+     remoteCommandCenter.changePlaybackPositionCommand.isEnabled = !isLiveStream
+-    remoteCommandCenter.skipForwardCommand.isEnabled = options?.showSeekForward ?? false
+-    remoteCommandCenter.skipBackwardCommand.isEnabled = options?.showSeekBackward ?? false
++    let supportsNextTrack = activePlayable?.supportsNextTrack ?? false
++    let supportsPreviousTrack = activePlayable?.supportsPreviousTrack ?? false
++    let showNextTrack = (options?.showNextTrack ?? false) && supportsNextTrack
++    let showPreviousTrack = (options?.showPreviousTrack ?? false) && supportsPreviousTrack
++
++    remoteCommandCenter.skipForwardCommand.isEnabled = (options?.showSeekForward ?? false) && !showNextTrack
++    remoteCommandCenter.skipBackwardCommand.isEnabled = (options?.showSeekBackward ?? false) && !showPreviousTrack
++    remoteCommandCenter.nextTrackCommand.isEnabled = showNextTrack
++    remoteCommandCenter.previousTrackCommand.isEnabled = showPreviousTrack
++  }
++
++  private func removeRemoteCommandTargets() {
++    remoteCommandTargets.forEach { command, target in
++      command.removeTarget(target)
++    }
++    remoteCommandTargets.removeAll()
+   }
+ 
+   private func disableRemoteCommands() {
+@@ -318,13 +410,9 @@ class MediaController {
+     remoteCommandCenter.changePlaybackPositionCommand.isEnabled = false
      remoteCommandCenter.skipForwardCommand.isEnabled = false
      remoteCommandCenter.skipBackwardCommand.isEnabled = false
++    remoteCommandCenter.nextTrackCommand.isEnabled = false
++    remoteCommandCenter.previousTrackCommand.isEnabled = false
  
 -    // Remove event targets
 -    remoteCommandCenter.playCommand.removeTarget(self)
@@ -689,22 +1337,17 @@ diff --git a/ios/MediaController.swift b/ios/MediaController.swift
 -    remoteCommandCenter.skipForwardCommand.removeTarget(self)
 -    remoteCommandCenter.skipBackwardCommand.removeTarget(self)
 +    removeRemoteCommandTargets()
-+  }
-+
-+  private func removeRemoteCommandTargets() {
-+    remoteCommandTargets.forEach { entry in
-+      entry.command.removeTarget(entry.target)
-+    }
-+    remoteCommandTargets.removeAll()
    }
  }
 diff --git a/src/Audio.types.ts b/src/Audio.types.ts
+index 906753f..5611882 100644
 --- a/src/Audio.types.ts
 +++ b/src/Audio.types.ts
-@@ -125,6 +125,16 @@
+@@ -124,6 +124,16 @@ export type AudioPlayerOptions = {
+    * @default false
     */
    keepAudioSessionActive?: boolean;
-   /**
++  /**
 +   * Whether playback can resume automatically after a native interruption or app background pause.
 +   * Set this to `false` when playback must resume only after an explicit `play()` call.
 +   *
@@ -714,16 +1357,13 @@ diff --git a/src/Audio.types.ts b/src/Audio.types.ts
 +   * @platform android
 +   */
 +  autoResumeOnInterruption?: boolean;
-+  /**
+   /**
     * The duration in seconds the player should buffer ahead of the current playback position.
     * A higher value improves playback stability at the cost of more memory/network usage.
-    *
-@@ -138,6 +148,15 @@
-    * @platform android
-    */
+@@ -140,6 +150,15 @@ export type AudioPlayerOptions = {
    preferredForwardBufferDuration?: number;
-+};
-+
+ };
+ 
 +/**
 + * Native audio interruption payload. Begin events cancel pending owners.
 + * Permanent Android focus loss sets `canRetry` and has no guaranteed end event.
@@ -731,13 +1371,16 @@ diff --git a/src/Audio.types.ts b/src/Audio.types.ts
 +export type AudioInterruptionEvent = {
 +  interrupted: boolean;
 +  canRetry?: boolean;
- };
- 
++};
++
  /**
+  * Options for configuring audio preloading behavior.
+  */
 diff --git a/src/AudioModule.types.ts b/src/AudioModule.types.ts
+index 7e75371..f7de53f 100644
 --- a/src/AudioModule.types.ts
 +++ b/src/AudioModule.types.ts
-@@ -48,7 +48,8 @@
+@@ -48,7 +48,8 @@ export declare class AudioPlayer extends SharedObject<AudioEvents> {
      source: AudioSource,
      updateInterval: number,
      keepAudioSessionActive: boolean,
@@ -748,9 +1391,10 @@ diff --git a/src/AudioModule.types.ts b/src/AudioModule.types.ts
  
    /**
 diff --git a/src/ExpoAudio.ts b/src/ExpoAudio.ts
+index af5998e..f08c999 100644
 --- a/src/ExpoAudio.ts
 +++ b/src/ExpoAudio.ts
-@@ -4,6 +4,7 @@
+@@ -4,6 +4,7 @@ import { useEffect, useMemo } from 'react';
  import { Platform } from 'react-native';
  
  import type {
@@ -758,7 +1402,7 @@ diff --git a/src/ExpoAudio.ts b/src/ExpoAudio.ts
    AudioMode,
    AudioPlayerOptions,
    AudioPlaylistOptions,
-@@ -101,6 +102,7 @@
+@@ -101,6 +102,7 @@ export function useAudioPlayer(
      downloadFirst = false,
      keepAudioSessionActive = false,
      preferredForwardBufferDuration = 0,
@@ -766,7 +1410,7 @@ diff --git a/src/ExpoAudio.ts b/src/ExpoAudio.ts
    } = options;
  
    // If downloadFirst is true, we don't need to resolve the source, because it will be resolved in the useEffect below.
-@@ -116,13 +118,15 @@
+@@ -116,13 +118,15 @@ export function useAudioPlayer(
          initialSource,
          updateInterval,
          keepAudioSessionActive,
@@ -783,7 +1427,7 @@ diff --git a/src/ExpoAudio.ts b/src/ExpoAudio.ts
      ]
    );
  
-@@ -407,13 +411,15 @@
+@@ -407,13 +411,15 @@ export function createAudioPlayer(
      downloadFirst = false,
      keepAudioSessionActive = false,
      preferredForwardBufferDuration = 0,
@@ -800,7 +1444,7 @@ diff --git a/src/ExpoAudio.ts b/src/ExpoAudio.ts
    );
  
    if (downloadFirst && source) {
-@@ -660,4 +666,16 @@
+@@ -660,4 +666,16 @@ export async function getPreloadedSources(): Promise<string[]> {
  
  export { useAudioStream } from './AudioStream';
  
@@ -818,9 +1462,10 @@ diff --git a/src/ExpoAudio.ts b/src/ExpoAudio.ts
  export { AudioModule };
 +export type { AudioInterruptionEvent };
 diff --git a/src/ExpoAudio.web.ts b/src/ExpoAudio.web.ts
+index 1d453a5..eac423d 100644
 --- a/src/ExpoAudio.web.ts
 +++ b/src/ExpoAudio.web.ts
-@@ -3,6 +3,7 @@
+@@ -3,6 +3,7 @@ import { useReleasingSharedObject } from 'expo-modules-core';
  import { useEffect, useMemo } from 'react';
  
  import type {
@@ -828,7 +1473,7 @@ diff --git a/src/ExpoAudio.web.ts b/src/ExpoAudio.web.ts
    AudioMode,
    AudioPlayerOptions,
    AudioPlaylistOptions,
-@@ -205,4 +206,11 @@
+@@ -205,4 +206,11 @@ export function getPreloadedSources(): string[] {
  
  export { useAudioStream } from './AudioStream.web';
  

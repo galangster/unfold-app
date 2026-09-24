@@ -1,9 +1,8 @@
 /** Ambient music. Sound effects use a different owner. */
-import { createAudioPlayer } from 'expo-audio';
-import type { AudioStatus } from 'expo-audio/build/Audio.types';
-import type { AudioPlayer } from 'expo-audio/build/AudioModule.types';
+import { createAmbientPlayer, type AmbientPlayer, type AmbientPlaybackStatus } from './ambient-player';
 import { AppState, type AppStateStatus } from 'react-native';
 import {
+  AMBIENT_TRACK_IDS,
   getAmbientTrack,
   isAmbientTrackId,
   takeNextAmbientTrack,
@@ -39,7 +38,7 @@ type FadeOperation = {
   resolve: (completed: boolean) => void;
 };
 
-let player: AudioPlayer | null = null;
+let player: AmbientPlayer | null = null;
 let sessionLease: AudioSessionLease | null = null;
 let playerTrackId: AmbientTrackId | null = null;
 let statusSubscription: { remove: () => void } | null = null;
@@ -144,7 +143,13 @@ function armWatchdog(generation: number): void {
   const timer = setTimeout(() => {
     if (watchdogTimer?.generation !== generation) return;
     watchdogTimer = null;
-    if (isCurrent(generation)) recoverError(GENERIC_LOAD_ERROR);
+    if (!isCurrent(generation)) return;
+    // A background status event can arrive after this timer. Read native playback first.
+    if (player?.playing) {
+      sawNativePlaying = true;
+      return;
+    }
+    recoverError(GENERIC_LOAD_ERROR);
   }, AMBIENT_LOAD_WATCHDOG_MS);
   watchdogTimer = { generation, timer };
 }
@@ -170,6 +175,7 @@ function destroyPlayer(releaseOwnership = true): void {
     const current = player;
     player = null;
     try {
+      current.clearLockScreenControls();
       current.pause();
     } catch {
       // Player may already be invalid.
@@ -184,8 +190,12 @@ function destroyPlayer(releaseOwnership = true): void {
   sawNativePlaying = false;
 }
 
-function fadeTo(targetPlayer: AudioPlayer, targetVolume: FadeTarget, generation: number, duration = AMBIENT_FADE_MS): Promise<boolean> {
+function fadeTo(targetPlayer: AmbientPlayer, targetVolume: FadeTarget, generation: number, duration = AMBIENT_FADE_MS): Promise<boolean> {
   clearFade();
+  if (AppState.currentState !== 'active') {
+    targetPlayer.volume = typeof targetVolume === 'function' ? targetVolume() : targetVolume;
+    return Promise.resolve(true);
+  }
   const startVolume = targetPlayer.volume;
   const startedAt = Date.now();
 
@@ -248,14 +258,21 @@ async function configureAudioSession(): Promise<boolean> {
   return lease.configure();
 }
 
-function attachStatusListener(target: AudioPlayer, generation: number): void {
+function attachStatusListener(target: AmbientPlayer, generation: number): void {
   if (statusSubscription) {
     statusSubscription.remove();
     statusSubscription = null;
   }
 
-  statusSubscription = target.addListener('playbackStatusUpdate', (status: AudioStatus) => {
+  statusSubscription = target.addListener('playbackStatusUpdate', (status: AmbientPlaybackStatus) => {
     if (!isCurrent(generation) || player !== target) return;
+
+    if (status.trackId && status.trackId !== playerTrackId) {
+      playerTrackId = status.trackId;
+      sawNativePlaying = false;
+      store().patch({ selectedTrackId: status.trackId });
+    }
+    store().patch({ currentTime: Math.max(0, status.currentTime || 0), duration: Math.max(0, status.duration || 0) });
 
     if (status.error) {
       recoverError(GENERIC_LOAD_ERROR);
@@ -270,6 +287,7 @@ function attachStatusListener(target: AudioPlayer, generation: number): void {
     if (status.playing) {
       sawNativePlaying = true;
       clearWatchdog(generation);
+      if (store().status === 'paused') store().patch({ status: 'playing', pauseReason: null });
     }
 
     if (store().status === 'loading' && status.isLoaded) {
@@ -301,15 +319,19 @@ function attachStatusListener(target: AudioPlayer, generation: number): void {
       && status.timeControlStatus === 'paused'
     ) {
       sawNativePlaying = false;
-      pauseAmbientSound('interruption');
+      clearWatchdog();
+      clearFade();
+      target.volume = store().volume;
+      store().patch({ status: 'paused', pauseReason: 'Paused' });
     }
   });
 }
 
-function beginPlayback(target: AudioPlayer, generation: number): void {
+function beginPlayback(target: AmbientPlayer, generation: number): void {
   if (player !== target || shouldAbortStart(generation)) return;
 
   try {
+    target.setActiveForLockScreen(true, { title: getAmbientTrack(store().selectedTrackId).title, artist: 'Unfold' });
     target.play();
     store().patch({ status: 'playing', pauseReason: null, error: null });
     void fadeTo(target, () => store().volume, generation);
@@ -368,7 +390,11 @@ function expireTimer(): void {
   void ending.then(() => signalAmbientTimerFinished());
 }
 
-function onAppStateChange(_next: AppStateStatus): void {
+function onAppStateChange(next: AppStateStatus): void {
+  if (next !== 'active' && player && fadeOperation) {
+    player.volume = store().status === 'playing' ? store().volume : 0;
+    clearFade();
+  }
   if (isDeadlineExpired()) {
     expireTimer();
     return;
@@ -386,22 +412,17 @@ async function startNewPlayback(generation: number): Promise<void> {
 
     const outgoing = player;
     if (outgoing) {
-      await fadeTo(outgoing, 0, generation);
+      if (outgoing.playing) await fadeTo(outgoing, 0, generation);
       if (!isCurrent(generation)) return;
       destroyPlayer(false);
       armWatchdog(generation);
     }
 
     const track = getAmbientTrack(store().selectedTrackId);
-    const next = createAudioPlayer(track.source, {
-      updateInterval: 500,
-      downloadFirst: false,
-      keepAudioSessionActive: true,
-      autoResumeOnInterruption: false,
-    });
+    const next = createAmbientPlayer(track.id, store().shuffle);
     player = next;
     playerTrackId = track.id;
-    next.loop = false;
+    next.setStopDeadline?.(store().deadline);
     next.volume = 0;
     attachStatusListener(next, generation);
 
@@ -432,6 +453,7 @@ async function resumeExisting(generation: number): Promise<void> {
 
     current.volume = 0;
     sawNativePlaying = false;
+    current.setActiveForLockScreen(true, { title: getAmbientTrack(store().selectedTrackId).title, artist: 'Unfold' });
     current.play();
     store().patch({ status: 'playing', pauseReason: null, error: null });
     await fadeTo(current, () => store().volume, generation);
@@ -442,7 +464,7 @@ async function resumeExisting(generation: number): Promise<void> {
   }
 }
 
-async function refreshPlayingSession(target: AudioPlayer, generation: number): Promise<void> {
+async function refreshPlayingSession(target: AmbientPlayer, generation: number): Promise<void> {
   try {
     attachStatusListener(target, generation);
     if (!(await configureAudioSession())) return;
@@ -511,9 +533,10 @@ export function playAmbientSound(trackId?: AmbientTrackId, userInitiated = true)
     store().patch({ selectedTrackId: trackId });
   }
 
-  const current = store();
+  let current = store();
   if (current.deadline != null && Date.now() >= current.deadline) {
     expireTimer();
+    current = store();
   }
 
   const currentPlayer = player;
@@ -550,14 +573,19 @@ function readablePauseReason(reason: string): string {
 
 export function pauseAmbientSound(reason = 'user'): void {
   if (!isAmbientAudioEnabled() && !player) return;
-  startGeneration += 1;
-  releaseSession();
+  const generation = ++startGeneration;
+  if (reason === 'user' && player) attachStatusListener(player, generation);
+  if (reason !== 'user') {
+    releaseSession();
+    player?.clearLockScreenControls();
+  }
   clearWatchdog();
   clearFade();
   sawNativePlaying = false;
   if (player) {
     try {
       player.pause();
+      player.volume = store().volume;
     } catch (error) {
       logger.warn('[AmbientAudio] pause failed', error);
     }
@@ -617,6 +645,7 @@ export function setAmbientShuffle(enabled: boolean): void {
   if (store().shuffle === enabled) return;
   store().patch({ shuffle: enabled });
   shuffleQueue = [];
+  player?.setShuffle?.(enabled);
 }
 
 export function setAmbientTimer(minutes: number): void {
@@ -630,6 +659,7 @@ export function setAmbientTimer(minutes: number): void {
       remainingSeconds: 0,
     });
     clearTicker();
+    player?.setStopDeadline?.(null);
     void cancelAmbientTimerNotification();
     return;
   }
@@ -641,6 +671,35 @@ export function setAmbientTimer(minutes: number): void {
     deadline,
     remainingSeconds: timerMinutes * 60,
   });
+  player?.setStopDeadline?.(deadline);
   ensureTicker();
   void scheduleAmbientTimerNotification(deadline);
+}
+
+export async function seekAmbientSound(seconds: number): Promise<void> {
+  const current = player;
+  if (!current?.isLoaded || !Number.isFinite(seconds)) return;
+  const position = Math.min(store().duration, Math.max(0, seconds));
+  try {
+    await current.seekTo(position);
+    if (player === current) store().patch({ currentTime: position });
+  } catch (error) {
+    logger.warn('[AmbientAudio] seek failed', error);
+  }
+}
+
+export function skipAmbientSound(direction: 'next' | 'previous'): void {
+  if (!player || !canStartPlayback()) return;
+  if (player[direction]) {
+    player[direction]();
+    return;
+  }
+  if (direction === 'previous') {
+    const index = AMBIENT_TRACK_IDS.indexOf(store().selectedTrackId);
+    playAmbientSound(AMBIENT_TRACK_IDS[(index - 1 + AMBIENT_TRACK_IDS.length) % AMBIENT_TRACK_IDS.length]);
+  } else {
+    const { next, queue } = takeNextAmbientTrack(store().selectedTrackId, store().shuffle, shuffleQueue);
+    shuffleQueue = queue;
+    playAmbientSound(next, false);
+  }
 }
