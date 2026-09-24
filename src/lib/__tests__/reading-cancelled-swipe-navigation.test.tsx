@@ -536,6 +536,19 @@ describe('reader swipe cancellation', () => {
     return tree!;
   }
 
+  it('unlocks the next reading when the mounted reader crosses local midnight', async () => {
+    const midnight = new Date(TYPING_AT);
+    midnight.setHours(24, 0, 0, 0);
+    jest.setSystemTime(new Date(midnight.getTime() - 1000));
+    const tree = await renderWithDayFour();
+    act(() => { mockPanGesture.onEnd?.({ translationX: -100 }, true); });
+    expect(readerSnapshot(tree).dayLabel).toBe('Day 3 of 7');
+    await act(async () => { jest.advanceTimersByTime(1500); });
+    act(() => { mockPanGesture.onEnd?.({ translationX: -100 }, true); });
+    expect(readerSnapshot(tree).dayLabel).toBe('Day 4 of 7');
+    act(() => tree.unmount());
+  });
+
   it('keeps the focused Day 3 reflection stable when an active swipe is cancelled', async () => {
     const tree = await renderWithDayFour();
     const draftInput = expandAndFocusReflection(tree);
@@ -585,6 +598,9 @@ describe('reader swipe cancellation', () => {
   });
 
   it('preserves an intentional forward swipe outside reflection editing', async () => {
+    const tomorrow = new Date(TYPING_AT);
+    tomorrow.setHours(24, 1, 0, 0);
+    jest.setSystemTime(tomorrow);
     const tree = await renderWithDayFour();
 
     expect(mockPanGesture.enabledValues.at(-1)).toBe(true);

@@ -49,7 +49,6 @@ import { smartQuotes } from '@/lib/smart-quotes';
 import { titleWithPeriod } from '@/lib/display-title';
 import { stripOuterQuotes } from '@/lib/cn';
 import { Typography } from '@/constants/typography';
-import { PageMark } from '@/components/motion/PageMark';
 import { GenerationPulse } from '@/components/generating/GenerationPulse';
 import { progressFillMotion, shouldAnnounceReadingReady } from '@/lib/meaningful-motion';
 import { useAppForegrounded } from '@/hooks/useAppForegrounded';
@@ -512,27 +511,21 @@ function RevealReadyState({
 }) {
   const { colors } = useTheme();
   const { width, fontScale } = useWindowDimensions();
-  const { entering, reducedMotion } = useAccessibleAnimation();
+  const { entering } = useAccessibleAnimation();
   const textCap = heroCopyCap(ambienceVisible);
   const isLargeTextHero = fontScale >= 1.18;
   const isCompactHero = width < 400 || isLargeTextHero;
   const isVeryCompactHero = width < 370 || fontScale >= 1.32;
-  const scriptureReference = state.dayData.scriptureReference || 'Today’s reading';
   const statusLabel = 'Ready to reveal';
   const displaySeriesTitle = formatHeroSeriesTitle(state.seriesTitle);
-  const revealMessage = 'Your next reading is ready.';
 
   return (
     <Animated.View entering={announceReady ? entering(FadeIn.duration(Duration.normal).easing(Ease.out)) : undefined}>
       <View style={[styles.revealOpenHero, isCompactHero && styles.revealOpenHeroCompact, isVeryCompactHero && styles.revealOpenHeroVeryCompact, relaxHeroMinHeight && styles.heroMinHeightRelaxed]}>
         <View style={[styles.openHeroContent, isCompactHero && styles.openHeroContentCompact, isVeryCompactHero && styles.openHeroContentVeryCompact]}>
           <HeroGround active={ambienceVisible}>
-            <View style={styles.readyPageMark}>
-              <PageMark color={colors.accent} filled animate={announceReady && !reducedMotion} />
-            </View>
-
             <Text
-              style={[styles.heroDayTitle, styles.pageMarkClearance, isCompactHero && styles.heroDayTitleCompact, isVeryCompactHero && styles.heroDayTitleVeryCompact, { color: colors.text, textAlign: 'left' }, textCap]}
+              style={[styles.heroDayTitle, isCompactHero && styles.heroDayTitleCompact, isVeryCompactHero && styles.heroDayTitleVeryCompact, { color: colors.text, textAlign: 'left' }, textCap]}
               numberOfLines={3}
               maxFontSizeMultiplier={DISPLAY_TEXT_MAX_SCALE}
             >
@@ -549,20 +542,6 @@ function RevealReadyState({
             <Text style={[styles.heroDayMeta, { color: colors.textMuted, textAlign: 'left' }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
               {statusLabel} · Day {state.dayNumber} of {state.totalDays}
             </Text>
-
-            <View style={styles.heroQuoteBlock}>
-              <Text style={[styles.heroQuoteMark, { color: colors.accent }]}>“</Text>
-              <Text
-                style={[styles.heroQuoteText, isCompactHero && styles.heroQuoteTextCompact, isVeryCompactHero && styles.heroQuoteTextVeryCompact, { color: colors.text, textAlign: 'left' }, textCap]}
-                numberOfLines={4}
-                maxFontSizeMultiplier={DISPLAY_TEXT_MAX_SCALE}
-              >
-                {revealMessage}
-              </Text>
-              <Text style={[styles.revealOpenScripture, { color: colors.textMuted, textAlign: 'left' }, textCap]} numberOfLines={1} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}>
-                {scriptureReference}
-              </Text>
-            </View>
           </HeroGround>
           <TouchableOpacity
             activeOpacity={0.74}
@@ -980,14 +959,8 @@ function MainCard({ state, ambienceVisible, relaxHeroMinHeight, announceReady = 
         <View style={[styles.openHero, isCompactHero && styles.openHeroCompact, isVeryCompactHero && styles.openHeroVeryCompact, relaxHeroMinHeight && styles.heroMinHeightRelaxed]}>
           <View style={[styles.openHeroContent, isCompactHero && styles.openHeroContentCompact, isVeryCompactHero && styles.openHeroContentVeryCompact, { alignItems: 'flex-start' }]}>
             <HeroGround active={ambienceVisible}>
-            {state.type === 'unread' ? (
-              <View style={styles.readyPageMark}>
-                <PageMark color={colors.accent} filled animate={announceReady && !reducedMotion} />
-              </View>
-            ) : null}
-
             <Text
-              style={[styles.heroDayTitle, state.type === 'unread' && styles.pageMarkClearance, isCompactHero && styles.heroDayTitleCompact, isVeryCompactHero && styles.heroDayTitleVeryCompact, { color: colors.text, textAlign: 'left' }, textCap]}
+              style={[styles.heroDayTitle, isCompactHero && styles.heroDayTitleCompact, isVeryCompactHero && styles.heroDayTitleVeryCompact, { color: colors.text, textAlign: 'left' }, textCap]}
               numberOfLines={3}
               maxFontSizeMultiplier={DISPLAY_TEXT_MAX_SCALE}
             >
@@ -1540,16 +1513,6 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 1.5,
   },
-  readyPageMark: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    zIndex: 1,
-    pointerEvents: 'none',
-  },
-  pageMarkClearance: {
-    paddingRight: 30,
-  },
   progressHidden: {
     display: 'none',
   },
@@ -1682,12 +1645,6 @@ const styles = StyleSheet.create({
   revealOpenHeroVeryCompact: {
     minHeight: 304,
     paddingBottom: Spacing['4'],
-  },
-  revealOpenScripture: {
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 20,
-    marginTop: Spacing['3'],
   },
 
   // Preparing state

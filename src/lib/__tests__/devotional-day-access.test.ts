@@ -170,7 +170,7 @@ describe('devotional day access', () => {
     expect(resolveInitialReadingDayNumber(tomorrowAfterCompletion, 2, now)).toBe(1);
   });
 
-  it('does not lock the next current day when a catch-up completion makes it calendar-eligible today', () => {
+  it('locks the next reading after completion even when the calendar is ahead', () => {
     const catchUpThenToday = devotional({
       currentDay: 7,
       seriesStartDate: '2026-05-04T12:00:00.000Z',
@@ -186,20 +186,15 @@ describe('devotional day access', () => {
     });
 
     expect(getCalendarDayNumber(catchUpThenToday, now)).toBe(7);
-    expect(getLockedTodayDayNumber(catchUpThenToday, now)).toBeNull();
-    expect(getTodayReaderDayNumber(catchUpThenToday, now)).toBe(7);
-    expect(getSelectableDayLimit(catchUpThenToday, now)).toBe(7);
-    expect(isDevotionalDaySelectable(catchUpThenToday, 7, now)).toBe(true);
-    expect(resolveInitialReadingDayNumber(catchUpThenToday, 7, now)).toBe(7);
+    expect(getLockedTodayDayNumber(catchUpThenToday, now)).toBe(6);
+    expect(getTodayReaderDayNumber(catchUpThenToday, now)).toBe(6);
+    expect(getSelectableDayLimit(catchUpThenToday, now)).toBe(6);
+    expect(isDevotionalDaySelectable(catchUpThenToday, 7, now)).toBe(false);
+    expect(resolveInitialReadingDayNumber(catchUpThenToday, 7, now)).toBe(6);
   });
 });
 
-// ── Regression: the missing-anchor fail-closed default ──────────────────────
-// `mapDevotional` (full-sync-pull.ts) and `buildDevotionalSyncMetadataPatch`
-// never carry `seriesStartDate`, so any devotional restored from server sync
-// has no calendar anchor. getCalendarDayNumber then returns null and
-// isCurrentDayAfterCalendarDay fails CLOSED — locking a legitimately behind
-// (catch-up) user out of the day they are entitled to.
+// Completion controls daily pacing with or without a calendar anchor.
 describe('missing seriesStartDate anchor', () => {
   // 3 days before `now` (2026-05-10), built in local time like the rest of this file.
   const threeDaysAgoIso = new Date(2026, 4, 7, 9, 0, 0).toISOString();
@@ -219,22 +214,20 @@ describe('missing seriesStartDate anchor', () => {
   });
 
   it('locks the user to today despite being days behind the calendar', () => {
-    // Series began 2026-05-07; `now` is 2026-05-10, so the calendar says this
-    // user is on day 4 and Day 2 should be freely available.
     expect(getLockedTodayDayNumber(anchorless, now)).toBe(1);
     expect(isDevotionalDaySelectable(anchorless, 2, now)).toBe(false);
     expect(resolveInitialReadingDayNumber(anchorless, 2, now)).toBe(1);
   });
 
-  it('behaves correctly once the anchor is present', () => {
+  it('keeps the same daily pace once the anchor is present', () => {
     const anchored = devotional({
       ...anchorless,
       seriesStartDate: threeDaysAgoIso,
     });
     expect(getCalendarDayNumber(anchored, now)).toBe(4);
-    expect(getLockedTodayDayNumber(anchored, now)).toBeNull();
-    expect(isDevotionalDaySelectable(anchored, 2, now)).toBe(true);
-    expect(resolveInitialReadingDayNumber(anchored, 2, now)).toBe(2);
+    expect(getLockedTodayDayNumber(anchored, now)).toBe(1);
+    expect(isDevotionalDaySelectable(anchored, 2, now)).toBe(false);
+    expect(resolveInitialReadingDayNumber(anchored, 2, now)).toBe(1);
   });
 });
 
@@ -244,6 +237,25 @@ describe('missing seriesStartDate anchor', () => {
 // (a selectable day with a missing title falling back to placeholder copy
 // instead of `Day N`).
 describe('getDayMenuPresentation', () => {
+  it('keeps missing upcoming content distinct from content due after local midnight', () => {
+    const series = devotional({
+      currentDay: 2,
+      seriesStartDate: new Date(2026, 4, 1, 12).toISOString(),
+      days: [day({ dayNumber: 1, isRead: true, readAt: todayIso })],
+    });
+
+    expect(getDayMenuPresentation(series, 2, now)).toEqual({
+      kind: 'coming-soon', title: 'Coming soon',
+    });
+    const tomorrow = new Date(2026, 4, 11, 0, 1);
+    expect(getDayMenuPresentation(series, 2, tomorrow)).toEqual({
+      kind: 'preparing', title: 'Being prepared…',
+    });
+    expect(getDayMenuPresentation(series, 3, tomorrow)).toEqual({
+      kind: 'coming-soon', title: 'Coming soon',
+    });
+  });
+
   it('shows the real title for a selectable day', () => {
     const series = devotional({
       currentDay: 3,
@@ -355,7 +367,7 @@ describe('getDayMenuPresentation', () => {
     const series = devotional({
       currentDay: 2,
       seriesStartDate: new Date(2026, 4, 9, 12, 0, 0).toISOString(),
-      days: [day({ dayNumber: 1, isRead: true, readAt: todayIso })],
+      days: [day({ dayNumber: 1, isRead: true, readAt: yesterdayIso })],
     });
 
     expect(getCalendarDayNumber(series, now)).toBe(2);

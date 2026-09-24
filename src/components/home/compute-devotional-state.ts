@@ -289,12 +289,8 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
     });
   }
 
-  // 5. Today's reading done but series not complete — locked until tomorrow.
-  // If the next current day is calendar-eligible today (for example after
-  // catching up an overdue day), let it continue into reveal/unread states.
-  // The card still owes the reader a reflect action for the day they just
-  // finished, so the completed day rides along with tomorrow's preview.
-  if (hasReadToday && !currentDayData.isRead && dayLabel === 'Tomorrow') {
+  // After completion, preserve reflection and keep the next reading locked until tomorrow.
+  if (hasReadToday && !currentDayData.isRead) {
     return ({
       type: 'tomorrow-locked' as const,
       devotionalId: currentDevotional.id,
