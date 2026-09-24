@@ -7,6 +7,7 @@ import { parsePositiveInteger, resolveRevealTarget, type RevealDevotional } from
 const series: RevealDevotional = {
   id: 'devotional-1725000000000-abc123xyz',
   title: 'Quiet Strength',
+  currentDay: 3,
   totalDays: 7,
   days: [
     { dayNumber: 1, title: 'Day One' },
@@ -15,7 +16,7 @@ const series: RevealDevotional = {
   ],
 };
 
-const other: RevealDevotional = { id: 'other', title: 'Other', totalDays: 3, days: [] };
+const other: RevealDevotional = { id: 'other', title: 'Other', totalDays: 3, currentDay: 1, days: [] };
 
 describe('parsePositiveInteger', () => {
   it.each([
@@ -48,7 +49,7 @@ describe('resolveRevealTarget', () => {
   });
 
   it('accepts a day inside totalDays that is not generated yet (still preparing)', () => {
-    expect(resolveRevealTarget({ devotionalId: series.id, dayNumber: '7' }, [series])).toMatchObject({
+    expect(resolveRevealTarget({ devotionalId: series.id, dayNumber: '7' }, [{ ...series, currentDay: 7 }])).toMatchObject({
       dayNumber: 7,
       dayTitle: null,
     });

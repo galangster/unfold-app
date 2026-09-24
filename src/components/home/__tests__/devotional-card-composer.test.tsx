@@ -276,7 +276,9 @@ describe('DevotionalCard composer integration', () => {
     const state = makeRevealReadyState({ dayLabel: 'Overdue', onReveal });
     const tree = renderInAct(<DevotionalCard state={state} />);
     const copy = textContent(tree.root);
-    expect(copy).toContain('Your next reading is ready.');
+    expect(copy).not.toContain('Your next reading is ready.');
+    expect(copy).not.toContain(state.dayData.scriptureReference);
+    expect(tree.root.findAllByProps({ testID: 'reading-page-mark' })).toHaveLength(0);
     expect(copy).toContain('Reveal Your Devotional');
     expect(copy).not.toMatch(/yesterday|catch up|still waiting/i);
     act(() => { findByLabel(tree, `Reveal ${state.seriesTitle}, day ${state.dayNumber}`)[0].props.onPress(); });
@@ -1234,7 +1236,7 @@ describe('DevotionalCard meaningful motion', () => {
       max: 100,
       now: 43,
     });
-    expect(tree.root.findByType(PageMark).props.animate).toBe(false);
+    expect(tree.root.findAllByType(PageMark)).toHaveLength(0);
   });
 
   it('keeps an earned delta when completion ambience remounts the progress bar', () => {
@@ -1365,7 +1367,7 @@ describe('DevotionalCard meaningful motion', () => {
       tree.update(<DevotionalCard state={makeUnreadState({ progress: 42.9, dayData: makeDayData({ dayNumber: 4, isRead: false }) })} />);
     });
 
-    expect(tree.root.findByType(PageMark).props.animate).toBe(true);
+    expect(tree.root.findAllByType(PageMark)).toHaveLength(0);
     expect(tree.root.findByProps({ testID: 'devotional-progress-bar' }).props.accessibilityValue.now).toBe(43);
   });
 });

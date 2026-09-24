@@ -4,6 +4,11 @@ import {
   selectRenderableDevotionalDay,
 } from './devotional-canonical-days';
 
+export interface DevotionalReadingProgress {
+  currentDay: number;
+  days: readonly { dayNumber: number; isRead?: boolean; readAt?: string }[];
+}
+
 function isSameLocalDate(value: string | undefined, now: Date): boolean {
   if (!value) return false;
   const parsed = new Date(value);
@@ -34,23 +39,16 @@ export function getReadingDayLabel(
   now = new Date(),
 ): 'Overdue' | 'Today' | 'Tomorrow' {
   if (!devotional || !day || day.isRead) return 'Today';
+  const lockedTodayDayNumber = getLockedTodayDayNumber(devotional, now);
+  if (lockedTodayDayNumber != null && day.dayNumber > lockedTodayDayNumber) return 'Tomorrow';
   const calendarDay = getCalendarDayNumber(devotional, now);
   if (calendarDay == null) return 'Today';
   if (day.dayNumber > calendarDay) return 'Tomorrow';
   return day.dayNumber < calendarDay ? 'Overdue' : 'Today';
 }
 
-function isCurrentDayAfterCalendarDay(
-  devotional: Devotional,
-  now = new Date(),
-): boolean {
-  const calendarDayNumber = getCalendarDayNumber(devotional, now);
-  if (calendarDayNumber == null) return true;
-  return devotional.currentDay > calendarDayNumber;
-}
-
 export function getLatestReadDayNumberToday(
-  devotional: Devotional | null | undefined,
+  devotional: Pick<DevotionalReadingProgress, 'days'> | null | undefined,
   now = new Date(),
 ): number | null {
   if (!devotional) return null;
@@ -63,7 +61,7 @@ export function getLatestReadDayNumberToday(
 }
 
 export function getLockedTodayDayNumber(
-  devotional: Devotional | null | undefined,
+  devotional: DevotionalReadingProgress | null | undefined,
   now = new Date(),
 ): number | null {
   if (!devotional) return null;
@@ -74,11 +72,12 @@ export function getLockedTodayDayNumber(
   const currentDay = devotional.days?.find((day) => day.dayNumber === devotional.currentDay);
   const currentDayIsTomorrowCandidate = devotional.currentDay > latestReadToday && !currentDay?.isRead;
 
-  return currentDayIsTomorrowCandidate && isCurrentDayAfterCalendarDay(devotional, now) ? latestReadToday : null;
+  // Completion sets the daily pace even when the series started before the first reading.
+  return currentDayIsTomorrowCandidate ? latestReadToday : null;
 }
 
 export function getTodayReaderDayNumber(
-  devotional: Devotional | null | undefined,
+  devotional: DevotionalReadingProgress | null | undefined,
   now = new Date(),
 ): number {
   if (!devotional) return 1;

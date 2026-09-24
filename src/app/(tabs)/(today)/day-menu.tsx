@@ -1,3 +1,4 @@
+import { useCalendarNow } from '@/hooks/useCalendarNow';
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -40,6 +41,7 @@ const TAP_EMPHASIS_MS = 900;
 
 export function DayMenuScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = {}) {
   const router = useRouter();
+  const calendarNow = useCalendarNow();
   const { colors } = useTheme();
   const reducedMotion = useReducedMotion();
   const adaptiveLayout = useAdaptiveLayout();
@@ -85,7 +87,7 @@ export function DayMenuScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   const activeViewingDay = resolveInitialReadingDayNumber(devotional, currentViewingDay);
 
   const handleSelectDay = (dayNumber: number) => {
-    if (!isDevotionalDaySelectable(devotional, dayNumber)) {
+    if (!isDevotionalDaySelectable(devotional, dayNumber, calendarNow)) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       setTappedLockedDay(dayNumber);
       setTapToken((n) => n + 1);
@@ -144,8 +146,8 @@ export function DayMenuScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
           const day = (devotional.days ?? []).find((d) => d.dayNumber === dayNumber);
           const isActive = dayNumber === activeViewingDay;
           const isDayRead = day?.isRead ?? false;
-          const isLocked = !isDevotionalDaySelectable(devotional, dayNumber);
-          const presentation = getDayMenuPresentation(devotional, dayNumber);
+          const isLocked = !isDevotionalDaySelectable(devotional, dayNumber, calendarNow);
+          const presentation = getDayMenuPresentation(devotional, dayNumber, calendarNow);
 
           return (
             <Animated.View

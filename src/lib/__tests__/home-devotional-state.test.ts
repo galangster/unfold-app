@@ -121,7 +121,7 @@ describe('home devotional state helpers', () => {
     expect(homeDayData?.dayNumber).toBe(6);
   });
 
-  it('keeps the Today hero on the calendar-eligible current day after catching up an overdue day', () => {
+  it('keeps the completed day available after reading behind the calendar', () => {
     const day6ReadToday = day({
       id: 'day-6',
       dayNumber: 6,
@@ -144,8 +144,8 @@ describe('home devotional state helpers', () => {
 
     const homeDayData = getHomeDevotionalDayData(current, today);
 
-    expect(homeDayData).toBe(day7Today);
-    expect(homeDayData?.dayNumber).toBe(7);
+    expect(homeDayData).toBe(day6ReadToday);
+    expect(homeDayData?.dayNumber).toBe(6);
   });
 
   it('prepares a progressive current day only when missing and calendar-eligible', () => {

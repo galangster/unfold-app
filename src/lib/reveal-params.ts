@@ -9,13 +9,15 @@
  * never from the raw params. Pure module; the screen owns the redirect.
  */
 
+import { getTodayReaderDayNumber, type DevotionalReadingProgress } from './devotional-day-access';
+
 export type RouteParam = string | string[] | undefined;
 
-export interface RevealDevotional {
+export interface RevealDevotional extends DevotionalReadingProgress {
   id: string;
   title: string;
   totalDays: number;
-  days: readonly { dayNumber: number; title: string }[];
+  days: readonly { dayNumber: number; title: string; isRead?: boolean; readAt?: string }[];
 }
 
 export interface RevealTarget {
@@ -47,6 +49,7 @@ export function parsePositiveInteger(value: RouteParam): number | null {
 export function resolveRevealTarget(
   params: { devotionalId?: RouteParam; dayNumber?: RouteParam },
   devotionals: readonly RevealDevotional[],
+  now = new Date(),
 ): RevealTarget | null {
   const devotionalId = firstParam(params.devotionalId);
   if (!devotionalId) return null;
@@ -63,6 +66,8 @@ export function resolveRevealTarget(
     : 0;
   const maxDay = Math.max(declaredTotal, days.length);
   if (dayNumber > maxDay) return null;
+
+  if (dayNumber > getTodayReaderDayNumber({ ...devotional, days }, now)) return null;
 
   const day = days.find((candidate) => candidate.dayNumber === dayNumber);
   return {

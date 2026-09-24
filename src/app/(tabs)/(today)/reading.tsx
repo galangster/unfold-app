@@ -1,3 +1,4 @@
+import { useCalendarNow } from '@/hooks/useCalendarNow';
 /** @jsxImportSource react */
 import { emitDayCompletionCueAfterSave } from '@/lib/day-completion-cue';
 import { clearBookOpening } from '@/lib/book-opening';
@@ -261,6 +262,7 @@ export function maybeCompleteAutoTrialOnLastDay(i: {
 }
 
 export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = {}) {
+  const calendarNow = useCalendarNow();
   const router = useRouter();
   const isReadingFocused = useIsFocused();
   const params = useLocalSearchParams<{ bookOpening?: string; dayNumber?: string; devotionalId?: string; highlightId?: string; bookmarkId?: string; readOnly?: string; focus?: string; from?: string; practice?: string; practiceMethod?: string }>();
@@ -450,12 +452,12 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     [currentDevotional],
   );
   const selectableDayLimit = useMemo(
-    () => getSelectableDayLimit(currentDevotional),
-    [currentDevotional],
+    () => getSelectableDayLimit(currentDevotional, calendarNow),
+    [currentDevotional, calendarNow],
   );
   const lockedTodayDayNumber = useMemo(
-    () => getLockedTodayDayNumber(currentDevotional),
-    [currentDevotional],
+    () => getLockedTodayDayNumber(currentDevotional, calendarNow),
+    [currentDevotional, calendarNow],
   );
   const availableDays = selectableDayLimit > 0 ? selectableDayLimit : renderableDays;
   const renderableDay = useMemo(
