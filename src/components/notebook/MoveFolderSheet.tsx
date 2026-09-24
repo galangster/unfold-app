@@ -64,6 +64,7 @@ import { Shadow } from '@/constants/shadows';
 import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
+import { SheetHandle } from '@/components/ui/SheetHandle';
 import type { NoteFolder } from '@/lib/store';
 
 // ---------------------------------------------------------------------------
@@ -284,10 +285,7 @@ export function MoveFolderSheet({
               },
             ]}
           >
-            {/* Handle indicator */}
-            <View style={styles.handleRow}>
-              <View style={[styles.handleBar, { backgroundColor: colors.borderStrong }]} />
-            </View>
+            <SheetHandle />
 
             <View style={styles.content}>
               {/* Header */}
@@ -700,16 +698,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: Radius['2xl'],
     borderTopRightRadius: Radius['2xl'],
     ...Shadow.sheet,
-  },
-  handleRow: {
-    alignItems: 'center',
-    paddingTop: Spacing['3'],
-    paddingBottom: Spacing['2'],
-  },
-  handleBar: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
   },
   content: {
     paddingTop: Spacing['2'],

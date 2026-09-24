@@ -17,6 +17,7 @@ import { useTheme } from '@/lib/theme';
 import { EmberSystem } from '@/components/EmberSystem';
 import type { ExclusionZone } from '@/lib/ember-system';
 import { alpha } from '@/components/ui';
+import { SheetHandle } from '@/components/ui/SheetHandle';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
@@ -769,10 +770,10 @@ export default function PaywallScreen() {
         exclusionZones={PAYWALL_TEXT_EXCLUSION}
       />
 
-      {/* Drag handle — sticky, above scroll content */}
-      <View style={{ position: 'absolute', top: 6, left: 0, right: 0, zIndex: 10, alignItems: 'center', pointerEvents: 'none' }}>
-        <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.borderStrong }} />
-      </View>
+      <SheetHandle
+        pointerEvents="none"
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10 }}
+      />
 
       {/* Close (X) — sticky at the sheet's true top-right corner, OUTSIDE the
           scroll + fade mask so it never scrolls, fades, or sits below the

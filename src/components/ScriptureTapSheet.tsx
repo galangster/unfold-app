@@ -20,6 +20,7 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
+import { SheetHandle } from '@/components/ui/SheetHandle';
 import { useUnfoldStore } from '@/lib/store';
 import { fetchVerse, fetchVerseLocal, type VerseResult } from '@/lib/bible-api';
 import { referenceToRoute } from '@/lib/bible-constants';
@@ -216,10 +217,7 @@ export function ScriptureTapSheet({
           <Animated.View style={[s.sheet, sheetAnimatedStyle, { backgroundColor: colors.background }]}>
           <GestureDetector gesture={panGesture}>
             <View testID="scripture-sheet-swipe-dismiss-region" style={s.dragRegion}>
-              {/* Drag indicator */}
-              <View style={s.handleRow}>
-                <View style={[s.handle, { backgroundColor: colors.borderStrong }]} />
-              </View>
+              <SheetHandle />
 
               {/* Header row: reference + translation + actions + close */}
               <View style={s.header}>
@@ -402,17 +400,6 @@ const s = StyleSheet.create({
   dragRegion: {
     width: '100%',
   },
-  handleRow: {
-    alignItems: 'center',
-    paddingTop: Spacing['3'],
-    paddingBottom: Spacing['2'],
-  },
-  handle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-  },
-
   // ─── Header ─────────────────────────────────────
   header: {
     flexDirection: 'row',

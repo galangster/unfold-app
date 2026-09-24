@@ -57,6 +57,7 @@ import { ACCENT_THEMES } from '@/lib/store';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Button, alpha } from '@/components/ui';
+import { SheetHandle } from '@/components/ui/SheetHandle';
 import { getCreateFolderInputLayout } from '@/lib/create-folder-input-layout';
 
 // ---------------------------------------------------------------------------
@@ -241,9 +242,7 @@ export function CreateFolderSheet({ visible, onClose, onSubmit, parentFolderId, 
             {/* Handle indicator — keep the pan gesture scoped away from TextInput so taps focus reliably. */}
             <View onLayout={handleChromeLayout}>
             <GestureDetector gesture={panGesture}>
-              <View style={styles.handleRow}>
-                <View style={[styles.handleBar, { backgroundColor: colors.borderStrong }]} />
-              </View>
+              <SheetHandle />
             </GestureDetector>
             </View>
 
@@ -372,16 +371,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: Radius['2xl'],
     borderTopRightRadius: Radius['2xl'],
     ...Shadow.sheet,
-  },
-  handleRow: {
-    alignItems: 'center',
-    paddingTop: Spacing['3'],
-    paddingBottom: Spacing['2'],
-  },
-  handleBar: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
   },
   content: {
     paddingHorizontal: Spacing['7'],

@@ -43,6 +43,7 @@ import { AmbientText } from './AmbientText';
 import { FontFamily } from '@/constants/fonts';
 import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
+import { SheetHandle } from '@/components/ui/SheetHandle';
 import {
   AMBIENT_TRACKS,
   formatTrackDuration,
@@ -623,32 +624,18 @@ export function AmbientSoundSheet({
           overflow: 'hidden',
         }}
       >
-        <View
-          {...pan.panHandlers}
-          collapsable={false}
-          style={{ height: 44, alignItems: 'center', justifyContent: 'center' }}
-          ref={title}
-          accessible
-          accessibilityRole="button"
-          accessibilityLabel={timerPanel ? 'Close timer' : 'Close background sound'}
-          onAccessibilityTap={close}
-        >
-          <View
-            style={{
-              width: 36,
-              height: 4,
-              borderRadius: 2,
-              backgroundColor: colors.borderStrong,
-            }}
+        <View style={styles.sheetChrome}>
+          <SheetHandle
+            {...pan.panHandlers}
+            collapsable={false}
+            ref={title}
+            accessible
+            accessibilityRole="button"
+            accessibilityLabel={timerPanel ? 'Close timer' : 'Close background sound'}
+            onAccessibilityTap={close}
+            style={styles.sheetHandleHit}
           />
-        </View>
-        <ScrollView
-          contentContainerStyle={[
-            styles.sheetContent,
-            { paddingBottom: Math.max(insets.bottom, 24) },
-          ]}
-        >
-          <View style={styles.sheetHeader}>
+          <View pointerEvents="box-none" style={styles.sheetHeader}>
             {timerPanel ? (
               <Pressable
                 onPress={() => setTimerPanel(false)}
@@ -659,7 +646,7 @@ export function AmbientSoundSheet({
                 <CaretLeftIcon size={22} color={colors.text} />
               </Pressable>
             ) : null}
-            <View style={styles.flex} />
+            <View pointerEvents="none" style={styles.flex} />
             <Pressable
               onPress={close}
               accessibilityRole="button"
@@ -670,6 +657,13 @@ export function AmbientSoundSheet({
               </AmbientText>
             </Pressable>
           </View>
+        </View>
+        <ScrollView
+          contentContainerStyle={[
+            styles.sheetContent,
+            { paddingBottom: Math.max(insets.bottom, 24) },
+          ]}
+        >
           <SheetEndedNote />
           {timerPanel ? (
             <SheetTimerPanel
@@ -731,8 +725,19 @@ const styles = StyleSheet.create({
   },
   modalRoot: { flex: 1 },
   backdrop: { backgroundColor: 'rgba(0,0,0,0.45)' },
+  sheetChrome: { position: 'relative' },
+  sheetHandleHit: { minHeight: 44 },
   sheetContent: { paddingHorizontal: 23 },
-  sheetHeader: { flexDirection: 'row', alignItems: 'center', minHeight: 46 },
+  sheetHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 44,
+    paddingHorizontal: 23,
+  },
   sheetTitle: { fontFamily: FontFamily.uiMedium, fontSize: 17 },
   actionText: { fontFamily: FontFamily.ui, fontSize: 13 },
   tabular: { fontVariant: ['tabular-nums'] },

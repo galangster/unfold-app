@@ -73,6 +73,7 @@ import { Shadow } from '@/constants/shadows';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
+import { SheetHandle } from '@/components/ui/SheetHandle';
 import { fetchVerseLocal, fetchVerse, type VerseResult } from '@/lib/bible-api';
 import { parseScriptureReferences } from '@/lib/scripture-parser';
 import { referenceToRoute } from '@/lib/bible-constants';
@@ -351,9 +352,7 @@ export function ScriptureSearchSheet({
             >
               <View onLayout={handleChromeLayout}>
               <GestureDetector gesture={panGesture}>
-                <View style={sheetStyles.handleRow}>
-                  <View style={[sheetStyles.handleBar, { backgroundColor: colors.borderStrong }]} />
-                </View>
+                <SheetHandle />
               </GestureDetector>
 
                 <View style={[sheetStyles.header, sheetStyles.headerPad]}>
@@ -542,16 +541,6 @@ const sheetStyles = StyleSheet.create({
     borderTopLeftRadius: Radius['2xl'],
     borderTopRightRadius: Radius['2xl'],
     ...Shadow.sheet,
-  },
-  handleRow: {
-    alignItems: 'center',
-    paddingTop: Spacing['3'],
-    paddingBottom: Spacing['2'],
-  },
-  handleBar: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
   },
   content: {
     paddingHorizontal: Spacing['6'],

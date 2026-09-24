@@ -16,6 +16,7 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { alpha } from '@/components/ui';
+import { SheetHandle } from '@/components/ui/SheetHandle';
 import { AnalyticsEvents, logEvent } from '@/lib/analytics';
 import { useTheme } from '@/lib/theme';
 import { useLatestRequest } from '@/hooks/useLatestRequest';
@@ -209,9 +210,7 @@ export function ScriptureExplainSheet({
             },
           ]}
         >
-          <View style={styles.handleRow}>
-            <View style={[styles.handle, { backgroundColor: colors.borderStrong }]} />
-          </View>
+          <SheetHandle />
 
           <View style={styles.header}>
             <View style={styles.headerTextGroup}>
@@ -343,16 +342,6 @@ const styles = StyleSheet.create({
     borderTopRightRadius: Radius['2xl'],
     borderWidth: StyleSheet.hairlineWidth,
     maxHeight: '84%',
-  },
-  handleRow: {
-    alignItems: 'center',
-    paddingTop: Spacing['3'],
-    paddingBottom: Spacing['2'],
-  },
-  handle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
   },
   header: {
     flexDirection: 'row',

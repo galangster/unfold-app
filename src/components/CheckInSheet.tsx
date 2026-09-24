@@ -48,6 +48,7 @@ import { adaptiveFrameStyle, adaptiveSafeGutterStyle, resolveAdaptiveLayout } fr
 import { CHECKIN_CELEBRATION_MESSAGES } from '@/constants/check-in-messages';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
 import { alpha } from '@/components/ui';
+import { SheetHandle } from '@/components/ui/SheetHandle';
 
 // iOS may update glyph sizes before invalidating native text measurements.
 // Remount text leaves on scale changes without resetting answers or inputs.
@@ -808,15 +809,7 @@ export function CheckInSheet({
               },
             ]}
           >
-            {/* Handle bar */}
-            <View style={styles.handleBarContainer}>
-              <View
-                style={[
-                  styles.handleBar,
-                  { backgroundColor: colors.borderStrong },
-                ]}
-              />
-            </View>
+            <SheetHandle />
 
             {/* Header row: back + step dots + close button */}
             <View style={styles.headerRow}>
@@ -907,17 +900,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0,
     overflow: 'hidden',
   },
-  handleBarContainer: {
-    alignItems: 'center',
-    paddingTop: Spacing['3'],
-    paddingBottom: Spacing['2'],
-  },
-  handleBar: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-  },
-
   /* Header */
   headerRow: {
     flexDirection: 'row',
