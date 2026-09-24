@@ -43,6 +43,7 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
+import { SheetHandle } from '@/components/ui/SheetHandle';
 import type { BibleHighlight } from '@/lib/store';
 import { formatScriptureReference } from '@/lib/bible-constants';
 import { accentFillInk } from '@/lib/bible-hub-category-palette';
@@ -210,9 +211,7 @@ export function BibleNoteSheet({ highlight, onClose, onSave, onDelete }: BibleNo
               ]}
             >
             <GestureDetector gesture={panGesture}>
-              <View style={styles.handleRow}>
-                <View style={[styles.handle, { backgroundColor: colors.borderStrong }]} />
-              </View>
+              <SheetHandle />
             </GestureDetector>
 
             <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive">
@@ -314,16 +313,6 @@ const styles = StyleSheet.create({
     borderTopRightRadius: Radius['2xl'],
     paddingBottom: 34,
     maxHeight: '85%',
-  },
-  handleRow: {
-    alignItems: 'center',
-    paddingTop: Spacing['3'],
-    paddingBottom: Spacing['2'],
-  },
-  handle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
   },
   content: {
     paddingHorizontal: Spacing['6'],

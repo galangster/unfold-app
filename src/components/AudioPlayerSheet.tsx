@@ -39,6 +39,7 @@ import { Spacing } from '@/constants/spacing';
 import { Duration, Spring } from '@/constants/animations';
 import { Shadow } from '@/constants/shadows';
 import { alpha } from '@/components/ui';
+import { SHEET_HANDLE, sheetHandleIndicatorStyle } from '@/components/ui/SheetHandle';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -243,11 +244,13 @@ export function AudioPlayerSheet() {
       enablePanDownToClose
       enableOverDrag={false}
       onChange={handleSheetChange}
+      handleStyle={{
+        paddingTop: SHEET_HANDLE.paddingTop,
+        paddingBottom: SHEET_HANDLE.paddingBottom,
+      }}
       handleIndicatorStyle={{
         backgroundColor: colors.borderStrong,
-        width: 36,
-        height: 4,
-        borderRadius: 2,
+        ...sheetHandleIndicatorStyle,
       }}
       backgroundStyle={[
         styles.sheetBackground,

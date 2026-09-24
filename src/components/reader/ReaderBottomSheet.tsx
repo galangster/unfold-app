@@ -21,6 +21,7 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
+import { SheetHandle } from '@/components/ui/SheetHandle';
 import { adaptiveSheetPlacement, resolveAdaptiveLayout } from '@/lib/adaptive-layout';
 
 export interface ReaderBottomSheetProps {
@@ -177,18 +178,12 @@ export function ReaderBottomSheet({
           ]}
         >
           <GestureDetector gesture={panGesture}>
-            <View
+            <SheetHandle
+              testID="reader-bottom-sheet-grabber"
               style={styles.dragRegion}
               accessibilityRole="button"
               accessibilityLabel="Swipe down to close reader preferences"
-            >
-              <View style={styles.grabberRow}>
-                <View
-                  testID="reader-bottom-sheet-grabber"
-                  style={[styles.grabber, { backgroundColor: colors.borderStrong }]}
-                />
-              </View>
-            </View>
+            />
           </GestureDetector>
 
           <ScrollView
@@ -232,17 +227,6 @@ const styles = StyleSheet.create({
   },
   dragRegion: {
     paddingHorizontal: Spacing['5'],
-    paddingTop: Spacing['3'],
-    paddingBottom: Spacing['2'],
-  },
-  grabberRow: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  grabber: {
-    width: 36,
-    height: 4,
-    borderRadius: Radius.full,
   },
   content: {
     paddingHorizontal: Spacing['5'],

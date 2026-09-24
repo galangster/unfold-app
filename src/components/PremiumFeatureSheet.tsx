@@ -42,6 +42,7 @@ import {
 } from '@/components/icons';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
+import { SheetHandle } from '@/components/ui/SheetHandle';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
@@ -282,11 +283,8 @@ export function PremiumFeatureSheet({ visible, onClose, feature }: PremiumFeatur
             accessibilityViewIsModal
             onAccessibilityEscape={dismissSheet}
           >
-            {/* Handle indicator */}
             <GestureDetector gesture={panGesture}>
-              <View style={pfStyles.handleRow}>
-                <View style={[pfStyles.handle, { backgroundColor: colors.borderStrong }]} />
-              </View>
+              <SheetHandle />
             </GestureDetector>
 
             <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={pfStyles.content}>
@@ -362,16 +360,6 @@ const pfStyles = StyleSheet.create({
   sheet: {
     borderTopLeftRadius: Radius['2xl'],
     borderTopRightRadius: Radius['2xl'],
-  },
-  handleRow: {
-    alignItems: 'center',
-    paddingTop: Spacing['3'],
-    paddingBottom: Spacing['2'],
-  },
-  handle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
   },
   content: {
     paddingHorizontal: Spacing['7'],

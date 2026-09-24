@@ -41,6 +41,7 @@ import { Shadow } from '@/constants/shadows';
 import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
 import { Radius } from '@/constants/radius';
+import { SheetHandle } from './SheetHandle';
 
 // ---------------------------------------------------------------------------
 // Animation config
@@ -201,11 +202,8 @@ export function Sheet({
             accessibilityViewIsModal
             onAccessibilityEscape={dismissSheet}
           >
-            {/* Handle bar */}
             <GestureDetector gesture={panGesture}>
-              <View style={styles.handleRow}>
-                <View style={[styles.handleBar, { backgroundColor: colors.borderStrong }]} />
-              </View>
+              <SheetHandle />
             </GestureDetector>
 
             {/* Content — scrolls when large text exceeds the sheet */}
@@ -244,16 +242,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: Radius['2xl'],
     borderTopRightRadius: Radius['2xl'],
     ...Shadow.sheet,
-  },
-  handleRow: {
-    alignItems: 'center',
-    paddingTop: Spacing['3'],
-    paddingBottom: Spacing['2'],
-  },
-  handleBar: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
   },
   content: {
     paddingTop: Spacing['2'],
