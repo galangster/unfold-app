@@ -42,6 +42,7 @@ jest.mock('../personal-data-sync-records', () => {
 
 // eslint-disable-next-line import/first
 import { useUnfoldStore, type Devotional, type DevotionalDay } from '../store';
+import { resolveRitualCompletion } from '../ritual-session';
 
 const MONDAY_NIGHT = new Date(2026, 8, 14, 23, 50, 0);
 const TUESDAY_MORNING = new Date(2026, 8, 15, 0, 20, 0);
@@ -128,6 +129,31 @@ describe('store ritual session stamps', () => {
     const reopened = useUnfoldStore.getState().ritualSessions.reading;
     expect(reopened).not.toEqual(abandoned);
     expect(reopened?.startedAt).toBe(THURSDAY_MORNING.toISOString());
+  });
+
+  it('credits tomorrow when a new series was previewed the evening before', () => {
+    const previewedAt = new Date(2026, 8, 14, 20, 0, 0);
+    const readAt = new Date(2026, 8, 15, 8, 0, 0);
+    jest.useFakeTimers().setSystemTime(previewedAt);
+    useUnfoldStore.setState({ streakCurrent: 7, streakLongest: 7, streakLastReadDate: previewedAt.toISOString() });
+    useUnfoldStore.getState().addDevotional(series({ id: 'next-series', currentDay: 1, days: [day({ dayNumber: 1 })] }));
+    const identity = { kind: 'reading' as const, devotionalId: 'next-series', dayNumber: 1 };
+    useUnfoldStore.getState().beginRitualSession(identity);
+    expect(useUnfoldStore.getState().streakCurrent).toBe(7);
+
+    jest.setSystemTime(readAt);
+    useUnfoldStore.getState().beginRitualSession(identity);
+    const clock = resolveRitualCompletion({
+      session: useUnfoldStore.getState().ritualSessions.reading,
+      identity,
+      completedAt: readAt,
+    });
+    useUnfoldStore.getState().markDayAsRead('next-series', 1, clock.iso);
+    useUnfoldStore.getState().recordStreakRead(clock.at);
+
+    expect(useUnfoldStore.getState().streakCurrent).toBe(8);
+    expect(useUnfoldStore.getState().streakLastReadDate).toBe(readAt.toISOString());
+    expect(useUnfoldStore.getState().devotionals[0].days[0].readAt).toBe(readAt.toISOString());
   });
 
   it('stamps readAt, streak, and check-in from the start calendar day', () => {

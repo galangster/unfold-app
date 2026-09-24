@@ -793,7 +793,7 @@ function JourneyCompleteStateFallback({
         </Text>
 
         <Text style={[styles.journeyCompleteSubtitle, { color: colors.textMuted }, textCap]}>
-          {seriesTitle} is complete. Rest with what God surfaced here, then begin another study when you’re ready.
+          {seriesTitle} is complete. Your streak continues across series. Prepare your next study now or tomorrow, then return for tomorrow’s reading.
         </Text>
       </HeroGround>
 
