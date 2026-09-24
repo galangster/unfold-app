@@ -3,8 +3,8 @@
  * stay the start calendar day. Completing after 00:00 used to stamp `readAt`
  * / check-in dates as "today", which consumed the next local day.
  *
- * Reuse only covers that night: the same local day, or the next one. An
- * abandoned session days later starts fresh. Travel is unchanged: if the
+ * Reuse covers the same local day or up to four hours across midnight.
+ * A preview left overnight starts fresh in the morning. Travel is unchanged: if the
  * device IANA zone changes mid-session, completion keeps the finish instant.
  */
 
@@ -19,6 +19,8 @@ export interface RitualSession {
 }
 
 export type RitualSessions = Partial<Record<RitualSessionKind, RitualSession>>;
+
+const MIDNIGHT_CARRYOVER_MS = 4 * 60 * 60 * 1000;
 
 export type RitualSessionIdentity = Pick<RitualSession, 'kind' | 'devotionalId' | 'dayNumber'>;
 
@@ -45,7 +47,8 @@ function localCalendarDayDelta(from: Date, to: Date): number {
 function isWithinMidnightCrossingWindow(startedAt: Date, now: Date): boolean {
   if (!Number.isFinite(startedAt.getTime()) || !Number.isFinite(now.getTime())) return false;
   const delta = localCalendarDayDelta(startedAt, now);
-  return delta === 0 || delta === 1;
+  const elapsed = now.getTime() - startedAt.getTime();
+  return elapsed >= 0 && (delta === 0 || (delta === 1 && elapsed <= MIDNIGHT_CARRYOVER_MS));
 }
 
 export function beginRitualSessionRecord(
@@ -81,7 +84,10 @@ export function resolveRitualCompletionInstant(input: {
   if (startedTimeZone && completedTimeZone && startedTimeZone !== completedTimeZone) {
     return completedAt;
   }
-  if (localCalendarDayDelta(startedAt, completedAt) === 1) {
+  if (
+    localCalendarDayDelta(startedAt, completedAt) === 1
+    && isWithinMidnightCrossingWindow(startedAt, completedAt)
+  ) {
     return startedAt;
   }
   return completedAt;

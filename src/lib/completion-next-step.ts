@@ -11,7 +11,7 @@ export function getCompletionNextStep(
   if (type === 'series') {
     return {
       title: 'Where would you like to go next?',
-      detail: 'On Today, continue with a recommended study or choose a new direction. Your completed series stays in your library.',
+      detail: 'Your streak continues across series. On Today, choose a recommended study or a new direction. Prepare it now or tomorrow, then read tomorrow. Your completed series stays in your library.',
     };
   }
 

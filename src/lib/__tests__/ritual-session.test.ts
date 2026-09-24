@@ -59,6 +59,30 @@ describe('ritual session calendar day', () => {
     expect(localCalendarYmd(at)).toBe('2026-09-15');
   });
 
+  it('credits the finish day when a preview stays open until the next morning', () => {
+    const preview = new Date(2026, 8, 14, 20, 0, 0);
+    const finish = new Date(2026, 8, 15, 8, 0, 0);
+    const identity = { kind: 'reading' as const, devotionalId: 'next-series', dayNumber: 1 };
+    const session = beginRitualSessionRecord(null, { ...identity, now: preview });
+    const clock = resolveRitualCompletion({ session, identity, completedAt: finish });
+    expect(clock.iso).toBe(finish.toISOString());
+    expect(resolveRitualCompletionInstant({
+      startedAt: preview,
+      completedAt: finish,
+      startedTimeZone: null,
+      completedTimeZone: null,
+    })).toBe(finish);
+  });
+
+  it('expires midnight carryover after four hours', () => {
+    const start = new Date(2026, 8, 14, 23, 0, 0);
+    const atLimit = new Date(start.getTime() + 4 * 60 * 60 * 1000);
+    const afterLimit = new Date(atLimit.getTime() + 1);
+    const times = { startedAt: start, startedTimeZone: null, completedTimeZone: null };
+    expect(resolveRitualCompletionInstant({ ...times, completedAt: atLimit })).toBe(start);
+    expect(resolveRitualCompletionInstant({ ...times, completedAt: afterLimit })).toBe(afterLimit);
+  });
+
   it('does not treat a DST stay in the same IANA zone as travel', () => {
     const beforeSpring = new Date(2026, 2, 7, 23, 50, 0);
     const afterSpring = new Date(2026, 2, 8, 0, 20, 0);
