@@ -134,3 +134,6 @@ export { WarningCircleIcon } from 'phosphor-react-native/src/icons/WarningCircle
 export { WifiHighIcon } from 'phosphor-react-native/src/icons/WifiHigh';
 export { XIcon } from 'phosphor-react-native/src/icons/X';
 export { XCircleIcon } from 'phosphor-react-native/src/icons/XCircle';
+
+export { SkipBackIcon } from 'phosphor-react-native/src/icons/SkipBack';
+export { SkipForwardIcon } from 'phosphor-react-native/src/icons/SkipForward';

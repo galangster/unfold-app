@@ -67,6 +67,7 @@ import {
   invalidateNarrationAudioSession,
   useGlobalAudioPlayer,
 } from '@/hooks/useGlobalAudioPlayer';
+import { AmbientPlaybackControls } from './AmbientPlaybackControls';
 import { AmbientMusicEntry } from './AmbientMusicEntry';
 
 export { AmbientMusicEntry };
@@ -489,6 +490,7 @@ export function AmbientSoundSheet({
   const [selectedDuration, setSelectedDuration] = useState(15);
   const timerMinutes = useAmbientAudioState((state) => state.timerMinutes);
   const choose = useAmbientSoundActions();
+  const playbackTrackId = useAmbientAudioState((state) => state.selectedTrackId);
 
   useEffect(() => {
     if (visible) {
@@ -673,6 +675,7 @@ export function AmbientSoundSheet({
             />
           ) : (
             <>
+              <AmbientPlaybackControls key={playbackTrackId} onToggle={() => choose()} />
               <SheetSoundsList choose={choose} />
               <SheetShuffleRow />
               <AmbientVolumeControl />

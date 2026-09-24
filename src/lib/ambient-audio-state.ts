@@ -25,6 +25,8 @@ export type AmbientAudioState = AmbientAudioPersisted & {
   timerStatus: AmbientTimerStatus;
   deadline: number | null;
   remainingSeconds: number;
+  currentTime: number;
+  duration: number;
   patch: (update: Partial<Omit<AmbientAudioState, 'patch'>>) => void;
 };
 
@@ -36,6 +38,8 @@ export const AMBIENT_AUDIO_RUNTIME_DEFAULTS = {
   timerStatus: 'idle' as const,
   deadline: null,
   remainingSeconds: 0,
+  currentTime: 0,
+  duration: 0,
 };
 
 export const AMBIENT_AUDIO_INITIAL_STATE: AmbientAudioPersisted & typeof AMBIENT_AUDIO_RUNTIME_DEFAULTS = {

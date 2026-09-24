@@ -13,9 +13,11 @@ import {
   setAmbientShuffle,
   setAmbientTimer,
   setAmbientVolume,
+  seekAmbientSound,
   stopAmbientSound,
   toggleAmbientSound,
 } from '../ambient-audio';
+import { acquireAudioSession } from '../audio-session-registry';
 import { AMBIENT_DEFAULT_VOLUME, useAmbientAudioState } from '../ambient-audio-state';
 
 jest.mock('../mmkv-storage', () => {
@@ -68,6 +70,16 @@ jest.mock('../ambient-audio-catalog', () => {
   };
 });
 
+jest.mock('../ambient-player', () => ({
+  createAmbientPlayer: (id: string) => {
+    const player = jest.requireMock('expo-audio').createAudioPlayer(jest.requireMock('../ambient-audio-catalog').getAmbientTrack(id).source, {
+      updateInterval: 500, downloadFirst: false, keepAudioSessionActive: true, autoResumeOnInterruption: false,
+    });
+    player.loop = false;
+    return player;
+  },
+}));
+
 jest.mock('expo-audio', () => ({
   createAudioPlayer: jest.fn(),
   setAudioModeAsync: jest.fn(),
@@ -113,6 +125,9 @@ type MockPlayer = {
   play: jest.Mock;
   pause: jest.Mock;
   remove: jest.Mock;
+  clearLockScreenControls: jest.Mock;
+  setActiveForLockScreen: jest.Mock;
+  seekTo: jest.Mock;
   addListener: jest.Mock;
   emit: (status?: Partial<AudioStatus>) => void;
 };
@@ -132,11 +147,15 @@ function makePlayer(source: number): MockPlayer {
       this.playing = false;
     }),
     remove: jest.fn(),
+    clearLockScreenControls: jest.fn(),
+    setActiveForLockScreen: jest.fn(),
+    seekTo: jest.fn().mockResolvedValue(undefined),
     addListener: jest.fn((_event: string, cb: (status: AudioStatus) => void) => {
       listener = cb;
       return { remove: jest.fn(() => { listener = null; }) };
     }),
     emit(status: Partial<AudioStatus> = {}) {
+      if (status.playing !== undefined) player.playing = status.playing;
       listener?.({
         id: 'ambient',
         currentTime: 0,
@@ -370,7 +389,7 @@ describe('ambient audio controller', () => {
     expect(mockSignalAmbientTimerFinished).toHaveBeenCalledTimes(1);
   });
 
-  it('records a native interruption and does not auto-resume', async () => {
+  it('reflects a native pause without automatically resuming', async () => {
     playAmbientSound('river-thread');
     await flush();
     const player = lastPlayer();
@@ -380,7 +399,7 @@ describe('ambient audio controller', () => {
     player.playing = false;
     player.emit({ isLoaded: true, playing: false, timeControlStatus: 'paused' });
     expect(useAmbientAudioState.getState().status).toBe('paused');
-    expect(useAmbientAudioState.getState().pauseReason).toBe('Paused by another audio source');
+    expect(useAmbientAudioState.getState().pauseReason).toBe('Paused');
     expect(player.play).toHaveBeenCalledTimes(1);
   });
 
@@ -494,6 +513,91 @@ describe('ambient audio controller', () => {
     await flush();
     expect(useAmbientAudioState.getState().status).toBe('playing');
     expect(mockCreateAudioPlayer).toHaveBeenCalledTimes(1);
+  });
+
+  it('updates progress and allows seeking while paused without restarting music', async () => {
+    playAmbientSound('river-thread'); await flush();
+    const player = lastPlayer(); player.isLoaded = true;
+    player.emit({ isLoaded: true, playing: false });
+    player.emit({ isLoaded: true, playing: true, currentTime: 18, duration: 60 });
+    pauseAmbientSound();
+    await seekAmbientSound(120);
+    expect(player.seekTo).toHaveBeenCalledWith(60);
+    expect(player.play).toHaveBeenCalledTimes(1);
+    expect(useAmbientAudioState.getState()).toMatchObject({ status: 'paused', currentTime: 60, duration: 60 });
+    player.emit({ isLoaded: true, playing: true, timeControlStatus: 'playing' });
+    expect(useAmbientAudioState.getState().status).toBe('playing');
+  });
+
+  it('removes remote controls after an interruption and ignores stale native play updates', async () => {
+    playAmbientSound('river-thread'); await flush();
+    const player = lastPlayer(); player.isLoaded = true;
+    player.emit({ isLoaded: true, playing: false });
+    player.emit({ isLoaded: true, playing: true });
+    interruptAmbientSound();
+    player.emit({ isLoaded: true, playing: true });
+    expect(player.clearLockScreenControls).toHaveBeenCalled();
+    expect(useAmbientAudioState.getState()).toMatchObject({ status: 'paused', pauseReason: 'Paused by another audio source' });
+  });
+
+  it('does not time out native playback when its background status event is delayed', async () => {
+    playAmbientSound('river-thread'); await flush();
+    const player = lastPlayer(); player.isLoaded = true;
+    player.emit({ isLoaded: true, playing: false });
+    // The native playing property changes before the queued JS status callback.
+    player.playing = true;
+    await jest.advanceTimersByTimeAsync(AMBIENT_LOAD_WATCHDOG_MS);
+    expect(useAmbientAudioState.getState().status).toBe('playing');
+    expect(player.remove).not.toHaveBeenCalled();
+  });
+
+  it('finishes the volume fade before JavaScript suspends in the background', async () => {
+    initializeAmbientAudio();
+    playAmbientSound('river-thread'); await flush();
+    const player = lastPlayer(); player.isLoaded = true;
+    player.emit({ isLoaded: true, playing: false });
+    expect(player.volume).toBe(0);
+    emitAppState('background');
+    expect(player.volume).toBe(AMBIENT_DEFAULT_VOLUME);
+  });
+
+  it('revokes remote playback when recording takes ownership after a user pause', async () => {
+    playAmbientSound('river-thread'); await flush();
+    const player = lastPlayer(); player.isLoaded = true;
+    player.emit({ isLoaded: true, playing: false });
+    player.emit({ isLoaded: true, playing: true });
+    pauseAmbientSound();
+    expect(player.clearLockScreenControls).not.toHaveBeenCalled();
+    const recording = acquireAudioSession({ owner: 'voice-recording' });
+    expect(player.clearLockScreenControls).toHaveBeenCalledTimes(1);
+    player.emit({ isLoaded: true, playing: true });
+    expect(useAmbientAudioState.getState().status).toBe('paused');
+    recording?.release();
+  });
+
+  it('canceling a pending load cannot later start music', async () => {
+    let resolveMode!: () => void;
+    mockSetAudioModeAsync.mockImplementation(() => new Promise<void>((resolve) => { resolveMode = resolve; }));
+    playAmbientSound('river-thread'); await flush();
+    pauseAmbientSound();
+    resolveMode(); await flush();
+    expect(mockCreateAudioPlayer).not.toHaveBeenCalled();
+    expect(useAmbientAudioState.getState().status).toBe('paused');
+  });
+
+  it('can advance after a track ends without waiting for JavaScript fade timers', async () => {
+    playAmbientSound('river-thread');
+    await flush();
+    const first = lastPlayer();
+    first.isLoaded = true;
+    first.emit({ isLoaded: true, playing: false });
+    first.emit({ isLoaded: true, playing: true });
+    await jest.advanceTimersByTimeAsync(AMBIENT_FADE_MS);
+    emitAppState('background');
+    first.emit({ isLoaded: true, playing: false, didJustFinish: true });
+    // Deliver promises, but no JS timers: the screen is locked at the track boundary.
+    for (let i = 0; i < 10; i += 1) await Promise.resolve();
+    expect(mockCreateAudioPlayer).toHaveBeenCalledTimes(2);
   });
 
   it('advances to the next piece when a track finishes', async () => {
