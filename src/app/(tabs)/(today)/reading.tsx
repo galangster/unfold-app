@@ -3,7 +3,7 @@ import { useCalendarNow } from '@/hooks/useCalendarNow';
 import { emitDayCompletionCueAfterSave } from '@/lib/day-completion-cue';
 import { clearBookOpening } from '@/lib/book-opening';
 import { markBookReaderReadyWithSnapshot } from '@/lib/book-opening-capture';
-import { getDailyGenerationNotice } from '@/lib/daily-generation-messages';
+import { getDailyGenerationNotice, getPausedSeriesDayNotice } from '@/lib/daily-generation-messages';
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useAutoHide } from '@/hooks/useAutoHide';
 import { View, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet, TouchableOpacity, Keyboard, ScrollView, UIManager, Modal, type LayoutChangeEvent } from 'react-native';
@@ -34,7 +34,7 @@ import Animated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import NetInfo from '@react-native-community/netinfo';
 import * as Haptics from 'expo-haptics';
-import { BookmarkSimpleIcon, ArrowsClockwiseIcon, CaretDownIcon, BookOpenIcon, CaretLeftIcon, PlayIcon, CheckIcon, UploadSimpleIcon, TextAaIcon } from '@/components/icons';
+import { BookmarkSimpleIcon, ArrowsClockwiseIcon, CaretDownIcon, BookOpenIcon, CaretLeftIcon, HouseIcon, PlayIcon, CheckIcon, UploadSimpleIcon, TextAaIcon } from '@/components/icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { FontFamily, FontSize } from '@/constants/fonts';
@@ -51,6 +51,12 @@ import { refreshDailyReminder } from '@/lib/notifications';
 import { continueGeneratingDays, isFullGenerationActive } from '@/lib/devotional-service';
 import { syncDevotionalDayRead } from '@/lib/devotional-read-sync';
 import { commitDevotionalPullCursor, pullDevotionalContent } from '@/lib/devotional-sync-pull';
+import {
+  extendSyncCheckCooldown,
+  syncCheckCooldown,
+  SyncPullRateLimitedError,
+  type SyncCheckCooldown,
+} from '@/lib/sync-pull-backoff';
 import { applyPulledDevotionalContent } from '@/lib/devotional-pulled-content';
 import {
   captureSyncSession,
@@ -261,6 +267,8 @@ export function maybeCompleteAutoTrialOnLastDay(i: {
   });
 }
 
+type SyncCheckOutcome = 'found' | 'missing' | 'failed' | 'rate-limited' | 'skipped';
+
 export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = {}) {
   const calendarNow = useCalendarNow();
   const router = useRouter();
@@ -374,6 +382,9 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   const [isRetrying, setIsRetrying] = useState(false);
   const [isCheckingForSyncedDay, setIsCheckingForSyncedDay] = useState(false);
   const [dailySyncRecoveryKey, setDailySyncRecoveryKey] = useState<string | null>(null);
+  // `${devotionalId}:${day}` that a successful full pull confirmed is not on the server.
+  const [confirmedMissingDayKey, setConfirmedMissingDayKey] = useState<string | null>(null);
+  const [checkCooldown, setCheckCooldown] = useState<SyncCheckCooldown | null>(null);
   // "Prepare Remaining Readings" is a secondary escape hatch — only worth
   // showing once the primary "Check for Day X" action has actually been
   // tried (or has failed).
@@ -1649,14 +1660,24 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     })();
   }, [user, devoId, devoTotalDays, devoDaysCount, isPremium, isGeneratingMore, generateRemainingDays, autoRetryTick, isOnline, params.readOnly, isViewingActiveSeries]);
 
-  const recoverSyncedDay = useCallback(async (source: 'auto' | 'manual' = 'manual'): Promise<boolean> => {
-    if (!currentDevotional || currentDayData || isCheckingForSyncedDay) return false;
+  const startCheckCooldown = useCallback((next: SyncCheckCooldown) => {
+    setCheckCooldown((current) => extendSyncCheckCooldown(current, next));
+  }, []);
+
+  useEffect(() => {
+    if (!checkCooldown) return;
+    const timer = setTimeout(() => setCheckCooldown(null), Math.max(0, checkCooldown.until - Date.now()));
+    return () => clearTimeout(timer);
+  }, [checkCooldown]);
+
+  const recoverSyncedDay = useCallback(async (source: 'auto' | 'manual' = 'manual'): Promise<SyncCheckOutcome> => {
+    if (!currentDevotional || currentDayData || isCheckingForSyncedDay) return 'skipped';
 
     const attemptKey = `${currentDevotional.id}:${viewingDay}`;
     const isProgressiveDay = isCanonicalProgressiveDevotional(currentDevotional);
     if (source === 'auto' && syncRecoveryAttemptRef.current[attemptKey]) {
       if (isProgressiveDay) setDailySyncRecoveryKey(attemptKey);
-      return false;
+      return 'skipped';
     }
     if (source === 'auto') {
       syncRecoveryAttemptRef.current[attemptKey] = true;
@@ -1677,7 +1698,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
       // to have covered it, so distrust it and pull the whole devotional.
       const pulled = await pullDevotionalContent(currentDevotional.id, { forceFull: true });
       if (!isRecoveryCurrent()) {
-        return false;
+        return 'skipped';
       }
       applyPulledDevotionalContent({
         devotionalId: currentDevotional.id,
@@ -1698,19 +1719,34 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
         if (source === 'manual') {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
-        return true;
+        return 'found';
       }
 
       if (!isRecoveryCurrent()) {
-        return false;
+        return 'skipped';
       }
+      setConfirmedMissingDayKey(attemptKey);
       if (source === 'manual' && !isProgressiveDay) {
         setRetryError('This reading is still being prepared. Try again in a moment, or prepare the next reading below.');
       }
-      return false;
+      return 'missing';
     } catch (err) {
       if (err instanceof SyncSessionInvalidatedError || !isRecoveryCurrent()) {
-        return false;
+        return 'skipped';
+      }
+      if (err instanceof SyncPullRateLimitedError) {
+        // The per-user read budget is spent. Wait out its window instead of
+        // reporting backpressure to Sentry as an error.
+        startCheckCooldown(syncCheckCooldown(Date.now(), err));
+        void logBugEvent('reading-sync-recovery', 'sync-pull-rate-limited', {
+          viewingDay,
+          source,
+          retryAfterSeconds: err.retryAfterSeconds,
+        }, 'warn');
+        if (source === 'manual') {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        }
+        return 'rate-limited';
       }
       void logBugError('reading-sync-recovery', err, {
         devotionalId: currentDevotional.id,
@@ -1721,14 +1757,14 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
         setRetryError('Could not refresh this reading. Please try again.');
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
-      return false;
+      return 'failed';
     } finally {
       if (readingMountedRef.current && isSyncSessionCurrent(session)) {
         if (isProgressiveDay) setDailySyncRecoveryKey(attemptKey);
         setIsCheckingForSyncedDay(false);
       }
     }
-  }, [currentDevotional, currentDayData, isCheckingForSyncedDay, updateDevotionalDays, viewingDay]);
+  }, [currentDevotional, currentDayData, isCheckingForSyncedDay, startCheckCooldown, updateDevotionalDays, viewingDay]);
 
   useEffect(() => {
     if (!currentDevotional || currentDayData || isCheckingForSyncedDay || !isReadingFocused) return;
@@ -1753,8 +1789,10 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   const dailyGeneration = useGeneratedDayWatch({
     devotionalId: currentDevotional?.id,
     dayNumber: viewingDay,
+    // Only the current series gets new days, so a paused series has no job to watch.
     enabled: shouldWatchViewingDay
       && isReadingFocused
+      && isViewingActiveSeries
       && dailySyncRecoveryKey === dailyRecoveryKey,
     canMutate: premiumPolicy === 'granted'
       && params.readOnly !== '1'
@@ -1796,10 +1834,17 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
           hasDevotionalMetadata: Boolean(pulled.devotional),
         });
       } catch (err) {
-        void logBugError('reading-sync-recovery', err, {
-          phase: 'missing-devotional-hydration',
-          devotionalId,
-        });
+        if (err instanceof SyncPullRateLimitedError) {
+          void logBugEvent('reading-sync-recovery', 'sync-pull-rate-limited', {
+            phase: 'missing-devotional-hydration',
+            retryAfterSeconds: err.retryAfterSeconds,
+          }, 'warn');
+        } else {
+          void logBugError('reading-sync-recovery', err, {
+            phase: 'missing-devotional-hydration',
+            devotionalId,
+          });
+        }
       } finally {
         if (!cancelled) {
           setIsHydratingMissingDevotional(false);
@@ -1934,7 +1979,15 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     );
     const usesDailyRecovery = isCanonicalProgressiveDevotional(currentDevotional);
     const dailyState = dailyGeneration.state;
-    const notice = getDailyGenerationNotice(dailyState, viewingDay);
+    // Only the current series gets new days. Once a full pull confirms this
+    // day of a paused series is not on the server, another check cannot produce it.
+    const isPausedSeriesDay = usesDailyRecovery
+      && !isViewingActiveSeries
+      && confirmedMissingDayKey === dailyRecoveryKey
+      && !isCheckingForSyncedDay;
+    const notice = isPausedSeriesDay
+      ? getPausedSeriesDayNotice(viewingDay)
+      : getDailyGenerationNotice(dailyState, viewingDay);
     const isDailyChecking = usesDailyRecovery
       && (dailyState.status === 'checking' || isCheckingForSyncedDay);
     const isDailyRunning = usesDailyRecovery && (dailyState.status === 'running' || dailyState.status === 'slow');
@@ -1942,6 +1995,20 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
       && dailyState.status === 'failed'
       && dailyState.canRetry
       && dailyState.failureKind === 'job';
+    const isCheckBusy = usesDailyRecovery ? isDailyChecking : isCheckingForSyncedDay;
+    // Each check is a full pull plus a job lookup against the per-user read
+    // budget, so the button rests between checks instead of taking every tap.
+    const isCheckResting = checkCooldown !== null && !canRetryDailyJob;
+    const isPrimaryActionDisabled = !isPausedSeriesDay && (isCheckBusy || isCheckResting);
+    const primaryActionLabel = isPausedSeriesDay
+      ? 'Open Today'
+      : isCheckBusy
+        ? 'Checking...'
+        : canRetryDailyJob
+          ? 'Try Again'
+          : isCheckResting
+            ? (checkCooldown?.reason === 'rate-limited' ? 'Try again in a minute' : 'Checked just now')
+            : `Check for Day ${viewingDay}`;
     const dailyHeadline = notice
       ? notice.title
       : dailyState.status === 'failed'
@@ -1982,9 +2049,9 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
         }
 
         const session = captureSyncSession();
-        const synced = await recoverSyncedDay('manual');
+        const outcome = await recoverSyncedDay('manual');
         if (!isSyncSessionCurrent(session)) return;
-        if (synced) return;
+        if (outcome === 'found' || outcome === 'rate-limited') return;
 
         void logBugEvent('reading-generation', 'manual-retry-started', {
           viewingDay,
@@ -2159,24 +2226,26 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
             <View style={{ paddingHorizontal: Spacing['7'], paddingBottom: fallbackBottomPadding, gap: Spacing['3'] }}>
               <TouchableOpacity activeOpacity={0.7}
                 onPress={async () => {
-                  if (usesDailyRecovery) {
-                    if (canRetryDailyJob) {
-                      await dailyGeneration.retry();
-                    } else {
-                      const synced = await recoverSyncedDay('manual');
-                      if (!synced) await dailyGeneration.checkAgain();
-                    }
-                  } else {
-                    await recoverSyncedDay('manual');
+                  if (isPausedSeriesDay) {
+                    router.navigate('/(tabs)/(today)');
+                    return;
                   }
+                  if (usesDailyRecovery && canRetryDailyJob) {
+                    await dailyGeneration.retry();
+                    return;
+                  }
+                  const outcome = await recoverSyncedDay('manual');
+                  if (outcome !== 'missing' && outcome !== 'failed') return;
+                  if (usesDailyRecovery) await dailyGeneration.checkAgain();
+                  startCheckCooldown(syncCheckCooldown(Date.now()));
                 }}
-                disabled={usesDailyRecovery ? isDailyChecking : isCheckingForSyncedDay}
+                disabled={isPrimaryActionDisabled}
                 accessibilityRole="button"
-                accessibilityLabel={canRetryDailyJob ? `Try preparing day ${viewingDay} again` : `Check for day ${viewingDay}`}
-                accessibilityHint={canRetryDailyJob ? 'Retries this failed reading job' : 'Checks the server for the latest devotional day'}
+                accessibilityLabel={isPausedSeriesDay ? 'Open Today' : canRetryDailyJob ? `Try preparing day ${viewingDay} again` : `Check for day ${viewingDay}`}
+                accessibilityHint={isPausedSeriesDay ? 'Goes to your reading on Today' : canRetryDailyJob ? 'Retries this failed reading job' : 'Checks the server for the latest devotional day'}
                 accessibilityState={{
-                  disabled: usesDailyRecovery ? isDailyChecking : isCheckingForSyncedDay,
-                  busy: usesDailyRecovery ? isDailyChecking : isCheckingForSyncedDay,
+                  disabled: isPrimaryActionDisabled,
+                  busy: isCheckBusy,
                 }}
                 style={{
                   backgroundColor: retryCtaButtonBg,
@@ -2188,10 +2257,12 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: 10,
-                  opacity: (usesDailyRecovery ? isDailyChecking : isCheckingForSyncedDay) ? 0.65 : 1,
+                  opacity: isPrimaryActionDisabled ? 0.65 : 1,
                 }}
               >
-                {(usesDailyRecovery ? isDailyChecking : isCheckingForSyncedDay) ? (
+                {isPausedSeriesDay ? (
+                  <HouseIcon size={16} color={btnText} weight="light" />
+                ) : isCheckBusy ? (
                   <ActivityIndicator color={colors.background} size="small" />
                 ) : (
                   <ArrowsClockwiseIcon size={16} color={btnText} weight="light" />
@@ -2203,11 +2274,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                     color: btnText,
                   }}
                 >
-                  {(usesDailyRecovery ? isDailyChecking : isCheckingForSyncedDay)
-                    ? 'Checking...'
-                    : canRetryDailyJob
-                      ? 'Try Again'
-                      : `Check for Day ${viewingDay}`}
+                  {primaryActionLabel}
                 </Text>
               </TouchableOpacity>
 
