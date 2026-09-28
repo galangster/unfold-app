@@ -16,6 +16,7 @@ import { BookDayList } from './BookDayList';
 
 export function BookOfSeasonsView({
   devotional,
+  seriesPaused,
   now,
   colors,
   isDark,
@@ -24,6 +25,7 @@ export function BookOfSeasonsView({
   showAllReadings = false,
 }: {
   devotional: Devotional;
+  seriesPaused: boolean;
   now: Date;
   colors: ColorTheme;
   isDark: boolean;
@@ -31,7 +33,7 @@ export function BookOfSeasonsView({
   headerAccessory?: ReactNode;
   showAllReadings?: boolean;
 }) {
-  const model = buildBookOfSeasonsModel(devotional, now);
+  const model = buildBookOfSeasonsModel(devotional, now, seriesPaused);
   const today = model?.page;
   const chapters = model?.chapters ?? [];
   const theme = devotional.seriesArc?.overarchingTheme?.trim();
@@ -82,7 +84,7 @@ export function BookOfSeasonsView({
           const dayNumber = resolveBookOpenDayNumber(devotional, chapter, now);
           if (dayNumber != null) onOpenDay(dayNumber);
         }}
-      /> : <BookDayList devotional={devotional} now={now} colors={colors} onOpenDay={onOpenDay} />}
+      /> : <BookDayList devotional={devotional} seriesPaused={seriesPaused} now={now} colors={colors} onOpenDay={onOpenDay} />}
     </View>
   );
 }

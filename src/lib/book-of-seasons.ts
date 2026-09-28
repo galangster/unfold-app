@@ -3,6 +3,7 @@ import {
   getDayMenuPresentation,
   getTodayReaderDayNumber,
   isDevotionalDaySelectable,
+  isPausedSeriesUnpreparedDay,
 } from './devotional-day-access';
 import { selectRenderableDevotionalDay } from './devotional-canonical-days';
 import { getServerOwnedSeriesTotalDays } from './devotional-series-boundary';
@@ -33,7 +34,7 @@ export type BookTodayPage = {
   seriesComplete: boolean;
   canOpen: boolean;
   action: 'continue' | 'read-again' | null;
-  eyebrow: 'today' | 'today-complete' | 'series-complete' | 'preparing';
+  eyebrow: 'today' | 'today-complete' | 'next-not-prepared' | 'series-complete' | 'preparing' | 'not-prepared';
 };
 
 export function listDaysInOrder(
@@ -180,6 +181,7 @@ export function resolveBookOpenDayNumber(
 export function buildBookOfSeasonsModel(
   devotional: Devotional | null | undefined,
   now: Date,
+  seriesPaused: boolean,
 ): { page: BookTodayPage; chapters: BookChapter[] } | null {
   if (!devotional) return null;
 
@@ -206,7 +208,11 @@ export function buildBookOfSeasonsModel(
 
   let eyebrow: BookTodayPage['eyebrow'] = 'today';
   if (seriesComplete) eyebrow = 'series-complete';
-  else if (completedToday) eyebrow = 'today-complete';
+  else if (completedToday) {
+    eyebrow = isPausedSeriesUnpreparedDay(devotional, dayNumber + 1, seriesPaused)
+      ? 'next-not-prepared'
+      : 'today-complete';
+  } else if (isPausedSeriesUnpreparedDay(devotional, dayNumber, seriesPaused)) eyebrow = 'not-prepared';
   else if (!contentReady) eyebrow = 'preparing';
 
   let action: BookTodayPage['action'] = null;
@@ -240,8 +246,9 @@ export function buildBookOfSeasonsModel(
 export function buildBookTodayPage(
   devotional: Devotional | null | undefined,
   now: Date,
+  seriesPaused: boolean,
 ): BookTodayPage | null {
-  return buildBookOfSeasonsModel(devotional, now)?.page ?? null;
+  return buildBookOfSeasonsModel(devotional, now, seriesPaused)?.page ?? null;
 }
 
 export function chapterStatusLabel(chapter: BookChapter): string {

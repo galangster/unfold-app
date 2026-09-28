@@ -127,7 +127,14 @@ it('keeps continue copy aligned with the paper page', () => {
   expect(bookActionLabel('read-again')).toBe('Read again');
   expect(bookActionLabel(null)).toBeNull();
   expect(bookPlaceLine(page)).toBeUndefined();
-  expect(bookPlaceLine({ ...page, completedToday: true })).toBe('Your next reading will be here tomorrow.');
+  expect(bookPlaceLine({ ...page, completedToday: true, eyebrow: 'today-complete' })).toBe('Your next reading will be here tomorrow.');
+});
+
+it('makes no promise for pages a paused series will not prepare', () => {
+  expect(bookPlaceLine({ ...page, contentReady: false, canOpen: false, action: null, eyebrow: 'not-prepared' }))
+    .toBe('This page wasn’t prepared.');
+  expect(bookPlaceLine({ ...page, completedToday: true, action: 'read-again', eyebrow: 'next-not-prepared' }))
+    .toBeUndefined();
 });
 
 it('stores the reader snapshot only before the turn starts, and marks ready once', () => {
