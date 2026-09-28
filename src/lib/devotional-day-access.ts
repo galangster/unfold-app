@@ -106,7 +106,11 @@ export function getSelectableDayLimit(
     (dayNumber) => readDayNumbers.has(dayNumber),
   );
 
-  return Math.min(Math.max(1, devotional.currentDay || 1), highestReachableDay);
+  // Read days right after the current day stay in reach too, so a reader who
+  // read out of order can move between them. The first unread day still stops.
+  let limit = Math.min(Math.max(1, devotional.currentDay || 1), highestReachableDay);
+  while (limit < highestReachableDay && readDayNumbers.has(limit + 1)) limit += 1;
+  return limit;
 }
 
 export function isDevotionalDaySelectable(
