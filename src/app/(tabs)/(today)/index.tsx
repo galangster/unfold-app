@@ -1035,6 +1035,9 @@ export default function HomeScreen() {
   // Midday follows the currently readable day. Evening follows the day actually
   // completed today, including the final day where currentDay does not advance.
   const middayCheckInDay = getMiddayCheckInDayNumber(currentDevotional);
+  // The sheet asks the question of the day it saves to, never the prepared
+  // tomorrow that currentDayData points at after a morning read.
+  const middayCheckInDayData = currentDevotional?.days.find((day) => day.dayNumber === middayCheckInDay) ?? null;
   const eveningCheckInDay = getEveningWindDownDayNumber(currentDevotional);
   const todayCheckIn = currentDevotional && middayCheckInDay != null
     ? getCheckIn(currentDevotional.id, middayCheckInDay, 'midday')
@@ -1824,8 +1827,8 @@ export default function HomeScreen() {
           visible={showCheckInSheet}
           onClose={() => setShowCheckInSheet(false)}
           onComplete={handleCheckInComplete}
-          question={currentDayData?.checkInQuestion}
-          chips={currentDayData?.checkInChips}
+          question={middayCheckInDayData?.checkInQuestion}
+          chips={middayCheckInDayData?.checkInChips}
           devotionalId={currentDevotional.id}
           dayNumber={middayCheckInDay ?? currentDevotional.currentDay}
         />

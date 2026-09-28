@@ -133,7 +133,13 @@ jest.mock('@/components/StreakBox', () => ({ StreakBox: () => null }));
 jest.mock('@/components/HomeOnboardingTooltips', () => ({ HomeOnboardingTooltips: () => null }));
 jest.mock('@/components/RippleLoader', () => ({ RippleLoader: () => null }));
 jest.mock('@/components/StreakCelebration', () => ({ StreakCelebration: () => null }));
-jest.mock('@/components/CheckInSheet', () => ({ CheckInSheet: () => null }));
+let mockCheckInSheetProps: Record<string, unknown> | null = null;
+jest.mock('@/components/CheckInSheet', () => ({
+  CheckInSheet: (props: Record<string, unknown>) => {
+    mockCheckInSheetProps = props;
+    return null;
+  },
+}));
 jest.mock('@/components/AppFeedbackSheet', () => ({ AppFeedbackSheet: () => null }));
 jest.mock('@/components/voice-check-in/VoiceCheckInSheet', () => ({ VoiceCheckInSheet: () => null }));
 jest.mock('@/components/PremiumFeatureSheet', () => ({ PremiumFeatureSheet: () => null }));
@@ -332,6 +338,42 @@ describe('Today read-budget gate', () => {
       'warn',
     );
     act(() => tree!.unmount());
+  });
+});
+
+describe('Today midday check-in', () => {
+  it('asks the question of the day it saves to, not the prepared tomorrow', async () => {
+    const saved = { ...mockTodayStoreState };
+    // A day read today reaches the completed-day reflection, which reads journal entries.
+    mockTodayStoreState.getJournalEntry = () => undefined;
+    // Day 3 was read this morning, so currentDay already points at a prepared Day 4.
+    mockTodayStoreState.devotionals = [{
+      id: 'today-series',
+      title: 'Today Series',
+      totalDays: 7,
+      currentDay: 4,
+      generationMode: 'progressive',
+      createdAt: '2026-09-01T00:00:00.000Z',
+      seriesStartDate: '2026-09-01T00:00:00.000Z',
+      days: [
+        { id: 'today-series-day-3', devotionalId: 'today-series', dayNumber: 3, title: 'Day 3', isRead: true, readAt: new Date().toISOString(), checkInQuestion: 'Where did trust meet you today?', checkInChips: ['In a hard talk'] },
+        { id: 'today-series-day-4', devotionalId: 'today-series', dayNumber: 4, title: 'Day 4', isRead: false, checkInQuestion: 'A question about tomorrow', checkInChips: ['Tomorrow'] },
+      ],
+    }];
+    let tree: { unmount: () => void };
+    await act(async () => {
+      tree = renderer.create(<HomeScreen />);
+      await Promise.resolve();
+    });
+
+    expect(mockCheckInSheetProps).toEqual(expect.objectContaining({
+      dayNumber: 3,
+      question: 'Where did trust meet you today?',
+      chips: ['In a hard talk'],
+    }));
+    act(() => tree!.unmount());
+    Object.keys(mockTodayStoreState).forEach((key) => delete mockTodayStoreState[key]);
+    Object.assign(mockTodayStoreState, saved);
   });
 });
 
