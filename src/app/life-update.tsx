@@ -10,7 +10,7 @@ import { useCreationGate } from '@/hooks/useCreationGate';
 import { FontFamily } from '@/constants/fonts';
 import { useHasHydrated, useUnfoldStore } from '@/lib/store';
 import { useTheme } from '@/lib/theme';
-import { canSaveLifeContext, LIFE_CONTEXT_INVITATION, LIFE_CONTEXT_QUESTION } from '@/lib/life-context';
+import { canSaveLifeContext, hasLifeContextAnswer, LIFE_CONTEXT_INVITATION, LIFE_CONTEXT_QUESTION } from '@/lib/life-context';
 import { captureSyncSession, isSyncSessionCurrent } from '@/lib/sync-session-fence';
 
 export default function LifeUpdateScreen() {
@@ -28,7 +28,9 @@ function LifeUpdateForm() {
   const newSeries = next === 'series';
   const { colors, isDark } = useTheme();
   const { gate, showExclusiveOffer, dismissOffer, handleOfferVerifiedExit } = useCreationGate();
+  // "Share an update" edits the saved context; a new series asks afresh, blank.
   const [text, setText] = useState(() => {
+    if (newSeries) return '';
     const state = useUnfoldStore.getState();
     return state.lifeContextDraft ?? state.user?.currentSituation ?? '';
   });
@@ -41,9 +43,10 @@ function LifeUpdateForm() {
     if (save && !canSaveLifeContext(text)) return;
     const state = useUnfoldStore.getState();
     if (!state.user) return;
-    if (save) {
+    if (save && (!newSeries || hasLifeContextAnswer(text))) {
       state.updateUser({ currentSituation: text });
-      state.setLifeContextDraft(null);
+      // The draft is Share an update's unsaved edit; a new series leaves it alone.
+      if (!newSeries) state.setLifeContextDraft(null);
     }
     if (newSeries) {
       if (!gate()) return;
@@ -75,12 +78,14 @@ function LifeUpdateForm() {
               <LifeContextInput value={text} colors={colors} isDark={isDark} onChangeText={(value) => {
                 if (!isSyncSessionCurrent(session.current)) return;
                 setText(value);
-                useUnfoldStore.getState().setLifeContextDraft(value);
+                if (!newSeries) useUnfoldStore.getState().setLifeContextDraft(value);
               }} />
               <Button size="lg" label={newSeries ? 'Save and create series' : 'Save update'} disabled={!canSaveLifeContext(text)} onPress={() => finish(true)} />
               <Button variant="ghost" size="lg" label="Skip for now" onPress={() => finish(false)} />
-              <Text style={[styles.note, { color: colors.textMuted }]}>Skipping keeps your saved context. Unfinished edits stay on this device.</Text>
-              {useUnfoldStore.getState().lifeContextDraft !== null && (
+              <Text style={[styles.note, { color: colors.textMuted }]}>
+                Skipping keeps your saved context.{!newSeries && ' Unfinished edits stay on this device.'}
+              </Text>
+              {!newSeries && useUnfoldStore.getState().lifeContextDraft !== null && (
                 <Button variant="ghost" label="Discard unfinished edits" onPress={() => {
                   Alert.alert('Discard these edits?', 'Your saved life context will stay unchanged.', [
                     { text: 'Keep editing', style: 'cancel' },

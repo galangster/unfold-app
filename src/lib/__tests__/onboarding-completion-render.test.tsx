@@ -1,8 +1,9 @@
 import React from 'react';
-import { AppState } from 'react-native';
+import { AppState, TextInput } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { STORE_KEY } from '@/lib/onboarding-draft-store';
 import { resetNotificationAskBaseline } from '@/lib/notification-ask';
+import { pressableAncestor } from './fixtures/pressable-ancestor';
 
 const renderer = require('react-test-renderer');
 const { act } = renderer;
@@ -113,9 +114,9 @@ jest.mock('@/hooks/useOnboardingDarkColors', () => ({
   }),
 }));
 const mockStoreState = {
-  user: null,
+  user: null as Record<string, unknown> | null,
   updateUser: jest.fn(),
-  lifeContextDraft: null,
+  lifeContextDraft: null as string | null,
   setLifeContextDraft: jest.fn(),
   setUser: jest.fn(),
   setCompanionName: jest.fn(),
@@ -272,5 +273,127 @@ describe('G5 onboarding completion draft retirement', () => {
       tree.unmount();
       client.clear();
     });
+  });
+});
+
+describe('new series from Today', () => {
+  // A reader who finished onboarding and one earlier series, a book study.
+  const PREVIOUS_SITUATION = 'Walking a short series through an ordinary week.';
+  const SHARE_AN_UPDATE_DRAFT = 'An unsaved edit from Share an update.';
+  const mockGenerateDiagnosticQuestions = jest.requireMock('@/lib/devotional-service').generateDiagnosticQuestions as jest.Mock;
+  let client: QueryClient;
+  let tree: { root: { findAll: Function }; unmount: () => void };
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    mockReplace.mockClear();
+    mockGenerateDiagnosticQuestions.mockReset().mockResolvedValue(null);
+    mockStoreState.lifeContextDraft = SHARE_AN_UPDATE_DRAFT;
+    mockStoreState.user = {
+      name: 'Ben',
+      aboutMe: 'A father of two.',
+      hasCompletedOnboarding: true,
+      currentSituation: PREVIOUS_SITUATION,
+      reminderTime: '9:00 PM',
+      relationshipWithGod: 'ups-and-downs',
+      bibleFrequency: 'weekly',
+      growthGoals: ['Prayer life'],
+      obstacles: ['Busy schedule'],
+      selectedTheme: 'trust',
+      selectedType: 'book_study',
+      selectedStudySubject: 'Ruth',
+    };
+    // The store merges each update over the saved profile.
+    mockStoreState.updateUser.mockImplementation((patch: Record<string, unknown>) => {
+      mockStoreState.user = { ...mockStoreState.user, ...patch };
+    });
+    mockStoreState.setLifeContextDraft.mockImplementation((text: string | null) => {
+      mockStoreState.lifeContextDraft = text;
+    });
+    client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
+  });
+
+  afterEach(async () => {
+    await act(async () => {
+      tree?.unmount();
+      client.clear();
+    });
+    mockStoreState.updateUser.mockReset();
+    mockStoreState.setLifeContextDraft.mockReset();
+    mockStoreState.user = null;
+    mockStoreState.lifeContextDraft = null;
+    jest.useRealTimers();
+  });
+
+  async function openAt(startAt: string) {
+    mockOnboardingSearchParams = { startAt, flow: 'newSeries' };
+    await act(async () => {
+      tree = renderer.create(
+        <QueryClientProvider client={client}>
+          <OnboardingScreen />
+        </QueryClientProvider>,
+      );
+    });
+  }
+
+  // Presses, then lets step transitions (up to 350 ms) and completion settle.
+  async function tap(target: { label?: string; text?: string }) {
+    const node = target.label
+      ? findByLabel(tree, target.label)[0]
+      : pressableAncestor(tree.root.findAll((n: { props?: { children?: unknown } }) => n.props?.children === target.text)[0]);
+    await act(async () => {
+      node.props.onPress();
+      await jest.advanceTimersByTimeAsync(400);
+    });
+  }
+
+  function lifeQuestionField() {
+    return tree.root.findAll(
+      (n: { type?: unknown; props?: { accessibilityLabel?: string } }) =>
+        n.type === TextInput && n.props?.accessibilityLabel === 'Your life update',
+    )[0];
+  }
+
+  async function type(field: { props: { onChangeText: (text: string) => void } }, text: string) {
+    await act(async () => field.props.onChangeText(text));
+  }
+
+  it('opens the life question blank instead of showing the previous series answer', async () => {
+    await openAt('themeType');
+    await tap({ text: 'Just guide me' });
+
+    expect(lifeQuestionField().props.defaultValue).toBe('');
+  });
+
+  it('skipping the life question keeps the saved context without asking about the old answer', async () => {
+    await openAt('themeType');
+    await tap({ text: 'Just guide me' });
+    await tap({ label: 'Skip life update' });
+
+    // The diagnostic round would otherwise build follow-ups from the old answer.
+    expect(mockGenerateDiagnosticQuestions).not.toHaveBeenCalled();
+    expect(tree.root.findAll(
+      (n: { props?: { children?: unknown } }) => typeof n.props?.children === 'string' && n.props.children.startsWith('When you imagine your faith'),
+    ).length).toBeGreaterThan(0);
+  });
+
+  it('saves a new answer as the life context and leaves unsaved Share an update writing alone', async () => {
+    await openAt('themeType');
+    await tap({ text: 'Just guide me' });
+    await type(lifeQuestionField(), 'Starting a new job next month.');
+    // Typing in a new series does not write the Share an update draft.
+    expect(mockStoreState.setLifeContextDraft).not.toHaveBeenCalled();
+
+    await tap({ label: 'Continue' });
+    // No diagnostic questions come back, so the next step is spiritualSeeking.
+    await type(tree.root.findAll((n: { type?: unknown }) => n.type === TextInput)[0], 'More patience.');
+    await tap({ label: 'Continue' });
+    await tap({ label: 'Continue' }); // upcomingEvent is optional
+    await tap({ label: '15 minutes' });
+    await tap({ label: '7 days' });
+
+    expect(mockReplace).toHaveBeenCalledWith('/generating');
+    expect(mockStoreState.user?.currentSituation).toBe('Starting a new job next month.');
+    expect(mockStoreState.lifeContextDraft).toBe(SHARE_AN_UPDATE_DRAFT);
   });
 });

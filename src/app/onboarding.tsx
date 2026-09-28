@@ -50,7 +50,7 @@ import { TypewriterText } from '@/components/TypewriterText';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
 import { LifeContextInput } from '@/components/LifeContextInput';
-import { canSaveLifeContext, LIFE_CONTEXT_QUESTION, LIFE_CONTEXT_INVITATION } from '@/lib/life-context';
+import { canSaveLifeContext, hasLifeContextAnswer, LIFE_CONTEXT_QUESTION, LIFE_CONTEXT_INVITATION } from '@/lib/life-context';
 import { OnboardingVoiceAnswerSheet } from '@/components/onboarding/OnboardingVoiceAnswerSheet';
 import { VoiceAnswerButton } from '@/components/onboarding/VoiceAnswerButton';
 import { isVoiceCheckInsEnabled } from '@/lib/voice-feature';
@@ -680,6 +680,8 @@ export default function OnboardingScreen() {
 
   // Form data (declared early — mirrorBackText useMemo depends on it).
   // Draft answers win over the defaults: they are what this person actually said.
+  // A returning reader here is starting a new series: its own answers — the
+  // life question included — start blank.
   const [data, setData] = useState<OnboardingData>(() => ({
     name: existingUser?.name || '',
     bibleTranslation: existingUser?.bibleTranslation || 'BSB',
@@ -692,9 +694,7 @@ export default function OnboardingScreen() {
     selectedThemes: [],
     selectedType: undefined,
     selectedStudySubject: undefined,
-    currentSituation: existingUser?.hasCompletedOnboarding
-      ? useUnfoldStore.getState().lifeContextDraft ?? existingUser.currentSituation
-      : '',
+    currentSituation: '',
     diagnosticAnswers: [],
     spiritualSeeking: '',
     upcomingEvent: { label: '', date: '' },
@@ -1385,6 +1385,8 @@ export default function OnboardingScreen() {
     // Read through the ref, never the closure — see dataRef above.
     const data = dataRef.current;
     const companionName = resolveCompanionNameToPersist(companionNameInputRef.current);
+    // A blank or skipped life answer keeps the saved context.
+    const wroteSituation = hasLifeContextAnswer(data.currentSituation);
     const lifeDraftState = useUnfoldStore.getState();
     if (lifeDraftState.lifeContextDraft === data.currentSituation) lifeDraftState.setLifeContextDraft(null);
 
@@ -1394,7 +1396,7 @@ export default function OnboardingScreen() {
         aboutMe: data.aboutMe,
         companionName,
         companionPersonality: companionPersonalityRef.current,
-        currentSituation: data.currentSituation,
+        currentSituation: wroteSituation ? data.currentSituation : existingUser.currentSituation ?? '',
         emotionalState: '',
         faithImpact: '',
         spiritualSeeking: data.spiritualSeeking || data.aspiration,
@@ -2757,15 +2759,13 @@ export default function OnboardingScreen() {
             value={data.currentSituation}
             colors={colors}
             isDark={isDark}
-            onChangeText={(text) => {
-              setData((prev) => ({ ...prev, currentSituation: text }));
-              if (existingUser?.hasCompletedOnboarding) useUnfoldStore.getState().setLifeContextDraft(text);
-            }}
+            onChangeText={(text) => setData((prev) => ({ ...prev, currentSituation: text }))}
           />
+          {/* Skipping leaves the answer blank: saving keeps the saved context,
+              and the follow-up questions never build on an old answer. */}
           <TouchableOpacity accessibilityRole="button" accessibilityLabel="Skip life update" style={{ minHeight: 44, justifyContent: 'center', alignItems: 'center' }} onPress={() => {
-            const kept = existingUser?.currentSituation ?? '';
-            dataRef.current = { ...dataRef.current, currentSituation: kept };
-            setData((prev) => ({ ...prev, currentSituation: kept }));
+            dataRef.current = { ...dataRef.current, currentSituation: '' };
+            setData((prev) => ({ ...prev, currentSituation: '' }));
             advanceToNextStep();
           }}>
             <Text style={{ color: colors.textMuted, fontFamily: FontFamily.ui, fontSize: 15 }}>Skip for now</Text>
