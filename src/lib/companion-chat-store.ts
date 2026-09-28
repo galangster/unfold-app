@@ -17,7 +17,7 @@ import {
   createCompanionChatPersistStorage,
 } from './companion-chat-persist-storage';
 import { shouldFlushAutosaveOnAppState } from './autosave-controller';
-import { claimCompanionDraft, companionDraftKey, forgetCompanionDraft } from './companion-drafts';
+import { claimNewChatDraft, forgetCompanionDraft, releaseCompanionDraft } from './companion-drafts';
 
 import { getAuthHeaders, PRIMARY_BACKEND_URL } from '@/lib/api-config';
 import { authenticatedFetch } from './device-credential';
@@ -339,9 +339,9 @@ export const useCompanionChatStore = create<CompanionChatState>()(
             }),
           };
         });
-        // Sending with no conversation creates one; it takes the unsent text typed before it.
+        // A message with no conversation creates one, and it takes the new-chat text.
         const after = get().activeConversationId;
-        if (after && after !== before) claimCompanionDraft(companionDraftKey(before), after);
+        if (after && after !== before) claimNewChatDraft(after);
       },
 
       updateMessage: (id, updates, conversationId) =>
@@ -453,7 +453,6 @@ export const useCompanionChatStore = create<CompanionChatState>()(
 
       startNewConversation: () => {
         const previousId = get().activeConversationId;
-        const previous = get().conversations.find((c) => c.id === previousId);
         set((s) => {
           const now = new Date().toISOString();
           const active = s.conversations.find(c => c.id === s.activeConversationId);
@@ -490,14 +489,9 @@ export const useCompanionChatStore = create<CompanionChatState>()(
             activeConversationId: newConv.id,
           };
         });
-        const created = get().activeConversationId;
-        if (!previous && created) {
-          // A conversation created while none was active takes what was typed there.
-          claimCompanionDraft(companionDraftKey(previousId), created);
-        } else if (previous && !get().conversations.some((c) => c.id === previous.id)) {
-          // An empty conversation the store just dropped takes its unsent text with it.
-          forgetCompanionDraft(previous.id);
-        }
+        // A dropped new chat hands its text to the new one; then the new one claims it.
+        if (previousId && !get().conversations.some((c) => c.id === previousId)) releaseCompanionDraft(previousId);
+        claimNewChatDraft(get().activeConversationId!);
       },
 
       archiveActiveConversation: (title, topicTags) =>
@@ -614,8 +608,8 @@ export const useCompanionChatStore = create<CompanionChatState>()(
             activeConversationId: id,
           };
         });
-        // An empty conversation the store just dropped takes its unsent text with it.
-        if (previousId && !get().conversations.some((c) => c.id === previousId)) forgetCompanionDraft(previousId);
+        // An empty conversation the store just dropped releases its unsent text.
+        if (previousId && !get().conversations.some((c) => c.id === previousId)) releaseCompanionDraft(previousId);
       },
     }),
     {

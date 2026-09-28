@@ -33,7 +33,7 @@ import type {
   UsedScripture,
 } from './store';
 import { useCompanionChatStore } from './companion-chat-store';
-import { forgetCompanionDraft } from './companion-drafts';
+import { forgetCompanionDraft, markCompanionDraftEmptied } from './companion-drafts';
 import type { CompanionMessage, Conversation } from './companion-chat-store';
 import type { SyncPullResponse, SyncPulledRecord, SyncPushResult, SyncTable } from './sync-types';
 import {
@@ -871,9 +871,12 @@ function applyCompanionChanges(payload: SyncPullResponse): void {
   });
 
   // A conversation deleted on another device takes its unsent text with it.
-  const remaining = new Set(useCompanionChatStore.getState().conversations.map((conversation) => conversation.id));
+  // One that only lost its messages keeps its text, which never moves to a new chat.
+  const remaining = new Map(useCompanionChatStore.getState().conversations.map((conversation) => [conversation.id, conversation]));
   conversationsBefore.forEach((conversation) => {
-    if (!remaining.has(conversation.id)) forgetCompanionDraft(conversation.id);
+    const kept = remaining.get(conversation.id);
+    if (!kept) forgetCompanionDraft(conversation.id);
+    else if ((conversation.messages ?? []).length > 0 && (kept.messages ?? []).length === 0) markCompanionDraftEmptied(conversation.id);
   });
 }
 

@@ -19,7 +19,16 @@ jest.mock('@/lib/personal-data-sync-records', () => ({
 }));
 jest.mock('expo-haptics', () => ({ impactAsync: jest.fn(), ImpactFeedbackStyle: { Light: 'light', Medium: 'medium' } }));
 jest.mock('phosphor-react-native', () => ({ ArrowUpIcon: () => null, StopCircleIcon: () => null, MicrophoneIcon: () => null }));
-jest.mock('@/components/VoiceInputBar', () => ({ VoiceInputBar: () => null }));
+let mockVoiceProps: { onChangeText: (text: string) => void } | null = null;
+jest.mock('@/components/VoiceInputBar', () => {
+  const { createElement } = jest.requireActual('react');
+  return {
+    VoiceInputBar: (props: { onChangeText: (text: string) => void }) => {
+      mockVoiceProps = props;
+      return createElement('VoiceInputBar');
+    },
+  };
+});
 jest.mock('@/components/ui', () => ({ alpha: (color: string) => color }));
 jest.mock('@/lib/theme', () => ({ useTheme: () => ({ isDark: false, colors: { accent: '#D4AF37', inputBackground: '#FFF', border: '#DDD', text: '#111', textHint: '#777', textMuted: '#666', error: '#F00', buttonBackground: '#F4F4F4' } }) }));
 jest.mock('react-native-reanimated', () => {
@@ -47,6 +56,14 @@ function userMessage(content: string): CompanionMessage {
   return { id: `message-${messageCount}`, role: 'user', content, timestamp: messageCount, status: 'sent' };
 }
 
+// The production send order (useCompanionChat.sendMessage), which starter cards
+// use too: start a conversation when none is active, then add the message.
+function send(text: string) {
+  const state = useCompanionChatStore.getState();
+  if (!state.conversations.some((conversation) => conversation.id === state.activeConversationId)) state.startNewConversation();
+  useCompanionChatStore.getState().addMessage(userMessage(text));
+}
+
 // The Ask screen's wiring: the composer follows the store's active conversation.
 function Composer() {
   const conversationId = useCompanionChatStore((state) => state.activeConversationId);
@@ -54,7 +71,7 @@ function Composer() {
     <CompanionInput
       conversationId={conversationId}
       onSend={(text) => {
-        useCompanionChatStore.getState().addMessage(userMessage(text));
+        send(text);
         return true;
       }}
       onStop={jest.fn()}
@@ -69,9 +86,11 @@ describe('CompanionInput with the chat store', () => {
   const shownText = () => tree.root.findByType(TextInput).props.value;
   const type = (text: string) => act(() => tree.root.findByType(TextInput).props.onChangeText(text));
   const run = (action: () => void) => act(() => action());
+  const isRecording = () => tree.root.findAllByType('VoiceInputBar').length > 0;
 
   beforeEach(() => {
     clearCompanionDrafts();
+    mockVoiceProps = null;
     useCompanionChatStore.setState({ conversations: [], activeConversationId: null });
     act(() => {
       tree = renderer.create(<Composer />);
@@ -84,7 +103,7 @@ describe('CompanionInput with the chat store', () => {
 
   it('keeps text typed with no conversation in the conversation a starter card creates', () => {
     type("Pray for Sam's surgery");
-    run(() => store().addMessage(userMessage('Help me pray')));
+    run(() => send('Help me pray'));
     const created = store().activeConversationId!;
     expect(shownText()).toBe("Pray for Sam's surgery");
 
@@ -106,27 +125,51 @@ describe('CompanionInput with the chat store', () => {
     expect(shownText()).toBe('');
   });
 
-  it('keeps a draft with its conversation when a pull removes its messages, and never shares it', () => {
-    run(() => store().addMessage(userMessage('First')));
-    const kept = store().activeConversationId!;
-    type('Still writing');
-
-    // A pull accepts the message tombstones but rejects the conversation's.
-    run(() => useCompanionChatStore.setState((state) => ({
-      conversations: state.conversations.map((c) => (c.id === kept ? { ...c, messages: [] } : c)),
-    })));
-    expect(shownText()).toBe('Still writing');
-
+  it('keeps a new chat\'s text for the next new chat when the reader opens another conversation', () => {
+    run(() => send('First'));
+    const established = store().activeConversationId!;
     run(() => store().startNewConversation());
+    type('Half a thought');
+
+    run(() => store().setActiveConversation(established));
     expect(shownText()).toBe('');
+    run(() => store().startNewConversation());
+    expect(shownText()).toBe('Half a thought');
   });
 
-  it('does not carry text typed in an empty chat into the next new chat', () => {
-    run(() => store().addMessage(userMessage('First')));
+  it('carries a new chat\'s text into the next new chat', () => {
     run(() => store().startNewConversation());
     type('Half a thought');
 
     run(() => store().startNewConversation());
+    expect(shownText()).toBe('Half a thought');
+  });
+
+  it('never moves an established conversation\'s text to a new chat', () => {
+    run(() => send('First'));
+    const established = store().activeConversationId!;
+    type('For this conversation');
+
+    run(() => store().startNewConversation());
     expect(shownText()).toBe('');
+    run(() => store().setActiveConversation(established));
+    expect(shownText()).toBe('For this conversation');
+  });
+
+  it('keeps a recording going when a starter card creates the conversation', () => {
+    act(() => {
+      tree.root.findByProps({ accessibilityLabel: 'Voice input' }).props.onPress();
+    });
+    expect(isRecording()).toBe(true);
+
+    run(() => send('Help me pray'));
+    expect(isRecording()).toBe(true);
+    act(() => mockVoiceProps!.onChangeText('Words spoken before the tap'));
+    expect(shownText()).toBe('Words spoken before the tap');
+
+    const created = store().activeConversationId!;
+    run(() => store().startNewConversation());
+    run(() => store().setActiveConversation(created));
+    expect(shownText()).toBe('Words spoken before the tap');
   });
 });

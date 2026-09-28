@@ -32,7 +32,7 @@ import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
 import { COMPANION_MESSAGE_MAX_CHARS } from '@/lib/companion-limits';
-import { companionDraftKey, readCompanionDraft, writeCompanionDraft } from '@/lib/companion-drafts';
+import { companionDraftKey, companionRecordingKey, readCompanionDraft, startCompanionRecording, writeCompanionDraft } from '@/lib/companion-drafts';
 
 const PLACEHOLDERS = [
   'What’s on your mind?',
@@ -78,10 +78,11 @@ export const CompanionInput = memo(function CompanionInput({ onSend, onStop, isS
   const [shown, setShown] = useState(() => ({ draftKey, text: readCompanionDraft(draftKey) }));
   const [isVoiceMode, setIsVoiceMode] = useState(false);
   if (shown.draftKey !== draftKey) {
-    // Another conversation shows its own unsent text, and a recording in progress
-    // ends, so words meant for one conversation are never sent to another.
+    // Another conversation shows its own unsent text. A recording in progress
+    // ends, so words meant for one conversation are never sent to another,
+    // unless the store created this conversation from the recording's slot.
     setShown({ draftKey, text: readCompanionDraft(draftKey) });
-    setIsVoiceMode(false);
+    if (companionRecordingKey() !== draftKey) setIsVoiceMode(false);
   }
   const { text } = shown;
   const setText = useCallback((next: string) => {
@@ -89,7 +90,6 @@ export const CompanionInput = memo(function CompanionInput({ onSend, onStop, isS
     setShown({ draftKey, text: next });
   }, [draftKey]);
   // A voice result belongs to the conversation it was recorded in.
-  const recordingKeyRef = useRef<string | null>(null);
   const activeKeyRef = useRef(draftKey);
   useEffect(() => {
     activeKeyRef.current = draftKey;
@@ -140,7 +140,7 @@ export const CompanionInput = memo(function CompanionInput({ onSend, onStop, isS
     // Re-tapping the mic after a permission denial retries the request
     // (iOS won't re-prompt, but the user may have flipped it in Settings).
     setMicPermissionDenied(false);
-    recordingKeyRef.current = draftKey;
+    startCompanionRecording(draftKey);
     setIsVoiceMode(true);
   }, [draftKey]);
 
@@ -151,7 +151,7 @@ export const CompanionInput = memo(function CompanionInput({ onSend, onStop, isS
 
   // When voice input changes text, auto-send or update field
   const handleVoiceText = useCallback((newText: string) => {
-    if (recordingKeyRef.current !== activeKeyRef.current) return;
+    if (companionRecordingKey() !== activeKeyRef.current) return;
     setText(newText);
     setIsVoiceMode(false);
     // Focus the text input so user can edit before sending
