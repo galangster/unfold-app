@@ -3,6 +3,25 @@ import { getCalendarDayNumber } from './devotional-day-access';
 import { getServerOwnedSeriesTotalDays } from './devotional-series-boundary';
 import { isCanonicalProgressiveDevotional } from './reading-generation-policy';
 import { selectRenderableDevotionalDay } from './devotional-canonical-days';
+import type { DailyGenerationRecoveryState } from './daily-generation-recovery';
+
+export function nextConfirmedAbsentKey(
+  previous: string | null,
+  key: string | null,
+  state: DailyGenerationRecoveryState,
+): string | null {
+  if (key === null) return null;
+  if (state.status === 'idle' && state.discovered === true) return key;
+  if (state.status === 'failed') return state.canRetry ? null : key;
+  if (
+    state.status === 'running'
+    || state.status === 'slow'
+    || state.status === 'complete'
+  ) {
+    return null;
+  }
+  return previous === key ? previous : null;
+}
 
 /** Shared wait for the initial-series watcher. */
 export function defaultSleep(ms: number): Promise<void> {

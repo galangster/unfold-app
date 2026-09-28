@@ -60,7 +60,7 @@ describe('reading swipe navigation source contract', () => {
 
   it('uses authoritative day recovery for progressive series and keeps batch continuation separate', () => {
     expect(readingSource).toContain('await dailyGeneration.retry()');
-    expect(readingSource).toContain('if (!synced) await dailyGeneration.checkAgain()');
+    expect(readingSource).toContain('if (usesDailyRecovery) await dailyGeneration.checkAgain()');
     expect(readingSource).toContain('backgroundColor: retryCtaButtonBg');
     expect(readingSource).toContain('setHasAttemptedSyncCheck(true)');
     expect(readingSource).toContain('!usesDailyRecovery && (hasAttemptedSyncCheck || !!retryError)');
@@ -70,8 +70,13 @@ describe('reading swipe navigation source contract', () => {
   it('pulls persisted day content before enabling progressive job discovery', () => {
     expect(readingSource).toContain('dailySyncRecoveryKey === dailyRecoveryKey');
     expect(readingSource).toMatch(
-      /const synced = await recoverSyncedDay\('manual'\);[\s\S]{0,120}if \(!synced\) await dailyGeneration\.checkAgain\(\)/,
+      /const outcome = await recoverSyncedDay\('manual'\);[\s\S]{0,120}if \(usesDailyRecovery\) await dailyGeneration\.checkAgain\(\)/,
     );
+    // A found day or a rate-limited pull skips the job lookup: the lookup
+    // spends the same per-user read budget the pull just exhausted.
+    expect(readingSource).toContain("if (outcome !== 'missing' && outcome !== 'failed') return;");
+    // The generation watch waits out a rate-limit window instead of looking up into it.
+    expect(readingSource).toContain('&& !readBudgetBlocked,');
     expect(readingSource).toContain("pullDevotionalContent(currentDevotional.id, { forceFull: true })");
   });
 

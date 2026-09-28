@@ -1,12 +1,75 @@
 /* eslint-disable import/first */
+import React from 'react';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+
+const renderer = require('react-test-renderer');
+const { act } = renderer;
+let mockReadBudgetBlocked = false;
+const mockGeneratedDayWatch = jest.fn((_options: unknown) => ({
+  state: { status: 'idle' },
+  checkAgain: jest.fn(),
+  retry: jest.fn(),
+}));
+const mockPullDevotionalContent = jest.fn(async (..._args: unknown[]) => ({ days: [], timestamp: 't' }));
+const mockLogBugEvent = jest.fn();
+const mockTodayStoreState: Record<string, unknown> = {
+  user: { name: 'Reader', hasCompletedOnboarding: true },
+  devotionals: [{
+    id: 'today-series',
+    title: 'Today Series',
+    totalDays: 3,
+    currentDay: 2,
+    generationMode: 'progressive',
+    createdAt: '2026-09-01T00:00:00.000Z',
+    seriesStartDate: '2026-09-01T00:00:00.000Z',
+    days: [{ id: 'today-series-day-1', devotionalId: 'today-series', dayNumber: 1, title: 'Day 1', isRead: true }],
+  }],
+  currentDevotionalId: 'today-series',
+  setCurrentDevotional: jest.fn(),
+  resumeContext: null,
+  clearResumeContext: jest.fn(),
+  updateUser: jest.fn(),
+  updateDevotionalDays: jest.fn(),
+  streakCurrent: 0,
+  streakLastReadDate: null,
+  addCheckIn: jest.fn(),
+  markMiddayCheckInCompleted: jest.fn(),
+  beginRitualSession: jest.fn(),
+  getCheckIn: jest.fn(),
+  hasSeenDay1Review: false,
+  appFeedbackPromptLastDate: null,
+  appFeedbackReadingsAtLast: 0,
+  appFeedbackSeriesAtLast: 0,
+  reviewPromptLastDate: null,
+  recordAppFeedbackPrompt: jest.fn(),
+  setHasSeenDay1Review: jest.fn(),
+  hasSeenHomeTooltips: true,
+  addGeneratedDay: jest.fn(),
+  archiveCurrentDevotional: jest.fn(),
+  markDayAsRevealed: jest.fn(),
+  isReturningUser: () => false,
+  dismissedMiddayCardDate: null,
+  dismissedEveningCardDate: null,
+  dismissedBridgeCardDate: null,
+  dismissedRememberThisCardDate: null,
+  highlights: [],
+  bibleHighlights: [],
+  setDismissedMiddayCardDate: jest.fn(),
+  setDismissedEveningCardDate: jest.fn(),
+  setDismissedBridgeCardDate: jest.fn(),
+  setDismissedRememberThisCardDate: jest.fn(),
+  checkIns: [],
+  generationSession: { status: 'idle', devotionalId: null, title: null, error: null },
+  clearGenerationSession: jest.fn(),
+  resetNudgeSession: jest.fn(),
+};
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: jest.fn(), replace: jest.fn(), navigate: jest.fn() }),
   useSegments: () => [],
   useNavigation: () => ({ getState: () => ({ index: 1, routes: [] }) }),
-  useFocusEffect: () => undefined,
+  useFocusEffect: (callback: () => void | (() => void)) => require('react').useEffect(callback, [callback]),
   useIsFocused: () => true,
   useLocalSearchParams: () => ({}),
 }));
@@ -39,6 +102,24 @@ jest.mock('@/hooks/usePremiumNudge', () => ({
 
 jest.mock('@/hooks/usePremiumAccessPolicy', () => ({
   usePremiumAccessPolicy: () => 'granted',
+}));
+jest.mock('@/hooks/useReadBudgetBlocked', () => ({
+  useReadBudgetBlocked: () => mockReadBudgetBlocked,
+}));
+jest.mock('@/hooks/useGeneratedDayWatch', () => ({
+  useGeneratedDayWatch: (options: unknown) => mockGeneratedDayWatch(options),
+}));
+jest.mock('@/hooks/useInflightInitialArcWatch', () => ({
+  useInflightInitialArcWatch: () => undefined,
+}));
+jest.mock('@/hooks/useAdaptiveLayout', () => ({
+  useAdaptiveLayout: () => ({
+    usesSplit: false,
+    splitMaxWidth: 800,
+    clusterMaxWidth: 600,
+    columnGap: 16,
+    availableHeight: 800,
+  }),
 }));
 
 jest.mock('@/components/home/AmbientArtCanvas', () => ({ AmbientArtCanvas: () => null }));
@@ -102,40 +183,35 @@ jest.mock('@/lib/mmkv-storage', () => ({
   },
 }));
 
-jest.mock('@/lib/store', () => ({
-  useUnfoldStore: (selector: (state: Record<string, unknown>) => unknown) => selector({
-    user: { hasCompletedOnboarding: true },
-    devotionals: [],
-    currentDevotionalId: null,
-    setCurrentDevotional: jest.fn(),
-    resumeContext: null,
-    clearResumeContext: jest.fn(),
-    updateUser: jest.fn(),
-    updateDevotionalDays: jest.fn(),
-    streakCurrent: 0,
-    streakLastReadDate: null,
-    addCheckIn: jest.fn(),
-    markMiddayCheckInCompleted: jest.fn(),
-    getCheckIn: jest.fn(),
-    hasSeenDay1Review: false,
-    setHasSeenDay1Review: jest.fn(),
-    hasSeenHomeTooltips: true,
-    addGeneratedDay: jest.fn(),
-    archiveCurrentDevotional: jest.fn(),
-    markDayAsRevealed: jest.fn(),
-    isReturningUser: () => false,
-    dismissedMiddayCardDate: null,
-    dismissedEveningCardDate: null,
-    dismissedBridgeCardDate: null,
-    generationSession: { status: 'idle', devotionalId: null, title: null, error: null },
-    clearGenerationSession: jest.fn(),
-  }),
+jest.mock('@/lib/store', () => {
+  const useUnfoldStore = (selector: (state: Record<string, unknown>) => unknown) => selector(mockTodayStoreState);
+  useUnfoldStore.getState = () => mockTodayStoreState;
+  return {
+    useUnfoldStore,
+    useHasHydrated: () => true,
+    updateSyncedDevotionals: jest.fn(),
+  };
+});
+
+jest.mock('@/lib/devotional-sync-pull', () => ({
+  pullDevotionalContent: (...args: unknown[]) => mockPullDevotionalContent(...args),
+  commitDevotionalPullCursor: jest.fn(),
+}));
+jest.mock('@/lib/devotional-pulled-content', () => ({ applyPulledDevotionalContent: jest.fn() }));
+jest.mock('@/lib/sync-outbox', () => ({ drainSyncOutbox: jest.fn() }));
+jest.mock('@/lib/bug-logger', () => ({
+  logBugEvent: (...args: unknown[]) => mockLogBugEvent(...args),
+}));
+jest.mock('@/lib/bible-db', () => ({
+  getBibleDbStatus: jest.fn(() => 'ready'),
+  downloadBibleDb: jest.fn(async () => undefined),
 }));
 
-import {
+import HomeScreen, {
   applyTodayAutoTrialFocus,
   abandonPurchasedIntentBeforeNewSeries,
 } from '@/app/(tabs)/(today)/index';
+import { SyncPullRateLimitedError } from '@/lib/sync-pull-backoff';
 import {
   buildRevealGuardKey,
   reconcileAutoTrialIntentOnLaunch,
@@ -222,6 +298,42 @@ const todaySource = readFileSync(
 );
 
 const INTENT_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+
+describe('Today read-budget gate', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockReadBudgetBlocked = true;
+  });
+
+  it('pauses the watcher and focus pull, then reruns both when the window ends', async () => {
+    mockPullDevotionalContent.mockRejectedValueOnce(new SyncPullRateLimitedError(30));
+    let tree: { update: (element: React.ReactElement) => void; unmount: () => void };
+
+    await act(async () => {
+      tree = renderer.create(<HomeScreen />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(mockGeneratedDayWatch).toHaveBeenLastCalledWith(expect.objectContaining({ enabled: false }));
+    expect(mockPullDevotionalContent).not.toHaveBeenCalled();
+
+    mockReadBudgetBlocked = false;
+    await act(async () => {
+      tree!.update(<HomeScreen />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(mockGeneratedDayWatch).toHaveBeenLastCalledWith(expect.objectContaining({ enabled: true }));
+    expect(mockPullDevotionalContent).toHaveBeenCalledTimes(1);
+    expect(mockLogBugEvent).toHaveBeenCalledWith(
+      'today-sync-refresh',
+      'sync-pull-rate-limited',
+      { retryAfterSeconds: 30 },
+      'warn',
+    );
+    act(() => tree!.unmount());
+  });
+});
 
 function intent(overrides: Partial<AutoTrialIntentV1> = {}): AutoTrialIntentV1 {
   return {
