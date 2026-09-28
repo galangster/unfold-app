@@ -41,7 +41,9 @@ describe('cleanRecommendationReason', () => {
     ['an apostrophe inside single quotes', "'You're invited to find rest.'", "You're invited to find rest."],
     ['a quotation inside double quotes', '"Jesus says "Come to me" and invites you to rest."', 'Jesus says "Come to me" and invites you to rest.'],
     ['two separate quotations', '"Be still" and "know"', '"Be still" and "know"'],
-  ])('handles outer quotes around %s', (_label, raw, expected) => {
+    ['bold text with a literal star inside', "Find rest in **God's * symbol** today.", "Find rest in God's * symbol today."],
+    ['a bold sentence with a literal star', '**Use * as a reminder.**', 'Use * as a reminder.'],
+  ])('handles %s', (_label, raw, expected) => {
     expect(cleanRecommendationReason(raw)).toBe(expected);
   });
 
@@ -83,6 +85,7 @@ describe('cleanRecommendationReason', () => {
     ['unclosed tags', '<a'.repeat(500)],
     ['unclosed emphasis', ' *a'.repeat(333)],
     ['a delimiter run', '*'.repeat(999) + '!'],
+    ['a table separator with trailing spaces', '-|-' + ' '.repeat(996) + '!'],
   ])('cleans adversarial input just under the bound quickly: %s', (_label, raw) => {
     const started = performance.now();
     cleanRecommendationReason(raw);

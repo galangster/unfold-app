@@ -368,10 +368,22 @@ describe('J10 RecommendedSeriesCard start-study gate', () => {
     expect(renderedTexts(tree)).toContain('A 7-day series on learning to trust — right where you are right now.');
   });
 
-  it('shows the plain fallback without a theme name when the fetched one is not text', async () => {
-    const tree = await mountFetched({ ...fetchedPick, themeName: 23, type: 'theme', reason: null });
+  it.each([
+    ['a number', 23],
+    ['an object', { name: 'Trust' }],
+  ])('renders without a theme name when the fetched one is %s', async (_label, themeName) => {
+    const tree = await mountFetched({ ...fetchedPick, themeName, type: 'theme', reason: null });
 
     expect(renderedTexts(tree)).toContain('A 7-day series on this theme — right where you are right now.');
+  });
+
+  it.each([
+    ['markdown', '**Trust**\nGod', 'A 7-day series on trust god — right where you are right now.'],
+    ['html', '<b>Trust</b>', 'A new series — right where you are right now.'],
+  ])('keeps the fallback plain when the theme name carries %s', async (_label, themeName, expected) => {
+    const tree = await mountFetched({ ...fetchedPick, themeName, reason: null });
+
+    expect(renderedTexts(tree)).toContain(expected);
   });
 
   it('renders the QA fixture reason unchanged', async () => {

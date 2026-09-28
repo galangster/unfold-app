@@ -18,7 +18,9 @@ const CONTAINER_MARKERS = /^\s*(>\s?|([-*+]|\d+[.)])\s+)+/;
 const HEADING_OR_FENCE_LINE = /^\s{0,3}(#{1,6}(\s|$)|```|~~~)/;
 const LABEL = /^(recommendation\s*:\s*)+/i;
 // A table row starts with a pipe, or is the separator row under a header.
-const TABLE_LINE = /^\s*\||^\s*:?-+:?\s*(\|\s*:?-+:?\s*)+\|?\s*$/;
+// The separator is matched with whitespace removed, which keeps it linear.
+const TABLE_ROW_START = /^\s*\|/;
+const TABLE_SEPARATOR = /^\|?:?-+:?(\|:?-+:?)+\|?$/;
 const LINK_DEFINITION_LINE = /^\s*\[[^\]]+\]:\s*\S/;
 // Markup with no plain-text reading: an HTML tag or comment, an inline or
 // reference link, strikethrough.
@@ -45,16 +47,21 @@ function unquote(text: string): string {
 
 /**
  * Removes paired emphasis and code delimiters. The wrapped text starts and
- * ends with a non-space character and never contains the delimiter, so a
- * lone or repeated `*` or `_` stays and each scan stops at the next one.
+ * ends with a non-space character and never contains its own delimiter (bold
+ * text may hold a single `*` or `_`), so a lone or repeated `*` or `_` stays
+ * and each scan stops at the next delimiter.
  */
 function stripPairedEmphasis(text: string): string {
   return text
-    .replace(/\*\*([^\s*](?:[^*]*[^\s*])?)\*\*/g, '$1')
-    .replace(/__([^\s_](?:[^_]*[^\s_])?)__/g, '$1')
+    .replace(/\*\*([^\s*](?:(?:[^*]|\*(?!\*))*[^\s*])?)\*\*/g, '$1')
+    .replace(/__([^\s_](?:(?:[^_]|_(?!_))*[^\s_])?)__/g, '$1')
     .replace(/(^|[^\w*])\*([^\s*](?:[^*]*[^\s*])?)\*(?![\w*])/g, '$1$2')
     .replace(/(^|[^\w_])_([^\s_](?:[^_]*[^\s_])?)_(?![\w_])/g, '$1$2')
     .replace(/`([^`]+)`/g, '$1');
+}
+
+function isTableLine(line: string): boolean {
+  return TABLE_ROW_START.test(line) || TABLE_SEPARATOR.test(line.replace(/\s+/g, ''));
 }
 
 function cleanOnce(raw: string): string | null {
@@ -71,7 +78,7 @@ function cleanOnce(raw: string): string | null {
       underText = false;
       continue;
     }
-    if (TABLE_LINE.test(line) || LINK_DEFINITION_LINE.test(line)) return null;
+    if (isTableLine(line) || LINK_DEFINITION_LINE.test(line)) return null;
     kept.push(line);
     underText = line.trim().length > 0;
   }
