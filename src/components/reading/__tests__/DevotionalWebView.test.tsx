@@ -4,6 +4,7 @@ import { PixelRatio } from 'react-native';
 import { DevotionalWebView } from '../DevotionalWebView';
 import { RANGY_BUNDLE } from '../rangy-bundle';
 import type { Bookmark, DevotionalDay, Highlight } from '@/lib/store';
+import { bookmarkIdentityToken } from '@/lib/bookmark-identity';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const renderer = require('react-test-renderer');
@@ -11,6 +12,9 @@ const { act } = renderer;
 
 let mockIsDark = false;
 const mockInjectJavaScript = jest.fn();
+const mockAddBookmark = jest.fn();
+const mockRemoveBookmark = jest.fn();
+let mockBookmarks: Bookmark[] = [];
 let mockDevotionalWebFont: { family: string; css: string } | null = {
   family: 'Source Serif 4',
   css: "@font-face { font-family: 'Source Serif 4'; src: url(data:font/woff2;base64,LOCAL); }",
@@ -69,7 +73,7 @@ jest.mock('@/lib/store', () => ({
     medium: { body: 18 },
     large: { body: 20 },
   },
-  useUnfoldStore: { getState: jest.fn(() => ({ devotionals: [], addBookmark: jest.fn(), bookmarks: [], removeBookmark: jest.fn() })) },
+  useUnfoldStore: { getState: jest.fn(() => ({ devotionals: [], addBookmark: mockAddBookmark, bookmarks: mockBookmarks, removeBookmark: mockRemoveBookmark })) },
 }));
 
 jest.mock('@/lib/logger', () => ({
@@ -134,6 +138,27 @@ function reportHeight(tree: any, height = 900, docId: string = getDocId(tree)) {
   });
 }
 
+function bookmarkElement(token: string) {
+  const classes = new Set<string>();
+  return {
+    getAttribute: (name: string) => name === 'data-bookmark-token' ? token : null,
+    classList: {
+      contains: (name: string) => classes.has(name),
+      toggle: (name: string, force?: boolean) => {
+        const add = force ?? !classes.has(name);
+        if (add) classes.add(name);
+        else classes.delete(name);
+      },
+    },
+  };
+}
+
+function executeBookmarkReconcile(script: string, elements: ReturnType<typeof bookmarkElement>[]) {
+  const document = { querySelectorAll: jest.fn(() => elements) };
+  new Function('document', script)(document);
+  expect(document.querySelectorAll).toHaveBeenCalledWith('.bookmark-btn');
+}
+
 describe('DevotionalWebView highlight interactions', () => {
   beforeEach(() => {
     mockIsDark = false;
@@ -142,6 +167,179 @@ describe('DevotionalWebView highlight interactions', () => {
       family: 'Source Serif 4',
       css: "@font-face { font-family: 'Source Serif 4'; src: url(data:font/woff2;base64,LOCAL); }",
     };
+    mockBookmarks = [];
+    mockAddBookmark.mockClear();
+    mockRemoveBookmark.mockClear();
+  });
+
+  it('restores, updates, and clears every matching control in the mounted document', () => {
+    const quoteKey = 'Grace "carries" \\ you. —\u2009Micah';
+    const boxDay = {
+      ...day,
+      quotes: [
+        { text: 'Grace "carries" \\ you.', author: 'Micah' },
+        { text: 'Grace "carries" \\ you.', author: 'Micah' },
+      ],
+      contextNote: 'Rome governed the region.',
+      wordStudy: 'Agape means self-giving love.',
+    };
+    const quoteBookmark = {
+      ...targetBookmark,
+      id: 'quote-bookmark',
+      scriptureReference: 'Quote',
+      scriptureText: quoteKey,
+    };
+    mockBookmarks = [quoteBookmark];
+
+    let tree: any;
+    act(() => {
+      tree = renderer.create(
+        <DevotionalWebView
+          day={boxDay}
+          fontSize="medium"
+          devotionalId="dev-1"
+          dayNumber={1}
+          bookmarks={mockBookmarks}
+        />,
+      );
+    });
+
+    reportHeight(tree);
+    const quoteToken = bookmarkIdentityToken({ kind: 'quote', key: quoteKey });
+    const controls = [
+      bookmarkElement(quoteToken),
+      bookmarkElement(quoteToken),
+      bookmarkElement(bookmarkIdentityToken({ kind: 'context', key: 'Rome governed the region.' })),
+    ];
+    executeBookmarkReconcile(mockInjectJavaScript.mock.calls.at(-1)![0], controls);
+    expect(controls[0].classList.contains('bookmarked')).toBe(true);
+    expect(controls[1].classList.contains('bookmarked')).toBe(true);
+    expect(controls[2].classList.contains('bookmarked')).toBe(false);
+
+    mockBookmarks = [];
+    act(() => {
+      tree.update(
+        <DevotionalWebView
+          day={boxDay}
+          fontSize="medium"
+          devotionalId="dev-1"
+          dayNumber={1}
+          bookmarks={mockBookmarks}
+        />,
+      );
+    });
+    executeBookmarkReconcile(mockInjectJavaScript.mock.calls.at(-1)![0], controls);
+    expect(controls[0].classList.contains('bookmarked')).toBe(false);
+    expect(controls[1].classList.contains('bookmarked')).toBe(false);
+  });
+
+  it('applies token changes made before readiness and after repeated readiness reports', () => {
+    const contextBookmark = {
+      ...targetBookmark,
+      id: 'context-bookmark',
+      scriptureReference: 'Historical Context',
+      scriptureText: 'Rome governed the region.',
+    };
+    const boxDay = { ...day, contextNote: 'Rome governed the region.' };
+    let tree: any;
+    act(() => {
+      tree = renderer.create(
+        <DevotionalWebView
+          day={boxDay}
+          fontSize="medium"
+          devotionalId="dev-1"
+          dayNumber={1}
+          bookmarks={[]}
+        />,
+      );
+    });
+
+    act(() => {
+      tree.update(
+        <DevotionalWebView
+          day={boxDay}
+          fontSize="medium"
+          devotionalId="dev-1"
+          dayNumber={1}
+          bookmarks={[contextBookmark]}
+        />,
+      );
+    });
+    expect(mockInjectJavaScript).toHaveBeenCalledTimes(0);
+
+    reportHeight(tree, 900);
+    expect(mockInjectJavaScript).toHaveBeenCalledTimes(1);
+    const control = bookmarkElement('["context","Rome governed the region."]');
+    executeBookmarkReconcile(mockInjectJavaScript.mock.calls[0][0], [control]);
+    expect(control.classList.contains('bookmarked')).toBe(true);
+
+    reportHeight(tree, 950);
+    expect(mockInjectJavaScript).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      tree.update(
+        <DevotionalWebView
+          day={boxDay}
+          fontSize="medium"
+          devotionalId="dev-1"
+          dayNumber={1}
+          bookmarks={[]}
+        />,
+      );
+    });
+    expect(mockInjectJavaScript).toHaveBeenCalledTimes(2);
+    executeBookmarkReconcile(mockInjectJavaScript.mock.calls[1][0], [control]);
+    expect(control.classList.contains('bookmarked')).toBe(false);
+  });
+
+  it('decides a box toggle from current store identity instead of the DOM class', () => {
+    const contextBookmark = {
+      ...targetBookmark,
+      id: 'context-bookmark',
+      scriptureReference: 'Historical Context',
+      scriptureText: 'Rome governed the region.',
+    };
+    mockBookmarks = [contextBookmark];
+    let tree: any;
+    act(() => {
+      tree = renderer.create(
+        <DevotionalWebView
+          day={{ ...day, contextNote: 'Rome governed the region.' }}
+          fontSize="medium"
+          devotionalId="dev-1"
+          dayNumber={1}
+          bookmarks={mockBookmarks}
+        />,
+      );
+    });
+
+    act(() => {
+      getWebViewProps(tree).onMessage({ nativeEvent: { data: JSON.stringify({
+        type: 'BOOKMARK',
+        contentType: 'context',
+        text: 'Rome governed the region.',
+        isBookmarked: true,
+      }) } });
+    });
+
+    expect(mockRemoveBookmark).toHaveBeenCalledWith('context-bookmark');
+    expect(mockAddBookmark).not.toHaveBeenCalled();
+
+    mockRemoveBookmark.mockClear();
+    mockBookmarks = [];
+    act(() => {
+      getWebViewProps(tree).onMessage({ nativeEvent: { data: JSON.stringify({
+        type: 'BOOKMARK',
+        contentType: 'context',
+        text: 'Rome governed the region.',
+        isBookmarked: false,
+      }) } });
+    });
+    expect(mockAddBookmark).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'context',
+      key: 'Rome governed the region.',
+    }));
+    expect(mockRemoveBookmark).not.toHaveBeenCalled();
   });
 
   it('reserves the initial reader height while the selected local font is pending', () => {

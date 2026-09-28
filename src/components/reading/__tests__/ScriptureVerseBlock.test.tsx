@@ -4,6 +4,7 @@
  * Bible reader would render, Remove takes it back out.
  */
 import React from 'react';
+import { fireEvent, render as renderNative } from '@testing-library/react-native';
 
 import { ScriptureVerseBlock } from '../ScriptureVerseBlock';
 import type { VersePassage } from '@/lib/bible-api';
@@ -89,6 +90,61 @@ beforeEach(() => {
 });
 
 describe('ScriptureVerseBlock', () => {
+  it('selects a verse on long-press and exposes the screen-reader selection hint', () => {
+    const view = renderNative(
+      <ScriptureVerseBlock
+        passage={passage}
+        textStyle={{ fontFamily: 'Serif', fontSize: 18, lineHeight: 30, color: '#000' }}
+        mutedColor="#666"
+        isDark={false}
+      />,
+    );
+
+    const verse = view.getByTestId('scripture-verse-16');
+    expect(verse.props.accessibilityHint).toBe('Double-tap to select this verse');
+    fireEvent(verse, 'longPress');
+    expect(view.getByTestId('scripture-verse-actions')).toBeTruthy();
+  });
+
+  it('persists the discovery hint after a verse tap or an explicit dismiss', () => {
+    const first = renderNative(
+      <ScriptureVerseBlock
+        passage={passage}
+        textStyle={{ fontFamily: 'Serif', fontSize: 18, lineHeight: 30, color: '#000' }}
+        mutedColor="#666"
+        isDark={false}
+      />,
+    );
+    expect(first.getByText('Tap a verse to highlight it')).toBeTruthy();
+    fireEvent.press(first.getByTestId('scripture-verse-16'));
+    expect(first.queryByText('Tap a verse to highlight it')).toBeNull();
+    first.unmount();
+
+    const reopened = renderNative(
+      <ScriptureVerseBlock
+        passage={passage}
+        textStyle={{ fontFamily: 'Serif', fontSize: 18, lineHeight: 30, color: '#000' }}
+        mutedColor="#666"
+        isDark={false}
+      />,
+    );
+    expect(reopened.queryByText('Tap a verse to highlight it')).toBeNull();
+    reopened.unmount();
+
+    act(() => { useUnfoldStore.getState().reset(); });
+    const dismissed = renderNative(
+      <ScriptureVerseBlock
+        passage={passage}
+        textStyle={{ fontFamily: 'Serif', fontSize: 18, lineHeight: 30, color: '#000' }}
+        mutedColor="#666"
+        isDark={false}
+      />,
+    );
+    fireEvent.press(dismissed.getByLabelText('Dismiss verse highlight hint'));
+    expect(dismissed.queryByText('Tap a verse to highlight it')).toBeNull();
+    expect(useUnfoldStore.getState().hasSeenScriptureHighlightHint).toBe(true);
+  });
+
   it('shows the colour row only after a verse is selected', () => {
     const root = render();
     expect(byTestID(root, 'scripture-verse-actions')).toBeUndefined();

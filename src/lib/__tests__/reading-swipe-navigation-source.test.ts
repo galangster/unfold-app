@@ -9,10 +9,10 @@ const readingSource = readFileSync(
 describe('reading swipe navigation source contract', () => {
   it('opens the devotional scripture tap sheet instead of immediately routing parseable references to Bible', () => {
     const scriptureTapBlock = readingSource.match(
-      /onScriptureTap=\{\(ref\) => \{[\s\S]{0,700}?\}\}/,
+      /onScriptureTap=\{\(ref, savedPassage\) => \{[\s\S]{0,700}?\}\}/,
     )?.[0] ?? '';
 
-    expect(scriptureTapBlock).toContain('setScriptureSheetRef(ref)');
+    expect(scriptureTapBlock).toContain('setScriptureSheetRef({ reference: ref, savedPassage })');
     expect(scriptureTapBlock).not.toContain("pathname: '/(tabs)/(bible)/reader'");
     expect(scriptureTapBlock).not.toContain('referenceToRoute(ref)');
   });

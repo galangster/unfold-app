@@ -122,6 +122,154 @@ describe('DevotionalContent versed scripture (Greptile A8)', () => {
     expect(text).toContain('NEWAITEXT');
   });
 
+  it('passes the displayed passage text and translation to the Scripture bookmark control', async () => {
+    mockFetchVerseLocal.mockResolvedValue({
+      reference: 'John 3:16',
+      translation: 'BSB',
+      text: 'For God so loved the displayed world.',
+      passage: [{ verse: 16, text: 'For God so loved the displayed world.' }],
+    });
+    const onToggleBookmark = jest.fn();
+
+    let tree: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderer.create(
+        <DevotionalContent
+          day={day({ scriptureText: 'Generated fallback text' })}
+          fontSize="medium"
+          onToggleBookmark={onToggleBookmark}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    const bookmarkControl = tree!.root.findByProps({ accessibilityLabel: 'Save John 3:16' });
+    expect(bookmarkControl.props.accessibilityState).toEqual({ selected: false });
+    act(() => bookmarkControl.props.onPress());
+    expect(onToggleBookmark).toHaveBeenCalledWith({
+      reference: 'John 3:16',
+      text: 'For God so loved the displayed world.',
+      translation: 'BSB',
+    });
+  });
+
+  it('keeps a Saved Scripture target on the main block when its reference matches canonically', async () => {
+    mockFetchVerseLocal.mockResolvedValue(null);
+    mockFetchVerse.mockResolvedValue(null);
+    const onScriptureTap = jest.fn();
+    const onTargetBookmarkLocated = jest.fn();
+
+    let tree: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderer.create(
+        <DevotionalContent
+          day={day({ scriptureReference: 'John 3:16' })}
+          fontSize="medium"
+          targetBookmark={{
+            id: 'main-bookmark',
+            devotionalId: 'devotional-1',
+            devotionalTitle: 'The Gift',
+            dayNumber: 1,
+            dayTitle: 'Loved First',
+            scriptureReference: ' john  3:16 ',
+            scriptureText: 'Saved main passage.',
+            savedAt: '2026-09-28T00:00:00.000Z',
+          }}
+          onScriptureTap={onScriptureTap}
+          onTargetBookmarkLocated={onTargetBookmarkLocated}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    act(() => tree!.root.findByProps({ testID: 'reading-scripture-section' }).props.onLayout({
+      nativeEvent: { layout: { y: 320 } },
+    }));
+    expect(onTargetBookmarkLocated).toHaveBeenCalledWith(320);
+    expect(onScriptureTap).not.toHaveBeenCalled();
+  });
+
+  it('navigates to a saved main passage in the reader current translation', async () => {
+    mockFetchVerseLocal.mockResolvedValue({
+      reference: 'John 3:16',
+      translation: 'BSB',
+      text: 'Current BSB passage.',
+      passage: [{ verse: 16, text: 'Current BSB passage.' }],
+    });
+    const onTargetBookmarkLocated = jest.fn();
+
+    let tree: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderer.create(
+        <DevotionalContent
+          day={day({ scriptureReference: 'John 3:16', scriptureText: 'Generated passage.' })}
+          fontSize="medium"
+          targetBookmark={{
+            id: 'main-kjv-bookmark',
+            devotionalId: 'devotional-1',
+            devotionalTitle: 'The Gift',
+            dayNumber: 1,
+            dayTitle: 'Loved First',
+            kind: 'scripture',
+            key: 'John 3:16',
+            scriptureReference: 'John 3:16',
+            scriptureText: 'Saved KJV passage.',
+            translation: 'KJV',
+            savedAt: '2026-09-28T00:00:00.000Z',
+          }}
+          onTargetBookmarkLocated={onTargetBookmarkLocated}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    act(() => tree!.root.findByProps({ testID: 'reading-scripture-section' }).props.onLayout({
+      nativeEvent: { layout: { y: 320 } },
+    }));
+
+    const text = collectText(tree!.toJSON()).join(' ');
+    expect(mockFetchVerseLocal).toHaveBeenCalledWith('John 3:16', 'BSB');
+    expect(text).toContain('Current BSB passage.');
+    expect(text).not.toContain('Saved KJV passage.');
+    expect(onTargetBookmarkLocated).toHaveBeenCalledWith(320);
+  });
+
+  it('opens a Saved Related Scripture target with its saved text and translation', async () => {
+    mockFetchVerseLocal.mockResolvedValue(null);
+    mockFetchVerse.mockResolvedValue(null);
+    const onScriptureTap = jest.fn();
+
+    await act(async () => {
+      renderer.create(
+        <DevotionalContent
+          day={day({
+            scriptureReference: 'John 3:16',
+            crossReferences: [{ reference: 'Romans 8:28', text: 'Current generated related text.' }],
+          })}
+          fontSize="medium"
+          targetBookmark={{
+            id: 'related-bookmark',
+            devotionalId: 'devotional-1',
+            devotionalTitle: 'The Gift',
+            dayNumber: 1,
+            dayTitle: 'Loved First',
+            scriptureReference: 'Romans 8:28',
+            scriptureText: 'Saved related passage in KJV.',
+            translation: 'KJV',
+            savedAt: '2026-09-28T00:00:00.000Z',
+          }}
+          onScriptureTap={onScriptureTap}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    expect(onScriptureTap).toHaveBeenCalledWith('Romans 8:28', {
+      text: 'Saved related passage in KJV.',
+      translation: 'KJV',
+    });
+  });
+
   it('signals reflection remeasurement after the WebView height commit', async () => {
     mockFetchVerseLocal.mockResolvedValue(null);
     mockFetchVerse.mockResolvedValue(null);

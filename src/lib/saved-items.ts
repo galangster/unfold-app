@@ -9,6 +9,7 @@ import { enqueueSyncChanges, removeSyncChangesForRecords } from '@/lib/sync-outb
 import { stripOuterQuotes } from '@/lib/cn';
 import { buildSavedHighlights, type SavedItem } from '@/lib/saved-highlights';
 import type { SyncPushChange } from '@/lib/sync-types';
+import { bookmarkKind } from '@/lib/bookmark-identity';
 
 /**
  * Journal › Saved: one list over devotional highlights, Bible highlights,
@@ -37,22 +38,18 @@ export type SavedTypeFilter = 'all' | 'highlights' | 'notes' | 'bookmarks';
 export const SAVED_SOURCE_FILTERS: readonly SavedSourceFilter[] = ['all', 'devotional', 'bible'];
 export const SAVED_TYPE_FILTERS: readonly SavedTypeFilter[] = ['all', 'highlights', 'notes', 'bookmarks'];
 
-const QUOTE_FALLBACK_REFERENCES = new Set(['Quote', 'Historical Context', 'Word Study']);
-
 export function toBookmarkSavedItem(bookmark: Bookmark, devotional?: Devotional): SavedBookmarkItem {
   const day = devotional?.days.find((d) => d.dayNumber === bookmark.dayNumber);
-  const quoteSource =
-    bookmark.quotedText ||
-    (QUOTE_FALLBACK_REFERENCES.has(bookmark.scriptureReference) ? bookmark.scriptureText : null) ||
-    day?.quotableLine ||
-    day?.scriptureText ||
-    bookmark.scriptureText;
+  const isScripture = bookmarkKind(bookmark) === 'scripture';
+  const quoteSource = isScripture
+    ? bookmark.scriptureText
+    : bookmark.quotedText || bookmark.scriptureText || day?.quotableLine || day?.scriptureText || '';
   return {
     id: bookmark.id,
     source: 'devotional',
     kind: 'bookmark',
     label: bookmark.dayTitle || day?.title || 'Saved Passage',
-    reference: day?.scriptureReference || bookmark.scriptureReference,
+    reference: isScripture ? bookmark.scriptureReference : day?.scriptureReference || bookmark.scriptureReference,
     quote: stripOuterQuotes(quoteSource),
     createdAt: bookmark.savedAt,
     updatedAt: bookmark.updatedAt,

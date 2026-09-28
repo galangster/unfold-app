@@ -90,7 +90,11 @@ import { resolveStackRoute, tabGroupToFrom, type TabGroup } from '@/lib/tab-stac
 import { readAutoTrialIntent, transitionAutoTrialIntent } from '@/lib/auto-trial-intent';
 import { trackAutoTrialCompleted } from '@/lib/auto-trial-telemetry';
 // ShareDevotionalModal removed — pull quote share now uses /share-card route
-import { DevotionalContent } from '@/components/reading/DevotionalContent';
+import {
+  DevotionalContent,
+  type DisplayedScripture,
+  type ReaderSection,
+} from '@/components/reading/DevotionalContent';
 import { ReflectionQuestionNav, type ReflectionKeyboardToolbarState } from '@/components/reading/ReflectionQuestionNav';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { TomorrowPreview } from '@/components/reading/TomorrowPreview';
@@ -110,7 +114,6 @@ import { AnalyticsEvents, logEvent } from '@/lib/analytics';
 import { addAppBreadcrumb } from '@/lib/sentry';
 import { StudyMethodSheet } from '@/components/reading/StudyMethodSheet';
 import { ReaderOutlineSheet } from '@/components/reading/ReaderOutlineSheet';
-import type { ReaderSection } from '@/components/reading/DevotionalContent';
 import {
   applyParagraphReport,
   applySectionLayoutReport,
@@ -131,7 +134,8 @@ import type { ReviewCompletion } from '@/lib/review-prompt-policy';
 import { countReadDaysWithinBoundary } from '@/lib/series-path';
 import { useGlobalAudioPlayer } from '@/hooks/useGlobalAudioPlayer';
 import { useAudioPlayerState } from '@/lib/audio-player-state';
-import { ScriptureTapSheet } from '@/components/ScriptureTapSheet';
+import { ScriptureTapSheet, type SavedScripturePassage } from '@/components/ScriptureTapSheet';
+import { findBookmarkByIdentity } from '@/lib/bookmark-identity';
 import { DevotionalReaderPreferencesSheet } from '@/components/reading/DevotionalReaderPreferencesSheet';
 import { getDefaultVoice, prefetchDevotionalAudio, streamDevotionalAudio, buildTtsText } from '@/lib/tts-service';
 import { syncWidgets, startReadingSession, endReadingSession } from '@/lib/widget-bridge';
@@ -380,7 +384,10 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   const completionCueVisible = useRef(false);
   completionCueVisible.current = isReadingFocused && showCelebration;
   useEffect(() => () => { completionCueVisible.current = false; }, []);
-  const [scriptureSheetRef, setScriptureSheetRef] = useState<string | null>(null);
+  const [scriptureSheetRef, setScriptureSheetRef] = useState<{
+    reference: string;
+    savedPassage?: SavedScripturePassage;
+  } | null>(null);
   const [celebrationType, setCelebrationType] = useState<'day' | 'series'>('day');
   const [isRetrying, setIsRetrying] = useState(false);
   const [isCheckingForSyncedDay, setIsCheckingForSyncedDay] = useState(false);
@@ -511,9 +518,14 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
 
   // Reactive bookmark check - fixes the bookmark icon not updating
   const isCurrentDayBookmarked = useMemo(() => {
-    if (!effectiveDevotionalId) return false;
-    return bookmarks.some((b) => b.devotionalId === effectiveDevotionalId && b.dayNumber === viewingDay);
-  }, [bookmarks, effectiveDevotionalId, viewingDay]);
+    if (!effectiveDevotionalId || !currentDayData?.scriptureReference) return false;
+    return Boolean(findBookmarkByIdentity(bookmarks, {
+      devotionalId: effectiveDevotionalId,
+      dayNumber: viewingDay,
+      kind: 'scripture',
+      key: currentDayData.scriptureReference,
+    }));
+  }, [bookmarks, currentDayData?.scriptureReference, effectiveDevotionalId, viewingDay]);
 
   // Get highlights for current day
   const currentDayHighlights = useMemo(() => {
@@ -1067,12 +1079,16 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     }
   }, [viewingDay, availableDays, goToDay]);
 
-  const handleToggleBookmark = useCallback(() => {
+  const handleToggleBookmark = useCallback((scripture: DisplayedScripture) => {
     if (!effectiveDevotionalId || !currentDevotional || !currentDayData) return;
 
-    const existingBookmark = bookmarks.find(
-      (b) => b.devotionalId === effectiveDevotionalId && b.dayNumber === viewingDay
-    );
+    const identity = {
+      devotionalId: effectiveDevotionalId,
+      dayNumber: viewingDay,
+      kind: 'scripture' as const,
+      key: scripture.reference,
+    };
+    const existingBookmark = findBookmarkByIdentity(bookmarks, identity);
 
     if (existingBookmark) {
       removeBookmark(existingBookmark.id);
@@ -1082,9 +1098,11 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
         devotionalTitle: currentDevotional.title,
         dayNumber: viewingDay,
         dayTitle: currentDayData.title,
-        scriptureReference: currentDayData.scriptureReference,
-        scriptureText: currentDayData.scriptureText,
-        quotedText: currentDayData.quotableLine || undefined,
+        kind: identity.kind,
+        key: identity.key,
+        scriptureReference: scripture.reference,
+        scriptureText: scripture.text,
+        translation: scripture.translation,
       });
       // Show bookmark toast on save only
       setBookmarkToast(true);
@@ -2504,6 +2522,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                 titleSharedTransitionTag={`devotional-title-${currentDevotional.id}-${viewingDay}`}
                 isBookmarked={isCurrentDayBookmarked}
                 onToggleBookmark={handleToggleBookmark}
+                bookmarks={bookmarks}
                 onStudyMethodPress={handleStudyMethodPress}
                 onHighlightsChanged={handleHighlightsChanged}
                 onHighlightFailed={handleHighlightFailed}
@@ -2528,8 +2547,8 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                   setActOutcome(effectiveDevotionalId, viewingDay, outcome);
                   logEvent('act_outcome', { outcome, source: 'reading' });
                 }}
-                onScriptureTap={(ref) => {
-                  setScriptureSheetRef(ref);
+                onScriptureTap={(ref, savedPassage) => {
+                  setScriptureSheetRef({ reference: ref, savedPassage });
                 }}
                 onBeginPractice={canOfferPractice ? beginPractice : undefined}
                 devotionalId={effectiveDevotionalId ?? ''}
@@ -2906,7 +2925,8 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
       <ScriptureTapSheet
         visible={!!scriptureSheetRef}
         onClose={() => setScriptureSheetRef(null)}
-        reference={scriptureSheetRef ?? ''}
+        reference={scriptureSheetRef?.reference ?? ''}
+        savedPassage={scriptureSheetRef?.savedPassage}
         devotionalId={currentDevotional.id}
         dayNumber={viewingDay}
         dayTitle={currentDayData?.title}

@@ -43,6 +43,8 @@ export function ScriptureVerseBlock({ passage, textStyle, mutedColor, isDark }: 
   const bibleHighlights = useUnfoldStore((s) => s.bibleHighlights);
   const addBibleHighlight = useUnfoldStore((s) => s.addBibleHighlight);
   const removeBibleHighlight = useUnfoldStore((s) => s.removeBibleHighlight);
+  const hasSeenHighlightHint = useUnfoldStore((s) => s.hasSeenScriptureHighlightHint);
+  const dismissHighlightHint = useUnfoldStore((s) => s.setHasSeenScriptureHighlightHint);
   const isPremium = usePremiumAccessPolicy() === 'granted';
 
   const [selected, setSelected] = useState<Set<number>>(() => new Set());
@@ -63,13 +65,14 @@ export function ScriptureVerseBlock({ passage, textStyle, mutedColor, isDark }: 
 
   const toggleVerse = useCallback((verse: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    dismissHighlightHint();
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(verse)) next.delete(verse);
       else next.add(verse);
       return next;
     });
-  }, []);
+  }, [dismissHighlightHint]);
 
   const applyColor = useCallback((color: BibleHighlightColor) => {
     if (selected.size === 0) return;
@@ -110,7 +113,7 @@ export function ScriptureVerseBlock({ passage, textStyle, mutedColor, isDark }: 
 
   return (
     <View>
-      <Text style={[textStyle, { textAlign: 'left' }]} accessibilityHint="Tap a verse to highlight it">
+      <Text style={[textStyle, { textAlign: 'left' }]}>
         {'“'}
         {passage.verses.map((v, i) => {
           const isSelected = selected.has(v.verse);
@@ -128,9 +131,12 @@ export function ScriptureVerseBlock({ passage, textStyle, mutedColor, isDark }: 
             <Text
               key={v.verse}
               onPress={() => toggleVerse(v.verse)}
+              onLongPress={() => toggleVerse(v.verse)}
               suppressHighlighting
               testID={`scripture-verse-${v.verse}`}
               accessibilityLabel={`Verse ${v.verse}${hl ? `, highlighted ${hl}` : ''}${isSelected ? ', selected' : ''}`}
+              accessibilityHint="Double-tap to select this verse"
+              accessibilityRole="button"
               style={{ backgroundColor, color }}
             >
               {`${toSuperscript(v.verse)} ${v.text}${last ? '' : ' '}`}
@@ -139,6 +145,32 @@ export function ScriptureVerseBlock({ passage, textStyle, mutedColor, isDark }: 
         })}
         {'”'}
       </Text>
+
+      {!hasSeenHighlightHint && (
+        <View style={styles.hintRow}>
+          <Text
+            style={[
+              styles.hintText,
+              {
+                color: mutedColor,
+                fontSize: textStyle.fontSize * 0.72,
+                lineHeight: textStyle.fontSize,
+              },
+            ]}
+          >
+            Tap a verse to highlight it
+          </Text>
+          <TouchableOpacity
+            onPress={dismissHighlightHint}
+            style={styles.hintDismiss}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss verse highlight hint"
+          >
+            <XIcon size={12} color={mutedColor} weight="bold" />
+          </TouchableOpacity>
+        </View>
+      )}
 
       {selected.size > 0 && (
         <View style={styles.actionRow} testID="scripture-verse-actions">
@@ -198,6 +230,20 @@ export function ScriptureVerseBlock({ passage, textStyle, mutedColor, isDark }: 
 }
 
 const styles = StyleSheet.create({
+  hintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: Spacing['2'],
+  },
+  hintText: {
+    flex: 1,
+  },
+  hintDismiss: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
