@@ -60,6 +60,16 @@ function toRecommendation(pick: NextPick): Recommendation {
   };
 }
 
+/**
+ * The plain fallback the backend serves when its reason text is unusable.
+ * Fetched JSON is unchecked, so the theme name is used only when it is text.
+ */
+function fallbackReason(recommendation: Recommendation) {
+  const themeName: unknown = recommendation.themeName;
+  const theme = typeof themeName === 'string' && themeName.trim() ? themeName.toLowerCase() : 'this theme';
+  return `A ${recommendation.suggestedLength}-day series on ${theme} — right where you are right now.`;
+}
+
 function formatRecommendationType(type: string) {
   return type
     .replace(/[-_]/g, ' ')
@@ -233,10 +243,7 @@ export function RecommendedSeriesCard({
   // the bare word 'Theme' with no value attached.
   const typeLabel = recommendation!.type === 'theme' ? null : formatRecommendationType(recommendation!.type);
   const actionLabel = isCompletion ? 'Begin the Next Study' : 'Start This Study';
-  // Same plain fallback the backend serves when its reason text is unusable.
-  // Fetched JSON is unchecked, so a missing field must not throw during render.
-  const reasonText = cleanRecommendationReason(recommendation!.reason)
-    ?? `A ${recommendation!.suggestedLength}-day series on ${(recommendation!.themeName || 'this theme').toLowerCase()} — right where you are right now.`;
+  const reasonText = cleanRecommendationReason(recommendation!.reason) ?? fallbackReason(recommendation!);
 
   return (
     <Animated.View entering={entering(FadeIn.duration(Duration.normal).easing(Ease.out))}>

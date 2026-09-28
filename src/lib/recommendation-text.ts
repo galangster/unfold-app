@@ -8,7 +8,8 @@
 // A reason is one sentence, and both writers keep it under 200 characters.
 // The bound keeps the regex work below cheap on hostile stored text.
 const MAX_INPUT_LENGTH = 1000;
-// Each pass only removes text, so a few passes reach a stable result.
+// Each pass only removes text. Text that is still changing after this many
+// passes is treated as unusable, so a returned reason is always stable.
 const MAX_PASSES = 5;
 
 const RULE_LINE = /^\s{0,3}([-*_])(\s*\1){2,}\s*$/;
@@ -18,9 +19,10 @@ const HEADING_OR_FENCE_LINE = /^\s{0,3}(#{1,6}(\s|$)|```|~~~)/;
 const LABEL = /^(recommendation\s*:\s*)+/i;
 // A table row starts with a pipe, or is the separator row under a header.
 const TABLE_LINE = /^\s*\||^\s*:?-+:?\s*(\|\s*:?-+:?\s*)+\|?\s*$/;
-// Markup with no plain-text reading: an HTML tag or comment, a link or link
-// definition, strikethrough.
-const LEFTOVER_MARKUP = /<[a-z!/]|\[[^[\]]*\]\s*[([:]|~~/i;
+const LINK_DEFINITION_LINE = /^\s*\[[^\]]+\]:\s*\S/;
+// Markup with no plain-text reading: an HTML tag or comment, an inline or
+// reference link, strikethrough.
+const LEFTOVER_MARKUP = /<[a-z!/]|\[[^[\]]*\]\s*[([]|~~/i;
 
 /** Removes one matched pair of outer quotes. */
 function unquote(text: string): string {
@@ -28,13 +30,17 @@ function unquote(text: string): string {
   return pair ? (pair[1] ?? pair[2] ?? pair[3]) : text;
 }
 
-/** Removes paired emphasis and code delimiters; a lone `*` or `_` stays. */
+/**
+ * Removes paired emphasis and code delimiters. The wrapped text starts and
+ * ends with a non-space character and never contains the delimiter, so a
+ * lone or repeated `*` or `_` stays and each scan stops at the next one.
+ */
 function stripPairedEmphasis(text: string): string {
   return text
-    .replace(/\*\*(\S(?:.*?\S)?)\*\*/g, '$1')
-    .replace(/__(\S(?:.*?\S)?)__/g, '$1')
-    .replace(/(^|[^\w*])\*(\S(?:.*?\S)?)\*(?![\w*])/g, '$1$2')
-    .replace(/(^|[^\w_])_(\S(?:.*?\S)?)_(?![\w_])/g, '$1$2')
+    .replace(/\*\*([^\s*](?:[^*]*[^\s*])?)\*\*/g, '$1')
+    .replace(/__([^\s_](?:[^_]*[^\s_])?)__/g, '$1')
+    .replace(/(^|[^\w*])\*([^\s*](?:[^*]*[^\s*])?)\*(?![\w*])/g, '$1$2')
+    .replace(/(^|[^\w_])_([^\s_](?:[^_]*[^\s_])?)_(?![\w_])/g, '$1$2')
     .replace(/`([^`]+)`/g, '$1');
 }
 
@@ -52,7 +58,7 @@ function cleanOnce(raw: string): string | null {
       underText = false;
       continue;
     }
-    if (TABLE_LINE.test(line)) return null;
+    if (TABLE_LINE.test(line) || LINK_DEFINITION_LINE.test(line)) return null;
     kept.push(line);
     underText = line.trim().length > 0;
   }
@@ -67,9 +73,8 @@ export function cleanRecommendationReason(raw: unknown): string | null {
   for (let pass = 0; pass < MAX_PASSES; pass++) {
     const next = cleanOnce(text);
     if (next === null) return null;
-    if (next === text) break;
+    if (next === text) return text && !LEFTOVER_MARKUP.test(text) ? text : null;
     text = next;
   }
-  if (!text || LEFTOVER_MARKUP.test(text)) return null;
-  return text;
+  return null;
 }

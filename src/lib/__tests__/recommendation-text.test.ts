@@ -29,6 +29,10 @@ describe('cleanRecommendationReason', () => {
     ['an embedded quotation', 'Jesus says, "Come to me."'],
     ['a leading quotation', '"Be still," says Psalm 46:10.'],
     ['inline pipes', 'This season calls for prayer | patience | trust.'],
+    ['literal delimiter runs', 'Use (*) and ___ as reminders to pause.'],
+    ['literal double delimiters', 'Keep __ as a pause and ** as a rest.'],
+    ['a bracketed reference', 'God meets you in [Psalm 23]: a promise of rest.'],
+    ['text at the size bound', `${'a'.repeat(999)}.`],
   ])('keeps %s as written', (_label, raw) => {
     expect(cleanRecommendationReason(raw)).toBe(raw);
   });
@@ -49,6 +53,8 @@ describe('cleanRecommendationReason', () => {
     ['a table row', `| Theme | ${SENTENCE} |`],
     ['a table without edge pipes', `Theme | Reason\n--- | ---\nRest | ${SENTENCE}`],
     ['strikethrough', 'Find ~~rest~~ in Him.'],
+    ['text over the size bound', `${'a'.repeat(1000)}.`],
+    ['text that does not settle within the pass budget', 'Recommendation: > '.repeat(6) + 'Find rest.'],
     ['a missing value', undefined],
     ['a non-string value', null],
   ])('rejects %s', (_label, raw) => {
@@ -61,6 +67,17 @@ describe('cleanRecommendationReason', () => {
   ])('rejects oversized input with %s without scanning it', (_label, raw) => {
     const started = performance.now();
     expect(cleanRecommendationReason(raw)).toBeNull();
+    expect(performance.now() - started).toBeLessThan(50);
+  });
+
+  it.each([
+    ['unmatched brackets', '['.repeat(1000)],
+    ['unclosed tags', '<a'.repeat(500)],
+    ['unclosed emphasis', ' *a'.repeat(333)],
+    ['a delimiter run', '*'.repeat(999) + '!'],
+  ])('cleans adversarial input just under the bound quickly: %s', (_label, raw) => {
+    const started = performance.now();
+    cleanRecommendationReason(raw);
     expect(performance.now() - started).toBeLessThan(50);
   });
 

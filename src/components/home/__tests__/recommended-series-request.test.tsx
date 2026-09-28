@@ -368,6 +368,12 @@ describe('J10 RecommendedSeriesCard start-study gate', () => {
     expect(renderedTexts(tree)).toContain('A 7-day series on learning to trust — right where you are right now.');
   });
 
+  it('shows the plain fallback without a theme name when the fetched one is not text', async () => {
+    const tree = await mountFetched({ ...fetchedPick, themeName: 23, type: 'theme', reason: null });
+
+    expect(renderedTexts(tree)).toContain('A 7-day series on this theme — right where you are right now.');
+  });
+
   it('renders the QA fixture reason unchanged', async () => {
     const tree = await mount();
 
