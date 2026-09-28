@@ -10,8 +10,12 @@ import {
 import { captureSyncSession } from '@/lib/generation-session';
 import type { DevotionalDay } from '@/lib/store';
 
-const FOREGROUND_DISCOVERY_COOLDOWN_MS = 10_000;
-const foregroundDiscoveryAtByKey = new Map<string, number>();
+const AUTOMATIC_DISCOVERY_COOLDOWN_MS = 10_000;
+const automaticDiscoveryAtByKey = new Map<string, number>();
+
+export function resetGeneratedDayWatchDiscoveryThrottleForTests(): void {
+  automaticDiscoveryAtByKey.clear();
+}
 
 export type GeneratedDayWatchResult = {
   state: DailyGenerationRecoveryState;
@@ -67,6 +71,16 @@ export function useGeneratedDayWatch({
     });
     controllerRef.current = controller;
 
+    const runAutomaticDiscovery = (): Promise<void> => {
+      const now = Date.now();
+      const lastDiscoveryAt = automaticDiscoveryAtByKey.get(recoveryKey);
+      if (lastDiscoveryAt !== undefined && now - lastDiscoveryAt < AUTOMATIC_DISCOVERY_COOLDOWN_MS) {
+        return Promise.resolve();
+      }
+      automaticDiscoveryAtByKey.set(recoveryKey, now);
+      return controller.start();
+    };
+
     const applyNetworkState = (network: { isConnected: boolean | null; isInternetReachable: boolean | null }) => (
       controller.setOnline(Boolean(network.isConnected && network.isInternetReachable !== false))
     );
@@ -76,11 +90,7 @@ export function useGeneratedDayWatch({
     });
     const appStateSubscription = AppState.addEventListener('change', (nextState) => {
       if (nextState !== 'active') return;
-      const now = Date.now();
-      const lastDiscoveryAt = foregroundDiscoveryAtByKey.get(recoveryKey);
-      if (lastDiscoveryAt !== undefined && now - lastDiscoveryAt < FOREGROUND_DISCOVERY_COOLDOWN_MS) return;
-      foregroundDiscoveryAtByKey.set(recoveryKey, now);
-      void controller.checkAgain();
+      void runAutomaticDiscovery();
     });
 
     void NetInfo.fetch()
@@ -88,12 +98,12 @@ export function useGeneratedDayWatch({
         networkInitialized = true;
         await applyNetworkState(network);
         if (network.isConnected && network.isInternetReachable !== false) {
-          await controller.start();
+          await runAutomaticDiscovery();
         }
       })
       .catch(() => {
         networkInitialized = true;
-        return controller.start();
+        return runAutomaticDiscovery();
       });
 
     return () => {

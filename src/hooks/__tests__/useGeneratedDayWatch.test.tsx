@@ -38,7 +38,11 @@ jest.mock('@/lib/generation-session', () => ({
   SyncSessionInvalidatedError: class SyncSessionInvalidatedError extends Error {},
 }));
 
-import { useGeneratedDayWatch, type GeneratedDayWatchResult } from '../useGeneratedDayWatch';
+import {
+  resetGeneratedDayWatchDiscoveryThrottleForTests,
+  useGeneratedDayWatch,
+  type GeneratedDayWatchResult,
+} from '../useGeneratedDayWatch';
 import { resetDailyGenerationRecoveryForTesting } from '@/lib/daily-generation-recovery';
 
 function Probe({
@@ -70,6 +74,7 @@ describe('useGeneratedDayWatch', () => {
       return { remove: jest.fn() };
     });
     resetDailyGenerationRecoveryForTesting();
+    resetGeneratedDayWatchDiscoveryThrottleForTests();
     mockSubmitGenerationJob.mockResolvedValue({ jobId: 'job-new', status: 'pending', devotionalId: 'devo-1' });
     mockPollJobStatus.mockResolvedValue({
       jobId: 'job-1',
@@ -123,7 +128,7 @@ describe('useGeneratedDayWatch', () => {
     act(() => tree?.unmount());
   });
 
-  it('throttles foreground discovery per recovery key without throttling initial start', async () => {
+  it('shares one throttle across initial start and foreground discovery for a recovery key', async () => {
     jest.useFakeTimers({ now: 1_000 });
     mockFindDayJob.mockResolvedValue(null);
     const onDay = jest.fn();
@@ -145,7 +150,7 @@ describe('useGeneratedDayWatch', () => {
       await Promise.resolve();
       await Promise.resolve();
     });
-    expect(mockFindDayJob).toHaveBeenCalledTimes(2);
+    expect(mockFindDayJob).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       jest.advanceTimersByTime(10_000);
@@ -153,7 +158,41 @@ describe('useGeneratedDayWatch', () => {
       await Promise.resolve();
       await Promise.resolve();
     });
-    expect(mockFindDayJob).toHaveBeenCalledTimes(3);
+    expect(mockFindDayJob).toHaveBeenCalledTimes(2);
+    act(() => tree?.unmount());
+  });
+
+  it('throttles a recreated watch for the same key', async () => {
+    jest.useFakeTimers({ now: 1_000 });
+    mockFindDayJob.mockResolvedValue(null);
+    const onDay = jest.fn();
+    let tree: { unmount: () => void } | null = null;
+
+    await act(async () => {
+      tree = renderer.create(<Probe onDay={onDay} onValue={() => undefined} canMutate={false} />);
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    act(() => tree?.unmount());
+
+    await act(async () => {
+      tree = renderer.create(<Probe onDay={onDay} onValue={() => undefined} canMutate={false} />);
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(mockFindDayJob).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      jest.advanceTimersByTime(10_000);
+      tree?.unmount();
+      tree = renderer.create(<Probe onDay={onDay} onValue={() => undefined} canMutate={false} />);
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(mockFindDayJob).toHaveBeenCalledTimes(2);
     act(() => tree?.unmount());
   });
 });

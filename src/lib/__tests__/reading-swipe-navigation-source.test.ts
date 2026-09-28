@@ -80,44 +80,6 @@ describe('reading swipe navigation source contract', () => {
     expect(readingSource).toContain("pullDevotionalContent(currentDevotional.id, { forceFull: true })");
   });
 
-  it('shares one read-budget block across reader recovery entry points', () => {
-    expect(readingSource).toContain('const readBudgetBlocked = useReadBudgetBlocked();');
-    expect(readingSource).toContain(
-      'const isPrimaryActionDisabled = !isPausedSeriesDay && (isCheckBusy || isCheckResting || readBudgetBlocked);',
-    );
-    expect(readingSource).toMatch(
-      /readBudgetBlocked\s*\? 'Try again in a minute'[\s\S]{0,120}isCheckResting\s*\? 'Checked just now'/,
-    );
-    expect(readingSource).toContain('disabled={isCheckingForSyncedDay || readBudgetBlocked}');
-    expect(readingSource).toContain('disabled={readBudgetBlocked}');
-  });
-
-  it('shows the paused-series verdict only after pull and job discovery both confirm absence', () => {
-    const pausedVerdict = readingSource.match(
-      /const isPausedSeriesDay = usesDailyRecovery[\s\S]{0,500}?;/,
-    )?.[0] ?? '';
-
-    expect(pausedVerdict).toContain('confirmedMissingDayKey === dailyRecoveryKey');
-    expect(pausedVerdict).toContain('discoveredAbsentKey === dailyRecoveryKey');
-    expect(pausedVerdict).toContain('!isCheckingForSyncedDay');
-    expect(pausedVerdict).toContain("dailyState.status !== 'running'");
-    expect(pausedVerdict).toContain("dailyState.status !== 'slow'");
-    expect(readingSource).toContain('nextConfirmedAbsentKey(previous, dailyRecoveryKey, dailyGeneration.state)');
-  });
-
-  it('retries missing-devotional hydration after the shared window ends without self-cancelling', () => {
-    const hydrationEffect = readingSource.match(
-      /useEffect\(\(\) => \{\n    const devotionalId = effectiveDevotionalId;[\s\S]{0,2400}?\n  \}, \[[^\]]+\]\);/,
-    )?.[0] ?? '';
-
-    expect(hydrationEffect).toContain('if (!devotionalId || currentDevotional || readBudgetBlocked) return;');
-    expect(hydrationEffect).toContain('if (!readingMountedRef.current || !isSyncSessionCurrent(session)) return;');
-    expect(hydrationEffect).toContain('delete missingDevotionalHydrationAttemptRef.current[devotionalId]');
-    expect(hydrationEffect).not.toContain('let cancelled = false');
-    expect(hydrationEffect).not.toContain('isHydratingMissingDevotional,');
-    expect(hydrationEffect).toMatch(/\[[^\]]*readBudgetBlocked[^\]]*\]/);
-  });
-
   it('re-enables job discovery when revisiting a missing progressive day after its sync pull ran', () => {
     expect(readingSource).toMatch(
       /if \(source === 'auto' && syncRecoveryAttemptRef\.current\[attemptKey\]\) \{[\s\S]{0,160}setDailySyncRecoveryKey\(attemptKey\)/,

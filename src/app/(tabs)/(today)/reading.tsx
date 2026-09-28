@@ -342,6 +342,8 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   // We resolve the effective devotional locally from the param *immediately*
   // Reading history must not replace the active series used by Today.
   const effectiveDevotionalId = params.devotionalId ?? currentDevotionalId;
+  const effectiveDevotionalIdRef = useRef(effectiveDevotionalId);
+  effectiveDevotionalIdRef.current = effectiveDevotionalId;
   const isViewingActiveSeries = Boolean(
     effectiveDevotionalId && effectiveDevotionalId === currentDevotionalId,
   );
@@ -1828,7 +1830,9 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
           updateDevotionals: updateSyncedDevotionals,
         });
         commitDevotionalPullCursor(pulled);
-        if (params.readOnly !== '1' && !useUnfoldStore.getState().currentDevotionalId
+        if (missingDevotionalHydrationOwnerRef.current === devotionalId
+          && effectiveDevotionalIdRef.current === devotionalId
+          && params.readOnly !== '1' && !useUnfoldStore.getState().currentDevotionalId
           && !useUnfoldStore.getState().devotionals.find((item) => item.id === devotionalId)?.archivedAt) {
           setCurrentDevotional(devotionalId);
         }

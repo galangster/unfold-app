@@ -38,6 +38,9 @@ const mockDailyRetry = jest.fn(async () => undefined);
 const mockLogBugError = jest.fn();
 const mockCaptureAppError = jest.fn();
 let mockDailyGenerationState: Record<string, unknown> = { status: 'idle' };
+let mockUseRealGeneratedDayWatch = false;
+const mockFindDayJob = jest.fn();
+const mockPollJobStatus = jest.fn();
 const mockWithTiming = jest.fn(
   (value: unknown, _config?: unknown, callback?: (finished: boolean) => void) => {
     callback?.(true);
@@ -110,6 +113,15 @@ jest.mock('../api-config', () => ({
   PRIMARY_BACKEND_URL: 'https://example.test',
   getAuthHeaders: jest.fn(async () => ({ 'Content-Type': 'application/json' })),
 }));
+
+jest.mock('@/lib/generation-api', () => {
+  const actual = jest.requireActual('@/lib/generation-api') as Record<string, unknown>;
+  return {
+    ...actual,
+    findDayJob: (...args: unknown[]) => mockFindDayJob(...args),
+    pollJobStatus: (...args: unknown[]) => mockPollJobStatus(...args),
+  };
+});
 
 jest.mock('@/lib/devotional-sync-pull', () => {
   const actual = jest.requireActual('@/lib/devotional-sync-pull');
@@ -306,13 +318,21 @@ jest.mock('@/hooks/usePremiumAccessPolicy', () => ({
 jest.mock('@/hooks/useCrossTabBack', () => ({
   useCrossTabBack: () => ({ handleBack: jest.fn() }),
 }));
-jest.mock('@/hooks/useGeneratedDayWatch', () => ({
-  useGeneratedDayWatch: () => ({
-    state: mockDailyGenerationState,
-    checkAgain: mockDailyCheckAgain,
-    retry: mockDailyRetry,
-  }),
-}));
+jest.mock('@/hooks/useGeneratedDayWatch', () => {
+  const actual = jest.requireActual('@/hooks/useGeneratedDayWatch') as typeof import('@/hooks/useGeneratedDayWatch');
+  return {
+    ...actual,
+    useGeneratedDayWatch: (options: Parameters<typeof actual.useGeneratedDayWatch>[0]) => (
+      mockUseRealGeneratedDayWatch
+        ? actual.useGeneratedDayWatch(options)
+        : {
+            state: mockDailyGenerationState,
+            checkAgain: mockDailyCheckAgain,
+            retry: mockDailyRetry,
+          }
+    ),
+  };
+});
 
 jest.mock('@/lib/widget-bridge', () => ({
   syncWidgets: jest.fn(),
@@ -397,6 +417,13 @@ const {
   resetReadBudgetForTests,
   SyncPullRateLimitedError,
 } = require('@/lib/sync-pull-backoff') as typeof import('@/lib/sync-pull-backoff');
+const {
+  resetGeneratedDayWatchDiscoveryThrottleForTests,
+} = require('@/hooks/useGeneratedDayWatch') as typeof import('@/hooks/useGeneratedDayWatch');
+const {
+  resetDailyGenerationRecoveryForTesting,
+} = require('@/lib/daily-generation-recovery') as typeof import('@/lib/daily-generation-recovery');
+const { ApiError } = require('@/lib/generation-api') as typeof import('@/lib/generation-api');
 
 const ACTIVE_DEVOTIONAL_ID = 'devo-active-today';
 
@@ -576,8 +603,13 @@ describe('reader swipe cancellation', () => {
     mockPanGesture.onEnd = null;
     mockPanGesture.onFinalize = null;
     mockDailyGenerationState = { status: 'idle' };
+    mockUseRealGeneratedDayWatch = false;
+    mockFindDayJob.mockResolvedValue(null);
+    mockPollJobStatus.mockResolvedValue({ status: 'processing' });
     mockPullDevotionalContent.mockResolvedValue(emptyPull());
     resetReadBudgetForTests();
+    resetGeneratedDayWatchDiscoveryThrottleForTests();
+    resetDailyGenerationRecoveryForTesting();
     useUnfoldStore.getState().reset();
   });
 
@@ -585,6 +617,8 @@ describe('reader swipe cancellation', () => {
     jest.useRealTimers();
     jest.restoreAllMocks();
     resetReadBudgetForTests();
+    resetGeneratedDayWatchDiscoveryThrottleForTests();
+    resetDailyGenerationRecoveryForTesting();
     useUnfoldStore.getState().reset();
   });
 
@@ -719,6 +753,87 @@ describe('reader swipe cancellation', () => {
     act(() => tree!.unmount());
   });
 
+  it('polls a running paused-series job and delivers its day through the real watcher', async () => {
+    seedPausedMissingDay();
+    mockUseRealGeneratedDayWatch = true;
+    const deliveredDay = makeDay(4, { isRead: false });
+    let resolveFindDayJob!: (job: Record<string, unknown>) => void;
+    mockFindDayJob.mockImplementation(() => new Promise((resolve) => {
+      resolveFindDayJob = resolve;
+    }));
+    mockPollJobStatus.mockResolvedValue({
+      jobId: 'job-day-4',
+      jobType: 'day',
+      devotionalId: DEVOTIONAL_ID,
+      dayNumber: 4,
+      status: 'complete',
+      result: { devotionalId: DEVOTIONAL_ID, devotionalDay: deliveredDay },
+    });
+    let tree: ReaderTree;
+
+    await act(async () => {
+      tree = renderer.create(<ReadingScreen />);
+      await flushEffects();
+    });
+    expect(mockFindDayJob).toHaveBeenCalledWith(DEVOTIONAL_ID, 4, expect.any(Number));
+
+    await act(async () => {
+      resolveFindDayJob({
+        jobId: 'job-day-4',
+        jobType: 'day',
+        devotionalId: DEVOTIONAL_ID,
+        dayNumber: 4,
+        status: 'processing',
+      });
+      await flushEffects();
+      jest.advanceTimersByTime(15_000);
+      await flushEffects();
+    });
+    expect(mockPollJobStatus).toHaveBeenCalledWith('job-day-4', expect.any(Number));
+    expect(useUnfoldStore.getState().devotionals.find((item) => item.id === DEVOTIONAL_ID)?.days)
+      .toEqual(expect.arrayContaining([expect.objectContaining({ dayNumber: 4 })]));
+    act(() => tree!.unmount());
+  });
+
+  it('records a find-day 429 and suppresses another real-watcher lookup until the window ends', async () => {
+    seedPausedMissingDay();
+    mockUseRealGeneratedDayWatch = true;
+    let rejectFindDayJob!: (error: Error) => void;
+    mockFindDayJob
+      .mockImplementationOnce(() => new Promise((_, reject) => {
+        rejectFindDayJob = reject;
+      }))
+      .mockResolvedValueOnce(null);
+    let tree: ReaderTree;
+
+    await act(async () => {
+      tree = renderer.create(<ReadingScreen />);
+      await flushEffects();
+    });
+    expect(mockFindDayJob).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      noteReadBudgetRateLimited(60);
+      rejectFindDayJob(new ApiError('Rate limited', 429, 'RATE_LIMITED'));
+      await flushEffects();
+    });
+    expect(mockLogBugError).not.toHaveBeenCalled();
+
+    await act(async () => {
+      jest.advanceTimersByTime(59_000);
+      await flushEffects();
+    });
+    expect(mockFindDayJob).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      jest.advanceTimersByTime(1_000);
+      await flushEffects();
+    });
+    expect(mockFindDayJob).toHaveBeenCalledTimes(2);
+    expect(mockLogBugError).not.toHaveBeenCalled();
+    act(() => tree!.unmount());
+  });
+
   it('treats pull 429 as quiet backpressure until the shared window ends', async () => {
     seedPausedMissingDay();
     mockPullDevotionalContent
@@ -782,7 +897,6 @@ describe('reader swipe cancellation', () => {
     expect(tree!.root.findAllByProps({ accessibilityLabel: 'Loading reading' }).length).toBeGreaterThan(0);
 
     await act(async () => {
-      useUnfoldStore.getState().setCurrentDevotional(DEVOTIONAL_ID);
       routeParams.devotionalId = missingC;
       tree!.update(<ReadingScreen />);
       await flushEffects();
@@ -793,7 +907,7 @@ describe('reader swipe cancellation', () => {
       resolveA?.(emptyPull());
       await flushEffects();
     });
-    expect(useUnfoldStore.getState().currentDevotionalId).toBe(DEVOTIONAL_ID);
+    expect(useUnfoldStore.getState().currentDevotionalId).toBeNull();
     expect(tree!.root.findAllByProps({ accessibilityLabel: 'Loading reading' }).length).toBeGreaterThan(0);
 
     await act(async () => {
