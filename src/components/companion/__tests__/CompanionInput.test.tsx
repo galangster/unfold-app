@@ -15,9 +15,10 @@ jest.mock('phosphor-react-native', () => ({
   MicrophoneIcon: () => null,
 }));
 
-jest.mock('@/components/VoiceInputBar', () => ({
-  VoiceInputBar: () => null,
-}));
+jest.mock('@/components/VoiceInputBar', () => {
+  const { createElement } = jest.requireActual('react');
+  return { VoiceInputBar: () => createElement('VoiceInputBar') };
+});
 
 jest.mock('@/components/ui', () => ({
   alpha: (color: string) => color,
@@ -72,7 +73,7 @@ const COMPANION_MESSAGE_MAX_CHARS = 4000;
 // Drafts live in memory for the whole process, so each test starts clean.
 beforeEach(() => clearCompanionDrafts());
 
-function renderInput(onSend: (text: string) => boolean, draftKey = 'conversation-a') {
+function renderInput(onSend: (text: string) => boolean, conversationId = 'conversation-a', hasMessages = true) {
   let tree: any;
 
   act(() => {
@@ -81,7 +82,8 @@ function renderInput(onSend: (text: string) => boolean, draftKey = 'conversation
         onSend={onSend}
         onStop={jest.fn()}
         isStreaming={false}
-        draftKey={draftKey}
+        conversationId={conversationId}
+        hasMessages={hasMessages}
       />
     );
   });
@@ -153,7 +155,7 @@ describe('CompanionInput send clearing', () => {
 
     act(() => {
       tree = renderer.create(
-        <CompanionInput draftKey="conversation-a"
+        <CompanionInput conversationId="conversation-a" hasMessages
           onSend={onSend}
           onStop={onStop}
           isStreaming={false}
@@ -165,7 +167,7 @@ describe('CompanionInput send clearing', () => {
 
     act(() => {
       tree.update(
-        <CompanionInput draftKey="conversation-a"
+        <CompanionInput conversationId="conversation-a" hasMessages
           onSend={onSend}
           onStop={onStop}
           isStreaming={false}
@@ -206,7 +208,7 @@ describe('CompanionInput send clearing', () => {
 
     act(() => {
       tree = renderer.create(
-        <CompanionInput draftKey="conversation-a" onSend={onSend} onStop={jest.fn()} isStreaming={isStreaming} />
+        <CompanionInput conversationId="conversation-a" hasMessages onSend={onSend} onStop={jest.fn()} isStreaming={isStreaming} />
       );
     });
     if (draft) enterText(tree, draft);
@@ -219,11 +221,12 @@ describe('CompanionInput send clearing', () => {
 });
 
 describe('CompanionInput drafts across conversations', () => {
-  function switchTo(tree: any, onSend: (text: string) => boolean, draftKey: string) {
+  function switchTo(tree: any, onSend: (text: string) => boolean, conversationId: string, hasMessages = true) {
     act(() => {
-      tree.update(<CompanionInput onSend={onSend} onStop={jest.fn()} isStreaming={false} draftKey={draftKey} />);
+      tree.update(<CompanionInput onSend={onSend} onStop={jest.fn()} isStreaming={false} conversationId={conversationId} hasMessages={hasMessages} />);
     });
   }
+  const shownText = (tree: any) => tree.root.findByType(TextInput).props.value;
 
   it('never sends one conversation\'s unsent text to another, and keeps it for its return', () => {
     const onSend = jest.fn(() => true);
@@ -231,15 +234,55 @@ describe('CompanionInput drafts across conversations', () => {
     enterText(tree, "Pray for Sam's surgery");
 
     switchTo(tree, onSend, 'conversation-b');
-    expect(tree.root.findByType(TextInput).props.value).toBe('');
+    expect(shownText(tree)).toBe('');
     enterText(tree, 'Hello from B');
     pressSend(tree);
     expect(onSend).toHaveBeenCalledTimes(1);
     expect(onSend).toHaveBeenCalledWith('Hello from B');
 
     switchTo(tree, onSend, 'conversation-a');
-    expect(tree.root.findByType(TextInput).props.value).toBe("Pray for Sam's surgery");
+    expect(shownText(tree)).toBe("Pray for Sam's surgery");
     switchTo(tree, onSend, 'conversation-b');
-    expect(tree.root.findByType(TextInput).props.value).toBe('');
+    expect(shownText(tree)).toBe('');
+  });
+
+  it('keeps a new chat\'s typed text with it when a starter card sends its first message', () => {
+    const onSend = jest.fn(() => true);
+    const tree = renderInput(onSend, 'conversation-a', false);
+    enterText(tree, "Pray for Sam's surgery");
+
+    // A starter card sends the first message; the composer did not send this text.
+    switchTo(tree, onSend, 'conversation-a', true);
+    expect(shownText(tree)).toBe("Pray for Sam's surgery");
+
+    // The next new chat opens blank, so the text cannot be sent there.
+    switchTo(tree, onSend, 'conversation-b', false);
+    expect(shownText(tree)).toBe('');
+    switchTo(tree, onSend, 'conversation-a', true);
+    expect(shownText(tree)).toBe("Pray for Sam's surgery");
+  });
+
+  it('carries unsent text from an empty chat into the next new chat, but not text it sent', () => {
+    const onSend = jest.fn(() => true);
+    const tree = renderInput(onSend, 'empty-chat-1', false);
+    enterText(tree, 'Half a thought');
+    switchTo(tree, onSend, 'empty-chat-2', false);
+    expect(shownText(tree)).toBe('Half a thought');
+
+    pressSend(tree);
+    switchTo(tree, onSend, 'empty-chat-2', true);
+    switchTo(tree, onSend, 'empty-chat-3', false);
+    expect(shownText(tree)).toBe('');
+  });
+
+  it('ends a recording when a new chat starts, even from an empty chat', () => {
+    const tree = renderInput(jest.fn(() => true), 'empty-chat-1', false);
+    act(() => {
+      tree.root.findByProps({ accessibilityLabel: 'Voice input' }).props.onPress();
+    });
+    expect(tree.root.findAllByType('VoiceInputBar')).toHaveLength(1);
+
+    switchTo(tree, jest.fn(() => true), 'empty-chat-2', false);
+    expect(tree.root.findAllByType('VoiceInputBar')).toHaveLength(0);
   });
 });

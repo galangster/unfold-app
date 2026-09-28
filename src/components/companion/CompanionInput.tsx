@@ -32,7 +32,7 @@ import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
 import { COMPANION_MESSAGE_MAX_CHARS } from '@/lib/companion-limits';
-import { readCompanionDraft, writeCompanionDraft } from '@/lib/companion-drafts';
+import { companionDraftKey, moveCompanionDraft, readCompanionDraft, writeCompanionDraft } from '@/lib/companion-drafts';
 
 const PLACEHOLDERS = [
   'What’s on your mind?',
@@ -65,27 +65,35 @@ interface Props {
   onStop: () => void;
   isStreaming: boolean;
   fontScale?: number;
-  /** The conversation this composer writes to. Each keeps its own unsent text. */
-  draftKey: string;
+  /** The active conversation. Each keeps its own unsent text. */
+  conversationId: string | null;
+  /** Whether it has messages yet. Chats without any share one draft slot. */
+  hasMessages: boolean;
 }
 
 // Memoized: the companion screen re-renders on every streaming token flush —
 // the input bar's props (stable callbacks + isStreaming/fontScale) only change
 // at stream or text-size boundaries, so the memo skips token-flush rerenders.
-export const CompanionInput = memo(function CompanionInput({ onSend, onStop, isStreaming, fontScale = 1, draftKey }: Props) {
+export const CompanionInput = memo(function CompanionInput({ onSend, onStop, isStreaming, fontScale = 1, conversationId, hasMessages }: Props) {
   const { colors, isDark } = useTheme();
-  const [draft, setDraft] = useState(() => ({ key: draftKey, text: readCompanionDraft(draftKey) }));
+  const draftKey = companionDraftKey(conversationId, hasMessages);
+  const [shown, setShown] = useState(() => ({ conversationId, draftKey, text: readCompanionDraft(draftKey) }));
   const [isVoiceMode, setIsVoiceMode] = useState(false);
-  // Another conversation shows its own unsent text, and a recording in progress
-  // ends, so words meant for one conversation are never sent to another.
-  if (draft.key !== draftKey) {
-    setDraft({ key: draftKey, text: readCompanionDraft(draftKey) });
+  if (shown.conversationId !== conversationId) {
+    // Another conversation shows its own unsent text, and a recording in progress
+    // ends, so words meant for one conversation are never sent to another.
+    setShown({ conversationId, draftKey, text: readCompanionDraft(draftKey) });
     setIsVoiceMode(false);
+  } else if (shown.draftKey !== draftKey) {
+    // The same chat got its first message, from a starter card say: its unsent
+    // text moves to the chat's own slot instead of waiting in the next new chat.
+    moveCompanionDraft(shown.draftKey, draftKey);
+    setShown({ ...shown, draftKey });
   }
-  const { text } = draft;
+  const { text } = shown;
   const setText = useCallback((next: string) => {
     writeCompanionDraft(draftKey, next);
-    setDraft({ key: draftKey, text: next });
+    setShown((prev) => ({ ...prev, text: next }));
   }, [draftKey]);
   const [micPermissionDenied, setMicPermissionDenied] = useState(false);
   const inputRef = useRef<TextInput>(null);

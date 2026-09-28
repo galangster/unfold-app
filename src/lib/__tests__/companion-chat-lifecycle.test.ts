@@ -31,6 +31,7 @@ import {
   useCompanionChatStore,
 } from '../companion-chat-store';
 import { companionConversationSyncData } from '../personal-data-sync-records';
+import { readCompanionDraft, writeCompanionDraft } from '../companion-drafts';
 
 function userMessage(id: string, content: string): CompanionMessage {
   return { id, role: 'user', content, timestamp: 1, status: 'sent' };
@@ -56,6 +57,12 @@ describe('companion chat retention and pairing', () => {
       conversations: [],
       activeConversationId: null,
     });
+  });
+
+  it('forgets a deleted conversation\'s unsent draft', () => {
+    writeCompanionDraft('conv-deleted', 'Half a thought');
+    useCompanionChatStore.getState().deleteConversation('conv-deleted');
+    expect(readCompanionDraft('conv-deleted')).toBe('');
   });
 
   it('keeps more than 50 conversations and 200 messages without silent deletes', () => {

@@ -17,6 +17,7 @@ import {
   createCompanionChatPersistStorage,
 } from './companion-chat-persist-storage';
 import { shouldFlushAutosaveOnAppState } from './autosave-controller';
+import { forgetCompanionDraft } from './companion-drafts';
 
 import { getAuthHeaders, PRIMARY_BACKEND_URL } from '@/lib/api-config';
 import { authenticatedFetch } from './device-credential';
@@ -514,7 +515,9 @@ export const useCompanionChatStore = create<CompanionChatState>()(
         }
       },
 
-      deleteConversation: (id) =>
+      deleteConversation: (id) => {
+        // A deleted conversation takes its unsent text with it.
+        forgetCompanionDraft(id);
         set((s) => {
           const now = new Date().toISOString();
           const existing = s.conversations.find(c => c.id === id);
@@ -528,7 +531,8 @@ export const useCompanionChatStore = create<CompanionChatState>()(
             conversations: s.conversations.filter(c => c.id !== id),
             activeConversationId: s.activeConversationId === id ? null : s.activeConversationId,
           };
-        }),
+        });
+      },
 
       clearAllConversations: () => {
         set((s) => {

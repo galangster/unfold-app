@@ -21,7 +21,20 @@ export function readCompanionDraft(draftKey: string): string {
 }
 
 export function writeCompanionDraft(draftKey: string, text: string): void {
-  drafts.set(draftKey, text);
+  if (text) drafts.set(draftKey, text);
+  else drafts.delete(draftKey);
+}
+
+/** Moves unsent text to a new slot. A second call finds nothing to move. */
+export function moveCompanionDraft(fromKey: string, toKey: string): void {
+  const text = drafts.get(fromKey);
+  if (!text) return;
+  drafts.delete(fromKey);
+  drafts.set(toKey, text);
+}
+
+export function forgetCompanionDraft(conversationId: string): void {
+  drafts.delete(conversationId);
 }
 
 export function clearCompanionDrafts(): void {

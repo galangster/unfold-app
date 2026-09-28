@@ -41,7 +41,6 @@ import { resolveCompanionPersonality } from '@/lib/companion-personality';
 import { ProfileEntryButton } from '@/components/ProfileEntryButton';
 import { COMPANION_MESSAGE_MAX_CHARS, useCompanionChat, type SendOutcome } from '@/lib/use-companion-chat';
 import type { CompanionMessage } from '@/lib/companion-chat-store';
-import { companionDraftKey } from '@/lib/companion-drafts';
 import {
   CompanionDrawer,
   useDrawerGesture,
@@ -593,7 +592,8 @@ export default function CompanionScreen() {
         onStop={stopGeneration}
         isStreaming={isStreaming}
         fontScale={fontScale}
-        draftKey={companionDraftKey(activeConversationId, messages.length > 0)}
+        conversationId={activeConversationId}
+        hasMessages={messages.length > 0}
       />
       </View>
       </View>

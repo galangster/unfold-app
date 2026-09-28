@@ -1,4 +1,4 @@
-import { companionDraftKey } from '../companion-drafts';
+import { companionDraftKey, moveCompanionDraft, readCompanionDraft, writeCompanionDraft } from '../companion-drafts';
 
 describe('companionDraftKey', () => {
   it('gives each conversation with messages its own slot', () => {
@@ -10,5 +10,15 @@ describe('companionDraftKey', () => {
     expect(companionDraftKey('empty-chat-1', false)).toBe(companionDraftKey('empty-chat-2', false));
     expect(companionDraftKey(null, false)).toBe(companionDraftKey('empty-chat-1', false));
     expect(companionDraftKey('empty-chat-1', false)).not.toBe(companionDraftKey('conversation-a', true));
+  });
+});
+
+describe('moveCompanionDraft', () => {
+  it('moves unsent text once, so a repeated move keeps it', () => {
+    writeCompanionDraft('new-chat-slot', 'Pray for Sam');
+    moveCompanionDraft('new-chat-slot', 'conversation-a');
+    moveCompanionDraft('new-chat-slot', 'conversation-a');
+    expect(readCompanionDraft('conversation-a')).toBe('Pray for Sam');
+    expect(readCompanionDraft('new-chat-slot')).toBe('');
   });
 });
