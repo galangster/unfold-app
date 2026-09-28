@@ -79,8 +79,49 @@ describe('TypewriterText', () => {
     act(() => {
       jest.advanceTimersByTime(1_000);
     });
-    // A later React commit (typing in the field below, say) re-renders from React
-    // props. Nothing may depend on the animation registry to stay visible.
+    // A later parent commit (typing in the field below, say) re-renders from
+    // React props. Nothing may depend on the animation registry to stay visible.
+    act(() => {
+      view.update(<TypewriterText text={QUESTION} onComplete={onComplete} style={{ color: TEXT_COLOR }} />);
+    });
+    expect(visibleText(view)).toBe(QUESTION.replace(/\s/g, ''));
+  });
+
+  it('does not resume a reveal that unmounted during its last-word pause', () => {
+    const onComplete = jest.fn();
+    act(() => {
+      view = create(<TypewriterText text="Stay with me" lastWordPause={1_000} onComplete={onComplete} />);
+    });
+    act(() => {
+      jest.advanceTimersByTime(250); // inside the pause before "me"
+    });
+    act(() => view.unmount());
+
+    act(() => {
+      jest.advanceTimersByTime(5_000);
+    });
+    expect(onComplete).not.toHaveBeenCalled();
+  });
+
+  it('reveals only the new text when it changes during the last-word pause', () => {
+    const onComplete = jest.fn();
+    act(() => {
+      view = create(<TypewriterText text="Stay with me" lastWordPause={1_000} onComplete={onComplete} style={{ color: TEXT_COLOR }} />);
+    });
+    act(() => {
+      jest.advanceTimersByTime(250);
+    });
+    act(() => {
+      view.update(<TypewriterText text={QUESTION} lastWordPause={1_000} onComplete={onComplete} style={{ color: TEXT_COLOR }} />);
+    });
+
+    act(() => {
+      jest.advanceTimersByTime(3_000); // the new reveal, its pause, and completion
+    });
+    expect(onComplete).toHaveBeenCalledTimes(1);
+    act(() => {
+      jest.advanceTimersByTime(1_000); // then each character's entrance settles
+    });
     expect(visibleText(view)).toBe(QUESTION.replace(/\s/g, ''));
   });
 

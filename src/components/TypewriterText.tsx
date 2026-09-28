@@ -181,6 +181,7 @@ export function TypewriterText({
     setVisibleCount(0);
     let count = 0;
     let intervalId: ReturnType<typeof setInterval> | null = null;
+    let pauseId: ReturnType<typeof setTimeout> | null = null;
     let completionTimerId: ReturnType<typeof setTimeout> | null = null;
     let lastWordFired = false;
 
@@ -196,7 +197,7 @@ export function TypewriterText({
           // Fire the callback
           onLastWordStartRef.current?.();
           // Resume after pause
-          setTimeout(() => {
+          pauseId = setTimeout(() => {
             intervalId = setInterval(() => {
               count++;
               setVisibleCount(count);
@@ -218,6 +219,7 @@ export function TypewriterText({
 
     return () => {
       clearTimeout(delayId);
+      if (pauseId) clearTimeout(pauseId);
       if (intervalId) clearInterval(intervalId);
       if (completionTimerId) clearTimeout(completionTimerId);
     };
