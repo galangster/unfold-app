@@ -11,6 +11,9 @@ import {
 import type { Devotional, DevotionalDay } from '../store';
 
 const now = new Date(2026, 4, 10, 12, 0, 0);
+// The series under test is the current one unless a test pauses it.
+const notPaused = false;
+const paused = true;
 const todayIso = new Date(2026, 4, 10, 9, 0, 0).toISOString();
 const yesterdayIso = new Date(2026, 4, 9, 9, 0, 0).toISOString();
 
@@ -100,7 +103,7 @@ describe('buildBookTodayPage', () => {
     const page = buildBookTodayPage(series({ currentDay: 4, days: [
       day({ dayNumber: 1, isRead: true, readAt: yesterdayIso }),
       day({ dayNumber: 4, title: 'Be still' }),
-    ] }), now);
+    ] }), now, notPaused);
     expect(page).toMatchObject({ dayNumber: 4, contentReady: true, canOpen: true, action: 'continue' });
   });
   it('does not treat duplicate or surplus read records as a complete series', () => {
@@ -135,6 +138,7 @@ describe('buildBookTodayPage', () => {
         ],
       }),
       now,
+      notPaused,
     );
 
     expect(page).toMatchObject({
@@ -166,6 +170,7 @@ describe('buildBookTodayPage', () => {
         ],
       }),
       now,
+      notPaused,
     );
 
     expect(page?.dayNumber).toBe(4);
@@ -183,6 +188,7 @@ describe('buildBookTodayPage', () => {
         days: [day({ dayNumber: 1, isRead: true, readAt: yesterdayIso })],
       }),
       now,
+      notPaused,
     );
 
     expect(page).toMatchObject({
@@ -213,7 +219,7 @@ describe('buildBookTodayPage', () => {
     });
 
     expect(isSeriesComplete(finished)).toBe(true);
-    expect(buildBookTodayPage(finished, now)).toMatchObject({
+    expect(buildBookTodayPage(finished, now, notPaused)).toMatchObject({
       seriesComplete: true,
       eyebrow: 'series-complete',
       action: 'read-again',
@@ -280,5 +286,57 @@ describe('buildBookChapters', () => {
     expect(chapters[0].status).toBe('done');
     expect(resolveBookOpenDayNumber(devotional, chapters[0], now)).toBe(7);
     expect(resolveBookOpenDayNumber(devotional, chapters[1], now)).toBe(8);
+  });
+});
+
+describe('paused series', () => {
+  beforeEach(() => {
+    jest.useFakeTimers({ now });
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('shows today of a paused series as not prepared and keeps the reader entry', () => {
+    const page = buildBookTodayPage(
+      series({
+        currentDay: 2,
+        seriesStartDate: new Date(2026, 4, 9, 12, 0, 0).toISOString(),
+        days: [day({ dayNumber: 1, isRead: true, readAt: yesterdayIso })],
+      }),
+      now,
+      paused,
+    );
+
+    expect(page).toMatchObject({
+      dayNumber: 2,
+      title: undefined,
+      contentReady: false,
+      canOpen: true,
+      action: 'continue',
+      eyebrow: 'not-prepared',
+    });
+  });
+
+  it('promises no next page after a paused series runs out of prepared days', () => {
+    const devotional = series({
+      currentDay: 5,
+      seriesStartDate: '2026-05-10T12:00:00.000Z',
+      days: [
+        day({ dayNumber: 1, isRead: true, readAt: yesterdayIso }),
+        day({ dayNumber: 2, isRead: true, readAt: yesterdayIso }),
+        day({ dayNumber: 3, isRead: true, readAt: yesterdayIso }),
+        day({ dayNumber: 4, isRead: true, readAt: todayIso, title: 'Be still' }),
+      ],
+    });
+
+    expect(buildBookTodayPage(devotional, now, notPaused)?.eyebrow).toBe('today-complete');
+    expect(buildBookTodayPage(devotional, now, paused)).toMatchObject({
+      dayNumber: 4,
+      canOpen: true,
+      action: 'read-again',
+      eyebrow: 'next-not-prepared',
+    });
   });
 });

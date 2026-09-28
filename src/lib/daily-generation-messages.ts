@@ -29,3 +29,15 @@ export function getDailyGenerationNotice(
       return null;
   }
 }
+
+/**
+ * A paused series (any series but the current one) is never generated
+ * further. Once a full pull confirms a day is not on the server, checking
+ * again cannot produce it, so the reader points to Today instead.
+ */
+export function getPausedSeriesDayNotice(dayNumber: number): { title: string; body: string } {
+  return {
+    title: `Day ${dayNumber} wasn’t prepared`,
+    body: `This series was paused before Day ${dayNumber}. Open Today to keep reading.`,
+  };
+}

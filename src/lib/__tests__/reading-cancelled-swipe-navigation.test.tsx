@@ -32,6 +32,15 @@ const mockExpoNotif: {
 };
 
 const mockReplace = jest.fn();
+const mockPullDevotionalContent = jest.fn();
+const mockDailyCheckAgain = jest.fn(async () => undefined);
+const mockDailyRetry = jest.fn(async () => undefined);
+const mockLogBugError = jest.fn();
+const mockCaptureAppError = jest.fn();
+let mockDailyGenerationState: Record<string, unknown> = { status: 'idle' };
+let mockUseRealGeneratedDayWatch = false;
+const mockFindDayJob = jest.fn();
+const mockPollJobStatus = jest.fn();
 const mockWithTiming = jest.fn(
   (value: unknown, _config?: unknown, callback?: (finished: boolean) => void) => {
     callback?.(true);
@@ -105,6 +114,24 @@ jest.mock('../api-config', () => ({
   getAuthHeaders: jest.fn(async () => ({ 'Content-Type': 'application/json' })),
 }));
 
+jest.mock('@/lib/generation-api', () => {
+  const actual = jest.requireActual('@/lib/generation-api') as Record<string, unknown>;
+  return {
+    ...actual,
+    findDayJob: (...args: unknown[]) => mockFindDayJob(...args),
+    pollJobStatus: (...args: unknown[]) => mockPollJobStatus(...args),
+  };
+});
+
+jest.mock('@/lib/devotional-sync-pull', () => {
+  const actual = jest.requireActual('@/lib/devotional-sync-pull');
+  return {
+    ...actual,
+    commitDevotionalPullCursor: jest.fn(),
+    pullDevotionalContent: (...args: unknown[]) => mockPullDevotionalContent(...args),
+  };
+});
+
 jest.mock('../mmkv-storage', () => {
   const store = new Map<string, string>();
   return {
@@ -142,7 +169,7 @@ jest.mock('../logger', () => ({
 }));
 
 jest.mock('../bug-logger', () => ({
-  logBugError: jest.fn(),
+  logBugError: (...args: unknown[]) => mockLogBugError(...args),
   logBugEvent: jest.fn(),
 }));
 
@@ -153,6 +180,7 @@ jest.mock('../analytics', () => ({
 
 jest.mock('../sentry', () => ({
   addAppBreadcrumb: jest.fn(),
+  captureAppError: (...args: unknown[]) => mockCaptureAppError(...args),
 }));
 
 jest.mock('@react-native-community/netinfo', () => ({
@@ -290,13 +318,21 @@ jest.mock('@/hooks/usePremiumAccessPolicy', () => ({
 jest.mock('@/hooks/useCrossTabBack', () => ({
   useCrossTabBack: () => ({ handleBack: jest.fn() }),
 }));
-jest.mock('@/hooks/useGeneratedDayWatch', () => ({
-  useGeneratedDayWatch: () => ({
-    state: { status: 'idle' },
-    checkAgain: jest.fn(async () => undefined),
-    retry: jest.fn(async () => undefined),
-  }),
-}));
+jest.mock('@/hooks/useGeneratedDayWatch', () => {
+  const actual = jest.requireActual('@/hooks/useGeneratedDayWatch') as typeof import('@/hooks/useGeneratedDayWatch');
+  return {
+    ...actual,
+    useGeneratedDayWatch: (options: Parameters<typeof actual.useGeneratedDayWatch>[0]) => (
+      mockUseRealGeneratedDayWatch
+        ? actual.useGeneratedDayWatch(options)
+        : {
+            state: mockDailyGenerationState,
+            checkAgain: mockDailyCheckAgain,
+            retry: mockDailyRetry,
+          }
+    ),
+  };
+});
 
 jest.mock('@/lib/widget-bridge', () => ({
   syncWidgets: jest.fn(),
@@ -376,12 +412,28 @@ import type { Devotional, DevotionalDay, UserProfile } from '@/lib/store';
 const { ReadingScreen } = require('@/app/(tabs)/(today)/reading');
 const { canonicalGeneratedDayId } = require('@/lib/devotional-canonical-days');
 const { useUnfoldStore } = require('@/lib/store') as typeof import('@/lib/store');
+const {
+  noteReadBudgetRateLimited,
+  resetReadBudgetForTests,
+  SyncPullRateLimitedError,
+} = require('@/lib/sync-pull-backoff') as typeof import('@/lib/sync-pull-backoff');
+const {
+  resetGeneratedDayWatchDiscoveryThrottleForTests,
+} = require('@/hooks/useGeneratedDayWatch') as typeof import('@/hooks/useGeneratedDayWatch');
+const {
+  resetDailyGenerationRecoveryForTesting,
+} = require('@/lib/daily-generation-recovery') as typeof import('@/lib/daily-generation-recovery');
+const { ApiError } = require('@/lib/generation-api') as typeof import('@/lib/generation-api');
+
+const ACTIVE_DEVOTIONAL_ID = 'devo-active-today';
 
 type ReaderTree = {
   root: {
     findByProps: (props: Record<string, unknown>) => { props: Record<string, unknown> };
     findAllByProps: (props: Record<string, unknown>) => Array<{ props: Record<string, unknown> }>;
   };
+  toJSON: () => unknown;
+  update: (element: React.ReactElement) => void;
   unmount: () => void;
 };
 
@@ -452,6 +504,44 @@ function seedReader(): { nextDay: DevotionalDay; seriesStartDate: string } {
   };
 }
 
+function seedPausedMissingDay(): void {
+  seedReader();
+  useUnfoldStore.setState((state) => {
+    const paused = state.devotionals[0];
+    const active = {
+      ...paused,
+      id: ACTIVE_DEVOTIONAL_ID,
+      title: 'Today series',
+      currentDay: 1,
+      days: paused.days.slice(0, 1).map((day) => ({
+        ...day,
+        id: canonicalGeneratedDayId(ACTIVE_DEVOTIONAL_ID, day.dayNumber),
+        devotionalId: ACTIVE_DEVOTIONAL_ID,
+      })),
+    };
+    return {
+      devotionals: [paused, active],
+      currentDevotionalId: ACTIVE_DEVOTIONAL_ID,
+    };
+  });
+  routeParams.devotionalId = DEVOTIONAL_ID;
+  routeParams.dayNumber = '4';
+}
+
+function emptyPull() {
+  return {
+    days: [],
+    timestamp: '2026-09-15T04:47:00.000Z',
+  };
+}
+
+async function flushEffects(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
 function readerSnapshot(tree: ReaderTree) {
   const dayChrome = tree.root.findAllByProps({ accessibilityLabel: 'Day 3 of 7' });
   const nextDayChrome = tree.root.findAllByProps({ accessibilityLabel: 'Day 4 of 7' });
@@ -512,12 +602,23 @@ describe('reader swipe cancellation', () => {
     mockPanGesture.onUpdate = null;
     mockPanGesture.onEnd = null;
     mockPanGesture.onFinalize = null;
+    mockDailyGenerationState = { status: 'idle' };
+    mockUseRealGeneratedDayWatch = false;
+    mockFindDayJob.mockResolvedValue(null);
+    mockPollJobStatus.mockResolvedValue({ status: 'processing' });
+    mockPullDevotionalContent.mockResolvedValue(emptyPull());
+    resetReadBudgetForTests();
+    resetGeneratedDayWatchDiscoveryThrottleForTests();
+    resetDailyGenerationRecoveryForTesting();
     useUnfoldStore.getState().reset();
   });
 
   afterEach(() => {
     jest.useRealTimers();
     jest.restoreAllMocks();
+    resetReadBudgetForTests();
+    resetGeneratedDayWatchDiscoveryThrottleForTests();
+    resetDailyGenerationRecoveryForTesting();
     useUnfoldStore.getState().reset();
   });
 
@@ -618,5 +719,201 @@ describe('reader swipe cancellation', () => {
     });
     expect(mockWithTiming).toHaveBeenCalledTimes(timingCallsAfterSuccessfulEnd);
     act(() => tree.unmount());
+  });
+
+  it('offers Open Today after pull and discovery confirm a paused day is absent', async () => {
+    seedPausedMissingDay();
+    mockDailyGenerationState = { status: 'idle', discovered: true };
+    let tree: ReaderTree;
+
+    await act(async () => {
+      tree = renderer.create(<ReadingScreen />);
+      await flushEffects();
+    });
+
+    expect(JSON.stringify(tree!.toJSON())).toContain("Day 4 wasn’t prepared");
+    expect(tree!.root.findByProps({ accessibilityLabel: 'Open Today' }).props.accessibilityState)
+      .toEqual(expect.objectContaining({ disabled: false }));
+    expect(mockPullDevotionalContent).toHaveBeenCalledTimes(1);
+    act(() => tree!.unmount());
+  });
+
+  it('keeps a paused day in its preparing state when discovery finds a running job', async () => {
+    seedPausedMissingDay();
+    mockDailyGenerationState = { status: 'running', jobId: 'job-day-4' };
+    let tree: ReaderTree;
+
+    await act(async () => {
+      tree = renderer.create(<ReadingScreen />);
+      await flushEffects();
+    });
+
+    expect(JSON.stringify(tree!.toJSON())).toContain('Preparing Day 4');
+    expect(tree!.root.findAllByProps({ accessibilityLabel: 'Open Today' })).toHaveLength(0);
+    act(() => tree!.unmount());
+  });
+
+  it('polls a running paused-series job and delivers its day through the real watcher', async () => {
+    seedPausedMissingDay();
+    mockUseRealGeneratedDayWatch = true;
+    const deliveredDay = makeDay(4, { isRead: false });
+    let resolveFindDayJob!: (job: Record<string, unknown>) => void;
+    mockFindDayJob.mockImplementation(() => new Promise((resolve) => {
+      resolveFindDayJob = resolve;
+    }));
+    mockPollJobStatus.mockResolvedValue({
+      jobId: 'job-day-4',
+      jobType: 'day',
+      devotionalId: DEVOTIONAL_ID,
+      dayNumber: 4,
+      status: 'complete',
+      result: { devotionalId: DEVOTIONAL_ID, devotionalDay: deliveredDay },
+    });
+    let tree: ReaderTree;
+
+    await act(async () => {
+      tree = renderer.create(<ReadingScreen />);
+      await flushEffects();
+    });
+    expect(mockFindDayJob).toHaveBeenCalledWith(DEVOTIONAL_ID, 4, expect.any(Number));
+
+    await act(async () => {
+      resolveFindDayJob({
+        jobId: 'job-day-4',
+        jobType: 'day',
+        devotionalId: DEVOTIONAL_ID,
+        dayNumber: 4,
+        status: 'processing',
+      });
+      await flushEffects();
+      jest.advanceTimersByTime(15_000);
+      await flushEffects();
+    });
+    expect(mockPollJobStatus).toHaveBeenCalledWith('job-day-4', expect.any(Number));
+    expect(useUnfoldStore.getState().devotionals.find((item) => item.id === DEVOTIONAL_ID)?.days)
+      .toEqual(expect.arrayContaining([expect.objectContaining({ dayNumber: 4 })]));
+    act(() => tree!.unmount());
+  });
+
+  it('records a find-day 429 and suppresses another real-watcher lookup until the window ends', async () => {
+    seedPausedMissingDay();
+    mockUseRealGeneratedDayWatch = true;
+    let rejectFindDayJob!: (error: Error) => void;
+    mockFindDayJob
+      .mockImplementationOnce(() => new Promise((_, reject) => {
+        rejectFindDayJob = reject;
+      }))
+      .mockResolvedValueOnce(null);
+    let tree: ReaderTree;
+
+    await act(async () => {
+      tree = renderer.create(<ReadingScreen />);
+      await flushEffects();
+    });
+    expect(mockFindDayJob).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      noteReadBudgetRateLimited(60);
+      rejectFindDayJob(new ApiError('Rate limited', 429, 'RATE_LIMITED'));
+      await flushEffects();
+    });
+    expect(mockLogBugError).not.toHaveBeenCalled();
+
+    await act(async () => {
+      jest.advanceTimersByTime(59_000);
+      await flushEffects();
+    });
+    expect(mockFindDayJob).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      jest.advanceTimersByTime(1_000);
+      await flushEffects();
+    });
+    expect(mockFindDayJob).toHaveBeenCalledTimes(2);
+    expect(mockLogBugError).not.toHaveBeenCalled();
+    act(() => tree!.unmount());
+  });
+
+  it('treats pull 429 as quiet backpressure until the shared window ends', async () => {
+    seedPausedMissingDay();
+    mockPullDevotionalContent
+      .mockImplementationOnce(async () => {
+        noteReadBudgetRateLimited(60);
+        throw new SyncPullRateLimitedError(60);
+      })
+      .mockResolvedValueOnce(emptyPull());
+    let tree: ReaderTree;
+
+    await act(async () => {
+      tree = renderer.create(<ReadingScreen />);
+      await flushEffects();
+    });
+
+    const blocked = tree!.root.findByProps({ accessibilityLabel: 'Check for day 4' });
+    expect(JSON.stringify(tree!.toJSON())).toContain('Try again in a minute');
+    expect(blocked.props.accessibilityState).toEqual(expect.objectContaining({ disabled: true }));
+    expect(mockLogBugError).not.toHaveBeenCalled();
+    expect(mockCaptureAppError).not.toHaveBeenCalled();
+    expect(mockPullDevotionalContent).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      jest.advanceTimersByTime(59_000);
+      await flushEffects();
+    });
+    expect(mockPullDevotionalContent).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      jest.advanceTimersByTime(1_000);
+      await flushEffects();
+    });
+    const available = tree!.root.findByProps({ accessibilityLabel: 'Check for day 4' });
+    await act(async () => {
+      await (available.props.onPress as () => Promise<void>)();
+      await flushEffects();
+    });
+    expect(mockPullDevotionalContent).toHaveBeenCalledTimes(2);
+    act(() => tree!.unmount());
+  });
+
+  it('keeps a new selection and the newest hydration loading state when an older pull finishes', async () => {
+    const missingA = 'missing-a';
+    const missingC = 'missing-c';
+    let resolveA: ((value: ReturnType<typeof emptyPull>) => void) | undefined;
+    let resolveC: ((value: ReturnType<typeof emptyPull>) => void) | undefined;
+    seedReader();
+    useUnfoldStore.setState((state) => ({ currentDevotionalId: null, devotionals: state.devotionals }));
+    routeParams.devotionalId = missingA;
+    routeParams.dayNumber = '1';
+    mockPullDevotionalContent.mockImplementation((devotionalId: string) => new Promise((resolve) => {
+      if (devotionalId === missingA) resolveA = resolve;
+      if (devotionalId === missingC) resolveC = resolve;
+    }));
+    let tree: ReaderTree;
+
+    await act(async () => {
+      tree = renderer.create(<ReadingScreen />);
+      await flushEffects();
+    });
+    expect(tree!.root.findAllByProps({ accessibilityLabel: 'Loading reading' }).length).toBeGreaterThan(0);
+
+    await act(async () => {
+      routeParams.devotionalId = missingC;
+      tree!.update(<ReadingScreen />);
+      await flushEffects();
+    });
+    expect(mockPullDevotionalContent).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      resolveA?.(emptyPull());
+      await flushEffects();
+    });
+    expect(useUnfoldStore.getState().currentDevotionalId).toBeNull();
+    expect(tree!.root.findAllByProps({ accessibilityLabel: 'Loading reading' }).length).toBeGreaterThan(0);
+
+    await act(async () => {
+      resolveC?.(emptyPull());
+      await flushEffects();
+    });
+    act(() => tree!.unmount());
   });
 });

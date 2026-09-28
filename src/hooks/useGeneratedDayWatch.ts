@@ -10,6 +10,13 @@ import {
 import { captureSyncSession } from '@/lib/generation-session';
 import type { DevotionalDay } from '@/lib/store';
 
+const AUTOMATIC_DISCOVERY_COOLDOWN_MS = 10_000;
+const automaticDiscoveryAtByKey = new Map<string, number>();
+
+export function resetGeneratedDayWatchDiscoveryThrottleForTests(): void {
+  automaticDiscoveryAtByKey.clear();
+}
+
 export type GeneratedDayWatchResult = {
   state: DailyGenerationRecoveryState;
   checkAgain: () => Promise<void>;
@@ -45,7 +52,7 @@ export function useGeneratedDayWatch({
   onDayRef.current = onDay;
 
   useEffect(() => {
-    if (!enabled || !devotionalId || !dayNumber) {
+    if (!enabled || !devotionalId || !dayNumber || !recoveryKey) {
       controllerRef.current?.cancel();
       controllerRef.current = null;
       return;
@@ -64,6 +71,16 @@ export function useGeneratedDayWatch({
     });
     controllerRef.current = controller;
 
+    // Repeated foreground events re-check at most once per cooldown. The first
+    // start always discovers, so a recreated watch never goes idle.
+    const runForegroundDiscovery = (): void => {
+      const now = Date.now();
+      const lastDiscoveryAt = automaticDiscoveryAtByKey.get(recoveryKey);
+      if (lastDiscoveryAt !== undefined && now - lastDiscoveryAt < AUTOMATIC_DISCOVERY_COOLDOWN_MS) return;
+      automaticDiscoveryAtByKey.set(recoveryKey, now);
+      void controller.checkAgain();
+    };
+
     const applyNetworkState = (network: { isConnected: boolean | null; isInternetReachable: boolean | null }) => (
       controller.setOnline(Boolean(network.isConnected && network.isInternetReachable !== false))
     );
@@ -72,7 +89,8 @@ export function useGeneratedDayWatch({
       if (networkInitialized) void applyNetworkState(network);
     });
     const appStateSubscription = AppState.addEventListener('change', (nextState) => {
-      if (nextState === 'active') void controller.checkAgain();
+      if (nextState !== 'active') return;
+      runForegroundDiscovery();
     });
 
     void NetInfo.fetch()

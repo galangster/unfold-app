@@ -1,6 +1,7 @@
 import * as Application from 'expo-application';
 import { ACT_SLOTS, type ActSlot } from '@/lib/act-reminder';
 
+import { parseAiRateLimitBody, readRetryAfterHeader } from './ai-budget-error';
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from './api-config';
 import { authenticatedFetch } from './device-credential';
 import { asNextPick, asTrimmedString } from './auto-trial-series';
@@ -19,6 +20,11 @@ import { bindPulledDevotionalSession } from './devotional-pulled-content';
 import { logger } from './logger';
 import { getDeviceId, mmkvStorage } from './mmkv-storage';
 import { useUnfoldStore } from './store';
+import {
+  noteReadBudgetRateLimited,
+  readBudgetRetryAfterMs,
+  SyncPullRateLimitedError,
+} from './sync-pull-backoff';
 import {
   assertSyncSessionCurrent,
   captureSyncSession,
@@ -266,6 +272,10 @@ export async function pullDevotionalContent(
   const controller = new AbortController();
   const unregister = registerSyncTransport(controller);
   try {
+    const retryAfterMs = readBudgetRetryAfterMs();
+    if (retryAfterMs > 0) {
+      throw new SyncPullRateLimitedError(Math.ceil(retryAfterMs / 1000));
+    }
     const response = await authenticatedFetch(`${PRIMARY_BACKEND_URL}/api/sync/pull`, {
       method: 'POST',
       headers,
@@ -279,6 +289,11 @@ export async function pullDevotionalContent(
       // is allowlisted through to Sentry, and a backend error body can quote the
       // devotional or journal text it failed on. `logger` is __DEV__-only.
       logger.warn('[sync/devotional-pull] pull failed', response.status, body.slice(0, 120));
+      if (response.status === 429) {
+        const { retryAfterSeconds } = parseAiRateLimitBody(body, readRetryAfterHeader(response));
+        noteReadBudgetRateLimited(retryAfterSeconds);
+        throw new SyncPullRateLimitedError(retryAfterSeconds);
+      }
       throw new Error(`Sync pull failed: ${response.status}`);
     }
 

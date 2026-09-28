@@ -415,3 +415,21 @@ it('uses the planned series total for history progress', () => {
   act(() => { tree = renderer.create(React.createElement(SeriesArcScreen)); });
   expect(allRenderedText(tree)).toContain('2 of 3 completed');
 });
+
+it('labels a paused series day not prepared and leaves the check to the reader', () => {
+  mockParams = { id: 'devo-1' };
+  mockCurrentDevotionalId = 'devo-2';
+  const devotional = withActs();
+  mockDevotionals = [{ ...devotional, days: [...devotional.days.slice(0, 3), day(4, { id: 'local-day-4' })] }];
+  let tree!: ReactTestRenderer;
+  act(() => { tree = renderer.create(React.createElement(SeriesArcScreen)); });
+
+  const text = allRenderedText(tree);
+  expect(text).toContain('This page wasn’t prepared.');
+  expect(text).toContain('Not prepared');
+  expect(text).not.toMatch(/being prepared/i);
+
+  const button = tree.root.findAllByProps({ testID: 'book-continue-reading' })[0];
+  act(() => { button.props.onPress(); });
+  expect(mockPush.mock.calls[0][0].params).toMatchObject({ devotionalId: 'devo-1', dayNumber: '4', readOnly: '1' });
+});

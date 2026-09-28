@@ -8,6 +8,7 @@
  */
 import type { AutoTrialEntry, AutoTrialSurface } from "./auto-trial-exit";
 import type { AutoTrialIntentV1 } from "./auto-trial-intent";
+import { parseAiRateLimitBody, readRetryAfterHeader } from './ai-budget-error';
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from "./api-config";
 import { authenticatedFetch } from "./device-credential";
 import { reconcileGenerationResultIdentity, type GeneratedDayWithIdentity, type GenerationResultPayload } from './generation-reconciliation';
@@ -20,6 +21,7 @@ import {
   SyncSessionInvalidatedError,
 } from './generation-session';
 import { mmkvStorage } from "./mmkv-storage";
+import { noteReadBudgetRateLimited, readBudgetRetryAfterMs } from './sync-pull-backoff';
 
 /** MMKV key for caching the active dynamic prompt example */
 export const DYNAMIC_EXAMPLE_KEY = 'active-dynamic-example';
@@ -41,6 +43,27 @@ type ApiErrorBody = {
   error?: { code?: string; message?: string; reason?: string };
   existingJobId?: string | null;
 };
+
+function assertReadBudgetAvailable(): void {
+  if (readBudgetRetryAfterMs() > 0) {
+    throw new ApiError('Rate limited', 429, 'RATE_LIMITED');
+  }
+}
+
+async function readLookupErrorBody(response: Response): Promise<ApiErrorBody | null> {
+  if (response.status !== 429) {
+    return (await response.json().catch(() => null)) as ApiErrorBody | null;
+  }
+
+  const bodyText = await response.text().catch(() => '');
+  const { retryAfterSeconds } = parseAiRateLimitBody(bodyText, readRetryAfterHeader(response));
+  noteReadBudgetRateLimited(retryAfterSeconds);
+  try {
+    return JSON.parse(bodyText) as ApiErrorBody;
+  } catch {
+    return null;
+  }
+}
 
 async function responseApiError(
   response: Response,
@@ -315,7 +338,7 @@ export async function pollJobStatus(
   if (!response.ok) {
     // Carry the status and code: 404 / 400 is the server's word that it does
     // not hold this job (`classifyPollFailure`), not a connection problem.
-    const body = (await response.json().catch(() => null)) as { error?: { code?: string; message?: string } } | null;
+    const body = await readLookupErrorBody(response);
     assertSyncSessionCurrent(origin, 'poll generation job');
     const detail = body?.error?.message ? ` — ${body.error.message}` : '';
     throw new ApiError(`Poll job failed: ${response.status}${detail}`, response.status, body?.error?.code ?? 'POLL_FAILED');
@@ -370,6 +393,7 @@ export async function findDayJob(
   assertSyncSessionCurrent(origin, 'find day generation job');
   const headers = await getAuthHeaders();
   assertSyncSessionCurrent(origin, 'find day generation job');
+  assertReadBudgetAvailable();
   const response = await fetchWithTimeout(
     `${PRIMARY_BACKEND_URL}/api/jobs/find-day?devotionalId=${encodeURIComponent(devotionalId)}&dayNumber=${dayNumber}`,
     { method: 'GET', headers },
@@ -382,7 +406,7 @@ export async function findDayJob(
     return null;
   }
   if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as { error?: { code?: string; message?: string } } | null;
+    const body = await readLookupErrorBody(response);
     assertSyncSessionCurrent(origin, 'find day generation job');
     const detail = body?.error?.message ? ` — ${body.error.message}` : '';
     throw new ApiError(
@@ -416,6 +440,9 @@ export async function fetchJobResult(
     'fetch generation job',
   );
   if (!response.ok) {
+    if (response.status === 429) {
+      await readLookupErrorBody(response);
+    }
     assertSyncSessionCurrent(origin, 'fetch generation job');
     return null;
   }
@@ -450,6 +477,15 @@ export async function findCompletedJob(
   }
   if (!response.ok) {
     assertSyncSessionCurrent(origin, 'find completed generation job');
+    if (response.status === 429) {
+      const body = await readLookupErrorBody(response);
+      const detail = body?.error?.message ? ` — ${body.error.message}` : '';
+      throw new ApiError(
+        `Find job failed: ${response.status}${detail}`,
+        response.status,
+        body?.error?.code ?? 'FIND_JOB_FAILED',
+      );
+    }
     throw new Error(`Find job failed: ${response.status}`);
   }
   const payload = await response.json();

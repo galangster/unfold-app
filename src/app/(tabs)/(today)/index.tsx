@@ -97,6 +97,9 @@ import { getReadingDayLabel } from '@/lib/devotional-day-access';
 import { resolveRitualCompletion } from '@/lib/ritual-session';
 import { getDeviceTimezone } from '@/lib/device-timezone';
 import { useGeneratedDayWatch } from '@/hooks/useGeneratedDayWatch';
+import { useReadBudgetBlocked } from '@/hooks/useReadBudgetBlocked';
+import { logBugEvent } from '@/lib/bug-logger';
+import { SyncPullRateLimitedError } from '@/lib/sync-pull-backoff';
 import { getQaTodayProfileMarker } from '@/lib/qa-today-marker';
 import { getStreakDayKey, shouldCelebrateStreakDayFlip } from '@/lib/streak-helpers';
 import { shouldShowCompletedEmberAmbience } from '@/lib/today-ambient-rive';
@@ -269,6 +272,7 @@ export function abandonPurchasedIntentBeforeNewSeries(i: {
 }
 
 export default function HomeScreen() {
+  const readBudgetBlocked = useReadBudgetBlocked();
   const router = useRouter();
   const routeParams = useLocalSearchParams<{
     voiceCheckInPrototype?: string | string[];
@@ -668,7 +672,7 @@ export default function HomeScreen() {
       void drainSyncOutbox();
 
       const devotionalId = currentDevotionalId;
-      if (!devotionalId) return;
+      if (!devotionalId || readBudgetBlocked) return;
 
       let cancelled = false;
       void (async () => {
@@ -687,12 +691,18 @@ export default function HomeScreen() {
           // discards the response, and must not advance the cursor.
           commitDevotionalPullCursor(pulled);
         } catch (err) {
+          if (err instanceof SyncPullRateLimitedError) {
+            void logBugEvent('today-sync-refresh', 'sync-pull-rate-limited', {
+              retryAfterSeconds: err.retryAfterSeconds,
+            }, 'warn');
+            return;
+          }
           logger.warn('[home] Devotional sync refresh failed:', err instanceof Error ? err.message : err);
         }
       })();
 
       return () => { cancelled = true; };
-    }, [currentDevotionalId, updateDevotionalDays])
+    }, [currentDevotionalId, readBudgetBlocked, updateDevotionalDays])
   );
 
   // Check if today's reading has been completed — drives ember visibility.
@@ -734,7 +744,7 @@ export default function HomeScreen() {
   const dailyGeneration = useGeneratedDayWatch({
     devotionalId: currentDevotional?.id,
     dayNumber: currentDevotional?.currentDay,
-    enabled: isPreparingCurrentDay && isTodayFocused,
+    enabled: isPreparingCurrentDay && isTodayFocused && !readBudgetBlocked,
     canMutate: premiumPolicy === 'granted'
       && currentDevotional?.id === currentDevotionalId
       && isPreparingCurrentDay,

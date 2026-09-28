@@ -54,6 +54,11 @@ import {
   pullDevotionalContent,
 } from '../devotional-sync-pull';
 import type { PulledDevotionalContent } from '../devotional-sync-pull';
+import {
+  noteReadBudgetRateLimited,
+  resetReadBudgetForTests,
+  SyncPullRateLimitedError,
+} from '../sync-pull-backoff';
 import { logger } from '../logger';
 import * as mmkvStorageModule from '../mmkv-storage';
 import { getDeviceId, mmkvStorage } from '../mmkv-storage';
@@ -181,6 +186,7 @@ function overlapped(timestamp: string): string {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  resetReadBudgetForTests();
   (mmkvStorageModule as unknown as { __clearMockStorage: () => void }).__clearMockStorage();
   mockApplication.nativeApplicationVersion = '1.2.3';
   mockApplication.nativeBuildVersion = '45';
@@ -190,6 +196,15 @@ beforeEach(() => {
 });
 
 describe('devotional sync pull recovery', () => {
+  it('does not request a pull while the shared read budget is blocked', async () => {
+    noteReadBudgetRateLimited(36);
+
+    await expect(pullDevotionalContent(DEVOTIONAL_ID)).rejects.toMatchObject({
+      retryAfterSeconds: 36,
+    });
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
   it('maps persisted devotional day rows by merging full content with flat sync columns', () => {
     const payload: SyncPullResponse = {
       timestamp: '2026-04-25T12:00:00.000Z',
@@ -495,6 +510,25 @@ describe('devotional pull cursor', () => {
     respondWith({ timestamp: '2026-04-25T13:00:00.000Z' });
     await pullDevotionalContent(DEVOTIONAL_ID);
     expect(requestBodies()[1]).toEqual({ lastPulledAt: overlapped(before.lastPulledAt) });
+  });
+
+  it('surfaces a 429 as rate-limit backpressure with the server retry window', async () => {
+    seedLocalDevotional();
+    const before = seedCursor();
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 429,
+      headers: { get: (name: string) => (name.toLowerCase() === 'retry-after' ? '36' : null) },
+      text: async () => '{"error":{"code":"RATE_LIMITED","message":"Too many requests. Try again in 36 seconds.","retryAfter":36}}',
+    });
+
+    const pull = pullDevotionalContent(DEVOTIONAL_ID);
+    await expect(pull).rejects.toBeInstanceOf(SyncPullRateLimitedError);
+    await expect(pull).rejects.toMatchObject({ message: 'Sync pull failed: 429', retryAfterSeconds: 36 });
+    expect(storedCursor()).toEqual(before);
+
+    await expect(pullDevotionalContent(DEVOTIONAL_ID)).rejects.toMatchObject({ retryAfterSeconds: 36 });
+    expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the cursor untouched when the network request itself fails', async () => {

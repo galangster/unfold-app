@@ -18,6 +18,7 @@ import { BookOfSeasonsView } from '@/components/book/BookOfSeasonsView';
 import { markShelfContentsReady } from '@/lib/shelf-opening';
 import { getSeriesCover } from '@/lib/series-cover';
 import { seriesReadingProgress } from '@/lib/bookshelf';
+import { isPausedSeries } from '@/lib/devotional-day-access';
 
 function PastSeriesLink({ onPress }: { onPress: () => void }) {
   const { colors } = useTheme();
@@ -97,7 +98,7 @@ export function SeriesArcScreen({ hostTab, chrome = 'stack' }: SeriesArcScreenPr
           {chrome !== 'tabRoot' && <View style={{ borderTopWidth: 1, borderColor: cover.gold + '66', paddingTop: 18, marginBottom: 14 }}>
             {dateLabel ? <Text style={{ fontFamily: FontFamily.ui, fontSize: 12, color: colors.textMuted }}>Begun {dateLabel}</Text> : null}
           </View>}
-          <BookOfSeasonsView key={`book-of-seasons-${layout.fontScale}`} devotional={devotional} showAllReadings={chrome !== 'tabRoot'} now={now} colors={colors} isDark={isDark} onOpenDay={handleDayPress}
+          <BookOfSeasonsView key={`book-of-seasons-${layout.fontScale}`} devotional={devotional} seriesPaused={isPausedSeries(devotional, currentDevotionalId)} showAllReadings={chrome !== 'tabRoot'} now={now} colors={colors} isDark={isDark} onOpenDay={handleDayPress}
             headerAccessory={chrome === 'tabRoot' ? <ProfileEntryButton testID="study-profile-button" /> : undefined} />
           {chrome === 'tabRoot' ? <PastSeriesLink key={`book-archive-${layout.fontScale}`} onPress={openPastSeries} /> : <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderColor: cover.gold + '66', marginTop: 24, paddingTop: 20, alignItems: 'center' }}>
             <Text style={{ fontFamily: FontFamily.display, fontSize: 18, color: colors.textMuted }}>Unfold</Text>

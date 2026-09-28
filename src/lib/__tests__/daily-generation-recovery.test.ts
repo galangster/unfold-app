@@ -184,7 +184,7 @@ describe('daily generation recovery', () => {
     await controller.start();
     await controller.retry();
 
-    expect(states.at(-1)?.status).toBe('idle');
+    expect(states.at(-1)).toEqual({ status: 'idle', discovered: true });
     expect(dependencies.submitGenerationJob).not.toHaveBeenCalled();
     expect(dependencies.retryJob).not.toHaveBeenCalled();
   });

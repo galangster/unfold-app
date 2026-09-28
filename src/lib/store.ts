@@ -39,6 +39,7 @@ import { isOnboardingFirstReading, isOnboardingSampleDevotionalId, withOnboardin
 import { isUsableSampleDevotionalDay } from './onboarding-sample-day-shape';
 import { applyArchiveIntent, applyUnarchiveIntent, isDevotionalArchived } from './devotional-lifecycle';
 import { selectSyncedCurrentDevotionalId } from './devotional-resume-selection';
+import { bookmarkIdentityEquals, type BookmarkIdentity, type BookmarkKind } from './bookmark-identity';
 import {
   bibleHighlightSyncData,
   bibleReadingPositionSyncData,
@@ -408,7 +409,7 @@ export interface UsedScripture {
   updatedAt?: string; // ISO timestamp
 }
 
-// Bookmarks for saved passages (premium feature)
+// Bookmarks for saved passages and devotional boxes
 export interface Bookmark {
   id: string;
   devotionalId: string;
@@ -418,6 +419,9 @@ export interface Bookmark {
   scriptureReference: string;
   scriptureText: string;
   quotedText?: string;
+  kind?: BookmarkKind;
+  key?: string;
+  translation?: string;
   savedAt: string;
   updatedAt?: string; // ISO timestamp
 }
@@ -703,7 +707,7 @@ interface UnfoldState {
   bookmarks: Bookmark[];
   addBookmark: (bookmark: Omit<Bookmark, 'id' | 'savedAt'>) => void;
   removeBookmark: (id: string) => void;
-  isBookmarked: (devotionalId: string, dayNumber: number) => boolean;
+  isBookmarked: (identity: BookmarkIdentity) => boolean;
 
   // Generation session (persisted for crash/restart recovery)
   generationSession: GenerationSession;
@@ -779,6 +783,10 @@ interface UnfoldState {
   // Feature onboarding carousel (shown once after first devotional generated)
   hasSeenFeatureOnboarding: boolean;
   setHasSeenFeatureOnboarding: (seen: boolean) => void;
+
+  // One-time Scripture verse-selection hint
+  hasSeenScriptureHighlightHint: boolean;
+  setHasSeenScriptureHighlightHint: () => void;
 
   // Card dismiss tracking (date strings — reset daily)
   dismissedMiddayCardDate: string | null;
@@ -967,6 +975,7 @@ const initialState = {
   recentCompanionCheckIns: [] as { mood: string; moodLabel: string; date: string; chipAnswer?: string }[],
   hasSeenHomeTooltips: false,
   hasSeenFeatureOnboarding: false,
+  hasSeenScriptureHighlightHint: false,
   dismissedMiddayCardDate: null as string | null,
   dismissedEveningCardDate: null as string | null,
   dismissedBridgeCardDate: null as string | null,
@@ -1576,6 +1585,9 @@ export const useUnfoldStore = create<UnfoldState>()(
       // Bookmark actions
       addBookmark: (bookmark) =>
         set((state) => {
+          if (state.bookmarks.some((existing) => bookmarkIdentityEquals(existing, bookmark))) {
+            return state;
+          }
           const now = new Date().toISOString();
           const newBookmark: Bookmark = { ...bookmark, id: `bm_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, savedAt: now, updatedAt: now };
           enqueuePersonalDataSyncChange('bookmarks', newBookmark.id, bookmarkSyncData(newBookmark), now);
@@ -1590,15 +1602,24 @@ export const useUnfoldStore = create<UnfoldState>()(
       removeBookmark: (id) =>
         set((state) => {
           const existing = state.bookmarks.find((b) => b.id === id);
-          if (existing) enqueuePersonalDataSyncChange('bookmarks', id, bookmarkSyncData(existing), new Date().toISOString(), true);
-          return { bookmarks: state.bookmarks.filter((b) => b.id !== id) };
+          if (!existing) return state;
+          const matches = state.bookmarks.filter((bookmark) =>
+            bookmarkIdentityEquals(bookmark, existing)
+          );
+          const now = new Date().toISOString();
+          matches.forEach((bookmark) => {
+            enqueuePersonalDataSyncChange('bookmarks', bookmark.id, bookmarkSyncData(bookmark), now, true);
+          });
+          return {
+            bookmarks: state.bookmarks.filter((bookmark) =>
+              !bookmarkIdentityEquals(bookmark, existing)
+            ),
+          };
         }),
 
-      isBookmarked: (devotionalId, dayNumber) => {
+      isBookmarked: (identity) => {
         const state = get();
-        return state.bookmarks.some(
-          (b) => b.devotionalId === devotionalId && b.dayNumber === dayNumber
-        );
+        return state.bookmarks.some((bookmark) => bookmarkIdentityEquals(bookmark, identity));
       },
 
       // Highlight actions
@@ -1898,6 +1919,9 @@ export const useUnfoldStore = create<UnfoldState>()(
 
       // Feature onboarding carousel
       setHasSeenFeatureOnboarding: (seen) => set({ hasSeenFeatureOnboarding: seen }),
+
+      // One-time Scripture verse-selection hint
+      setHasSeenScriptureHighlightHint: () => set({ hasSeenScriptureHighlightHint: true }),
 
       // Card dismiss tracking
       setDismissedMiddayCardDate: (date) => set({ dismissedMiddayCardDate: date }),

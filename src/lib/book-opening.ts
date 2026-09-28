@@ -110,11 +110,18 @@ export function bookDayCaption(page: BookTodayPage): string {
   return page.totalDays > 0 ? `Day ${page.dayNumber} of ${page.totalDays}` : 'Your next reading';
 }
 
+const BOOK_PLACE_LINES: Record<BookTodayPage['eyebrow'], string | undefined> = {
+  today: undefined,
+  'today-complete': 'Your next reading will be here tomorrow.',
+  // A paused series will not prepare the next page, so it promises nothing.
+  'next-not-prepared': undefined,
+  'series-complete': 'You can return to any page.',
+  preparing: 'This page is still being prepared.',
+  'not-prepared': 'This page wasn’t prepared.',
+};
+
 export function bookPlaceLine(page: BookTodayPage): string | undefined {
-  if (page.seriesComplete) return 'You can return to any page.';
-  if (page.completedToday) return 'Your next reading will be here tomorrow.';
-  if (!page.contentReady) return 'This page is still being prepared.';
-  return undefined;
+  return BOOK_PLACE_LINES[page.eyebrow];
 }
 
 export function bookActionLabel(action: BookTodayPage['action']): string | null {

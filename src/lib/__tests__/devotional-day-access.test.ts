@@ -7,6 +7,8 @@ import {
   getSelectableDayLimit,
   getTodayReaderDayNumber,
   isDevotionalDaySelectable,
+  isPausedSeries,
+  isPausedSeriesUnpreparedDay,
   resolveInitialReadingDayNumber,
 } from '../devotional-day-access';
 import { canonicalGeneratedDayId } from '../devotional-canonical-days';
@@ -402,5 +404,69 @@ describe('getDayMenuPresentation', () => {
       kind: 'coming-soon',
       title: 'Coming soon',
     });
+  });
+});
+
+// ── Paused series ───────────────────────────────────────────────────────
+// Only the current series gets new days, so a day a paused series is missing
+// will never be prepared.
+
+describe('paused series days', () => {
+  beforeEach(() => {
+    jest.useFakeTimers({ now });
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  // Day 1 was read yesterday. Nothing has prepared Day 2.
+  const series = devotional({
+    currentDay: 2,
+    days: [day({ dayNumber: 1, isRead: true, readAt: yesterdayIso })],
+  });
+
+  it('pauses every series except the current one', () => {
+    expect(isPausedSeries(series, 'devotional-1')).toBe(false);
+    expect(isPausedSeries(series, 'devotional-2')).toBe(true);
+    expect(isPausedSeries(series, null)).toBe(true);
+    expect(isPausedSeries(null, 'devotional-1')).toBe(false);
+  });
+
+  it('keeps a missing day of the current series in preparation', () => {
+    expect(isPausedSeriesUnpreparedDay(series, 2, false)).toBe(false);
+    expect(getDayMenuPresentation(series, 2, now)).toEqual({
+      kind: 'preparing',
+      title: 'Being prepared…',
+    });
+  });
+
+  it('says "Not prepared" for every missing unread day of a paused series', () => {
+    expect(isPausedSeriesUnpreparedDay(series, 2, true)).toBe(true);
+    expect(getDayMenuPresentation(series, 2, now, true)).toEqual({
+      kind: 'not-prepared',
+      title: 'Not prepared',
+    });
+    expect(getDayMenuPresentation(series, 5, now, true)).toEqual({
+      kind: 'not-prepared',
+      title: 'Not prepared',
+    });
+  });
+
+  it('leaves read and ready days of a paused series unchanged', () => {
+    const withContent = devotional({
+      currentDay: 3,
+      days: [
+        // Read, but only a local copy is on this device: the reader restores it.
+        day({ dayNumber: 1, id: 'local-day-1', isRead: true, readAt: yesterdayIso }),
+        day({ dayNumber: 2, isRead: true, readAt: yesterdayIso }),
+        day({ dayNumber: 3, title: 'Be still' }),
+      ],
+    });
+
+    expect(isPausedSeriesUnpreparedDay(withContent, 1, true)).toBe(false);
+    expect(isPausedSeriesUnpreparedDay(withContent, 3, true)).toBe(false);
+    expect(getDayMenuPresentation(withContent, 3, now, true))
+      .toEqual(getDayMenuPresentation(withContent, 3, now));
   });
 });
