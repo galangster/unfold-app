@@ -8,7 +8,7 @@
  *   - Multiline: grows up to 5 lines (~120px), then scrolls internally
  *   - Voice recording replaces the entire input bar with waveform UI
  */
-import { memo, useState, useRef, useCallback, useMemo } from 'react';
+import { memo, useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -32,7 +32,7 @@ import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
 import { COMPANION_MESSAGE_MAX_CHARS } from '@/lib/companion-limits';
-import { companionDraftKey, moveCompanionDraft, readCompanionDraft, writeCompanionDraft } from '@/lib/companion-drafts';
+import { companionDraftKey, readCompanionDraft, writeCompanionDraft } from '@/lib/companion-drafts';
 
 const PLACEHOLDERS = [
   'What’s on your mind?',
@@ -67,33 +67,32 @@ interface Props {
   fontScale?: number;
   /** The active conversation. Each keeps its own unsent text. */
   conversationId: string | null;
-  /** Whether it has messages yet. Chats without any share one draft slot. */
-  hasMessages: boolean;
 }
 
 // Memoized: the companion screen re-renders on every streaming token flush —
 // the input bar's props (stable callbacks + isStreaming/fontScale) only change
 // at stream or text-size boundaries, so the memo skips token-flush rerenders.
-export const CompanionInput = memo(function CompanionInput({ onSend, onStop, isStreaming, fontScale = 1, conversationId, hasMessages }: Props) {
+export const CompanionInput = memo(function CompanionInput({ onSend, onStop, isStreaming, fontScale = 1, conversationId }: Props) {
   const { colors, isDark } = useTheme();
-  const draftKey = companionDraftKey(conversationId, hasMessages);
-  const [shown, setShown] = useState(() => ({ conversationId, draftKey, text: readCompanionDraft(draftKey) }));
+  const draftKey = companionDraftKey(conversationId);
+  const [shown, setShown] = useState(() => ({ draftKey, text: readCompanionDraft(draftKey) }));
   const [isVoiceMode, setIsVoiceMode] = useState(false);
-  if (shown.conversationId !== conversationId) {
+  if (shown.draftKey !== draftKey) {
     // Another conversation shows its own unsent text, and a recording in progress
     // ends, so words meant for one conversation are never sent to another.
-    setShown({ conversationId, draftKey, text: readCompanionDraft(draftKey) });
+    setShown({ draftKey, text: readCompanionDraft(draftKey) });
     setIsVoiceMode(false);
-  } else if (shown.draftKey !== draftKey) {
-    // The same chat got its first message, from a starter card say: its unsent
-    // text moves to the chat's own slot instead of waiting in the next new chat.
-    moveCompanionDraft(shown.draftKey, draftKey);
-    setShown({ ...shown, draftKey });
   }
   const { text } = shown;
   const setText = useCallback((next: string) => {
     writeCompanionDraft(draftKey, next);
-    setShown((prev) => ({ ...prev, text: next }));
+    setShown({ draftKey, text: next });
+  }, [draftKey]);
+  // A voice result belongs to the conversation it was recorded in.
+  const recordingKeyRef = useRef<string | null>(null);
+  const activeKeyRef = useRef(draftKey);
+  useEffect(() => {
+    activeKeyRef.current = draftKey;
   }, [draftKey]);
   const [micPermissionDenied, setMicPermissionDenied] = useState(false);
   const inputRef = useRef<TextInput>(null);
@@ -114,7 +113,13 @@ export const CompanionInput = memo(function CompanionInput({ onSend, onStop, isS
     if (!canSend) return;
 
     const trimmed = text.trim();
-    if (onSend(trimmed) === false) return;
+    // Clear the draft first: sending with no conversation creates one, and the
+    // store hands it whatever unsent text is still waiting.
+    writeCompanionDraft(draftKey, '');
+    if (onSend(trimmed) === false) {
+      writeCompanionDraft(draftKey, text);
+      return;
+    }
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
@@ -123,7 +128,7 @@ export const CompanionInput = memo(function CompanionInput({ onSend, onStop, isS
     });
 
     setText('');
-  }, [canSend, text, onSend, sendScale, setText]);
+  }, [canSend, text, onSend, sendScale, setText, draftKey]);
 
   const handleStop = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -135,8 +140,9 @@ export const CompanionInput = memo(function CompanionInput({ onSend, onStop, isS
     // Re-tapping the mic after a permission denial retries the request
     // (iOS won't re-prompt, but the user may have flipped it in Settings).
     setMicPermissionDenied(false);
+    recordingKeyRef.current = draftKey;
     setIsVoiceMode(true);
-  }, []);
+  }, [draftKey]);
 
   const handleMicPermissionDenied = useCallback(() => {
     setIsVoiceMode(false);
@@ -145,6 +151,7 @@ export const CompanionInput = memo(function CompanionInput({ onSend, onStop, isS
 
   // When voice input changes text, auto-send or update field
   const handleVoiceText = useCallback((newText: string) => {
+    if (recordingKeyRef.current !== activeKeyRef.current) return;
     setText(newText);
     setIsVoiceMode(false);
     // Focus the text input so user can edit before sending

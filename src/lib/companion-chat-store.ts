@@ -17,7 +17,7 @@ import {
   createCompanionChatPersistStorage,
 } from './companion-chat-persist-storage';
 import { shouldFlushAutosaveOnAppState } from './autosave-controller';
-import { forgetCompanionDraft } from './companion-drafts';
+import { claimCompanionDraft, companionDraftKey, forgetCompanionDraft } from './companion-drafts';
 
 import { getAuthHeaders, PRIMARY_BACKEND_URL } from '@/lib/api-config';
 import { authenticatedFetch } from './device-credential';
@@ -284,7 +284,8 @@ export const useCompanionChatStore = create<CompanionChatState>()(
       conversations: [],
       activeConversationId: null,
 
-      addMessage: (msg) =>
+      addMessage: (msg) => {
+        const before = get().activeConversationId;
         set((s) => {
           const now = new Date().toISOString();
           const timestampedMsg = { ...msg, updatedAt: now };
@@ -337,7 +338,11 @@ export const useCompanionChatStore = create<CompanionChatState>()(
               return nextConv;
             }),
           };
-        }),
+        });
+        // Sending with no conversation creates one; it takes the unsent text typed before it.
+        const after = get().activeConversationId;
+        if (after && after !== before) claimCompanionDraft(companionDraftKey(before), after);
+      },
 
       updateMessage: (id, updates, conversationId) =>
         set((s) => {
@@ -446,7 +451,9 @@ export const useCompanionChatStore = create<CompanionChatState>()(
           };
         }),
 
-      startNewConversation: () =>
+      startNewConversation: () => {
+        const previousId = get().activeConversationId;
+        const previous = get().conversations.find((c) => c.id === previousId);
         set((s) => {
           const now = new Date().toISOString();
           const active = s.conversations.find(c => c.id === s.activeConversationId);
@@ -482,7 +489,16 @@ export const useCompanionChatStore = create<CompanionChatState>()(
             conversations: [...conversations, newConv],
             activeConversationId: newConv.id,
           };
-        }),
+        });
+        const created = get().activeConversationId;
+        if (!previous && created) {
+          // A conversation created while none was active takes what was typed there.
+          claimCompanionDraft(companionDraftKey(previousId), created);
+        } else if (previous && !get().conversations.some((c) => c.id === previous.id)) {
+          // An empty conversation the store just dropped takes its unsent text with it.
+          forgetCompanionDraft(previous.id);
+        }
+      },
 
       archiveActiveConversation: (title, topicTags) =>
         set((s) => {
@@ -563,7 +579,8 @@ export const useCompanionChatStore = create<CompanionChatState>()(
           };
         }),
 
-      setActiveConversation: (id) =>
+      setActiveConversation: (id) => {
+        const previousId = get().activeConversationId;
         set((s) => {
           const now = new Date().toISOString();
           const target = s.conversations.find(c => c.id === id);
@@ -596,7 +613,10 @@ export const useCompanionChatStore = create<CompanionChatState>()(
             conversations,
             activeConversationId: id,
           };
-        }),
+        });
+        // An empty conversation the store just dropped takes its unsent text with it.
+        if (previousId && !get().conversations.some((c) => c.id === previousId)) forgetCompanionDraft(previousId);
+      },
     }),
     {
       name: COMPANION_CHAT_STORAGE_KEY,

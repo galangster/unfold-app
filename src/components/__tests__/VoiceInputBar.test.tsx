@@ -328,6 +328,37 @@ describe('VoiceInputBar', () => {
     expect(onChangeText).toHaveBeenCalledWith('Sentence one trailing words.');
   });
 
+  it('drops an accepted transcript when the bar unmounts before it commits', async () => {
+    const onChangeText = jest.fn();
+    let tree: any;
+
+    await act(async () => {
+      tree = renderer.create(<VoiceInputBar value="" onChangeText={onChangeText} />);
+    });
+
+    await act(async () => {
+      tree.root.findByProps({ accessibilityLabel: 'Tap to speak' }).props.onPress();
+      await Promise.resolve();
+    });
+
+    act(() => {
+      dispatchSpeechEvent('result', {
+        isFinal: true,
+        results: [{ transcript: 'Meant for the previous chat.' }],
+      });
+    });
+
+    act(() => {
+      tree.root.findByProps({ accessibilityLabel: 'Accept voice input' }).props.onPress();
+    });
+    act(() => tree.unmount());
+    act(() => {
+      jest.advanceTimersByTime(250);
+    });
+
+    expect(onChangeText).not.toHaveBeenCalled();
+  });
+
   it('routes speech only to the most recently started voice input', async () => {
     const onChangeTextA = jest.fn();
     const onChangeTextB = jest.fn();

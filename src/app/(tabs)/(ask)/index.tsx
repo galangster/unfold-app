@@ -593,7 +593,6 @@ export default function CompanionScreen() {
         isStreaming={isStreaming}
         fontScale={fontScale}
         conversationId={activeConversationId}
-        hasMessages={messages.length > 0}
       />
       </View>
       </View>

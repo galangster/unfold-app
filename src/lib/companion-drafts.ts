@@ -5,15 +5,11 @@
  */
 const drafts = new Map<string, string>();
 
-const NEW_CHAT_DRAFT_KEY = 'new-chat';
+/** The composer's slot while no conversation exists yet. */
+const NO_CONVERSATION_KEY = 'no-conversation';
 
-/**
- * The draft slot for a conversation. Chats with no messages share one slot:
- * the store gives a new chat an id but drops it once the reader leaves, which
- * would strand its text under an id that no longer exists.
- */
-export function companionDraftKey(conversationId: string | null, hasMessages: boolean): string {
-  return hasMessages && conversationId ? conversationId : NEW_CHAT_DRAFT_KEY;
+export function companionDraftKey(conversationId: string | null): string {
+  return conversationId ?? NO_CONVERSATION_KEY;
 }
 
 export function readCompanionDraft(draftKey: string): string {
@@ -25,12 +21,16 @@ export function writeCompanionDraft(draftKey: string, text: string): void {
   else drafts.delete(draftKey);
 }
 
-/** Moves unsent text to a new slot. A second call finds nothing to move. */
-export function moveCompanionDraft(fromKey: string, toKey: string): void {
+/**
+ * Text typed before any conversation existed belongs to the conversation that
+ * the store creates next, for example when a starter card sends its first
+ * message. Text never moves out of an existing conversation.
+ */
+export function claimCompanionDraft(fromKey: string, conversationId: string): void {
   const text = drafts.get(fromKey);
   if (!text) return;
   drafts.delete(fromKey);
-  drafts.set(toKey, text);
+  drafts.set(conversationId, text);
 }
 
 export function forgetCompanionDraft(conversationId: string): void {

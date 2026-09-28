@@ -400,7 +400,6 @@ describe('full user-data sync', () => {
   });
 
   it('forgets the unsent draft of a conversation deleted on another device, and keeps it when the delete is rejected', () => {
-    replaceSyncOutbox([]);
     const conversation = (id: string) => ({
       id,
       messages: [{ id: `msg-${id}`, role: 'user', content: 'hi', timestamp: Date.now(), status: 'sent', updatedAt: '2026-06-01T00:00:00.000Z' }],
@@ -414,15 +413,24 @@ describe('full user-data sync', () => {
     useCompanionChatStore.setState({ activeConversationId: 'conv-kept', conversations: [conversation('conv-gone'), conversation('conv-kept')] });
     writeCompanionDraft('conv-gone', 'Half a thought');
     writeCompanionDraft('conv-kept', 'Still writing');
+    // A local rename of conv-kept is newer than its tombstone, so the pull rejects that delete.
+    const pendingAt = new Date(Date.now() + 120_000).toISOString();
+    replaceSyncOutbox([
+      { table: 'companion_conversations', id: 'conv-kept', data: { title: 'Renamed' }, clientUpdatedAt: pendingAt, deleted: false },
+    ]);
 
     const tombstoneAt = new Date(Date.now() + 60_000).toISOString();
     applyPulledUserData({
       timestamp: tombstoneAt,
       changes: {
-        companion_conversations: [{ id: 'conv-gone', data: { clientUpdatedAt: tombstoneAt }, updatedAt: tombstoneAt, deleted: true }],
+        companion_conversations: [
+          { id: 'conv-gone', data: { clientUpdatedAt: tombstoneAt }, updatedAt: tombstoneAt, deleted: true },
+          { id: 'conv-kept', data: { clientUpdatedAt: tombstoneAt }, updatedAt: tombstoneAt, deleted: true },
+        ],
       },
     });
 
+    expect(useCompanionChatStore.getState().conversations.map((item) => item.id)).toEqual(['conv-kept']);
     expect(readCompanionDraft('conv-gone')).toBe('');
     expect(readCompanionDraft('conv-kept')).toBe('Still writing');
   });
