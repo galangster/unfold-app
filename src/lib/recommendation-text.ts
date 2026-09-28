@@ -24,10 +24,23 @@ const LINK_DEFINITION_LINE = /^\s*\[[^\]]+\]:\s*\S/;
 // reference link, strikethrough.
 const LEFTOVER_MARKUP = /<[a-z!/]|\[[^[\]]*\]\s*[([]|~~/i;
 
-/** Removes one matched pair of outer quotes. */
+/**
+ * Removes one outer pair of quotes. Apostrophes inside single quotes do not
+ * count. A double pair comes off only when the quotes inside it pair up and
+ * the first one opens a quotation, so "Be still" and "know" keeps its quotes.
+ */
 function unquote(text: string): string {
-  const pair = /^"([^"]*)"$|^'([^']*)'$|^“([^“”]*)”$/.exec(text);
-  return pair ? (pair[1] ?? pair[2] ?? pair[3]) : text;
+  if (text.length < 2) return text;
+  const inner = text.slice(1, -1);
+  const first = text[0];
+  const last = text[text.length - 1];
+  if (first === "'" && last === "'") return inner;
+  if (first === '“' && last === '”' && !/[“”]/.test(inner)) return inner;
+  if (first !== '"' || last !== '"') return text;
+  const firstInner = inner.indexOf('"');
+  const balanced = inner.split('"').length % 2 === 1;
+  const opensFirst = firstInner <= 0 || /\s/.test(inner[firstInner - 1]);
+  return balanced && opensFirst ? inner : text;
 }
 
 /**

@@ -37,6 +37,14 @@ describe('cleanRecommendationReason', () => {
     expect(cleanRecommendationReason(raw)).toBe(raw);
   });
 
+  it.each([
+    ['an apostrophe inside single quotes', "'You're invited to find rest.'", "You're invited to find rest."],
+    ['a quotation inside double quotes', '"Jesus says "Come to me" and invites you to rest."', 'Jesus says "Come to me" and invites you to rest.'],
+    ['two separate quotations', '"Be still" and "know"', '"Be still" and "know"'],
+  ])('handles outer quotes around %s', (_label, raw, expected) => {
+    expect(cleanRecommendationReason(raw)).toBe(expected);
+  });
+
   it('keeps a bold introductory clause that is not a recommendation label', () => {
     expect(cleanRecommendationReason('**When you feel weary:** this series offers rest.')).toBe(
       'When you feel weary: this series offers rest.',
