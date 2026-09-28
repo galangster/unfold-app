@@ -1004,12 +1004,14 @@ export default function HomeScreen() {
     freeText?: string;
   }) => {
     const opened = openedCheckIn;
-    // After an account reset the opened series is gone: save nothing.
-    if (!opened || !isSyncSessionCurrent(opened.session)) {
+    const store = useUnfoldStore.getState();
+    const openedSeries = opened ? store.devotionals.find((devotional) => devotional.id === opened.devotionalId) : undefined;
+    // Save nothing when the opened series or day is gone: an account reset, or
+    // a sync that deleted the series while the sheet was open.
+    if (!opened || !isSyncSessionCurrent(opened.session) || !openedSeries?.days.some((day) => day.dayNumber === opened.dayNumber)) {
       setShowCheckInSheet(false);
       return;
     }
-    const store = useUnfoldStore.getState();
     const clock = resolveRitualCompletion({
       session: store.ritualSessions.midday,
       identity: { kind: 'midday', devotionalId: opened.devotionalId, dayNumber: opened.dayNumber },

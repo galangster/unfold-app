@@ -460,6 +460,23 @@ describe('Today midday check-in', () => {
     expect(mockTodayStoreState.addCheckIn).toHaveBeenCalledWith(expect.objectContaining({ devotionalId: 'today-series', dayNumber: 3 }));
   });
 
+  it('saves nothing when a sync deletes the opened series with the sheet open', async () => {
+    await openFromMiddayNotification(new Date(2026, 8, 28, 12, 30), new Date(2026, 8, 28, 8, 0));
+
+    mockTodayStoreState.devotionals = [
+      { id: 'series-b', title: 'Series B', totalDays: 7, currentDay: 2, generationMode: 'progressive', createdAt: '2026-09-20T00:00:00.000Z', seriesStartDate: '2026-09-20T00:00:00.000Z', days: [{ id: 'series-b-day-2', devotionalId: 'series-b', dayNumber: 2, title: 'B Day 2', isRead: false, checkInQuestion: 'A question from series B' }] },
+    ];
+    mockTodayStoreState.currentDevotionalId = 'series-b';
+    await act(async () => {
+      tree!.update(<HomeScreen />);
+      await Promise.resolve();
+    });
+
+    submitCheckIn();
+    expect(mockTodayStoreState.addCheckIn).not.toHaveBeenCalled();
+    expect(mockCheckInSheetProps).toEqual(expect.objectContaining({ visible: false }));
+  });
+
   it('closes the check-in and saves nothing after an account reset', async () => {
     await openFromMiddayNotification(new Date(2026, 8, 28, 12, 30), new Date(2026, 8, 28, 8, 0));
     const submitAfterReset = mockCheckInSheetProps!.onComplete as (data: { mood: number; moodLabel: string }) => void;
