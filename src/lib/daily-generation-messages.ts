@@ -1,4 +1,5 @@
 import type { DailyGenerationRecoveryState } from './daily-generation-recovery';
+import type { PausedSeriesMissingDayKind } from './devotional-day-access';
 
 export function getDailyGenerationNotice(
   state: DailyGenerationRecoveryState | undefined,
@@ -35,7 +36,16 @@ export function getDailyGenerationNotice(
  * further. Once a full pull confirms a day is not on the server, checking
  * again cannot produce it, so the reader points to Today instead.
  */
-export function getPausedSeriesDayNotice(dayNumber: number): { title: string; body: string } {
+export function getPausedSeriesDayNotice(
+  dayNumber: number,
+  kind: PausedSeriesMissingDayKind,
+): { title: string; body: string } {
+  if (kind === 'restore-failed') {
+    return {
+      title: `Day ${dayNumber} couldn’t be restored`,
+      body: 'We couldn’t find this reading on the server. Open Today to keep reading.',
+    };
+  }
   return {
     title: `Day ${dayNumber} wasn’t prepared`,
     body: `This series was paused before Day ${dayNumber}. Open Today to keep reading.`,

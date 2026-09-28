@@ -160,6 +160,18 @@ export function isPausedSeriesUnpreparedDay(
   return selectRenderableDevotionalDay(devotional, dayNumber).status !== 'ready';
 }
 
+export type PausedSeriesMissingDayKind = 'not-prepared' | 'restore-failed';
+
+// Why a paused series lacks a day once a full pull confirms the server has no
+// copy: an unread day was never prepared, but a read day was, and only its
+// restore failed.
+export function getPausedSeriesMissingDayKind(
+  devotional: Devotional,
+  dayNumber: number,
+): PausedSeriesMissingDayKind {
+  return isDevotionalDayRead(devotional, dayNumber) ? 'restore-failed' : 'not-prepared';
+}
+
 const WEEKDAY_SHORT_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTH_SHORT_NAMES = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',

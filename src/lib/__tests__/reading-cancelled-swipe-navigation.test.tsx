@@ -738,6 +738,35 @@ describe('reader swipe cancellation', () => {
     act(() => tree!.unmount());
   });
 
+  it('says a read day could not be restored when the pull and discovery find no copy', async () => {
+    seedPausedMissingDay();
+    // Day 2 was read, but this device has only a local copy of it.
+    useUnfoldStore.setState((state) => ({
+      devotionals: state.devotionals.map((devotional) => devotional.id === DEVOTIONAL_ID
+        ? {
+          ...devotional,
+          days: devotional.days.map((day) => (day.dayNumber === 2 ? { ...day, id: 'local-day-2' } : day)),
+        }
+        : devotional),
+    }));
+    routeParams.dayNumber = '2';
+    mockDailyGenerationState = { status: 'idle', discovered: true };
+    let tree: ReaderTree;
+
+    await act(async () => {
+      tree = renderer.create(<ReadingScreen />);
+      await flushEffects();
+    });
+
+    const screenText = JSON.stringify(tree!.toJSON());
+    expect(screenText).toContain('Day 2 couldn’t be restored');
+    expect(screenText).toContain('We couldn’t find this reading on the server. Open Today to keep reading.');
+    expect(screenText).not.toContain('wasn’t prepared');
+    expect(tree!.root.findByProps({ accessibilityLabel: 'Open Today' }).props.accessibilityState)
+      .toEqual(expect.objectContaining({ disabled: false }));
+    act(() => tree!.unmount());
+  });
+
   it('keeps a paused day in its preparing state when discovery finds a running job', async () => {
     seedPausedMissingDay();
     mockDailyGenerationState = { status: 'running', jobId: 'job-day-4' };

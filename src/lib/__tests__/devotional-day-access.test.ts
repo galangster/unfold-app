@@ -5,6 +5,7 @@ import {
   getDayMenuPresentation,
   getLatestReadDayNumberToday,
   getLockedTodayDayNumber,
+  getPausedSeriesMissingDayKind,
   getSelectableDayLimit,
   getTodayReaderDayNumber,
   isDevotionalDaySelectable,
@@ -452,6 +453,20 @@ describe('paused series days', () => {
       kind: 'not-prepared',
       title: 'Not prepared',
     });
+  });
+
+  it('tells a failed restore of a read day from a day that was never prepared', () => {
+    // Day 2 was read, but only a local copy of it is on this device.
+    const withLocalReadDay = devotional({
+      currentDay: 3,
+      days: [
+        day({ dayNumber: 1, isRead: true, readAt: yesterdayIso }),
+        day({ dayNumber: 2, id: 'local-day-2', isRead: true, readAt: yesterdayIso }),
+      ],
+    });
+
+    expect(getPausedSeriesMissingDayKind(withLocalReadDay, 2)).toBe('restore-failed');
+    expect(getPausedSeriesMissingDayKind(withLocalReadDay, 3)).toBe('not-prepared');
   });
 
   it('leaves read and ready days of a paused series unchanged', () => {
