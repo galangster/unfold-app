@@ -1789,11 +1789,11 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   const dailyGeneration = useGeneratedDayWatch({
     devotionalId: currentDevotional?.id,
     dayNumber: viewingDay,
-    // Only the current series gets new days, so a paused series has no job to watch.
+    // The job lookup spends the same read budget as the pull, so it waits out a rate limit.
     enabled: shouldWatchViewingDay
       && isReadingFocused
-      && isViewingActiveSeries
-      && dailySyncRecoveryKey === dailyRecoveryKey,
+      && dailySyncRecoveryKey === dailyRecoveryKey
+      && checkCooldown?.reason !== 'rate-limited',
     canMutate: premiumPolicy === 'granted'
       && params.readOnly !== '1'
       && currentDevotional?.id === currentDevotionalId
@@ -1980,15 +1980,19 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     const usesDailyRecovery = isCanonicalProgressiveDevotional(currentDevotional);
     const dailyState = dailyGeneration.state;
     // Only the current series gets new days. Once a full pull confirms this
-    // day of a paused series is not on the server, another check cannot produce it.
+    // day of a paused series is not on the server, another check cannot produce
+    // it. A job that was already running when the series was left still shows.
     const isPausedSeriesDay = usesDailyRecovery
       && !isViewingActiveSeries
       && confirmedMissingDayKey === dailyRecoveryKey
-      && !isCheckingForSyncedDay;
+      && !isCheckingForSyncedDay
+      && dailyState.status !== 'running'
+      && dailyState.status !== 'slow';
     const notice = isPausedSeriesDay
       ? getPausedSeriesDayNotice(viewingDay)
       : getDailyGenerationNotice(dailyState, viewingDay);
     const isDailyChecking = usesDailyRecovery
+      && !isPausedSeriesDay
       && (dailyState.status === 'checking' || isCheckingForSyncedDay);
     const isDailyRunning = usesDailyRecovery && (dailyState.status === 'running' || dailyState.status === 'slow');
     const canRetryDailyJob = usesDailyRecovery

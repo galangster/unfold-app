@@ -75,6 +75,8 @@ describe('reading swipe navigation source contract', () => {
     // A found day or a rate-limited pull skips the job lookup: the lookup
     // spends the same per-user read budget the pull just exhausted.
     expect(readingSource).toContain("if (outcome !== 'missing' && outcome !== 'failed') return;");
+    // The generation watch waits out a rate-limit window instead of looking up into it.
+    expect(readingSource).toContain("&& checkCooldown?.reason !== 'rate-limited',");
     expect(readingSource).toContain("pullDevotionalContent(currentDevotional.id, { forceFull: true })");
   });
 
