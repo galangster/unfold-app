@@ -5,11 +5,15 @@
  */
 const drafts = new Map<string, string>();
 
-/** Conversations a pull emptied. They had messages, so their text never moves. */
+/**
+ * Conversations a pull emptied. They had messages, so the text found at the
+ * pull never moves. Text the reader types afterwards moves like a new chat's.
+ */
 const emptiedByPull = new Set<string>();
 
-/** The slot that a recording in progress writes to. */
-let recordingDraftKey: string | null = null;
+/** The recording in progress: a token that never changes, and the slot it writes to. */
+let recording: { token: number; draftKey: string } | null = null;
+let lastRecordingToken = 0;
 
 /** The composer's slot while no conversation is active: the reader's next new chat. */
 const NO_CONVERSATION_KEY = 'no-conversation';
@@ -23,6 +27,7 @@ export function readCompanionDraft(draftKey: string): string {
 }
 
 export function writeCompanionDraft(draftKey: string, text: string): void {
+  emptiedByPull.delete(draftKey);
   if (text) drafts.set(draftKey, text);
   else drafts.delete(draftKey);
 }
@@ -35,7 +40,7 @@ export function claimNewChatDraft(conversationId: string): void {
   const text = drafts.get(NO_CONVERSATION_KEY);
   drafts.delete(NO_CONVERSATION_KEY);
   if (text) drafts.set(conversationId, text);
-  if (recordingDraftKey === NO_CONVERSATION_KEY) recordingDraftKey = conversationId;
+  if (recording?.draftKey === NO_CONVERSATION_KEY) recording = { ...recording, draftKey: conversationId };
 }
 
 /**
@@ -63,13 +68,17 @@ export function forgetCompanionDraft(conversationId: string): void {
 export function clearCompanionDrafts(): void {
   drafts.clear();
   emptiedByPull.clear();
-  recordingDraftKey = null;
+  recording = null;
 }
 
-export function startCompanionRecording(draftKey: string): void {
-  recordingDraftKey = draftKey;
+/** Starts a recording in a slot. The token identifies it for as long as it lives. */
+export function startCompanionRecording(draftKey: string): number {
+  lastRecordingToken += 1;
+  recording = { token: lastRecordingToken, draftKey };
+  return lastRecordingToken;
 }
 
-export function companionRecordingKey(): string | null {
-  return recordingDraftKey;
+/** The slot a recording writes to, while it is the one in progress. */
+export function companionRecordingSlot(token: number | null): string | null {
+  return recording !== null && recording.token === token ? recording.draftKey : null;
 }

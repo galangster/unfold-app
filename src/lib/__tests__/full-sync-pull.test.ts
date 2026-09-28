@@ -435,7 +435,8 @@ describe('full user-data sync', () => {
     expect(readCompanionDraft('conv-kept')).toBe('Still writing');
   });
 
-  it('keeps the draft of a conversation a pull empties, and never moves it into a new chat', () => {
+  // conv-emptied is active with one message. The pull removes that message and keeps the conversation.
+  function pullEmptiesActiveConversation() {
     replaceSyncOutbox([]);
     useCompanionChatStore.setState({
       activeConversationId: 'conv-emptied',
@@ -450,8 +451,6 @@ describe('full user-data sync', () => {
         updatedAt: '2026-06-01T00:00:00.000Z',
       } as never],
     });
-    writeCompanionDraft('conv-emptied', 'Still writing');
-
     const tombstoneAt = new Date(Date.now() + 60_000).toISOString();
     applyPulledUserData({
       timestamp: tombstoneAt,
@@ -460,12 +459,26 @@ describe('full user-data sync', () => {
       },
     });
     expect(useCompanionChatStore.getState().conversations.find((item) => item.id === 'conv-emptied')?.messages).toEqual([]);
+  }
+
+  it('keeps the draft of a conversation a pull empties, and never moves it into a new chat', () => {
+    writeCompanionDraft('conv-emptied', 'Still writing');
+    pullEmptiesActiveConversation();
     expect(readCompanionDraft('conv-emptied')).toBe('Still writing');
 
     // Leaving the emptied conversation drops it; its text must not follow into the new chat.
     useCompanionChatStore.getState().startNewConversation();
     expect(readCompanionDraft('conv-emptied')).toBe('');
     expect(readCompanionDraft(useCompanionChatStore.getState().activeConversationId!)).toBe('');
+  });
+
+  it('moves text typed after the pull into the next new chat', () => {
+    pullEmptiesActiveConversation();
+    // The reader types in the emptied conversation, then starts a new chat.
+    writeCompanionDraft('conv-emptied', 'Typed after the pull');
+
+    useCompanionChatStore.getState().startNewConversation();
+    expect(readCompanionDraft(useCompanionChatStore.getState().activeConversationId!)).toBe('Typed after the pull');
   });
 
   it('maps startedAt before createdAt and preserves local pinned when remote omits it', () => {

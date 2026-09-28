@@ -175,7 +175,16 @@ import {
 import { cancelAllScheduledNotifications } from '../notifications';
 import { useUnfoldStore } from '../store';
 import { clearBridgeCache } from '../bridge-service';
-import { readCompanionDraft, writeCompanionDraft } from '../companion-drafts';
+import {
+  claimNewChatDraft,
+  companionDraftKey,
+  companionRecordingSlot,
+  markCompanionDraftEmptied,
+  readCompanionDraft,
+  releaseCompanionDraft,
+  startCompanionRecording,
+  writeCompanionDraft,
+} from '../companion-drafts';
 import { clearExamenCache } from '../examen-service';
 import { clearScriptureExplainCache } from '../scripture-explain-api';
 import { clearVerseCache } from '../bible-api';
@@ -310,12 +319,20 @@ describe('performFullLocalReset', () => {
     expect(purgeRealStoreForRecoveryReset).toHaveBeenCalledTimes(1);
   });
 
-  it('forgets unsent companion drafts', async () => {
+  it('forgets unsent companion drafts, pull marks, and the recording in progress', async () => {
     writeCompanionDraft('conversation-a', 'Half a thought');
+    markCompanionDraftEmptied('conversation-b');
+    const recording = startCompanionRecording('conversation-a');
 
     await performFullLocalReset();
 
     expect(readCompanionDraft('conversation-a')).toBe('');
+    expect(companionRecordingSlot(recording)).toBeNull();
+    // A pull mark that outlived the reset would delete this text instead of keeping it for the next new chat.
+    writeCompanionDraft(companionDraftKey(null), 'For the next new chat');
+    claimNewChatDraft('conversation-b');
+    releaseCompanionDraft('conversation-b');
+    expect(readCompanionDraft(companionDraftKey(null))).toBe('For the next new chat');
   });
 
   it('clears caches, bug log, trial mirror, review marker, diagnostics, TTS cache, widgets, RevenueCat, and rotates identity', async () => {

@@ -87,6 +87,9 @@ describe('CompanionInput with the chat store', () => {
   const type = (text: string) => act(() => tree.root.findByType(TextInput).props.onChangeText(text));
   const run = (action: () => void) => act(() => action());
   const isRecording = () => tree.root.findAllByType('VoiceInputBar').length > 0;
+  const pressMic = () => act(() => {
+    tree.root.findByProps({ accessibilityLabel: 'Voice input' }).props.onPress();
+  });
 
   beforeEach(() => {
     clearCompanionDrafts();
@@ -157,9 +160,7 @@ describe('CompanionInput with the chat store', () => {
   });
 
   it('keeps a recording going when a starter card creates the conversation', () => {
-    act(() => {
-      tree.root.findByProps({ accessibilityLabel: 'Voice input' }).props.onPress();
-    });
+    pressMic();
     expect(isRecording()).toBe(true);
 
     run(() => send('Help me pray'));
@@ -171,5 +172,27 @@ describe('CompanionInput with the chat store', () => {
     run(() => store().startNewConversation());
     run(() => store().setActiveConversation(created));
     expect(shownText()).toBe('Words spoken before the tap');
+  });
+
+  it('lets no late result of an earlier recording end a new one', () => {
+    run(() => send('First conversation'));
+    const first = store().activeConversationId!;
+    run(() => store().startNewConversation());
+    run(() => send('Second conversation'));
+    const second = store().activeConversationId!;
+    run(() => store().setActiveConversation(first));
+
+    // Accepted in the first conversation, the words wait out the voice bar's flush.
+    pressMic();
+    const lateResultOfFirst = mockVoiceProps!.onChangeText;
+    run(() => store().setActiveConversation(second));
+    pressMic();
+    act(() => lateResultOfFirst('Words for the first conversation'));
+    expect(isRecording()).toBe(true);
+
+    act(() => mockVoiceProps!.onChangeText('Words for the second conversation'));
+    expect(shownText()).toBe('Words for the second conversation');
+    run(() => store().setActiveConversation(first));
+    expect(shownText()).toBe('');
   });
 });

@@ -32,7 +32,7 @@ import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
 import { COMPANION_MESSAGE_MAX_CHARS } from '@/lib/companion-limits';
-import { companionDraftKey, companionRecordingKey, readCompanionDraft, startCompanionRecording, writeCompanionDraft } from '@/lib/companion-drafts';
+import { companionDraftKey, companionRecordingSlot, readCompanionDraft, startCompanionRecording, writeCompanionDraft } from '@/lib/companion-drafts';
 
 const PLACEHOLDERS = [
   'What’s on your mind?',
@@ -77,12 +77,13 @@ export const CompanionInput = memo(function CompanionInput({ onSend, onStop, isS
   const draftKey = companionDraftKey(conversationId);
   const [shown, setShown] = useState(() => ({ draftKey, text: readCompanionDraft(draftKey) }));
   const [isVoiceMode, setIsVoiceMode] = useState(false);
+  const [recordingToken, setRecordingToken] = useState<number | null>(null);
   if (shown.draftKey !== draftKey) {
     // Another conversation shows its own unsent text. A recording in progress
     // ends, so words meant for one conversation are never sent to another,
     // unless the store created this conversation from the recording's slot.
     setShown({ draftKey, text: readCompanionDraft(draftKey) });
-    if (companionRecordingKey() !== draftKey) setIsVoiceMode(false);
+    if (companionRecordingSlot(recordingToken) !== draftKey) setIsVoiceMode(false);
   }
   const { text } = shown;
   const setText = useCallback((next: string) => {
@@ -140,7 +141,7 @@ export const CompanionInput = memo(function CompanionInput({ onSend, onStop, isS
     // Re-tapping the mic after a permission denial retries the request
     // (iOS won't re-prompt, but the user may have flipped it in Settings).
     setMicPermissionDenied(false);
-    startCompanionRecording(draftKey);
+    setRecordingToken(startCompanionRecording(draftKey));
     setIsVoiceMode(true);
   }, [draftKey]);
 
@@ -149,14 +150,16 @@ export const CompanionInput = memo(function CompanionInput({ onSend, onStop, isS
     setMicPermissionDenied(true);
   }, []);
 
-  // When voice input changes text, auto-send or update field
+  // When voice input changes text, auto-send or update field. The callback
+  // holds its recording's token: a late result of an earlier recording, or one
+  // whose conversation is no longer active, is dropped.
   const handleVoiceText = useCallback((newText: string) => {
-    if (companionRecordingKey() !== activeKeyRef.current) return;
+    if (companionRecordingSlot(recordingToken) !== activeKeyRef.current) return;
     setText(newText);
     setIsVoiceMode(false);
     // Focus the text input so user can edit before sending
     setTimeout(() => inputRef.current?.focus(), 100);
-  }, [setText]);
+  }, [setText, recordingToken]);
 
   const sendAnimStyle = useAnimatedStyle(() => ({
     transform: [{ scale: sendScale.value }],
