@@ -11,6 +11,8 @@ let mockNext: string | undefined;
 const mockUpdateUser = jest.fn();
 const mockDraft = jest.fn();
 let mockState: any;
+// The store keeps what it is given, so a remount sees the persisted draft.
+const mockSeriesDraft = jest.fn((text: string | null) => { mockState.newSeriesLifeDraft = text; });
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({ replace: mockReplace }),
@@ -44,22 +46,65 @@ describe('life update before a new series', () => {
     mockState = {
       user: { hasCompletedOnboarding: true, currentSituation: 'Caring for my father.' },
       lifeContextDraft: null,
+      newSeriesLifeDraft: null,
       updateUser: mockUpdateUser,
       setLifeContextDraft: mockDraft,
+      setNewSeriesLifeDraft: mockSeriesDraft,
     };
   });
   afterEach(() => { if (view) act(() => view.unmount()); });
   function render() { act(() => { view = create(<LifeUpdateScreen />); }); }
   function press(label: string) { act(() => view.root.findByProps({ label }).props.onPress()); }
+  const situationWrites = () => mockUpdateUser.mock.calls.filter(([patch]) => 'currentSituation' in patch);
+  const RETIRED_INTAKE = { diagnosticAnswers: undefined, mirrorWorkingRead: undefined, mirrorCorrection: undefined };
 
-  it('keeps saved context and unfinished writing when skipped', () => {
+  it('opens a new series blank, without the previous answer or another screen\'s unsaved edit', () => {
+    mockState.lifeContextDraft = 'I also want to learn about forgiveness.';
+    render();
+    expect(view.root.findByType(TextInput).props.value).toBe('');
+    expect(view.root.findAllByProps({ label: 'Discard unfinished edits' })).toHaveLength(0);
+  });
+
+  it.each(['Skip for now', 'Save and create series'])('keeps the saved context and unfinished writing on "%s" with a blank field', (label) => {
+    mockState.lifeContextDraft = 'I also want to learn about forgiveness.';
+    render();
+    press(label);
+    expect(situationWrites()).toEqual([]);
+    expect(mockDraft).not.toHaveBeenCalled();
+    expect(mockSeriesDraft).toHaveBeenLastCalledWith(null);
+    expect(mockReplace).toHaveBeenCalledWith('/generating');
+  });
+
+  it('keeps an unfinished new-series answer through a close and reopen, apart from Share an update\'s draft', () => {
+    mockState.lifeContextDraft = 'I also want to learn about forgiveness.';
+    render();
+    act(() => view.root.findByType(TextInput).props.onChangeText('Starting a new job'));
+    press('Close');
+    act(() => view.unmount());
+    render();
+    expect(view.root.findByType(TextInput).props.value).toBe('Starting a new job');
+    expect(view.root.findAllByProps({ label: 'Discard unfinished edits' }).length).toBeGreaterThan(0);
+    expect(mockDraft).not.toHaveBeenCalled();
+    expect(mockState.lifeContextDraft).toBe('I also want to learn about forgiveness.');
+  });
+
+  it('opens the next new series blank once this one is submitted', () => {
+    render();
+    act(() => view.root.findByType(TextInput).props.onChangeText('Starting a new job'));
+    press('Save and create series');
+    act(() => view.unmount());
+    render();
+    expect(view.root.findByType(TextInput).props.value).toBe('');
+  });
+
+  it('restores unfinished writing when sharing an update', () => {
+    mockNext = undefined;
     mockState.lifeContextDraft = 'I also want to learn about forgiveness.';
     render();
     expect(view.root.findByType(TextInput).props.value).toBe(mockState.lifeContextDraft);
-    press('Skip for now');
-    expect(mockUpdateUser).not.toHaveBeenCalled();
-    expect(mockDraft).not.toHaveBeenCalled();
-    expect(mockReplace).toHaveBeenCalledWith('/generating');
+    expect(view.root.findAllByProps({ label: 'Discard unfinished edits' }).length).toBeGreaterThan(0);
+    act(() => view.root.findByType(TextInput).props.onChangeText('I also want to learn about patience.'));
+    expect(mockDraft).toHaveBeenLastCalledWith('I also want to learn about patience.');
   });
 
   it('saves all 6000 characters before generating and prevents duplicate navigation', () => {
@@ -67,12 +112,13 @@ describe('life update before a new series', () => {
     const detail = 'I want to learn how to listen better.';
     const update = 'a'.repeat(6000 - detail.length) + detail;
     act(() => view.root.findByType(TextInput).props.onChangeText(update));
-    expect(mockDraft).toHaveBeenLastCalledWith(update);
+    // A new series answer is not written as a Share an update draft.
+    expect(mockDraft).not.toHaveBeenCalled();
     press('Save and create series');
     press('Save and create series');
-    expect(mockUpdateUser).toHaveBeenCalledTimes(1);
-    expect(mockUpdateUser).toHaveBeenCalledWith({ currentSituation: update });
-    expect(mockDraft).toHaveBeenLastCalledWith(null);
+    expect(situationWrites()).toEqual([[{ currentSituation: update }]]);
+    expect(mockDraft).not.toHaveBeenCalled();
+    expect(mockSeriesDraft).toHaveBeenLastCalledWith(null);
     expect(mockReplace).toHaveBeenCalledTimes(1);
   });
 
@@ -82,7 +128,8 @@ describe('life update before a new series', () => {
     act(() => view.root.findByType(TextInput).props.onChangeText(update));
     expect(view.root.findByProps({ label: 'Save and create series' }).props.disabled).toBe(true);
     press('Save and create series');
-    expect(mockDraft).toHaveBeenLastCalledWith(update);
+    expect(view.root.findByType(TextInput).props.value).toBe(update);
+    expect(mockSeriesDraft).toHaveBeenLastCalledWith(update);
     expect(mockUpdateUser).not.toHaveBeenCalled();
   });
 
@@ -90,6 +137,24 @@ describe('life update before a new series', () => {
     mockGate.mockReturnValue(false);
     render();
     press('Skip for now');
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(situationWrites()).toEqual([]);
+  });
+
+  it('starts the new series without the last intake\'s deeper answers and read', () => {
+    render();
+    act(() => view.root.findByType(TextInput).props.onChangeText('Starting a new job next month.'));
+    press('Save and create series');
+    expect(mockUpdateUser).toHaveBeenCalledWith({ currentSituation: 'Starting a new job next month.' });
+    expect(mockUpdateUser).toHaveBeenCalledWith(RETIRED_INTAKE);
+    expect(mockReplace).toHaveBeenCalledWith('/generating');
+  });
+
+  it('retires the last intake before the creation gate, whose paywall routes can start the series', () => {
+    mockGate.mockReturnValue(false);
+    render();
+    press('Skip for now');
+    expect(mockUpdateUser).toHaveBeenCalledWith(RETIRED_INTAKE);
     expect(mockReplace).not.toHaveBeenCalled();
   });
 

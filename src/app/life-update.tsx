@@ -10,7 +10,7 @@ import { useCreationGate } from '@/hooks/useCreationGate';
 import { FontFamily } from '@/constants/fonts';
 import { useHasHydrated, useUnfoldStore } from '@/lib/store';
 import { useTheme } from '@/lib/theme';
-import { canSaveLifeContext, LIFE_CONTEXT_INVITATION, LIFE_CONTEXT_QUESTION } from '@/lib/life-context';
+import { canSaveLifeContext, hasLifeContextAnswer, LIFE_CONTEXT_INVITATION, LIFE_CONTEXT_QUESTION } from '@/lib/life-context';
 import { captureSyncSession, isSyncSessionCurrent } from '@/lib/sync-session-fence';
 
 export default function LifeUpdateScreen() {
@@ -28,10 +28,19 @@ function LifeUpdateForm() {
   const newSeries = next === 'series';
   const { colors, isDark } = useTheme();
   const { gate, showExclusiveOffer, dismissOffer, handleOfferVerifiedExit } = useCreationGate();
-  const [text, setText] = useState(() => {
+  // Each intake keeps its own unsent text. "Share an update" edits the saved
+  // context; a new series asks afresh and opens blank unless it has unsent text.
+  const readDraft = () => {
     const state = useUnfoldStore.getState();
-    return state.lifeContextDraft ?? state.user?.currentSituation ?? '';
-  });
+    return newSeries ? state.newSeriesLifeDraft : state.lifeContextDraft;
+  };
+  const writeDraft = (value: string | null) => {
+    const state = useUnfoldStore.getState();
+    // An emptied new-series field is no unsent writing.
+    if (newSeries) state.setNewSeriesLifeDraft(value || null);
+    else state.setLifeContextDraft(value);
+  };
+  const [text, setText] = useState(() => readDraft() ?? (newSeries ? '' : useUnfoldStore.getState().user?.currentSituation ?? ''));
   const [saved, setSaved] = useState(false);
   const session = useRef(captureSyncSession());
   const leaving = useRef(false);
@@ -41,11 +50,15 @@ function LifeUpdateForm() {
     if (save && !canSaveLifeContext(text)) return;
     const state = useUnfoldStore.getState();
     if (!state.user) return;
-    if (save) {
+    if (save && (!newSeries || hasLifeContextAnswer(text))) {
       state.updateUser({ currentSituation: text });
-      state.setLifeContextDraft(null);
     }
+    // Saving ends the unsent text; so does skipping a new series' question.
+    if (save || newSeries) writeDraft(null);
     if (newSeries) {
+      // The last intake's deeper answers and read feed only a new series' first
+      // plan. Retire them before the gate: its paywall routes can start it too.
+      state.updateUser({ diagnosticAnswers: undefined, mirrorWorkingRead: undefined, mirrorCorrection: undefined });
       if (!gate()) return;
       leaving.current = true;
       router.replace('/generating');
@@ -75,17 +88,19 @@ function LifeUpdateForm() {
               <LifeContextInput value={text} colors={colors} isDark={isDark} onChangeText={(value) => {
                 if (!isSyncSessionCurrent(session.current)) return;
                 setText(value);
-                useUnfoldStore.getState().setLifeContextDraft(value);
+                writeDraft(value);
               }} />
               <Button size="lg" label={newSeries ? 'Save and create series' : 'Save update'} disabled={!canSaveLifeContext(text)} onPress={() => finish(true)} />
               <Button variant="ghost" size="lg" label="Skip for now" onPress={() => finish(false)} />
-              <Text style={[styles.note, { color: colors.textMuted }]}>Skipping keeps your saved context. Unfinished edits stay on this device.</Text>
-              {useUnfoldStore.getState().lifeContextDraft !== null && (
+              <Text style={[styles.note, { color: colors.textMuted }]}>
+                Skipping keeps your saved context.{!newSeries && ' Unfinished edits stay on this device.'}
+              </Text>
+              {readDraft() !== null && (
                 <Button variant="ghost" label="Discard unfinished edits" onPress={() => {
                   Alert.alert('Discard these edits?', 'Your saved life context will stay unchanged.', [
                     { text: 'Keep editing', style: 'cancel' },
                     { text: 'Discard', style: 'destructive', onPress: () => {
-                      useUnfoldStore.getState().setLifeContextDraft(null);
+                      writeDraft(null);
                       close();
                     } },
                   ]);

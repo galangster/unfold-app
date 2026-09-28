@@ -5,3 +5,8 @@ export const LIFE_CONTEXT_INVITATION = "Talk about what's going on, what you're 
 export function canSaveLifeContext(text: string): boolean {
   return text.length <= LIFE_CONTEXT_MAX_LENGTH;
 }
+
+/** A blank answer is no update: it leaves the saved context as it is. */
+export function hasLifeContextAnswer(text: string): boolean {
+  return text.trim().length > 0;
+}

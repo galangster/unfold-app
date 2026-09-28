@@ -50,7 +50,7 @@ import { TypewriterText } from '@/components/TypewriterText';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
 import { LifeContextInput } from '@/components/LifeContextInput';
-import { canSaveLifeContext, LIFE_CONTEXT_QUESTION, LIFE_CONTEXT_INVITATION } from '@/lib/life-context';
+import { canSaveLifeContext, hasLifeContextAnswer, LIFE_CONTEXT_QUESTION, LIFE_CONTEXT_INVITATION } from '@/lib/life-context';
 import { OnboardingVoiceAnswerSheet } from '@/components/onboarding/OnboardingVoiceAnswerSheet';
 import { VoiceAnswerButton } from '@/components/onboarding/VoiceAnswerButton';
 import { isVoiceCheckInsEnabled } from '@/lib/voice-feature';
@@ -680,6 +680,9 @@ export default function OnboardingScreen() {
 
   // Form data (declared early — mirrorBackText useMemo depends on it).
   // Draft answers win over the defaults: they are what this person actually said.
+  // A returning reader here is starting a new series: profile answers this flow
+  // never asks again carry over (saving writes them back), while the series'
+  // own answers start blank. The life question keeps only this intake's unsent answer.
   const [data, setData] = useState<OnboardingData>(() => ({
     name: existingUser?.name || '',
     bibleTranslation: existingUser?.bibleTranslation || 'BSB',
@@ -692,20 +695,18 @@ export default function OnboardingScreen() {
     selectedThemes: [],
     selectedType: undefined,
     selectedStudySubject: undefined,
-    currentSituation: existingUser?.hasCompletedOnboarding
-      ? useUnfoldStore.getState().lifeContextDraft ?? existingUser.currentSituation
-      : '',
+    currentSituation: existingUser?.hasCompletedOnboarding ? useUnfoldStore.getState().newSeriesLifeDraft ?? '' : '',
     diagnosticAnswers: [],
     spiritualSeeking: '',
     upcomingEvent: { label: '', date: '' },
     aspiration: '',
-    growthGoals: [],
-    obstacles: [],
-    relationshipWithGod: undefined,
-    bibleFrequency: undefined,
+    growthGoals: existingUser?.growthGoals ?? [],
+    obstacles: existingUser?.obstacles ?? [],
+    relationshipWithGod: existingUser?.relationshipWithGod,
+    bibleFrequency: existingUser?.bibleFrequency,
     readingDuration: 15,
     devotionalLength: 7,
-    reminderTime: '8:00 AM',
+    reminderTime: existingUser?.reminderTime || '8:00 AM',
     mirrorBackCommitted: false,
     ...(restoredDraft?.data ?? {}),
     // Drafts written before key-people rows carried ids restore without them.
@@ -1385,8 +1386,12 @@ export default function OnboardingScreen() {
     // Read through the ref, never the closure — see dataRef above.
     const data = dataRef.current;
     const companionName = resolveCompanionNameToPersist(companionNameInputRef.current);
+    // A blank or skipped life answer keeps the saved context.
+    const wroteSituation = hasLifeContextAnswer(data.currentSituation);
     const lifeDraftState = useUnfoldStore.getState();
     if (lifeDraftState.lifeContextDraft === data.currentSituation) lifeDraftState.setLifeContextDraft(null);
+    // Submitting the intake ends its unsent answer; the next new series opens blank.
+    if (lifeDraftState.newSeriesLifeDraft) lifeDraftState.setNewSeriesLifeDraft(null);
 
     if (existingUser) {
       updateUser({
@@ -1394,7 +1399,7 @@ export default function OnboardingScreen() {
         aboutMe: data.aboutMe,
         companionName,
         companionPersonality: companionPersonalityRef.current,
-        currentSituation: data.currentSituation,
+        currentSituation: wroteSituation ? data.currentSituation : existingUser.currentSituation ?? '',
         emotionalState: '',
         faithImpact: '',
         spiritualSeeking: data.spiritualSeeking || data.aspiration,
@@ -1408,12 +1413,13 @@ export default function OnboardingScreen() {
         bibleTranslation: data.bibleTranslation as BibleTranslation,
         hasCompletedOnboarding: true,
         writingStyle: { tone: data.tone, depth: data.depth, faithBackground: data.faithBackground, lifeStage: data.lifeStage },
-        ...(data.selectedThemes.length > 0 ? { selectedTheme: data.selectedThemes[0] } : {}),
-        ...(data.selectedType ? { selectedType: data.selectedType } : {}),
-        ...(data.selectedStudySubject ? { selectedStudySubject: data.selectedStudySubject } : {}),
         ...(shapeKeyPeople(data.keyPeople).length > 0 ? { keyPeople: shapeKeyPeople(data.keyPeople) } : {}),
         // Per-series fields overwrite unconditionally: a new series must never
-        // inherit a previous pass's event/answers/read (review finding).
+        // inherit a previous pass's direction/event/answers/read (review finding).
+        // "Just guide me" after a book study must not generate that study again.
+        selectedTheme: data.selectedThemes[0],
+        selectedType: data.selectedType,
+        selectedStudySubject: data.selectedStudySubject,
         upcomingEvent: shapeUpcomingEvent(data.upcomingEvent),
         diagnosticAnswers: data.diagnosticAnswers.length > 0 ? data.diagnosticAnswers : undefined,
         mirrorWorkingRead: data.mirrorWorkingRead || undefined,
@@ -1875,6 +1881,10 @@ export default function OnboardingScreen() {
       // Reset theme selection mode before advancing
       setThemeSelectionMode('none');
       setCurrentStepId('currentSituation');
+      // Enter like advanceToNextStep does: the question types in first, then
+      // its answer controls fade in. Without this the input mounted mid-reveal.
+      setShowInput(false);
+      inputOpacity.value = 0;
     }
   };
 
@@ -2759,13 +2769,16 @@ export default function OnboardingScreen() {
             isDark={isDark}
             onChangeText={(text) => {
               setData((prev) => ({ ...prev, currentSituation: text }));
-              if (existingUser?.hasCompletedOnboarding) useUnfoldStore.getState().setLifeContextDraft(text);
+              // Unsent writing survives a close or an app stop until it is submitted or skipped.
+              if (existingUser?.hasCompletedOnboarding) useUnfoldStore.getState().setNewSeriesLifeDraft(text || null);
             }}
           />
+          {/* Skipping leaves the answer blank: saving keeps the saved context,
+              and the follow-up questions never build on an old answer. */}
           <TouchableOpacity accessibilityRole="button" accessibilityLabel="Skip life update" style={{ minHeight: 44, justifyContent: 'center', alignItems: 'center' }} onPress={() => {
-            const kept = existingUser?.currentSituation ?? '';
-            dataRef.current = { ...dataRef.current, currentSituation: kept };
-            setData((prev) => ({ ...prev, currentSituation: kept }));
+            dataRef.current = { ...dataRef.current, currentSituation: '' };
+            setData((prev) => ({ ...prev, currentSituation: '' }));
+            useUnfoldStore.getState().setNewSeriesLifeDraft(null);
             advanceToNextStep();
           }}>
             <Text style={{ color: colors.textMuted, fontFamily: FontFamily.ui, fontSize: 15 }}>Skip for now</Text>
