@@ -10,6 +10,7 @@ describe('cleanRecommendationReason', () => {
     ['a bold label', `**Recommendation:** ${SENTENCE}`],
     ['a bold label with the colon outside', `**Recommendation**: ${SENTENCE}`],
     ['a plain label', `Recommendation: ${SENTENCE}`],
+    ['a quoted label', `"Recommendation: ${SENTENCE}"`],
     ['a list marker', `- ${SENTENCE}`],
     ['a blockquote marker', `> ${SENTENCE}`],
     ['emphasis inside the sentence', 'This series meets you where **doubt** feels more _honest_ than certainty.'],
@@ -32,6 +33,8 @@ describe('cleanRecommendationReason', () => {
     ['a link', `${SENTENCE} [Start here](https://example.test)`],
     ['html', `<b>${SENTENCE}</b>`],
     ['a table row', `| Theme | ${SENTENCE} |`],
+    ['a reference link', 'This series invites you to rest [here][1].'],
+    ['a reference definition', `${SENTENCE}\n[1]: https://example.test`],
   ])('rejects %s', (_label, raw) => {
     expect(cleanRecommendationReason(raw)).toBeNull();
   });

@@ -13,8 +13,10 @@ const LIST_MARKER = /^\s*([-*+]|\d+[.)])\s+/;
 const BOLD_LABEL = /^(\*\*|__)[^*_]+?(:\1|\1:)\s*/;
 const PLAIN_LABEL = /^recommendation\s*:\s*/i;
 const EMPHASIS = /[*_`]/g;
-// Markup with no plain-text reading: an HTML tag, a link, a table row.
-const LEFTOVER_MARKUP = /<\/?[a-z][^>]*>|\[[^\]]*\]\([^)]*\)|\|.*\|/i;
+const WRAPPING_QUOTES = /^["']|["']$/g;
+// Markup with no plain-text reading: an HTML tag, an inline or reference
+// link, a link definition, a table row.
+const LEFTOVER_MARKUP = /<\/?[a-z][^>]*>|\[[^\]]*\]\s*(\([^)]*\)|\[[^\]]*\]|:)|\|.*\|/i;
 
 /** Plain text for the card, or null when markup survives or nothing is left. */
 export function cleanRecommendationReason(raw: string): string | null {
@@ -38,11 +40,12 @@ export function cleanRecommendationReason(raw: string): string | null {
     .join(' ')
     .replace(/\s+/g, ' ')
     .trim()
+    .replace(WRAPPING_QUOTES, '')
     .replace(BOLD_LABEL, '')
     .replace(EMPHASIS, '')
     .trim()
     .replace(PLAIN_LABEL, '')
-    .replace(/^["']|["']$/g, '');
+    .replace(WRAPPING_QUOTES, '');
   if (!text || LEFTOVER_MARKUP.test(text)) return null;
   return text;
 }
