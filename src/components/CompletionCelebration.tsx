@@ -24,7 +24,7 @@ import { Button } from '@/components/ui/Button';
 const DAY_MESSAGES = [
   'He is faithful, even when you’re not sure you are.',
   'The word that went out will not return empty.',
-  'His mercies are new this morning.',
+  'His mercies are new every morning.',
   'God is closer than your next breath.',
   'Jesus intercedes for you right now.',
   'He who began a good work will finish it.',
