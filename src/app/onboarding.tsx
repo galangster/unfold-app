@@ -680,8 +680,9 @@ export default function OnboardingScreen() {
 
   // Form data (declared early — mirrorBackText useMemo depends on it).
   // Draft answers win over the defaults: they are what this person actually said.
-  // A returning reader here is starting a new series: its own answers — the
-  // life question included — start blank.
+  // A returning reader here is starting a new series: profile answers this flow
+  // never asks again carry over (saving writes them back), while the series'
+  // own answers — the life question included — start blank.
   const [data, setData] = useState<OnboardingData>(() => ({
     name: existingUser?.name || '',
     bibleTranslation: existingUser?.bibleTranslation || 'BSB',
@@ -699,13 +700,13 @@ export default function OnboardingScreen() {
     spiritualSeeking: '',
     upcomingEvent: { label: '', date: '' },
     aspiration: '',
-    growthGoals: [],
-    obstacles: [],
-    relationshipWithGod: undefined,
-    bibleFrequency: undefined,
+    growthGoals: existingUser?.growthGoals ?? [],
+    obstacles: existingUser?.obstacles ?? [],
+    relationshipWithGod: existingUser?.relationshipWithGod,
+    bibleFrequency: existingUser?.bibleFrequency,
     readingDuration: 15,
     devotionalLength: 7,
-    reminderTime: '8:00 AM',
+    reminderTime: existingUser?.reminderTime || '8:00 AM',
     mirrorBackCommitted: false,
     ...(restoredDraft?.data ?? {}),
     // Drafts written before key-people rows carried ids restore without them.

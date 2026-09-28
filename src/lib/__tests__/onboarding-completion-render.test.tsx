@@ -396,4 +396,21 @@ describe('new series from Today', () => {
     expect(mockStoreState.user?.currentSituation).toBe('Starting a new job next month.');
     expect(mockStoreState.lifeContextDraft).toBe(SHARE_AN_UPDATE_DRAFT);
   });
+
+  it('keeps the profile answers a new series does not ask again', async () => {
+    await openAt('devotionalLength');
+    await tap({ label: '7 days' });
+
+    expect(mockReplace).toHaveBeenCalledWith('/generating');
+    expect(mockStoreState.user).toEqual(expect.objectContaining({
+      reminderTime: '9:00 PM',
+      relationshipWithGod: 'ups-and-downs',
+      bibleFrequency: 'weekly',
+      growthGoals: ['Prayer life'],
+      obstacles: ['Busy schedule'],
+      // Nothing new was written, so the saved life context and its unsaved edit stay.
+      currentSituation: PREVIOUS_SITUATION,
+    }));
+    expect(mockStoreState.lifeContextDraft).toBe(SHARE_AN_UPDATE_DRAFT);
+  });
 });
