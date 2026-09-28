@@ -174,8 +174,6 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoSt
   const instanceId = useRef<symbol>(Symbol('voiceInput'));
   const isRecordingRef = useRef(false);
   const mountedRef = useRef(true);
-  // Both commits wait a short flush for the final result; unmounting cancels it.
-  const commitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const userStoppedRef = useRef(false); // distinguishes user-stop vs silence-stop
   const committedSegmentsRef = useRef('');
   const finalTranscriptRef = useRef('');
@@ -289,7 +287,6 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoSt
       mountedRef.current = false;
       startGenerationRef.current += 1;
       clearTimer();
-      if (commitTimerRef.current) clearTimeout(commitTimerRef.current);
       if (activeRecorder === owner) {
         activeRecorder = null;
         activeRecorderHandoff = null;
@@ -382,7 +379,7 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoSt
           userStoppedRef.current = true;
           ExpoSpeechRecognitionModule.stop();
           // Slight delay to let final result arrive before committing
-          commitTimerRef.current = setTimeout(() => doCommit(), FINAL_RESULT_FLUSH_MS);
+          setTimeout(() => doCommit(), FINAL_RESULT_FLUSH_MS);
         }
         return next;
       });
@@ -413,7 +410,7 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoSt
     startGenerationRef.current += 1;
     userStoppedRef.current = true;
     ExpoSpeechRecognitionModule.stop();
-    commitTimerRef.current = setTimeout(() => doCommit(), FINAL_RESULT_FLUSH_MS);
+    setTimeout(() => doCommit(), FINAL_RESULT_FLUSH_MS);
   }, [doCommit]);
 
   // ── Idle state ───────────────────────────────────────────

@@ -328,7 +328,9 @@ describe('VoiceInputBar', () => {
     expect(onChangeText).toHaveBeenCalledWith('Sentence one trailing words.');
   });
 
-  it('drops an accepted transcript when the bar unmounts before it commits', async () => {
+  // A journal field can unmount its voice bar inside the flush, for example on a
+  // switch from Free Write to SOAP. The words the reader accepted still arrive.
+  it('commits an accepted transcript when the bar unmounts before the flush ends', async () => {
     const onChangeText = jest.fn();
     let tree: any;
 
@@ -344,7 +346,7 @@ describe('VoiceInputBar', () => {
     act(() => {
       dispatchSpeechEvent('result', {
         isFinal: true,
-        results: [{ transcript: 'Meant for the previous chat.' }],
+        results: [{ transcript: 'Words for the journal.' }],
       });
     });
 
@@ -356,7 +358,7 @@ describe('VoiceInputBar', () => {
       jest.advanceTimersByTime(250);
     });
 
-    expect(onChangeText).not.toHaveBeenCalled();
+    expect(onChangeText).toHaveBeenCalledWith('Words for the journal.');
   });
 
   it('routes speech only to the most recently started voice input', async () => {
