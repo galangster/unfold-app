@@ -1170,7 +1170,7 @@ export interface SeriesArc {
 
 /**
  * Join all text blocks from a raw Anthropic response body. Adaptive-thinking
- * models (claude-opus-5, claude-sonnet-5) may lead with a thinking block, so
+ * models (the Opus 5 and Sonnet 5 families) may lead with a thinking block, so
  * content[0].text is not reliable — the answer lives in later text blocks.
  */
 function extractAnthropicText(data: unknown): string {
@@ -1456,10 +1456,12 @@ Avoid the bad pattern. Follow the good pattern.`;
     + arcBlock
     + (storiesBlock ? `\n\n${storiesBlock}` : '');
 
-  // Sonnet 5 for core devotional generation — quality is the product.
-  // (The backend proxy omits temperature + disables adaptive thinking for
-  // sonnet-5, so this stays a cost-stable drop-in.)
-  const model = 'claude-sonnet-5';
+  // Sonnet 5.5 for core devotional generation — quality is the product.
+  // (The backend proxy omits temperature for the Sonnet 5 family and sends no
+  // thinking setting, so the model thinks at its default depth. Sonnet 5.5
+  // costs the same as Sonnet 5. The proxy has to list this model before a
+  // build that names it ships.)
+  const model = 'claude-sonnet-5-5';
   const timeoutMs = 180000; // 3 min timeout for all days
 
   // Scale max_tokens based on batch size and reading duration to prevent truncation
@@ -1602,7 +1604,7 @@ Avoid the bad pattern. Follow the good pattern.`;
     throw new Error(`Backend error: ${typeof data.error === 'string' ? data.error : JSON.stringify(data.error)}`);
   }
 
-  // Text-join extraction: sonnet-5 also runs adaptive thinking, so a leading
+  // Text-join extraction: Sonnet also runs adaptive thinking, so a leading
   // thinking block would make content[0].text undefined and fail every batch.
   const content = extractAnthropicText(data);
 
