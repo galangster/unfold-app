@@ -106,6 +106,22 @@ describe('generateDevotional on a 429', () => {
   });
 });
 
+describe('the writing model', () => {
+  it('asks the backend for Sonnet 5.5, not the model before it', async () => {
+    const fetchMock = mockBackend(429, {
+      error: { code: 'RATE_LIMITED', message: 'Too many requests. Try again in 30 seconds.', retryAfter: 30 },
+    });
+
+    await expect(generateDevotional(CONTEXT)).rejects.toThrow();
+
+    const models = (fetchMock.mock.calls as unknown as Array<[string, { body: string }]>).map(
+      ([, init]) => JSON.parse(init.body).model as string,
+    );
+    expect(models).toContain('claude-sonnet-5-5');
+    expect(models).not.toContain('claude-sonnet-5');
+  });
+});
+
 describe('generation POST transport', () => {
   it('posts through authenticatedFetch with an abort signal', async () => {
     mockBackend(200, { ok: true });
