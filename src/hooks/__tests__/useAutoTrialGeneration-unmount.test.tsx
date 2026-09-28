@@ -74,7 +74,6 @@ import { ApiError } from '@/lib/generation-api';
 import { readInflightGenerationJob } from '@/lib/inflight-generation-job';
 import { mmkvStorage } from '@/lib/mmkv-storage';
 import { useUnfoldStore, type UserProfile } from '@/lib/store';
-import { SyncPullRateLimitedError, resetReadBudgetForTests } from '@/lib/sync-pull-backoff';
 
 const NOW = Date.parse('2026-09-10T17:00:00.000Z');
 const nativeSetTimeout = global.setTimeout;
@@ -122,7 +121,6 @@ describe('H13 useAutoTrialGeneration unmount', () => {
       devotionals: [],
     });
     mockPoll.mockResolvedValue({ status: 'pending' });
-    resetReadBudgetForTests();
     jest.spyOn(global, 'setTimeout').mockImplementation(((
       callback: (...args: unknown[]) => void,
       delay?: number,
@@ -141,7 +139,6 @@ describe('H13 useAutoTrialGeneration unmount', () => {
   afterEach(() => {
     pendingTimers.forEach((timer) => clearTimeout(timer));
     pendingTimers.clear();
-    resetReadBudgetForTests();
     jest.restoreAllMocks();
   });
 
@@ -240,23 +237,6 @@ describe('H13 useAutoTrialGeneration unmount', () => {
     act(() => {
       tree.unmount();
     });
-  });
-
-  it('keeps a missing auto-trial job deferred when the fallback pull is rate limited', async () => {
-    mockPoll.mockRejectedValue(new ApiError('Poll job failed: 404 — Job not found', 404, 'NOT_FOUND'));
-    (pullDevotionalContent as jest.Mock).mockRejectedValue(new SyncPullRateLimitedError(30));
-    const created = seedPurchased();
-    transitionAutoTrialIntent('submitted', { jobId: 'job-gone', devotionalId: 'devo-pull' }, { nowMs: NOW });
-    let tree!: ReturnType<typeof create>;
-
-    await act(async () => {
-      tree = create(<Probe intentId={created.intentId} />);
-      await new Promise((resolve) => setTimeout(resolve, 20));
-    });
-
-    expect(readAutoTrialIntent()?.status).toBe('submitted');
-    expect(mockSubmit).not.toHaveBeenCalled();
-    act(() => tree.unmount());
   });
 
   it('does not dispatch submit_error after unmount', async () => {

@@ -71,14 +71,14 @@ export function useGeneratedDayWatch({
     });
     controllerRef.current = controller;
 
-    const runAutomaticDiscovery = (): Promise<void> => {
+    // Repeated foreground events re-check at most once per cooldown. The first
+    // start always discovers, so a recreated watch never goes idle.
+    const runForegroundDiscovery = (): void => {
       const now = Date.now();
       const lastDiscoveryAt = automaticDiscoveryAtByKey.get(recoveryKey);
-      if (lastDiscoveryAt !== undefined && now - lastDiscoveryAt < AUTOMATIC_DISCOVERY_COOLDOWN_MS) {
-        return Promise.resolve();
-      }
+      if (lastDiscoveryAt !== undefined && now - lastDiscoveryAt < AUTOMATIC_DISCOVERY_COOLDOWN_MS) return;
       automaticDiscoveryAtByKey.set(recoveryKey, now);
-      return controller.start();
+      void controller.checkAgain();
     };
 
     const applyNetworkState = (network: { isConnected: boolean | null; isInternetReachable: boolean | null }) => (
@@ -90,7 +90,7 @@ export function useGeneratedDayWatch({
     });
     const appStateSubscription = AppState.addEventListener('change', (nextState) => {
       if (nextState !== 'active') return;
-      void runAutomaticDiscovery();
+      runForegroundDiscovery();
     });
 
     void NetInfo.fetch()
@@ -98,12 +98,12 @@ export function useGeneratedDayWatch({
         networkInitialized = true;
         await applyNetworkState(network);
         if (network.isConnected && network.isInternetReachable !== false) {
-          await runAutomaticDiscovery();
+          await controller.start();
         }
       })
       .catch(() => {
         networkInitialized = true;
-        return runAutomaticDiscovery();
+        return controller.start();
       });
 
     return () => {

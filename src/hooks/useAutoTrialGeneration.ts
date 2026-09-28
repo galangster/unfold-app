@@ -49,7 +49,6 @@ import {
 import { flushUnfoldStorePersistAsync, useUnfoldStore, type Devotional } from '@/lib/store';
 import { useUIState } from '@/lib/ui-state';
 import { syncUserProfileToBackend } from '@/lib/user-profile-sync';
-import { SyncPullRateLimitedError } from '@/lib/sync-pull-backoff';
 
 export const PROFILE_PUSH_CAP_MS = 5_000;
 
@@ -277,8 +276,7 @@ export function useAutoTrialGeneration(intentId: string | null): {
               runEffectsRef.current([{ type: 'land' }]);
               return;
             }
-          } catch (pullError) {
-            if (pullError instanceof SyncPullRateLimitedError) return;
+          } catch {
             // Fall through to job_gone.
           }
         }

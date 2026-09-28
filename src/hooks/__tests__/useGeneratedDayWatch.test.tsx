@@ -128,7 +128,7 @@ describe('useGeneratedDayWatch', () => {
     act(() => tree?.unmount());
   });
 
-  it('shares one throttle across initial start and foreground discovery for a recovery key', async () => {
+  it('throttles repeated foreground discovery for a recovery key', async () => {
     jest.useFakeTimers({ now: 1_000 });
     mockFindDayJob.mockResolvedValue(null);
     const onDay = jest.fn();
@@ -146,23 +146,23 @@ describe('useGeneratedDayWatch', () => {
       mockOnAppState?.('active');
       await Promise.resolve();
       await Promise.resolve();
-      mockOnAppState?.('active');
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-    expect(mockFindDayJob).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      jest.advanceTimersByTime(10_000);
       mockOnAppState?.('active');
       await Promise.resolve();
       await Promise.resolve();
     });
     expect(mockFindDayJob).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      jest.advanceTimersByTime(10_000);
+      mockOnAppState?.('active');
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(mockFindDayJob).toHaveBeenCalledTimes(3);
     act(() => tree?.unmount());
   });
 
-  it('throttles a recreated watch for the same key', async () => {
+  it('discovers again at once when a watch is recreated for the same key', async () => {
     jest.useFakeTimers({ now: 1_000 });
     mockFindDayJob.mockResolvedValue(null);
     const onDay = jest.fn();
@@ -177,16 +177,6 @@ describe('useGeneratedDayWatch', () => {
     act(() => tree?.unmount());
 
     await act(async () => {
-      tree = renderer.create(<Probe onDay={onDay} onValue={() => undefined} canMutate={false} />);
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-    expect(mockFindDayJob).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      jest.advanceTimersByTime(10_000);
-      tree?.unmount();
       tree = renderer.create(<Probe onDay={onDay} onValue={() => undefined} canMutate={false} />);
       await Promise.resolve();
       await Promise.resolve();
