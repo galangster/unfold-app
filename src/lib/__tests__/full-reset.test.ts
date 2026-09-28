@@ -175,6 +175,7 @@ import {
 import { cancelAllScheduledNotifications } from '../notifications';
 import { useUnfoldStore } from '../store';
 import { clearBridgeCache } from '../bridge-service';
+import { readCompanionDraft, writeCompanionDraft } from '../companion-drafts';
 import { clearExamenCache } from '../examen-service';
 import { clearScriptureExplainCache } from '../scripture-explain-api';
 import { clearVerseCache } from '../bible-api';
@@ -307,6 +308,14 @@ describe('performFullLocalReset', () => {
     await performFullLocalReset();
 
     expect(purgeRealStoreForRecoveryReset).toHaveBeenCalledTimes(1);
+  });
+
+  it('forgets unsent companion drafts', async () => {
+    writeCompanionDraft('conversation-a', 'Half a thought');
+
+    await performFullLocalReset();
+
+    expect(readCompanionDraft('conversation-a')).toBe('');
   });
 
   it('clears caches, bug log, trial mirror, review marker, diagnostics, TTS cache, widgets, RevenueCat, and rotates identity', async () => {

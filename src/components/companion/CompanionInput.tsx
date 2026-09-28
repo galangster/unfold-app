@@ -32,6 +32,7 @@ import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
 import { COMPANION_MESSAGE_MAX_CHARS } from '@/lib/companion-limits';
+import { readCompanionDraft, writeCompanionDraft } from '@/lib/companion-drafts';
 
 const PLACEHOLDERS = [
   'What’s on your mind?',
@@ -64,15 +65,28 @@ interface Props {
   onStop: () => void;
   isStreaming: boolean;
   fontScale?: number;
+  /** The conversation this composer writes to. Each keeps its own unsent text. */
+  draftKey: string;
 }
 
 // Memoized: the companion screen re-renders on every streaming token flush —
 // the input bar's props (stable callbacks + isStreaming/fontScale) only change
 // at stream or text-size boundaries, so the memo skips token-flush rerenders.
-export const CompanionInput = memo(function CompanionInput({ onSend, onStop, isStreaming, fontScale = 1 }: Props) {
+export const CompanionInput = memo(function CompanionInput({ onSend, onStop, isStreaming, fontScale = 1, draftKey }: Props) {
   const { colors, isDark } = useTheme();
-  const [text, setText] = useState('');
+  const [draft, setDraft] = useState(() => ({ key: draftKey, text: readCompanionDraft(draftKey) }));
   const [isVoiceMode, setIsVoiceMode] = useState(false);
+  // Another conversation shows its own unsent text, and a recording in progress
+  // ends, so words meant for one conversation are never sent to another.
+  if (draft.key !== draftKey) {
+    setDraft({ key: draftKey, text: readCompanionDraft(draftKey) });
+    setIsVoiceMode(false);
+  }
+  const { text } = draft;
+  const setText = useCallback((next: string) => {
+    writeCompanionDraft(draftKey, next);
+    setDraft({ key: draftKey, text: next });
+  }, [draftKey]);
   const [micPermissionDenied, setMicPermissionDenied] = useState(false);
   const inputRef = useRef<TextInput>(null);
   const sendScale = useSharedValue(1);
@@ -101,7 +115,7 @@ export const CompanionInput = memo(function CompanionInput({ onSend, onStop, isS
     });
 
     setText('');
-  }, [canSend, text, onSend, sendScale]);
+  }, [canSend, text, onSend, sendScale, setText]);
 
   const handleStop = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -127,7 +141,7 @@ export const CompanionInput = memo(function CompanionInput({ onSend, onStop, isS
     setIsVoiceMode(false);
     // Focus the text input so user can edit before sending
     setTimeout(() => inputRef.current?.focus(), 100);
-  }, []);
+  }, [setText]);
 
   const sendAnimStyle = useAnimatedStyle(() => ({
     transform: [{ scale: sendScale.value }],

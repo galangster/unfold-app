@@ -41,6 +41,7 @@ import {
   purgeRealStoreForRecoveryReset,
 } from '@/lib/mmkv-storage';
 import { clearBridgeCache } from '@/lib/bridge-service';
+import { clearCompanionDrafts } from '@/lib/companion-drafts';
 import { clearExamenCache } from '@/lib/examen-service';
 import { clearScriptureExplainCache } from '@/lib/scripture-explain-api';
 import { clearVerseCache } from '@/lib/bible-api';
@@ -298,6 +299,7 @@ async function runFullLocalReset(options: FullResetOptions): Promise<FullResetRe
   // 2. Zustand store reset
   store.reset();
   useCompanionChatStore.getState().clearAllConversations();
+  clearCompanionDrafts();
 
   // Voice audio is stored outside Zustand. Clear ownership before the MMKV sweep
   // so a late upload callback cannot restore an erased draft.

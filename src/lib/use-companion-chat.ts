@@ -969,6 +969,7 @@ export function useCompanionChat() {
 
   return {
     messages,
+    activeConversationId,
     isStreaming,
     activeRequestCompanionId,
     isSearching,

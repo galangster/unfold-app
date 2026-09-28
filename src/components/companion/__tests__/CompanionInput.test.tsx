@@ -65,10 +65,14 @@ jest.mock('react-native-reanimated', () => {
 });
 
 import { CompanionInput } from '../CompanionInput';
+import { clearCompanionDrafts } from '@/lib/companion-drafts';
 
 const COMPANION_MESSAGE_MAX_CHARS = 4000;
 
-function renderInput(onSend: (text: string) => boolean) {
+// Drafts live in memory for the whole process, so each test starts clean.
+beforeEach(() => clearCompanionDrafts());
+
+function renderInput(onSend: (text: string) => boolean, draftKey = 'conversation-a') {
   let tree: any;
 
   act(() => {
@@ -77,6 +81,7 @@ function renderInput(onSend: (text: string) => boolean) {
         onSend={onSend}
         onStop={jest.fn()}
         isStreaming={false}
+        draftKey={draftKey}
       />
     );
   });
@@ -148,7 +153,7 @@ describe('CompanionInput send clearing', () => {
 
     act(() => {
       tree = renderer.create(
-        <CompanionInput
+        <CompanionInput draftKey="conversation-a"
           onSend={onSend}
           onStop={onStop}
           isStreaming={false}
@@ -160,7 +165,7 @@ describe('CompanionInput send clearing', () => {
 
     act(() => {
       tree.update(
-        <CompanionInput
+        <CompanionInput draftKey="conversation-a"
           onSend={onSend}
           onStop={onStop}
           isStreaming={false}
@@ -201,7 +206,7 @@ describe('CompanionInput send clearing', () => {
 
     act(() => {
       tree = renderer.create(
-        <CompanionInput onSend={onSend} onStop={jest.fn()} isStreaming={isStreaming} />
+        <CompanionInput draftKey="conversation-a" onSend={onSend} onStop={jest.fn()} isStreaming={isStreaming} />
       );
     });
     if (draft) enterText(tree, draft);
@@ -210,5 +215,31 @@ describe('CompanionInput send clearing', () => {
     expect(button.props.accessibilityRole).toBe('button');
     expect(button.props.hitSlop).toBeUndefined();
     expect(button.props.style).toEqual(expect.objectContaining({ width: 44, height: 44 }));
+  });
+});
+
+describe('CompanionInput drafts across conversations', () => {
+  function switchTo(tree: any, onSend: (text: string) => boolean, draftKey: string) {
+    act(() => {
+      tree.update(<CompanionInput onSend={onSend} onStop={jest.fn()} isStreaming={false} draftKey={draftKey} />);
+    });
+  }
+
+  it('never sends one conversation\'s unsent text to another, and keeps it for its return', () => {
+    const onSend = jest.fn(() => true);
+    const tree = renderInput(onSend);
+    enterText(tree, "Pray for Sam's surgery");
+
+    switchTo(tree, onSend, 'conversation-b');
+    expect(tree.root.findByType(TextInput).props.value).toBe('');
+    enterText(tree, 'Hello from B');
+    pressSend(tree);
+    expect(onSend).toHaveBeenCalledTimes(1);
+    expect(onSend).toHaveBeenCalledWith('Hello from B');
+
+    switchTo(tree, onSend, 'conversation-a');
+    expect(tree.root.findByType(TextInput).props.value).toBe("Pray for Sam's surgery");
+    switchTo(tree, onSend, 'conversation-b');
+    expect(tree.root.findByType(TextInput).props.value).toBe('');
   });
 });
