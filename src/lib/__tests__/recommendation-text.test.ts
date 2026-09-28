@@ -9,6 +9,7 @@ describe('cleanRecommendationReason', () => {
     ['an underlined heading', `Recommendation\n==============\n${SENTENCE}`],
     ['a bold label', `**Recommendation:** ${SENTENCE}`],
     ['a bold label with the colon outside', `**Recommendation**: ${SENTENCE}`],
+    ['a plain label', `Recommendation: ${SENTENCE}`],
     ['a list marker', `- ${SENTENCE}`],
     ['a blockquote marker', `> ${SENTENCE}`],
     ['emphasis inside the sentence', 'This series meets you where **doubt** feels more _honest_ than certainty.'],
@@ -18,12 +19,19 @@ describe('cleanRecommendationReason', () => {
     expect(cleanRecommendationReason(raw)).toBe(SENTENCE);
   });
 
+  it('keeps an ordinary hash inside a sentence', () => {
+    expect(cleanRecommendationReason('Day #3 builds on this theme.')).toBe('Day #3 builds on this theme.');
+  });
+
+  it('keeps a short plain line', () => {
+    expect(cleanRecommendationReason('Find rest.')).toBe('Find rest.');
+  });
+
   it.each([
     ['a heading with no sentence', '# Recommendation'],
     ['a link', `${SENTENCE} [Start here](https://example.test)`],
     ['html', `<b>${SENTENCE}</b>`],
     ['a table row', `| Theme | ${SENTENCE} |`],
-    ['text over the length cap', `${SENTENCE} ${SENTENCE} ${SENTENCE}`],
   ])('rejects %s', (_label, raw) => {
     expect(cleanRecommendationReason(raw)).toBeNull();
   });

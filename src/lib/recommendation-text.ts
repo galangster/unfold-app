@@ -11,10 +11,12 @@ const SETEXT_UNDERLINE = /^\s{0,3}(=+|-+)\s*$/;
 const BLOCKQUOTE_MARKER = /^\s*(>\s?)+/;
 const LIST_MARKER = /^\s*([-*+]|\d+[.)])\s+/;
 const BOLD_LABEL = /^(\*\*|__)[^*_]+?(:\1|\1:)\s*/;
+const PLAIN_LABEL = /^recommendation\s*:\s*/i;
 const EMPHASIS = /[*_`]/g;
-const LEFTOVER_MARKUP = /[#<>[\]|]/;
+// Markup with no plain-text reading: an HTML tag, a link, a table row.
+const LEFTOVER_MARKUP = /<\/?[a-z][^>]*>|\[[^\]]*\]\([^)]*\)|\|.*\|/i;
 
-/** Plain text for the card, or null when the text is unusable. */
+/** Plain text for the card, or null when markup survives or nothing is left. */
 export function cleanRecommendationReason(raw: string): string | null {
   const kept: string[] = [];
   let underText = false;
@@ -39,8 +41,8 @@ export function cleanRecommendationReason(raw: string): string | null {
     .replace(BOLD_LABEL, '')
     .replace(EMPHASIS, '')
     .trim()
+    .replace(PLAIN_LABEL, '')
     .replace(/^["']|["']$/g, '');
-  if (LEFTOVER_MARKUP.test(text)) return null;
-  if (text.length <= 10 || text.length >= 200) return null;
+  if (!text || LEFTOVER_MARKUP.test(text)) return null;
   return text;
 }
