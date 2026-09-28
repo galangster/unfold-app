@@ -52,7 +52,6 @@ import { continueGeneratingDays, isFullGenerationActive } from '@/lib/devotional
 import { syncDevotionalDayRead } from '@/lib/devotional-read-sync';
 import { commitDevotionalPullCursor, pullDevotionalContent } from '@/lib/devotional-sync-pull';
 import {
-  extendSyncCheckCooldown,
   syncCheckCooldown,
   SyncPullRateLimitedError,
   type SyncCheckCooldown,
@@ -76,8 +75,9 @@ import {
   isDevotionalDaySelectable,
   resolveInitialReadingDayNumber,
 } from '@/lib/devotional-day-access';
-import { shouldWatchForGeneratedDay } from '@/lib/generated-day-watch';
+import { nextConfirmedAbsentKey, shouldWatchForGeneratedDay } from '@/lib/generated-day-watch';
 import { useGeneratedDayWatch } from '@/hooks/useGeneratedDayWatch';
+import { useReadBudgetBlocked } from '@/hooks/useReadBudgetBlocked';
 import { getServerOwnedSeriesTotalDays } from '@/lib/devotional-series-boundary';
 import { isTransientGenerationError, toFriendlyRemainingDaysGenerationError } from '@/lib/generation-errors';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
@@ -271,6 +271,7 @@ type SyncCheckOutcome = 'found' | 'missing' | 'failed' | 'rate-limited' | 'skipp
 
 export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = {}) {
   const calendarNow = useCalendarNow();
+  const readBudgetBlocked = useReadBudgetBlocked();
   const router = useRouter();
   const isReadingFocused = useIsFocused();
   const params = useLocalSearchParams<{ bookOpening?: string; dayNumber?: string; devotionalId?: string; highlightId?: string; bookmarkId?: string; readOnly?: string; focus?: string; from?: string; practice?: string; practiceMethod?: string }>();
@@ -384,6 +385,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   const [dailySyncRecoveryKey, setDailySyncRecoveryKey] = useState<string | null>(null);
   // `${devotionalId}:${day}` that a successful full pull confirmed is not on the server.
   const [confirmedMissingDayKey, setConfirmedMissingDayKey] = useState<string | null>(null);
+  const [discoveredAbsentKey, setDiscoveredAbsentKey] = useState<string | null>(null);
   const [checkCooldown, setCheckCooldown] = useState<SyncCheckCooldown | null>(null);
   // "Prepare Remaining Readings" is a secondary escape hatch — only worth
   // showing once the primary "Check for Day X" action has actually been
@@ -1660,10 +1662,6 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     })();
   }, [user, devoId, devoTotalDays, devoDaysCount, isPremium, isGeneratingMore, generateRemainingDays, autoRetryTick, isOnline, params.readOnly, isViewingActiveSeries]);
 
-  const startCheckCooldown = useCallback((next: SyncCheckCooldown) => {
-    setCheckCooldown((current) => extendSyncCheckCooldown(current, next));
-  }, []);
-
   useEffect(() => {
     if (!checkCooldown) return;
     const timer = setTimeout(() => setCheckCooldown(null), Math.max(0, checkCooldown.until - Date.now()));
@@ -1671,6 +1669,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   }, [checkCooldown]);
 
   const recoverSyncedDay = useCallback(async (source: 'auto' | 'manual' = 'manual'): Promise<SyncCheckOutcome> => {
+    if (readBudgetBlocked) return 'rate-limited';
     if (!currentDevotional || currentDayData || isCheckingForSyncedDay) return 'skipped';
 
     const attemptKey = `${currentDevotional.id}:${viewingDay}`;
@@ -1737,7 +1736,6 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
       if (err instanceof SyncPullRateLimitedError) {
         // The per-user read budget is spent. Wait out its window instead of
         // reporting backpressure to Sentry as an error.
-        startCheckCooldown(syncCheckCooldown(Date.now(), err));
         void logBugEvent('reading-sync-recovery', 'sync-pull-rate-limited', {
           viewingDay,
           source,
@@ -1764,12 +1762,12 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
         setIsCheckingForSyncedDay(false);
       }
     }
-  }, [currentDevotional, currentDayData, isCheckingForSyncedDay, startCheckCooldown, updateDevotionalDays, viewingDay]);
+  }, [currentDevotional, currentDayData, isCheckingForSyncedDay, readBudgetBlocked, updateDevotionalDays, viewingDay]);
 
   useEffect(() => {
-    if (!currentDevotional || currentDayData || isCheckingForSyncedDay || !isReadingFocused) return;
+    if (!currentDevotional || currentDayData || isCheckingForSyncedDay || !isReadingFocused || readBudgetBlocked) return;
     void recoverSyncedDay('auto');
-  }, [currentDevotional, currentDayData, isCheckingForSyncedDay, isReadingFocused, recoverSyncedDay]);
+  }, [currentDevotional, currentDayData, isCheckingForSyncedDay, isReadingFocused, readBudgetBlocked, recoverSyncedDay]);
 
   // Canonical progressive days use the same authoritative job recovery as
   // Today. Legacy batch series keep the direct continuation path above.
@@ -1793,7 +1791,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     enabled: shouldWatchViewingDay
       && isReadingFocused
       && dailySyncRecoveryKey === dailyRecoveryKey
-      && checkCooldown?.reason !== 'rate-limited',
+      && !readBudgetBlocked,
     canMutate: premiumPolicy === 'granted'
       && params.readOnly !== '1'
       && currentDevotional?.id === currentDevotionalId
@@ -1802,19 +1800,24 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   });
 
   useEffect(() => {
+    setDiscoveredAbsentKey((previous) => (
+      nextConfirmedAbsentKey(previous, dailyRecoveryKey, dailyGeneration.state)
+    ));
+  }, [dailyGeneration.state, dailyRecoveryKey]);
+
+  useEffect(() => {
     const devotionalId = effectiveDevotionalId;
-    if (!devotionalId || currentDevotional || isHydratingMissingDevotional) return;
+    if (!devotionalId || currentDevotional || readBudgetBlocked) return;
     if (missingDevotionalHydrationAttemptRef.current[devotionalId]) return;
 
     missingDevotionalHydrationAttemptRef.current[devotionalId] = true;
-    let cancelled = false;
     setIsHydratingMissingDevotional(true);
 
     void (async () => {
       try {
         const session = captureSyncSession();
         const pulled = await pullDevotionalContent(devotionalId);
-        if (cancelled || !isSyncSessionCurrent(session)) return;
+        if (!readingMountedRef.current || !isSyncSessionCurrent(session)) return;
 
         applyPulledDevotionalContent({
           devotionalId,
@@ -1835,6 +1838,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
         });
       } catch (err) {
         if (err instanceof SyncPullRateLimitedError) {
+          delete missingDevotionalHydrationAttemptRef.current[devotionalId];
           void logBugEvent('reading-sync-recovery', 'sync-pull-rate-limited', {
             phase: 'missing-devotional-hydration',
             retryAfterSeconds: err.retryAfterSeconds,
@@ -1846,16 +1850,12 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
           });
         }
       } finally {
-        if (!cancelled) {
+        if (readingMountedRef.current) {
           setIsHydratingMissingDevotional(false);
         }
       }
     })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [effectiveDevotionalId, currentDevotional, currentDevotionalId, isHydratingMissingDevotional, params.readOnly, setCurrentDevotional, updateDevotionalDays]);
+  }, [effectiveDevotionalId, currentDevotional, currentDevotionalId, params.readOnly, readBudgetBlocked, setCurrentDevotional, updateDevotionalDays]);
 
   const fallbackBottomPadding = Math.max(insets.bottom + 96, 112);
 
@@ -1985,6 +1985,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     const isPausedSeriesDay = usesDailyRecovery
       && !isViewingActiveSeries
       && confirmedMissingDayKey === dailyRecoveryKey
+      && discoveredAbsentKey === dailyRecoveryKey
       && !isCheckingForSyncedDay
       && dailyState.status !== 'running'
       && dailyState.status !== 'slow';
@@ -2003,15 +2004,17 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     // Each check is a full pull plus a job lookup against the per-user read
     // budget, so the button rests between checks instead of taking every tap.
     const isCheckResting = checkCooldown !== null && !canRetryDailyJob;
-    const isPrimaryActionDisabled = !isPausedSeriesDay && (isCheckBusy || isCheckResting);
+    const isPrimaryActionDisabled = !isPausedSeriesDay && (isCheckBusy || isCheckResting || readBudgetBlocked);
     const primaryActionLabel = isPausedSeriesDay
       ? 'Open Today'
       : isCheckBusy
         ? 'Checking...'
-        : canRetryDailyJob
-          ? 'Try Again'
-          : isCheckResting
-            ? (checkCooldown?.reason === 'rate-limited' ? 'Try again in a minute' : 'Checked just now')
+        : readBudgetBlocked
+          ? 'Try again in a minute'
+          : canRetryDailyJob
+            ? 'Try Again'
+            : isCheckResting
+              ? 'Checked just now'
             : `Check for Day ${viewingDay}`;
     const dailyHeadline = notice
       ? notice.title
@@ -2241,7 +2244,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                   const outcome = await recoverSyncedDay('manual');
                   if (outcome !== 'missing' && outcome !== 'failed') return;
                   if (usesDailyRecovery) await dailyGeneration.checkAgain();
-                  startCheckCooldown(syncCheckCooldown(Date.now()));
+                  setCheckCooldown(syncCheckCooldown(Date.now()));
                 }}
                 disabled={isPrimaryActionDisabled}
                 accessibilityRole="button"
@@ -2288,18 +2291,18 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
               {!usesDailyRecovery && (hasAttemptedSyncCheck || !!retryError) && (
                 <TouchableOpacity activeOpacity={0.6}
                   onPress={handleRetryGeneration}
-                  disabled={isCheckingForSyncedDay}
+                  disabled={isCheckingForSyncedDay || readBudgetBlocked}
                   accessibilityRole="button"
                   accessibilityLabel="Prepare remaining readings"
                   accessibilityHint={`Prepare the remaining ${expectedDays - daysReady} readings in your devotional`}
-                  accessibilityState={{ disabled: isCheckingForSyncedDay }}
+                  accessibilityState={{ disabled: isCheckingForSyncedDay || readBudgetBlocked }}
                   style={{
                     paddingVertical: Spacing['3'],
                     flexDirection: 'row',
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: 8,
-                    opacity: isCheckingForSyncedDay ? 0.65 : 1,
+                    opacity: isCheckingForSyncedDay || readBudgetBlocked ? 0.65 : 1,
                   }}
                 >
                   <ArrowsClockwiseIcon size={14} color={colors.textMuted} weight="light" />
@@ -2727,6 +2730,8 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                         ) : isPremium ? (
                           <TouchableOpacity activeOpacity={0.7}
                             onPress={handleGenerateMore}
+                            disabled={readBudgetBlocked}
+                            accessibilityState={{ disabled: readBudgetBlocked }}
                             style={{
                               backgroundColor: retryCtaButtonBg,
                               paddingVertical: Spacing['4'],
@@ -2738,7 +2743,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                               alignItems: 'center',
                               justifyContent: 'center',
                               gap: 10,
-                              opacity: 1,
+                              opacity: readBudgetBlocked ? 0.65 : 1,
                               minWidth: 240,
                             }}
                           >

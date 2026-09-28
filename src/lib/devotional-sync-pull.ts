@@ -20,7 +20,11 @@ import { bindPulledDevotionalSession } from './devotional-pulled-content';
 import { logger } from './logger';
 import { getDeviceId, mmkvStorage } from './mmkv-storage';
 import { useUnfoldStore } from './store';
-import { SyncPullRateLimitedError } from './sync-pull-backoff';
+import {
+  noteReadBudgetRateLimited,
+  readBudgetRetryAfterMs,
+  SyncPullRateLimitedError,
+} from './sync-pull-backoff';
 import {
   assertSyncSessionCurrent,
   captureSyncSession,
@@ -245,6 +249,10 @@ export async function pullDevotionalContent(
 ): Promise<PulledDevotionalContent> {
   const session = captureSyncSession();
   assertSyncSessionCurrent(session, 'devotional pull');
+  const retryAfterMs = readBudgetRetryAfterMs();
+  if (retryAfterMs > 0) {
+    throw new SyncPullRateLimitedError(Math.ceil(retryAfterMs / 1000));
+  }
 
   const scope = currentDevotionalPullScope(devotionalId);
   const startedAt = Date.now();
@@ -283,6 +291,7 @@ export async function pullDevotionalContent(
       logger.warn('[sync/devotional-pull] pull failed', response.status, body.slice(0, 120));
       if (response.status === 429) {
         const { retryAfterSeconds } = parseAiRateLimitBody(body, readRetryAfterHeader(response));
+        noteReadBudgetRateLimited(retryAfterSeconds);
         throw new SyncPullRateLimitedError(retryAfterSeconds);
       }
       throw new Error(`Sync pull failed: ${response.status}`);

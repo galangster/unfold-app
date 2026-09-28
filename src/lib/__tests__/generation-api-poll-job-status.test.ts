@@ -17,6 +17,10 @@ jest.mock('../api-config', () => ({
 
 import { ApiError, findDayJob, pollJobStatus, retryJob, submitGenerationJob } from '../generation-api';
 import { classifyPollFailure } from '../generation-poll-outcome';
+import {
+  noteReadBudgetRateLimited,
+  resetReadBudgetForTests,
+} from '../sync-pull-backoff';
 
 type ErrorBody = { error?: { code?: string; message?: string } };
 
@@ -33,10 +37,29 @@ const fetchMock = jest.fn();
 
 beforeEach(() => {
   fetchMock.mockReset();
+  resetReadBudgetForTests();
   (globalThis as { fetch: unknown }).fetch = fetchMock;
 });
 
 describe('pollJobStatus', () => {
+  it('opens the shared read-budget window on a 429 response', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ...jsonResponse(429, { error: { code: 'RATE_LIMITED', message: 'Too many requests' } }),
+      headers: { get: () => '36' },
+    });
+
+    await expect(pollJobStatus('job-1')).rejects.toMatchObject({
+      status: 429,
+      code: 'RATE_LIMITED',
+    });
+    await expect(pollJobStatus('job-1')).rejects.toMatchObject({
+      status: 429,
+      code: 'RATE_LIMITED',
+      message: 'Rate limited',
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('returns the job body and asks for the job by id', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(200, { jobId: 'job-1', status: 'processing' }));
 
@@ -87,6 +110,34 @@ describe('pollJobStatus', () => {
 });
 
 describe('findDayJob', () => {
+  it('opens the shared read-budget window on a 429 response', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ...jsonResponse(429, { error: { code: 'RATE_LIMITED', message: 'Too many requests' } }),
+      headers: { get: () => '36' },
+    });
+
+    await expect(findDayJob('devo-1', 2)).rejects.toMatchObject({
+      status: 429,
+      code: 'RATE_LIMITED',
+    });
+    await expect(findDayJob('devo-1', 2)).rejects.toMatchObject({
+      status: 429,
+      code: 'RATE_LIMITED',
+      message: 'Rate limited',
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('throws an ApiError without a request while the shared window is active', async () => {
+    noteReadBudgetRateLimited(36);
+
+    const error = await findDayJob('devo-1', 2).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({ status: 429, code: 'RATE_LIMITED', message: 'Rate limited' });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('discovers a day job through the owner-scoped identity route', async () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,

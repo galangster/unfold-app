@@ -1,29 +1,67 @@
 import {
-  extendSyncCheckCooldown,
+  noteReadBudgetRateLimited,
+  readBudgetRetryAfterMs,
+  resetReadBudgetForTests,
+  subscribeReadBudget,
   syncCheckCooldown,
-  SyncPullRateLimitedError,
 } from '../sync-pull-backoff';
 
-describe('manual sync check back-off', () => {
+describe('read-budget back-off', () => {
   const now = 1_000_000;
 
-  it('pauses ten seconds after an ordinary check', () => {
-    expect(syncCheckCooldown(now)).toEqual({ until: now + 10_000, reason: 'checked' });
+  beforeEach(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(now);
+    resetReadBudgetForTests();
   });
 
-  it('waits out the server window after a rate-limited check, between 10 and 60 seconds', () => {
-    expect(syncCheckCooldown(now, new SyncPullRateLimitedError(36))).toEqual({ until: now + 36_000, reason: 'rate-limited' });
-    expect(syncCheckCooldown(now, new SyncPullRateLimitedError(2)).until).toBe(now + 10_000);
-    expect(syncCheckCooldown(now, new SyncPullRateLimitedError(600)).until).toBe(now + 60_000);
-    expect(syncCheckCooldown(now, new SyncPullRateLimitedError(null)).until).toBe(now + 30_000);
+  afterEach(() => {
+    resetReadBudgetForTests();
+    jest.useRealTimers();
   });
 
-  it('never shortens an active rate-limit wait with a later ordinary pause', () => {
-    const limited = syncCheckCooldown(now, new SyncPullRateLimitedError(36));
-    expect(extendSyncCheckCooldown(limited, syncCheckCooldown(now + 1_000))).toBe(limited);
+  it.each([
+    [36, 36_000],
+    [2, 10_000],
+    [600, 60_000],
+    [null, 30_000],
+  ])('clamps a %s-second retry window to %s milliseconds', (retryAfterSeconds, expected) => {
+    noteReadBudgetRateLimited(retryAfterSeconds);
 
-    const later = syncCheckCooldown(now + 40_000);
-    expect(extendSyncCheckCooldown(limited, later)).toBe(later);
-    expect(extendSyncCheckCooldown(null, later)).toBe(later);
+    expect(readBudgetRetryAfterMs()).toBe(expected);
+  });
+
+  it('keeps the later window end when another rate limit is noted', () => {
+    noteReadBudgetRateLimited(36);
+    jest.advanceTimersByTime(1_000);
+    noteReadBudgetRateLimited(10);
+
+    expect(readBudgetRetryAfterMs()).toBe(35_000);
+
+    noteReadBudgetRateLimited(60);
+
+    expect(readBudgetRetryAfterMs()).toBe(60_000);
+  });
+
+  it('notifies listeners when the window changes and when it ends', () => {
+    const listener = jest.fn();
+    const unsubscribe = subscribeReadBudget(listener);
+
+    noteReadBudgetRateLimited(10);
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    jest.advanceTimersByTime(9_999);
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(readBudgetRetryAfterMs()).toBe(1);
+
+    jest.advanceTimersByTime(1);
+    expect(listener).toHaveBeenCalledTimes(2);
+    expect(readBudgetRetryAfterMs()).toBe(0);
+
+    unsubscribe();
+  });
+
+  it('keeps the ordinary check rest at ten seconds', () => {
+    expect(syncCheckCooldown(now)).toEqual({ until: now + 10_000 });
   });
 });

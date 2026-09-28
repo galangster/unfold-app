@@ -1,6 +1,8 @@
 import {
+  nextConfirmedAbsentKey,
   shouldWatchForGeneratedDay,
 } from '../generated-day-watch';
+import type { DailyGenerationRecoveryState } from '../daily-generation-recovery';
 import type { Devotional, DevotionalDay } from '../store';
 
 function day(dayNumber: number, devotionalId = 'devo-1'): DevotionalDay {
@@ -63,5 +65,37 @@ describe('shouldWatchForGeneratedDay', () => {
       ),
     ).toBe(false);
     expect(shouldWatchForGeneratedDay(null, 2, now)).toBe(false);
+  });
+});
+
+describe('nextConfirmedAbsentKey', () => {
+  const key = 'devo-1:2';
+
+  it('clears the verdict when there is no current day key', () => {
+    expect(nextConfirmedAbsentKey(key, null, { status: 'idle', discovered: true })).toBeNull();
+  });
+
+  it('confirms the current day after read-only discovery finds no job', () => {
+    expect(nextConfirmedAbsentKey(null, key, { status: 'idle', discovered: true })).toBe(key);
+  });
+
+  it.each<DailyGenerationRecoveryState>([
+    { status: 'running', jobId: 'job-1' },
+    { status: 'slow', jobId: 'job-1' },
+    { status: 'complete', jobId: 'job-1' },
+    { status: 'failed', jobId: 'job-1', canRetry: false, failureKind: 'job' },
+  ])('clears the verdict when $status confirms a job exists', (state) => {
+    expect(nextConfirmedAbsentKey(key, key, state)).toBeNull();
+  });
+
+  it.each<DailyGenerationRecoveryState>([
+    { status: 'idle' },
+    { status: 'checking', operation: 'discover' },
+    { status: 'offline' },
+    { status: 'service-error' },
+    { status: 'blocked', reason: 'series-read-only' },
+  ])('preserves the same-day verdict through $status', (state) => {
+    expect(nextConfirmedAbsentKey(key, key, state)).toBe(key);
+    expect(nextConfirmedAbsentKey('devo-1:1', key, state)).toBeNull();
   });
 });

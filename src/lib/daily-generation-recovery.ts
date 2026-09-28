@@ -15,7 +15,7 @@ export const DAILY_GENERATION_POLL_INTERVAL_MS = 15_000;
 export const DAILY_GENERATION_SLOW_AFTER_MS = 2 * 60_000;
 
 export type DailyGenerationRecoveryState =
-  | { status: 'idle' }
+  | { status: 'idle'; discovered?: true }
   | { status: 'checking'; operation: 'discover' | 'retry' }
   | { status: 'running' | 'slow'; jobId: string }
   | { status: 'failed'; jobId: string; canRetry: boolean; failureKind: 'job' | 'invalid-result' }
@@ -325,7 +325,7 @@ export function createDailyGenerationRecovery(options: ControllerOptions): Daily
       }
 
       if (!canMutate) {
-        publish({ status: 'idle' });
+        publish({ status: 'idle', discovered: true });
         return;
       }
 
