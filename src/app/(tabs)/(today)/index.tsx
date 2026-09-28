@@ -455,6 +455,8 @@ export default function HomeScreen() {
     dayNumber: number;
     question?: string;
     chips?: string[];
+    /** A day still in preparation is not in the store yet; its answer saves anyway. */
+    dayInStore: boolean;
     session: number;
   } | null>(null);
   const [showVoiceCheckInSheet, setShowVoiceCheckInSheet] = useState(false);
@@ -959,6 +961,7 @@ export default function HomeScreen() {
         dayNumber,
         question: day?.checkInQuestion,
         chips: day?.checkInChips,
+        dayInStore: day !== undefined,
         session: captureSyncSession(),
       });
       beginRitualSession({ kind: 'midday', devotionalId: currentDevotional.id, dayNumber });
@@ -1002,15 +1005,18 @@ export default function HomeScreen() {
     moodLabel: string;
     chipAnswer?: string;
     freeText?: string;
-  }) => {
+  }): boolean => {
     const opened = openedCheckIn;
     const store = useUnfoldStore.getState();
     const openedSeries = opened ? store.devotionals.find((devotional) => devotional.id === opened.devotionalId) : undefined;
-    // Save nothing when the opened series or day is gone: an account reset, or
-    // a sync that deleted the series while the sheet was open.
-    if (!opened || !isSyncSessionCurrent(opened.session) || !openedSeries?.days.some((day) => day.dayNumber === opened.dayNumber)) {
+    // Save nothing when the opened series is gone (an account reset, or a sync
+    // that deleted it while the sheet was open), or when the opened day was in
+    // the store and is gone. A day still in preparation was never there.
+    const dayGone = opened?.dayInStore && !openedSeries?.days.some((day) => day.dayNumber === opened.dayNumber);
+    if (!opened || !isSyncSessionCurrent(opened.session) || !openedSeries || dayGone) {
       setShowCheckInSheet(false);
-      return;
+      Alert.alert('Check-in not saved', 'The reading it belongs to was removed from this device while you were answering.');
+      return false;
     }
     const clock = resolveRitualCompletion({
       session: store.ritualSessions.midday,
@@ -1036,6 +1042,7 @@ export default function HomeScreen() {
     markMiddayCheckInCompleted(clock.localYmd);
     store.clearRitualSession('midday');
     setShowCheckInSheet(false);
+    return true;
   };
 
   const handleEveningWindDown = useCallback(() => {
