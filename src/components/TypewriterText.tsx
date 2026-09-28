@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useMemo, useState } from 'react';
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -37,23 +37,48 @@ interface TypewriterTextProps {
   highlightColor?: string;
 }
 
-// ─── Magical character that animates on mount ──────────────────────
-const MagicalChar = React.memo(function MagicalChar({
-  char,
-  accentColor,
-  textColor,
-  style,
-  isWordStart,
-  shimmer,
-}: {
+const CHAR_STYLE: TextStyle = { fontFamily: FontFamily.display, fontSize: 25, letterSpacing: -0.15 };
+
+const COLOR_FADE_DELAY_MS = 50;
+const COLOR_FADE_MS = 600;
+/** The entrance ends with its delayed color fade. */
+const ENTRANCE_SETTLE_MS = COLOR_FADE_DELAY_MS + COLOR_FADE_MS;
+
+type CharProps = {
   char: string;
   accentColor: string;
   textColor: string;
   style?: TextStyle;
-  isWordStart: boolean;
   shimmer?: boolean;
-}) {
+};
+
+// ─── Magical character that animates on mount ──────────────────────
+// React props keep Reanimated's first style (opacity 0), so a settled character
+// re-renders as plain text in its final style that no later commit can hide.
+const MagicalChar = React.memo(function MagicalChar({ char, accentColor, textColor, style, shimmer }: CharProps) {
   const reducedMotion = useReducedMotion();
+  // Reduce Motion has no entrance to wait for.
+  const [settled, setSettled] = useState(reducedMotion);
+
+  useEffect(() => {
+    Haptics.selectionAsync();
+  }, []);
+
+  useEffect(() => {
+    // A shimmering word loops and never settles.
+    if (settled || shimmer) return;
+    const settleId = setTimeout(() => setSettled(true), ENTRANCE_SETTLE_MS);
+    return () => clearTimeout(settleId);
+  }, [settled, shimmer]);
+
+  if (settled) {
+    return <Text style={[CHAR_STYLE, style, { color: textColor }]}>{char}</Text>;
+  }
+  return <EnteringChar char={char} accentColor={accentColor} textColor={textColor} style={style} shimmer={shimmer} />;
+});
+
+/** Mounted only without Reduce Motion (see MagicalChar). */
+function EnteringChar({ char, accentColor, textColor, style, shimmer }: CharProps) {
   const opacity = useSharedValue(0);
   const translateY = useSharedValue(6);
   const scale = useSharedValue(0.85);
@@ -61,8 +86,6 @@ const MagicalChar = React.memo(function MagicalChar({
   const shimmerOpacity = useSharedValue(1);
 
   useEffect(() => {
-    Haptics.selectionAsync();
-
     // Fade + rise
     opacity.value = withTiming(1, {
       duration: Duration.instant,
@@ -82,12 +105,12 @@ const MagicalChar = React.memo(function MagicalChar({
 
     // Golden glow → normal text color
     colorProgress.value = withDelay(
-      50,
-      withTiming(1, { duration: 600, easing: Easing.out(Easing.cubic) }),
+      COLOR_FADE_DELAY_MS,
+      withTiming(1, { duration: COLOR_FADE_MS, easing: Easing.out(Easing.cubic) }),
     );
 
     // Shimmer — gentle brightness pulse after appearing
-    if (shimmer && !reducedMotion) {
+    if (shimmer) {
       shimmerOpacity.value = withDelay(
         800,
         withRepeat(
@@ -120,22 +143,8 @@ const MagicalChar = React.memo(function MagicalChar({
     ),
   }));
 
-  return (
-    <Animated.Text
-      style={[
-        {
-          fontFamily: FontFamily.display,
-          fontSize: 25,
-          letterSpacing: -0.15,
-        },
-        style,
-        animatedStyle,
-      ]}
-    >
-      {char}
-    </Animated.Text>
-  );
-});
+  return <Animated.Text style={[CHAR_STYLE, style, animatedStyle]}>{char}</Animated.Text>;
+}
 
 // ─── Main component ────────────────────────────────────────────────
 export function TypewriterText({
@@ -234,7 +243,7 @@ export function TypewriterText({
       {/* Text wrapper handles line-breaking and space collapsing natively.
           Unrevealed chars are invisible placeholders that reserve width,
           preventing words from reflowing as characters appear. */}
-      <Animated.Text style={[{ fontFamily: FontFamily.display, fontSize: 25, letterSpacing: -0.15 }, style]}>
+      <Text style={[CHAR_STYLE, style]}>
       {segments.map((segment, segIndex) => {
         if (!segment) return null;
 
@@ -243,12 +252,12 @@ export function TypewriterText({
           const idx = globalIdx;
           globalIdx += segment.length;
           return (
-            <Animated.Text
+            <Text
               key={`s-${idx}`}
               style={{ color: idx < visibleCount ? textColor : 'transparent' }}
             >
               {segment}
-            </Animated.Text>
+            </Text>
           );
         }
 
@@ -274,24 +283,23 @@ export function TypewriterText({
                 accentColor={colors.accent}
                 textColor={wordColor || textColor}
                 style={style}
-                isWordStart={charIdx === 0}
                 shimmer={!!isHighlighted}
               />
             );
           }
           // Unrevealed — invisible placeholder reserving width
           return (
-            <Animated.Text
+            <Text
               key={`c-${charGlobalIdx}`}
               style={{ color: 'transparent' }}
             >
               {char}
-            </Animated.Text>
+            </Text>
           );
         });
       })}
 
-      </Animated.Text>
+      </Text>
     </View>
   );
 }

@@ -166,13 +166,15 @@ jest.mock('@/lib/generation-session', () => ({
   isSyncSessionCurrent: () => true,
   SyncSessionInvalidatedError: class SyncSessionInvalidatedError extends Error {},
 }));
+// Headlines finish typing at once unless a test holds one mid-reveal.
+let mockTypewriterFinishes = true;
 jest.mock('@/components/TypewriterText', () => {
   const ReactActual = require('react');
   const { Text } = require('react-native');
   return {
     TypewriterText: ({ text, onComplete }: { text: string; onComplete?: () => void }) => {
       ReactActual.useEffect(() => {
-        onComplete?.();
+        if (mockTypewriterFinishes) onComplete?.();
       }, [onComplete]);
       return ReactActual.createElement(Text, null, text);
     },
@@ -287,6 +289,7 @@ describe('new series from Today', () => {
   beforeEach(() => {
     jest.useFakeTimers();
     mockReplace.mockClear();
+    mockTypewriterFinishes = true;
     mockGenerateDiagnosticQuestions.mockReset().mockResolvedValue(null);
     mockStoreState.lifeContextDraft = SHARE_AN_UPDATE_DRAFT;
     mockStoreState.user = {
@@ -363,6 +366,15 @@ describe('new series from Today', () => {
     await tap({ text: 'Just guide me' });
 
     expect(lifeQuestionField().props.defaultValue).toBe('');
+  });
+
+  it('types the life question in before its answer controls appear', async () => {
+    await openAt('themeType');
+    mockTypewriterFinishes = false;
+    await tap({ text: 'Just guide me' });
+
+    // The answer controls wait for the question, as on every other step.
+    expect(lifeQuestionField()).toBeUndefined();
   });
 
   it('skipping the life question keeps the saved context without asking about the old answer', async () => {

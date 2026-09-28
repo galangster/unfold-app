@@ -1879,6 +1879,10 @@ export default function OnboardingScreen() {
       // Reset theme selection mode before advancing
       setThemeSelectionMode('none');
       setCurrentStepId('currentSituation');
+      // Enter like advanceToNextStep does: the question types in first, then
+      // its answer controls fade in. Without this the input mounted mid-reveal.
+      setShowInput(false);
+      inputOpacity.value = 0;
     }
   };
 
