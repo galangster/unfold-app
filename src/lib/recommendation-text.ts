@@ -21,22 +21,25 @@ const LABEL = /^(recommendation\s*:\s*)+/i;
 // The separator is matched with whitespace removed, which keeps it linear.
 const TABLE_ROW_START = /^\s*\|/;
 const TABLE_SEPARATOR = /^\|?:?-+:?(\|:?-+:?)+\|?$/;
+// A single quote mark without a letter or digit on each side.
+const NON_APOSTROPHE_MARK = /(^|[^A-Za-z0-9\u00C0-\u024F])'|'([^A-Za-z0-9\u00C0-\u024F]|$)/;
 const LINK_DEFINITION_LINE = /^\s*\[[^\]]+\]:\s*\S/;
 // Markup with no plain-text reading: an HTML tag or comment, an inline or
 // reference link, strikethrough.
 const LEFTOVER_MARKUP = /<[a-z!/]|\[[^[\]]*\]\s*[([]|~~/i;
 
 /**
- * Removes one outer pair of quotes. Apostrophes inside single quotes do not
- * count. A double pair comes off only when the quotes inside it pair up and
- * the first one opens a quotation, so "Be still" and "know" keeps its quotes.
+ * Removes one outer pair of quotes. A single pair comes off only when every
+ * single mark inside is an apostrophe (a letter or digit on each side). A
+ * double pair comes off only when the quotes inside it pair up and the first
+ * one opens a quotation, so "Be still" and "know" keeps its quotes.
  */
 function unquote(text: string): string {
   if (text.length < 2) return text;
   const inner = text.slice(1, -1);
   const first = text[0];
   const last = text[text.length - 1];
-  if (first === "'" && last === "'") return inner;
+  if (first === "'" && last === "'") return NON_APOSTROPHE_MARK.test(inner) ? text : inner;
   if (first === '“' && last === '”' && !/[“”]/.test(inner)) return inner;
   if (first !== '"' || last !== '"') return text;
   const firstInner = inner.indexOf('"');

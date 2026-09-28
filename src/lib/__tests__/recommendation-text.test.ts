@@ -39,6 +39,7 @@ describe('cleanRecommendationReason', () => {
 
   it.each([
     ['an apostrophe inside single quotes', "'You're invited to find rest.'", "You're invited to find rest."],
+    ['two single-quoted phrases', "'Be still,' says Jesus, 'and know'", "'Be still,' says Jesus, 'and know'"],
     ['a quotation inside double quotes', '"Jesus says "Come to me" and invites you to rest."', 'Jesus says "Come to me" and invites you to rest.'],
     ['two separate quotations', '"Be still" and "know"', '"Be still" and "know"'],
     ['bold text with a literal star inside', "Find rest in **God's * symbol** today.", "Find rest in God's * symbol today."],
