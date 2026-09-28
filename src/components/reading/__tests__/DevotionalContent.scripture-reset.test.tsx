@@ -153,6 +153,33 @@ describe('DevotionalContent versed scripture (Greptile A8)', () => {
     });
   });
 
+  it('saves no translation label when the card shows the day text because both fetches failed', async () => {
+    mockFetchVerseLocal.mockResolvedValue(null);
+    mockFetchVerse.mockResolvedValue(null);
+    const onToggleBookmark = jest.fn();
+
+    let tree: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderer.create(
+        <DevotionalContent
+          day={day({ scriptureText: 'Generated fallback text' })}
+          fontSize="medium"
+          onToggleBookmark={onToggleBookmark}
+        />,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const bookmarkControl = tree!.root.findByProps({ accessibilityLabel: 'Save John 3:16' });
+    act(() => bookmarkControl.props.onPress());
+    expect(onToggleBookmark).toHaveBeenCalledWith({
+      reference: 'John 3:16',
+      text: 'Generated fallback text',
+      translation: undefined,
+    });
+  });
+
   it('keeps a Saved Scripture target on the main block when its reference matches canonically', async () => {
     mockFetchVerseLocal.mockResolvedValue(null);
     mockFetchVerse.mockResolvedValue(null);

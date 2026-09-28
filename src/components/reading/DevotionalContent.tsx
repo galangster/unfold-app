@@ -41,7 +41,7 @@ export type ReaderSection = 'scripture' | 'devotional' | 'reflection' | 'act' | 
 export interface DisplayedScripture {
   reference: string;
   text: string;
-  translation: string;
+  translation?: string;
 }
 
 interface DevotionalContentProps {
@@ -322,9 +322,10 @@ export function DevotionalContent({
     onToggleBookmark?.({
       reference: day.scriptureReference,
       text: displayScripture,
-      translation: versedScripture?.translation ?? translation,
+      // Only a fetched passage has a known translation. The day's own text has none.
+      translation: versedScripture?.translation,
     });
-  }, [bookmarkScale, day.scriptureReference, displayScripture, onToggleBookmark, translation, versedScripture?.translation]);
+  }, [bookmarkScale, day.scriptureReference, displayScripture, onToggleBookmark, versedScripture?.translation]);
 
   const bookmarkAnimStyle = useAnimatedStyle(() => ({
     transform: [{ scale: bookmarkScale.value }],
