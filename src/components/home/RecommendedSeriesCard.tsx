@@ -26,6 +26,7 @@ import { clearInitialGenerationRequestId } from '@/lib/initial-generation-reques
 import { trackAutoTrialPickStartTapped } from '@/lib/auto-trial-telemetry';
 import { getChurnedCreationGateAction } from '@/lib/creation-gate-policy';
 import { mmkvStorage } from '@/lib/mmkv-storage';
+import { cleanRecommendationReason } from '@/lib/recommendation-text';
 import type { NextPick } from '@/lib/store';
 import type { PremiumAccessPolicy } from '@/lib/premium-access-policy';
 
@@ -57,6 +58,24 @@ function toRecommendation(pick: NextPick): Recommendation {
     reason: pick.line,
     suggestedLength: pick.suggestedLength,
   };
+}
+
+/** Fetched JSON is unchecked, so a theme name renders only when it is text. */
+function displayThemeName(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
+const PLAIN_FALLBACK_REASON = 'A new series — right where you are right now.';
+
+/**
+ * The plain fallback the backend serves when its reason text is unusable. The
+ * theme name is data, so the sentence is cleaned too, and a constant covers a
+ * theme name the cleaner refuses.
+ */
+function fallbackReason(suggestedLength: number, themeName: string) {
+  const theme = themeName.trim() ? themeName.toLowerCase() : 'this theme';
+  return cleanRecommendationReason(`A ${suggestedLength}-day series on ${theme} — right where you are right now.`)
+    ?? PLAIN_FALLBACK_REASON;
 }
 
 function formatRecommendationType(type: string) {
@@ -232,6 +251,9 @@ export function RecommendedSeriesCard({
   // the bare word 'Theme' with no value attached.
   const typeLabel = recommendation!.type === 'theme' ? null : formatRecommendationType(recommendation!.type);
   const actionLabel = isCompletion ? 'Begin the Next Study' : 'Start This Study';
+  const themeName = displayThemeName(recommendation!.themeName);
+  const reasonText = cleanRecommendationReason(recommendation!.reason)
+    ?? fallbackReason(recommendation!.suggestedLength, themeName);
 
   return (
     <Animated.View entering={entering(FadeIn.duration(Duration.normal).easing(Ease.out))}>
@@ -244,11 +266,11 @@ export function RecommendedSeriesCard({
       >
         <View style={styles.contentColumn}>
           <Text style={[styles.themeName, { color: colors.text }]}>
-            {recommendation!.themeName}
+            {themeName}
           </Text>
 
           <Text style={[styles.reason, { color: colors.textMuted }]}>
-            {recommendation!.reason}
+            {reasonText}
           </Text>
 
           <View style={styles.metaRow}>
@@ -266,7 +288,7 @@ export function RecommendedSeriesCard({
             activeOpacity={0.72}
             onPress={handleStartStudy}
             accessibilityRole="button"
-            accessibilityLabel={`${actionLabel}: ${recommendation!.themeName}`}
+            accessibilityLabel={`${actionLabel}: ${themeName}`}
             accessibilityHint="Starts generation for this recommended devotional series"
             style={[
               styles.primaryAction,
