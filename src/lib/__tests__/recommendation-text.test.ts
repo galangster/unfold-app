@@ -28,6 +28,7 @@ describe('cleanRecommendationReason', () => {
     ['literal symbols', 'Use * as a reminder, and read study_notes (*) slowly.'],
     ['an embedded quotation', 'Jesus says, "Come to me."'],
     ['a leading quotation', '"Be still," says Psalm 46:10.'],
+    ['inline pipes', 'This season calls for prayer | patience | trust.'],
   ])('keeps %s as written', (_label, raw) => {
     expect(cleanRecommendationReason(raw)).toBe(raw);
   });
@@ -46,6 +47,7 @@ describe('cleanRecommendationReason', () => {
     ['html', `<b>${SENTENCE}</b>`],
     ['an HTML comment', `<!-- Recommendation --> ${SENTENCE}`],
     ['a table row', `| Theme | ${SENTENCE} |`],
+    ['a table without edge pipes', `Theme | Reason\n--- | ---\nRest | ${SENTENCE}`],
     ['strikethrough', 'Find ~~rest~~ in Him.'],
     ['a missing value', undefined],
     ['a non-string value', null],

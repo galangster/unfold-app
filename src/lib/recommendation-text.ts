@@ -16,9 +16,11 @@ const SETEXT_UNDERLINE = /^\s{0,3}(=+|-+)\s*$/;
 const CONTAINER_MARKERS = /^\s*(>\s?|([-*+]|\d+[.)])\s+)+/;
 const HEADING_OR_FENCE_LINE = /^\s{0,3}(#{1,6}(\s|$)|```|~~~)/;
 const LABEL = /^(recommendation\s*:\s*)+/i;
+// A table row starts with a pipe, or is the separator row under a header.
+const TABLE_LINE = /^\s*\||^\s*:?-+:?\s*(\|\s*:?-+:?\s*)+\|?\s*$/;
 // Markup with no plain-text reading: an HTML tag or comment, a link or link
-// definition, a table row, strikethrough.
-const LEFTOVER_MARKUP = /<[a-z!/]|\[[^[\]]*\]\s*[([:]|\|[^|]*\||~~/i;
+// definition, strikethrough.
+const LEFTOVER_MARKUP = /<[a-z!/]|\[[^[\]]*\]\s*[([:]|~~/i;
 
 /** Removes one matched pair of outer quotes. */
 function unquote(text: string): string {
@@ -36,7 +38,7 @@ function stripPairedEmphasis(text: string): string {
     .replace(/`([^`]+)`/g, '$1');
 }
 
-function cleanOnce(raw: string): string {
+function cleanOnce(raw: string): string | null {
   const kept: string[] = [];
   let underText = false;
   for (const rawLine of raw.split(/\r?\n/)) {
@@ -50,6 +52,7 @@ function cleanOnce(raw: string): string {
       underText = false;
       continue;
     }
+    if (TABLE_LINE.test(line)) return null;
     kept.push(line);
     underText = line.trim().length > 0;
   }
@@ -63,6 +66,7 @@ export function cleanRecommendationReason(raw: unknown): string | null {
   let text = raw;
   for (let pass = 0; pass < MAX_PASSES; pass++) {
     const next = cleanOnce(text);
+    if (next === null) return null;
     if (next === text) break;
     text = next;
   }
