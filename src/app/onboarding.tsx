@@ -1411,12 +1411,13 @@ export default function OnboardingScreen() {
         bibleTranslation: data.bibleTranslation as BibleTranslation,
         hasCompletedOnboarding: true,
         writingStyle: { tone: data.tone, depth: data.depth, faithBackground: data.faithBackground, lifeStage: data.lifeStage },
-        ...(data.selectedThemes.length > 0 ? { selectedTheme: data.selectedThemes[0] } : {}),
-        ...(data.selectedType ? { selectedType: data.selectedType } : {}),
-        ...(data.selectedStudySubject ? { selectedStudySubject: data.selectedStudySubject } : {}),
         ...(shapeKeyPeople(data.keyPeople).length > 0 ? { keyPeople: shapeKeyPeople(data.keyPeople) } : {}),
         // Per-series fields overwrite unconditionally: a new series must never
-        // inherit a previous pass's event/answers/read (review finding).
+        // inherit a previous pass's direction/event/answers/read (review finding).
+        // "Just guide me" after a book study must not generate that study again.
+        selectedTheme: data.selectedThemes[0],
+        selectedType: data.selectedType,
+        selectedStudySubject: data.selectedStudySubject,
         upcomingEvent: shapeUpcomingEvent(data.upcomingEvent),
         diagnosticAnswers: data.diagnosticAnswers.length > 0 ? data.diagnosticAnswers : undefined,
         mirrorWorkingRead: data.mirrorWorkingRead || undefined,

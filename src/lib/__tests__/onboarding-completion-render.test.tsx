@@ -413,4 +413,13 @@ describe('new series from Today', () => {
     }));
     expect(mockStoreState.lifeContextDraft).toBe(SHARE_AN_UPDATE_DRAFT);
   });
+
+  it('does not inherit the previous series direction', async () => {
+    await openAt('devotionalLength');
+    await tap({ label: '7 days' });
+
+    expect(mockStoreState.user?.selectedTheme).toBeUndefined();
+    expect(mockStoreState.user?.selectedType).toBeUndefined();
+    expect(mockStoreState.user?.selectedStudySubject).toBeUndefined();
+  });
 });
