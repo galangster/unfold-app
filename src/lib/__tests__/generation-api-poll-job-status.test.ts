@@ -10,15 +10,18 @@ jest.mock('../mmkv-storage', () => ({
   getDeviceId: jest.fn(() => 'test-device-id'),
   getSharedEncryptionKey: jest.fn(() => 'test-key'),
 }));
+const mockGetAuthHeaders = jest.fn(async () => ({ 'X-Device-ID': 'test-device-id' }));
+
 jest.mock('../api-config', () => ({
   PRIMARY_BACKEND_URL: 'https://backend.test',
-  getAuthHeaders: jest.fn(async () => ({ 'X-Device-ID': 'test-device-id' })),
+  getAuthHeaders: () => mockGetAuthHeaders(),
 }));
 
-import { ApiError, findDayJob, pollJobStatus, retryJob, submitGenerationJob } from '../generation-api';
+import { ApiError, fetchJobResult, findDayJob, pollJobStatus, retryJob, submitGenerationJob } from '../generation-api';
 import { classifyPollFailure } from '../generation-poll-outcome';
 import {
   noteReadBudgetRateLimited,
+  readBudgetRetryAfterMs,
   resetReadBudgetForTests,
 } from '../sync-pull-backoff';
 
@@ -37,12 +40,15 @@ const fetchMock = jest.fn();
 
 beforeEach(() => {
   fetchMock.mockReset();
+  mockGetAuthHeaders.mockReset();
+  mockGetAuthHeaders.mockResolvedValue({ 'X-Device-ID': 'test-device-id' });
   resetReadBudgetForTests();
   (globalThis as { fetch: unknown }).fetch = fetchMock;
 });
 
 describe('pollJobStatus', () => {
-  it('opens the shared read-budget window on a 429 response', async () => {
+  it('sends during an open read-budget window and extends it from a 429 response', async () => {
+    noteReadBudgetRateLimited(10);
     fetchMock.mockResolvedValueOnce({
       ...jsonResponse(429, { error: { code: 'RATE_LIMITED', message: 'Too many requests' } }),
       headers: { get: () => '36' },
@@ -52,12 +58,8 @@ describe('pollJobStatus', () => {
       status: 429,
       code: 'RATE_LIMITED',
     });
-    await expect(pollJobStatus('job-1')).rejects.toMatchObject({
-      status: 429,
-      code: 'RATE_LIMITED',
-      message: 'Rate limited',
-    });
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(readBudgetRetryAfterMs()).toBeGreaterThan(35_000);
   });
 
   it('returns the job body and asks for the job by id', async () => {
@@ -138,6 +140,24 @@ describe('findDayJob', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('stops before fetch when the shared window opens during authentication', async () => {
+    let resolveHeaders: ((headers: { 'X-Device-ID': string }) => void) | undefined;
+    mockGetAuthHeaders.mockReturnValueOnce(new Promise((resolve) => {
+      resolveHeaders = resolve;
+    }));
+
+    const lookup = findDayJob('devo-1', 2);
+    noteReadBudgetRateLimited(36);
+    resolveHeaders?.({ 'X-Device-ID': 'test-device-id' });
+
+    await expect(lookup).rejects.toMatchObject({
+      status: 429,
+      code: 'RATE_LIMITED',
+      message: 'Rate limited',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('discovers a day job through the owner-scoped identity route', async () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,
@@ -167,6 +187,18 @@ describe('findDayJob', () => {
   it('rejects a non-positive day before making a request', async () => {
     await expect(findDayJob('devo-1', 0)).rejects.toThrow('dayNumber must be a positive integer');
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('fetchJobResult', () => {
+  it('registers a 429 while preserving its null result contract', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ...jsonResponse(429, { error: { code: 'RATE_LIMITED', message: 'Too many requests' } }),
+      headers: { get: () => '36' },
+    });
+
+    await expect(fetchJobResult('job-1')).resolves.toBeNull();
+    expect(readBudgetRetryAfterMs()).toBeGreaterThan(35_000);
   });
 });
 

@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
 
 const renderer = require('react-test-renderer');
 const { act } = renderer;
@@ -8,6 +9,7 @@ const mockSubmitGenerationJob = jest.fn();
 const mockPollJobStatus = jest.fn();
 const mockRetryJob = jest.fn();
 const mockOnNetwork = jest.fn();
+let mockOnAppState: ((state: AppStateStatus) => void) | null = null;
 
 jest.mock('@react-native-community/netinfo', () => ({
   __esModule: true,
@@ -39,12 +41,20 @@ jest.mock('@/lib/generation-session', () => ({
 import { useGeneratedDayWatch, type GeneratedDayWatchResult } from '../useGeneratedDayWatch';
 import { resetDailyGenerationRecoveryForTesting } from '@/lib/daily-generation-recovery';
 
-function Probe({ onDay, onValue }: { onDay: jest.Mock; onValue: (value: GeneratedDayWatchResult) => void }) {
+function Probe({
+  onDay,
+  onValue,
+  canMutate = true,
+}: {
+  onDay: jest.Mock;
+  onValue: (value: GeneratedDayWatchResult) => void;
+  canMutate?: boolean;
+}) {
   const value = useGeneratedDayWatch({
     devotionalId: 'devo-1',
     dayNumber: 2,
     enabled: true,
-    canMutate: true,
+    canMutate,
     onDay,
   });
   useEffect(() => onValue(value), [onValue, value]);
@@ -54,6 +64,11 @@ function Probe({ onDay, onValue }: { onDay: jest.Mock; onValue: (value: Generate
 describe('useGeneratedDayWatch', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockOnAppState = null;
+    jest.spyOn(AppState, 'addEventListener').mockImplementation((_event, listener) => {
+      mockOnAppState = listener as (state: AppStateStatus) => void;
+      return { remove: jest.fn() };
+    });
     resetDailyGenerationRecoveryForTesting();
     mockSubmitGenerationJob.mockResolvedValue({ jobId: 'job-new', status: 'pending', devotionalId: 'devo-1' });
     mockPollJobStatus.mockResolvedValue({
@@ -64,6 +79,11 @@ describe('useGeneratedDayWatch', () => {
       status: 'processing',
     });
     mockRetryJob.mockResolvedValue({ jobId: 'job-1', status: 'pending' });
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+    jest.restoreAllMocks();
   });
 
   it('discovers and applies an existing day on the initial online mount', async () => {
@@ -100,6 +120,40 @@ describe('useGeneratedDayWatch', () => {
     expect(mockFindDayJob).toHaveBeenCalledWith('devo-1', 2, 1);
     expect(onDay).toHaveBeenCalledWith('devo-1', day);
     expect(mockSubmitGenerationJob).not.toHaveBeenCalled();
+    act(() => tree?.unmount());
+  });
+
+  it('throttles foreground discovery per recovery key without throttling initial start', async () => {
+    jest.useFakeTimers({ now: 1_000 });
+    mockFindDayJob.mockResolvedValue(null);
+    const onDay = jest.fn();
+    let tree: { unmount: () => void } | null = null;
+
+    await act(async () => {
+      tree = renderer.create(<Probe onDay={onDay} onValue={() => undefined} canMutate={false} />);
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(mockFindDayJob).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      mockOnAppState?.('active');
+      await Promise.resolve();
+      await Promise.resolve();
+      mockOnAppState?.('active');
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(mockFindDayJob).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      jest.advanceTimersByTime(10_000);
+      mockOnAppState?.('active');
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(mockFindDayJob).toHaveBeenCalledTimes(3);
     act(() => tree?.unmount());
   });
 });

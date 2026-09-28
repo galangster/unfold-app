@@ -249,10 +249,6 @@ export async function pullDevotionalContent(
 ): Promise<PulledDevotionalContent> {
   const session = captureSyncSession();
   assertSyncSessionCurrent(session, 'devotional pull');
-  const retryAfterMs = readBudgetRetryAfterMs();
-  if (retryAfterMs > 0) {
-    throw new SyncPullRateLimitedError(Math.ceil(retryAfterMs / 1000));
-  }
 
   const scope = currentDevotionalPullScope(devotionalId);
   const startedAt = Date.now();
@@ -276,6 +272,10 @@ export async function pullDevotionalContent(
   const controller = new AbortController();
   const unregister = registerSyncTransport(controller);
   try {
+    const retryAfterMs = readBudgetRetryAfterMs();
+    if (retryAfterMs > 0) {
+      throw new SyncPullRateLimitedError(Math.ceil(retryAfterMs / 1000));
+    }
     const response = await authenticatedFetch(`${PRIMARY_BACKEND_URL}/api/sync/pull`, {
       method: 'POST',
       headers,

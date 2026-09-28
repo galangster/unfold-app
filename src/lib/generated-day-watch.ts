@@ -12,11 +12,11 @@ export function nextConfirmedAbsentKey(
 ): string | null {
   if (key === null) return null;
   if (state.status === 'idle' && state.discovered === true) return key;
+  if (state.status === 'failed') return state.canRetry ? null : key;
   if (
     state.status === 'running'
     || state.status === 'slow'
     || state.status === 'complete'
-    || state.status === 'failed'
   ) {
     return null;
   }

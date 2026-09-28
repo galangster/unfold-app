@@ -10,6 +10,9 @@ import {
 import { captureSyncSession } from '@/lib/generation-session';
 import type { DevotionalDay } from '@/lib/store';
 
+const FOREGROUND_DISCOVERY_COOLDOWN_MS = 10_000;
+const foregroundDiscoveryAtByKey = new Map<string, number>();
+
 export type GeneratedDayWatchResult = {
   state: DailyGenerationRecoveryState;
   checkAgain: () => Promise<void>;
@@ -45,7 +48,7 @@ export function useGeneratedDayWatch({
   onDayRef.current = onDay;
 
   useEffect(() => {
-    if (!enabled || !devotionalId || !dayNumber) {
+    if (!enabled || !devotionalId || !dayNumber || !recoveryKey) {
       controllerRef.current?.cancel();
       controllerRef.current = null;
       return;
@@ -72,7 +75,12 @@ export function useGeneratedDayWatch({
       if (networkInitialized) void applyNetworkState(network);
     });
     const appStateSubscription = AppState.addEventListener('change', (nextState) => {
-      if (nextState === 'active') void controller.checkAgain();
+      if (nextState !== 'active') return;
+      const now = Date.now();
+      const lastDiscoveryAt = foregroundDiscoveryAtByKey.get(recoveryKey);
+      if (lastDiscoveryAt !== undefined && now - lastDiscoveryAt < FOREGROUND_DISCOVERY_COOLDOWN_MS) return;
+      foregroundDiscoveryAtByKey.set(recoveryKey, now);
+      void controller.checkAgain();
     });
 
     void NetInfo.fetch()

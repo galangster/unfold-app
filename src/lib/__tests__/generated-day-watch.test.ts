@@ -83,9 +83,17 @@ describe('nextConfirmedAbsentKey', () => {
     { status: 'running', jobId: 'job-1' },
     { status: 'slow', jobId: 'job-1' },
     { status: 'complete', jobId: 'job-1' },
-    { status: 'failed', jobId: 'job-1', canRetry: false, failureKind: 'job' },
   ])('clears the verdict when $status confirms a job exists', (state) => {
     expect(nextConfirmedAbsentKey(key, key, state)).toBeNull();
+  });
+
+  it('confirms absence when a failed paused-series job cannot be retried', () => {
+    expect(nextConfirmedAbsentKey(null, key, {
+      status: 'failed',
+      jobId: 'job-1',
+      canRetry: false,
+      failureKind: 'job',
+    })).toBe(key);
   });
 
   it.each<DailyGenerationRecoveryState>([

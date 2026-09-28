@@ -419,6 +419,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   const autoRetryTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const syncRecoveryAttemptRef = useRef<Record<string, boolean>>({});
   const missingDevotionalHydrationAttemptRef = useRef<Record<string, boolean>>({});
+  const missingDevotionalHydrationOwnerRef = useRef<string | null>(null);
   const readingMountedRef = useRef(true);
 
   const translateX = useSharedValue(0);
@@ -1811,6 +1812,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     if (missingDevotionalHydrationAttemptRef.current[devotionalId]) return;
 
     missingDevotionalHydrationAttemptRef.current[devotionalId] = true;
+    missingDevotionalHydrationOwnerRef.current = devotionalId;
     setIsHydratingMissingDevotional(true);
 
     void (async () => {
@@ -1826,7 +1828,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
           updateDevotionals: updateSyncedDevotionals,
         });
         commitDevotionalPullCursor(pulled);
-        if (params.readOnly !== '1' && !currentDevotionalId
+        if (params.readOnly !== '1' && !useUnfoldStore.getState().currentDevotionalId
           && !useUnfoldStore.getState().devotionals.find((item) => item.id === devotionalId)?.archivedAt) {
           setCurrentDevotional(devotionalId);
         }
@@ -1850,12 +1852,13 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
           });
         }
       } finally {
-        if (readingMountedRef.current) {
+        if (readingMountedRef.current && missingDevotionalHydrationOwnerRef.current === devotionalId) {
+          missingDevotionalHydrationOwnerRef.current = null;
           setIsHydratingMissingDevotional(false);
         }
       }
     })();
-  }, [effectiveDevotionalId, currentDevotional, currentDevotionalId, params.readOnly, readBudgetBlocked, setCurrentDevotional, updateDevotionalDays]);
+  }, [effectiveDevotionalId, currentDevotional, params.readOnly, readBudgetBlocked, setCurrentDevotional, updateDevotionalDays]);
 
   const fallbackBottomPadding = Math.max(insets.bottom + 96, 112);
 

@@ -325,7 +325,6 @@ export async function pollJobStatus(
 ): Promise<GenerationJobResponse> {
   const origin = resolveGenerationSession(session);
   assertSyncSessionCurrent(origin, 'poll generation job');
-  assertReadBudgetAvailable();
   const headers = await getAuthHeaders();
   assertSyncSessionCurrent(origin, 'poll generation job');
   const response = await fetchWithTimeout(
@@ -392,9 +391,9 @@ export async function findDayJob(
   }
   const origin = resolveGenerationSession(session);
   assertSyncSessionCurrent(origin, 'find day generation job');
-  assertReadBudgetAvailable();
   const headers = await getAuthHeaders();
   assertSyncSessionCurrent(origin, 'find day generation job');
+  assertReadBudgetAvailable();
   const response = await fetchWithTimeout(
     `${PRIMARY_BACKEND_URL}/api/jobs/find-day?devotionalId=${encodeURIComponent(devotionalId)}&dayNumber=${dayNumber}`,
     { method: 'GET', headers },
@@ -441,6 +440,9 @@ export async function fetchJobResult(
     'fetch generation job',
   );
   if (!response.ok) {
+    if (response.status === 429) {
+      await readLookupErrorBody(response);
+    }
     assertSyncSessionCurrent(origin, 'fetch generation job');
     return null;
   }
@@ -460,7 +462,6 @@ export async function findCompletedJob(
 ): Promise<GenerationJobResponse | null> {
   const origin = resolveGenerationSession(session);
   assertSyncSessionCurrent(origin, 'find completed generation job');
-  assertReadBudgetAvailable();
   const headers = await getAuthHeaders();
   assertSyncSessionCurrent(origin, 'find completed generation job');
   const response = await fetchWithTimeout(
