@@ -65,13 +65,14 @@ const mockTodayStoreState: Record<string, unknown> = {
   resetNudgeSession: jest.fn(),
 };
 
+let mockSearchParams: Record<string, string> = {};
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ push: jest.fn(), replace: jest.fn(), navigate: jest.fn() }),
+  useRouter: () => ({ push: jest.fn(), replace: jest.fn(), navigate: jest.fn(), setParams: jest.fn() }),
   useSegments: () => [],
   useNavigation: () => ({ getState: () => ({ index: 1, routes: [] }) }),
   useFocusEffect: (callback: () => void | (() => void)) => require('react').useEffect(callback, [callback]),
   useIsFocused: () => true,
-  useLocalSearchParams: () => ({}),
+  useLocalSearchParams: () => mockSearchParams,
 }));
 
 jest.mock('@tanstack/react-query', () => ({
@@ -218,6 +219,7 @@ import HomeScreen, {
   abandonPurchasedIntentBeforeNewSeries,
 } from '@/app/(tabs)/(today)/index';
 import { SyncPullRateLimitedError } from '@/lib/sync-pull-backoff';
+import { beginRitualSessionRecord, type RitualSessionIdentity } from '@/lib/ritual-session';
 import {
   buildRevealGuardKey,
   reconcileAutoTrialIntentOnLaunch,
@@ -342,12 +344,13 @@ describe('Today read-budget gate', () => {
 });
 
 describe('Today midday check-in', () => {
-  it('asks the question of the day it saves to, not the prepared tomorrow', async () => {
-    const saved = { ...mockTodayStoreState };
-    // A day read today reaches the completed-day reflection, which reads journal entries.
-    mockTodayStoreState.getJournalEntry = () => undefined;
-    // Day 3 was read this morning, so currentDay already points at a prepared Day 4.
-    mockTodayStoreState.devotionals = [{
+  const TODAY_QUESTION = 'Where did trust meet you today?';
+  const TODAY_CHIPS = ['In a hard talk'];
+  let saved: Record<string, unknown>;
+
+  // Day 3 was read at readAt, so currentDay already points at a prepared Day 4.
+  function seriesReadAt(readAt: Date) {
+    return [{
       id: 'today-series',
       title: 'Today Series',
       totalDays: 7,
@@ -356,24 +359,77 @@ describe('Today midday check-in', () => {
       createdAt: '2026-09-01T00:00:00.000Z',
       seriesStartDate: '2026-09-01T00:00:00.000Z',
       days: [
-        { id: 'today-series-day-3', devotionalId: 'today-series', dayNumber: 3, title: 'Day 3', isRead: true, readAt: new Date().toISOString(), checkInQuestion: 'Where did trust meet you today?', checkInChips: ['In a hard talk'] },
+        { id: 'today-series-day-3', devotionalId: 'today-series', dayNumber: 3, title: 'Day 3', isRead: true, readAt: readAt.toISOString(), checkInQuestion: TODAY_QUESTION, checkInChips: TODAY_CHIPS },
         { id: 'today-series-day-4', devotionalId: 'today-series', dayNumber: 4, title: 'Day 4', isRead: false, checkInQuestion: 'A question about tomorrow', checkInChips: ['Tomorrow'] },
       ],
     }];
+  }
+
+  // Opens Today from a midday notification, which opens the check-in sheet.
+  async function openFromMiddayNotification() {
     let tree: { unmount: () => void };
     await act(async () => {
       tree = renderer.create(<HomeScreen />);
       await Promise.resolve();
     });
+    expect(mockCheckInSheetProps).toEqual(expect.objectContaining({ visible: true }));
+    return tree!;
+  }
 
-    expect(mockCheckInSheetProps).toEqual(expect.objectContaining({
-      dayNumber: 3,
-      question: 'Where did trust meet you today?',
-      chips: ['In a hard talk'],
-    }));
-    act(() => tree!.unmount());
+  function submitCheckIn() {
+    act(() => {
+      (mockCheckInSheetProps!.onComplete as (data: { mood: number; moodLabel: string }) => void)({ mood: 5, moodLabel: 'Steady' });
+    });
+  }
+
+  beforeEach(() => {
+    saved = { ...mockTodayStoreState };
+    mockCheckInSheetProps = null;
+    mockSearchParams = { focus: 'midday' };
+    // A day read today reaches the completed-day reflection, which reads journal entries.
+    mockTodayStoreState.getJournalEntry = () => undefined;
+    mockTodayStoreState.addCheckIn = jest.fn();
+    // The store keeps the session the way the real one does.
+    mockTodayStoreState.ritualSessions = {};
+    mockTodayStoreState.beginRitualSession = (identity: RitualSessionIdentity) => {
+      mockTodayStoreState.ritualSessions = { midday: beginRitualSessionRecord(undefined, { ...identity, timeZone: null }) };
+    };
+    mockTodayStoreState.clearRitualSession = jest.fn();
+  });
+
+  afterEach(() => {
     Object.keys(mockTodayStoreState).forEach((key) => delete mockTodayStoreState[key]);
     Object.assign(mockTodayStoreState, saved);
+    mockSearchParams = {};
+    jest.useRealTimers();
+  });
+
+  it('asks the question of the day it saves to, not the prepared tomorrow', async () => {
+    mockTodayStoreState.devotionals = seriesReadAt(new Date());
+    const tree = await openFromMiddayNotification();
+
+    expect(mockCheckInSheetProps).toEqual(expect.objectContaining({ dayNumber: 3, question: TODAY_QUESTION, chips: TODAY_CHIPS }));
+    submitCheckIn();
+    expect(mockTodayStoreState.addCheckIn).toHaveBeenCalledWith(expect.objectContaining({ dayNumber: 3, timeOfDay: 'midday' }));
+    act(() => tree.unmount());
+  });
+
+  it('keeps the day it opened on when midnight passes with the sheet open', async () => {
+    jest.useFakeTimers({ now: new Date(2026, 8, 28, 23, 59, 0) });
+    mockTodayStoreState.devotionals = seriesReadAt(new Date(2026, 8, 28, 23, 30, 0));
+    const tree = await openFromMiddayNotification();
+    expect(mockCheckInSheetProps).toEqual(expect.objectContaining({ dayNumber: 3, question: TODAY_QUESTION }));
+
+    // Cross midnight: Today's minute tick re-renders with the new date.
+    act(() => {
+      jest.setSystemTime(new Date(2026, 8, 29, 0, 1, 0));
+      jest.advanceTimersByTime(60_000);
+    });
+
+    expect(mockCheckInSheetProps).toEqual(expect.objectContaining({ dayNumber: 3, question: TODAY_QUESTION, chips: TODAY_CHIPS }));
+    submitCheckIn();
+    expect(mockTodayStoreState.addCheckIn).toHaveBeenCalledWith(expect.objectContaining({ dayNumber: 3 }));
+    act(() => tree.unmount());
   });
 });
 

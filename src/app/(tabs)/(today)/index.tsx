@@ -446,6 +446,10 @@ export default function HomeScreen() {
 
   const [clockNow, setClockNow] = useState(() => new Date());
   const [showCheckInSheet, setShowCheckInSheet] = useState(false);
+  // The check-in keeps the day it opened on, with that day's question and
+  // chips, until it closes. The answer saves to that day through the ritual
+  // session, so a minute tick past midnight must not swap in the next day.
+  const [openedCheckIn, setOpenedCheckIn] = useState<{ dayNumber: number; question?: string; chips?: string[] } | null>(null);
   const [showVoiceCheckInSheet, setShowVoiceCheckInSheet] = useState(false);
   const [voiceCheckInAutoStart, setVoiceCheckInAutoStart] = useState(false);
   const [showPremiumSheet, setShowPremiumSheet] = useState(false);
@@ -941,11 +945,10 @@ export default function HomeScreen() {
   const openCheckInSheet = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (currentDevotional) {
-      beginRitualSession({
-        kind: 'midday',
-        devotionalId: currentDevotional.id,
-        dayNumber: getMiddayCheckInDayNumber(currentDevotional) ?? currentDevotional.currentDay,
-      });
+      const dayNumber = getMiddayCheckInDayNumber(currentDevotional) ?? currentDevotional.currentDay;
+      const day = currentDevotional.days.find((candidate) => candidate.dayNumber === dayNumber);
+      setOpenedCheckIn({ dayNumber, question: day?.checkInQuestion, chips: day?.checkInChips });
+      beginRitualSession({ kind: 'midday', devotionalId: currentDevotional.id, dayNumber });
     }
     setShowCheckInSheet(true);
   }, [beginRitualSession, currentDevotional]);
@@ -1035,9 +1038,6 @@ export default function HomeScreen() {
   // Midday follows the currently readable day. Evening follows the day actually
   // completed today, including the final day where currentDay does not advance.
   const middayCheckInDay = getMiddayCheckInDayNumber(currentDevotional);
-  // The sheet asks the question of the day it saves to, never the prepared
-  // tomorrow that currentDayData points at after a morning read.
-  const middayCheckInDayData = currentDevotional?.days.find((day) => day.dayNumber === middayCheckInDay) ?? null;
   const eveningCheckInDay = getEveningWindDownDayNumber(currentDevotional);
   const todayCheckIn = currentDevotional && middayCheckInDay != null
     ? getCheckIn(currentDevotional.id, middayCheckInDay, 'midday')
@@ -1827,10 +1827,12 @@ export default function HomeScreen() {
           visible={showCheckInSheet}
           onClose={() => setShowCheckInSheet(false)}
           onComplete={handleCheckInComplete}
-          question={middayCheckInDayData?.checkInQuestion}
-          chips={middayCheckInDayData?.checkInChips}
+          // The day read today, fixed at open; never the prepared tomorrow
+          // that currentDayData points at after a morning read.
+          question={openedCheckIn?.question}
+          chips={openedCheckIn?.chips}
           devotionalId={currentDevotional.id}
-          dayNumber={middayCheckInDay ?? currentDevotional.currentDay}
+          dayNumber={openedCheckIn?.dayNumber ?? middayCheckInDay ?? currentDevotional.currentDay}
         />
       )}
 
