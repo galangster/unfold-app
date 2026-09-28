@@ -84,6 +84,21 @@ describe('saved-items', () => {
     expect(item.quote).toBe('A quoted line');
   });
 
+  it('shows a Scripture bookmark reference and passage text instead of the day quotable line', () => {
+    const scriptureBookmark: Bookmark = {
+      ...bookmark,
+      id: 'scripture-bookmark',
+      scriptureReference: 'Isaiah 40:31',
+      scriptureText: 'Those who wait upon the LORD will renew their strength.',
+      quotedText: 'A stale quotable line from an older build',
+    };
+
+    expect(toBookmarkSavedItem(scriptureBookmark, devotional)).toMatchObject({
+      reference: 'Isaiah 40:31',
+      quote: 'Those who wait upon the LORD will renew their strength.',
+    });
+  });
+
   it('filters on both axes and by search text', () => {
     expect(filterSavedEntries(entries, { source: 'bible', type: 'all' }).map((e) => e.id)).toEqual(['b2', 'b1']);
     expect(filterSavedEntries(entries, { source: 'all', type: 'bookmarks' }).map((e) => e.id)).toEqual(['bm1']);

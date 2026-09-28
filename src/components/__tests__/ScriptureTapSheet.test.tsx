@@ -12,7 +12,7 @@ const mockFetchVerse = jest.fn();
 const mockFetchCommentary = jest.fn();
 const mockFetchScriptureExplanation = jest.fn();
 const mockAddBookmark = jest.fn();
-const mockIsBookmarked = jest.fn();
+const mockRemoveBookmark = jest.fn();
 const mockRouterPush = jest.fn();
 
 jest.mock('@/lib/bible-api', () => ({
@@ -36,8 +36,10 @@ jest.mock('@/lib/analytics', () => ({
 
 const mockStoreState = {
   user: { bibleTranslation: 'BSB' },
+  bibleReaderSettings: { translation: 'KJV' },
+  bookmarks: [] as Record<string, unknown>[],
   addBookmark: mockAddBookmark,
-  isBookmarked: mockIsBookmarked,
+  removeBookmark: mockRemoveBookmark,
 };
 
 jest.mock('@/lib/store', () => ({
@@ -168,7 +170,7 @@ jest.mock('@/lib/bible-constants', () => ({
 const verseResult = {
   reference: 'John 3:16',
   text: 'For God so loved the world that He gave His one and only Son.',
-  translation: 'BSB',
+  translation: 'KJV',
 };
 
 function collectText(node: any): string[] {
@@ -182,6 +184,12 @@ function textContent(tree: any): string {
   return collectText(tree.toJSON()).join(' ');
 }
 
+function findSaveButton(tree: any, label: string) {
+  return tree.root
+    .findAllByType(TouchableOpacity)
+    .find((node: any) => node.props.accessibilityLabel === label);
+}
+
 describe('ScriptureTapSheet Explain CTA', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -190,14 +198,15 @@ describe('ScriptureTapSheet Explain CTA', () => {
     mockFetchCommentary.mockResolvedValue('Automatic commentary should not render.');
     mockFetchScriptureExplanation.mockResolvedValue({
       reference: 'John 3:16',
-      translation: 'BSB',
+      translation: 'KJV',
       explanation: {
         plainMeaning: 'God gives love generously.',
         personalConnection: 'You can receive this love today.',
       },
       model: 'claude-haiku-4-5-20251001',
     });
-    mockIsBookmarked.mockReturnValue(false);
+    mockStoreState.bookmarks.length = 0;
+    mockStoreState.bibleReaderSettings.translation = 'KJV';
   });
 
   it('drops a slow verse fetch for a previous reference after the reference changes (Greptile A5)', async () => {
@@ -224,17 +233,82 @@ describe('ScriptureTapSheet Explain CTA', () => {
     expect(deferred).toHaveLength(2);
 
     await act(async () => {
-      deferred[0]({ reference: 'John 3:16', text: 'STALE VERSE TEXT', translation: 'BSB' });
+      deferred[0]({ reference: 'John 3:16', text: 'STALE VERSE TEXT', translation: 'KJV' });
       await Promise.resolve();
     });
     expect(textContent(tree)).not.toContain('STALE VERSE TEXT');
 
     await act(async () => {
-      deferred[1]({ reference: 'John 1:1', text: 'FRESH VERSE TEXT', translation: 'BSB' });
+      deferred[1]({ reference: 'John 1:1', text: 'FRESH VERSE TEXT', translation: 'KJV' });
       await Promise.resolve();
     });
     expect(textContent(tree)).toContain('FRESH VERSE TEXT');
     expect(textContent(tree)).not.toContain('STALE VERSE TEXT');
+  });
+
+  it('clears the displayed passage and Save action while a new reference loads', async () => {
+    let resolveSecondFetch: ((value: unknown) => void) | undefined;
+    mockFetchVerseLocal
+      .mockResolvedValueOnce({ ...verseResult, translation: 'KJV' })
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveSecondFetch = resolve; }));
+
+    const props = {
+      visible: true,
+      onClose: jest.fn(),
+      devotionalId: 'devotional-1',
+      dayNumber: 1,
+      dayTitle: 'Loved First',
+      devotionalTitle: 'The Gift',
+    };
+    let tree: any;
+    await act(async () => {
+      tree = renderer.create(<ScriptureTapSheet {...props} reference="John 3:16" />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(textContent(tree)).toContain(verseResult.text);
+    expect(findSaveButton(tree, 'Save John 3:16')).toBeTruthy();
+
+    await act(async () => {
+      tree.update(<ScriptureTapSheet {...props} reference="John 1:1" />);
+      await Promise.resolve();
+    });
+
+    expect(textContent(tree)).not.toContain(verseResult.text);
+    expect(findSaveButton(tree, 'Save John 1:1')).toBeUndefined();
+    expect(resolveSecondFetch).toBeDefined();
+  });
+
+  it('clears the displayed passage and Save action while a new translation loads', async () => {
+    let resolveBsbFetch: ((value: unknown) => void) | undefined;
+    mockFetchVerseLocal
+      .mockResolvedValueOnce({ ...verseResult, translation: 'KJV' })
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveBsbFetch = resolve; }));
+
+    const props = {
+      visible: true,
+      onClose: jest.fn(),
+      reference: 'John 3:16',
+      devotionalId: 'devotional-1',
+      dayNumber: 1,
+    };
+    let tree: any;
+    await act(async () => {
+      tree = renderer.create(<ScriptureTapSheet {...props} />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(findSaveButton(tree, 'Save John 3:16')).toBeTruthy();
+
+    mockStoreState.bibleReaderSettings.translation = 'BSB';
+    await act(async () => {
+      tree.update(<ScriptureTapSheet {...props} />);
+      await Promise.resolve();
+    });
+
+    expect(textContent(tree)).not.toContain(verseResult.text);
+    expect(findSaveButton(tree, 'Save John 3:16')).toBeUndefined();
+    expect(resolveBsbFetch).toBeDefined();
   });
 
   // CI-load flake: this async render+fetch assertion is clean in isolation but can exceed Jest's default timeout in the full parallel suite.
@@ -256,7 +330,7 @@ describe('ScriptureTapSheet Explain CTA', () => {
       await Promise.resolve();
     });
 
-    expect(mockFetchVerseLocal).toHaveBeenCalledWith('John 3:16', 'BSB');
+    expect(mockFetchVerseLocal).toHaveBeenCalledWith('John 3:16', 'KJV');
     expect(mockFetchCommentary).not.toHaveBeenCalled();
 
     const content = textContent(tree);
@@ -264,6 +338,208 @@ describe('ScriptureTapSheet Explain CTA', () => {
     expect(content).toContain('Explain this passage');
     expect(content).toContain('Read in Bible');
   }, 15000);
+
+  it('shows Save despite another bookmark on the day and saves the displayed translation', async () => {
+    mockStoreState.bookmarks.push({
+      id: 'quote-1',
+      devotionalId: 'devotional-1',
+      dayNumber: 1,
+      scriptureReference: 'Quote',
+      scriptureText: 'Another saved item',
+      savedAt: '2026-09-28T00:00:00.000Z',
+    });
+    mockFetchVerseLocal.mockResolvedValue({ ...verseResult, translation: 'KJV', text: 'For God so loved the world.' });
+
+    let tree: any;
+    await act(async () => {
+      tree = renderer.create(
+        <ScriptureTapSheet
+          visible
+          onClose={jest.fn()}
+          reference="John 3:16"
+          devotionalId="devotional-1"
+          dayNumber={1}
+          dayTitle="Loved First"
+          devotionalTitle="The Gift"
+        />,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(textContent(tree)).toContain('Save');
+    const saveButton = tree.root
+      .findAllByType(TouchableOpacity)
+      .find((node: any) => node.props.accessibilityLabel === 'Save John 3:16');
+    expect(saveButton).toBeTruthy();
+    act(() => saveButton.props.onPress());
+    expect(mockAddBookmark).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'scripture',
+      key: 'John 3:16',
+      scriptureReference: 'John 3:16',
+      scriptureText: 'For God so loved the world.',
+      translation: 'KJV',
+    }));
+  });
+
+  it('shows Saved for its exact passage and removes only that bookmark', async () => {
+    mockStoreState.bookmarks.push({
+      id: 'scripture-1',
+      devotionalId: 'devotional-1',
+      dayNumber: 1,
+      kind: 'scripture',
+      key: 'John 3:16',
+      scriptureReference: 'John 3:16',
+      scriptureText: verseResult.text,
+      savedAt: '2026-09-28T00:00:00.000Z',
+    });
+
+    let tree: any;
+    await act(async () => {
+      tree = renderer.create(
+        <ScriptureTapSheet
+          visible
+          onClose={jest.fn()}
+          reference="John 3:16"
+          devotionalId="devotional-1"
+          dayNumber={1}
+        />,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(textContent(tree)).toContain('Saved');
+    const removeButton = tree.root
+      .findAllByType(TouchableOpacity)
+      .find((node: any) => node.props.accessibilityLabel === 'Remove John 3:16 from saved');
+    expect(removeButton).toBeTruthy();
+    expect(removeButton.props.accessibilityState).toEqual({ selected: true });
+    act(() => removeButton.props.onPress());
+    expect(mockRemoveBookmark).toHaveBeenCalledWith('scripture-1');
+  });
+
+  it('shows a Saved Related Scripture passage in its saved translation after the reader translation changes', async () => {
+    mockStoreState.bibleReaderSettings.translation = 'BSB';
+    mockStoreState.bookmarks.push({
+      id: 'related-scripture-1',
+      devotionalId: 'devotional-1',
+      dayNumber: 1,
+      kind: 'scripture',
+      key: 'Romans 8:28',
+      scriptureReference: 'Romans 8:28',
+      scriptureText: 'All things work together for good.',
+      translation: 'KJV',
+      savedAt: '2026-09-28T00:00:00.000Z',
+    });
+
+    let tree: any;
+    await act(async () => {
+      tree = renderer.create(
+        <ScriptureTapSheet
+          visible
+          onClose={jest.fn()}
+          reference="Romans 8:28"
+          savedPassage={{ text: 'All things work together for good.', translation: 'KJV' }}
+          devotionalId="devotional-1"
+          dayNumber={1}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    expect(textContent(tree)).toContain('All things work together for good.');
+    expect(textContent(tree)).toContain('KJV');
+    expect(mockFetchVerseLocal).not.toHaveBeenCalled();
+    const removeButton = findSaveButton(tree, 'Remove Romans 8:28 from saved');
+    expect(removeButton).toBeTruthy();
+    act(() => removeButton.props.onPress());
+    expect(mockRemoveBookmark).toHaveBeenCalledWith('related-scripture-1');
+  });
+
+  it('can save a restored Related Scripture passage again after removing it', async () => {
+    const savedPassage = { text: 'All things work together for good.', translation: 'KJV' };
+    mockStoreState.bookmarks.push({
+      id: 'related-scripture-1',
+      devotionalId: 'devotional-1',
+      dayNumber: 1,
+      kind: 'scripture',
+      key: 'Romans 8:28',
+      scriptureReference: 'Romans 8:28',
+      scriptureText: savedPassage.text,
+      translation: savedPassage.translation,
+      savedAt: '2026-09-28T00:00:00.000Z',
+    });
+    const renderSheet = () => (
+      <ScriptureTapSheet
+        visible
+        onClose={jest.fn()}
+        reference="Romans 8:28"
+        savedPassage={savedPassage}
+        devotionalId="devotional-1"
+        dayNumber={1}
+      />
+    );
+
+    let tree: any;
+    await act(async () => {
+      tree = renderer.create(renderSheet());
+      await Promise.resolve();
+    });
+    act(() => findSaveButton(tree, 'Remove Romans 8:28 from saved').props.onPress());
+
+    mockStoreState.bookmarks.length = 0;
+    await act(async () => {
+      tree.update(renderSheet());
+      await Promise.resolve();
+    });
+    const saveButton = findSaveButton(tree, 'Save Romans 8:28');
+    act(() => saveButton.props.onPress());
+    expect(mockAddBookmark).toHaveBeenCalledWith(expect.objectContaining({
+      scriptureReference: 'Romans 8:28',
+      scriptureText: savedPassage.text,
+      translation: 'KJV',
+    }));
+  });
+
+  it('saves a displayed WEB fallback with its actual translation', async () => {
+    mockFetchVerseLocal.mockResolvedValue(null);
+    mockFetchVerse.mockResolvedValue({
+      reference: 'John 3:16',
+      text: 'Fallback WEB passage.',
+      translation: 'web',
+    });
+
+    let tree: any;
+    await act(async () => {
+      tree = renderer.create(
+        <ScriptureTapSheet
+          visible
+          onClose={jest.fn()}
+          reference="John 3:16"
+          devotionalId="devotional-1"
+          dayNumber={1}
+        />,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(textContent(tree)).toContain('Fallback WEB passage.');
+    const saveButton = findSaveButton(tree, 'Save John 3:16');
+    act(() => saveButton.props.onPress());
+    expect(mockAddBookmark).toHaveBeenCalledWith({
+      devotionalId: 'devotional-1',
+      devotionalTitle: '',
+      dayNumber: 1,
+      dayTitle: '',
+      kind: 'scripture',
+      key: 'John 3:16',
+      scriptureReference: 'John 3:16',
+      scriptureText: 'Fallback WEB passage.',
+      translation: 'WEB',
+    });
+  });
 
   it('opens the shared explanation sheet only after tapping Explain', async () => {
     let tree: any;
@@ -301,7 +577,7 @@ describe('ScriptureTapSheet Explain CTA', () => {
     expect(mockFetchScriptureExplanation).toHaveBeenCalledWith(expect.objectContaining({
       reference: 'John 3:16',
       passageText: verseResult.text,
-      translation: 'BSB',
+      translation: 'KJV',
       source: 'devotional-scripture-sheet',
       devotionalContext: expect.objectContaining({
         devotionalId: 'devotional-1',

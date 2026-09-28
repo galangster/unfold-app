@@ -30,18 +30,27 @@ import { DevotionalWebView } from './DevotionalWebView';
 import type { DevotionalWebViewCommands, HighlightsChangedEvent } from './DevotionalWebView';
 import { InlineReflectionJournal } from './InlineReflectionJournal';
 import type { ReflectionKeyboardToolbarState } from './ReflectionQuestionNav';
+import type { SavedScripturePassage } from '@/components/ScriptureTapSheet';
 import { getReflectionTypography } from '@/lib/reflection-typography';
 import { Typography } from '@/constants/typography';
+import { bookmarkKind, canonicalizeScriptureReference } from '@/lib/bookmark-identity';
 
 /** Jump targets for the reader Contents sheet, in document order. */
 export type ReaderSection = 'scripture' | 'devotional' | 'reflection' | 'act' | 'prayer';
+
+export interface DisplayedScripture {
+  reference: string;
+  text: string;
+  translation?: string;
+}
 
 interface DevotionalContentProps {
   day: DevotionalDay;
   fontSize: FontSize;
   titleSharedTransitionTag?: string;
   isBookmarked?: boolean;
-  onToggleBookmark?: () => void;
+  onToggleBookmark?: (scripture: DisplayedScripture) => void;
+  bookmarks?: Bookmark[];
   onHighlightsChanged?: (event: HighlightsChangedEvent) => void;
   onHighlightFailed?: () => void;
   onHighlightsLost?: (serials: string[]) => void;
@@ -54,7 +63,7 @@ interface DevotionalContentProps {
   layoutGeneration?: number;
   targetBookmark?: Bookmark | null;
   onTargetBookmarkLocated?: (contentY: number) => void;
-  onScriptureTap?: (reference: string) => void;
+  onScriptureTap?: (reference: string, savedPassage?: SavedScripturePassage) => void;
   onBeginPractice?: () => void;
   devotionalId?: string;
   dayNumber?: number;
@@ -106,6 +115,7 @@ export function DevotionalContent({
   titleSharedTransitionTag,
   isBookmarked,
   onToggleBookmark,
+  bookmarks,
   onHighlightsChanged,
   onHighlightFailed,
   onHighlightsLost,
@@ -193,10 +203,25 @@ export function DevotionalContent({
   const actSectionRef = useRef<View>(null);
   const prayerSectionRef = useRef<View>(null);
   const locatedTopBookmarkRef = useRef<string | null>(null);
-  const targetBookmarkIsWebViewContent = useMemo(() => {
-    const reference = targetBookmark?.scriptureReference?.toLowerCase();
-    return reference === 'quote' || reference === 'historical context' || reference === 'word study';
-  }, [targetBookmark?.scriptureReference]);
+  const targetBookmarkKind = targetBookmark ? bookmarkKind(targetBookmark) : null;
+  const targetBookmarkIsMainScripture = useMemo(() => {
+    if (!targetBookmark || targetBookmarkKind !== 'scripture') return false;
+    return canonicalizeScriptureReference(targetBookmark.scriptureReference)
+      === canonicalizeScriptureReference(day.scriptureReference);
+  }, [day.scriptureReference, targetBookmark, targetBookmarkKind]);
+  const targetBookmarkIsWebViewContent = targetBookmarkKind !== null
+    && targetBookmarkKind !== 'scripture';
+
+  useEffect(() => {
+    if (!targetBookmark || targetBookmarkKind !== 'scripture') return;
+    if (targetBookmarkIsMainScripture) return;
+    if (locatedTopBookmarkRef.current === targetBookmark.id) return;
+    locatedTopBookmarkRef.current = targetBookmark.id;
+    onScriptureTap?.(targetBookmark.scriptureReference, {
+      text: targetBookmark.scriptureText,
+      ...(targetBookmark.translation ? { translation: targetBookmark.translation } : {}),
+    });
+  }, [onScriptureTap, targetBookmark, targetBookmarkIsMainScripture, targetBookmarkKind]);
 
   const handleDevotionalWebViewLayout = useCallback((event: LayoutChangeEvent) => {
     devotionalWebViewTopRef.current = event.nativeEvent.layout.y;
@@ -204,11 +229,11 @@ export function DevotionalContent({
   }, [layoutGeneration, onSectionLayout]);
 
   const locateTopBookmark = useCallback((contentY: number) => {
-    if (!targetBookmark || targetBookmarkIsWebViewContent) return;
+    if (!targetBookmark || !targetBookmarkIsMainScripture) return;
     if (locatedTopBookmarkRef.current === targetBookmark.id) return;
     locatedTopBookmarkRef.current = targetBookmark.id;
     onTargetBookmarkLocated?.(contentY);
-  }, [onTargetBookmarkLocated, targetBookmark, targetBookmarkIsWebViewContent]);
+  }, [onTargetBookmarkLocated, targetBookmark, targetBookmarkIsMainScripture]);
 
   const handleScriptureBlockLayout = useCallback((event: LayoutChangeEvent) => {
     const y = event.nativeEvent.layout.y;
@@ -294,8 +319,13 @@ export function DevotionalContent({
     bookmarkScale.value = 0.8;
     bookmarkScale.value = withSpring(1, { damping: 20, stiffness: 300, overshootClamping: true });
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    onToggleBookmark?.();
-  }, [onToggleBookmark, bookmarkScale]);
+    onToggleBookmark?.({
+      reference: day.scriptureReference,
+      text: displayScripture,
+      // Only a fetched passage has a known translation. The day's own text has none.
+      translation: versedScripture?.translation,
+    });
+  }, [bookmarkScale, day.scriptureReference, displayScripture, onToggleBookmark, versedScripture?.translation]);
 
   const bookmarkAnimStyle = useAnimatedStyle(() => ({
     transform: [{ scale: bookmarkScale.value }],
@@ -359,6 +389,7 @@ export function DevotionalContent({
 
       {/* Scripture block */}
       <View
+        testID="reading-scripture-section"
         ref={scriptureSectionRef}
         collapsable={false}
         onLayout={handleScriptureBlockLayout}
@@ -392,7 +423,8 @@ export function DevotionalContent({
               onPress={handleBookmarkPress}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               accessibilityRole="button"
-              accessibilityLabel={isBookmarked ? 'Remove bookmark' : 'Add bookmark'}
+              accessibilityLabel={isBookmarked ? `Remove ${day.scriptureReference} from saved` : `Save ${day.scriptureReference}`}
+              accessibilityState={{ selected: Boolean(isBookmarked) }}
               style={dcStyles.bookmarkButton}
             >
               <Animated.View style={bookmarkAnimStyle}>
@@ -447,6 +479,7 @@ export function DevotionalContent({
           devotionalId={devotionalId}
           dayNumber={dayNumber}
           dayTitle={day.title}
+          bookmarks={bookmarks}
         />
       </View>
 
@@ -738,7 +771,10 @@ const dcStyles = StyleSheet.create({
     ...Typography.cardMeta,
   },
   bookmarkButton: {
-    padding: 4,
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   crossRefSection: {
     marginTop: 44,

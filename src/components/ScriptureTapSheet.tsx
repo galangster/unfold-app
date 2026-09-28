@@ -25,6 +25,12 @@ import { useUnfoldStore } from '@/lib/store';
 import { fetchVerse, fetchVerseLocal, type VerseResult } from '@/lib/bible-api';
 import { referenceToRoute } from '@/lib/bible-constants';
 import { ScriptureExplainSheet } from '@/components/ScriptureExplainSheet';
+import { canonicalizeScriptureReference, findBookmarkByIdentity } from '@/lib/bookmark-identity';
+
+export interface SavedScripturePassage {
+  text: string;
+  translation?: string;
+}
 
 interface ScriptureTapSheetProps {
   visible: boolean;
@@ -34,6 +40,7 @@ interface ScriptureTapSheetProps {
   dayNumber?: number;
   dayTitle?: string;
   devotionalTitle?: string;
+  savedPassage?: SavedScripturePassage;
 }
 
 const SWIPE_DISMISS_THRESHOLD = 72;
@@ -58,24 +65,47 @@ export function ScriptureTapSheet({
   dayNumber,
   dayTitle,
   devotionalTitle,
+  savedPassage,
 }: ScriptureTapSheetProps) {
   const { colors } = useTheme();
   const reducedMotion = useReducedMotion();
   const router = useRouter();
   const addBookmark = useUnfoldStore((s) => s.addBookmark);
-  const isBookmarked = useUnfoldStore((s) => s.isBookmarked);
-  const user = useUnfoldStore((s) => s.user);
+  const removeBookmark = useUnfoldStore((s) => s.removeBookmark);
+  const bookmarks = useUnfoldStore((s) => s.bookmarks);
+  const readerTranslation = useUnfoldStore((s) => s.bibleReaderSettings.translation);
 
-  const [verse, setVerse] = useState<VerseResult | null>(null);
+  const [loadedVerse, setLoadedVerse] = useState<{
+    result: VerseResult;
+    requestedReference: string;
+    requestedTranslation: string;
+    source: 'fetch' | 'saved';
+  } | null>(null);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [showExplainSheet, setShowExplainSheet] = useState(false);
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const alreadyBookmarked = devotionalId && dayNumber
-    ? isBookmarked(devotionalId, dayNumber)
-    : false;
+  const verse = useMemo(() => {
+    if (!loadedVerse) return null;
+    if (
+      canonicalizeScriptureReference(loadedVerse.requestedReference)
+      !== canonicalizeScriptureReference(reference)
+    ) return null;
+    if (loadedVerse.source === 'saved') return loadedVerse.result;
+    if (loadedVerse.requestedTranslation !== readerTranslation.toUpperCase()) return null;
+    return loadedVerse.result;
+  }, [loadedVerse, readerTranslation, reference]);
+
+  const existingBookmark = devotionalId && dayNumber
+    ? findBookmarkByIdentity(bookmarks, {
+        devotionalId,
+        dayNumber,
+        kind: 'scripture',
+        key: reference,
+      })
+    : undefined;
+  const alreadyBookmarked = Boolean(existingBookmark);
 
   const canNavigate = parseReferenceForNav(reference) !== null;
   const translateY = useSharedValue(0);
@@ -125,12 +155,26 @@ export function ScriptureTapSheet({
   }));
 
   useEffect(() => {
+    setLoadedVerse(null);
     if (visible && reference) {
-      setLoading(true);
       setCopied(false);
-      setSaved(false);
       setShowExplainSheet(false);
-      const translation = user?.bibleTranslation ?? 'BSB';
+      const translation = readerTranslation;
+      if (savedPassage) {
+        setLoading(false);
+        setLoadedVerse({
+          result: {
+            reference,
+            text: savedPassage.text,
+            translation: savedPassage.translation ?? '',
+          },
+          requestedReference: reference,
+          requestedTranslation: translation.toUpperCase(),
+          source: 'saved',
+        });
+        return;
+      }
+      setLoading(true);
       const fetchFn = ['BSB', 'KJV'].includes(translation.toUpperCase())
         ? () => fetchVerseLocal(reference, translation.toUpperCase() as 'BSB' | 'KJV')
             .then((local) => local ?? fetchVerse(reference, 'web'))
@@ -140,10 +184,20 @@ export function ScriptureTapSheet({
       let cancelled = false;
       fetchFn()
         .then((result) => {
-          if (!cancelled) setVerse(result);
+          if (cancelled) return;
+          if (!result) {
+            setLoadedVerse(null);
+            return;
+          }
+          setLoadedVerse({
+            result,
+            requestedReference: reference,
+            requestedTranslation: translation.toUpperCase(),
+            source: 'fetch',
+          });
         })
         .catch(() => {
-          if (!cancelled) setVerse(null);
+          if (!cancelled) setLoadedVerse(null);
         })
         .finally(() => {
           if (!cancelled) setLoading(false);
@@ -152,12 +206,13 @@ export function ScriptureTapSheet({
         cancelled = true;
       };
     }
-  }, [visible, reference, user?.bibleTranslation, dayTitle]);
+  }, [visible, reference, readerTranslation, savedPassage]);
 
   const handleCopy = async () => {
     if (!verse) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    await Clipboard.setStringAsync(`${verse.text}\n— ${verse.reference} (${verse.translation.toUpperCase()})`);
+    const translationLabel = verse.translation ? ` (${verse.translation.toUpperCase()})` : '';
+    await Clipboard.setStringAsync(`${verse.text}\n— ${verse.reference}${translationLabel}`);
     setCopied(true);
     if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
     copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
@@ -166,16 +221,21 @@ export function ScriptureTapSheet({
   const handleBookmark = () => {
     if (!devotionalId || !dayNumber || !verse) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (existingBookmark) {
+      removeBookmark(existingBookmark.id);
+      return;
+    }
     addBookmark({
       devotionalId,
       devotionalTitle: devotionalTitle ?? '',
       dayNumber,
       dayTitle: dayTitle ?? '',
-      scriptureReference: verse.reference,
+      kind: 'scripture',
+      key: reference,
+      scriptureReference: reference,
       scriptureText: verse.text,
-      quotedText: verse.text,
+      translation: verse.translation.toUpperCase(),
     });
-    setSaved(true);
   };
 
   const handleReadInBible = () => {
@@ -225,7 +285,7 @@ export function ScriptureTapSheet({
                   <Text style={[s.reference, { color: colors.text }]} numberOfLines={1}>
                     {reference}
                   </Text>
-                  {verse && (
+                  {verse?.translation && (
                     <View style={[s.translationPill, { backgroundColor: alpha(colors.accent, 0.10) }]}>
                       <Text style={[s.translationPillText, { color: colors.accent }]}>
                         {verse.translation.toUpperCase()}
@@ -254,20 +314,24 @@ export function ScriptureTapSheet({
                   )}
 
                   {/* Bookmark */}
-                  {verse && devotionalId && dayNumber && !alreadyBookmarked && (
+                  {verse && devotionalId && dayNumber && (
                     <TouchableOpacity
                       activeOpacity={0.6}
                       onPress={handleBookmark}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      style={[s.iconBtn, { backgroundColor: saved ? alpha(colors.accent, 0.10) : 'transparent' }]}
+                      style={[s.saveBtn, { backgroundColor: alreadyBookmarked ? alpha(colors.accent, 0.10) : 'transparent' }]}
                       accessibilityRole="button"
-                      accessibilityLabel={saved ? 'Remove bookmark' : 'Save bookmark'}
+                      accessibilityLabel={alreadyBookmarked ? `Remove ${reference} from saved` : `Save ${reference}`}
+                      accessibilityState={{ selected: alreadyBookmarked }}
                     >
                       <BookmarkSimpleIcon
                         size={16}
-                        color={saved ? colors.accent : colors.textMuted}
-                        weight={saved ? 'fill' : 'light'}
+                        color={alreadyBookmarked ? colors.accent : colors.textMuted}
+                        weight={alreadyBookmarked ? 'fill' : 'light'}
                       />
+                      <Text style={[s.saveLabel, { color: alreadyBookmarked ? colors.accent : colors.textMuted }]}>
+                        {alreadyBookmarked ? 'Saved' : 'Save'}
+                      </Text>
                     </TouchableOpacity>
                   )}
 
@@ -441,6 +505,20 @@ const s = StyleSheet.create({
     borderRadius: Radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  saveBtn: {
+    minWidth: 64,
+    height: 44,
+    borderRadius: Radius.lg,
+    paddingHorizontal: Spacing['2'],
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+  },
+  saveLabel: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: FontSize.xs,
   },
 
   // ─── Scroll ─────────────────────────────────────

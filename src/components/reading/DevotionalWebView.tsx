@@ -16,6 +16,12 @@ import { RANGY_BUNDLE } from './rangy-bundle';
 import { highlightInk, highlighterStroke, HIGHLIGHT_STROKE_FIT, webFontNameFor } from '@/constants/bible-highlight-colors';
 import { parseWebViewLayoutGeneration, parseWebViewParagraphYs, WEBVIEW_COLLECT_PARAGRAPH_YS_JS } from '@/lib/reader-scroll-anchor';
 import { useDevotionalWebFont } from '@/lib/devotional-web-fonts';
+import {
+  bookmarkIdentity,
+  bookmarkIdentityToken,
+  bookmarkKindFromBoxType,
+  findBookmarkByIdentity,
+} from '@/lib/bookmark-identity';
 
 /** The document is the source of truth: every mutation reports the diff of
  *  live highlights before and after, and the store reconciles from it. */
@@ -62,6 +68,7 @@ interface DevotionalWebViewProps {
   devotionalTitle?: string;
   dayNumber?: number;
   dayTitle?: string;
+  bookmarks?: Bookmark[];
 }
 
 const CONTENT_PADDING = 24;
@@ -80,6 +87,7 @@ export function clampSystemFontScale(scale: number): number {
  *  mints a new array identity on every render, invalidating the injected-JS
  *  memo below and re-injecting script into the WebView for free. */
 const NO_HIGHLIGHTS: Highlight[] = [];
+const NO_BOOKMARKS: Bookmark[] = [];
 
 /** Custom entries REPLACE the system text-selection menu (react-native-webview
  *  semantics), so Copy is re-added by hand. Highlight opens the named colour
@@ -186,6 +194,19 @@ function buildLayoutGenerationScript(generation: number): string {
   `;
 }
 
+function buildBookmarkReconcileScript(tokens: readonly string[]): string {
+  return `
+    (function() {
+      var savedBookmarkIdentities = ${JSON.stringify(tokens)};
+      document.querySelectorAll('.bookmark-btn').forEach(function(el) {
+        var token = el.getAttribute('data-bookmark-token');
+        el.classList.toggle('bookmarked', savedBookmarkIdentities.indexOf(token) >= 0);
+      });
+    })();
+    true;
+  `;
+}
+
 /** Sequence for `data-doc-id`: every built document gets a fresh id so a
  *  height report can be attributed to the document that sent it. The id is
  *  part of the html string, so a document is only rebuilt when its memo deps
@@ -213,6 +234,7 @@ export function DevotionalWebView({
   devotionalTitle,
   dayNumber,
   dayTitle,
+  bookmarks = NO_BOOKMARKS,
 }: DevotionalWebViewProps) {
   const { colors, isDark } = useTheme();
   const readingFont = useReadingFont();
@@ -242,6 +264,17 @@ export function DevotionalWebView({
     () => buildThemeVars(fontSize, colors.accent, isDark, fontScale),
     [fontSize, colors, isDark, fontScale],
   );
+
+  const resolvedDayNumber = dayNumber ?? day.dayNumber;
+  const savedBoxBookmarkTokens = useMemo(() => bookmarks
+    .filter((bookmark) =>
+      Boolean(devotionalId)
+      && bookmark.devotionalId === devotionalId
+      && bookmark.dayNumber === resolvedDayNumber,
+    )
+    .map(bookmarkIdentity)
+    .filter((identity) => identity.kind !== 'scripture')
+    .map(bookmarkIdentityToken), [bookmarks, devotionalId, resolvedDayNumber]);
 
   // Inject JS to report content height and apply highlights using rangy
   const injectedJavaScript = useMemo(() => {
@@ -316,7 +349,7 @@ export function DevotionalWebView({
 
         // Store highlighter globally
         window.rangyHighlighter = highlighter;
-        
+
         // Deserialize existing highlights — join all individual ranges into one
         // rangy serialization string and deserialize in a single call.
         // Each stored range may or may not include the "type:textContent" header;
@@ -1188,15 +1221,15 @@ export function DevotionalWebView({
         var type = el.getAttribute('data-type');
         var index = el.getAttribute('data-index');
         var parent = el.parentElement;
-        var text = '';
+        var text = el.getAttribute('data-bookmark-key') || '';
 
-        if (type === 'quote') {
+        if (!text && type === 'quote') {
           var p = parent.querySelector('p');
           var cite = parent.querySelector('cite');
           text = (p ? p.textContent : '') + (cite ? ' ' + cite.textContent : '');
-        } else if (type === 'context') {
+        } else if (!text && type === 'context') {
           text = parent.querySelector('p') ? parent.querySelector('p').textContent : '';
-        } else if (type === 'wordstudy') {
+        } else if (!text && type === 'wordstudy') {
           var term = parent.querySelector('.term');
           var meaning = parent.querySelectorAll('p');
           text = (term ? term.textContent + ': ' : '') + (meaning.length > 0 ? meaning[meaning.length - 1].textContent : '');
@@ -1295,10 +1328,15 @@ export function DevotionalWebView({
       ? '<div class="section-divider"><span class="divider-dots">&middot;&ensp;&middot;&ensp;&middot;</span></div>'
       : '';
 
+    const boxBookmarkAttributes = (kind: 'quote' | 'context' | 'word-study', key: string) =>
+      `data-bookmark-kind="${kind}" data-bookmark-key="${escapeHtml(key)}" data-bookmark-token="${escapeHtml(bookmarkIdentityToken({ kind, key }))}"`;
+
     const quotesHtml = day.quotes?.length
-      ? day.quotes.map((q, i) => `
+      ? day.quotes.map((q, i) => {
+        const bookmarkKey = `${stripOuterQuotes(q.text)} —\u2009${q.author}`;
+        return `
         <blockquote>
-          <div class="bookmark-btn" data-type="quote" data-index="${i}" onclick="handleBookmark(this)">
+          <div class="bookmark-btn" data-type="quote" data-index="${i}" ${boxBookmarkAttributes('quote', bookmarkKey)} onclick="handleBookmark(this)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
             </svg>
@@ -1307,13 +1345,14 @@ export function DevotionalWebView({
           <p>${escapeHtml(stripOuterQuotes(q.text))}</p>
           <cite>\u2014\u2009${escapeHtml(q.author)}</cite>
         </blockquote>
-      `).join('')
+      `;
+      }).join('')
       : '';
 
     const contextHtml = day.contextNote
       ? `
         <div class="context-box">
-          <div class="bookmark-btn" data-type="context" data-index="0" onclick="handleBookmark(this)">
+          <div class="bookmark-btn" data-type="context" data-index="0" ${boxBookmarkAttributes('context', day.contextNote)} onclick="handleBookmark(this)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
             </svg>
@@ -1325,10 +1364,15 @@ export function DevotionalWebView({
       : '';
 
     const wordStudy = normalizeWordStudy(day.wordStudy);
+    const wordStudyBookmarkKey = typeof wordStudy === 'string'
+      ? wordStudy
+      : isStructuredWordStudy(wordStudy)
+        ? `${wordStudy.term}: ${wordStudy.meaning}`
+        : '';
     const wordStudyHtml = typeof wordStudy === 'string'
       ? `
         <div class="word-study-box">
-          <div class="bookmark-btn" data-type="wordstudy" data-index="0" onclick="handleBookmark(this)">
+          <div class="bookmark-btn" data-type="wordstudy" data-index="0" ${boxBookmarkAttributes('word-study', wordStudyBookmarkKey)} onclick="handleBookmark(this)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
             </svg>
@@ -1340,7 +1384,7 @@ export function DevotionalWebView({
       : isStructuredWordStudy(wordStudy)
       ? `
         <div class="word-study-box">
-          <div class="bookmark-btn" data-type="wordstudy" data-index="0" onclick="handleBookmark(this)">
+          <div class="bookmark-btn" data-type="wordstudy" data-index="0" ${boxBookmarkAttributes('word-study', wordStudyBookmarkKey)} onclick="handleBookmark(this)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
             </svg>
@@ -1842,7 +1886,11 @@ export function DevotionalWebView({
   // truth. appliedJson tracks the values the document is showing so that an
   // unchanged theme is never pushed twice.
   const liveDocToken = `${webViewTargetKey}|${webViewDocument.docId}`;
-  const liveDocRef = useRef<{ token: string; appliedJson: string } | null>(null);
+  const liveDocRef = useRef<{
+    token: string;
+    appliedJson: string;
+    appliedBookmarkTokensJson: string;
+  } | null>(null);
 
   const pushThemeVars = useCallback((vars: ThemeVars) => {
     const live = liveDocRef.current;
@@ -1854,12 +1902,27 @@ export function DevotionalWebView({
     live.appliedJson = vars.json;
   }, [liveDocToken]);
 
+  const pushBookmarkTokens = useCallback((tokens: readonly string[]) => {
+    const live = liveDocRef.current;
+    if (!live || live.token !== liveDocToken) return;
+    const tokensJson = JSON.stringify(tokens);
+    if (live.appliedBookmarkTokensJson === tokensJson) return;
+    const webView = webViewRef.current;
+    if (!webView) return;
+    webView.injectJavaScript(buildBookmarkReconcileScript(tokens));
+    live.appliedBookmarkTokensJson = tokensJson;
+  }, [liveDocToken]);
+
   // Aa / theme change while mounted: update the live document in place.
   // Before the document is ready this is a no-op; the ready handler below
   // applies the then-current values once.
   useEffect(() => {
     pushThemeVars(themeVars);
   }, [themeVars, pushThemeVars]);
+
+  useEffect(() => {
+    pushBookmarkTokens(savedBoxBookmarkTokens);
+  }, [pushBookmarkTokens, savedBoxBookmarkTokens]);
 
   useEffect(() => {
     if (layoutGeneration <= 0) return;
@@ -1949,8 +2012,13 @@ export function DevotionalWebView({
         // injectJavaScript. It rendered with the baked values; catch it up
         // with anything that changed while it was loading (usually nothing).
         if (isFirstDocumentReport) {
-          liveDocRef.current = { token: liveDocToken, appliedJson: webViewDocument.bakedThemeJson };
+          liveDocRef.current = {
+            token: liveDocToken,
+            appliedJson: webViewDocument.bakedThemeJson,
+            appliedBookmarkTokensJson: savedBoxBookmarkTokens.length > 0 ? '' : '[]',
+          };
           pushThemeVars(themeVars);
+          pushBookmarkTokens(savedBoxBookmarkTokens);
           if (layoutGeneration > 0) {
             webViewRef.current?.injectJavaScript(buildLayoutGenerationScript(layoutGeneration));
           }
@@ -1964,10 +2032,14 @@ export function DevotionalWebView({
       } else if (data.type === 'HAPTIC_IMPACT') {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       } else if (data.type === 'BOOKMARK') {
-        const { contentType, text, isBookmarked: nowBookmarked } = data;
+        const { contentType, text } = data;
         const store = useUnfoldStore.getState();
         const resolvedDayNumber = dayNumber ?? day.dayNumber;
-        if (nowBookmarked && devotionalId) {
+        const kind = bookmarkKindFromBoxType(contentType);
+        if (!kind || !devotionalId) return;
+        const identity = { devotionalId, dayNumber: resolvedDayNumber, kind, key: text };
+        const existing = findBookmarkByIdentity(store.bookmarks, identity);
+        if (!existing) {
           const labelMap: Record<string, string> = {
             quote: 'Quote',
             context: 'Historical Context',
@@ -1983,22 +2055,16 @@ export function DevotionalWebView({
             devotionalTitle: seriesTitle,
             dayNumber: resolvedDayNumber,
             dayTitle: dayTitle || day.title || '',
+            kind,
+            key: text,
             scriptureReference: labelMap[contentType] || contentType,
             scriptureText: text,
             quotedText: text,
             updatedAt: new Date().toISOString(),
           });
-        } else if (!nowBookmarked && devotionalId) {
+        } else {
           // Find and remove the matching bookmark
-          const existing = store.bookmarks.find(
-            (b) =>
-              b.devotionalId === devotionalId &&
-              b.dayNumber === resolvedDayNumber &&
-              b.scriptureText === text
-          );
-          if (existing) {
-            store.removeBookmark(existing.id);
-          }
+          store.removeBookmark(existing.id);
         }
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
