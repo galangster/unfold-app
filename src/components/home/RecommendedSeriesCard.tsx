@@ -26,6 +26,7 @@ import { clearInitialGenerationRequestId } from '@/lib/initial-generation-reques
 import { trackAutoTrialPickStartTapped } from '@/lib/auto-trial-telemetry';
 import { getChurnedCreationGateAction } from '@/lib/creation-gate-policy';
 import { mmkvStorage } from '@/lib/mmkv-storage';
+import { cleanRecommendationReason } from '@/lib/recommendation-text';
 import type { NextPick } from '@/lib/store';
 import type { PremiumAccessPolicy } from '@/lib/premium-access-policy';
 
@@ -232,6 +233,9 @@ export function RecommendedSeriesCard({
   // the bare word 'Theme' with no value attached.
   const typeLabel = recommendation!.type === 'theme' ? null : formatRecommendationType(recommendation!.type);
   const actionLabel = isCompletion ? 'Begin the Next Study' : 'Start This Study';
+  // Same plain fallback the backend serves when its reason text is unusable.
+  const reasonText = cleanRecommendationReason(recommendation!.reason)
+    ?? `A ${recommendation!.suggestedLength}-day series on ${recommendation!.themeName.toLowerCase()} — right where you are right now.`;
 
   return (
     <Animated.View entering={entering(FadeIn.duration(Duration.normal).easing(Ease.out))}>
@@ -248,7 +252,7 @@ export function RecommendedSeriesCard({
           </Text>
 
           <Text style={[styles.reason, { color: colors.textMuted }]}>
-            {recommendation!.reason}
+            {reasonText}
           </Text>
 
           <View style={styles.metaRow}>

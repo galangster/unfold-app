@@ -312,6 +312,36 @@ describe('J10 RecommendedSeriesCard start-study gate', () => {
     })).toBeTruthy();
   });
 
+  it('renders a stored pick line without its markdown heading', async () => {
+    const { Text } = require('react-native');
+    const tree = await mount({
+      storedPick: {
+        ...storedPick,
+        line: '# Recommendation\n\nBecause this season is asking for patience.',
+      },
+      gateCreation: () => true,
+    });
+
+    const texts = tree.root
+      .findAllByType(Text)
+      .map((node: { props: { children: unknown } }) => node.props.children);
+    expect(texts).toContain('Because this season is asking for patience.');
+    expect(texts.join(' ')).not.toContain('#');
+  });
+
+  it('shows the plain fallback when a stored pick line is only markup', async () => {
+    const { Text } = require('react-native');
+    const tree = await mount({
+      storedPick: { ...storedPick, line: '# Recommendation' },
+      gateCreation: () => true,
+    });
+
+    const texts = tree.root
+      .findAllByType(Text)
+      .map((node: { props: { children: unknown } }) => node.props.children);
+    expect(texts).toContain('A 7-day series on a quiet strength — right where you are right now.');
+  });
+
   it('does not POST /api/jobs on render', async () => {
     await mount({ storedPick, gateCreation: () => true });
 
