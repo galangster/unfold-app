@@ -682,7 +682,7 @@ export default function OnboardingScreen() {
   // Draft answers win over the defaults: they are what this person actually said.
   // A returning reader here is starting a new series: profile answers this flow
   // never asks again carry over (saving writes them back), while the series'
-  // own answers — the life question included — start blank.
+  // own answers start blank. The life question keeps only this intake's unsent answer.
   const [data, setData] = useState<OnboardingData>(() => ({
     name: existingUser?.name || '',
     bibleTranslation: existingUser?.bibleTranslation || 'BSB',
@@ -695,7 +695,7 @@ export default function OnboardingScreen() {
     selectedThemes: [],
     selectedType: undefined,
     selectedStudySubject: undefined,
-    currentSituation: '',
+    currentSituation: existingUser?.hasCompletedOnboarding ? useUnfoldStore.getState().newSeriesLifeDraft ?? '' : '',
     diagnosticAnswers: [],
     spiritualSeeking: '',
     upcomingEvent: { label: '', date: '' },
@@ -1390,6 +1390,8 @@ export default function OnboardingScreen() {
     const wroteSituation = hasLifeContextAnswer(data.currentSituation);
     const lifeDraftState = useUnfoldStore.getState();
     if (lifeDraftState.lifeContextDraft === data.currentSituation) lifeDraftState.setLifeContextDraft(null);
+    // Submitting the intake ends its unsent answer; the next new series opens blank.
+    if (lifeDraftState.newSeriesLifeDraft) lifeDraftState.setNewSeriesLifeDraft(null);
 
     if (existingUser) {
       updateUser({
@@ -2765,13 +2767,18 @@ export default function OnboardingScreen() {
             value={data.currentSituation}
             colors={colors}
             isDark={isDark}
-            onChangeText={(text) => setData((prev) => ({ ...prev, currentSituation: text }))}
+            onChangeText={(text) => {
+              setData((prev) => ({ ...prev, currentSituation: text }));
+              // Unsent writing survives a close or an app stop until it is submitted or skipped.
+              if (existingUser?.hasCompletedOnboarding) useUnfoldStore.getState().setNewSeriesLifeDraft(text || null);
+            }}
           />
           {/* Skipping leaves the answer blank: saving keeps the saved context,
               and the follow-up questions never build on an old answer. */}
           <TouchableOpacity accessibilityRole="button" accessibilityLabel="Skip life update" style={{ minHeight: 44, justifyContent: 'center', alignItems: 'center' }} onPress={() => {
             dataRef.current = { ...dataRef.current, currentSituation: '' };
             setData((prev) => ({ ...prev, currentSituation: '' }));
+            useUnfoldStore.getState().setNewSeriesLifeDraft(null);
             advanceToNextStep();
           }}>
             <Text style={{ color: colors.textMuted, fontFamily: FontFamily.ui, fontSize: 15 }}>Skip for now</Text>

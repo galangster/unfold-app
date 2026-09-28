@@ -11,6 +11,8 @@ let mockNext: string | undefined;
 const mockUpdateUser = jest.fn();
 const mockDraft = jest.fn();
 let mockState: any;
+// The store keeps what it is given, so a remount sees the persisted draft.
+const mockSeriesDraft = jest.fn((text: string | null) => { mockState.newSeriesLifeDraft = text; });
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({ replace: mockReplace }),
@@ -44,8 +46,10 @@ describe('life update before a new series', () => {
     mockState = {
       user: { hasCompletedOnboarding: true, currentSituation: 'Caring for my father.' },
       lifeContextDraft: null,
+      newSeriesLifeDraft: null,
       updateUser: mockUpdateUser,
       setLifeContextDraft: mockDraft,
+      setNewSeriesLifeDraft: mockSeriesDraft,
     };
   });
   afterEach(() => { if (view) act(() => view.unmount()); });
@@ -67,7 +71,30 @@ describe('life update before a new series', () => {
     press(label);
     expect(situationWrites()).toEqual([]);
     expect(mockDraft).not.toHaveBeenCalled();
+    expect(mockSeriesDraft).toHaveBeenLastCalledWith(null);
     expect(mockReplace).toHaveBeenCalledWith('/generating');
+  });
+
+  it('keeps an unfinished new-series answer through a close and reopen, apart from Share an update\'s draft', () => {
+    mockState.lifeContextDraft = 'I also want to learn about forgiveness.';
+    render();
+    act(() => view.root.findByType(TextInput).props.onChangeText('Starting a new job'));
+    press('Close');
+    act(() => view.unmount());
+    render();
+    expect(view.root.findByType(TextInput).props.value).toBe('Starting a new job');
+    expect(view.root.findAllByProps({ label: 'Discard unfinished edits' }).length).toBeGreaterThan(0);
+    expect(mockDraft).not.toHaveBeenCalled();
+    expect(mockState.lifeContextDraft).toBe('I also want to learn about forgiveness.');
+  });
+
+  it('opens the next new series blank once this one is submitted', () => {
+    render();
+    act(() => view.root.findByType(TextInput).props.onChangeText('Starting a new job'));
+    press('Save and create series');
+    act(() => view.unmount());
+    render();
+    expect(view.root.findByType(TextInput).props.value).toBe('');
   });
 
   it('restores unfinished writing when sharing an update', () => {
@@ -91,6 +118,7 @@ describe('life update before a new series', () => {
     press('Save and create series');
     expect(situationWrites()).toEqual([[{ currentSituation: update }]]);
     expect(mockDraft).not.toHaveBeenCalled();
+    expect(mockSeriesDraft).toHaveBeenLastCalledWith(null);
     expect(mockReplace).toHaveBeenCalledTimes(1);
   });
 
@@ -101,6 +129,7 @@ describe('life update before a new series', () => {
     expect(view.root.findByProps({ label: 'Save and create series' }).props.disabled).toBe(true);
     press('Save and create series');
     expect(view.root.findByType(TextInput).props.value).toBe(update);
+    expect(mockSeriesDraft).toHaveBeenLastCalledWith(update);
     expect(mockUpdateUser).not.toHaveBeenCalled();
   });
 

@@ -118,6 +118,8 @@ const mockStoreState = {
   updateUser: jest.fn(),
   lifeContextDraft: null as string | null,
   setLifeContextDraft: jest.fn(),
+  newSeriesLifeDraft: null as string | null,
+  setNewSeriesLifeDraft: jest.fn(),
   setUser: jest.fn(),
   setCompanionName: jest.fn(),
   addDevotional: jest.fn(),
@@ -313,6 +315,10 @@ describe('new series from Today', () => {
     mockStoreState.setLifeContextDraft.mockImplementation((text: string | null) => {
       mockStoreState.lifeContextDraft = text;
     });
+    mockStoreState.newSeriesLifeDraft = null;
+    mockStoreState.setNewSeriesLifeDraft.mockImplementation((text: string | null) => {
+      mockStoreState.newSeriesLifeDraft = text;
+    });
     client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
   });
 
@@ -323,6 +329,8 @@ describe('new series from Today', () => {
     });
     mockStoreState.updateUser.mockReset();
     mockStoreState.setLifeContextDraft.mockReset();
+    mockStoreState.setNewSeriesLifeDraft.mockReset();
+    mockStoreState.newSeriesLifeDraft = null;
     mockStoreState.user = null;
     mockStoreState.lifeContextDraft = null;
     jest.useRealTimers();
@@ -384,6 +392,7 @@ describe('new series from Today', () => {
 
     // The diagnostic round would otherwise build follow-ups from the old answer.
     expect(mockGenerateDiagnosticQuestions).not.toHaveBeenCalled();
+    expect(mockStoreState.newSeriesLifeDraft).toBeNull();
     expect(tree.root.findAll(
       (n: { props?: { children?: unknown } }) => typeof n.props?.children === 'string' && n.props.children.startsWith('When you imagine your faith'),
     ).length).toBeGreaterThan(0);
@@ -406,6 +415,25 @@ describe('new series from Today', () => {
 
     expect(mockReplace).toHaveBeenCalledWith('/generating');
     expect(mockStoreState.user?.currentSituation).toBe('Starting a new job next month.');
+    expect(mockStoreState.lifeContextDraft).toBe(SHARE_AN_UPDATE_DRAFT);
+
+    // The next new series opens blank once this one is submitted.
+    await act(async () => tree.unmount());
+    await openAt('themeType');
+    await tap({ text: 'Just guide me' });
+    expect(lifeQuestionField().props.defaultValue).toBe('');
+  });
+
+  it('keeps an unfinished life answer through an app stop, apart from Share an update\'s draft', async () => {
+    await openAt('themeType');
+    await tap({ text: 'Just guide me' });
+    await type(lifeQuestionField(), 'Half an answer');
+
+    await act(async () => tree.unmount());
+    await openAt('themeType');
+    await tap({ text: 'Just guide me' });
+
+    expect(lifeQuestionField().props.defaultValue).toBe('Half an answer');
     expect(mockStoreState.lifeContextDraft).toBe(SHARE_AN_UPDATE_DRAFT);
   });
 
