@@ -234,8 +234,9 @@ export function RecommendedSeriesCard({
   const typeLabel = recommendation!.type === 'theme' ? null : formatRecommendationType(recommendation!.type);
   const actionLabel = isCompletion ? 'Begin the Next Study' : 'Start This Study';
   // Same plain fallback the backend serves when its reason text is unusable.
+  // Fetched JSON is unchecked, so a missing field must not throw during render.
   const reasonText = cleanRecommendationReason(recommendation!.reason)
-    ?? `A ${recommendation!.suggestedLength}-day series on ${recommendation!.themeName.toLowerCase()} — right where you are right now.`;
+    ?? `A ${recommendation!.suggestedLength}-day series on ${(recommendation!.themeName || 'this theme').toLowerCase()} — right where you are right now.`;
 
   return (
     <Animated.View entering={entering(FadeIn.duration(Duration.normal).easing(Ease.out))}>

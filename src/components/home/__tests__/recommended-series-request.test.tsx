@@ -312,34 +312,68 @@ describe('J10 RecommendedSeriesCard start-study gate', () => {
     })).toBeTruthy();
   });
 
-  it('renders a stored pick line without its markdown heading', async () => {
+  function renderedTexts(tree: ReturnType<typeof renderer.create>): unknown[] {
     const { Text } = require('react-native');
-    const tree = await mount({
-      storedPick: {
-        ...storedPick,
-        line: '# Recommendation\n\nBecause this season is asking for patience.',
-      },
-      gateCreation: () => true,
-    });
-
-    const texts = tree.root
+    return tree.root
       .findAllByType(Text)
       .map((node: { props: { children: unknown } }) => node.props.children);
+  }
+
+  async function mountFetched(body: Record<string, unknown>) {
+    mockIsQaToolsEnabled.mockReturnValue(false);
+    mockFetch.mockResolvedValue({ ok: true, json: async () => body });
+    const tree = await mount();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    return tree;
+  }
+
+  const fetchedPick = { theme: 'trust', themeName: 'Learning to Trust', type: 'personal', suggestedLength: 7 };
+
+  it('renders a stored pick line without its markdown heading', async () => {
+    const tree = await mount({
+      storedPick: { ...storedPick, line: '# Recommendation\n\nBecause this season is asking for patience.' },
+    });
+
+    const texts = renderedTexts(tree);
     expect(texts).toContain('Because this season is asking for patience.');
     expect(texts.join(' ')).not.toContain('#');
   });
 
-  it('shows the plain fallback when a stored pick line is only markup', async () => {
-    const { Text } = require('react-native');
-    const tree = await mount({
-      storedPick: { ...storedPick, line: '# Recommendation' },
-      gateCreation: () => true,
+  it.each([
+    ['only markup', '# Recommendation'],
+    ['oversized', '['.repeat(64_000)],
+  ])('shows the plain fallback when a stored pick line is %s', async (_label, line) => {
+    const tree = await mount({ storedPick: { ...storedPick, line } });
+
+    expect(renderedTexts(tree)).toContain('A 7-day series on a quiet strength — right where you are right now.');
+  });
+
+  it('renders a fetched reason without its markdown heading', async () => {
+    const tree = await mountFetched({
+      ...fetchedPick,
+      reason: '# Recommendation\n\nThis series meets you where doubt feels more honest.',
     });
 
-    const texts = tree.root
-      .findAllByType(Text)
-      .map((node: { props: { children: unknown } }) => node.props.children);
-    expect(texts).toContain('A 7-day series on a quiet strength — right where you are right now.');
+    expect(renderedTexts(tree)).toContain('This series meets you where doubt feels more honest.');
+  });
+
+  it.each([
+    ['null', { reason: null }],
+    ['missing', {}],
+  ])('shows the plain fallback when a fetched reason is %s', async (_label, reason) => {
+    const tree = await mountFetched({ ...fetchedPick, ...reason });
+
+    expect(renderedTexts(tree)).toContain('A 7-day series on learning to trust — right where you are right now.');
+  });
+
+  it('renders the QA fixture reason unchanged', async () => {
+    const tree = await mount();
+
+    expect(renderedTexts(tree)).toContain(
+      'Because this season is asking for patience without passivity — a study on waiting, courage, and hearing God clearly.',
+    );
   });
 
   it('does not POST /api/jobs on render', async () => {
