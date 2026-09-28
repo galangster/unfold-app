@@ -1,10 +1,13 @@
 /**
  * Greptile A10 regression: the 300ms auto-advance timers were never retained,
  * so a close/reopen inside that window advanced the freshly reset sheet.
+ * Also: an answer the caller could not save plays no success haptic and shows
+ * no celebration.
  */
 import React from 'react';
 import { TouchableOpacity } from 'react-native';
 import renderer, { act } from 'react-test-renderer';
+import * as Haptics from 'expo-haptics';
 import { CheckInSheet } from '../CheckInSheet';
 
 jest.mock('expo-haptics', () => ({
@@ -96,4 +99,50 @@ describe('CheckInSheet auto-advance timer (Greptile A10)', () => {
     expect(text).not.toContain(props.question);
   });
 
+});
+
+describe('CheckInSheet completion', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    (Haptics.notificationAsync as jest.Mock).mockClear();
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  // Picks a mood and a chip, then skips the note, which completes the check-in.
+  async function completeCheckIn(onComplete: () => boolean | void) {
+    let tree: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderer.create(<CheckInSheet {...props} onComplete={onComplete} visible />);
+    });
+    for (const label of ['Struggling', 'Work stress', 'Skip this step']) {
+      await act(async () => {
+        tree!.root.findAll((node) => node.type === TouchableOpacity && node.props.accessibilityLabel === label)[0].props.onPress();
+      });
+      // A chip waits 300ms before the step's own 300ms advance; step each timer separately.
+      for (let tick = 0; tick < 2; tick += 1) {
+        await act(async () => {
+          jest.advanceTimersByTime(400);
+        });
+      }
+    }
+    return collectText(tree!.toJSON()).join(' ');
+  }
+
+  it('plays no success haptic and shows no celebration when the answer is not saved', async () => {
+    const onComplete = jest.fn(() => false);
+    const text = await completeCheckIn(onComplete);
+
+    expect(onComplete).toHaveBeenCalledTimes(1);
+    expect(Haptics.notificationAsync).not.toHaveBeenCalled();
+    expect(text).not.toContain('Tap anywhere to continue');
+  });
+
+  it('celebrates a saved answer', async () => {
+    const text = await completeCheckIn(() => true);
+
+    expect(Haptics.notificationAsync).toHaveBeenCalledWith('success');
+    expect(text).toContain('Tap anywhere to continue');
+  });
 });

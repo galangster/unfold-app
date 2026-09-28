@@ -81,12 +81,13 @@ const MOOD_OPTIONS: Array<{
 export interface CheckInSheetProps {
   visible: boolean;
   onClose: () => void;
+  /** Saves the answer. Returns false when it could not be saved. */
   onComplete: (data: {
     mood: MoodValue;
     moodLabel: string;
     chipAnswer?: string;
     freeText?: string;
-  }) => void;
+  }) => boolean | void;
   question?: string;
   chips?: string[];
   devotionalId: string;
@@ -730,8 +731,9 @@ export function CheckInSheet({
   const triggerCelebration = useCallback(
     (data: { mood: MoodValue; moodLabel: string; chipAnswer?: string; freeText?: string }) => {
       completionDataRef.current = data;
+      // An answer that was not saved is no success: no haptic, no celebration.
+      if (onComplete(data) === false) return;
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      onComplete(data);
       setShowCelebration(true);
     },
     [onComplete]

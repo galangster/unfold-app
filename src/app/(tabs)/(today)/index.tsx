@@ -79,7 +79,7 @@ import {
   resolvePendingInitialArcResume,
   type PendingInitialArcResume,
 } from '@/lib/support-clarity';
-import { captureSyncSession, isSyncSessionCurrent } from '@/lib/sync-session-fence';
+import { captureSyncSession, isSyncSessionCurrent, subscribeLocalResetIdle } from '@/lib/sync-session-fence';
 import {
   getCurrentDevotional,
   getHomeDevotionalDayData,
@@ -446,6 +446,19 @@ export default function HomeScreen() {
 
   const [clockNow, setClockNow] = useState(() => new Date());
   const [showCheckInSheet, setShowCheckInSheet] = useState(false);
+  // The check-in keeps the series and day it opened on, with that day's
+  // question and chips, until it closes, and the answer saves there. Neither a
+  // minute tick past midnight, the ritual carry-over window, nor a synced
+  // series change may move it to another day.
+  const [openedCheckIn, setOpenedCheckIn] = useState<{
+    devotionalId: string;
+    dayNumber: number;
+    question?: string;
+    chips?: string[];
+    /** A day still in preparation is not in the store yet; its answer saves anyway. */
+    dayInStore: boolean;
+    session: number;
+  } | null>(null);
   const [showVoiceCheckInSheet, setShowVoiceCheckInSheet] = useState(false);
   const [voiceCheckInAutoStart, setVoiceCheckInAutoStart] = useState(false);
   const [showPremiumSheet, setShowPremiumSheet] = useState(false);
@@ -941,11 +954,17 @@ export default function HomeScreen() {
   const openCheckInSheet = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (currentDevotional) {
-      beginRitualSession({
-        kind: 'midday',
+      const dayNumber = getMiddayCheckInDayNumber(currentDevotional) ?? currentDevotional.currentDay;
+      const day = currentDevotional.days.find((candidate) => candidate.dayNumber === dayNumber);
+      setOpenedCheckIn({
         devotionalId: currentDevotional.id,
-        dayNumber: getMiddayCheckInDayNumber(currentDevotional) ?? currentDevotional.currentDay,
+        dayNumber,
+        question: day?.checkInQuestion,
+        chips: day?.checkInChips,
+        dayInStore: day !== undefined,
+        session: captureSyncSession(),
       });
+      beginRitualSession({ kind: 'midday', devotionalId: currentDevotional.id, dayNumber });
     }
     setShowCheckInSheet(true);
   }, [beginRitualSession, currentDevotional]);
@@ -954,6 +973,12 @@ export default function HomeScreen() {
     if (!gate()) return;
     openCheckInSheet();
   }, [gate, openCheckInSheet]);
+
+  // An account reset ends an open check-in; its series and day no longer exist.
+  useEffect(() => subscribeLocalResetIdle(() => {
+    setShowCheckInSheet(false);
+    setOpenedCheckIn(null);
+  }), []);
 
   const clearMiddayNotificationFocus = useCallback(() => {
     router.setParams({ focus: '' });
@@ -980,22 +1005,27 @@ export default function HomeScreen() {
     moodLabel: string;
     chipAnswer?: string;
     freeText?: string;
-  }) => {
-    if (!currentDevotional) return;
-    const fallbackDay = getMiddayCheckInDayNumber(currentDevotional) ?? currentDevotional.currentDay;
+  }): boolean => {
+    const opened = openedCheckIn;
     const store = useUnfoldStore.getState();
+    const openedSeries = opened ? store.devotionals.find((devotional) => devotional.id === opened.devotionalId) : undefined;
+    // Save nothing when the opened series is gone (an account reset, or a sync
+    // that deleted it while the sheet was open), or when the opened day was in
+    // the store and is gone. A day still in preparation was never there.
+    const dayGone = opened?.dayInStore && !openedSeries?.days.some((day) => day.dayNumber === opened.dayNumber);
+    if (!opened || !isSyncSessionCurrent(opened.session) || !openedSeries || dayGone) {
+      setShowCheckInSheet(false);
+      Alert.alert('Check-in not saved', 'The reading it belongs to was removed from this device while you were answering.');
+      return false;
+    }
     const clock = resolveRitualCompletion({
       session: store.ritualSessions.midday,
-      identity: {
-        kind: 'midday',
-        devotionalId: currentDevotional.id,
-        dayNumber: fallbackDay,
-      },
+      identity: { kind: 'midday', devotionalId: opened.devotionalId, dayNumber: opened.dayNumber },
       completedTimeZone: getDeviceTimezone(),
     });
     addCheckIn({
-      devotionalId: currentDevotional.id,
-      dayNumber: clock.dayNumber,
+      devotionalId: opened.devotionalId,
+      dayNumber: opened.dayNumber,
       mood: data.mood,
       moodLabel: data.moodLabel,
       chipAnswer: data.chipAnswer,
@@ -1012,6 +1042,7 @@ export default function HomeScreen() {
     markMiddayCheckInCompleted(clock.localYmd);
     store.clearRitualSession('midday');
     setShowCheckInSheet(false);
+    return true;
   };
 
   const handleEveningWindDown = useCallback(() => {
@@ -1824,10 +1855,12 @@ export default function HomeScreen() {
           visible={showCheckInSheet}
           onClose={() => setShowCheckInSheet(false)}
           onComplete={handleCheckInComplete}
-          question={currentDayData?.checkInQuestion}
-          chips={currentDayData?.checkInChips}
+          // The day read today, fixed at open; never the prepared tomorrow
+          // that currentDayData points at after a morning read.
+          question={openedCheckIn?.question}
+          chips={openedCheckIn?.chips}
           devotionalId={currentDevotional.id}
-          dayNumber={middayCheckInDay ?? currentDevotional.currentDay}
+          dayNumber={openedCheckIn?.dayNumber ?? middayCheckInDay ?? currentDevotional.currentDay}
         />
       )}
 
