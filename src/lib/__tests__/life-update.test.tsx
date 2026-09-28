@@ -52,6 +52,7 @@ describe('life update before a new series', () => {
   function render() { act(() => { view = create(<LifeUpdateScreen />); }); }
   function press(label: string) { act(() => view.root.findByProps({ label }).props.onPress()); }
   const situationWrites = () => mockUpdateUser.mock.calls.filter(([patch]) => 'currentSituation' in patch);
+  const RETIRED_INTAKE = { diagnosticAnswers: undefined, mirrorWorkingRead: undefined, mirrorCorrection: undefined };
 
   it('opens a new series blank, without the previous answer or another screen\'s unsaved edit', () => {
     mockState.lifeContextDraft = 'I also want to learn about forgiveness.';
@@ -109,6 +110,23 @@ describe('life update before a new series', () => {
     press('Skip for now');
     expect(mockReplace).not.toHaveBeenCalled();
     expect(situationWrites()).toEqual([]);
+  });
+
+  it('starts the new series without the last intake\'s deeper answers and read', () => {
+    render();
+    act(() => view.root.findByType(TextInput).props.onChangeText('Starting a new job next month.'));
+    press('Save and create series');
+    expect(mockUpdateUser).toHaveBeenCalledWith({ currentSituation: 'Starting a new job next month.' });
+    expect(mockUpdateUser).toHaveBeenCalledWith(RETIRED_INTAKE);
+    expect(mockReplace).toHaveBeenCalledWith('/generating');
+  });
+
+  it('retires the last intake before the creation gate, whose paywall routes can start the series', () => {
+    mockGate.mockReturnValue(false);
+    render();
+    press('Skip for now');
+    expect(mockUpdateUser).toHaveBeenCalledWith(RETIRED_INTAKE);
+    expect(mockReplace).not.toHaveBeenCalled();
   });
 
   it('does not apply an old session draft after account reset', () => {

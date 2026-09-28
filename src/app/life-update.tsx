@@ -49,6 +49,9 @@ function LifeUpdateForm() {
       if (!newSeries) state.setLifeContextDraft(null);
     }
     if (newSeries) {
+      // The last intake's deeper answers and read feed only a new series' first
+      // plan. Retire them before the gate: its paywall routes can start it too.
+      state.updateUser({ diagnosticAnswers: undefined, mirrorWorkingRead: undefined, mirrorCorrection: undefined });
       if (!gate()) return;
       leaving.current = true;
       router.replace('/generating');
