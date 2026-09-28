@@ -26,6 +26,7 @@ import { useUnfoldStore } from '@/lib/store';
 import {
   getDayMenuPresentation,
   isDevotionalDaySelectable,
+  isPausedSeries,
   resolveInitialReadingDayNumber,
   type DayMenuPresentation,
 } from '@/lib/devotional-day-access';
@@ -54,6 +55,7 @@ export function DayMenuScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   }>();
 
   const devotionals = useUnfoldStore((s) => s.devotionals);
+  const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
   const devotional = devotionals.find((d) => d.id === params.devotionalId);
   const currentViewingDay = parseInt(params.currentDay ?? '1', 10);
   const [pressedDay, setPressedDay] = useState<number | null>(null);
@@ -85,6 +87,7 @@ export function DayMenuScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   }
 
   const activeViewingDay = resolveInitialReadingDayNumber(devotional, currentViewingDay);
+  const seriesPaused = isPausedSeries(devotional, currentDevotionalId);
 
   const handleSelectDay = (dayNumber: number) => {
     if (!isDevotionalDaySelectable(devotional, dayNumber, calendarNow)) {
@@ -147,7 +150,7 @@ export function DayMenuScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
           const isActive = dayNumber === activeViewingDay;
           const isDayRead = day?.isRead ?? false;
           const isLocked = !isDevotionalDaySelectable(devotional, dayNumber, calendarNow);
-          const presentation = getDayMenuPresentation(devotional, dayNumber, calendarNow);
+          const presentation = getDayMenuPresentation(devotional, dayNumber, calendarNow, seriesPaused);
 
           return (
             <Animated.View
@@ -215,7 +218,10 @@ function DayRow({
   reducedMotion: boolean;
 }) {
   const dayTitle = presentation.title;
-  const unlockCaption = isLocked ? presentation.unlockLabel ?? GENERIC_UNLOCK_LABEL : undefined;
+  // A day that will not be prepared never unlocks, so it gets no unlock caption.
+  const unlockCaption = isLocked && presentation.kind !== 'not-prepared'
+    ? presentation.unlockLabel ?? GENERIC_UNLOCK_LABEL
+    : undefined;
 
   const pulse = useSharedValue(1);
   const captionEmphasis = useSharedValue(1);

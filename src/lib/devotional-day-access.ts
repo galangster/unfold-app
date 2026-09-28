@@ -110,6 +110,29 @@ export function isDevotionalDaySelectable(
   return selectRenderableDevotionalDay(devotional, dayNumber).status === 'ready';
 }
 
+// Only the current series gets new days: the server prepares days for the
+// current series alone, and the reader never requests a day for any other
+// series. Every other series is paused, or finished, and keeps what it has.
+export function isPausedSeries(
+  devotional: Pick<Devotional, 'id'> | null | undefined,
+  currentDevotionalId: string | null | undefined,
+): boolean {
+  return devotional != null && devotional.id !== currentDevotionalId;
+}
+
+// An unread day that a paused series is missing will not be prepared, so it
+// must not be presented as being prepared. It stays open to the reader: a pull
+// there restores a copy the server already has, or confirms the day is missing.
+export function isPausedSeriesUnpreparedDay(
+  devotional: Devotional | null | undefined,
+  dayNumber: number,
+  seriesPaused: boolean,
+): boolean {
+  if (!seriesPaused || !devotional) return false;
+  if (devotional.days.some((day) => day.dayNumber === dayNumber && day.isRead)) return false;
+  return selectRenderableDevotionalDay(devotional, dayNumber).status !== 'ready';
+}
+
 const WEEKDAY_SHORT_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTH_SHORT_NAMES = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -147,7 +170,7 @@ function getUnlockLabel(
   return `Unlocks ${MONTH_SHORT_NAMES[unlockDay.getMonth()]} ${unlockDay.getDate()}`;
 }
 
-export type DayMenuPresentationKind = 'ready' | 'locked-titled' | 'preparing' | 'coming-soon';
+export type DayMenuPresentationKind = 'ready' | 'locked-titled' | 'preparing' | 'not-prepared' | 'coming-soon';
 
 export interface DayMenuPresentation {
   kind: DayMenuPresentationKind;
@@ -168,15 +191,23 @@ export interface DayMenuPresentation {
 //   - preparing:      content is missing and due today — genuinely still
 //                      being written.
 //   - coming-soon:    content is missing and not due yet.
+// A paused series adds a fifth situation:
+//   - not-prepared:   content is missing and will never arrive, because only
+//                      the current series gets new days.
 export function getDayMenuPresentation(
   devotional: Devotional | null | undefined,
   dayNumber: number,
   now = new Date(),
+  seriesPaused = false,
 ): DayMenuPresentation {
   const fallbackTitle = `Day ${dayNumber}`;
 
   if (!devotional) {
     return { kind: 'coming-soon', title: 'Coming soon' };
+  }
+
+  if (isPausedSeriesUnpreparedDay(devotional, dayNumber, seriesPaused)) {
+    return { kind: 'not-prepared', title: 'Not prepared' };
   }
 
   const renderable = selectRenderableDevotionalDay(devotional, dayNumber);
