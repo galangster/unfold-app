@@ -42,8 +42,10 @@ export function selectNextRenderableDevotionalDay(
   return result.status === 'ready' ? result.day : undefined;
 }
 
+/** A day the caller marks passable counts as contiguous without being renderable. */
 export function getHighestContiguousRenderableDayNumber(
   devotional: Devotional | null | undefined,
+  isPassable: (dayNumber: number) => boolean = () => false,
 ): number {
   if (!devotional) return 0;
 
@@ -53,7 +55,7 @@ export function getHighestContiguousRenderableDayNumber(
 
   let highest = 0;
   for (let dayNumber = 1; dayNumber <= devotional.totalDays; dayNumber += 1) {
-    if (selectRenderableDevotionalDay(devotional, dayNumber).status !== 'ready') {
+    if (!isPassable(dayNumber) && selectRenderableDevotionalDay(devotional, dayNumber).status !== 'ready') {
       break;
     }
     highest = dayNumber;

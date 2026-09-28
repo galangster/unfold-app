@@ -5,9 +5,9 @@ import { CaretRightIcon, CheckIcon } from '@/components/icons';
 import type { ColorTheme } from '@/constants/colors';
 import type { Devotional } from '@/lib/store';
 import {
+  canOpenDevotionalDay,
   getDayMenuPresentation,
   getTodayReaderDayNumber,
-  isDevotionalDaySelectable,
   type DayMenuPresentation,
 } from '@/lib/devotional-day-access';
 import { getServerOwnedSeriesTotalDays } from '@/lib/devotional-series-boundary';
@@ -20,8 +20,8 @@ function dayStatusLabel({ isRead, ready, canOpen, presentation }: {
   canOpen: boolean;
   presentation: DayMenuPresentation;
 }): string {
-  if (presentation.kind === 'not-prepared') return presentation.title;
-  if (!ready && canOpen) return isRead ? 'Tap to restore reading' : 'Being prepared';
+  if (presentation.kind === 'not-prepared' || presentation.kind === 'restore') return presentation.title;
+  if (!ready && canOpen) return 'Being prepared';
   if (isRead) return 'Read';
   if (canOpen) return 'Ready to read';
   return presentation.unlockLabel ?? 'Still to come';
@@ -46,7 +46,7 @@ export function BookDayList({ devotional, seriesPaused, now, colors, onOpenDay }
       {dayNumbers.map((dayNumber) => {
         const isRead = devotional.days.some((day) => day.dayNumber === dayNumber && day.isRead);
         const ready = selectRenderableDevotionalDay(devotional, dayNumber).status === 'ready';
-        const canOpen = isRead || isDevotionalDaySelectable(devotional, dayNumber, now) || dayNumber === getTodayReaderDayNumber(devotional, now);
+        const canOpen = canOpenDevotionalDay(devotional, dayNumber, now) || dayNumber === getTodayReaderDayNumber(devotional, now);
         const presentation = getDayMenuPresentation(devotional, dayNumber, now, seriesPaused);
         const title = ready ? presentation.title : `Day ${dayNumber}`;
         const status = dayStatusLabel({ isRead, ready, canOpen, presentation });
