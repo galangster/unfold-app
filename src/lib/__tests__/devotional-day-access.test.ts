@@ -1,4 +1,5 @@
 import {
+  canOpenDevotionalDay,
   getCalendarDayNumber,
   getReadingDayLabel,
   getDayMenuPresentation,
@@ -468,5 +469,113 @@ describe('paused series days', () => {
     expect(isPausedSeriesUnpreparedDay(withContent, 3, true)).toBe(false);
     expect(getDayMenuPresentation(withContent, 3, now, true))
       .toEqual(getDayMenuPresentation(withContent, 3, now));
+  });
+});
+
+// ── Read days with only a local copy ────────────────────────────────────
+// A day can be read while this device has only a local copy of it, not the
+// canonical day. The reader restores it with a pull, so the day stays open
+// and does not hold back the days after it.
+
+describe('read days with only a local copy', () => {
+  beforeEach(() => {
+    jest.useFakeTimers({ now });
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  // Day 2 was read, but this device has only a local copy of it.
+  const series = devotional({
+    currentDay: 4,
+    days: [
+      day({ dayNumber: 1, isRead: true, readAt: yesterdayIso }),
+      day({ dayNumber: 2, id: 'local-day-2', isRead: true, readAt: yesterdayIso }),
+      day({ dayNumber: 3, isRead: true, readAt: yesterdayIso }),
+      day({ dayNumber: 4 }),
+    ],
+  });
+
+  it('opens the day to restore it, in current and paused series alike', () => {
+    const restore = { kind: 'restore', title: 'Tap to restore reading' };
+
+    expect(isDevotionalDaySelectable(series, 2, now)).toBe(false);
+    expect(canOpenDevotionalDay(series, 2, now)).toBe(true);
+    expect(resolveInitialReadingDayNumber(series, 2, now)).toBe(2);
+    expect(getDayMenuPresentation(series, 2, now)).toEqual(restore);
+    expect(getDayMenuPresentation(series, 2, now, true)).toEqual(restore);
+  });
+
+  it('does not hold back the days after it', () => {
+    expect(getSelectableDayLimit(series, now)).toBe(4);
+    expect(isDevotionalDaySelectable(series, 3, now)).toBe(true);
+    expect(isDevotionalDaySelectable(series, 4, now)).toBe(true);
+    expect(getDayMenuPresentation(series, 4, now)).toEqual({ kind: 'ready', title: 'Day 4' });
+  });
+
+  it('still stops at a local copy that was never read', () => {
+    const unread = devotional({
+      currentDay: 3,
+      days: [
+        day({ dayNumber: 1, isRead: true, readAt: yesterdayIso }),
+        day({ dayNumber: 2, id: 'local-day-2' }),
+        day({ dayNumber: 3 }),
+      ],
+    });
+
+    expect(getSelectableDayLimit(unread, now)).toBe(1);
+    expect(canOpenDevotionalDay(unread, 2, now)).toBe(false);
+    expect(canOpenDevotionalDay(unread, 3, now)).toBe(false);
+  });
+
+  it('keeps read days after the current day in reach, up to the first unread day', () => {
+    // Read out of order: Days 3 and 4 were read before Day 2, and only a
+    // local copy of Day 3 is here. The reader can move between Days 2 to 4.
+    const outOfOrder = devotional({
+      currentDay: 2,
+      days: [
+        day({ dayNumber: 1, isRead: true, readAt: yesterdayIso }),
+        day({ dayNumber: 2 }),
+        day({ dayNumber: 3, id: 'local-day-3', isRead: true, readAt: yesterdayIso }),
+        day({ dayNumber: 4, isRead: true, readAt: yesterdayIso }),
+        day({ dayNumber: 5 }),
+      ],
+    });
+
+    expect(getSelectableDayLimit(outOfOrder, now)).toBe(4);
+    expect(canOpenDevotionalDay(outOfOrder, 3, now)).toBe(true);
+    expect(isDevotionalDaySelectable(outOfOrder, 4, now)).toBe(true);
+    expect(isDevotionalDaySelectable(outOfOrder, 5, now)).toBe(false);
+
+    // An unread day after the current day still holds back the read day after it.
+    const unreadAhead = devotional({
+      currentDay: 2,
+      days: [
+        day({ dayNumber: 1, isRead: true, readAt: yesterdayIso }),
+        day({ dayNumber: 2 }),
+        day({ dayNumber: 3 }),
+        day({ dayNumber: 4, isRead: true, readAt: yesterdayIso }),
+      ],
+    });
+    expect(getSelectableDayLimit(unreadAhead, now)).toBe(2);
+    expect(isDevotionalDaySelectable(unreadAhead, 3, now)).toBe(false);
+  });
+
+  it('keeps a read day closed while the reader holds today’s completed reading', () => {
+    // Day 2 was completed today, so the reader stays on Day 2 until tomorrow.
+    const heldToday = devotional({
+      currentDay: 4,
+      days: [
+        day({ dayNumber: 1, isRead: true, readAt: yesterdayIso }),
+        day({ dayNumber: 2, isRead: true, readAt: todayIso }),
+        day({ dayNumber: 3, id: 'local-day-3', isRead: true, readAt: yesterdayIso }),
+        day({ dayNumber: 4 }),
+      ],
+    });
+
+    expect(getLockedTodayDayNumber(heldToday, now)).toBe(2);
+    expect(resolveInitialReadingDayNumber(heldToday, 3, now)).toBe(2);
+    expect(canOpenDevotionalDay(heldToday, 3, now)).toBe(false);
   });
 });

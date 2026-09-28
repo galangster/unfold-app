@@ -24,8 +24,8 @@ import { adaptiveFrameStyle } from '@/lib/adaptive-layout';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import {
+  canOpenDevotionalDay,
   getDayMenuPresentation,
-  isDevotionalDaySelectable,
   isPausedSeries,
   resolveInitialReadingDayNumber,
   type DayMenuPresentation,
@@ -90,7 +90,7 @@ export function DayMenuScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   const seriesPaused = isPausedSeries(devotional, currentDevotionalId);
 
   const handleSelectDay = (dayNumber: number) => {
-    if (!isDevotionalDaySelectable(devotional, dayNumber, calendarNow)) {
+    if (!canOpenDevotionalDay(devotional, dayNumber, calendarNow)) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       setTappedLockedDay(dayNumber);
       setTapToken((n) => n + 1);
@@ -149,7 +149,7 @@ export function DayMenuScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
           const day = (devotional.days ?? []).find((d) => d.dayNumber === dayNumber);
           const isActive = dayNumber === activeViewingDay;
           const isDayRead = day?.isRead ?? false;
-          const isLocked = !isDevotionalDaySelectable(devotional, dayNumber, calendarNow);
+          const isLocked = !canOpenDevotionalDay(devotional, dayNumber, calendarNow);
           const presentation = getDayMenuPresentation(devotional, dayNumber, calendarNow, seriesPaused);
 
           return (

@@ -16,6 +16,10 @@ function isSameLocalDate(value: string | undefined, now: Date): boolean {
   return parsed.toDateString() === now.toDateString();
 }
 
+function isDevotionalDayRead(devotional: Devotional, dayNumber: number): boolean {
+  return devotional.days.some((day) => day.dayNumber === dayNumber && day.isRead);
+}
+
 export function getCalendarDayNumber(
   devotional: Devotional | null | undefined,
   now = new Date(),
@@ -90,14 +94,23 @@ export function getSelectableDayLimit(
 ): number {
   if (!devotional) return 0;
 
-  const highestRenderableDay = getHighestContiguousRenderableDayNumber(devotional);
   const lockedTodayDayNumber = getLockedTodayDayNumber(devotional, now);
+  if (lockedTodayDayNumber != null) return lockedTodayDayNumber;
 
-  if (lockedTodayDayNumber != null) {
-    return Math.min(lockedTodayDayNumber, Math.max(highestRenderableDay, lockedTodayDayNumber));
-  }
+  // A read day never holds back the days after it, even when this device has
+  // only a local copy of it: the reader restores that copy with a pull. A
+  // missing unread day still holds back every later day.
+  const readDayNumbers = new Set(devotional.days.filter((day) => day.isRead).map((day) => day.dayNumber));
+  const highestReachableDay = getHighestContiguousRenderableDayNumber(
+    devotional,
+    (dayNumber) => readDayNumbers.has(dayNumber),
+  );
 
-  return Math.min(Math.max(1, devotional.currentDay || 1), highestRenderableDay);
+  // Read days right after the current day stay in reach too, so a reader who
+  // read out of order can move between them. The first unread day still stops.
+  let limit = Math.min(Math.max(1, devotional.currentDay || 1), highestReachableDay);
+  while (limit < highestReachableDay && readDayNumbers.has(limit + 1)) limit += 1;
+  return limit;
 }
 
 export function isDevotionalDaySelectable(
@@ -108,6 +121,20 @@ export function isDevotionalDaySelectable(
   if (!devotional || dayNumber < 1) return false;
   if (dayNumber > getSelectableDayLimit(devotional, now)) return false;
   return selectRenderableDevotionalDay(devotional, dayNumber).status === 'ready';
+}
+
+// Read days stay open. When this device has only a local copy of a read day,
+// the reader restores it with a pull. A day opens only where
+// resolveInitialReadingDayNumber lands, so the day rows match the reader and
+// today's completed reading still holds the reader in place.
+export function canOpenDevotionalDay(
+  devotional: Devotional | null | undefined,
+  dayNumber: number,
+  now = new Date(),
+): boolean {
+  if (isDevotionalDaySelectable(devotional, dayNumber, now)) return true;
+  if (!devotional || !isDevotionalDayRead(devotional, dayNumber)) return false;
+  return resolveInitialReadingDayNumber(devotional, dayNumber, now) === dayNumber;
 }
 
 // Only the current series gets new days: the server prepares days for the
@@ -129,7 +156,7 @@ export function isPausedSeriesUnpreparedDay(
   seriesPaused: boolean,
 ): boolean {
   if (!seriesPaused || !devotional) return false;
-  if (devotional.days.some((day) => day.dayNumber === dayNumber && day.isRead)) return false;
+  if (isDevotionalDayRead(devotional, dayNumber)) return false;
   return selectRenderableDevotionalDay(devotional, dayNumber).status !== 'ready';
 }
 
@@ -170,7 +197,7 @@ function getUnlockLabel(
   return `Unlocks ${MONTH_SHORT_NAMES[unlockDay.getMonth()]} ${unlockDay.getDate()}`;
 }
 
-export type DayMenuPresentationKind = 'ready' | 'locked-titled' | 'preparing' | 'not-prepared' | 'coming-soon';
+export type DayMenuPresentationKind = 'ready' | 'restore' | 'locked-titled' | 'preparing' | 'not-prepared' | 'coming-soon';
 
 export interface DayMenuPresentation {
   kind: DayMenuPresentationKind;
@@ -182,8 +209,8 @@ export interface DayMenuPresentation {
 // situations that all used to render as an identical "Being prepared…" —
 // collapsing them lost the difference between "calendar is holding this
 // back" and "this genuinely doesn't exist yet":
-//   - ready:          selectable now — show the real title (or `Day N` if a
-//                      title is somehow missing; a selectable day must never
+//   - ready:          opens now — show the real title (or `Day N` if a
+//                      title is somehow missing; an open day must never
 //                      look like a placeholder).
 //   - locked-titled:  content is generated and on device, but paced/calendar
 //                      gated — show the real title (dimmed) plus when it
@@ -194,6 +221,9 @@ export interface DayMenuPresentation {
 // A paused series adds a fifth situation:
 //   - not-prepared:   content is missing and will never arrive, because only
 //                      the current series gets new days.
+// A read day adds a sixth, in any series:
+//   - restore:        the day was read, but this device has only a local
+//                      copy of it. It opens, and the reader restores it.
 export function getDayMenuPresentation(
   devotional: Devotional | null | undefined,
   dayNumber: number,
@@ -213,9 +243,10 @@ export function getDayMenuPresentation(
   const renderable = selectRenderableDevotionalDay(devotional, dayNumber);
   const contentIsReady = renderable.status === 'ready';
 
-  if (isDevotionalDaySelectable(devotional, dayNumber, now)) {
-    const title = contentIsReady ? renderable.day.title : undefined;
-    return { kind: 'ready', title: title || fallbackTitle };
+  if (canOpenDevotionalDay(devotional, dayNumber, now)) {
+    return contentIsReady
+      ? { kind: 'ready', title: renderable.day.title || fallbackTitle }
+      : { kind: 'restore', title: 'Tap to restore reading' };
   }
 
   if (contentIsReady) {

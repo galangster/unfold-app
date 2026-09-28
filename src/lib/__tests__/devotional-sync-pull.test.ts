@@ -47,6 +47,8 @@ import {
 } from '../devotional-pull-cursor';
 import type { DevotionalPullCursor } from '../devotional-pull-cursor';
 import { applyPulledDevotionalContent } from '../devotional-pulled-content';
+import { selectRenderableDevotionalDay } from '../devotional-canonical-days';
+import { getDayMenuPresentation } from '../devotional-day-access';
 import {
   commitDevotionalPullCursor,
   extractPulledDevotionalContent,
@@ -762,6 +764,36 @@ describe('applying pulled deltas to the store', () => {
     expect(days[0]).toMatchObject({ title: 'Server Day 1', isRead: true });
     expect(days[2]).toMatchObject({ title: 'Local-only Day 4' });
     expect(useUnfoldStore.getState().devotionals[0].currentDay).toBe(2);
+  });
+
+  it('restores a read day whose only local copy is not canonical, and keeps it read', async () => {
+    const now = new Date(2026, 3, 27, 12, 0, 0);
+    jest.useFakeTimers({
+      now,
+      doNotFake: ['nextTick', 'queueMicrotask', 'setImmediate', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'],
+    });
+    try {
+      seedLocalDevotional([
+        localDay(1, { isRead: true, readAt: '2026-04-24T08:00:00.000Z' }),
+        localDay(2, { id: 'local-day-2', isRead: true, readAt: '2026-04-25T08:00:00.000Z' }),
+      ]);
+      const series = () => useUnfoldStore.getState().devotionals[0];
+      expect(getDayMenuPresentation(series(), 2, now)).toEqual({ kind: 'restore', title: 'Tap to restore reading' });
+
+      // The reader's recovery: a forced full pull of this devotional.
+      respondWith({ timestamp: '2026-04-27T11:00:00.000Z', changes: { devotional_days: [dayRecord(2)] } });
+      applyToStore(await pullDevotionalContent(DEVOTIONAL_ID, { forceFull: true }));
+
+      expect(localDays()[1]).toMatchObject({
+        id: `day-${DEVOTIONAL_ID}-2`,
+        isRead: true,
+        readAt: '2026-04-25T08:00:00.000Z',
+      });
+      expect(selectRenderableDevotionalDay(series(), 2).status).toBe('ready');
+      expect(getDayMenuPresentation(series(), 2, now)).toEqual({ kind: 'ready', title: 'Server Day 2' });
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('drops tombstoned rows from a delta instead of applying them as content', async () => {

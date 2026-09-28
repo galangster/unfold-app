@@ -1,8 +1,8 @@
 import type { Devotional, DevotionalDay, SeriesArc } from './store';
 import {
+  canOpenDevotionalDay,
   getDayMenuPresentation,
   getTodayReaderDayNumber,
-  isDevotionalDaySelectable,
   isPausedSeriesUnpreparedDay,
 } from './devotional-day-access';
 import { selectRenderableDevotionalDay } from './devotional-canonical-days';
@@ -159,23 +159,15 @@ export function resolveBookOpenDayNumber(
     return todayReaderDayNumber;
   }
 
-  const lastRead = [...days]
-    .reverse()
-    .find(
-      (day) =>
-        day.isRead &&
-        day.dayNumber >= chapter.fromDay &&
-        day.dayNumber <= chapter.toDay,
-    );
+  const opensInChapter = (day: DevotionalDay) =>
+    day.dayNumber >= chapter.fromDay &&
+    day.dayNumber <= chapter.toDay &&
+    canOpenDevotionalDay(devotional, day.dayNumber, now);
+
+  const lastRead = [...days].reverse().find((day) => day.isRead && opensInChapter(day));
   if (lastRead) return lastRead.dayNumber;
 
-  const firstOpenable = days.find(
-    (day) =>
-      day.dayNumber >= chapter.fromDay &&
-      day.dayNumber <= chapter.toDay &&
-      (day.isRead || isDevotionalDaySelectable(devotional, day.dayNumber, now)),
-  );
-  return firstOpenable?.dayNumber ?? null;
+  return days.find(opensInChapter)?.dayNumber ?? null;
 }
 
 export function buildBookOfSeasonsModel(
