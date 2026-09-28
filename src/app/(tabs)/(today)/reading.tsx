@@ -71,6 +71,7 @@ import {
 } from '@/lib/devotional-canonical-days';
 import {
   getLockedTodayDayNumber,
+  getPausedSeriesMissingDayKind,
   getSelectableDayLimit,
   isDevotionalDaySelectable,
   resolveInitialReadingDayNumber,
@@ -2015,7 +2016,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
       && dailyState.status !== 'running'
       && dailyState.status !== 'slow';
     const notice = isPausedSeriesDay
-      ? getPausedSeriesDayNotice(viewingDay)
+      ? getPausedSeriesDayNotice(viewingDay, getPausedSeriesMissingDayKind(currentDevotional, viewingDay))
       : getDailyGenerationNotice(dailyState, viewingDay);
     const isDailyChecking = usesDailyRecovery
       && !isPausedSeriesDay
