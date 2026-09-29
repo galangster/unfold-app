@@ -32,7 +32,7 @@ import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
 import { COMPANION_MESSAGE_MAX_CHARS } from '@/lib/companion-limits';
-import { companionDraftKey, companionRecordingSlot, readCompanionDraft, startCompanionRecording, writeCompanionDraft } from '@/lib/companion-drafts';
+import { companionDraftKey, companionRecordingSlot, holdCompanionDraftForSend, readCompanionDraft, startCompanionRecording, writeCompanionDraft } from '@/lib/companion-drafts';
 
 const PLACEHOLDERS = [
   'What’s on your mind?',
@@ -114,11 +114,11 @@ export const CompanionInput = memo(function CompanionInput({ onSend, onStop, isS
     if (!canSend) return;
 
     const trimmed = text.trim();
-    // Clear the draft first: sending with no conversation creates one, and the
-    // store hands it whatever unsent text is still waiting.
-    writeCompanionDraft(draftKey, '');
+    // Take the draft out first: sending with no conversation creates one, and
+    // the store hands it whatever unsent text is still waiting.
+    const putDraftBack = holdCompanionDraftForSend(draftKey);
     if (onSend(trimmed) === false) {
-      writeCompanionDraft(draftKey, text);
+      putDraftBack();
       return;
     }
 
