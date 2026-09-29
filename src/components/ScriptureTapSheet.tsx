@@ -155,8 +155,10 @@ export function ScriptureTapSheet({
 
   useEffect(() => {
     setLoadedVerse(null);
+    // Also when the sheet hides: it stays mounted, and a copy that lands
+    // after that must not confirm or announce.
+    resetCopied();
     if (visible && reference) {
-      resetCopied();
       setShowExplainSheet(false);
       const translation = readerTranslation;
       if (savedPassage) {

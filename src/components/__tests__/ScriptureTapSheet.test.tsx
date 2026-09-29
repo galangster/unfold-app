@@ -759,6 +759,38 @@ describe('ScriptureTapSheet copy action', () => {
     expect(copyButtonLook(tree)).toEqual(IDLE);
   });
 
+  it('ends the confirmation and its timer when the sheet hides', async () => {
+    const tree = await open();
+    await pressCopy(tree);
+    expect(jest.getTimerCount()).toBe(1);
+
+    await show(tree, { visible: false });
+
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
+  it('confirms and announces nothing when the write lands after the sheet hides', async () => {
+    let land!: (didCopy: boolean) => void;
+    clipboard.setStringAsync.mockReturnValueOnce(
+      new Promise<boolean>((resolve) => {
+        land = resolve;
+      }),
+    );
+    const tree = await open();
+    await pressCopy(tree);
+
+    await show(tree, { visible: false });
+    await act(async () => {
+      land(true);
+      await Promise.resolve();
+    });
+
+    expect(announce).not.toHaveBeenCalled();
+    expect(jest.getTimerCount()).toBe(0);
+    await show(tree, { visible: true });
+    expect(copyButtonLook(tree)).toEqual(IDLE);
+  });
+
   it('announces the copy', async () => {
     const tree = await open();
 
