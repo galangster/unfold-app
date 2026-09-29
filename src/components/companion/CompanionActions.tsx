@@ -3,10 +3,9 @@
  * Copy and native iOS share only.
  * Staggered 80ms fade-in per Storyboard D.
  */
-import { useEffect, useState, type ReactNode } from 'react';
-import { AccessibilityInfo, Platform, Pressable, Share, StyleSheet, View } from 'react-native';
+import { useEffect, type ReactNode } from 'react';
+import { Platform, Pressable, Share, StyleSheet, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { SymbolView } from 'expo-symbols';
 import { BackdropBlur, Canvas, Fill } from '@shopify/react-native-skia';
@@ -24,10 +23,10 @@ import Animated, {
 import { CheckIcon, CopyIcon } from '@/components/icons';
 import { Duration, Ease, Stagger } from '@/constants/animations';
 import { Spacing } from '@/constants/spacing';
+import { useCopyConfirmation } from '@/hooks/useCopyConfirmation';
 import { useTheme } from '@/lib/theme';
 import { COMPANION_TEXT_INDENT } from './CompanionMessageContent';
 
-const CONFIRMATION_MS = 2000;
 const HIT = 44;
 const ICON = 18;
 const PRESS_SCALE = 0.96;
@@ -216,19 +215,10 @@ export function CompanionActions({
   reducedMotion = false,
 }: Props) {
   const { colors } = useTheme();
-  const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    if (!copied) return;
-    const timer = setTimeout(() => setCopied(false), CONFIRMATION_MS);
-    return () => clearTimeout(timer);
-  }, [copied]);
+  const { copied, copy } = useCopyConfirmation();
 
   const handleCopy = () => {
-    void Clipboard.setStringAsync(content).then(() => {
-      setCopied(true);
-      AccessibilityInfo.announceForAccessibility('Copied');
-    });
+    void copy(content);
   };
 
   const handleShare = () => {

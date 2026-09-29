@@ -758,4 +758,31 @@ describe('ScriptureTapSheet copy action', () => {
 
     expect(copyButtonLook(tree)).toEqual(IDLE);
   });
+
+  it('announces the copy', async () => {
+    const tree = await open();
+
+    await pressCopy(tree);
+
+    expect(announce).toHaveBeenCalledTimes(1);
+    expect(announce).toHaveBeenCalledWith('Copied');
+  });
+
+  it.each([
+    ['refuses', () => clipboard.setStringAsync.mockResolvedValue(false)],
+    ['rejects', () => clipboard.setStringAsync.mockRejectedValue(new Error('clipboard unavailable'))],
+  ])('does not confirm or announce a copy that the clipboard %s', async (_case, arrange) => {
+    arrange();
+    const tree = await open();
+
+    await pressCopy(tree);
+    // One real macrotask. Node reports a rejection that nothing handled
+    // before it ends, and Jest fails the test that was running.
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    expect(clipboard.setStringAsync).toHaveBeenCalledTimes(1);
+    expect(copyButtonLook(tree)).toEqual(IDLE);
+    expect(announce).not.toHaveBeenCalled();
+    expect(jest.getTimerCount()).toBe(0);
+  });
 });

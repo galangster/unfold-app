@@ -147,4 +147,44 @@ describe('CompanionActions copy', () => {
 
     expect(jest.getTimerCount()).toBe(0);
   });
+
+  it('keeps the check mark for 2 seconds after a second copy', async () => {
+    const tree = renderRow();
+    await pressCopy(tree);
+    act(() => {
+      jest.advanceTimersByTime(1000);
+    });
+    await pressCopy(tree);
+
+    act(() => {
+      jest.advanceTimersByTime(1999);
+    });
+    expect(copyLabel(tree)).toBe('Copied');
+    expect(iconOpacity(tree, CheckIcon)).toBe(1);
+
+    act(() => {
+      jest.advanceTimersByTime(1);
+    });
+    expect(copyLabel(tree)).toBe('Copy response');
+    expect(iconOpacity(tree, CheckIcon)).toBe(0);
+  });
+
+  it.each([
+    ['refuses', () => setStringAsync.mockResolvedValue(false)],
+    ['rejects', () => setStringAsync.mockRejectedValue(new Error('clipboard unavailable'))],
+  ])('does not confirm or announce a copy that the clipboard %s', async (_case, arrange) => {
+    arrange();
+    const tree = renderRow();
+
+    await pressCopy(tree);
+    // One real macrotask. Node reports a rejection that nothing handled
+    // before it ends, and Jest fails the test that was running.
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    expect(setStringAsync).toHaveBeenCalledWith(REPLY);
+    expect(copyLabel(tree)).toBe('Copy response');
+    expect(iconOpacity(tree, CheckIcon)).toBe(0);
+    expect(announce).not.toHaveBeenCalled();
+    expect(jest.getTimerCount()).toBe(0);
+  });
 });
