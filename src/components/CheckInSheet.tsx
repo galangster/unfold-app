@@ -10,6 +10,9 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  AccessibilityInfo,
+  Alert,
+  Keyboard,
   type LayoutChangeEvent,
 } from 'react-native';
 import Animated, {
@@ -24,6 +27,7 @@ import Animated, {
   interpolate,
   useReducedMotion,
 } from 'react-native-reanimated';
+import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import {
   SmileySadIcon,
@@ -45,7 +49,13 @@ import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { adaptiveFrameStyle, adaptiveSafeGutterStyle, resolveAdaptiveLayout } from '@/lib/adaptive-layout';
-import { CHECKIN_CELEBRATION_MESSAGES } from '@/constants/check-in-messages';
+import {
+  CHECKIN_CELEBRATION_MESSAGES,
+  CHECKIN_CLOSE_WITHOUT_WORDS,
+  CHECKIN_NOT_SAVED_REASON,
+  CHECKIN_NOT_SAVED_TITLE,
+  CHECKIN_NOT_SAVED_WORDS_HINT,
+} from '@/constants/check-in-messages';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
 import { alpha } from '@/components/ui';
 import { SheetHandle } from '@/components/ui/SheetHandle';
@@ -81,7 +91,10 @@ const MOOD_OPTIONS: Array<{
 export interface CheckInSheetProps {
   visible: boolean;
   onClose: () => void;
-  /** Saves the answer. Returns false when it could not be saved. */
+  /**
+   * Saves the answer. Returns false when it could not be saved: the sheet then
+   * shows why, with the words the reader wrote, for as long as it stays visible.
+   */
   onComplete: (data: {
     mood: MoodValue;
     moodLabel: string;
@@ -90,8 +103,6 @@ export interface CheckInSheetProps {
   }) => boolean | void;
   question?: string;
   chips?: string[];
-  devotionalId: string;
-  dayNumber: number;
 }
 
 /** Step indicator dots rendered at the top of the sheet. */
@@ -219,13 +230,14 @@ function MoodStep({
 function QuestionStep({
   question,
   chips,
-  onSelectChip,
+  onAnswer,
   colors,
   isDark,
 }: {
   question: string;
   chips: string[];
-  onSelectChip: (chip: string) => void;
+  /** `typed` tells an answer the reader wrote from a suggestion they tapped. */
+  onAnswer: (answer: string, typed: boolean) => void;
   colors: ReturnType<typeof useTheme>['colors'];
   isDark: boolean;
 }) {
@@ -250,9 +262,9 @@ function QuestionStep({
       setSelectedChip(chip);
       // Short delay so the user sees the selection before advancing
       if (chipTimerRef.current) clearTimeout(chipTimerRef.current);
-      chipTimerRef.current = setTimeout(() => onSelectChip(chip), 300);
+      chipTimerRef.current = setTimeout(() => onAnswer(chip, false), 300);
     },
-    [onSelectChip]
+    [onAnswer]
   );
 
   const handleTypeOwn = useCallback(() => {
@@ -265,9 +277,9 @@ function QuestionStep({
   const handleSubmitTyped = useCallback(() => {
     if (typedAnswer.trim().length > 0) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      onSelectChip(typedAnswer.trim());
+      onAnswer(typedAnswer.trim(), true);
     }
-  }, [typedAnswer, onSelectChip]);
+  }, [typedAnswer, onAnswer]);
 
   return (
     <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)} style={styles.stepContent}>
@@ -618,13 +630,170 @@ function CheckInCelebration({ colors, onDismiss }: { colors: ReturnType<typeof u
   );
 }
 
+function NotSavedButton({
+  label,
+  widthLabel = label,
+  primary,
+  onPress,
+  colors,
+}: {
+  label: string;
+  /** The label that sets the width, so the button does not move when its label changes. */
+  widthLabel?: string;
+  primary: boolean;
+  onPress: () => void;
+  colors: ReturnType<typeof useTheme>['colors'];
+}) {
+  const textStyle = primary
+    ? [styles.doneButtonText, { color: colors.background, fontFamily: FontFamily.uiSemiBold }]
+    : [styles.skipText, { color: colors.textMuted, fontFamily: FontFamily.uiMedium }];
+  // The width label holds the size, and the label in view is drawn over it.
+  const overlaid = widthLabel !== label;
+
+  return (
+    <TouchableOpacity activeOpacity={0.7}
+      onPress={onPress}
+      style={primary ? [styles.doneButton, { backgroundColor: colors.accent }] : styles.skipButton}
+      hitSlop={{ top: 8, bottom: 8 }}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
+      <CheckInText style={[textStyle, overlaid && styles.widthLabel]}>
+        {widthLabel}
+      </CheckInText>
+      {overlaid && (
+        <View pointerEvents="none" style={styles.labelOverWidthLabel}>
+          <CheckInText style={textStyle}>{label}</CheckInText>
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+}
+
+const COPIED_MS = 2000;
+
+/**
+ * Shown in place of the steps when the answer could not be saved: the reason,
+ * the words the reader wrote, and the actions. The actions stay in view below
+ * the scrolling words.
+ */
+function NotSavedPanel({
+  words,
+  onCopied,
+  onClose,
+  colors,
+  bottomInset,
+}: {
+  words: string;
+  onCopied: () => void;
+  onClose: () => void;
+  colors: ReturnType<typeof useTheme>['colors'];
+  bottomInset: number;
+}) {
+  const reducedMotion = useReducedMotion();
+  // The time of the last copy, while the button says so.
+  const [copiedAt, setCopiedAt] = useState<number | null>(null);
+  const holdsWords = words.length > 0;
+  const reason = holdsWords ? `${CHECKIN_NOT_SAVED_REASON} ${CHECKIN_NOT_SAVED_WORDS_HINT}` : CHECKIN_NOT_SAVED_REASON;
+
+  // The announcement carries the message. The words stay text on the screen,
+  // which a screen reader reads to the reader like any other text.
+  useEffect(() => {
+    AccessibilityInfo.announceForAccessibility(`${CHECKIN_NOT_SAVED_TITLE}. ${reason}`);
+  }, [reason]);
+
+  // Each copy starts the two seconds again.
+  useEffect(() => {
+    if (copiedAt === null) return;
+    const timer = setTimeout(() => setCopiedAt(null), COPIED_MS);
+    return () => clearTimeout(timer);
+  }, [copiedAt]);
+
+  // The words go to the clipboard and nowhere else. A copy that fails leaves
+  // them on screen, where the reader can copy again or select them.
+  const handleCopy = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    void Clipboard.setStringAsync(words).then((didCopy) => {
+      if (!didCopy) return;
+      setCopiedAt(Date.now());
+      onCopied();
+      AccessibilityInfo.announceForAccessibility('Copied');
+    }, () => undefined);
+  }, [onCopied, words]);
+
+  return (
+    <>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.stepContainer, { paddingBottom: Spacing['4'] }]}>
+        <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)} style={styles.stepContent}>
+          <CheckInText
+            accessibilityRole="header"
+            style={[
+              styles.stepTitle,
+              { color: colors.text, fontFamily: FontFamily.display },
+            ]}
+          >
+            {CHECKIN_NOT_SAVED_TITLE}
+          </CheckInText>
+          <CheckInText
+            style={[
+              styles.notSavedReason,
+              { color: colors.textMuted, fontFamily: FontFamily.body },
+            ]}
+          >
+            {reason}
+          </CheckInText>
+          {holdsWords && (
+            <View
+              style={[
+                styles.keptWords,
+                { backgroundColor: colors.inputBackground, borderColor: colors.border },
+              ]}
+            >
+              <CheckInText
+                selectable
+                style={[
+                  styles.keptWordsText,
+                  { color: colors.text, fontFamily: FontFamily.body },
+                ]}
+              >
+                {words}
+              </CheckInText>
+            </View>
+          )}
+        </Animated.View>
+      </ScrollView>
+
+      {/* The copy action comes first. The row is reversed, so that action
+          sits at the right, and on top when large text makes the row wrap. */}
+      <View
+        style={[
+          styles.notSavedActions,
+          { paddingBottom: Spacing['4'] + bottomInset, borderTopColor: colors.border },
+        ]}
+      >
+        {holdsWords && (
+          <NotSavedButton
+            label={copiedAt === null ? 'Copy my words' : 'Copied'}
+            widthLabel="Copy my words"
+            primary
+            onPress={handleCopy}
+            colors={colors}
+          />
+        )}
+        <NotSavedButton label="Close" primary={!holdsWords} onPress={onClose} colors={colors} />
+      </View>
+    </>
+  );
+}
+
 /**
  * CheckInSheet -- A 3-step bottom sheet for midday check-ins.
  *
  * Step 1: Mood selection (auto-advances on tap after 300ms).
  * Step 2: Question with tappable chips or freeform text input.
  * Step 3: Optional freeform note with Skip / Done.
- * Then: Brief celebration before dismissing.
+ * Then: Brief celebration before dismissing. An answer the caller could not
+ * save shows the reason instead, with the words the reader wrote.
  */
 export function CheckInSheet({
   visible,
@@ -632,8 +801,6 @@ export function CheckInSheet({
   onComplete,
   question = 'What are you carrying today?',
   chips = ['Work stress', 'Relationship', 'Health'],
-  devotionalId: _devotionalId,
-  dayNumber: _dayNumber,
 }: CheckInSheetProps) {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
@@ -657,14 +824,13 @@ export function CheckInSheet({
   const reducedMotion = useReducedMotion();
   const [currentStep, setCurrentStep] = useState(0);
   const [selectedMood, setSelectedMood] = useState<MoodValue | null>(null);
-  const [chipAnswer, setChipAnswer] = useState<string | undefined>(undefined);
+  // A typed answer is the reader's own words. A tapped suggestion is not.
+  const [answer, setAnswer] = useState<{ text: string; typed: boolean } | null>(null);
   const [showCelebration, setShowCelebration] = useState(false);
-  const completionDataRef = useRef<{
-    mood: MoodValue;
-    moodLabel: string;
-    chipAnswer?: string;
-    freeText?: string;
-  } | null>(null);
+  // Set when the caller could not save the answer, with the words the reader
+  // wrote: a typed answer and the note. `copied` is true after a copy of them
+  // that succeeded.
+  const [notSaved, setNotSaved] = useState<{ words: string; copied: boolean } | null>(null);
 
   // Animated backdrop opacity
   const backdropOpacity = useSharedValue(0);
@@ -692,15 +858,17 @@ export function CheckInSheet({
   }, []);
   useEffect(() => clearAdvanceTimer, [clearAdvanceTimer]);
 
-  // Reset state when the sheet opens
+  // Reset state when the sheet opens. A closed sheet keeps none of the
+  // reader's words.
   useEffect(() => {
     if (visible) {
       clearAdvanceTimer();
       setCurrentStep(0);
       setSelectedMood(null);
-      setChipAnswer(undefined);
       setShowCelebration(false);
-      completionDataRef.current = null;
+    } else {
+      setAnswer(null);
+      setNotSaved(null);
     }
   }, [clearAdvanceTimer, visible]);
 
@@ -718,8 +886,8 @@ export function CheckInSheet({
     advanceAfterDelay(1);
   }, [advanceAfterDelay]);
 
-  const handleChipAnswer = useCallback((chip: string) => {
-    setChipAnswer(chip);
+  const handleAnswer = useCallback((text: string, typed: boolean) => {
+    setAnswer({ text, typed });
     advanceAfterDelay(2);
   }, [advanceAfterDelay]);
 
@@ -728,44 +896,61 @@ export function CheckInSheet({
     setCurrentStep((step) => Math.max(0, step - 1));
   }, []);
 
-  const triggerCelebration = useCallback(
+  const submitCheckIn = useCallback(
     (data: { mood: MoodValue; moodLabel: string; chipAnswer?: string; freeText?: string }) => {
-      completionDataRef.current = data;
       // An answer that was not saved is no success: no haptic, no celebration.
-      if (onComplete(data) === false) return;
+      // The sheet says why and keeps the words the reader wrote.
+      if (onComplete(data) === false) {
+        Keyboard.dismiss();
+        setNotSaved({ words: [answer?.typed ? answer.text : undefined, data.freeText].filter(Boolean).join('\n\n'), copied: false });
+        return;
+      }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setShowCelebration(true);
     },
-    [onComplete]
+    [answer, onComplete]
   );
 
   const handleNoteSubmit = useCallback(
     (text: string) => {
       if (selectedMood == null) return;
-      triggerCelebration({
+      submitCheckIn({
         mood: selectedMood,
         moodLabel: MOOD_LABELS[selectedMood - 1],
-        chipAnswer,
+        chipAnswer: answer?.text,
         freeText: text.length > 0 ? text : undefined,
       });
     },
-    [selectedMood, chipAnswer, triggerCelebration]
+    [selectedMood, answer, submitCheckIn]
   );
 
   const handleNoteSkip = useCallback(() => {
     if (selectedMood == null) return;
-    triggerCelebration({
+    submitCheckIn({
       mood: selectedMood,
       moodLabel: MOOD_LABELS[selectedMood - 1],
-      chipAnswer,
+      chipAnswer: answer?.text,
       freeText: undefined,
     });
-  }, [selectedMood, chipAnswer, triggerCelebration]);
+  }, [selectedMood, answer, submitCheckIn]);
 
+  const handleWordsCopied = useCallback(() => {
+    setNotSaved((state) => (state && !state.copied ? { ...state, copied: true } : state));
+  }, []);
+
+  // Every way to close that the reader has. Words that are not copied exist
+  // only in this sheet, so it asks before it drops them.
   const handleClose = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (notSaved?.words && !notSaved.copied) {
+      Alert.alert(CHECKIN_CLOSE_WITHOUT_WORDS.title, CHECKIN_CLOSE_WITHOUT_WORDS.message, [
+        { text: CHECKIN_CLOSE_WITHOUT_WORDS.stay, style: 'cancel' },
+        { text: CHECKIN_CLOSE_WITHOUT_WORDS.close, style: 'destructive', onPress: onClose },
+      ]);
+      return;
+    }
     onClose();
-  }, [onClose]);
+  }, [notSaved, onClose]);
 
   return (
     <Modal
@@ -780,8 +965,13 @@ export function CheckInSheet({
         style={styles.modalContainer}
       >
         <View style={[styles.modalContainer, { width: '100%', marginTop: insets.top }]} onLayout={handleContainerLayout}>
-        {/* Backdrop */}
-        <TouchableOpacity activeOpacity={1} style={StyleSheet.absoluteFill} onPress={handleClose}>
+        {/* Backdrop. A stray tap must not drop words that exist only in this sheet. */}
+        <TouchableOpacity
+          testID="check-in-backdrop"
+          activeOpacity={1}
+          style={StyleSheet.absoluteFill}
+          onPress={notSaved?.words ? undefined : handleClose}
+        >
           <Animated.View
             style={[
               StyleSheet.absoluteFill,
@@ -813,10 +1003,10 @@ export function CheckInSheet({
           >
             <SheetHandle />
 
-            {/* Header row: back + step dots + close button */}
+            {/* Header row: back + step dots + close button. The steps are over once an answer was not saved. */}
             <View style={styles.headerRow}>
               <View style={styles.headerLeft}>
-                {!showCelebration && currentStep > 0 && (
+                {!showCelebration && !notSaved && currentStep > 0 && (
                   <TouchableOpacity activeOpacity={0.7}
                     onPress={handleBack}
                     style={styles.backButton}
@@ -827,12 +1017,14 @@ export function CheckInSheet({
                     <CaretLeftIcon size={18} color={colors.textMuted} weight="light" />
                   </TouchableOpacity>
                 )}
-                <StepDots
-                  currentStep={currentStep}
-                  totalSteps={TOTAL_STEPS}
-                  accentColor={colors.accent}
-                  mutedColor={alpha(colors.text, isDark ? 0.12 : 0.08)}
-                />
+                {!notSaved && (
+                  <StepDots
+                    currentStep={currentStep}
+                    totalSteps={TOTAL_STEPS}
+                    accentColor={colors.accent}
+                    mutedColor={alpha(colors.text, isDark ? 0.12 : 0.08)}
+                  />
+                )}
               </View>
               <TouchableOpacity activeOpacity={0.7}
                 onPress={handleClose}
@@ -846,38 +1038,48 @@ export function CheckInSheet({
             </View>
 
             {/* Step content */}
-            <ScrollView key={showCelebration ? 'celebration' : currentStep} style={{ flex: 1 }} contentContainerStyle={[styles.stepContainer, { paddingBottom: 24 + insets.bottom }]} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive">
-              {showCelebration ? (
-                <CheckInCelebration colors={colors} onDismiss={handleClose} />
-              ) : (
-                <>
-                  {currentStep === 0 && (
-                    <MoodStep
-                      onSelect={handleMoodSelect}
-                      colors={colors}
-                      isDark={isDark}
-                    />
-                  )}
-                  {currentStep === 1 && (
-                    <QuestionStep
-                      question={question}
-                      chips={chips}
-                      onSelectChip={handleChipAnswer}
-                      colors={colors}
-                      isDark={isDark}
-                    />
-                  )}
-                  {currentStep === 2 && (
-                    <NoteStep
-                      onSubmit={handleNoteSubmit}
-                      onSkip={handleNoteSkip}
-                      colors={colors}
-                      isDark={isDark}
-                    />
-                  )}
-                </>
-              )}
-            </ScrollView>
+            {notSaved ? (
+              <NotSavedPanel
+                words={notSaved.words}
+                onCopied={handleWordsCopied}
+                onClose={handleClose}
+                colors={colors}
+                bottomInset={insets.bottom}
+              />
+            ) : (
+              <ScrollView key={showCelebration ? 'celebration' : currentStep} style={{ flex: 1 }} contentContainerStyle={[styles.stepContainer, { paddingBottom: 24 + insets.bottom }]} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive">
+                {showCelebration ? (
+                  <CheckInCelebration colors={colors} onDismiss={handleClose} />
+                ) : (
+                  <>
+                    {currentStep === 0 && (
+                      <MoodStep
+                        onSelect={handleMoodSelect}
+                        colors={colors}
+                        isDark={isDark}
+                      />
+                    )}
+                    {currentStep === 1 && (
+                      <QuestionStep
+                        question={question}
+                        chips={chips}
+                        onAnswer={handleAnswer}
+                        colors={colors}
+                        isDark={isDark}
+                      />
+                    )}
+                    {currentStep === 2 && (
+                      <NoteStep
+                        onSubmit={handleNoteSubmit}
+                        onSkip={handleNoteSkip}
+                        colors={colors}
+                        isDark={isDark}
+                      />
+                    )}
+                  </>
+                )}
+              </ScrollView>
+            )}
           </Animated.View>
           </View>
         )}
@@ -1062,6 +1264,41 @@ const styles = StyleSheet.create({
   },
   doneButtonText: {
     fontSize: FontSize.sm,
+  },
+
+  /* Answer that was not saved */
+  notSavedReason: {
+    fontSize: FontSize.sm,
+    lineHeight: 20,
+    marginBottom: Spacing['4'],
+  },
+  keptWords: {
+    borderRadius: Radius.card,
+    borderWidth: 1,
+    paddingHorizontal: Spacing['4'],
+    paddingVertical: 14,
+  },
+  keptWordsText: {
+    fontSize: FontSize.sm,
+    lineHeight: 20,
+  },
+  notSavedActions: {
+    flexDirection: 'row-reverse',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    rowGap: Spacing['2'],
+    paddingHorizontal: Spacing['6'],
+    paddingTop: Spacing['3'],
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  widthLabel: {
+    opacity: 0,
+  },
+  labelOverWidthLabel: {
+    ...StyleSheet.absoluteFill,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 

@@ -2,14 +2,19 @@
  * Greptile A10 regression: the 300ms auto-advance timers were never retained,
  * so a close/reopen inside that window advanced the freshly reset sheet.
  * Also: an answer the caller could not save plays no success haptic and shows
- * no celebration.
+ * no celebration. The sheet stays open with the words the reader wrote, and
+ * offers to copy them.
  */
 import React from 'react';
-import { TouchableOpacity } from 'react-native';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { AccessibilityInfo, Alert, TextInput, TouchableOpacity } from 'react-native';
 import renderer, { act } from 'react-test-renderer';
+import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { CheckInSheet } from '../CheckInSheet';
 
+jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(() => Promise.resolve(true)) }));
 jest.mock('expo-haptics', () => ({
   impactAsync: jest.fn(),
   notificationAsync: jest.fn(),
@@ -61,9 +66,41 @@ const props = {
   onClose: jest.fn(),
   onComplete: jest.fn(),
   question: 'What are you carrying today?',
-  devotionalId: 'd1',
-  dayNumber: 1,
 };
+
+function buttons(tree: renderer.ReactTestRenderer, label: string) {
+  return tree.root.findAll((node) => node.type === TouchableOpacity && node.props.accessibilityLabel === label);
+}
+
+// Presses a button, then lets the sheet advance. A chip waits 300ms before
+// the step's own 300ms advance; step each timer separately.
+async function press(tree: renderer.ReactTestRenderer, label: string) {
+  await act(async () => {
+    buttons(tree, label)[0].props.onPress();
+  });
+  for (let tick = 0; tick < 2; tick += 1) {
+    await act(async () => {
+      jest.advanceTimersByTime(400);
+    });
+  }
+}
+
+async function open(sheetProps: Partial<React.ComponentProps<typeof CheckInSheet>> = {}) {
+  let tree: renderer.ReactTestRenderer;
+  await act(async () => {
+    tree = renderer.create(<CheckInSheet {...props} {...sheetProps} visible />);
+  });
+  return tree!;
+}
+
+// Picks a mood and a suggestion, then skips the note, which completes the check-in.
+async function tapThroughCheckIn(tree: renderer.ReactTestRenderer) {
+  for (const label of ['Struggling', 'Work stress', 'Skip this step']) {
+    await press(tree, label);
+  }
+}
+
+const shownText = (tree: renderer.ReactTestRenderer) => collectText(tree.toJSON()).join(' ');
 
 describe('CheckInSheet auto-advance timer (Greptile A10)', () => {
   beforeEach(() => {
@@ -74,27 +111,21 @@ describe('CheckInSheet auto-advance timer (Greptile A10)', () => {
   });
 
   it('stays on the mood step when the sheet is closed and reopened inside the advance window', async () => {
-    let tree: renderer.ReactTestRenderer;
+    const tree = await open();
     await act(async () => {
-      tree = renderer.create(<CheckInSheet {...props} visible />);
-    });
-    const mood = tree!.root.findAll(
-      (node) => node.type === TouchableOpacity && node.props.accessibilityLabel === 'Struggling',
-    )[0];
-    await act(async () => {
-      mood.props.onPress();
+      buttons(tree, 'Struggling')[0].props.onPress();
     });
     await act(async () => {
-      tree!.update(<CheckInSheet {...props} visible={false} />);
+      tree.update(<CheckInSheet {...props} visible={false} />);
     });
     await act(async () => {
-      tree!.update(<CheckInSheet {...props} visible />);
+      tree.update(<CheckInSheet {...props} visible />);
     });
     await act(async () => {
       jest.advanceTimersByTime(400);
     });
 
-    const text = collectText(tree!.toJSON()).join(' ');
+    const text = shownText(tree);
     expect(text).toContain('How are you today?');
     expect(text).not.toContain(props.question);
   });
@@ -110,24 +141,10 @@ describe('CheckInSheet completion', () => {
     jest.useRealTimers();
   });
 
-  // Picks a mood and a chip, then skips the note, which completes the check-in.
   async function completeCheckIn(onComplete: () => boolean | void) {
-    let tree: renderer.ReactTestRenderer;
-    await act(async () => {
-      tree = renderer.create(<CheckInSheet {...props} onComplete={onComplete} visible />);
-    });
-    for (const label of ['Struggling', 'Work stress', 'Skip this step']) {
-      await act(async () => {
-        tree!.root.findAll((node) => node.type === TouchableOpacity && node.props.accessibilityLabel === label)[0].props.onPress();
-      });
-      // A chip waits 300ms before the step's own 300ms advance; step each timer separately.
-      for (let tick = 0; tick < 2; tick += 1) {
-        await act(async () => {
-          jest.advanceTimersByTime(400);
-        });
-      }
-    }
-    return collectText(tree!.toJSON()).join(' ');
+    const tree = await open({ onComplete });
+    await tapThroughCheckIn(tree);
+    return shownText(tree);
   }
 
   it('plays no success haptic and shows no celebration when the answer is not saved', async () => {
@@ -144,5 +161,336 @@ describe('CheckInSheet completion', () => {
 
     expect(Haptics.notificationAsync).toHaveBeenCalledWith('success');
     expect(text).toContain('Tap anywhere to continue');
+  });
+});
+
+describe('CheckInSheet answer that was not saved', () => {
+  const ANSWER = 'The talk with my brother';
+  const NOTE = 'Lord, help me listen first.';
+  const REASON = 'The reading it belongs to was removed from this device while you were answering.';
+  const HINT = 'Your words are still here. Copy them to keep them.';
+  let tree: renderer.ReactTestRenderer;
+  let onClose: jest.Mock;
+  let announce: jest.SpyInstance;
+  let alert: jest.SpyInstance;
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    (Haptics.notificationAsync as jest.Mock).mockClear();
+    (Clipboard.setStringAsync as jest.Mock).mockClear();
+    onClose = jest.fn();
+    announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => undefined);
+    alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  });
+  afterEach(() => {
+    act(() => tree.unmount());
+    announce.mockRestore();
+    alert.mockRestore();
+    jest.useRealTimers();
+  });
+
+  // The question the sheet asks before it drops words that are not copied.
+  const CLOSE_QUESTION = ['Close without your words?', 'They are not saved. Copy them first to keep them.'];
+  async function answerCloseQuestion(answer: 'Go back' | 'Close') {
+    const buttons = alert.mock.calls[alert.mock.calls.length - 1][2] as { text: string; onPress?: () => void }[];
+    await act(async () => {
+      buttons.find((button) => button.text === answer)!.onPress?.();
+    });
+  }
+
+  async function write(words: string) {
+    await act(async () => {
+      tree.root.findByType(TextInput).props.onChangeText(words);
+    });
+  }
+
+  // Answers in the reader's own words and writes a note.
+  async function writeAnswerAndNote(answer = ANSWER) {
+    await press(tree, 'Struggling');
+    await press(tree, 'Type my own answer');
+    await write(answer);
+    await press(tree, 'Submit answer');
+    await write(NOTE);
+    await press(tree, 'Submit note');
+  }
+
+  // The same, submitted to a caller that refuses.
+  async function submitWrittenAnswer() {
+    const onComplete = jest.fn(() => false);
+    tree = await open({ onClose, onComplete });
+    await writeAnswerAndNote();
+    return onComplete;
+  }
+
+  const backdrop = () => tree.root.findAll((node) => node.type === TouchableOpacity && node.props.testID === 'check-in-backdrop')[0];
+
+  it('stays open with the message and the words the reader wrote', async () => {
+    const onComplete = await submitWrittenAnswer();
+
+    expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ chipAnswer: ANSWER, freeText: NOTE }));
+    const text = shownText(tree);
+    expect(text).toContain('Check-in not saved');
+    expect(text).toContain(`${REASON} ${HINT}`);
+    expect(text).toContain(ANSWER);
+    expect(text).toContain(NOTE);
+    // The mood is not something the reader wrote.
+    expect(text).not.toContain('Struggling');
+    expect(onClose).not.toHaveBeenCalled();
+    expect(Haptics.notificationAsync).not.toHaveBeenCalled();
+    expect(text).not.toContain('Tap anywhere to continue');
+    // The steps are over: nothing can be submitted a second time.
+    expect(buttons(tree, 'Submit note')).toHaveLength(0);
+    expect(buttons(tree, 'Back')).toHaveLength(0);
+  });
+
+  it('copies the words the reader wrote and stays open', async () => {
+    await submitWrittenAnswer();
+
+    await press(tree, 'Copy my words');
+
+    expect(Clipboard.setStringAsync).toHaveBeenCalledTimes(1);
+    expect(Clipboard.setStringAsync).toHaveBeenCalledWith(`${ANSWER}\n\n${NOTE}`);
+    expect(buttons(tree, 'Copied')).toHaveLength(1);
+    expect(shownText(tree)).toContain(NOTE);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('does not say Copied when the clipboard refuses the words', async () => {
+    (Clipboard.setStringAsync as jest.Mock).mockResolvedValueOnce(false);
+    await submitWrittenAnswer();
+
+    await press(tree, 'Copy my words');
+
+    expect(buttons(tree, 'Copied')).toHaveLength(0);
+    expect(buttons(tree, 'Copy my words')).toHaveLength(1);
+    expect(shownText(tree)).toContain(NOTE);
+  });
+
+  it.each(['Close', 'Close check-in'])('asks before %s drops words that are not copied', async (label) => {
+    await submitWrittenAnswer();
+
+    await press(tree, label);
+
+    expect(alert).toHaveBeenCalledTimes(1);
+    expect(alert).toHaveBeenCalledWith(...CLOSE_QUESTION, [
+      expect.objectContaining({ text: 'Go back', style: 'cancel' }),
+      expect.objectContaining({ text: 'Close', style: 'destructive' }),
+    ]);
+    expect(JSON.stringify(alert.mock.calls)).not.toContain(NOTE);
+    expect(onClose).not.toHaveBeenCalled();
+
+    await answerCloseQuestion('Go back');
+    expect(onClose).not.toHaveBeenCalled();
+    expect(shownText(tree)).toContain(NOTE);
+
+    await press(tree, label);
+    await answerCloseQuestion('Close');
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks before the Android back button or the screen reader escape drops the words', async () => {
+    await submitWrittenAnswer();
+    const modal = tree.root.findAll((node) => typeof node.props.onRequestClose === 'function')[0];
+    const sheet = tree.root.findAll((node) => typeof node.props.onAccessibilityEscape === 'function')[0];
+
+    await act(async () => {
+      modal.props.onRequestClose();
+    });
+    await act(async () => {
+      sheet.props.onAccessibilityEscape();
+    });
+
+    expect(alert).toHaveBeenCalledTimes(2);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('closes with no question after a copy', async () => {
+    await submitWrittenAnswer();
+    await press(tree, 'Copy my words');
+
+    await press(tree, 'Close');
+
+    expect(alert).not.toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('still asks after a copy that the clipboard refused', async () => {
+    (Clipboard.setStringAsync as jest.Mock).mockResolvedValueOnce(false);
+    await submitWrittenAnswer();
+    await press(tree, 'Copy my words');
+
+    await press(tree, 'Close');
+
+    expect(alert).toHaveBeenCalledTimes(1);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('asks nothing when the caller closes the sheet, as Today does for an account reset', async () => {
+    const onComplete = await submitWrittenAnswer();
+
+    await act(async () => {
+      tree.update(<CheckInSheet {...props} onClose={onClose} onComplete={onComplete} visible={false} />);
+    });
+
+    expect(alert).not.toHaveBeenCalled();
+    expect(shownText(tree)).not.toContain(NOTE);
+  });
+
+  it('says Copied for two seconds after the last copy', async () => {
+    await submitWrittenAnswer();
+    const tap = async (label: string) => act(async () => {
+      buttons(tree, label)[0].props.onPress();
+    });
+    const wait = async (ms: number) => act(async () => {
+      jest.advanceTimersByTime(ms);
+    });
+
+    await tap('Copy my words');
+    await wait(1500);
+    await tap('Copied');
+    await wait(1500);
+    expect(buttons(tree, 'Copied')).toHaveLength(1);
+
+    await wait(600);
+    expect(buttons(tree, 'Copied')).toHaveLength(0);
+    expect(buttons(tree, 'Copy my words')).toHaveLength(1);
+    expect(Clipboard.setStringAsync).toHaveBeenCalledTimes(2);
+  });
+
+  it('puts the copy action before Close', async () => {
+    await submitWrittenAnswer();
+
+    // The order a screen reader meets them in, after the close button of the sheet.
+    const labels = tree.root.findAll((node) => node.type === TouchableOpacity)
+      .map((node) => node.props.accessibilityLabel)
+      .filter((label) => label === 'Copy my words' || label === 'Close');
+    expect(labels).toEqual(['Copy my words', 'Close']);
+  });
+
+  it('ignores a tap outside the sheet while it holds words', async () => {
+    await submitWrittenAnswer();
+
+    await act(async () => {
+      backdrop().props.onPress?.();
+    });
+
+    // Ignored: it does not close, and it asks nothing.
+    expect(alert).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(shownText(tree)).toContain(NOTE);
+  });
+
+  it('closes on a tap outside the sheet while the reader is still answering', async () => {
+    tree = await open({ onClose });
+    await press(tree, 'Struggling');
+
+    await act(async () => {
+      backdrop().props.onPress();
+    });
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers only Close when the reader wrote no words', async () => {
+    tree = await open({ onClose, onComplete: () => false });
+    await tapThroughCheckIn(tree);
+
+    const text = shownText(tree);
+    expect(text).toContain('Check-in not saved');
+    expect(text).toContain(REASON);
+    expect(text).not.toContain(HINT);
+    // A tapped suggestion is not the reader's writing.
+    expect(text).not.toContain('Work stress');
+    expect(buttons(tree, 'Copy my words')).toHaveLength(0);
+
+    await press(tree, 'Close');
+    expect(alert).not.toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a note the reader wrote after a tapped suggestion', async () => {
+    tree = await open({ onClose, onComplete: () => false });
+    await press(tree, 'Struggling');
+    await press(tree, 'Work stress');
+    await write(NOTE);
+    await press(tree, 'Submit note');
+
+    expect(shownText(tree)).not.toContain('Work stress');
+    await press(tree, 'Copy my words');
+    expect(Clipboard.setStringAsync).toHaveBeenCalledWith(NOTE);
+  });
+
+  it('keeps a typed answer that reads the same as a suggestion', async () => {
+    tree = await open({ onClose, onComplete: () => false });
+    await writeAnswerAndNote('Work stress');
+
+    await press(tree, 'Copy my words');
+
+    expect(Clipboard.setStringAsync).toHaveBeenCalledWith(`Work stress\n\n${NOTE}`);
+  });
+
+  it('opens empty the next time', async () => {
+    const onComplete = await submitWrittenAnswer();
+
+    await act(async () => {
+      tree.update(<CheckInSheet {...props} onClose={onClose} onComplete={onComplete} visible={false} />);
+    });
+    await act(async () => {
+      tree.update(<CheckInSheet {...props} onClose={onClose} onComplete={onComplete} visible />);
+    });
+
+    const text = shownText(tree);
+    expect(text).toContain('How are you today?');
+    expect(text).not.toContain('Check-in not saved');
+    expect(text).not.toContain(NOTE);
+  });
+
+  it('says the message to a screen reader, and none of the words', async () => {
+    await submitWrittenAnswer();
+
+    expect(announce).toHaveBeenCalledTimes(1);
+    expect(announce).toHaveBeenCalledWith(`Check-in not saved. ${REASON} ${HINT}`);
+    await press(tree, 'Copy my words');
+    expect(announce).toHaveBeenLastCalledWith('Copied');
+    const said = JSON.stringify(announce.mock.calls);
+    expect(said).not.toContain(ANSWER);
+    expect(said).not.toContain(NOTE);
+  });
+
+  it('says nothing when the caller closes the sheet as it refuses', async () => {
+    // Today does this for an account reset: it closes the sheet and shows an alert.
+    const onComplete = jest.fn(() => {
+      tree.update(<CheckInSheet {...props} onClose={onClose} onComplete={onComplete} visible={false} />);
+      return false;
+    });
+    tree = await open({ onClose, onComplete });
+    await writeAnswerAndNote();
+
+    expect(onComplete).toHaveBeenCalledTimes(1);
+    expect(announce).not.toHaveBeenCalled();
+    expect(shownText(tree)).not.toContain(NOTE);
+  });
+
+  it('writes none of the words to the console or to a label', async () => {
+    const consoleSpies = (['log', 'info', 'warn', 'error', 'debug'] as const).map((method) => jest.spyOn(console, method).mockImplementation(() => undefined));
+    await submitWrittenAnswer();
+    await press(tree, 'Copy my words');
+
+    const logged = JSON.stringify(consoleSpies.map((spy) => spy.mock.calls));
+    consoleSpies.forEach((spy) => spy.mockRestore());
+    expect(logged).not.toContain(ANSWER);
+    expect(logged).not.toContain(NOTE);
+    const labelled = tree.root.findAll((node) => (
+      [node.props.accessibilityLabel, node.props['aria-label'], node.props.accessibilityHint, node.props.testID]
+        .some((value) => typeof value === 'string' && (value.includes(ANSWER) || value.includes(NOTE)))
+    ));
+    expect(labelled).toHaveLength(0);
+  });
+
+  it('has no logger, error reporter, or analytics to send the words to', () => {
+    const source = readFileSync(join(__dirname, '../CheckInSheet.tsx'), 'utf8');
+
+    expect(source).not.toMatch(/from '@\/lib\/(logger|bug-logger|sentry|report-error|analytics)[^']*'/);
+    expect(source).not.toMatch(/console\./);
   });
 });
