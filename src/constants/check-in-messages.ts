@@ -240,6 +240,12 @@ export const CHECKIN_CELEBRATION_MESSAGES: string[] = [
   "You checked in. That’s growth.",
 ];
 
+/** A midday answer that could not be saved: in the check-in sheet, and in Today's alert after an account reset. */
+export const CHECKIN_NOT_SAVED_TITLE = 'Check-in not saved';
+export const CHECKIN_NOT_SAVED_REASON = 'The reading it belongs to was removed from this device while you were answering.';
+/** Follows the reason when the sheet holds words the reader wrote. */
+export const CHECKIN_NOT_SAVED_WORDS_HINT = 'Your words are still here. Copy them to keep them.';
+
 export const EVENING_CELEBRATION_MESSAGES: string[] = [
   "God is near tonight.",
   "He watches while you rest.",

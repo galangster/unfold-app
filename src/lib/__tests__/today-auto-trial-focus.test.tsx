@@ -136,9 +136,18 @@ jest.mock('@/components/HomeOnboardingTooltips', () => ({ HomeOnboardingTooltips
 jest.mock('@/components/RippleLoader', () => ({ RippleLoader: () => null }));
 jest.mock('@/components/StreakCelebration', () => ({ StreakCelebration: () => null }));
 let mockCheckInSheetProps: Record<string, unknown> | null = null;
+let mockCheckInSheetMounts = 0;
 jest.mock('@/components/CheckInSheet', () => ({
   CheckInSheet: (props: Record<string, unknown>) => {
     mockCheckInSheetProps = props;
+    // A sheet that Today takes off the screen has no props left. One that
+    // Today mounts again has lost what the reader typed in it.
+    require('react').useEffect(() => {
+      mockCheckInSheetMounts += 1;
+      return () => {
+        mockCheckInSheetProps = null;
+      };
+    }, []);
     return null;
   },
 }));
@@ -376,7 +385,7 @@ describe('Today midday check-in', () => {
       tree = renderer.create(<HomeScreen />);
       await Promise.resolve();
     });
-    expect(mockCheckInSheetProps).toEqual(expect.objectContaining({ visible: true, dayNumber: 3, question: TODAY_QUESTION, chips: TODAY_CHIPS }));
+    expect(mockCheckInSheetProps).toEqual(expect.objectContaining({ visible: true, question: TODAY_QUESTION, chips: TODAY_CHIPS }));
   }
 
   // Moves the clock and lets Today's minute tick re-render.
@@ -387,12 +396,31 @@ describe('Today midday check-in', () => {
     });
   }
 
+  const WRITTEN_ANSWER = 'The talk with my brother';
+  const WRITTEN_NOTE = 'Lord, help me listen first.';
+
   function submitCheckIn() {
     let result: boolean | undefined;
     act(() => {
-      result = (mockCheckInSheetProps!.onComplete as (data: { mood: number; moodLabel: string }) => boolean)({ mood: 5, moodLabel: 'Steady' });
+      result = (mockCheckInSheetProps!.onComplete as (data: { mood: number; moodLabel: string; chipAnswer: string; freeText: string }) => boolean)(
+        { mood: 5, moodLabel: 'Steady', chipAnswer: WRITTEN_ANSWER, freeText: WRITTEN_NOTE },
+      );
     });
     return result;
+  }
+
+  // A refused answer stays in the open sheet: nothing saved, no alert, and the
+  // reader's words in no log event.
+  function expectRefusedInTheOpenSheet() {
+    expect(mockTodayStoreState.addCheckIn).not.toHaveBeenCalled();
+    expect(mockTodayStoreState.markMiddayCheckInCompleted).not.toHaveBeenCalled();
+    expect(mockCheckInSheetProps).toEqual(expect.objectContaining({ visible: true, question: TODAY_QUESTION, chips: TODAY_CHIPS }));
+    // The same sheet all along, so the text typed in it is still there.
+    expect(mockCheckInSheetMounts).toBe(1);
+    expect(alertSpy).not.toHaveBeenCalled();
+    const logged = JSON.stringify([mockLogBugEvent.mock.calls, consoleSpies.map((spy) => spy.mock.calls)]);
+    expect(logged).not.toContain(WRITTEN_ANSWER);
+    expect(logged).not.toContain(WRITTEN_NOTE);
   }
 
   async function syncDevotionals(devotionals: unknown[], currentDevotionalId?: string) {
@@ -405,14 +433,18 @@ describe('Today midday check-in', () => {
   }
 
   let alertSpy: jest.SpyInstance;
+  let consoleSpies: jest.SpyInstance[];
 
   beforeEach(() => {
+    consoleSpies = (['log', 'info', 'warn', 'error', 'debug'] as const).map((method) => jest.spyOn(console, method).mockImplementation(() => undefined));
     saved = { ...mockTodayStoreState };
     mockCheckInSheetProps = null;
+    mockCheckInSheetMounts = 0;
     mockSearchParams = { focus: 'midday' };
     // A day read today reaches the completed-day reflection, which reads journal entries.
     mockTodayStoreState.getJournalEntry = () => undefined;
     mockTodayStoreState.addCheckIn = jest.fn();
+    mockTodayStoreState.markMiddayCheckInCompleted = jest.fn();
     // The store keeps the session the way the real one does.
     mockTodayStoreState.ritualSessions = {};
     mockTodayStoreState.beginRitualSession = (identity: RitualSessionIdentity) => {
@@ -430,6 +462,7 @@ describe('Today midday check-in', () => {
     mockSearchParams = {};
     resetSyncSessionFenceForTesting();
     alertSpy.mockRestore();
+    consoleSpies.forEach((spy) => spy.mockRestore());
     jest.useRealTimers();
   });
 
@@ -450,7 +483,7 @@ describe('Today midday check-in', () => {
       tree = renderer.create(<HomeScreen />);
       await Promise.resolve();
     });
-    expect(mockCheckInSheetProps).toEqual(expect.objectContaining({ visible: true, dayNumber: 4, question: undefined }));
+    expect(mockCheckInSheetProps).toEqual(expect.objectContaining({ visible: true, question: undefined }));
 
     expect(submitCheckIn()).toBe(true);
     expect(mockTodayStoreState.addCheckIn).toHaveBeenCalledWith(expect.objectContaining({ devotionalId: 'today-series', dayNumber: 4, timeOfDay: 'midday' }));
@@ -460,7 +493,7 @@ describe('Today midday check-in', () => {
     await openFromMiddayNotification(new Date(2026, 8, 28, 23, 59), new Date(2026, 8, 28, 23, 30));
 
     moveClockTo(new Date(2026, 8, 29, 0, 1));
-    expect(mockCheckInSheetProps).toEqual(expect.objectContaining({ dayNumber: 3, question: TODAY_QUESTION, chips: TODAY_CHIPS }));
+    expect(mockCheckInSheetProps).toEqual(expect.objectContaining({ question: TODAY_QUESTION, chips: TODAY_CHIPS }));
     submitCheckIn();
     expect(mockTodayStoreState.addCheckIn).toHaveBeenCalledWith(expect.objectContaining({ dayNumber: 3 }));
   });
@@ -470,7 +503,7 @@ describe('Today midday check-in', () => {
 
     // More than four hours past midnight, the ritual session no longer carries the day.
     moveClockTo(new Date(2026, 8, 29, 4, 5));
-    expect(mockCheckInSheetProps).toEqual(expect.objectContaining({ dayNumber: 3, question: TODAY_QUESTION }));
+    expect(mockCheckInSheetProps).toEqual(expect.objectContaining({ question: TODAY_QUESTION }));
     submitCheckIn();
     expect(mockTodayStoreState.addCheckIn).toHaveBeenCalledWith(expect.objectContaining({ devotionalId: 'today-series', dayNumber: 3 }));
   });
@@ -492,7 +525,7 @@ describe('Today midday check-in', () => {
     expect(mockTodayStoreState.addCheckIn).toHaveBeenCalledWith(expect.objectContaining({ devotionalId: 'today-series', dayNumber: 3 }));
   });
 
-  it('saves nothing when a sync deletes the opened series with the sheet open', async () => {
+  it('saves nothing and keeps the sheet open when a sync deletes the opened series', async () => {
     await openFromMiddayNotification(new Date(2026, 8, 28, 12, 30), new Date(2026, 8, 28, 8, 0));
 
     await syncDevotionals([
@@ -500,20 +533,55 @@ describe('Today midday check-in', () => {
     ], 'series-b');
 
     expect(submitCheckIn()).toBe(false);
-    expect(mockTodayStoreState.addCheckIn).not.toHaveBeenCalled();
-    expect(mockCheckInSheetProps).toEqual(expect.objectContaining({ visible: false }));
-    expect(alertSpy).toHaveBeenCalledWith('Check-in not saved', expect.any(String));
+    expectRefusedInTheOpenSheet();
   });
 
-  it('saves nothing when a sync deletes the opened day with the sheet open', async () => {
+  it('saves nothing and keeps the sheet open when a sync deletes the opened day', async () => {
     await openFromMiddayNotification(new Date(2026, 8, 28, 12, 30), new Date(2026, 8, 28, 8, 0));
 
     const series = seriesReadAt(new Date(2026, 8, 28, 8, 0));
     await syncDevotionals([{ ...series, days: series.days.filter((day) => day.dayNumber !== 3) }]);
 
     expect(submitCheckIn()).toBe(false);
+    expectRefusedInTheOpenSheet();
+  });
+
+  it('keeps the open sheet on screen when a sync deletes the only series', async () => {
+    await openFromMiddayNotification(new Date(2026, 8, 28, 12, 30), new Date(2026, 8, 28, 8, 0));
+
+    // No series is left, so Today has no current series to show.
+    mockTodayStoreState.currentDevotionalId = null;
+    await syncDevotionals([]);
+
+    expect(mockCheckInSheetProps).toEqual(expect.objectContaining({ visible: true, question: TODAY_QUESTION, chips: TODAY_CHIPS }));
+    expect(submitCheckIn()).toBe(false);
+    expectRefusedInTheOpenSheet();
+  });
+
+  it('closes the refused sheet when the reader closes it', async () => {
+    await openFromMiddayNotification(new Date(2026, 8, 28, 12, 30), new Date(2026, 8, 28, 8, 0));
+    mockTodayStoreState.currentDevotionalId = null;
+    await syncDevotionals([]);
+    expect(submitCheckIn()).toBe(false);
+
+    act(() => (mockCheckInSheetProps!.onClose as () => void)());
+
+    expect(mockCheckInSheetProps).toEqual(expect.objectContaining({ visible: false }));
+  });
+
+  it('closes the check-in with the alert when an account reset is in progress at the submit', async () => {
+    await openFromMiddayNotification(new Date(2026, 8, 28, 12, 30), new Date(2026, 8, 28, 8, 0));
+
+    let resetToken = 0;
+    act(() => {
+      resetToken = beginLocalResetSession();
+    });
+    expect(submitCheckIn()).toBe(false);
+
     expect(mockTodayStoreState.addCheckIn).not.toHaveBeenCalled();
-    expect(alertSpy).toHaveBeenCalledWith('Check-in not saved', expect.any(String));
+    expect(mockCheckInSheetProps).toEqual(expect.objectContaining({ visible: false }));
+    expect(alertSpy).toHaveBeenCalledWith('Check-in not saved', 'The reading it belongs to was removed from this device while you were answering.');
+    act(() => endLocalResetSession(resetToken));
   });
 
   it('closes the check-in and saves nothing after an account reset', async () => {
@@ -526,6 +594,7 @@ describe('Today midday check-in', () => {
     expect(mockCheckInSheetProps).toEqual(expect.objectContaining({ visible: false }));
     act(() => submitAfterReset({ mood: 5, moodLabel: 'Steady' }));
     expect(mockTodayStoreState.addCheckIn).not.toHaveBeenCalled();
+    expect(alertSpy).toHaveBeenCalledWith('Check-in not saved', expect.any(String));
   });
 });
 

@@ -34,7 +34,12 @@ import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
 import { getPremiumNudgeCardTone } from '@/components/PremiumNudgeCard';
 import { usePremiumNudge } from '@/hooks/usePremiumNudge';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
-import { getContentAwareEveningMessage, getMiddayCheckInBody } from '@/constants/check-in-messages';
+import {
+  CHECKIN_NOT_SAVED_REASON,
+  CHECKIN_NOT_SAVED_TITLE,
+  getContentAwareEveningMessage,
+  getMiddayCheckInBody,
+} from '@/constants/check-in-messages';
 import { copySeed } from '@/lib/copy-variation';
 import { dayIndexFor } from '@/lib/variation-bag';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
@@ -1008,16 +1013,20 @@ export default function HomeScreen() {
   }): boolean => {
     const opened = openedCheckIn;
     const store = useUnfoldStore.getState();
-    const openedSeries = opened ? store.devotionals.find((devotional) => devotional.id === opened.devotionalId) : undefined;
-    // Save nothing when the opened series is gone (an account reset, or a sync
-    // that deleted it while the sheet was open), or when the opened day was in
-    // the store and is gone. A day still in preparation was never there.
-    const dayGone = opened?.dayInStore && !openedSeries?.days.some((day) => day.dayNumber === opened.dayNumber);
-    if (!opened || !isSyncSessionCurrent(opened.session) || !openedSeries || dayGone) {
+    // An account reset ends the check-in: its words belong to the account that
+    // was removed, and the reset closes the sheet when it finishes.
+    if (!opened || !isSyncSessionCurrent(opened.session)) {
       setShowCheckInSheet(false);
-      Alert.alert('Check-in not saved', 'The reading it belongs to was removed from this device while you were answering.');
+      Alert.alert(CHECKIN_NOT_SAVED_TITLE, CHECKIN_NOT_SAVED_REASON);
       return false;
     }
+    // Save nothing when a sync deleted the opened series while the sheet was
+    // open, or when the opened day was in the store and is gone. A day still in
+    // preparation was never there. The sheet stays open: it says why, and it
+    // keeps the words the reader wrote.
+    const openedSeries = store.devotionals.find((devotional) => devotional.id === opened.devotionalId);
+    const dayGone = opened.dayInStore && !openedSeries?.days.some((day) => day.dayNumber === opened.dayNumber);
+    if (!openedSeries || dayGone) return false;
     const clock = resolveRitualCompletion({
       session: store.ritualSessions.midday,
       identity: { kind: 'midday', devotionalId: opened.devotionalId, dayNumber: opened.dayNumber },
@@ -1850,19 +1859,18 @@ export default function HomeScreen() {
         </Animated.ScrollView>
       </SafeAreaView>
 
-      {currentDevotional && (
-        <CheckInSheet
-          visible={showCheckInSheet}
-          onClose={() => setShowCheckInSheet(false)}
-          onComplete={handleCheckInComplete}
-          // The day read today, fixed at open; never the prepared tomorrow
-          // that currentDayData points at after a morning read.
-          question={openedCheckIn?.question}
-          chips={openedCheckIn?.chips}
-          devotionalId={currentDevotional.id}
-          dayNumber={openedCheckIn?.dayNumber ?? middayCheckInDay ?? currentDevotional.currentDay}
-        />
-      )}
+      {/* Drawn with or without a current series: an open check-in stays on
+          screen when a sync deletes the series Today shows. Without it the
+          reader's words would go with no message. */}
+      <CheckInSheet
+        visible={showCheckInSheet}
+        onClose={() => setShowCheckInSheet(false)}
+        onComplete={handleCheckInComplete}
+        // The day read today, fixed at open; never the prepared tomorrow
+        // that currentDayData points at after a morning read.
+        question={openedCheckIn?.question}
+        chips={openedCheckIn?.chips}
+      />
 
       <AppFeedbackSheet visible={showAppFeedback} onClose={() => setShowAppFeedback(false)} source="reading-milestone" />
 
