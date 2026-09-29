@@ -1,5 +1,6 @@
 import React from 'react';
-import { Modal, TouchableOpacity } from 'react-native';
+import { AccessibilityInfo, Modal, StyleSheet, TouchableOpacity } from 'react-native';
+import { CheckIcon, CopyIcon } from '@/components/icons';
 import { ScriptureTapSheet } from '../ScriptureTapSheet';
 
 const fs = require('fs');
@@ -603,5 +604,158 @@ describe('ScriptureTapSheet Explain CTA', () => {
     expect(source).not.toMatch(/<Animated\.View[^>]*entering=\{reducedMotion \? undefined : FadeInDown[^>]*style=\{\[s\.sheet, sheetAnimatedStyle,/s);
     expect(source).toMatch(/<GestureDetector gesture=\{panGesture\}>[\s\S]*scripture-sheet-swipe-dismiss-region[\s\S]*<\/GestureDetector>[\s\S]*<ScrollView/);
     expect(source).toMatch(/translationY > SWIPE_DISMISS_THRESHOLD \|\| e\.velocityY > SWIPE_DISMISS_VELOCITY/);
+  });
+});
+
+describe('ScriptureTapSheet copy action', () => {
+  const clipboard: { setStringAsync: jest.Mock } = jest.requireMock('expo-clipboard');
+  const haptics: { impactAsync: jest.Mock } = jest.requireMock('expo-haptics');
+  const COPY_LABEL = 'Copy verse text';
+  const IDLE = { checkIcons: 0, copyIcons: 1, background: 'transparent' };
+  // The alpha() mock of this file joins the color and the opacity.
+  const CONFIRMED = { checkIcons: 1, copyIcons: 0, background: '#C8A55C0.1' };
+  let announce: jest.SpyInstance;
+
+  function sheet(overrides: Partial<React.ComponentProps<typeof ScriptureTapSheet>> = {}) {
+    return (
+      <ScriptureTapSheet
+        visible
+        onClose={jest.fn()}
+        reference="John 3:16"
+        devotionalId="devotional-1"
+        dayNumber={1}
+        dayTitle="Loved First"
+        devotionalTitle="The Gift"
+        {...overrides}
+      />
+    );
+  }
+
+  async function open() {
+    let tree: any;
+    await act(async () => {
+      tree = renderer.create(sheet());
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    return tree;
+  }
+
+  async function show(tree: any, overrides: Partial<React.ComponentProps<typeof ScriptureTapSheet>>) {
+    await act(async () => {
+      tree.update(sheet(overrides));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  }
+
+  // The button keeps its label. The check mark and the tint are the confirmation.
+  function copyButton(tree: any) {
+    return tree.root
+      .findAllByType(TouchableOpacity)
+      .find((node: any) => node.props.accessibilityLabel === COPY_LABEL);
+  }
+
+  async function pressCopy(tree: any) {
+    await act(async () => {
+      copyButton(tree).props.onPress();
+      await Promise.resolve();
+    });
+  }
+
+  function copyButtonLook(tree: any) {
+    const button = copyButton(tree);
+    return {
+      checkIcons: button.findAllByType(CheckIcon).length,
+      copyIcons: button.findAllByType(CopyIcon).length,
+      background: StyleSheet.flatten(button.props.style).backgroundColor,
+    };
+  }
+
+  beforeEach(() => {
+    // act() queues a microtask of its own. Microtasks stay real, so the
+    // timer count holds timers only.
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'setImmediate'] });
+    jest.clearAllMocks();
+    mockFetchVerseLocal.mockImplementation(async (reference: string) => ({ ...verseResult, reference }));
+    clipboard.setStringAsync.mockResolvedValue(true);
+    mockStoreState.bookmarks.length = 0;
+    mockStoreState.bibleReaderSettings.translation = 'KJV';
+    announce = jest
+      .spyOn(AccessibilityInfo, 'announceForAccessibility')
+      .mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    announce.mockRestore();
+    jest.useRealTimers();
+  });
+
+  it('copies the verse with its reference and translation, and shows the check mark', async () => {
+    const tree = await open();
+    expect(copyButtonLook(tree)).toEqual(IDLE);
+
+    await pressCopy(tree);
+
+    expect(haptics.impactAsync).toHaveBeenCalledTimes(1);
+    expect(haptics.impactAsync).toHaveBeenCalledWith('light');
+    expect(clipboard.setStringAsync).toHaveBeenCalledTimes(1);
+    expect(clipboard.setStringAsync).toHaveBeenCalledWith(`${verseResult.text}\n— John 3:16 (KJV)`);
+    expect(copyButtonLook(tree)).toEqual(CONFIRMED);
+  });
+
+  it('shows the copy icon again 2 seconds after the copy', async () => {
+    const tree = await open();
+    await pressCopy(tree);
+
+    act(() => {
+      jest.advanceTimersByTime(1999);
+    });
+    expect(copyButtonLook(tree)).toEqual(CONFIRMED);
+
+    act(() => {
+      jest.advanceTimersByTime(1);
+    });
+    expect(copyButtonLook(tree)).toEqual(IDLE);
+  });
+
+  it('counts the 2 seconds from the last copy', async () => {
+    const tree = await open();
+    await pressCopy(tree);
+    act(() => {
+      jest.advanceTimersByTime(1000);
+    });
+    await pressCopy(tree);
+
+    act(() => {
+      jest.advanceTimersByTime(1999);
+    });
+    expect(copyButtonLook(tree)).toEqual(CONFIRMED);
+
+    act(() => {
+      jest.advanceTimersByTime(1);
+    });
+    expect(copyButtonLook(tree)).toEqual(IDLE);
+  });
+
+  it('drops the confirmation when the sheet opens again', async () => {
+    const tree = await open();
+    await pressCopy(tree);
+    expect(copyButtonLook(tree)).toEqual(CONFIRMED);
+
+    await show(tree, { visible: false });
+    await show(tree, { visible: true });
+
+    expect(copyButtonLook(tree)).toEqual(IDLE);
+  });
+
+  it('drops the confirmation when the reference changes', async () => {
+    const tree = await open();
+    await pressCopy(tree);
+    expect(copyButtonLook(tree)).toEqual(CONFIRMED);
+
+    await show(tree, { reference: 'John 1:1' });
+
+    expect(copyButtonLook(tree)).toEqual(IDLE);
   });
 });
