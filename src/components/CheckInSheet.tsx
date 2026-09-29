@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   AccessibilityInfo,
+  Alert,
   Keyboard,
   type LayoutChangeEvent,
 } from 'react-native';
@@ -50,6 +51,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { adaptiveFrameStyle, adaptiveSafeGutterStyle, resolveAdaptiveLayout } from '@/lib/adaptive-layout';
 import {
   CHECKIN_CELEBRATION_MESSAGES,
+  CHECKIN_CLOSE_WITHOUT_WORDS,
   CHECKIN_NOT_SAVED_REASON,
   CHECKIN_NOT_SAVED_TITLE,
   CHECKIN_NOT_SAVED_WORDS_HINT,
@@ -630,15 +632,24 @@ function CheckInCelebration({ colors, onDismiss }: { colors: ReturnType<typeof u
 
 function NotSavedButton({
   label,
+  widthLabel = label,
   primary,
   onPress,
   colors,
 }: {
   label: string;
+  /** The label that sets the width, so the button does not move when its label changes. */
+  widthLabel?: string;
   primary: boolean;
   onPress: () => void;
   colors: ReturnType<typeof useTheme>['colors'];
 }) {
+  const textStyle = primary
+    ? [styles.doneButtonText, { color: colors.background, fontFamily: FontFamily.uiSemiBold }]
+    : [styles.skipText, { color: colors.textMuted, fontFamily: FontFamily.uiMedium }];
+  // The width label holds the size, and the label in view is drawn over it.
+  const overlaid = widthLabel !== label;
+
   return (
     <TouchableOpacity activeOpacity={0.7}
       onPress={onPress}
@@ -647,13 +658,14 @@ function NotSavedButton({
       accessibilityRole="button"
       accessibilityLabel={label}
     >
-      <CheckInText
-        style={primary
-          ? [styles.doneButtonText, { color: colors.background, fontFamily: FontFamily.uiSemiBold }]
-          : [styles.skipText, { color: colors.textMuted, fontFamily: FontFamily.uiMedium }]}
-      >
-        {label}
+      <CheckInText style={[textStyle, overlaid && styles.widthLabel]}>
+        {widthLabel}
       </CheckInText>
+      {overlaid && (
+        <View pointerEvents="none" style={styles.labelOverWidthLabel}>
+          <CheckInText style={textStyle}>{label}</CheckInText>
+        </View>
+      )}
     </TouchableOpacity>
   );
 }
@@ -667,30 +679,35 @@ const COPIED_MS = 2000;
  */
 function NotSavedPanel({
   words,
+  onCopied,
   onClose,
   colors,
   bottomInset,
 }: {
   words: string;
+  onCopied: () => void;
   onClose: () => void;
   colors: ReturnType<typeof useTheme>['colors'];
   bottomInset: number;
 }) {
   const reducedMotion = useReducedMotion();
-  const [copied, setCopied] = useState(false);
+  // The time of the last copy, while the button says so.
+  const [copiedAt, setCopiedAt] = useState<number | null>(null);
   const holdsWords = words.length > 0;
   const reason = holdsWords ? `${CHECKIN_NOT_SAVED_REASON} ${CHECKIN_NOT_SAVED_WORDS_HINT}` : CHECKIN_NOT_SAVED_REASON;
 
-  // Says what the panel shows, and never the reader's words.
+  // The announcement carries the message. The words stay text on the screen,
+  // which a screen reader reads to the reader like any other text.
   useEffect(() => {
     AccessibilityInfo.announceForAccessibility(`${CHECKIN_NOT_SAVED_TITLE}. ${reason}`);
   }, [reason]);
 
+  // Each copy starts the two seconds again.
   useEffect(() => {
-    if (!copied) return;
-    const timer = setTimeout(() => setCopied(false), COPIED_MS);
+    if (copiedAt === null) return;
+    const timer = setTimeout(() => setCopiedAt(null), COPIED_MS);
     return () => clearTimeout(timer);
-  }, [copied]);
+  }, [copiedAt]);
 
   // The words go to the clipboard and nowhere else. A copy that fails leaves
   // them on screen, where the reader can copy again or select them.
@@ -698,10 +715,11 @@ function NotSavedPanel({
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     void Clipboard.setStringAsync(words).then((didCopy) => {
       if (!didCopy) return;
-      setCopied(true);
+      setCopiedAt(Date.now());
+      onCopied();
       AccessibilityInfo.announceForAccessibility('Copied');
     }, () => undefined);
-  }, [words]);
+  }, [onCopied, words]);
 
   return (
     <>
@@ -745,20 +763,24 @@ function NotSavedPanel({
         </Animated.View>
       </ScrollView>
 
+      {/* The copy action comes first. The row is reversed, so that action
+          sits at the right, and on top when large text makes the row wrap. */}
       <View
         style={[
           styles.notSavedActions,
-          {
-            justifyContent: holdsWords ? 'space-between' : 'flex-end',
-            paddingBottom: Spacing['4'] + bottomInset,
-            borderTopColor: colors.border,
-          },
+          { paddingBottom: Spacing['4'] + bottomInset, borderTopColor: colors.border },
         ]}
       >
-        <NotSavedButton label="Close" primary={!holdsWords} onPress={onClose} colors={colors} />
         {holdsWords && (
-          <NotSavedButton label={copied ? 'Copied' : 'Copy my words'} primary onPress={handleCopy} colors={colors} />
+          <NotSavedButton
+            label={copiedAt === null ? 'Copy my words' : 'Copied'}
+            widthLabel="Copy my words"
+            primary
+            onPress={handleCopy}
+            colors={colors}
+          />
         )}
+        <NotSavedButton label="Close" primary={!holdsWords} onPress={onClose} colors={colors} />
       </View>
     </>
   );
@@ -806,8 +828,9 @@ export function CheckInSheet({
   const [answer, setAnswer] = useState<{ text: string; typed: boolean } | null>(null);
   const [showCelebration, setShowCelebration] = useState(false);
   // Set when the caller could not save the answer, with the words the reader
-  // wrote: a typed answer and the note.
-  const [notSaved, setNotSaved] = useState<{ words: string } | null>(null);
+  // wrote: a typed answer and the note. `copied` is true after a copy of them
+  // that succeeded.
+  const [notSaved, setNotSaved] = useState<{ words: string; copied: boolean } | null>(null);
 
   // Animated backdrop opacity
   const backdropOpacity = useSharedValue(0);
@@ -879,7 +902,7 @@ export function CheckInSheet({
       // The sheet says why and keeps the words the reader wrote.
       if (onComplete(data) === false) {
         Keyboard.dismiss();
-        setNotSaved({ words: [answer?.typed ? answer.text : undefined, data.freeText].filter(Boolean).join('\n\n') });
+        setNotSaved({ words: [answer?.typed ? answer.text : undefined, data.freeText].filter(Boolean).join('\n\n'), copied: false });
         return;
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -911,10 +934,23 @@ export function CheckInSheet({
     });
   }, [selectedMood, answer, submitCheckIn]);
 
+  const handleWordsCopied = useCallback(() => {
+    setNotSaved((state) => (state && !state.copied ? { ...state, copied: true } : state));
+  }, []);
+
+  // Every way to close that the reader has. Words that are not copied exist
+  // only in this sheet, so it asks before it drops them.
   const handleClose = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (notSaved?.words && !notSaved.copied) {
+      Alert.alert(CHECKIN_CLOSE_WITHOUT_WORDS.title, CHECKIN_CLOSE_WITHOUT_WORDS.message, [
+        { text: CHECKIN_CLOSE_WITHOUT_WORDS.stay, style: 'cancel' },
+        { text: CHECKIN_CLOSE_WITHOUT_WORDS.close, style: 'destructive', onPress: onClose },
+      ]);
+      return;
+    }
     onClose();
-  }, [onClose]);
+  }, [notSaved, onClose]);
 
   return (
     <Modal
@@ -1003,7 +1039,13 @@ export function CheckInSheet({
 
             {/* Step content */}
             {notSaved ? (
-              <NotSavedPanel words={notSaved.words} onClose={handleClose} colors={colors} bottomInset={insets.bottom} />
+              <NotSavedPanel
+                words={notSaved.words}
+                onCopied={handleWordsCopied}
+                onClose={handleClose}
+                colors={colors}
+                bottomInset={insets.bottom}
+              />
             ) : (
               <ScrollView key={showCelebration ? 'celebration' : currentStep} style={{ flex: 1 }} contentContainerStyle={[styles.stepContainer, { paddingBottom: 24 + insets.bottom }]} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive">
                 {showCelebration ? (
@@ -1241,11 +1283,22 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   notSavedActions: {
-    flexDirection: 'row',
+    flexDirection: 'row-reverse',
+    flexWrap: 'wrap',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    rowGap: Spacing['2'],
     paddingHorizontal: Spacing['6'],
     paddingTop: Spacing['3'],
     borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  widthLabel: {
+    opacity: 0,
+  },
+  labelOverWidthLabel: {
+    ...StyleSheet.absoluteFill,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 

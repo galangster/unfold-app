@@ -245,6 +245,13 @@ export const CHECKIN_NOT_SAVED_TITLE = 'Check-in not saved';
 export const CHECKIN_NOT_SAVED_REASON = 'The reading it belongs to was removed from this device while you were answering.';
 /** Follows the reason when the sheet holds words the reader wrote. */
 export const CHECKIN_NOT_SAVED_WORDS_HINT = 'Your words are still here. Copy them to keep them.';
+/** Asked before the sheet closes with words that are not copied. */
+export const CHECKIN_CLOSE_WITHOUT_WORDS = {
+  title: 'Close without your words?',
+  message: 'They are not saved. Copy them first to keep them.',
+  stay: 'Go back',
+  close: 'Close',
+} as const;
 
 export const EVENING_CELEBRATION_MESSAGES: string[] = [
   "God is near tonight.",

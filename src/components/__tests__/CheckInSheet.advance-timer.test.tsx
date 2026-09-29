@@ -8,7 +8,7 @@
 import React from 'react';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { AccessibilityInfo, TextInput, TouchableOpacity } from 'react-native';
+import { AccessibilityInfo, Alert, TextInput, TouchableOpacity } from 'react-native';
 import renderer, { act } from 'react-test-renderer';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
@@ -172,6 +172,7 @@ describe('CheckInSheet answer that was not saved', () => {
   let tree: renderer.ReactTestRenderer;
   let onClose: jest.Mock;
   let announce: jest.SpyInstance;
+  let alert: jest.SpyInstance;
 
   beforeEach(() => {
     jest.useFakeTimers();
@@ -179,12 +180,23 @@ describe('CheckInSheet answer that was not saved', () => {
     (Clipboard.setStringAsync as jest.Mock).mockClear();
     onClose = jest.fn();
     announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => undefined);
+    alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   });
   afterEach(() => {
     act(() => tree.unmount());
     announce.mockRestore();
+    alert.mockRestore();
     jest.useRealTimers();
   });
+
+  // The question the sheet asks before it drops words that are not copied.
+  const CLOSE_QUESTION = ['Close without your words?', 'They are not saved. Copy them first to keep them.'];
+  async function answerCloseQuestion(answer: 'Go back' | 'Close') {
+    const buttons = alert.mock.calls[alert.mock.calls.length - 1][2] as { text: string; onPress?: () => void }[];
+    await act(async () => {
+      buttons.find((button) => button.text === answer)!.onPress?.();
+    });
+  }
 
   async function write(words: string) {
     await act(async () => {
@@ -254,20 +266,105 @@ describe('CheckInSheet answer that was not saved', () => {
     expect(shownText(tree)).toContain(NOTE);
   });
 
-  it('closes on Close', async () => {
+  it.each(['Close', 'Close check-in'])('asks before %s drops words that are not copied', async (label) => {
     await submitWrittenAnswer();
 
-    await press(tree, 'Close');
+    await press(tree, label);
 
+    expect(alert).toHaveBeenCalledTimes(1);
+    expect(alert).toHaveBeenCalledWith(...CLOSE_QUESTION, [
+      expect.objectContaining({ text: 'Go back', style: 'cancel' }),
+      expect.objectContaining({ text: 'Close', style: 'destructive' }),
+    ]);
+    expect(JSON.stringify(alert.mock.calls)).not.toContain(NOTE);
+    expect(onClose).not.toHaveBeenCalled();
+
+    await answerCloseQuestion('Go back');
+    expect(onClose).not.toHaveBeenCalled();
+    expect(shownText(tree)).toContain(NOTE);
+
+    await press(tree, label);
+    await answerCloseQuestion('Close');
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('closes on the close button of the sheet', async () => {
+  it('asks before the Android back button or the screen reader escape drops the words', async () => {
+    await submitWrittenAnswer();
+    const modal = tree.root.findAll((node) => typeof node.props.onRequestClose === 'function')[0];
+    const sheet = tree.root.findAll((node) => typeof node.props.onAccessibilityEscape === 'function')[0];
+
+    await act(async () => {
+      modal.props.onRequestClose();
+    });
+    await act(async () => {
+      sheet.props.onAccessibilityEscape();
+    });
+
+    expect(alert).toHaveBeenCalledTimes(2);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('closes with no question after a copy', async () => {
+    await submitWrittenAnswer();
+    await press(tree, 'Copy my words');
+
+    await press(tree, 'Close');
+
+    expect(alert).not.toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('still asks after a copy that the clipboard refused', async () => {
+    (Clipboard.setStringAsync as jest.Mock).mockResolvedValueOnce(false);
+    await submitWrittenAnswer();
+    await press(tree, 'Copy my words');
+
+    await press(tree, 'Close');
+
+    expect(alert).toHaveBeenCalledTimes(1);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('asks nothing when the caller closes the sheet, as Today does for an account reset', async () => {
+    const onComplete = await submitWrittenAnswer();
+
+    await act(async () => {
+      tree.update(<CheckInSheet {...props} onClose={onClose} onComplete={onComplete} visible={false} />);
+    });
+
+    expect(alert).not.toHaveBeenCalled();
+    expect(shownText(tree)).not.toContain(NOTE);
+  });
+
+  it('says Copied for two seconds after the last copy', async () => {
+    await submitWrittenAnswer();
+    const tap = async (label: string) => act(async () => {
+      buttons(tree, label)[0].props.onPress();
+    });
+    const wait = async (ms: number) => act(async () => {
+      jest.advanceTimersByTime(ms);
+    });
+
+    await tap('Copy my words');
+    await wait(1500);
+    await tap('Copied');
+    await wait(1500);
+    expect(buttons(tree, 'Copied')).toHaveLength(1);
+
+    await wait(600);
+    expect(buttons(tree, 'Copied')).toHaveLength(0);
+    expect(buttons(tree, 'Copy my words')).toHaveLength(1);
+    expect(Clipboard.setStringAsync).toHaveBeenCalledTimes(2);
+  });
+
+  it('puts the copy action before Close', async () => {
     await submitWrittenAnswer();
 
-    await press(tree, 'Close check-in');
-
-    expect(onClose).toHaveBeenCalledTimes(1);
+    // The order a screen reader meets them in, after the close button of the sheet.
+    const labels = tree.root.findAll((node) => node.type === TouchableOpacity)
+      .map((node) => node.props.accessibilityLabel)
+      .filter((label) => label === 'Copy my words' || label === 'Close');
+    expect(labels).toEqual(['Copy my words', 'Close']);
   });
 
   it('ignores a tap outside the sheet while it holds words', async () => {
@@ -277,6 +374,8 @@ describe('CheckInSheet answer that was not saved', () => {
       backdrop().props.onPress?.();
     });
 
+    // Ignored: it does not close, and it asks nothing.
+    expect(alert).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
     expect(shownText(tree)).toContain(NOTE);
   });
@@ -305,6 +404,7 @@ describe('CheckInSheet answer that was not saved', () => {
     expect(buttons(tree, 'Copy my words')).toHaveLength(0);
 
     await press(tree, 'Close');
+    expect(alert).not.toHaveBeenCalled();
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
