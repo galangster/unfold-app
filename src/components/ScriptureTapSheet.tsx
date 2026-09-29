@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, Modal, ScrollView, StyleSheet } from 'react-native';
 import { GestureHandlerRootView, Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -12,12 +12,12 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Duration, Ease } from '@/constants/animations';
 import * as Haptics from 'expo-haptics';
-import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
 import { XIcon, BookmarkSimpleIcon, CopyIcon, CheckIcon, BookOpenIcon, ArrowRightIcon } from '@/components/icons';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
+import { useCopyConfirmation } from '@/hooks/useCopyConfirmation';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { SheetHandle } from '@/components/ui/SheetHandle';
@@ -82,9 +82,8 @@ export function ScriptureTapSheet({
     source: 'fetch' | 'saved';
   } | null>(null);
   const [loading, setLoading] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const { copied, copy, reset: resetCopied } = useCopyConfirmation();
   const [showExplainSheet, setShowExplainSheet] = useState(false);
-  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const verse = useMemo(() => {
     if (!loadedVerse) return null;
@@ -156,8 +155,10 @@ export function ScriptureTapSheet({
 
   useEffect(() => {
     setLoadedVerse(null);
+    // Also when the sheet hides: it stays mounted, and a copy that lands
+    // after that must not confirm or announce.
+    resetCopied();
     if (visible && reference) {
-      setCopied(false);
       setShowExplainSheet(false);
       const translation = readerTranslation;
       if (savedPassage) {
@@ -206,16 +207,13 @@ export function ScriptureTapSheet({
         cancelled = true;
       };
     }
-  }, [visible, reference, readerTranslation, savedPassage]);
+  }, [visible, reference, readerTranslation, savedPassage, resetCopied]);
 
-  const handleCopy = async () => {
+  const handleCopy = () => {
     if (!verse) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const translationLabel = verse.translation ? ` (${verse.translation.toUpperCase()})` : '';
-    await Clipboard.setStringAsync(`${verse.text}\n— ${verse.reference}${translationLabel}`);
-    setCopied(true);
-    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
-    copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
+    void copy(`${verse.text}\n— ${verse.reference}${translationLabel}`);
   };
 
   const handleBookmark = () => {
