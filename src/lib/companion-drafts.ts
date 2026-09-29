@@ -33,6 +33,20 @@ export function writeCompanionDraft(draftKey: string, text: string): void {
 }
 
 /**
+ * Takes a draft out while the composer sends it, so a conversation that the
+ * send creates does not claim the sent text. Returns the way to put it back
+ * when the send is refused. Neither step is a change by the reader, so a pull
+ * mark stays.
+ */
+export function holdCompanionDraftForSend(draftKey: string): () => void {
+  const text = drafts.get(draftKey);
+  drafts.delete(draftKey);
+  return () => {
+    if (text) drafts.set(draftKey, text);
+  };
+}
+
+/**
  * A conversation the store creates takes the no-conversation slot: its text,
  * and a recording in progress there. Creating a conversation is not navigation.
  */

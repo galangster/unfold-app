@@ -47,7 +47,7 @@ jest.mock('react-native-reanimated', () => {
 });
 
 import { CompanionInput } from '../CompanionInput';
-import { clearCompanionDrafts } from '@/lib/companion-drafts';
+import { clearCompanionDrafts, markCompanionDraftEmptied } from '@/lib/companion-drafts';
 import { useCompanionChatStore, type CompanionMessage } from '@/lib/companion-chat-store';
 
 let messageCount = 0;
@@ -64,6 +64,9 @@ function send(text: string) {
   useCompanionChatStore.getState().addMessage(userMessage(text));
 }
 
+// The Ask screen refuses a send, for example of a draft over the length limit.
+let refuseSends = false;
+
 // The Ask screen's wiring: the composer follows the store's active conversation.
 function Composer() {
   const conversationId = useCompanionChatStore((state) => state.activeConversationId);
@@ -71,6 +74,7 @@ function Composer() {
     <CompanionInput
       conversationId={conversationId}
       onSend={(text) => {
+        if (refuseSends) return false;
         send(text);
         return true;
       }}
@@ -91,9 +95,14 @@ describe('CompanionInput with the chat store', () => {
     tree.root.findByProps({ accessibilityLabel: 'Voice input' }).props.onPress();
   });
 
+  const pressSend = () => act(() => {
+    tree.root.findByProps({ accessibilityLabel: 'Send message' }).props.onPress();
+  });
+
   beforeEach(() => {
     clearCompanionDrafts();
     mockVoiceProps = null;
+    refuseSends = false;
     useCompanionChatStore.setState({ conversations: [], activeConversationId: null });
     act(() => {
       tree = renderer.create(<Composer />);
@@ -118,7 +127,7 @@ describe('CompanionInput with the chat store', () => {
 
   it('leaves nothing behind when the composer itself sends the first message', () => {
     type('Hello');
-    act(() => tree.root.findByProps({ accessibilityLabel: 'Send message' }).props.onPress());
+    pressSend();
     const created = store().activeConversationId!;
     expect(shownText()).toBe('');
 
@@ -157,6 +166,45 @@ describe('CompanionInput with the chat store', () => {
     expect(shownText()).toBe('');
     run(() => store().setActiveConversation(established));
     expect(shownText()).toBe('For this conversation');
+  });
+
+  // A pull from another device removes every message of a conversation and keeps it.
+  function pullEmpties(conversationId: string) {
+    run(() => {
+      useCompanionChatStore.setState((state) => ({
+        conversations: state.conversations.map((conversation) => (
+          conversation.id === conversationId ? { ...conversation, messages: [] } : conversation
+        )),
+      }));
+      markCompanionDraftEmptied(conversationId);
+    });
+  }
+
+  // The reader has unsent text in a conversation. A pull empties the
+  // conversation, and then the screen refuses to send the text.
+  function refuseSendAfterPull() {
+    run(() => send('First'));
+    const emptied = store().activeConversationId!;
+    type('Meant for that conversation');
+    pullEmpties(emptied);
+    refuseSends = true;
+    pressSend();
+  }
+
+  it('keeps the text found at a pull out of the next new chat after a refused send', () => {
+    refuseSendAfterPull();
+    expect(shownText()).toBe('Meant for that conversation');
+
+    run(() => store().startNewConversation());
+    expect(shownText()).toBe('');
+  });
+
+  it('moves the text to the next new chat when the reader changes it after a refused send', () => {
+    refuseSendAfterPull();
+
+    type('Meant for that conversation, and more');
+    run(() => store().startNewConversation());
+    expect(shownText()).toBe('Meant for that conversation, and more');
   });
 
   it('keeps a recording going when a starter card creates the conversation', () => {
