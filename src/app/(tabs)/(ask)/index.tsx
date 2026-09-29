@@ -171,6 +171,7 @@ export default function CompanionScreen() {
 
   const {
     messages,
+    activeConversationId,
     isStreaming,
     activeRequestCompanionId,
     suggestions,
@@ -591,6 +592,7 @@ export default function CompanionScreen() {
         onStop={stopGeneration}
         isStreaming={isStreaming}
         fontScale={fontScale}
+        conversationId={activeConversationId}
       />
       </View>
       </View>

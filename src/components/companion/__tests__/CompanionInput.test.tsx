@@ -15,9 +15,16 @@ jest.mock('phosphor-react-native', () => ({
   MicrophoneIcon: () => null,
 }));
 
-jest.mock('@/components/VoiceInputBar', () => ({
-  VoiceInputBar: () => null,
-}));
+let mockVoiceProps: { onChangeText: (text: string) => void } | null = null;
+jest.mock('@/components/VoiceInputBar', () => {
+  const { createElement } = jest.requireActual('react');
+  return {
+    VoiceInputBar: (props: { onChangeText: (text: string) => void }) => {
+      mockVoiceProps = props;
+      return createElement('VoiceInputBar');
+    },
+  };
+});
 
 jest.mock('@/components/ui', () => ({
   alpha: (color: string) => color,
@@ -65,10 +72,14 @@ jest.mock('react-native-reanimated', () => {
 });
 
 import { CompanionInput } from '../CompanionInput';
+import { clearCompanionDrafts } from '@/lib/companion-drafts';
 
 const COMPANION_MESSAGE_MAX_CHARS = 4000;
 
-function renderInput(onSend: (text: string) => boolean) {
+// Drafts live in memory for the whole process, so each test starts clean.
+beforeEach(() => clearCompanionDrafts());
+
+function renderInput(onSend: (text: string) => boolean, conversationId = 'conversation-a') {
   let tree: any;
 
   act(() => {
@@ -77,6 +88,7 @@ function renderInput(onSend: (text: string) => boolean) {
         onSend={onSend}
         onStop={jest.fn()}
         isStreaming={false}
+        conversationId={conversationId}
       />
     );
   });
@@ -148,7 +160,7 @@ describe('CompanionInput send clearing', () => {
 
     act(() => {
       tree = renderer.create(
-        <CompanionInput
+        <CompanionInput conversationId="conversation-a"
           onSend={onSend}
           onStop={onStop}
           isStreaming={false}
@@ -160,7 +172,7 @@ describe('CompanionInput send clearing', () => {
 
     act(() => {
       tree.update(
-        <CompanionInput
+        <CompanionInput conversationId="conversation-a"
           onSend={onSend}
           onStop={onStop}
           isStreaming={false}
@@ -201,7 +213,7 @@ describe('CompanionInput send clearing', () => {
 
     act(() => {
       tree = renderer.create(
-        <CompanionInput onSend={onSend} onStop={jest.fn()} isStreaming={isStreaming} />
+        <CompanionInput conversationId="conversation-a" onSend={onSend} onStop={jest.fn()} isStreaming={isStreaming} />
       );
     });
     if (draft) enterText(tree, draft);
@@ -210,5 +222,64 @@ describe('CompanionInput send clearing', () => {
     expect(button.props.accessibilityRole).toBe('button');
     expect(button.props.hitSlop).toBeUndefined();
     expect(button.props.style).toEqual(expect.objectContaining({ width: 44, height: 44 }));
+  });
+});
+
+describe('CompanionInput drafts across conversations', () => {
+  function switchTo(tree: any, onSend: (text: string) => boolean, conversationId: string) {
+    act(() => {
+      tree.update(<CompanionInput onSend={onSend} onStop={jest.fn()} isStreaming={false} conversationId={conversationId} />);
+    });
+  }
+  const shownText = (tree: any) => tree.root.findByType(TextInput).props.value;
+  const startRecording = (tree: any) => act(() => {
+    tree.root.findByProps({ accessibilityLabel: 'Voice input' }).props.onPress();
+  });
+
+  it('never sends one conversation\'s unsent text to another, and keeps it for its return', () => {
+    const onSend = jest.fn(() => true);
+    const tree = renderInput(onSend);
+    enterText(tree, "Pray for Sam's surgery");
+
+    switchTo(tree, onSend, 'conversation-b');
+    expect(shownText(tree)).toBe('');
+    enterText(tree, 'Hello from B');
+    pressSend(tree);
+    expect(onSend).toHaveBeenCalledTimes(1);
+    expect(onSend).toHaveBeenCalledWith('Hello from B');
+
+    switchTo(tree, onSend, 'conversation-a');
+    expect(shownText(tree)).toBe("Pray for Sam's surgery");
+    switchTo(tree, onSend, 'conversation-b');
+    expect(shownText(tree)).toBe('');
+  });
+
+  it('ends a recording when the conversation changes', () => {
+    const tree = renderInput(jest.fn(() => true));
+    startRecording(tree);
+    expect(tree.root.findAllByType('VoiceInputBar')).toHaveLength(1);
+
+    switchTo(tree, jest.fn(() => true), 'conversation-b');
+    expect(tree.root.findAllByType('VoiceInputBar')).toHaveLength(0);
+  });
+
+  it('drops a voice result that arrives after the conversation changed', () => {
+    const onSend = jest.fn(() => true);
+    const tree = renderInput(onSend);
+    startRecording(tree);
+    const lateResult = mockVoiceProps!.onChangeText;
+
+    switchTo(tree, onSend, 'conversation-b');
+    act(() => lateResult('A transcript meant for A'));
+    expect(shownText(tree)).toBe('');
+    switchTo(tree, onSend, 'conversation-a');
+    expect(shownText(tree)).toBe('');
+  });
+
+  it('keeps a voice result in the conversation it was recorded in', () => {
+    const tree = renderInput(jest.fn(() => true));
+    startRecording(tree);
+    act(() => mockVoiceProps!.onChangeText('A transcript for A'));
+    expect(shownText(tree)).toBe('A transcript for A');
   });
 });

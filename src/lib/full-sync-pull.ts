@@ -33,6 +33,7 @@ import type {
   UsedScripture,
 } from './store';
 import { useCompanionChatStore } from './companion-chat-store';
+import { forgetCompanionDraft, markCompanionDraftEmptied } from './companion-drafts';
 import type { CompanionMessage, Conversation } from './companion-chat-store';
 import type { SyncPullResponse, SyncPulledRecord, SyncPushResult, SyncTable } from './sync-types';
 import {
@@ -818,6 +819,7 @@ function applyCompanionChanges(payload: SyncPullResponse): void {
   const { companion_conversations: conversationRecords = [], companion_messages: messageRecords = [] } = payload.changes;
   if (conversationRecords.length === 0 && messageRecords.length === 0) return;
   const pendingByRecord = pendingClientUpdatedAtsByRecord();
+  const conversationsBefore = useCompanionChatStore.getState().conversations;
 
   useCompanionChatStore.setState((state) => {
     let conversations = state.conversations;
@@ -866,6 +868,15 @@ function applyCompanionChanges(payload: SyncPullResponse): void {
       conversations,
       activeConversationId: activeStillPresent ? state.activeConversationId : null,
     };
+  });
+
+  // A conversation deleted on another device takes its unsent text with it.
+  // One that only lost its messages keeps its text, which never moves to a new chat.
+  const remaining = new Map(useCompanionChatStore.getState().conversations.map((conversation) => [conversation.id, conversation]));
+  conversationsBefore.forEach((conversation) => {
+    const kept = remaining.get(conversation.id);
+    if (!kept) forgetCompanionDraft(conversation.id);
+    else if ((conversation.messages ?? []).length > 0 && (kept.messages ?? []).length === 0) markCompanionDraftEmptied(conversation.id);
   });
 }
 

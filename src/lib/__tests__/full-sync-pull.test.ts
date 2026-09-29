@@ -35,6 +35,7 @@ import { applyPulledUserData, LAST_PULLED_AT_KEY, pullAllUserData } from '../ful
 import { persistNoteSnapshot } from '../note-detail-editor';
 import { drainSyncOutbox, peekSyncOutbox, replaceSyncOutbox, resetDrainStateForTesting } from '../sync-outbox';
 import { useCompanionChatStore } from '../companion-chat-store';
+import { readCompanionDraft, writeCompanionDraft } from '../companion-drafts';
 import { mmkvStorage } from '../mmkv-storage';
 import type { SyncPushChange, SyncTable } from '../sync-types';
 
@@ -396,6 +397,88 @@ describe('full user-data sync', () => {
     });
     expect(useCompanionChatStore.getState().conversations.find((item) => item.id === 'conv-open')).toBeUndefined();
     expect(useCompanionChatStore.getState().activeConversationId).toBeNull();
+  });
+
+  it('forgets the unsent draft of a conversation deleted on another device, and keeps it when the delete is rejected', () => {
+    const conversation = (id: string) => ({
+      id,
+      messages: [{ id: `msg-${id}`, role: 'user', content: 'hi', timestamp: Date.now(), status: 'sent', updatedAt: '2026-06-01T00:00:00.000Z' }],
+      createdAt: Date.now(),
+      lastMessageAt: Date.now(),
+      title: 'Open',
+      topicTags: [],
+      archived: false,
+      updatedAt: '2026-06-01T00:00:00.000Z',
+    } as never);
+    useCompanionChatStore.setState({ activeConversationId: 'conv-kept', conversations: [conversation('conv-gone'), conversation('conv-kept')] });
+    writeCompanionDraft('conv-gone', 'Half a thought');
+    writeCompanionDraft('conv-kept', 'Still writing');
+    // A local rename of conv-kept is newer than its tombstone, so the pull rejects that delete.
+    const pendingAt = new Date(Date.now() + 120_000).toISOString();
+    replaceSyncOutbox([
+      { table: 'companion_conversations', id: 'conv-kept', data: { title: 'Renamed' }, clientUpdatedAt: pendingAt, deleted: false },
+    ]);
+
+    const tombstoneAt = new Date(Date.now() + 60_000).toISOString();
+    applyPulledUserData({
+      timestamp: tombstoneAt,
+      changes: {
+        companion_conversations: [
+          { id: 'conv-gone', data: { clientUpdatedAt: tombstoneAt }, updatedAt: tombstoneAt, deleted: true },
+          { id: 'conv-kept', data: { clientUpdatedAt: tombstoneAt }, updatedAt: tombstoneAt, deleted: true },
+        ],
+      },
+    });
+
+    expect(useCompanionChatStore.getState().conversations.map((item) => item.id)).toEqual(['conv-kept']);
+    expect(readCompanionDraft('conv-gone')).toBe('');
+    expect(readCompanionDraft('conv-kept')).toBe('Still writing');
+  });
+
+  // conv-emptied is active with one message. The pull removes that message and keeps the conversation.
+  function pullEmptiesActiveConversation() {
+    replaceSyncOutbox([]);
+    useCompanionChatStore.setState({
+      activeConversationId: 'conv-emptied',
+      conversations: [{
+        id: 'conv-emptied',
+        messages: [{ id: 'msg-emptied', role: 'user', content: 'hi', timestamp: Date.now(), status: 'sent', updatedAt: '2026-06-01T00:00:00.000Z' }],
+        createdAt: Date.now(),
+        lastMessageAt: Date.now(),
+        title: 'Open',
+        topicTags: [],
+        archived: false,
+        updatedAt: '2026-06-01T00:00:00.000Z',
+      } as never],
+    });
+    const tombstoneAt = new Date(Date.now() + 60_000).toISOString();
+    applyPulledUserData({
+      timestamp: tombstoneAt,
+      changes: {
+        companion_messages: [{ id: 'msg-emptied', data: { conversationId: 'conv-emptied', clientUpdatedAt: tombstoneAt }, updatedAt: tombstoneAt, deleted: true }],
+      },
+    });
+    expect(useCompanionChatStore.getState().conversations.find((item) => item.id === 'conv-emptied')?.messages).toEqual([]);
+  }
+
+  it('keeps the draft of a conversation a pull empties, and never moves it into a new chat', () => {
+    writeCompanionDraft('conv-emptied', 'Still writing');
+    pullEmptiesActiveConversation();
+    expect(readCompanionDraft('conv-emptied')).toBe('Still writing');
+
+    // Leaving the emptied conversation drops it; its text must not follow into the new chat.
+    useCompanionChatStore.getState().startNewConversation();
+    expect(readCompanionDraft('conv-emptied')).toBe('');
+    expect(readCompanionDraft(useCompanionChatStore.getState().activeConversationId!)).toBe('');
+  });
+
+  it('moves text typed after the pull into the next new chat', () => {
+    pullEmptiesActiveConversation();
+    // The reader types in the emptied conversation, then starts a new chat.
+    writeCompanionDraft('conv-emptied', 'Typed after the pull');
+
+    useCompanionChatStore.getState().startNewConversation();
+    expect(readCompanionDraft(useCompanionChatStore.getState().activeConversationId!)).toBe('Typed after the pull');
   });
 
   it('maps startedAt before createdAt and preserves local pinned when remote omits it', () => {

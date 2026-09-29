@@ -17,6 +17,7 @@ import {
   createCompanionChatPersistStorage,
 } from './companion-chat-persist-storage';
 import { shouldFlushAutosaveOnAppState } from './autosave-controller';
+import { claimNewChatDraft, forgetCompanionDraft, releaseCompanionDraft } from './companion-drafts';
 
 import { getAuthHeaders, PRIMARY_BACKEND_URL } from '@/lib/api-config';
 import { authenticatedFetch } from './device-credential';
@@ -283,7 +284,8 @@ export const useCompanionChatStore = create<CompanionChatState>()(
       conversations: [],
       activeConversationId: null,
 
-      addMessage: (msg) =>
+      addMessage: (msg) => {
+        const before = get().activeConversationId;
         set((s) => {
           const now = new Date().toISOString();
           const timestampedMsg = { ...msg, updatedAt: now };
@@ -336,7 +338,11 @@ export const useCompanionChatStore = create<CompanionChatState>()(
               return nextConv;
             }),
           };
-        }),
+        });
+        // A message with no conversation creates one, and it takes the new-chat text.
+        const after = get().activeConversationId;
+        if (after && after !== before) claimNewChatDraft(after);
+      },
 
       updateMessage: (id, updates, conversationId) =>
         set((s) => {
@@ -445,7 +451,8 @@ export const useCompanionChatStore = create<CompanionChatState>()(
           };
         }),
 
-      startNewConversation: () =>
+      startNewConversation: () => {
+        const previousId = get().activeConversationId;
         set((s) => {
           const now = new Date().toISOString();
           const active = s.conversations.find(c => c.id === s.activeConversationId);
@@ -481,7 +488,11 @@ export const useCompanionChatStore = create<CompanionChatState>()(
             conversations: [...conversations, newConv],
             activeConversationId: newConv.id,
           };
-        }),
+        });
+        // A dropped new chat hands its text to the new one; then the new one claims it.
+        if (previousId && !get().conversations.some((c) => c.id === previousId)) releaseCompanionDraft(previousId);
+        claimNewChatDraft(get().activeConversationId!);
+      },
 
       archiveActiveConversation: (title, topicTags) =>
         set((s) => {
@@ -514,7 +525,9 @@ export const useCompanionChatStore = create<CompanionChatState>()(
         }
       },
 
-      deleteConversation: (id) =>
+      deleteConversation: (id) => {
+        // A deleted conversation takes its unsent text with it.
+        forgetCompanionDraft(id);
         set((s) => {
           const now = new Date().toISOString();
           const existing = s.conversations.find(c => c.id === id);
@@ -528,7 +541,8 @@ export const useCompanionChatStore = create<CompanionChatState>()(
             conversations: s.conversations.filter(c => c.id !== id),
             activeConversationId: s.activeConversationId === id ? null : s.activeConversationId,
           };
-        }),
+        });
+      },
 
       clearAllConversations: () => {
         set((s) => {
@@ -559,7 +573,8 @@ export const useCompanionChatStore = create<CompanionChatState>()(
           };
         }),
 
-      setActiveConversation: (id) =>
+      setActiveConversation: (id) => {
+        const previousId = get().activeConversationId;
         set((s) => {
           const now = new Date().toISOString();
           const target = s.conversations.find(c => c.id === id);
@@ -592,7 +607,10 @@ export const useCompanionChatStore = create<CompanionChatState>()(
             conversations,
             activeConversationId: id,
           };
-        }),
+        });
+        // An empty conversation the store just dropped releases its unsent text.
+        if (previousId && !get().conversations.some((c) => c.id === previousId)) releaseCompanionDraft(previousId);
+      },
     }),
     {
       name: COMPANION_CHAT_STORAGE_KEY,
