@@ -67,22 +67,6 @@ type PendingResponse = {
 };
 
 /**
- * Answers whose latest save failed, by devotional, day, and question. A pane
- * change unmounts the journal and mounts a new one, which reads the in-memory
- * store; this keeps the failure and its retry visible across that remount.
- */
-const failedReflectionSaves = new Map<string, string>();
-/** The latest save attempt per answer, so an older attempt settles nothing. */
-const latestReflectionSaveAttempts = new Map<string, number>();
-let reflectionSaveAttemptCounter = 0;
-/** Mounted journals, told when a save that outlived its journal fails. */
-const failedReflectionSaveListeners = new Set<(key: string) => void>();
-
-function reflectionSaveKey(devotionalId: string, dayNumber: number, question: string): string {
-  return `${devotionalId}\u001f${dayNumber}\u001f${question}`;
-}
-
-/**
  * Interactive inline reflection journal that appears in the reading screen.
  * Each question is a tappable prompt that reveals a TextInput for quick capture.
  * Responses auto-save to the same store used by the full journal editor.
@@ -158,23 +142,6 @@ export function InlineReflectionJournal({
   heldIndexRef.current = heldIndex;
 
   const questionsKey = useMemo(() => questions.join('\u001f'), [questions]);
-  const questionsRef = useRef(questions);
-  questionsRef.current = questions;
-
-  // Takes over an answer whose latest save failed, so its retry saves it.
-  const adoptFailedSave = useCallback((index: number, question: string, response: string) => {
-    const revision = ++revisionCounterRef.current;
-    const scope = currentScopeRef.current;
-    latestRevisionsRef.current.set(index, revision);
-    failedResponsesRef.current.set(index, {
-      index,
-      question,
-      response,
-      devotionalId: scope.devotionalId,
-      dayNumber: scope.dayNumber,
-      revision,
-    });
-  }, []);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -222,19 +189,6 @@ export function InlineReflectionJournal({
         }
       }
     }
-    questions.forEach((question, idx) => {
-      const key = reflectionSaveKey(devotionalId, dayNumber, question);
-      const failed = failedReflectionSaves.get(key);
-      if (failed === undefined) return;
-      // The store holds the words of a failed save. Other words mean the
-      // answer changed elsewhere since, so that failure is stale.
-      if (initial.get(idx) !== failed) {
-        failedReflectionSaves.delete(key);
-        return;
-      }
-      adoptFailedSave(idx, question, failed);
-      initialStatuses.set(idx, 'error');
-    });
     setPersistedResponses(persisted);
     setSaveStatuses(initialStatuses);
 
@@ -245,29 +199,7 @@ export function InlineReflectionJournal({
     };
     localResponsesRef.current = initial;
     setLocalResponses(initial);
-  }, [devotionalId, dayNumber, questionsKey, questions, adoptFailedSave]);
-
-  // A save that outlived the journal before this one can fail after this one
-  // mounted. Show it here unless this journal has written that answer since.
-  useEffect(() => {
-    const handleFailedSave = (key: string) => {
-      const { devotionalId: scopeId, dayNumber: scopeDay } = currentScopeRef.current;
-      const index = questionsRef.current.findIndex((question) => reflectionSaveKey(scopeId, scopeDay, question) === key);
-      const failed = failedReflectionSaves.get(key);
-      if (
-        index < 0 ||
-        failed === undefined ||
-        latestRevisionsRef.current.has(index) ||
-        localResponsesRef.current.get(index) !== failed
-      ) return;
-      adoptFailedSave(index, questionsRef.current[index], failed);
-      setSaveStatuses((current) => new Map(current).set(index, 'error'));
-    };
-    failedReflectionSaveListeners.add(handleFailedSave);
-    return () => {
-      failedReflectionSaveListeners.delete(handleFailedSave);
-    };
-  }, [adoptFailedSave]);
+  }, [devotionalId, dayNumber, questionsKey, questions]);
 
   // Ensure a journal entry exists to attach responses to
   const ensureEntry = useCallback(
@@ -325,14 +257,6 @@ export function InlineReflectionJournal({
         dayNumber: targetDayNumber,
         revision,
       };
-      const key = reflectionSaveKey(targetDevotionalId, targetDayNumber, question);
-      const attempt = ++reflectionSaveAttemptCounter;
-      latestReflectionSaveAttempts.set(key, attempt);
-      const isLatestAttempt = () => {
-        if (latestReflectionSaveAttempts.get(key) !== attempt) return false;
-        latestReflectionSaveAttempts.delete(key);
-        return true;
-      };
 
       try {
         const entryId = ensureEntry(targetDevotionalId, targetDayNumber);
@@ -341,7 +265,6 @@ export function InlineReflectionJournal({
         const wrote = await flushUnfoldStorePersistAsync();
         if (!wrote) throw new Error('Journal persistence unavailable');
 
-        if (isLatestAttempt()) failedReflectionSaves.delete(key);
         if (isCurrentSaveAttempt(pending)) {
           failedResponsesRef.current.delete(index);
           setSaveStatuses((current) => new Map(current).set(index, 'saved'));
@@ -353,10 +276,6 @@ export function InlineReflectionJournal({
           });
         }
       } catch {
-        if (isLatestAttempt()) {
-          failedReflectionSaves.set(key, response);
-          failedReflectionSaveListeners.forEach((listener) => listener(key));
-        }
         if (isCurrentSaveAttempt(pending)) {
           failedResponsesRef.current.set(index, pending);
           setSaveStatuses((current) => new Map(current).set(index, 'error'));
