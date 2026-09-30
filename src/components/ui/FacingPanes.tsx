@@ -55,11 +55,21 @@ export function FacingPanes({ panes, first, second, unpaired = 'hide', divider =
   const { colors } = useTheme();
   const layout = panes && second != null ? paneStyles(panes) : null;
   const showSecond = second != null && (layout !== null || unpaired === 'stack');
+  // A first pane with no size, such as one folded away above the keyboard,
+  // leaves VoiceOver, and the spine goes with it.
+  const firstFolded = layout !== null && panes?.first === 0;
 
   return (
     <View testID={testID} style={[styles.fill, layout?.container]}>
       {first != null ? (
-        <View key="first" style={layout ? layout.first : styles.fill}>{first}</View>
+        <View
+          key="first"
+          accessibilityElementsHidden={firstFolded}
+          importantForAccessibility={firstFolded ? 'no-hide-descendants' : 'auto'}
+          style={layout ? layout.first : styles.fill}
+        >
+          {first}
+        </View>
       ) : null}
       {layout ? (
         <View
@@ -68,7 +78,7 @@ export function FacingPanes({ panes, first, second, unpaired = 'hide', divider =
           importantForAccessibility="no-hide-descendants"
           style={[styles.gutter, layout.gutter]}
         >
-          {divider ? <View style={[layout.rule, { backgroundColor: colors.border }]} /> : null}
+          {divider && !firstFolded ? <View style={[layout.rule, { backgroundColor: colors.border }]} /> : null}
         </View>
       ) : null}
       {showSecond ? (

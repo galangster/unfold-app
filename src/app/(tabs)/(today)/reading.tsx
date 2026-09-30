@@ -6,10 +6,11 @@ import { markBookReaderReadyWithSnapshot } from '@/lib/book-opening-capture';
 import { getDailyGenerationNotice, getPausedSeriesDayNotice } from '@/lib/daily-generation-messages';
 import { useState, useCallback, useMemo, useEffect, useLayoutEffect, useRef } from 'react';
 import { useAutoHide } from '@/hooks/useAutoHide';
-import { View, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet, TouchableOpacity, Keyboard, LayoutAnimation, ScrollView, UIManager, Modal, type KeyboardEvent, type LayoutChangeEvent } from 'react-native';
+import { View, ActivityIndicator, AccessibilityInfo, StyleSheet, TouchableOpacity, Keyboard, ScrollView, UIManager, Modal, type LayoutChangeEvent } from 'react-native';
 import { ReaderText as Text } from '@/components/reading/ReaderText';
 import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
-import { ADAPTIVE_PANE_MIN, ADAPTIVE_READABLE_MEASURE, adaptiveFrameStyle, adaptivePaneLane, resolveAdaptivePanes } from '@/lib/adaptive-layout';
+import { useKeyboardFoldedPanes } from '@/hooks/useKeyboardFoldedPanes';
+import { ADAPTIVE_READABLE_MEASURE, adaptiveFrameStyle, adaptivePaneLane, resolveAdaptivePanes } from '@/lib/adaptive-layout';
 import { FacingPanes } from '@/components/ui/FacingPanes';
 import { useRouter, useLocalSearchParams, useIsFocused } from 'expo-router';
 import { useModalNavigation } from '@/hooks/useModalNavigation';
@@ -517,56 +518,20 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     ? Math.min(facingPanes.first - READER_PAGE_PADDING * 2, ADAPTIVE_READABLE_MEASURE)
     : adaptiveLayout.readableMaxWidth;
   const readingFrameStyle = adaptiveFrameStyle(readableWidth);
-  // A tall window gives reflection the space above the keyboard when the
-  // keyboard would leave its pane too short to write in. Reading stays mounted.
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const raisesReflectionDesk = (height: number) => facingPanes?.axis === 'column'
-    && reflectionFacing
-    && reflectionToolbar !== null
-    && facingPanes.second - Math.max(0, height - adaptiveLayout.insetBottom) < ADAPTIVE_PANE_MIN;
-  const reflectionDeskRaised = raisesReflectionDesk(keyboardHeight);
-  // Read by the keyboard listeners, which outlive a render.
-  const reflectionDeskMotionRef = useRef({ raised: reflectionDeskRaised, raisesAt: raisesReflectionDesk, reducedMotion });
-  reflectionDeskMotionRef.current = { raised: reflectionDeskRaised, raisesAt: raisesReflectionDesk, reducedMotion };
-  const stackedPaneAxis = facingPanes?.axis;
-  useEffect(() => {
-    if (stackedPaneAxis !== 'column') return;
-    setKeyboardHeight(Keyboard.isVisible() ? Keyboard.metrics()?.height ?? 0 : 0);
-    // The desk rises and lowers with the keyboard, on its duration and curve.
-    const followKeyboard = (event: KeyboardEvent, height: number) => {
-      const desk = reflectionDeskMotionRef.current;
-      if (!desk.reducedMotion && event.duration > 0 && desk.raisesAt(height) !== desk.raised) {
-        const type = LayoutAnimation.Types[event.easing] ?? LayoutAnimation.Types.keyboard;
-        LayoutAnimation.configureNext({ duration: event.duration, update: { duration: event.duration, type } });
-      }
-      setKeyboardHeight(height);
-    };
-    const show = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', (event) => {
-      followKeyboard(event, event.endCoordinates.height);
-    });
-    const hide = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', (event) => {
-      followKeyboard(event, 0);
-    });
-    return () => {
-      show.remove();
-      hide.remove();
-    };
-  }, [stackedPaneAxis]);
   // The raised desk keeps the reader header and progress line, so the way
   // back stays in reach. Only the reading scroll area folds away.
   const [readerHeaderHeight, setReaderHeaderHeight] = useState(0);
   const handleReaderHeaderLayout = useCallback((event: LayoutChangeEvent) => {
     setReaderHeaderHeight(event.nativeEvent.layout.height);
   }, []);
-  const readerChromeHeight = readerHeaderHeight + READING_PROGRESS_BAR_HEIGHT;
-  const displayedPanes = facingPanes && reflectionDeskRaised
-    ? {
-      ...facingPanes,
-      first: readerChromeHeight,
-      gutter: 0,
-      second: facingPanes.first + facingPanes.gutter + facingPanes.second - readerChromeHeight,
-    }
-    : facingPanes;
+  // A tall window gives reflection the space above the keyboard when the
+  // keyboard would leave its pane too short to write in. Reading stays mounted.
+  const { panes: displayedPanes, folded: reflectionDeskRaised } = useKeyboardFoldedPanes(facingPanes, {
+    enabled: reflectionFacing && reflectionToolbar !== null,
+    keep: readerHeaderHeight + READING_PROGRESS_BAR_HEIGHT,
+    insetBottom: adaptiveLayout.insetBottom,
+    reducedMotion,
+  });
   // A pane change unmounts the one journal and mounts it in the other pane.
   // Keep the open question of this day, so the new journal reopens it.
   const reflectionScope = `${effectiveDevotionalId ?? ''}:${viewingDay}`;

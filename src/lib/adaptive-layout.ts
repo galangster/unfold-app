@@ -11,6 +11,8 @@ export const ADAPTIVE_WIDE_MIN_WIDTH = 840;
 export const ADAPTIVE_SINGLE_COLUMN_FONT_SCALE = 1.6;
 /** Internal reading-column cap. Not an Apple-prescribed width. */
 export const ADAPTIVE_READABLE_MEASURE = 672;
+/** Horizontal padding of a reader page: the reading column and the pages that face it. */
+export const READER_PAGE_PADDING = Spacing['6'];
 export const PRIMARY_SAFE_AREA_EDGES = ['top', 'left', 'right'] as const;
 export const ADAPTIVE_CLUSTER_MEASURE = 720;
 export const ADAPTIVE_SPLIT_MEASURE = 980;
@@ -184,6 +186,23 @@ export function resolveAdaptivePanes(
     return { axis: 'row', lead: midline - layout.insetLeft - leadingRoom, first, second, gutter };
   }
   return null;
+}
+
+/**
+ * Whether a software keyboard this tall leaves the second of two stacked panes
+ * too short to write in. The bottom safe-area inset sits under the keyboard.
+ */
+export function keyboardCrowdsSecondPane(panes: AdaptivePanes, keyboardHeight: number, insetBottom: number): boolean {
+  return panes.second - Math.max(0, keyboardHeight - insetBottom) < ADAPTIVE_PANE_MIN;
+}
+
+/**
+ * Stacked panes with the first folded to `keep` points and the gutter closed,
+ * so the second pane takes the rest of the window. The folded pane stays
+ * mounted; a fold to zero hides it.
+ */
+export function foldFirstPane(panes: AdaptivePanes, keep = 0): AdaptivePanes {
+  return { ...panes, first: keep, gutter: 0, second: panes.first + panes.gutter + panes.second - keep };
 }
 
 /** A frame that spans both row panes, for chrome that sits above or below them. */
