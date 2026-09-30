@@ -2,7 +2,7 @@ import React, { Activity, type ReactNode } from 'react';
 import { act, renderHook } from '@testing-library/react-native';
 import { AccessibilityInfo } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
-import { useCopyConfirmation, type CopyConfirmation } from '../useCopyConfirmation';
+import { copyText, useCopyConfirmation, type CopyConfirmation } from '../useCopyConfirmation';
 
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn() }));
 
@@ -289,5 +289,22 @@ describe('useCopyConfirmation', () => {
     await copy(result);
 
     expect(announce.mock.calls).toEqual([['Copied']]);
+  });
+});
+
+describe('copyText', () => {
+  it('resolves true when the clipboard takes the text and confirms nothing', async () => {
+    await expect(copyText(TEXT)).resolves.toBe(true);
+    expect(setStringAsync).toHaveBeenCalledWith(TEXT);
+    expect(announce).not.toHaveBeenCalled();
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
+  it('resolves false, and does not reject, when the clipboard refuses the text', async () => {
+    setStringAsync.mockResolvedValueOnce(false);
+    await expect(copyText(TEXT)).resolves.toBe(false);
+    setStringAsync.mockRejectedValueOnce(new Error(`clipboard refused ${TEXT}`));
+    await expect(copyText(TEXT)).resolves.toBe(false);
+    expect(announce).not.toHaveBeenCalled();
   });
 });

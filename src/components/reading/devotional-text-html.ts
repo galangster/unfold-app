@@ -1,3 +1,4 @@
+import { closesQuotation, opensQuotation } from '@/lib/quote-marks';
 import { parseScriptureReferences, type ScriptureRef } from '@/lib/scripture-parser';
 
 /** The day's own passage, so a quotation of it counts as Scripture. */
@@ -22,23 +23,13 @@ export function escapeHtml(text: string): string {
     .replace(/'/g, '&#039;');
 }
 
-function isOpeningQuote(text: string, i: number): boolean {
-  const c = text.charAt(i);
-  return c === '\u201C' || (c === '"' && (i === 0 || /[\s([\u2014\u2013-]/.test(text.charAt(i - 1))));
-}
-
-function isClosingQuote(text: string, i: number): boolean {
-  const c = text.charAt(i);
-  return c === '\u201D' || (c === '"' && !isOpeningQuote(text, i));
-}
-
 /** Pairs of quote marks [open, close] with no other quote mark between them. */
 function quotationMarks(text: string): [number, number][] {
   const pairs: [number, number][] = [];
   let open = -1;
   for (let i = 0; i < text.length; i++) {
-    if (isOpeningQuote(text, i)) open = i;
-    else if (open >= 0 && isClosingQuote(text, i)) {
+    if (opensQuotation(text, i)) open = i;
+    else if (open >= 0 && closesQuotation(text, i)) {
       pairs.push([open, i]);
       open = -1;
     }

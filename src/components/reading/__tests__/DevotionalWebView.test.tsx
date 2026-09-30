@@ -5,7 +5,8 @@ import { AccessibilityInfo, PixelRatio, Platform, Share } from 'react-native';
 import { DevotionalWebView } from '../DevotionalWebView';
 import { RANGY_BUNDLE } from '../rangy-bundle';
 import type { Bookmark, DevotionalDay, Highlight } from '@/lib/store';
-import { bookmarkIdentityToken, EXCERPT_BOOKMARK_REFERENCE } from '@/lib/bookmark-identity';
+import { bookmarkIdentityToken, storedReferenceFor } from '@/lib/bookmark-identity';
+import { textContainsWords } from '@/lib/reader-words';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const renderer = require('react-test-renderer');
@@ -480,8 +481,6 @@ describe('DevotionalWebView highlight interactions', () => {
     });
 
     const script = getWebViewProps(tree).injectedJavaScript as string;
-    expect(script).toContain('function locateTextElement(targetText)');
-    expect(script).toContain('best = locateTextElement(targetText);');
     expect(script).toContain("type: 'TARGET_HIGHLIGHT_LOCATED'");
     expect(script).toContain('Grace meets you');
   });
@@ -645,7 +644,7 @@ describe('DevotionalWebView highlight interactions', () => {
     expect(script).toContain("postHighlightsChanged('recolor', before, primarySerial, false)");
     expect(script).toContain("postHighlightsChanged('undo', before, '', true)");
     // Nothing applied on the page ⇒ nothing stored: a failure is reported instead.
-    expect(script).toContain("postToApp({ type: 'HIGHLIGHT_FAILED' })");
+    expect(script).toContain("type: 'HIGHLIGHT_FAILED'");
     expect(script).not.toContain("type: 'QUOTE_SELECTED'");
 
     const added = [{ serial: '10$20$1$rangy-highlight-yellow$', text: 'grace upon', color: 'yellow', context: 'x' }];
@@ -741,9 +740,7 @@ describe('DevotionalWebView highlight interactions', () => {
     const script = getWebViewProps(tree).injectedJavaScript as string;
 
     expect(script).toContain('const targetBookmark = {"id":"bookmark-1"');
-    expect(script).toContain('function locateTargetBookmark(isLastTry)');
     expect(script).toContain("type: 'TARGET_BOOKMARK_LOCATED'");
-    expect(script).toContain("type: 'TARGET_BOOKMARK_MISSING'");
     expect(script).toContain('Grace meets you in the next act of trust.');
   });
 });
@@ -1269,7 +1266,7 @@ describe('DevotionalWebView selection actions (RN side)', () => {
       dayTitle: 'A Quiet Path',
       kind: 'excerpt',
       key: 'Rest is a gift.',
-      scriptureReference: EXCERPT_BOOKMARK_REFERENCE,
+      scriptureReference: storedReferenceFor('excerpt'),
       scriptureText: 'Rest is a gift.',
       quotedText: 'Rest is a gift.',
     };
@@ -1291,7 +1288,7 @@ describe('DevotionalWebView selection actions (RN side)', () => {
       devotionalTitle: 'Quiet Path Series',
       dayNumber: 1,
       dayTitle: 'A Quiet Path',
-      scriptureReference: EXCERPT_BOOKMARK_REFERENCE,
+      scriptureReference: storedReferenceFor('excerpt'),
       scriptureText: 'Rest is a gift.',
       savedAt: '2026-09-30T00:00:00.000Z',
     };
@@ -1415,6 +1412,73 @@ describe('DevotionalWebView selection actions (RN side)', () => {
     ]);
   });
 
+  it('copies without rendering the reader again: the bar shows the confirmation', async () => {
+    const onRender = jest.fn();
+    let tree: any;
+    act(() => {
+      tree = renderer.create(
+        <React.Profiler id="reader" onRender={onRender}>
+          <DevotionalWebView day={scriptureDay} fontSize="medium" devotionalId="dev-1" dayNumber={1} />
+        </React.Profiler>,
+      );
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const renders = onRender.mock.calls.length;
+    send(tree, { type: 'SELECTION_ACTION', action: 'copy', requestId: 3, text: 'Rest is a gift.' });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(mockInjectJavaScript).toHaveBeenCalledWith(
+      'window.__unfoldSelectionConfirm && window.__unfoldSelectionConfirm(3, "Copied"); true;',
+    );
+    expect(onRender).toHaveBeenCalledTimes(renders);
+  });
+
+  it('ignores a bar step or an action it does not know', () => {
+    const tree = renderReader();
+    mockInjectJavaScript.mockClear();
+    send(tree, { type: 'SELECTION_BAR', mode: 'toString' });
+    send(tree, { type: 'SELECTION_ACTION', action: 'highlight', requestId: 1, text: 'Rest is a gift.' });
+    send(tree, { type: 'SELECTION_ACTION', action: 'constructor', requestId: 2, text: 'Rest is a gift.' });
+    expect(announceSpy).not.toHaveBeenCalled();
+    expect(shareSpy).not.toHaveBeenCalled();
+    expect(mockAddBookmark).not.toHaveBeenCalled();
+    expect(mockInjectJavaScript).not.toHaveBeenCalled();
+  });
+
+  it('tells a ready page when a screen reader is on and when that changes, and sends nothing while none is on', async () => {
+    const told = () => mockInjectJavaScript.mock.calls.map(([script]) => script as string)
+      .filter((script) => script.includes('__unfoldSetScreenReader'));
+    const quiet = renderReader();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    reportHeight(quiet);
+    expect(told()).toEqual([]);
+    act(() => quiet.unmount());
+
+    // The jest preset's own mocks: each answers the next call only.
+    let changeTo: ((on: boolean) => void) | undefined;
+    jest.mocked(AccessibilityInfo.isScreenReaderEnabled).mockResolvedValueOnce(true);
+    jest.mocked(AccessibilityInfo.addEventListener).mockImplementationOnce(((_event: string, handler: (on: boolean) => void) => {
+      changeTo = handler;
+      return { remove: jest.fn() };
+    }) as never);
+    const tree = renderReader();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    // The page is not ready before its first height report.
+    expect(told()).toEqual([]);
+    reportHeight(tree);
+    expect(told()).toEqual(['window.__unfoldSetScreenReader && window.__unfoldSetScreenReader(true); true;']);
+    act(() => changeTo?.(false));
+    expect(told().at(-1)).toBe('window.__unfoldSetScreenReader && window.__unfoldSetScreenReader(false); true;');
+    act(() => tree.unmount());
+  });
+
   it('answers SELECTION_ACTIVE with the band of the page the reader can see', () => {
     const viewportRef = { current: { measureInWindow: (callback: any) => callback(0, 100, 390, 600) } };
     const tree = renderReader({ viewportRef });
@@ -1454,7 +1518,8 @@ interface ReaderPage {
 
 const openPages: ReaderPage[] = [];
 
-async function openPage(tree: any): Promise<ReaderPage> {
+/** `beforeScript` runs in the page after its <head> and before the page script. */
+async function openPage(tree: any, beforeScript?: (window: any) => void): Promise<ReaderPage> {
   const props = getWebViewProps(tree);
   const dom = new JSDOM(props.source.html, { runScripts: 'dangerously', pretendToBeVisual: true });
   const { window } = dom;
@@ -1476,6 +1541,7 @@ async function openPage(tree: any): Promise<ReaderPage> {
   if (document.readyState !== 'complete') {
     await new Promise((resolve) => window.addEventListener('load', resolve));
   }
+  beforeScript?.(window);
   window.eval(props.injectedJavaScript);
   const page = { window, document, toolbar: document.getElementById('highlight-toolbar'), messages, geometry };
   openPages.push(page);
@@ -1944,7 +2010,7 @@ describe('DevotionalWebView selection bar (the page, in jsdom)', () => {
         ...targetBookmark,
         id: 'bm-across',
         kind: 'excerpt',
-        scriptureReference: EXCERPT_BOOKMARK_REFERENCE,
+        scriptureReference: storedReferenceFor('excerpt'),
         scriptureText: 'Stillness is trust. Third paragraph',
         quotedText: 'Stillness is trust. Third paragraph',
       },
@@ -2098,7 +2164,7 @@ describe('DevotionalWebView selection bar (the page, in jsdom)', () => {
       ...targetBookmark,
       id: 'bm-crossing',
       kind: 'excerpt',
-      scriptureReference: EXCERPT_BOOKMARK_REFERENCE,
+      scriptureReference: storedReferenceFor('excerpt'),
       // As the page saves it: the paragraph break is one space.
       scriptureText: 'in the next act of trust. Jesus said, “Come to me',
       quotedText: 'in the next act of trust. Jesus said, “Come to me',
@@ -2114,6 +2180,124 @@ describe('DevotionalWebView selection bar (the page, in jsdom)', () => {
       { type: 'TARGET_BOOKMARK_MISSING', bookmarkId: 'bm-gone' },
     ]);
     expect(lastMessage(gone, 'TARGET_BOOKMARK_LOCATED')).toBeUndefined();
+  });
+
+  it('lands a saved highlight on its words when no restored mark is there', async () => {
+    const page = await openPage(renderPage({ targetHighlight: { ...targetHighlight, serializedRange: undefined }, existingHighlights: [] }));
+    await wait(200);
+    expect(lastMessage(page, 'TARGET_HIGHLIGHT_LOCATED')).toMatchObject({ highlightId: 'highlight-1' });
+    expect(page.document.querySelector('p').classList.contains('target-highlight-flash')).toBe(true);
+  });
+
+  it('starts only after every part of its script has run, so start-up never reads a binding before it exists', async () => {
+    const readyAtStart: string[] = [];
+    const page = await openPage(renderPage({ existingHighlights: [targetHighlight] }), (window) => {
+      const init = window.rangy.init;
+      window.rangy.init = function start(this: unknown, ...args: unknown[]) {
+        readyAtStart.push(typeof window.__unfoldCloseBar, typeof window.handleBookmark);
+        return init.apply(this, args);
+      };
+    });
+    expect(readyAtStart).toEqual(['function', 'function']);
+    expect(page.document.querySelector('mark.highlight-yellow')?.textContent).toBe('Grace meets you');
+  });
+
+  it('finds a bookmark’s words exactly when RN predicts it will', async () => {
+    const cases: [bodyText: string, words: string][] = [
+      ['For God *so loved* the world.', 'so loved the world'],
+      ['For God so loved the world.', 'FOR GOD SO LOVED'],
+      ['Be\u00A0still, and know.', 'be still, and know'],
+      ['First part ends.\n\nSecond part begins.', 'ends. Second part'],
+      ['Grace * peace.', 'grace peace'],
+      ['ΛΟΓΟΣ is the Word.', 'λογοσ is'],
+      ['Jesus said, “Come to me” (Matthew 11:28).', '“come to me”'],
+      ['For God so loved the world.', 'not in the reading'],
+    ];
+    const pages = await Promise.all(cases.map(([bodyText, words], i) => {
+      let tree: any;
+      act(() => {
+        tree = renderer.create(
+          <DevotionalWebView
+            day={{ ...day, quotableLine: '', bodyText }}
+            fontSize="medium"
+            devotionalId="dev-1"
+            dayNumber={1}
+            targetBookmark={{ ...targetBookmark, id: `bm-${i}`, kind: 'scripture', scriptureReference: 'Psalm 23:1', scriptureText: words }}
+          />,
+        );
+      });
+      return openPage(tree);
+    }));
+    await wait(1100);
+    const found = pages.map((page) => Boolean(lastMessage(page, 'TARGET_BOOKMARK_LOCATED')));
+    expect(found).toEqual(cases.map(([bodyText, words]) => textContainsWords(bodyText, words)));
+    expect(found).toContain(false);
+  });
+
+  it('moves focus to the first button of the bar when a screen reader is on, and leaves it alone when none is', async () => {
+    const quiet = await openPage(renderPage());
+    await select(quiet, 'Grace meets you');
+    quiet.window.__unfoldSetViewport(0, 3000);
+    expect(isBarVisible(quiet)).toBe(true);
+    expect(quiet.document.activeElement).toBe(quiet.document.body);
+
+    const page = await openPage(renderPage());
+    const click = (el: any) => el.dispatchEvent(new page.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+    page.window.__unfoldSetScreenReader(true);
+    await select(page, 'Rest is a gift.');
+    page.window.__unfoldSetViewport(0, 3000);
+    expect(page.document.activeElement).toBe(barButton(page, '[data-action="highlight"]'));
+    // WebKit clears the selection when focus moves into the bar. The bar stays.
+    await collapseSelection(page);
+    expect(isBarVisible(page)).toBe(true);
+
+    // VoiceOver activates Highlight: Back is the first button of the colour step.
+    click(barButton(page, '[data-action="highlight"]'));
+    expect(barMode(page)).toBe('colors');
+    expect(page.document.activeElement).toBe(barButton(page, '[data-action="back"]'));
+    click(barButton(page, '.color-btn.green'));
+    expect(isBarVisible(page)).toBe(false);
+
+    // Tap-to-edit has no Back: the first colour.
+    click(page.document.querySelector('mark.highlight-green'));
+    page.window.__unfoldSetViewport(0, 3000);
+    expect(barMode(page)).toBe('edit');
+    expect(page.document.activeElement).toBe(barButton(page, '.color-btn.yellow'));
+  });
+
+  it('closes, with its selection, for a tap on one of the reader’s own views', async () => {
+    const commandRef = { current: null as any };
+    const page = await openPage(renderPage({ commandRef }));
+    await select(page, 'Grace meets you');
+    page.window.__unfoldSetViewport(0, 3000);
+    expect(isBarVisible(page)).toBe(true);
+
+    mockInjectJavaScript.mockClear();
+    act(() => commandRef.current.closeSelectionBar());
+    expect(mockInjectJavaScript).toHaveBeenCalledWith('window.__unfoldCloseBar && window.__unfoldCloseBar(); true;');
+    page.window.eval(mockInjectJavaScript.mock.calls[0][0]);
+    expect(isBarVisible(page)).toBe(false);
+    expect(page.window.getSelection().toString()).toBe('');
+  });
+
+  it('on Android, Back in the colour step closes the bar and never shows the action bar', async () => {
+    const AndroidWebView = loadAndroidWebView();
+    let tree: any;
+    act(() => {
+      tree = renderer.create(<AndroidWebView day={pageDay} fontSize="medium" devotionalId="dev-1" dayNumber={1} />);
+    });
+    const page = await openPage(tree);
+    await select(page, 'Grace meets you');
+    await collapseSelection(page);
+    page.window.__unfoldSelectionAction('highlight', 'Grace meets you');
+    page.window.__unfoldSetViewport(0, 3000);
+    expect(barMode(page)).toBe('colors');
+    expect(isBarVisible(page)).toBe(true);
+
+    tap(page, barButton(page, '[data-action="back"]'));
+    expect(isBarVisible(page)).toBe(false);
+    expect(page.messages.filter((message) => message.type === 'SELECTION_BAR').map((message) => message.mode)).toEqual(['colors']);
+    expect(page.document.querySelector('mark')).toBeNull();
   });
 
   it('on Android shows no action bar and runs the native menu keys through the same path', async () => {

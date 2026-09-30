@@ -33,7 +33,8 @@ import type { ReflectionKeyboardToolbarState } from './ReflectionQuestionNav';
 import type { SavedScripturePassage } from '@/components/ScriptureTapSheet';
 import { getReflectionTypography } from '@/lib/reflection-typography';
 import { Typography } from '@/constants/typography';
-import { bookmarkKind, canonicalizeScriptureReference } from '@/lib/bookmark-identity';
+import { bookmarkLanding } from '@/lib/bookmark-landing';
+import { useSelectionBarOutsideTap } from './useSelectionBarOutsideTap';
 
 /** Jump targets for the reader Contents sheet, in document order. */
 export type ReaderSection = 'scripture' | 'devotional' | 'reflection' | 'act' | 'prayer';
@@ -97,17 +98,6 @@ interface DevotionalContentProps {
  * Elegant section divider -- three centered dots with fine rules on each side.
  * Used between major content sections for a book-like feel.
  */
-/** Words compared the way the reader shows them: no markdown asterisks,
- *  white space collapsed, case ignored. */
-function readerWords(value: string | undefined): string {
-  return (value ?? '').replace(/\*/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
-}
-
-function textContainsWords(text: string | undefined, words: string | undefined): boolean {
-  const needle = readerWords(words);
-  return needle.length > 0 && readerWords(text).includes(needle);
-}
-
 function SectionDivider({ color, style }: { color: string; style?: object }) {
   return (
     <View style={[dcStyles.dividerContainer, style]}>
@@ -234,46 +224,32 @@ export function DevotionalContent({
   const actSectionRef = useRef<View>(null);
   const prayerSectionRef = useRef<View>(null);
   const locatedTopBookmarkRef = useRef<string | null>(null);
-  const targetBookmarkKind = targetBookmark ? bookmarkKind(targetBookmark) : null;
-  // A Scripture bookmark whose words are in the devotional text is a phrase
-  // selected there. Sync keeps only the reference and the text, so the text
-  // decides. A phrase lands on its words; the passage is the fallback when
-  // the page cannot find them. The day's whole passage is the passage, even
-  // when the teaching quotes it word for word.
-  const targetBookmarkIsPhrase = useMemo(() => targetBookmarkKind === 'scripture'
-    && Boolean(targetBookmark && textContainsWords(day.bodyText, targetBookmark.scriptureText))
-    && readerWords(targetBookmark?.scriptureText) !== readerWords(day.scriptureText),
-  [day.bodyText, day.scriptureText, targetBookmark, targetBookmarkKind]);
-  const [missingPhraseId, setMissingPhraseId] = useState<string | null>(null);
-  const targetBookmarkIsInText = targetBookmarkIsPhrase && missingPhraseId !== targetBookmark?.id;
-  const targetBookmarkIsMainScripture = useMemo(() => {
-    if (!targetBookmark || targetBookmarkKind !== 'scripture' || targetBookmarkIsInText) return false;
-    return canonicalizeScriptureReference(targetBookmark.scriptureReference)
-      === canonicalizeScriptureReference(day.scriptureReference);
-  }, [day.scriptureReference, targetBookmark, targetBookmarkIsInText, targetBookmarkKind]);
-  const targetBookmarkIsWebViewContent = targetBookmarkKind !== null
-    && (targetBookmarkKind !== 'scripture' || targetBookmarkIsPhrase);
+  // The id of a target bookmark whose words the page reported it cannot find.
+  const [missingWordsId, setMissingWordsId] = useState<string | null>(null);
+  const targetLanding = useMemo(() => (targetBookmark
+    ? bookmarkLanding(
+      targetBookmark,
+      { scriptureReference: day.scriptureReference, scriptureText: day.scriptureText, bodyText: day.bodyText },
+      missingWordsId === targetBookmark.id,
+    )
+    : null), [day.bodyText, day.scriptureReference, day.scriptureText, missingWordsId, targetBookmark]);
 
   useEffect(() => {
-    if (!targetBookmark || targetBookmarkKind !== 'scripture') return;
-    if (targetBookmarkIsMainScripture || targetBookmarkIsInText) return;
+    if (!targetBookmark || targetLanding?.on !== 'sheet') return;
     if (locatedTopBookmarkRef.current === targetBookmark.id) return;
     locatedTopBookmarkRef.current = targetBookmark.id;
-    // A phrase is not the passage text, so the sheet loads the passage. A
-    // selection saved on this device keeps its kind and its words as
-    // quotedText, which still mark it as a phrase after the day's text
-    // changes. Older builds put quotedText on whole passages, with no kind.
-    const selectedPhrase = targetBookmark.kind === 'scripture' && Boolean(targetBookmark.quotedText);
-    const savedTextIsPassage = !targetBookmarkIsPhrase && !selectedPhrase;
-    onScriptureTap?.(targetBookmark.scriptureReference, savedTextIsPassage ? {
-      text: targetBookmark.scriptureText,
-      ...(targetBookmark.translation ? { translation: targetBookmark.translation } : {}),
-    } : undefined);
-  }, [onScriptureTap, targetBookmark, targetBookmarkIsInText, targetBookmarkIsMainScripture, targetBookmarkIsPhrase, targetBookmarkKind]);
+    onScriptureTap?.(targetBookmark.scriptureReference, targetLanding.savedPassage);
+  }, [onScriptureTap, targetBookmark, targetLanding]);
 
   const handleTargetBookmarkMissing = useCallback(() => {
-    if (targetBookmarkIsPhrase && targetBookmark) setMissingPhraseId(targetBookmark.id);
-  }, [targetBookmark, targetBookmarkIsPhrase]);
+    if (targetBookmark) setMissingWordsId(targetBookmark.id);
+  }, [targetBookmark]);
+
+  // The page's commands. The reader passes its own ref (undo, jumps); a
+  // reading without one still needs a ref to close the selection bar.
+  const ownCommandRef = useRef<DevotionalWebViewCommands | null>(null);
+  const commandRef = highlightCommandRef ?? ownCommandRef;
+  const { onPageTouchStart, readerTouchHandlers } = useSelectionBarOutsideTap(commandRef);
 
   const handleDevotionalWebViewLayout = useCallback((event: LayoutChangeEvent) => {
     devotionalWebViewTopRef.current = event.nativeEvent.layout.y;
@@ -281,11 +257,11 @@ export function DevotionalContent({
   }, [layoutGeneration, onSectionLayout]);
 
   const locateTopBookmark = useCallback((contentY: number) => {
-    if (!targetBookmark || !targetBookmarkIsMainScripture) return;
+    if (!targetBookmark || targetLanding?.on !== 'passage') return;
     if (locatedTopBookmarkRef.current === targetBookmark.id) return;
     locatedTopBookmarkRef.current = targetBookmark.id;
     onTargetBookmarkLocated?.(contentY);
-  }, [onTargetBookmarkLocated, targetBookmark, targetBookmarkIsMainScripture]);
+  }, [onTargetBookmarkLocated, targetBookmark, targetLanding]);
 
   const handleScriptureBlockLayout = useCallback((event: LayoutChangeEvent) => {
     const y = event.nativeEvent.layout.y;
@@ -389,7 +365,7 @@ export function DevotionalContent({
     : `${colors.accent}26`; // ~15% opacity on light
 
   return (
-    <View ref={contentRootRef} collapsable={false}>
+    <View ref={contentRootRef} collapsable={false} {...readerTouchHandlers}>
       {/* Day title — fontSize is dynamic so keep inline */}
       <Text
         {...(titleSharedTransitionTag ? { sharedTransitionTag: titleSharedTransitionTag } : {})}
@@ -522,21 +498,27 @@ export function DevotionalContent({
       {/* Section divider: scripture -> body */}
       <SectionDivider color={colors.textMuted} style={{ marginTop: 20, marginBottom: 8 }} />
 
-      <View ref={devotionalSectionRef} collapsable={false} onLayout={handleDevotionalWebViewLayout}>
+      <View
+        ref={devotionalSectionRef}
+        testID="reading-devotional-section"
+        collapsable={false}
+        onLayout={handleDevotionalWebViewLayout}
+        onTouchStart={onPageTouchStart}
+      >
         <DevotionalWebView
           day={day}
           fontSize={fontSize}
           onHighlightsChanged={onHighlightsChanged}
           onHighlightFailed={onHighlightFailed}
           onHighlightsLost={onHighlightsLost}
-          commandRef={highlightCommandRef}
+          commandRef={commandRef}
           existingHighlights={existingHighlights}
           targetHighlight={targetHighlight}
           onTargetHighlightLocated={handleTargetHighlightLocated}
           onContentLocations={onWebViewLocations}
           onLayoutGenerationCommitted={handleLayoutGenerationCommitted}
           layoutGeneration={layoutGeneration}
-          targetBookmark={targetBookmarkIsWebViewContent ? targetBookmark : null}
+          targetBookmark={targetLanding?.inPage ? targetBookmark : null}
           onTargetBookmarkLocated={handleTargetBookmarkLocated}
           onTargetBookmarkMissing={handleTargetBookmarkMissing}
           onScriptureTap={onScriptureTap}

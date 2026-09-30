@@ -3,19 +3,35 @@ export type BookmarkKind = 'scripture' | 'quote' | 'context' | 'word-study' | 'e
 /** The kinds a box in the devotional reader (quote, context, word study) saves. */
 export type BoxBookmarkKind = 'quote' | 'context' | 'word-study';
 
+const STORED_REFERENCES: Record<Exclude<BookmarkKind, 'scripture'>, string> = {
+  quote: 'Quote',
+  context: 'Historical Context',
+  'word-study': 'Word Study',
+  excerpt: 'quote',
+};
+
 /**
- * What an excerpt bookmark (prose selected in the devotional reader) stores
- * in `scriptureReference`. Sync carries only `scriptureReference` and
- * `scriptureText`, so this value must bring the kind back after a round trip.
+ * What a bookmark that is not Scripture stores in `scriptureReference`
+ * (Scripture stores its own reference). Sync carries only
+ * `scriptureReference` and `scriptureText`, so this value must bring the kind
+ * back after a round trip: bookmarkKind reads it.
  *
- * Builds from before excerpts read the reference through
- * LEGACY_KIND_BY_REFERENCE, trimmed and in lower case. With 'quote' they
- * keep each excerpt as its own quote bookmark, keyed by its text. Any other
- * label makes them read every excerpt of a day as one Scripture passage, so
- * deleting one there deletes them all. This build tells an excerpt from a
- * quote box by case: a quote box stores 'Quote'.
+ * - A box (quote, context, word study) stores its legacy label: 'Quote',
+ *   'Historical Context', 'Word Study'.
+ * - An excerpt (prose selected in the devotional reader) stores 'quote', in
+ *   lower case. Builds from before excerpts read the reference through
+ *   LEGACY_KIND_BY_REFERENCE, trimmed and in lower case. With 'quote' they
+ *   keep each excerpt as its own quote bookmark, keyed by its text. Any other
+ *   label makes them read every excerpt of a day as one Scripture passage, so
+ *   deleting one there deletes them all.
+ *
+ * So this build tells the two apart by case alone: 'quote' is an excerpt and
+ * 'Quote' is a quote box. No build has stored 'quote' for a quote box.
  */
-export const EXCERPT_BOOKMARK_REFERENCE = 'quote';
+export function storedReferenceFor(kind: Exclude<BookmarkKind, 'scripture'>): string {
+  return STORED_REFERENCES[kind];
+}
+
 /** What My library shows as the reference of an excerpt. */
 export const EXCERPT_BOOKMARK_LABEL = 'Excerpt';
 
@@ -65,7 +81,7 @@ export function bookmarkKind(bookmark: Pick<BookmarkIdentitySource, 'kind' | 'sc
   const explicitKind = parseBookmarkKind(bookmark.kind);
   if (explicitKind) return explicitKind;
   const reference = bookmark.scriptureReference.trim();
-  if (reference === EXCERPT_BOOKMARK_REFERENCE) return 'excerpt';
+  if (reference === STORED_REFERENCES.excerpt) return 'excerpt';
   return LEGACY_KIND_BY_REFERENCE[reference.toLowerCase()] ?? 'scripture';
 }
 

@@ -18,6 +18,8 @@
  * The link lives only in the message text, so the caller passes no `url`.
  */
 
+import { closesQuotation, isQuoteMark, opensQuotation, QUOTE_MARKS } from '@/lib/quote-marks';
+
 export const UNFOLD_SHARE_LINE = 'Shared from Unfold · https://unfoldapp.co';
 
 export interface SelectionShareInput {
@@ -34,21 +36,11 @@ function collapse(value: string | null | undefined): string {
   return typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
 }
 
-const QUOTE_MARK = /["“”„]/;
-
-/** Whether the quote mark at `i` opens a quotation. A straight mark opens
- *  at the start and after white space or an opening bracket or dash. */
-function opensQuotation(text: string, i: number): boolean {
-  const c = text.charAt(i);
-  if (c === '”') return false;
-  return c !== '"' || i === 0 || /[\s([\u2014\u2013-]/.test(text.charAt(i - 1));
-}
-
 /** How many quotations are still open at the end of `text`. */
 function openQuotations(text: string): number {
   let depth = 0;
   for (let i = 0; i < text.length; i++) {
-    if (QUOTE_MARK.test(text.charAt(i))) depth = Math.max(0, depth + (opensQuotation(text, i) ? 1 : -1));
+    if (isQuoteMark(text.charAt(i))) depth = Math.max(0, depth + (opensQuotation(text, i) ? 1 : -1));
   }
   return depth;
 }
@@ -57,12 +49,15 @@ function openQuotations(text: string): number {
 function closingMark(text: string): number {
   let depth = 0;
   for (let i = 0; i < text.length; i++) {
-    if (!QUOTE_MARK.test(text.charAt(i))) continue;
+    if (!isQuoteMark(text.charAt(i))) continue;
     depth += opensQuotation(text, i) ? 1 : -1;
     if (depth === 0) return i;
   }
   return -1;
 }
+
+/** Quote marks at the end of the text, before an optional , ; or : */
+const TRAILING_QUOTE_MARKS = new RegExp(`\\s*[${QUOTE_MARKS}]+[,;:]?$`);
 
 /**
  * Removes the quote marks the selection already carries, so the wrapping
@@ -75,15 +70,16 @@ function closingMark(text: string): number {
  */
 export function unwrapQuotes(text: string): string {
   let t = text.trim();
-  if (/^["“„]/.test(t)) {
+  if (opensQuotation(t, 0)) {
     const close = closingMark(t);
     // A trailing , ; or : belongs to the sentence the words came from.
     if (close >= 0 && /^\s*[,;:]?$/.test(t.slice(close + 1))) return t.slice(1, close).trim();
     if (close < 0) t = t.slice(1).trim();
   } else {
-    t = t.replace(/^”+\s*/, '');
+    // Marks that close a quotation opened before the selection.
+    while (closesQuotation(t, 0)) t = t.slice(1).trimStart();
   }
-  const trailing = t.match(/\s*["“”]+[,;:]?$/);
+  const trailing = t.match(TRAILING_QUOTE_MARKS);
   if (trailing && openQuotations(t.slice(0, trailing.index)) === 0) t = t.slice(0, trailing.index);
   return t.trim();
 }

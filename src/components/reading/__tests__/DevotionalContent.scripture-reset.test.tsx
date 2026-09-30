@@ -6,7 +6,7 @@
 import renderer, { act } from 'react-test-renderer';
 import { DevotionalContent } from '../DevotionalContent';
 import type { Bookmark } from '@/lib/store';
-import { EXCERPT_BOOKMARK_REFERENCE } from '@/lib/bookmark-identity';
+import { storedReferenceFor } from '@/lib/bookmark-identity';
 
 const mockFetchVerseLocal = jest.fn();
 const mockFetchVerse = jest.fn();
@@ -319,8 +319,8 @@ describe('DevotionalContent versed scripture (Greptile A8)', () => {
       { ...saved, id: 'pulled-related', scriptureReference: 'Matthew 11:28', scriptureText: 'Come to me' },
       { ...saved, id: 'selected-main', kind: 'scripture' as const, key: 'John 3:16', scriptureReference: 'John 3:16', scriptureText: 'so loved', quotedText: 'so loved' },
       // Prose, as saved and as a sync pull rebuilds it.
-      { ...saved, id: 'selected-prose', kind: 'excerpt' as const, key: 'Grace meets you', scriptureReference: EXCERPT_BOOKMARK_REFERENCE, scriptureText: 'Grace meets you', quotedText: 'Grace meets you' },
-      { ...saved, id: 'pulled-prose', scriptureReference: EXCERPT_BOOKMARK_REFERENCE, scriptureText: 'Grace meets you' },
+      { ...saved, id: 'selected-prose', kind: 'excerpt' as const, key: 'Grace meets you', scriptureReference: storedReferenceFor('excerpt'), scriptureText: 'Grace meets you', quotedText: 'Grace meets you' },
+      { ...saved, id: 'pulled-prose', scriptureReference: storedReferenceFor('excerpt'), scriptureText: 'Grace meets you' },
     ];
 
     for (const targetBookmark of targets) {
@@ -494,6 +494,66 @@ describe('DevotionalContent versed scripture (Greptile A8)', () => {
     expect(onTargetBookmarkLocated).toHaveBeenCalledWith(320);
     expect(onScriptureTap).not.toHaveBeenCalled();
     act(() => tree!.unmount());
+  });
+
+  it('closes the selection bar on a tap on the reader’s own views, not on the page, a drag, or a long press', async () => {
+    mockFetchVerseLocal.mockResolvedValue(null);
+    mockFetchVerse.mockResolvedValue(null);
+    const closeSelectionBar = jest.fn();
+    const commands = { applyInverse: jest.fn(), scrollToHighlight: jest.fn(), refreshSelectionBar: jest.fn(), closeSelectionBar };
+    const at = (pageX: number, pageY: number, timestamp: number) => ({ nativeEvent: { pageX, pageY, timestamp } });
+    const render = async (extra: Record<string, unknown>) => {
+      mockDevotionalWebView.mockClear();
+      let tree: renderer.ReactTestRenderer;
+      await act(async () => {
+        tree = renderer.create(<DevotionalContent day={day({ act: 'Take a quiet moment.' })} fontSize="medium" {...extra} />);
+        await Promise.resolve();
+      });
+      return {
+        tree: tree!,
+        reader: tree!.root.findAll((node) => typeof node.props.onTouchEnd === 'function')[0].props,
+        page: tree!.root.findByProps({ testID: 'reading-devotional-section' }).props,
+      };
+    };
+
+    const { tree, reader, page } = await render({ highlightCommandRef: { current: commands } });
+    // A tap on the act section.
+    act(() => {
+      reader.onTouchStart(at(20, 900, 1000));
+      reader.onTouchEnd(at(22, 903, 1120));
+    });
+    expect(closeSelectionBar).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      // A tap on the page: RN hands it to the page's wrapper first, and the
+      // page closes its own bar by its own rule.
+      page.onTouchStart(at(20, 400, 2000));
+      reader.onTouchStart(at(20, 400, 2000));
+      reader.onTouchEnd(at(20, 400, 2100));
+      // A drag that scrolls the reader, a long press, and a touch the
+      // ScrollView takes over.
+      reader.onTouchStart(at(20, 900, 3000));
+      reader.onTouchMove(at(20, 860, 3050));
+      reader.onTouchEnd(at(20, 700, 3200));
+      reader.onTouchStart(at(20, 900, 4000));
+      reader.onTouchEnd(at(20, 900, 4800));
+      reader.onTouchStart(at(20, 900, 5000));
+      reader.onTouchCancel();
+      reader.onTouchEnd(at(20, 900, 5100));
+    });
+    expect(closeSelectionBar).toHaveBeenCalledTimes(1);
+    act(() => tree.unmount());
+
+    // A reading without the reader's ref (onboarding) gives the page its own.
+    const own = await render({});
+    const webViewProps = mockDevotionalWebView.mock.calls.at(-1)?.[0] as { commandRef: { current: unknown } };
+    webViewProps.commandRef.current = commands;
+    act(() => {
+      own.reader.onTouchStart(at(20, 900, 6000));
+      own.reader.onTouchEnd(at(20, 900, 6100));
+    });
+    expect(closeSelectionBar).toHaveBeenCalledTimes(2);
+    act(() => own.tree.unmount());
   });
 
   it('signals reflection remeasurement after the WebView height commit', async () => {

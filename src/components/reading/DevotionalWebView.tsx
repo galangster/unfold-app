@@ -19,13 +19,16 @@ import {
   bookmarkIdentity,
   bookmarkIdentityToken,
   bookmarkKindFromBoxType,
-  EXCERPT_BOOKMARK_REFERENCE,
   findBookmarkByIdentity,
+  storedReferenceFor,
 } from '@/lib/bookmark-identity';
 import type { BookmarkKind, BoxBookmarkKind } from '@/lib/bookmark-identity';
+import { READER_WORDS_PAGE_JS } from '@/lib/reader-words';
 import { formatSelectionShareText } from '@/lib/selection-share';
-import { COPIED_MESSAGE, useCopyConfirmation } from '@/hooks/useCopyConfirmation';
+import { COPIED_MESSAGE, copyText } from '@/hooks/useCopyConfirmation';
+import { useScreenReaderEnabled } from '@/hooks/useScreenReaderEnabled';
 import { escapeHtml, renderDevotionalInline } from './devotional-text-html';
+import { TAP_MAX_MS, TAP_SLOP_PX } from './useSelectionBarOutsideTap';
 
 /** The document is the source of truth: every mutation reports the diff of
  *  live highlights before and after, and the store reconciles from it. */
@@ -51,6 +54,9 @@ export interface DevotionalWebViewCommands {
    *  it ran itself (a reflow restore after an Aa change, a jump) ends: the
    *  visible band the bar was placed in moved with that scroll. */
   refreshSelectionBar: () => void;
+  /** Close an open selection bar and clear its selection. The reader calls it
+   *  for a tap on one of its own views, outside the page. */
+  closeSelectionBar: () => void;
 }
 
 interface DevotionalWebViewProps {
@@ -111,11 +117,13 @@ const NO_BOOKMARKS: Bookmark[] = [];
  *  patch). No menuItems: they would bring back the long-press-only menu. */
 const IOS_SUPPRESS_MENU_ITEMS: ['all'] = ['all'];
 
+type SelectionAction = 'highlight' | 'bookmark' | 'share' | 'copy';
+
 /** The four selection actions, in order: the buttons of the iOS bar and the
  *  items of the Android menu. Android keeps a native menu; custom entries
  *  REPLACE it (react-native-webview semantics), and each key runs the same
  *  page path as the matching button of the iOS bar. */
-const SELECTION_ACTIONS: { key: 'highlight' | 'bookmark' | 'share' | 'copy'; label: string }[] = [
+const SELECTION_ACTIONS: { key: SelectionAction; label: string }[] = [
   { key: 'highlight', label: 'Highlight' },
   { key: 'bookmark', label: 'Bookmark' },
   { key: 'share', label: 'Share' },
@@ -127,13 +135,6 @@ const BOOKMARK_SAVED_MESSAGE = 'Saved to My library';
 /** The store keeps one bookmark per identity: the same prose words, or any
  *  words from a Scripture passage that is already saved, add nothing. */
 const BOOKMARK_EXISTS_MESSAGE = 'Already in My library';
-
-/** What a box bookmark stores in `scriptureReference` (its legacy label). */
-const BOX_BOOKMARK_LABELS: Record<BoxBookmarkKind, string> = {
-  quote: 'Quote',
-  context: 'Historical Context',
-  'word-study': 'Word Study',
-};
 
 /** Phosphor (regular weight, 256 viewBox) paths for the selection bar, the
  *  same icon set phosphor-react-native draws elsewhere in the app. */
@@ -151,14 +152,46 @@ const barIcon = (path: string) =>
 
 const HIGHLIGHT_COLOR_NAMES = Object.keys(HIGHLIGHT_COLOR_LABELS) as HighlightColor[];
 
+/** The steps of the bar the page names to RN when it opens or changes step:
+ *  the actions, the colour step, and tap-to-edit. Its fourth step, a
+ *  confirmation ('status'), says its own words. */
+const ANNOUNCED_BAR_MODES = ['actions', 'colors', 'edit'] as const;
+type AnnouncedBarMode = (typeof ANNOUNCED_BAR_MODES)[number];
+
+function isAnnouncedBarMode(mode: unknown): mode is AnnouncedBarMode {
+  return (ANNOUNCED_BAR_MODES as readonly unknown[]).includes(mode);
+}
+
 /** VoiceOver and TalkBack hear these when the bar opens or changes step:
  *  the bar is the last element of the page, after the whole article. */
 const HIGHLIGHT_CHOICES = HIGHLIGHT_COLOR_NAMES.map((color) => HIGHLIGHT_COLOR_LABELS[color]).join(', ');
-const SELECTION_BAR_ANNOUNCEMENTS: Record<string, string> = {
+const SELECTION_BAR_ANNOUNCEMENTS: Record<AnnouncedBarMode, string> = {
   actions: `Selection actions: ${SELECTION_ACTIONS.map(({ label }) => label).join(', ')}`,
   colors: `Highlight: ${HIGHLIGHT_CHOICES}`,
   edit: `Edit highlight: ${HIGHLIGHT_CHOICES}, or remove it`,
 };
+
+/** A SELECTION_ACTION message from the page. Highlight never comes: its
+ *  colour step stays in the page. */
+interface SelectionActionMessage {
+  action: Exclude<SelectionAction, 'highlight'>;
+  /** Bookmark and Share: one line. Copy: the words as selected. */
+  text: string;
+  /** The Scripture passage the words sit in, or ''. */
+  reference: string;
+  requestId: number;
+}
+
+function parseSelectionAction(data: Record<string, unknown>): SelectionActionMessage | null {
+  const { action } = data;
+  if (action !== 'bookmark' && action !== 'share' && action !== 'copy') return null;
+  return {
+    action,
+    text: typeof data.text === 'string' ? data.text : '',
+    reference: typeof data.reference === 'string' ? data.reference.trim() : '',
+    requestId: typeof data.requestId === 'number' ? data.requestId : 0,
+  };
+}
 
 /** The selection bar: the four actions, the colour step, a confirmation. */
 const SELECTION_BAR_HTML = `
@@ -173,8 +206,300 @@ const SELECTION_BAR_HTML = `
     <div class="bar-status">${barIcon(BAR_ICON_PATHS.check)}<span class="status-text"></span></div>
   </div>`;
 
-/** The page side of the selection bar, of highlight create / edit / undo,
- *  and of the box bookmarks. Nothing in it changes between documents. */
+/** Helpers every part of the page script uses. */
+const PAGE_HELPERS_SCRIPT = `
+      // ---- Helpers --------------------------------------------------------------
+      function postToApp(message) {
+        if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify(message));
+      }
+
+      function elementOf(node) {
+        return node && node.nodeType === 3 ? node.parentElement : node;
+      }
+
+      function normalizeWs(s) { return String(s || '').replace(/\\s+/g, ' ').trim(); }
+
+      // The blocks of the article. Their edges count as white space when the
+      // article text is searched, the way a selection that crosses them reads.
+      const TEXT_BLOCKS = 'p, h3, cite, aside, blockquote, .deco-quote, .word-term';
+
+      // Words compared the way RN compares them (src/lib/reader-words.ts).
+${READER_WORDS_PAGE_JS}`;
+
+/** The highlights: the diff protocol that reports every change to RN, the
+ *  heal of stored highlights whose text moved, undo, and the remove and
+ *  recolour of tap-to-edit. */
+const HIGHLIGHTS_SCRIPT = `
+      // ---- Highlights -----------------------------------------------------------
+      // Build a single-highlight serialized string matching rangy's format:
+      //   "start$end$id$className$containerElementId"
+      // This is the same shape stored in highlight.serializedRange, so RN-side
+      // we can compare strings directly.
+      function getRangySerial(hl) {
+        if (!hl) return '';
+        var cr = hl.characterRange;
+        var cid = hl.containerElementId || '';
+        return cr.start + '$' + cr.end + '$' + hl.id + '$' + hl.classApplier.className + '$' + cid;
+      }
+
+      // ---- Document-is-truth protocol -------------------------------------
+      // Every mutation (create, remove, recolor, undo) is reported to RN as
+      // the DIFF between the highlighter's state before and after: rangy's
+      // exclusive mode merges same-color neighbours and trims other-color
+      // neighbours, so the set of live highlights can change in ways the
+      // single "new highlight" never captured. RN reconciles its store from
+      // this diff, so what is stored always matches what is on the page.
+      function colorOf(hl) {
+        return String(hl.classApplier.className).replace('rangy-highlight-', '');
+      }
+
+      // Serial + object only; text is read lazily for the few highlights
+      // that actually changed (a removed highlight's range still resolves
+      // against the document after unapply, so its text stays readable).
+      function snapshotHighlights() {
+        var out = [];
+        var hs = (window.rangyHighlighter && window.rangyHighlighter.highlights) || [];
+        for (var i = 0; i < hs.length; i++) out.push({ serial: getRangySerial(hs[i]), hl: hs[i] });
+        return out;
+      }
+
+      function findBySerial(serial) {
+        var hs = (window.rangyHighlighter && window.rangyHighlighter.highlights) || [];
+        for (var i = 0; i < hs.length; i++) {
+          if (getRangySerial(hs[i]) === serial) return hs[i];
+        }
+        return null;
+      }
+
+      function describe(entry, withContext) {
+        var text = '';
+        try { text = entry.hl.getText(); } catch (_) {}
+        var row = { serial: entry.serial, text: text, color: colorOf(entry.hl) };
+        if (withContext) row.context = contextFor(entry.hl, text);
+        return row;
+      }
+
+      function contextFor(hl, text) {
+        try {
+          var els = hl.getHighlightElements();
+          var parent = els && els[0] && els[0].parentElement;
+          // The paragraph, not a quotation or emphasis around the mark.
+          var block = parent && (parent.closest(TEXT_BLOCKS) || parent);
+          var t = (block && block.textContent) || '';
+          var idx = t.indexOf(text);
+          if (idx < 0) return t.substring(0, 150);
+          return t.substring(Math.max(0, idx - 50), idx + text.length + 50);
+        } catch (_) {
+          return '';
+        }
+      }
+
+      // keepSerials: spans unapplied from the page whose records must stay
+      // in the store (a lost highlight waiting for its text to come back).
+      function postHighlightsChanged(reason, before, primarySerial, silent, keepSerials) {
+        var after = snapshotHighlights();
+        var keep = {};
+        (keepSerials || []).forEach(function(k) { keep[k] = true; });
+        var beforeBySerial = {};
+        var afterBySerial = {};
+        before.forEach(function(h) { beforeBySerial[h.serial] = h; });
+        after.forEach(function(h) { afterBySerial[h.serial] = h; });
+        var removed = [];
+        var added = [];
+        before.forEach(function(h) { if (!afterBySerial[h.serial] && !keep[h.serial]) removed.push(describe(h, false)); });
+        after.forEach(function(h) { if (!beforeBySerial[h.serial]) added.push(describe(h, true)); });
+        postToApp({
+          type: 'HIGHLIGHTS_CHANGED',
+          reason: reason,
+          removed: removed,
+          added: added,
+          primarySerial: primarySerial || '',
+          silent: !!silent
+        });
+      }
+
+      // Re-apply a serialized highlight through rangy's character-range API.
+      // (deserialize() REPLACES the whole highlight set, so it cannot be used
+      // to put one highlight back.)
+      function restoreSerial(serial) {
+        var parts = String(serial || '').split('$');
+        if (parts.length < 4 || !window.rangyHighlighter) return;
+        var start = parseInt(parts[0], 10);
+        var end = parseInt(parts[1], 10);
+        var className = parts[3];
+        var containerId = parts[4] || null;
+        if (!(end > start)) return;
+        var converter = window.rangyHighlighter.converter;
+        var container = containerId ? document.getElementById(containerId) : document.body;
+        var range = converter.characterRangeToRange(document, { start: start, end: end }, container);
+        var charRange = converter.rangeToCharacterRange(range, container);
+        window.rangyHighlighter.highlightCharacterRanges(className, [charRange], {
+          containerElementId: containerId,
+          exclusive: true
+        });
+      }
+
+      // Character offsets in the article text for every occurrence of the
+      // stored text; when there are several, the one whose neighbourhood
+      // shares the most words with the stored context wins. The search stops
+      // at the picker so a highlight can never re-anchor onto a swatch label.
+      function articleTextLength() {
+        var tb = document.getElementById('highlight-toolbar');
+        if (!tb) return (document.body.textContent || '').length;
+        var r = document.createRange();
+        r.setStart(document.body, 0);
+        r.setEndBefore(tb);
+        return r.toString().length;
+      }
+
+      function locateStoredText(text, before) {
+        var body = (document.body.textContent || '').substring(0, articleTextLength());
+        var needle = normalizeWs(text);
+        if (!needle) return -1;
+        var hits = [];
+        var from = 0;
+        while (hits.length < 50) {
+          var i = body.indexOf(needle, from);
+          if (i < 0) break;
+          hits.push(i);
+          from = i + 1;
+        }
+        if (hits.length <= 1) return hits.length ? hits[0] : -1;
+        var words = normalizeWs(before).toLowerCase().split(' ').filter(function(w) { return w.length > 3; });
+        var best = hits[0], bestScore = -1;
+        hits.forEach(function(i) {
+          var window = body.substring(Math.max(0, i - 120), i + needle.length + 120).toLowerCase();
+          var score = 0;
+          words.forEach(function(w) { if (window.indexOf(w) >= 0) score++; });
+          if (score > bestScore) { bestScore = score; best = i; }
+        });
+        return best;
+      }
+
+      // Two passes: first decide every stored highlight's fate and unapply
+      // the ones that drifted, then re-anchor. Re-anchoring while stale
+      // neighbours are still applied lets rangy trim them into new spans.
+      function healHighlights(stored) {
+        if (!window.rangyHighlighter || !stored || !stored.length) return;
+        var liveByPos = {};
+        window.rangyHighlighter.highlights.forEach(function(h) {
+          liveByPos[h.characterRange.start + '-' + h.characterRange.end] = h;
+        });
+        var before = snapshotHighlights();
+        var lost = [];
+        var relocate = [];
+        var stale = [];
+        stored.forEach(function(s) {
+          var parts = String(s.serial || '').split('$');
+          var live = parts.length >= 2 ? liveByPos[parts[0] + '-' + parts[1]] : null;
+          var liveText = '';
+          if (live) { try { liveText = normalizeWs(live.getText()); } catch (_) {} }
+          if (live && liveText === normalizeWs(s.text)) return;
+          if (live) stale.push(live);
+          var idx = locateStoredText(s.text, s.before);
+          if (idx < 0) {
+            // A mark on the wrong words is worse than none; the record itself
+            // stays in the store for a device that still has the old text.
+            lost.push(s.serial);
+          } else {
+            relocate.push({ idx: idx, len: normalizeWs(s.text).length, color: s.color || 'yellow', serial: s.serial });
+          }
+        });
+        if (stale.length) { try { window.rangyHighlighter.removeHighlights(stale); } catch (_) {} }
+        var healedCount = 0;
+        relocate.forEach(function(r) {
+          try {
+            var converter = window.rangyHighlighter.converter;
+            var range = converter.characterRangeToRange(document, { start: r.idx, end: r.idx + r.len }, document.body);
+            var charRange = converter.rangeToCharacterRange(range, document.body);
+            window.rangyHighlighter.highlightCharacterRanges('rangy-highlight-' + r.color, [charRange], { exclusive: true });
+            healedCount++;
+          } catch (err) {
+            lost.push(r.serial);
+          }
+        });
+        if (healedCount > 0 || stale.length > 0) postHighlightsChanged('heal', before, '', true, lost);
+        if (lost.length > 0) {
+          postToApp({ type: 'HIGHLIGHTS_LOST', serials: lost });
+        }
+      }
+
+      // Undo from RN: given the forward change, apply its inverse and report
+      // the resulting diff silently (no second toast).
+      window.__unfoldApplyInverse = function(change) {
+        if (!window.rangyHighlighter) return;
+        var before = snapshotHighlights();
+        try {
+          var toRemove = [];
+          ((change && change.added) || []).forEach(function(a) {
+            var hl = findBySerial(a.serial);
+            if (hl) toRemove.push(hl);
+          });
+          if (toRemove.length) window.rangyHighlighter.removeHighlights(toRemove);
+          ((change && change.removed) || []).forEach(function(r) { restoreSerial(r.serial); });
+        } catch (err) {
+          console.log('Undo failed:', err);
+        }
+        closeBar(false);
+        postHighlightsChanged('undo', before, '', true);
+      };
+
+      // Tap-to-edit's X: remove the highlight the mark belongs to.
+      function removeHighlight(mark) {
+        var before = snapshotHighlights();
+
+        try {
+          if (window.rangyHighlighter && window.rangyHighlighter.getHighlightForElement) {
+            var rangyHl = window.rangyHighlighter.getHighlightForElement(mark);
+            if (rangyHl) {
+              window.rangyHighlighter.removeHighlights([rangyHl]);
+            } else {
+              // Fallback: manually unwrap the mark
+              const parent = mark.parentNode;
+              if (parent) {
+                while (mark.firstChild) {
+                  parent.insertBefore(mark.firstChild, mark);
+                }
+                parent.removeChild(mark);
+                parent.normalize && parent.normalize();
+              }
+            }
+          }
+        } catch (err) {}
+
+        postToApp({ type: 'HAPTIC_IMPACT' });
+        postHighlightsChanged('remove', before, '', false);
+      }
+
+      // Change the color of an existing highlight in place. Uses rangy's own
+      // character-range API so we don't hold onto a DOM Range that gets
+      // detached when the mark is unwrapped.
+      function recolorHighlight(mark, newColor) {
+        if (!window.rangyHighlighter) return;
+        var before = snapshotHighlights();
+        var primarySerial = '';
+        try {
+          var rangyHl = window.rangyHighlighter.getHighlightForElement(mark);
+          if (rangyHl) {
+            var charRange = rangyHl.characterRange;
+            var containerElementId = rangyHl.containerElementId;
+            window.rangyHighlighter.removeHighlights([rangyHl]);
+            var created = window.rangyHighlighter.highlightCharacterRanges(
+              'rangy-highlight-' + newColor,
+              [charRange],
+              { containerElementId: containerElementId, exclusive: true }
+            );
+            if (created && created.length) primarySerial = getRangySerial(created[created.length - 1]);
+          }
+        } catch (err) {}
+
+        postToApp({ type: 'HAPTIC_IMPACT' });
+        postHighlightsChanged('recolor', before, primarySerial, false);
+      }
+`;
+
+/** The selection bar: Highlight, Bookmark, Share, Copy, the colour step,
+ *  tap-to-edit, and the short confirmation. */
 const SELECTION_BAR_SCRIPT = `
       // ---- Selection bar ------------------------------------------------------
       // iOS: the system edit menu and Writing Tools are off (suppressMenuItems
@@ -193,7 +518,8 @@ const SELECTION_BAR_SCRIPT = `
       const SHOW_SELECTION_BAR = ${JSON.stringify(!IS_ANDROID)};
       const BAR_GAP = 14;      // clears the knobs of the selection handles
       const BAR_MARGIN = 8;
-      const TAP_SLOP = 10;     // how far a finger can drift and still tap
+      const TAP_SLOP = ${TAP_SLOP_PX};     // how far a finger can drift and still tap
+      const TAP_MAX_MS = ${TAP_MAX_MS}; // how long a tap can last
       // Lexical names: a var named toolbar would collide with window.toolbar.
       const toolbar = document.getElementById('highlight-toolbar');
       const statusText = toolbar.querySelector('.status-text');
@@ -204,7 +530,7 @@ const SELECTION_BAR_SCRIPT = `
       let liveRange = null;    // Android: the last selected range the page saw
       let viewport = null;     // { top, bottom }: the visible band, in page px
       let viewportAnchor = null; // the selection range or mark that band is for
-      let barTouchUntil = 0;   // a collapse before this time came from a bar tap
+      let barTouchUntil = 0;   // a collapse before this time came from the bar (a tap, a focus move)
       let ownSelectionUntil = 0; // a change before this time is our selectRange()
       let pendingRequest = 0;  // the SELECTION_ACTION waiting for RN to confirm
       let nextRequestId = 0;
@@ -213,14 +539,8 @@ const SELECTION_BAR_SCRIPT = `
       let revealTimer = 0;
       let statusTimer = 0;
       let confirmTimer = 0;
-
-      function postToApp(message) {
-        if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify(message));
-      }
-
-      function elementOf(node) {
-        return node && node.nodeType === 3 ? node.parentElement : node;
-      }
+      let screenReaderOn = false; // RN: VoiceOver or TalkBack is on
+      let focusOnReveal = false;  // move focus into the bar when it shows
 
       function isInsideBar(node) {
         var el = elementOf(node);
@@ -435,7 +755,22 @@ const SELECTION_BAR_SCRIPT = `
       function revealBar() {
         clearTimeout(revealTimer);
         revealTimer = 0;
-        if (barMode && placeBar()) toolbar.classList.add('visible');
+        if (!barMode || !placeBar()) return;
+        toolbar.classList.add('visible');
+        if (focusOnReveal) focusBar();
+      }
+
+      // A screen reader is on: focus goes to the first button of the step the
+      // bar shows. WebKit clears the selection when focus leaves it. The bar
+      // acts on its own copy of the words, and that collapse must not close it.
+      function focusBar() {
+        focusOnReveal = false;
+        var first = barMode === 'actions' ? toolbar.querySelector('.action-btn')
+          : barMode === 'colors' ? toolbar.querySelector('.back-btn')
+          : barMode === 'edit' ? colorButtons[0] : null;
+        if (!first) return;
+        barTouchUntil = Date.now() + 600;
+        first.focus();
       }
 
       // Ask RN where the reader can see the page now. Show or move the bar
@@ -452,9 +787,13 @@ const SELECTION_BAR_SCRIPT = `
         var wasOpen = !!barMode;
         var newMode = barMode !== mode;
         setBarMode(mode);
-        // VoiceOver: the bar is the body's last child, so RN says it is there.
-        // A confirmation says its own words.
-        if ((!wasOpen || newMode) && mode !== 'status') postToApp({ type: 'SELECTION_BAR', mode: mode });
+        // VoiceOver: the bar is the body's last child, after the whole article,
+        // so RN says it is there, and with a screen reader on focus moves to
+        // it when it shows. A confirmation says its own words.
+        if ((!wasOpen || newMode) && mode !== 'status') {
+          postToApp({ type: 'SELECTION_BAR', mode: mode });
+          focusOnReveal = screenReaderOn;
+        }
         var anchor = mode === 'edit' ? (editing && editing.mark) : (barSnap && barSnap.range);
         if (wasOpen && anchor === viewportAnchor) {
           // The same words in another mode. A reveal still to come places it.
@@ -474,6 +813,7 @@ const SELECTION_BAR_SCRIPT = `
         barSnap = null;
         pendingRequest = 0;
         editing = null;
+        focusOnReveal = false;
         // The contents stay until the next open, so the fade-out never swaps them.
         toolbar.classList.remove('visible');
         if (alsoClearSelection) clearSelection();
@@ -492,287 +832,21 @@ const SELECTION_BAR_SCRIPT = `
         if (barMode) measureViewport();
       };
 
+      // RN: whether a screen reader (VoiceOver, TalkBack) is on.
+      window.__unfoldSetScreenReader = function(on) {
+        screenReaderOn = on === true;
+      };
+
       let refreshFrame = 0;
       window.addEventListener('resize', function() {
         cancelAnimationFrame(refreshFrame);
         refreshFrame = requestAnimationFrame(window.__unfoldRefreshBar);
       });
 
-      // Build a single-highlight serialized string matching rangy's format:
-      //   "start$end$id$className$containerElementId"
-      // This is the same shape stored in highlight.serializedRange, so RN-side
-      // we can compare strings directly.
-      function getRangySerial(hl) {
-        if (!hl) return '';
-        var cr = hl.characterRange;
-        var cid = hl.containerElementId || '';
-        return cr.start + '$' + cr.end + '$' + hl.id + '$' + hl.classApplier.className + '$' + cid;
-      }
-
-      // ---- Document-is-truth protocol -------------------------------------
-      // Every mutation (create, remove, recolor, undo) is reported to RN as
-      // the DIFF between the highlighter's state before and after: rangy's
-      // exclusive mode merges same-color neighbours and trims other-color
-      // neighbours, so the set of live highlights can change in ways the
-      // single "new highlight" never captured. RN reconciles its store from
-      // this diff, so what is stored always matches what is on the page.
-      function colorOf(hl) {
-        return String(hl.classApplier.className).replace('rangy-highlight-', '');
-      }
-
-      // Serial + object only; text is read lazily for the few highlights
-      // that actually changed (a removed highlight's range still resolves
-      // against the document after unapply, so its text stays readable).
-      function snapshotHighlights() {
-        var out = [];
-        var hs = (window.rangyHighlighter && window.rangyHighlighter.highlights) || [];
-        for (var i = 0; i < hs.length; i++) out.push({ serial: getRangySerial(hs[i]), hl: hs[i] });
-        return out;
-      }
-
-      function findBySerial(serial) {
-        var hs = (window.rangyHighlighter && window.rangyHighlighter.highlights) || [];
-        for (var i = 0; i < hs.length; i++) {
-          if (getRangySerial(hs[i]) === serial) return hs[i];
-        }
-        return null;
-      }
-
-      function describe(entry, withContext) {
-        var text = '';
-        try { text = entry.hl.getText(); } catch (_) {}
-        var row = { serial: entry.serial, text: text, color: colorOf(entry.hl) };
-        if (withContext) row.context = contextFor(entry.hl, text);
-        return row;
-      }
-
-      function contextFor(hl, text) {
-        try {
-          var els = hl.getHighlightElements();
-          var parent = els && els[0] && els[0].parentElement;
-          // The paragraph, not a quotation or emphasis around the mark.
-          var block = parent && (parent.closest(TEXT_BLOCKS) || parent);
-          var t = (block && block.textContent) || '';
-          var idx = t.indexOf(text);
-          if (idx < 0) return t.substring(0, 150);
-          return t.substring(Math.max(0, idx - 50), idx + text.length + 50);
-        } catch (_) {
-          return '';
-        }
-      }
-
-      // keepSerials: spans unapplied from the page whose records must stay
-      // in the store (a lost highlight waiting for its text to come back).
-      function postHighlightsChanged(reason, before, primarySerial, silent, keepSerials) {
-        var after = snapshotHighlights();
-        var keep = {};
-        (keepSerials || []).forEach(function(k) { keep[k] = true; });
-        var beforeBySerial = {};
-        var afterBySerial = {};
-        before.forEach(function(h) { beforeBySerial[h.serial] = h; });
-        after.forEach(function(h) { afterBySerial[h.serial] = h; });
-        var removed = [];
-        var added = [];
-        before.forEach(function(h) { if (!afterBySerial[h.serial] && !keep[h.serial]) removed.push(describe(h, false)); });
-        after.forEach(function(h) { if (!beforeBySerial[h.serial]) added.push(describe(h, true)); });
-        postToApp({
-          type: 'HIGHLIGHTS_CHANGED',
-          reason: reason,
-          removed: removed,
-          added: added,
-          primarySerial: primarySerial || '',
-          silent: !!silent
-        });
-      }
-
-      // Re-apply a serialized highlight through rangy's character-range API.
-      // (deserialize() REPLACES the whole highlight set, so it cannot be used
-      // to put one highlight back.)
-      function restoreSerial(serial) {
-        var parts = String(serial || '').split('$');
-        if (parts.length < 4 || !window.rangyHighlighter) return;
-        var start = parseInt(parts[0], 10);
-        var end = parseInt(parts[1], 10);
-        var className = parts[3];
-        var containerId = parts[4] || null;
-        if (!(end > start)) return;
-        var converter = window.rangyHighlighter.converter;
-        var container = containerId ? document.getElementById(containerId) : document.body;
-        var range = converter.characterRangeToRange(document, { start: start, end: end }, container);
-        var charRange = converter.rangeToCharacterRange(range, container);
-        window.rangyHighlighter.highlightCharacterRanges(className, [charRange], {
-          containerElementId: containerId,
-          exclusive: true
-        });
-      }
-
-      function normalizeWs(s) { return String(s || '').replace(/\\s+/g, ' ').trim(); }
-
-      // Character offsets in the article text for every occurrence of the
-      // stored text; when there are several, the one whose neighbourhood
-      // shares the most words with the stored context wins. The search stops
-      // at the picker so a highlight can never re-anchor onto a swatch label.
-      function articleTextLength() {
-        var tb = document.getElementById('highlight-toolbar');
-        if (!tb) return (document.body.textContent || '').length;
-        var r = document.createRange();
-        r.setStart(document.body, 0);
-        r.setEndBefore(tb);
-        return r.toString().length;
-      }
-
-      function locateStoredText(text, before) {
-        var body = (document.body.textContent || '').substring(0, articleTextLength());
-        var needle = normalizeWs(text);
-        if (!needle) return -1;
-        var hits = [];
-        var from = 0;
-        while (hits.length < 50) {
-          var i = body.indexOf(needle, from);
-          if (i < 0) break;
-          hits.push(i);
-          from = i + 1;
-        }
-        if (hits.length <= 1) return hits.length ? hits[0] : -1;
-        var words = normalizeWs(before).toLowerCase().split(' ').filter(function(w) { return w.length > 3; });
-        var best = hits[0], bestScore = -1;
-        hits.forEach(function(i) {
-          var window = body.substring(Math.max(0, i - 120), i + needle.length + 120).toLowerCase();
-          var score = 0;
-          words.forEach(function(w) { if (window.indexOf(w) >= 0) score++; });
-          if (score > bestScore) { bestScore = score; best = i; }
-        });
-        return best;
-      }
-
-      // Two passes: first decide every stored highlight's fate and unapply
-      // the ones that drifted, then re-anchor. Re-anchoring while stale
-      // neighbours are still applied lets rangy trim them into new spans.
-      function healHighlights(stored) {
-        if (!window.rangyHighlighter || !stored || !stored.length) return;
-        var liveByPos = {};
-        window.rangyHighlighter.highlights.forEach(function(h) {
-          liveByPos[h.characterRange.start + '-' + h.characterRange.end] = h;
-        });
-        var before = snapshotHighlights();
-        var lost = [];
-        var relocate = [];
-        var stale = [];
-        stored.forEach(function(s) {
-          var parts = String(s.serial || '').split('$');
-          var live = parts.length >= 2 ? liveByPos[parts[0] + '-' + parts[1]] : null;
-          var liveText = '';
-          if (live) { try { liveText = normalizeWs(live.getText()); } catch (_) {} }
-          if (live && liveText === normalizeWs(s.text)) return;
-          if (live) stale.push(live);
-          var idx = locateStoredText(s.text, s.before);
-          if (idx < 0) {
-            // A mark on the wrong words is worse than none; the record itself
-            // stays in the store for a device that still has the old text.
-            lost.push(s.serial);
-          } else {
-            relocate.push({ idx: idx, len: normalizeWs(s.text).length, color: s.color || 'yellow', serial: s.serial });
-          }
-        });
-        if (stale.length) { try { window.rangyHighlighter.removeHighlights(stale); } catch (_) {} }
-        var healedCount = 0;
-        relocate.forEach(function(r) {
-          try {
-            var converter = window.rangyHighlighter.converter;
-            var range = converter.characterRangeToRange(document, { start: r.idx, end: r.idx + r.len }, document.body);
-            var charRange = converter.rangeToCharacterRange(range, document.body);
-            window.rangyHighlighter.highlightCharacterRanges('rangy-highlight-' + r.color, [charRange], { exclusive: true });
-            healedCount++;
-          } catch (err) {
-            lost.push(r.serial);
-          }
-        });
-        if (healedCount > 0 || stale.length > 0) postHighlightsChanged('heal', before, '', true, lost);
-        if (lost.length > 0) {
-          postToApp({ type: 'HIGHLIGHTS_LOST', serials: lost });
-        }
-      }
-
-      // Undo from RN: given the forward change, apply its inverse and report
-      // the resulting diff silently (no second toast).
-      window.__unfoldApplyInverse = function(change) {
-        if (!window.rangyHighlighter) return;
-        var before = snapshotHighlights();
-        try {
-          var toRemove = [];
-          ((change && change.added) || []).forEach(function(a) {
-            var hl = findBySerial(a.serial);
-            if (hl) toRemove.push(hl);
-          });
-          if (toRemove.length) window.rangyHighlighter.removeHighlights(toRemove);
-          ((change && change.removed) || []).forEach(function(r) { restoreSerial(r.serial); });
-        } catch (err) {
-          console.log('Undo failed:', err);
-        }
-        closeBar(false);
-        postHighlightsChanged('undo', before, '', true);
-      };
-
       function enterEditMode(mark, color) {
         barSnap = null;
         editing = { mark: mark, color: color };
         openBar('edit');
-      }
-
-      function removeEditHighlight() {
-        if (!editing) return;
-        var mark = editing.mark;
-        var before = snapshotHighlights();
-
-        try {
-          if (window.rangyHighlighter && window.rangyHighlighter.getHighlightForElement) {
-            var rangyHl = window.rangyHighlighter.getHighlightForElement(mark);
-            if (rangyHl) {
-              window.rangyHighlighter.removeHighlights([rangyHl]);
-            } else {
-              // Fallback: manually unwrap the mark
-              const parent = mark.parentNode;
-              if (parent) {
-                while (mark.firstChild) {
-                  parent.insertBefore(mark.firstChild, mark);
-                }
-                parent.removeChild(mark);
-                parent.normalize && parent.normalize();
-              }
-            }
-          }
-        } catch (err) {}
-
-        postToApp({ type: 'HAPTIC_IMPACT' });
-        closeBar(false);
-        postHighlightsChanged('remove', before, '', false);
-      }
-
-      // Change the color of an existing highlight in place. Uses rangy's own
-      // character-range API so we don't hold onto a DOM Range that gets
-      // detached when the mark is unwrapped.
-      function recolorEditHighlight(newColor) {
-        if (!editing || !window.rangyHighlighter) return;
-        var before = snapshotHighlights();
-        var primarySerial = '';
-        try {
-          var rangyHl = window.rangyHighlighter.getHighlightForElement(editing.mark);
-          if (rangyHl) {
-            var charRange = rangyHl.characterRange;
-            var containerElementId = rangyHl.containerElementId;
-            window.rangyHighlighter.removeHighlights([rangyHl]);
-            var created = window.rangyHighlighter.highlightCharacterRanges(
-              'rangy-highlight-' + newColor,
-              [charRange],
-              { containerElementId: containerElementId, exclusive: true }
-            );
-            if (created && created.length) primarySerial = getRangySerial(created[created.length - 1]);
-          }
-        } catch (err) {}
-
-        postToApp({ type: 'HAPTIC_IMPACT' });
-        closeBar(false);
-        postHighlightsChanged('recolor', before, primarySerial, false);
       }
 
       // Scripture in the devotional text is a quotation that names its
@@ -906,8 +980,11 @@ const SELECTION_BAR_SCRIPT = `
       // Tapping the X removes the highlight; another colour recolours it.
       function applyColor(color) {
         if (barMode === 'edit') {
-          if (color === editing.color) removeEditHighlight();
-          else recolorEditHighlight(color);
+          var mark = editing.mark;
+          var removes = color === editing.color;
+          closeBar(false);
+          if (removes) removeHighlight(mark);
+          else recolorHighlight(mark, color);
           return;
         }
         if (barMode === 'colors') createHighlight(color);
@@ -918,7 +995,10 @@ const SELECTION_BAR_SCRIPT = `
         var action = btn.getAttribute('data-action');
         if (color) applyColor(color);
         // Back shows only in the colour step, which always has a selection.
-        else if (action === 'back') openBar('actions');
+        // Android has no action bar to go back to (its menu is native), so
+        // there Back closes the bar.
+        else if (action === 'back' && SHOW_SELECTION_BAR) openBar('actions');
+        else if (action === 'back') closeBar(true);
         else if (action && pendingRequest === 0) runSelectionAction(action);
       }
 
@@ -1090,12 +1170,17 @@ const SELECTION_BAR_SCRIPT = `
       document.addEventListener('touchend', function() {
         var touch = outsideTouch;
         outsideTouch = null;
-        if (!touch || Date.now() - touch.at > 450) return;
+        if (!touch || Date.now() - touch.at > TAP_MAX_MS) return;
         // Edit mode is closed by the mark-click handler below.
         if (!barMode || barMode === 'edit') return;
         if (barMode === 'actions' && readSelection()) return;
         closeBar(true);
       });
+
+      // RN: a tap on one of the reader's own views, outside the page.
+      window.__unfoldCloseBar = function() {
+        if (barMode) closeBar(true);
+      };
 
       // Tap-to-edit existing highlights. Runs in capture phase so it intercepts
       // before scripture-ref/bookmark handlers. Tapping a <mark class="highlight-*">
@@ -1127,7 +1212,10 @@ const SELECTION_BAR_SCRIPT = `
 
         if (barMode === 'edit') closeBar(false);
       }, true);
+`;
 
+/** The bookmark buttons of the quote, context, and word study boxes. */
+const BOX_BOOKMARKS_SCRIPT = `
       // Bookmark button handler for quotes, context boxes, and word study boxes
       window.handleBookmark = function(el) {
         var type = el.getAttribute('data-type');
@@ -1379,6 +1467,7 @@ export function DevotionalWebView({
       : null;
 
     return `
+      ${PAGE_HELPERS_SCRIPT}
       const targetHighlight = ${JSON.stringify(targetHighlightPayload)};
       const targetBookmark = ${JSON.stringify(targetBookmarkPayload)};
 
@@ -1586,23 +1675,13 @@ export function DevotionalWebView({
       // without remounting it with a new baked target.
       window.__unfoldLocateHighlight = locateHighlightPayload;
 
-      // The blocks of the article. Their edges count as white space when the
-      // article text is searched, the way a selection that crosses them reads.
-      const TEXT_BLOCKS = 'p, h3, cite, aside, blockquote, .deco-quote, .word-term';
-
-      function foldCase(value) {
-        var out = '';
-        for (var i = 0; i < value.length; i++) out += value.charAt(i).toLowerCase();
-        return out;
-      }
-
       // The element that holds the words: the article text is searched once,
-      // with white space collapsed and case ignored, and the hit is mapped
-      // back to its text nodes. Words that cross blocks land on the first one.
-      // skipPullQuotes: read the article the way a selection does, without
-      // the pull quote.
+      // read the way RN reads the day's text (readerWords), and the hit is
+      // mapped back to its text nodes. Words that cross blocks land on the
+      // first one. skipPullQuotes: read the article the way a selection does,
+      // without the pull quote.
       function locateTextInArticle(targetText, skipPullQuotes) {
-        var target = foldCase(normalizeWs(targetText));
+        var target = readerWords(targetText);
         if (!target) return null;
         var chars = [];
         var points = [];   // for each char: [text node, offset]
@@ -1615,7 +1694,7 @@ export function DevotionalWebView({
           var block = el.closest(TEXT_BLOCKS) || el;
           var value = node.nodeValue;
           for (var i = 0; i < value.length; i++) {
-            var c = /\\s/.test(value.charAt(i)) ? ' ' : value.charAt(i).toLowerCase();
+            var c = readerChar(value.charAt(i));
             if (block !== lastBlock && chars.length && chars[chars.length - 1] !== ' ') {
               chars.push(' ');
               points.push([node, i]);
@@ -1685,14 +1764,7 @@ export function DevotionalWebView({
           y: flashElement(best),
         });
       }
-      
-      // Initialize on load
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initRangy);
-      } else {
-        initRangy();
-      }
-      
+
       // Scripture reference tap handling
       document.addEventListener('click', function(e) {
         const ref = e.target.closest('.scripture-ref');
@@ -1714,7 +1786,21 @@ export function DevotionalWebView({
         resizeFrame = requestAnimationFrame(reportHeight);
       });
       
+      ${HIGHLIGHTS_SCRIPT}
       ${SELECTION_BAR_SCRIPT}
+      ${BOX_BOOKMARKS_SCRIPT}
+
+      // ---- Start -----------------------------------------------------------------
+      // Last, after every part of the script above has run. rangy is inlined in
+      // the <head>, so initRangy() usually runs at once, and what it calls
+      // (healHighlights, postHighlightsChanged, ...) can read the let and const
+      // bindings of any part above. Read before its declaration has run, such a
+      // binding throws a ReferenceError (the temporal dead zone).
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initRangy);
+      } else {
+        initRangy();
+      }
       true;
     `;
   }, [existingHighlights, targetHighlight, targetBookmark]);
@@ -2420,6 +2506,7 @@ export function DevotionalWebView({
     token: string;
     appliedJson: string;
     appliedBookmarkTokensJson: string;
+    appliedScreenReader: boolean;
   } | null>(null);
 
   const pushThemeVars = useCallback((vars: ThemeVars) => {
@@ -2468,6 +2555,21 @@ export function DevotionalWebView({
     );
   }, []);
 
+  // VoiceOver or TalkBack: the page moves focus into the selection bar when it
+  // opens. A page starts with no screen reader, so nothing is sent while none is on.
+  const screenReaderOn = useScreenReaderEnabled();
+  const pushScreenReader = useCallback((on: boolean) => {
+    const live = liveDocRef.current;
+    if (!live || live.token !== liveDocToken) return;
+    if (live.appliedScreenReader === on) return;
+    live.appliedScreenReader = on;
+    callPage('__unfoldSetScreenReader', on);
+  }, [callPage, liveDocToken]);
+
+  useEffect(() => {
+    pushScreenReader(screenReaderOn);
+  }, [pushScreenReader, screenReaderOn]);
+
   // Android: a key from the native selection menu runs the same page path as
   // the matching button of the iOS bar.
   const handleAndroidMenuSelection = useCallback((event: { nativeEvent: { key: string; selectedText: string } }) => {
@@ -2505,11 +2607,9 @@ export function DevotionalWebView({
   }, [callPage, viewportRef]);
 
   // Bookmark and Copy end with a short confirmation in the bar ('' closes it).
-  const confirmSelectionAction = useCallback((requestId: unknown, message: string) => {
-    callPage('__unfoldSelectionConfirm', typeof requestId === 'number' ? requestId : 0, message);
+  const confirmSelectionAction = useCallback((requestId: number, message: string) => {
+    callPage('__unfoldSelectionConfirm', requestId, message);
   }, [callPage]);
-
-  const { copy } = useCopyConfirmation();
 
   useEffect(() => {
     if (!commandRef) return;
@@ -2530,6 +2630,9 @@ export function DevotionalWebView({
       refreshSelectionBar: () => {
         callPage('__unfoldRefreshBar');
       },
+      closeSelectionBar: () => {
+        callPage('__unfoldCloseBar');
+      },
     };
     return () => {
       commandRef.current = null;
@@ -2539,9 +2642,10 @@ export function DevotionalWebView({
   const seriesTitleFor = (devotionals: readonly { id: string; title: string }[]) =>
     devotionalTitle || devotionals.find((d) => d.id === devotionalId)?.title || '';
 
-  // Box bookmarks and selection bookmarks for this day. The store drops a
-  // bookmark it already holds.
-  const saveDayBookmark = (kind: BookmarkKind, key: string, reference: string, text: string) => {
+  // Box bookmarks and selection bookmarks for this day. Scripture stores its
+  // own reference (its key). Any other kind stores the reference that brings
+  // the kind back after a sync. The store drops a bookmark it already holds.
+  const saveDayBookmark = (kind: BookmarkKind, key: string, text: string) => {
     if (!devotionalId) return;
     const store = useUnfoldStore.getState();
     store.addBookmark({
@@ -2551,7 +2655,7 @@ export function DevotionalWebView({
       dayTitle: dayTitle || day.title || '',
       kind,
       key,
-      scriptureReference: reference,
+      scriptureReference: kind === 'scripture' ? key : storedReferenceFor(kind),
       scriptureText: text,
       quotedText: text,
     });
@@ -2559,46 +2663,55 @@ export function DevotionalWebView({
 
   // Bookmark, Share, and Copy from the iOS bar or the Android menu. The page
   // sends Bookmark and Share text with its white space already collapsed.
-  const handleSelectionAction = (data: { action?: unknown; text?: unknown; reference?: unknown; requestId?: unknown }) => {
-    const text = typeof data.text === 'string' ? data.text : '';
-    const reference = typeof data.reference === 'string' ? data.reference.trim() : '';
-    if (data.action === 'copy') {
-      const plain = text.trim();
-      if (!plain) {
-        confirmSelectionAction(data.requestId, '');
+  const handleSelectionAction = ({ action, text, reference, requestId }: SelectionActionMessage) => {
+    switch (action) {
+      case 'copy': {
+        const plain = text.trim();
+        if (!plain) {
+          confirmSelectionAction(requestId, '');
+          return;
+        }
+        // copyText, not useCopyConfirmation: the bar shows the confirmation,
+        // so a copy does not render the reader again.
+        void copyText(plain).then((copied) => {
+          if (copied) AccessibilityInfo.announceForAccessibility(COPIED_MESSAGE);
+          confirmSelectionAction(requestId, copied ? COPIED_MESSAGE : '');
+        });
         return;
       }
-      void copy(plain).then((copied) => confirmSelectionAction(data.requestId, copied ? COPIED_MESSAGE : ''));
-    } else if (data.action === 'share') {
-      const message = formatSelectionShareText({
-        text,
-        scriptureReference: reference,
-        seriesTitle: seriesTitleFor(useUnfoldStore.getState().devotionals),
-        dayNumber: resolvedDayNumber,
-        dayTitle: dayTitle || day.title,
-      });
-      // The link is in the message, so no url (it would share twice).
-      if (message) Share.share({ message }).catch((error) => logger.warn('Share failed:', error));
-    } else if (data.action === 'bookmark') {
-      if (!text || !devotionalId) {
-        confirmSelectionAction(data.requestId, '');
+      case 'share': {
+        const message = formatSelectionShareText({
+          text,
+          scriptureReference: reference,
+          seriesTitle: seriesTitleFor(useUnfoldStore.getState().devotionals),
+          dayNumber: resolvedDayNumber,
+          dayTitle: dayTitle || day.title,
+        });
+        // The link is in the message, so no url (it would share twice).
+        if (message) Share.share({ message }).catch((error) => logger.warn('Share failed:', error));
         return;
       }
-      // Prose is its own words. A Scripture passage is its reference, so it
-      // is saved at most once.
-      const kind: BookmarkKind = reference ? 'scripture' : 'excerpt';
-      const key = reference || text;
-      const exists = findBookmarkByIdentity(useUnfoldStore.getState().bookmarks, {
-        devotionalId,
-        dayNumber: resolvedDayNumber,
-        kind,
-        key,
-      });
-      if (!exists) saveDayBookmark(kind, key, reference || EXCERPT_BOOKMARK_REFERENCE, text);
-      const message = exists ? BOOKMARK_EXISTS_MESSAGE : BOOKMARK_SAVED_MESSAGE;
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      AccessibilityInfo.announceForAccessibility(message);
-      confirmSelectionAction(data.requestId, message);
+      case 'bookmark': {
+        if (!text || !devotionalId) {
+          confirmSelectionAction(requestId, '');
+          return;
+        }
+        // Prose is its own words. A Scripture passage is its reference, so it
+        // is saved at most once.
+        const kind: BookmarkKind = reference ? 'scripture' : 'excerpt';
+        const key = reference || text;
+        const exists = findBookmarkByIdentity(useUnfoldStore.getState().bookmarks, {
+          devotionalId,
+          dayNumber: resolvedDayNumber,
+          kind,
+          key,
+        });
+        if (!exists) saveDayBookmark(kind, key, text);
+        const message = exists ? BOOKMARK_EXISTS_MESSAGE : BOOKMARK_SAVED_MESSAGE;
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        AccessibilityInfo.announceForAccessibility(message);
+        confirmSelectionAction(requestId, message);
+      }
     }
   };
 
@@ -2648,9 +2761,11 @@ export function DevotionalWebView({
             token: liveDocToken,
             appliedJson: webViewDocument.bakedThemeJson,
             appliedBookmarkTokensJson: savedBoxBookmarkTokens.length > 0 ? '' : '[]',
+            appliedScreenReader: false,
           };
           pushThemeVars(themeVars);
           pushBookmarkTokens(savedBoxBookmarkTokens);
+          pushScreenReader(screenReaderOn);
           if (layoutGeneration > 0) {
             webViewRef.current?.injectJavaScript(buildLayoutGenerationScript(layoutGeneration));
           }
@@ -2664,10 +2779,11 @@ export function DevotionalWebView({
       } else if (data.type === 'SELECTION_ACTIVE') {
         measureSelectionViewport();
       } else if (data.type === 'SELECTION_BAR') {
-        const announcement = SELECTION_BAR_ANNOUNCEMENTS[data.mode];
-        if (announcement) AccessibilityInfo.announceForAccessibility(announcement);
+        const mode: unknown = data.mode;
+        if (isAnnouncedBarMode(mode)) AccessibilityInfo.announceForAccessibility(SELECTION_BAR_ANNOUNCEMENTS[mode]);
       } else if (data.type === 'SELECTION_ACTION') {
-        handleSelectionAction(data);
+        const message = parseSelectionAction(data);
+        if (message) handleSelectionAction(message);
       } else if (data.type === 'HAPTIC_SELECTION') {
         Haptics.selectionAsync();
       } else if (data.type === 'HAPTIC_IMPACT') {
@@ -2680,7 +2796,7 @@ export function DevotionalWebView({
         const store = useUnfoldStore.getState();
         const existing = findBookmarkByIdentity(store.bookmarks, { devotionalId, dayNumber: resolvedDayNumber, kind, key: text });
         if (existing) store.removeBookmark(existing.id);
-        else saveDayBookmark(kind, text, BOX_BOOKMARK_LABELS[kind], text);
+        else saveDayBookmark(kind, text, text);
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
     } catch (e) {

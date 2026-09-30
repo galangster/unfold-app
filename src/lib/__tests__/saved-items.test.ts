@@ -9,7 +9,7 @@ import {
   toBookmarkSavedItem,
   undoSavedDeletions,
 } from '@/lib/saved-items';
-import { EXCERPT_BOOKMARK_REFERENCE } from '@/lib/bookmark-identity';
+import { storedReferenceFor } from '@/lib/bookmark-identity';
 
 jest.mock('@/lib/sync-outbox', () => ({
   enqueueSyncChanges: jest.fn(),
@@ -106,7 +106,7 @@ describe('saved-items', () => {
       id: 'excerpt-bookmark',
       kind: 'excerpt',
       key: 'Rest is given before it is earned.',
-      scriptureReference: EXCERPT_BOOKMARK_REFERENCE,
+      scriptureReference: storedReferenceFor('excerpt'),
       scriptureText: 'Rest is given before it is earned.',
       quotedText: 'Rest is given before it is earned.',
     };
@@ -126,7 +126,7 @@ describe('saved-items', () => {
       id: 'excerpt-with-quote',
       kind: 'excerpt',
       key: '“Come to me,” Jesus says.',
-      scriptureReference: EXCERPT_BOOKMARK_REFERENCE,
+      scriptureReference: storedReferenceFor('excerpt'),
       scriptureText: '“Come to me,” Jesus says.',
       quotedText: '“Come to me,” Jesus says.',
     };

@@ -3,8 +3,8 @@ import {
   bookmarkIdentity,
   bookmarkIdentityEquals,
   bookmarkKind,
-  EXCERPT_BOOKMARK_REFERENCE,
   parseBookmarkKind,
+  storedReferenceFor,
 } from '@/lib/bookmark-identity';
 
 function legacyBookmark(scriptureReference: string, scriptureText = 'Saved text'): Bookmark {
@@ -33,9 +33,21 @@ describe('bookmark identity', () => {
     expect(bookmarkKind(legacyBookmark(reference))).toBe(expectedKind);
   });
 
+  it.each(['quote', 'context', 'word-study', 'excerpt'] as const)(
+    'reads the reference a %s bookmark stores back as its kind after a sync round trip',
+    (kind) => {
+      expect(bookmarkKind(legacyBookmark(storedReferenceFor(kind)))).toBe(kind);
+    },
+  );
+
+  it('tells an excerpt from a quote box by the case of the reference alone', () => {
+    expect(storedReferenceFor('excerpt')).toBe('quote');
+    expect(storedReferenceFor('quote')).toBe('Quote');
+  });
+
   it('keeps an excerpt bookmark the same after a sync round trip', () => {
     const saved = {
-      ...legacyBookmark(EXCERPT_BOOKMARK_REFERENCE, 'Grace meets you in the next act of trust.'),
+      ...legacyBookmark(storedReferenceFor('excerpt'), 'Grace meets you in the next act of trust.'),
       kind: 'excerpt' as const,
       key: 'Grace meets you in the next act of trust.',
       quotedText: 'Grace meets you in the next act of trust.',
@@ -58,8 +70,8 @@ describe('bookmark identity', () => {
       return { kind, key };
     };
     // What a pull hands those builds: the reference and the text only.
-    const first = legacyBookmark(EXCERPT_BOOKMARK_REFERENCE, 'Grace meets you in the next act of trust.');
-    const second = legacyBookmark(EXCERPT_BOOKMARK_REFERENCE, 'Rest is a gift.');
+    const first = legacyBookmark(storedReferenceFor('excerpt'), 'Grace meets you in the next act of trust.');
+    const second = legacyBookmark(storedReferenceFor('excerpt'), 'Rest is a gift.');
 
     expect(olderBuildIdentity(first)).toEqual({ kind: 'quote', key: 'Grace meets you in the next act of trust.' });
     expect(olderBuildIdentity(second)).toEqual({ kind: 'quote', key: 'Rest is a gift.' });
