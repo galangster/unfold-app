@@ -15,9 +15,11 @@ let consoleSpies: jest.SpyInstance[];
 
 // A copy that rejects fails the test here, because act() awaits it.
 async function copy(result: { current: CopyConfirmation }) {
+  let didCopy: boolean | undefined;
   await act(async () => {
-    await result.current.copy(TEXT);
+    didCopy = await result.current.copy(TEXT);
   });
+  return didCopy;
 }
 
 function advance(ms: number) {
@@ -39,7 +41,7 @@ function heldWrite() {
 
 /** Starts a copy and leaves its write on its way. */
 function startCopy(result: { current: CopyConfirmation }) {
-  let pending!: Promise<void>;
+  let pending!: Promise<boolean>;
   act(() => {
     pending = result.current.copy(TEXT);
   });
@@ -80,7 +82,7 @@ describe('useCopyConfirmation', () => {
   it('confirms and announces after the clipboard takes the text', async () => {
     const { result } = renderHook(useCopyConfirmation);
 
-    await copy(result);
+    expect(await copy(result)).toBe(true);
 
     expect(setStringAsync).toHaveBeenCalledTimes(1);
     expect(setStringAsync).toHaveBeenCalledWith(TEXT);
@@ -122,7 +124,7 @@ describe('useCopyConfirmation', () => {
     arrange();
     const { result } = renderHook(useCopyConfirmation);
 
-    await copy(result);
+    expect(await copy(result)).toBe(false);
 
     expect(setStringAsync).toHaveBeenCalledWith(TEXT);
     expect(result.current.copied).toBe(false);

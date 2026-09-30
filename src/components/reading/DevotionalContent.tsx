@@ -78,12 +78,26 @@ interface DevotionalContentProps {
   onActOutcome?: (outcome: 'done' | 'skipped') => void;
   /** Content y of each section as it lays out (reader Contents sheet). */
   onSectionLayout?: (section: ReaderSection, contentY: number, layoutGeneration: number) => void;
+  /** A view with the frame of the reader's scroll viewport: bounds where the
+   *  selection bar can sit. */
+  viewportRef?: RefObject<View | null>;
 }
 
 /**
  * Elegant section divider -- three centered dots with fine rules on each side.
  * Used between major content sections for a book-like feel.
  */
+/** Words compared the way the reader shows them: no markdown asterisks,
+ *  white space collapsed, case ignored. */
+function readerWords(value: string | undefined): string {
+  return (value ?? '').replace(/\*/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function textContainsWords(text: string | undefined, words: string | undefined): boolean {
+  const needle = readerWords(words);
+  return needle.length > 0 && readerWords(text).includes(needle);
+}
+
 function SectionDivider({ color, style }: { color: string; style?: object }) {
   return (
     <View style={[dcStyles.dividerContainer, style]}>
@@ -141,6 +155,7 @@ export function DevotionalContent({
   onActLocated,
   onActOutcome,
   onSectionLayout,
+  viewportRef,
 }: DevotionalContentProps) {
   const { colors, isDark } = useTheme();
   const actLocatedRef = useRef(false);
@@ -204,24 +219,45 @@ export function DevotionalContent({
   const prayerSectionRef = useRef<View>(null);
   const locatedTopBookmarkRef = useRef<string | null>(null);
   const targetBookmarkKind = targetBookmark ? bookmarkKind(targetBookmark) : null;
+  // A Scripture bookmark whose words are in the devotional text is a phrase
+  // selected there. Sync keeps only the reference and the text, so the text
+  // decides. A phrase lands on its words; the passage is the fallback when
+  // the page cannot find them. The day's whole passage is the passage, even
+  // when the teaching quotes it word for word.
+  const targetBookmarkIsPhrase = useMemo(() => targetBookmarkKind === 'scripture'
+    && Boolean(targetBookmark && textContainsWords(day.bodyText, targetBookmark.scriptureText))
+    && readerWords(targetBookmark?.scriptureText) !== readerWords(day.scriptureText),
+  [day.bodyText, day.scriptureText, targetBookmark, targetBookmarkKind]);
+  const [missingPhraseId, setMissingPhraseId] = useState<string | null>(null);
+  const targetBookmarkIsInText = targetBookmarkIsPhrase && missingPhraseId !== targetBookmark?.id;
   const targetBookmarkIsMainScripture = useMemo(() => {
-    if (!targetBookmark || targetBookmarkKind !== 'scripture') return false;
+    if (!targetBookmark || targetBookmarkKind !== 'scripture' || targetBookmarkIsInText) return false;
     return canonicalizeScriptureReference(targetBookmark.scriptureReference)
       === canonicalizeScriptureReference(day.scriptureReference);
-  }, [day.scriptureReference, targetBookmark, targetBookmarkKind]);
+  }, [day.scriptureReference, targetBookmark, targetBookmarkIsInText, targetBookmarkKind]);
   const targetBookmarkIsWebViewContent = targetBookmarkKind !== null
-    && targetBookmarkKind !== 'scripture';
+    && (targetBookmarkKind !== 'scripture' || targetBookmarkIsPhrase);
 
   useEffect(() => {
     if (!targetBookmark || targetBookmarkKind !== 'scripture') return;
-    if (targetBookmarkIsMainScripture) return;
+    if (targetBookmarkIsMainScripture || targetBookmarkIsInText) return;
     if (locatedTopBookmarkRef.current === targetBookmark.id) return;
     locatedTopBookmarkRef.current = targetBookmark.id;
-    onScriptureTap?.(targetBookmark.scriptureReference, {
+    // A phrase is not the passage text, so the sheet loads the passage. A
+    // selection saved on this device keeps its kind and its words as
+    // quotedText, which still mark it as a phrase after the day's text
+    // changes. Older builds put quotedText on whole passages, with no kind.
+    const selectedPhrase = targetBookmark.kind === 'scripture' && Boolean(targetBookmark.quotedText);
+    const savedTextIsPassage = !targetBookmarkIsPhrase && !selectedPhrase;
+    onScriptureTap?.(targetBookmark.scriptureReference, savedTextIsPassage ? {
       text: targetBookmark.scriptureText,
       ...(targetBookmark.translation ? { translation: targetBookmark.translation } : {}),
-    });
-  }, [onScriptureTap, targetBookmark, targetBookmarkIsMainScripture, targetBookmarkKind]);
+    } : undefined);
+  }, [onScriptureTap, targetBookmark, targetBookmarkIsInText, targetBookmarkIsMainScripture, targetBookmarkIsPhrase, targetBookmarkKind]);
+
+  const handleTargetBookmarkMissing = useCallback(() => {
+    if (targetBookmarkIsPhrase && targetBookmark) setMissingPhraseId(targetBookmark.id);
+  }, [targetBookmark, targetBookmarkIsPhrase]);
 
   const handleDevotionalWebViewLayout = useCallback((event: LayoutChangeEvent) => {
     devotionalWebViewTopRef.current = event.nativeEvent.layout.y;
@@ -475,11 +511,13 @@ export function DevotionalContent({
           layoutGeneration={layoutGeneration}
           targetBookmark={targetBookmarkIsWebViewContent ? targetBookmark : null}
           onTargetBookmarkLocated={handleTargetBookmarkLocated}
+          onTargetBookmarkMissing={handleTargetBookmarkMissing}
           onScriptureTap={onScriptureTap}
           devotionalId={devotionalId}
           dayNumber={dayNumber}
           dayTitle={day.title}
           bookmarks={bookmarks}
+          viewportRef={viewportRef}
         />
       </View>
 

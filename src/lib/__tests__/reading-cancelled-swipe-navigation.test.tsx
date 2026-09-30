@@ -296,8 +296,12 @@ jest.mock('@/components/reading/ScripturePracticeSheet', () => ({
   ScripturePracticeSheet: () => null,
   buildPracticeBibleHref: () => '',
 }));
+const mockWebViewProps: { current: { commandRef?: { current: unknown } } | null } = { current: null };
 jest.mock('@/components/reading/DevotionalWebView', () => ({
-  DevotionalWebView: () => null,
+  DevotionalWebView: (props: { commandRef?: { current: unknown } }) => {
+    mockWebViewProps.current = props;
+    return null;
+  },
 }));
 
 jest.mock('@/lib/bible-api', () => ({
@@ -431,6 +435,7 @@ type ReaderTree = {
   root: {
     findByProps: (props: Record<string, unknown>) => { props: Record<string, unknown> };
     findAllByProps: (props: Record<string, unknown>) => Array<{ props: Record<string, unknown> }>;
+    findAll: (predicate: (node: { props: Record<string, unknown> }) => boolean) => Array<{ props: Record<string, unknown> }>;
   };
   toJSON: () => unknown;
   update: (element: React.ReactElement) => void;
@@ -636,6 +641,37 @@ describe('reader swipe cancellation', () => {
     });
     return tree!;
   }
+
+  it('places an open selection bar again after a scroll the reader ran itself, not after a fling', async () => {
+    const tree = await renderWithDayFour();
+    const refreshSelectionBar = jest.fn();
+    const commandRef = mockWebViewProps.current?.commandRef;
+    if (!commandRef) throw new Error('the reader did not pass a command ref to the web view');
+    commandRef.current = { applyInverse: jest.fn(), scrollToHighlight: jest.fn(), refreshSelectionBar };
+    const end = { nativeEvent: { contentOffset: { x: 0, y: 240 } } };
+    type ScrollHandlers = Record<'onScrollBeginDrag' | 'onMomentumScrollBegin', () => void>
+      & Record<'onScrollEndDrag' | 'onMomentumScrollEnd', (event: typeof end) => void>;
+    const [scrollView] = tree.root.findAll((node) => typeof node.props.onMomentumScrollEnd === 'function'
+      && typeof node.props.onMomentumScrollBegin === 'function');
+    const scroll = scrollView.props as unknown as ScrollHandlers;
+
+    // A fling the person started keeps the bar where it is.
+    act(() => {
+      scroll.onScrollBeginDrag();
+      scroll.onScrollEndDrag(end);
+      scroll.onMomentumScrollBegin();
+      scroll.onMomentumScrollEnd(end);
+    });
+    expect(refreshSelectionBar).not.toHaveBeenCalled();
+
+    // RN ends the reader's own scrollTo (a reflow restore, a jump) as a
+    // momentum end with no drag or momentum start before it.
+    act(() => {
+      scroll.onMomentumScrollEnd(end);
+    });
+    expect(refreshSelectionBar).toHaveBeenCalledTimes(1);
+    act(() => tree.unmount());
+  });
 
   it('unlocks the next reading when the mounted reader crosses local midnight', async () => {
     const midnight = new Date(TYPING_AT);

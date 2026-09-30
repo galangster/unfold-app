@@ -301,6 +301,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     }
   }, []);
   const scrollViewRef = useRef<ScrollView | null>(null);
+  const readerViewportRef = useRef<View | null>(null);
   const readingContentRef = useRef<View | null>(null);
   const readingContentTopRef = useRef(0);
   const readerScrollNativeTargetRef = useRef<number | null>(null);
@@ -2491,6 +2492,8 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
             {/* Premium nudge banner — audio teaser */}
             {/* Content - scrollable with day-transition fade */}
             <Animated.View style={[{ flex: 1 }, scrollContentStyle]}>
+            {/* The scroll viewport's frame, for the selection bar (neither Reanimated ref can be measured). */}
+            <View ref={readerViewportRef} cssInterop={false} collapsable={false} pointerEvents="none" style={StyleSheet.absoluteFill} />
             <Animated.ScrollView
               ref={scrollViewRef}
               style={{ flex: 1 }}
@@ -2508,7 +2511,13 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
               onScrollBeginDrag={() => { userScrollActiveRef.current = true; }}
               onScrollEndDrag={(event) => saveReaderScrollY(event.nativeEvent.contentOffset.y)}
               onMomentumScrollBegin={() => { userScrollActiveRef.current = true; }}
-              onMomentumScrollEnd={(event) => saveReaderScrollY(event.nativeEvent.contentOffset.y)}
+              onMomentumScrollEnd={(event) => {
+                // RN also ends the reader's own scrollTo (the reflow restore
+                // after an Aa change, a jump) here. That scroll moved the page
+                // under an open selection bar, so the bar is placed again.
+                if (!userScrollActiveRef.current) highlightCommandRef.current?.refreshSelectionBar();
+                saveReaderScrollY(event.nativeEvent.contentOffset.y);
+              }}
               scrollEventThrottle={16}
             >
               <View
@@ -2539,6 +2548,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                 targetBookmark={targetBookmark}
                 onTargetBookmarkLocated={handleTargetHighlightLocated}
                 scrollContentRef={readingContentRef}
+                viewportRef={readerViewportRef}
                 onReflectionInputFocus={handleReflectionInputFocus}
                 onReflectionKeyboardToolbarChange={handleReflectionToolbarChange}
                 focusAct={params.focus === 'act'}
