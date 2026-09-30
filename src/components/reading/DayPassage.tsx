@@ -26,6 +26,12 @@ export function DayPassage({ day }: DayPassageProps) {
   const fontSize = useUnfoldStore((s) => s.user?.fontSize ?? 'medium');
   const scriptureSize = FONT_SIZE_VALUES[fontSize].scripture;
   const passage = useReaderScripture(day.scriptureReference, day.scriptureText);
+  const passageStyle = {
+    fontFamily: readingFont.body,
+    fontSize: scriptureSize,
+    lineHeight: scriptureSize * SCRIPTURE_LEADING,
+    color: isDark ? colors.text : colors.textMuted,
+  };
 
   return (
     <>
@@ -36,16 +42,13 @@ export function DayPassage({ day }: DayPassageProps) {
         <Text style={[styles.reference, { color: colors.accent }]}>{day.scriptureReference}</Text>
       ) : null}
       {passage ? (
-        <Text
-          testID="day-passage-text"
-          style={{
-            fontFamily: readingFont.body,
-            fontSize: scriptureSize,
-            lineHeight: scriptureSize * SCRIPTURE_LEADING,
-            color: isDark ? colors.text : colors.textMuted,
-          }}
-        >
+        <Text testID="day-passage-text" style={passageStyle}>
           {`“${preventOrphan(stripOuterQuotes(passage))}”`}
+        </Text>
+      ) : day.scriptureReference ? (
+        // The reader's note when neither the Bible nor the day has the words.
+        <Text testID="day-passage-text" style={[passageStyle, { color: colors.textMuted }]}>
+          {`Scripture text not available for ${day.scriptureReference}.`}
         </Text>
       ) : null}
     </>

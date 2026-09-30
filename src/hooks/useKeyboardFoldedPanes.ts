@@ -46,9 +46,18 @@ export function useKeyboardFoldedPanes(
     const hide = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', (event) => {
       followKeyboard(event, 0);
     });
+    // A shown keyboard can change size with no show event: another keyboard,
+    // the QuickType bar, or a hardware keyboard's shortcut bar. iOS reports an
+    // undocked or floating iPad keyboard as hidden, so its frames are ignored.
+    const resize = Platform.OS === 'ios'
+      ? Keyboard.addListener('keyboardWillChangeFrame', (event) => {
+        if (Keyboard.isVisible()) followKeyboard(event, event.endCoordinates.height);
+      })
+      : null;
     return () => {
       show.remove();
       hide.remove();
+      resize?.remove();
     };
   }, [axis]);
 

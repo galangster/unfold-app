@@ -15,6 +15,7 @@ const PHONE = { width: 390, height: 844, insetTop: 47, insetBottom: 34, insetLef
 const OPEN_DUO = { width: 951, height: 669, insetTop: 24, insetBottom: 20, insetLeft: 0, insetRight: 0 };
 // Reported content area of an open Duo held upright.
 const UPRIGHT_DUO = { width: 669, height: 703, insetTop: 0, insetBottom: 0, insetLeft: 0, insetRight: 0 };
+const IPAD_PORTRAIT = { width: 744, height: 1133, insetTop: 24, insetBottom: 20, insetLeft: 0, insetRight: 0 };
 const mockWindow = { ...PHONE };
 let mockReducedMotion = true;
 const mockParams: { devotionalId?: string; dayNumber?: string } = { devotionalId: 'dev-1', dayNumber: '1' };
@@ -316,6 +317,38 @@ describe('journal writing desk', () => {
     }
     expect(useUnfoldStore.getState().journalEntries).toBe(before);
     expect(before).toHaveLength(withEntry ? 1 : 0);
+  });
+
+  it('keeps the words being written across opening, turning, and closing', () => {
+    const tree = render(PHONE);
+    act(() => {
+      editor(tree).props.onChangeText('Half a thought');
+    });
+    for (const size of [OPEN_DUO, UPRIGHT_DUO, PHONE]) {
+      resize(tree, size);
+      expect(editor(tree).props.value).toBe('Half a thought');
+    }
+    expect(mockDraftMounts).toBe(1);
+  });
+
+  it('follows a keyboard that changes size while shown', () => {
+    const listeners = new Map<string, (event: unknown) => void>();
+    jest.spyOn(Keyboard, 'addListener').mockImplementation(((event: string, listener: (event: unknown) => void) => {
+      listeners.set(event, listener);
+      return { remove: jest.fn() };
+    }) as never);
+    jest.spyOn(Keyboard, 'isVisible').mockReturnValue(true);
+    const tree = render(IPAD_PORTRAIT);
+
+    act(() => {
+      listeners.get('keyboardWillShow')?.({ duration: 250, easing: 'keyboard', endCoordinates: { height: 300 } });
+    });
+    expect(tree.root.findByType(FacingPanes).props.panes).toMatchObject({ first: 0 });
+    // A hardware keyboard leaves only its shortcut bar: the draft has room again.
+    act(() => {
+      listeners.get('keyboardWillChangeFrame')?.({ duration: 250, easing: 'keyboard', endCoordinates: { height: 69 } });
+    });
+    expect(tree.root.findByType(FacingPanes).props.panes).toMatchObject({ first: 522.5, gutter: 40 });
   });
 
   it('never folds the source on an open Duo', () => {
