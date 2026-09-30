@@ -46,6 +46,7 @@ jest.mock('@/components/icons', () => new Proxy({}, { get: () => () => null }));
 jest.mock('@/components/UndoToast', () => ({ UndoToast: () => null }));
 jest.mock('@/components/CompletionCelebration', () => ({ CompletionCelebration: () => null }));
 jest.mock('@/components/reading/DevotionalContent', () => ({ DevotionalContent: () => null }));
+jest.mock('@/components/reading/ReflectionFacingPage', () => ({ ReflectionFacingPage: () => null }));
 jest.mock('@/components/reading/StudyMethodSheet', () => ({ StudyMethodSheet: () => null }));
 jest.mock('@/components/reading/ReaderOutlineSheet', () => ({ ReaderOutlineSheet: () => null }));
 jest.mock('@/components/ScriptureTapSheet', () => ({ ScriptureTapSheet: () => null }));
@@ -112,6 +113,7 @@ jest.mock('react-native-reanimated', () => {
 
 jest.mock('@/lib/theme', () => ({
   useTheme: () => ({ colors: { text: '#fff', accent: '#c8a55c', textMuted: '#aaa', background: '#000' } }),
+  useColors: () => ({ text: '#fff', accent: '#c8a55c', textMuted: '#aaa', background: '#000', border: '#333' }),
 }));
 
 jest.mock('@/hooks/usePremiumNudge', () => ({
