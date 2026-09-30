@@ -12,13 +12,14 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Typography } from '@/constants/typography';
 import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
+import { useReaderScripture } from '@/hooks/useReaderScripture';
 import { ADAPTIVE_READABLE_MEASURE, adaptiveFrameStyle, resolveAdaptivePanes } from '@/lib/adaptive-layout';
 import { selectRenderableDevotionalDay } from '@/lib/devotional-canonical-days';
 import { dismissOr } from '@/lib/navigation';
 import { FONT_SIZE_VALUES, useUnfoldStore } from '@/lib/store';
 import { useTheme } from '@/lib/theme';
 import { useReadingFont } from '@/lib/useReadingFont';
-import { preventOrphan } from '@/lib/cn';
+import { preventOrphan, stripOuterQuotes } from '@/lib/cn';
 import { parsePositiveInteger } from '@/lib/reveal-params';
 
 type StayFocus = 'prayer' | 'passage';
@@ -97,9 +98,11 @@ export default function StayScreen() {
     [devotional, dayNumber],
   );
   const day = renderableDay.status === 'ready' ? renderableDay.day : undefined;
+  // The same words the reader showed: its translation first, then the day's text.
+  const passageText = useReaderScripture(day?.scriptureReference, day?.scriptureText);
   const texts: Record<StayFocus, string | undefined> = {
     prayer: day?.closingPrayer,
-    passage: day?.scriptureText,
+    passage: passageText ? stripOuterQuotes(passageText) : undefined,
   };
 
   const panes = resolveAdaptivePanes(adaptiveLayout, { stacked: true });

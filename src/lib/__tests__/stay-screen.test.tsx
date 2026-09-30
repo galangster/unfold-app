@@ -43,10 +43,16 @@ jest.mock('@/lib/theme', () => ({
   useTheme: () => ({ isDark: false, colors: new Proxy({}, { get: () => '#888888' }) }),
 }));
 jest.mock('@/lib/useReadingFont', () => ({ useReadingFont: () => ({ body: 'Body' }) }));
+const mockFetchVerseLocal = jest.fn(async (_reference: string, _translation: string) => null as null | { text: string });
+jest.mock('@/lib/bible-api', () => ({
+  fetchVerseLocal: (reference: string, translation: string) => mockFetchVerseLocal(reference, translation),
+  fetchVerse: jest.fn(async () => null),
+}));
 jest.mock('@/lib/store', () => ({
   FONT_SIZE_VALUES: { medium: { scripture: 21, body: 17, title: 32 } },
   useUnfoldStore: (selector: (state: unknown) => unknown) => selector({
     user: { fontSize: 'medium' },
+    bibleReaderSettings: { translation: 'BSB' },
     devotionals: [{
       id: 'devo',
       days: [
@@ -167,6 +173,16 @@ describe('StayScreen', () => {
     expect(style(host(tree, 'stay-passage')).fontSize).toBe(25);
     expect(hasText(tree, 'Matthew 11:28')).toBeDefined();
     expect(hosts(tree, 'stay-prayer')).toHaveLength(0);
+  });
+
+  it('shows the passage in the translation the reader showed', async () => {
+    mockParams.focus = 'passage';
+    mockFetchVerseLocal.mockResolvedValueOnce({ text: '"Come to me, all you who are weary and burdened."' });
+    const tree = render();
+    await act(async () => {});
+    expect(mockFetchVerseLocal).toHaveBeenCalledWith('Matthew 11:28', 'BSB');
+    expect(text(host(tree, 'stay-passage'))).toContain('all you who are weary');
+    expect(text(host(tree, 'stay-passage'))).not.toMatch(/^"/);
   });
 
   it('faces the prayer with the passage, the title and Done on an open Duo', () => {
