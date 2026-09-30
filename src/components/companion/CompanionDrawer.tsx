@@ -10,7 +10,7 @@
  *   DRAWER_WIDTH       — constant for parent layout use
  */
 
-import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -457,15 +457,20 @@ export const CompanionDrawer = memo(function CompanionDrawer({
   const [actionMode, setActionMode] = useState<ActionMode>('actions');
   const [renameDraft, setRenameDraft] = useState('');
 
+  // Reset only on a real close. The overlay mounts closed when a paired
+  // window folds shut, and a dismiss then would drop the composer keyboard.
+  const wasOpenRef = useRef(isOpen);
   useEffect(() => {
+    const wasOpen = wasOpenRef.current;
+    wasOpenRef.current = isOpen;
     if (isOpen) setGroupingNow(Date.now());
-    else if (!docked) {
+    else if (wasOpen) {
       Keyboard.dismiss();
       setActionConversation(null);
       setActionMode('actions');
       setRenameDraft('');
     }
-  }, [isOpen, docked]);
+  }, [isOpen]);
 
   // A docked list never opens or closes, so it regroups when the history changes.
   useEffect(() => {

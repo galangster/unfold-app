@@ -165,6 +165,15 @@ export default function CompanionScreen() {
   // returns when the window narrows again.
   const dockedPanes = resolveAdaptivePanes(adaptiveLayout);
   const docked = dockedPanes != null;
+  // Docked history can collapse. The conversation then spans the window as
+  // it does unpaired, and the overlay drawer stays away.
+  const [dockedHistoryHidden, setDockedHistoryHidden] = useState(false);
+  const visiblePanes = dockedHistoryHidden ? null : dockedPanes;
+  const historyToggleLabel = !docked
+    ? 'Open conversation history'
+    : dockedHistoryHidden
+      ? 'Show conversation history'
+      : 'Hide conversation history';
   const listRef = useRef<any>(null);
 
   // Full tab bar height including safe area (home indicator)
@@ -462,22 +471,21 @@ export default function CompanionScreen() {
         }}
       >
         <View style={{ width: TOOLBAR_SIDE_SLOT_WIDTH, alignItems: 'flex-start' }}>
-          {/* Docked history is always visible, so the toggle leaves. The slot
-              stays to keep the Companion centered. */}
-          {docked ? null : (
-            <TouchableOpacity
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                handleDrawerOpen();
-              }}
-              activeOpacity={0.7}
-              accessibilityLabel="Open conversation history"
-              accessibilityRole="button"
-              style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
-            >
-              <List size={22} color={colors.textMuted} weight="light" />
-            </TouchableOpacity>
-          )}
+          {/* Docked, the toggle hides and shows the history pane. Otherwise
+              it opens the overlay drawer. */}
+          <TouchableOpacity
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              if (docked) setDockedHistoryHidden((hidden) => !hidden);
+              else handleDrawerOpen();
+            }}
+            activeOpacity={0.7}
+            accessibilityLabel={historyToggleLabel}
+            accessibilityRole="button"
+            style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <List size={22} color={colors.textMuted} weight="light" />
+          </TouchableOpacity>
         </View>
 
         <View
@@ -621,13 +629,14 @@ export default function CompanionScreen() {
       testID="companion-screen"
     >
       {/* The wrapper owns the safe areas in every layout. The conversation
-          stays in the second pane, so docking never remounts it. */}
+          stays in the second pane, so docking or collapsing the history never
+          remounts it. */}
       <View style={[{ flex: 1, paddingTop: insets.top }, adaptiveSafeGutterStyle(insets.left, insets.right)]}>
         <FacingPanes
-          panes={dockedPanes}
+          panes={visiblePanes}
           unpaired="stack"
           testID="companion-docked-panes"
-          first={dockedPanes ? (
+          first={visiblePanes ? (
             <CompanionDrawer
               docked
               translateX={drawerTranslateX}

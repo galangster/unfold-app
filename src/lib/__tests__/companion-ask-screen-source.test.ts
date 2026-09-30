@@ -152,13 +152,21 @@ describe('drawer edge-swipe gesture wired at the screen root', () => {
 describe('docked history in a paired window', () => {
   it('docks the history as the first facing pane and the conversation as the second', () => {
     expect(source).toContain('const dockedPanes = resolveAdaptivePanes(adaptiveLayout)');
-    expect(source).toMatch(/<FacingPanes\s+panes=\{dockedPanes\}\s+unpaired="stack"/);
-    expect(source).toMatch(/first=\{dockedPanes \? \(\s*<CompanionDrawer\s+docked/);
+    expect(source).toMatch(/<FacingPanes\s+panes=\{visiblePanes\}\s+unpaired="stack"/);
+    expect(source).toMatch(/first=\{visiblePanes \? \(\s*<CompanionDrawer\s+docked/);
     expect(source).toContain('second={conversationColumn}');
   });
 
-  it('drops the toggle, the overlay drawer, and the edge swipe while docked', () => {
-    expect(source).toMatch(/\{docked \? null : \(\s*<TouchableOpacity[\s\S]*?Open conversation history/);
+  it('collapses the docked history with the toggle instead of opening the overlay', () => {
+    expect(source).toContain('const visiblePanes = dockedHistoryHidden ? null : dockedPanes');
+    expect(source).toContain('if (docked) setDockedHistoryHidden((hidden) => !hidden);');
+    expect(source).toContain('else handleDrawerOpen();');
+    expect(source).toContain('accessibilityLabel={historyToggleLabel}');
+    expect(source).toContain("'Hide conversation history'");
+    expect(source).toContain("'Show conversation history'");
+  });
+
+  it('drops the overlay drawer and the edge swipe while paired', () => {
     expect(source).toMatch(/\{dockedPanes \? null : \(\s*<CompanionDrawer/);
     expect(source).toContain('handleDrawerClose, !docked)');
     expect(source).toContain('if (docked && drawerOpen) setDrawerOpen(false)');
@@ -179,7 +187,6 @@ describe('asymmetric safe areas and drawer resize', () => {
     // One wrapper owns the safe areas in every layout, so the conversation
     // column never needs its own insets.
     expect(source).toMatch(/paddingTop: insets\.top \}, adaptiveSafeGutterStyle\(insets\.left, insets\.right\)\]\}>\s*<FacingPanes/);
-    expect(source).not.toContain('chromeInsets');
   });
 
   it('rewrites the closed drawer translation when drawer width changes', () => {

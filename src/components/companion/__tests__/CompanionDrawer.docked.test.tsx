@@ -158,6 +158,26 @@ describe('CompanionDrawer docked mode', () => {
     expect(addListener).not.toHaveBeenCalled();
   });
 
+  it('does not dismiss the keyboard when the overlay mounts closed', () => {
+    const dismiss = jest.spyOn(Keyboard, 'dismiss');
+    renderDrawer({ isOpen: false });
+    expect(dismiss).not.toHaveBeenCalled();
+  });
+
+  it('dismisses the keyboard when the overlay closes', () => {
+    const dismiss = jest.spyOn(Keyboard, 'dismiss');
+    const { tree, handlers } = renderDrawer({ isOpen: true });
+    expect(dismiss).not.toHaveBeenCalled();
+
+    act(() => {
+      tree.update(
+        <CompanionDrawer translateX={{ value: -320 } as never} isOpen={false} {...handlers} />,
+      );
+    });
+
+    expect(dismiss).toHaveBeenCalledTimes(1);
+  });
+
   it('switches conversations from the docked list as the drawer does', () => {
     const { tree, handlers } = renderDrawer({ docked: true });
     const [row] = tree.root.findAll(
