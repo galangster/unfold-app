@@ -51,8 +51,10 @@ jest.mock('@/lib/store', () => ({
 jest.mock('@/lib/home-devotional-state', () => ({
   getCurrentDevotional: (devotionals: { id: string }[], id: string | null) => devotionals.find((d) => d.id === id),
 }));
+const PASSAGE = 'The Lord is my shepherd; I shall not want.';
+let mockPassage: string | undefined = PASSAGE;
 jest.mock('@/hooks/useReaderScripture', () => ({
-  useReaderScripture: () => 'The Lord is my shepherd; I shall not want.',
+  useReaderScripture: () => mockPassage,
 }));
 jest.mock('@/lib/useReadingFont', () => ({ useReadingFont: () => ({ body: 'SourceSerif' }) }));
 jest.mock('@/lib/companion-personality', () => ({ resolveCompanionPersonality: () => 'warm' }));
@@ -225,6 +227,7 @@ function press(tree: renderer.ReactTestRenderer) {
 
 describe('Ask docked conversation history', () => {
   beforeEach(() => {
+    mockPassage = PASSAGE;
     mockComposerMounts.mockClear();
     mockState.devotionals = [];
     mockState.currentDevotionalId = null;
@@ -357,6 +360,39 @@ describe('Ask docked conversation history', () => {
     press(tree);
     expect(hostCount(tree, 'companion-reading-page')).toBe(1);
     expect(mockComposerMounts).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the day read today after the series moves on to tomorrow', () => {
+    // Finishing Day 2 moves currentDay to Day 3, which is already written.
+    mockState.devotionals = [{
+      ...TODAY,
+      currentDay: 3,
+      days: [
+        ...TODAY.days.slice(0, 1),
+        { ...TODAY.days[1], isRead: true, readAt: new Date().toISOString() },
+        { dayNumber: 3, title: 'Tomorrow', scriptureReference: 'Psalm 23:3', scriptureText: '', bodyText: 'Not yet.' },
+      ],
+    }];
+    mockState.currentDevotionalId = 'psalms';
+    const tree = render(PAIRED);
+    act(() => {
+      paneTab(tree, "Today's reading").props.onPress();
+    });
+
+    expect(texts(tree)).toContain('Day 2 · The shepherd');
+    expect(texts(tree)).not.toContain('Day 3 · Tomorrow');
+  });
+
+  it('says when the passage is not available, as the reader does', () => {
+    mockPassage = undefined;
+    mockState.devotionals = [TODAY];
+    mockState.currentDevotionalId = 'psalms';
+    const tree = render(PAIRED);
+    act(() => {
+      paneTab(tree, "Today's reading").props.onPress();
+    });
+
+    expect(texts(tree)).toContain('Scripture text not available for Psalm 23:1.');
   });
 
   it('keeps the reading choice through a fold', () => {

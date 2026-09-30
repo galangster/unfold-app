@@ -19,6 +19,7 @@ import {
 import { GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
+import { useCalendarNow } from '@/hooks/useCalendarNow';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import {
   adaptiveFrameStyle,
@@ -44,6 +45,7 @@ import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { getCurrentDevotional } from '@/lib/home-devotional-state';
 import { selectRenderableDevotionalDay } from '@/lib/devotional-canonical-days';
+import { getTodayReaderDayNumber } from '@/lib/devotional-day-access';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import { resolveCompanionPersonality } from '@/lib/companion-personality';
@@ -234,12 +236,16 @@ export default function CompanionScreen() {
     if (!currentDevotional) return undefined;
     return currentDevotional.days?.find((d) => d.dayNumber === currentDevotional.currentDay)?.title;
   }, [currentDevotional]);
-  // The day the reading page shows beside the conversation, when one is ready.
+  // The day the reading page shows beside the conversation, when one is ready:
+  // the day the reader opens today. Finishing today's reading already moves
+  // currentDay to tomorrow, so it is not that day.
+  const calendarNow = useCalendarNow();
   const readingDay = useMemo(() => {
     if (!currentDevotional) return undefined;
-    const renderable = selectRenderableDevotionalDay(currentDevotional, currentDevotional.currentDay);
+    const todayDayNumber = getTodayReaderDayNumber(currentDevotional, calendarNow);
+    const renderable = selectRenderableDevotionalDay(currentDevotional, todayDayNumber);
     return renderable.status === 'ready' ? renderable.day : undefined;
-  }, [currentDevotional]);
+  }, [currentDevotional, calendarNow]);
 
   React.useEffect(() => {
     if (isStreaming && Platform.OS === 'ios') {
