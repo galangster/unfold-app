@@ -178,6 +178,39 @@ describe('CompanionDrawer docked mode', () => {
     expect(dismiss).toHaveBeenCalledTimes(1);
   });
 
+  it('starts from the search the screen kept and reports each edit', () => {
+    const onSearchQueryChange = jest.fn();
+    const { tree } = renderDrawer({ docked: true, initialSearchQuery: 'psalm', onSearchQueryChange });
+    const [field] = tree.root.findAll(
+      (node: any) => node.props.accessibilityLabel === 'Search conversation titles' && typeof node.type === 'string',
+    );
+
+    expect(field.props.value).toBe('psalm');
+    expect(hasText(tree, 'Morning psalm')).toBe(true);
+    expect(hasText(tree, 'Anxious week')).toBe(false);
+
+    act(() => {
+      field.props.onChangeText('psalms');
+    });
+    expect(onSearchQueryChange).toHaveBeenLastCalledWith('psalms');
+    expect(field.props.value).toBe('psalms');
+
+    const [clear] = tree.root.findAll(
+      (node: any) => node.props.accessibilityLabel === 'Clear search' && node.props.onPress,
+    );
+    act(() => {
+      clear.props.onPress();
+    });
+    expect(onSearchQueryChange).toHaveBeenLastCalledWith('');
+  });
+
+  it('leaves out its heading when the pane switch names the list', () => {
+    expect(hasText(renderDrawer({ docked: true }).tree, 'Chats')).toBe(true);
+    const { tree } = renderDrawer({ docked: true, hideHeading: true });
+    expect(hasText(tree, 'Chats')).toBe(false);
+    expect(hasText(tree, 'New Chat')).toBe(true);
+  });
+
   it('switches conversations from the docked list as the drawer does', () => {
     const { tree, handlers } = renderDrawer({ docked: true });
     const [row] = tree.root.findAll(

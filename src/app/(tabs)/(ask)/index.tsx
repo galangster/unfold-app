@@ -43,6 +43,7 @@ import {
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { getCurrentDevotional } from '@/lib/home-devotional-state';
+import { selectRenderableDevotionalDay } from '@/lib/devotional-canonical-days';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import { resolveCompanionPersonality } from '@/lib/companion-personality';
@@ -53,6 +54,8 @@ import {
   CompanionDrawer,
   useDrawerGesture,
 } from '@/components/companion/CompanionDrawer';
+import { CompanionReadingPage } from '@/components/companion/CompanionReadingPage';
+import { SegmentTabs } from '@/components/ui/SegmentTabs';
 import { CompanionEmptyState } from '@/components/companion/CompanionEmptyState';
 import { CompanionInput } from '@/components/companion/CompanionInput';
 import { UserMessageBubble } from '@/components/companion/UserMessageBubble';
@@ -154,6 +157,13 @@ const TOOLBAR_SIDE_SLOT_WIDTH = 88;
 
 // ── Screen ─────────────────────────────────────────────────────────────────
 
+// The docked first pane shows the history or the day's reading.
+type FirstPane = 'chats' | 'reading';
+const FIRST_PANE_TABS = [
+  { id: 'chats', label: 'Chats' },
+  { id: 'reading', label: "Today's reading" },
+] as const satisfies readonly { id: FirstPane; label: string }[];
+
 export default function CompanionScreen() {
   const { colors } = useTheme();
   const { reducedMotion } = useAccessibleAnimation();
@@ -169,6 +179,15 @@ export default function CompanionScreen() {
   // Docked history can collapse. The conversation then spans the window as
   // it does unpaired, and the overlay drawer stays away.
   const [dockedHistoryHidden, setDockedHistoryHidden] = useState(false);
+  // What the docked first pane shows: the history or the day's reading.
+  const [firstPane, setFirstPane] = useState<FirstPane>('chats');
+  // History search outlives one list: the docked list and the overlay drawer
+  // are separate instances, and a fold swaps one for the other. A ref keeps
+  // each keystroke from re-rendering this screen.
+  const historySearchRef = useRef('');
+  const rememberHistorySearch = useCallback((query: string) => {
+    historySearchRef.current = query;
+  }, []);
   const visiblePanes = dockedHistoryHidden ? null : dockedPanes;
   const historyToggleLabel = !docked
     ? 'Open conversation history'
@@ -214,6 +233,12 @@ export default function CompanionScreen() {
   const todayTheme = useMemo(() => {
     if (!currentDevotional) return undefined;
     return currentDevotional.days?.find((d) => d.dayNumber === currentDevotional.currentDay)?.title;
+  }, [currentDevotional]);
+  // The day the reading page shows beside the conversation, when one is ready.
+  const readingDay = useMemo(() => {
+    if (!currentDevotional) return undefined;
+    const renderable = selectRenderableDevotionalDay(currentDevotional, currentDevotional.currentDay);
+    return renderable.status === 'ready' ? renderable.day : undefined;
   }, [currentDevotional]);
 
   React.useEffect(() => {
@@ -644,15 +669,29 @@ export default function CompanionScreen() {
           unpaired="stack"
           testID="companion-docked-panes"
           first={visiblePanes ? (
-            <CompanionDrawer
-              docked
-              translateX={drawerTranslateX}
-              isOpen={false}
-              onOpen={handleDrawerOpen}
-              onClose={handleDrawerClose}
-              onNewChat={handleNewChat}
-              onWillSwitchConversation={stopGeneration}
-            />
+            // The day's reading can take the history's place. Without a
+            // current day there is nothing to pin, so the pane stays Chats.
+            <View style={{ flex: 1 }}>
+              {readingDay ? (
+                <SegmentTabs tabs={FIRST_PANE_TABS} value={firstPane} onChange={setFirstPane} testID="companion-pane-switch" />
+              ) : null}
+              {readingDay && firstPane === 'reading' ? (
+                <CompanionReadingPage day={readingDay} />
+              ) : (
+                <CompanionDrawer
+                  docked
+                  translateX={drawerTranslateX}
+                  isOpen={false}
+                  onOpen={handleDrawerOpen}
+                  onClose={handleDrawerClose}
+                  onNewChat={handleNewChat}
+                  onWillSwitchConversation={stopGeneration}
+                  initialSearchQuery={historySearchRef.current}
+                  onSearchQueryChange={rememberHistorySearch}
+                  hideHeading={readingDay !== undefined}
+                />
+              )}
+            </View>
           ) : null}
           second={conversationColumn}
         />
@@ -679,6 +718,8 @@ export default function CompanionScreen() {
           onClose={handleDrawerClose}
           onNewChat={handleNewChat}
           onWillSwitchConversation={stopGeneration}
+          initialSearchQuery={historySearchRef.current}
+          onSearchQueryChange={rememberHistorySearch}
         />
       )}
 

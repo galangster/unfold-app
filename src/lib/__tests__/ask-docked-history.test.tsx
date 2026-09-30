@@ -2,12 +2,19 @@
  * Docked conversation history on Ask (iPhone Duo): a paired window docks the
  * history beside the conversation, and the history toggle collapses it. The
  * conversation keeps its slot, so collapsing never remounts the composer.
+ * The first pane can show the day's reading instead, and the history search
+ * survives a fold.
  */
 import React from 'react';
 import renderer, { act } from 'react-test-renderer';
 
 const mockWindow = { width: 390, height: 844, insetTop: 47, insetBottom: 34, insetLeft: 0, insetRight: 0 };
 const mockComposerMounts = jest.fn();
+const mockState: { devotionals: unknown[]; currentDevotionalId: string | null; user: null } = {
+  devotionals: [],
+  currentDevotionalId: null,
+  user: null,
+};
 
 jest.mock('expo-router', () => ({
   useFocusEffect: () => undefined,
@@ -38,9 +45,16 @@ jest.mock('@/lib/theme', () => ({
   useTheme: () => ({ isDark: false, colors: new Proxy({}, { get: () => '#888888' }) }),
 }));
 jest.mock('@/lib/store', () => ({
-  useUnfoldStore: (selector: (state: unknown) => unknown) => selector({ devotionals: [], currentDevotionalId: null, user: null }),
+  useUnfoldStore: (selector: (state: unknown) => unknown) => selector(mockState),
+  FONT_SIZE_VALUES: { medium: { body: 17, scripture: 21, title: 32 } },
 }));
-jest.mock('@/lib/home-devotional-state', () => ({ getCurrentDevotional: () => undefined }));
+jest.mock('@/lib/home-devotional-state', () => ({
+  getCurrentDevotional: (devotionals: { id: string }[], id: string | null) => devotionals.find((d) => d.id === id),
+}));
+jest.mock('@/hooks/useReaderScripture', () => ({
+  useReaderScripture: () => 'The Lord is my shepherd; I shall not want.',
+}));
+jest.mock('@/lib/useReadingFont', () => ({ useReadingFont: () => ({ body: 'SourceSerif' }) }));
 jest.mock('@/lib/companion-personality', () => ({ resolveCompanionPersonality: () => 'warm' }));
 jest.mock('@/lib/premium-gating', () => ({
   canSendCompanionMessage: () => true,
@@ -85,11 +99,35 @@ jest.mock('@/components/companion/CompanionInput', () => {
   };
 });
 jest.mock('@/components/companion/CompanionDrawer', () => {
-  const { View } = require('react-native');
+  const { useState } = require('react');
+  const { TextInput, View } = require('react-native');
   return {
-    CompanionDrawer: ({ docked, isOpen }: { docked?: boolean; isOpen: boolean }) => (
-      <View testID={docked ? 'docked-history' : 'overlay-drawer'} accessibilityState={{ expanded: isOpen }} />
-    ),
+    // Starts from the screen's search and reports each edit, as the drawer does.
+    CompanionDrawer: ({ docked, isOpen, initialSearchQuery = '', onSearchQueryChange, hideHeading }: {
+      docked?: boolean;
+      isOpen: boolean;
+      initialSearchQuery?: string;
+      onSearchQueryChange?: (query: string) => void;
+      hideHeading?: boolean;
+    }) => {
+      const [query, setQuery] = useState(initialSearchQuery);
+      return (
+        <View
+          testID={docked ? 'docked-history' : 'overlay-drawer'}
+          accessibilityHint={hideHeading ? 'no heading' : undefined}
+          accessibilityState={{ expanded: isOpen }}
+        >
+          <TextInput
+            testID="history-search"
+            value={query}
+            onChangeText={(next: string) => {
+              setQuery(next);
+              onSearchQueryChange?.(next);
+            }}
+          />
+        </View>
+      );
+    },
     useDrawerGesture: () => ({}),
   };
 });
@@ -102,6 +140,21 @@ const COMPACT = { width: 390, height: 844, insetTop: 47, insetBottom: 34, insetL
 
 const mounted: renderer.ReactTestRenderer[] = [];
 
+const TODAY = {
+  id: 'psalms',
+  currentDay: 2,
+  days: [
+    { dayNumber: 1, title: 'Still waters', scriptureReference: 'Psalm 23:2', scriptureText: '', bodyText: 'Day one.' },
+    {
+      dayNumber: 2,
+      title: 'The shepherd',
+      scriptureReference: 'Psalm 23:1',
+      scriptureText: 'The day text.',
+      bodyText: 'He knows the way.\n\n---\n\n**Rest** in that today.',
+    },
+  ],
+};
+
 function render(window: typeof PAIRED) {
   Object.assign(mockWindow, window);
   let tree!: renderer.ReactTestRenderer;
@@ -110,6 +163,35 @@ function render(window: typeof PAIRED) {
   });
   mounted.push(tree);
   return tree;
+}
+
+/** Fold or open the device: the same screen re-renders at a new window size. */
+function resize(tree: renderer.ReactTestRenderer, window: typeof PAIRED) {
+  Object.assign(mockWindow, window);
+  act(() => {
+    tree.update(<CompanionScreen />);
+  });
+}
+
+function searchField(tree: renderer.ReactTestRenderer) {
+  const [field] = host(tree, 'history-search');
+  return field;
+}
+
+function paneTab(tree: renderer.ReactTestRenderer, label: string) {
+  const [tab] = tree.root.findAll(
+    (node) => node.props.accessibilityRole === 'tab'
+      && typeof node.props.accessibilityLabel === 'string'
+      && node.props.accessibilityLabel.startsWith(`${label} tab`)
+      && typeof node.props.onPress === 'function',
+  );
+  return tab;
+}
+
+function texts(tree: renderer.ReactTestRenderer) {
+  return tree.root
+    .findAll((node) => (node.type as unknown) === 'Text')
+    .map((node) => [node.props.children].flat().join(''));
 }
 
 function host(tree: renderer.ReactTestRenderer, testID: string) {
@@ -144,6 +226,8 @@ function press(tree: renderer.ReactTestRenderer) {
 describe('Ask docked conversation history', () => {
   beforeEach(() => {
     mockComposerMounts.mockClear();
+    mockState.devotionals = [];
+    mockState.currentDevotionalId = null;
   });
 
   afterEach(() => {
@@ -208,5 +292,104 @@ describe('Ask docked conversation history', () => {
     press(tree);
     expect(host(tree, 'overlay-drawer')[0].props.accessibilityState).toEqual({ expanded: true });
     expect(hostCount(tree, 'docked-history')).toBe(0);
+  });
+
+  it('keeps the history search through a fold and an open', () => {
+    const tree = render(PAIRED);
+    act(() => {
+      searchField(tree).props.onChangeText('psalm');
+    });
+
+    resize(tree, COMPACT);
+    expect(hostCount(tree, 'overlay-drawer')).toBe(1);
+    expect(searchField(tree).props.value).toBe('psalm');
+
+    resize(tree, PAIRED);
+    expect(hostCount(tree, 'docked-history')).toBe(1);
+    expect(searchField(tree).props.value).toBe('psalm');
+  });
+
+  it('shows the day\'s reading in the first pane from the switch', () => {
+    mockState.devotionals = [TODAY];
+    mockState.currentDevotionalId = 'psalms';
+    const tree = render(PAIRED);
+
+    expect(paneTab(tree, 'Chats').props.accessibilityState).toEqual({ selected: true });
+    expect(paneTab(tree, "Today's reading").props.accessibilityState).toEqual({ selected: false });
+    expect(hostCount(tree, 'docked-history')).toBe(1);
+    // The switch names the list, so the docked list drops its own heading.
+    expect(host(tree, 'docked-history')[0].props.accessibilityHint).toBe('no heading');
+    expect(hostCount(tree, 'companion-reading-page')).toBe(0);
+
+    act(() => {
+      paneTab(tree, "Today's reading").props.onPress();
+    });
+
+    expect(paneTab(tree, "Today's reading").props.accessibilityState).toEqual({ selected: true });
+    expect(hostCount(tree, 'docked-history')).toBe(0);
+    expect(hostCount(tree, 'companion-reading-page')).toBe(1);
+    expect(texts(tree)).toEqual(expect.arrayContaining([
+      'Day 2 · The shepherd',
+      'Psalm 23:1',
+      'He knows the way.',
+      'Rest in that today.',
+    ]));
+    expect(texts(tree)).toEqual(expect.arrayContaining([
+      expect.stringMatching(/^\u201CThe Lord is my shepherd; I shall not\s+want\.\u201D$/),
+    ]));
+    expect(texts(tree)).not.toContain('---');
+    expect(hostCount(tree, 'ask-composer')).toBe(1);
+    expect(mockComposerMounts).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the reading choice while the history toggle hides the pane', () => {
+    mockState.devotionals = [TODAY];
+    mockState.currentDevotionalId = 'psalms';
+    const tree = render(PAIRED);
+    act(() => {
+      paneTab(tree, "Today's reading").props.onPress();
+    });
+
+    press(tree);
+    expect(hostCount(tree, 'companion-reading-page')).toBe(0);
+    expect(hostCount(tree, 'companion-pane-switch')).toBe(0);
+
+    press(tree);
+    expect(hostCount(tree, 'companion-reading-page')).toBe(1);
+    expect(mockComposerMounts).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the reading choice through a fold', () => {
+    mockState.devotionals = [TODAY];
+    mockState.currentDevotionalId = 'psalms';
+    const tree = render(PAIRED);
+    act(() => {
+      paneTab(tree, "Today's reading").props.onPress();
+    });
+
+    resize(tree, COMPACT);
+    expect(hostCount(tree, 'companion-reading-page')).toBe(0);
+    resize(tree, PAIRED);
+    expect(hostCount(tree, 'companion-reading-page')).toBe(1);
+    expect(paneTab(tree, "Today's reading").props.accessibilityState).toEqual({ selected: true });
+    expect(mockComposerMounts).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves out the switch without a current day', () => {
+    const tree = render(PAIRED);
+
+    expect(hostCount(tree, 'companion-pane-switch')).toBe(0);
+    expect(paneTab(tree, 'Chats')).toBeUndefined();
+    expect(hostCount(tree, 'docked-history')).toBe(1);
+  });
+
+  it('leaves out the switch on a compact window', () => {
+    mockState.devotionals = [TODAY];
+    mockState.currentDevotionalId = 'psalms';
+    const tree = render(COMPACT);
+
+    expect(hostCount(tree, 'companion-pane-switch')).toBe(0);
+    expect(hostCount(tree, 'companion-reading-page')).toBe(0);
+    expect(hostCount(tree, 'overlay-drawer')).toBe(1);
   });
 });
