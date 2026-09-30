@@ -16,13 +16,15 @@ In a seated arrangement, sustained reading occupies the upper region. Reflection
 
 A person can choose **Stay with this passage** or **Stay with this prayer**. This starts a short, intentional reading session. Standing alone keeps the current task. Returning restores the same reading anchor.
 
+Amended 30 September 2026 after the native build and its audit: Today's two pages are equal, so the devotional card never crosses the fold. Both stays are offered at every width, so closing the device never removes them. The reflection desk applies to every tall regular window, iPad portrait included. No hinge action completes a day or finishes a prayer.
+
 ## Wider app direction
 
 These are design proposals. Bible, Companion, and Journal are not implemented in this prototype.
 
 | Area | Narrow or closed | Expanded or book | Seated | Standing |
 | --- | --- | --- | --- | --- |
-| Today | Current devotional, then unfinished reflection and verse | Devotional receives most of the space; supporting content stays secondary | Reading context above; continue and resume actions below if useful | Retain Today until a passage is chosen |
+| Today | Current devotional, then unfinished reflection and verse | Two equal pages: the devotional stands alone on its page; supporting content stays secondary on the facing page | Reading context above; continue and resume actions below if useful | Retain Today until a passage is chosen |
 | Bible | One page, or the chosen scrolling preference | Two readable facing pages | Reading above; related controls below | An explicitly chosen passage |
 | Devotional | Active reading or response, with a direct switch | Scripture and prose beside questions and one response | Reading above; reflection below | Chosen passage or closing prayer |
 | Companion | Conversation and composer; source opens in context | Pinned source beside conversation; history can collapse | Source above; conversation and composer below when space permits | Retain conversation; a cited passage may open an intentional session |

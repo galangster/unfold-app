@@ -18,8 +18,11 @@ Stage: 5  Next: build with the Xcode 27.1 RC image, then run the Stage 5 checks 
 ## Decisions
 - Open display: facing pages in the reader, open-book series spread, two pages for Today, You and the wind-down, docked Ask history that can hide: chosen (agent, 2026-09-30) — extends the facing-page direction accepted 2026-09-14
 - Tall regular window (Duo upright, iPad portrait): reading above, reflection below; the reading steps aside while typing: chosen (agent, 2026-09-30)
-- Today pages: equal, not 1.35:1: recommended; pending (Nick) — keeps the devotional card off the fold
-- "Stay with this prayer": regular-width windows only; recommended; pending (Nick) — phones stay unchanged unless Nick wants it there
+- Today pages: equal, not 1.35:1: chosen (Nick, 2026-09-30, Fable audit) — keeps the devotional card off the fold
+- Stay with this prayer and Stay with this passage: every width: chosen (Nick, 2026-09-30, Fable audit) — closing the device must not remove them
+- Reflection desk on iPad portrait too: chosen (Nick, 2026-09-30, Fable audit) — size classes cannot tell an upright Duo from an iPad
+- Every reading pairs on an open display; a day without questions gets a quiet facing page: chosen (Nick, 2026-09-30) — the header stays off the fold
+- Hinge: no hinge action completes a day or finishes a prayer; a wind-down dimmer stays an opt-in idea for a native hinge bridge (Nick, 2026-09-30)
 - Outer landscape and tent stance: not now (agent, 2026-09-30) — needs landscape on every iPhone
 
 ## Done / verified
@@ -30,3 +33,4 @@ Stage: 5  Next: build with the Xcode 27.1 RC image, then run the Stage 5 checks 
 - Device Hub iPhone Duo simulator, fold, Split View, PiP, Reduce Transparency, RTL — not run: needs Xcode 27.1
 - Physical iPhone Duo — not run
 - Known limit: a failed reflection save shows as saved after a fold remounts the journal, as a day change already does — engineer follow-up
+- Follow-ups: failed save kept through a fold; shared history search; reading pinned beside Ask; journal writing desk; toasts and sheets follow the fold once it reaches JavaScript
