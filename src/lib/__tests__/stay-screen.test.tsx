@@ -58,7 +58,7 @@ jest.mock('@/lib/devotional-canonical-days', () => ({
 }));
 
 // eslint-disable-next-line import/first
-import StayScreen from '../stay';
+import StayScreen from '@/app/stay';
 
 type Node = {
   type: unknown;

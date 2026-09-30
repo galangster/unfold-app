@@ -257,9 +257,26 @@ describe('Book of Seasons open-book spread', () => {
     };
     const style = StyleSheet.flatten(link.props.style as never) as { marginLeft: number; width: number };
 
-    expect(style.marginLeft).toBe(panes.lead + panes.first + panes.gutter);
-    expect(style.marginLeft).toBeGreaterThan(duoOpen.width / 2);
+    // The frame already starts at the lead, so the link starts after the
+    // first page and the gutter.
+    expect(style.marginLeft).toBe(panes.first + panes.gutter);
+    expect(panes.lead + style.marginLeft).toBeGreaterThan(duoOpen.width / 2);
     expect(style.width).toBe(panes.second);
+  });
+
+  it('lines the archive link up with the contents page when the spread is centered', () => {
+    const wide = resolveAdaptiveLayout({ width: 1366, height: 1024 });
+    mockPairedLayout = wide;
+    const tree = renderTab();
+    const panes = resolveAdaptivePanes(wide);
+    const link = tree.root.findAllByProps({ testID: 'book-past-series' })[0] as {
+      props: { style: unknown };
+    };
+    const style = StyleSheet.flatten(link.props.style as never) as { marginLeft: number; width: number };
+
+    expect(panes.lead).toBeGreaterThan(0);
+    expect(style.marginLeft).toBe(panes.first + panes.gutter);
+    expect(panes.lead + style.marginLeft).toBeGreaterThan(wide.width / 2);
   });
 
   it('keeps the current page mounted when the device opens and closes', () => {

@@ -60,7 +60,7 @@ export default function StayScreen() {
   };
 
   const label = day?.title ? (
-    <Text numberOfLines={2} style={[styles.label, { color: colors.textMuted }]}>
+    <Text accessibilityRole="header" numberOfLines={2} style={[styles.label, { color: colors.textMuted }]}>
       {day.title}
     </Text>
   ) : null;
@@ -129,7 +129,11 @@ export default function StayScreen() {
   );
 
   return (
-    <SafeAreaView style={[styles.fill, { backgroundColor: colors.background }]} edges={['top', 'left', 'right', 'bottom']}>
+    <SafeAreaView
+      style={[styles.fill, { backgroundColor: colors.background }]}
+      edges={['top', 'left', 'right', 'bottom']}
+      onAccessibilityEscape={handleDone}
+    >
       <Stack.Screen options={{ animation: reducedMotion ? 'none' : 'fade' }} />
       <FacingPanes
         panes={panes}
@@ -142,11 +146,14 @@ export default function StayScreen() {
           </View>
         }
         second={panes ? (
-          <ScrollView style={styles.fill} contentContainerStyle={styles.centered} showsVerticalScrollIndicator={false}>
-            {label}
-            {passage}
-            {done}
-          </ScrollView>
+          <View style={styles.fill}>
+            <ScrollView style={styles.fill} contentContainerStyle={styles.centered} showsVerticalScrollIndicator={false}>
+              {label}
+              {passage}
+            </ScrollView>
+            {/* Done stays put below a long passage, at the bottom of the page. */}
+            <View style={styles.singleDone}>{done}</View>
+          </View>
         ) : undefined}
       />
     </SafeAreaView>
