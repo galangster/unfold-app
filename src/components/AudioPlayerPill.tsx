@@ -30,6 +30,8 @@ import Animated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { PlayIcon, PauseIcon } from '@/components/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
+import { adaptivePaneLane, resolveAdaptivePanes } from '@/lib/adaptive-layout';
 import * as Haptics from 'expo-haptics';
 
 import { useTheme } from '@/lib/theme';
@@ -58,7 +60,12 @@ const MAX_TITLE_WIDTH = 160;
 // Component
 // ---------------------------------------------------------------------------
 
-export function AudioPlayerPill() {
+type AudioPlayerPillProps = {
+  /** The pane of a paired row the pill floats in. The reader keeps it beside the reading. */
+  pane?: 'first' | 'second';
+};
+
+export function AudioPlayerPill({ pane = 'second' }: AudioPlayerPillProps = {}) {
   const { colors } = useTheme();
   const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
@@ -151,6 +158,11 @@ export function AudioPlayerPill() {
     bottom: animatedBottom.value,
   }));
 
+  // -- Horizontal lane — the safe area, or one pane of a paired window, so
+  // the pill never sits on the fold at the window midline --
+  const adaptiveLayout = useAdaptiveLayout();
+  const lane = adaptivePaneLane(adaptiveLayout, resolveAdaptivePanes(adaptiveLayout), { pane });
+
   // -- Accessibility actions --
   const onAccessibilityAction = useCallback(
     (event: { nativeEvent: { actionName: string } }) => {
@@ -175,7 +187,7 @@ export function AudioPlayerPill() {
     <Animated.View
       entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).easing(Ease.out)}
       exiting={reducedMotion ? undefined : FadeOutDown.duration(Duration.fast).easing(Ease.out)}
-      style={[styles.wrapper, bottomStyle]}
+      style={[styles.wrapper, lane, bottomStyle]}
     >
       <GestureDetector gesture={panGesture}>
         <Animated.View
@@ -259,8 +271,6 @@ export function AudioPlayerPill() {
 const styles = StyleSheet.create({
   wrapper: {
     position: 'absolute',
-    left: 0,
-    right: 0,
     alignItems: 'center',
     zIndex: 100,
   },

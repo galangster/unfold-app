@@ -271,6 +271,13 @@ function RootLayoutNav() {
           }}
         />
         <Stack.Screen
+          name="stay"
+          options={{
+            presentation: 'fullScreenModal',
+            animation: 'fade',
+          }}
+        />
+        <Stack.Screen
           name="streak-settings"
           options={{
             animation: 'slide_from_right',

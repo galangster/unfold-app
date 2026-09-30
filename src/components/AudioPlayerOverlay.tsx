@@ -36,6 +36,9 @@ export function AudioPlayerOverlay() {
 
   // Companion screen — pill overlaps text input
   const isCompanionScreen = segments.includes('(ask)');
+  // Devotional reader — on a paired window the pill floats on the first page,
+  // beside the reading it plays
+  const isReadingScreen = segments.includes('reading');
 
   if (playerTier === 'hidden') return null;
   if (playerTier === 'sheet') return <AudioPlayerSheet />;
@@ -43,7 +46,7 @@ export function AudioPlayerOverlay() {
   // Pill: hide on companion screen or when keyboard is up
   if (playerTier === 'pill') {
     if (isCompanionScreen || keyboardVisible) return null;
-    return <AudioPlayerPill />;
+    return <AudioPlayerPill pane={isReadingScreen ? 'first' : 'second'} />;
   }
 
   return null;

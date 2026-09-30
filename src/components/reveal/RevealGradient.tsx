@@ -39,8 +39,11 @@ function useIsAppActive(): boolean {
 }
 
 function useFieldSize() {
-  const windowSize = Dimensions.get('window');
-  const [size, setSize] = useState({ width: windowSize.width, height: windowSize.height });
+  // The window size at mount seeds the first frame; onLayout then owns the size.
+  const [size, setSize] = useState(() => {
+    const windowSize = Dimensions.get('window');
+    return { width: windowSize.width, height: windowSize.height };
+  });
 
   const onLayout = (event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;

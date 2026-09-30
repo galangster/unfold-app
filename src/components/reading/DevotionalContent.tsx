@@ -78,6 +78,16 @@ interface DevotionalContentProps {
   onActOutcome?: (outcome: 'done' | 'skipped') => void;
   /** Content y of each section as it lays out (reader Contents sheet). */
   onSectionLayout?: (section: ReaderSection, contentY: number, layoutGeneration: number) => void;
+  /** 'facing' leaves the reflection to a facing page beside the reading. */
+  reflectionPlacement?: 'inline' | 'facing';
+  reflectionInitialExpandedIndex?: number | null;
+  onReflectionExpandedIndexChange?: (index: number | null) => void;
+  /** False on a pane handoff, so the questions do not replay their entrance. */
+  reflectionAnimateEntrance?: boolean;
+  /** Opens a full-screen session for the closing prayer. */
+  onStayWithPrayer?: () => void;
+  /** Opens a full-screen session for the day's passage. */
+  onStayWithPassage?: () => void;
 }
 
 /**
@@ -141,6 +151,12 @@ export function DevotionalContent({
   onActLocated,
   onActOutcome,
   onSectionLayout,
+  reflectionPlacement = 'inline',
+  reflectionInitialExpandedIndex,
+  onReflectionExpandedIndexChange,
+  reflectionAnimateEntrance,
+  onStayWithPrayer,
+  onStayWithPassage,
 }: DevotionalContentProps) {
   const { colors, isDark } = useTheme();
   const actLocatedRef = useRef(false);
@@ -455,6 +471,17 @@ export function DevotionalContent({
           onBegin={onBeginPractice}
         />
       ) : null}
+      {displayScripture && onStayWithPassage ? (
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={onStayWithPassage}
+          accessibilityRole="button"
+          accessibilityHint="Opens this passage on its own, full screen"
+          style={dcStyles.stayButton}
+        >
+          <Text style={[dcStyles.stayLabel, { color: colors.accent }]}>Stay with this passage</Text>
+        </TouchableOpacity>
+      ) : null}
 
       {/* Section divider: scripture -> body */}
       <SectionDivider color={colors.textMuted} style={{ marginTop: 20, marginBottom: 8 }} />
@@ -524,7 +551,7 @@ export function DevotionalContent({
       )}
 
       {/* Reflection Questions Section */}
-      {day.reflectionQuestions && day.reflectionQuestions.length > 0 && (
+      {reflectionPlacement === 'inline' && day.reflectionQuestions && day.reflectionQuestions.length > 0 && (
         <View
           ref={reflectionSectionRef}
           testID="reading-reflection-section"
@@ -544,6 +571,9 @@ export function DevotionalContent({
               onFocusInput={onReflectionInputFocus}
               layoutCommitSignal={reflectionLayoutCommitSignal}
               onKeyboardToolbarChange={onReflectionKeyboardToolbarChange}
+              initialExpandedIndex={reflectionInitialExpandedIndex}
+              onExpandedIndexChange={onReflectionExpandedIndexChange}
+              animateEntrance={reflectionAnimateEntrance}
             />
           ) : (
             <View>
@@ -658,6 +688,17 @@ export function DevotionalContent({
           </Text>
         </View>
       )}
+      {day.closingPrayer && onStayWithPrayer ? (
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={onStayWithPrayer}
+          accessibilityRole="button"
+          accessibilityHint="Opens this prayer on its own, full screen"
+          style={dcStyles.stayButton}
+        >
+          <Text style={[dcStyles.stayLabel, { color: colors.accent }]}>Stay with this prayer</Text>
+        </TouchableOpacity>
+      ) : null}
 
       {/* Carry line — what leaves the page with the reader */}
       {day.carryLine && (
@@ -814,4 +855,6 @@ const dcStyles = StyleSheet.create({
   prayerSection: {
     marginTop: Spacing['12'],
   },
+  stayButton: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', marginTop: Spacing['3'] },
+  stayLabel: { ...Typography.uiMd },
 });
