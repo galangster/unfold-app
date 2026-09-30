@@ -168,7 +168,7 @@ export default function EveningWindDownScreen() {
   // never replays or resets them.
   const panes = resolveAdaptivePanes(adaptiveLayout, { stacked: true });
   const spread = panes?.axis === 'row' ? panes : null;
-  const stack = panes?.axis === 'column' ? panes : null;
+  const stackedPanes = panes?.axis === 'column' ? panes : null;
   const spreadStyle = spread
     ? { flexDirection: 'row' as const, alignItems: 'flex-start' as const, paddingLeft: spread.lead, gap: spread.gutter }
     : undefined;
@@ -397,6 +397,8 @@ export default function EveningWindDownScreen() {
       </TouchableOpacity>
     </Animated.View>
   ) : null;
+  // A tall window stacks only when there is an action to pin below the fold.
+  const stack = goodnight ? stackedPanes : null;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
