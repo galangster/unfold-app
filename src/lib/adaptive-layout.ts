@@ -17,6 +17,21 @@ export const ADAPTIVE_SPLIT_MEASURE = 980;
 export const ADAPTIVE_SHEET_MEASURE = 520;
 export const ADAPTIVE_DRAWER_MAX_WIDTH = 320;
 export const ADAPTIVE_COLUMN_GAP = Spacing['4'];
+/**
+ * A window wider than it is tall pairs its content from this available
+ * width, so an open folding display or a landscape iPad reads as two pages.
+ */
+export const ADAPTIVE_PAIRED_MIN_WIDTH = 760;
+/** A taller-than-wide regular window can stack two panes from this height. */
+export const ADAPTIVE_STACKED_MIN_HEIGHT = 800;
+/** Smallest pane, measured along the pairing axis. */
+export const ADAPTIVE_PANE_MIN = 320;
+/**
+ * Space between paired panes, centered on the window midline. A folding
+ * display bends along that line, so nothing sits in it. Provisional until a
+ * native reserved-region inset reaches JavaScript.
+ */
+export const ADAPTIVE_FOLD_GUTTER = Spacing['10'];
 
 export type AdaptiveColumnCount = 1 | 2;
 
@@ -76,10 +91,13 @@ export function resolveAdaptiveLayout(input: {
   const isCompact =
     availableWidth < ADAPTIVE_REGULAR_MIN_WIDTH ||
     fontScale >= ADAPTIVE_SINGLE_COLUMN_FONT_SCALE;
+  // Window shape, not device orientation: an open iPhone Duo is wider than
+  // tall at about 800-870pt, below the 840pt split used for tall windows.
   const usesSplit =
     !isCompact &&
-    availableWidth >= ADAPTIVE_WIDE_MIN_WIDTH &&
-    fontScale < ADAPTIVE_SINGLE_COLUMN_FONT_SCALE;
+    fontScale < ADAPTIVE_SINGLE_COLUMN_FONT_SCALE &&
+    (availableWidth >= ADAPTIVE_WIDE_MIN_WIDTH ||
+      (width > height && availableWidth >= ADAPTIVE_PAIRED_MIN_WIDTH));
   const gutter = availableWidth >= ADAPTIVE_WIDE_MIN_WIDTH ? Spacing['8'] : Spacing['6'];
 
   return {
@@ -102,6 +120,62 @@ export function resolveAdaptiveLayout(input: {
     usesSplit,
     isCompact,
   };
+}
+
+export type AdaptivePaneAxis = 'row' | 'column';
+
+/**
+ * Two panes that meet on the window midline. Sizes run along the axis:
+ * widths for a row, heights for a column. `lead` is the space before the
+ * first pane, measured from the safe-area edge.
+ */
+export type AdaptivePanes = {
+  axis: AdaptivePaneAxis;
+  lead: number;
+  first: number;
+  second: number;
+  gutter: number;
+};
+
+type PaneInput = Pick<
+  AdaptiveLayout,
+  'width' | 'height' | 'insetLeft' | 'insetRight' | 'insetTop' | 'insetBottom' | 'availableHeight' | 'usesSplit' | 'isCompact'
+>;
+
+/**
+ * Split a regular window into two panes around its midline. Rows follow
+ * `usesSplit`. Columns are opt-in for tall regular windows, such as an open
+ * iPhone Duo turned upright or propped like a laptop. Each pane keeps its own
+ * outer safe-area inset, so an asymmetric side rail never moves the gutter.
+ */
+export function resolveAdaptivePanes(
+  layout: PaneInput,
+  options: { stacked?: boolean } = {},
+): AdaptivePanes | null {
+  const gutter = ADAPTIVE_FOLD_GUTTER;
+  if (layout.usesSplit) {
+    const midline = layout.width / 2;
+    const half = ADAPTIVE_SPLIT_MEASURE / 2;
+    const leadingRoom = Math.min(midline - layout.insetLeft, half);
+    const trailingRoom = Math.min(layout.width - midline - layout.insetRight, half);
+    const first = leadingRoom - gutter / 2;
+    const second = trailingRoom - gutter / 2;
+    if (first < ADAPTIVE_PANE_MIN || second < ADAPTIVE_PANE_MIN) return null;
+    return { axis: 'row', lead: midline - layout.insetLeft - leadingRoom, first, second, gutter };
+  }
+  if (
+    options.stacked &&
+    !layout.isCompact &&
+    layout.height > layout.width &&
+    layout.availableHeight >= ADAPTIVE_STACKED_MIN_HEIGHT
+  ) {
+    const midline = layout.height / 2;
+    const first = midline - layout.insetTop - gutter / 2;
+    const second = layout.height - midline - layout.insetBottom - gutter / 2;
+    if (first < ADAPTIVE_PANE_MIN || second < ADAPTIVE_PANE_MIN) return null;
+    return { axis: 'column', lead: 0, first, second, gutter };
+  }
+  return null;
 }
 
 export function adaptiveFrameStyle(maxWidth: number): AdaptiveFrameStyle {

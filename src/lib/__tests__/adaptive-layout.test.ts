@@ -3,6 +3,8 @@ import {
   ADAPTIVE_READABLE_MEASURE,
   ADAPTIVE_SHEET_MEASURE,
   ADAPTIVE_SPLIT_MEASURE,
+  ADAPTIVE_FOLD_GUTTER,
+  resolveAdaptivePanes,
   adaptiveFrameStyle,
   adaptiveSafeGutterStyle,
   adaptiveSheetPlacement,
@@ -155,5 +157,53 @@ describe('adaptive helpers', () => {
         fallbackHeight: 768,
       }),
     ).toBe(720);
+  });
+});
+
+describe('facing panes', () => {
+  // iPhone Duo sizes are reported from the Xcode 27.1 beta simulator, not published by Apple.
+  it('keeps the closed outer display as one compact column beside its side rail', () => {
+    const outer = resolveAdaptiveLayout({ width: 466, height: 678, fontScale: 1, insetRight: 80 });
+    expect(outer.isCompact).toBe(true);
+    expect(outer.usesSplit).toBe(false);
+    expect(resolveAdaptivePanes(outer, { stacked: true })).toBeNull();
+  });
+
+  it('pairs an open, wider-than-tall display below the 840pt split and centers the gutter on the fold', () => {
+    const inner = resolveAdaptiveLayout({ width: 951, height: 669, fontScale: 1, insetLeft: 68, insetRight: 80 });
+    expect(inner.availableWidth).toBe(803);
+    expect(inner.usesSplit).toBe(true);
+
+    const panes = resolveAdaptivePanes(inner);
+    expect(panes).toEqual({ axis: 'row', lead: 0, first: 387.5, second: 375.5, gutter: ADAPTIVE_FOLD_GUTTER });
+    const gutterCenter = inner.insetLeft + panes!.lead + panes!.first + panes!.gutter / 2;
+    expect(gutterCenter).toBe(inner.width / 2);
+  });
+
+  it('stacks an open display turned upright only when the caller opts in', () => {
+    const upright = resolveAdaptiveLayout({ width: 669, height: 951, fontScale: 1, insetTop: 50, insetBottom: 20 });
+    expect(upright.isCompact).toBe(false);
+    expect(upright.usesSplit).toBe(false);
+    expect(resolveAdaptivePanes(upright)).toBeNull();
+    expect(resolveAdaptivePanes(upright, { stacked: true })).toEqual({
+      axis: 'column',
+      lead: 0,
+      first: 405.5,
+      second: 435.5,
+      gutter: ADAPTIVE_FOLD_GUTTER,
+    });
+  });
+
+  it('caps wide windows to the split measure around the midline', () => {
+    const wide = resolveAdaptiveLayout({ width: 1366, height: 1024, fontScale: 1 });
+    expect(resolveAdaptivePanes(wide)).toEqual({ axis: 'row', lead: 193, first: 470, second: 470, gutter: ADAPTIVE_FOLD_GUTTER });
+  });
+
+  it('never pairs at large text sizes or in short windows', () => {
+    const largeType = resolveAdaptiveLayout({ width: 951, height: 669, fontScale: 1.6 });
+    expect(resolveAdaptivePanes(largeType, { stacked: true })).toBeNull();
+
+    const shortUpright = resolveAdaptiveLayout({ width: 700, height: 760, fontScale: 1 });
+    expect(resolveAdaptivePanes(shortUpright, { stacked: true })).toBeNull();
   });
 });
