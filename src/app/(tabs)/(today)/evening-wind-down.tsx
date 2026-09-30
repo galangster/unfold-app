@@ -28,7 +28,7 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Typography } from '@/constants/typography';
 import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
-import { adaptiveFrameStyle, PRIMARY_SAFE_AREA_EDGES } from '@/lib/adaptive-layout';
+import { adaptiveFrameStyle, PRIMARY_SAFE_AREA_EDGES, resolveAdaptivePanes } from '@/lib/adaptive-layout';
 import { useTheme } from '@/lib/theme';
 import { useGuardedBack } from '@/hooks/useGuardedBack';
 import { useUnfoldStore } from '@/lib/store';
@@ -160,6 +160,15 @@ export default function EveningWindDownScreen() {
   const adaptiveLayout = useAdaptiveLayout();
   const clusterFrameStyle = adaptiveFrameStyle(adaptiveLayout.clusterMaxWidth);
   const readableFrameStyle = adaptiveFrameStyle(adaptiveLayout.readableMaxWidth);
+  // Two pages around the window midline: the moon and title on the left,
+  // the prayer, Scripture and Done on the right. Both pages keep their tree
+  // position, so opening or closing the device never replays or resets them.
+  const spread = resolveAdaptivePanes(adaptiveLayout);
+  const spreadStyle = spread
+    ? { flexDirection: 'row' as const, paddingLeft: spread.lead, gap: spread.gutter }
+    : undefined;
+  const heroPageStyle = spread ? { width: spread.first } : undefined;
+  const prayerPageStyle = spread ? { width: spread.second } : undefined;
   const ambientPlayerPadding = useAmbientPlayerScrollPadding(100);
   const user = useUnfoldStore((s) => s.user);
   const devotionals = useUnfoldStore((s) => s.devotionals);
@@ -347,7 +356,7 @@ export default function EveningWindDownScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SafeAreaView style={{ flex: 1 }} edges={PRIMARY_SAFE_AREA_EDGES}>
         {/* Header — minimal */}
-        <View style={clusterFrameStyle}>
+        <View style={spread ? undefined : clusterFrameStyle}>
         <View
           style={{
             flexDirection: 'row',
@@ -377,6 +386,8 @@ export default function EveningWindDownScreen() {
           contentContainerStyle={{ paddingBottom: ambientPlayerPadding }}
           showsVerticalScrollIndicator={false}
         >
+          <View testID="evening-wind-down-pages" style={spreadStyle}>
+          <View testID="evening-wind-down-hero-page" style={heroPageStyle}>
           {/* Hero — Moon + title */}
           <Animated.View
             entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
@@ -419,8 +430,10 @@ export default function EveningWindDownScreen() {
                   : 'A moment of peace before rest'}
             </Text>
           </Animated.View>
+          </View>
 
           {/* Unified content: Prayer → Scripture → Done */}
+          <View testID="evening-wind-down-prayer-page" style={prayerPageStyle}>
           <View style={[readableFrameStyle, { paddingHorizontal: Spacing['7'] }]}>
             {/* === EVENING PRAYER SECTION === */}
             {askToReadFirst ? (
@@ -712,6 +725,8 @@ export default function EveningWindDownScreen() {
                 </TouchableOpacity>
               </Animated.View>
             )}
+          </View>
+          </View>
           </View>
         </ScrollView>
       </SafeAreaView>

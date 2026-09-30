@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, type StyleProp, type ViewStyle } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -8,7 +8,7 @@ import { FontFamily } from '@/constants/fonts';
 import { useCrossTabBack } from '@/hooks/useCrossTabBack';
 import { useCalendarNow } from '@/hooks/useCalendarNow';
 import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
-import { adaptiveFrameStyle } from '@/lib/adaptive-layout';
+import { adaptiveFrameStyle, resolveAdaptivePanes } from '@/lib/adaptive-layout';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { resolveStackRoute, type TabGroup } from '@/lib/tab-stack-routes';
@@ -20,11 +20,11 @@ import { getSeriesCover } from '@/lib/series-cover';
 import { seriesReadingProgress } from '@/lib/bookshelf';
 import { isPausedSeries } from '@/lib/devotional-day-access';
 
-function PastSeriesLink({ onPress }: { onPress: () => void }) {
+function PastSeriesLink({ onPress, style }: { onPress: () => void; style?: StyleProp<ViewStyle> }) {
   const { colors } = useTheme();
   return <TouchableOpacity testID="book-past-series" activeOpacity={0.7} onPress={onPress}
     accessibilityRole="button" accessibilityLabel="Past series"
-    accessibilityHint="Opens your library of past and in-progress series" style={styles.pastSeriesLink}>
+    accessibilityHint="Opens your library of past and in-progress series" style={[styles.pastSeriesLink, style]}>
     <Text style={[styles.pastSeriesLabel, { color: colors.textMuted }]}>Past series</Text>
     <CaretRightIcon size={14} color={colors.textMuted} />
   </TouchableOpacity>;
@@ -35,6 +35,15 @@ interface SeriesArcScreenProps { hostTab?: TabGroup; chrome?: SeriesArcChrome }
 export function SeriesArcScreen({ hostTab, chrome = 'stack' }: SeriesArcScreenProps = {}) {
   const layout = useAdaptiveLayout();
   const frameStyle = adaptiveFrameStyle(layout.clusterMaxWidth);
+  // An open book: the spread sits flush with the safe-area edges, because
+  // its pages already meet on the window midline.
+  const spread = resolveAdaptivePanes(layout);
+  const bookFrameStyle = spread ? styles.flushFrame : frameStyle;
+  const edgeStyle = spread ? styles.spreadEdge : null;
+  // Keep the archive link under the contents page, off the midline.
+  const archiveStyle = spread
+    ? { marginLeft: spread.lead + spread.first + spread.gutter, width: spread.second }
+    : undefined;
   const router = useRouter();
   const { id: paramId, shelfOpening } = useLocalSearchParams<{ id?: string; shelfOpening?: string }>();
   const { colors, isDark } = useTheme();
@@ -87,20 +96,20 @@ export function SeriesArcScreen({ hostTab, chrome = 'stack' }: SeriesArcScreenPr
   const dateLabel = Number.isFinite(begun.getTime()) ? begun.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }) : '';
   return <View style={{ flex: 1, backgroundColor: chrome === 'tabRoot' ? colors.background : paper }}>
     <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
-      <View style={[frameStyle, { flex: 1 }]}>
+      <View style={[bookFrameStyle, { flex: 1 }]}>
         {chrome !== 'tabRoot' && <View style={styles.header}>
           <TouchableOpacity onPress={handleBack} accessibilityRole="button" accessibilityLabel="Close book" style={styles.backButton}><CaretLeftIcon size={22} color={colors.textMuted} /></TouchableOpacity>
           <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, color: colors.textMuted }}>Your library</Text>
           <Text style={{ marginLeft: 'auto', fontFamily: FontFamily.ui, fontSize: 12, color: colors.textMuted }}>{progress.complete ? `${progress.total} days completed` : `${progress.read} of ${progress.total} completed`}</Text>
         </View>}
         <ScrollView testID="series-detail-scroll" showsVerticalScrollIndicator={false} onContentSizeChange={() => markShelfContentsReady(shelfOpening)}
-          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: chrome === 'tabRoot' ? 24 : 18, paddingBottom: 120 }}>
-          {chrome !== 'tabRoot' && <View style={{ borderTopWidth: 1, borderColor: cover.gold + '66', paddingTop: 18, marginBottom: 14 }}>
+          contentContainerStyle={{ paddingHorizontal: spread ? 0 : 24, paddingTop: chrome === 'tabRoot' ? 24 : 18, paddingBottom: 120 }}>
+          {chrome !== 'tabRoot' && <View style={[{ borderTopWidth: 1, borderColor: cover.gold + '66', paddingTop: 18, marginBottom: 14 }, edgeStyle]}>
             {dateLabel ? <Text style={{ fontFamily: FontFamily.ui, fontSize: 12, color: colors.textMuted }}>Begun {dateLabel}</Text> : null}
           </View>}
-          <BookOfSeasonsView key={`book-of-seasons-${layout.fontScale}`} devotional={devotional} seriesPaused={isPausedSeries(devotional, currentDevotionalId)} showAllReadings={chrome !== 'tabRoot'} now={now} colors={colors} isDark={isDark} onOpenDay={handleDayPress}
+          <BookOfSeasonsView key={`book-of-seasons-${layout.fontScale}`} devotional={devotional} seriesPaused={isPausedSeries(devotional, currentDevotionalId)} showAllReadings={chrome !== 'tabRoot'} spread={spread} now={now} colors={colors} isDark={isDark} onOpenDay={handleDayPress}
             headerAccessory={chrome === 'tabRoot' ? <ProfileEntryButton testID="study-profile-button" /> : undefined} />
-          {chrome === 'tabRoot' ? <PastSeriesLink key={`book-archive-${layout.fontScale}`} onPress={openPastSeries} /> : <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderColor: cover.gold + '66', marginTop: 24, paddingTop: 20, alignItems: 'center' }}>
+          {chrome === 'tabRoot' ? <PastSeriesLink key={`book-archive-${layout.fontScale}`} onPress={openPastSeries} style={archiveStyle} /> : <View style={[{ borderTopWidth: StyleSheet.hairlineWidth, borderColor: cover.gold + '66', marginTop: 24, paddingTop: 20, alignItems: 'center' }, edgeStyle]}>
             <Text style={{ fontFamily: FontFamily.display, fontSize: 18, color: colors.textMuted }}>Unfold</Text>
           </View>}
         </ScrollView>
@@ -111,6 +120,8 @@ export function SeriesArcScreen({ hostTab, chrome = 'stack' }: SeriesArcScreenPr
 export default function SeriesDetailScreen() { return <SeriesArcScreen />; }
 
 const styles = StyleSheet.create({
+  flushFrame: { width: '100%' },
+  spreadEdge: { marginHorizontal: 24 },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 6, gap: 4 },
   backButton: { minHeight: 44, minWidth: 44, alignItems: 'center', justifyContent: 'center' },
   seriesTitle: { fontFamily: FontFamily.display, fontSize: 30, lineHeight: 36 },

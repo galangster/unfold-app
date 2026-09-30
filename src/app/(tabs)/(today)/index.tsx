@@ -3,7 +3,7 @@ import { drainSyncOutbox } from '@/lib/sync-outbox';
 import { usePrevious } from '@/hooks/usePrevious';
 import { View, StyleSheet, Alert } from 'react-native';
 import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
-import { adaptiveFrameStyle } from '@/lib/adaptive-layout';
+import { adaptiveFrameStyle, resolveAdaptivePanes } from '@/lib/adaptive-layout';
 import { useRouter, useFocusEffect, useIsFocused, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
@@ -287,17 +287,33 @@ export default function HomeScreen() {
   const { colors } = useTheme();
   const adaptiveLayout = useAdaptiveLayout();
   const todayUsesSplit = adaptiveLayout.usesSplit;
-  const todayFrameStyle = adaptiveFrameStyle(
-    todayUsesSplit ? adaptiveLayout.splitMaxWidth : adaptiveLayout.clusterMaxWidth,
-  );
+  // Two equal pages that meet on the window midline, where a folding display
+  // bends. The pane geometry carries its own offsets, so the frame sits flush
+  // with the safe-area edges instead of centering a capped column.
+  const todayPanes = todayUsesSplit ? resolveAdaptivePanes(adaptiveLayout) : null;
+  const todayFrameStyle = todayPanes
+    ? { marginLeft: todayPanes.lead, width: todayPanes.first + todayPanes.gutter + todayPanes.second }
+    : adaptiveFrameStyle(
+        todayUsesSplit ? adaptiveLayout.splitMaxWidth : adaptiveLayout.clusterMaxWidth,
+      );
   const todayColumnsStyle = todayUsesSplit
     ? [styles.splitColumns, {
-        gap: adaptiveLayout.columnGap,
+        gap: todayPanes ? todayPanes.gutter : adaptiveLayout.columnGap,
         minHeight: Math.max(0, adaptiveLayout.availableHeight - 200),
       }]
     : undefined;
-  const todayHeroColumnStyle = todayUsesSplit ? styles.splitHeroColumn : undefined;
-  const todayTrailColumnStyle = todayUsesSplit ? styles.splitTrailColumn : undefined;
+  const todayHeroColumnStyle = todayUsesSplit
+    ? [styles.splitHeroColumn, todayPanes ? { width: todayPanes.first } : styles.splitEqualColumn]
+    : undefined;
+  const todayTrailColumnStyle = todayUsesSplit
+    ? [styles.splitTrailColumn, todayPanes ? { width: todayPanes.second } : styles.splitEqualColumn]
+    : undefined;
+  // DevotionalCard sizes its hero from the width of its own column.
+  const todayHeroWidth = todayPanes
+    ? todayPanes.first
+    : todayUsesSplit
+      ? (adaptiveLayout.splitMaxWidth - adaptiveLayout.columnGap) / 2
+      : adaptiveLayout.clusterMaxWidth;
   const { entering } = useAccessibleAnimation();
   const user = useUnfoldStore((s) => s.user);
   const devotionals = useUnfoldStore((s) => s.devotionals);
@@ -1816,6 +1832,7 @@ export default function HomeScreen() {
                   hasReadToday,
                 })}
                 relaxHeroMinHeight={todayUsesSplit}
+                availableWidth={todayHeroWidth}
               />
             </Animated.View>
           </View>
@@ -1945,11 +1962,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   splitHeroColumn: {
-    flex: 1.35,
     minWidth: 0,
   },
   splitTrailColumn: {
-    flex: 1,
     minWidth: 0,
+  },
+  // Only when an asymmetric inset leaves no room for two midline panes.
+  splitEqualColumn: {
+    flex: 1,
   },
 });

@@ -114,18 +114,25 @@ jest.mock('@/hooks/useGeneratedDayWatch', () => ({
 jest.mock('@/hooks/useInflightInitialArcWatch', () => ({
   useInflightInitialArcWatch: () => undefined,
 }));
+let mockAdaptiveLayout: object | null = null;
 jest.mock('@/hooks/useAdaptiveLayout', () => ({
-  useAdaptiveLayout: () => ({
+  useAdaptiveLayout: () => mockAdaptiveLayout ?? {
     usesSplit: false,
     splitMaxWidth: 800,
     clusterMaxWidth: 600,
     columnGap: 16,
     availableHeight: 800,
-  }),
+  },
 }));
 
 jest.mock('@/components/home/AmbientArtCanvas', () => ({ AmbientArtCanvas: () => null }));
-jest.mock('@/components/home/DevotionalCard', () => ({ DevotionalCard: () => null }));
+let mockDevotionalCardProps: Record<string, unknown> | null = null;
+jest.mock('@/components/home/DevotionalCard', () => ({
+  DevotionalCard: (props: Record<string, unknown>) => {
+    mockDevotionalCardProps = props;
+    return null;
+  },
+}));
 jest.mock('@/components/home/TodayCardStack', () => ({ TodayCardStack: () => null }));
 jest.mock('@/components/home/GreetingRow', () => ({ GreetingRow: () => null }));
 jest.mock('@/components/home/BentoGrid', () => ({ BentoGrid: () => null }));
@@ -317,6 +324,44 @@ const todaySource = readFileSync(
 );
 
 const INTENT_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+
+describe('Today pages', () => {
+  const { resolveAdaptiveLayout, resolveAdaptivePanes } = jest.requireActual('@/lib/adaptive-layout');
+
+  afterEach(() => {
+    mockAdaptiveLayout = null;
+    mockDevotionalCardProps = null;
+  });
+
+  async function renderToday() {
+    let tree: { unmount: () => void } | undefined;
+    await act(async () => {
+      tree = renderer.create(<HomeScreen />);
+      await Promise.resolve();
+    });
+    tree?.unmount();
+  }
+
+  it('sizes the hero from its page on an open folding display', async () => {
+    // Reported iPhone Duo inner display, open and wider than tall.
+    mockAdaptiveLayout = resolveAdaptiveLayout({ width: 951, height: 669, insetTop: 24, insetBottom: 20 });
+    const panes = resolveAdaptivePanes(mockAdaptiveLayout);
+    await renderToday();
+
+    expect(panes.first).toBe(panes.second);
+    expect(mockDevotionalCardProps?.availableWidth).toBe(panes.first);
+    expect(mockDevotionalCardProps?.relaxHeroMinHeight).toBe(true);
+  });
+
+  it('sizes the hero from the safe column, not the window, beside a side rail', async () => {
+    // Reported iPhone Duo outer display with a side rail on one edge.
+    mockAdaptiveLayout = resolveAdaptiveLayout({ width: 466, height: 678, insetLeft: 80 });
+    await renderToday();
+
+    expect(mockDevotionalCardProps?.availableWidth).toBe(386);
+    expect(mockDevotionalCardProps?.relaxHeroMinHeight).toBe(false);
+  });
+});
 
 describe('Today read-budget gate', () => {
   beforeEach(() => {
