@@ -21,11 +21,12 @@ jest.mock('react-native-reanimated', () => {
   const chain: object = new Proxy({}, { get: () => () => chain });
   return {
     __esModule: true,
-    default: { View: 'Animated.View' },
+    default: { View: 'Animated.View', ScrollView: 'Animated.ScrollView' },
     FadeIn: chain,
     FadeInDown: chain,
-    useSharedValue: (value: unknown) => ({ value }),
+    useSharedValue: (value: unknown) => require('react').useRef({ value }).current,
     useAnimatedStyle: (factory: () => unknown) => factory(),
+    useAnimatedScrollHandler: (handlers: { onScroll: (event: unknown) => void }) => handlers.onScroll,
     withRepeat: (value: unknown) => value,
     withTiming: (value: unknown) => value,
     withDelay: (_delay: number, value: unknown) => value,
@@ -99,6 +100,8 @@ const { resolveAdaptiveLayout } = jest.requireActual('@/lib/adaptive-layout');
 
 // Reported iPhone Duo inner display, open and wider than tall.
 const duoOpen = resolveAdaptiveLayout({ width: 951, height: 669, insetTop: 24, insetBottom: 20 });
+// Reported iPhone Duo inner display, open and turned upright.
+const duoUpright = resolveAdaptiveLayout({ width: 669, height: 951, insetTop: 50, insetBottom: 20 });
 const phone = resolveAdaptiveLayout({ width: 393, height: 852, insetTop: 59, insetBottom: 34 });
 
 function textOf(node: ReactTestInstance): string {
@@ -106,6 +109,12 @@ function textOf(node: ReactTestInstance): string {
     .findAll((child) => typeof child.props.children === 'string')
     .map((child) => child.props.children as string)
     .join('|');
+}
+
+function flatStyle(node: ReactTestInstance): Record<string, unknown> {
+  const style = node.props.style;
+  const list = (Array.isArray(style) ? style : [style]) as Array<Record<string, unknown> | undefined>;
+  return Object.assign({}, ...list.filter(Boolean));
 }
 
 function render(): ReactTestRenderer {
@@ -143,5 +152,47 @@ describe('Evening wind-down pages', () => {
     act(() => { tree.update(React.createElement(EveningWindDownScreen)); });
     expect(tree.root.findByProps({ testID: 'evening-wind-down-prayer-page' })).toBe(prayer);
     expect(textOf(prayer)).toContain('Goodnight');
+  });
+
+  it('keeps the moon and title in view while the prayer page scrolls', () => {
+    mockLayout = duoOpen;
+    const tree = render();
+    const hero = () => tree.root.findByProps({ testID: 'evening-wind-down-hero-page' });
+    act(() => { tree.root.findByProps({ testID: 'evening-wind-down-scroll' }).props.onScroll({ contentOffset: { y: 180 } }); });
+    act(() => { hero().props.onLayout({ nativeEvent: { layout: { height: 300 } } }); });
+    expect(flatStyle(hero()).transform).toEqual([{ translateY: 180 }]);
+  });
+
+  it('leaves the phone hero in the scroll, with Goodnight after the prayer', () => {
+    mockLayout = phone;
+    const tree = render();
+    const hero = () => tree.root.findByProps({ testID: 'evening-wind-down-hero-page' });
+    act(() => { tree.root.findByProps({ testID: 'evening-wind-down-scroll' }).props.onScroll({ contentOffset: { y: 180 } }); });
+    act(() => { hero().props.onLayout({ nativeEvent: { layout: { height: 300 } } }); });
+    expect(flatStyle(hero()).transform).toEqual([{ translateY: 0 }]);
+    expect(tree.root.findAllByProps({ testID: 'evening-wind-down-lower-pane' })).toHaveLength(0);
+  });
+
+  it('scrolls the prayer in the upper pane and pins Goodnight in the lower pane of a stacked window', () => {
+    mockLayout = phone;
+    const tree = render();
+    const hero = tree.root.findByProps({ testID: 'evening-wind-down-hero-page' });
+    const prayer = tree.root.findByProps({ testID: 'evening-wind-down-prayer-page' });
+
+    mockLayout = duoUpright;
+    act(() => { tree.update(React.createElement(EveningWindDownScreen)); });
+    expect(tree.root.findByProps({ testID: 'evening-wind-down-hero-page' })).toBe(hero);
+    expect(tree.root.findByProps({ testID: 'evening-wind-down-prayer-page' })).toBe(prayer);
+
+    const upper = textOf(tree.root.findByProps({ testID: 'evening-wind-down-scroll' }));
+    expect(upper).toContain('Evening Wind-Down');
+    expect(upper).toContain('Thank you for this day.');
+    expect(upper).not.toContain('Goodnight');
+
+    const lower = tree.root.findByProps({ testID: 'evening-wind-down-lower-pane' });
+    expect(textOf(lower)).toContain('Goodnight');
+    // The lower pane runs from the fold gutter to the bottom of the window.
+    expect(flatStyle(lower).height).toBe(duoUpright.height / 2 + 20);
+    expect(flatStyle(lower).justifyContent).toBe('flex-end');
   });
 });

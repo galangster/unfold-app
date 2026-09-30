@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import {
   View,
   Text,
-  Dimensions,
   TouchableOpacity,
   StyleSheet,
   ScrollView,
@@ -33,10 +32,6 @@ import { Duration } from '@/constants/animations';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { DarkColors, createThemedColors } from '@/constants/colors';
 import { useUnfoldStore, ACCENT_THEMES } from '@/lib/store';
-
-
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // ─── Page data ───────────────────────────────────────────────────
 

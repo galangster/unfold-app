@@ -4,6 +4,8 @@ import {
   ADAPTIVE_SHEET_MEASURE,
   ADAPTIVE_SPLIT_MEASURE,
   ADAPTIVE_FOLD_GUTTER,
+  ADAPTIVE_PANE_MIN,
+  ADAPTIVE_STACKED_MIN_HEIGHT,
   adaptivePaneLane,
   resolveAdaptivePanes,
   adaptiveFrameStyle,
@@ -204,8 +206,27 @@ describe('facing panes', () => {
     const largeType = resolveAdaptiveLayout({ width: 951, height: 669, fontScale: 1.6 });
     expect(resolveAdaptivePanes(largeType, { stacked: true })).toBeNull();
 
-    const shortUpright = resolveAdaptiveLayout({ width: 700, height: 760, fontScale: 1 });
+    const shortUpright = resolveAdaptiveLayout({ width: 620, height: 670, fontScale: 1 });
     expect(resolveAdaptivePanes(shortUpright, { stacked: true })).toBeNull();
+  });
+
+  it('stacks the upright Duo content area and lets the pane-size guard decide', () => {
+    expect(ADAPTIVE_STACKED_MIN_HEIGHT).toBe(ADAPTIVE_PANE_MIN * 2 + ADAPTIVE_FOLD_GUTTER);
+    expect(ADAPTIVE_STACKED_MIN_HEIGHT).toBe(680);
+
+    const content = resolveAdaptiveLayout({ width: 669, height: 703, fontScale: 1 });
+    expect(resolveAdaptivePanes(content, { stacked: true })).toEqual({
+      axis: 'column',
+      lead: 0,
+      first: 331.5,
+      second: 331.5,
+      gutter: ADAPTIVE_FOLD_GUTTER,
+    });
+
+    // Tall enough overall, but the top inset leaves the upper pane under 320pt.
+    const inset = resolveAdaptiveLayout({ width: 669, height: 740, fontScale: 1, insetTop: 50 });
+    expect(inset.availableHeight).toBeGreaterThanOrEqual(ADAPTIVE_STACKED_MIN_HEIGHT);
+    expect(resolveAdaptivePanes(inset, { stacked: true })).toBeNull();
   });
 });
 
@@ -222,6 +243,19 @@ describe('pane lane', () => {
     const docked = adaptivePaneLane(inner, resolveAdaptivePanes(inner), { margin: 16, maxWidth: 300 });
     expect(docked.width).toBe(300);
     expect(docked.left + docked.width / 2).toBe(lane.left + lane.width / 2);
+  });
+
+  it('floats a control in the first page of an open display on request', () => {
+    const inner = resolveAdaptiveLayout({ width: 951, height: 669, fontScale: 1, insetLeft: 68, insetRight: 80 });
+    const lane = adaptivePaneLane(inner, resolveAdaptivePanes(inner), { pane: 'first' });
+    expect(lane).toEqual({ left: 68, width: 387.5 });
+    expect(lane.left + lane.width).toBeLessThan(inner.width / 2);
+
+    const wide = resolveAdaptiveLayout({ width: 1366, height: 1024, fontScale: 1 });
+    expect(adaptivePaneLane(wide, resolveAdaptivePanes(wide), { pane: 'first', margin: 16 })).toEqual({ left: 209, width: 438 });
+
+    const phone = resolveAdaptiveLayout({ width: 390, height: 844, fontScale: 1 });
+    expect(adaptivePaneLane(phone, resolveAdaptivePanes(phone), { pane: 'first' })).toEqual({ left: 0, width: 390 });
   });
 
   it('ignores stacked panes, which leave the full width to floating controls', () => {

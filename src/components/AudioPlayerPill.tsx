@@ -60,7 +60,12 @@ const MAX_TITLE_WIDTH = 160;
 // Component
 // ---------------------------------------------------------------------------
 
-export function AudioPlayerPill() {
+type AudioPlayerPillProps = {
+  /** The pane of a paired row the pill floats in. The reader keeps it beside the reading. */
+  pane?: 'first' | 'second';
+};
+
+export function AudioPlayerPill({ pane = 'second' }: AudioPlayerPillProps = {}) {
   const { colors } = useTheme();
   const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
@@ -153,10 +158,10 @@ export function AudioPlayerPill() {
     bottom: animatedBottom.value,
   }));
 
-  // -- Horizontal lane — the safe area, or the trailing pane of a paired
-  // window, so the pill never sits on the fold at the window midline --
+  // -- Horizontal lane — the safe area, or one pane of a paired window, so
+  // the pill never sits on the fold at the window midline --
   const adaptiveLayout = useAdaptiveLayout();
-  const lane = adaptivePaneLane(adaptiveLayout, resolveAdaptivePanes(adaptiveLayout));
+  const lane = adaptivePaneLane(adaptiveLayout, resolveAdaptivePanes(adaptiveLayout), { pane });
 
   // -- Accessibility actions --
   const onAccessibilityAction = useCallback(

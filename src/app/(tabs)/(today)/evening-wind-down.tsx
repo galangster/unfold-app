@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
@@ -7,6 +7,7 @@ import Animated, {
   FadeInDown,
   useSharedValue,
   useAnimatedStyle,
+  useAnimatedScrollHandler,
   withRepeat,
   withTiming,
   withDelay,
@@ -160,16 +161,32 @@ export default function EveningWindDownScreen() {
   const adaptiveLayout = useAdaptiveLayout();
   const clusterFrameStyle = adaptiveFrameStyle(adaptiveLayout.clusterMaxWidth);
   const readableFrameStyle = adaptiveFrameStyle(adaptiveLayout.readableMaxWidth);
-  // Two pages around the window midline: the moon and title on the left,
-  // the prayer, Scripture and Done on the right. Both pages keep their tree
-  // position, so opening or closing the device never replays or resets them.
-  const spread = resolveAdaptivePanes(adaptiveLayout);
+  // Two pages around the window midline. A row puts the moon and title on the
+  // left and the prayer, Scripture and Done on the right. A column scrolls
+  // all of it in the upper pane and pins Done at the foot of the lower one.
+  // Both pages keep their tree position, so opening or closing the device
+  // never replays or resets them.
+  const panes = resolveAdaptivePanes(adaptiveLayout, { stacked: true });
+  const spread = panes?.axis === 'row' ? panes : null;
+  const stack = panes?.axis === 'column' ? panes : null;
   const spreadStyle = spread
-    ? { flexDirection: 'row' as const, paddingLeft: spread.lead, gap: spread.gutter }
+    ? { flexDirection: 'row' as const, alignItems: 'flex-start' as const, paddingLeft: spread.lead, gap: spread.gutter }
     : undefined;
   const heroPageStyle = spread ? { width: spread.first } : undefined;
   const prayerPageStyle = spread ? { width: spread.second } : undefined;
-  const ambientPlayerPadding = useAmbientPlayerScrollPadding(100);
+  // The moon and title stay in view while the prayer page scrolls beside them.
+  const [heroHeight, setHeroHeight] = useState(0);
+  const pagesScrollY = useSharedValue(0);
+  const handlePagesScroll = useAnimatedScrollHandler({
+    onScroll: (event) => { pagesScrollY.value = event.contentOffset.y; },
+  });
+  const canKeepHeroVisible = spread !== null && heroHeight > 0 &&
+    heroHeight <= adaptiveLayout.availableHeight - 100;
+  const heroStickyStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: canKeepHeroVisible ? Math.max(0, pagesScrollY.value) : 0 }],
+  }));
+  const ambientDockHeight = useAmbientPlayerScrollPadding(0);
+  const ambientPlayerPadding = 100 + ambientDockHeight;
   const user = useUnfoldStore((s) => s.user);
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
@@ -352,6 +369,35 @@ export default function EveningWindDownScreen() {
     exitWindDown();
   }, [exitWindDown]);
 
+  // Goodnight closes the prayer page, or sits at the foot of the lower pane
+  // in a stacked window.
+  const goodnight = !askToReadFirst && (examen || scriptureText) ? (
+    <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(600 + (examen?.movements.length ?? 5) * 150).easing(Ease.out)} style={{ marginTop: Spacing['4'], marginBottom: Spacing['2'] }}>
+      <TouchableOpacity activeOpacity={0.7}
+        onPress={handleShowCelebration}
+      >
+        <View
+          style={{
+            backgroundColor: colors.accent,
+            borderRadius: Radius.card,
+            paddingVertical: Spacing['4'],
+            alignItems: 'center',
+          }}
+        >
+          <Text
+            style={{
+              fontFamily: FontFamily.uiMedium,
+              fontSize: 15,
+              color: colors.background,
+            }}
+          >
+            Goodnight
+          </Text>
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
+  ) : null;
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SafeAreaView style={{ flex: 1 }} edges={PRIMARY_SAFE_AREA_EDGES}>
@@ -382,12 +428,19 @@ export default function EveningWindDownScreen() {
         </View>
         </View>
 
-        <ScrollView
-          contentContainerStyle={{ paddingBottom: ambientPlayerPadding }}
+        <Animated.ScrollView
+          testID="evening-wind-down-scroll"
+          onScroll={handlePagesScroll}
+          scrollEventThrottle={16}
+          contentContainerStyle={{ paddingBottom: stack ? Spacing['8'] : ambientPlayerPadding }}
           showsVerticalScrollIndicator={false}
         >
           <View testID="evening-wind-down-pages" style={spreadStyle}>
-          <View testID="evening-wind-down-hero-page" style={heroPageStyle}>
+          <Animated.View
+            testID="evening-wind-down-hero-page"
+            style={[heroPageStyle, heroStickyStyle]}
+            onLayout={(event) => setHeroHeight(event.nativeEvent.layout.height)}
+          >
           {/* Hero — Moon + title */}
           <Animated.View
             entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
@@ -430,7 +483,7 @@ export default function EveningWindDownScreen() {
                   : 'A moment of peace before rest'}
             </Text>
           </Animated.View>
-          </View>
+          </Animated.View>
 
           {/* Unified content: Prayer → Scripture → Done */}
           <View testID="evening-wind-down-prayer-page" style={prayerPageStyle}>
@@ -698,37 +751,24 @@ export default function EveningWindDownScreen() {
               </Animated.View>
             )}
 
-            {/* === DONE BUTTON === */}
-            {!askToReadFirst && (examen || scriptureText) && (
-              <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(600 + (examen?.movements.length ?? 5) * 150).easing(Ease.out)} style={{ marginTop: Spacing['4'], marginBottom: Spacing['2'] }}>
-                <TouchableOpacity activeOpacity={0.7}
-                  onPress={handleShowCelebration}
-                >
-                  <View
-                    style={{
-                      backgroundColor: colors.accent,
-                      borderRadius: Radius.card,
-                      paddingVertical: Spacing['4'],
-                      alignItems: 'center',
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontFamily: FontFamily.uiMedium,
-                        fontSize: 15,
-                        color: colors.background,
-                      }}
-                    >
-                      Goodnight
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              </Animated.View>
-            )}
+            {stack ? null : goodnight}
           </View>
           </View>
           </View>
-        </ScrollView>
+        </Animated.ScrollView>
+        {stack ? (
+          <View
+            testID="evening-wind-down-lower-pane"
+            style={{
+              height: stack.gutter + stack.second + adaptiveLayout.insetBottom,
+              paddingTop: stack.gutter,
+              paddingBottom: adaptiveLayout.insetBottom + ambientDockHeight + Spacing['6'],
+              justifyContent: 'flex-end',
+            }}
+          >
+            <View style={[readableFrameStyle, { paddingHorizontal: Spacing['7'] }]}>{goodnight}</View>
+          </View>
+        ) : null}
       </SafeAreaView>
       {isAmbientAudioEnabled() ? (
         <AmbientQuietEnding visible={showCelebration} onClose={handleDismissCelebration} />

@@ -34,6 +34,7 @@ import {
   List,
   NotePencil,
 } from '@/components/icons';
+import { SidebarSimpleIcon } from 'phosphor-react-native/src/icons/SidebarSimple';
 import * as Haptics from 'expo-haptics';
 import {
   useSharedValue,
@@ -484,7 +485,13 @@ export default function CompanionScreen() {
             accessibilityRole="button"
             style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
           >
-            <List size={22} color={colors.textMuted} weight="light" />
+            {/* A paired window shows the pane it toggles, filled while the
+                history is in view. */}
+            {docked ? (
+              <SidebarSimpleIcon size={22} color={colors.textMuted} weight={dockedHistoryHidden ? 'light' : 'fill'} />
+            ) : (
+              <List size={22} color={colors.textMuted} weight="light" />
+            )}
           </TouchableOpacity>
         </View>
 

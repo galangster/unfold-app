@@ -141,6 +141,11 @@ const CONFIGS: Record<CurrentType, ElementConfig> = {
 // Particle seed — random properties generated once per particle
 // ---------------------------------------------------------------------------
 
+/**
+ * baseX, baseY, offsetX, and offsetY are fractions of the window. The worklet
+ * scales them by the live size, so a resize moves the field without
+ * reshuffling it.
+ */
 interface ParticleSeed {
   baseY: number;
   baseX: number;
@@ -155,10 +160,10 @@ interface ParticleSeed {
   angle: number;
 }
 
-function generateSeeds(config: ElementConfig, SW: number, SH: number): ParticleSeed[] {
+function generateSeeds(config: ElementConfig): ParticleSeed[] {
   return Array.from({ length: config.count }, () => ({
-    baseY: Math.random() * SH,
-    baseX: Math.random() * SW,
+    baseY: Math.random(),
+    baseX: Math.random(),
     freq: 0.8 + Math.random() * 2.4,
     amplitude: 15 + Math.random() * 40,
     duration:
@@ -171,16 +176,16 @@ function generateSeeds(config: ElementConfig, SW: number, SH: number): ParticleS
     maxOpacity:
       config.opacityRange[0] +
       Math.random() * (config.opacityRange[1] - config.opacityRange[0]),
-    offsetX: (Math.random() - 0.5) * SW * 0.5,
-    offsetY: (Math.random() - 0.5) * SH * 0.15,
+    offsetX: (Math.random() - 0.5) * 0.5,
+    offsetY: (Math.random() - 0.5) * 0.15,
     angle: Math.random() * Math.PI * 2,
   }));
 }
 
 // ---------------------------------------------------------------------------
 // Inline position calculators — worklet-safe (no closures over JS scope)
-// The live window size reaches the worklet as captured locals, and the seeds
-// regenerate when it changes, so an open, close, or resize stays full-bleed.
+// The live window size reaches the worklet as captured locals. Seeds hold
+// window fractions, so an open, close, or resize stays full-bleed.
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
@@ -235,7 +240,7 @@ export function Current({ type, color, intensity = 1, centerX, centerY, scale = 
   const { width: SCREEN_W, height: SCREEN_H } = useWindowDimensions();
 
   const sprite = useMemo(() => createSprite(color), [color]);
-  const seeds = useMemo(() => generateSeeds(config, SCREEN_W, SCREEN_H), [config, SCREEN_W, SCREEN_H]);
+  const seeds = useMemo(() => generateSeeds(config), [config]);
   const sprites = useMemo<SkRect[]>(() => seeds.map(() => SPRITE_RECT), [seeds]);
 
   // Capture values as locals the worklet can close over
@@ -276,6 +281,8 @@ export function Current({ type, color, intensity = 1, centerX, centerY, scale = 
     return seeds.map((seed) => {
       const elapsed = Math.max(0, t - seed.delay);
       const p = (elapsed % seed.duration) / seed.duration;
+      const baseX = seed.baseX * w;
+      const baseY = seed.baseY * h;
 
       // --- Position math inline per element type ---
       let px = 0;
@@ -283,23 +290,23 @@ export function Current({ type, color, intensity = 1, centerX, centerY, scale = 
 
       if (elementType === 'wind') {
         px = -40 + p * (w + 80);
-        py = seed.baseY + Math.sin(p * Math.PI * 2 * seed.freq) * seed.amplitude;
+        py = baseY + Math.sin(p * Math.PI * 2 * seed.freq) * seed.amplitude;
       } else if (elementType === 'storm') {
         px = -60 + p * (w + 120);
-        py = seed.baseY +
+        py = baseY +
           Math.sin(p * Math.PI * 2 * seed.freq) * seed.amplitude +
           Math.sin(p * Math.PI * 2 * seed.freq * 2.3 + t * 0.0008) * seed.amplitude * 0.4;
       } else if (elementType === 'warmth') {
-        px = seed.baseX + Math.sin(p * Math.PI * 2 * seed.freq) * seed.amplitude;
+        px = baseX + Math.sin(p * Math.PI * 2 * seed.freq) * seed.amplitude;
         py = h * 0.9 - p * h * 1.1;
       } else if (elementType === 'stillwater') {
         px = -20 + p * (w + 40);
-        py = seed.baseY + Math.sin(p * Math.PI * seed.freq) * seed.amplitude * 0.3;
+        py = baseY + Math.sin(p * Math.PI * seed.freq) * seed.amplitude * 0.3;
       } else if (elementType === 'spirit') {
         const angle = p * Math.PI * 2 * seed.freq;
         const radius = seed.amplitude * (0.7 + 0.3 * Math.sin(angle * 1.5));
-        px = w / 2 + seed.offsetX + Math.cos(angle) * radius;
-        py = h * 0.4 + seed.offsetY + Math.sin(angle) * radius * 0.7;
+        px = w / 2 + seed.offsetX * w + Math.cos(angle) * radius;
+        py = h * 0.4 + seed.offsetY * h + Math.sin(angle) * radius * 0.7;
       } else if (elementType === 'joy') {
         const angle = seed.angle + p * 0.3;
         const radius = p * Math.max(w, h) * 0.7;
@@ -309,13 +316,13 @@ export function Current({ type, color, intensity = 1, centerX, centerY, scale = 
         // Each particle travels in its own random direction from a random start
         const dx = Math.cos(seed.angle) * (w + 100);
         const dy = Math.sin(seed.angle) * (h + 100);
-        px = seed.baseX + p * dx * 0.5;
-        py = seed.baseY + p * dy * 0.5;
+        px = baseX + p * dx * 0.5;
+        py = baseY + p * dy * 0.5;
         px += Math.sin(p * Math.PI * 4 * seed.freq) * seed.amplitude * 0.3;
         py += Math.cos(p * Math.PI * 3 * seed.freq) * seed.amplitude * 0.3;
       } else if (elementType === 'rise') {
         // Rush upward from bottom — fast, purposeful, slight horizontal scatter
-        px = seed.baseX + Math.sin(p * Math.PI * 2 * seed.freq) * 15;
+        px = baseX + Math.sin(p * Math.PI * 2 * seed.freq) * 15;
         py = h + 40 - p * (h + 80); // Bottom to top, bleeds off both edges
       } else if (elementType === 'trinity') {
         // Three-Petal Spiral: hypotrochoid R=3, r=1, d=3
@@ -325,11 +332,11 @@ export function Current({ type, color, intensity = 1, centerX, centerY, scale = 
         const R = 3;
         const r = 1;
         const d = 3 + 0.25; // slight detailScale baked in
-        const baseX = (R - r) * Math.cos(tt) + d * Math.cos(((R - r) / r) * tt);
-        const baseY = (R - r) * Math.sin(tt) - d * Math.sin(((R - r) / r) * tt);
+        const curveX = (R - r) * Math.cos(tt) + d * Math.cos(((R - r) / r) * tt);
+        const curveY = (R - r) * Math.sin(tt) - d * Math.sin(((R - r) / r) * tt);
         const curveScale = 2.2 * _scale;
-        px = _cx + baseX * curveScale * 8; // 8 = pixel scale for screen size
-        py = _cy + baseY * curveScale * 8;
+        px = _cx + curveX * curveScale * 8; // 8 = pixel scale for screen size
+        py = _cy + curveY * curveScale * 8;
       }
 
       const breathe = 0.9 + 0.1 * Math.sin(elapsed * 0.001);
@@ -347,7 +354,8 @@ export function Current({ type, color, intensity = 1, centerX, centerY, scale = 
 
       return Skia.RSXform(sizeScale, 0, tx, ty);
     });
-  }, [clock, seeds]);
+    // The window size is a dependency: seeds no longer change on resize.
+  }, [clock, seeds, SCREEN_W, SCREEN_H, _cx, _cy]);
 
   const colors = useDerivedValue(() => {
     'worklet';

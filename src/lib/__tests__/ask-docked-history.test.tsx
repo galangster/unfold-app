@@ -63,6 +63,7 @@ jest.mock('@/lib/use-companion-chat', () => ({
   }),
 }));
 jest.mock('@/components/icons', () => ({ CrownIcon: () => null, List: () => null, NotePencil: () => null }));
+jest.mock('phosphor-react-native/src/icons/SidebarSimple', () => ({ SidebarSimpleIcon: () => null }));
 jest.mock('@/components/CompanionOrb', () => ({ CompanionOrb: () => null }));
 jest.mock('@/components/ProfileEntryButton', () => ({ ProfileEntryButton: () => null }));
 jest.mock('@/components/ScriptureTapSheet', () => ({ ScriptureTapSheet: () => null }));
@@ -129,6 +130,12 @@ function historyToggle(tree: renderer.ReactTestRenderer) {
   return toggle;
 }
 
+/** The glyph inside the toggle: the sidebar on a paired window, else the list. */
+function toggleGlyph(tree: renderer.ReactTestRenderer) {
+  const [glyph] = historyToggle(tree).findAll((node) => typeof node.type === 'function' && node.props.size === 22);
+  return glyph;
+}
+
 function press(tree: renderer.ReactTestRenderer) {
   act(() => {
     historyToggle(tree).props.onPress();
@@ -170,6 +177,17 @@ describe('Ask docked conversation history', () => {
     expect(mockComposerMounts).toHaveBeenCalledTimes(1);
   });
 
+  it('shows a sidebar glyph on a paired window, filled while the history is in view', () => {
+    const { SidebarSimpleIcon } = jest.requireMock('phosphor-react-native/src/icons/SidebarSimple');
+    const tree = render(PAIRED);
+    expect(toggleGlyph(tree).type).toBe(SidebarSimpleIcon);
+    expect(toggleGlyph(tree).props.weight).toBe('fill');
+
+    press(tree);
+    expect(toggleGlyph(tree).type).toBe(SidebarSimpleIcon);
+    expect(toggleGlyph(tree).props.weight).toBe('light');
+  });
+
   it('gives the collapsed conversation the full width, as unpaired', () => {
     const paired = render(PAIRED);
     press(paired);
@@ -186,6 +204,7 @@ describe('Ask docked conversation history', () => {
     expect(hostCount(tree, 'docked-history')).toBe(0);
     expect(hostCount(tree, 'overlay-drawer')).toBe(1);
     expect(historyToggle(tree).props.accessibilityLabel).toBe('Open conversation history');
+    expect(toggleGlyph(tree).type).toBe(jest.requireMock('@/components/icons').List);
 
     press(tree);
     expect(host(tree, 'overlay-drawer')[0].props.accessibilityState).toEqual({ expanded: true });

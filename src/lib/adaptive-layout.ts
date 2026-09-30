@@ -22,8 +22,6 @@ export const ADAPTIVE_COLUMN_GAP = Spacing['4'];
  * width, so an open folding display or a landscape iPad reads as two pages.
  */
 export const ADAPTIVE_PAIRED_MIN_WIDTH = 760;
-/** A taller-than-wide regular window can stack two panes from this height. */
-export const ADAPTIVE_STACKED_MIN_HEIGHT = 800;
 /** Smallest pane, measured along the pairing axis. */
 export const ADAPTIVE_PANE_MIN = 320;
 /**
@@ -32,6 +30,13 @@ export const ADAPTIVE_PANE_MIN = 320;
  * native reserved-region inset reaches JavaScript.
  */
 export const ADAPTIVE_FOLD_GUTTER = Spacing['10'];
+/**
+ * A taller-than-wide regular window can stack two panes from this height: two
+ * minimum panes and the fold gutter. The pane-size guard in
+ * resolveAdaptivePanes decides once safe-area insets are subtracted. An open
+ * Duo held upright reports a content area of about 669 x 703pt.
+ */
+export const ADAPTIVE_STACKED_MIN_HEIGHT = ADAPTIVE_PANE_MIN * 2 + ADAPTIVE_FOLD_GUTTER;
 
 export type AdaptiveColumnCount = 1 | 2;
 
@@ -184,18 +189,27 @@ export function adaptivePanesFrameStyle(panes: AdaptivePanes): { marginLeft: num
 }
 
 /**
- * The horizontal lane for a floating control: the safe area, or the second
- * pane of a paired row, so nothing floats across the midline. The control is
- * centered in the lane, `margin` from each side and at most `maxWidth` wide.
+ * The horizontal lane for a floating control: the safe area, or one pane of a
+ * paired row (the second by default), so nothing floats across the midline.
+ * The control is centered in the lane, `margin` from each side and at most
+ * `maxWidth` wide.
  */
 export function adaptivePaneLane(
   layout: Pick<AdaptiveLayout, 'insetLeft' | 'availableWidth'>,
   panes: AdaptivePanes | null,
-  { margin = 0, maxWidth = Number.POSITIVE_INFINITY }: { margin?: number; maxWidth?: number } = {},
+  {
+    margin = 0,
+    maxWidth = Number.POSITIVE_INFINITY,
+    pane = 'second',
+  }: { margin?: number; maxWidth?: number; pane?: 'first' | 'second' } = {},
 ): { left: number; width: number } {
   const row = panes?.axis === 'row' ? panes : null;
-  const laneLeft = layout.insetLeft + (row ? row.lead + row.first + row.gutter : 0);
-  const laneWidth = row ? row.second : layout.availableWidth;
+  let laneLeft = layout.insetLeft;
+  let laneWidth = layout.availableWidth;
+  if (row) {
+    laneLeft += pane === 'first' ? row.lead : row.lead + row.first + row.gutter;
+    laneWidth = pane === 'first' ? row.first : row.second;
+  }
   const width = Math.max(0, Math.min(laneWidth - margin * 2, maxWidth));
   return { left: laneLeft + (laneWidth - width) / 2, width };
 }
