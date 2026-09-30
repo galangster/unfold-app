@@ -14,7 +14,7 @@
  */
 
 import { useMemo } from 'react';
-import { Dimensions, StyleSheet } from 'react-native';
+import { StyleSheet, useWindowDimensions } from 'react-native';
 import {
   Canvas,
   Atlas,
@@ -27,8 +27,6 @@ import {
 import { useDerivedValue, useSharedValue } from 'react-native-reanimated';
 
 import type { SkImage, SkRect, SkRSXform } from '@shopify/react-native-skia';
-
-const { width: SW, height: SH } = Dimensions.get('window');
 
 // ---------------------------------------------------------------------------
 // Element configs — seed generation parameters (NOT worklet functions)
@@ -157,7 +155,7 @@ interface ParticleSeed {
   angle: number;
 }
 
-function generateSeeds(config: ElementConfig): ParticleSeed[] {
+function generateSeeds(config: ElementConfig, SW: number, SH: number): ParticleSeed[] {
   return Array.from({ length: config.count }, () => ({
     baseY: Math.random() * SH,
     baseX: Math.random() * SW,
@@ -181,12 +179,9 @@ function generateSeeds(config: ElementConfig): ParticleSeed[] {
 
 // ---------------------------------------------------------------------------
 // Inline position calculators — worklet-safe (no closures over JS scope)
-// All screen dimensions are passed as constants via the seeds.
+// The live window size reaches the worklet as captured locals, and the seeds
+// regenerate when it changes, so an open, close, or resize stays full-bleed.
 // ---------------------------------------------------------------------------
-
-// Pre-bake screen dims into constants the worklet can capture
-const SCREEN_W = SW;
-const SCREEN_H = SH;
 
 // ---------------------------------------------------------------------------
 // Sprite texture — soft radial gradient dot
@@ -237,9 +232,10 @@ interface CurrentProps {
 
 export function Current({ type, color, intensity = 1, centerX, centerY, scale = 1, speed, drift }: CurrentProps) {
   const config = CONFIGS[type];
+  const { width: SCREEN_W, height: SCREEN_H } = useWindowDimensions();
 
   const sprite = useMemo(() => createSprite(color), [color]);
-  const seeds = useMemo(() => generateSeeds(config), [config]);
+  const seeds = useMemo(() => generateSeeds(config, SCREEN_W, SCREEN_H), [config, SCREEN_W, SCREEN_H]);
   const sprites = useMemo<SkRect[]>(() => seeds.map(() => SPRITE_RECT), [seeds]);
 
   // Capture values as locals the worklet can close over

@@ -2,6 +2,7 @@
  * CompanionDrawer
  * Left-edge overlay drawer for companion conversation history.
  * Supports edge-swipe to open, swipe-back or scrim-tap to close.
+ * In a paired window the screen docks it as a static first pane instead.
  *
  * Exports:
  *   CompanionDrawer    — drawer + scrim component
@@ -79,6 +80,9 @@ interface CompanionDrawerProps {
   /** Called before switching to another conversation — lets the screen stop
    * an in-flight stream in the conversation being left (P0-5). */
   onWillSwitchConversation?: () => void;
+  /** Docked beside the conversation in a paired window. Renders statically:
+   * no translate, scrim, modal flag, close control, or keyboard listener. */
+  docked?: boolean;
 }
 
 type ListItem = DrawerListItem;
@@ -92,6 +96,8 @@ export function useDrawerGesture(
   isOpen: boolean,
   onOpen: () => void,
   onClose: () => void,
+  /** False while the history is docked: there is no drawer to swipe. */
+  enabled = true,
 ) {
   const { width: windowWidth } = useWindowDimensions();
   const drawerWidth = companionDrawerWidth(windowWidth);
@@ -99,6 +105,7 @@ export function useDrawerGesture(
   const isEdgeSwipe = useSharedValue(false);
 
   const panGesture = Gesture.Pan()
+    .enabled(enabled)
     .activeOffsetX([-ACTIVE_OFFSET_X, ACTIVE_OFFSET_X])
     .failOffsetY([-FAIL_OFFSET_Y, FAIL_OFFSET_Y])
     .onStart((e) => {
@@ -398,6 +405,7 @@ export const CompanionDrawer = memo(function CompanionDrawer({
   onClose,
   onNewChat,
   onWillSwitchConversation,
+  docked = false,
 }: CompanionDrawerProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -407,6 +415,8 @@ export const CompanionDrawer = memo(function CompanionDrawer({
   const [keyboardInset, setKeyboardInset] = useState(() => Keyboard.metrics()?.height ?? 0);
 
   useEffect(() => {
+    // Docked, the screen's keyboard avoidance owns the bottom edge.
+    if (docked) return;
     const event = Platform.OS === 'ios' ? 'keyboardWillChangeFrame' : 'keyboardDidShow';
     const show = Keyboard.addListener(event, ({ endCoordinates }) => {
       setKeyboardInset(Math.max(0, windowHeight - endCoordinates.screenY));
@@ -416,7 +426,7 @@ export const CompanionDrawer = memo(function CompanionDrawer({
       show.remove();
       hide.remove();
     };
-  }, [windowHeight]);
+  }, [docked, windowHeight]);
 
   const activeId = useCompanionChatStore((s) => s.activeConversationId);
   // A streaming token flush replaces the active conversation object (content
@@ -449,13 +459,18 @@ export const CompanionDrawer = memo(function CompanionDrawer({
 
   useEffect(() => {
     if (isOpen) setGroupingNow(Date.now());
-    else {
+    else if (!docked) {
       Keyboard.dismiss();
       setActionConversation(null);
       setActionMode('actions');
       setRenameDraft('');
     }
-  }, [isOpen]);
+  }, [isOpen, docked]);
+
+  // A docked list never opens or closes, so it regroups when the history changes.
+  useEffect(() => {
+    if (docked) setGroupingNow(Date.now());
+  }, [docked, conversationsFingerprint]);
 
   const visibleConversations = useMemo(
     () => allWithMessages.filter((conversation) => conversationMatchesTitleQuery(conversation, searchQuery)),
@@ -612,10 +627,121 @@ export const CompanionDrawer = memo(function CompanionDrawer({
     [],
   );
 
+  const historyPanel = (
+    <>
+      <View
+        style={styles.historyContent}
+        accessibilityElementsHidden={activeActionConversation != null}
+        importantForAccessibility={activeActionConversation ? 'no-hide-descendants' : 'auto'}
+      >
+        <View style={styles.historyHeader}>
+          <Text
+            style={[styles.chatsHeading, { color: colors.text }]}
+            accessibilityRole="header"
+          >
+            Chats
+          </Text>
+          {docked ? null : (
+            <TouchableOpacity
+              onPress={handleCloseHistory}
+              activeOpacity={0.7}
+              style={styles.headerClose}
+              accessibilityRole="button"
+              accessibilityLabel="Close history"
+            >
+              <Text style={[styles.headerCloseLabel, { color: colors.textMuted }]}>Close</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <TouchableOpacity
+          onPress={handleDrawerNewChat}
+          activeOpacity={0.7}
+          style={[styles.newChatButton, { borderBottomColor: colors.border }]}
+          accessibilityRole="button"
+          accessibilityLabel="Start new conversation"
+        >
+          <PlusCircle size={20} color={colors.accent} weight="light" />
+          <Text style={[styles.newChatLabel, { color: colors.accent }]}>
+            New Chat
+          </Text>
+        </TouchableOpacity>
+
+        <View style={[styles.searchRow, { borderBottomColor: colors.border, backgroundColor: colors.inputBackground }]}>
+          <MagnifyingGlassIcon size={16} color={colors.textMuted} weight="light" />
+          <TextInput
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search titles"
+            placeholderTextColor={colors.textMuted}
+            selectionColor={colors.accent}
+            cursorColor={colors.accent}
+            style={[styles.searchInput, { color: colors.text }]}
+            accessibilityLabel="Search conversation titles"
+            autoCorrect={false}
+            autoCapitalize="none"
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity
+              onPress={() => setSearchQuery('')}
+              style={styles.searchClear}
+              accessibilityRole="button"
+              accessibilityLabel="Clear search"
+            >
+              <XIcon size={16} color={colors.textMuted} weight="bold" />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {listItems.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={[styles.emptyText, { color: colors.textMuted }]}>
+              {searchQuery.trim()
+                ? 'No conversations match that title'
+                : 'Your conversations will appear here'}
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            data={listItems}
+            renderItem={renderItem}
+            keyExtractor={keyExtractor}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="none"
+          />
+        )}
+      </View>
+
+      <ConversationActionPanel
+        conversation={activeActionConversation}
+        mode={actionMode}
+        renameDraft={renameDraft}
+        onRenameDraftChange={setRenameDraft}
+        onClose={closeActionPanel}
+        onPin={handleActionPin}
+        onStartRename={handleStartRename}
+        onConfirmRename={handleConfirmRename}
+        onStartDelete={handleStartDelete}
+        onConfirmDelete={handleConfirmDelete}
+      />
+    </>
+  );
+
+  if (docked) {
+    return (
+      <View testID="companion-history-docked" style={[styles.docked, { backgroundColor: colors.background }]}>
+        {historyPanel}
+      </View>
+    );
+  }
+
   return (
     <>
       {/* Scrim */}
       <Animated.View
+        testID="companion-drawer-scrim"
         style={[styles.scrim, scrimStyle]}
         pointerEvents={isOpen ? 'auto' : 'none'}
       >
@@ -644,101 +770,7 @@ export const CompanionDrawer = memo(function CompanionDrawer({
         accessibilityElementsHidden={!isOpen}
         importantForAccessibility={isOpen ? 'yes' : 'no-hide-descendants'}
       >
-        <View
-          style={styles.historyContent}
-          accessibilityElementsHidden={activeActionConversation != null}
-          importantForAccessibility={activeActionConversation ? 'no-hide-descendants' : 'auto'}
-        >
-          <View style={styles.historyHeader}>
-            <Text
-              style={[styles.chatsHeading, { color: colors.text }]}
-              accessibilityRole="header"
-            >
-              Chats
-            </Text>
-            <TouchableOpacity
-              onPress={handleCloseHistory}
-              activeOpacity={0.7}
-              style={styles.headerClose}
-              accessibilityRole="button"
-              accessibilityLabel="Close history"
-            >
-              <Text style={[styles.headerCloseLabel, { color: colors.textMuted }]}>Close</Text>
-            </TouchableOpacity>
-          </View>
-
-          <TouchableOpacity
-            onPress={handleDrawerNewChat}
-            activeOpacity={0.7}
-            style={[styles.newChatButton, { borderBottomColor: colors.border }]}
-            accessibilityRole="button"
-            accessibilityLabel="Start new conversation"
-          >
-            <PlusCircle size={20} color={colors.accent} weight="light" />
-            <Text style={[styles.newChatLabel, { color: colors.accent }]}>
-              New Chat
-            </Text>
-          </TouchableOpacity>
-
-          <View style={[styles.searchRow, { borderBottomColor: colors.border, backgroundColor: colors.inputBackground }]}>
-            <MagnifyingGlassIcon size={16} color={colors.textMuted} weight="light" />
-            <TextInput
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              placeholder="Search titles"
-              placeholderTextColor={colors.textMuted}
-              selectionColor={colors.accent}
-              cursorColor={colors.accent}
-              style={[styles.searchInput, { color: colors.text }]}
-              accessibilityLabel="Search conversation titles"
-              autoCorrect={false}
-              autoCapitalize="none"
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity
-                onPress={() => setSearchQuery('')}
-                style={styles.searchClear}
-                accessibilityRole="button"
-                accessibilityLabel="Clear search"
-              >
-                <XIcon size={16} color={colors.textMuted} weight="bold" />
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {listItems.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-                {searchQuery.trim()
-                  ? 'No conversations match that title'
-                  : 'Your conversations will appear here'}
-              </Text>
-            </View>
-          ) : (
-            <FlatList
-              data={listItems}
-              renderItem={renderItem}
-              keyExtractor={keyExtractor}
-              contentContainerStyle={styles.listContent}
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-              keyboardDismissMode="none"
-            />
-          )}
-        </View>
-
-        <ConversationActionPanel
-          conversation={activeActionConversation}
-          mode={actionMode}
-          renameDraft={renameDraft}
-          onRenameDraftChange={setRenameDraft}
-          onClose={closeActionPanel}
-          onPin={handleActionPin}
-          onStartRename={handleStartRename}
-          onConfirmRename={handleConfirmRename}
-          onStartDelete={handleStartDelete}
-          onConfirmDelete={handleConfirmDelete}
-        />
+        {historyPanel}
       </Animated.View>
     </>
   );
@@ -763,6 +795,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.18,
     shadowRadius: 12,
     elevation: 12,
+  },
+  docked: {
+    flex: 1,
   },
   historyContent: {
     flex: 1,

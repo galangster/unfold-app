@@ -555,6 +555,7 @@ interface FABProps {
 
 function FloatingActionButton({ onPress, visible, tabBarHeight }: FABProps) {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const { reducedMotion } = useAccessibleAnimation();
   const scale = useSharedValue(1);
   const translateY = useSharedValue(0);
@@ -603,6 +604,7 @@ function FloatingActionButton({ onPress, visible, tabBarHeight }: FABProps) {
         fabStyles.container,
         {
           bottom: tabBarHeight + 24,
+          right: FAB_EDGE_OFFSET + insets.right,
           backgroundColor: colors.accent,
           shadowColor: colors.accent,
         },
@@ -625,10 +627,12 @@ function FloatingActionButton({ onPress, visible, tabBarHeight }: FABProps) {
   );
 }
 
+// Absolute children ignore the SafeAreaView padding, so the side inset is added here.
+const FAB_EDGE_OFFSET = 24;
+
 const fabStyles = StyleSheet.create({
   container: {
     position: 'absolute',
-    right: 24,
     width: 52,
     height: 52,
     borderRadius: 26,

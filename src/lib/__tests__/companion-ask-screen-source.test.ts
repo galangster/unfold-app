@@ -139,13 +139,29 @@ describe('drawer edge-swipe gesture wired at the screen root', () => {
   it('imports and calls useDrawerGesture with the screen\'s own drawer state', () => {
     expect(source).toContain('useDrawerGesture');
     expect(source).toMatch(
-      /useDrawerGesture\(drawerTranslateX, drawerOpen, handleDrawerOpen, handleDrawerClose\)/,
+      /useDrawerGesture\(drawerTranslateX, drawerOpen, handleDrawerOpen, handleDrawerClose, !docked\)/,
     );
   });
 
   it('wraps the screen root in a GestureDetector using that gesture', () => {
     expect(source).toMatch(/<GestureDetector gesture=\{drawerPanGesture\}>\s*<KeyboardAvoidingView/);
     expect(source).toMatch(/<\/KeyboardAvoidingView>\s*<\/GestureDetector>/);
+  });
+});
+
+describe('docked history in a paired window', () => {
+  it('docks the history as the first facing pane and the conversation as the second', () => {
+    expect(source).toContain('const dockedPanes = resolveAdaptivePanes(adaptiveLayout)');
+    expect(source).toMatch(/<FacingPanes\s+panes=\{dockedPanes\}\s+divider/);
+    expect(source).toMatch(/first=\{\s*<CompanionDrawer\s+docked/);
+    expect(source).toContain('second={conversationColumn}');
+  });
+
+  it('drops the toggle, the overlay drawer, and the edge swipe while docked', () => {
+    expect(source).toMatch(/\{docked \? null : \(\s*<TouchableOpacity[\s\S]*?Open conversation history/);
+    expect(source).toMatch(/\{dockedPanes \? null : \(\s*<CompanionDrawer/);
+    expect(source).toContain('handleDrawerClose, !docked)');
+    expect(source).toContain('if (docked && drawerOpen) setDrawerOpen(false)');
   });
 });
 
@@ -160,8 +176,11 @@ describe('errors live on the bubble, not a banner', () => {
 
 describe('asymmetric safe areas and drawer resize', () => {
   it('pads the header and composer with live left and right insets', () => {
-    expect(source).toContain('paddingLeft: Spacing[\'4\'] + insets.left');
-    expect(source).toContain('paddingRight: Spacing[\'4\'] + insets.right');
+    expect(source).toContain('const chromeInsets = docked ? DOCKED_CHROME_INSETS : insets');
+    expect(source).toContain('paddingLeft: Spacing[\'4\'] + chromeInsets.left');
+    expect(source).toContain('paddingRight: Spacing[\'4\'] + chromeInsets.right');
+    expect(source).toContain('adaptiveSafeGutterStyle(chromeInsets.left, chromeInsets.right)');
+    // Docked, the pane wrapper owns the safe areas instead.
     expect(source).toContain('adaptiveSafeGutterStyle(insets.left, insets.right)');
   });
 
@@ -175,7 +194,7 @@ describe('drawer edge-swipe gesture wired at the screen root', () => {
   it('imports and calls useDrawerGesture with the screen\'s own drawer state', () => {
     expect(source).toContain('useDrawerGesture');
     expect(source).toMatch(
-      /useDrawerGesture\(drawerTranslateX, drawerOpen, handleDrawerOpen, handleDrawerClose\)/,
+      /useDrawerGesture\(drawerTranslateX, drawerOpen, handleDrawerOpen, handleDrawerClose, !docked\)/,
     );
   });
 

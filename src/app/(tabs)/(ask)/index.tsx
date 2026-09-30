@@ -20,7 +20,14 @@ import { GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
-import { adaptiveFrameStyle, adaptiveSafeGutterStyle, companionDrawerClosedTranslate, companionDrawerWidth } from '@/lib/adaptive-layout';
+import {
+  adaptiveFrameStyle,
+  adaptiveSafeGutterStyle,
+  companionDrawerClosedTranslate,
+  companionDrawerWidth,
+  resolveAdaptivePanes,
+} from '@/lib/adaptive-layout';
+import { FacingPanes } from '@/components/ui/FacingPanes';
 import { useFocusEffect, useIsFocused } from 'expo-router';
 import {
   CrownIcon,
@@ -143,6 +150,9 @@ const MemoPremiumFeatureSheet = React.memo(PremiumFeatureSheet);
 const TAB_BAR_CONTENT_HEIGHT = 56;
 const HEADER_COMPANION_SIZE = 64;
 const TOOLBAR_SIDE_SLOT_WIDTH = 88;
+// Docked, the pane wrapper owns the safe areas, so the conversation column
+// lays out from zero on every edge it touches.
+const DOCKED_CHROME_INSETS = { top: 0, left: 0, right: 0 } as const;
 
 // ── Screen ─────────────────────────────────────────────────────────────────
 
@@ -154,6 +164,11 @@ export default function CompanionScreen() {
   const adaptiveLayout = useAdaptiveLayout();
   const askFrameStyle = adaptiveFrameStyle(adaptiveLayout.readableMaxWidth);
   const drawerWidth = companionDrawerWidth(windowWidth);
+  // A paired window docks the history as the first pane. The compact drawer
+  // returns when the window narrows again.
+  const dockedPanes = resolveAdaptivePanes(adaptiveLayout);
+  const docked = dockedPanes != null;
+  const chromeInsets = docked ? DOCKED_CHROME_INSETS : insets;
   const listRef = useRef<any>(null);
 
   // Full tab bar height including safe area (home indicator)
@@ -217,6 +232,10 @@ export default function CompanionScreen() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const drawerTranslateX = useSharedValue(companionDrawerClosedTranslate(drawerWidth));
 
+  // Docking replaces the overlay, so an open drawer closes. It stays closed
+  // when the window narrows again.
+  if (docked && drawerOpen) setDrawerOpen(false);
+
   useEffect(() => {
     if (!drawerOpen) {
       drawerTranslateX.value = companionDrawerClosedTranslate(drawerWidth);
@@ -251,7 +270,7 @@ export default function CompanionScreen() {
   // activeOffsetX/failOffsetY inside useDrawerGesture keep this from
   // stealing the transcript's vertical scroll — it only claims a touch once
   // it reads as a deliberate horizontal drag.
-  const drawerPanGesture = useDrawerGesture(drawerTranslateX, drawerOpen, handleDrawerOpen, handleDrawerClose);
+  const drawerPanGesture = useDrawerGesture(drawerTranslateX, drawerOpen, handleDrawerOpen, handleDrawerClose, !docked);
 
   // Scripture tap sheet state
   const [verseSheetRef, setVerseSheetRef] = useState<string | null>(null);
@@ -432,39 +451,37 @@ export default function CompanionScreen() {
     </Text>
   );
 
-  return (
-    <GestureDetector gesture={drawerPanGesture}>
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: colors.background }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? -tabBarHeight : 0}
-      testID="companion-screen"
-    >
+  const conversationColumn = (
+    <View style={{ flex: 1 }}>
       {/* Header — one fixed Companion presence between equal control slots. */}
       <View
         style={{
-          paddingTop: insets.top + 4,
+          paddingTop: chromeInsets.top + 4,
           paddingBottom: 8,
-          paddingLeft: Spacing['4'] + insets.left,
-          paddingRight: Spacing['4'] + insets.right,
+          paddingLeft: Spacing['4'] + chromeInsets.left,
+          paddingRight: Spacing['4'] + chromeInsets.right,
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
         }}
       >
         <View style={{ width: TOOLBAR_SIDE_SLOT_WIDTH, alignItems: 'flex-start' }}>
-          <TouchableOpacity
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              handleDrawerOpen();
-            }}
-            activeOpacity={0.7}
-            accessibilityLabel="Open conversation history"
-            accessibilityRole="button"
-            style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
-          >
-            <List size={22} color={colors.textMuted} weight="light" />
-          </TouchableOpacity>
+          {/* Docked history is always visible, so the toggle leaves. The slot
+              stays to keep the Companion centered. */}
+          {docked ? null : (
+            <TouchableOpacity
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                handleDrawerOpen();
+              }}
+              activeOpacity={0.7}
+              accessibilityLabel="Open conversation history"
+              accessibilityRole="button"
+              style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <List size={22} color={colors.textMuted} weight="light" />
+            </TouchableOpacity>
+          )}
         </View>
 
         <View
@@ -510,13 +527,13 @@ export default function CompanionScreen() {
 
       {/* Each scroll container owns keyboard dismissal and touch handling. */}
       {isEmpty ? (
-        <View style={[{ flex: 1, overflow: 'hidden' }, adaptiveSafeGutterStyle(insets.left, insets.right)]}>
+        <View style={[{ flex: 1, overflow: 'hidden' }, adaptiveSafeGutterStyle(chromeInsets.left, chromeInsets.right)]}>
           <View style={[{ flex: 1 }, askFrameStyle]}>
           <CompanionEmptyState onSelectStarter={handleSend} todayTheme={todayTheme} />
           </View>
         </View>
       ) : (
-        <View style={[{ flex: 1 }, adaptiveSafeGutterStyle(insets.left, insets.right)]}>
+        <View style={[{ flex: 1 }, adaptiveSafeGutterStyle(chromeInsets.left, chromeInsets.right)]}>
           <FlatList
             ref={listRef}
             data={invertedMessages}
@@ -546,7 +563,7 @@ export default function CompanionScreen() {
           never changes while a conversation is open, so the message list
           doesn't lurch when either child appears or disappears. */}
       {!isEmpty && (
-        <View style={[{ height: statusSlotHeight, justifyContent: 'center' }, adaptiveSafeGutterStyle(insets.left, insets.right)]}>
+        <View style={[{ height: statusSlotHeight, justifyContent: 'center' }, adaptiveSafeGutterStyle(chromeInsets.left, chromeInsets.right)]}>
         <View style={askFrameStyle}>
           {showSuggestions ? (
             <SuggestionChips
@@ -585,7 +602,7 @@ export default function CompanionScreen() {
       ))}
 
       {/* Input bar */}
-      <View style={adaptiveSafeGutterStyle(insets.left, insets.right)}>
+      <View style={adaptiveSafeGutterStyle(chromeInsets.left, chromeInsets.right)}>
       <View style={askFrameStyle}>
       <CompanionInput
         onSend={handleSend}
@@ -596,6 +613,38 @@ export default function CompanionScreen() {
       />
       </View>
       </View>
+    </View>
+  );
+
+  return (
+    <GestureDetector gesture={drawerPanGesture}>
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? -tabBarHeight : 0}
+      testID="companion-screen"
+    >
+      {dockedPanes ? (
+        <View style={[{ flex: 1, paddingTop: insets.top }, adaptiveSafeGutterStyle(insets.left, insets.right)]}>
+          <FacingPanes
+            panes={dockedPanes}
+            divider
+            testID="companion-docked-panes"
+            first={
+              <CompanionDrawer
+                docked
+                translateX={drawerTranslateX}
+                isOpen={false}
+                onOpen={handleDrawerOpen}
+                onClose={handleDrawerClose}
+                onNewChat={handleNewChat}
+                onWillSwitchConversation={stopGeneration}
+              />
+            }
+            second={conversationColumn}
+          />
+        </View>
+      ) : conversationColumn}
 
       {/* Bottom spacer: clears the absolutely-positioned custom tab bar.
           keyboardVerticalOffset negates this when the keyboard opens,
@@ -609,15 +658,17 @@ export default function CompanionScreen() {
         reference={verseSheetRef ?? ''}
       />
 
-      {/* Companion Drawer */}
-      <CompanionDrawer
-        translateX={drawerTranslateX}
-        isOpen={drawerOpen}
-        onOpen={handleDrawerOpen}
-        onClose={handleDrawerClose}
-        onNewChat={handleNewChat}
-        onWillSwitchConversation={stopGeneration}
-      />
+      {/* Companion Drawer — compact windows only; paired windows dock it */}
+      {dockedPanes ? null : (
+        <CompanionDrawer
+          translateX={drawerTranslateX}
+          isOpen={drawerOpen}
+          onOpen={handleDrawerOpen}
+          onClose={handleDrawerClose}
+          onNewChat={handleNewChat}
+          onWillSwitchConversation={stopGeneration}
+        />
+      )}
 
       {/* Premium upsell sheet for companion daily limit */}
       <MemoPremiumFeatureSheet

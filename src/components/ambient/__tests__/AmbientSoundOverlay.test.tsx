@@ -100,11 +100,19 @@ jest.mock('@/components/icons', () => {
   return { XIcon: View };
 });
 jest.mock('react-native-safe-area-context', () => ({
-  useSafeAreaInsets: () => ({ top: 40, bottom: 34, left: 0, right: 0 }),
+  useSafeAreaInsets: () => mockInsets,
+}));
+let mockInsets = { top: 40, bottom: 34, left: 0, right: 0 };
+let mockWindow = { width: 390, height: 844 };
+jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
+  __esModule: true,
+  default: () => ({ ...mockWindow, scale: 3, fontScale: 1 }),
 }));
 
 describe('ambient overlay timer notice', () => {
   beforeEach(() => {
+    mockInsets = { top: 40, bottom: 34, left: 0, right: 0 };
+    mockWindow = { width: 390, height: 844 };
     jest.mocked(listPendingAnnouncementPages).mockReturnValue([]);
     jest.mocked(canAnnounceFeatures).mockReturnValue(false);
     useAmbientAudioState.setState({
@@ -147,6 +155,28 @@ describe('ambient overlay timer notice', () => {
     expect(setAmbientTimer).toHaveBeenCalledWith(0);
     expect(screen.queryByTestId('ambient-ended-timer-notice')).toBeNull();
     expect(useAmbientSoundChrome.getState().playerDockHeight).toBe(0);
+  });
+
+  it('centers the bottom dock between asymmetric side insets', () => {
+    // Outer folding display: a side rail inset on one edge only.
+    mockWindow = { width: 466, height: 678 };
+    mockInsets = { top: 40, bottom: 34, left: 80, right: 0 };
+    useAmbientAudioState.setState({ timerStatus: 'ended' });
+    render(<AmbientSoundOverlay />);
+
+    const { left, width } = screen.getByTestId('ambient-bottom-dock').props.style;
+    expect(left).toBeGreaterThanOrEqual(80);
+    expect(left - 80).toBeCloseTo(466 - (left + width));
+  });
+
+  it('keeps the bottom dock off the window midline in a paired window', () => {
+    mockWindow = { width: 951, height: 669 };
+    useAmbientAudioState.setState({ timerStatus: 'ended' });
+    render(<AmbientSoundOverlay />);
+
+    const { left, width } = screen.getByTestId('ambient-bottom-dock').props.style;
+    const midline = 951 / 2;
+    expect(left > midline || left + width < midline).toBe(true);
   });
 
   it('yields the ambient session when a reflection ends so a completion cue can play', () => {

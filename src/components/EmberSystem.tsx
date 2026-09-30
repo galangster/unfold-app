@@ -21,10 +21,10 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   AppState,
   type AppStateStatus,
-  Dimensions,
   type LayoutChangeEvent,
   StyleSheet,
   View,
+  useWindowDimensions,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
@@ -61,10 +61,6 @@ import {
   type ResolvedEmberParams,
   type StaticEmber,
 } from '@/lib/ember-system';
-
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const CENTER_X = SCREEN_WIDTH / 2;
-const CENTER_Y = SCREEN_HEIGHT / 2;
 
 // ---------------------------------------------------------------------------
 // Particle types
@@ -228,6 +224,7 @@ function LuminousMote({
   size,
   delay,
   drift,
+  rise,
   accentColor,
   textColor,
   isAccent,
@@ -237,6 +234,8 @@ function LuminousMote({
   size: number;
   delay: number;
   drift: number;
+  /** Rise distance before drift, from the window height at seed time. */
+  rise: number;
   accentColor: string;
   textColor: string;
   isAccent: boolean;
@@ -261,7 +260,7 @@ function LuminousMote({
 
   const style = useAnimatedStyle(() => {
     const opacity = interpolate(progress.value, [0, 0.08, 0.3, 0.75, 1], [0, 0.9, 0.7, 0.3, 0]);
-    const translateY = interpolate(progress.value, [0, 1], [0, -(SCREEN_HEIGHT * 0.35 + drift)]);
+    const translateY = interpolate(progress.value, [0, 1], [0, -(rise + drift)]);
     const translateX = interpolate(sway.value, [0, 1], [-12, 12]);
     const s = interpolate(progress.value, [0, 0.15, 0.6, 1], [0.2, 1, 0.8, 0.3]);
     return {
@@ -455,6 +454,8 @@ export function EmberSystem({
   const { reducedMotion } = useAccessibleAnimation();
   const isAppActive = useIsAppActive();
   const lowPowerMode = useLowPowerMode();
+  // Live window size: an open, close, or resize changes it after mount.
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
   const accent = accentColor ?? colors.accent;
   const effectiveDirection: EmberDirection = variant === 'celebration' ? 'up' : direction;
@@ -462,7 +463,7 @@ export function EmberSystem({
   // Measure the mounted container; fall back to window dims so full-screen
   // mounts (the common case, incl. the canonical celebration) render
   // identically on the first frame.
-  const [layout, setLayout] = useState({ width: SCREEN_WIDTH, height: SCREEN_HEIGHT });
+  const [layout, setLayout] = useState(() => ({ width: windowWidth, height: windowHeight }));
   const onLayout = (e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout;
     if (width > 0 && height > 0 && (Math.abs(width - layout.width) > 8 || Math.abs(height - layout.height) > 8)) {
@@ -508,14 +509,15 @@ export function EmberSystem({
     if (variant !== 'celebration' || !motes || reducedMotion) return [];
     return Array.from({ length: CELEBRATION_MOTE_COUNT }, (_, i) => ({
       id: i,
-      startX: CENTER_X + (Math.random() - 0.5) * SCREEN_WIDTH * 0.6,
-      startY: CENTER_Y + (Math.random() - 0.3) * SCREEN_HEIGHT * 0.15,
+      startX: windowWidth / 2 + (Math.random() - 0.5) * windowWidth * 0.6,
+      startY: windowHeight / 2 + (Math.random() - 0.3) * windowHeight * 0.15,
       size: Math.random() * 4.5 + 2,
       delay: 200 + Math.random() * 700,
       drift: Math.random() * 80,
+      rise: windowHeight * 0.35,
       isAccent: Math.random() > 0.65,
     }));
-  }, [variant, motes, reducedMotion]);
+  }, [variant, motes, reducedMotion, windowWidth, windowHeight]);
 
   // For glow gradient, darken the accent on light mode for better contrast (canon).
   const glowHex = isDark ? accent : darken(accent, 0.15);
@@ -581,6 +583,7 @@ export function EmberSystem({
           size={m.size}
           delay={m.delay}
           drift={m.drift}
+          rise={m.rise}
           accentColor={accent}
           textColor={moteTextColor}
           isAccent={m.isAccent}
