@@ -23,6 +23,8 @@ interface ReflectionFacingPageProps {
   fontSize: FontSize;
   onOpenFullJournal: (focusQuestion?: number) => void;
   onKeyboardToolbarChange?: (toolbar: ReflectionKeyboardToolbarState | null) => void;
+  initialExpandedIndex?: number | null;
+  onExpandedIndexChange?: (index: number | null) => void;
   /** Lets the reader scroll this page, for example from the Contents sheet. */
   scrollViewRef: RefObject<ScrollView | null>;
   /** Clearance below the last question for the tab bar and home indicator. */
@@ -42,6 +44,8 @@ export function ReflectionFacingPage({
   fontSize,
   onOpenFullJournal,
   onKeyboardToolbarChange,
+  initialExpandedIndex,
+  onExpandedIndexChange,
   scrollViewRef,
   bottomInset,
 }: ReflectionFacingPageProps) {
@@ -82,6 +86,8 @@ export function ReflectionFacingPage({
           scrollContentRef={contentRef}
           onFocusInput={handleFocusInput}
           onKeyboardToolbarChange={onKeyboardToolbarChange}
+          initialExpandedIndex={initialExpandedIndex}
+          onExpandedIndexChange={onExpandedIndexChange}
         />
       </View>
     </ScrollView>

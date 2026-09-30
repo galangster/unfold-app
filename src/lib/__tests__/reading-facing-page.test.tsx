@@ -12,6 +12,7 @@ const { act } = renderer;
 
 const DEVOTIONAL_ID = 'devo-facing-page';
 const QUESTION = 'Where did you notice rest today?';
+const SECOND_QUESTION = 'What would you set down tomorrow?';
 const DRAFT = 'In the walk home, before the phone came out.';
 
 const mockPush = jest.fn();
@@ -252,10 +253,12 @@ import type { Devotional, UserProfile } from '@/lib/store';
 const { ReadingScreen } = require('@/app/(tabs)/(today)/reading');
 const { useUnfoldStore } = require('@/lib/store') as typeof import('@/lib/store');
 const { DevotionalContent } = require('@/components/reading/DevotionalContent');
+const { FacingPanes } = require('@/components/ui/FacingPanes');
 
 type Node = {
   type: unknown;
   props: Record<string, unknown>;
+  parent: Node | null;
   findAllByProps: (props: Record<string, unknown>) => Node[];
   findByType: (type: unknown) => Node;
 };
@@ -285,7 +288,7 @@ function seedReader() {
         quotableLine: 'Quote',
         closingPrayer: 'Teach me to rest in you.',
         isRead: false,
-        reflectionQuestions: [QUESTION],
+        reflectionQuestions: [QUESTION, SECOND_QUESTION],
       }],
     } as unknown as Devotional],
     currentDevotionalId: DEVOTIONAL_ID,
@@ -295,9 +298,29 @@ function seedReader() {
   });
 }
 
-function responseInputs(root: Node) {
-  return root.findAllByProps({ accessibilityLabel: `Your response to: ${QUESTION}` })
+function responseInputs(root: Node, question = QUESTION) {
+  return root.findAllByProps({ accessibilityLabel: `Your response to: ${question}` })
     .filter((node) => typeof node.type === 'string' && typeof node.props.onChangeText === 'function');
+}
+
+function isHiddenFromAccessibility(node: Node) {
+  for (let current: Node | null = node; current; current = current.parent) {
+    if (current.props.accessibilityElementsHidden === true) return true;
+  }
+  return false;
+}
+
+function stayButtons(root: Node) {
+  return root.findAllByProps({ accessibilityHint: 'Opens this prayer on its own, full screen' })
+    .filter((node) => typeof node.props.onPress === 'function');
+}
+
+function tapQuestion(root: Node, number: number, question: string) {
+  const [card] = root.findAllByProps({ accessibilityLabel: `Reflection question ${number}: ${question}` })
+    .filter((node) => typeof node.props.onPress === 'function');
+  act(() => {
+    (card.props.onPress as () => void)();
+  });
 }
 
 function isInsideFacingPage(root: Node, input: Node) {
@@ -324,6 +347,7 @@ async function resizeTo(tree: ReaderTree, window: typeof PHONE) {
 describe('reader facing page', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    Reflect.deleteProperty(mockWindow, 'fontScale');
     useUnfoldStore.getState().reset();
     seedReader();
   });
@@ -392,10 +416,21 @@ describe('reader facing page', () => {
     act(() => tree.unmount());
   });
 
-  it('opens the prayer session for the day being read', async () => {
+  it('keeps the prayer session off a phone', async () => {
     const tree = await renderAt(PHONE);
-    const [stay] = tree.root.findAllByProps({ accessibilityHint: 'Opens this prayer on its own, full screen' })
-      .filter((node) => typeof node.props.onPress === 'function');
+    expect(stayButtons(tree.root)).toHaveLength(0);
+    act(() => tree.unmount());
+  });
+
+  it('keeps the prayer session for large text on a regular-width window', async () => {
+    const tree = await renderAt({ ...DUO_OPEN, fontScale: 2 } as typeof PHONE);
+    expect(stayButtons(tree.root).length).toBeGreaterThan(0);
+    act(() => tree.unmount());
+  });
+
+  it('opens the prayer session for the day being read', async () => {
+    const tree = await renderAt(DUO_OPEN);
+    const [stay] = stayButtons(tree.root);
     act(() => {
       (stay.props.onPress as () => void)();
     });
@@ -403,6 +438,71 @@ describe('reader facing page', () => {
       pathname: '/stay',
       params: { devotionalId: DEVOTIONAL_ID, dayNumber: '1' },
     });
+    act(() => tree.unmount());
+  });
+});
+
+describe('reader continuity across a pane change', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    Reflect.deleteProperty(mockWindow, 'fontScale');
+    useUnfoldStore.getState().reset();
+    seedReader();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+    useUnfoldStore.getState().reset();
+  });
+
+  it('reopens the question the person had open', async () => {
+    const tree = await renderAt(PHONE);
+    tapQuestion(tree.root, 2, SECOND_QUESTION);
+    expect(responseInputs(tree.root, SECOND_QUESTION)).toHaveLength(1);
+
+    await resizeTo(tree, DUO_OPEN);
+    const facing = responseInputs(tree.root, SECOND_QUESTION);
+    expect(facing).toHaveLength(1);
+    expect(isInsideFacingPage(tree.root, facing[0])).toBe(true);
+    expect(responseInputs(tree.root)).toHaveLength(0);
+
+    tapQuestion(tree.root, 2, SECOND_QUESTION);
+    await resizeTo(tree, PHONE);
+    expect(responseInputs(tree.root)).toHaveLength(0);
+    expect(responseInputs(tree.root, SECOND_QUESTION)).toHaveLength(0);
+    act(() => tree.unmount());
+  });
+
+  it('keeps the header in a tall window while the keyboard raises the desk', async () => {
+    const keyboardListeners = new Map<string, (event: { endCoordinates: { height: number } }) => void>();
+    const { Keyboard } = require('react-native');
+    jest.spyOn(Keyboard, 'addListener').mockImplementation(((event: string, listener: (event: { endCoordinates: { height: number } }) => void) => {
+      keyboardListeners.set(event, listener);
+      return { remove: jest.fn() };
+    }) as never);
+    const tree = await renderAt(DUO_UPRIGHT);
+    const [header] = tree.root.findAllByProps({ testID: 'reader-header' });
+    act(() => {
+      (header.props.onLayout as (event: unknown) => void)({ nativeEvent: { layout: { x: 0, y: 0, width: 669, height: 64 } } });
+    });
+    const input = responseInputs(tree.root)[0] as unknown as { props: { onFocus: () => void } };
+    act(() => {
+      input.props.onFocus();
+      keyboardListeners.get('keyboardWillShow')?.({ endCoordinates: { height: 400 } });
+    });
+
+    const readerPane = tree.root.findByType(DevotionalContent);
+    expect(isHiddenFromAccessibility(readerPane)).toBe(true);
+    const [back] = tree.root.findAllByProps({ accessibilityLabel: 'Go back' })
+      .filter((node) => typeof node.props.onPress === 'function');
+    expect(isHiddenFromAccessibility(back)).toBe(false);
+    // The first pane keeps exactly the header and the progress line.
+    expect(tree.root.findByType(FacingPanes).props.panes).toMatchObject({ axis: 'column', first: 66, gutter: 0 });
+
+    act(() => {
+      keyboardListeners.get('keyboardWillHide')?.({ endCoordinates: { height: 0 } });
+    });
+    expect(isHiddenFromAccessibility(tree.root.findByType(DevotionalContent))).toBe(false);
     act(() => tree.unmount());
   });
 });

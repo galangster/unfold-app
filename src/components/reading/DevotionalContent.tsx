@@ -80,6 +80,8 @@ interface DevotionalContentProps {
   onSectionLayout?: (section: ReaderSection, contentY: number, layoutGeneration: number) => void;
   /** 'facing' leaves the reflection to a facing page beside the reading. */
   reflectionPlacement?: 'inline' | 'facing';
+  reflectionInitialExpandedIndex?: number | null;
+  onReflectionExpandedIndexChange?: (index: number | null) => void;
   /** Opens a full-screen session for the closing prayer. */
   onStayWithPrayer?: () => void;
 }
@@ -146,6 +148,8 @@ export function DevotionalContent({
   onActOutcome,
   onSectionLayout,
   reflectionPlacement = 'inline',
+  reflectionInitialExpandedIndex,
+  onReflectionExpandedIndexChange,
   onStayWithPrayer,
 }: DevotionalContentProps) {
   const { colors, isDark } = useTheme();
@@ -550,6 +554,8 @@ export function DevotionalContent({
               onFocusInput={onReflectionInputFocus}
               layoutCommitSignal={reflectionLayoutCommitSignal}
               onKeyboardToolbarChange={onReflectionKeyboardToolbarChange}
+              initialExpandedIndex={reflectionInitialExpandedIndex}
+              onExpandedIndexChange={onReflectionExpandedIndexChange}
             />
           ) : (
             <View>

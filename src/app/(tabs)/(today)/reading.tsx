@@ -9,7 +9,7 @@ import { useAutoHide } from '@/hooks/useAutoHide';
 import { View, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet, TouchableOpacity, Keyboard, ScrollView, UIManager, Modal, type LayoutChangeEvent } from 'react-native';
 import { ReaderText as Text } from '@/components/reading/ReaderText';
 import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
-import { ADAPTIVE_PANE_MIN, ADAPTIVE_READABLE_MEASURE, adaptiveFrameStyle, adaptivePaneLane, resolveAdaptivePanes } from '@/lib/adaptive-layout';
+import { ADAPTIVE_PANE_MIN, ADAPTIVE_READABLE_MEASURE, ADAPTIVE_REGULAR_MIN_WIDTH, adaptiveFrameStyle, adaptivePaneLane, resolveAdaptivePanes } from '@/lib/adaptive-layout';
 import { FacingPanes } from '@/components/ui/FacingPanes';
 import { useRouter, useLocalSearchParams, useIsFocused } from 'expo-router';
 import { useModalNavigation } from '@/hooks/useModalNavigation';
@@ -157,6 +157,8 @@ const LIBRARY_TARGET_TOP_INSET = 220;
 const SECTION_TARGET_TOP_INSET = 24;
 /** Room the reflection toolbar keeps above the home indicator when the keyboard is closed. */
 const REFLECTION_TOOLBAR_CLEARANCE = 64;
+/** Height of the scroll progress line under the reader header. */
+const READING_PROGRESS_BAR_HEIGHT = 2;
 
 function parsePositiveInteger(value?: string | string[]): number | null {
   if (!value) return null;
@@ -172,8 +174,8 @@ function ReadingProgressBar({ progress, accentColor }: { progress: SharedValue<n
     opacity: progress.value > 0.005 ? 1 : 0,
   }));
   return (
-    <View style={{ height: 2, backgroundColor: 'transparent' }}>
-      <Animated.View style={[{ height: 2, borderRadius: 1, backgroundColor: accentColor }, barStyle]} />
+    <View style={{ height: READING_PROGRESS_BAR_HEIGHT, backgroundColor: 'transparent' }}>
+      <Animated.View style={[{ height: READING_PROGRESS_BAR_HEIGHT, borderRadius: 1, backgroundColor: accentColor }, barStyle]} />
     </View>
   );
 }
@@ -534,9 +536,32 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     && reflectionFacing
     && reflectionToolbar !== null
     && facingPanes.second - Math.max(0, keyboardHeight - adaptiveLayout.insetBottom) < ADAPTIVE_PANE_MIN;
+  // The raised desk keeps the reader header and progress line, so the way
+  // back stays in reach. Only the reading scroll area folds away.
+  const [readerHeaderHeight, setReaderHeaderHeight] = useState(0);
+  const handleReaderHeaderLayout = useCallback((event: LayoutChangeEvent) => {
+    setReaderHeaderHeight(event.nativeEvent.layout.height);
+  }, []);
+  const readerChromeHeight = readerHeaderHeight + READING_PROGRESS_BAR_HEIGHT;
   const displayedPanes = facingPanes && reflectionDeskRaised
-    ? { ...facingPanes, first: 0, gutter: 0, second: facingPanes.first + facingPanes.gutter + facingPanes.second }
+    ? {
+      ...facingPanes,
+      first: readerChromeHeight,
+      gutter: 0,
+      second: facingPanes.first + facingPanes.gutter + facingPanes.second - readerChromeHeight,
+    }
     : facingPanes;
+  // A pane change unmounts the one journal and mounts it in the other pane.
+  // Keep the open question of this day, so the new journal reopens it.
+  const reflectionScope = `${effectiveDevotionalId ?? ''}:${viewingDay}`;
+  const expandedReflectionRef = useRef<{ scope: string; index: number | null } | null>(null);
+  if (expandedReflectionRef.current && expandedReflectionRef.current.scope !== reflectionScope) {
+    expandedReflectionRef.current = null;
+  }
+  const initialExpandedReflection = expandedReflectionRef.current?.index;
+  const handleExpandedReflectionChange = useCallback((index: number | null) => {
+    expandedReflectionRef.current = { scope: reflectionScope, index };
+  }, [reflectionScope]);
   const practiceHostTab: PracticeTarget['hostTab'] = hostTab === '(study)' ? '(study)' : '(today)';
   const assignedPractice = getScripturePractice(currentDayData?.studyMethod);
   const canOfferPractice = Boolean(
@@ -2476,13 +2501,9 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
             <FacingPanes
               panes={displayedPanes}
               first={
-            <View
-              style={reflectionDeskRaised ? { flex: 1, overflow: 'hidden' } : { flex: 1 }}
-              accessibilityElementsHidden={reflectionDeskRaised}
-              importantForAccessibility={reflectionDeskRaised ? 'no-hide-descendants' : 'auto'}
-            >
+            <View style={reflectionDeskRaised ? { flex: 1, overflow: 'hidden' } : { flex: 1 }}>
             {/* Header */}
-            <View key={adaptiveLayout.fontScale} style={[adaptiveFrameStyle(adaptiveLayout.clusterMaxWidth), { backgroundColor: colors.background }]}>
+            <View key={adaptiveLayout.fontScale} testID="reader-header" onLayout={handleReaderHeaderLayout} style={[adaptiveFrameStyle(adaptiveLayout.clusterMaxWidth), { backgroundColor: colors.background }]}>
               <View
                 style={{
                   flexDirection: 'row',
@@ -2584,7 +2605,11 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
             <ReadingProgressBar progress={scrollProgress} accentColor={colors.accent} />
             {/* Premium nudge banner — audio teaser */}
             {/* Content - scrollable with day-transition fade */}
-            <Animated.View style={[{ flex: 1 }, scrollContentStyle]}>
+            <Animated.View
+              style={[{ flex: 1 }, scrollContentStyle]}
+              accessibilityElementsHidden={reflectionDeskRaised}
+              importantForAccessibility={reflectionDeskRaised ? 'no-hide-descendants' : 'auto'}
+            >
             <Animated.ScrollView
               ref={scrollViewRef}
               style={{ flex: 1 }}
@@ -2650,7 +2675,10 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                 dayNumber={viewingDay}
                 onOpenJournal={handleOpenJournal}
                 reflectionPlacement={reflectionPlacement}
-                onStayWithPrayer={handleStayWithPrayer}
+                reflectionInitialExpandedIndex={initialExpandedReflection}
+                onReflectionExpandedIndexChange={handleExpandedReflectionChange}
+                // A regular-width window by size alone, so large text keeps it.
+                onStayWithPrayer={adaptiveLayout.availableWidth >= ADAPTIVE_REGULAR_MIN_WIDTH ? handleStayWithPrayer : undefined}
               />
 
               {/* One section boundary before completion */}
@@ -2933,6 +2961,8 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                       fontSize={fontSize}
                       onOpenFullJournal={handleOpenJournal}
                       onKeyboardToolbarChange={handleReflectionToolbarChange}
+                      initialExpandedIndex={initialExpandedReflection}
+                      onExpandedIndexChange={handleExpandedReflectionChange}
                       scrollViewRef={facingScrollRef}
                       bottomInset={insets.bottom + REFLECTION_TOOLBAR_CLEARANCE}
                     />
