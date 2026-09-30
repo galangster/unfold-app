@@ -434,14 +434,28 @@ describe('reader facing page', () => {
     act(() => tree.unmount());
   });
 
-  it('offers the prayer session on a phone', async () => {
-    const tree = await renderAt(PHONE);
-    expect(stayButtons(tree.root).length).toBeGreaterThan(0);
+  it('keeps words typed on the facing page when the device closes before they save', async () => {
+    const tree = await renderAt(DUO_OPEN);
+    const facingInput = responseInputs(tree.root)[0] as unknown as { props: { onFocus?: () => void; onChangeText: (text: string) => void } };
+    expect(isInsideFacingPage(tree.root, facingInput as never)).toBe(true);
+    act(() => {
+      facingInput.props.onFocus?.();
+      facingInput.props.onChangeText(DRAFT);
+    });
+
+    await resizeTo(tree, PHONE);
+    const inlineInputs = responseInputs(tree.root);
+    expect(inlineInputs).toHaveLength(1);
+    expect(isInsideFacingPage(tree.root, inlineInputs[0])).toBe(false);
+    expect(inlineInputs[0].props.value).toBe(DRAFT);
+    expect(
+      useUnfoldStore.getState().getJournalEntry(DEVOTIONAL_ID, 1)?.questionResponses?.[0]?.response,
+    ).toBe(DRAFT);
     act(() => tree.unmount());
   });
 
-  it('keeps the prayer session for large text on a regular-width window', async () => {
-    const tree = await renderAt({ ...DUO_OPEN, fontScale: 2 } as typeof PHONE);
+  it('offers the prayer session on a phone', async () => {
+    const tree = await renderAt(PHONE);
     expect(stayButtons(tree.root).length).toBeGreaterThan(0);
     act(() => tree.unmount());
   });

@@ -147,6 +147,12 @@ describe('InlineReflectionJournal across a remount', () => {
     act(() => tree.unmount());
   });
 
+  it('opens the first question when the remembered one is past the end of the day', () => {
+    const tree = mount(1, { initialExpandedIndex: 5 });
+    expect(openInputs(tree).map((input) => input.props.accessibilityLabel)).toEqual([`Your response to: ${QUESTIONS[0]}`]);
+    act(() => tree.unmount());
+  });
+
   it('opens no question when it is given none', () => {
     const tree = mount(1, { initialExpandedIndex: null });
     expect(openInputs(tree)).toHaveLength(0);

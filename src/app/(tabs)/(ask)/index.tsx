@@ -33,8 +33,8 @@ import {
   CrownIcon,
   List,
   NotePencil,
+  SidebarSimpleIcon,
 } from '@/components/icons';
-import { SidebarSimpleIcon } from 'phosphor-react-native/src/icons/SidebarSimple';
 import * as Haptics from 'expo-haptics';
 import {
   useSharedValue,

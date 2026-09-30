@@ -197,6 +197,13 @@ describe('facing panes', () => {
     });
   });
 
+  it('stacks a tall window that is wide enough for a row when the caller can stack', () => {
+    const tallWide = resolveAdaptiveLayout({ width: 1032, height: 1376, fontScale: 1, insetTop: 24, insetBottom: 20 });
+    expect(tallWide.usesSplit).toBe(true);
+    expect(resolveAdaptivePanes(tallWide, { stacked: true })?.axis).toBe('column');
+    expect(resolveAdaptivePanes(tallWide)?.axis).toBe('row');
+  });
+
   it('caps wide windows to the split measure around the midline', () => {
     const wide = resolveAdaptiveLayout({ width: 1366, height: 1024, fontScale: 1 });
     expect(resolveAdaptivePanes(wide)).toEqual({ axis: 'row', lead: 193, first: 470, second: 470, gutter: ADAPTIVE_FOLD_GUTTER });

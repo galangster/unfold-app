@@ -62,8 +62,7 @@ jest.mock('@/lib/use-companion-chat', () => ({
     startNewConversation: jest.fn(),
   }),
 }));
-jest.mock('@/components/icons', () => ({ CrownIcon: () => null, List: () => null, NotePencil: () => null }));
-jest.mock('phosphor-react-native/src/icons/SidebarSimple', () => ({ SidebarSimpleIcon: () => null }));
+jest.mock('@/components/icons', () => ({ CrownIcon: () => null, List: () => null, NotePencil: () => null, SidebarSimpleIcon: () => null }));
 jest.mock('@/components/CompanionOrb', () => ({ CompanionOrb: () => null }));
 jest.mock('@/components/ProfileEntryButton', () => ({ ProfileEntryButton: () => null }));
 jest.mock('@/components/ScriptureTapSheet', () => ({ ScriptureTapSheet: () => null }));
@@ -178,7 +177,7 @@ describe('Ask docked conversation history', () => {
   });
 
   it('shows a sidebar glyph on a paired window, filled while the history is in view', () => {
-    const { SidebarSimpleIcon } = jest.requireMock('phosphor-react-native/src/icons/SidebarSimple');
+    const { SidebarSimpleIcon } = jest.requireMock('@/components/icons');
     const tree = render(PAIRED);
     expect(toggleGlyph(tree).type).toBe(SidebarSimpleIcon);
     expect(toggleGlyph(tree).props.weight).toBe('fill');

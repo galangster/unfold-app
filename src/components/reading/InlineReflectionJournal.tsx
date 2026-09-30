@@ -113,8 +113,11 @@ export function InlineReflectionJournal({
 
   // Track which question is expanded
   // Auto-open the first question so users discover the inline journal
+  // A remembered question past the end of this day's list opens the first.
   const [expandedIndex, setExpandedIndex] = useState<number | null>(
-    initialExpandedIndex !== undefined ? initialExpandedIndex : 0
+    initialExpandedIndex === undefined || (initialExpandedIndex !== null && initialExpandedIndex >= questions.length)
+      ? 0
+      : initialExpandedIndex
   );
 
   // Local response state (before debounced save)

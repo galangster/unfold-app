@@ -158,16 +158,8 @@ export function resolveAdaptivePanes(
   options: { stacked?: boolean } = {},
 ): AdaptivePanes | null {
   const gutter = ADAPTIVE_FOLD_GUTTER;
-  if (layout.usesSplit) {
-    const midline = layout.width / 2;
-    const half = ADAPTIVE_SPLIT_MEASURE / 2;
-    const leadingRoom = Math.min(midline - layout.insetLeft, half);
-    const trailingRoom = Math.min(midline - layout.insetRight, half);
-    const first = leadingRoom - gutter / 2;
-    const second = trailingRoom - gutter / 2;
-    if (first < ADAPTIVE_PANE_MIN || second < ADAPTIVE_PANE_MIN) return null;
-    return { axis: 'row', lead: midline - layout.insetLeft - leadingRoom, first, second, gutter };
-  }
+  // A caller that can stack follows Apple's split arrangement: a window taller
+  // than wide divides top and bottom, even when it is wide enough for a row.
   if (
     options.stacked &&
     !layout.isCompact &&
@@ -177,8 +169,19 @@ export function resolveAdaptivePanes(
     const midline = layout.height / 2;
     const first = midline - layout.insetTop - gutter / 2;
     const second = midline - layout.insetBottom - gutter / 2;
+    if (first >= ADAPTIVE_PANE_MIN && second >= ADAPTIVE_PANE_MIN) {
+      return { axis: 'column', lead: 0, first, second, gutter };
+    }
+  }
+  if (layout.usesSplit) {
+    const midline = layout.width / 2;
+    const half = ADAPTIVE_SPLIT_MEASURE / 2;
+    const leadingRoom = Math.min(midline - layout.insetLeft, half);
+    const trailingRoom = Math.min(midline - layout.insetRight, half);
+    const first = leadingRoom - gutter / 2;
+    const second = trailingRoom - gutter / 2;
     if (first < ADAPTIVE_PANE_MIN || second < ADAPTIVE_PANE_MIN) return null;
-    return { axis: 'column', lead: 0, first, second, gutter };
+    return { axis: 'row', lead: midline - layout.insetLeft - leadingRoom, first, second, gutter };
   }
   return null;
 }

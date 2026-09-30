@@ -99,6 +99,7 @@ export { ShareNetworkIcon } from 'phosphor-react-native/src/icons/ShareNetwork';
 export { ShieldIcon } from 'phosphor-react-native/src/icons/Shield';
 export { ShieldCheckIcon } from 'phosphor-react-native/src/icons/ShieldCheck';
 export { ShuffleIcon } from 'phosphor-react-native/src/icons/Shuffle';
+export { SidebarSimpleIcon } from 'phosphor-react-native/src/icons/SidebarSimple';
 export { SmileyIcon } from 'phosphor-react-native/src/icons/Smiley';
 export { SmileyBlankIcon } from 'phosphor-react-native/src/icons/SmileyBlank';
 export { SmileyMehIcon } from 'phosphor-react-native/src/icons/SmileyMeh';
