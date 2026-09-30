@@ -3,10 +3,10 @@ import {
   View,
   ScrollView,
   Text,
-  Dimensions,
   StyleSheet,
   TouchableOpacity,
   Alert,
+  useWindowDimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -52,8 +52,6 @@ import { useGuardedBack } from '@/hooks/useGuardedBack';
 import { logger } from '@/lib/logger';
 import { computeRecapData, type RecapData } from '@/lib/recap-stats';
 import { SparkleBurst } from '@/components/SparkleBurst';
-
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const TOTAL_CARDS = 8;
 const CLOSE_HIT_SLOP = { top: 12, bottom: 12, left: 12, right: 12 };
@@ -196,13 +194,17 @@ const CARD_DURATIONS = [
 // ─── Floating Ember Particles ─────────────────────────────────
 const FloatingEmber = React.memo(function FloatingEmber({ index, color }: { index: number; color: string }) {
   const reducedMotion = useReducedMotion();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  // Rise progress runs 0 to -1; the live window height scales it, so an open,
+  // close, or resize moves the embers without a restart.
   const translateY = useSharedValue(0);
   const translateX = useSharedValue(0);
   const opacity = useSharedValue(0);
 
   const size = 1.5 + (index % 4) * 1.2;
-  const startX = (index * 47 + 13) % SCREEN_WIDTH;
-  const startY = SCREEN_HEIGHT * 0.4 + ((index * 73) % (SCREEN_HEIGHT * 0.5));
+  const startX = (index * 47 + 13) % windowWidth;
+  const startY = windowHeight * 0.4 + ((index * 73) % (windowHeight * 0.5));
+  const riseDistance = windowHeight * 0.6;
   const driftDuration = 3500 + (index % 5) * 1200;
   const riseDuration = 5000 + (index % 4) * 2000;
 
@@ -221,7 +223,7 @@ const FloatingEmber = React.memo(function FloatingEmber({ index, color }: { inde
     translateY.value = withDelay(
       index * 150,
       withRepeat(
-        withTiming(-SCREEN_HEIGHT * 0.6, { duration: riseDuration, easing: Easing.linear }),
+        withTiming(-1, { duration: riseDuration, easing: Easing.linear }),
         -1,
       ),
     );
@@ -248,7 +250,7 @@ const FloatingEmber = React.memo(function FloatingEmber({ index, color }: { inde
     opacity: opacity.value,
     transform: [
       { translateX: startX + translateX.value },
-      { translateY: startY + translateY.value },
+      { translateY: startY + translateY.value * riseDistance },
     ],
   }));
 
@@ -1089,6 +1091,7 @@ export default function UnfoldedScreen() {
   const router = useRouter();
   const guardedBack = useGuardedBack();
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
   const [currentCard, setCurrentCard] = useState(0);
   const [paused, setPaused] = useState(false);
   const [cardViewportHeight, setCardViewportHeight] = useState(0);
@@ -1194,7 +1197,7 @@ export default function UnfoldedScreen() {
   const tapGesture = Gesture.Tap()
     .onEnd((e) => {
       const tapX = e.x;
-      if (tapX < SCREEN_WIDTH * 0.3) {
+      if (tapX < windowWidth * 0.3) {
         runOnJS(goPrev)();
       } else {
         if (currentCard < TOTAL_CARDS - 1) {

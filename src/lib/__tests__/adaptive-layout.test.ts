@@ -3,6 +3,11 @@ import {
   ADAPTIVE_READABLE_MEASURE,
   ADAPTIVE_SHEET_MEASURE,
   ADAPTIVE_SPLIT_MEASURE,
+  ADAPTIVE_FOLD_GUTTER,
+  ADAPTIVE_PANE_MIN,
+  ADAPTIVE_STACKED_MIN_HEIGHT,
+  adaptivePaneLane,
+  resolveAdaptivePanes,
   adaptiveFrameStyle,
   adaptiveSafeGutterStyle,
   adaptiveSheetPlacement,
@@ -155,5 +160,113 @@ describe('adaptive helpers', () => {
         fallbackHeight: 768,
       }),
     ).toBe(720);
+  });
+});
+
+describe('facing panes', () => {
+  // iPhone Duo sizes are reported from the Xcode 27.1 beta simulator, not published by Apple.
+  it('keeps the closed outer display as one compact column beside its side rail', () => {
+    const outer = resolveAdaptiveLayout({ width: 466, height: 678, fontScale: 1, insetRight: 80 });
+    expect(outer.isCompact).toBe(true);
+    expect(outer.usesSplit).toBe(false);
+    expect(resolveAdaptivePanes(outer, { stacked: true })).toBeNull();
+  });
+
+  it('pairs an open, wider-than-tall display below the 840pt split and centers the gutter on the fold', () => {
+    const inner = resolveAdaptiveLayout({ width: 951, height: 669, fontScale: 1, insetLeft: 68, insetRight: 80 });
+    expect(inner.availableWidth).toBe(803);
+    expect(inner.usesSplit).toBe(true);
+
+    const panes = resolveAdaptivePanes(inner);
+    expect(panes).toEqual({ axis: 'row', lead: 0, first: 387.5, second: 375.5, gutter: ADAPTIVE_FOLD_GUTTER });
+    const gutterCenter = inner.insetLeft + panes!.lead + panes!.first + panes!.gutter / 2;
+    expect(gutterCenter).toBe(inner.width / 2);
+  });
+
+  it('stacks an open display turned upright only when the caller opts in', () => {
+    const upright = resolveAdaptiveLayout({ width: 669, height: 951, fontScale: 1, insetTop: 50, insetBottom: 20 });
+    expect(upright.isCompact).toBe(false);
+    expect(upright.usesSplit).toBe(false);
+    expect(resolveAdaptivePanes(upright)).toBeNull();
+    expect(resolveAdaptivePanes(upright, { stacked: true })).toEqual({
+      axis: 'column',
+      lead: 0,
+      first: 405.5,
+      second: 435.5,
+      gutter: ADAPTIVE_FOLD_GUTTER,
+    });
+  });
+
+  it('stacks a tall window that is wide enough for a row when the caller can stack', () => {
+    const tallWide = resolveAdaptiveLayout({ width: 1032, height: 1376, fontScale: 1, insetTop: 24, insetBottom: 20 });
+    expect(tallWide.usesSplit).toBe(true);
+    expect(resolveAdaptivePanes(tallWide, { stacked: true })?.axis).toBe('column');
+    expect(resolveAdaptivePanes(tallWide)?.axis).toBe('row');
+  });
+
+  it('caps wide windows to the split measure around the midline', () => {
+    const wide = resolveAdaptiveLayout({ width: 1366, height: 1024, fontScale: 1 });
+    expect(resolveAdaptivePanes(wide)).toEqual({ axis: 'row', lead: 193, first: 470, second: 470, gutter: ADAPTIVE_FOLD_GUTTER });
+  });
+
+  it('never pairs at large text sizes or in short windows', () => {
+    const largeType = resolveAdaptiveLayout({ width: 951, height: 669, fontScale: 1.6 });
+    expect(resolveAdaptivePanes(largeType, { stacked: true })).toBeNull();
+
+    const shortUpright = resolveAdaptiveLayout({ width: 620, height: 670, fontScale: 1 });
+    expect(resolveAdaptivePanes(shortUpright, { stacked: true })).toBeNull();
+  });
+
+  it('stacks the upright Duo content area and lets the pane-size guard decide', () => {
+    expect(ADAPTIVE_STACKED_MIN_HEIGHT).toBe(ADAPTIVE_PANE_MIN * 2 + ADAPTIVE_FOLD_GUTTER);
+    expect(ADAPTIVE_STACKED_MIN_HEIGHT).toBe(680);
+
+    const content = resolveAdaptiveLayout({ width: 669, height: 703, fontScale: 1 });
+    expect(resolveAdaptivePanes(content, { stacked: true })).toEqual({
+      axis: 'column',
+      lead: 0,
+      first: 331.5,
+      second: 331.5,
+      gutter: ADAPTIVE_FOLD_GUTTER,
+    });
+
+    // Tall enough overall, but the top inset leaves the upper pane under 320pt.
+    const inset = resolveAdaptiveLayout({ width: 669, height: 740, fontScale: 1, insetTop: 50 });
+    expect(inset.availableHeight).toBeGreaterThanOrEqual(ADAPTIVE_STACKED_MIN_HEIGHT);
+    expect(resolveAdaptivePanes(inset, { stacked: true })).toBeNull();
+  });
+});
+
+describe('pane lane', () => {
+  it('floats a control in the safe area, or in the second page of an open display', () => {
+    const phone = resolveAdaptiveLayout({ width: 390, height: 844, fontScale: 1 });
+    expect(adaptivePaneLane(phone, resolveAdaptivePanes(phone), { margin: 16 })).toEqual({ left: 16, width: 358 });
+
+    const inner = resolveAdaptiveLayout({ width: 951, height: 669, fontScale: 1, insetLeft: 68, insetRight: 80 });
+    const lane = adaptivePaneLane(inner, resolveAdaptivePanes(inner));
+    expect(lane.left).toBeGreaterThan(inner.width / 2);
+    expect(lane).toEqual({ left: 495.5, width: 375.5 });
+
+    const docked = adaptivePaneLane(inner, resolveAdaptivePanes(inner), { margin: 16, maxWidth: 300 });
+    expect(docked.width).toBe(300);
+    expect(docked.left + docked.width / 2).toBe(lane.left + lane.width / 2);
+  });
+
+  it('floats a control in the first page of an open display on request', () => {
+    const inner = resolveAdaptiveLayout({ width: 951, height: 669, fontScale: 1, insetLeft: 68, insetRight: 80 });
+    const lane = adaptivePaneLane(inner, resolveAdaptivePanes(inner), { pane: 'first' });
+    expect(lane).toEqual({ left: 68, width: 387.5 });
+    expect(lane.left + lane.width).toBeLessThan(inner.width / 2);
+
+    const wide = resolveAdaptiveLayout({ width: 1366, height: 1024, fontScale: 1 });
+    expect(adaptivePaneLane(wide, resolveAdaptivePanes(wide), { pane: 'first', margin: 16 })).toEqual({ left: 209, width: 438 });
+
+    const phone = resolveAdaptiveLayout({ width: 390, height: 844, fontScale: 1 });
+    expect(adaptivePaneLane(phone, resolveAdaptivePanes(phone), { pane: 'first' })).toEqual({ left: 0, width: 390 });
+  });
+
+  it('ignores stacked panes, which leave the full width to floating controls', () => {
+    const upright = resolveAdaptiveLayout({ width: 669, height: 951, fontScale: 1, insetTop: 50, insetBottom: 20 });
+    expect(adaptivePaneLane(upright, resolveAdaptivePanes(upright, { stacked: true }))).toEqual({ left: 0, width: 669 });
   });
 });

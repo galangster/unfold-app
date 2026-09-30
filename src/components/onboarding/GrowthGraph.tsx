@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { View, Text, Dimensions } from 'react-native';
+import { View, Text } from 'react-native';
 import {
   Canvas,
   Path,
@@ -24,9 +24,10 @@ import { FontFamily } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Typography } from '@/constants/typography';
 import type { ColorTheme } from '@/constants/colors';
+import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const GRAPH_WIDTH = SCREEN_WIDTH - Spacing['6'] * 2 - 32;
+// Page padding plus canvas margins, subtracted from the onboarding column.
+const GRAPH_WIDTH_INSET = Spacing['6'] * 2 + 32;
 const GRAPH_HEIGHT = 160;
 
 const LABELS = ['3 Days', '7 Days', '30 Days'];
@@ -54,16 +55,20 @@ interface GrowthGraphProps {
 export function GrowthGraph({ colors, animationDelay = 0, onDrawComplete }: GrowthGraphProps) {
   const accent = colors.accent;
   const reducedMotion = useReducedMotion();
+  // The onboarding column is the cluster measure inside the side safe areas.
+  // Read it live so an open, close, or resize keeps the graph inside it.
+  const { clusterMaxWidth } = useAdaptiveLayout();
+  const graphWidth = clusterMaxWidth - GRAPH_WIDTH_INSET;
   const path = useMemo(
-    () => Skia.Path.MakeFromSVGString(buildCurvePath(GRAPH_WIDTH, GRAPH_HEIGHT)),
-    [],
+    () => Skia.Path.MakeFromSVGString(buildCurvePath(graphWidth, GRAPH_HEIGHT)),
+    [graphWidth],
   );
   const fillPath = useMemo(
-    () => Skia.Path.MakeFromSVGString(buildFillPath(GRAPH_WIDTH, GRAPH_HEIGHT)),
-    [],
+    () => Skia.Path.MakeFromSVGString(buildFillPath(graphWidth, GRAPH_HEIGHT)),
+    [graphWidth],
   );
 
-  // Animate clip width from 0 → GRAPH_WIDTH (reveals line left to right)
+  // Animate clip width from 0 → graphWidth (reveals line left to right)
   const clipProgress = useSharedValue(0);
   const fillOpacity = useSharedValue(0);
 
@@ -72,24 +77,24 @@ export function GrowthGraph({ colors, animationDelay = 0, onDrawComplete }: Grow
     return {
       x: 0,
       y: 0,
-      width: clipProgress.value * GRAPH_WIDTH,
+      width: clipProgress.value * graphWidth,
       height: GRAPH_HEIGHT,
     };
   });
 
   // Dot position — tracks the clip rect's leading edge exactly.
-  // dotX = clipProgress * GRAPH_WIDTH (same as the clip rect width).
+  // dotX = clipProgress * graphWidth (same as the clip rect width).
   // dotY = solve the bezier y for that x by finding the t that produces dotX,
   // then evaluating y at that t. We use Newton's method (3 iterations) to invert
   // the bezier x(t) → t, then evaluate y(t).
   const dotX = useDerivedValue(() => {
-    return clipProgress.value * GRAPH_WIDTH;
+    return clipProgress.value * graphWidth;
   });
 
   const dotY = useDerivedValue(() => {
-    const targetX = clipProgress.value * GRAPH_WIDTH;
+    const targetX = clipProgress.value * graphWidth;
     // Bezier control points (x-coordinates)
-    const x0 = 0, x1 = GRAPH_WIDTH * 0.35, x2 = GRAPH_WIDTH * 0.5, x3 = GRAPH_WIDTH;
+    const x0 = 0, x1 = graphWidth * 0.35, x2 = graphWidth * 0.5, x3 = graphWidth;
     // Bezier control points (y-coordinates)
     const y0 = GRAPH_HEIGHT * 0.92, y1 = GRAPH_HEIGHT * 0.85, y2 = GRAPH_HEIGHT * 0.4, y3 = GRAPH_HEIGHT * 0.08;
 
@@ -149,7 +154,7 @@ export function GrowthGraph({ colors, animationDelay = 0, onDrawComplete }: Grow
 
       {/* Canvas */}
       <View style={{ height: GRAPH_HEIGHT + 40, marginHorizontal: 4 }}>
-        <Canvas style={{ width: GRAPH_WIDTH + 24, height: GRAPH_HEIGHT + 24 }}>
+        <Canvas style={{ width: graphWidth + 24, height: GRAPH_HEIGHT + 24 }}>
         <Group transform={[{ translateX: 12 }, { translateY: 12 }]}>
           {/* Gradient fill under curve (fades in after draw) */}
           {fillPath && (
@@ -189,7 +194,7 @@ export function GrowthGraph({ colors, animationDelay = 0, onDrawComplete }: Grow
               fontFamily: FontFamily.ui,
               fontSize: 11,
               color: colors.textHint,
-              width: GRAPH_WIDTH / 3,
+              width: graphWidth / 3,
               textAlign: i === 0 ? 'left' : i === 2 ? 'right' : 'center',
             }}>
               {label}

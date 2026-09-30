@@ -7,6 +7,7 @@ import type { ReflectionKeyboardToolbarState } from './ReflectionQuestionNav';
 import Animated, {
   FadeIn,
   FadeInDown,
+  LayoutAnimationConfig,
   useReducedMotion,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -49,6 +50,15 @@ interface InlineReflectionJournalProps {
   onFocusInput?: (contentY: number) => void;
   layoutCommitSignal?: number;
   onKeyboardToolbarChange?: (toolbar: ReflectionKeyboardToolbarState | null) => void;
+  /** The question open on mount. Null opens none. Defaults to the first. */
+  initialExpandedIndex?: number | null;
+  /** Reports each change of the open question, so a remount can reopen it. */
+  onExpandedIndexChange?: (index: number | null) => void;
+  /**
+   * Plays the question cards' entrance on mount. A pane handoff passes false,
+   * so the journal moves without replaying it. Read once, on mount.
+   */
+  animateEntrance?: boolean;
 }
 
 type ReflectionSaveState = 'saving' | 'saved' | 'error';
@@ -77,9 +87,14 @@ export function InlineReflectionJournal({
   onFocusInput,
   layoutCommitSignal,
   onKeyboardToolbarChange,
+  initialExpandedIndex,
+  onExpandedIndexChange,
+  animateEntrance = true,
 }: InlineReflectionJournalProps) {
   const { colors, isDark } = useTheme();
   const reducedMotion = useReducedMotion();
+  // Latched, so a later prop change never swaps the wrapper and remounts the cards.
+  const [skipEntrance] = useState(!animateEntrance);
   const typography = getReflectionTypography(fontSize);
   const premiumPolicy = usePremiumAccessPolicy();
   const editable = premiumPolicy === 'granted';
@@ -98,7 +113,12 @@ export function InlineReflectionJournal({
 
   // Track which question is expanded
   // Auto-open the first question so users discover the inline journal
-  const [expandedIndex, setExpandedIndex] = useState<number | null>(0);
+  // A remembered question past the end of this day's list opens the first.
+  const [expandedIndex, setExpandedIndex] = useState<number | null>(
+    initialExpandedIndex === undefined || (initialExpandedIndex !== null && initialExpandedIndex >= questions.length)
+      ? 0
+      : initialExpandedIndex
+  );
 
   // Local response state (before debounced save)
   const [localResponses, setLocalResponses] = useState<Map<number, string>>(new Map());
@@ -494,6 +514,10 @@ export function InlineReflectionJournal({
   }, [cancelPendingFocus]);
 
   useEffect(() => {
+    onExpandedIndexChange?.(expandedIndex);
+  }, [expandedIndex, onExpandedIndexChange]);
+
+  useEffect(() => {
     if (!onKeyboardToolbarChange) return;
     if (!toolbarActive || expandedIndex === null) {
       onKeyboardToolbarChange(null);
@@ -562,7 +586,7 @@ export function InlineReflectionJournal({
     [localResponses, existingEntry]
   );
 
-  return (
+  const journal = (
     <View>
       <View
         style={{
@@ -683,6 +707,10 @@ export function InlineReflectionJournal({
       </Animated.View>
     </View>
   );
+
+  // Skips the entering animations of this mount only. A question opened
+  // later still animates.
+  return skipEntrance ? <LayoutAnimationConfig skipEntering>{journal}</LayoutAnimationConfig> : journal;
 }
 
 /**

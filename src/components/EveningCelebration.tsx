@@ -24,8 +24,8 @@ import {
   View,
   Text,
   TouchableOpacity,
-  Dimensions,
   StyleSheet,
+  useWindowDimensions,
   Modal,
 } from 'react-native';
 import Animated, {
@@ -51,9 +51,6 @@ import {
   snapTwinklePeriod,
   starFrame,
 } from '@/lib/evening-twinkle';
-
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const DIAGONAL = Math.sqrt(SCREEN_WIDTH ** 2 + SCREEN_HEIGHT ** 2);
 
 // ─── Evening messages (sans-serif, single line) ──────────────────────────────
 const EVENING_MESSAGES = [
@@ -165,8 +162,9 @@ function Star({
 }
 
 // ─── Expanding dark circle ───────────────────────────────────────────────────
-function DarkExpansion({ bgColor }: { bgColor: string }) {
+function DarkExpansion({ bgColor, width, height }: { bgColor: string; width: number; height: number }) {
   const scale = useSharedValue(0);
+  const diagonal = Math.sqrt(width ** 2 + height ** 2);
 
   useEffect(() => {
     scale.value = withTiming(1, {
@@ -177,11 +175,11 @@ function DarkExpansion({ bgColor }: { bgColor: string }) {
 
   const style = useAnimatedStyle(() => ({
     position: 'absolute' as const,
-    width: DIAGONAL,
-    height: DIAGONAL,
-    borderRadius: DIAGONAL / 2,
-    left: SCREEN_WIDTH / 2 - DIAGONAL / 2,
-    top: SCREEN_HEIGHT / 2 - DIAGONAL / 2,
+    width: diagonal,
+    height: diagonal,
+    borderRadius: diagonal / 2,
+    left: width / 2 - diagonal / 2,
+    top: height / 2 - diagonal / 2,
     backgroundColor: bgColor,
     transform: [{ scale: scale.value }],
   }));
@@ -202,6 +200,8 @@ export function EveningCelebration({
   message,
 }: EveningCelebrationProps) {
   const { reducedMotion } = useAccessibleAnimation();
+  // Live window size: an open or closed folding display resizes the sky.
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
   // Evening celebration is ALWAYS rendered with the dark night-sky aesthetic
   // regardless of the user's theme preference. A white "evening" screen with
@@ -218,14 +218,15 @@ export function EveningCelebration({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, message]);
 
-  // Generate stars fresh each time celebration shows
-  const stars = useMemo(() => {
+  // Generate stars fresh each time celebration shows. Positions are fractions
+  // of the window, so a resize moves the sky without reshuffling it.
+  const starField = useMemo(() => {
     if (!visible) return [];
     const count = 55;
     return Array.from({ length: count }, (_, i) => ({
       id: i,
-      x: Math.random() * (SCREEN_WIDTH - 4),
-      y: Math.random() * (SCREEN_HEIGHT - 4),
+      x: Math.random(),
+      y: Math.random(),
       size: Math.random() * 2.5 + 1.2,
       // Stagger appearance: first stars appear at 200ms, last at ~2000ms
       appearDelay:
@@ -238,6 +239,14 @@ export function EveningCelebration({
       brightness: 0.4 + Math.random() * 0.6,
     }));
   }, [visible]);
+  const stars = useMemo(
+    () => starField.map((star) => ({
+      ...star,
+      x: star.x * (windowWidth - 4),
+      y: star.y * (windowHeight - 4),
+    })),
+    [starField, windowWidth, windowHeight],
+  );
 
   // Shared star-field clocks (see lib/evening-twinkle.ts): `intro` counts the
   // first SKY_INTRO_MS once, `phase` cycles forever. Every star derives its
@@ -331,7 +340,7 @@ export function EveningCelebration({
         <Animated.View style={[StyleSheet.absoluteFill, overlayStyle]}>
 
           {/* Expanding dark circle fills the screen */}
-          {!reducedMotion && <DarkExpansion bgColor={overlayBg} />}
+          {!reducedMotion && <DarkExpansion bgColor={overlayBg} width={windowWidth} height={windowHeight} />}
           {reducedMotion && (
             <View style={[StyleSheet.absoluteFill, { backgroundColor: overlayBg }]} />
           )}

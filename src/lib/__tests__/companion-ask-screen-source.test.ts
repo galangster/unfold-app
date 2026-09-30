@@ -139,7 +139,7 @@ describe('drawer edge-swipe gesture wired at the screen root', () => {
   it('imports and calls useDrawerGesture with the screen\'s own drawer state', () => {
     expect(source).toContain('useDrawerGesture');
     expect(source).toMatch(
-      /useDrawerGesture\(drawerTranslateX, drawerOpen, handleDrawerOpen, handleDrawerClose\)/,
+      /useDrawerGesture\(drawerTranslateX, drawerOpen, handleDrawerOpen, handleDrawerClose, !docked\)/,
     );
   });
 
@@ -160,9 +160,9 @@ describe('errors live on the bubble, not a banner', () => {
 
 describe('asymmetric safe areas and drawer resize', () => {
   it('pads the header and composer with live left and right insets', () => {
-    expect(source).toContain('paddingLeft: Spacing[\'4\'] + insets.left');
-    expect(source).toContain('paddingRight: Spacing[\'4\'] + insets.right');
-    expect(source).toContain('adaptiveSafeGutterStyle(insets.left, insets.right)');
+    // One wrapper owns the safe areas in every layout, so the conversation
+    // column never needs its own insets.
+    expect(source).toMatch(/paddingTop: insets\.top \}, adaptiveSafeGutterStyle\(insets\.left, insets\.right\)\]\}>\s*<FacingPanes/);
   });
 
   it('rewrites the closed drawer translation when drawer width changes', () => {
@@ -175,7 +175,7 @@ describe('drawer edge-swipe gesture wired at the screen root', () => {
   it('imports and calls useDrawerGesture with the screen\'s own drawer state', () => {
     expect(source).toContain('useDrawerGesture');
     expect(source).toMatch(
-      /useDrawerGesture\(drawerTranslateX, drawerOpen, handleDrawerOpen, handleDrawerClose\)/,
+      /useDrawerGesture\(drawerTranslateX, drawerOpen, handleDrawerOpen, handleDrawerClose, !docked\)/,
     );
   });
 

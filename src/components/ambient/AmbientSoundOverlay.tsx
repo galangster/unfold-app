@@ -4,11 +4,12 @@ import {
   findNodeHandle,
   Platform,
   Pressable,
-  useWindowDimensions,
   View,
 } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
+import { adaptivePaneLane, resolveAdaptivePanes } from '@/lib/adaptive-layout';
 import { XIcon } from '@/components/icons';
 import { FontFamily } from '@/constants/fonts';
 import { useAmbientSoundVisibility } from '@/hooks/useAmbientSoundVisibility';
@@ -82,8 +83,10 @@ function EndedTimerNotice({
 
 function EnabledAmbientSoundOverlay() {
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
-  const dockWidth = Math.min(width - 32, 528);
+  const adaptiveLayout = useAdaptiveLayout();
+  // The dock centers in the safe area. A paired window centers it in the
+  // trailing pane instead, so its controls never sit on the fold.
+  const dock = adaptivePaneLane(adaptiveLayout, resolveAdaptivePanes(adaptiveLayout), { margin: 16, maxWidth: 528 });
   const pathname = usePathname();
   const router = useRouter();
   const { colors } = useTheme();
@@ -231,7 +234,7 @@ function EnabledAmbientSoundOverlay() {
           style={{
             position: 'absolute',
             top: insets.top + 8,
-            left: 16,
+            left: 16 + insets.left,
             padding: 14,
             backgroundColor: colors.backgroundElevated,
             borderRadius: 14,
@@ -245,7 +248,7 @@ function EnabledAmbientSoundOverlay() {
       {audioEnabled && headerVisible ? (
         <View
           pointerEvents="box-none"
-          style={{ position: 'absolute', top: insets.top + 4, right: 12 }}
+          style={{ position: 'absolute', top: insets.top + 4, right: 12 + insets.right }}
         >
           <AmbientMusicEntry />
         </View>
@@ -256,9 +259,9 @@ function EnabledAmbientSoundOverlay() {
           pointerEvents="box-none"
           style={{
             position: 'absolute',
-            left: (width - dockWidth) / 2,
+            left: dock.left,
             bottom: insets.bottom + 64,
-            width: dockWidth,
+            width: dock.width,
             gap: 8,
           }}
         >

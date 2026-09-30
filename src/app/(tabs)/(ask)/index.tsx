@@ -20,12 +20,20 @@ import { GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
-import { adaptiveFrameStyle, adaptiveSafeGutterStyle, companionDrawerClosedTranslate, companionDrawerWidth } from '@/lib/adaptive-layout';
+import {
+  adaptiveFrameStyle,
+  adaptiveSafeGutterStyle,
+  companionDrawerClosedTranslate,
+  companionDrawerWidth,
+  resolveAdaptivePanes,
+} from '@/lib/adaptive-layout';
+import { FacingPanes } from '@/components/ui/FacingPanes';
 import { useFocusEffect, useIsFocused } from 'expo-router';
 import {
   CrownIcon,
   List,
   NotePencil,
+  SidebarSimpleIcon,
 } from '@/components/icons';
 import * as Haptics from 'expo-haptics';
 import {
@@ -154,6 +162,19 @@ export default function CompanionScreen() {
   const adaptiveLayout = useAdaptiveLayout();
   const askFrameStyle = adaptiveFrameStyle(adaptiveLayout.readableMaxWidth);
   const drawerWidth = companionDrawerWidth(windowWidth);
+  // A paired window docks the history as the first pane. The compact drawer
+  // returns when the window narrows again.
+  const dockedPanes = resolveAdaptivePanes(adaptiveLayout);
+  const docked = dockedPanes != null;
+  // Docked history can collapse. The conversation then spans the window as
+  // it does unpaired, and the overlay drawer stays away.
+  const [dockedHistoryHidden, setDockedHistoryHidden] = useState(false);
+  const visiblePanes = dockedHistoryHidden ? null : dockedPanes;
+  const historyToggleLabel = !docked
+    ? 'Open conversation history'
+    : dockedHistoryHidden
+      ? 'Show conversation history'
+      : 'Hide conversation history';
   const listRef = useRef<any>(null);
 
   // Full tab bar height including safe area (home indicator)
@@ -217,6 +238,10 @@ export default function CompanionScreen() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const drawerTranslateX = useSharedValue(companionDrawerClosedTranslate(drawerWidth));
 
+  // Docking replaces the overlay, so an open drawer closes. It stays closed
+  // when the window narrows again.
+  if (docked && drawerOpen) setDrawerOpen(false);
+
   useEffect(() => {
     if (!drawerOpen) {
       drawerTranslateX.value = companionDrawerClosedTranslate(drawerWidth);
@@ -251,7 +276,7 @@ export default function CompanionScreen() {
   // activeOffsetX/failOffsetY inside useDrawerGesture keep this from
   // stealing the transcript's vertical scroll — it only claims a touch once
   // it reads as a deliberate horizontal drag.
-  const drawerPanGesture = useDrawerGesture(drawerTranslateX, drawerOpen, handleDrawerOpen, handleDrawerClose);
+  const drawerPanGesture = useDrawerGesture(drawerTranslateX, drawerOpen, handleDrawerOpen, handleDrawerClose, !docked);
 
   // Scripture tap sheet state
   const [verseSheetRef, setVerseSheetRef] = useState<string | null>(null);
@@ -432,38 +457,41 @@ export default function CompanionScreen() {
     </Text>
   );
 
-  return (
-    <GestureDetector gesture={drawerPanGesture}>
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: colors.background }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? -tabBarHeight : 0}
-      testID="companion-screen"
-    >
+  const conversationColumn = (
+    <View style={{ flex: 1 }}>
       {/* Header — one fixed Companion presence between equal control slots. */}
       <View
         style={{
-          paddingTop: insets.top + 4,
+          paddingTop: 4,
           paddingBottom: 8,
-          paddingLeft: Spacing['4'] + insets.left,
-          paddingRight: Spacing['4'] + insets.right,
+          paddingLeft: Spacing['4'],
+          paddingRight: Spacing['4'],
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
         }}
       >
         <View style={{ width: TOOLBAR_SIDE_SLOT_WIDTH, alignItems: 'flex-start' }}>
+          {/* Docked, the toggle hides and shows the history pane. Otherwise
+              it opens the overlay drawer. */}
           <TouchableOpacity
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              handleDrawerOpen();
+              if (docked) setDockedHistoryHidden((hidden) => !hidden);
+              else handleDrawerOpen();
             }}
             activeOpacity={0.7}
-            accessibilityLabel="Open conversation history"
+            accessibilityLabel={historyToggleLabel}
             accessibilityRole="button"
             style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
           >
-            <List size={22} color={colors.textMuted} weight="light" />
+            {/* A paired window shows the pane it toggles, filled while the
+                history is in view. */}
+            {docked ? (
+              <SidebarSimpleIcon size={22} color={colors.textMuted} weight={dockedHistoryHidden ? 'light' : 'fill'} />
+            ) : (
+              <List size={22} color={colors.textMuted} weight="light" />
+            )}
           </TouchableOpacity>
         </View>
 
@@ -510,13 +538,13 @@ export default function CompanionScreen() {
 
       {/* Each scroll container owns keyboard dismissal and touch handling. */}
       {isEmpty ? (
-        <View style={[{ flex: 1, overflow: 'hidden' }, adaptiveSafeGutterStyle(insets.left, insets.right)]}>
+        <View style={{ flex: 1, overflow: 'hidden' }}>
           <View style={[{ flex: 1 }, askFrameStyle]}>
           <CompanionEmptyState onSelectStarter={handleSend} todayTheme={todayTheme} />
           </View>
         </View>
       ) : (
-        <View style={[{ flex: 1 }, adaptiveSafeGutterStyle(insets.left, insets.right)]}>
+        <View style={{ flex: 1 }}>
           <FlatList
             ref={listRef}
             data={invertedMessages}
@@ -546,7 +574,7 @@ export default function CompanionScreen() {
           never changes while a conversation is open, so the message list
           doesn't lurch when either child appears or disappears. */}
       {!isEmpty && (
-        <View style={[{ height: statusSlotHeight, justifyContent: 'center' }, adaptiveSafeGutterStyle(insets.left, insets.right)]}>
+        <View style={{ height: statusSlotHeight, justifyContent: 'center' }}>
         <View style={askFrameStyle}>
           {showSuggestions ? (
             <SuggestionChips
@@ -585,7 +613,7 @@ export default function CompanionScreen() {
       ))}
 
       {/* Input bar */}
-      <View style={adaptiveSafeGutterStyle(insets.left, insets.right)}>
+      <View>
       <View style={askFrameStyle}>
       <CompanionInput
         onSend={handleSend}
@@ -595,6 +623,39 @@ export default function CompanionScreen() {
         conversationId={activeConversationId}
       />
       </View>
+      </View>
+    </View>
+  );
+
+  return (
+    <GestureDetector gesture={drawerPanGesture}>
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? -tabBarHeight : 0}
+      testID="companion-screen"
+    >
+      {/* The wrapper owns the safe areas in every layout. The conversation
+          stays in the second pane, so docking or collapsing the history never
+          remounts it. */}
+      <View style={[{ flex: 1, paddingTop: insets.top }, adaptiveSafeGutterStyle(insets.left, insets.right)]}>
+        <FacingPanes
+          panes={visiblePanes}
+          unpaired="stack"
+          testID="companion-docked-panes"
+          first={visiblePanes ? (
+            <CompanionDrawer
+              docked
+              translateX={drawerTranslateX}
+              isOpen={false}
+              onOpen={handleDrawerOpen}
+              onClose={handleDrawerClose}
+              onNewChat={handleNewChat}
+              onWillSwitchConversation={stopGeneration}
+            />
+          ) : null}
+          second={conversationColumn}
+        />
       </View>
 
       {/* Bottom spacer: clears the absolutely-positioned custom tab bar.
@@ -609,15 +670,17 @@ export default function CompanionScreen() {
         reference={verseSheetRef ?? ''}
       />
 
-      {/* Companion Drawer */}
-      <CompanionDrawer
-        translateX={drawerTranslateX}
-        isOpen={drawerOpen}
-        onOpen={handleDrawerOpen}
-        onClose={handleDrawerClose}
-        onNewChat={handleNewChat}
-        onWillSwitchConversation={stopGeneration}
-      />
+      {/* Companion Drawer — compact windows only; paired windows dock it */}
+      {dockedPanes ? null : (
+        <CompanionDrawer
+          translateX={drawerTranslateX}
+          isOpen={drawerOpen}
+          onOpen={handleDrawerOpen}
+          onClose={handleDrawerClose}
+          onNewChat={handleNewChat}
+          onWillSwitchConversation={stopGeneration}
+        />
+      )}
 
       {/* Premium upsell sheet for companion daily limit */}
       <MemoPremiumFeatureSheet

@@ -70,6 +70,8 @@ interface Props {
   nonblockingResume?: { onResume: () => void } | null;
   /** Drop the tall hero min-height in the Today split so the column can size to copy. */
   relaxHeroMinHeight?: boolean;
+  /** Width of the card's column. The hero sizes from it, not the window. */
+  availableWidth?: number;
   seriesId?: string;
   screenFocused?: boolean;
   progressIdentity?: string;
@@ -503,14 +505,16 @@ function RevealReadyState({
   ambienceVisible,
   relaxHeroMinHeight,
   announceReady = false,
+  width,
 }: {
   state: Extract<DevotionalCardState, { type: 'reveal-ready' }>;
   ambienceVisible: boolean;
   relaxHeroMinHeight?: boolean;
   announceReady?: boolean;
+  width: number;
 }) {
   const { colors } = useTheme();
-  const { width, fontScale } = useWindowDimensions();
+  const { fontScale } = useWindowDimensions();
   const { entering } = useAccessibleAnimation();
   const textCap = heroCopyCap(ambienceVisible);
   const isLargeTextHero = fontScale >= 1.18;
@@ -571,13 +575,15 @@ function PreparingState({
   state,
   ambienceVisible,
   motionActive,
+  width,
 }: {
   state: Extract<DevotionalCardState, { type: 'preparing' }>;
   ambienceVisible: boolean;
   motionActive: boolean;
+  width: number;
 }) {
   const { colors } = useTheme();
-  const { width, fontScale } = useWindowDimensions();
+  const { fontScale } = useWindowDimensions();
   const isCompactHero = width < 400 || fontScale >= 1.18;
   const isVeryCompactHero = width < 370 || fontScale >= 1.32;
   const textCap = heroCopyCap(ambienceVisible);
@@ -838,9 +844,10 @@ interface MainCardProps {
   screenFocused: boolean;
   progressIdentity?: string;
   onComposerFocusChange: (focused: boolean) => void;
+  width: number;
 }
 
-function MainCard({ state, ambienceVisible, relaxHeroMinHeight, announceReady = false, motionActive, seriesKey, identityKey, screenFocused, progressIdentity, onComposerFocusChange }: MainCardProps) {
+function MainCard({ state, ambienceVisible, relaxHeroMinHeight, announceReady = false, motionActive, seriesKey, identityKey, screenFocused, progressIdentity, onComposerFocusChange, width }: MainCardProps) {
   const { colors, isDark } = useTheme();
   const localProgressHistoryRef = useRef<ProgressHistoryRef['current']>(null);
   const progressHistoryRef = progressIdentity
@@ -850,7 +857,7 @@ function MainCard({ state, ambienceVisible, relaxHeroMinHeight, announceReady = 
   const readyOpacity = useSharedValue(announceReady && !reducedMotion ? 0 : 1);
   const textCap = heroCopyCap(ambienceVisible);
   const glassMode = isDark ? 'dark' : 'light';
-  const { width, fontScale } = useWindowDimensions();
+  const { fontScale } = useWindowDimensions();
   const isLargeTextHero = fontScale >= 1.18;
   const isCompactHero = width < 400 || isLargeTextHero;
   const isVeryCompactHero = width < 370 || fontScale >= 1.32;
@@ -1154,6 +1161,7 @@ export function DevotionalCard({
   ambienceVisible = false,
   nonblockingResume = null,
   relaxHeroMinHeight = false,
+  availableWidth,
   seriesId,
   screenFocused = true,
   progressIdentity,
@@ -1161,7 +1169,8 @@ export function DevotionalCard({
   const { entering } = useAccessibleAnimation();
   const appForegrounded = useAppForegrounded();
   const motionActive = screenFocused && appForegrounded;
-  const { width, fontScale } = useWindowDimensions();
+  const { width: windowWidth, fontScale } = useWindowDimensions();
+  const width = availableWidth ?? windowWidth;
   const seriesKey = seriesId ?? ('dayData' in state ? state.dayData.devotionalId : undefined)
     ?? ('seriesTitle' in state ? state.seriesTitle : 'empty');
   const identityKey = progressIdentity ?? '';
@@ -1225,7 +1234,7 @@ export function DevotionalCard({
         />
       )}
       {cardState.type === 'preparing' && (
-        <PreparingState state={cardState} ambienceVisible={ambienceVisible} motionActive={motionActive} />
+        <PreparingState state={cardState} ambienceVisible={ambienceVisible} motionActive={motionActive} width={width} />
       )}
       {cardState.type === 'first-series-failed' && (
         <FirstSeriesFailedState state={cardState} ambienceVisible={ambienceVisible} />
@@ -1251,6 +1260,7 @@ export function DevotionalCard({
           ambienceVisible={ambienceVisible}
           relaxHeroMinHeight={relaxHeroMinHeight}
           announceReady={announceReady}
+          width={width}
         />
       )}
       {(cardState.type === 'unread' ||
@@ -1267,6 +1277,7 @@ export function DevotionalCard({
           screenFocused={screenFocused}
           progressIdentity={progressIdentity}
           onComposerFocusChange={handleComposerFocusChange}
+          width={width}
         />
       )}
     </Animated.View>

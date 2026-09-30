@@ -1,4 +1,5 @@
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import { canonicalGeneratedDayId } from '../devotional-canonical-days';
 import type { Devotional, DevotionalDay } from '../store';
@@ -20,6 +21,7 @@ let mockParams: { id?: string } = {};
 let mockDevotionals: Devotional[] = [];
 let mockCurrentDevotionalId: string | null = 'devo-1';
 let mockFontScale = 1;
+let mockPairedLayout: object | null = null;
 
 const now = new Date();
 const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 3, 12).toISOString();
@@ -96,7 +98,7 @@ jest.mock('@/hooks/useCrossTabBack', () => ({
 }));
 
 jest.mock('@/hooks/useAdaptiveLayout', () => ({
-  useAdaptiveLayout: () => ({ clusterMaxWidth: 560, fontScale: mockFontScale }),
+  useAdaptiveLayout: () => mockPairedLayout ?? { clusterMaxWidth: 560, fontScale: mockFontScale },
 }));
 
 jest.mock('@/lib/theme', () => ({
@@ -225,7 +227,76 @@ beforeEach(() => {
   mockParams = {};
   mockCurrentDevotionalId = 'devo-1';
   mockFontScale = 1;
+  mockPairedLayout = null;
   mockDevotionals = [withActs()];
+});
+
+describe('Book of Seasons open-book spread', () => {
+  const { resolveAdaptiveLayout, resolveAdaptivePanes } = jest.requireActual('@/lib/adaptive-layout');
+  // Reported iPhone Duo inner display, open and wider than tall.
+  const duoOpen = resolveAdaptiveLayout({ width: 951, height: 669, insetTop: 24, insetBottom: 20 });
+
+  it('opens the current page and the chapters as two facing pages', () => {
+    mockPairedLayout = duoOpen;
+    const root = renderTab().root as unknown as ReactTestRenderer['root'];
+    const current = root.findByProps({ testID: 'book-current-page' });
+    const contents = root.findByProps({ testID: 'book-contents-page' });
+
+    expect(current.findAllByProps({ testID: 'active-series-book' }).length).toBeGreaterThan(0);
+    expect(contents.findAllByProps({ testID: 'book-chapter-journey' }).length).toBeGreaterThan(0);
+    expect(contents.findAllByType('ProfileEntryButton' as never)).toHaveLength(1);
+    expect(current.findAllByProps({ testID: 'book-chapter-journey' })).toHaveLength(0);
+  });
+
+  it('keeps the archive link under the contents page, off the midline', () => {
+    mockPairedLayout = duoOpen;
+    const tree = renderTab();
+    const panes = resolveAdaptivePanes(duoOpen);
+    const link = tree.root.findAllByProps({ testID: 'book-past-series' })[0] as {
+      props: { style: unknown };
+    };
+    const style = StyleSheet.flatten(link.props.style as never) as { marginLeft: number; width: number };
+
+    // The frame already starts at the lead, so the link starts after the
+    // first page and the gutter.
+    expect(style.marginLeft).toBe(panes.first + panes.gutter);
+    expect(panes.lead + style.marginLeft).toBeGreaterThan(duoOpen.width / 2);
+    expect(style.width).toBe(panes.second);
+  });
+
+  it('lines the archive link up with the contents page when the spread is centered', () => {
+    const wide = resolveAdaptiveLayout({ width: 1366, height: 1024 });
+    mockPairedLayout = wide;
+    const tree = renderTab();
+    const panes = resolveAdaptivePanes(wide);
+    const link = tree.root.findAllByProps({ testID: 'book-past-series' })[0] as {
+      props: { style: unknown };
+    };
+    const style = StyleSheet.flatten(link.props.style as never) as { marginLeft: number; width: number };
+
+    expect(panes.lead).toBeGreaterThan(0);
+    expect(style.marginLeft).toBe(panes.first + panes.gutter);
+    expect(panes.lead + style.marginLeft).toBeGreaterThan(wide.width / 2);
+  });
+
+  it('keeps the current page mounted when the device opens and closes', () => {
+    mockParams = { id: 'devo-1' };
+    let tree!: ReactTestRenderer;
+    const screen = () => React.createElement(SeriesArcScreen);
+    act(() => { tree = renderer.create(screen()); });
+    const page = tree.root.findByProps({ testID: 'book-page-capture' });
+    const contents = tree.root.findByProps({ testID: 'book-contents-page' });
+
+    mockPairedLayout = duoOpen;
+    act(() => { tree.update(screen()); });
+    expect(tree.root.findByProps({ testID: 'book-page-capture' })).toBe(page);
+    expect(tree.root.findByProps({ testID: 'book-contents-page' })).toBe(contents);
+
+    mockPairedLayout = null;
+    act(() => { tree.update(screen()); });
+    expect(tree.root.findByProps({ testID: 'book-page-capture' })).toBe(page);
+    expect(tree.root.findAllByProps({ testID: 'book-day-1' }).length).toBeGreaterThan(0);
+  });
 });
 
 describe('Book of Seasons tab root', () => {

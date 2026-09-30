@@ -4,12 +4,13 @@ import { emitDayCompletionCueAfterSave } from '@/lib/day-completion-cue';
 import { clearBookOpening } from '@/lib/book-opening';
 import { markBookReaderReadyWithSnapshot } from '@/lib/book-opening-capture';
 import { getDailyGenerationNotice, getPausedSeriesDayNotice } from '@/lib/daily-generation-messages';
-import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { useState, useCallback, useMemo, useEffect, useLayoutEffect, useRef } from 'react';
 import { useAutoHide } from '@/hooks/useAutoHide';
-import { View, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet, TouchableOpacity, Keyboard, ScrollView, UIManager, Modal, type LayoutChangeEvent } from 'react-native';
+import { View, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet, TouchableOpacity, Keyboard, LayoutAnimation, ScrollView, UIManager, Modal, type KeyboardEvent, type LayoutChangeEvent } from 'react-native';
 import { ReaderText as Text } from '@/components/reading/ReaderText';
 import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
-import { adaptiveFrameStyle } from '@/lib/adaptive-layout';
+import { ADAPTIVE_PANE_MIN, ADAPTIVE_READABLE_MEASURE, adaptiveFrameStyle, adaptivePaneLane, resolveAdaptivePanes } from '@/lib/adaptive-layout';
+import { FacingPanes } from '@/components/ui/FacingPanes';
 import { useRouter, useLocalSearchParams, useIsFocused } from 'expo-router';
 import { useModalNavigation } from '@/hooks/useModalNavigation';
 import { qaMethodReadingsHref } from '@/lib/qa-method-readings-route';
@@ -97,6 +98,7 @@ import {
   type ReaderSection,
 } from '@/components/reading/DevotionalContent';
 import { ReflectionQuestionNav, type ReflectionKeyboardToolbarState } from '@/components/reading/ReflectionQuestionNav';
+import { READER_PAGE_PADDING, ReflectionFacingPage } from '@/components/reading/ReflectionFacingPage';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { TomorrowPreview } from '@/components/reading/TomorrowPreview';
 import { ScripturePracticeSheet, buildPracticeBibleHref } from '@/components/reading/ScripturePracticeSheet';
@@ -153,6 +155,10 @@ const AUTO_RETRY_BASE_DELAY_MS = 15000;
 const LIBRARY_TARGET_TOP_INSET = 220;
 /** Section jumps land the heading near the top, under the reader chrome. */
 const SECTION_TARGET_TOP_INSET = 24;
+/** Room the reflection toolbar keeps above the home indicator when the keyboard is closed. */
+const REFLECTION_TOOLBAR_CLEARANCE = 64;
+/** Height of the scroll progress line under the reader header. */
+const READING_PROGRESS_BAR_HEIGHT = 2;
 
 function parsePositiveInteger(value?: string | string[]): number | null {
   if (!value) return null;
@@ -168,8 +174,8 @@ function ReadingProgressBar({ progress, accentColor }: { progress: SharedValue<n
     opacity: progress.value > 0.005 ? 1 : 0,
   }));
   return (
-    <View style={{ height: 2, backgroundColor: 'transparent' }}>
-      <Animated.View style={[{ height: 2, borderRadius: 1, backgroundColor: accentColor }, barStyle]} />
+    <View style={{ height: READING_PROGRESS_BAR_HEIGHT, backgroundColor: 'transparent' }}>
+      <Animated.View style={[{ height: READING_PROGRESS_BAR_HEIGHT, borderRadius: 1, backgroundColor: accentColor }, barStyle]} />
     </View>
   );
 }
@@ -285,7 +291,6 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
   const adaptiveLayout = useAdaptiveLayout();
-  const readingFrameStyle = adaptiveFrameStyle(adaptiveLayout.readableMaxWidth);
 
   // Clear reveal transition flag AFTER reading screen has painted to prevent
   // home screen from flashing behind during the transition handoff.
@@ -490,6 +495,93 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     [currentDevotional, viewingDay],
   );
   const currentDayData = renderableDay.status === 'ready' ? renderableDay.day : undefined;
+
+  // The facing page (DESIGN.md, accepted 2026-09-14): on a paired window the
+  // reflection questions and the response sit beside the reading, or below it
+  // in a tall window. A row pairs every ready day, so the layout holds from
+  // day to day. A day without questions faces a quiet page. A stacked column
+  // pairs only when the inline journal would render.
+  const hasReflectionQuestions = Boolean(currentDayData?.reflectionQuestions?.length);
+  const canFaceReading = Boolean(currentDayData && effectiveDevotionalId && viewingDay);
+  const facingPanes = canFaceReading ? resolveAdaptivePanes(adaptiveLayout, { stacked: hasReflectionQuestions }) : null;
+  // The journal moves one commit after the panes change. The outgoing journal
+  // saves its pending words on unmount first, so the incoming one reads them.
+  const [reflectionFacing, setReflectionFacing] = useState(false);
+  const wantsReflectionFacing = facingPanes !== null;
+  useLayoutEffect(() => {
+    setReflectionFacing(wantsReflectionFacing);
+  }, [wantsReflectionFacing]);
+  const reflectionPlacement = hasReflectionQuestions && (wantsReflectionFacing || reflectionFacing) ? 'facing' : 'inline';
+  const facingScrollRef = useRef<ScrollView | null>(null);
+  const readerPaneWidth = facingPanes?.axis === 'row' ? facingPanes.first : adaptiveLayout.width;
+  const readableWidth = facingPanes?.axis === 'row'
+    ? Math.min(facingPanes.first - READER_PAGE_PADDING * 2, ADAPTIVE_READABLE_MEASURE)
+    : adaptiveLayout.readableMaxWidth;
+  const readingFrameStyle = adaptiveFrameStyle(readableWidth);
+  // A tall window gives reflection the space above the keyboard when the
+  // keyboard would leave its pane too short to write in. Reading stays mounted.
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const raisesReflectionDesk = (height: number) => facingPanes?.axis === 'column'
+    && reflectionFacing
+    && reflectionToolbar !== null
+    && facingPanes.second - Math.max(0, height - adaptiveLayout.insetBottom) < ADAPTIVE_PANE_MIN;
+  const reflectionDeskRaised = raisesReflectionDesk(keyboardHeight);
+  // Read by the keyboard listeners, which outlive a render.
+  const reflectionDeskMotionRef = useRef({ raised: reflectionDeskRaised, raisesAt: raisesReflectionDesk, reducedMotion });
+  reflectionDeskMotionRef.current = { raised: reflectionDeskRaised, raisesAt: raisesReflectionDesk, reducedMotion };
+  const stackedPaneAxis = facingPanes?.axis;
+  useEffect(() => {
+    if (stackedPaneAxis !== 'column') return;
+    setKeyboardHeight(Keyboard.isVisible() ? Keyboard.metrics()?.height ?? 0 : 0);
+    // The desk rises and lowers with the keyboard, on its duration and curve.
+    const followKeyboard = (event: KeyboardEvent, height: number) => {
+      const desk = reflectionDeskMotionRef.current;
+      if (!desk.reducedMotion && event.duration > 0 && desk.raisesAt(height) !== desk.raised) {
+        const type = LayoutAnimation.Types[event.easing] ?? LayoutAnimation.Types.keyboard;
+        LayoutAnimation.configureNext({ duration: event.duration, update: { duration: event.duration, type } });
+      }
+      setKeyboardHeight(height);
+    };
+    const show = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', (event) => {
+      followKeyboard(event, event.endCoordinates.height);
+    });
+    const hide = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', (event) => {
+      followKeyboard(event, 0);
+    });
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, [stackedPaneAxis]);
+  // The raised desk keeps the reader header and progress line, so the way
+  // back stays in reach. Only the reading scroll area folds away.
+  const [readerHeaderHeight, setReaderHeaderHeight] = useState(0);
+  const handleReaderHeaderLayout = useCallback((event: LayoutChangeEvent) => {
+    setReaderHeaderHeight(event.nativeEvent.layout.height);
+  }, []);
+  const readerChromeHeight = readerHeaderHeight + READING_PROGRESS_BAR_HEIGHT;
+  const displayedPanes = facingPanes && reflectionDeskRaised
+    ? {
+      ...facingPanes,
+      first: readerChromeHeight,
+      gutter: 0,
+      second: facingPanes.first + facingPanes.gutter + facingPanes.second - readerChromeHeight,
+    }
+    : facingPanes;
+  // A pane change unmounts the one journal and mounts it in the other pane.
+  // Keep the open question of this day, so the new journal reopens it.
+  const reflectionScope = `${effectiveDevotionalId ?? ''}:${viewingDay}`;
+  const expandedReflectionRef = useRef<{ scope: string; index: number | null } | null>(null);
+  if (expandedReflectionRef.current && expandedReflectionRef.current.scope !== reflectionScope) {
+    expandedReflectionRef.current = null;
+  }
+  const initialExpandedReflection = expandedReflectionRef.current?.index;
+  // A record for this day means a journal already showed it: a new mount is a
+  // pane handoff, so the questions do not replay their entrance.
+  const reflectionAnimateEntrance = expandedReflectionRef.current === null;
+  const handleExpandedReflectionChange = useCallback((index: number | null) => {
+    expandedReflectionRef.current = { scope: reflectionScope, index };
+  }, [reflectionScope]);
   const practiceHostTab: PracticeTarget['hostTab'] = hostTab === '(study)' ? '(study)' : '(today)';
   const assignedPractice = getScripturePractice(currentDayData?.studyMethod);
   const canOfferPractice = Boolean(
@@ -612,10 +704,11 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     [journalEntries, effectiveDevotionalId, viewingDay],
   );
 
-  const availableSections = useMemo(
-    () => new Set(Object.keys(sectionOffsets) as ReaderSection[]),
-    [sectionOffsets],
-  );
+  const availableSections = useMemo(() => {
+    const sections = new Set(Object.keys(sectionOffsets) as ReaderSection[]);
+    if (reflectionFacing && hasReflectionQuestions) sections.add('reflection');
+    return sections;
+  }, [sectionOffsets, reflectionFacing, hasReflectionQuestions]);
 
   useEffect(() => {
     setSectionOffsets({});
@@ -684,10 +777,15 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   const handleJumpToSection = useCallback((section: ReaderSection) => {
     const y = sectionOffsets[section];
     setShowOutlineSheet(false);
+    if (section === 'reflection' && reflectionFacing) {
+      Haptics.selectionAsync();
+      facingScrollRef.current?.scrollTo({ y: 0, animated: !reducedMotion });
+      return;
+    }
     if (y === undefined) return;
     Haptics.selectionAsync();
     scrollReaderToY(Math.max(0, y - SECTION_TARGET_TOP_INSET));
-  }, [sectionOffsets, scrollReaderToY]);
+  }, [sectionOffsets, scrollReaderToY, reflectionFacing, reducedMotion]);
 
   // A sheet-initiated jump scrolls once; the deep-link retry ladder in
   // handleTargetHighlightLocated is for a document still laying out.
@@ -708,6 +806,38 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     setShowOutlineSheet(false);
     openJournalForDay();
   }, [openJournalForDay]);
+
+  const handleOpenJournal = useCallback((focusQuestion?: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (isViewingActiveSeries && effectiveDevotionalId && currentDevotional) {
+      setResumeContext({
+        route: 'journal',
+        devotionalId: effectiveDevotionalId,
+        dayNumber: viewingDay,
+        devotionalTitle: currentDevotional.title,
+        dayTitle: currentDayData?.title,
+      });
+    }
+    router.push({
+      pathname: resolveStackRoute(hostTab, 'journal'),
+      params: {
+        devotionalId: effectiveDevotionalId ?? '',
+        dayNumber: viewingDay.toString(),
+        ...(focusQuestion != null ? { focusQuestion: String(focusQuestion) } : {}),
+      },
+    });
+  }, [isViewingActiveSeries, effectiveDevotionalId, currentDevotional, currentDayData?.title, setResumeContext, router, hostTab, viewingDay]);
+
+  const openStay = useCallback((focus: 'prayer' | 'passage') => {
+    if (!effectiveDevotionalId) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push({
+      pathname: '/stay',
+      params: { devotionalId: effectiveDevotionalId, dayNumber: String(viewingDay), focus },
+    });
+  }, [router, effectiveDevotionalId, viewingDay]);
+  const handleStayWithPrayer = useCallback(() => openStay('prayer'), [openStay]);
+  const handleStayWithPassage = useCallback(() => openStay('passage'), [openStay]);
 
   const explicitTargetKey = resolveExplicitReaderTargetKey({
     highlightId: targetHighlight?.id,
@@ -780,7 +910,9 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     };
   }, [scrollReaderToY, targetScrollRequest]);
 
-  const readerLayoutKey = `${adaptiveLayout.readableMaxWidth}:${adaptiveLayout.fontScale}:${fontSize}:${user?.readingFont ?? ''}`;
+  // The target placement, not the one-commit journal handoff, so pairing
+  // starts or ends one reflow.
+  const readerLayoutKey = `${readableWidth}:${wantsReflectionFacing ? 'facing' : 'inline'}:${adaptiveLayout.fontScale}:${fontSize}:${user?.readingFont ?? ''}`;
   if (readerLayoutKeyRef.current !== readerLayoutKey) {
     if (readerLayoutKeyRef.current !== '') {
       const started = beginReaderLayoutGeneration({
@@ -2388,12 +2520,16 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
       <GestureDetector gesture={panGesture}>
         <Animated.View style={[{ flex: 1 }, contentStyle]}>
           <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'left', 'right']}>
+            <FacingPanes
+              panes={displayedPanes}
+              first={
+            <View style={reflectionDeskRaised ? { flex: 1, overflow: 'hidden' } : { flex: 1 }}>
             {/* Header */}
-            <View key={adaptiveLayout.fontScale} style={[adaptiveFrameStyle(adaptiveLayout.clusterMaxWidth), { backgroundColor: colors.background }]}>
+            <View key={adaptiveLayout.fontScale} testID="reader-header" onLayout={handleReaderHeaderLayout} style={[adaptiveFrameStyle(adaptiveLayout.clusterMaxWidth), { backgroundColor: colors.background }]}>
               <View
                 style={{
                   flexDirection: 'row',
-                  flexWrap: adaptiveLayout.fontScale > 1.2 || adaptiveLayout.width < 375 ? 'wrap' : 'nowrap',
+                  flexWrap: adaptiveLayout.fontScale > 1.2 || readerPaneWidth < 375 ? 'wrap' : 'nowrap',
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   paddingHorizontal: Spacing['4'],
@@ -2446,7 +2582,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
               </TouchableOpacity>
 
               {/* Right: Journal + Reading Settings */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 2, ...(adaptiveLayout.fontScale > 1.2 || adaptiveLayout.width < 375 ? { width: '100%' as const } : {}) }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 2, ...(adaptiveLayout.fontScale > 1.2 || readerPaneWidth < 375 ? { width: '100%' as const } : {}) }}>
                 {isAmbientAudioEnabled() ? <AmbientMusicEntry /> : null}
                 {/* Contents / Highlights / Notes for this reading */}
                 <TouchableOpacity activeOpacity={0.7}
@@ -2491,14 +2627,18 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
             <ReadingProgressBar progress={scrollProgress} accentColor={colors.accent} />
             {/* Premium nudge banner — audio teaser */}
             {/* Content - scrollable with day-transition fade */}
-            <Animated.View style={[{ flex: 1 }, scrollContentStyle]}>
+            <Animated.View
+              style={[{ flex: 1 }, scrollContentStyle]}
+              accessibilityElementsHidden={reflectionDeskRaised}
+              importantForAccessibility={reflectionDeskRaised ? 'no-hide-descendants' : 'auto'}
+            >
             {/* The scroll viewport's frame, for the selection bar (neither Reanimated ref can be measured). */}
             <View ref={readerViewportRef} cssInterop={false} collapsable={false} pointerEvents="none" style={StyleSheet.absoluteFill} />
             <Animated.ScrollView
               ref={scrollViewRef}
               style={{ flex: 1 }}
               contentContainerStyle={{
-                paddingHorizontal: Spacing['6'],
+                paddingHorizontal: READER_PAGE_PADDING,
                 paddingTop: Spacing['10'],
                 paddingBottom: 300,
               }}
@@ -2564,26 +2704,14 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                 onBeginPractice={canOfferPractice ? beginPractice : undefined}
                 devotionalId={effectiveDevotionalId ?? ''}
                 dayNumber={viewingDay}
-                onOpenJournal={(focusQuestion) => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  if (isViewingActiveSeries && effectiveDevotionalId && currentDevotional) {
-                    setResumeContext({
-                      route: 'journal',
-                      devotionalId: effectiveDevotionalId,
-                      dayNumber: viewingDay,
-                      devotionalTitle: currentDevotional.title,
-                      dayTitle: currentDayData?.title,
-                    });
-                  }
-                  router.push({
-                    pathname: resolveStackRoute(hostTab, 'journal'),
-                    params: {
-                      devotionalId: effectiveDevotionalId ?? '',
-                      dayNumber: viewingDay.toString(),
-                      ...(focusQuestion != null ? { focusQuestion: String(focusQuestion) } : {}),
-                    },
-                  });
-                }}
+                onOpenJournal={handleOpenJournal}
+                reflectionPlacement={reflectionPlacement}
+                reflectionInitialExpandedIndex={initialExpandedReflection}
+                onReflectionExpandedIndexChange={handleExpandedReflectionChange}
+                reflectionAnimateEntrance={reflectionAnimateEntrance}
+                // At every width, so closing the device keeps it.
+                onStayWithPrayer={handleStayWithPrayer}
+                onStayWithPassage={handleStayWithPassage}
               />
 
               {/* One section boundary before completion */}
@@ -2853,6 +2981,30 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
               </View>
             </Animated.ScrollView>
             </Animated.View>
+            </View>
+              }
+              second={displayedPanes && effectiveDevotionalId ? (
+                <Animated.View style={[{ flex: 1 }, scrollContentStyle]}>
+                  {reflectionFacing ? (
+                    <ReflectionFacingPage
+                      questions={currentDayData.reflectionQuestions ?? []}
+                      devotionalId={effectiveDevotionalId}
+                      dayNumber={viewingDay}
+                      dayTitle={currentDayData.title}
+                      quotableLine={currentDayData.quotableLine}
+                      fontSize={fontSize}
+                      onOpenFullJournal={handleOpenJournal}
+                      onKeyboardToolbarChange={handleReflectionToolbarChange}
+                      initialExpandedIndex={initialExpandedReflection}
+                      onExpandedIndexChange={handleExpandedReflectionChange}
+                      animateEntrance={reflectionAnimateEntrance}
+                      scrollViewRef={facingScrollRef}
+                      bottomInset={insets.bottom + REFLECTION_TOOLBAR_CLEARANCE}
+                    />
+                  ) : null}
+                </Animated.View>
+              ) : undefined}
+            />
           </SafeAreaView>
         </Animated.View>
       </GestureDetector>
@@ -2861,8 +3013,12 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
         <KeyboardStickyView
           testID="reflection-keyboard-toolbar"
           accessible={false}
-          offset={{ closed: -(insets.bottom + 64), opened: 0 }}
-          style={{ position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: colors.background }}
+          offset={{ closed: -(insets.bottom + REFLECTION_TOOLBAR_CLEARANCE), opened: 0 }}
+          style={[
+            { position: 'absolute', left: insets.left, right: insets.right, bottom: 0, backgroundColor: colors.background },
+            // Beside the reading, the toolbar belongs to the facing page only.
+            displayedPanes?.axis === 'row' ? { ...adaptivePaneLane(adaptiveLayout, displayedPanes), right: undefined } : null,
+          ]}
         >
           <ReflectionQuestionNav {...reflectionToolbar} />
         </KeyboardStickyView>

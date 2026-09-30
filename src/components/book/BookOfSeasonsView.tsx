@@ -5,6 +5,8 @@ import { firstReadingLabel } from '@/lib/bookshelf';
 import { Spacing } from '@/constants/spacing';
 import type { ColorTheme } from '@/constants/colors';
 import type { Devotional } from '@/lib/store';
+import type { AdaptivePanes } from '@/lib/adaptive-layout';
+import { FacingPanes } from '@/components/ui/FacingPanes';
 import {
   buildBookOfSeasonsModel,
   resolveBookOpenDayNumber,
@@ -23,6 +25,7 @@ export function BookOfSeasonsView({
   onOpenDay,
   headerAccessory,
   showAllReadings = false,
+  spread = null,
 }: {
   devotional: Devotional;
   seriesPaused: boolean;
@@ -32,14 +35,26 @@ export function BookOfSeasonsView({
   onOpenDay: (dayNumber: number, openingId?: string) => void;
   headerAccessory?: ReactNode;
   showAllReadings?: boolean;
+  /**
+   * Row geometry from resolveAdaptivePanes. It opens the book: the current
+   * page on the left, the chapters or days on the right. Place the view flush
+   * with the safe-area edges when it is set.
+   */
+  spread?: AdaptivePanes | null;
 }) {
   const model = buildBookOfSeasonsModel(devotional, now, seriesPaused);
   const today = model?.page;
   const chapters = model?.chapters ?? [];
   const theme = devotional.seriesArc?.overarchingTheme?.trim();
+  const openBook = spread?.axis === 'row' ? spread : null;
+  const accessory = !showAllReadings && headerAccessory
+    ? <View style={styles.accessoryRow}>{headerAccessory}</View>
+    : null;
 
-  return (
-    <View testID="book-of-seasons">
+  // Both pages keep one tree position in every layout, so opening or closing
+  // the device never remounts them or the page-curl capture.
+  const currentPage = (
+    <View testID="book-current-page" style={openBook ? styles.page : undefined}>
       {showAllReadings ? <View style={styles.season}>
         {firstReadingLabel(devotional) ? (
           <Text style={[styles.subtitle, { color: colors.textMuted, marginTop: 0, marginBottom: Spacing['2'] }]}>
@@ -57,7 +72,7 @@ export function BookOfSeasonsView({
             {theme}
           </Text>
         ) : null}
-      </View> : headerAccessory ? <View style={styles.accessoryRow}>{headerAccessory}</View> : null}
+      </View> : null}
       {today ? (
         showAllReadings ? (
           <OpenReadingPage
@@ -76,20 +91,40 @@ export function BookOfSeasonsView({
           />
         )
       ) : null}
-      {chapters.length > 0 && !showAllReadings ? <ChapterJourney
-        chapters={chapters}
-        colors={colors}
-        canOpenChapter={(chapter) => resolveBookOpenDayNumber(devotional, chapter, now) != null}
-        onOpenChapter={(chapter) => {
-          const dayNumber = resolveBookOpenDayNumber(devotional, chapter, now);
-          if (dayNumber != null) onOpenDay(dayNumber);
-        }}
-      /> : <BookDayList devotional={devotional} seriesPaused={seriesPaused} now={now} colors={colors} onOpenDay={onOpenDay} />}
+    </View>
+  );
+  const contents = chapters.length > 0 && !showAllReadings ? <ChapterJourney
+    chapters={chapters}
+    colors={colors}
+    canOpenChapter={(chapter) => resolveBookOpenDayNumber(devotional, chapter, now) != null}
+    onOpenChapter={(chapter) => {
+      const dayNumber = resolveBookOpenDayNumber(devotional, chapter, now);
+      if (dayNumber != null) onOpenDay(dayNumber);
+    }}
+  /> : <BookDayList devotional={devotional} seriesPaused={seriesPaused} now={now} colors={colors} onOpenDay={onOpenDay} />;
+
+  return (
+    <View testID="book-of-seasons">
+      {openBook ? null : accessory}
+      <FacingPanes
+        panes={openBook}
+        unpaired="stack"
+        first={currentPage}
+        second={
+          <View testID="book-contents-page" style={openBook ? styles.page : undefined}>
+            {openBook ? accessory : null}
+            {contents}
+          </View>
+        }
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  page: {
+    paddingHorizontal: Spacing['6'],
+  },
   accessoryRow: {
     alignItems: 'flex-end',
     minHeight: 44,
