@@ -1,7 +1,8 @@
 /**
  * A pane change unmounts the one InlineReflectionJournal and mounts a new one
  * in the other pane. These tests check what the new journal shows: the open
- * question, without a replay of the cards' entrance.
+ * question, without a replay of the cards' entrance, and any answer whose
+ * latest save failed.
  */
 import React from 'react';
 import { AppState, Keyboard, TextInput } from 'react-native';
@@ -12,6 +13,7 @@ const { act } = renderer;
 import { InlineReflectionJournal } from '../InlineReflectionJournal';
 
 const QUESTIONS = ['What stood out?', 'Where will you carry it?'];
+const RETRY_LABEL = 'Save failed. Tap to retry.';
 
 const mockEntries: Array<{
   id: string;
@@ -42,10 +44,12 @@ const mockUpdateQuestionResponse = jest.fn((entryId: string, question: string, r
   entry.questionResponses = responses;
 });
 
+const mockFlushUnfoldStorePersistAsync = jest.fn(() => Promise.resolve(true));
+
 jest.mock('@/lib/store', () => ({
   FONT_SIZE_VALUES: { medium: { body: 18, bodyLineHeight: 28 } },
   flushUnfoldStorePersist: () => true,
-  flushUnfoldStorePersistAsync: () => Promise.resolve(true),
+  flushUnfoldStorePersistAsync: () => mockFlushUnfoldStorePersistAsync(),
   useUnfoldStore: (selector: (state: unknown) => unknown) =>
     selector({
       getJournalEntry: (devotionalId: string, dayNumber: number) =>
@@ -112,6 +116,25 @@ function openInputs(tree: Tree) {
   return tree.root.findAllByType(TextInput);
 }
 
+function retryControls(tree: Tree) {
+  return tree.root.findAllByProps({ accessibilityLabel: RETRY_LABEL })
+    .filter((node) => typeof node.props.onPress === 'function');
+}
+
+function typeText(tree: Tree, text: string) {
+  act(() => {
+    (openInputs(tree)[0].props.onChangeText as (value: string) => void)(text);
+  });
+}
+
+async function typeAndSettle(tree: Tree, text: string) {
+  typeText(tree, text);
+  await act(async () => {
+    jest.advanceTimersByTime(800);
+    await Promise.resolve();
+  });
+}
+
 describe('InlineReflectionJournal across a remount', () => {
   beforeEach(() => {
     jest.useFakeTimers();
@@ -170,5 +193,92 @@ describe('InlineReflectionJournal across a remount', () => {
     expect(config.props.skipEntering).toBe(true);
     expect(openInputs(handoff)).toHaveLength(1);
     act(() => handoff.unmount());
+  });
+
+  it('keeps a failed save failed after a remount, and retries the same words', async () => {
+    mockFlushUnfoldStorePersistAsync.mockImplementationOnce(() => Promise.resolve(false));
+    const first = mount(2);
+    await typeAndSettle(first, 'Keep these words.');
+    expect(retryControls(first).length).toBeGreaterThan(0);
+    act(() => first.unmount());
+
+    const second = mount(2);
+    expect(openInputs(second)[0].props.value).toBe('Keep these words.');
+    const [retry] = retryControls(second);
+    expect(retry).toBeTruthy();
+    await act(async () => {
+      (retry.props.onPress as () => void)();
+      await Promise.resolve();
+    });
+    expect(mockUpdateQuestionResponse).toHaveBeenLastCalledWith('entry-devotional-2', QUESTIONS[0], 'Keep these words.');
+    expect(retryControls(second)).toHaveLength(0);
+    act(() => second.unmount());
+
+    // The later success clears the record.
+    const third = mount(2);
+    expect(retryControls(third)).toHaveLength(0);
+    act(() => third.unmount());
+  });
+
+  it('leaves a retry that is still saving to settle its own record', async () => {
+    mockFlushUnfoldStorePersistAsync.mockImplementationOnce(() => Promise.resolve(false));
+    const first = mount(5);
+    await typeAndSettle(first, 'Saved on the second try.');
+    const [retry] = retryControls(first);
+    let finishRetry: (wrote: boolean) => void = () => {};
+    mockFlushUnfoldStorePersistAsync.mockImplementationOnce(() => new Promise<boolean>((resolve) => {
+      finishRetry = resolve;
+    }));
+    act(() => {
+      (retry.props.onPress as () => void)();
+    });
+    // The device folds while the retry is still saving.
+    act(() => first.unmount());
+    const second = mount(5);
+    expect(retryControls(second)).toHaveLength(0);
+
+    await act(async () => {
+      finishRetry(true);
+      await Promise.resolve();
+    });
+    expect(retryControls(second)).toHaveLength(0);
+    act(() => second.unmount());
+    const third = mount(5);
+    expect(retryControls(third)).toHaveLength(0);
+    act(() => third.unmount());
+  });
+
+  it('shows a failure that lands after the next journal mounted', async () => {
+    let failSave: (wrote: boolean) => void = () => {};
+    mockFlushUnfoldStorePersistAsync.mockImplementationOnce(() => new Promise<boolean>((resolve) => {
+      failSave = resolve;
+    }));
+    const first = mount(3);
+    typeText(first, 'Written just before the fold.');
+    // The outgoing journal saves its pending words on unmount.
+    act(() => first.unmount());
+    const second = mount(3);
+    expect(retryControls(second)).toHaveLength(0);
+
+    await act(async () => {
+      failSave(false);
+      await Promise.resolve();
+    });
+    expect(retryControls(second).length).toBeGreaterThan(0);
+    expect(openInputs(second)[0].props.value).toBe('Written just before the fold.');
+    act(() => second.unmount());
+  });
+
+  it('drops a failure that the Journal screen has since replaced', async () => {
+    mockFlushUnfoldStorePersistAsync.mockImplementationOnce(() => Promise.resolve(false));
+    const first = mount(4);
+    await typeAndSettle(first, 'The first try.');
+    act(() => first.unmount());
+
+    mockUpdateQuestionResponse('entry-devotional-4', QUESTIONS[0], 'Rewritten in the Journal.');
+    const second = mount(4);
+    expect(retryControls(second)).toHaveLength(0);
+    expect(openInputs(second)[0].props.value).toBe('Rewritten in the Journal.');
+    act(() => second.unmount());
   });
 });
