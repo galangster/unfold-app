@@ -9,7 +9,7 @@ import {
 import { usePathname, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
-import { resolveAdaptivePanes } from '@/lib/adaptive-layout';
+import { adaptivePaneLane, resolveAdaptivePanes } from '@/lib/adaptive-layout';
 import { XIcon } from '@/components/icons';
 import { FontFamily } from '@/constants/fonts';
 import { useAmbientSoundVisibility } from '@/hooks/useAmbientSoundVisibility';
@@ -86,12 +86,7 @@ function EnabledAmbientSoundOverlay() {
   const adaptiveLayout = useAdaptiveLayout();
   // The dock centers in the safe area. A paired window centers it in the
   // trailing pane instead, so its controls never sit on the fold.
-  const panes = resolveAdaptivePanes(adaptiveLayout);
-  const laneLeft = panes
-    ? adaptiveLayout.insetLeft + panes.lead + panes.first + panes.gutter
-    : adaptiveLayout.insetLeft;
-  const laneWidth = panes ? panes.second : adaptiveLayout.availableWidth;
-  const dockWidth = Math.min(laneWidth - 32, 528);
+  const dock = adaptivePaneLane(adaptiveLayout, resolveAdaptivePanes(adaptiveLayout), { margin: 16, maxWidth: 528 });
   const pathname = usePathname();
   const router = useRouter();
   const { colors } = useTheme();
@@ -264,9 +259,9 @@ function EnabledAmbientSoundOverlay() {
           pointerEvents="box-none"
           style={{
             position: 'absolute',
-            left: laneLeft + (laneWidth - dockWidth) / 2,
+            left: dock.left,
             bottom: insets.bottom + 64,
-            width: dockWidth,
+            width: dock.width,
             gap: 8,
           }}
         >

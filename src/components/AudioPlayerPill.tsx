@@ -31,7 +31,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { PlayIcon, PauseIcon } from '@/components/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
-import { resolveAdaptivePanes } from '@/lib/adaptive-layout';
+import { adaptivePaneLane, resolveAdaptivePanes } from '@/lib/adaptive-layout';
 import * as Haptics from 'expo-haptics';
 
 import { useTheme } from '@/lib/theme';
@@ -156,11 +156,7 @@ export function AudioPlayerPill() {
   // -- Horizontal lane — the safe area, or the trailing pane of a paired
   // window, so the pill never sits on the fold at the window midline --
   const adaptiveLayout = useAdaptiveLayout();
-  const panes = resolveAdaptivePanes(adaptiveLayout);
-  const laneLeft = panes
-    ? adaptiveLayout.insetLeft + panes.lead + panes.first + panes.gutter
-    : adaptiveLayout.insetLeft;
-  const laneWidth = panes ? panes.second : adaptiveLayout.availableWidth;
+  const lane = adaptivePaneLane(adaptiveLayout, resolveAdaptivePanes(adaptiveLayout));
 
   // -- Accessibility actions --
   const onAccessibilityAction = useCallback(
@@ -186,7 +182,7 @@ export function AudioPlayerPill() {
     <Animated.View
       entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).easing(Ease.out)}
       exiting={reducedMotion ? undefined : FadeOutDown.duration(Duration.fast).easing(Ease.out)}
-      style={[styles.wrapper, { left: laneLeft, width: laneWidth }, bottomStyle]}
+      style={[styles.wrapper, lane, bottomStyle]}
     >
       <GestureDetector gesture={panGesture}>
         <Animated.View

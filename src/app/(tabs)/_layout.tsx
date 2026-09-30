@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Tabs, useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { StyleSheet, Platform, View, TouchableOpacity, Text } from 'react-native';
-import { ADAPTIVE_CLUSTER_MEASURE, adaptiveFrameStyle, adaptiveSafeGutterStyle, resolveAdaptivePanes } from '@/lib/adaptive-layout';
+import { ADAPTIVE_CLUSTER_MEASURE, adaptiveFrameStyle, adaptivePaneLane, adaptiveSafeGutterStyle, resolveAdaptivePanes } from '@/lib/adaptive-layout';
 import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
 import { HouseIcon, BookBookmarkIcon, BookOpenIcon, UserIcon, ChatCircleIcon, StepsIcon } from '@/components/icons';
 import Animated, {
@@ -76,11 +76,7 @@ function NoteDraftDock() {
 
   // The dock spans the safe area. A paired window moves it into the trailing
   // pane, so the whole-row button never crosses the fold on the midline.
-  const panes = resolveAdaptivePanes(adaptiveLayout);
-  const laneLeft = panes
-    ? adaptiveLayout.insetLeft + panes.lead + panes.first + panes.gutter
-    : adaptiveLayout.insetLeft;
-  const laneWidth = panes ? panes.second : adaptiveLayout.availableWidth;
+  const lane = adaptivePaneLane(adaptiveLayout, resolveAdaptivePanes(adaptiveLayout), { margin: Spacing['4'] });
 
   const handleRestore = () => {
     const noteId = draft.noteId;
@@ -98,11 +94,7 @@ function NoteDraftDock() {
       pointerEvents="box-none"
       style={[
         styles.draftDockWrap,
-        {
-          bottom: dockOffset.bottom,
-          left: laneLeft + Spacing['4'],
-          width: laneWidth - Spacing['4'] * 2,
-        },
+        { bottom: dockOffset.bottom, ...lane },
         dockAnimatedStyle,
       ]}
     >

@@ -4,6 +4,7 @@ import {
   ADAPTIVE_SHEET_MEASURE,
   ADAPTIVE_SPLIT_MEASURE,
   ADAPTIVE_FOLD_GUTTER,
+  adaptivePaneLane,
   resolveAdaptivePanes,
   adaptiveFrameStyle,
   adaptiveSafeGutterStyle,
@@ -205,5 +206,26 @@ describe('facing panes', () => {
 
     const shortUpright = resolveAdaptiveLayout({ width: 700, height: 760, fontScale: 1 });
     expect(resolveAdaptivePanes(shortUpright, { stacked: true })).toBeNull();
+  });
+});
+
+describe('pane lane', () => {
+  it('floats a control in the safe area, or in the second page of an open display', () => {
+    const phone = resolveAdaptiveLayout({ width: 390, height: 844, fontScale: 1 });
+    expect(adaptivePaneLane(phone, resolveAdaptivePanes(phone), { margin: 16 })).toEqual({ left: 16, width: 358 });
+
+    const inner = resolveAdaptiveLayout({ width: 951, height: 669, fontScale: 1, insetLeft: 68, insetRight: 80 });
+    const lane = adaptivePaneLane(inner, resolveAdaptivePanes(inner));
+    expect(lane.left).toBeGreaterThan(inner.width / 2);
+    expect(lane).toEqual({ left: 495.5, width: 375.5 });
+
+    const docked = adaptivePaneLane(inner, resolveAdaptivePanes(inner), { margin: 16, maxWidth: 300 });
+    expect(docked.width).toBe(300);
+    expect(docked.left + docked.width / 2).toBe(lane.left + lane.width / 2);
+  });
+
+  it('ignores stacked panes, which leave the full width to floating controls', () => {
+    const upright = resolveAdaptiveLayout({ width: 669, height: 951, fontScale: 1, insetTop: 50, insetBottom: 20 });
+    expect(adaptivePaneLane(upright, resolveAdaptivePanes(upright, { stacked: true }))).toEqual({ left: 0, width: 669 });
   });
 });

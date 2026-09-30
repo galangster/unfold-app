@@ -37,6 +37,7 @@ describe('ReflectionFacingPage', () => {
           fontSize="medium"
           onOpenFullJournal={onOpenFullJournal}
           scrollViewRef={scrollViewRef}
+          bottomInset={0}
         />,
       );
     });

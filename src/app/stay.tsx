@@ -19,6 +19,7 @@ import { FONT_SIZE_VALUES, useUnfoldStore } from '@/lib/store';
 import { useTheme } from '@/lib/theme';
 import { useReadingFont } from '@/lib/useReadingFont';
 import { preventOrphan } from '@/lib/cn';
+import { parsePositiveInteger } from '@/lib/reveal-params';
 
 /**
  * "Stay with this prayer": one closing prayer, full screen, with the screen
@@ -37,7 +38,7 @@ export default function StayScreen() {
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const user = useUnfoldStore((s) => s.user);
 
-  const dayNumber = Number.parseInt(params.dayNumber ?? '', 10);
+  const dayNumber = parsePositiveInteger(params.dayNumber) ?? 0;
   const devotional = useMemo(
     () => devotionals.find((d) => d.id === params.devotionalId),
     [devotionals, params.devotionalId],
@@ -62,6 +63,27 @@ export default function StayScreen() {
     <Text numberOfLines={2} style={[styles.label, { color: colors.textMuted }]}>
       {day.title}
     </Text>
+  ) : null;
+
+  // The day's passage faces the prayer, as a verse faces its collect in a
+  // prayer book.
+  const passage = panes && day?.scriptureText ? (
+    <View style={[adaptiveFrameStyle(ADAPTIVE_READABLE_MEASURE), styles.passage]}>
+      <Text
+        style={{
+          fontFamily: readingFont.body,
+          fontSize: fontSizes.scripture,
+          lineHeight: Math.round(fontSizes.scripture * 1.6),
+          color: colors.textMuted,
+          textAlign: 'center',
+        }}
+      >
+        {preventOrphan(day.scriptureText)}
+      </Text>
+      {day.scriptureReference ? (
+        <Text style={[styles.reference, { color: colors.accent }]}>{day.scriptureReference}</Text>
+      ) : null}
+    </View>
   ) : null;
 
   const done = (
@@ -120,10 +142,11 @@ export default function StayScreen() {
           </View>
         }
         second={panes ? (
-          <View style={[styles.fill, styles.centered]}>
+          <ScrollView style={styles.fill} contentContainerStyle={styles.centered} showsVerticalScrollIndicator={false}>
             {label}
+            {passage}
             {done}
-          </View>
+          </ScrollView>
         ) : undefined}
       />
     </SafeAreaView>
@@ -144,6 +167,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: Spacing['6'],
   },
+  passage: { alignItems: 'center', marginBottom: Spacing['10'] },
+  reference: { ...Typography.cardMeta, marginTop: Spacing['3'] },
   singleDone: { alignItems: 'center', paddingVertical: Spacing['6'] },
   doneButton: {
     minHeight: 44,

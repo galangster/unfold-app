@@ -152,8 +152,8 @@ describe('drawer edge-swipe gesture wired at the screen root', () => {
 describe('docked history in a paired window', () => {
   it('docks the history as the first facing pane and the conversation as the second', () => {
     expect(source).toContain('const dockedPanes = resolveAdaptivePanes(adaptiveLayout)');
-    expect(source).toMatch(/<FacingPanes\s+panes=\{dockedPanes\}\s+divider/);
-    expect(source).toMatch(/first=\{\s*<CompanionDrawer\s+docked/);
+    expect(source).toMatch(/<FacingPanes\s+panes=\{dockedPanes\}\s+unpaired="stack"/);
+    expect(source).toMatch(/first=\{dockedPanes \? \(\s*<CompanionDrawer\s+docked/);
     expect(source).toContain('second={conversationColumn}');
   });
 
@@ -176,12 +176,10 @@ describe('errors live on the bubble, not a banner', () => {
 
 describe('asymmetric safe areas and drawer resize', () => {
   it('pads the header and composer with live left and right insets', () => {
-    expect(source).toContain('const chromeInsets = docked ? DOCKED_CHROME_INSETS : insets');
-    expect(source).toContain('paddingLeft: Spacing[\'4\'] + chromeInsets.left');
-    expect(source).toContain('paddingRight: Spacing[\'4\'] + chromeInsets.right');
-    expect(source).toContain('adaptiveSafeGutterStyle(chromeInsets.left, chromeInsets.right)');
-    // Docked, the pane wrapper owns the safe areas instead.
-    expect(source).toContain('adaptiveSafeGutterStyle(insets.left, insets.right)');
+    // One wrapper owns the safe areas in every layout, so the conversation
+    // column never needs its own insets.
+    expect(source).toMatch(/paddingTop: insets\.top \}, adaptiveSafeGutterStyle\(insets\.left, insets\.right\)\]\}>\s*<FacingPanes/);
+    expect(source).not.toContain('chromeInsets');
   });
 
   it('rewrites the closed drawer translation when drawer width changes', () => {

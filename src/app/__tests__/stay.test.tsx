@@ -35,7 +35,6 @@ jest.mock('@/hooks/useAdaptiveLayout', () => ({
 }));
 jest.mock('@/lib/theme', () => ({
   useTheme: () => ({ isDark: false, colors: new Proxy({}, { get: () => '#888888' }) }),
-  useColors: () => new Proxy({}, { get: () => '#888888' }),
 }));
 jest.mock('@/lib/useReadingFont', () => ({ useReadingFont: () => ({ body: 'Body' }) }));
 jest.mock('@/lib/store', () => ({

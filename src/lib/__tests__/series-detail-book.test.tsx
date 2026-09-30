@@ -102,7 +102,6 @@ jest.mock('@/hooks/useAdaptiveLayout', () => ({
 }));
 
 jest.mock('@/lib/theme', () => ({
-  useColors: () => ({ border: '#3A3328' }),
   useTheme: () => ({
     isDark: true,
     colors: {
@@ -269,12 +268,12 @@ describe('Book of Seasons open-book spread', () => {
     const screen = () => React.createElement(SeriesArcScreen);
     act(() => { tree = renderer.create(screen()); });
     const page = tree.root.findByProps({ testID: 'book-page-capture' });
-    expect(tree.root.findAllByProps({ testID: 'book-contents-page' })).toHaveLength(0);
+    const contents = tree.root.findByProps({ testID: 'book-contents-page' });
 
     mockPairedLayout = duoOpen;
     act(() => { tree.update(screen()); });
     expect(tree.root.findByProps({ testID: 'book-page-capture' })).toBe(page);
-    expect(tree.root.findAllByProps({ testID: 'book-contents-page' }).length).toBeGreaterThan(0);
+    expect(tree.root.findByProps({ testID: 'book-contents-page' })).toBe(contents);
 
     mockPairedLayout = null;
     act(() => { tree.update(screen()); });

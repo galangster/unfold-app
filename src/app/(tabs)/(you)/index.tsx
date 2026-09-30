@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { View, Text, useWindowDimensions, TextInput } from 'react-native';
 import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
-import { adaptiveFrameStyle } from '@/lib/adaptive-layout';
+import { adaptiveFrameStyle, adaptivePanesFrameStyle, resolveAdaptivePanes } from '@/lib/adaptive-layout';
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -42,21 +42,24 @@ interface MenuItem {
 export default function YouScreen() {
   const { fontScale } = useWindowDimensions();
   const adaptiveLayout = useAdaptiveLayout();
-  const youFrameStyle = adaptiveLayout.usesSplit
+  // Two pages that meet on the window midline, where a folding display bends.
+  const youPanes = resolveAdaptivePanes(adaptiveLayout);
+  const youFrameStyle = youPanes
     ? {
-        ...adaptiveFrameStyle(adaptiveLayout.splitMaxWidth),
+        ...adaptivePanesFrameStyle(youPanes),
         flexDirection: 'row' as const,
         alignItems: 'flex-start' as const,
-        gap: adaptiveLayout.columnGap,
+        gap: youPanes.gutter,
       }
     : adaptiveFrameStyle(adaptiveLayout.clusterMaxWidth);
-  const youColumnStyle = adaptiveLayout.usesSplit ? { flex: 1, minWidth: 0 } : undefined;
+  const youProfileColumnStyle = youPanes ? { width: youPanes.first } : undefined;
+  const youRowsColumnStyle = youPanes ? { width: youPanes.second } : undefined;
   const [profileHeight, setProfileHeight] = useState(0);
   const profileScrollY = useSharedValue(0);
   const handleProfileScroll = useAnimatedScrollHandler({
     onScroll: (event) => { profileScrollY.value = event.contentOffset.y; },
   });
-  const canKeepProfileVisible = adaptiveLayout.usesSplit && profileHeight > 0 &&
+  const canKeepProfileVisible = youPanes !== null && profileHeight > 0 &&
     profileHeight <= adaptiveLayout.availableHeight - 100;
   const profileStickyStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: canKeepProfileVisible ? Math.max(0, profileScrollY.value) : 0 }],
@@ -119,7 +122,7 @@ export default function YouScreen() {
         >
           <View style={youFrameStyle}>
           <Animated.View
-            style={[youColumnStyle, profileStickyStyle]}
+            style={[youProfileColumnStyle, profileStickyStyle]}
             onLayout={(event) => setProfileHeight(event.nativeEvent.layout.height)}
           >
           <Animated.View
@@ -329,7 +332,7 @@ export default function YouScreen() {
           </Animated.View>
 
           <View
-            style={youColumnStyle}
+            style={youRowsColumnStyle}
             onLayout={(event) => {
               const nextY = event.nativeEvent.layout.y;
               setSettingsWrapperY((prev) => (prev === nextY ? prev : nextY));

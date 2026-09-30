@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AppState, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { AppState, Dimensions, StyleSheet, View } from 'react-native';
 import type { AppStateStatus, LayoutChangeEvent } from 'react-native';
 import { Blur, Canvas, Fill, Group, Shader } from '@shopify/react-native-skia';
 import { useDerivedValue, useFrameCallback, useSharedValue } from 'react-native-reanimated';
@@ -39,9 +39,11 @@ function useIsAppActive(): boolean {
 }
 
 function useFieldSize() {
-  // The live window size seeds the first frame; onLayout then owns the size.
-  const windowSize = useWindowDimensions();
-  const [size, setSize] = useState(() => ({ width: windowSize.width, height: windowSize.height }));
+  // The window size at mount seeds the first frame; onLayout then owns the size.
+  const [size, setSize] = useState(() => {
+    const windowSize = Dimensions.get('window');
+    return { width: windowSize.width, height: windowSize.height };
+  });
 
   const onLayout = (event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;

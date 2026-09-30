@@ -90,7 +90,6 @@ jest.mock('@/hooks/useCrossTabBack', () => ({
 }));
 
 jest.mock('@/lib/theme', () => ({
-  useColors: () => ({ border: '#3A3328' }),
   useTheme: () => ({
     isDark: true,
     colors: {

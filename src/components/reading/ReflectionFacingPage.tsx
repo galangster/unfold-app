@@ -10,6 +10,8 @@ import { ADAPTIVE_READABLE_MEASURE, adaptiveFrameStyle } from '@/lib/adaptive-la
 import type { FontSize } from '@/lib/store';
 import { useTheme } from '@/lib/theme';
 
+/** Horizontal padding of a reader page, shared with the reading column. */
+export const READER_PAGE_PADDING = Spacing['6'];
 /** Room kept above a focused answer so its question stays in view. */
 const FOCUS_TOP_INSET = Spacing['16'];
 
@@ -22,9 +24,9 @@ interface ReflectionFacingPageProps {
   onOpenFullJournal: (focusQuestion?: number) => void;
   onKeyboardToolbarChange?: (toolbar: ReflectionKeyboardToolbarState | null) => void;
   /** Lets the reader scroll this page, for example from the Contents sheet. */
-  scrollViewRef?: RefObject<ScrollView | null>;
+  scrollViewRef: RefObject<ScrollView | null>;
   /** Clearance below the last question for the tab bar and home indicator. */
-  bottomInset?: number;
+  bottomInset: number;
 }
 
 /**
@@ -41,21 +43,19 @@ export function ReflectionFacingPage({
   onOpenFullJournal,
   onKeyboardToolbarChange,
   scrollViewRef,
-  bottomInset = 0,
+  bottomInset,
 }: ReflectionFacingPageProps) {
   const { colors } = useTheme();
   const reducedMotion = useReducedMotion();
-  const localScrollRef = useRef<ScrollView | null>(null);
-  const scrollRef = scrollViewRef ?? localScrollRef;
   const contentRef = useRef<View | null>(null);
 
   const handleFocusInput = useCallback((contentY: number) => {
-    scrollRef.current?.scrollTo({ y: Math.max(0, contentY - FOCUS_TOP_INSET), animated: !reducedMotion });
-  }, [reducedMotion, scrollRef]);
+    scrollViewRef.current?.scrollTo({ y: Math.max(0, contentY - FOCUS_TOP_INSET), animated: !reducedMotion });
+  }, [reducedMotion, scrollViewRef]);
 
   return (
     <ScrollView
-      ref={scrollRef}
+      ref={scrollViewRef}
       testID="reflection-facing-page"
       style={styles.fill}
       contentContainerStyle={[styles.content, { paddingBottom: bottomInset + Spacing['16'] }]}
@@ -90,7 +90,6 @@ export function ReflectionFacingPage({
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  // Matches the reading column's padding.
-  content: { paddingHorizontal: Spacing['6'], paddingTop: Spacing['10'] },
+  content: { paddingHorizontal: READER_PAGE_PADDING, paddingTop: Spacing['10'] },
   runningHead: { ...Typography.cardMeta, marginBottom: Spacing['6'] },
 });

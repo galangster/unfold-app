@@ -28,7 +28,7 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Typography } from '@/constants/typography';
 import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
-import { adaptiveFrameStyle, PRIMARY_SAFE_AREA_EDGES, resolveAdaptivePanes } from '@/lib/adaptive-layout';
+import { adaptiveFrameStyle, adaptivePanesFrameStyle, PRIMARY_SAFE_AREA_EDGES, resolveAdaptivePanes } from '@/lib/adaptive-layout';
 import { useTheme } from '@/lib/theme';
 import { useGuardedBack } from '@/hooks/useGuardedBack';
 import { useUnfoldStore } from '@/lib/store';
@@ -356,7 +356,7 @@ export default function EveningWindDownScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SafeAreaView style={{ flex: 1 }} edges={PRIMARY_SAFE_AREA_EDGES}>
         {/* Header — minimal */}
-        <View style={spread ? undefined : clusterFrameStyle}>
+        <View style={spread ? adaptivePanesFrameStyle(spread) : clusterFrameStyle}>
         <View
           style={{
             flexDirection: 'row',

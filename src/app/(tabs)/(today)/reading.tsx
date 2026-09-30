@@ -9,7 +9,7 @@ import { useAutoHide } from '@/hooks/useAutoHide';
 import { View, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet, TouchableOpacity, Keyboard, ScrollView, UIManager, Modal, type LayoutChangeEvent } from 'react-native';
 import { ReaderText as Text } from '@/components/reading/ReaderText';
 import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
-import { ADAPTIVE_PANE_MIN, ADAPTIVE_READABLE_MEASURE, adaptiveFrameStyle, resolveAdaptivePanes } from '@/lib/adaptive-layout';
+import { ADAPTIVE_PANE_MIN, ADAPTIVE_READABLE_MEASURE, adaptiveFrameStyle, adaptivePaneLane, resolveAdaptivePanes } from '@/lib/adaptive-layout';
 import { FacingPanes } from '@/components/ui/FacingPanes';
 import { useRouter, useLocalSearchParams, useIsFocused } from 'expo-router';
 import { useModalNavigation } from '@/hooks/useModalNavigation';
@@ -98,7 +98,7 @@ import {
   type ReaderSection,
 } from '@/components/reading/DevotionalContent';
 import { ReflectionQuestionNav, type ReflectionKeyboardToolbarState } from '@/components/reading/ReflectionQuestionNav';
-import { ReflectionFacingPage } from '@/components/reading/ReflectionFacingPage';
+import { READER_PAGE_PADDING, ReflectionFacingPage } from '@/components/reading/ReflectionFacingPage';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { TomorrowPreview } from '@/components/reading/TomorrowPreview';
 import { ScripturePracticeSheet, buildPracticeBibleHref } from '@/components/reading/ScripturePracticeSheet';
@@ -157,8 +157,6 @@ const LIBRARY_TARGET_TOP_INSET = 220;
 const SECTION_TARGET_TOP_INSET = 24;
 /** Room the reflection toolbar keeps above the home indicator when the keyboard is closed. */
 const REFLECTION_TOOLBAR_CLEARANCE = 64;
-/** Horizontal padding of the reading scroll content. */
-const READER_CONTENT_PADDING = Spacing['6'];
 
 function parsePositiveInteger(value?: string | string[]): number | null {
   if (!value) return null;
@@ -511,7 +509,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   const facingScrollRef = useRef<ScrollView | null>(null);
   const readerPaneWidth = facingPanes?.axis === 'row' ? facingPanes.first : adaptiveLayout.width;
   const readableWidth = facingPanes?.axis === 'row'
-    ? Math.min(facingPanes.first - READER_CONTENT_PADDING * 2, ADAPTIVE_READABLE_MEASURE)
+    ? Math.min(facingPanes.first - READER_PAGE_PADDING * 2, ADAPTIVE_READABLE_MEASURE)
     : adaptiveLayout.readableMaxWidth;
   const readingFrameStyle = adaptiveFrameStyle(readableWidth);
   // A tall window gives reflection the space above the keyboard when the
@@ -2591,7 +2589,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
               ref={scrollViewRef}
               style={{ flex: 1 }}
               contentContainerStyle={{
-                paddingHorizontal: READER_CONTENT_PADDING,
+                paddingHorizontal: READER_PAGE_PADDING,
                 paddingTop: Spacing['10'],
                 paddingBottom: 300,
               }}
@@ -2954,11 +2952,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
           style={[
             { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: colors.background },
             // Beside the reading, the toolbar belongs to the facing page only.
-            displayedPanes?.axis === 'row' ? {
-              left: adaptiveLayout.insetLeft + displayedPanes.lead + displayedPanes.first + displayedPanes.gutter,
-              right: undefined,
-              width: displayedPanes.second,
-            } : null,
+            displayedPanes?.axis === 'row' ? { ...adaptivePaneLane(adaptiveLayout, displayedPanes), right: undefined } : null,
           ]}
         >
           <ReflectionQuestionNav {...reflectionToolbar} />

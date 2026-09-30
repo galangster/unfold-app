@@ -51,8 +51,8 @@ export function BookOfSeasonsView({
     ? <View style={styles.accessoryRow}>{headerAccessory}</View>
     : null;
 
-  // The current page keeps one tree position in every layout, so opening or
-  // closing the device never remounts it or its page-curl capture.
+  // Both pages keep one tree position in every layout, so opening or closing
+  // the device never remounts them or the page-curl capture.
   const currentPage = (
     <View testID="book-current-page" style={openBook ? styles.page : undefined}>
       {showAllReadings ? <View style={styles.season}>
@@ -108,15 +108,15 @@ export function BookOfSeasonsView({
       {openBook ? null : accessory}
       <FacingPanes
         panes={openBook}
+        unpaired="stack"
         first={currentPage}
-        second={openBook ? (
-          <View testID="book-contents-page" style={styles.page}>
-            {accessory}
+        second={
+          <View testID="book-contents-page" style={openBook ? styles.page : undefined}>
+            {openBook ? accessory : null}
             {contents}
           </View>
-        ) : undefined}
+        }
       />
-      {openBook ? null : contents}
     </View>
   );
 }

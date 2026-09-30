@@ -155,7 +155,6 @@ jest.mock('@/lib/theme', () => ({
     isDark: true,
     colors: new Proxy({}, { get: (_target, prop) => (typeof prop === 'string' ? '#888888' : undefined) }),
   }),
-  useColors: () => new Proxy({}, { get: (_target, prop) => (typeof prop === 'string' ? '#888888' : undefined) }),
 }));
 jest.mock('@/components/icons', () => new Proxy({}, { get: () => () => null }));
 jest.mock('@/components/UndoToast', () => ({ UndoToast: () => null }));

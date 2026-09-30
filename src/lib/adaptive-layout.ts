@@ -157,7 +157,7 @@ export function resolveAdaptivePanes(
     const midline = layout.width / 2;
     const half = ADAPTIVE_SPLIT_MEASURE / 2;
     const leadingRoom = Math.min(midline - layout.insetLeft, half);
-    const trailingRoom = Math.min(layout.width - midline - layout.insetRight, half);
+    const trailingRoom = Math.min(midline - layout.insetRight, half);
     const first = leadingRoom - gutter / 2;
     const second = trailingRoom - gutter / 2;
     if (first < ADAPTIVE_PANE_MIN || second < ADAPTIVE_PANE_MIN) return null;
@@ -171,11 +171,33 @@ export function resolveAdaptivePanes(
   ) {
     const midline = layout.height / 2;
     const first = midline - layout.insetTop - gutter / 2;
-    const second = layout.height - midline - layout.insetBottom - gutter / 2;
+    const second = midline - layout.insetBottom - gutter / 2;
     if (first < ADAPTIVE_PANE_MIN || second < ADAPTIVE_PANE_MIN) return null;
     return { axis: 'column', lead: 0, first, second, gutter };
   }
   return null;
+}
+
+/** A frame that spans both row panes, for chrome that sits above or below them. */
+export function adaptivePanesFrameStyle(panes: AdaptivePanes): { marginLeft: number; width: number } {
+  return { marginLeft: panes.lead, width: panes.first + panes.gutter + panes.second };
+}
+
+/**
+ * The horizontal lane for a floating control: the safe area, or the second
+ * pane of a paired row, so nothing floats across the midline. The control is
+ * centered in the lane, `margin` from each side and at most `maxWidth` wide.
+ */
+export function adaptivePaneLane(
+  layout: Pick<AdaptiveLayout, 'insetLeft' | 'availableWidth'>,
+  panes: AdaptivePanes | null,
+  { margin = 0, maxWidth = Number.POSITIVE_INFINITY }: { margin?: number; maxWidth?: number } = {},
+): { left: number; width: number } {
+  const row = panes?.axis === 'row' ? panes : null;
+  const laneLeft = layout.insetLeft + (row ? row.lead + row.first + row.gutter : 0);
+  const laneWidth = row ? row.second : layout.availableWidth;
+  const width = Math.max(0, Math.min(laneWidth - margin * 2, maxWidth));
+  return { left: laneLeft + (laneWidth - width) / 2, width };
 }
 
 export function adaptiveFrameStyle(maxWidth: number): AdaptiveFrameStyle {

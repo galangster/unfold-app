@@ -3,7 +3,7 @@ import { drainSyncOutbox } from '@/lib/sync-outbox';
 import { usePrevious } from '@/hooks/usePrevious';
 import { View, StyleSheet, Alert } from 'react-native';
 import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
-import { adaptiveFrameStyle, resolveAdaptivePanes } from '@/lib/adaptive-layout';
+import { adaptiveFrameStyle, adaptivePanesFrameStyle, resolveAdaptivePanes } from '@/lib/adaptive-layout';
 import { useRouter, useFocusEffect, useIsFocused, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
@@ -290,9 +290,9 @@ export default function HomeScreen() {
   // Two equal pages that meet on the window midline, where a folding display
   // bends. The pane geometry carries its own offsets, so the frame sits flush
   // with the safe-area edges instead of centering a capped column.
-  const todayPanes = todayUsesSplit ? resolveAdaptivePanes(adaptiveLayout) : null;
+  const todayPanes = resolveAdaptivePanes(adaptiveLayout);
   const todayFrameStyle = todayPanes
-    ? { marginLeft: todayPanes.lead, width: todayPanes.first + todayPanes.gutter + todayPanes.second }
+    ? adaptivePanesFrameStyle(todayPanes)
     : adaptiveFrameStyle(
         todayUsesSplit ? adaptiveLayout.splitMaxWidth : adaptiveLayout.clusterMaxWidth,
       );

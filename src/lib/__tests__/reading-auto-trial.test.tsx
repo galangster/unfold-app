@@ -113,7 +113,6 @@ jest.mock('react-native-reanimated', () => {
 
 jest.mock('@/lib/theme', () => ({
   useTheme: () => ({ colors: { text: '#fff', accent: '#c8a55c', textMuted: '#aaa', background: '#000' } }),
-  useColors: () => ({ text: '#fff', accent: '#c8a55c', textMuted: '#aaa', background: '#000', border: '#333' }),
 }));
 
 jest.mock('@/hooks/usePremiumNudge', () => ({
