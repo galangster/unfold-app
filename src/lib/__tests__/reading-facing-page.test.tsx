@@ -16,6 +16,7 @@ const SECOND_QUESTION = 'What would you set down tomorrow?';
 const DRAFT = 'In the walk home, before the phone came out.';
 
 const mockPush = jest.fn();
+let mockReducedMotion = true;
 const mockWindow = { width: 390, height: 844, insetTop: 47, insetBottom: 34, insetLeft: 0, insetRight: 0 };
 
 jest.mock('@/hooks/useAdaptiveLayout', () => ({
@@ -134,6 +135,9 @@ jest.mock('react-native-reanimated', () => {
     FadeIn: chain,
     FadeOut: chain,
     FadeInDown: chain,
+    LayoutAnimationConfig: function LayoutAnimationConfig({ children }: { children: React.ReactNode }) {
+      return children;
+    },
     SlideInDown: chain,
     SlideOutDown: chain,
     Easing: { cubic: 'cubic', ease: 'ease', out: () => 'out', in: () => 'in', inOut: () => 'inOut', bezier: () => 'bezier' },
@@ -148,7 +152,7 @@ jest.mock('react-native-reanimated', () => {
     withSpring: (value: unknown) => value,
     withDelay: (_delay: number, value: unknown) => value,
     runOnJS: (fn: (...args: unknown[]) => void) => fn,
-    useReducedMotion: () => true,
+    useReducedMotion: () => mockReducedMotion,
   };
 });
 jest.mock('@/lib/theme', () => ({
@@ -254,13 +258,16 @@ const { ReadingScreen } = require('@/app/(tabs)/(today)/reading');
 const { useUnfoldStore } = require('@/lib/store') as typeof import('@/lib/store');
 const { DevotionalContent } = require('@/components/reading/DevotionalContent');
 const { FacingPanes } = require('@/components/ui/FacingPanes');
+const { InlineReflectionJournal } = require('@/components/reading/InlineReflectionJournal');
 
 type Node = {
   type: unknown;
   props: Record<string, unknown>;
   parent: Node | null;
+  children: Array<Node | string>;
   findAllByProps: (props: Record<string, unknown>) => Node[];
   findByType: (type: unknown) => Node;
+  findAllByType: (type: unknown) => Node[];
 };
 type ReaderTree = { root: Node; update: (element: React.ReactElement) => void; unmount: () => void };
 
@@ -268,7 +275,7 @@ const PHONE = { width: 390, height: 844, insetTop: 47, insetBottom: 34, insetLef
 const DUO_OPEN = { width: 951, height: 669, insetTop: 24, insetBottom: 20, insetLeft: 0, insetRight: 0 };
 const DUO_UPRIGHT = { width: 669, height: 951, insetTop: 24, insetBottom: 20, insetLeft: 0, insetRight: 0 };
 
-function seedReader() {
+function seedReader(dayOverrides: Record<string, unknown> = {}) {
   useUnfoldStore.setState({
     user: { name: 'Ada', fontSize: 'medium', isPremium: true, hasCompletedOnboarding: true } as unknown as UserProfile,
     devotionals: [{
@@ -289,6 +296,7 @@ function seedReader() {
         closingPrayer: 'Teach me to rest in you.',
         isRead: false,
         reflectionQuestions: [QUESTION, SECOND_QUESTION],
+        ...dayOverrides,
       }],
     } as unknown as Devotional],
     currentDevotionalId: DEVOTIONAL_ID,
@@ -310,9 +318,19 @@ function isHiddenFromAccessibility(node: Node) {
   return false;
 }
 
-function stayButtons(root: Node) {
-  return root.findAllByProps({ accessibilityHint: 'Opens this prayer on its own, full screen' })
+function stayButtons(root: Node, subject: 'prayer' | 'passage' = 'prayer') {
+  return root.findAllByProps({ accessibilityHint: `Opens this ${subject} on its own, full screen` })
     .filter((node) => typeof node.props.onPress === 'function');
+}
+
+/** The pane slots FacingPanes renders, in order: first, gutter, second. */
+function paneSlots(root: Node) {
+  let container = root.findByType(FacingPanes);
+  for (;;) {
+    const nodes = container.children.filter((child): child is Node => typeof child !== 'string');
+    if (nodes.length !== 1) return nodes;
+    container = nodes[0];
+  }
 }
 
 function tapQuestion(root: Node, number: number, question: string) {
@@ -416,9 +434,9 @@ describe('reader facing page', () => {
     act(() => tree.unmount());
   });
 
-  it('keeps the prayer session off a phone', async () => {
+  it('offers the prayer session on a phone', async () => {
     const tree = await renderAt(PHONE);
-    expect(stayButtons(tree.root)).toHaveLength(0);
+    expect(stayButtons(tree.root).length).toBeGreaterThan(0);
     act(() => tree.unmount());
   });
 
@@ -436,8 +454,44 @@ describe('reader facing page', () => {
     });
     expect(mockPush).toHaveBeenCalledWith({
       pathname: '/stay',
-      params: { devotionalId: DEVOTIONAL_ID, dayNumber: '1' },
+      params: { devotionalId: DEVOTIONAL_ID, dayNumber: '1', focus: 'prayer' },
     });
+    act(() => tree.unmount());
+  });
+
+  it('opens the passage session for the day being read', async () => {
+    const tree = await renderAt(PHONE);
+    const [stay] = stayButtons(tree.root, 'passage');
+    act(() => {
+      (stay.props.onPress as () => void)();
+    });
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/stay',
+      params: { devotionalId: DEVOTIONAL_ID, dayNumber: '1', focus: 'passage' },
+    });
+    act(() => tree.unmount());
+  });
+
+  it('pairs a day without questions on a wide window and keeps the header in the first pane', async () => {
+    seedReader({ reflectionQuestions: undefined });
+    const tree = await renderAt(DUO_OPEN);
+    expect(tree.root.findByType(FacingPanes).props.panes).toMatchObject({ axis: 'row' });
+    expect(tree.root.findByType(DevotionalContent).props.reflectionPlacement).toBe('inline');
+
+    const slots = paneSlots(tree.root);
+    expect(slots).toHaveLength(3);
+    const [first, , second] = slots;
+    expect(first.findAllByProps({ testID: 'reader-header' }).length).toBeGreaterThan(0);
+    expect(second.findAllByProps({ testID: 'reflection-facing-page' }).length).toBeGreaterThan(0);
+    expect(second.findAllByProps({ testID: 'reflection-facing-epigraph' }).length).toBeGreaterThan(0);
+    expect(tree.root.findAllByType(InlineReflectionJournal)).toHaveLength(0);
+    act(() => tree.unmount());
+  });
+
+  it('keeps a stacked column unpaired for a day without questions', async () => {
+    seedReader({ reflectionQuestions: undefined });
+    const tree = await renderAt(DUO_UPRIGHT);
+    expect(tree.root.findByType(FacingPanes).props.panes).toBeNull();
     act(() => tree.unmount());
   });
 });
@@ -452,7 +506,21 @@ describe('reader continuity across a pane change', () => {
 
   afterEach(() => {
     jest.restoreAllMocks();
+    mockReducedMotion = true;
     useUnfoldStore.getState().reset();
+  });
+
+  it('plays the question entrance once and not again on a pane handoff', async () => {
+    const { LayoutAnimationConfig } = require('react-native-reanimated');
+    const tree = await renderAt(PHONE);
+    expect(tree.root.findAllByType(LayoutAnimationConfig)).toHaveLength(0);
+
+    await resizeTo(tree, DUO_OPEN);
+    expect(tree.root.findAllByType(InlineReflectionJournal)).toHaveLength(1);
+    const [page] = tree.root.findAllByProps({ testID: 'reflection-facing-page' });
+    const [config] = page.findAllByType(LayoutAnimationConfig);
+    expect(config.props.skipEntering).toBe(true);
+    act(() => tree.unmount());
   });
 
   it('reopens the question the person had open', async () => {
@@ -470,6 +538,39 @@ describe('reader continuity across a pane change', () => {
     await resizeTo(tree, PHONE);
     expect(responseInputs(tree.root)).toHaveLength(0);
     expect(responseInputs(tree.root, SECOND_QUESTION)).toHaveLength(0);
+    act(() => tree.unmount());
+  });
+
+  it.each([
+    ['moves the desk with the keyboard', false],
+    ['moves the desk without animation under Reduce Motion', true],
+  ])('%s', async (_label, reducedMotion) => {
+    mockReducedMotion = reducedMotion;
+    const { Keyboard, LayoutAnimation } = require('react-native');
+    const configureNext = jest.spyOn(LayoutAnimation, 'configureNext').mockImplementation(() => undefined);
+    const keyboardListeners = new Map<string, (event: unknown) => void>();
+    jest.spyOn(Keyboard, 'addListener').mockImplementation(((event: string, listener: (event: unknown) => void) => {
+      keyboardListeners.set(event, listener);
+      return { remove: jest.fn() };
+    }) as never);
+    const tree = await renderAt(DUO_UPRIGHT);
+    const input = responseInputs(tree.root)[0] as unknown as { props: { onFocus: () => void } };
+    act(() => {
+      input.props.onFocus();
+    });
+    configureNext.mockClear();
+    act(() => {
+      keyboardListeners.get('keyboardWillShow')?.({ duration: 250, easing: 'keyboard', endCoordinates: { height: 400 } });
+    });
+    const expected = reducedMotion
+      ? []
+      : [[{ duration: 250, update: { duration: 250, type: 'keyboard' } }]];
+    expect(configureNext.mock.calls).toEqual(expected);
+
+    act(() => {
+      keyboardListeners.get('keyboardWillHide')?.({ duration: 250, easing: 'keyboard', endCoordinates: { height: 0 } });
+    });
+    expect(configureNext).toHaveBeenCalledTimes(reducedMotion ? 0 : 2);
     act(() => tree.unmount());
   });
 

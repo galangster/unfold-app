@@ -16,15 +16,20 @@ export const READER_PAGE_PADDING = Spacing['6'];
 const FOCUS_TOP_INSET = Spacing['16'];
 
 interface ReflectionFacingPageProps {
+  /** The day's questions. None leaves a quiet page with the day's line. */
   questions: string[];
   devotionalId: string;
   dayNumber: number;
   dayTitle?: string;
+  /** Shown as an epigraph when the day has no questions. */
+  quotableLine?: string;
   fontSize: FontSize;
   onOpenFullJournal: (focusQuestion?: number) => void;
   onKeyboardToolbarChange?: (toolbar: ReflectionKeyboardToolbarState | null) => void;
   initialExpandedIndex?: number | null;
   onExpandedIndexChange?: (index: number | null) => void;
+  /** False on a pane handoff, so the questions do not replay their entrance. */
+  animateEntrance?: boolean;
   /** Lets the reader scroll this page, for example from the Contents sheet. */
   scrollViewRef: RefObject<ScrollView | null>;
   /** Clearance below the last question for the tab bar and home indicator. */
@@ -35,17 +40,21 @@ interface ReflectionFacingPageProps {
  * The reflection desk: the day's questions and the response on their own page,
  * facing the reading. It scrolls on its own, so writing never moves the
  * reading, and it hosts the only InlineReflectionJournal while it is shown.
+ * A day without questions keeps the page, quiet: the running head and the
+ * day's line.
  */
 export function ReflectionFacingPage({
   questions,
   devotionalId,
   dayNumber,
   dayTitle,
+  quotableLine,
   fontSize,
   onOpenFullJournal,
   onKeyboardToolbarChange,
   initialExpandedIndex,
   onExpandedIndexChange,
+  animateEntrance,
   scrollViewRef,
   bottomInset,
 }: ReflectionFacingPageProps) {
@@ -77,18 +86,25 @@ export function ReflectionFacingPage({
             {`Day ${dayNumber} · ${dayTitle}`}
           </Text>
         ) : null}
-        <InlineReflectionJournal
-          questions={questions}
-          devotionalId={devotionalId}
-          dayNumber={dayNumber}
-          onOpenFullJournal={onOpenFullJournal}
-          fontSize={fontSize}
-          scrollContentRef={contentRef}
-          onFocusInput={handleFocusInput}
-          onKeyboardToolbarChange={onKeyboardToolbarChange}
-          initialExpandedIndex={initialExpandedIndex}
-          onExpandedIndexChange={onExpandedIndexChange}
-        />
+        {questions.length > 0 ? (
+          <InlineReflectionJournal
+            questions={questions}
+            devotionalId={devotionalId}
+            dayNumber={dayNumber}
+            onOpenFullJournal={onOpenFullJournal}
+            fontSize={fontSize}
+            scrollContentRef={contentRef}
+            onFocusInput={handleFocusInput}
+            onKeyboardToolbarChange={onKeyboardToolbarChange}
+            initialExpandedIndex={initialExpandedIndex}
+            onExpandedIndexChange={onExpandedIndexChange}
+            animateEntrance={animateEntrance}
+          />
+        ) : quotableLine ? (
+          <Text testID="reflection-facing-epigraph" style={[styles.epigraph, { color: colors.textMuted }]}>
+            {quotableLine}
+          </Text>
+        ) : null}
       </View>
     </ScrollView>
   );
@@ -98,4 +114,5 @@ const styles = StyleSheet.create({
   fill: { flex: 1 },
   content: { paddingHorizontal: READER_PAGE_PADDING, paddingTop: Spacing['10'] },
   runningHead: { ...Typography.cardMeta, marginBottom: Spacing['6'] },
+  epigraph: { ...Typography.displayMd },
 });

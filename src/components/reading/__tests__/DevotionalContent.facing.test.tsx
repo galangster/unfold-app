@@ -111,4 +111,21 @@ describe('DevotionalContent facing page and prayer session', () => {
     );
     expect(tree.root.findAllByProps({ accessibilityHint: 'Opens this prayer on its own, full screen' })).toHaveLength(0);
   });
+
+  it('offers to stay with the passage when the day has Scripture text', async () => {
+    const onStayWithPassage = jest.fn();
+    const tree = await render(
+      <DevotionalContent day={day()} fontSize="medium" onStayWithPassage={onStayWithPassage} />,
+    );
+    const button = tree.root.findByProps({ accessibilityHint: 'Opens this passage on its own, full screen' });
+    act(() => button.props.onPress());
+    expect(onStayWithPassage).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not offer the passage session for a day without Scripture text', async () => {
+    const tree = await render(
+      <DevotionalContent day={day({ scriptureText: undefined })} fontSize="medium" onStayWithPassage={jest.fn()} />,
+    );
+    expect(tree.root.findAllByProps({ accessibilityHint: 'Opens this passage on its own, full screen' })).toHaveLength(0);
+  });
 });

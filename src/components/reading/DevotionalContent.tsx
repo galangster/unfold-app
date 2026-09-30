@@ -82,8 +82,12 @@ interface DevotionalContentProps {
   reflectionPlacement?: 'inline' | 'facing';
   reflectionInitialExpandedIndex?: number | null;
   onReflectionExpandedIndexChange?: (index: number | null) => void;
+  /** False on a pane handoff, so the questions do not replay their entrance. */
+  reflectionAnimateEntrance?: boolean;
   /** Opens a full-screen session for the closing prayer. */
   onStayWithPrayer?: () => void;
+  /** Opens a full-screen session for the day's passage. */
+  onStayWithPassage?: () => void;
 }
 
 /**
@@ -150,7 +154,9 @@ export function DevotionalContent({
   reflectionPlacement = 'inline',
   reflectionInitialExpandedIndex,
   onReflectionExpandedIndexChange,
+  reflectionAnimateEntrance,
   onStayWithPrayer,
+  onStayWithPassage,
 }: DevotionalContentProps) {
   const { colors, isDark } = useTheme();
   const actLocatedRef = useRef(false);
@@ -465,6 +471,17 @@ export function DevotionalContent({
           onBegin={onBeginPractice}
         />
       ) : null}
+      {displayScripture && onStayWithPassage ? (
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={onStayWithPassage}
+          accessibilityRole="button"
+          accessibilityHint="Opens this passage on its own, full screen"
+          style={dcStyles.stayButton}
+        >
+          <Text style={[dcStyles.stayLabel, { color: colors.accent }]}>Stay with this passage</Text>
+        </TouchableOpacity>
+      ) : null}
 
       {/* Section divider: scripture -> body */}
       <SectionDivider color={colors.textMuted} style={{ marginTop: 20, marginBottom: 8 }} />
@@ -556,6 +573,7 @@ export function DevotionalContent({
               onKeyboardToolbarChange={onReflectionKeyboardToolbarChange}
               initialExpandedIndex={reflectionInitialExpandedIndex}
               onExpandedIndexChange={onReflectionExpandedIndexChange}
+              animateEntrance={reflectionAnimateEntrance}
             />
           ) : (
             <View>
