@@ -188,6 +188,23 @@ export function resolveAdaptivePanes(
   return null;
 }
 
+/**
+ * Whether a software keyboard this tall leaves the second of two stacked panes
+ * too short to write in. The bottom safe-area inset sits under the keyboard.
+ */
+export function keyboardCrowdsSecondPane(panes: AdaptivePanes, keyboardHeight: number, insetBottom: number): boolean {
+  return panes.second - Math.max(0, keyboardHeight - insetBottom) < ADAPTIVE_PANE_MIN;
+}
+
+/**
+ * Stacked panes with the first folded to `keep` points and the gutter closed,
+ * so the second pane takes the rest of the window. The folded pane stays
+ * mounted; a fold to zero hides it.
+ */
+export function foldFirstPane(panes: AdaptivePanes, keep = 0): AdaptivePanes {
+  return { ...panes, first: keep, gutter: 0, second: panes.first + panes.gutter + panes.second - keep };
+}
+
 /** A frame that spans both row panes, for chrome that sits above or below them. */
 export function adaptivePanesFrameStyle(panes: AdaptivePanes): { marginLeft: number; width: number } {
   return { marginLeft: panes.lead, width: panes.first + panes.gutter + panes.second };

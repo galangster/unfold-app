@@ -108,6 +108,11 @@ jest.mock('@/lib/theme', () => ({
   }),
 }));
 
+// The writing desk's source page reads the reader's passage.
+jest.mock('@/lib/bible-api', () => ({
+  fetchVerseLocal: jest.fn(async () => null),
+  fetchVerse: jest.fn(async () => null),
+}));
 jest.mock('@/lib/network-error-handler', () => ({
   isOnline: jest.fn(async () => true),
 }));

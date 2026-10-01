@@ -46,7 +46,10 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
 import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
-import { adaptiveFrameStyle, PRIMARY_SAFE_AREA_EDGES } from '@/lib/adaptive-layout';
+import { useKeyboardFoldedPanes } from '@/hooks/useKeyboardFoldedPanes';
+import { adaptiveFrameStyle, PRIMARY_SAFE_AREA_EDGES, resolveAdaptivePanes } from '@/lib/adaptive-layout';
+import { FacingPanes } from '@/components/ui/FacingPanes';
+import { JournalSourcePage } from '@/components/journal/JournalSourcePage';
 import { useTheme } from '@/lib/theme';
 import { flushUnfoldStorePersist, useUnfoldStore, JournalMode, SoapResponses } from '@/lib/store';
 import { isOnline } from '@/lib/network-error-handler';
@@ -837,9 +840,32 @@ Their journal entry:
   // Prayer requests from existing entry
   const prayerRequests = existingEntry?.prayerRequests ?? [];
 
+  // The writing desk (DESIGN.md, Journal, write): writing from a day's reading
+  // puts that day on a source page beside the draft, or above it in a tall
+  // window. The draft keeps its place in the tree in every layout, so opening
+  // or closing the device never remounts the fields or their autosave. In a
+  // tall window the source folds away while the keyboard would leave the draft
+  // too short to write in.
+  const sourceDay = devotionalId ? currentDay : undefined;
+  const { panes: deskPanes } = useKeyboardFoldedPanes(
+    sourceDay ? resolveAdaptivePanes(adaptiveLayout, { stacked: true }) : null,
+    { insetBottom: adaptiveLayout.insetBottom, reducedMotion },
+  );
+
   return (
     <TouchableOpacity accessible={false} activeOpacity={1} style={[jStyles.flex1, { backgroundColor: colors.background }]} onPress={Keyboard.dismiss}>
       <SafeAreaView style={jStyles.flex1} edges={PRIMARY_SAFE_AREA_EDGES}>
+        {/* The draft is always the second pane: an unpaired window stacks it
+            alone, so it keeps one tree position in every layout. */}
+        <FacingPanes
+          panes={deskPanes}
+          unpaired="stack"
+          testID="journal-desk"
+          first={sourceDay && deskPanes ? (
+            <JournalSourcePage day={sourceDay} bottomInset={adaptiveLayout.insetBottom} />
+          ) : null}
+          second={
+            <>
           {/* Header */}
           <View style={clusterFrameStyle}>
           <View style={jStyles.headerRow}>
@@ -1340,6 +1366,9 @@ Their journal entry:
               {hasChanges ? 'Saving...' : justSaved ? 'Saved' : 'Your response is saved automatically'}
             </Animated.Text>
           </Animated.View>
+            </>
+          }
+        />
       </SafeAreaView>
 
       <PremiumFeatureSheet
