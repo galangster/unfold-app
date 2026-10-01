@@ -25,6 +25,7 @@ on:
         options:
           - qa-testflight
           - production
+          - production-xcode-27-1
           - preview
       platform:
         description: Target platform
