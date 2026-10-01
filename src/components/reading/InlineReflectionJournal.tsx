@@ -73,6 +73,23 @@ type PendingResponse = {
 };
 
 /**
+ * Answers whose latest save failed, by devotional, day, and question. A pane
+ * change unmounts the journal and mounts a new one, which reads the in-memory
+ * store; this keeps the failure and its retry visible across that remount.
+ */
+const failedReflectionSaves = new Map<string, PendingResponse>();
+/** The latest save attempt per answer, so an older attempt settles nothing. */
+const latestReflectionSaveAttempts = new Map<string, PendingResponse>();
+/** Mounted journals, told when a save that outlived its journal fails. */
+const failedReflectionSaveListeners = new Set<(failed: PendingResponse) => void>();
+
+type ReflectionAnswer = Pick<PendingResponse, 'devotionalId' | 'dayNumber' | 'question'>;
+
+function reflectionSaveKey({ devotionalId, dayNumber, question }: ReflectionAnswer): string {
+  return `${devotionalId}\u001f${dayNumber}\u001f${question}`;
+}
+
+/**
  * Interactive inline reflection journal that appears in the reading screen.
  * Each question is a tappable prompt that reveals a TextInput for quick capture.
  * Responses auto-save to the same store used by the full journal editor.
@@ -154,6 +171,15 @@ export function InlineReflectionJournal({
   heldIndexRef.current = heldIndex;
 
   const questionsKey = useMemo(() => questions.join('\u001f'), [questions]);
+  const questionsRef = useRef(questions);
+  questionsRef.current = questions;
+
+  // Takes over an answer whose latest save failed, so its retry saves it.
+  const adoptFailedSave = useCallback((index: number, failed: PendingResponse) => {
+    const revision = ++revisionCounterRef.current;
+    latestRevisionsRef.current.set(index, revision);
+    failedResponsesRef.current.set(index, { ...failed, index, revision });
+  }, []);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -201,6 +227,20 @@ export function InlineReflectionJournal({
         }
       }
     }
+    questions.forEach((question, idx) => {
+      const key = reflectionSaveKey({ devotionalId, dayNumber, question });
+      const failed = failedReflectionSaves.get(key);
+      // A save of this answer that is still running settles the record itself.
+      if (!failed || latestReflectionSaveAttempts.has(key)) return;
+      // The store holds the words of a failed save. Other words mean the
+      // answer changed elsewhere since, so that failure is stale.
+      if (initial.get(idx) !== failed.response) {
+        failedReflectionSaves.delete(key);
+        return;
+      }
+      adoptFailedSave(idx, failed);
+      initialStatuses.set(idx, 'error');
+    });
     setPersistedResponses(persisted);
     setSaveStatuses(initialStatuses);
 
@@ -211,7 +251,32 @@ export function InlineReflectionJournal({
     };
     localResponsesRef.current = initial;
     setLocalResponses(initial);
-  }, [devotionalId, dayNumber, questionsKey, questions]);
+  }, [devotionalId, dayNumber, questionsKey, questions, adoptFailedSave]);
+
+  // A save that outlived the journal before this one can fail after this one
+  // mounted. Show it here unless this journal has written that answer since.
+  useEffect(() => {
+    const handleFailedSave = (failed: PendingResponse) => {
+      const scope = currentScopeRef.current;
+      const index = questionsRef.current.indexOf(failed.question);
+      if (
+        failed.devotionalId !== scope.devotionalId ||
+        failed.dayNumber !== scope.dayNumber ||
+        index < 0 ||
+        latestRevisionsRef.current.has(index)
+      ) return;
+      // Another writer, such as the Journal screen, may have replaced the words since.
+      const stored = getJournalEntry(failed.devotionalId, failed.dayNumber)
+        ?.questionResponses?.find((qr) => qr.question === failed.question)?.response;
+      if (stored !== failed.response) return;
+      adoptFailedSave(index, failed);
+      setSaveStatuses((current) => new Map(current).set(index, 'error'));
+    };
+    failedReflectionSaveListeners.add(handleFailedSave);
+    return () => {
+      failedReflectionSaveListeners.delete(handleFailedSave);
+    };
+  }, [adoptFailedSave, getJournalEntry]);
 
   // Ensure a journal entry exists to attach responses to
   const ensureEntry = useCallback(
@@ -269,6 +334,14 @@ export function InlineReflectionJournal({
         dayNumber: targetDayNumber,
         revision,
       };
+      const key = reflectionSaveKey(pending);
+      latestReflectionSaveAttempts.set(key, pending);
+      // True once, for the newest attempt at this answer, which then owns its record.
+      const settleLatestAttempt = () => {
+        if (latestReflectionSaveAttempts.get(key) !== pending) return false;
+        latestReflectionSaveAttempts.delete(key);
+        return true;
+      };
 
       try {
         const entryId = ensureEntry(targetDevotionalId, targetDayNumber);
@@ -277,6 +350,7 @@ export function InlineReflectionJournal({
         const wrote = await flushUnfoldStorePersistAsync();
         if (!wrote) throw new Error('Journal persistence unavailable');
 
+        if (settleLatestAttempt()) failedReflectionSaves.delete(key);
         if (isCurrentSaveAttempt(pending)) {
           failedResponsesRef.current.delete(index);
           setSaveStatuses((current) => new Map(current).set(index, 'saved'));
@@ -291,6 +365,10 @@ export function InlineReflectionJournal({
         if (isCurrentSaveAttempt(pending)) {
           failedResponsesRef.current.set(index, pending);
           setSaveStatuses((current) => new Map(current).set(index, 'error'));
+        }
+        if (settleLatestAttempt()) {
+          failedReflectionSaves.set(key, pending);
+          failedReflectionSaveListeners.forEach((listener) => listener(pending));
         }
       }
     },
