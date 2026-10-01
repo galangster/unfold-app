@@ -100,6 +100,21 @@ describe('saved-items', () => {
     });
   });
 
+  it('shows a Scripture phrase with its ellipses under its reference, as saved and after a sync', () => {
+    const phrase: Bookmark = {
+      ...bookmark,
+      id: 'scripture-phrase',
+      kind: 'scripture',
+      key: 'Isaiah 40:31',
+      scriptureReference: 'Isaiah 40:31',
+      scriptureText: '…renew their strength…',
+      quotedText: 'renew their strength',
+    };
+    expect(toBookmarkSavedItem(phrase, devotional)).toMatchObject({ reference: 'Isaiah 40:31', quote: '…renew their strength…' });
+    const { kind: _kind, key: _key, quotedText: _quotedText, ...synced } = phrase;
+    expect(toBookmarkSavedItem(synced as Bookmark, devotional)).toMatchObject({ reference: 'Isaiah 40:31', quote: '…renew their strength…' });
+  });
+
   it('labels a selection excerpt Excerpt, not the day passage it does not quote', () => {
     const excerpt: Bookmark = {
       ...bookmark,

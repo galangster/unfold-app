@@ -564,16 +564,17 @@ describe('DevotionalWebView highlight interactions', () => {
     expect(html).toContain('background-position: 0 0.24em;');
   });
 
-  it('names every colour in the picker with the same label My Library uses', () => {
+  it('names every colour swatch for VoiceOver with the label My Library uses, and writes no visible label', () => {
     let tree: any;
     act(() => {
       tree = renderer.create(<DevotionalWebView day={day} fontSize="medium" />);
     });
     const html = getWebViewProps(tree).source.html as string;
     for (const label of ['General', 'Growth', 'Prayer', 'Questions', 'Important']) {
-      expect(html).toContain(`<span class="lbl"><span>${label}</span></span>`);
+      expect(html).toContain(`aria-label="Highlight ${label}"`);
     }
-    expect(html).toContain('aria-label="Highlight Prayer"');
+    expect(html).not.toContain('<span class="lbl"><span>');
+    expect(html).not.toContain("content: 'Remove'");
   });
 
   it('turns the iOS system edit menu off and passes no custom menu', () => {
@@ -1306,16 +1307,25 @@ describe('DevotionalWebView selection actions (RN side)', () => {
     }
   });
 
-  it('saves words inside a Scripture passage as a Scripture bookmark keyed by the reference, once per passage', () => {
+  it('saves words inside a Scripture passage as a Scripture phrase keyed by the reference, once per passage', () => {
     const tree = renderReader();
     send(tree, { type: 'SELECTION_ACTION', action: 'bookmark', requestId: 3, text: 'Come to me', reference: 'Matthew 11:28' });
 
-    expect(mockAddBookmark).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mockAddBookmark).toHaveBeenLastCalledWith(expect.objectContaining({
       kind: 'scripture',
       key: 'Matthew 11:28',
       scriptureReference: 'Matthew 11:28',
-      scriptureText: 'Come to me',
+      // Sync carries only the reference and this text: the ellipses keep it
+      // a phrase on another device.
+      scriptureText: '…Come to me…',
       quotedText: 'Come to me',
+    }));
+
+    // The whole quotation: its quote marks and an ellipsis at its end stay out.
+    send(tree, { type: 'SELECTION_ACTION', action: 'bookmark', requestId: 4, text: '“Come to me, all who are weary…”', reference: 'Matthew 11:28' });
+    expect(mockAddBookmark).toHaveBeenLastCalledWith(expect.objectContaining({
+      scriptureText: '…Come to me, all who are weary…',
+      quotedText: 'Come to me, all who are weary',
     }));
 
     // The passage is already saved (for example from the passage sheet).
@@ -1332,11 +1342,11 @@ describe('DevotionalWebView selection actions (RN side)', () => {
       scriptureText: 'Come to me, all who are weary and burdened.',
       savedAt: '2026-09-30T00:00:00.000Z',
     }];
-    send(tree, { type: 'SELECTION_ACTION', action: 'bookmark', requestId: 4, text: 'all who are weary', reference: 'matthew 11:28' });
+    send(tree, { type: 'SELECTION_ACTION', action: 'bookmark', requestId: 5, text: 'all who are weary', reference: 'matthew 11:28' });
     expect(mockAddBookmark).not.toHaveBeenCalled();
     // Sync keeps one Scripture bookmark per passage, so the bar says so.
     expect(mockInjectJavaScript).toHaveBeenCalledWith(
-      'window.__unfoldSelectionConfirm && window.__unfoldSelectionConfirm(4, "Already in My library"); true;',
+      'window.__unfoldSelectionConfirm && window.__unfoldSelectionConfirm(5, "Already in My library"); true;',
     );
     expect(announceSpy).toHaveBeenCalledWith('Already in My library');
   });
@@ -1486,8 +1496,10 @@ describe('DevotionalWebView selection actions (RN side)', () => {
     const container = tree.root.find((node: any) => node.props.collapsable === false && node.instance?.measureInWindow);
     container.instance.measureInWindow = (callback: any) => callback(0, -400, 390, 3000);
 
-    send(tree, { type: 'SELECTION_ACTIVE' });
-    expect(mockInjectJavaScript).toHaveBeenCalledWith('window.__unfoldSetViewport && window.__unfoldSetViewport(500, 1100); true;');
+    // The answer carries the id of the request, so the page can drop an
+    // answer to an older one.
+    send(tree, { type: 'SELECTION_ACTIVE', requestId: 3 });
+    expect(mockInjectJavaScript).toHaveBeenCalledWith('window.__unfoldSetViewport && window.__unfoldSetViewport(500, 1100, 3); true;');
   });
 });
 
@@ -1596,6 +1608,11 @@ const barMode = (page: ReaderPage) => page.toolbar.getAttribute('data-mode');
 const isBarVisible = (page: ReaderPage) => page.toolbar.classList.contains('visible');
 const lastMessage = (page: ReaderPage, type: string) => [...page.messages].reverse().find((message) => message.type === type);
 
+/** RN's answer to the page's latest SELECTION_ACTIVE: the band the reader can see. */
+function answerViewport(page: ReaderPage, top: number, bottom: number) {
+  page.window.__unfoldSetViewport(top, bottom, lastMessage(page, 'SELECTION_ACTIVE')?.requestId);
+}
+
 async function highlightWords(page: ReaderPage, needle: string, color: string) {
   await select(page, needle);
   tap(page, barButton(page, '[data-action="highlight"]'));
@@ -1630,9 +1647,9 @@ describe('DevotionalWebView selection bar (the page, in jsdom)', () => {
     await select(page, 'Grace meets you');
 
     // The page asks RN where the reader can see it, then shows the bar.
-    expect(page.messages).toContainEqual({ type: 'SELECTION_ACTIVE' });
+    expect(page.messages).toContainEqual({ type: 'SELECTION_ACTIVE', requestId: 1 });
     expect(isBarVisible(page)).toBe(false);
-    page.window.__unfoldSetViewport(0, 3000);
+    answerViewport(page, 0, 3000);
     expect(isBarVisible(page)).toBe(true);
     expect(barMode(page)).toBe('actions');
 
@@ -1662,7 +1679,7 @@ describe('DevotionalWebView selection bar (the page, in jsdom)', () => {
     const page = await openPage(renderPage());
     await select(page, 'Grace meets you', box(400, 330, 50));
     // The reader can see page y 380..1000: no room above the selection.
-    page.window.__unfoldSetViewport(380, 1000);
+    answerViewport(page, 380, 1000);
     expect(page.toolbar.getAttribute('data-placement')).toBe('below');
     expect(page.toolbar.style.top).toBe('438px');
     // Centred on 355 it would overflow; it stops 8px from the right edge.
@@ -1671,14 +1688,14 @@ describe('DevotionalWebView selection bar (the page, in jsdom)', () => {
     // A handle drag grows the selection: the bar follows it once RN has
     // measured the band for the new words.
     await select(page, 'Grace meets you in the next', box(700, 0, 300));
-    page.window.__unfoldSetViewport(380, 1000);
+    answerViewport(page, 380, 1000);
     expect(page.toolbar.getAttribute('data-placement')).toBe('above');
     expect(page.toolbar.style.top).toBe('626px');
     expect(page.toolbar.style.left).toBe('21px');
 
     // Taller than the band: pinned to its top.
     await select(page, 'The next faithful step', box(300, 20, 300, 900));
-    page.window.__unfoldSetViewport(380, 1000);
+    answerViewport(page, 380, 1000);
     expect(page.toolbar.getAttribute('data-placement')).toBe('pinned');
     expect(page.toolbar.style.top).toBe('388px');
   });
@@ -1699,11 +1716,11 @@ describe('DevotionalWebView selection bar (the page, in jsdom)', () => {
     const start = measured();
     click(markA);
     expect(measured()).toBe(start + 1);
-    page.window.__unfoldSetViewport(0, 800);
+    answerViewport(page, 0, 800);
     expect(page.toolbar.style.top).toBe('326px');
     click(markB);
     expect(measured()).toBe(start + 2);
-    page.window.__unfoldSetViewport(1200, 2000);
+    answerViewport(page, 1200, 2000);
     expect(page.toolbar.getAttribute('data-placement')).toBe('below');
     expect(page.toolbar.style.top).toBe('1268px');
     click(page.document.querySelector('p'));
@@ -1711,10 +1728,10 @@ describe('DevotionalWebView selection bar (the page, in jsdom)', () => {
 
     // A long press on new words while the bar is still open.
     await select(page, 'faithful step', box(400, 100));
-    page.window.__unfoldSetViewport(0, 800);
+    answerViewport(page, 0, 800);
     await select(page, 'Stillness is trust.', box(1230, 100));
     expect(measured()).toBe(start + 4);
-    page.window.__unfoldSetViewport(1200, 2000);
+    answerViewport(page, 1200, 2000);
     expect(page.toolbar.getAttribute('data-placement')).toBe('below');
     expect(page.toolbar.style.top).toBe('1268px');
 
@@ -1729,13 +1746,31 @@ describe('DevotionalWebView selection bar (the page, in jsdom)', () => {
     expect(page.toolbar.style.top).toBe('326px');
   });
 
+  it('places the bar with the answer to its latest request, and ignores an older answer that arrives last', async () => {
+    const page = await openPage(renderPage());
+    const requests = () => page.messages.filter((message) => message.type === 'SELECTION_ACTIVE').map((message) => message.requestId);
+    await select(page, 'faithful step', box(400, 100));
+    // The reader scrolls two screens and selects again before RN answers.
+    await select(page, 'Stillness is trust.', box(1230, 100));
+    const [older, latest] = requests().slice(-2);
+
+    page.window.__unfoldSetViewport(1200, 2000, latest);
+    expect(page.toolbar.getAttribute('data-placement')).toBe('below');
+    expect(page.toolbar.style.top).toBe('1268px');
+    // The answer to the older request (the band two screens up) comes last.
+    page.window.__unfoldSetViewport(0, 800, older);
+    expect(page.toolbar.getAttribute('data-placement')).toBe('below');
+    expect(page.toolbar.style.top).toBe('1268px');
+    expect(latest).toBeGreaterThan(older);
+  });
+
   it('measures again when an Aa change or a window resize reflows the page under the bar', async () => {
     const tree = renderPage();
     reportHeight(tree, 900);
     const page = await openPage(tree);
     const measured = () => page.messages.filter((message) => message.type === 'SELECTION_ACTIVE').length;
     await select(page, 'Grace meets you', box(400, 100));
-    page.window.__unfoldSetViewport(0, 3000);
+    answerViewport(page, 0, 3000);
     expect(measured()).toBe(1);
 
     mockInjectJavaScript.mockClear();
@@ -1747,7 +1782,7 @@ describe('DevotionalWebView selection bar (the page, in jsdom)', () => {
     page.geometry.selection = box(520, 100);
     page.window.eval(themeScript);
     expect(measured()).toBe(2);
-    page.window.__unfoldSetViewport(0, 3000);
+    answerViewport(page, 0, 3000);
     expect(page.toolbar.style.top).toBe('446px');
 
     page.window.dispatchEvent(new page.window.Event('resize'));
@@ -1768,14 +1803,14 @@ describe('DevotionalWebView selection bar (the page, in jsdom)', () => {
       page.window.eval(mockInjectJavaScript.mock.calls[0][0]);
     };
     await select(page, 'Grace meets you', box(400, 100));
-    page.window.__unfoldSetViewport(0, 3000);
+    answerViewport(page, 0, 3000);
     expect(page.toolbar.getAttribute('data-placement')).toBe('above');
 
     // The reflow restore after an Aa change scrolled the reader. The band it
     // can see now starts just above the words, so the bar moves below them.
     refresh();
     expect(measured()).toBe(2);
-    page.window.__unfoldSetViewport(380, 1000);
+    answerViewport(page, 380, 1000);
     expect(page.toolbar.getAttribute('data-placement')).toBe('below');
     expect(page.toolbar.style.top).toBe('438px');
     expect(isBarVisible(page)).toBe(true);
@@ -1790,7 +1825,7 @@ describe('DevotionalWebView selection bar (the page, in jsdom)', () => {
   it('turns into the five named colours and a back control on Highlight', async () => {
     const page = await openPage(renderPage());
     await select(page, 'Grace meets you');
-    page.window.__unfoldSetViewport(0, 3000);
+    answerViewport(page, 0, 3000);
 
     tap(page, barButton(page, '[data-action="highlight"]'));
     expect(barMode(page)).toBe('colors');
@@ -1805,6 +1840,30 @@ describe('DevotionalWebView selection bar (the page, in jsdom)', () => {
     tap(page, barButton(page, '[data-action="back"]'));
     expect(barMode(page)).toBe('actions');
     expect(isBarVisible(page)).toBe(true);
+  });
+
+  it('shows only colour dots in the colour step and in edit mode, each still named for VoiceOver', async () => {
+    const page = await openPage(renderPage());
+    const swatches = () => [...page.toolbar.querySelectorAll('.bar-colors .color-btn')] as any[];
+    await select(page, 'Grace meets you');
+    tap(page, barButton(page, '[data-action="highlight"]'));
+    expect(barMode(page)).toBe('colors');
+    expect(swatches().map((button) => button.textContent.trim())).toEqual(['', '', '', '', '']);
+    expect(swatches().every((button) => button.querySelector('.dot'))).toBe(true);
+    expect(swatches().map((button) => button.getAttribute('aria-label'))).toEqual([
+      'Highlight General', 'Highlight Growth', 'Highlight Prayer', 'Highlight Questions', 'Highlight Important',
+    ]);
+    expect(barButton(page, '[data-action="back"]').getAttribute('aria-label')).toBe('Back');
+
+    // Edit mode: the current colour carries the remove mark and says so.
+    tap(page, barButton(page, '.color-btn.green'));
+    page.document.querySelector('mark.highlight-green').dispatchEvent(new page.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+    expect(barMode(page)).toBe('edit');
+    expect(swatches().map((button) => button.textContent.trim())).toEqual(['', '', '', '', '']);
+    const green = barButton(page, '.color-btn.green');
+    expect(green.classList.contains('remove-mode')).toBe(true);
+    expect(green.getAttribute('aria-label')).toBe('Remove highlight');
+    expect(barButton(page, '.color-btn.yellow').getAttribute('aria-label')).toBe('Highlight General');
   });
 
   it('applies the colour on the first tap even after the tap collapsed the selection', async () => {
@@ -2044,7 +2103,7 @@ describe('DevotionalWebView selection bar (the page, in jsdom)', () => {
     const page = await openPage(renderPage());
     await select(page, 'Grace meets you');
     tap(page, barButton(page, '[data-action="highlight"]'));
-    page.window.__unfoldSetViewport(0, 3000);
+    answerViewport(page, 0, 3000);
     const paragraph = page.document.querySelector('p');
     touch(page, 'touchstart', paragraph);
     touch(page, 'touchend', paragraph);
@@ -2053,7 +2112,7 @@ describe('DevotionalWebView selection bar (the page, in jsdom)', () => {
     expect(page.window.getSelection().toString()).toBe('');
 
     await select(page, 'faithful step');
-    page.window.__unfoldSetViewport(0, 3000);
+    answerViewport(page, 0, 3000);
     expect(isBarVisible(page)).toBe(true);
     await wait(650);
     await collapseSelection(page);
@@ -2182,6 +2241,15 @@ describe('DevotionalWebView selection bar (the page, in jsdom)', () => {
     expect(lastMessage(gone, 'TARGET_BOOKMARK_LOCATED')).toBeUndefined();
   });
 
+  it('lands a Scripture phrase on its words after a sync round trip, without its ellipses', async () => {
+    // A sync pull rebuilds the phrase from its reference and text only.
+    const synced: Bookmark = { ...targetBookmark, id: 'bm-phrase', scriptureReference: 'Matthew 11:28', scriptureText: '…all who are weary…' };
+    const page = await openPage(renderPage({ targetBookmark: synced }));
+    await wait(200);
+    expect(lastMessage(page, 'TARGET_BOOKMARK_LOCATED')).toMatchObject({ bookmarkId: 'bm-phrase' });
+    expect(page.document.querySelector('.target-highlight-flash')?.textContent).toContain('all who are weary');
+  });
+
   it('lands a saved highlight on its words when no restored mark is there', async () => {
     const page = await openPage(renderPage({ targetHighlight: { ...targetHighlight, serializedRange: undefined }, existingHighlights: [] }));
     await wait(200);
@@ -2202,7 +2270,7 @@ describe('DevotionalWebView selection bar (the page, in jsdom)', () => {
     expect(page.document.querySelector('mark.highlight-yellow')?.textContent).toBe('Grace meets you');
   });
 
-  it('finds a bookmark’s words exactly when RN predicts it will', async () => {
+  it('finds a bookmark’s words exactly where the RN copy of the rule finds them', async () => {
     const cases: [bodyText: string, words: string][] = [
       ['For God *so loved* the world.', 'so loved the world'],
       ['For God so loved the world.', 'FOR GOD SO LOVED'],
@@ -2237,7 +2305,7 @@ describe('DevotionalWebView selection bar (the page, in jsdom)', () => {
   it('moves focus to the first button of the bar when a screen reader is on, and leaves it alone when none is', async () => {
     const quiet = await openPage(renderPage());
     await select(quiet, 'Grace meets you');
-    quiet.window.__unfoldSetViewport(0, 3000);
+    answerViewport(quiet, 0, 3000);
     expect(isBarVisible(quiet)).toBe(true);
     expect(quiet.document.activeElement).toBe(quiet.document.body);
 
@@ -2245,7 +2313,7 @@ describe('DevotionalWebView selection bar (the page, in jsdom)', () => {
     const click = (el: any) => el.dispatchEvent(new page.window.MouseEvent('click', { bubbles: true, cancelable: true }));
     page.window.__unfoldSetScreenReader(true);
     await select(page, 'Rest is a gift.');
-    page.window.__unfoldSetViewport(0, 3000);
+    answerViewport(page, 0, 3000);
     expect(page.document.activeElement).toBe(barButton(page, '[data-action="highlight"]'));
     // WebKit clears the selection when focus moves into the bar. The bar stays.
     await collapseSelection(page);
@@ -2260,7 +2328,7 @@ describe('DevotionalWebView selection bar (the page, in jsdom)', () => {
 
     // Tap-to-edit has no Back: the first colour.
     click(page.document.querySelector('mark.highlight-green'));
-    page.window.__unfoldSetViewport(0, 3000);
+    answerViewport(page, 0, 3000);
     expect(barMode(page)).toBe('edit');
     expect(page.document.activeElement).toBe(barButton(page, '.color-btn.yellow'));
   });
@@ -2269,7 +2337,7 @@ describe('DevotionalWebView selection bar (the page, in jsdom)', () => {
     const commandRef = { current: null as any };
     const page = await openPage(renderPage({ commandRef }));
     await select(page, 'Grace meets you');
-    page.window.__unfoldSetViewport(0, 3000);
+    answerViewport(page, 0, 3000);
     expect(isBarVisible(page)).toBe(true);
 
     mockInjectJavaScript.mockClear();
@@ -2290,7 +2358,7 @@ describe('DevotionalWebView selection bar (the page, in jsdom)', () => {
     await select(page, 'Grace meets you');
     await collapseSelection(page);
     page.window.__unfoldSelectionAction('highlight', 'Grace meets you');
-    page.window.__unfoldSetViewport(0, 3000);
+    answerViewport(page, 0, 3000);
     expect(barMode(page)).toBe('colors');
     expect(isBarVisible(page)).toBe(true);
 
@@ -2310,12 +2378,12 @@ describe('DevotionalWebView selection bar (the page, in jsdom)', () => {
     await select(page, 'Grace meets you');
     await wait(200);
     expect(isBarVisible(page)).toBe(false);
-    expect(page.messages).not.toContainEqual({ type: 'SELECTION_ACTIVE' });
+    expect(page.messages.filter((message) => message.type === 'SELECTION_ACTIVE')).toEqual([]);
 
     // The native menu closes the selection before RN hands over the key.
     await collapseSelection(page);
     page.window.__unfoldSelectionAction('highlight', 'Grace meets you');
-    page.window.__unfoldSetViewport(0, 3000);
+    answerViewport(page, 0, 3000);
     expect(barMode(page)).toBe('colors');
     expect(isBarVisible(page)).toBe(true);
     tap(page, barButton(page, '.color-btn.blue'));
@@ -2325,5 +2393,57 @@ describe('DevotionalWebView selection bar (the page, in jsdom)', () => {
     await collapseSelection(page);
     page.window.__unfoldSelectionAction('bookmark', 'Come to me');
     expect(lastMessage(page, 'SELECTION_ACTION')).toMatchObject({ action: 'bookmark', text: 'Come to me', reference: 'Matthew 11:28' });
+  });
+
+  it('on Android, runs a menu key on the kept range only when it holds the menu’s words', async () => {
+    const AndroidWebView = loadAndroidWebView();
+    let tree: any;
+    act(() => {
+      tree = renderer.create(<AndroidWebView day={pageDay} fontSize="medium" devotionalId="dev-1" dayNumber={1} />);
+    });
+    const page = await openPage(tree);
+    const setSelection = (range: any) => {
+      page.window.getSelection().removeAllRanges();
+      page.window.getSelection().addRange(range);
+    };
+    const rangeOver = (needle: string) => {
+      const node = textNodeWith(page, needle);
+      const range = page.document.createRange();
+      range.setStart(node, node.nodeValue.indexOf(needle));
+      range.setEnd(node, node.nodeValue.indexOf(needle) + needle.length);
+      return range;
+    };
+
+    // Words across paragraphs: the menu reads a line break the page text
+    // does not have, and the kept range still stands in.
+    const crossing = page.document.createRange();
+    crossing.setStart(textNodeWith(page, 'act of trust.'), textNodeWith(page, 'act of trust.').nodeValue.indexOf('act of trust.'));
+    crossing.setEnd(textNodeWith(page, 'Jesus said'), 'Jesus said'.length);
+    setSelection(crossing);
+    page.document.dispatchEvent(new page.window.Event('selectionchange'));
+    await wait(90);
+    await collapseSelection(page);
+    page.window.__unfoldSelectionAction('copy', 'act of trust.\n\nJesus said');
+    expect(lastMessage(page, 'SELECTION_ACTION')).toMatchObject({ action: 'copy', text: 'act of trust.\n\nJesus said' });
+    page.window.__unfoldSelectionConfirm(1, '');
+
+    // Selection A is dismissed without an action. Android then clears a new
+    // selection B before the page sees it, and hands over B's menu text.
+    await select(page, 'Grace meets you');
+    await collapseSelection(page);
+    const sent = page.messages.length;
+    page.window.__unfoldSelectionAction('highlight', 'Rest is a gift.');
+    tap(page, barButton(page, '.color-btn.blue'));
+    expect(page.document.querySelector('mark')).toBeNull();
+    page.window.__unfoldSelectionAction('bookmark', 'Rest is a gift.');
+    expect(page.messages.slice(sent).filter((message: any) => message.type === 'SELECTION_ACTION' || message.type === 'SELECTION_BAR')).toEqual([]);
+    expect(isBarVisible(page)).toBe(false);
+
+    // B is still selected in the page, before the page has seen it: the
+    // live selection is used.
+    setSelection(rangeOver('Rest is a gift.'));
+    page.window.__unfoldSelectionAction('highlight', 'Rest is a gift.');
+    tap(page, barButton(page, '.color-btn.blue'));
+    expect([...page.document.querySelectorAll('mark')].map((mark: any) => mark.textContent)).toEqual(['Rest is a gift.']);
   });
 });

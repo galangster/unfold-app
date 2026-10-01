@@ -35,6 +35,37 @@ export function storedReferenceFor(kind: Exclude<BookmarkKind, 'scripture'>): st
 /** What My library shows as the reference of an excerpt. */
 export const EXCERPT_BOOKMARK_LABEL = 'Excerpt';
 
+/** The mark on each side of a Scripture phrase's words in scriptureText. */
+const PHRASE_ELLIPSIS = '…';
+
+/**
+ * What a Scripture phrase (words selected in a quotation of the devotional
+ * text) stores in `scriptureText`: its words between two ellipses,
+ * '…goodness and mercy…'. Sync carries only `scriptureReference` and
+ * `scriptureText`, so the ellipses keep it a phrase after a round trip
+ * (scripturePhraseWords reads them), and My library shows them. A passage
+ * saved from the passage block or the passage sheet stores its whole text.
+ */
+export function storedScripturePhrase(words: string): string {
+  return `${PHRASE_ELLIPSIS}${words}${PHRASE_ELLIPSIS}`;
+}
+
+/**
+ * The words of a Scripture phrase, or null for a whole passage and for every
+ * other kind. This device saves a phrase with its kind and its words as
+ * `quotedText`. Builds from before kinds put `quotedText` on whole passages,
+ * with no kind. After a sync only the ellipses of `scriptureText` remain.
+ */
+export function scripturePhraseWords(
+  bookmark: Pick<BookmarkIdentitySource, 'kind' | 'scriptureReference' | 'scriptureText' | 'quotedText'>,
+): string | null {
+  if (bookmarkKind(bookmark) !== 'scripture') return null;
+  if (bookmark.kind === 'scripture' && bookmark.quotedText?.trim()) return bookmark.quotedText;
+  const text = bookmark.scriptureText.trim();
+  if (!text.startsWith(PHRASE_ELLIPSIS) || !text.endsWith(PHRASE_ELLIPSIS)) return null;
+  return text.slice(PHRASE_ELLIPSIS.length, -PHRASE_ELLIPSIS.length).trim() || null;
+}
+
 export interface BookmarkIdentity {
   devotionalId: string;
   dayNumber: number;

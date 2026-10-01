@@ -51,6 +51,29 @@ describe('findScriptureQuotes', () => {
     expect(quotesIn('“Grace is enough” and then “Come to me” (Matthew 11:28).'))
       .toEqual([['“Come to me”', 'Matthew 11:28']]);
   });
+
+  it('leaves a quotation as prose when the reference after it starts the next sentence', () => {
+    expect(quotesIn('“Rest is a gift.” John 3:16 reminds us that God loves the world.')).toEqual([]);
+    expect(quotesIn('“Rest is a gift.” *John 3:16* reminds us that God loves the world.')).toEqual([]);
+  });
+
+  it.each([
+    ['in parentheses', '“For God so loved the world” (John 3:16) reminds us.'],
+    ['after an em dash', '“For God so loved the world”—John 3:16 reminds us.'],
+    ['after a spaced en dash', '“For God so loved the world” – John 3:16 reminds us.'],
+    ['after a hyphen', '“For God so loved the world” - John 3:16 reminds us.'],
+    ['bare, before a full stop', '“For God so loved the world” John 3:16. He gave.'],
+    ['bare, before a comma', '“For God so loved the world” John 3:16, and so on.'],
+    ['bare, before a semicolon', '“For God so loved the world” John 3:16; so we rest.'],
+    ['bare, before a colon', '“For God so loved the world” John 3:16: he gave.'],
+    ['bare, before an exclamation mark', '“For God so loved the world” John 3:16! He gave.'],
+    ['bare, before a question mark', 'Do you know “For God so loved the world” John 3:16?'],
+    ['bare, before a closing parenthesis', '(Jesus said “For God so loved the world” John 3:16)'],
+    ['bare, at the end of the block', '“For God so loved the world” John 3:16'],
+    ['bare, in emphasis, before a full stop', '“For God so loved the world” *John 3:16*.'],
+  ])('names a quotation by a citation after it, %s', (_form, text) => {
+    expect(quotesIn(text)).toEqual([['“For God so loved the world”', 'John 3:16']]);
+  });
 });
 
 describe('renderDevotionalInline', () => {

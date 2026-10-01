@@ -4,7 +4,9 @@ import {
   bookmarkIdentityEquals,
   bookmarkKind,
   parseBookmarkKind,
+  scripturePhraseWords,
   storedReferenceFor,
+  storedScripturePhrase,
 } from '@/lib/bookmark-identity';
 
 function legacyBookmark(scriptureReference: string, scriptureText = 'Saved text'): Bookmark {
@@ -93,6 +95,31 @@ describe('bookmark identity', () => {
 
     expect(bookmarkKind(pulled)).toBe('scripture');
     expect(bookmarkIdentityEquals(pulled, saved)).toBe(true);
+  });
+
+  it('keeps a Scripture phrase a phrase after a sync round trip: its words sit between ellipses', () => {
+    const saved = {
+      ...legacyBookmark('Psalm 23:6', storedScripturePhrase('goodness and mercy')),
+      kind: 'scripture' as const,
+      key: 'Psalm 23:6',
+      quotedText: 'goodness and mercy',
+    };
+    const pulled = legacyBookmark(saved.scriptureReference, saved.scriptureText);
+
+    expect(saved.scriptureText).toBe('…goodness and mercy…');
+    expect(scripturePhraseWords(saved)).toBe('goodness and mercy');
+    expect(scripturePhraseWords(pulled)).toBe('goodness and mercy');
+    expect(bookmarkIdentityEquals(pulled, saved)).toBe(true);
+  });
+
+  it('reads a whole passage and any other kind as no Scripture phrase', () => {
+    const passage = 'Surely goodness and mercy shall follow me.';
+    expect(scripturePhraseWords({ ...legacyBookmark('Psalm 23:6', passage), kind: 'scripture' })).toBeNull();
+    // Older builds put quotedText on whole passages, with no kind.
+    expect(scripturePhraseWords({ ...legacyBookmark('Psalm 23:6', passage), quotedText: passage })).toBeNull();
+    expect(scripturePhraseWords(legacyBookmark('Psalm 23:6', '…and mercy shall follow me.'))).toBeNull();
+    expect(scripturePhraseWords(legacyBookmark('Psalm 23:6', '……'))).toBeNull();
+    expect(scripturePhraseWords(legacyBookmark(storedReferenceFor('excerpt'), '…and so on…'))).toBeNull();
   });
 
   it('parses excerpt as a bookmark kind', () => {

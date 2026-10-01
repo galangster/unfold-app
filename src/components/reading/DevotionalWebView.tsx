@@ -21,10 +21,12 @@ import {
   bookmarkKindFromBoxType,
   findBookmarkByIdentity,
   storedReferenceFor,
+  storedScripturePhrase,
 } from '@/lib/bookmark-identity';
 import type { BookmarkKind, BoxBookmarkKind } from '@/lib/bookmark-identity';
+import { bookmarkPageWords } from '@/lib/bookmark-landing';
 import { READER_WORDS_PAGE_JS } from '@/lib/reader-words';
-import { formatSelectionShareText } from '@/lib/selection-share';
+import { formatSelectionShareText, unwrapQuotes } from '@/lib/selection-share';
 import { COPIED_MESSAGE, copyText } from '@/hooks/useCopyConfirmation';
 import { useScreenReaderEnabled } from '@/hooks/useScreenReaderEnabled';
 import { escapeHtml, renderDevotionalInline } from './devotional-text-html';
@@ -201,7 +203,7 @@ const SELECTION_BAR_HTML = `
     </div>
     <div class="bar-group bar-colors">
       <button type="button" class="back-btn" data-action="back" aria-label="Back">${barIcon(BAR_ICON_PATHS.back)}</button>
-      ${HIGHLIGHT_COLOR_NAMES.map((color) => `<button type="button" class="color-btn ${color}" data-color="${color}" data-label="${HIGHLIGHT_COLOR_LABELS[color]}" aria-label="Highlight ${HIGHLIGHT_COLOR_LABELS[color]}"><span class="dot"></span><span class="lbl"><span>${HIGHLIGHT_COLOR_LABELS[color]}</span></span></button>`).join('\n      ')}
+      ${HIGHLIGHT_COLOR_NAMES.map((color) => `<button type="button" class="color-btn ${color}" data-color="${color}" data-label="${HIGHLIGHT_COLOR_LABELS[color]}" aria-label="Highlight ${HIGHLIGHT_COLOR_LABELS[color]}"><span class="dot"></span></button>`).join('\n      ')}
     </div>
     <div class="bar-status">${barIcon(BAR_ICON_PATHS.check)}<span class="status-text"></span></div>
   </div>`;
@@ -513,8 +515,9 @@ const SELECTION_BAR_SCRIPT = `
       // article and the parent ScrollView scrolls it, so window.innerHeight is
       // the article height and the page cannot tell which part is on screen.
       // RN measures that band for each new anchor of the bar (SELECTION_ACTIVE,
-      // answered by __unfoldSetViewport): the reader may have scrolled since
-      // the last one. Until it answers, the article edges stand in.
+      // answered by __unfoldSetViewport with the id of the request): the
+      // reader may have scrolled since the last one. Until it answers, the
+      // article edges stand in.
       const SHOW_SELECTION_BAR = ${JSON.stringify(!IS_ANDROID)};
       const BAR_GAP = 14;      // clears the knobs of the selection handles
       const BAR_MARGIN = 8;
@@ -530,6 +533,7 @@ const SELECTION_BAR_SCRIPT = `
       let liveRange = null;    // Android: the last selected range the page saw
       let viewport = null;     // { top, bottom }: the visible band, in page px
       let viewportAnchor = null; // the selection range or mark that band is for
+      let viewportRequest = 0; // the id of the latest SELECTION_ACTIVE
       let barTouchUntil = 0;   // a collapse before this time came from the bar (a tap, a focus move)
       let ownSelectionUntil = 0; // a change before this time is our selectRange()
       let pendingRequest = 0;  // the SELECTION_ACTION waiting for RN to confirm
@@ -780,7 +784,7 @@ const SELECTION_BAR_SCRIPT = `
         viewport = null;
         clearTimeout(revealTimer);
         revealTimer = setTimeout(revealBar, 150);
-        postToApp({ type: 'SELECTION_ACTIVE' });
+        postToApp({ type: 'SELECTION_ACTIVE', requestId: ++viewportRequest });
       }
 
       function openBar(mode) {
@@ -819,7 +823,10 @@ const SELECTION_BAR_SCRIPT = `
         if (alsoClearSelection) clearSelection();
       }
 
-      window.__unfoldSetViewport = function(top, bottom) {
+      // An answer to an older request measured the page for older words or
+      // an older scroll position, so it is dropped.
+      window.__unfoldSetViewport = function(top, bottom, requestId) {
+        if (requestId !== viewportRequest) return;
         if (typeof top === 'number' && typeof bottom === 'number' && bottom > top) {
           viewport = { top: top, bottom: bottom };
         }
@@ -1002,16 +1009,27 @@ const SELECTION_BAR_SCRIPT = `
         else if (action && pendingRequest === 0) runSelectionAction(action);
       }
 
+      // Whether two texts hold the same words. White space does not count:
+      // the native menu reads a line break between paragraphs, and a range
+      // reads only its text nodes.
+      function sameWords(a, b) {
+        return String(a || '').replace(/\\s+/g, '') === String(b || '').replace(/\\s+/g, '');
+      }
+
       // Android: RN sends the key of the native menu item. The menu has
       // usually collapsed the selection by now, so the last selected range
       // stands in, read with the menu's own text (it keeps the paragraph
-      // breaks for Copy). With no range, the menu's text alone is used.
+      // breaks for Copy), but only when it holds the menu's words: Android
+      // can clear a newer selection before the page sees it. Then the live
+      // selection. With neither, nothing runs.
       window.__unfoldSelectionAction = function(action, nativeText) {
-        var text = normalizeWs(nativeText);
-        var range = selectedRange(window.getSelection()) || liveRange;
-        var snap = range ? snapOf(range, nativeText || range.toString()) : null;
-        if (!snap) snap = text ? { text: text, raw: String(nativeText).trim(), range: null } : null;
-        if (!snap) return;
+        var snap = liveRange && sameWords(liveRange.toString(), nativeText)
+          ? snapOf(liveRange, nativeText)
+          : readSelection();
+        if (!snap) {
+          closeBar(false);
+          return;
+        }
         editing = null;
         barSnap = snap;
         runSelectionAction(action);
@@ -1457,13 +1475,10 @@ export function DevotionalWebView({
           contextAfter: targetHighlight.contextAfter,
         }
       : null;
+    // The page looks for the words alone: a Scripture phrase without the
+    // ellipses it stores.
     const targetBookmarkPayload = targetBookmark
-      ? {
-          id: targetBookmark.id,
-          scriptureReference: targetBookmark.scriptureReference,
-          scriptureText: targetBookmark.scriptureText,
-          quotedText: targetBookmark.quotedText,
-        }
+      ? { id: targetBookmark.id, words: bookmarkPageWords(targetBookmark) }
       : null;
 
     return `
@@ -1740,17 +1755,12 @@ export function DevotionalWebView({
         }
       }
 
-      function getBookmarkTargetText(bookmark) {
-        if (!bookmark) return '';
-        return normalizeText(bookmark.quotedText || bookmark.scriptureText);
-      }
-
       // Three tries while the page settles. When the last one finds nothing,
       // RN is told, so it can open the passage instead.
       let targetBookmarkFound = false;
       function locateTargetBookmark(isLastTry) {
         if (!targetBookmark) return;
-        const best = locateTextElement(getBookmarkTargetText(targetBookmark));
+        const best = locateTextElement(normalizeText(targetBookmark.words));
         if (!best) {
           if (isLastTry === true && !targetBookmarkFound) {
             postToApp({ type: 'TARGET_BOOKMARK_MISSING', bookmarkId: targetBookmark.id });
@@ -2256,7 +2266,7 @@ export function DevotionalWebView({
     }
 
     /* Selection bar. One element in four modes (data-mode): the actions, the
-       colour step (Back + the five named colours), tap-to-edit (the colours
+       colour step (Back + the five colour dots), tap-to-edit (the dots
        without Back), and a short confirmation. It is the body's last child,
        after the article, so its words never shift a highlight offset. */
     #highlight-toolbar {
@@ -2381,10 +2391,10 @@ export function DevotionalWebView({
       fill: var(--accent);
     }
 
-    /* Each swatch is a named choice: dot + the same label My Library uses. */
+    /* Each swatch is a colour dot in a 44pt hit target. Its aria-label
+       names the colour with the label My Library uses. */
     .color-btn {
-      min-width: 46px;
-      gap: 5px;
+      min-width: 44px;
     }
     .color-btn .dot {
       width: 28px;
@@ -2394,11 +2404,6 @@ export function DevotionalWebView({
       transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
       pointer-events: none;
     }
-    #highlight-toolbar .color-btn .lbl {
-      font-size: 10px;
-      letter-spacing: 0.02em;
-    }
-
     .color-btn:active .dot,
     .color-btn.pressed .dot {
       transform: scale(0.96);
@@ -2418,10 +2423,6 @@ export function DevotionalWebView({
     .color-btn.remove-mode .dot {
       position: relative;
     }
-    .color-btn.remove-mode .lbl::before {
-      content: 'Remove';
-    }
-    .color-btn.remove-mode .lbl span { display: none; }
     .color-btn.remove-mode .dot::after {
       content: '×';
       position: absolute;
@@ -2580,9 +2581,10 @@ export function DevotionalWebView({
   // The page cannot see which part of it is on screen: the WebView is sized
   // to the whole article and the parent ScrollView scrolls it. When the bar
   // opens, answer with the visible band in page coordinates so the bar can
-  // move below a selection that has no room above. Both frames are measured
-  // at once; the answer goes when both are in.
-  const measureSelectionViewport = useCallback(() => {
+  // move below a selection that has no room above, and with the id of the
+  // request, so the page can drop an answer to an older one. Both frames
+  // are measured at once; the answer goes when both are in.
+  const measureSelectionViewport = useCallback((requestId: number) => {
     const container = containerRef.current;
     if (!container) return;
     const viewport = viewportRef?.current;
@@ -2594,6 +2596,7 @@ export function DevotionalWebView({
         '__unfoldSetViewport',
         Math.max(0, Math.round(band.top - page.top)),
         Math.min(Math.round(page.height), Math.round(band.bottom - page.top)),
+        requestId,
       );
     };
     container.measureInWindow((_x, top, _width, height) => {
@@ -2643,8 +2646,9 @@ export function DevotionalWebView({
     devotionalTitle || devotionals.find((d) => d.id === devotionalId)?.title || '';
 
   // Box bookmarks and selection bookmarks for this day. Scripture stores its
-  // own reference (its key). Any other kind stores the reference that brings
-  // the kind back after a sync. The store drops a bookmark it already holds.
+  // own reference (its key) and its words between ellipses. Any other kind
+  // stores the reference that brings the kind back after a sync, and its
+  // words. The store drops a bookmark it already holds.
   const saveDayBookmark = (kind: BookmarkKind, key: string, text: string) => {
     if (!devotionalId) return;
     const store = useUnfoldStore.getState();
@@ -2656,7 +2660,7 @@ export function DevotionalWebView({
       kind,
       key,
       scriptureReference: kind === 'scripture' ? key : storedReferenceFor(kind),
-      scriptureText: text,
+      scriptureText: kind === 'scripture' ? storedScripturePhrase(text) : text,
       quotedText: text,
     });
   };
@@ -2692,21 +2696,24 @@ export function DevotionalWebView({
         return;
       }
       case 'bookmark': {
-        if (!text || !devotionalId) {
+        // A Scripture phrase keeps only its words: the quote marks it carries
+        // and any ellipsis at its ends stay out of the ellipses it is stored in.
+        const words = reference ? unwrapQuotes(text).replace(/^\u2026+|\u2026+$/g, '').trim() : text;
+        if (!words || !devotionalId) {
           confirmSelectionAction(requestId, '');
           return;
         }
         // Prose is its own words. A Scripture passage is its reference, so it
         // is saved at most once.
         const kind: BookmarkKind = reference ? 'scripture' : 'excerpt';
-        const key = reference || text;
+        const key = reference || words;
         const exists = findBookmarkByIdentity(useUnfoldStore.getState().bookmarks, {
           devotionalId,
           dayNumber: resolvedDayNumber,
           kind,
           key,
         });
-        if (!exists) saveDayBookmark(kind, key, text);
+        if (!exists) saveDayBookmark(kind, key, words);
         const message = exists ? BOOKMARK_EXISTS_MESSAGE : BOOKMARK_SAVED_MESSAGE;
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         AccessibilityInfo.announceForAccessibility(message);
@@ -2777,7 +2784,7 @@ export function DevotionalWebView({
       } else if (data.type === 'TARGET_BOOKMARK_MISSING') {
         onTargetBookmarkMissing?.();
       } else if (data.type === 'SELECTION_ACTIVE') {
-        measureSelectionViewport();
+        measureSelectionViewport(typeof data.requestId === 'number' ? data.requestId : 0);
       } else if (data.type === 'SELECTION_BAR') {
         const mode: unknown = data.mode;
         if (isAnnouncedBarMode(mode)) AccessibilityInfo.announceForAccessibility(SELECTION_BAR_ANNOUNCEMENTS[mode]);

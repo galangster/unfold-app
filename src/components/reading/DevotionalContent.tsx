@@ -227,12 +227,8 @@ export function DevotionalContent({
   // The id of a target bookmark whose words the page reported it cannot find.
   const [missingWordsId, setMissingWordsId] = useState<string | null>(null);
   const targetLanding = useMemo(() => (targetBookmark
-    ? bookmarkLanding(
-      targetBookmark,
-      { scriptureReference: day.scriptureReference, scriptureText: day.scriptureText, bodyText: day.bodyText },
-      missingWordsId === targetBookmark.id,
-    )
-    : null), [day.bodyText, day.scriptureReference, day.scriptureText, missingWordsId, targetBookmark]);
+    ? bookmarkLanding(targetBookmark, { scriptureReference: day.scriptureReference }, missingWordsId === targetBookmark.id)
+    : null), [day.scriptureReference, missingWordsId, targetBookmark]);
 
   useEffect(() => {
     if (!targetBookmark || targetLanding?.on !== 'sheet') return;

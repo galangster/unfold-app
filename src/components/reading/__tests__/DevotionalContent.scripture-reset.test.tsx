@@ -315,9 +315,10 @@ describe('DevotionalContent versed scripture (Greptile A8)', () => {
     const targets = [
       // Scripture quoted in the text, for another passage and for the day's
       // own, as saved and as a sync pull rebuilds it (reference and text only).
-      { ...saved, id: 'selected-related', kind: 'scripture' as const, key: 'Matthew 11:28', scriptureReference: 'Matthew 11:28', scriptureText: 'Come to me', quotedText: 'Come to me' },
-      { ...saved, id: 'pulled-related', scriptureReference: 'Matthew 11:28', scriptureText: 'Come to me' },
-      { ...saved, id: 'selected-main', kind: 'scripture' as const, key: 'John 3:16', scriptureReference: 'John 3:16', scriptureText: 'so loved', quotedText: 'so loved' },
+      { ...saved, id: 'selected-related', kind: 'scripture' as const, key: 'Matthew 11:28', scriptureReference: 'Matthew 11:28', scriptureText: '…Come to me…', quotedText: 'Come to me' },
+      { ...saved, id: 'pulled-related', scriptureReference: 'Matthew 11:28', scriptureText: '…Come to me…' },
+      { ...saved, id: 'selected-main', kind: 'scripture' as const, key: 'John 3:16', scriptureReference: 'John 3:16', scriptureText: '…so loved…', quotedText: 'so loved' },
+      { ...saved, id: 'pulled-main', scriptureReference: 'John 3:16', scriptureText: '…so loved…' },
       // Prose, as saved and as a sync pull rebuilds it.
       { ...saved, id: 'selected-prose', kind: 'excerpt' as const, key: 'Grace meets you', scriptureReference: storedReferenceFor('excerpt'), scriptureText: 'Grace meets you', quotedText: 'Grace meets you' },
       { ...saved, id: 'pulled-prose', scriptureReference: storedReferenceFor('excerpt'), scriptureText: 'Grace meets you' },
@@ -352,7 +353,7 @@ describe('DevotionalContent versed scripture (Greptile A8)', () => {
     expect(onTargetBookmarkLocated).not.toHaveBeenCalled();
   });
 
-  it('falls back to the passage when the page cannot find a selected phrase', async () => {
+  it('opens the passage sheet, without the saved words, when the page cannot find a selected phrase', async () => {
     mockFetchVerseLocal.mockResolvedValue(null);
     mockFetchVerse.mockResolvedValue(null);
     const onScriptureTap = jest.fn();
@@ -370,7 +371,8 @@ describe('DevotionalContent versed scripture (Greptile A8)', () => {
       await act(async () => {
         tree = renderer.create(
           <DevotionalContent
-            day={day({ scriptureReference: 'John 3:16', bodyText: 'Jesus said, “Come to me” (Matthew 11:28). For God so loved the world.' })}
+            // The day was written again: the quotations the reader selected are gone.
+            day={day({ scriptureReference: 'John 3:16', bodyText: 'Rest in that love today.' })}
             fontSize="medium"
             targetBookmark={targetBookmark}
             onScriptureTap={onScriptureTap}
@@ -386,26 +388,33 @@ describe('DevotionalContent versed scripture (Greptile A8)', () => {
         targetBookmark?: { id: string } | null;
         onTargetBookmarkMissing?: () => void;
       };
+      // The page looks for the words first.
       expect(webViewProps().targetBookmark?.id).toBe(targetBookmark.id);
+      expect(onScriptureTap).not.toHaveBeenCalled();
       act(() => webViewProps().onTargetBookmarkMissing?.());
       // The page keeps its target, so the document does not reload.
       expect(webViewProps().targetBookmark?.id).toBe(targetBookmark.id);
       act(() => tree!.unmount());
     };
 
-    // Another passage: its sheet opens and loads the passage itself.
-    await render({ ...phrase, id: 'related-phrase', scriptureReference: 'Matthew 11:28', scriptureText: 'Come to me' });
-    expect(onScriptureTap).toHaveBeenCalledWith('Matthew 11:28', undefined);
+    // Another passage and the day's own, as saved and as a sync pull
+    // rebuilds them: the sheet loads the passage itself, since a phrase is
+    // not the passage.
+    const targets: [string, Bookmark][] = [
+      ['Romans 8:28', { ...phrase, id: 'saved-related', kind: 'scripture', key: 'Romans 8:28', scriptureReference: 'Romans 8:28', scriptureText: '…all things work together…', quotedText: 'all things work together' }],
+      ['Matthew 11:28', { ...phrase, id: 'pulled-related', scriptureReference: 'Matthew 11:28', scriptureText: '…Come to me…' }],
+      ['John 3:16', { ...phrase, id: 'pulled-main', scriptureReference: 'John 3:16', scriptureText: '…so loved…' }],
+    ];
+    for (const [reference, target] of targets) {
+      onScriptureTap.mockClear();
+      await render(target);
+      expect(onScriptureTap).toHaveBeenCalledTimes(1);
+      expect(onScriptureTap).toHaveBeenCalledWith(reference, undefined);
+    }
     expect(onTargetBookmarkLocated).not.toHaveBeenCalled();
-
-    // The day's own passage: the reader goes to the passage block.
-    onScriptureTap.mockClear();
-    await render({ ...phrase, id: 'main-phrase', scriptureReference: 'John 3:16', scriptureText: 'so loved' });
-    expect(onTargetBookmarkLocated).toHaveBeenCalledWith(320);
-    expect(onScriptureTap).not.toHaveBeenCalled();
   });
 
-  it('opens the passage sheet without the saved words for a selected phrase the day no longer holds', async () => {
+  it('opens a passage saved from the passage sheet with its saved text, even when the teaching quotes it word for word', async () => {
     mockFetchVerseLocal.mockResolvedValue(null);
     mockFetchVerse.mockResolvedValue(null);
     const onScriptureTap = jest.fn();
@@ -414,7 +423,6 @@ describe('DevotionalContent versed scripture (Greptile A8)', () => {
       devotionalTitle: 'The Gift',
       dayNumber: 1,
       dayTitle: 'Loved First',
-      scriptureReference: 'Romans 8:28',
       savedAt: '2026-09-30T00:00:00.000Z',
     };
     const render = async (targetBookmark: Bookmark) => {
@@ -423,8 +431,7 @@ describe('DevotionalContent versed scripture (Greptile A8)', () => {
       await act(async () => {
         tree = renderer.create(
           <DevotionalContent
-            // The day was written again: the quotation the reader selected is gone.
-            day={day({ scriptureReference: 'John 3:16', bodyText: 'For God so loved the world. Rest in that love today.' })}
+            day={day({ scriptureReference: 'John 3:16', bodyText: 'Jesus said, “Come to me” (Matthew 11:28). For God so loved the world.' })}
             fontSize="medium"
             targetBookmark={targetBookmark}
             onScriptureTap={onScriptureTap}
@@ -437,22 +444,24 @@ describe('DevotionalContent versed scripture (Greptile A8)', () => {
       act(() => tree!.unmount());
     };
 
-    // A phrase is not the passage: the sheet loads the passage itself.
+    // The passage sheet saved the whole of Matthew 11:28, and the teaching
+    // quotes it word for word.
     await render({
       ...saved,
-      id: 'selected-phrase',
+      id: 'sheet-passage',
       kind: 'scripture',
-      key: 'Romans 8:28',
-      scriptureText: 'all things work together',
-      quotedText: 'all things work together',
+      key: 'Matthew 11:28',
+      scriptureReference: 'Matthew 11:28',
+      scriptureText: 'Come to me',
+      translation: 'WEB',
     });
-    expect(onScriptureTap).toHaveBeenCalledWith('Romans 8:28', undefined);
+    expect(onScriptureTap).toHaveBeenCalledWith('Matthew 11:28', { text: 'Come to me', translation: 'WEB' });
 
     // Older builds saved the whole passage with quotedText and no kind: the
     // sheet still shows the saved passage.
     onScriptureTap.mockClear();
     const passage = 'And we know that all things work together for good to them that love God.';
-    await render({ ...saved, id: 'older-passage', scriptureText: passage, quotedText: passage });
+    await render({ ...saved, id: 'older-passage', scriptureReference: 'Romans 8:28', scriptureText: passage, quotedText: passage });
     expect(onScriptureTap).toHaveBeenCalledWith('Romans 8:28', { text: passage });
   });
 

@@ -1,9 +1,8 @@
 /**
- * How the reader compares a bookmark's words with the devotional text. RN
- * uses it to predict that the page will find the words (bookmarkLanding).
- * The page finds them with the same rule: READER_WORDS_PAGE_JS is its copy,
- * which locateTextInArticle runs over the article's text nodes. A test runs
- * both copies on the same inputs.
+ * How the reader compares a bookmark's words with the devotional text. The
+ * page finds them with READER_WORDS_PAGE_JS, its copy of this rule, which
+ * locateTextInArticle runs over the article's text nodes. A test runs both
+ * copies on the same inputs.
  *
  * - `*` drops out: a markdown emphasis mark, which the page shows as emphasis.
  * - Each run of white space is one space, and the ends are trimmed.

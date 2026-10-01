@@ -55,13 +55,22 @@ export function findScriptureQuotes(
   // The characters between a quotation and a reference, as the reader shows
   // them (without markdown asterisks).
   const gap = (from: number, to: number) => text.slice(from, to).replace(/\*/g, '');
+  // A reference after a closing quote cites the quotation in parentheses
+  // (” (John 3:16)), after a dash (”—John 3:16), or bare when only end
+  // punctuation, a closing parenthesis, or the end of the block follows it
+  // (” John 3:16.). A bare reference that a word follows starts a new
+  // sentence: “Rest is a gift.” John 3:16 reminds us…
+  const citesAfter = (close: number, ref: ScriptureRef) => {
+    const between = gap(close + 1, ref.startIndex);
+    if (!/^[\s,.;:([\u2014\u2013-]{0,6}$/.test(between)) return false;
+    return /[([\u2014\u2013-]/.test(between) || /^(?:[.,;:!?)\]]|\s*$)/.test(gap(ref.endIndex, text.length));
+  };
   const quotes: ScriptureQuote[] = [];
   for (const [open, close] of quotationMarks(text)) {
     // The citation after a quotation names it, even when the one before it
     // ends a citation of its own. A reference before the quotation names it
     // only inside the same sentence: '(Matthew 11:28). “…”' is a new one.
-    const named = refs.find((ref) =>
-      ref.startIndex > close && /^[\s,.;:([\u2014\u2013-]{0,6}$/.test(gap(close + 1, ref.startIndex)))
+    const named = refs.find((ref) => ref.startIndex > close && citesAfter(close, ref))
       ?? refs.find((ref) =>
         ref.endIndex <= open && /^[\s,;:)\]\u2014\u2013-]{0,4}$/.test(gap(ref.endIndex, open)));
     const quoted = matchKey(text.slice(open + 1, close));
