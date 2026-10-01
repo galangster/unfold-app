@@ -248,6 +248,31 @@ describe('InlineReflectionJournal across a remount', () => {
     act(() => third.unmount());
   });
 
+  it('shows a retry that fails after the device folds', async () => {
+    mockFlushUnfoldStorePersistAsync.mockImplementationOnce(() => Promise.resolve(false));
+    const first = mount(6);
+    await typeAndSettle(first, 'Still not saved.');
+    const [retry] = retryControls(first);
+    let finishRetry: (wrote: boolean) => void = () => {};
+    mockFlushUnfoldStorePersistAsync.mockImplementationOnce(() => new Promise<boolean>((resolve) => {
+      finishRetry = resolve;
+    }));
+    act(() => {
+      (retry.props.onPress as () => void)();
+    });
+    act(() => first.unmount());
+    const second = mount(6);
+    expect(retryControls(second)).toHaveLength(0);
+
+    await act(async () => {
+      finishRetry(false);
+      await Promise.resolve();
+    });
+    expect(retryControls(second).length).toBeGreaterThan(0);
+    expect(openInputs(second)[0].props.value).toBe('Still not saved.');
+    act(() => second.unmount());
+  });
+
   it('shows a failure that lands after the next journal mounted', async () => {
     let failSave: (wrote: boolean) => void = () => {};
     mockFlushUnfoldStorePersistAsync.mockImplementationOnce(() => new Promise<boolean>((resolve) => {
