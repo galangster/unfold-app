@@ -6,12 +6,11 @@ import { InlineReflectionJournal } from './InlineReflectionJournal';
 import type { ReflectionKeyboardToolbarState } from './ReflectionQuestionNav';
 import { Spacing } from '@/constants/spacing';
 import { Typography } from '@/constants/typography';
-import { ADAPTIVE_READABLE_MEASURE, adaptiveFrameStyle } from '@/lib/adaptive-layout';
+import { ADAPTIVE_READABLE_MEASURE, READER_PAGE_PADDING, adaptiveFrameStyle } from '@/lib/adaptive-layout';
 import type { FontSize } from '@/lib/store';
 import { useTheme } from '@/lib/theme';
 
-/** Horizontal padding of a reader page, shared with the reading column. */
-export const READER_PAGE_PADDING = Spacing['6'];
+export { READER_PAGE_PADDING };
 /** Room kept above a focused answer so its question stays in view. */
 const FOCUS_TOP_INSET = Spacing['16'];
 

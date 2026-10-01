@@ -7,6 +7,8 @@ import {
   ADAPTIVE_PANE_MIN,
   ADAPTIVE_STACKED_MIN_HEIGHT,
   adaptivePaneLane,
+  foldFirstPane,
+  keyboardCrowdsSecondPane,
   resolveAdaptivePanes,
   adaptiveFrameStyle,
   adaptiveSafeGutterStyle,
@@ -21,6 +23,7 @@ import {
   resolveAdaptiveLayout,
   swipeDismissTranslate,
 } from '../adaptive-layout';
+import type { AdaptivePanes } from '../adaptive-layout';
 
 describe('resolveAdaptiveLayout', () => {
   it('keeps a 390pt window as a full-width single column', () => {
@@ -268,5 +271,21 @@ describe('pane lane', () => {
   it('ignores stacked panes, which leave the full width to floating controls', () => {
     const upright = resolveAdaptiveLayout({ width: 669, height: 951, fontScale: 1, insetTop: 50, insetBottom: 20 });
     expect(adaptivePaneLane(upright, resolveAdaptivePanes(upright, { stacked: true }))).toEqual({ left: 0, width: 669 });
+  });
+});
+
+describe('keyboard fold', () => {
+  const stacked: AdaptivePanes = { axis: 'column', lead: 0, first: 435, gutter: 40, second: 440 };
+
+  it('folds only when the keyboard leaves the second pane shorter than a page', () => {
+    expect(keyboardCrowdsSecondPane(stacked, 0, 20)).toBe(false);
+    // 440 - (140 - 20) leaves exactly one page.
+    expect(keyboardCrowdsSecondPane(stacked, 140, 20)).toBe(false);
+    expect(keyboardCrowdsSecondPane(stacked, 336, 20)).toBe(true);
+  });
+
+  it('gives the folded first pane and the gutter to the second pane', () => {
+    expect(foldFirstPane(stacked)).toEqual({ axis: 'column', lead: 0, first: 0, gutter: 0, second: 915 });
+    expect(foldFirstPane(stacked, 96)).toEqual({ axis: 'column', lead: 0, first: 96, gutter: 0, second: 819 });
   });
 });

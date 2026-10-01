@@ -83,6 +83,13 @@ interface CompanionDrawerProps {
   /** Docked beside the conversation in a paired window. Renders statically:
    * no translate, scrim, modal flag, close control, or keyboard listener. */
   docked?: boolean;
+  /** The title search to start from. The screen keeps the latest one, so it
+   * survives the swap between the docked list and the overlay on a fold. */
+  initialSearchQuery?: string;
+  onSearchQueryChange?: (query: string) => void;
+  /** Docked only: leaves out the "Chats" heading when the screen's pane
+   * switch already names the list. */
+  hideHeading?: boolean;
 }
 
 type ListItem = DrawerListItem;
@@ -397,7 +404,7 @@ function ConversationActionPanel({
 
 // Memoized: the companion screen re-renders on every streaming token flush —
 // the drawer's props (shared value + stable callbacks + isOpen) only change
-// when the drawer opens/closes.
+// when the drawer opens/closes, or once after a search edit.
 export const CompanionDrawer = memo(function CompanionDrawer({
   translateX,
   isOpen,
@@ -406,6 +413,9 @@ export const CompanionDrawer = memo(function CompanionDrawer({
   onNewChat,
   onWillSwitchConversation,
   docked = false,
+  initialSearchQuery = '',
+  onSearchQueryChange,
+  hideHeading = false,
 }: CompanionDrawerProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -451,7 +461,11 @@ export const CompanionDrawer = memo(function CompanionDrawer({
     );
   }, [conversationsFingerprint]);
 
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQueryState] = useState(initialSearchQuery);
+  const setSearchQuery = useCallback((query: string) => {
+    setSearchQueryState(query);
+    onSearchQueryChange?.(query);
+  }, [onSearchQueryChange]);
   const [groupingNow, setGroupingNow] = useState(() => Date.now());
   const [actionConversation, setActionConversation] = useState<Conversation | null>(null);
   const [actionMode, setActionMode] = useState<ActionMode>('actions');
@@ -639,25 +653,27 @@ export const CompanionDrawer = memo(function CompanionDrawer({
         accessibilityElementsHidden={activeActionConversation != null}
         importantForAccessibility={activeActionConversation ? 'no-hide-descendants' : 'auto'}
       >
-        <View style={styles.historyHeader}>
-          <Text
-            style={[styles.chatsHeading, { color: colors.text }]}
-            accessibilityRole="header"
-          >
-            Chats
-          </Text>
-          {docked ? null : (
-            <TouchableOpacity
-              onPress={handleCloseHistory}
-              activeOpacity={0.7}
-              style={styles.headerClose}
-              accessibilityRole="button"
-              accessibilityLabel="Close history"
+        {docked && hideHeading ? null : (
+          <View style={styles.historyHeader}>
+            <Text
+              style={[styles.chatsHeading, { color: colors.text }]}
+              accessibilityRole="header"
             >
-              <Text style={[styles.headerCloseLabel, { color: colors.textMuted }]}>Close</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+              Chats
+            </Text>
+            {docked ? null : (
+              <TouchableOpacity
+                onPress={handleCloseHistory}
+                activeOpacity={0.7}
+                style={styles.headerClose}
+                accessibilityRole="button"
+                accessibilityLabel="Close history"
+              >
+                <Text style={[styles.headerCloseLabel, { color: colors.textMuted }]}>Close</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
 
         <TouchableOpacity
           onPress={handleDrawerNewChat}
