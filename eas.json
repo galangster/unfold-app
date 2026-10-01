@@ -60,6 +60,12 @@
         "distribution": "store"
       },
       "environment": "production"
+    },
+    "production-xcode-27-1": {
+      "extends": "production",
+      "ios": {
+        "image": "macos-tahoe-26.6-xcode-27.1"
+      }
     }
   },
   "submit": {
