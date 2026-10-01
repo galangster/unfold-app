@@ -5,6 +5,8 @@
  */
 import renderer, { act } from 'react-test-renderer';
 import { DevotionalContent } from '../DevotionalContent';
+import type { Bookmark } from '@/lib/store';
+import { storedReferenceFor } from '@/lib/bookmark-identity';
 
 const mockFetchVerseLocal = jest.fn();
 const mockFetchVerse = jest.fn();
@@ -295,6 +297,272 @@ describe('DevotionalContent versed scripture (Greptile A8)', () => {
       text: 'Saved related passage in KJV.',
       translation: 'KJV',
     });
+  });
+
+  it('lands a bookmark saved from a text selection on the selected words in the devotional text', async () => {
+    const bodyText = 'Jesus said, “Come to me” (Matthew 11:28). For God *so loved* the world. Grace meets you here.';
+    mockFetchVerseLocal.mockResolvedValue(null);
+    mockFetchVerse.mockResolvedValue(null);
+    const onScriptureTap = jest.fn();
+    const onTargetBookmarkLocated = jest.fn();
+    const saved = {
+      devotionalId: 'devotional-1',
+      devotionalTitle: 'The Gift',
+      dayNumber: 1,
+      dayTitle: 'Loved First',
+      savedAt: '2026-09-30T00:00:00.000Z',
+    };
+    const targets = [
+      // Scripture quoted in the text, for another passage and for the day's
+      // own, as saved and as a sync pull rebuilds it (reference and text only).
+      { ...saved, id: 'selected-related', kind: 'scripture' as const, key: 'Matthew 11:28', scriptureReference: 'Matthew 11:28', scriptureText: '…Come to me…', quotedText: 'Come to me' },
+      { ...saved, id: 'pulled-related', scriptureReference: 'Matthew 11:28', scriptureText: '…Come to me…' },
+      { ...saved, id: 'selected-main', kind: 'scripture' as const, key: 'John 3:16', scriptureReference: 'John 3:16', scriptureText: '…so loved…', quotedText: 'so loved' },
+      { ...saved, id: 'pulled-main', scriptureReference: 'John 3:16', scriptureText: '…so loved…' },
+      // Prose, as saved and as a sync pull rebuilds it.
+      { ...saved, id: 'selected-prose', kind: 'excerpt' as const, key: 'Grace meets you', scriptureReference: storedReferenceFor('excerpt'), scriptureText: 'Grace meets you', quotedText: 'Grace meets you' },
+      { ...saved, id: 'pulled-prose', scriptureReference: storedReferenceFor('excerpt'), scriptureText: 'Grace meets you' },
+    ];
+
+    for (const targetBookmark of targets) {
+      mockDevotionalWebView.mockClear();
+      let tree: renderer.ReactTestRenderer;
+      await act(async () => {
+        tree = renderer.create(
+          <DevotionalContent
+            day={day({ scriptureReference: 'John 3:16', bodyText })}
+            fontSize="medium"
+            targetBookmark={targetBookmark}
+            onScriptureTap={onScriptureTap}
+            onTargetBookmarkLocated={onTargetBookmarkLocated}
+          />,
+        );
+        await Promise.resolve();
+      });
+      act(() => tree!.root.findByProps({ testID: 'reading-scripture-section' }).props.onLayout({
+        nativeEvent: { layout: { y: 320 } },
+      }));
+
+      const webViewProps = mockDevotionalWebView.mock.calls.at(-1)?.[0] as { targetBookmark?: { id: string } | null };
+      expect(webViewProps.targetBookmark?.id).toBe(targetBookmark.id);
+      act(() => tree!.unmount());
+    }
+    // The text locator reports the position; neither the passage block nor
+    // the passage sheet takes over.
+    expect(onScriptureTap).not.toHaveBeenCalled();
+    expect(onTargetBookmarkLocated).not.toHaveBeenCalled();
+  });
+
+  it('opens the passage sheet, without the saved words, when the page cannot find a selected phrase', async () => {
+    mockFetchVerseLocal.mockResolvedValue(null);
+    mockFetchVerse.mockResolvedValue(null);
+    const onScriptureTap = jest.fn();
+    const onTargetBookmarkLocated = jest.fn();
+    const phrase = {
+      devotionalId: 'devotional-1',
+      devotionalTitle: 'The Gift',
+      dayNumber: 1,
+      dayTitle: 'Loved First',
+      savedAt: '2026-09-30T00:00:00.000Z',
+    };
+    const render = async (targetBookmark: Bookmark) => {
+      mockDevotionalWebView.mockClear();
+      let tree: renderer.ReactTestRenderer;
+      await act(async () => {
+        tree = renderer.create(
+          <DevotionalContent
+            // The day was written again: the quotations the reader selected are gone.
+            day={day({ scriptureReference: 'John 3:16', bodyText: 'Rest in that love today.' })}
+            fontSize="medium"
+            targetBookmark={targetBookmark}
+            onScriptureTap={onScriptureTap}
+            onTargetBookmarkLocated={onTargetBookmarkLocated}
+          />,
+        );
+        await Promise.resolve();
+      });
+      act(() => tree!.root.findByProps({ testID: 'reading-scripture-section' }).props.onLayout({
+        nativeEvent: { layout: { y: 320 } },
+      }));
+      const webViewProps = () => mockDevotionalWebView.mock.calls.at(-1)?.[0] as {
+        targetBookmark?: { id: string } | null;
+        onTargetBookmarkMissing?: () => void;
+      };
+      // The page looks for the words first.
+      expect(webViewProps().targetBookmark?.id).toBe(targetBookmark.id);
+      expect(onScriptureTap).not.toHaveBeenCalled();
+      act(() => webViewProps().onTargetBookmarkMissing?.());
+      // The page keeps its target, so the document does not reload.
+      expect(webViewProps().targetBookmark?.id).toBe(targetBookmark.id);
+      act(() => tree!.unmount());
+    };
+
+    // Another passage and the day's own, as saved and as a sync pull
+    // rebuilds them: the sheet loads the passage itself, since a phrase is
+    // not the passage.
+    const targets: [string, Bookmark][] = [
+      ['Romans 8:28', { ...phrase, id: 'saved-related', kind: 'scripture', key: 'Romans 8:28', scriptureReference: 'Romans 8:28', scriptureText: '…all things work together…', quotedText: 'all things work together' }],
+      ['Matthew 11:28', { ...phrase, id: 'pulled-related', scriptureReference: 'Matthew 11:28', scriptureText: '…Come to me…' }],
+      ['John 3:16', { ...phrase, id: 'pulled-main', scriptureReference: 'John 3:16', scriptureText: '…so loved…' }],
+    ];
+    for (const [reference, target] of targets) {
+      onScriptureTap.mockClear();
+      await render(target);
+      expect(onScriptureTap).toHaveBeenCalledTimes(1);
+      expect(onScriptureTap).toHaveBeenCalledWith(reference, undefined);
+    }
+    expect(onTargetBookmarkLocated).not.toHaveBeenCalled();
+  });
+
+  it('opens a passage saved from the passage sheet with its saved text, even when the teaching quotes it word for word', async () => {
+    mockFetchVerseLocal.mockResolvedValue(null);
+    mockFetchVerse.mockResolvedValue(null);
+    const onScriptureTap = jest.fn();
+    const saved = {
+      devotionalId: 'devotional-1',
+      devotionalTitle: 'The Gift',
+      dayNumber: 1,
+      dayTitle: 'Loved First',
+      savedAt: '2026-09-30T00:00:00.000Z',
+    };
+    const render = async (targetBookmark: Bookmark) => {
+      mockDevotionalWebView.mockClear();
+      let tree: renderer.ReactTestRenderer;
+      await act(async () => {
+        tree = renderer.create(
+          <DevotionalContent
+            day={day({ scriptureReference: 'John 3:16', bodyText: 'Jesus said, “Come to me” (Matthew 11:28). For God so loved the world.' })}
+            fontSize="medium"
+            targetBookmark={targetBookmark}
+            onScriptureTap={onScriptureTap}
+          />,
+        );
+        await Promise.resolve();
+      });
+      const webViewProps = mockDevotionalWebView.mock.calls.at(-1)?.[0] as { targetBookmark?: { id: string } | null };
+      expect(webViewProps.targetBookmark ?? null).toBeNull();
+      act(() => tree!.unmount());
+    };
+
+    // The passage sheet saved the whole of Matthew 11:28, and the teaching
+    // quotes it word for word.
+    await render({
+      ...saved,
+      id: 'sheet-passage',
+      kind: 'scripture',
+      key: 'Matthew 11:28',
+      scriptureReference: 'Matthew 11:28',
+      scriptureText: 'Come to me',
+      translation: 'WEB',
+    });
+    expect(onScriptureTap).toHaveBeenCalledWith('Matthew 11:28', { text: 'Come to me', translation: 'WEB' });
+
+    // Older builds saved the whole passage with quotedText and no kind: the
+    // sheet still shows the saved passage.
+    onScriptureTap.mockClear();
+    const passage = 'And we know that all things work together for good to them that love God.';
+    await render({ ...saved, id: 'older-passage', scriptureReference: 'Romans 8:28', scriptureText: passage, quotedText: passage });
+    expect(onScriptureTap).toHaveBeenCalledWith('Romans 8:28', { text: passage });
+  });
+
+  it('lands the day’s passage bookmark on the passage block when the teaching quotes it word for word', async () => {
+    mockFetchVerseLocal.mockResolvedValue(null);
+    mockFetchVerse.mockResolvedValue(null);
+    const onScriptureTap = jest.fn();
+    const onTargetBookmarkLocated = jest.fn();
+    const passage = 'Be still, and know that I am God.';
+    let tree: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderer.create(
+        <DevotionalContent
+          day={day({ scriptureReference: 'Psalm 46:10', scriptureText: passage, bodyText: `The Lord says, “${passage}” Stillness is trust.` })}
+          fontSize="medium"
+          targetBookmark={{
+            id: 'passage-bookmark',
+            devotionalId: 'devotional-1',
+            devotionalTitle: 'The Gift',
+            dayNumber: 1,
+            dayTitle: 'Loved First',
+            // As a sync pull rebuilds the passage block's bookmark.
+            scriptureReference: 'Psalm 46:10',
+            scriptureText: passage,
+            savedAt: '2026-09-30T00:00:00.000Z',
+          }}
+          onScriptureTap={onScriptureTap}
+          onTargetBookmarkLocated={onTargetBookmarkLocated}
+        />,
+      );
+      await Promise.resolve();
+    });
+    act(() => tree!.root.findByProps({ testID: 'reading-scripture-section' }).props.onLayout({
+      nativeEvent: { layout: { y: 320 } },
+    }));
+
+    const webViewProps = mockDevotionalWebView.mock.calls.at(-1)?.[0] as { targetBookmark?: { id: string } | null };
+    expect(webViewProps.targetBookmark ?? null).toBeNull();
+    expect(onTargetBookmarkLocated).toHaveBeenCalledWith(320);
+    expect(onScriptureTap).not.toHaveBeenCalled();
+    act(() => tree!.unmount());
+  });
+
+  it('closes the selection bar on a tap on the reader’s own views, not on the page, a drag, or a long press', async () => {
+    mockFetchVerseLocal.mockResolvedValue(null);
+    mockFetchVerse.mockResolvedValue(null);
+    const closeSelectionBar = jest.fn();
+    const commands = { applyInverse: jest.fn(), scrollToHighlight: jest.fn(), refreshSelectionBar: jest.fn(), closeSelectionBar };
+    const at = (pageX: number, pageY: number, timestamp: number) => ({ nativeEvent: { pageX, pageY, timestamp } });
+    const render = async (extra: Record<string, unknown>) => {
+      mockDevotionalWebView.mockClear();
+      let tree: renderer.ReactTestRenderer;
+      await act(async () => {
+        tree = renderer.create(<DevotionalContent day={day({ act: 'Take a quiet moment.' })} fontSize="medium" {...extra} />);
+        await Promise.resolve();
+      });
+      return {
+        tree: tree!,
+        reader: tree!.root.findAll((node) => typeof node.props.onTouchEnd === 'function')[0].props,
+        page: tree!.root.findByProps({ testID: 'reading-devotional-section' }).props,
+      };
+    };
+
+    const { tree, reader, page } = await render({ highlightCommandRef: { current: commands } });
+    // A tap on the act section.
+    act(() => {
+      reader.onTouchStart(at(20, 900, 1000));
+      reader.onTouchEnd(at(22, 903, 1120));
+    });
+    expect(closeSelectionBar).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      // A tap on the page: RN hands it to the page's wrapper first, and the
+      // page closes its own bar by its own rule.
+      page.onTouchStart(at(20, 400, 2000));
+      reader.onTouchStart(at(20, 400, 2000));
+      reader.onTouchEnd(at(20, 400, 2100));
+      // A drag that scrolls the reader, a long press, and a touch the
+      // ScrollView takes over.
+      reader.onTouchStart(at(20, 900, 3000));
+      reader.onTouchMove(at(20, 860, 3050));
+      reader.onTouchEnd(at(20, 700, 3200));
+      reader.onTouchStart(at(20, 900, 4000));
+      reader.onTouchEnd(at(20, 900, 4800));
+      reader.onTouchStart(at(20, 900, 5000));
+      reader.onTouchCancel();
+      reader.onTouchEnd(at(20, 900, 5100));
+    });
+    expect(closeSelectionBar).toHaveBeenCalledTimes(1);
+    act(() => tree.unmount());
+
+    // A reading without the reader's ref (onboarding) gives the page its own.
+    const own = await render({});
+    const webViewProps = mockDevotionalWebView.mock.calls.at(-1)?.[0] as { commandRef: { current: unknown } };
+    webViewProps.commandRef.current = commands;
+    act(() => {
+      own.reader.onTouchStart(at(20, 900, 6000));
+      own.reader.onTouchEnd(at(20, 900, 6100));
+    });
+    expect(closeSelectionBar).toHaveBeenCalledTimes(2);
+    act(() => own.tree.unmount());
   });
 
   it('signals reflection remeasurement after the WebView height commit', async () => {

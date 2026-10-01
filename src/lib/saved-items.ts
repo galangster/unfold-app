@@ -9,7 +9,8 @@ import { enqueueSyncChanges, removeSyncChangesForRecords } from '@/lib/sync-outb
 import { stripOuterQuotes } from '@/lib/cn';
 import { buildSavedHighlights, type SavedItem } from '@/lib/saved-highlights';
 import type { SyncPushChange } from '@/lib/sync-types';
-import { bookmarkKind } from '@/lib/bookmark-identity';
+import { bookmarkKind, EXCERPT_BOOKMARK_LABEL } from '@/lib/bookmark-identity';
+import { unwrapQuotes } from '@/lib/selection-share';
 
 /**
  * Journal › Saved: one list over devotional highlights, Bible highlights,
@@ -40,7 +41,8 @@ export const SAVED_TYPE_FILTERS: readonly SavedTypeFilter[] = ['all', 'highlight
 
 export function toBookmarkSavedItem(bookmark: Bookmark, devotional?: Devotional): SavedBookmarkItem {
   const day = devotional?.days.find((d) => d.dayNumber === bookmark.dayNumber);
-  const isScripture = bookmarkKind(bookmark) === 'scripture';
+  const kind = bookmarkKind(bookmark);
+  const isScripture = kind === 'scripture';
   const quoteSource = isScripture
     ? bookmark.scriptureText
     : bookmark.quotedText || bookmark.scriptureText || day?.quotableLine || day?.scriptureText || '';
@@ -49,8 +51,14 @@ export function toBookmarkSavedItem(bookmark: Bookmark, devotional?: Devotional)
     source: 'devotional',
     kind: 'bookmark',
     label: bookmark.dayTitle || day?.title || 'Saved Passage',
-    reference: isScripture ? bookmark.scriptureReference : day?.scriptureReference || bookmark.scriptureReference,
-    quote: stripOuterQuotes(quoteSource),
+    // Scripture shows its own reference and an excerpt its label (never the
+    // day's passage, which it does not quote).
+    reference: kind === 'excerpt'
+      ? EXCERPT_BOOKMARK_LABEL
+      : isScripture ? bookmark.scriptureReference : day?.scriptureReference || bookmark.scriptureReference,
+    // An excerpt can start with a quotation that closes inside it: only a
+    // pair that wraps all of it comes off.
+    quote: kind === 'excerpt' ? unwrapQuotes(quoteSource) : stripOuterQuotes(quoteSource),
     createdAt: bookmark.savedAt,
     updatedAt: bookmark.updatedAt,
     raw: bookmark,

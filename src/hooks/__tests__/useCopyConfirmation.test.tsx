@@ -2,7 +2,7 @@ import React, { Activity, type ReactNode } from 'react';
 import { act, renderHook } from '@testing-library/react-native';
 import { AccessibilityInfo } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
-import { useCopyConfirmation, type CopyConfirmation } from '../useCopyConfirmation';
+import { copyText, useCopyConfirmation, type CopyConfirmation } from '../useCopyConfirmation';
 
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn() }));
 
@@ -15,9 +15,11 @@ let consoleSpies: jest.SpyInstance[];
 
 // A copy that rejects fails the test here, because act() awaits it.
 async function copy(result: { current: CopyConfirmation }) {
+  let didCopy: boolean | undefined;
   await act(async () => {
-    await result.current.copy(TEXT);
+    didCopy = await result.current.copy(TEXT);
   });
+  return didCopy;
 }
 
 function advance(ms: number) {
@@ -39,7 +41,7 @@ function heldWrite() {
 
 /** Starts a copy and leaves its write on its way. */
 function startCopy(result: { current: CopyConfirmation }) {
-  let pending!: Promise<void>;
+  let pending!: Promise<boolean>;
   act(() => {
     pending = result.current.copy(TEXT);
   });
@@ -80,7 +82,7 @@ describe('useCopyConfirmation', () => {
   it('confirms and announces after the clipboard takes the text', async () => {
     const { result } = renderHook(useCopyConfirmation);
 
-    await copy(result);
+    expect(await copy(result)).toBe(true);
 
     expect(setStringAsync).toHaveBeenCalledTimes(1);
     expect(setStringAsync).toHaveBeenCalledWith(TEXT);
@@ -122,7 +124,7 @@ describe('useCopyConfirmation', () => {
     arrange();
     const { result } = renderHook(useCopyConfirmation);
 
-    await copy(result);
+    expect(await copy(result)).toBe(false);
 
     expect(setStringAsync).toHaveBeenCalledWith(TEXT);
     expect(result.current.copied).toBe(false);
@@ -287,5 +289,22 @@ describe('useCopyConfirmation', () => {
     await copy(result);
 
     expect(announce.mock.calls).toEqual([['Copied']]);
+  });
+});
+
+describe('copyText', () => {
+  it('resolves true when the clipboard takes the text and confirms nothing', async () => {
+    await expect(copyText(TEXT)).resolves.toBe(true);
+    expect(setStringAsync).toHaveBeenCalledWith(TEXT);
+    expect(announce).not.toHaveBeenCalled();
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
+  it('resolves false, and does not reject, when the clipboard refuses the text', async () => {
+    setStringAsync.mockResolvedValueOnce(false);
+    await expect(copyText(TEXT)).resolves.toBe(false);
+    setStringAsync.mockRejectedValueOnce(new Error(`clipboard refused ${TEXT}`));
+    await expect(copyText(TEXT)).resolves.toBe(false);
+    expect(announce).not.toHaveBeenCalled();
   });
 });

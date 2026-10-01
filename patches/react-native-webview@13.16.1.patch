@@ -1,0 +1,74 @@
+diff --git a/apple/RNCWebViewImpl.m b/apple/RNCWebViewImpl.m
+index 7f5c24d6e2cfb26eddbc513bf17a81c24a7273e2..15fff0f3e9a945b89269456de3f034c2736e8e0a 100644
+--- a/apple/RNCWebViewImpl.m
++++ b/apple/RNCWebViewImpl.m
+@@ -81,6 +81,11 @@ NSString *const CUSTOM_SELECTOR = @"_CUSTOM_SELECTOR_";
+ - (BOOL)canPerformAction:(SEL)action
+               withSender:(id)sender{
+   if(self.suppressMenuItems) {
++      // Unfold: 'all' turns off every system edit-menu action. The page
++      // draws its own selection bar instead.
++      if ([self.suppressMenuItems containsObject:@"all"]) {
++          return NO;
++      }
+       NSString * sel = [self stringFromAction:action];
+       if ([self.suppressMenuItems containsObject: sel]) {
+           return NO;
+@@ -100,6 +105,12 @@ NSString *const CUSTOM_SELECTOR = @"_CUSTOM_SELECTOR_";
+       }
+     }
+     [super buildMenuWithBuilder:builder];
++    // Unfold: the Look Up group (Look Up, Translate, Search Web) holds
++    // actions that canPerformAction:withSender: never sees. With 'all',
++    // remove it after super so nothing WebKit adds comes back.
++    if ([self.suppressMenuItems containsObject:@"all"]) {
++      [builder removeMenuForIdentifier:UIMenuLookup];
++    }
+ }
+ #else // TARGET_OS_OSX
+ - (void)scrollWheel:(NSEvent *)theEvent {
+@@ -459,6 +470,15 @@ RCTAutoInsetsProtocol>
+   if (_prefsUsed) {
+     wkWebViewConfig.preferences = prefs;
+   }
++#if TARGET_OS_IOS && defined(__IPHONE_OS_VERSION_MAX_ALLOWED) && __IPHONE_OS_VERSION_MAX_ALLOWED >= 180000 /* iOS 18 */
++  // Unfold: Writing Tools skips canPerformAction:withSender:, so 'all' also
++  // turns it off here. The configuration is read once, when the web view is made.
++  if (@available(iOS 18.0, *)) {
++    if ([_suppressMenuItems containsObject:@"all"]) {
++      wkWebViewConfig.writingToolsBehavior = UIWritingToolsBehaviorNone;
++    }
++  }
++#endif
+   if (_incognito) {
+     wkWebViewConfig.websiteDataStore = [WKWebsiteDataStore nonPersistentDataStore];
+   } else if (_cacheEnabled) {
+diff --git a/lib/WebViewTypes.d.ts b/lib/WebViewTypes.d.ts
+index 998cc88f03f3fbcd0a47f227c01f738dbf4c58bf..054ff7b0775fd2eb9cc4c57b3fc662da74ce9b96 100644
+--- a/lib/WebViewTypes.d.ts
++++ b/lib/WebViewTypes.d.ts
+@@ -148,7 +148,7 @@ export interface WebViewCustomMenuItems {
+      */
+     label: string;
+ }
+-export declare type SuppressMenuItem = 'cut' | 'copy' | 'paste' | 'replace' | 'bold' | 'italic' | 'underline' | 'select' | 'selectAll' | 'translate' | 'lookup' | 'share';
++export declare type SuppressMenuItem = 'cut' | 'copy' | 'paste' | 'replace' | 'bold' | 'italic' | 'underline' | 'select' | 'selectAll' | 'translate' | 'lookup' | 'share' | 'all';
+ export type WebViewSource = WebViewSourceUri | WebViewSourceHtml;
+ export interface ViewManager {
+     shouldStartLoadWithLockIdentifier: Function;
+diff --git a/src/WebViewTypes.ts b/src/WebViewTypes.ts
+index eca81415ab48676da18fc2be13b84e60fe5cb3f5..9d4723e58c3cd653d27bc0f7e7a0e4a07b484c20 100644
+--- a/src/WebViewTypes.ts
++++ b/src/WebViewTypes.ts
+@@ -246,7 +246,10 @@ export declare type SuppressMenuItem =
+   | 'selectAll'
+   | 'translate'
+   | 'lookup'
+-  | 'share';
++  | 'share'
++  // Unfold patch: iOS only. Turns off every system edit-menu action,
++  // the Look Up group, and Writing Tools.
++  | 'all';
+ 
+ export type WebViewSource = WebViewSourceUri | WebViewSourceHtml;
+ 

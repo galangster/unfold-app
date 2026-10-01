@@ -3,6 +3,10 @@ import {
   bookmarkIdentity,
   bookmarkIdentityEquals,
   bookmarkKind,
+  parseBookmarkKind,
+  scripturePhraseWords,
+  storedReferenceFor,
+  storedScripturePhrase,
 } from '@/lib/bookmark-identity';
 
 function legacyBookmark(scriptureReference: string, scriptureText = 'Saved text'): Bookmark {
@@ -23,10 +27,111 @@ describe('bookmark identity', () => {
     ['Quote', 'quote'],
     ['Historical Context', 'context'],
     ['Word Study', 'word-study'],
+    ['quote', 'excerpt'],
+    ['Excerpt', 'scripture'],
     ['John 3:16', 'scripture'],
     ['', 'scripture'],
   ] as const)('derives legacy %s bookmarks as %s', (reference, expectedKind) => {
     expect(bookmarkKind(legacyBookmark(reference))).toBe(expectedKind);
+  });
+
+  it.each(['quote', 'context', 'word-study', 'excerpt'] as const)(
+    'reads the reference a %s bookmark stores back as its kind after a sync round trip',
+    (kind) => {
+      expect(bookmarkKind(legacyBookmark(storedReferenceFor(kind)))).toBe(kind);
+    },
+  );
+
+  it('tells an excerpt from a quote box by the case of the reference alone', () => {
+    expect(storedReferenceFor('excerpt')).toBe('quote');
+    expect(storedReferenceFor('quote')).toBe('Quote');
+  });
+
+  it('keeps an excerpt bookmark the same after a sync round trip', () => {
+    const saved = {
+      ...legacyBookmark(storedReferenceFor('excerpt'), 'Grace meets you in the next act of trust.'),
+      kind: 'excerpt' as const,
+      key: 'Grace meets you in the next act of trust.',
+      quotedText: 'Grace meets you in the next act of trust.',
+    };
+    // A pull rebuilds the record from scriptureReference and scriptureText only.
+    const pulled = legacyBookmark(saved.scriptureReference, saved.scriptureText);
+
+    expect(bookmarkKind(pulled)).toBe('excerpt');
+    expect(bookmarkIdentity(pulled)).toEqual(bookmarkIdentity(saved));
+    expect(bookmarkIdentityEquals(pulled, saved)).toBe(true);
+  });
+
+  it('keeps two synced excerpts of a day apart on builds from before excerpts', () => {
+    // Those builds (59835e64) read the kind from the reference alone, trimmed
+    // and in lower case, and key Scripture by its reference.
+    const olderBuildKinds: Record<string, string> = { quote: 'quote', 'historical context': 'context', 'word study': 'word-study' };
+    const olderBuildIdentity = (bookmark: Bookmark) => {
+      const kind = olderBuildKinds[bookmark.scriptureReference.trim().toLowerCase()] ?? 'scripture';
+      const key = kind === 'scripture' ? bookmark.scriptureReference.trim().toLowerCase() : bookmark.scriptureText.trim();
+      return { kind, key };
+    };
+    // What a pull hands those builds: the reference and the text only.
+    const first = legacyBookmark(storedReferenceFor('excerpt'), 'Grace meets you in the next act of trust.');
+    const second = legacyBookmark(storedReferenceFor('excerpt'), 'Rest is a gift.');
+
+    expect(olderBuildIdentity(first)).toEqual({ kind: 'quote', key: 'Grace meets you in the next act of trust.' });
+    expect(olderBuildIdentity(second)).toEqual({ kind: 'quote', key: 'Rest is a gift.' });
+    // This build reads both back as excerpts, still apart.
+    expect(bookmarkKind(first)).toBe('excerpt');
+    expect(bookmarkIdentityEquals(first, second)).toBe(false);
+    // A quote box keeps its capitalised label, so it stays a quote here.
+    expect(bookmarkKind(legacyBookmark('Quote', 'Grace meets you in the next act of trust.'))).toBe('quote');
+  });
+
+  it('keeps a Scripture selection bookmark the same after a sync round trip', () => {
+    const saved = {
+      ...legacyBookmark('Psalm 46:10', 'Be still'),
+      kind: 'scripture' as const,
+      key: 'Psalm 46:10',
+      quotedText: 'Be still',
+    };
+    const pulled = legacyBookmark(saved.scriptureReference, saved.scriptureText);
+
+    expect(bookmarkKind(pulled)).toBe('scripture');
+    expect(bookmarkIdentityEquals(pulled, saved)).toBe(true);
+  });
+
+  it('keeps a Scripture phrase a phrase after a sync round trip: its words sit between ellipses', () => {
+    const saved = {
+      ...legacyBookmark('Psalm 23:6', storedScripturePhrase('goodness and mercy')),
+      kind: 'scripture' as const,
+      key: 'Psalm 23:6',
+      quotedText: 'goodness and mercy',
+    };
+    const pulled = legacyBookmark(saved.scriptureReference, saved.scriptureText);
+
+    expect(saved.scriptureText).toBe('…goodness and mercy…');
+    expect(scripturePhraseWords(saved)).toBe('goodness and mercy');
+    expect(scripturePhraseWords(pulled)).toBe('goodness and mercy');
+    expect(bookmarkIdentityEquals(pulled, saved)).toBe(true);
+  });
+
+  it('reads a whole passage and any other kind as no Scripture phrase', () => {
+    const passage = 'Surely goodness and mercy shall follow me.';
+    expect(scripturePhraseWords({ ...legacyBookmark('Psalm 23:6', passage), kind: 'scripture' })).toBeNull();
+    // Older builds put quotedText on whole passages, with no kind.
+    expect(scripturePhraseWords({ ...legacyBookmark('Psalm 23:6', passage), quotedText: passage })).toBeNull();
+    expect(scripturePhraseWords(legacyBookmark('Psalm 23:6', '…and mercy shall follow me.'))).toBeNull();
+    expect(scripturePhraseWords(legacyBookmark('Psalm 23:6', '……'))).toBeNull();
+    expect(scripturePhraseWords(legacyBookmark(storedReferenceFor('excerpt'), '…and so on…'))).toBeNull();
+  });
+
+  it('parses excerpt as a bookmark kind', () => {
+    expect(parseBookmarkKind('excerpt')).toBe('excerpt');
+    expect(parseBookmarkKind('Excerpt')).toBeUndefined();
+  });
+
+  it('keeps an excerpt separate from a quote with the same text', () => {
+    expect(bookmarkIdentityEquals(
+      { devotionalId: 'devotional-1', dayNumber: 2, kind: 'excerpt', key: 'Be still' },
+      { devotionalId: 'devotional-1', dayNumber: 2, kind: 'quote', key: 'Be still' },
+    )).toBe(false);
   });
 
   it('uses the reference for Scripture and the saved text for boxes', () => {

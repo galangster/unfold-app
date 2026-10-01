@@ -1,5 +1,70 @@
 /** `word-study` is the stable sync slug for the product's “word study” kind. */
-export type BookmarkKind = 'scripture' | 'quote' | 'context' | 'word-study';
+export type BookmarkKind = 'scripture' | 'quote' | 'context' | 'word-study' | 'excerpt';
+/** The kinds a box in the devotional reader (quote, context, word study) saves. */
+export type BoxBookmarkKind = 'quote' | 'context' | 'word-study';
+
+const STORED_REFERENCES: Record<Exclude<BookmarkKind, 'scripture'>, string> = {
+  quote: 'Quote',
+  context: 'Historical Context',
+  'word-study': 'Word Study',
+  excerpt: 'quote',
+};
+
+/**
+ * What a bookmark that is not Scripture stores in `scriptureReference`
+ * (Scripture stores its own reference). Sync carries only
+ * `scriptureReference` and `scriptureText`, so this value must bring the kind
+ * back after a round trip: bookmarkKind reads it.
+ *
+ * - A box (quote, context, word study) stores its legacy label: 'Quote',
+ *   'Historical Context', 'Word Study'.
+ * - An excerpt (prose selected in the devotional reader) stores 'quote', in
+ *   lower case. Builds from before excerpts read the reference through
+ *   LEGACY_KIND_BY_REFERENCE, trimmed and in lower case. With 'quote' they
+ *   keep each excerpt as its own quote bookmark, keyed by its text. Any other
+ *   label makes them read every excerpt of a day as one Scripture passage, so
+ *   deleting one there deletes them all.
+ *
+ * So this build tells the two apart by case alone: 'quote' is an excerpt and
+ * 'Quote' is a quote box. No build has stored 'quote' for a quote box.
+ */
+export function storedReferenceFor(kind: Exclude<BookmarkKind, 'scripture'>): string {
+  return STORED_REFERENCES[kind];
+}
+
+/** What My library shows as the reference of an excerpt. */
+export const EXCERPT_BOOKMARK_LABEL = 'Excerpt';
+
+/** The mark on each side of a Scripture phrase's words in scriptureText. */
+const PHRASE_ELLIPSIS = '…';
+
+/**
+ * What a Scripture phrase (words selected in a quotation of the devotional
+ * text) stores in `scriptureText`: its words between two ellipses,
+ * '…goodness and mercy…'. Sync carries only `scriptureReference` and
+ * `scriptureText`, so the ellipses keep it a phrase after a round trip
+ * (scripturePhraseWords reads them), and My library shows them. A passage
+ * saved from the passage block or the passage sheet stores its whole text.
+ */
+export function storedScripturePhrase(words: string): string {
+  return `${PHRASE_ELLIPSIS}${words}${PHRASE_ELLIPSIS}`;
+}
+
+/**
+ * The words of a Scripture phrase, or null for a whole passage and for every
+ * other kind. This device saves a phrase with its kind and its words as
+ * `quotedText`. Builds from before kinds put `quotedText` on whole passages,
+ * with no kind. After a sync only the ellipses of `scriptureText` remain.
+ */
+export function scripturePhraseWords(
+  bookmark: Pick<BookmarkIdentitySource, 'kind' | 'scriptureReference' | 'scriptureText' | 'quotedText'>,
+): string | null {
+  if (bookmarkKind(bookmark) !== 'scripture') return null;
+  if (bookmark.kind === 'scripture' && bookmark.quotedText?.trim()) return bookmark.quotedText;
+  const text = bookmark.scriptureText.trim();
+  if (!text.startsWith(PHRASE_ELLIPSIS) || !text.endsWith(PHRASE_ELLIPSIS)) return null;
+  return text.slice(PHRASE_ELLIPSIS.length, -PHRASE_ELLIPSIS.length).trim() || null;
+}
 
 export interface BookmarkIdentity {
   devotionalId: string;
@@ -23,7 +88,7 @@ const LEGACY_KIND_BY_REFERENCE: Record<string, Exclude<BookmarkKind, 'scripture'
   'historical context': 'context',
   'word study': 'word-study',
 };
-const BOOKMARK_KINDS = new Set<BookmarkKind>(['scripture', 'quote', 'context', 'word-study']);
+const BOOKMARK_KINDS = new Set<BookmarkKind>(['scripture', 'quote', 'context', 'word-study', 'excerpt']);
 
 function normalizeKey(value: string): string {
   return value.replace(/\s+/g, ' ').trim();
@@ -46,7 +111,9 @@ export function parseBookmarkKind(value: unknown): BookmarkKind | undefined {
 export function bookmarkKind(bookmark: Pick<BookmarkIdentitySource, 'kind' | 'scriptureReference'>): BookmarkKind {
   const explicitKind = parseBookmarkKind(bookmark.kind);
   if (explicitKind) return explicitKind;
-  return LEGACY_KIND_BY_REFERENCE[bookmark.scriptureReference.trim().toLowerCase()] ?? 'scripture';
+  const reference = bookmark.scriptureReference.trim();
+  if (reference === STORED_REFERENCES.excerpt) return 'excerpt';
+  return LEGACY_KIND_BY_REFERENCE[reference.toLowerCase()] ?? 'scripture';
 }
 
 export function bookmarkKey(bookmark: BookmarkIdentitySource): string {
@@ -96,7 +163,7 @@ export function bookmarkIdentityToken(identity: Pick<BookmarkIdentity, 'kind' | 
   return JSON.stringify([identity.kind, normalizeIdentityKey(identity.kind, identity.key)]);
 }
 
-export function bookmarkKindFromBoxType(contentType: string): Exclude<BookmarkKind, 'scripture'> | null {
+export function bookmarkKindFromBoxType(contentType: string): BoxBookmarkKind | null {
   if (contentType === 'quote') return 'quote';
   if (contentType === 'context') return 'context';
   if (contentType === 'wordstudy') return 'word-study';

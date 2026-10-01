@@ -9,6 +9,7 @@ import {
   toBookmarkSavedItem,
   undoSavedDeletions,
 } from '@/lib/saved-items';
+import { storedReferenceFor } from '@/lib/bookmark-identity';
 
 jest.mock('@/lib/sync-outbox', () => ({
   enqueueSyncChanges: jest.fn(),
@@ -97,6 +98,56 @@ describe('saved-items', () => {
       reference: 'Isaiah 40:31',
       quote: 'Those who wait upon the LORD will renew their strength.',
     });
+  });
+
+  it('shows a Scripture phrase with its ellipses under its reference, as saved and after a sync', () => {
+    const phrase: Bookmark = {
+      ...bookmark,
+      id: 'scripture-phrase',
+      kind: 'scripture',
+      key: 'Isaiah 40:31',
+      scriptureReference: 'Isaiah 40:31',
+      scriptureText: '…renew their strength…',
+      quotedText: 'renew their strength',
+    };
+    expect(toBookmarkSavedItem(phrase, devotional)).toMatchObject({ reference: 'Isaiah 40:31', quote: '…renew their strength…' });
+    const { kind: _kind, key: _key, quotedText: _quotedText, ...synced } = phrase;
+    expect(toBookmarkSavedItem(synced as Bookmark, devotional)).toMatchObject({ reference: 'Isaiah 40:31', quote: '…renew their strength…' });
+  });
+
+  it('labels a selection excerpt Excerpt, not the day passage it does not quote', () => {
+    const excerpt: Bookmark = {
+      ...bookmark,
+      id: 'excerpt-bookmark',
+      kind: 'excerpt',
+      key: 'Rest is given before it is earned.',
+      scriptureReference: storedReferenceFor('excerpt'),
+      scriptureText: 'Rest is given before it is earned.',
+      quotedText: 'Rest is given before it is earned.',
+    };
+    expect(toBookmarkSavedItem(excerpt, devotional)).toMatchObject({
+      label: 'Strength',
+      reference: 'Excerpt',
+      quote: 'Rest is given before it is earned.',
+    });
+    // A synced copy carries no kind: the Excerpt label alone restores it.
+    const { kind: _kind, key: _key, ...synced } = excerpt;
+    expect(toBookmarkSavedItem(synced as Bookmark, devotional).reference).toBe('Excerpt');
+  });
+
+  it('keeps the quote marks of an excerpt paired', () => {
+    const excerpt: Bookmark = {
+      ...bookmark,
+      id: 'excerpt-with-quote',
+      kind: 'excerpt',
+      key: '“Come to me,” Jesus says.',
+      scriptureReference: storedReferenceFor('excerpt'),
+      scriptureText: '“Come to me,” Jesus says.',
+      quotedText: '“Come to me,” Jesus says.',
+    };
+    expect(toBookmarkSavedItem(excerpt, devotional).quote).toBe('“Come to me,” Jesus says.');
+    expect(toBookmarkSavedItem({ ...excerpt, quotedText: '“Rest is a gift.”', scriptureText: '“Rest is a gift.”' }, devotional).quote)
+      .toBe('Rest is a gift.');
   });
 
   it('filters on both axes and by search text', () => {
