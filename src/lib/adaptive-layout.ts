@@ -11,6 +11,8 @@ export const ADAPTIVE_WIDE_MIN_WIDTH = 840;
 export const ADAPTIVE_SINGLE_COLUMN_FONT_SCALE = 1.6;
 /** Internal reading-column cap. Not an Apple-prescribed width. */
 export const ADAPTIVE_READABLE_MEASURE = 672;
+/** Horizontal padding of a reader page: the reading column and the pages that face it. */
+export const READER_PAGE_PADDING = Spacing['6'];
 export const PRIMARY_SAFE_AREA_EDGES = ['top', 'left', 'right'] as const;
 export const ADAPTIVE_CLUSTER_MEASURE = 720;
 export const ADAPTIVE_SPLIT_MEASURE = 980;
