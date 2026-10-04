@@ -2,7 +2,7 @@ import { computeDevotionalState, type ComputeInput } from '@/components/home/com
 import { getReadingDayLabel, getTodayReaderDayNumber, isDevotionalDaySelectable } from '../devotional-day-access';
 import { hasReadDevotionalToday } from '../home-devotional-state';
 import type { Devotional, DevotionalDay } from '../store';
-import { resolveRevealTarget } from '../reveal-params';
+import { resolveRevealOutcome } from '../reveal-params';
 
 const completedAt = new Date(2026, 8, 23, 7, 40).toISOString();
 const now = new Date(2026, 8, 23, 18, 52);
@@ -50,7 +50,7 @@ it('keeps the next reading locked after completion even when the series calendar
 });
 
 it('rejects a direct reveal route for the next reading after completion', () => {
-  expect(resolveRevealTarget({ devotionalId: series.id, dayNumber: '6' }, [series], now)).toBeNull();
+  expect(resolveRevealOutcome({ devotionalId: series.id, dayNumber: '6' }, [series], now)).toEqual({ kind: 'locked', dayNumber: 6 });
 });
 
 it('unlocks the next reading at local midnight without changing the saved series', () => {
@@ -58,17 +58,17 @@ it('unlocks the next reading at local midnight without changing the saved series
   expect(cardAt(tomorrow).type).toBe('reveal-ready');
   expect(getTodayReaderDayNumber(series, tomorrow)).toBe(6);
   expect(isDevotionalDaySelectable(series, 6, tomorrow)).toBe(true);
-  expect(resolveRevealTarget({ devotionalId: series.id, dayNumber: '6' }, [series], tomorrow)?.dayNumber).toBe(6);
+  expect(resolveRevealOutcome({ devotionalId: series.id, dayNumber: '6' }, [series], tomorrow)).toMatchObject({ kind: 'open', target: { dayNumber: 6 } });
 });
 
 it('keeps completed readings available for rereading', () => {
   expect(isDevotionalDaySelectable(series, 5, now)).toBe(true);
-  expect(resolveRevealTarget({ devotionalId: series.id, dayNumber: '5' }, [series], now)?.dayNumber).toBe(5);
+  expect(resolveRevealOutcome({ devotionalId: series.id, dayNumber: '5' }, [series], now)).toMatchObject({ kind: 'open', target: { dayNumber: 5 } });
 });
 
 
 it('does not reveal a later future day when the next reading unlocks', () => {
   const tomorrow = new Date(2026, 8, 24, 0, 1);
   const withFutureDay = { ...series, days: [...series.days, { ...days[5], dayNumber: 7, title: 'Later reading' }] };
-  expect(resolveRevealTarget({ devotionalId: series.id, dayNumber: '7' }, [withFutureDay], tomorrow)).toBeNull();
+  expect(resolveRevealOutcome({ devotionalId: series.id, dayNumber: '7' }, [withFutureDay], tomorrow)).toEqual({ kind: 'invalid' });
 });

@@ -4,6 +4,12 @@
 **Status:** Approved
 **Approach:** B — Server-Gated Day Advance
 
+> **Read as design history, 2026-10-04.** The rule below gates by the series calendar.
+> The shipped rule gates by the reader's last completion: the next reading opens at
+> the start of the following local day, even for a reader behind the calendar
+> (`docs/bugs/2026-09-23-today-pacing.md`). The live statement of the rule, its owners
+> and its shared test vectors is `docs/day-unlock-contract.md`.
+
 ## Problem
 
 Devotional days unlock prematurely. When a user finishes reading day N, `advanceDay()` fires immediately on the client, bumping `currentDay` to N+1. If day N+1 content exists (from the midnight cron or on-demand generation), it becomes visible instantly — even though it's supposed to be tomorrow's reading.

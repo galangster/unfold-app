@@ -27,7 +27,8 @@ import { useUIState } from '@/lib/ui-state';
 import { ScatterTitle } from '@/components/ScatterTitle';
 import { ShimmerText } from '@/components/ShimmerText';
 import { buildReadingRouteFromRevealParams } from '@/lib/push-notification-helpers';
-import { resolveRevealTarget } from '@/lib/reveal-params';
+import { resolveRevealOutcome } from '@/lib/reveal-params';
+import { reportReadyPushForLockedDay } from '@/lib/day-unlock-telemetry';
 import { Typography } from '@/constants/typography';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { RevealBackdrop } from '@/components/reveal/RevealBackdrop';
@@ -73,10 +74,11 @@ export default function RevealScreen() {
   // P3-4: params are only trusted once they resolve to a devotional that
   // exists locally and a day inside its range. Everything the store learns
   // from this screen comes from `revealTarget`, never from the raw params.
-  const revealTarget = useMemo(
-    () => resolveRevealTarget({ devotionalId, dayNumber }, devotionals),
+  const revealOutcome = useMemo(
+    () => resolveRevealOutcome({ devotionalId, dayNumber }, devotionals),
     [devotionalId, dayNumber, devotionals],
   );
+  const revealTarget = revealOutcome.kind === 'open' ? revealOutcome.target : null;
 
   const revealedDay = devotionals
     .find((row) => row.id === revealTarget?.devotionalId)?.days
@@ -173,12 +175,20 @@ export default function RevealScreen() {
   // of range, junk) — nothing is written to the store on that path.
   // `devotionals` is a dependency so a late hydration re-evaluates the guard.
   useEffect(() => {
-    if (revealTarget || hasNavigated.current) return;
+    if (revealOutcome.kind === 'open' || hasNavigated.current) return;
     if (!useUnfoldStore.persist.hasHydrated()) return;
     hasNavigated.current = true;
-    logger.warn('[Reveal] params do not resolve to a local devotional day — redirecting to Today');
+    if (revealOutcome.kind === 'locked') {
+      // The push named a day the pacing lock keeps closed until the next local
+      // day. The reader still lands on Today, which says Tomorrow; this records
+      // that the server and the app disagreed.
+      reportReadyPushForLockedDay(revealOutcome.dayNumber);
+      logger.warn('[Reveal] ready push names a locked day — redirecting to Today');
+    } else {
+      logger.warn('[Reveal] params do not resolve to a local devotional day — redirecting to Today');
+    }
     router.replace('/(tabs)/(today)');
-  }, [revealTarget, devotionals, router]);
+  }, [revealOutcome, devotionals, router]);
 
   const navigateToReading = useCallback(() => {
     if (hasNavigated.current) {

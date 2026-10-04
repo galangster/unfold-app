@@ -9,7 +9,11 @@
  * never from the raw params. Pure module; the screen owns the redirect.
  */
 
-import { getTodayReaderDayNumber, type DevotionalReadingProgress } from './devotional-day-access';
+import {
+  getLockedTodayDayNumber,
+  getTodayReaderDayNumber,
+  type DevotionalReadingProgress,
+} from './devotional-day-access';
 
 export type RouteParam = string | string[] | undefined;
 
@@ -41,40 +45,60 @@ export function parsePositiveInteger(value: RouteParam): number | null {
 }
 
 /**
- * Resolve reveal params against the local devotionals. Returns null when the
+ * What a reveal request resolves to. `locked` is a request that is valid in
+ * every way except the pacing lock: the reader finished a reading today, so
+ * the day stays closed until the next local day. A "ready" push for that day
+ * means the server announced a day the app keeps closed, so the screen reports
+ * it before it sends the reader to Today.
+ */
+export type RevealOutcome =
+  | { kind: 'open'; target: RevealTarget }
+  | { kind: 'locked'; dayNumber: number }
+  | { kind: 'invalid' };
+
+const INVALID: RevealOutcome = { kind: 'invalid' };
+
+/**
+ * Resolve reveal params against the local devotionals. `invalid` when the
  * devotional is unknown or the day is not a positive integer within
  * max(totalDays, days.length) — the day itself may still be "preparing", so
  * existence in `days` is not required.
  */
-export function resolveRevealTarget(
+export function resolveRevealOutcome(
   params: { devotionalId?: RouteParam; dayNumber?: RouteParam },
   devotionals: readonly RevealDevotional[],
   now = new Date(),
-): RevealTarget | null {
+): RevealOutcome {
   const devotionalId = firstParam(params.devotionalId);
-  if (!devotionalId) return null;
+  if (!devotionalId) return INVALID;
 
   const devotional = devotionals.find((candidate) => candidate.id === devotionalId);
-  if (!devotional) return null;
+  if (!devotional) return INVALID;
 
   const dayNumber = parsePositiveInteger(params.dayNumber);
-  if (dayNumber === null) return null;
+  if (dayNumber === null) return INVALID;
 
   const days = Array.isArray(devotional.days) ? devotional.days : [];
   const declaredTotal = Number.isFinite(devotional.totalDays)
     ? Math.max(0, Math.floor(devotional.totalDays))
     : 0;
   const maxDay = Math.max(declaredTotal, days.length);
-  if (dayNumber > maxDay) return null;
+  if (dayNumber > maxDay) return INVALID;
 
-  if (dayNumber > getTodayReaderDayNumber({ ...devotional, days }, now)) return null;
+  const normalized = { ...devotional, days };
+  if (dayNumber > getTodayReaderDayNumber(normalized, now)) {
+    return getLockedTodayDayNumber(normalized, now) != null ? { kind: 'locked', dayNumber } : INVALID;
+  }
 
   const day = days.find((candidate) => candidate.dayNumber === dayNumber);
   return {
-    devotionalId,
-    dayNumber,
-    seriesTitle: devotional.title,
-    dayTitle: day?.title ?? null,
-    totalDays: declaredTotal > 0 ? declaredTotal : maxDay,
+    kind: 'open',
+    target: {
+      devotionalId,
+      dayNumber,
+      seriesTitle: devotional.title,
+      dayTitle: day?.title ?? null,
+      totalDays: declaredTotal > 0 ? declaredTotal : maxDay,
+    },
   };
 }

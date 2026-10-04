@@ -1,0 +1,279 @@
+{
+  "version": 1,
+  "rule": "A reading finished on a local day opens the next reading at the start of the following local day. The series calendar never opens a day earlier. Times are wall-clock times in the reader's own time zone.",
+  "openThroughDay": "Let latestReadToday be the highest day number whose readAt falls on today's local date. When latestReadToday exists, currentDay is above it and the day at currentDay is unread, openThroughDay is latestReadToday. Otherwise openThroughDay is currentDay. A day that is missing counts as unread.",
+  "pushTiming": "A ready push for day N goes out at the earliest instant t at or after the day finishes generating such that N is at most openThroughDay at t and t is not before the reader's preferred time on its local day. delayedBy says what delays it: pacingLock (day N is still locked at generation time), preferredTime (day N is open but the preferred time has not come) or none (send at once).",
+  "cases": [
+    {
+      "name": "behind the series calendar: a reading finished this morning keeps the next day locked until the next local day",
+      "timeZone": "Pacific/Honolulu",
+      "seriesStartLocal": "2026-10-01T05:00",
+      "currentDay": 4,
+      "reads": [
+        { "day": 1, "readAtLocal": "2026-10-02T06:10" },
+        { "day": 2, "readAtLocal": "2026-10-03T06:05" },
+        { "day": 3, "readAtLocal": "2026-10-04T05:30" }
+      ],
+      "checks": [
+        { "nowLocal": "2026-10-04T05:31", "openThroughDay": 3 },
+        { "nowLocal": "2026-10-04T06:00", "openThroughDay": 3 },
+        { "nowLocal": "2026-10-04T23:59", "openThroughDay": 3 },
+        { "nowLocal": "2026-10-05T00:00", "openThroughDay": 4 },
+        { "nowLocal": "2026-10-05T06:00", "openThroughDay": 4 }
+      ]
+    },
+    {
+      "name": "on pace: the same lock applies when the series calendar agrees with the reader",
+      "timeZone": "Pacific/Honolulu",
+      "seriesStartLocal": "2026-10-01T05:00",
+      "currentDay": 4,
+      "reads": [
+        { "day": 1, "readAtLocal": "2026-10-01T06:00" },
+        { "day": 2, "readAtLocal": "2026-10-02T06:00" },
+        { "day": 3, "readAtLocal": "2026-10-03T06:00" }
+      ],
+      "checks": [
+        { "nowLocal": "2026-10-03T06:01", "openThroughDay": 3 },
+        { "nowLocal": "2026-10-03T23:59", "openThroughDay": 3 },
+        { "nowLocal": "2026-10-04T00:00", "openThroughDay": 4 }
+      ]
+    },
+    {
+      "name": "evening reader in Hawaii: the UTC date changes at 14:00 local and must not move the lock",
+      "timeZone": "Pacific/Honolulu",
+      "seriesStartLocal": "2026-10-01T05:00",
+      "currentDay": 2,
+      "reads": [
+        { "day": 1, "readAtLocal": "2026-10-03T22:30" }
+      ],
+      "checks": [
+        { "nowLocal": "2026-10-03T23:30", "openThroughDay": 1 },
+        { "nowLocal": "2026-10-04T00:00", "openThroughDay": 2 },
+        { "nowLocal": "2026-10-04T06:00", "openThroughDay": 2 }
+      ]
+    },
+    {
+      "name": "readAt is the start time of a reading that ended after midnight, so the next day is open once midnight has passed",
+      "timeZone": "Pacific/Honolulu",
+      "seriesStartLocal": "2026-10-01T05:00",
+      "currentDay": 2,
+      "reads": [
+        { "day": 1, "readAtLocal": "2026-10-03T23:50" }
+      ],
+      "checks": [
+        { "nowLocal": "2026-10-04T00:11", "openThroughDay": 2 }
+      ]
+    },
+    {
+      "name": "after an absence the calendar opens nothing: the reader resumes at currentDay, then waits a day",
+      "timeZone": "Pacific/Honolulu",
+      "seriesStartLocal": "2026-10-01T05:00",
+      "currentDay": 3,
+      "reads": [
+        { "day": 1, "readAtLocal": "2026-10-01T06:00" },
+        { "day": 2, "readAtLocal": "2026-10-06T08:30" }
+      ],
+      "checks": [
+        { "nowLocal": "2026-10-06T08:31", "openThroughDay": 2 },
+        { "nowLocal": "2026-10-06T23:59", "openThroughDay": 2 },
+        { "nowLocal": "2026-10-07T00:00", "openThroughDay": 3 }
+      ]
+    },
+    {
+      "name": "two readings finished on one local day: the later day sets the lock",
+      "timeZone": "Pacific/Honolulu",
+      "seriesStartLocal": "2026-10-01T05:00",
+      "currentDay": 4,
+      "reads": [
+        { "day": 1, "readAtLocal": "2026-10-01T06:00" },
+        { "day": 2, "readAtLocal": "2026-10-04T06:00" },
+        { "day": 3, "readAtLocal": "2026-10-04T07:00" }
+      ],
+      "checks": [
+        { "nowLocal": "2026-10-04T08:00", "openThroughDay": 3 },
+        { "nowLocal": "2026-10-05T00:00", "openThroughDay": 4 }
+      ]
+    },
+    {
+      "name": "the pointer lags a finished day: the day at currentDay is already read, so there is nothing to lock",
+      "timeZone": "Pacific/Honolulu",
+      "seriesStartLocal": "2026-10-01T05:00",
+      "currentDay": 3,
+      "reads": [
+        { "day": 1, "readAtLocal": "2026-10-02T06:00" },
+        { "day": 2, "readAtLocal": "2026-10-03T06:00" },
+        { "day": 3, "readAtLocal": "2026-10-03T07:00" }
+      ],
+      "checks": [
+        { "nowLocal": "2026-10-03T08:00", "openThroughDay": 3 }
+      ]
+    },
+    {
+      "name": "the last day of a series: no later day exists, so nothing is locked",
+      "timeZone": "Pacific/Honolulu",
+      "seriesStartLocal": "2026-10-01T05:00",
+      "currentDay": 7,
+      "reads": [
+        { "day": 1, "readAtLocal": "2026-10-01T06:00" },
+        { "day": 2, "readAtLocal": "2026-10-02T06:00" },
+        { "day": 3, "readAtLocal": "2026-10-03T06:00" },
+        { "day": 4, "readAtLocal": "2026-10-04T06:00" },
+        { "day": 5, "readAtLocal": "2026-10-05T06:00" },
+        { "day": 6, "readAtLocal": "2026-10-06T06:00" },
+        { "day": 7, "readAtLocal": "2026-10-07T06:00" }
+      ],
+      "checks": [
+        { "nowLocal": "2026-10-07T06:01", "openThroughDay": 7 },
+        { "nowLocal": "2026-10-08T00:00", "openThroughDay": 7 }
+      ]
+    },
+    {
+      "name": "25-hour day when clocks fall back: the lock still ends at the next local midnight",
+      "timeZone": "America/Los_Angeles",
+      "seriesStartLocal": "2026-10-30T07:00",
+      "currentDay": 2,
+      "reads": [
+        { "day": 1, "readAtLocal": "2026-11-01T12:00" }
+      ],
+      "checks": [
+        { "nowLocal": "2026-11-01T23:59", "openThroughDay": 1 },
+        { "nowLocal": "2026-11-02T00:00", "openThroughDay": 2 }
+      ]
+    },
+    {
+      "name": "23-hour day when clocks spring forward: the lock still ends at the next local midnight",
+      "timeZone": "America/Los_Angeles",
+      "seriesStartLocal": "2026-03-06T07:00",
+      "currentDay": 2,
+      "reads": [
+        { "day": 1, "readAtLocal": "2026-03-08T12:00" }
+      ],
+      "checks": [
+        { "nowLocal": "2026-03-08T23:59", "openThroughDay": 1 },
+        { "nowLocal": "2026-03-09T00:00", "openThroughDay": 2 }
+      ]
+    }
+  ],
+  "pushCases": [
+    {
+      "name": "behind the series calendar: Day 4 finishes generating minutes after Day 3, so the push waits for the next day",
+      "timeZone": "Pacific/Honolulu",
+      "preferredTimeLocal": "06:00",
+      "currentDay": 4,
+      "reads": [
+        { "day": 1, "readAtLocal": "2026-10-02T06:10" },
+        { "day": 2, "readAtLocal": "2026-10-03T06:05" },
+        { "day": 3, "readAtLocal": "2026-10-04T05:30" }
+      ],
+      "day": 4,
+      "generatedAtLocal": "2026-10-04T05:40",
+      "delayedBy": "pacingLock",
+      "sendAtLocal": "2026-10-05T06:00"
+    },
+    {
+      "name": "on pace: overnight generation after midnight waits only for the preferred time",
+      "timeZone": "Pacific/Honolulu",
+      "preferredTimeLocal": "07:00",
+      "currentDay": 4,
+      "reads": [
+        { "day": 1, "readAtLocal": "2026-10-01T06:00" },
+        { "day": 2, "readAtLocal": "2026-10-02T06:00" },
+        { "day": 3, "readAtLocal": "2026-10-03T06:00" }
+      ],
+      "day": 4,
+      "generatedAtLocal": "2026-10-04T01:30",
+      "delayedBy": "preferredTime",
+      "sendAtLocal": "2026-10-04T07:00"
+    },
+    {
+      "name": "on pace: a day that finishes after the preferred time goes out at once",
+      "timeZone": "Pacific/Honolulu",
+      "preferredTimeLocal": "07:00",
+      "currentDay": 4,
+      "reads": [
+        { "day": 1, "readAtLocal": "2026-10-01T06:00" },
+        { "day": 2, "readAtLocal": "2026-10-02T06:00" },
+        { "day": 3, "readAtLocal": "2026-10-03T06:00" }
+      ],
+      "day": 4,
+      "generatedAtLocal": "2026-10-04T08:15",
+      "delayedBy": "none",
+      "sendAtLocal": "2026-10-04T08:15"
+    },
+    {
+      "name": "a late-night reading keeps the push waiting past midnight, then until the preferred time",
+      "timeZone": "Pacific/Honolulu",
+      "preferredTimeLocal": "07:00",
+      "currentDay": 4,
+      "reads": [
+        { "day": 1, "readAtLocal": "2026-10-01T06:00" },
+        { "day": 2, "readAtLocal": "2026-10-02T06:00" },
+        { "day": 3, "readAtLocal": "2026-10-03T23:30" }
+      ],
+      "day": 4,
+      "generatedAtLocal": "2026-10-03T23:40",
+      "delayedBy": "pacingLock",
+      "sendAtLocal": "2026-10-04T07:00"
+    },
+    {
+      "name": "a preferred time just after midnight sends as soon as the day opens",
+      "timeZone": "Pacific/Honolulu",
+      "preferredTimeLocal": "00:30",
+      "currentDay": 4,
+      "reads": [
+        { "day": 1, "readAtLocal": "2026-10-01T06:00" },
+        { "day": 2, "readAtLocal": "2026-10-02T06:00" },
+        { "day": 3, "readAtLocal": "2026-10-03T23:00" }
+      ],
+      "day": 4,
+      "generatedAtLocal": "2026-10-03T23:05",
+      "delayedBy": "pacingLock",
+      "sendAtLocal": "2026-10-04T00:30"
+    },
+    {
+      "name": "readAt is the start time of a reading that ended after midnight, so the day is already open when it generates",
+      "timeZone": "Pacific/Honolulu",
+      "preferredTimeLocal": "06:00",
+      "currentDay": 4,
+      "reads": [
+        { "day": 1, "readAtLocal": "2026-10-01T06:00" },
+        { "day": 2, "readAtLocal": "2026-10-02T06:00" },
+        { "day": 3, "readAtLocal": "2026-10-03T23:50" }
+      ],
+      "day": 4,
+      "generatedAtLocal": "2026-10-04T00:20",
+      "delayedBy": "preferredTime",
+      "sendAtLocal": "2026-10-04T06:00"
+    },
+    {
+      "name": "25-hour day when clocks fall back: the push still waits for the next local midnight",
+      "timeZone": "America/Los_Angeles",
+      "preferredTimeLocal": "07:00",
+      "currentDay": 4,
+      "reads": [
+        { "day": 1, "readAtLocal": "2026-10-30T07:00" },
+        { "day": 2, "readAtLocal": "2026-10-31T07:00" },
+        { "day": 3, "readAtLocal": "2026-11-01T12:00" }
+      ],
+      "day": 4,
+      "generatedAtLocal": "2026-11-01T12:10",
+      "delayedBy": "pacingLock",
+      "sendAtLocal": "2026-11-02T07:00"
+    },
+    {
+      "name": "23-hour day when clocks spring forward: the push still waits for the next local midnight",
+      "timeZone": "America/Los_Angeles",
+      "preferredTimeLocal": "07:00",
+      "currentDay": 4,
+      "reads": [
+        { "day": 1, "readAtLocal": "2026-03-06T07:00" },
+        { "day": 2, "readAtLocal": "2026-03-07T07:00" },
+        { "day": 3, "readAtLocal": "2026-03-08T12:00" }
+      ],
+      "day": 4,
+      "generatedAtLocal": "2026-03-08T12:10",
+      "delayedBy": "pacingLock",
+      "sendAtLocal": "2026-03-09T07:00"
+    }
+  ]
+}
