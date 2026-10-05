@@ -989,6 +989,115 @@ describe('reader swipe cancellation', () => {
     act(() => tree!.unmount());
   }, 30_000);
 
+  it.each(['newer-archive', 'missing-lifecycle'] as const)('continues successfully on an explicit retry after %s', async (firstFailure) => {
+    seedShelleyMissingDay();
+    const remoteClock = new Date(Date.now() + 60_000).toISOString();
+    const before = useUnfoldStore.getState().devotionals;
+    const sentClocks: string[] = [];
+    globalThis.fetch = jest.fn(async (_url, init) => {
+      const changes = JSON.parse(init!.body as string).changes;
+      const resume = changes.find((entry: { table: string }) => entry.table === 'devotionals');
+      sentClocks.push(resume.data.archivedStateAt);
+      mockAcceptedResume = { id: DEVOTIONAL_ID, archivedAt: null, archivedStateAt: resume.data.archivedStateAt };
+      return { ok: true, json: async () => ({ results: changes.map((entry: { table: string; id: string }) => ({
+        table: entry.table, id: entry.id, status: 'accepted', serverUpdatedAt: new Date().toISOString(),
+      })) }) } as Response;
+    });
+    mockPullDevotionalContent.mockImplementation(async () => ({ ...emptyPull(), devotional: sentClocks.length === 0 ? undefined
+      : sentClocks.length === 1 ? firstFailure === 'missing-lifecycle' ? undefined
+        : { id: DEVOTIONAL_ID, archivedAt: remoteClock, archivedStateAt: remoteClock }
+        : mockAcceptedResume }));
+    mockUseRealGeneratedDayWatch = true;
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    let tree: ReaderTree;
+    await act(async () => { tree = renderer.create(<ReadingScreen />); await flushEffects(); });
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      act(() => (tree!.root.findByProps({ accessibilityLabel: 'Continue this series' }).props.onPress as () => void)());
+      await act(async () => { alert.mock.calls[attempt][2]!.find((button) => button.text === 'Continue this series')!.onPress!(); await flushEffects(); });
+      if (attempt === 0) {
+        expect(useUnfoldStore.getState().devotionals).toEqual(before);
+        expect(useUnfoldStore.getState().currentDevotionalId).toBe(ACTIVE_DEVOTIONAL_ID);
+        expect(routeParams.readOnly).toBe('1');
+        expect(mockSubmitGenerationJob).not.toHaveBeenCalled();
+      }
+    }
+    expect(Date.parse(sentClocks[1])).toBeGreaterThan(Date.parse(firstFailure === 'newer-archive' ? remoteClock : sentClocks[0]));
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe(DEVOTIONAL_ID);
+    expect(routeParams.readOnly).toBe('');
+    expect(mockSubmitGenerationJob).toHaveBeenCalledTimes(1);
+    const resumed = useUnfoldStore.getState().devotionals.find((series) => series.id === DEVOTIONAL_ID)!;
+    expect(resumed.days).toEqual(before.find((series) => series.id === DEVOTIONAL_ID)!.days);
+    expect(resumed.seriesStartDate).toBe(before.find((series) => series.id === DEVOTIONAL_ID)!.seriesStartDate);
+    act(() => tree!.unmount());
+  }, 30_000);
+
+  it('clears Continue busy at the auth deadline and ignores credentials arriving later', async () => {
+    seedShelleyMissingDay();
+    const actualPull = jest.requireActual('@/lib/devotional-sync-pull').pullDevotionalContent as typeof import('@/lib/devotional-sync-pull').pullDevotionalContent;
+    mockPullDevotionalContent.mockImplementation((devotionalId: string, options?: import('@/lib/devotional-sync-pull').PullDevotionalContentOptions) => (
+      mockAcceptedResume ? actualPull(devotionalId, options) : Promise.resolve(emptyPull())
+    ));
+    const auth = jest.requireMock('../api-config').getAuthHeaders as jest.Mock;
+    let releaseAuth!: (headers: Record<string, string>) => void;
+    auth.mockResolvedValueOnce({ 'Content-Type': 'application/json' });
+    auth.mockImplementationOnce(() => new Promise<Record<string, string>>((resolve) => { releaseAuth = resolve; }));
+    mockUseRealGeneratedDayWatch = true;
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    let tree: ReaderTree;
+    await act(async () => { tree = renderer.create(<ReadingScreen />); await flushEffects(); });
+    act(() => (tree!.root.findByProps({ accessibilityLabel: 'Continue this series' }).props.onPress as () => void)());
+    await act(async () => { alert.mock.calls[0][2]!.find((button) => button.text === 'Continue this series')!.onPress!(); await flushEffects(); });
+    expect(tree!.root.findByProps({ accessibilityLabel: 'Continue this series' }).props.accessibilityState).toEqual({ disabled: true, busy: true });
+    await act(async () => { jest.advanceTimersByTime(15_000); await flushEffects(); });
+    expect(tree!.root.findByProps({ accessibilityLabel: 'Continue this series' }).props.accessibilityState).toEqual({ disabled: false, busy: false });
+    await act(async () => { releaseAuth({ 'Content-Type': 'application/json' }); await flushEffects(); });
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1); // Only the accepted resume push; no late verification fetch.
+    expect(mockSubmitGenerationJob).not.toHaveBeenCalled();
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe(ACTIVE_DEVOTIONAL_ID);
+    expect(routeParams.readOnly).toBe('1');
+    act(() => tree!.unmount());
+  }, 30_000);
+
+  it('critic regression: a confirmed retry supersedes the newer archive clock already observed', async () => {
+    seedShelleyMissingDay();
+    const baseClock = Date.now();
+    const remoteArchiveClock = new Date(baseClock + 60_000).toISOString();
+    useUnfoldStore.setState((state) => ({ devotionals: state.devotionals.map((series) => (
+      series.id === ACTIVE_DEVOTIONAL_ID ? { ...series, createdAt: new Date(baseClock + 30_000).toISOString() }
+        : series.id === DEVOTIONAL_ID ? { ...series, archivedAt: DAY_3_COMPLETED_AT, archivedStateAt: DAY_3_COMPLETED_AT }
+          : series
+    )) }));
+    const sentClocks: string[] = [];
+    globalThis.fetch = jest.fn(async (_url, init) => {
+      const changes = JSON.parse(init!.body as string).changes;
+      const resume = changes.find((entry: { table: string }) => entry.table === 'devotionals');
+      sentClocks.push(resume.data.archivedStateAt);
+      return { ok: true, json: async () => ({ results: changes.map((entry: { table: string; id: string }) => ({
+        table: entry.table, id: entry.id, status: 'accepted', serverUpdatedAt: new Date().toISOString(),
+      })) }) } as Response;
+    });
+    mockPullDevotionalContent.mockImplementation(async () => ({ ...emptyPull(), devotional: sentClocks.length === 0
+      ? undefined : { id: DEVOTIONAL_ID, archivedAt: remoteArchiveClock, archivedStateAt: remoteArchiveClock } }));
+    mockUseRealGeneratedDayWatch = true;
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    let tree: ReaderTree;
+    await act(async () => { tree = renderer.create(<ReadingScreen />); await flushEffects(); });
+    try {
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        act(() => (tree!.root.findByProps({ accessibilityLabel: 'Continue this series' }).props.onPress as () => void)());
+        await act(async () => {
+          alert.mock.calls[attempt][2]!.find((button) => button.text === 'Continue this series')!.onPress!();
+          await flushEffects();
+        });
+        expect(useUnfoldStore.getState().currentDevotionalId).toBe(ACTIVE_DEVOTIONAL_ID);
+        expect(routeParams.readOnly).toBe('1');
+        expect(mockSubmitGenerationJob).not.toHaveBeenCalled();
+      }
+      expect(sentClocks).toHaveLength(2);
+      expect(Date.parse(sentClocks[1])).toBeGreaterThan(Date.parse(remoteArchiveClock));
+    } finally { act(() => tree!.unmount()); }
+  }, 30_000);
+
   it.each(['accepted', 'accepted-newer-archive', 'accepted-wrong-clock', 'accepted-no-lifecycle', 'rejected', 'missing', 'conflict', 'service-error', 'network-error'] as const)(
     'waits for the exact archive acknowledgement before activation: %s', async (outcome) => {
       seedShelleyMissingDay();

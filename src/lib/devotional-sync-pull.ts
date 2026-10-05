@@ -268,27 +268,49 @@ export async function pullDevotionalContent(
       : `[sync/devotional-pull] pull: full (${decision.reason})`,
   );
 
-  const headers = await getAuthHeaders();
-  assertSyncSessionCurrent(session, 'devotional pull');
-
   const controller = new AbortController();
   const unregister = registerSyncTransport(controller);
-  const timeout = options.timeoutMs && Number.isFinite(options.timeoutMs) && options.timeoutMs > 0
-    ? setTimeout(() => controller.abort(), options.timeoutMs) : undefined;
+  const timeoutMs = options.timeoutMs && Number.isFinite(options.timeoutMs) && options.timeoutMs > 0
+    ? options.timeoutMs : undefined;
+  const expiresAt = timeoutMs === undefined ? undefined : startedAt + timeoutMs;
+  const timeoutError = new Error('Devotional verification timed out');
+  let timedOut = false;
+  let rejectDeadline: ((reason: Error) => void) | undefined;
+  const deadline = timeoutMs === undefined ? undefined : new Promise<never>((_resolve, reject) => { rejectDeadline = reject; });
+  const onAbort = () => rejectDeadline?.(timedOut ? timeoutError : new SyncSessionInvalidatedError('devotional pull'));
+  if (deadline) controller.signal.addEventListener('abort', onAbort, { once: true });
+  const timeout = timeoutMs === undefined ? undefined : setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, Math.max(0, expiresAt! - Date.now()));
+  const assertPullCurrent = () => {
+    assertSyncSessionCurrent(session, 'devotional pull');
+    if (expiresAt !== undefined && Date.now() >= expiresAt) {
+      timedOut = true;
+      controller.abort();
+      throw timeoutError;
+    }
+  };
+  const awaitStep = async <T,>(step: Promise<T>): Promise<T> => {
+    const result = await (deadline ? Promise.race([step, deadline]) : step);
+    assertPullCurrent();
+    return result;
+  };
   try {
+    const headers = await awaitStep(getAuthHeaders());
     const retryAfterMs = readBudgetRetryAfterMs();
     if (retryAfterMs > 0) {
       throw new SyncPullRateLimitedError(Math.ceil(retryAfterMs / 1000));
     }
-    const response = await authenticatedFetch(`${PRIMARY_BACKEND_URL}/api/sync/pull`, {
+    const response = await awaitStep(authenticatedFetch(`${PRIMARY_BACKEND_URL}/api/sync/pull`, {
       method: 'POST',
       headers,
       body: JSON.stringify({ lastPulledAt: decision.lastPulledAt }),
       signal: controller.signal,
-    });
+    }));
 
     if (!response.ok) {
-      const body = await response.text().catch(() => '');
+      const body = await awaitStep(response.text().catch(() => ''));
       // The body stays out of the Error message: a captured exception's `value`
       // is allowlisted through to Sentry, and a backend error body can quote the
       // devotional or journal text it failed on. `logger` is __DEV__-only.
@@ -301,9 +323,10 @@ export async function pullDevotionalContent(
       throw new Error(`Sync pull failed: ${response.status}`);
     }
 
-    const payload = await response.json() as SyncPullResponse;
+    const payload = await awaitStep(response.json()) as SyncPullResponse;
     assertSyncSessionCurrent(session, 'devotional pull');
     const pulled = extractPulledDevotionalContent(payload, devotionalId);
+    assertPullCurrent();
     bindPulledDevotionalSession(pulled, session);
 
     if (isValidTimestamp(payload.timestamp)) {
@@ -320,6 +343,7 @@ export async function pullDevotionalContent(
     throw error;
   } finally {
     if (timeout !== undefined) clearTimeout(timeout);
+    controller.signal.removeEventListener('abort', onAbort);
     unregister();
   }
 }

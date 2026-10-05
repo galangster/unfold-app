@@ -2,6 +2,33 @@ import type { Devotional } from './store';
 import type { DailyGenerationRecoveryState } from './daily-generation-recovery';
 import { getTodayReaderDayNumber, isPausedSeriesUnpreparedDay } from './devotional-day-access';
 import { shouldWatchForGeneratedDay } from './generated-day-watch';
+import { lifecycleTimestampMs } from './devotional-lifecycle';
+
+/** Reader-local clocks; a rejected lifecycle never becomes a store mutation. */
+export class PausedSeriesResumeClocks {
+  private session: number | null = null;
+  private readonly clocks = new Map<string, number>();
+
+  nextIntentAt(session: number, devotionalId: string, devotionals: readonly Devotional[], now = Date.now()): string {
+    if (this.session !== session) {
+      this.session = session;
+      this.clocks.clear();
+    }
+    let clock = now;
+    for (const observed of this.clocks.values()) clock = Math.max(clock, observed);
+    for (const series of devotionals) {
+      clock = Math.max(clock, lifecycleTimestampMs(series.createdAt), lifecycleTimestampMs(series.archivedStateAt));
+    }
+    const next = clock + 1;
+    this.clocks.set(devotionalId, next);
+    return new Date(next).toISOString();
+  }
+
+  observe(session: number, devotionalId: string, archivedStateAt: string | undefined): void {
+    if (this.session !== session) return;
+    this.clocks.set(devotionalId, Math.max(this.clocks.get(devotionalId) ?? 0, lifecycleTimestampMs(archivedStateAt)));
+  }
+}
 
 export interface PausedSeriesRecoveryContext {
   devotional: Devotional | null | undefined;

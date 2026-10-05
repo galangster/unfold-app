@@ -79,7 +79,7 @@ import {
   resolveInitialReadingDayNumber,
 } from '@/lib/devotional-day-access';
 import { nextConfirmedAbsentKey, shouldWatchForGeneratedDay } from '@/lib/generated-day-watch';
-import { getPausedSeriesContinuationDay, type PausedSeriesRecoveryContext } from '@/lib/paused-series-recovery';
+import { getPausedSeriesContinuationDay, PausedSeriesResumeClocks, type PausedSeriesRecoveryContext } from '@/lib/paused-series-recovery';
 import { applyUnarchiveIntent, lifecycleTimestampMs } from '@/lib/devotional-lifecycle';
 import { buildPersonalDataSyncChange, devotionalSyncData } from '@/lib/personal-data-sync-records';
 import { drainSyncChange, enqueueSyncChanges } from '@/lib/sync-outbox';
@@ -445,6 +445,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   const pausedRecoveryContextRef = useRef<PausedSeriesRecoveryContext | null>(null);
   const continuationDialogRef = useRef<PausedSeriesRecoveryContext | null>(null);
   const continuationPendingRef = useRef<object | null>(null);
+  const continuationClocksRef = useRef(new PausedSeriesResumeClocks());
   const [isContinuingSeries, setIsContinuingSeries] = useState(false);
   const [continuationError, setContinuationError] = useState<string | null>(null);
 
@@ -1999,10 +2000,8 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
             try {
               // The server ranks progressive series by creation/resume clock.
               // Even an already-unarchived history series needs an explicit resume.
-              const latestSelectionClock = useUnfoldStore.getState().devotionals.reduce((clock, entry) => (
-                Math.max(clock, lifecycleTimestampMs(entry.createdAt), lifecycleTimestampMs(entry.archivedStateAt))
-              ), Date.now());
-              const resumed = applyUnarchiveIntent(series, new Date(latestSelectionClock + 1).toISOString());
+              const intentAt = continuationClocksRef.current.nextIntentAt(session, devotionalId, useUnfoldStore.getState().devotionals);
+              const resumed = applyUnarchiveIntent(series, intentAt);
               const clientUpdatedAt = lifecycleTimestampMs(series.updatedAt) > lifecycleTimestampMs(resumed.archivedStateAt)
                 ? series.updatedAt! : resumed.archivedStateAt;
               const change = buildPersonalDataSyncChange('devotionals', devotionalId, devotionalSyncData(resumed), clientUpdatedAt);
@@ -2017,6 +2016,9 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
               // Distrust the incremental cursor and require the exact resume clock.
               const pulled = await pullDevotionalContent(devotionalId, { forceFull: true, timeoutMs: 15_000 });
               if (continuationPendingRef.current !== pending || !isIntentCurrent()) return;
+              if (pulled.devotional?.id === devotionalId) {
+                continuationClocksRef.current.observe(session, devotionalId, pulled.devotional.archivedStateAt);
+              }
               if (pulled.devotional?.id !== devotionalId || pulled.devotional.archivedAt !== null
                 || pulled.devotional.archivedStateAt !== resumed.archivedStateAt) {
                 setContinuationError('This series could not be continued yet. Please check your connection and try again.');
