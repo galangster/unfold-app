@@ -71,9 +71,12 @@ Names come from older notes. Check each one in the code before you rely on it.
 4. Persist the queued push. A Railway deploy restarts both services, so an
    in-memory timer is not enough. A table or a column on the job row both work.
 5. Run the cancel checks at send time, not at queue time. The checks are the push
-   token, premium status, the local-daily-reminder flag in `sync_users.settings`,
-   and whether the day is already read. A reader can get a local reminder, or read
-   the day, between the queue time and the send time.
+   token, the local-daily-reminder flag in `sync_users.settings`, and whether the
+   day is already read. When `ENFORCE_SERVER_PREMIUM_GATE` is `true`, also cancel
+   for inactive premium status at send time. This follows the contract and the
+   shipped backend gate; it does not enable premium enforcement. A reader can
+   lose premium access, get a local reminder, or read the day between queueing
+   and sending.
 6. At send time, recompute `readyPushSendAt` from the current reads. If the result
    is later than now, queue the push again. This covers a read that arrives after
    the push was queued.
