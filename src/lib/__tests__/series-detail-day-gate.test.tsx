@@ -183,7 +183,7 @@ const SeriesDetailScreen = seriesDetailModule.default;
 const SeriesArcScreen = seriesDetailModule.SeriesArcScreen;
 
 function renderScreen(props?: { hostTab?: '(today)' | '(study)' | '(you)'; chrome?: 'stack' | 'tabRoot' }) {
-  let tree: { root: { findAll: (p: (n: unknown) => boolean) => unknown[] } };
+  let tree: { root: { findAll: (p: (n: unknown) => boolean) => unknown[] }; unmount: () => void };
   act(() => {
     tree = renderer.create(
       React.createElement(
@@ -294,6 +294,32 @@ describe('SeriesDetailScreen day gating', () => {
     expect(mockPush.mock.calls[0][0].params.readOnly).toBe('1');
     expect(mockPush.mock.calls[0][0].params.devotionalId).toBe('dino-series');
   });
+
+  it.each(['(today)', '(study)'] as const)(
+    'opens the paused missing Day 2 page from Library as read-only in %s', (hostTab) => {
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      mockCurrentDevotionalId = 'other-active-series';
+      mockDevotionals = [{
+        ...mockSeries, currentDay: 2, seriesStartDate: yesterday.toISOString(),
+        days: [{ ...mockSeries.days[0], readAt: yesterday.toISOString() }],
+      }];
+      const tree = renderScreen({ hostTab });
+      expect(findRowContaining(tree, 'Day 2')).toBeUndefined();
+      const button = tree.root.findAll((node) => {
+        const n = node as { props?: { testID?: string } };
+        return n.props?.testID === 'book-continue-reading';
+      })[0] as { props: { onPress: () => void } };
+      expect(button).toBeDefined();
+      act(() => { button.props.onPress(); });
+      expect(mockPush.mock.calls[0][0]).toEqual(expect.objectContaining({
+        pathname: `/(tabs)/${hostTab}/reading`,
+        params: expect.objectContaining({ devotionalId: 'dino-series', dayNumber: '2', readOnly: '1' }),
+      }));
+      expect(mockSetCurrentDevotional).not.toHaveBeenCalled();
+      act(() => tree.unmount());
+    },
+  );
 
   it('lets the Study tab-root recover the current series without a read-only lock', () => {
     mockParams = {};

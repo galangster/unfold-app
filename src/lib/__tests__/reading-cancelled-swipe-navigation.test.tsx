@@ -6,6 +6,7 @@
  * content and a Honolulu calendar. It does not re-implement navigation logic.
  */
 import React from 'react';
+import { Alert } from 'react-native';
 
 const renderer = require('react-test-renderer');
 const { act } = renderer;
@@ -32,6 +33,9 @@ const mockExpoNotif: {
 };
 
 const mockReplace = jest.fn();
+const mockNavigate = jest.fn();
+const mockSetParams = jest.fn((params: Partial<typeof routeParams>) => Object.assign(routeParams, params));
+let mockFocused = true;
 const mockPullDevotionalContent = jest.fn();
 const mockDailyCheckAgain = jest.fn(async () => undefined);
 const mockDailyRetry = jest.fn(async () => undefined);
@@ -41,6 +45,7 @@ let mockDailyGenerationState: Record<string, unknown> = { status: 'idle' };
 let mockUseRealGeneratedDayWatch = false;
 const mockFindDayJob = jest.fn();
 const mockPollJobStatus = jest.fn();
+const mockSubmitGenerationJob = jest.fn();
 const mockWithTiming = jest.fn(
   (value: unknown, _config?: unknown, callback?: (finished: boolean) => void) => {
     callback?.(true);
@@ -54,7 +59,7 @@ const mockPanGesture = {
   onEnd: null as null | ((event: { translationX: number }, success: boolean) => void),
   onFinalize: null as null | ((event: { translationX: number }, success: boolean) => void),
 };
-const routeParams: { devotionalId: string; dayNumber?: string } = {
+const routeParams: { devotionalId: string; dayNumber?: string; readOnly?: string } = {
   devotionalId: DEVOTIONAL_ID,
   dayNumber: '3',
 };
@@ -92,14 +97,15 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({
     canGoBack: () => true,
     replace: mockReplace,
+    navigate: mockNavigate,
     push: jest.fn(),
     back: jest.fn(),
-    setParams: jest.fn(),
+    setParams: mockSetParams,
   }),
   useLocalSearchParams: () => routeParams,
   useSegments: () => ['(tabs)', '(today)', 'reading'],
   useNavigation: () => ({ getState: () => ({ index: 1, routes: [] }), addListener: jest.fn(() => jest.fn()) }),
-  useIsFocused: () => true,
+  useIsFocused: () => mockFocused,
   useFocusEffect: () => undefined,
 }));
 
@@ -120,6 +126,7 @@ jest.mock('@/lib/generation-api', () => {
     ...actual,
     findDayJob: (...args: unknown[]) => mockFindDayJob(...args),
     pollJobStatus: (...args: unknown[]) => mockPollJobStatus(...args),
+    submitGenerationJob: (...args: unknown[]) => mockSubmitGenerationJob(...args),
   };
 });
 
@@ -296,9 +303,9 @@ jest.mock('@/components/reading/ScripturePracticeSheet', () => ({
   ScripturePracticeSheet: () => null,
   buildPracticeBibleHref: () => '',
 }));
-const mockWebViewProps: { current: { commandRef?: { current: unknown } } | null } = { current: null };
+const mockWebViewProps: { current: { commandRef?: { current: unknown }; day?: { id: string; dayNumber: number; bodyText: string } } | null } = { current: null };
 jest.mock('@/components/reading/DevotionalWebView', () => ({
-  DevotionalWebView: (props: { commandRef?: { current: unknown } }) => {
+  DevotionalWebView: (props: { commandRef?: { current: unknown }; day?: { id: string; dayNumber: number; bodyText: string } }) => {
     mockWebViewProps.current = props;
     return null;
   },
@@ -533,6 +540,21 @@ function seedPausedMissingDay(): void {
   routeParams.dayNumber = '4';
 }
 
+function seedShelleyMissingDay(): void {
+  seedPausedMissingDay();
+  useUnfoldStore.setState((state) => ({
+    devotionals: state.devotionals.map((series) => series.id === DEVOTIONAL_ID
+      ? { ...series, currentDay: 2, days: series.days.slice(0, 1).map((day) => ({
+        ...day, bodyText: 'Shelley fixture: canonical Day 1 content.',
+      })) }
+      : series),
+  }));
+  // These are the params sent by Library's SeriesArcScreen.handleDayPress.
+  routeParams.dayNumber = '2';
+  routeParams.readOnly = '1';
+  mockDailyGenerationState = { status: 'idle', discovered: true };
+}
+
 function emptyPull() {
   return {
     days: [],
@@ -602,6 +624,8 @@ describe('reader swipe cancellation', () => {
     jest.clearAllMocks();
     routeParams.devotionalId = DEVOTIONAL_ID;
     routeParams.dayNumber = '3';
+    delete routeParams.readOnly;
+    mockFocused = true;
     mockPanGesture.enabledValues.length = 0;
     mockPanGesture.onStart = null;
     mockPanGesture.onUpdate = null;
@@ -611,6 +635,7 @@ describe('reader swipe cancellation', () => {
     mockUseRealGeneratedDayWatch = false;
     mockFindDayJob.mockResolvedValue(null);
     mockPollJobStatus.mockResolvedValue({ status: 'processing' });
+    mockSubmitGenerationJob.mockResolvedValue({ jobId: 'job-resumed-day-2', status: 'pending', devotionalId: DEVOTIONAL_ID });
     mockPullDevotionalContent.mockResolvedValue(emptyPull());
     resetReadBudgetForTests();
     resetGeneratedDayWatchDiscoveryThrottleForTests();
@@ -756,6 +781,216 @@ describe('reader swipe cancellation', () => {
     expect(mockWithTiming).toHaveBeenCalledTimes(timingCallsAfterSuccessfulEnd);
     act(() => tree.unmount());
   });
+
+  it.each(['(today)', '(study)'] as const)(
+    'keeps the Day 1 fallback selected after sync, refocus and repeated taps in %s', async (hostTab) => {
+      seedShelleyMissingDay();
+      let tree: ReaderTree;
+      await act(async () => {
+        tree = renderer.create(<ReadingScreen hostTab={hostTab} />);
+        await flushEffects();
+      });
+      expect(JSON.stringify(tree!.toJSON())).toContain('Day 2 wasn’t prepared');
+      const fallback = tree!.root.findByProps({ accessibilityLabel: 'Go back to day 1' });
+      const pressFallback = fallback.props.onPress as () => void;
+      await act(async () => {
+        pressFallback();
+        pressFallback();
+        await flushEffects();
+      });
+      await act(async () => {
+        const series = useUnfoldStore.getState().devotionals.find((row) => row.id === DEVOTIONAL_ID)!;
+        useUnfoldStore.getState().updateDevotionalDays(DEVOTIONAL_ID, series.days.map((day) => ({ ...day })));
+        mockFocused = false;
+        tree!.update(<ReadingScreen hostTab={hostTab} />);
+        await flushEffects();
+      });
+      await act(async () => {
+        mockFocused = true;
+        tree!.update(<ReadingScreen hostTab={hostTab} />);
+        await flushEffects();
+      });
+      expect(tree!.root.findAllByProps({ accessibilityLabel: 'Day 1 of 7' }).length).toBeGreaterThan(0);
+      expect(mockWebViewProps.current?.day?.bodyText).toBe('Shelley fixture: canonical Day 1 content.');
+      expect(useUnfoldStore.getState().currentDevotionalId).toBe(ACTIVE_DEVOTIONAL_ID);
+      expect(routeParams.readOnly).toBe('1');
+      act(() => tree!.unmount());
+    },
+  );
+
+  it.each(['missing', 'local-only'])('offers no fallback when Day 1 is %s', async (kind) => {
+    seedShelleyMissingDay();
+    useUnfoldStore.setState((state) => ({
+      devotionals: state.devotionals.map((series) => series.id === DEVOTIONAL_ID
+        ? { ...series, days: kind === 'missing' ? [] : series.days.map((day) => ({ ...day, id: 'local-day-1' })) }
+        : series),
+    }));
+    let tree: ReaderTree;
+    await act(async () => {
+      tree = renderer.create(<ReadingScreen />);
+      await flushEffects();
+    });
+    expect(tree!.root.findAllByProps({ accessibilityLabel: 'Go back to day 1' })).toHaveLength(0);
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe(ACTIVE_DEVOTIONAL_ID);
+    act(() => tree!.unmount());
+  });
+
+  it.each(['pull', 'job-discovery'] as const)(
+    'keeps Day 1 visible when the previous Day 2 %s finishes late', async (pending) => {
+      seedShelleyMissingDay();
+      let resolvePull!: (value: ReturnType<typeof emptyPull>) => void;
+      let resolveDiscovery!: (value: null) => void;
+      if (pending === 'pull') {
+        mockPullDevotionalContent.mockImplementationOnce(() => new Promise((resolve) => { resolvePull = resolve; }));
+      } else {
+        mockUseRealGeneratedDayWatch = true;
+        mockFindDayJob.mockImplementationOnce(() => new Promise((resolve) => { resolveDiscovery = resolve; }));
+      }
+      let tree: ReaderTree;
+      await act(async () => {
+        tree = renderer.create(<ReadingScreen />);
+        await flushEffects();
+      });
+      act(() => (tree!.root.findByProps({ accessibilityLabel: 'Go back to day 1' }).props.onPress as () => void)());
+      await act(async () => {
+        if (pending === 'pull') resolvePull(emptyPull());
+        else resolveDiscovery(null);
+        await flushEffects();
+      });
+      expect(tree!.root.findAllByProps({ accessibilityLabel: 'Day 1 of 7' }).length).toBeGreaterThan(0);
+      expect(mockWebViewProps.current?.day?.bodyText).toBe('Shelley fixture: canonical Day 1 content.');
+      expect(useUnfoldStore.getState().currentDevotionalId).toBe(ACTIVE_DEVOTIONAL_ID);
+      act(() => tree!.unmount());
+    },
+  );
+
+  it('keeps Open Today on the active series', async () => {
+    seedShelleyMissingDay();
+    let tree: ReaderTree;
+    await act(async () => {
+      tree = renderer.create(<ReadingScreen />);
+      await flushEffects();
+    });
+    await act(async () => { await (tree!.root.findByProps({ accessibilityLabel: 'Open Today' }).props.onPress as () => Promise<void>)(); });
+    expect(mockNavigate).toHaveBeenCalledWith('/(tabs)/(today)');
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe(ACTIVE_DEVOTIONAL_ID);
+    act(() => tree!.unmount());
+  });
+
+  it('requires confirmation once and preserves progress when continuing the paused series', async () => {
+    seedShelleyMissingDay();
+    const before = useUnfoldStore.getState().devotionals;
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    let tree: ReaderTree;
+    await act(async () => {
+      tree = renderer.create(<ReadingScreen />);
+      await flushEffects();
+    });
+    const continueButton = tree!.root.findByProps({ accessibilityLabel: 'Continue this series' });
+    const pressContinue = continueButton.props.onPress as () => void;
+    act(() => { pressContinue(); pressContinue(); });
+    expect(alert).toHaveBeenCalledTimes(1);
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe(ACTIVE_DEVOTIONAL_ID);
+    const confirm = alert.mock.calls[0][2]!.find((button) => button.text === 'Continue this series')!;
+    await act(async () => { confirm.onPress!(); await flushEffects(); });
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe(DEVOTIONAL_ID);
+    expect(useUnfoldStore.getState().devotionals).toEqual(before);
+    expect(routeParams).toEqual({ devotionalId: DEVOTIONAL_ID, dayNumber: '2', readOnly: '' });
+    act(() => tree!.unmount());
+  });
+
+  it.each([false, true])('continues a paused series through real job submission and delivery (archived=%s)', async (archived) => {
+    seedShelleyMissingDay();
+    if (archived) useUnfoldStore.setState((state) => ({
+      devotionals: state.devotionals.map((series) => series.id === DEVOTIONAL_ID
+        ? { ...series, archivedAt: DAY_3_COMPLETED_AT, archivedStateAt: DAY_3_COMPLETED_AT }
+        : series),
+    }));
+    const before = useUnfoldStore.getState().devotionals.find((series) => series.id === DEVOTIONAL_ID)!;
+    const beforeActive = useUnfoldStore.getState().devotionals.find((series) => series.id === ACTIVE_DEVOTIONAL_ID)!;
+    mockUseRealGeneratedDayWatch = true;
+    mockPollJobStatus.mockResolvedValue({
+      jobId: 'job-resumed-day-2', jobType: 'day', devotionalId: DEVOTIONAL_ID, dayNumber: 2, status: 'complete',
+      result: { devotionalId: DEVOTIONAL_ID, devotionalDay: makeDay(2, { isRead: false, bodyText: 'Resumed Day 2 content.' }) },
+    });
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    let tree: ReaderTree;
+    await act(async () => {
+      tree = renderer.create(<ReadingScreen />);
+      await flushEffects();
+    });
+    expect(mockSubmitGenerationJob).not.toHaveBeenCalled();
+    act(() => (tree!.root.findByProps({ accessibilityLabel: 'Continue this series' }).props.onPress as () => void)());
+    const confirm = alert.mock.calls[0][2]!.find((button) => button.text === 'Continue this series')!;
+    await act(async () => { confirm.onPress!(); confirm.onPress!(); await flushEffects(); });
+    expect(mockSubmitGenerationJob).toHaveBeenCalledTimes(1);
+    expect(mockSubmitGenerationJob).toHaveBeenCalledWith(expect.objectContaining({
+      devotionalId: DEVOTIONAL_ID, dayNumber: 2, jobType: 'day', session: expect.any(Number),
+    }));
+    expect(routeParams.readOnly).toBe('');
+    await act(async () => { jest.advanceTimersByTime(15_000); await flushEffects(); });
+    const after = useUnfoldStore.getState().devotionals.find((series) => series.id === DEVOTIONAL_ID)!;
+    expect(after.currentDay).toBe(before.currentDay);
+    expect(after.seriesStartDate).toBe(before.seriesStartDate);
+    expect(after.days.find((day) => day.dayNumber === 1)).toEqual(before.days[0]);
+    if (archived) expect(after.archivedAt).toBeNull();
+    expect(useUnfoldStore.getState().devotionals.find((series) => series.id === ACTIVE_DEVOTIONAL_ID)).toEqual(beforeActive);
+    expect(mockWebViewProps.current?.day?.bodyText).toBe('Resumed Day 2 content.');
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe(DEVOTIONAL_ID);
+    act(() => tree!.unmount());
+  });
+
+  it('does not activate history when the missing day arrives while confirmation is open', async () => {
+    seedShelleyMissingDay();
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    let tree: ReaderTree;
+    await act(async () => { tree = renderer.create(<ReadingScreen />); await flushEffects(); });
+    act(() => (tree!.root.findByProps({ accessibilityLabel: 'Continue this series' }).props.onPress as () => void)());
+    const confirm = alert.mock.calls[0][2]!.find((button) => button.text === 'Continue this series')!;
+    await act(async () => {
+      useUnfoldStore.getState().updateDevotionalDays(DEVOTIONAL_ID, [makeDay(2, { isRead: false })]);
+      await flushEffects();
+      confirm.onPress!();
+    });
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe(ACTIVE_DEVOTIONAL_ID);
+    expect(routeParams.readOnly).toBe('1');
+    expect(mockSubmitGenerationJob).not.toHaveBeenCalled();
+    act(() => tree!.unmount());
+  });
+
+  it.each(['cancel', 'change-series', 'change-day', 'blur', 'unmount'] as const)(
+    'keeps a stale or cancelled confirmation from activating history: %s', async (change) => {
+      seedShelleyMissingDay();
+      const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+      let tree: ReaderTree;
+      await act(async () => {
+        tree = renderer.create(<ReadingScreen />);
+        await flushEffects();
+      });
+      act(() => (tree!.root.findByProps({ accessibilityLabel: 'Continue this series' }).props.onPress as () => void)());
+      const buttons = alert.mock.calls[0][2]!;
+      if (change === 'cancel') {
+        act(() => buttons.find((button) => button.text === 'Cancel')!.onPress!());
+        act(() => buttons.find((button) => button.text === 'Continue this series')!.onPress!());
+      } else {
+        await act(async () => {
+          if (change === 'change-series') useUnfoldStore.setState({ currentDevotionalId: 'new-active-series' });
+          if (change === 'change-day') routeParams.dayNumber = '1';
+          if (change === 'blur') mockFocused = false;
+          if (change === 'unmount') tree!.unmount();
+          else tree!.update(<ReadingScreen />);
+          await flushEffects();
+        });
+        await act(async () => {
+          buttons.find((button) => button.text === 'Continue this series')!.onPress!();
+          await flushEffects();
+        });
+      }
+      expect(useUnfoldStore.getState().currentDevotionalId).toBe(change === 'change-series' ? 'new-active-series' : ACTIVE_DEVOTIONAL_ID);
+      expect(routeParams.readOnly).toBe('1');
+      if (change !== 'unmount') act(() => tree!.unmount());
+    },
+  );
 
   it('offers Open Today after pull and discovery confirm a paused day is absent', async () => {
     seedPausedMissingDay();

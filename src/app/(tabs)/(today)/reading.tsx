@@ -6,7 +6,7 @@ import { markBookReaderReadyWithSnapshot } from '@/lib/book-opening-capture';
 import { getDailyGenerationNotice, getPausedSeriesDayNotice } from '@/lib/daily-generation-messages';
 import { useState, useCallback, useMemo, useEffect, useLayoutEffect, useRef } from 'react';
 import { useAutoHide } from '@/hooks/useAutoHide';
-import { View, ActivityIndicator, AccessibilityInfo, StyleSheet, TouchableOpacity, Keyboard, ScrollView, UIManager, Modal, type LayoutChangeEvent } from 'react-native';
+import { View, ActivityIndicator, AccessibilityInfo, Alert, StyleSheet, TouchableOpacity, Keyboard, ScrollView, UIManager, Modal, type LayoutChangeEvent } from 'react-native';
 import { ReaderText as Text } from '@/components/reading/ReaderText';
 import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
 import { useKeyboardFoldedPanes } from '@/hooks/useKeyboardFoldedPanes';
@@ -79,6 +79,7 @@ import {
   resolveInitialReadingDayNumber,
 } from '@/lib/devotional-day-access';
 import { nextConfirmedAbsentKey, shouldWatchForGeneratedDay } from '@/lib/generated-day-watch';
+import { getPausedSeriesContinuationDay, type PausedSeriesRecoveryContext } from '@/lib/paused-series-recovery';
 import { useGeneratedDayWatch } from '@/hooks/useGeneratedDayWatch';
 import { useReadBudgetBlocked } from '@/hooks/useReadBudgetBlocked';
 import { getServerOwnedSeriesTotalDays } from '@/lib/devotional-series-boundary';
@@ -438,6 +439,12 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   const missingDevotionalHydrationAttemptRef = useRef<Record<string, boolean>>({});
   const missingDevotionalHydrationOwnerRef = useRef<string | null>(null);
   const readingMountedRef = useRef(true);
+  const pausedRecoveryContextRef = useRef<PausedSeriesRecoveryContext | null>(null);
+  const continuationDialogRef = useRef<PausedSeriesRecoveryContext | null>(null);
+
+  useEffect(() => {
+    continuationDialogRef.current = null;
+  }, [effectiveDevotionalId, viewingDay, currentDevotionalId, isReadingFocused]);
 
   const translateX = useSharedValue(0);
   const contentOpacity = useSharedValue(1);
@@ -1925,6 +1932,64 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     ));
   }, [dailyGeneration.state, dailyRecoveryKey]);
 
+  const pausedRecoveryContext: PausedSeriesRecoveryContext = {
+    devotional: currentDevotional,
+    currentDevotionalId,
+    dayNumber: viewingDay,
+    confirmedMissingDayKey,
+    discoveredAbsentKey,
+    generationState: dailyGeneration.state,
+    isCheckingForSyncedDay,
+    isFocused: isReadingFocused,
+    isOnline,
+    readBudgetBlocked,
+  };
+  pausedRecoveryContextRef.current = pausedRecoveryContext;
+  const continuationDay = getPausedSeriesContinuationDay(pausedRecoveryContext, calendarNow);
+
+  const handleContinueSeries = () => {
+    if (!currentDevotional || continuationDay === null || continuationDialogRef.current) return;
+    const devotionalId = currentDevotional.id;
+    const activeId = currentDevotionalId;
+    const session = captureSyncSession();
+    const activeTitle = devotionals.find((series) => series.id === activeId)?.title;
+    const confirmation = pausedRecoveryContext;
+    continuationDialogRef.current = confirmation;
+    const closeConfirmation = () => {
+      if (continuationDialogRef.current === confirmation) continuationDialogRef.current = null;
+    };
+
+    Alert.alert(
+      'Continue this series?',
+      activeTitle
+        ? `“${currentDevotional.title}” will become your active series and “${activeTitle}” will be paused. Your progress in both series will be kept.`
+        : `Continue “${currentDevotional.title}” from Day ${continuationDay}? Your saved progress will be kept.`,
+      [
+        { text: 'Cancel', style: 'cancel', onPress: closeConfirmation },
+        { text: 'Continue this series', onPress: () => {
+          if (continuationDialogRef.current !== confirmation) return;
+          closeConfirmation();
+          const latestContext = pausedRecoveryContextRef.current;
+          const latestStore = useUnfoldStore.getState();
+          const latestSeries = latestStore.devotionals.find((series) => series.id === devotionalId);
+          if (!readingMountedRef.current || !isSyncSessionCurrent(session) || !latestContext
+            || effectiveDevotionalIdRef.current !== devotionalId
+            || latestContext.dayNumber !== viewingDay || latestStore.currentDevotionalId !== activeId) return;
+          const nextDay = getPausedSeriesContinuationDay({
+            ...latestContext, devotional: latestSeries, currentDevotionalId: latestStore.currentDevotionalId,
+          });
+          if (nextDay === null || nextDay !== continuationDay) return;
+          // Activation preserves progress/start date. The existing watcher owns generation,
+          // entitlement, single-flight submission, network recovery and stale results.
+          setCurrentDevotional(devotionalId);
+          router.setParams({ devotionalId, dayNumber: String(nextDay), readOnly: '' });
+          setViewingDay(nextDay);
+        } },
+      ],
+      { cancelable: true, onDismiss: closeConfirmation },
+    );
+  };
+
   useEffect(() => {
     const devotionalId = effectiveDevotionalId;
     if (!devotionalId || currentDevotional || readBudgetBlocked) return;
@@ -2154,7 +2219,9 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
               ? `Looking for Day ${viewingDay}...`
               : 'Reading not ready yet';
     const dailyBody = notice
-      ? notice.body
+      ? continuationDay !== null
+        ? `Make this your active series to continue from Day ${viewingDay}, or open Today to read your active series.`
+        : notice.body
       : dailyState.status === 'failed'
         ? dailyState.failureKind === 'job'
           ? canRetryDailyJob
@@ -2355,6 +2422,28 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
           {/* Bottom buttons - reserve space above the absolute tab bar */}
           {!isRetrying && (
             <View style={{ paddingHorizontal: Spacing['7'], paddingBottom: fallbackBottomPadding, gap: Spacing['3'] }}>
+              {continuationDay !== null && (
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={handleContinueSeries}
+                  accessibilityRole="button"
+                  accessibilityLabel="Continue this series"
+                  accessibilityHint="Asks to make this your active series, keeping your saved progress"
+                  style={{
+                    backgroundColor: retryCtaButtonBg,
+                    paddingVertical: Spacing['4'],
+                    borderRadius: Radius.card,
+                    borderWidth: 1,
+                    borderColor: retryCtaButtonBorder,
+                    alignItems: 'center',
+                    minHeight: 44,
+                  }}
+                >
+                  <Text style={{ fontFamily: FontFamily.uiSemiBold, fontSize: 15, color: btnText }}>
+                    Continue this series
+                  </Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity activeOpacity={0.7}
                 onPress={async () => {
                   if (isPausedSeriesDay) {
