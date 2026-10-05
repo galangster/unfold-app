@@ -176,7 +176,7 @@ Source: `src/constants/shadows.ts`. Each shadow is black with an x offset of 0.
 | `lg` | 4 | 0.12 | 16 | 6 |
 | `sheet` | -4 | 0.12 | 20 | 24 |
 
-In the dark theme, a raised surface takes a border in place of a shadow.
+In the dark theme, a surface styled with `elevated` takes a border in place of a shadow.
 The border is 1 px of warm white at alpha 0.09. The tiers `lg` and `sheet` use alpha 0.14.
 The function `elevated` applies the correct treatment for the theme.
 The source keeps accent glows separate from depth. It names the home hero and the paywall action as examples.
