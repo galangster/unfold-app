@@ -33,6 +33,7 @@ import {
   isValidConflictResult,
   resolvingAcknowledgementPairs,
   syncSnapshotsEqual,
+  type SyncAcknowledgementPair,
 } from '@/lib/sync-acknowledgements';
 import type { SyncPushChange, SyncPushResult, SyncTable } from '@/lib/sync-types';
 // RS13-1: single owner — the key is defined in mmkv-recovery-outbox.ts (pure, no native deps)
@@ -204,6 +205,35 @@ type InFlightDrain = {
 };
 
 let inflight: InFlightDrain | null = null;
+const acknowledgementListeners = new Set<(pair: SyncAcknowledgementPair, session: number) => void>();
+
+/** Observe the acknowledgement of this exact snapshot, never infer it from queue removal. */
+export async function drainSyncChange(
+  change: SyncPushChange,
+  session = captureSyncSession(),
+): Promise<SyncPushResult | undefined> {
+  if (!isSyncSessionCurrent(session)) return undefined;
+  let acknowledged: SyncPushResult | undefined;
+  const listener = (pair: SyncAcknowledgementPair, acknowledgedSession: number) => {
+    if (acknowledgedSession === session && syncSnapshotsEqual(pair.change, change)) {
+      acknowledged = pair.result;
+    }
+  };
+  acknowledgementListeners.add(listener);
+  const joinedOlderDrain = inflight?.session === session;
+  try {
+    await drainSyncOutbox();
+    // A single-flight cycle has an immutable initial snapshot. Fresh work
+    // queued during that cycle gets its own cycle, using the existing backoff.
+    if (!acknowledged && joinedOlderDrain && isSyncSessionCurrent(session)
+      && peekSyncOutbox().some((entry) => syncSnapshotsEqual(entry, change))) {
+      await drainSyncOutbox();
+    }
+    return isSyncSessionCurrent(session) ? acknowledged : undefined;
+  } finally {
+    acknowledgementListeners.delete(listener);
+  }
+}
 
 export function drainSyncOutbox(): Promise<void> {
   // FAP-LIB-1 (orphaned-pushes): never POST under an ephemeral recovery
@@ -299,6 +329,9 @@ export function drainSyncOutbox(): Promise<void> {
           )))
           .map((pair) => pair.result);
         applyConflictResults(conflictsToApply);
+        for (const pair of resolving) {
+          for (const listener of acknowledgementListeners) listener(pair, session);
+        }
       }
       if (completed && isSyncSessionCurrent(session)) {
         lastAttemptedEnqueueRevision = capturedRevision;

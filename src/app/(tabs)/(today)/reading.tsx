@@ -80,6 +80,9 @@ import {
 } from '@/lib/devotional-day-access';
 import { nextConfirmedAbsentKey, shouldWatchForGeneratedDay } from '@/lib/generated-day-watch';
 import { getPausedSeriesContinuationDay, type PausedSeriesRecoveryContext } from '@/lib/paused-series-recovery';
+import { applyUnarchiveIntent, lifecycleTimestampMs } from '@/lib/devotional-lifecycle';
+import { buildPersonalDataSyncChange, devotionalSyncData } from '@/lib/personal-data-sync-records';
+import { drainSyncChange, enqueueSyncChanges } from '@/lib/sync-outbox';
 import { useGeneratedDayWatch } from '@/hooks/useGeneratedDayWatch';
 import { useReadBudgetBlocked } from '@/hooks/useReadBudgetBlocked';
 import { getServerOwnedSeriesTotalDays } from '@/lib/devotional-series-boundary';
@@ -441,9 +444,15 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   const readingMountedRef = useRef(true);
   const pausedRecoveryContextRef = useRef<PausedSeriesRecoveryContext | null>(null);
   const continuationDialogRef = useRef<PausedSeriesRecoveryContext | null>(null);
+  const continuationPendingRef = useRef<object | null>(null);
+  const [isContinuingSeries, setIsContinuingSeries] = useState(false);
+  const [continuationError, setContinuationError] = useState<string | null>(null);
 
   useEffect(() => {
     continuationDialogRef.current = null;
+    continuationPendingRef.current = null;
+    setIsContinuingSeries(false);
+    setContinuationError(null);
   }, [effectiveDevotionalId, viewingDay, currentDevotionalId, isReadingFocused]);
 
   const translateX = useSharedValue(0);
@@ -1948,7 +1957,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   const continuationDay = getPausedSeriesContinuationDay(pausedRecoveryContext, calendarNow);
 
   const handleContinueSeries = () => {
-    if (!currentDevotional || continuationDay === null || continuationDialogRef.current) return;
+    if (!currentDevotional || continuationDay === null || continuationDialogRef.current || continuationPendingRef.current) return;
     const devotionalId = currentDevotional.id;
     const activeId = currentDevotionalId;
     const session = captureSyncSession();
@@ -1969,21 +1978,69 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
         { text: 'Continue this series', onPress: () => {
           if (continuationDialogRef.current !== confirmation) return;
           closeConfirmation();
-          const latestContext = pausedRecoveryContextRef.current;
-          const latestStore = useUnfoldStore.getState();
-          const latestSeries = latestStore.devotionals.find((series) => series.id === devotionalId);
-          if (!readingMountedRef.current || !isSyncSessionCurrent(session) || !latestContext
-            || effectiveDevotionalIdRef.current !== devotionalId
-            || latestContext.dayNumber !== viewingDay || latestStore.currentDevotionalId !== activeId) return;
-          const nextDay = getPausedSeriesContinuationDay({
-            ...latestContext, devotional: latestSeries, currentDevotionalId: latestStore.currentDevotionalId,
-          });
-          if (nextDay === null || nextDay !== continuationDay) return;
-          // Activation preserves progress/start date. The existing watcher owns generation,
-          // entitlement, single-flight submission, network recovery and stale results.
-          setCurrentDevotional(devotionalId);
-          router.setParams({ devotionalId, dayNumber: String(nextDay), readOnly: '' });
-          setViewingDay(nextDay);
+          const isIntentCurrent = () => {
+            const context = pausedRecoveryContextRef.current;
+            const state = useUnfoldStore.getState();
+            if (!readingMountedRef.current || !isSyncSessionCurrent(session) || !context
+              || effectiveDevotionalIdRef.current !== devotionalId
+              || context.dayNumber !== viewingDay || state.currentDevotionalId !== activeId) return false;
+            return getPausedSeriesContinuationDay({
+              ...context, devotional: state.devotionals.find((series) => series.id === devotionalId),
+              currentDevotionalId: state.currentDevotionalId,
+            }) === continuationDay;
+          };
+          if (!isIntentCurrent()) return;
+          const series = useUnfoldStore.getState().devotionals.find((entry) => entry.id === devotionalId)!;
+          const pending = {};
+          continuationPendingRef.current = pending;
+          setIsContinuingSeries(true);
+          setContinuationError(null);
+          void (async () => {
+            try {
+              // The server ranks progressive series by creation/resume clock.
+              // Even an already-unarchived history series needs an explicit resume.
+              const latestSelectionClock = useUnfoldStore.getState().devotionals.reduce((clock, entry) => (
+                Math.max(clock, lifecycleTimestampMs(entry.createdAt), lifecycleTimestampMs(entry.archivedStateAt))
+              ), Date.now());
+              const resumed = applyUnarchiveIntent(series, new Date(latestSelectionClock + 1).toISOString());
+              const clientUpdatedAt = lifecycleTimestampMs(series.updatedAt) > lifecycleTimestampMs(resumed.archivedStateAt)
+                ? series.updatedAt! : resumed.archivedStateAt;
+              const change = buildPersonalDataSyncChange('devotionals', devotionalId, devotionalSyncData(resumed), clientUpdatedAt);
+              enqueueSyncChanges([change]);
+              const acknowledgement = await drainSyncChange(change, session);
+              if (continuationPendingRef.current !== pending || !isIntentCurrent()) return;
+              if (acknowledgement?.status !== 'accepted') {
+                setContinuationError('This series could not be continued yet. Please check your connection and try again.');
+                return;
+              }
+              // Content acceptance does not prove that the lifecycle CAS won.
+              // Distrust the incremental cursor and require the exact resume clock.
+              const pulled = await pullDevotionalContent(devotionalId, { forceFull: true, timeoutMs: 15_000 });
+              if (continuationPendingRef.current !== pending || !isIntentCurrent()) return;
+              if (pulled.devotional?.id !== devotionalId || pulled.devotional.archivedAt !== null
+                || pulled.devotional.archivedStateAt !== resumed.archivedStateAt) {
+                setContinuationError('This series could not be continued yet. Please check your connection and try again.');
+                return;
+              }
+              if (!useUnfoldStore.getState().activateAcknowledgedDevotionalResume(
+                devotionalId, activeId, series.archivedStateAt, resumed.archivedStateAt,
+              )) return;
+              if (pulled.days.length > 0) updateDevotionalDays(devotionalId, pulled.days);
+              // Only activation enables the existing watcher. It retains ownership
+              // of entitlement, job discovery, submission and stale delivery guards.
+              router.setParams({ devotionalId, dayNumber: String(continuationDay), readOnly: '' });
+              setViewingDay(continuationDay);
+            } catch {
+              if (continuationPendingRef.current === pending && isIntentCurrent()) {
+                setContinuationError('This series could not be continued yet. Please check your connection and try again.');
+              }
+            } finally {
+              if (continuationPendingRef.current === pending) {
+                continuationPendingRef.current = null;
+                if (readingMountedRef.current) setIsContinuingSeries(false);
+              }
+            }
+          })();
         } },
       ],
       { cancelable: true, onDismiss: closeConfirmation },
@@ -2426,9 +2483,11 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                 <TouchableOpacity
                   activeOpacity={0.7}
                   onPress={handleContinueSeries}
+                  disabled={isContinuingSeries}
                   accessibilityRole="button"
                   accessibilityLabel="Continue this series"
                   accessibilityHint="Asks to make this your active series, keeping your saved progress"
+                  accessibilityState={{ disabled: isContinuingSeries, busy: isContinuingSeries }}
                   style={{
                     backgroundColor: retryCtaButtonBg,
                     paddingVertical: Spacing['4'],
@@ -2440,9 +2499,14 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                   }}
                 >
                   <Text style={{ fontFamily: FontFamily.uiSemiBold, fontSize: 15, color: btnText }}>
-                    Continue this series
+                    {isContinuingSeries ? 'Continuing…' : 'Continue this series'}
                   </Text>
                 </TouchableOpacity>
+              )}
+              {continuationError && (
+                <Text accessibilityRole="alert" style={{ fontFamily: FontFamily.ui, color: colors.textMuted, textAlign: 'center' }}>
+                  {continuationError}
+                </Text>
               )}
               <TouchableOpacity activeOpacity={0.7}
                 onPress={async () => {

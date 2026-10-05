@@ -195,6 +195,8 @@ export type PullDevotionalContentOptions = {
    * distrust the cursor.
    */
   forceFull?: boolean;
+  /** Bound an explicit resume verification; ordinary pull behavior stays unchanged. */
+  timeoutMs?: number;
 };
 
 /**
@@ -271,6 +273,8 @@ export async function pullDevotionalContent(
 
   const controller = new AbortController();
   const unregister = registerSyncTransport(controller);
+  const timeout = options.timeoutMs && Number.isFinite(options.timeoutMs) && options.timeoutMs > 0
+    ? setTimeout(() => controller.abort(), options.timeoutMs) : undefined;
   try {
     const retryAfterMs = readBudgetRetryAfterMs();
     if (retryAfterMs > 0) {
@@ -315,6 +319,7 @@ export async function pullDevotionalContent(
     }
     throw error;
   } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
     unregister();
   }
 }

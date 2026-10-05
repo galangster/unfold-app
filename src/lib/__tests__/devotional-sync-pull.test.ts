@@ -198,6 +198,21 @@ beforeEach(() => {
 });
 
 describe('devotional sync pull recovery', () => {
+  it('bounds an explicitly timed lifecycle verification and leaves its cursor unchanged', async () => {
+    jest.useFakeTimers();
+    try {
+      mockFetch.mockImplementation((_url, init) => new Promise((_resolve, reject) => {
+        init.signal.addEventListener('abort', () => reject(new Error('Timed out')));
+      }));
+      const pending = pullDevotionalContent(DEVOTIONAL_ID, { forceFull: true, timeoutMs: 15_000 });
+      const rejected = expect(pending).rejects.toThrow('Timed out');
+      await jest.advanceTimersByTimeAsync(15_000);
+      await rejected;
+      expect(mmkvStorage.getItem(DEVOTIONAL_PULL_CURSOR_KEY)).toBeNull();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
   it('does not request a pull while the shared read budget is blocked', async () => {
     noteReadBudgetRateLimited(36);
 

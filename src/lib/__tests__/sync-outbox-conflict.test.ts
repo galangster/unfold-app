@@ -41,7 +41,7 @@ jest.mock('../mmkv-storage', () => {
 import { mmkvStorage } from '../mmkv-storage';
 import { useUnfoldStore } from '../store';
 const fullSyncPull = jest.requireActual('../full-sync-pull') as typeof import('../full-sync-pull');
-const { drainSyncOutbox, enqueueSyncChanges, OUTBOX_KEY, peekSyncOutbox, resetDrainStateForTesting } = jest.requireActual('../sync-outbox') as typeof import('../sync-outbox');
+const { drainSyncChange, drainSyncOutbox, enqueueSyncChanges, OUTBOX_KEY, peekSyncOutbox, removeSyncChangesForRecords, resetDrainStateForTesting } = jest.requireActual('../sync-outbox') as typeof import('../sync-outbox');
 
 const T0 = new Date('2026-09-01T12:00:00.000Z');
 const at = (offsetMs: number) => new Date(T0.getTime() + offsetMs).toISOString();
@@ -110,6 +110,59 @@ beforeEach(() => {
 
 afterEach(() => {
   jest.useRealTimers();
+});
+
+describe('exact push acknowledgement waits', () => {
+  it('drains fresh work queued during an older single-flight cycle', async () => {
+    const older = { table: 'notes' as const, id: 'older', data: { title: 'Earlier' }, clientUpdatedAt: at(0), deleted: false };
+    const resumed = { table: 'devotionals' as const, id: 'series-a', data: { archivedAt: null, archivedStateAt: at(1000) }, clientUpdatedAt: at(1000), deleted: false };
+    enqueueSyncChanges([older]);
+    let finishOlder!: (response: Response) => void;
+    const requests: unknown[] = [];
+    globalThis.fetch = jest.fn(async (_url, init) => {
+      const { changes } = JSON.parse(init!.body as string);
+      requests.push(changes);
+      if (requests.length === 1) return new Promise<Response>((resolve) => { finishOlder = resolve; });
+      return { ok: true, json: async () => ({ results: changes.map((change: { table: string; id: string }) => ({
+        table: change.table, id: change.id, status: 'accepted', serverUpdatedAt: at(1000),
+      })) }) } as Response;
+    });
+    const firstCycle = drainSyncOutbox();
+    await Promise.resolve();
+    enqueueSyncChanges([resumed]);
+    const acknowledgement = drainSyncChange(resumed);
+    finishOlder({ ok: true, json: async () => ({ results: [{ table: older.table, id: older.id, status: 'accepted', serverUpdatedAt: at(0) }] }) } as Response);
+    await firstCycle;
+    expect(await acknowledgement).toEqual(expect.objectContaining({ id: resumed.id, status: 'accepted' }));
+    expect(requests).toEqual([[older], [resumed]]);
+    expect(peekSyncOutbox()).toEqual([]);
+  });
+
+  it('does not interpret removal or another snapshot acknowledgement as acceptance', async () => {
+    const change = { table: 'devotionals' as const, id: 'series-a', data: { archivedAt: null }, clientUpdatedAt: at(1000), deleted: false };
+    enqueueSyncChanges([change]);
+    globalThis.fetch = jest.fn(async () => {
+      removeSyncChangesForRecords([{ table: change.table, id: change.id }]);
+      return { ok: true, json: async () => ({ results: [] }) } as Response;
+    });
+    expect(await drainSyncChange(change)).toBeUndefined();
+    expect(peekSyncOutbox()).toEqual([]);
+    const newer = { ...change, clientUpdatedAt: at(2000), data: { archivedAt: at(2000) } };
+    enqueueSyncChanges([newer]);
+    mockPushResponse(() => [{ table: change.table, id: change.id, status: 'accepted', serverUpdatedAt: at(2000) }]);
+    expect(await drainSyncChange(change)).toBeUndefined();
+    expect(peekSyncOutbox()).toEqual([]);
+  });
+
+  it('keeps the existing retry interval after a rejected snapshot', async () => {
+    const change = { table: 'devotionals' as const, id: 'series-a', data: { archivedAt: null }, clientUpdatedAt: at(1000), deleted: false };
+    enqueueSyncChanges([change]);
+    mockPushResponse(() => [{ table: change.table, id: change.id, status: 'rejected', serverUpdatedAt: at(1000) }]);
+    expect(await drainSyncChange(change)).toBeUndefined();
+    expect(await drainSyncChange(change)).toBeUndefined();
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    expect(peekSyncOutbox()).toEqual([change]);
+  });
 });
 
 describe('push conflict → server version', () => {

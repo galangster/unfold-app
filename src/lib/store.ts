@@ -37,7 +37,7 @@ import type { WordStudy } from './word-study';
 import { flushCheckInToServer } from './check-in-flush';
 import { isOnboardingFirstReading, isOnboardingSampleDevotionalId, withOnboardingFirstReadingArc } from './auto-trial-series';
 import { isUsableSampleDevotionalDay } from './onboarding-sample-day-shape';
-import { applyArchiveIntent, applyUnarchiveIntent, isDevotionalArchived } from './devotional-lifecycle';
+import { applyArchiveIntent, applyUnarchiveIntent, isDevotionalArchived, lifecycleTimestampMs } from './devotional-lifecycle';
 import { selectSyncedCurrentDevotionalId } from './devotional-resume-selection';
 import { bookmarkIdentityEquals, type BookmarkIdentity, type BookmarkKind } from './bookmark-identity';
 import {
@@ -671,6 +671,7 @@ interface UnfoldState {
   retireOnboardingSamples: (opts: { keepId?: string }) => void;
   updateDevotionalDays: (devotionalId: string, days: DevotionalDay[], title?: string) => void;
   setCurrentDevotional: (id: string) => void;
+  activateAcknowledgedDevotionalResume: (id: string, expectedActiveId: string | null, previousClock: string | undefined, acknowledgedClock: string) => boolean;
   archiveCurrentDevotional: () => void;
   hasEverCreatedDevotional: boolean;
   isReturningUser: () => boolean;
@@ -1342,6 +1343,31 @@ export const useUnfoldStore = create<UnfoldState>()(
             scripturePracticeReturn: null,
           };
         }),
+      activateAcknowledgedDevotionalResume: (id, expectedActiveId, previousClock, acknowledgedClock) => {
+        let activated = false;
+        set((state) => {
+          const existing = state.devotionals.find((d) => d.id === id);
+          if (state.currentDevotionalId !== expectedActiveId || !existing
+            || existing.archivedStateAt !== previousClock
+            || lifecycleTimestampMs(acknowledgedClock) <= lifecycleTimestampMs(previousClock)) return state;
+          // Commit the accepted lifecycle clock without minting another intent.
+          // Content/progress may have changed while the push was pending.
+          const resumed = {
+            ...existing,
+            archivedAt: null,
+            archivedStateAt: acknowledgedClock,
+            updatedAt: lifecycleTimestampMs(existing.updatedAt) > lifecycleTimestampMs(acknowledgedClock)
+              ? existing.updatedAt : acknowledgedClock,
+          };
+          activated = true;
+          return {
+            devotionals: state.devotionals.map((d) => (d.id === id ? resumed : d)),
+            currentDevotionalId: id,
+            scripturePracticeReturn: null,
+          };
+        });
+        return activated;
+      },
       archiveCurrentDevotional: () =>
         set((state) => {
           const currentId = state.currentDevotionalId;
