@@ -7,7 +7,9 @@
  * server and the app disagreed (docs/day-unlock-contract.md). This is the Sentry
  * issue that says a release or a server change reopened the gap.
  *
- * Only the day number leaves the device. Nothing a reader wrote, no ids.
+ * This call adds only the day number: no reader writing or identifiers.
+ * The Sentry event also retains the context allowed by captureAppSignal,
+ * including device, release, and breadcrumb information.
  */
 import { captureAppSignal } from '@/lib/sentry';
 

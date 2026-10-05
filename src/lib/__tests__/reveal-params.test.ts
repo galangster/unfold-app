@@ -133,8 +133,8 @@ describe('resolveRevealOutcome: locked days', () => {
     });
   });
 
-  it('calls a later day locked too while the lock is in force', () => {
-    expect(outcomeFor('5', noon)).toEqual({ kind: 'locked', dayNumber: 5 });
+  it('keeps a day beyond currentDay invalid even while the pacing lock is in force', () => {
+    expect(outcomeFor('5', noon)).toEqual({ kind: 'invalid' });
   });
 
   it('calls the day at currentDay locked when out-of-order reads leave the lock further back', () => {

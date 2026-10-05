@@ -87,7 +87,9 @@ export function resolveRevealOutcome(
 
   const normalized = { ...devotional, days };
   if (dayNumber > getTodayReaderDayNumber(normalized, now)) {
-    return getLockedTodayDayNumber(normalized, now) != null ? { kind: 'locked', dayNumber } : INVALID;
+    return getLockedTodayDayNumber(normalized, now) != null && dayNumber <= normalized.currentDay
+      ? { kind: 'locked', dayNumber }
+      : INVALID;
   }
 
   const day = days.find((candidate) => candidate.dayNumber === dayNumber);

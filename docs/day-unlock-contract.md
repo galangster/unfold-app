@@ -53,7 +53,8 @@ the preferred time.
 
 A queued push survives a restart and goes out once. Checks that can cancel it run
 at send time, not when the push is queued. They are a missing push token, a local
-daily reminder already scheduled, and the day already read. At send time the
+daily reminder already scheduled, the day already read, and inactive premium
+status when the server premium gate is enabled. At send time the
 server also recomputes the send time from the current reads. If the day is still
 locked, it queues the push again.
 
