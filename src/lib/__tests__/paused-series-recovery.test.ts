@@ -1,4 +1,5 @@
-import { getPausedSeriesContinuationDay } from '../paused-series-recovery';
+import { getPausedSeriesContinuationDay, pausedSeriesResumeClocks } from '../paused-series-recovery';
+import { beginLocalResetSession, captureSyncSession, endLocalResetSession } from '../sync-session-fence';
 import type { PausedSeriesRecoveryContext } from '../paused-series-recovery';
 import type { Devotional } from '../store';
 
@@ -21,6 +22,16 @@ function context(): PausedSeriesRecoveryContext {
 }
 
 describe('paused series continuation', () => {
+  it('fences remembered clocks when the identity/session changes', () => {
+    const session = captureSyncSession();
+    pausedSeriesResumeClocks.nextIntentAt(session, 'series-a', [], 1000);
+    pausedSeriesResumeClocks.observe(session, 'series-a', new Date(60_000).toISOString());
+    const resetToken = beginLocalResetSession();
+    expect(() => pausedSeriesResumeClocks.nextIntentAt(session, 'series-a', [], 1000)).toThrow('sync session is not current');
+    pausedSeriesResumeClocks.observe(session, 'series-a', new Date(120_000).toISOString());
+    endLocalResetSession(resetToken);
+    expect(pausedSeriesResumeClocks.nextIntentAt(captureSyncSession(), 'series-a', [], 1000)).toBe('1970-01-01T00:00:01.001Z');
+  });
   it('offers the missing current reading without changing saved progress or the start date', () => {
     const recovery = context();
     const before = JSON.stringify(recovery);

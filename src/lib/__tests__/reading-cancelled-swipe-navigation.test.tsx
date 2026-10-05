@@ -626,6 +626,10 @@ describe('reader swipe cancellation', () => {
   beforeEach(() => {
     jest.useFakeTimers({ now: new Date(TYPING_AT), advanceTimers: true });
     jest.clearAllMocks();
+    // Each test owns a fresh identity epoch; remounts inside a test retain it.
+    const resetToken = beginLocalResetSession();
+    endLocalResetSession(resetToken);
+    jest.requireMock('../api-config').getAuthHeaders.mockReset().mockResolvedValue({ 'Content-Type': 'application/json' });
     routeParams.devotionalId = DEVOTIONAL_ID;
     routeParams.dayNumber = '3';
     delete routeParams.readOnly;
@@ -1019,6 +1023,8 @@ describe('reader swipe cancellation', () => {
         expect(useUnfoldStore.getState().currentDevotionalId).toBe(ACTIVE_DEVOTIONAL_ID);
         expect(routeParams.readOnly).toBe('1');
         expect(mockSubmitGenerationJob).not.toHaveBeenCalled();
+        act(() => tree!.unmount());
+        await act(async () => { tree = renderer.create(<ReadingScreen hostTab="(study)" />); await flushEffects(); });
       }
     }
     expect(Date.parse(sentClocks[1])).toBeGreaterThan(Date.parse(firstFailure === 'newer-archive' ? remoteClock : sentClocks[0]));
@@ -1028,6 +1034,156 @@ describe('reader swipe cancellation', () => {
     const resumed = useUnfoldStore.getState().devotionals.find((series) => series.id === DEVOTIONAL_ID)!;
     expect(resumed.days).toEqual(before.find((series) => series.id === DEVOTIONAL_ID)!.days);
     expect(resumed.seriesStartDate).toBe(before.find((series) => series.id === DEVOTIONAL_ID)!.seriesStartDate);
+    act(() => tree!.unmount());
+  }, 30_000);
+
+  it.each(['auth', 'body'] as const)('critic push deadline: Continue permits retry when resume push %s stalls', async (stage) => {
+    seedShelleyMissingDay();
+    let releaseAuth: ((headers: Record<string, string>) => void) | undefined;
+    let releaseBody: ((body: { results: unknown[] }) => void) | undefined;
+    if (stage === 'auth') {
+      const auth = jest.requireMock('../api-config').getAuthHeaders as jest.Mock;
+      auth.mockImplementationOnce(() => new Promise<Record<string, string>>((resolve) => { releaseAuth = resolve; }));
+    } else {
+      globalThis.fetch = jest.fn(async () => ({
+        ok: true,
+        json: () => new Promise((resolve) => { releaseBody = resolve; }),
+      })) as unknown as typeof fetch;
+    }
+    mockUseRealGeneratedDayWatch = true;
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    let tree: ReaderTree;
+    await act(async () => { tree = renderer.create(<ReadingScreen />); await flushEffects(); });
+    try {
+      act(() => (tree!.root.findByProps({ accessibilityLabel: 'Continue this series' }).props.onPress as () => void)());
+      await act(async () => { alert.mock.calls[0][2]!.find((button) => button.text === 'Continue this series')!.onPress!(); await flushEffects(); });
+      expect(tree!.root.findByProps({ accessibilityLabel: 'Continue this series' }).props.accessibilityState).toEqual({ disabled: true, busy: true });
+      await act(async () => { jest.advanceTimersByTime(15_000); await flushEffects(); });
+      expect(useUnfoldStore.getState().currentDevotionalId).toBe(ACTIVE_DEVOTIONAL_ID);
+      expect(routeParams.readOnly).toBe('1');
+      expect(mockSubmitGenerationJob).not.toHaveBeenCalled();
+      expect(globalThis.fetch).toHaveBeenCalledTimes(stage === 'auth' ? 0 : 1);
+      expect(tree!.root.findByProps({ accessibilityLabel: 'Continue this series' }).props.accessibilityState).toEqual({ disabled: false, busy: false });
+    } finally {
+      const resetToken = beginLocalResetSession();
+      await act(async () => {
+        releaseAuth?.({ 'Content-Type': 'application/json' });
+        releaseBody?.({ results: [] });
+        await flushEffects();
+      });
+      endLocalResetSession(resetToken);
+      act(() => tree!.unmount());
+    }
+  }, 30_000);
+
+  it('critic remount clock: a confirmed retry after reader reentry exceeds the previous attempt', async () => {
+    seedShelleyMissingDay();
+    const futureCreationClock = new Date(Date.now() + 120_000).toISOString();
+    useUnfoldStore.setState((state) => ({ devotionals: state.devotionals.map((series) => (
+      series.id === ACTIVE_DEVOTIONAL_ID ? { ...series, createdAt: futureCreationClock } : series
+    )) }));
+    const sentClocks: string[] = [];
+    globalThis.fetch = jest.fn(async (_url, init) => {
+      const changes = JSON.parse(init!.body as string).changes;
+      const resume = changes.find((entry: { table: string }) => entry.table === 'devotionals');
+      sentClocks.push(resume.data.archivedStateAt);
+      return { ok: true, json: async () => ({ results: changes.map((entry: { table: string; id: string }) => ({
+        table: entry.table, id: entry.id, status: 'rejected', serverUpdatedAt: new Date().toISOString(),
+      })) }) } as Response;
+    });
+    mockUseRealGeneratedDayWatch = true;
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    let tree: ReaderTree | undefined;
+    try {
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        await act(async () => { tree = renderer.create(<ReadingScreen />); await flushEffects(); });
+        act(() => (tree!.root.findByProps({ accessibilityLabel: 'Continue this series' }).props.onPress as () => void)());
+        await act(async () => { alert.mock.calls[attempt][2]!.find((button) => button.text === 'Continue this series')!.onPress!(); await flushEffects(); });
+        expect(useUnfoldStore.getState().currentDevotionalId).toBe(ACTIVE_DEVOTIONAL_ID);
+        expect(routeParams.readOnly).toBe('1');
+        expect(mockSubmitGenerationJob).not.toHaveBeenCalled();
+        act(() => tree!.unmount());
+        tree = undefined;
+        // Let unchanged-outbox retry backoff expire while remaining below B's future clock.
+        await act(async () => { jest.advanceTimersByTime(16_000); await flushEffects(); });
+      }
+      expect(sentClocks).toHaveLength(2);
+      expect(Date.parse(sentClocks[1])).toBeGreaterThan(Date.parse(sentClocks[0]));
+    } finally { if (tree) act(() => tree!.unmount()); }
+  }, 30_000);
+
+  it('bounds resume push and canonical verification with one deadline', async () => {
+    seedShelleyMissingDay();
+    const actualPull = jest.requireActual('@/lib/devotional-sync-pull').pullDevotionalContent as typeof import('@/lib/devotional-sync-pull').pullDevotionalContent;
+    mockPullDevotionalContent.mockImplementation((devotionalId: string, options?: import('@/lib/devotional-sync-pull').PullDevotionalContentOptions) => (
+      mockAcceptedResume ? actualPull(devotionalId, options) : Promise.resolve(emptyPull())
+    ));
+    let releaseAuth!: (headers: Record<string, string>) => void;
+    jest.requireMock('../api-config').getAuthHeaders
+      .mockResolvedValueOnce({ 'Content-Type': 'application/json' })
+      .mockImplementationOnce(() => new Promise((resolve) => { releaseAuth = resolve; }));
+    let releasePush!: (response: Response) => void;
+    let changes: { table: string; id: string; data: Record<string, unknown> }[] = [];
+    globalThis.fetch = jest.fn(async (_url, init) => {
+      changes = JSON.parse(init!.body as string).changes;
+      const resume = changes.find((change) => change.table === 'devotionals')!;
+      mockAcceptedResume = { id: resume.id, archivedAt: null, archivedStateAt: resume.data.archivedStateAt as string };
+      return new Promise<Response>((resolve) => { releasePush = resolve; });
+    });
+    mockUseRealGeneratedDayWatch = true;
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    let tree: ReaderTree;
+    await act(async () => { tree = renderer.create(<ReadingScreen />); await flushEffects(); });
+    act(() => (tree!.root.findByProps({ accessibilityLabel: 'Continue this series' }).props.onPress as () => void)());
+    await act(async () => { alert.mock.calls[0][2]!.find((button) => button.text === 'Continue this series')!.onPress!(); await flushEffects(); });
+    await act(async () => { jest.advanceTimersByTime(8_000); await flushEffects(); });
+    await act(async () => {
+      releasePush({ ok: true, json: async () => ({ results: changes.map((change) => ({
+        table: change.table, id: change.id, status: 'accepted', serverUpdatedAt: new Date().toISOString(),
+      })) }) } as Response);
+      await flushEffects();
+    });
+    await act(async () => { jest.advanceTimersByTime(6_000); await flushEffects(); });
+    expect(tree!.root.findByProps({ accessibilityLabel: 'Continue this series' }).props.accessibilityState).toEqual({ disabled: true, busy: true });
+    await act(async () => { jest.advanceTimersByTime(1_000); await flushEffects(); });
+    expect(tree!.root.findByProps({ accessibilityLabel: 'Continue this series' }).props.accessibilityState).toEqual({ disabled: false, busy: false });
+    await act(async () => { releaseAuth({ 'Content-Type': 'application/json' }); await flushEffects(); });
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe(ACTIVE_DEVOTIONAL_ID);
+    expect(routeParams.readOnly).toBe('1');
+    expect(mockSubmitGenerationJob).not.toHaveBeenCalled();
+    act(() => tree!.unmount());
+  }, 30_000);
+
+  it('continues on a confirmed retry after the push credential deadline and ignores old credentials', async () => {
+    seedShelleyMissingDay();
+    const before = useUnfoldStore.getState().devotionals.find((series) => series.id === DEVOTIONAL_ID)!;
+    let releaseAuth!: (headers: Record<string, string>) => void;
+    jest.requireMock('../api-config').getAuthHeaders.mockImplementationOnce(() => new Promise((resolve) => { releaseAuth = resolve; }));
+    mockUseRealGeneratedDayWatch = true;
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    let tree: ReaderTree;
+    await act(async () => { tree = renderer.create(<ReadingScreen />); await flushEffects(); });
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      act(() => (tree!.root.findByProps({ accessibilityLabel: 'Continue this series' }).props.onPress as () => void)());
+      await act(async () => { alert.mock.calls[attempt][2]!.find((button) => button.text === 'Continue this series')!.onPress!(); await flushEffects(); });
+      if (attempt === 0) {
+        await act(async () => { jest.advanceTimersByTime(15_000); await flushEffects(); });
+        expect(useUnfoldStore.getState().currentDevotionalId).toBe(ACTIVE_DEVOTIONAL_ID);
+        expect(routeParams.readOnly).toBe('1');
+        expect(tree!.root.findByProps({ accessibilityLabel: 'Continue this series' }).props.accessibilityState).toEqual({ disabled: false, busy: false });
+      }
+    }
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe(DEVOTIONAL_ID);
+    expect(routeParams.readOnly).toBe('');
+    expect(mockSubmitGenerationJob).toHaveBeenCalledTimes(1);
+    const after = useUnfoldStore.getState().devotionals.find((series) => series.id === DEVOTIONAL_ID)!;
+    expect(after.days).toEqual(before.days);
+    expect(after.seriesStartDate).toBe(before.seriesStartDate);
+    await act(async () => { releaseAuth({ 'Content-Type': 'application/json' }); await flushEffects(); });
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    expect(mockSubmitGenerationJob).toHaveBeenCalledTimes(1);
+    expect(useUnfoldStore.getState().devotionals.find((series) => series.id === DEVOTIONAL_ID)!.archivedStateAt).toBe(after.archivedStateAt);
     act(() => tree!.unmount());
   }, 30_000);
 

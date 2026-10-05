@@ -3,13 +3,15 @@ import type { DailyGenerationRecoveryState } from './daily-generation-recovery';
 import { getTodayReaderDayNumber, isPausedSeriesUnpreparedDay } from './devotional-day-access';
 import { shouldWatchForGeneratedDay } from './generated-day-watch';
 import { lifecycleTimestampMs } from './devotional-lifecycle';
+import { assertSyncSessionCurrent, isSyncSessionCurrent } from './sync-session-fence';
 
-/** Reader-local clocks; a rejected lifecycle never becomes a store mutation. */
+/** Session-local clocks; a rejected lifecycle never becomes a store mutation. */
 export class PausedSeriesResumeClocks {
   private session: number | null = null;
   private readonly clocks = new Map<string, number>();
 
   nextIntentAt(session: number, devotionalId: string, devotionals: readonly Devotional[], now = Date.now()): string {
+    assertSyncSessionCurrent(session, 'paused series resume');
     if (this.session !== session) {
       this.session = session;
       this.clocks.clear();
@@ -25,10 +27,13 @@ export class PausedSeriesResumeClocks {
   }
 
   observe(session: number, devotionalId: string, archivedStateAt: string | undefined): void {
-    if (this.session !== session) return;
+    if (this.session !== session || !isSyncSessionCurrent(session)) return;
     this.clocks.set(devotionalId, Math.max(this.clocks.get(devotionalId) ?? 0, lifecycleTimestampMs(archivedStateAt)));
   }
 }
+
+// Today/Study and reader re-entry share knowledge until the identity/session changes.
+export const pausedSeriesResumeClocks = new PausedSeriesResumeClocks();
 
 export interface PausedSeriesRecoveryContext {
   devotional: Devotional | null | undefined;

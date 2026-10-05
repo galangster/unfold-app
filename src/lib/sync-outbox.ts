@@ -202,7 +202,10 @@ function applyConflictResults(results: SyncPushResult[]): void {
 type InFlightDrain = {
   session: number;
   promise: Promise<void>;
+  limitDeadline: (deadlineAt: number) => void;
 };
+
+type SyncDrainOptions = { deadlineAt?: number };
 
 let inflight: InFlightDrain | null = null;
 const acknowledgementListeners = new Set<(pair: SyncAcknowledgementPair, session: number) => void>();
@@ -211,6 +214,7 @@ const acknowledgementListeners = new Set<(pair: SyncAcknowledgementPair, session
 export async function drainSyncChange(
   change: SyncPushChange,
   session = captureSyncSession(),
+  options: SyncDrainOptions = {},
 ): Promise<SyncPushResult | undefined> {
   if (!isSyncSessionCurrent(session)) return undefined;
   let acknowledged: SyncPushResult | undefined;
@@ -222,12 +226,12 @@ export async function drainSyncChange(
   acknowledgementListeners.add(listener);
   const joinedOlderDrain = inflight?.session === session;
   try {
-    await drainSyncOutbox();
+    await drainSyncOutbox(options);
     // A single-flight cycle has an immutable initial snapshot. Fresh work
     // queued during that cycle gets its own cycle, using the existing backoff.
     if (!acknowledged && joinedOlderDrain && isSyncSessionCurrent(session)
       && peekSyncOutbox().some((entry) => syncSnapshotsEqual(entry, change))) {
-      await drainSyncOutbox();
+      await drainSyncOutbox(options);
     }
     return isSyncSessionCurrent(session) ? acknowledged : undefined;
   } finally {
@@ -235,7 +239,7 @@ export async function drainSyncChange(
   }
 }
 
-export function drainSyncOutbox(): Promise<void> {
+export function drainSyncOutbox(options: SyncDrainOptions = {}): Promise<void> {
   // FAP-LIB-1 (orphaned-pushes): never POST under an ephemeral recovery
   // identity — the X-Device-ID header would file every change under a
   // one-session identity the real client can never read back. Keep the
@@ -245,6 +249,9 @@ export function drainSyncOutbox(): Promise<void> {
 
   const session = captureSyncSession();
   if (!isSyncSessionCurrent(session)) return Promise.resolve();
+  const deadlineAt = options.deadlineAt !== undefined && Number.isFinite(options.deadlineAt)
+    ? options.deadlineAt : Infinity;
+  if (Date.now() >= deadlineAt) return Promise.resolve();
 
   // Min-interval guard (RS10-4): skip if a drain completed recently AND no
   // new enqueue revision exists since that cycle's captured revision.
@@ -257,21 +264,51 @@ export function drainSyncOutbox(): Promise<void> {
     return Promise.resolve();
   }
 
-  if (inflight && inflight.session === session) return inflight.promise;
+  if (inflight && inflight.session === session) {
+    inflight.limitDeadline(deadlineAt);
+    return inflight.promise;
+  }
+
+  const controller = new AbortController();
+  const unregister = registerSyncTransport(controller);
+  let explicitDeadlineAt = deadlineAt;
+  let expiresAt = Math.min(Date.now() + 15_000, explicitDeadlineAt);
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const armDeadline = () => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => controller.abort(), Math.max(0, expiresAt - Date.now()));
+  };
+  const limitDeadline = (limit: number) => {
+    explicitDeadlineAt = Math.min(explicitDeadlineAt, limit);
+    expiresAt = Math.min(expiresAt, explicitDeadlineAt);
+    armDeadline();
+  };
+  let rejectInterrupted!: (reason: Error) => void;
+  const interrupted = new Promise<never>((_resolve, reject) => { rejectInterrupted = reject; });
+  const onAbort = () => rejectInterrupted(new Error('Sync push interrupted'));
+  controller.signal.addEventListener('abort', onAbort, { once: true });
+  // A synchronous session/deadline failure can occur before the first raced await.
+  void interrupted.catch(() => {});
+  const assertDrainCurrent = () => {
+    if (!isSyncSessionCurrent(session) || controller.signal.aborted || Date.now() >= expiresAt) {
+      controller.abort();
+      throw new Error('Sync push interrupted');
+    }
+  };
+  const awaitStep = async <T,>(step: Promise<T>): Promise<T> => {
+    const result = await Promise.race([step, interrupted]);
+    assertDrainCurrent();
+    return result;
+  };
+  armDeadline();
 
   const promise = (async () => {
-    if (!isSyncSessionCurrent(session)) return;
-    const initial = readOutbox();
-    const capturedRevision = enqueueRevision;
-    if (initial.length === 0) return;
-
-    const controller = new AbortController();
-    let timeoutId = setTimeout(() => controller.abort(), 15_000);
-    const unregister = registerSyncTransport(controller);
-
     try {
-      const headers = await getAuthHeaders();
-      if (!isSyncSessionCurrent(session)) return;
+      assertDrainCurrent();
+      const initial = readOutbox();
+      const capturedRevision = enqueueRevision;
+      if (initial.length === 0) return;
+      const headers = await awaitStep(getAuthHeaders());
 
       const envelope = createSyncPushBodyEnvelope();
       let offset = 0;
@@ -289,29 +326,28 @@ export function drainSyncOutbox(): Promise<void> {
         offset = next;
         if (batch.length === 0) continue;
 
-        clearTimeout(timeoutId);
-        timeoutId = setTimeout(() => controller.abort(), 15_000);
+        // Retain the ordinary per-batch timeout, capped by an explicit caller budget.
+        expiresAt = Math.min(Date.now() + 15_000, explicitDeadlineAt);
+        armDeadline();
+        assertDrainCurrent();
 
-        const response = await authenticatedFetch(`${PRIMARY_BACKEND_URL}/api/sync/push`, {
+        const response = await awaitStep(authenticatedFetch(`${PRIMARY_BACKEND_URL}/api/sync/push`, {
           method: 'POST',
           headers,
           body,
           signal: controller.signal,
-        });
+        }));
 
         if (!response.ok) {
           completed = false;
           break;
         }
 
-        const payload = (await response.json().catch(() => null)) as {
+        const payload = (await awaitStep(response.json().catch(() => null))) as {
           results?: unknown[];
         } | null;
 
-        if (!isSyncSessionCurrent(session)) {
-          completed = false;
-          break;
-        }
+        assertDrainCurrent();
 
         const resolving = resolvingAcknowledgementPairs(batch, payload?.results ?? []);
         const resolvingByKey = new Map(
@@ -329,6 +365,7 @@ export function drainSyncOutbox(): Promise<void> {
           )))
           .map((pair) => pair.result);
         applyConflictResults(conflictsToApply);
+        assertDrainCurrent();
         for (const pair of resolving) {
           for (const listener of acknowledgementListeners) listener(pair, session);
         }
@@ -341,12 +378,13 @@ export function drainSyncOutbox(): Promise<void> {
       // Network error / timeout / abort — keep the outbox intact for retry
     } finally {
       clearTimeout(timeoutId);
+      controller.signal.removeEventListener('abort', onAbort);
       unregister();
     }
   })().finally(() => {
     if (inflight?.promise === promise) inflight = null;
   });
 
-  inflight = { session, promise };
+  inflight = { session, promise, limitDeadline };
   return promise;
 }

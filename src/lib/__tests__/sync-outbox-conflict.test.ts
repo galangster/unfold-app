@@ -42,6 +42,7 @@ import { mmkvStorage } from '../mmkv-storage';
 import { useUnfoldStore } from '../store';
 const fullSyncPull = jest.requireActual('../full-sync-pull') as typeof import('../full-sync-pull');
 const { drainSyncChange, drainSyncOutbox, enqueueSyncChanges, OUTBOX_KEY, peekSyncOutbox, removeSyncChangesForRecords, resetDrainStateForTesting } = jest.requireActual('../sync-outbox') as typeof import('../sync-outbox');
+import { beginLocalResetSession, captureSyncSession, endLocalResetSession } from '../sync-session-fence';
 
 const T0 = new Date('2026-09-01T12:00:00.000Z');
 const at = (offsetMs: number) => new Date(T0.getTime() + offsetMs).toISOString();
@@ -100,6 +101,9 @@ function mockPushResponse(build: () => unknown[]) {
 }
 
 beforeEach(() => {
+  const resetToken = beginLocalResetSession();
+  endLocalResetSession(resetToken);
+  jest.requireMock('../api-config').getAuthHeaders.mockReset().mockResolvedValue({ 'Content-Type': 'application/json' });
   useUnfoldStore.getState().reset();
   // The outbox lives in the (module-scoped) mmkv mock, not in the store.
   mmkvStorage.removeItem(OUTBOX_KEY);
@@ -118,17 +122,19 @@ describe('exact push acknowledgement waits', () => {
     const resumed = { table: 'devotionals' as const, id: 'series-a', data: { archivedAt: null, archivedStateAt: at(1000) }, clientUpdatedAt: at(1000), deleted: false };
     enqueueSyncChanges([older]);
     let finishOlder!: (response: Response) => void;
+    let olderStarted!: () => void;
+    const started = new Promise<void>((resolve) => { olderStarted = resolve; });
     const requests: unknown[] = [];
     globalThis.fetch = jest.fn(async (_url, init) => {
       const { changes } = JSON.parse(init!.body as string);
       requests.push(changes);
-      if (requests.length === 1) return new Promise<Response>((resolve) => { finishOlder = resolve; });
+      if (requests.length === 1) return new Promise<Response>((resolve) => { finishOlder = resolve; olderStarted(); });
       return { ok: true, json: async () => ({ results: changes.map((change: { table: string; id: string }) => ({
         table: change.table, id: change.id, status: 'accepted', serverUpdatedAt: at(1000),
       })) }) } as Response;
     });
     const firstCycle = drainSyncOutbox();
-    await Promise.resolve();
+    await started;
     enqueueSyncChanges([resumed]);
     const acknowledgement = drainSyncChange(resumed);
     finishOlder({ ok: true, json: async () => ({ results: [{ table: older.table, id: older.id, status: 'accepted', serverUpdatedAt: at(0) }] }) } as Response);
@@ -162,6 +168,99 @@ describe('exact push acknowledgement waits', () => {
     expect(await drainSyncChange(change)).toBeUndefined();
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
     expect(peekSyncOutbox()).toEqual([change]);
+  });
+
+  it.each(['auth', 'fetch', 'body'] as const)('settles a non-cooperative %s stall and retries without accepting its late result', async (stage) => {
+    const old = { table: 'devotionals' as const, id: 'series-a', data: { archivedAt: null, archivedStateAt: at(1000) }, clientUpdatedAt: at(1000), deleted: false };
+    const fresh = { ...old, data: { ...old.data, archivedStateAt: at(2000) }, clientUpdatedAt: at(2000) };
+    const accepted = (change: typeof old) => ({ results: [{ table: change.table, id: change.id, status: 'accepted', serverUpdatedAt: change.clientUpdatedAt }] });
+    const response = (change: typeof old) => ({ ok: true, json: async () => accepted(change) }) as Response;
+    let releaseOld!: () => void;
+    let releaseFresh!: (result: Response) => void;
+    const fetch = jest.fn(() => new Promise<Response>((resolve) => { releaseFresh = resolve; }));
+    if (stage === 'auth') {
+      jest.requireMock('../api-config').getAuthHeaders.mockImplementationOnce(() => new Promise((resolve) => {
+        releaseOld = () => resolve({ 'Content-Type': 'application/json' });
+      }));
+    } else if (stage === 'fetch') {
+      fetch.mockImplementationOnce(() => new Promise<Response>((resolve) => { releaseOld = () => resolve(response(old)); }));
+    } else {
+      fetch.mockImplementationOnce(async () => ({ ok: true, json: () => new Promise((resolve) => {
+        releaseOld = () => resolve(accepted(old));
+      }) }) as Response);
+    }
+    globalThis.fetch = fetch;
+    enqueueSyncChanges([old]);
+    const first = drainSyncChange(old, captureSyncSession(), { deadlineAt: Date.now() + 15_000 });
+    await jest.advanceTimersByTimeAsync(15_000);
+    expect(await first).toBeUndefined();
+    expect(peekSyncOutbox()).toEqual([old]);
+    enqueueSyncChanges([fresh]);
+    const retry = drainSyncChange(fresh, captureSyncSession(), { deadlineAt: Date.now() + 15_000 });
+    await jest.advanceTimersByTimeAsync(0);
+    releaseOld();
+    await jest.advanceTimersByTimeAsync(0);
+    expect(peekSyncOutbox()).toEqual([fresh]);
+    expect(fetch).toHaveBeenCalledTimes(stage === 'auth' ? 1 : 2);
+    releaseFresh(response(fresh));
+    expect(await retry).toEqual(expect.objectContaining({ status: 'accepted', id: fresh.id }));
+    expect(peekSyncOutbox()).toEqual([]);
+  });
+
+  it('caps joined older work at the explicit deadline and permits a fresh drain afterward', async () => {
+    const older = { table: 'notes' as const, id: 'older', data: { title: 'Earlier' }, clientUpdatedAt: at(0), deleted: false };
+    const resumed = { table: 'devotionals' as const, id: 'series-a', data: { archivedAt: null }, clientUpdatedAt: at(1000), deleted: false };
+    let releaseAuth!: () => void;
+    jest.requireMock('../api-config').getAuthHeaders.mockImplementationOnce(() => new Promise((resolve) => {
+      releaseAuth = () => resolve({ 'Content-Type': 'application/json' });
+    }));
+    globalThis.fetch = jest.fn(async (_url, init) => {
+      const { changes } = JSON.parse(init!.body as string);
+      return { ok: true, json: async () => ({ results: changes.map((change: { table: string; id: string }) => ({
+        table: change.table, id: change.id, status: 'accepted', serverUpdatedAt: at(1000),
+      })) }) } as Response;
+    });
+    enqueueSyncChanges([older]);
+    const firstCycle = drainSyncOutbox();
+    await jest.advanceTimersByTimeAsync(5_000);
+    enqueueSyncChanges([resumed]);
+    const acknowledgement = drainSyncChange(resumed, captureSyncSession(), { deadlineAt: Date.now() + 3_000 });
+    await jest.advanceTimersByTimeAsync(3_000);
+    await firstCycle;
+    expect(await acknowledgement).toBeUndefined();
+    expect(peekSyncOutbox()).toEqual([older, resumed]);
+    releaseAuth();
+    await jest.advanceTimersByTimeAsync(0);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(await drainSyncChange(resumed)).toEqual(expect.objectContaining({ id: resumed.id, status: 'accepted' }));
+    expect(peekSyncOutbox()).toEqual([]);
+  });
+
+  it.each(['auth', 'body'] as const)('settles %s on reset and ignores late completion in a new session', async (stage) => {
+    const change = { table: 'devotionals' as const, id: 'series-a', data: { archivedAt: null }, clientUpdatedAt: at(1000), deleted: false };
+    let release!: () => void;
+    if (stage === 'auth') {
+      jest.requireMock('../api-config').getAuthHeaders.mockImplementationOnce(() => new Promise((resolve) => {
+        release = () => resolve({ 'Content-Type': 'application/json' });
+      }));
+      globalThis.fetch = jest.fn();
+    } else {
+      globalThis.fetch = jest.fn(async () => ({ ok: true, json: () => new Promise((resolve) => {
+        release = () => resolve({ results: [{ table: change.table, id: change.id, status: 'accepted', serverUpdatedAt: at(1000) }] });
+      }) }) as Response);
+    }
+    enqueueSyncChanges([change]);
+    const acknowledgement = drainSyncChange(change);
+    await jest.advanceTimersByTimeAsync(0);
+    const token = beginLocalResetSession();
+    expect(await acknowledgement).toBeUndefined();
+    endLocalResetSession(token);
+    const fresh = { ...change, clientUpdatedAt: at(2000) };
+    enqueueSyncChanges([fresh]);
+    release();
+    await jest.advanceTimersByTimeAsync(0);
+    expect(peekSyncOutbox()).toEqual([fresh]);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(stage === 'auth' ? 0 : 1);
   });
 });
 

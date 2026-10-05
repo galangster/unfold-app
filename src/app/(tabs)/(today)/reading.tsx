@@ -79,7 +79,7 @@ import {
   resolveInitialReadingDayNumber,
 } from '@/lib/devotional-day-access';
 import { nextConfirmedAbsentKey, shouldWatchForGeneratedDay } from '@/lib/generated-day-watch';
-import { getPausedSeriesContinuationDay, PausedSeriesResumeClocks, type PausedSeriesRecoveryContext } from '@/lib/paused-series-recovery';
+import { getPausedSeriesContinuationDay, pausedSeriesResumeClocks, type PausedSeriesRecoveryContext } from '@/lib/paused-series-recovery';
 import { applyUnarchiveIntent, lifecycleTimestampMs } from '@/lib/devotional-lifecycle';
 import { buildPersonalDataSyncChange, devotionalSyncData } from '@/lib/personal-data-sync-records';
 import { drainSyncChange, enqueueSyncChanges } from '@/lib/sync-outbox';
@@ -445,7 +445,6 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   const pausedRecoveryContextRef = useRef<PausedSeriesRecoveryContext | null>(null);
   const continuationDialogRef = useRef<PausedSeriesRecoveryContext | null>(null);
   const continuationPendingRef = useRef<object | null>(null);
-  const continuationClocksRef = useRef(new PausedSeriesResumeClocks());
   const [isContinuingSeries, setIsContinuingSeries] = useState(false);
   const [continuationError, setContinuationError] = useState<string | null>(null);
 
@@ -1994,19 +1993,20 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
           const series = useUnfoldStore.getState().devotionals.find((entry) => entry.id === devotionalId)!;
           const pending = {};
           continuationPendingRef.current = pending;
+          const deadlineAt = Date.now() + 15_000;
           setIsContinuingSeries(true);
           setContinuationError(null);
           void (async () => {
             try {
               // The server ranks progressive series by creation/resume clock.
               // Even an already-unarchived history series needs an explicit resume.
-              const intentAt = continuationClocksRef.current.nextIntentAt(session, devotionalId, useUnfoldStore.getState().devotionals);
+              const intentAt = pausedSeriesResumeClocks.nextIntentAt(session, devotionalId, useUnfoldStore.getState().devotionals);
               const resumed = applyUnarchiveIntent(series, intentAt);
               const clientUpdatedAt = lifecycleTimestampMs(series.updatedAt) > lifecycleTimestampMs(resumed.archivedStateAt)
                 ? series.updatedAt! : resumed.archivedStateAt;
               const change = buildPersonalDataSyncChange('devotionals', devotionalId, devotionalSyncData(resumed), clientUpdatedAt);
               enqueueSyncChanges([change]);
-              const acknowledgement = await drainSyncChange(change, session);
+              const acknowledgement = await drainSyncChange(change, session, { deadlineAt });
               if (continuationPendingRef.current !== pending || !isIntentCurrent()) return;
               if (acknowledgement?.status !== 'accepted') {
                 setContinuationError('This series could not be continued yet. Please check your connection and try again.');
@@ -2014,10 +2014,13 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
               }
               // Content acceptance does not prove that the lifecycle CAS won.
               // Distrust the incremental cursor and require the exact resume clock.
-              const pulled = await pullDevotionalContent(devotionalId, { forceFull: true, timeoutMs: 15_000 });
+              const remainingMs = deadlineAt - Date.now();
+              if (remainingMs <= 0) throw new Error('Series continuation timed out');
+              const pulled = await pullDevotionalContent(devotionalId, { forceFull: true, timeoutMs: remainingMs });
               if (continuationPendingRef.current !== pending || !isIntentCurrent()) return;
+              if (Date.now() >= deadlineAt) throw new Error('Series continuation timed out');
               if (pulled.devotional?.id === devotionalId) {
-                continuationClocksRef.current.observe(session, devotionalId, pulled.devotional.archivedStateAt);
+                pausedSeriesResumeClocks.observe(session, devotionalId, pulled.devotional.archivedStateAt);
               }
               if (pulled.devotional?.id !== devotionalId || pulled.devotional.archivedAt !== null
                 || pulled.devotional.archivedStateAt !== resumed.archivedStateAt) {
