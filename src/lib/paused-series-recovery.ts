@@ -4,7 +4,7 @@ import { getTodayReaderDayNumber, isPausedSeriesUnpreparedDay } from './devotion
 import { shouldWatchForGeneratedDay } from './generated-day-watch';
 import { lifecycleTimestampMs } from './devotional-lifecycle';
 import { assertSyncSessionCurrent, isSyncSessionCurrent } from './sync-session-fence';
-import type { ActiveSeriesCandidate } from './devotional-active-selection';
+import { isProgressiveSeriesCandidate, type ActiveSeriesCandidate } from './devotional-active-selection';
 
 /** Session-local clocks; a rejected lifecycle never becomes a store mutation. */
 export class PausedSeriesResumeClocks {
@@ -67,7 +67,7 @@ export function getPausedSeriesContinuationDay(
   now = new Date(),
 ): number | null {
   const { devotional, dayNumber, generationState } = context;
-  if (!devotional || !context.isFocused || !context.isOnline
+  if (!devotional || !isProgressiveSeriesCandidate(devotional) || !context.isFocused || !context.isOnline
     || context.isCheckingForSyncedDay || context.readBudgetBlocked) return null;
   if (devotional.id === context.currentDevotionalId
     || !isPausedSeriesUnpreparedDay(devotional, dayNumber, true)) return null;

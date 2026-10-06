@@ -940,6 +940,105 @@ describe('reader swipe cancellation', () => {
     expect(observed.generationRequests).toBe(0);
   }, 30_000);
 
+  it('Integration227: canonical target losing progressive eligibility after preflight remains read-only', async () => {
+    seedShelleyMissingDay();
+    const { extractPulledDevotionalContent } = jest.requireActual('@/lib/devotional-sync-pull') as typeof import('@/lib/devotional-sync-pull');
+    const before = useUnfoldStore.getState().devotionals.find((series) => series.id === DEVOTIONAL_ID)!;
+    mockPullDevotionalContent.mockImplementation(async () => {
+      if (!mockAcceptedResume) return emptyPull();
+      // Backend469 upsert can insert a lifecycle-only row after a hard deletion.
+      // Nullable generation_mode has no default; jobs' progressive SQL excludes it.
+      return extractPulledDevotionalContent({ timestamp: new Date().toISOString(), changes: { devotionals: [{
+        id: DEVOTIONAL_ID, deleted: false, updatedAt: mockAcceptedResume.archivedStateAt,
+        data: { id: DEVOTIONAL_ID, generationMode: null, title: null, totalDays: null,
+          currentDay: null, seriesArc: null, createdAt: before.createdAt,
+          archivedAt: null, archivedStateAt: mockAcceptedResume.archivedStateAt },
+      }] } }, DEVOTIONAL_ID);
+    });
+    mockUseRealGeneratedDayWatch = true;
+    mockSubmitGenerationJob.mockRejectedValue(new ApiError('Target is not progressive', 409, 'SERIES_NOT_ACTIVE'));
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    let tree: ReaderTree;
+    await act(async () => { tree = renderer.create(<ReadingScreen />); await flushEffects(); });
+    act(() => (tree!.root.findByProps({ accessibilityLabel: 'Continue this series' }).props.onPress as () => void)());
+    await act(async () => { alert.mock.calls[0][2]!.find((button) => button.text === 'Continue this series')!.onPress!(); await flushEffects(); });
+    const observed = { active: useUnfoldStore.getState().currentDevotionalId,
+      readOnly: routeParams.readOnly, requests: mockSubmitGenerationJob.mock.calls.length };
+    act(() => tree!.unmount());
+    expect(observed).toEqual({ active: ACTIVE_DEVOTIONAL_ID, readOnly: '1', requests: 0 });
+  }, 30_000);
+
+  it.each([
+    ['missing', undefined], ['null', null], ['batch', 'batch'], ['unknown string', 'future-mode'],
+    ['number', 42], ['object', {}], ['progressive', 'progressive'],
+  ])('canonical post-push mode proof uses actual %s metadata', async (name, generationMode) => {
+    seedShelleyMissingDay();
+    const { extractPulledDevotionalContent } = jest.requireActual('@/lib/devotional-sync-pull') as typeof import('@/lib/devotional-sync-pull');
+    const before = useUnfoldStore.getState().devotionals.find((series) => series.id === DEVOTIONAL_ID)!;
+    mockPullDevotionalContent.mockImplementation(async () => {
+      if (!mockAcceptedResume) return emptyPull();
+      return extractPulledDevotionalContent({ timestamp: TYPING_AT, changes: { devotionals: [{
+        id: DEVOTIONAL_ID, deleted: false, updatedAt: mockAcceptedResume.archivedStateAt,
+        data: { ...(name === 'missing' ? {} : { generationMode }), createdAt: before.createdAt,
+          archivedAt: null, archivedStateAt: mockAcceptedResume.archivedStateAt },
+      }] } }, DEVOTIONAL_ID);
+    });
+    mockUseRealGeneratedDayWatch = true;
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    let tree: ReaderTree;
+    await act(async () => { tree = renderer.create(<ReadingScreen />); await flushEffects(); });
+    try {
+      act(() => (tree!.root.findByProps({ accessibilityLabel: 'Continue this series' }).props.onPress as () => void)());
+      await act(async () => { alert.mock.calls[0][2]!.find((button) => button.text === 'Continue this series')!.onPress!(); await flushEffects(); });
+      const eligible = name === 'progressive';
+      expect(useUnfoldStore.getState().currentDevotionalId).toBe(eligible ? DEVOTIONAL_ID : ACTIVE_DEVOTIONAL_ID);
+      expect(routeParams.readOnly).toBe(eligible ? '' : '1');
+      expect(mockSubmitGenerationJob).toHaveBeenCalledTimes(eligible ? 1 : 0);
+      const after = useUnfoldStore.getState().devotionals.find((series) => series.id === DEVOTIONAL_ID)!;
+      expect(after.days).toEqual(before.days);
+      expect(after.currentDay).toBe(before.currentDay);
+      expect(after.seriesStartDate).toBe(before.seriesStartDate);
+      if (!eligible) expect(JSON.stringify(tree!.toJSON())).toContain('This series could not be continued yet.');
+    } finally { act(() => tree!.unmount()); }
+  });
+
+  it('rejects direct onboarding-sample operation entry before pull/auth/POST', async () => {
+    seedShelleyMissingDay();
+    const sampleId = `onboarding-sample-${DEVOTIONAL_ID}`;
+    useUnfoldStore.setState((state) => ({ devotionals: state.devotionals.map((series) => series.id === DEVOTIONAL_ID
+      ? { ...series, id: sampleId } : series) }));
+    const { createPausedSeriesResume } = jest.requireActual('@/lib/paused-series-resume') as typeof import('@/lib/paused-series-resume');
+    const { captureSyncSession } = jest.requireActual('@/lib/sync-session-fence') as typeof import('@/lib/sync-session-fence');
+    const operation = createPausedSeriesResume({ devotionalId: sampleId, expectedActiveId: ACTIVE_DEVOTIONAL_ID,
+      session: captureSyncSession(), isViewCurrent: () => true });
+    await expect(operation.run()).rejects.toThrow('ineligible');
+    expect(mockPullDevotionalContent).not.toHaveBeenCalled();
+    expect(jest.requireMock('../api-config').getAuthHeaders).not.toHaveBeenCalled();
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe(ACTIVE_DEVOTIONAL_ID);
+    expect(routeParams.readOnly).toBe('1');
+  });
+
+  it('Integration227: onboarding sample is neither offered nor posted as a continuation target', async () => {
+    seedShelleyMissingDay();
+    const sampleId = `onboarding-sample-${DEVOTIONAL_ID}`;
+    useUnfoldStore.setState((state) => ({ devotionals: state.devotionals.map((series) => series.id === DEVOTIONAL_ID
+      ? { ...series, id: sampleId, days: series.days.map((day) => ({ ...day, devotionalId: sampleId })) } : series) }));
+    routeParams.devotionalId = sampleId;
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    let tree: ReaderTree;
+    await act(async () => { tree = renderer.create(<ReadingScreen />); await flushEffects(); });
+    const offers = tree!.root.findAllByProps({ accessibilityLabel: 'Continue this series' });
+    if (offers.length > 0) {
+      act(() => (offers[0].props.onPress as () => void)());
+      await act(async () => { alert.mock.calls[0][2]!.find((button) => button.text === 'Continue this series')!.onPress!(); await flushEffects(); });
+    }
+    const observed = { offered: offers.length > 0,
+      postedIds: (globalThis.fetch as jest.Mock).mock.calls.flatMap((call) => JSON.parse(call[1].body).changes.map((change: { id: string }) => change.id)) };
+    act(() => tree!.unmount());
+    expect(observed).toEqual({ offered: false, postedIds: [] });
+  }, 30_000);
+
   it.each([false, true])('Greptile r4190002040: activates after concurrent full sync has applied the same accepted lifecycle (already selected=%s)', async (alreadySelected) => {
     seedShelleyMissingDay();
     useUnfoldStore.setState((state) => ({ devotionals: state.devotionals.map((series) => series.id === DEVOTIONAL_ID

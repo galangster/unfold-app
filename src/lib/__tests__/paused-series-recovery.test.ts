@@ -75,6 +75,13 @@ describe('paused series continuation', () => {
     expect(getPausedSeriesContinuationDay({ ...context(), currentDevotionalId: 'series-a' }, now)).toBeNull();
   });
 
+  it('does not offer continuation for an onboarding sample', () => {
+    const recovery = context();
+    recovery.devotional!.id = 'onboarding-sample-series-a';
+    recovery.confirmedMissingDayKey = recovery.discoveredAbsentKey = 'onboarding-sample-series-a:2';
+    expect(getPausedSeriesContinuationDay(recovery, now)).toBeNull();
+  });
+
   it('does not offer continuation for a ready reading or a read day needing restoration', () => {
     for (const isRead of [false, true]) {
       const recovery = context();

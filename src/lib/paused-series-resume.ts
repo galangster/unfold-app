@@ -9,7 +9,7 @@ import { correlateSyncAcknowledgements } from './sync-acknowledgements';
 import { createSyncPushBodyEnvelope, selectEncodedSyncPushBatch } from './sync-push-body';
 import { createSyncOperation } from './sync-operation';
 import { pullDevotionalContent } from './devotional-sync-pull';
-import { isStrictActiveSeriesWinner } from './devotional-active-selection';
+import { isProgressiveSeriesCandidate, isStrictActiveSeriesWinner } from './devotional-active-selection';
 import { pausedSeriesResumeClocks } from './paused-series-recovery';
 
 /** One confirmed, view-owned resume. It never becomes background outbox work. */
@@ -40,6 +40,7 @@ export function createPausedSeriesResume(options: {
     async run() {
       try {
         assertCurrent();
+        if (!isProgressiveSeriesCandidate(previous)) throw new Error('Series is ineligible for continuation');
         if (isEphemeralDeviceId(getDeviceId())) throw new Error('Series continuation requires a restored identity');
         // The push route is an upsert. Verify an existing canonical target
         // before sending a lifecycle-only intent instead of recreating stale content.
@@ -47,7 +48,7 @@ export function createPausedSeriesResume(options: {
           forceFull: true, timeoutMs: deadlineAt - Date.now(), signal: operation.signal,
         }));
         assertCurrent();
-        if (!before.canonicalSeries?.some((series) => series.id === options.devotionalId && series.generationMode === 'progressive')) {
+        if (!before.canonicalSeries?.some((series) => series.id === options.devotionalId && isProgressiveSeriesCandidate(series))) {
           throw new Error('Canonical series is unavailable');
         }
         pausedSeriesResumeClocks.observeCanonical(options.session, before.canonicalSeries);
@@ -81,10 +82,8 @@ export function createPausedSeriesResume(options: {
         if (!pulled.canonicalSeries) throw new Error('Canonical selection evidence is unavailable');
         pausedSeriesResumeClocks.observeCanonical(options.session, pulled.devotional
           ? [...pulled.canonicalSeries, pulled.devotional] : pulled.canonicalSeries);
-        const canonical = pulled.canonicalSeries.map((series) => series.id === options.devotionalId
-          ? { ...previous, ...series, createdAt: series.createdAt ?? previous.createdAt, generationMode: series.generationMode ?? previous.generationMode } : series);
         if (pulled.devotional?.id !== options.devotionalId || pulled.devotional.archivedAt !== null
-          || pulled.devotional.archivedStateAt !== intentClock || !isStrictActiveSeriesWinner(options.devotionalId, canonical)) {
+          || pulled.devotional.archivedStateAt !== intentClock || !isStrictActiveSeriesWinner(options.devotionalId, pulled.canonicalSeries)) {
           throw new Error('Canonical series selection did not confirm this resume');
         }
         assertCurrent();

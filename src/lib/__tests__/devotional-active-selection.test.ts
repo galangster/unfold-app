@@ -31,5 +31,8 @@ describe('canonical active series proof', () => {
     expect(isStrictActiveSeriesWinner('series-a', [])).toBe(false);
     expect(isStrictActiveSeriesWinner('series-a', [{ ...resumed, archivedAt: at(400) }])).toBe(false);
     expect(isStrictActiveSeriesWinner('series-a', [{ ...resumed, generationMode: 'batch' }])).toBe(false);
+    expect(isStrictActiveSeriesWinner('series-a', [{ ...resumed, generationMode: undefined }])).toBe(false);
+    expect(isStrictActiveSeriesWinner('series-a', [{ ...resumed, generationMode: 'future-mode' }])).toBe(false);
+    expect(isStrictActiveSeriesWinner('onboarding-sample-a', [{ ...resumed, id: 'onboarding-sample-a' }])).toBe(false);
   });
 });
