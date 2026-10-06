@@ -117,6 +117,40 @@ afterEach(() => {
 });
 
 describe('exact push acknowledgement waits', () => {
+  it.each([false, true])('Greptile r4190002057: ordinary two-batch delivery retains its budget (explicit observer=%s)', async (explicitObserver) => {
+    const notes = Array.from({ length: 501 }, (_, i) => ({
+      table: 'notes' as const, id: `budget-note-${i}`, data: { title: `Note ${i}` },
+      clientUpdatedAt: at(i), deleted: false,
+    }));
+    const resumed = { table: 'devotionals' as const, id: 'series-a',
+      data: { archivedAt: null, archivedStateAt: at(1000) }, clientUpdatedAt: at(1000), deleted: false };
+    enqueueSyncChanges(notes);
+    let requestNumber = 0;
+    globalThis.fetch = jest.fn(async (_url, init) => {
+      const { changes } = JSON.parse(init!.body as string);
+      requestNumber += 1;
+      const delay = requestNumber === 1 ? 6_000 : requestNumber === 2 ? 12_000 : 0;
+      const response = {
+        ok: true, json: async () => ({ results: changes.map((change: { table: string; id: string }) => ({
+          table: change.table, id: change.id, status: 'accepted', serverUpdatedAt: at(20_000),
+        })) }),
+      } as Response;
+      if (delay === 0) return response;
+      return new Promise<Response>((resolve) => { setTimeout(() => resolve(response), delay); });
+    });
+    const ordinaryDrain = drainSyncOutbox();
+    await jest.advanceTimersByTimeAsync(0);
+    enqueueSyncChanges([resumed]);
+    const acknowledgement = drainSyncChange(resumed, captureSyncSession(), explicitObserver
+      ? { deadlineAt: Date.now() + 15_000 } : {});
+    await jest.advanceTimersByTimeAsync(18_000);
+    await ordinaryDrain;
+    await acknowledgement;
+    const remainingNotes = peekSyncOutbox().filter((change) => change.table === 'notes');
+    // Both ordinary requests are individually within the existing 15s per-batch budget.
+    expect(remainingNotes).toEqual([]);
+  });
+
   it('drains fresh work queued during an older single-flight cycle', async () => {
     const older = { table: 'notes' as const, id: 'older', data: { title: 'Earlier' }, clientUpdatedAt: at(0), deleted: false };
     const resumed = { table: 'devotionals' as const, id: 'series-a', data: { archivedAt: null, archivedStateAt: at(1000) }, clientUpdatedAt: at(1000), deleted: false };
@@ -207,7 +241,7 @@ describe('exact push acknowledgement waits', () => {
     expect(peekSyncOutbox()).toEqual([]);
   });
 
-  it('caps joined older work at the explicit deadline and permits a fresh drain afterward', async () => {
+  it('detaches the explicit observer without shortening an ordinary stalled drain', async () => {
     const older = { table: 'notes' as const, id: 'older', data: { title: 'Earlier' }, clientUpdatedAt: at(0), deleted: false };
     const resumed = { table: 'devotionals' as const, id: 'series-a', data: { archivedAt: null }, clientUpdatedAt: at(1000), deleted: false };
     let releaseAuth!: () => void;
@@ -221,13 +255,16 @@ describe('exact push acknowledgement waits', () => {
       })) }) } as Response;
     });
     enqueueSyncChanges([older]);
-    const firstCycle = drainSyncOutbox();
+    let ordinarySettled = false;
+    const firstCycle = drainSyncOutbox().then(() => { ordinarySettled = true; });
     await jest.advanceTimersByTimeAsync(5_000);
     enqueueSyncChanges([resumed]);
     const acknowledgement = drainSyncChange(resumed, captureSyncSession(), { deadlineAt: Date.now() + 3_000 });
     await jest.advanceTimersByTimeAsync(3_000);
-    await firstCycle;
     expect(await acknowledgement).toBeUndefined();
+    expect(ordinarySettled).toBe(false);
+    await jest.advanceTimersByTimeAsync(7_000);
+    await firstCycle;
     expect(peekSyncOutbox()).toEqual([older, resumed]);
     releaseAuth();
     await jest.advanceTimersByTimeAsync(0);

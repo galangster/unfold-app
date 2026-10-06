@@ -39,6 +39,7 @@ import { isOnboardingFirstReading, isOnboardingSampleDevotionalId, withOnboardin
 import { isUsableSampleDevotionalDay } from './onboarding-sample-day-shape';
 import { applyArchiveIntent, applyUnarchiveIntent, isDevotionalArchived, lifecycleTimestampMs } from './devotional-lifecycle';
 import { selectSyncedCurrentDevotionalId } from './devotional-resume-selection';
+import { isStrictActiveSeriesWinner } from './devotional-active-selection';
 import { bookmarkIdentityEquals, type BookmarkIdentity, type BookmarkKind } from './bookmark-identity';
 import {
   bibleHighlightSyncData,
@@ -1347,8 +1348,9 @@ export const useUnfoldStore = create<UnfoldState>()(
         let activated = false;
         set((state) => {
           const existing = state.devotionals.find((d) => d.id === id);
-          if (state.currentDevotionalId !== expectedActiveId || !existing
-            || existing.archivedStateAt !== previousClock
+          const exactApplied = existing?.archivedAt === null && existing.archivedStateAt === acknowledgedClock;
+          if ((state.currentDevotionalId !== expectedActiveId && !(state.currentDevotionalId === id && exactApplied)) || !existing
+            || (existing.archivedStateAt !== previousClock && !exactApplied)
             || lifecycleTimestampMs(acknowledgedClock) <= lifecycleTimestampMs(previousClock)) return state;
           // Commit the accepted lifecycle clock without minting another intent.
           // Content/progress may have changed while the push was pending.
@@ -1356,9 +1358,8 @@ export const useUnfoldStore = create<UnfoldState>()(
             ...existing,
             archivedAt: null,
             archivedStateAt: acknowledgedClock,
-            updatedAt: lifecycleTimestampMs(existing.updatedAt) > lifecycleTimestampMs(acknowledgedClock)
-              ? existing.updatedAt : acknowledgedClock,
           };
+          if (!isStrictActiveSeriesWinner(id, state.devotionals.map((series) => series.id === id ? resumed : series))) return state;
           activated = true;
           return {
             devotionals: state.devotionals.map((d) => (d.id === id ? resumed : d)),

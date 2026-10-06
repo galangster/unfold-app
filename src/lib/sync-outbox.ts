@@ -36,13 +36,13 @@ import {
   type SyncAcknowledgementPair,
 } from '@/lib/sync-acknowledgements';
 import type { SyncPushChange, SyncPushResult, SyncTable } from '@/lib/sync-types';
+import { createSyncOperation } from './sync-operation';
 // RS13-1: single owner — the key is defined in mmkv-recovery-outbox.ts (pure, no native deps)
 // and re-exported here so all consumers import from one place via sync-outbox.
 import { RECOVERY_OUTBOX_KEY } from '@/lib/mmkv-recovery-outbox';
 import {
   captureSyncSession,
   isSyncSessionCurrent,
-  registerSyncTransport,
 } from '@/lib/sync-session-fence';
 
 // Re-export the type so consumers can import from one place
@@ -202,7 +202,6 @@ function applyConflictResults(results: SyncPushResult[]): void {
 type InFlightDrain = {
   session: number;
   promise: Promise<void>;
-  limitDeadline: (deadlineAt: number) => void;
 };
 
 type SyncDrainOptions = { deadlineAt?: number };
@@ -225,21 +224,27 @@ export async function drainSyncChange(
   };
   acknowledgementListeners.add(listener);
   const joinedOlderDrain = inflight?.session === session;
+  const observer = createSyncOperation({ action: 'sync acknowledgement', session, deadlineAt: options.deadlineAt });
   try {
-    await drainSyncOutbox(options);
+    observer.assertCurrent();
+    await observer.wait(drainSyncOutbox());
     // A single-flight cycle has an immutable initial snapshot. Fresh work
     // queued during that cycle gets its own cycle, using the existing backoff.
     if (!acknowledged && joinedOlderDrain && isSyncSessionCurrent(session)
       && peekSyncOutbox().some((entry) => syncSnapshotsEqual(entry, change))) {
-      await drainSyncOutbox(options);
+      observer.assertCurrent();
+      await observer.wait(drainSyncOutbox());
     }
     return isSyncSessionCurrent(session) ? acknowledged : undefined;
+  } catch {
+    return undefined;
   } finally {
+    observer.dispose();
     acknowledgementListeners.delete(listener);
   }
 }
 
-export function drainSyncOutbox(options: SyncDrainOptions = {}): Promise<void> {
+export function drainSyncOutbox(): Promise<void> {
   // FAP-LIB-1 (orphaned-pushes): never POST under an ephemeral recovery
   // identity — the X-Device-ID header would file every change under a
   // one-session identity the real client can never read back. Keep the
@@ -249,9 +254,6 @@ export function drainSyncOutbox(options: SyncDrainOptions = {}): Promise<void> {
 
   const session = captureSyncSession();
   if (!isSyncSessionCurrent(session)) return Promise.resolve();
-  const deadlineAt = options.deadlineAt !== undefined && Number.isFinite(options.deadlineAt)
-    ? options.deadlineAt : Infinity;
-  if (Date.now() >= deadlineAt) return Promise.resolve();
 
   // Min-interval guard (RS10-4): skip if a drain completed recently AND no
   // new enqueue revision exists since that cycle's captured revision.
@@ -264,51 +266,16 @@ export function drainSyncOutbox(options: SyncDrainOptions = {}): Promise<void> {
     return Promise.resolve();
   }
 
-  if (inflight && inflight.session === session) {
-    inflight.limitDeadline(deadlineAt);
-    return inflight.promise;
-  }
-
-  const controller = new AbortController();
-  const unregister = registerSyncTransport(controller);
-  let explicitDeadlineAt = deadlineAt;
-  let expiresAt = Math.min(Date.now() + 15_000, explicitDeadlineAt);
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
-  const armDeadline = () => {
-    clearTimeout(timeoutId);
-    timeoutId = setTimeout(() => controller.abort(), Math.max(0, expiresAt - Date.now()));
-  };
-  const limitDeadline = (limit: number) => {
-    explicitDeadlineAt = Math.min(explicitDeadlineAt, limit);
-    expiresAt = Math.min(expiresAt, explicitDeadlineAt);
-    armDeadline();
-  };
-  let rejectInterrupted!: (reason: Error) => void;
-  const interrupted = new Promise<never>((_resolve, reject) => { rejectInterrupted = reject; });
-  const onAbort = () => rejectInterrupted(new Error('Sync push interrupted'));
-  controller.signal.addEventListener('abort', onAbort, { once: true });
-  // A synchronous session/deadline failure can occur before the first raced await.
-  void interrupted.catch(() => {});
-  const assertDrainCurrent = () => {
-    if (!isSyncSessionCurrent(session) || controller.signal.aborted || Date.now() >= expiresAt) {
-      controller.abort();
-      throw new Error('Sync push interrupted');
-    }
-  };
-  const awaitStep = async <T,>(step: Promise<T>): Promise<T> => {
-    const result = await Promise.race([step, interrupted]);
-    assertDrainCurrent();
-    return result;
-  };
-  armDeadline();
+  if (inflight && inflight.session === session) return inflight.promise;
+  const operation = createSyncOperation({ action: 'sync push', session, deadlineAt: Date.now() + 15_000 });
 
   const promise = (async () => {
     try {
-      assertDrainCurrent();
+      operation.assertCurrent();
       const initial = readOutbox();
       const capturedRevision = enqueueRevision;
       if (initial.length === 0) return;
-      const headers = await awaitStep(getAuthHeaders());
+      const headers = await operation.wait(getAuthHeaders());
 
       const envelope = createSyncPushBodyEnvelope();
       let offset = 0;
@@ -326,16 +293,14 @@ export function drainSyncOutbox(options: SyncDrainOptions = {}): Promise<void> {
         offset = next;
         if (batch.length === 0) continue;
 
-        // Retain the ordinary per-batch timeout, capped by an explicit caller budget.
-        expiresAt = Math.min(Date.now() + 15_000, explicitDeadlineAt);
-        armDeadline();
-        assertDrainCurrent();
+        operation.setDeadlineAt(Date.now() + 15_000);
+        operation.assertCurrent();
 
-        const response = await awaitStep(authenticatedFetch(`${PRIMARY_BACKEND_URL}/api/sync/push`, {
+        const response = await operation.wait(authenticatedFetch(`${PRIMARY_BACKEND_URL}/api/sync/push`, {
           method: 'POST',
           headers,
           body,
-          signal: controller.signal,
+          signal: operation.signal,
         }));
 
         if (!response.ok) {
@@ -343,11 +308,11 @@ export function drainSyncOutbox(options: SyncDrainOptions = {}): Promise<void> {
           break;
         }
 
-        const payload = (await awaitStep(response.json().catch(() => null))) as {
+        const payload = (await operation.wait(response.json().catch(() => null))) as {
           results?: unknown[];
         } | null;
 
-        assertDrainCurrent();
+        operation.assertCurrent();
 
         const resolving = resolvingAcknowledgementPairs(batch, payload?.results ?? []);
         const resolvingByKey = new Map(
@@ -365,7 +330,7 @@ export function drainSyncOutbox(options: SyncDrainOptions = {}): Promise<void> {
           )))
           .map((pair) => pair.result);
         applyConflictResults(conflictsToApply);
-        assertDrainCurrent();
+        operation.assertCurrent();
         for (const pair of resolving) {
           for (const listener of acknowledgementListeners) listener(pair, session);
         }
@@ -377,14 +342,12 @@ export function drainSyncOutbox(options: SyncDrainOptions = {}): Promise<void> {
     } catch {
       // Network error / timeout / abort — keep the outbox intact for retry
     } finally {
-      clearTimeout(timeoutId);
-      controller.signal.removeEventListener('abort', onAbort);
-      unregister();
+      operation.dispose();
     }
   })().finally(() => {
     if (inflight?.promise === promise) inflight = null;
   });
 
-  inflight = { session, promise, limitDeadline };
+  inflight = { session, promise };
   return promise;
 }

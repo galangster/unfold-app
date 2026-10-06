@@ -22,6 +22,14 @@ function context(): PausedSeriesRecoveryContext {
 }
 
 describe('paused series continuation', () => {
+  it('observes a canonical sibling before the first intent in a new session', () => {
+    const token = beginLocalResetSession();
+    endLocalResetSession(token);
+    const session = captureSyncSession();
+    pausedSeriesResumeClocks.observeCanonical(session, [{ id: 'remote-sibling', createdAt: new Date(60_000).toISOString() }]);
+    expect(pausedSeriesResumeClocks.nextIntentAt(session, 'series-a', [], 1000)).toBe('1970-01-01T00:01:00.001Z');
+  });
+
   it('fences remembered clocks when the identity/session changes', () => {
     const session = captureSyncSession();
     pausedSeriesResumeClocks.nextIntentAt(session, 'series-a', [], 1000);

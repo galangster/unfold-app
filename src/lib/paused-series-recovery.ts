@@ -4,6 +4,7 @@ import { getTodayReaderDayNumber, isPausedSeriesUnpreparedDay } from './devotion
 import { shouldWatchForGeneratedDay } from './generated-day-watch';
 import { lifecycleTimestampMs } from './devotional-lifecycle';
 import { assertSyncSessionCurrent, isSyncSessionCurrent } from './sync-session-fence';
+import type { ActiveSeriesCandidate } from './devotional-active-selection';
 
 /** Session-local clocks; a rejected lifecycle never becomes a store mutation. */
 export class PausedSeriesResumeClocks {
@@ -29,6 +30,18 @@ export class PausedSeriesResumeClocks {
   observe(session: number, devotionalId: string, archivedStateAt: string | undefined): void {
     if (this.session !== session || !isSyncSessionCurrent(session)) return;
     this.clocks.set(devotionalId, Math.max(this.clocks.get(devotionalId) ?? 0, lifecycleTimestampMs(archivedStateAt)));
+  }
+
+  observeCanonical(session: number, series: readonly ActiveSeriesCandidate[]): void {
+    if (!isSyncSessionCurrent(session)) return;
+    if (this.session !== session) {
+      this.session = session;
+      this.clocks.clear();
+    }
+    for (const candidate of series) {
+      const clock = Math.max(lifecycleTimestampMs(candidate.createdAt), lifecycleTimestampMs(candidate.archivedStateAt));
+      if (clock > 0) this.observe(session, candidate.id, new Date(clock).toISOString());
+    }
   }
 }
 

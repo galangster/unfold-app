@@ -435,7 +435,7 @@ const {
   resetDailyGenerationRecoveryForTesting,
 } = require('@/lib/daily-generation-recovery') as typeof import('@/lib/daily-generation-recovery');
 const { ApiError } = require('@/lib/generation-api') as typeof import('@/lib/generation-api');
-const { replaceSyncOutbox, resetDrainStateForTesting } = jest.requireActual('@/lib/sync-outbox') as typeof import('@/lib/sync-outbox');
+const { drainSyncOutbox, enqueueSyncChanges, peekSyncOutbox, replaceSyncOutbox, resetDrainStateForTesting } = jest.requireActual('@/lib/sync-outbox') as typeof import('@/lib/sync-outbox');
 const originalFetch = globalThis.fetch;
 let mockAcceptedResume: { id: string; archivedAt: string | null; archivedStateAt: string } | undefined;
 const { beginLocalResetSession, endLocalResetSession } = jest.requireActual('@/lib/sync-session-fence') as typeof import('@/lib/sync-session-fence');
@@ -561,6 +561,8 @@ function seedShelleyMissingDay(): void {
 
 function emptyPull() {
   return {
+    canonicalSeries: useUnfoldStore.getState().devotionals.map((series) => series.id === mockAcceptedResume?.id
+      ? { ...series, ...mockAcceptedResume } : series),
     days: [],
     timestamp: '2026-09-15T04:47:00.000Z',
   };
@@ -894,6 +896,214 @@ describe('reader swipe cancellation', () => {
     await act(async () => { await (tree!.root.findByProps({ accessibilityLabel: 'Open Today' }).props.onPress as () => Promise<void>)(); });
     expect(mockNavigate).toHaveBeenCalledWith('/(tabs)/(today)');
     expect(useUnfoldStore.getState().currentDevotionalId).toBe(ACTIVE_DEVOTIONAL_ID);
+    act(() => tree!.unmount());
+  });
+
+  it('Greptile r4190002025: keeps history when a canonical sibling outranks the accepted resume', async () => {
+    seedShelleyMissingDay();
+    const remoteSiblingId = 'remote-sibling-not-yet-local';
+    const remoteSiblingClock = new Date(Date.now() + 60_000).toISOString();
+    const { extractPulledDevotionalContent } = jest.requireActual('@/lib/devotional-sync-pull') as typeof import('@/lib/devotional-sync-pull');
+    mockPullDevotionalContent.mockImplementation(async () => {
+      if (!mockAcceptedResume) return emptyPull();
+      const payload = {
+        timestamp: new Date().toISOString(),
+        changes: { devotionals: [
+          { id: DEVOTIONAL_ID, deleted: false, updatedAt: mockAcceptedResume.archivedStateAt, data: { ...mockAcceptedResume } },
+          { id: remoteSiblingId, deleted: false, updatedAt: remoteSiblingClock, data: {
+            title: 'Remote sibling', createdAt: remoteSiblingClock, generationMode: 'progressive',
+            archivedAt: null, archivedStateAt: remoteSiblingClock,
+          } },
+        ] },
+      };
+      // Exercise the real production extractor on the complete canonical payload.
+      return extractPulledDevotionalContent(payload, DEVOTIONAL_ID);
+    });
+    mockUseRealGeneratedDayWatch = true;
+    mockSubmitGenerationJob.mockRejectedValue(new ApiError('A newer sibling is active', 409, 'SERIES_NOT_ACTIVE'));
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    let tree: ReaderTree;
+    await act(async () => { tree = renderer.create(<ReadingScreen />); await flushEffects(); });
+    act(() => (tree!.root.findByProps({ accessibilityLabel: 'Continue this series' }).props.onPress as () => void)());
+    await act(async () => { alert.mock.calls[0][2]!.find((button) => button.text === 'Continue this series')!.onPress!(); await flushEffects(); });
+    const observed = {
+      localActive: useUnfoldStore.getState().currentDevotionalId,
+      readOnly: routeParams.readOnly,
+      acceptedClock: mockAcceptedResume?.archivedStateAt,
+      remoteSiblingClock,
+      generationRequests: mockSubmitGenerationJob.mock.calls.length,
+    };
+    act(() => tree!.unmount());
+    expect(Date.parse(observed.acceptedClock!)).toBeLessThan(Date.parse(remoteSiblingClock));
+    expect(observed.localActive).toBe(ACTIVE_DEVOTIONAL_ID);
+    expect(observed.readOnly).toBe('1');
+    expect(observed.generationRequests).toBe(0);
+  }, 30_000);
+
+  it.each([false, true])('Greptile r4190002040: activates after concurrent full sync has applied the same accepted lifecycle (already selected=%s)', async (alreadySelected) => {
+    seedShelleyMissingDay();
+    useUnfoldStore.setState((state) => ({ devotionals: state.devotionals.map((series) => series.id === DEVOTIONAL_ID
+      ? { ...series, archivedAt: DAY_3_COMPLETED_AT, archivedStateAt: DAY_3_COMPLETED_AT } : series) }));
+    const { applyPulledUserData } = jest.requireActual('@/lib/full-sync-pull') as typeof import('@/lib/full-sync-pull');
+    let synchronizedClock: string | undefined;
+    const concurrentContentAt = new Date(Date.now() + 120_000).toISOString();
+    mockPullDevotionalContent.mockImplementation(async () => {
+      if (!mockAcceptedResume) return emptyPull();
+      // App-start/reconnect uses this actual full-pull application path.
+      applyPulledUserData({ timestamp: new Date().toISOString(), changes: { devotionals: [{
+        id: DEVOTIONAL_ID, updatedAt: mockAcceptedResume.archivedStateAt, deleted: false,
+        data: { archivedAt: null, archivedStateAt: mockAcceptedResume.archivedStateAt },
+      }] } });
+      synchronizedClock = useUnfoldStore.getState().devotionals.find((series) => series.id === DEVOTIONAL_ID)!.archivedStateAt;
+      useUnfoldStore.setState((state) => ({
+        ...(alreadySelected ? { currentDevotionalId: DEVOTIONAL_ID } : {}),
+        devotionals: state.devotionals.map((series) => series.id === DEVOTIONAL_ID
+          ? { ...series, title: 'Concurrent content retained', updatedAt: concurrentContentAt } : series),
+      }));
+      return { ...emptyPull(), devotional: mockAcceptedResume };
+    });
+    mockUseRealGeneratedDayWatch = true;
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    let tree: ReaderTree;
+    await act(async () => { tree = renderer.create(<ReadingScreen />); await flushEffects(); });
+    act(() => (tree!.root.findByProps({ accessibilityLabel: 'Continue this series' }).props.onPress as () => void)());
+    await act(async () => { alert.mock.calls[0][2]!.find((button) => button.text === 'Continue this series')!.onPress!(); await flushEffects(); });
+    const observed = {
+      localActive: useUnfoldStore.getState().currentDevotionalId,
+      readOnly: routeParams.readOnly,
+      acceptedClock: mockAcceptedResume?.archivedStateAt,
+      synchronizedClock,
+      generationRequests: mockSubmitGenerationJob.mock.calls.length,
+      hasContinuationError: JSON.stringify(tree!.toJSON()).includes('This series could not be continued yet.'),
+    };
+    act(() => tree!.unmount());
+    expect(synchronizedClock).toBe(mockAcceptedResume!.archivedStateAt);
+    expect(observed.localActive).toBe(DEVOTIONAL_ID);
+    expect(observed.readOnly).toBe('');
+    expect(observed.generationRequests).toBe(1);
+    const retained = useUnfoldStore.getState().devotionals.find((series) => series.id === DEVOTIONAL_ID)!;
+    expect(retained.title).toBe('Concurrent content retained');
+    expect(retained.updatedAt).toBe(concurrentContentAt);
+  }, 30_000);
+
+  it('Greptile r4190002049: an unsent abandoned resume is not replayed by background note sync', async () => {
+    seedShelleyMissingDay();
+    let releaseAuth!: (headers: Record<string, string>) => void;
+    jest.requireMock('../api-config').getAuthHeaders.mockImplementationOnce(() => new Promise((resolve) => { releaseAuth = resolve; }));
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    let tree: ReaderTree;
+    await act(async () => { tree = renderer.create(<ReadingScreen />); await flushEffects(); });
+    act(() => (tree!.root.findByProps({ accessibilityLabel: 'Continue this series' }).props.onPress as () => void)());
+    await act(async () => { alert.mock.calls[0][2]!.find((button) => button.text === 'Continue this series')!.onPress!(); await flushEffects(); });
+    await act(async () => { jest.advanceTimersByTime(15_000); await flushEffects(); });
+    expect(globalThis.fetch).not.toHaveBeenCalled(); // No request was ever sent.
+    act(() => tree!.unmount());
+    enqueueSyncChanges([{ table: 'notes', id: 'ordinary-note', deleted: false,
+      clientUpdatedAt: new Date().toISOString(), data: { title: 'Retained note', content: 'Synthetic writing' } }]);
+    await drainSyncOutbox(); // Reconnect/Today focus; there is no new confirmation.
+    const requests = (globalThis.fetch as jest.Mock).mock.calls.flatMap((call) => JSON.parse(call[1].body).changes);
+    const observed = {
+      localActive: useUnfoldStore.getState().currentDevotionalId,
+      readOnly: routeParams.readOnly,
+      postedIds: requests.map((change: { id: string }) => change.id),
+      postedLifecycle: requests.find((change: { id: string }) => change.id === DEVOTIONAL_ID)?.data,
+      remainingIds: peekSyncOutbox().map((change) => change.id),
+    };
+    releaseAuth({ 'Content-Type': 'application/json' });
+    await flushEffects();
+    expect(observed.postedIds).toContain('ordinary-note');
+    expect(requests.some((change: { id: string; data: { archivedAt?: unknown } }) =>
+      change.id === DEVOTIONAL_ID && change.data.archivedAt === null)).toBe(false);
+  }, 30_000);
+
+  it.each(['open-today', 'back-day-1', 'reader-back', 'unmount', 'blur', 'change-series'] as const)(
+    'cancels unsent continuation at %s while retaining ordinary writing', async (exit) => {
+      seedShelleyMissingDay();
+      const queued = [
+        { table: 'notes' as const, id: 'retained-note', deleted: false, clientUpdatedAt: TYPING_AT, data: { content: 'Synthetic saved writing' } },
+        { table: 'devotionals' as const, id: DEVOTIONAL_ID, deleted: false, clientUpdatedAt: TYPING_AT, data: { title: 'Concurrent saved content', currentDay: 2 } },
+      ];
+      enqueueSyncChanges(queued);
+      let releaseAuth!: (headers: Record<string, string>) => void;
+      jest.requireMock('../api-config').getAuthHeaders.mockImplementationOnce(() => new Promise((resolve) => { releaseAuth = resolve; }));
+      const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+      let tree: ReaderTree;
+      await act(async () => { tree = renderer.create(<ReadingScreen />); await flushEffects(); });
+      act(() => (tree!.root.findByProps({ accessibilityLabel: 'Continue this series' }).props.onPress as () => void)());
+      await act(async () => { alert.mock.calls[0][2]!.find((button) => button.text === 'Continue this series')!.onPress!(); await flushEffects(); });
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+      // Commit the actual unmount/focus change before releasing credentials.
+      act(() => {
+        if (exit === 'unmount') tree!.unmount();
+        else if (exit === 'blur') { mockFocused = false; tree!.update(<ReadingScreen />); }
+        else if (exit === 'change-series') useUnfoldStore.setState({ currentDevotionalId: 'new-active-series' });
+        else (tree!.root.findByProps({ accessibilityLabel: exit === 'open-today' ? 'Open Today' : exit === 'back-day-1' ? 'Go back to day 1' : 'Go back' }).props.onPress as () => void)();
+      });
+      await act(async () => {
+        releaseAuth({ 'Content-Type': 'application/json' });
+        await flushEffects();
+      });
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+      expect(peekSyncOutbox()).toEqual(queued);
+      expect(routeParams.readOnly).toBe('1');
+      expect(mockSubmitGenerationJob).not.toHaveBeenCalled();
+      if (exit !== 'unmount') act(() => tree!.unmount());
+      await drainSyncOutbox();
+      const posted = (globalThis.fetch as jest.Mock).mock.calls.flatMap((call) => JSON.parse(call[1].body).changes);
+      expect(posted).toEqual(queued);
+      expect(peekSyncOutbox()).toEqual([]);
+    }, 30_000,
+  );
+
+  it.each(['missing', 'deleted', 'batch'] as const)('does not upsert a %s canonical target', async (target) => {
+    seedShelleyMissingDay();
+    const actualExtract = jest.requireActual('@/lib/devotional-sync-pull').extractPulledDevotionalContent as typeof import('@/lib/devotional-sync-pull').extractPulledDevotionalContent;
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    let tree: ReaderTree;
+    await act(async () => { tree = renderer.create(<ReadingScreen />); await flushEffects(); });
+    mockPullDevotionalContent.mockImplementation(async () => actualExtract({ timestamp: TYPING_AT, changes: { devotionals: target === 'missing' ? [] : [{
+      id: DEVOTIONAL_ID, deleted: target === 'deleted', updatedAt: TYPING_AT,
+      data: { createdAt: DAY_3_COMPLETED_AT, generationMode: 'batch', archivedAt: null },
+    }] } }, DEVOTIONAL_ID));
+    act(() => (tree!.root.findByProps({ accessibilityLabel: 'Continue this series' }).props.onPress as () => void)());
+    await act(async () => { alert.mock.calls[0][2]!.find((button) => button.text === 'Continue this series')!.onPress!(); await flushEffects(); });
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe(ACTIVE_DEVOTIONAL_ID);
+    expect(routeParams.readOnly).toBe('1');
+    expect(mockSubmitGenerationJob).not.toHaveBeenCalled();
+    expect(JSON.stringify(tree!.toJSON())).toContain('This series could not be continued yet.');
+    act(() => tree!.unmount());
+  });
+
+  it.each(['exact', 'newer-archive', 'wrong-id'] as const)('verifies lifecycle-only content-conflict acknowledgement: %s', async (proof) => {
+    seedShelleyMissingDay();
+    const before = useUnfoldStore.getState().devotionals.find((series) => series.id === DEVOTIONAL_ID)!;
+    mockUseRealGeneratedDayWatch = true;
+    globalThis.fetch = jest.fn(async (_url, init) => {
+      const [resume] = JSON.parse(init!.body as string).changes;
+      expect(resume.data).toEqual({ archivedAt: null, archivedStateAt: expect.any(String) });
+      expect(resume.clientUpdatedAt).toBe(before.updatedAt ?? before.createdAt);
+      mockAcceptedResume = { id: DEVOTIONAL_ID, archivedAt: proof === 'newer-archive' ? TYPING_AT : null,
+        archivedStateAt: proof === 'newer-archive' ? new Date(Date.now() + 60_000).toISOString() : resume.data.archivedStateAt };
+      return { ok: true, json: async () => ({ results: [{ table: 'devotionals', requestedId: DEVOTIONAL_ID,
+        id: proof === 'wrong-id' ? 'another-series' : DEVOTIONAL_ID, status: 'conflict', serverUpdatedAt: TYPING_AT,
+        serverData: { ...mockAcceptedResume, title: 'Server content must not replace current local progress', currentDay: 7 },
+      }] }) } as Response;
+    });
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    let tree: ReaderTree;
+    await act(async () => { tree = renderer.create(<ReadingScreen />); await flushEffects(); });
+    act(() => (tree!.root.findByProps({ accessibilityLabel: 'Continue this series' }).props.onPress as () => void)());
+    await act(async () => { alert.mock.calls[0][2]!.find((button) => button.text === 'Continue this series')!.onPress!(); await flushEffects(); });
+    const after = useUnfoldStore.getState().devotionals.find((series) => series.id === DEVOTIONAL_ID)!;
+    expect(after.title).toBe(before.title);
+    expect(after.currentDay).toBe(before.currentDay);
+    expect(after.days).toEqual(before.days);
+    expect(after.seriesStartDate).toBe(before.seriesStartDate);
+    expect(after.updatedAt).toBe(before.updatedAt);
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe(proof === 'exact' ? DEVOTIONAL_ID : ACTIVE_DEVOTIONAL_ID);
+    expect(routeParams.readOnly).toBe(proof === 'exact' ? '' : '1');
+    expect(mockSubmitGenerationJob).toHaveBeenCalledTimes(proof === 'exact' ? 1 : 0);
     act(() => tree!.unmount());
   });
 
@@ -1339,7 +1549,9 @@ describe('reader swipe cancellation', () => {
       await act(async () => { tree = renderer.create(<ReadingScreen />); await flushEffects(); });
       act(() => (tree!.root.findByProps({ accessibilityLabel: 'Continue this series' }).props.onPress as () => void)());
       await act(async () => { alert.mock.calls[0][2]!.find((button) => button.text === 'Continue this series')!.onPress!(); await flushEffects(); });
-      expect(mockPullDevotionalContent).toHaveBeenLastCalledWith(DEVOTIONAL_ID, { forceFull: true, timeoutMs: 15_000 });
+      expect(mockPullDevotionalContent).toHaveBeenLastCalledWith(DEVOTIONAL_ID, {
+        forceFull: true, timeoutMs: 15_000, signal: expect.any(AbortSignal),
+      });
       expect(useUnfoldStore.getState().currentDevotionalId).toBe(ACTIVE_DEVOTIONAL_ID);
       expect(routeParams.readOnly).toBe('1');
       expect(mockSubmitGenerationJob).not.toHaveBeenCalled();

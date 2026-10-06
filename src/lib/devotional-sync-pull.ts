@@ -18,6 +18,7 @@ import type { CommittedDevotionalPull, DevotionalPullCursor, DevotionalPullScope
 import { extractDevotionalLifecycle } from './devotional-lifecycle';
 import { bindPulledDevotionalSession } from './devotional-pulled-content';
 import { logger } from './logger';
+import { createSyncOperation } from './sync-operation';
 import { getDeviceId, mmkvStorage } from './mmkv-storage';
 import { useUnfoldStore } from './store';
 import {
@@ -29,7 +30,6 @@ import {
   assertSyncSessionCurrent,
   captureSyncSession,
   isSyncSessionCurrent,
-  registerSyncTransport,
   SyncSessionInvalidatedError,
 } from './sync-session-fence';
 import type { Devotional, DevotionalDay } from './store';
@@ -38,6 +38,8 @@ import { normalizeWordStudy } from './word-study';
 
 type PulledDevotionalMetadata = {
   id: string;
+  createdAt?: string;
+  generationMode?: Devotional['generationMode'];
   title?: string;
   totalDays?: number;
   currentDay?: number;
@@ -52,6 +54,8 @@ type PulledDevotionalMetadata = {
 
 export type PulledDevotionalContent = {
   devotional?: PulledDevotionalMetadata;
+  /** All nondeleted rows, needed to prove selection after a force-full pull. */
+  canonicalSeries?: PulledDevotionalMetadata[];
   days: DevotionalDay[];
   timestamp: string;
 };
@@ -158,6 +162,8 @@ function mapPulledDevotionalMetadata(record: SyncPulledRecord): PulledDevotional
   const lifecycle = extractDevotionalLifecycle(data);
   return {
     id: record.id,
+    createdAt: asString(data.createdAt),
+    generationMode: data.generationMode === 'progressive' || data.generationMode === 'batch' ? data.generationMode : undefined,
     title: asString(data.title),
     totalDays: asNumber(data.totalDays),
     currentDay: asNumber(data.currentDay),
@@ -177,12 +183,14 @@ export function extractPulledDevotionalContent(
     .filter((day): day is DevotionalDay => !!day && day.devotionalId === devotionalId)
     .sort((a, b) => a.dayNumber - b.dayNumber);
 
-  const devotional = (payload.changes.devotionals ?? [])
+  const canonicalSeries = (payload.changes.devotionals ?? [])
     .map(mapPulledDevotionalMetadata)
-    .find((candidate): candidate is PulledDevotionalMetadata => !!candidate && candidate.id === devotionalId);
+    .filter((candidate): candidate is PulledDevotionalMetadata => !!candidate);
+  const devotional = canonicalSeries.find((candidate) => candidate.id === devotionalId);
 
   return {
     devotional,
+    canonicalSeries,
     days,
     timestamp: payload.timestamp,
   };
@@ -197,6 +205,7 @@ export type PullDevotionalContentOptions = {
   forceFull?: boolean;
   /** Bound an explicit resume verification; ordinary pull behavior stays unchanged. */
   timeoutMs?: number;
+  signal?: AbortSignal;
 };
 
 /**
@@ -268,49 +277,26 @@ export async function pullDevotionalContent(
       : `[sync/devotional-pull] pull: full (${decision.reason})`,
   );
 
-  const controller = new AbortController();
-  const unregister = registerSyncTransport(controller);
-  const timeoutMs = options.timeoutMs && Number.isFinite(options.timeoutMs) && options.timeoutMs > 0
-    ? options.timeoutMs : undefined;
-  const expiresAt = timeoutMs === undefined ? undefined : startedAt + timeoutMs;
-  const timeoutError = new Error('Devotional verification timed out');
-  let timedOut = false;
-  let rejectDeadline: ((reason: Error) => void) | undefined;
-  const deadline = timeoutMs === undefined ? undefined : new Promise<never>((_resolve, reject) => { rejectDeadline = reject; });
-  const onAbort = () => rejectDeadline?.(timedOut ? timeoutError : new SyncSessionInvalidatedError('devotional pull'));
-  if (deadline) controller.signal.addEventListener('abort', onAbort, { once: true });
-  const timeout = timeoutMs === undefined ? undefined : setTimeout(() => {
-    timedOut = true;
-    controller.abort();
-  }, Math.max(0, expiresAt! - Date.now()));
-  const assertPullCurrent = () => {
-    assertSyncSessionCurrent(session, 'devotional pull');
-    if (expiresAt !== undefined && Date.now() >= expiresAt) {
-      timedOut = true;
-      controller.abort();
-      throw timeoutError;
-    }
-  };
-  const awaitStep = async <T,>(step: Promise<T>): Promise<T> => {
-    const result = await (deadline ? Promise.race([step, deadline]) : step);
-    assertPullCurrent();
-    return result;
-  };
+  const timeoutMs = options.timeoutMs && Number.isFinite(options.timeoutMs) && options.timeoutMs > 0 ? options.timeoutMs : undefined;
+  const operation = createSyncOperation({ action: 'devotional pull', session, signal: options.signal,
+    deadlineAt: timeoutMs === undefined ? undefined : startedAt + timeoutMs,
+    timeoutError: new Error('Devotional verification timed out') });
   try {
-    const headers = await awaitStep(getAuthHeaders());
+    operation.assertCurrent();
+    const headers = await operation.wait(getAuthHeaders());
     const retryAfterMs = readBudgetRetryAfterMs();
     if (retryAfterMs > 0) {
       throw new SyncPullRateLimitedError(Math.ceil(retryAfterMs / 1000));
     }
-    const response = await awaitStep(authenticatedFetch(`${PRIMARY_BACKEND_URL}/api/sync/pull`, {
+    const response = await operation.wait(authenticatedFetch(`${PRIMARY_BACKEND_URL}/api/sync/pull`, {
       method: 'POST',
       headers,
       body: JSON.stringify({ lastPulledAt: decision.lastPulledAt }),
-      signal: controller.signal,
+      signal: operation.signal,
     }));
 
     if (!response.ok) {
-      const body = await awaitStep(response.text().catch(() => ''));
+      const body = await operation.wait(response.text().catch(() => ''));
       // The body stays out of the Error message: a captured exception's `value`
       // is allowlisted through to Sentry, and a backend error body can quote the
       // devotional or journal text it failed on. `logger` is __DEV__-only.
@@ -323,10 +309,10 @@ export async function pullDevotionalContent(
       throw new Error(`Sync pull failed: ${response.status}`);
     }
 
-    const payload = await awaitStep(response.json()) as SyncPullResponse;
+    const payload = await operation.wait(response.json()) as SyncPullResponse;
     assertSyncSessionCurrent(session, 'devotional pull');
     const pulled = extractPulledDevotionalContent(payload, devotionalId);
-    assertPullCurrent();
+    operation.assertCurrent();
     bindPulledDevotionalSession(pulled, session);
 
     if (isValidTimestamp(payload.timestamp)) {
@@ -342,9 +328,7 @@ export async function pullDevotionalContent(
     }
     throw error;
   } finally {
-    if (timeout !== undefined) clearTimeout(timeout);
-    controller.signal.removeEventListener('abort', onAbort);
-    unregister();
+    operation.dispose();
   }
 }
 

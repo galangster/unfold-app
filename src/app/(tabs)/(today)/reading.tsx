@@ -79,10 +79,8 @@ import {
   resolveInitialReadingDayNumber,
 } from '@/lib/devotional-day-access';
 import { nextConfirmedAbsentKey, shouldWatchForGeneratedDay } from '@/lib/generated-day-watch';
-import { getPausedSeriesContinuationDay, pausedSeriesResumeClocks, type PausedSeriesRecoveryContext } from '@/lib/paused-series-recovery';
-import { applyUnarchiveIntent, lifecycleTimestampMs } from '@/lib/devotional-lifecycle';
-import { buildPersonalDataSyncChange, devotionalSyncData } from '@/lib/personal-data-sync-records';
-import { drainSyncChange, enqueueSyncChanges } from '@/lib/sync-outbox';
+import { getPausedSeriesContinuationDay, type PausedSeriesRecoveryContext } from '@/lib/paused-series-recovery';
+import { createPausedSeriesResume, type PausedSeriesResume } from '@/lib/paused-series-resume';
 import { useGeneratedDayWatch } from '@/hooks/useGeneratedDayWatch';
 import { useReadBudgetBlocked } from '@/hooks/useReadBudgetBlocked';
 import { getServerOwnedSeriesTotalDays } from '@/lib/devotional-series-boundary';
@@ -291,7 +289,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   const router = useRouter();
   const isReadingFocused = useIsFocused();
   const params = useLocalSearchParams<{ bookOpening?: string; dayNumber?: string; devotionalId?: string; highlightId?: string; bookmarkId?: string; readOnly?: string; focus?: string; from?: string; practice?: string; practiceMethod?: string }>();
-  const { handleBack: handleReaderBack } = useCrossTabBack();
+  const { handleBack: navigateReaderBack } = useCrossTabBack();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
@@ -444,15 +442,33 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   const readingMountedRef = useRef(true);
   const pausedRecoveryContextRef = useRef<PausedSeriesRecoveryContext | null>(null);
   const continuationDialogRef = useRef<PausedSeriesRecoveryContext | null>(null);
-  const continuationPendingRef = useRef<object | null>(null);
+  const continuationPendingRef = useRef<PausedSeriesResume | null>(null);
   const [isContinuingSeries, setIsContinuingSeries] = useState(false);
   const [continuationError, setContinuationError] = useState<string | null>(null);
 
-  useEffect(() => {
-    continuationDialogRef.current = null;
+  const cancelContinuation = useCallback(() => {
+    continuationPendingRef.current?.cancel();
     continuationPendingRef.current = null;
+    continuationDialogRef.current = null;
     setIsContinuingSeries(false);
     setContinuationError(null);
+  }, []);
+
+  const handleReaderBack = useCallback(() => {
+    cancelContinuation();
+    navigateReaderBack();
+  }, [cancelContinuation, navigateReaderBack]);
+
+  useEffect(() => {
+    const pending = continuationPendingRef.current;
+    if (!pending) return;
+    if (pending?.isViewCurrent() && pending.isSelectionCompatible()) return;
+    cancelContinuation();
+  }, [effectiveDevotionalId, viewingDay, currentDevotionalId, isReadingFocused, devotionals, cancelContinuation]);
+
+  useEffect(() => {
+    continuationDialogRef.current = null;
+    if (!continuationPendingRef.current) setContinuationError(null);
   }, [effectiveDevotionalId, viewingDay, currentDevotionalId, isReadingFocused]);
 
   const translateX = useSharedValue(0);
@@ -482,6 +498,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     readingMountedRef.current = true;
     return () => {
       readingMountedRef.current = false;
+      continuationPendingRef.current?.cancel();
     };
   }, []);
 
@@ -1169,6 +1186,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
 
   const goToDay = useCallback((day: number) => {
     if (day >= 1 && day <= availableDays) {
+      cancelContinuation();
       addAppBreadcrumb('reading', 'changed-day');
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       // Quick fade out → change day → fade in. Start fade-in only after the
@@ -1180,7 +1198,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
         contentOpacity.value = withTiming(1, { duration: Duration.normal, easing: Easing.out(Easing.ease) });
       });
     }
-  }, [availableDays, contentOpacity]);
+  }, [availableDays, contentOpacity, cancelContinuation]);
 
   const handlePrevious = useCallback(() => {
     if (viewingDay > 1) {
@@ -1978,65 +1996,29 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
         { text: 'Continue this series', onPress: () => {
           if (continuationDialogRef.current !== confirmation) return;
           closeConfirmation();
-          const isIntentCurrent = () => {
+          const isViewCurrent = () => {
             const context = pausedRecoveryContextRef.current;
-            const state = useUnfoldStore.getState();
-            if (!readingMountedRef.current || !isSyncSessionCurrent(session) || !context
-              || effectiveDevotionalIdRef.current !== devotionalId
-              || context.dayNumber !== viewingDay || state.currentDevotionalId !== activeId) return false;
-            return getPausedSeriesContinuationDay({
-              ...context, devotional: state.devotionals.find((series) => series.id === devotionalId),
-              currentDevotionalId: state.currentDevotionalId,
-            }) === continuationDay;
+            return readingMountedRef.current && isSyncSessionCurrent(session) && !!context?.isFocused
+              && effectiveDevotionalIdRef.current === devotionalId && context.devotional?.id === devotionalId
+              && context.dayNumber === viewingDay
+              && (context.currentDevotionalId === devotionalId || selectRenderableDevotionalDay(context.devotional, viewingDay).status !== 'ready');
           };
-          if (!isIntentCurrent()) return;
-          const series = useUnfoldStore.getState().devotionals.find((entry) => entry.id === devotionalId)!;
-          const pending = {};
+          if (!isViewCurrent() || useUnfoldStore.getState().currentDevotionalId !== activeId
+            || getPausedSeriesContinuationDay(pausedRecoveryContextRef.current!) !== continuationDay) return;
+          const pending = createPausedSeriesResume({ devotionalId, expectedActiveId: activeId, session, isViewCurrent });
           continuationPendingRef.current = pending;
-          const deadlineAt = Date.now() + 15_000;
           setIsContinuingSeries(true);
           setContinuationError(null);
           void (async () => {
             try {
-              // The server ranks progressive series by creation/resume clock.
-              // Even an already-unarchived history series needs an explicit resume.
-              const intentAt = pausedSeriesResumeClocks.nextIntentAt(session, devotionalId, useUnfoldStore.getState().devotionals);
-              const resumed = applyUnarchiveIntent(series, intentAt);
-              const clientUpdatedAt = lifecycleTimestampMs(series.updatedAt) > lifecycleTimestampMs(resumed.archivedStateAt)
-                ? series.updatedAt! : resumed.archivedStateAt;
-              const change = buildPersonalDataSyncChange('devotionals', devotionalId, devotionalSyncData(resumed), clientUpdatedAt);
-              enqueueSyncChanges([change]);
-              const acknowledgement = await drainSyncChange(change, session, { deadlineAt });
-              if (continuationPendingRef.current !== pending || !isIntentCurrent()) return;
-              if (acknowledgement?.status !== 'accepted') {
-                setContinuationError('This series could not be continued yet. Please check your connection and try again.');
-                return;
-              }
-              // Content acceptance does not prove that the lifecycle CAS won.
-              // Distrust the incremental cursor and require the exact resume clock.
-              const remainingMs = deadlineAt - Date.now();
-              if (remainingMs <= 0) throw new Error('Series continuation timed out');
-              const pulled = await pullDevotionalContent(devotionalId, { forceFull: true, timeoutMs: remainingMs });
-              if (continuationPendingRef.current !== pending || !isIntentCurrent()) return;
-              if (Date.now() >= deadlineAt) throw new Error('Series continuation timed out');
-              if (pulled.devotional?.id === devotionalId) {
-                pausedSeriesResumeClocks.observe(session, devotionalId, pulled.devotional.archivedStateAt);
-              }
-              if (pulled.devotional?.id !== devotionalId || pulled.devotional.archivedAt !== null
-                || pulled.devotional.archivedStateAt !== resumed.archivedStateAt) {
-                setContinuationError('This series could not be continued yet. Please check your connection and try again.');
-                return;
-              }
-              if (!useUnfoldStore.getState().activateAcknowledgedDevotionalResume(
-                devotionalId, activeId, series.archivedStateAt, resumed.archivedStateAt,
-              )) return;
-              if (pulled.days.length > 0) updateDevotionalDays(devotionalId, pulled.days);
+              await pending.run();
+              if (continuationPendingRef.current !== pending || !isViewCurrent()) return;
               // Only activation enables the existing watcher. It retains ownership
               // of entitlement, job discovery, submission and stale delivery guards.
               router.setParams({ devotionalId, dayNumber: String(continuationDay), readOnly: '' });
               setViewingDay(continuationDay);
             } catch {
-              if (continuationPendingRef.current === pending && isIntentCurrent()) {
+              if (continuationPendingRef.current === pending && isViewCurrent()) {
                 setContinuationError('This series could not be continued yet. Please check your connection and try again.');
               }
             } finally {
@@ -2516,6 +2498,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
               <TouchableOpacity activeOpacity={0.7}
                 onPress={async () => {
                   if (isPausedSeriesDay) {
+                    cancelContinuation();
                     router.navigate('/(tabs)/(today)');
                     return;
                   }
@@ -2604,6 +2587,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
               {fallbackDayNumber !== null && (
                 <TouchableOpacity activeOpacity={0.7}
                   onPress={() => {
+                    cancelContinuation();
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     setViewingDay(fallbackDayNumber);
                   }}
