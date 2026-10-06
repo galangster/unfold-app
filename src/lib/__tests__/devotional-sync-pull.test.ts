@@ -67,6 +67,7 @@ import { getDeviceId, mmkvStorage } from '../mmkv-storage';
 import { useUnfoldStore } from '../store';
 import type { Devotional, DevotionalDay } from '../store';
 import type { SyncPullResponse, SyncPulledRecord } from '../sync-types';
+import { beginLocalResetSession, endLocalResetSession } from '../sync-session-fence';
 
 const mockFetch = jest.fn();
 const mockGetDeviceId = getDeviceId as jest.Mock;
@@ -188,6 +189,7 @@ function overlapped(timestamp: string): string {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockFetch.mockReset();
   resetReadBudgetForTests();
   (mmkvStorageModule as unknown as { __clearMockStorage: () => void }).__clearMockStorage();
   mockApplication.nativeApplicationVersion = '1.2.3';
@@ -198,6 +200,82 @@ beforeEach(() => {
 });
 
 describe('devotional sync pull recovery', () => {
+  it('discards credential preflight after a session reset without starting a late fetch', async () => {
+    jest.useFakeTimers();
+    const auth = jest.requireMock('../api-config').getAuthHeaders as jest.Mock;
+    let releaseAuth!: (headers: Record<string, string>) => void;
+    auth.mockImplementationOnce(() => new Promise<Record<string, string>>((resolve) => { releaseAuth = resolve; }));
+    const pending = pullDevotionalContent(DEVOTIONAL_ID, { forceFull: true, timeoutMs: 15_000 });
+    const rejected = expect(pending).rejects.toMatchObject({ name: 'SyncSessionInvalidatedError' });
+    try {
+      const token = beginLocalResetSession();
+      endLocalResetSession(token);
+      await rejected;
+      releaseAuth({ 'Content-Type': 'application/json' });
+      await Promise.resolve();
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(mmkvStorage.getItem(DEVOTIONAL_PULL_CURSOR_KEY)).toBeNull();
+    } finally {
+      releaseAuth({ 'Content-Type': 'application/json' });
+      jest.useRealTimers();
+    }
+  });
+
+  it('bounds response parsing even when the response ignores abort', async () => {
+    jest.useFakeTimers();
+    let releaseBody!: (value: Partial<SyncPullResponse>) => void;
+    mockFetch.mockResolvedValue({ ok: true, json: () => new Promise((resolve) => { releaseBody = resolve; }) });
+    const pending = pullDevotionalContent(DEVOTIONAL_ID, { forceFull: true, timeoutMs: 15_000 });
+    const rejected = expect(pending).rejects.toThrow('Devotional verification timed out');
+    try {
+      await jest.advanceTimersByTimeAsync(15_000);
+      await rejected;
+      releaseBody({ timestamp: '2026-04-25T12:00:00.000Z', changes: {} });
+      await Promise.resolve();
+      expect(mmkvStorage.getItem(DEVOTIONAL_PULL_CURSOR_KEY)).toBeNull();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('critic regression: the explicit verification deadline also bounds credential preflight', async () => {
+    jest.useFakeTimers();
+    const auth = jest.requireMock('../api-config').getAuthHeaders as jest.Mock;
+    let releaseAuth!: (headers: Record<string, string>) => void;
+    auth.mockImplementationOnce(() => new Promise<Record<string, string>>((resolve) => { releaseAuth = resolve; }));
+    respondWith({});
+    let settled = false;
+    const pending = pullDevotionalContent(DEVOTIONAL_ID, { forceFull: true, timeoutMs: 15_000 });
+    void pending.then(() => { settled = true; }, () => { settled = true; });
+    try {
+      await jest.advanceTimersByTimeAsync(15_000);
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(settled).toBe(true);
+    } finally {
+      releaseAuth({ 'Content-Type': 'application/json' });
+      await pending.catch(() => undefined);
+      await Promise.resolve();
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(mmkvStorage.getItem(DEVOTIONAL_PULL_CURSOR_KEY)).toBeNull();
+      jest.useRealTimers();
+    }
+  });
+
+  it('bounds an explicitly timed lifecycle verification and leaves its cursor unchanged', async () => {
+    jest.useFakeTimers();
+    try {
+      mockFetch.mockImplementation((_url, init) => new Promise((_resolve, reject) => {
+        init.signal.addEventListener('abort', () => reject(new Error('Timed out')));
+      }));
+      const pending = pullDevotionalContent(DEVOTIONAL_ID, { forceFull: true, timeoutMs: 15_000 });
+      const rejected = expect(pending).rejects.toThrow('Devotional verification timed out');
+      await jest.advanceTimersByTimeAsync(15_000);
+      await rejected;
+      expect(mmkvStorage.getItem(DEVOTIONAL_PULL_CURSOR_KEY)).toBeNull();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
   it('does not request a pull while the shared read budget is blocked', async () => {
     noteReadBudgetRateLimited(36);
 

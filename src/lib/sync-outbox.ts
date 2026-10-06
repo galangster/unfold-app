@@ -33,15 +33,16 @@ import {
   isValidConflictResult,
   resolvingAcknowledgementPairs,
   syncSnapshotsEqual,
+  type SyncAcknowledgementPair,
 } from '@/lib/sync-acknowledgements';
 import type { SyncPushChange, SyncPushResult, SyncTable } from '@/lib/sync-types';
+import { createSyncOperation } from './sync-operation';
 // RS13-1: single owner — the key is defined in mmkv-recovery-outbox.ts (pure, no native deps)
 // and re-exported here so all consumers import from one place via sync-outbox.
 import { RECOVERY_OUTBOX_KEY } from '@/lib/mmkv-recovery-outbox';
 import {
   captureSyncSession,
   isSyncSessionCurrent,
-  registerSyncTransport,
 } from '@/lib/sync-session-fence';
 
 // Re-export the type so consumers can import from one place
@@ -203,7 +204,45 @@ type InFlightDrain = {
   promise: Promise<void>;
 };
 
+type SyncDrainOptions = { deadlineAt?: number };
+
 let inflight: InFlightDrain | null = null;
+const acknowledgementListeners = new Set<(pair: SyncAcknowledgementPair, session: number) => void>();
+
+/** Observe the acknowledgement of this exact snapshot, never infer it from queue removal. */
+export async function drainSyncChange(
+  change: SyncPushChange,
+  session = captureSyncSession(),
+  options: SyncDrainOptions = {},
+): Promise<SyncPushResult | undefined> {
+  if (!isSyncSessionCurrent(session)) return undefined;
+  let acknowledged: SyncPushResult | undefined;
+  const listener = (pair: SyncAcknowledgementPair, acknowledgedSession: number) => {
+    if (acknowledgedSession === session && syncSnapshotsEqual(pair.change, change)) {
+      acknowledged = pair.result;
+    }
+  };
+  acknowledgementListeners.add(listener);
+  const joinedOlderDrain = inflight?.session === session;
+  const observer = createSyncOperation({ action: 'sync acknowledgement', session, deadlineAt: options.deadlineAt });
+  try {
+    observer.assertCurrent();
+    await observer.wait(drainSyncOutbox());
+    // A single-flight cycle has an immutable initial snapshot. Fresh work
+    // queued during that cycle gets its own cycle, using the existing backoff.
+    if (!acknowledged && joinedOlderDrain && isSyncSessionCurrent(session)
+      && peekSyncOutbox().some((entry) => syncSnapshotsEqual(entry, change))) {
+      observer.assertCurrent();
+      await observer.wait(drainSyncOutbox());
+    }
+    return isSyncSessionCurrent(session) ? acknowledged : undefined;
+  } catch {
+    return undefined;
+  } finally {
+    observer.dispose();
+    acknowledgementListeners.delete(listener);
+  }
+}
 
 export function drainSyncOutbox(): Promise<void> {
   // FAP-LIB-1 (orphaned-pushes): never POST under an ephemeral recovery
@@ -228,20 +267,15 @@ export function drainSyncOutbox(): Promise<void> {
   }
 
   if (inflight && inflight.session === session) return inflight.promise;
+  const operation = createSyncOperation({ action: 'sync push', session, deadlineAt: Date.now() + 15_000 });
 
   const promise = (async () => {
-    if (!isSyncSessionCurrent(session)) return;
-    const initial = readOutbox();
-    const capturedRevision = enqueueRevision;
-    if (initial.length === 0) return;
-
-    const controller = new AbortController();
-    let timeoutId = setTimeout(() => controller.abort(), 15_000);
-    const unregister = registerSyncTransport(controller);
-
     try {
-      const headers = await getAuthHeaders();
-      if (!isSyncSessionCurrent(session)) return;
+      operation.assertCurrent();
+      const initial = readOutbox();
+      const capturedRevision = enqueueRevision;
+      if (initial.length === 0) return;
+      const headers = await operation.wait(getAuthHeaders());
 
       const envelope = createSyncPushBodyEnvelope();
       let offset = 0;
@@ -259,29 +293,26 @@ export function drainSyncOutbox(): Promise<void> {
         offset = next;
         if (batch.length === 0) continue;
 
-        clearTimeout(timeoutId);
-        timeoutId = setTimeout(() => controller.abort(), 15_000);
+        operation.setDeadlineAt(Date.now() + 15_000);
+        operation.assertCurrent();
 
-        const response = await authenticatedFetch(`${PRIMARY_BACKEND_URL}/api/sync/push`, {
+        const response = await operation.wait(authenticatedFetch(`${PRIMARY_BACKEND_URL}/api/sync/push`, {
           method: 'POST',
           headers,
           body,
-          signal: controller.signal,
-        });
+          signal: operation.signal,
+        }));
 
         if (!response.ok) {
           completed = false;
           break;
         }
 
-        const payload = (await response.json().catch(() => null)) as {
+        const payload = (await operation.wait(response.json().catch(() => null))) as {
           results?: unknown[];
         } | null;
 
-        if (!isSyncSessionCurrent(session)) {
-          completed = false;
-          break;
-        }
+        operation.assertCurrent();
 
         const resolving = resolvingAcknowledgementPairs(batch, payload?.results ?? []);
         const resolvingByKey = new Map(
@@ -299,6 +330,10 @@ export function drainSyncOutbox(): Promise<void> {
           )))
           .map((pair) => pair.result);
         applyConflictResults(conflictsToApply);
+        operation.assertCurrent();
+        for (const pair of resolving) {
+          for (const listener of acknowledgementListeners) listener(pair, session);
+        }
       }
       if (completed && isSyncSessionCurrent(session)) {
         lastAttemptedEnqueueRevision = capturedRevision;
@@ -307,8 +342,7 @@ export function drainSyncOutbox(): Promise<void> {
     } catch {
       // Network error / timeout / abort — keep the outbox intact for retry
     } finally {
-      clearTimeout(timeoutId);
-      unregister();
+      operation.dispose();
     }
   })().finally(() => {
     if (inflight?.promise === promise) inflight = null;
