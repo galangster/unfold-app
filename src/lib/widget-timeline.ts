@@ -11,7 +11,7 @@
  */
 import type { Devotional } from '@/lib/store';
 import { getServerOwnedSeriesTotalDays } from './devotional-series-boundary';
-import { hasReadTodayGlobal } from './home-devotional-state';
+import { getTodayDay, hasReadTodayGlobal } from './home-devotional-state';
 import { deriveLockLine } from './widget-lock-line';
 
 export type WidgetSharedProps = {
@@ -24,8 +24,15 @@ export type WidgetSharedProps = {
   totalDays: number;
   scriptureReference: string;
   scriptureText: string;
-  /** One-sentence excerpt of scriptureText for the UnfoldVerse Lock Screen widget. */
+  /**
+   * UnfoldVerse (Lock Screen) fields. They follow the day the reader is on
+   * today, so a finished reading keeps its verse and day until midnight.
+   */
   lockLine: string;
+  lockReference: string;
+  lockDayNumber: number;
+  /** Days of the series the reader has finished: the fill of the Lock Screen ring. */
+  lockDaysRead: number;
   quotableLine: string;
   readingMinutes: number;
   weeklyProgress: string;
@@ -90,6 +97,7 @@ export function buildWidgetSharedProps(slice: WidgetStateSlice, forDate: Date): 
   const nextDay = devotional?.days?.find(
     (d) => d.dayNumber === (devotional?.currentDay ?? 0) + 1
   );
+  const todayDay = getTodayDay(devotional, forDate);
 
   return {
     streakCount: slice.streakCurrent,
@@ -101,7 +109,10 @@ export function buildWidgetSharedProps(slice: WidgetStateSlice, forDate: Date): 
     totalDays: getServerOwnedSeriesTotalDays(devotional),
     scriptureReference: currentDay?.scriptureReference ?? '',
     scriptureText: currentDay?.scriptureText ?? '',
-    lockLine: deriveLockLine(currentDay?.scriptureText ?? ''),
+    lockLine: deriveLockLine(todayDay?.scriptureText ?? ''),
+    lockReference: todayDay?.scriptureReference ?? '',
+    lockDayNumber: todayDay?.dayNumber ?? devotional?.currentDay ?? 0,
+    lockDaysRead: devotional?.days?.filter((d) => d.isRead).length ?? 0,
     quotableLine: currentDay?.quotableLine ?? '',
     readingMinutes: slice.readingDuration,
     weeklyProgress: getWeeklyProgress(slice.allDevotionals, forDate),

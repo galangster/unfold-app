@@ -165,4 +165,57 @@ describe('buildWidgetTimelineEntries', () => {
       expect(entry.props.scriptureReference).toBe('Matthew 11:28-29');
     }
   });
+
+  it('keeps the day read today on the Lock Screen until midnight, though advanceDay moved currentDay on', () => {
+    const readAt = new Date(2026, 5, 10, 9, 0).toISOString();
+    const d = devo(
+      [
+        day({ dayNumber: 1, isRead: true, readAt: new Date(2026, 5, 8, 9, 0).toISOString() }),
+        day({ dayNumber: 2, isRead: true, readAt: new Date(2026, 5, 9, 9, 0).toISOString() }),
+        day({
+          dayNumber: 3,
+          isRead: true,
+          readAt,
+          scriptureReference: 'Psalm 23:1-2',
+          scriptureText: 'The LORD is my shepherd; I shall not want. He makes me lie down in green pastures.',
+        }),
+        day({
+          dayNumber: 4,
+          scriptureReference: 'Psalm 46:10',
+          scriptureText: 'Be still, and know that I am God. I will be exalted among the nations.',
+        }),
+      ],
+      { totalDays: 7, currentDay: 4 }
+    );
+    const [today, midnight] = buildWidgetTimelineEntries(
+      slice({ currentDevotional: d, allDevotionals: [d], streakLastReadDate: readAt }),
+      new Date(2026, 5, 10, 14, 0)
+    );
+    expect(today.props).toMatchObject({
+      lockDayNumber: 3,
+      lockDaysRead: 3,
+      lockReference: 'Psalm 23:1-2',
+      lockLine: 'The LORD is my shepherd; I shall not want.',
+      hasReadToday: true,
+    });
+    expect(midnight.props).toMatchObject({
+      lockDayNumber: 4,
+      lockDaysRead: 3,
+      lockReference: 'Psalm 46:10',
+      lockLine: 'Be still, and know that I am God.',
+      hasReadToday: false,
+    });
+  });
+
+  it('keeps the series day on the Lock Screen while that day has no content yet', () => {
+    const d = devo(
+      [day({ dayNumber: 1, isRead: true, readAt: new Date(2026, 5, 8, 9, 0).toISOString() })],
+      { totalDays: 7, currentDay: 2 }
+    );
+    const [entry] = buildWidgetTimelineEntries(
+      slice({ currentDevotional: d, allDevotionals: [d] }),
+      new Date(2026, 5, 10, 14, 0)
+    );
+    expect(entry.props).toMatchObject({ lockDayNumber: 2, lockReference: '', lockLine: '' });
+  });
 });

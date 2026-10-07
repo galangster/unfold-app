@@ -82,6 +82,20 @@ describe('deriveLockLine (UnfoldVerse lock-screen line)', () => {
     ).toBe('Come to Me, all you who are weary and burdened, and I will give you rest.');
   });
 
+  it('drops an opening single quote that does not close within the line', () => {
+    expect(
+      deriveLockLine(
+        'Jesus answered, ‘It is written: Man shall not live on bread alone. It is also written.’'
+      )
+    ).toBe('Jesus answered, It is written: Man shall not live on bread alone.');
+  });
+
+  it('measures each sentence after its unpaired quotes are dropped', () => {
+    // 28 characters with its opening quote, 27 without it: too short to use.
+    const first = `“${'a'.repeat(26)}.`;
+    expect(deriveLockLine(`${first} ${sentenceOf(40)}”`)).toBe(sentenceOf(40));
+  });
+
   it('returns an empty string for empty or blank text', () => {
     expect(deriveLockLine('')).toBe('');
     expect(deriveLockLine('  \n\t ')).toBe('');

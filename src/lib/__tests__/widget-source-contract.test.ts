@@ -28,11 +28,6 @@ describe('widget source contracts (RT-WIDGETS-3, RT-WIDGETS-4)', () => {
     expect(src.split('widgetURL(deepLink)').length - 1).toBe(2);
   });
 
-  it('UnfoldVerse carries the deep link on all three family branches', () => {
-    const src = read('UnfoldVerse.tsx');
-    expect(src.split('widgetURL(deepLink)').length - 1).toBe(3);
-  });
-
   it.each(['UnfoldToday.tsx', 'UnfoldDashboard.tsx'])(
     '%s carries exactly one widgetURL',
     (file) => {

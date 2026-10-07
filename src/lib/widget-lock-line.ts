@@ -9,6 +9,9 @@
 
 const OPEN_QUOTE = '“';
 const CLOSE_QUOTE = '”';
+const OPEN_SINGLE = '‘';
+/** Also the apostrophe, so it pairs with an open ‘ but is never dropped. */
+const CLOSE_SINGLE = '’';
 const ELLIPSIS = '…';
 
 /** Inclusive length band of a sentence that fits the Lock Screen whole. */
@@ -28,18 +31,27 @@ function collapseWhitespace(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
 }
 
-/** Removes every curly double quote that has no partner in `text`. */
+/**
+ * Removes every curly double quote that has no partner in `text`, and every
+ * opening single quote that never closes. A lone ’ stays: it is usually an
+ * apostrophe.
+ */
 function dropUnpairedQuotes(text: string): string {
   const unpaired = new Set<number>();
   const open: number[] = [];
+  const openSingle: number[] = [];
   for (let i = 0; i < text.length; i++) {
     if (text[i] === OPEN_QUOTE) {
       open.push(i);
     } else if (text[i] === CLOSE_QUOTE && open.pop() === undefined) {
       unpaired.add(i);
+    } else if (text[i] === OPEN_SINGLE) {
+      openSingle.push(i);
+    } else if (text[i] === CLOSE_SINGLE) {
+      openSingle.pop();
     }
   }
-  open.forEach((i) => unpaired.add(i));
+  [...open, ...openSingle].forEach((i) => unpaired.add(i));
   if (unpaired.size === 0) return text;
   // split('') keeps UTF-16 indexes aligned with text[i] above.
   return text
@@ -62,18 +74,21 @@ function cutSentence(sentence: string): string {
 /**
  * The first sentence of `text` that is 28 to 84 characters long. Otherwise
  * the first sentence, cut at its last clause mark (; , —) or word break
- * within 80 characters. A short first sentence stays whole. Curly double
- * quotes without a partner are removed, in the text and in the line.
+ * within 80 characters. A short first sentence stays whole. Curly quotes
+ * without a partner are removed, in the text and in the line.
  */
 export function deriveLockLine(text: string): string {
-  const clean = collapseWhitespace(dropUnpairedQuotes(text));
+  const clean = collapseWhitespace(text);
   if (clean === '') return '';
 
-  const sentences = clean.match(SENTENCE) ?? [clean];
+  // Measure each sentence as it would ship: a quote that pairs across
+  // sentences is unpaired inside one and goes.
+  const sentences = (clean.match(SENTENCE) ?? [clean]).map((s) =>
+    collapseWhitespace(dropUnpairedQuotes(s))
+  );
   const first = sentences[0];
-  const line =
+  return (
     sentences.find((s) => s.length >= MIN_LINE && s.length <= MAX_LINE) ??
-    (first.length <= MAX_LINE ? first : cutSentence(first));
-
-  return collapseWhitespace(dropUnpairedQuotes(line));
+    (first.length <= MAX_LINE ? first : collapseWhitespace(dropUnpairedQuotes(cutSentence(first))))
+  );
 }

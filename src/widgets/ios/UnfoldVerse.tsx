@@ -37,8 +37,9 @@ import {
 
 type VerseWidgetProps = {
   lockLine: string;
-  scriptureReference: string;
-  dayNumber: number;
+  lockReference: string;
+  lockDayNumber: number;
+  lockDaysRead: number;
   totalDays: number;
   hasReadToday: boolean;
 };
@@ -54,40 +55,44 @@ const VerseWidget = (props: VerseWidgetProps, environment: WidgetEnvironment) =>
     uiSemi: 'Inter-SemiBold',
     serif: 'SourceSerifPro-Regular',
   };
+  const primary = foregroundStyle({ type: 'hierarchical', style: 'primary' });
+  const secondary = foregroundStyle({ type: 'hierarchical', style: 'secondary' });
 
   const verse = props.lockLine ?? '';
-  const reference = props.scriptureReference ?? '';
-  const day = props.dayNumber ?? 0;
+  const reference = props.lockReference ?? '';
+  const day = props.lockDayNumber ?? 0;
+  const daysRead = props.lockDaysRead ?? 0;
   const total = props.totalDays ?? 0;
   const hasRead = props.hasReadToday ?? false;
   const hasVerse = verse !== '';
+  const hasReference = reference !== '';
+  const hasSeries = day > 0;
 
   // Tap target: Today tab, the same canonical route as the other widgets.
   const deepLink = 'unfold://(tabs)/(today)';
 
-  const emptyLabel = 'Open Unfold to start a series.';
-  // No second stop when the line already ends a sentence or with an ellipsis.
-  const verseStop = '.!?…”’'.includes(verse.slice(-1)) ? '' : '.';
-  const verseLabel = `Today's verse: ${verse}${verseStop}${reference !== '' ? ` ${reference}.` : ''}`;
+  // A series whose day has no text yet is not the same as no series.
+  const emptyText = hasSeries ? "Open Unfold for today's reading" : 'Open Unfold to start a series';
+  // No second stop when the line already ends a sentence, a quotation or a bracket.
+  const verseStop = '.!?…”’")'.includes(verse.slice(-1)) ? '' : '.';
+  const label = hasVerse
+    ? `Today's verse: ${verse}${verseStop}${hasReference ? ` ${reference}.` : ''}`
+    : `${emptyText}.`;
 
   if (environment.widgetFamily === 'accessoryInline') {
     // One line in the system font: the book symbol and the reference.
     return (
       <HStack
-        modifiers={[
-          accessibilityElement('ignore'),
-          accessibilityLabel(hasVerse ? verseLabel : emptyLabel),
-          widgetURL(deepLink),
-        ]}
+        modifiers={[accessibilityElement('ignore'), accessibilityLabel(label), widgetURL(deepLink)]}
       >
         <Image systemName="book" size={15} />
-        <Text>{hasVerse && reference !== '' ? reference : 'Unfold'}</Text>
+        <Text>{hasVerse && hasReference ? reference : 'Unfold'}</Text>
       </HStack>
     );
   }
 
   if (environment.widgetFamily === 'accessoryRectangular') {
-    // The Lock Screen gives this family about 143×56 pt of content (iOS 27,
+    // The Lock Screen gives this family about 143x56 pt of content (iOS 27,
     // measured), so three lines of 12 pt serif on a 14 pt line height plus the
     // reference fill it (54 pt). Line height needs iOS 26; earlier iOS keeps
     // the serif's taller natural leading, so the verse scales down slightly
@@ -99,7 +104,7 @@ const VerseWidget = (props: VerseWidgetProps, environment: WidgetEnvironment) =>
         modifiers={[
           frame({ maxWidth: Infinity, maxHeight: Infinity, alignment: 'leading' }),
           accessibilityElement('ignore'),
-          accessibilityLabel(hasVerse ? verseLabel : emptyLabel),
+          accessibilityLabel(label),
           widgetURL(deepLink),
         ]}
       >
@@ -108,7 +113,7 @@ const VerseWidget = (props: VerseWidgetProps, environment: WidgetEnvironment) =>
             modifiers={[
               font({ family: F.serif, size: 12 }),
               lineHeight(14),
-              foregroundStyle({ type: 'hierarchical', style: 'primary' }),
+              primary,
               lineLimit(3),
               minimumScaleFactor(0.8),
             ]}
@@ -116,41 +121,26 @@ const VerseWidget = (props: VerseWidgetProps, environment: WidgetEnvironment) =>
             {verse}
           </Text>
         )}
-        {hasVerse && reference !== '' && (
-          <Text
-            modifiers={[
-              font({ family: F.uiSemi, size: 8.5 }),
-              kerning(0.8),
-              foregroundStyle({ type: 'hierarchical', style: 'secondary' }),
-              lineLimit(1),
-            ]}
-          >
+        {hasVerse && hasReference && (
+          <Text modifiers={[font({ family: F.uiSemi, size: 8.5 }), kerning(0.8), secondary, lineLimit(1)]}>
             {reference.toUpperCase()}
           </Text>
         )}
         {!hasVerse && (
-          <Text
-            modifiers={[
-              font({ family: F.uiMedium, size: 11 }),
-              foregroundStyle({ type: 'hierarchical', style: 'primary' }),
-              lineLimit(2),
-            ]}
-          >
-            Open Unfold to start a series
+          <Text modifiers={[font({ family: F.uiMedium, size: 11 }), primary, lineLimit(2)]}>
+            {emptyText}
           </Text>
         )}
       </VStack>
     );
   }
 
-  // accessoryCircular — the series day inside a capacity ring. The ring counts
-  // finished days: the days before today, plus today once it is read. The
-  // widget runtime drops a Gauge's value label (expo-widgets renders no slots),
-  // so the day is an overlay, sized to sit clear of the ring's inner edge.
-  const hasSeries = day > 0;
+  // accessoryCircular — the series day inside a capacity ring that fills with
+  // the days the reader has finished. The widget runtime drops a Gauge's value
+  // label (expo-widgets renders no slots), so the day is an overlay, sized to
+  // sit clear of the ring's inner edge.
   const shownDay = total > 0 ? Math.min(day, total) : day;
-  const progress =
-    total > 0 ? Math.min(1, Math.max(0, (day - 1 + (hasRead ? 1 : 0)) / total)) : 0;
+  const progress = total > 0 ? Math.min(1, Math.max(0, daysRead / total)) : 0;
   return (
     <ZStack
       modifiers={[
@@ -158,7 +148,7 @@ const VerseWidget = (props: VerseWidgetProps, environment: WidgetEnvironment) =>
         accessibilityLabel(
           hasSeries
             ? `Series day ${shownDay}${total > 0 ? ` of ${total}` : ''}. ${hasRead ? 'Read today.' : 'Not yet read today.'}`
-            : emptyLabel
+            : label
         ),
         widgetURL(deepLink),
       ]}
@@ -170,35 +160,18 @@ const VerseWidget = (props: VerseWidgetProps, environment: WidgetEnvironment) =>
       {hasSeries && (
         <VStack spacing={0}>
           <Text
-            modifiers={[
-              font({ family: F.display, size: 20 }),
-              foregroundStyle({ type: 'hierarchical', style: 'primary' }),
-              lineLimit(1),
-              minimumScaleFactor(0.6),
-            ]}
+            modifiers={[font({ family: F.display, size: 20 }), primary, lineLimit(1), minimumScaleFactor(0.6)]}
           >
             {shownDay}
           </Text>
           {total > 0 && (
-            <Text
-              modifiers={[
-                font({ family: F.uiMedium, size: 7.5 }),
-                foregroundStyle({ type: 'hierarchical', style: 'secondary' }),
-                lineLimit(1),
-              ]}
-            >
+            <Text modifiers={[font({ family: F.uiMedium, size: 7.5 }), secondary, lineLimit(1)]}>
               of {total}
             </Text>
           )}
         </VStack>
       )}
-      {!hasSeries && (
-        <Image
-          systemName="book"
-          size={20}
-          modifiers={[foregroundStyle({ type: 'hierarchical', style: 'primary' })]}
-        />
-      )}
+      {!hasSeries && <Image systemName="book" size={20} modifiers={[primary]} />}
     </ZStack>
   );
 };

@@ -144,6 +144,18 @@ export function shouldAutoPrepareCurrentDevotionalDay(
 }
 
 /**
+ * The day the reader is on today: the day they finished today, otherwise the
+ * day Today shows. Finishing a reading calls `advanceDay`, so `currentDay`
+ * alone already points at tomorrow's material.
+ */
+export function getTodayDay(
+  devotional: Devotional | null | undefined,
+  now = new Date(),
+): DevotionalDay | null {
+  return getDaysReadToday(devotional, now)[0] ?? getHomeDevotionalDayData(devotional, now);
+}
+
+/**
  * The day the check-in copy should talk about.
  *
  * The day READ TODAY wins over whatever `currentDay` now points at. Finishing
@@ -161,7 +173,7 @@ export function getTodayDayContext(
   devotional: Devotional | null | undefined,
   now = new Date(),
 ): DayContext | null {
-  const day = getDaysReadToday(devotional, now)[0] ?? getHomeDevotionalDayData(devotional, now);
+  const day = getTodayDay(devotional, now);
   if (!day) return null;
   return {
     title: day.title,
