@@ -988,3 +988,51 @@ describe('H7 Today auto-trial focus', () => {
     expect(next.abandonReason).toBe('user_setup_fallback');
   });
 });
+
+describe('Today widget sync', () => {
+  let saved: Record<string, unknown>;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockReadBudgetBlocked = false;
+    saved = { ...mockTodayStoreState };
+    // The day read earlier reaches the completed-day reflection, which reads journal entries.
+    mockTodayStoreState.getJournalEntry = () => undefined;
+  });
+
+  afterEach(() => {
+    Object.keys(mockTodayStoreState).forEach((key) => delete mockTodayStoreState[key]);
+    Object.assign(mockTodayStoreState, saved);
+  });
+
+  it('syncs the widgets again when a day lands while Today stays open', async () => {
+    const { syncWidgets } = jest.requireMock('@/lib/widget-bridge') as { syncWidgets: jest.Mock };
+    let tree: { update: (element: React.ReactElement) => void; unmount: () => void };
+    await act(async () => {
+      tree = renderer.create(<HomeScreen />);
+      await Promise.resolve();
+    });
+    const syncsOnOpen = syncWidgets.mock.calls.length;
+    expect(syncsOnOpen).toBeGreaterThan(0);
+
+    // A render that lands no day does not sync again.
+    await act(async () => {
+      tree!.update(<HomeScreen />);
+      await Promise.resolve();
+    });
+    expect(syncWidgets).toHaveBeenCalledTimes(syncsOnOpen);
+
+    // The focus pull resolves after the focus sync and lands Day 2.
+    const [series] = mockTodayStoreState.devotionals as { days: unknown[] }[];
+    mockTodayStoreState.devotionals = [{
+      ...series,
+      days: [...series.days, { id: 'today-series-day-2', devotionalId: 'today-series', dayNumber: 2, title: 'Day 2', isRead: false }],
+    }];
+    await act(async () => {
+      tree!.update(<HomeScreen />);
+      await Promise.resolve();
+    });
+    expect(syncWidgets).toHaveBeenCalledTimes(syncsOnOpen + 1);
+    act(() => tree!.unmount());
+  });
+});

@@ -767,6 +767,15 @@ export default function HomeScreen() {
     getCurrentDevotional(devotionals, currentDevotionalId)
   ), [currentDevotionalId, devotionals]);
 
+  // The focus sync above runs before the focus pull lands a day, and the day
+  // watch below lands one while Today stays open. Sync the widgets again when
+  // the series gains a day, so they show it once it is on the device. Keyed
+  // on the day count, not the days, so writing on a day does not re-sync.
+  const currentDevotionalDayCount = currentDevotional?.days?.length ?? 0;
+  useEffect(() => {
+    syncWidgets();
+  }, [currentDevotionalId, currentDevotionalDayCount]);
+
   // Server-side generation handles content creation. The client only tracks
   // whether the current day's content hasn't arrived yet (shows a loading card).
   // Never show "preparing" for days beyond today's calendar position — those are
