@@ -12,7 +12,7 @@
  *
  * Inventory of `unfold://` producers that must keep working (keep the test
  * file's "legitimate producers" block in sync):
- *   - iOS widgets (src/widgets/ios/{UnfoldStreak,UnfoldToday,UnfoldDashboard}.tsx)
+ *   - iOS widgets (src/widgets/ios/{UnfoldStreak,UnfoldToday,UnfoldDashboard,UnfoldVerse}.tsx)
  *     emit `unfold://(tabs)/(today)` via widgetURL.
  *   - Notification taps never travel as URLs (expo-notifications response
  *     listener → router.replace in src/lib/push-notification-helpers.ts), so
@@ -136,7 +136,6 @@ export const EXTERNAL_ROUTE_ALLOWLIST: Readonly<Record<string, RouteSchema>> = {
   // A slug, not the current id list: the screen ignores ids it does not know,
   // so a link built from newer content still opens the list.
   '/feelings': { params: { feeling: slug() } },
-  '/onboarding': { params: { startAt: slug(), flow: oneOf(['newSeries']) } },
   '/share-card': {
     params: { text: text(1000), reference: text(160), translation: text(24), type: oneOf(['verse']) },
     required: ['text'],
@@ -190,6 +189,11 @@ export const EXTERNAL_ROUTE_BLOCKLIST: ReadonlySet<string> = new Set([
   '/day-menu', // in-reader sheet that needs reader context
   '/qa-method-readings', // QA sample library; in-app only behind the practice gate
   '/qa-ambient-sound', // Future sound QA; explicit in-app entry only
+  // Onboarding is gated by its in-app callers (Today's New Series runs the
+  // creation gate and the end-series confirm first). A finished reader skips
+  // its paywall step, and ?startAt= can pass it. `/` sends a finished reader to
+  // Today and shows a new one the welcome screen that leads into onboarding.
+  '/onboarding',
 ]);
 
 /** Route groups that may appear as path segments; anything else is rejected. */

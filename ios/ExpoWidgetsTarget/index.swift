@@ -8,6 +8,7 @@ struct ExportWidgets0: WidgetBundle {
     UnfoldStreak()
     UnfoldToday()
     UnfoldDashboard()
+    UnfoldVerse()
     WidgetLiveActivity()
   }
 }

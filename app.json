@@ -123,6 +123,19 @@
               "supportedFamilies": [
                 "systemLarge"
               ]
+            },
+            {
+              "name": "UnfoldVerse",
+              "displayName": "Today's Verse",
+              "description": "See today's verse from your series on your Lock Screen.",
+              "ios": {
+                "supportedFamilies": [
+                  "accessoryInline",
+                  "accessoryRectangular",
+                  "accessoryCircular"
+                ]
+              },
+              "android": null
             }
           ]
         }

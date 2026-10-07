@@ -11,7 +11,9 @@
  */
 import type { Devotional } from '@/lib/store';
 import { getServerOwnedSeriesTotalDays } from './devotional-series-boundary';
-import { hasReadTodayGlobal } from './home-devotional-state';
+import { getDaysReadToday, getTodayDay, hasReadTodayGlobal } from './home-devotional-state';
+import { countReadDaysWithinBoundary } from './series-path';
+import { deriveLockLine } from './widget-lock-line';
 
 export type WidgetSharedProps = {
   streakCount: number;
@@ -23,6 +25,17 @@ export type WidgetSharedProps = {
   totalDays: number;
   scriptureReference: string;
   scriptureText: string;
+  /**
+   * UnfoldVerse (Lock Screen) fields. They follow the day the reader is on
+   * today, so a finished reading keeps its verse and day until midnight.
+   */
+  lockLine: string;
+  lockReference: string;
+  lockDayNumber: number;
+  /** Days of the series the reader has finished: the fill of the Lock Screen ring. */
+  lockDaysRead: number;
+  /** A day of THIS series was read today (hasReadToday counts any series). */
+  lockReadToday: boolean;
   quotableLine: string;
   readingMinutes: number;
   weeklyProgress: string;
@@ -74,6 +87,29 @@ export function getWeeklyProgress(devotionals: Devotional[], forDate: Date): str
   return bits.join(',');
 }
 
+type LockScreenProps = Pick<
+  WidgetSharedProps,
+  'lockLine' | 'lockReference' | 'lockDayNumber' | 'lockDaysRead' | 'lockReadToday'
+>;
+
+/**
+ * The UnfoldVerse (Lock Screen) fields. The timeline and the sync fingerprint
+ * both use this, so a change the widget shows always triggers a push.
+ */
+export function getLockScreenProps(
+  devotional: Devotional | null | undefined,
+  forDate: Date
+): LockScreenProps {
+  const todayDay = getTodayDay(devotional, forDate);
+  return {
+    lockLine: deriveLockLine(todayDay?.scriptureText ?? ''),
+    lockReference: todayDay?.scriptureReference ?? '',
+    lockDayNumber: todayDay?.dayNumber ?? devotional?.currentDay ?? 0,
+    lockDaysRead: devotional ? countReadDaysWithinBoundary(devotional) : 0,
+    lockReadToday: getDaysReadToday(devotional, forDate).length > 0,
+  };
+}
+
 /** Snapshot of widget props as they should appear AT forDate. */
 export function buildWidgetSharedProps(slice: WidgetStateSlice, forDate: Date): WidgetSharedProps {
   const devotional = slice.currentDevotional;
@@ -87,7 +123,6 @@ export function buildWidgetSharedProps(slice: WidgetStateSlice, forDate: Date): 
   const nextDay = devotional?.days?.find(
     (d) => d.dayNumber === (devotional?.currentDay ?? 0) + 1
   );
-
   return {
     streakCount: slice.streakCurrent,
     streakLongest: slice.streakLongest,
@@ -98,6 +133,7 @@ export function buildWidgetSharedProps(slice: WidgetStateSlice, forDate: Date): 
     totalDays: getServerOwnedSeriesTotalDays(devotional),
     scriptureReference: currentDay?.scriptureReference ?? '',
     scriptureText: currentDay?.scriptureText ?? '',
+    ...getLockScreenProps(devotional, forDate),
     quotableLine: currentDay?.quotableLine ?? '',
     readingMinutes: slice.readingDuration,
     weeklyProgress: getWeeklyProgress(slice.allDevotionals, forDate),

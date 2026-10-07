@@ -126,4 +126,16 @@ describe('redirectSystemPath', () => {
       Reflect.set(global, '__DEV__', originalDev);
     }
   });
+
+  // Why onboarding never opens from outside: its EXTERNAL_ROUTE_BLOCKLIST note.
+  it.each([
+    'unfold://onboarding?startAt=themeType&flow=newSeries',
+    'unfold://onboarding?flow=newSeries',
+    'unfold://onboarding',
+    'unfold://onboarding?startAt=themeType',
+    'com.unfoldapp.ios://onboarding?flow=newSeries',
+  ])('lands the outside link %s on the root anchor', (path) => {
+    expect(redirectSystemPath({ path, initial: false })).toBe('/');
+    expect(redirectSystemPath({ path, initial: true })).toBe('/');
+  });
 });
