@@ -174,13 +174,10 @@ import {
   INITIAL_GENERATION_REQUEST_ID_KEY,
   readInitialGenerationRequestId,
 } from '../initial-generation-request';
-import { createAutoTrialIntent, transitionAutoTrialIntent } from '../auto-trial-intent';
+import { createAutoTrialIntent, readAutoTrialIntent, transitionAutoTrialIntent } from '../auto-trial-intent';
 import { mmkvStorage } from '../mmkv-storage';
 import { useUnfoldStore, type Devotional, type UserProfile } from '../store';
-import {
-  resolveCreateNewDuringPendingInitial,
-  resolvePendingInitialArcResume,
-} from '../support-clarity';
+import { resolveCreateNewDuringPendingInitial } from '../support-clarity';
 import { useUIState } from '@/lib/ui-state';
 
 const GO_HOME_LABEL = 'Go to Today';
@@ -660,14 +657,16 @@ describe('Go home after the server ruled on the first series', () => {
   }
 
   // The question Today's "Start a new series" asks before it opens
-  // new-series setup. The reader has no series yet.
+  // new-series setup, built as Today's handleCreateNew builds it. The reader
+  // has no series yet.
   function todayCreateNewAction() {
-    return resolveCreateNewDuringPendingInitial(resolvePendingInitialArcResume({
+    return resolveCreateNewDuringPendingInitial({
       inflight: readInflightGenerationJob(),
       requestId: readInitialGenerationRequestId(),
       generationSessionStatus: useUnfoldStore.getState().generationSession.status,
       hasReadableCurrentSeries: false,
-    }));
+      autoTrialOwnsFlow: readAutoTrialIntent()?.status === 'purchased',
+    });
   }
 
   async function renderSubmittedJob(): Promise<Tree> {
