@@ -180,6 +180,12 @@ export default function GeneratingScreen() {
   const [devotionalTitle, setDevotionalTitle] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [canRetryJob, setCanRetry] = useState(true);
+  // Whether the error on screen is the server's verdict on the job (failed,
+  // an unopenable result, an unknown status, no such job) rather than a
+  // request that never got an answer. Set beside each of this screen's own
+  // setError calls so a later client-side failure cannot inherit an earlier
+  // verdict; the auto-trial handoff never sets it.
+  const [errorIsServerVerdict, setErrorIsServerVerdict] = useState(false);
 
   // Job polling state
   const [pendingJobId, setPendingJobId] = useState<string | null>(null);
@@ -572,6 +578,8 @@ export default function GeneratingScreen() {
       setIsGenerating(false);
       setIsReconnecting(false);
       setError(message);
+      // Every caller but the network give-up is a verdict.
+      setErrorIsServerVerdict(!options.keepInflight);
       setCanRetry(true);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     };
@@ -637,6 +645,7 @@ export default function GeneratingScreen() {
             setIsGenerating(false);
             setIsReconnecting(false);
             setError(errorMsg);
+            setErrorIsServerVerdict(true);
             setCanRetry(outcome.canRetry);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
             return;
@@ -707,6 +716,7 @@ export default function GeneratingScreen() {
         setIsGenerating(false);
         setIsReconnecting(false);
         setError('We couldn’t load your details. Please try again.');
+        setErrorIsServerVerdict(false);
         setCanRetry(true);
       }, NO_USER_GRACE_MS);
       return () => clearTimeout(graceTimer);
@@ -864,6 +874,7 @@ export default function GeneratingScreen() {
         setIsGenerating(false);
         setIsReconnecting(false);
         setError(errorMessage);
+        setErrorIsServerVerdict(false);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
     };
@@ -973,6 +984,7 @@ export default function GeneratingScreen() {
       setIsGenerating(false);
       setIsReconnecting(false);
       setError(errorMessage);
+      setErrorIsServerVerdict(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
   };
@@ -1000,6 +1012,11 @@ export default function GeneratingScreen() {
     if (cleanup === 'clear') {
       clearInflightGenerationJob();
       clearGenerationSession();
+      // The server has ruled on this request, and resubmitting its id only
+      // returns the same job, so Today's create and resume taps looped back
+      // here. A request that never got an answer keeps its id: the POST may
+      // have created a job, and the same id finds it instead of a second one.
+      if (errorIsServerVerdict) clearInitialGenerationRequestId();
     } else {
       // We only lost contact with the server; it may still own this job.
       // Keep the record, marked for Today so it watches the job from there
@@ -1054,7 +1071,11 @@ export default function GeneratingScreen() {
 
   if (error) {
     const displayError = toFriendlyOnboardingGenerationError(error);
-    const isConnectionError = displayError.toLowerCase().includes('connection');
+    // A server verdict is never a lost connection, whatever its text says. A
+    // provider timeout reads like one, and hiding Start over for it left Go
+    // home as the only way out once the retries were spent.
+    const isConnectionError = !errorIsServerVerdict
+      && displayError.toLowerCase().includes('connection');
     return (
       <View style={genStyles.transparentFlex}>
         <SafeAreaView style={genStyles.errorSafeArea}>
