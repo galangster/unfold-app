@@ -1,8 +1,13 @@
 import type { Devotional, DevotionalDay } from './store';
 import type { PulledDevotionalContent } from './devotional-sync-pull';
 import { canonicalGeneratedDayId } from './devotional-canonical-days';
-import { mergeDevotionalLifecycle } from './devotional-lifecycle';
+import {
+  didDevotionalLifecycleChange,
+  mergeDevotionalLifecycle,
+  parseLifecycleTimestamp,
+} from './devotional-lifecycle';
 import { assertSyncSessionCurrent } from './sync-session-fence';
+import { peekSyncOutbox } from './sync-outbox';
 import { buildDevotionalSyncMetadataPatch } from './devotional-sync-metadata';
 import {
   clampCurrentDayToSeriesBoundary,
@@ -120,19 +125,73 @@ export function applyPulledDevotionalMetadataToDevotionals(
   return didChange ? nextDevotionals : devotionals;
 }
 
+function pulledSeriesBesides(pulled: PulledDevotionalContent, devotionalId: string) {
+  return pulled.canonicalSeries?.filter((series) => series.id !== devotionalId) ?? [];
+}
+
+/** Lifecycle clocks still waiting in the outbox count as local, as in the full sync. */
+function pendingLifecycleClocksById(): Map<string, string> {
+  const pending = new Map<string, string>();
+  for (const change of peekSyncOutbox()) {
+    if (change.table !== 'devotionals' || change.deleted) continue;
+    const archivedStateAt = parseLifecycleTimestamp(change.data.archivedStateAt);
+    if (typeof archivedStateAt !== 'string') continue;
+    const existing = pending.get(change.id);
+    if (!existing || existing < archivedStateAt) pending.set(change.id, archivedStateAt);
+  }
+  return pending;
+}
+
+/**
+ * A pull of one series returns every series row that changed. "Continue this
+ * series" on another device resumes one series and pauses the current one on
+ * the same clock, so applying the current row alone archives it while the
+ * resumed series stays paused here, and Today is left with no series. Apply
+ * the other rows' archive and resume clocks too, with the same
+ * compare-and-set as the full sync. Their content and progress, and rows this
+ * device does not hold, wait for the full sync.
+ */
+function applyPulledSeriesLifecycleToDevotionals(
+  devotionals: Devotional[],
+  devotionalId: string,
+  pulled: PulledDevotionalContent,
+): Devotional[] {
+  assertBoundPulledSession(pulled);
+  const incomingById = new Map(pulledSeriesBesides(pulled, devotionalId).map((series) => [series.id, series]));
+  if (incomingById.size === 0) return devotionals;
+
+  const pending = pendingLifecycleClocksById();
+  let didChange = false;
+  const nextDevotionals = devotionals.map((devotional) => {
+    const incoming = incomingById.get(devotional.id);
+    if (!incoming) return devotional;
+    const lifecycle = mergeDevotionalLifecycle({
+      local: devotional,
+      incoming: { archivedAt: incoming.archivedAt, archivedStateAt: incoming.archivedStateAt },
+      pendingArchivedStateAt: pending.get(devotional.id),
+    });
+    if (!didDevotionalLifecycleChange(devotional, lifecycle)) return devotional;
+    didChange = true;
+    return { ...devotional, ...lifecycle };
+  });
+
+  return didChange ? nextDevotionals : devotionals;
+}
+
 export function applyPulledDevotionalContentToDevotionals(
   devotionals: Devotional[],
   devotionalId: string,
   pulled: PulledDevotionalContent,
 ): Devotional[] {
   assertBoundPulledSession(pulled);
-  const existing = devotionals.some((devotional) => devotional.id === devotionalId);
+  const withLifecycle = applyPulledSeriesLifecycleToDevotionals(devotionals, devotionalId, pulled);
+  const existing = withLifecycle.some((devotional) => devotional.id === devotionalId);
   if (existing) {
-    return applyPulledDevotionalMetadataToDevotionals(devotionals, devotionalId, pulled);
+    return applyPulledDevotionalMetadataToDevotionals(withLifecycle, devotionalId, pulled);
   }
 
   const shell = buildPulledDevotionalShell(devotionalId, pulled);
-  return shell ? [shell, ...devotionals] : devotionals;
+  return shell ? [shell, ...withLifecycle] : withLifecycle;
 }
 
 export function applyPulledDevotionalContent({
@@ -147,7 +206,7 @@ export function applyPulledDevotionalContent({
   updateDevotionals: (updater: (devotionals: Devotional[]) => Devotional[]) => void;
 }): void {
   assertBoundPulledSession(pulled);
-  if (pulled.devotional || pulled.days.length > 0) {
+  if (pulled.devotional || pulled.days.length > 0 || pulledSeriesBesides(pulled, devotionalId).length > 0) {
     updateDevotionals((devotionals) =>
       applyPulledDevotionalContentToDevotionals(devotionals, devotionalId, pulled),
     );

@@ -150,6 +150,13 @@ describe('selectSyncedCurrentDevotionalId when the current series is paused else
     expect(select([{ ...resumedB, generationMode: 'batch' }])).toBeNull();
     // A live sibling on the same clock leaves no strict winner.
     expect(select([resumedB, { ...resumedB, id: 'series-c' }])).toBeNull();
+    // A newer live series that only this pull brings outranks the resume. The
+    // proof runs on the pulled rows, not on the copy held before the pull.
+    expect(selectSyncedCurrentDevotionalId({
+      previousCurrentId: 'series-x',
+      previous: [liveX, resumedB],
+      next: [pausedX, resumedB, { id: 'series-c', createdAt: NEWER_RESUME_AT, generationMode: 'progressive' }],
+    })).toBeNull();
   });
 
   // Ending a series to start a new one archives the current series too. An
