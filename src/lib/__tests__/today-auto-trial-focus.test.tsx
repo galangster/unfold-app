@@ -550,6 +550,9 @@ describe('Today across local midnight', () => {
       pulled: overnightPull,
     }));
     expect(commitDevotionalPullCursor).toHaveBeenCalledWith(overnightPull);
+    const applyOrder = jest.mocked(applyPulledDevotionalContent).mock.invocationCallOrder;
+    const commitOrder = jest.mocked(commitDevotionalPullCursor).mock.invocationCallOrder;
+    expect(applyOrder[applyOrder.length - 1]).toBeLessThan(commitOrder[commitOrder.length - 1]);
     // The card follows the watch again, so its Checking / Check Again action
     // tracks the job, instead of a recovery-less "Check back in a moment".
     expect(mockDevotionalCardProps?.state).toEqual(expect.objectContaining({
@@ -557,6 +560,31 @@ describe('Today across local midnight', () => {
       dayNumber: 4,
       recovery: expect.objectContaining({ onCheckAgain: expect.any(Function) }),
     }));
+  });
+
+  it('keeps the cursor when the pulled day fails to reach the store', async () => {
+    await renderTodayAt(new Date(2026, 9, 3, 21, 0));
+    await settlePull();
+    jest.mocked(applyPulledDevotionalContent).mockClear();
+    jest.mocked(commitDevotionalPullCursor).mockClear();
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    emitAppState('background');
+    act(() => {
+      jest.setSystemTime(new Date(2026, 9, 4, 7, 30));
+    });
+    mockPullDevotionalContent.mockResolvedValueOnce(overnightPull);
+    jest.mocked(applyPulledDevotionalContent).mockImplementationOnce(() => {
+      throw new Error('apply failed');
+    });
+    emitAppState('active');
+    await settlePull();
+    warnSpy.mockRestore();
+
+    // Day 4 never reached the store. The cursor stays put, so the next
+    // incremental pull asks for Day 4 again instead of skipping it.
+    expect(applyPulledDevotionalContent).toHaveBeenCalledWith(expect.objectContaining({ pulled: overnightPull }));
+    expect(commitDevotionalPullCursor).not.toHaveBeenCalled();
   });
 
   it('shows the new day on resume without waiting for the minute tick', async () => {
