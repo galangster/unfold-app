@@ -37,7 +37,7 @@ import { drainSyncOutbox, peekSyncOutbox, replaceSyncOutbox, resetDrainStateForT
 import { useCompanionChatStore } from '../companion-chat-store';
 import { readCompanionDraft, writeCompanionDraft } from '../companion-drafts';
 import { mmkvStorage } from '../mmkv-storage';
-import type { SyncPushChange, SyncTable } from '../sync-types';
+import type { SyncPulledRecord, SyncPushChange, SyncTable } from '../sync-types';
 
 const mockFetch = jest.fn();
 const FIXED_CLOCK = new Date('2026-07-01T12:00:00.000Z');
@@ -241,7 +241,7 @@ describe('full user-data sync', () => {
     expect(useUnfoldStore.getState().notes.find((note) => note.id === noteId)).toBeUndefined();
   });
 
-  it('sends the persisted lastPulledAt cursor and advances it after apply', async () => {
+  it('sends the persisted cursor minus the overlap window and advances it after apply', async () => {
     mmkvStorage.setItem(LAST_PULLED_AT_KEY, '2026-07-01T11:00:00.000Z');
     serveSync({
       pull: () => ({ timestamp: '2026-07-01T12:00:00.000Z', changes: {} }),
@@ -252,7 +252,7 @@ describe('full user-data sync', () => {
     expect(mockFetch).toHaveBeenCalledWith('https://example.test/api/sync/pull', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ lastPulledAt: '2026-07-01T11:00:00.000Z' }),
+      body: JSON.stringify({ lastPulledAt: '2026-07-01T10:58:00.000Z' }),
       signal: expect.any(AbortSignal),
     });
     expect(mmkvStorage.getItem(LAST_PULLED_AT_KEY)).toBe('2026-07-01T12:00:00.000Z');
@@ -1260,5 +1260,114 @@ describe('pulled series lifecycle', () => {
     const state = useUnfoldStore.getState();
     expect(state.currentDevotionalId).toBe('series-2');
     expect(state.devotionals.find((item) => item.id === 'series-2')?.archivedAt).toBeUndefined();
+  });
+});
+
+describe('incremental pull cursor overlap', () => {
+  type ServerRow = { record: SyncPulledRecord; committed: boolean };
+
+  function serverDay(dayNumber: number, updatedAt: string): SyncPulledRecord {
+    return {
+      id: `day-series-1-${dayNumber}`,
+      updatedAt,
+      deleted: false,
+      data: {
+        devotionalId: 'series-1',
+        dayNumber,
+        title: `Day ${dayNumber}`,
+        scriptureReference: 'John 1:1',
+        scriptureText: 'In the beginning',
+        bodyText: 'Body',
+        quotableLine: 'Line',
+        isRead: false,
+        clientUpdatedAt: updatedAt,
+      },
+    };
+  }
+
+  // Mirrors POST /api/sync/pull: the response timestamp is the API clock
+  // taken before the SELECTs, and a row is visible only once its writer has
+  // committed. Uncommitted rows are invisible however they were stamped.
+  function serveDays(rows: ServerRow[], serverNow: () => string, delivered: string[][]) {
+    serveSync({
+      pull: ({ lastPulledAt }) => {
+        const since = lastPulledAt ? Date.parse(lastPulledAt) : null;
+        const visible = rows
+          .filter((row) => row.committed && (since === null || Date.parse(row.record.updatedAt) > since))
+          .map((row) => row.record);
+        delivered.push(visible.map((record) => record.id));
+        return {
+          timestamp: serverNow(),
+          changes: visible.length > 0 ? { devotional_days: visible } : {},
+        };
+      },
+    });
+  }
+
+  function seedSeries() {
+    useUnfoldStore.setState({
+      devotionals: [{
+        id: 'series-1',
+        title: 'Stillness',
+        totalDays: 14,
+        currentDay: 2,
+        days: [],
+        createdAt: '2026-09-01T00:00:00.000Z',
+        updatedAt: '2026-09-11T12:00:00.000Z',
+        generationMode: 'progressive',
+        userContext: { name: '', aboutMe: '', currentSituation: '', emotionalState: '' },
+      } as never],
+      currentDevotionalId: null,
+    });
+  }
+
+  it('delivers a day the worker stamped before a pull but committed after it', async () => {
+    seedSeries();
+    mmkvStorage.setItem(LAST_PULLED_AT_KEY, '2026-09-12T15:59:00.000Z');
+    const day1 = { record: serverDay(1, '2026-09-12T15:59:30.000Z'), committed: true };
+    // The worker's publish transaction stamps updated_at with its own clock,
+    // then runs more statements before COMMIT.
+    const day2 = { record: serverDay(2, '2026-09-12T16:00:00.000Z'), committed: false };
+    const delivered: string[][] = [];
+    let serverNow = '2026-09-12T16:00:00.050Z';
+    serveDays([day1, day2], () => serverNow, delivered);
+
+    // This pull's timestamp is taken after day 2's stamp, and its SELECT runs
+    // before day 2 commits.
+    jest.setSystemTime(new Date('2026-09-12T16:00:00.050Z'));
+    await pullAllUserData();
+    expect(delivered[0]).toEqual(['day-series-1-1']);
+    expect(mmkvStorage.getItem(LAST_PULLED_AT_KEY)).toBe('2026-09-12T16:00:00.050Z');
+
+    day2.committed = true;
+    jest.setSystemTime(new Date('2026-09-12T16:01:00.000Z'));
+    useUnfoldStore.getState().markDayAsRead('series-1', 1);
+
+    serverNow = '2026-09-12T16:05:00.000Z';
+    jest.setSystemTime(new Date('2026-09-12T16:05:00.000Z'));
+    await pullAllUserData();
+
+    const days = useUnfoldStore.getState().devotionals.find((item) => item.id === 'series-1')?.days ?? [];
+    expect(days.map((day) => day.dayNumber)).toEqual([1, 2]);
+    // Day 1 came back in the overlap window. The older server copy must not
+    // undo the read the device recorded after the first pull.
+    expect(delivered[1]).toContain('day-series-1-1');
+    expect(days[0]).toMatchObject({ isRead: true, readAt: '2026-09-12T16:01:00.000Z' });
+    // The stored cursor is still the server's own timestamp.
+    expect(mmkvStorage.getItem(LAST_PULLED_AT_KEY)).toBe('2026-09-12T16:05:00.000Z');
+  });
+
+  it('requests a full pull when the stored cursor is not a timestamp', async () => {
+    mmkvStorage.setItem(LAST_PULLED_AT_KEY, 'not-a-timestamp');
+    serveSync({
+      pull: () => ({ timestamp: '2026-07-01T12:00:00.000Z', changes: {} }),
+    });
+
+    await pullAllUserData();
+
+    expect(mockFetch).toHaveBeenCalledWith('https://example.test/api/sync/pull', expect.objectContaining({
+      body: JSON.stringify({ lastPulledAt: null }),
+    }));
+    expect(mmkvStorage.getItem(LAST_PULLED_AT_KEY)).toBe('2026-07-01T12:00:00.000Z');
   });
 });

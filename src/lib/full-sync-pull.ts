@@ -9,6 +9,7 @@ import {
   mergeDevotionalLifecycle,
   parseLifecycleTimestamp,
 } from './devotional-lifecycle';
+import { DEVOTIONAL_PULL_CURSOR_OVERLAP_MS } from './devotional-pull-cursor';
 import { selectSyncedCurrentDevotionalId } from './devotional-resume-selection';
 import { mmkvStorage } from './mmkv-storage';
 import { logger } from './logger';
@@ -46,6 +47,23 @@ import {
 } from './sync-session-fence';
 
 export const LAST_PULLED_AT_KEY = 'unfold-last-pulled-at';
+
+/**
+ * `lastPulledAt` to send for a stored cursor. The server's `timestamp` is
+ * taken before its SELECTs, and writers (the worker's publish transaction,
+ * another device's push) stamp `updatedAt` before they commit. A row
+ * committed during a pull can therefore carry an `updatedAt` older than the
+ * returned cursor and never match `updatedAt > cursor` again. Re-requesting
+ * the overlap window picks it up. Pulled rows apply last-write-wins on their
+ * update stamps, so a row received twice is a no-op. An unparseable cursor
+ * asks for a full pull.
+ */
+function incrementalPullSince(stored: string | null): string | null {
+  if (!stored) return null;
+  const cursorMs = Date.parse(stored);
+  if (!Number.isFinite(cursorMs)) return null;
+  return new Date(Math.max(0, cursorMs - DEVOTIONAL_PULL_CURSOR_OVERLAP_MS)).toISOString();
+}
 
 type PullAllUserDataOptions = {
   /** Force a first-sync style restore. Normal app-start pulls should stay incremental. */
@@ -915,7 +933,7 @@ export function applyServerConflictRecords(results: SyncPushResult[]): void {
 export async function pullAllUserData(options: PullAllUserDataOptions = {}): Promise<SyncPullResponse> {
   const session = captureSyncSession();
   assertSyncSessionCurrent(session, 'sync pull');
-  const lastPulledAt = options.full ? null : syncGet(LAST_PULLED_AT_KEY);
+  const lastPulledAt = options.full ? null : incrementalPullSince(syncGet(LAST_PULLED_AT_KEY));
   const headers = await getAuthHeaders();
   assertSyncSessionCurrent(session, 'sync pull');
 

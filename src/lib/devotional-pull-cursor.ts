@@ -39,6 +39,7 @@ export const DEVOTIONAL_FULL_PULL_INTERVAL_MS = 24 * 60 * 60 * 1000;
  * Re-request records updated this long before the stored cursor. Rows are
  * upserted idempotently, so the only cost is re-receiving a record or two;
  * the benefit is immunity to the stamp-before-commit race described above.
+ * The app-start pull (`full-sync-pull.ts`) uses the same window.
  */
 export const DEVOTIONAL_PULL_CURSOR_OVERLAP_MS = 2 * 60 * 1000;
 
