@@ -1,10 +1,14 @@
 import React from 'react';
 import { AppState } from 'react-native';
 import renderer, { act } from 'react-test-renderer';
+import { logEvent } from '../../lib/analytics';
 import { isSyncSessionCurrent, resetSyncSessionFenceForTesting } from '../../lib/sync-session-fence';
 import { useDailyReminderSync } from '../useDailyReminderSync';
 
-const mockScheduleDailyReminder = jest.fn<Promise<string | null>, unknown[]>(async () => 'request-0');
+type MorningsWrite = { complete: boolean; holdsFirstMorning: boolean };
+const mockScheduleDailyReminderMornings = jest.fn<Promise<MorningsWrite>, unknown[]>(
+  async () => ({ complete: true, holdsFirstMorning: true }),
+);
 const mockCancelNotificationById = jest.fn<Promise<void>, unknown[]>(async () => undefined);
 let mockOperation = 0;
 const mockIsOriginCurrent = (session: number, origin: number) =>
@@ -46,7 +50,7 @@ jest.mock('@/lib/logger', () => ({
 
 jest.mock('@/lib/notifications', () => ({
   NOTIFICATION_IDS: { DAILY_REMINDER: 'unfold-daily-reminder' },
-  scheduleDailyReminder: (...args: unknown[]) => mockScheduleDailyReminder(...args),
+  scheduleDailyReminderMornings: (...args: unknown[]) => mockScheduleDailyReminderMornings(...args),
   areNotificationsEnabled: async () => true,
   cancelNotificationById: (...args: unknown[]) => mockCancelNotificationById(...args),
   beginDailyReminderOperation: () => {
@@ -103,8 +107,10 @@ describe('useDailyReminderSync horizon', () => {
     jest.useFakeTimers();
     resetSyncSessionFenceForTesting();
     mockOperation = 0;
-    mockScheduleDailyReminder.mockClear();
+    mockScheduleDailyReminderMornings.mockReset();
+    mockScheduleDailyReminderMornings.mockResolvedValue({ complete: true, holdsFirstMorning: true });
     mockCancelNotificationById.mockClear();
+    (logEvent as jest.Mock).mockClear();
     jest.spyOn(AppState, 'addEventListener').mockImplementation(() => ({ remove: jest.fn() }));
   });
 
@@ -130,13 +136,16 @@ describe('useDailyReminderSync horizon', () => {
     await mountAt(at(7, 8, 35));
 
     expect(mockCancelNotificationById).not.toHaveBeenCalled();
-    expect(mockScheduleDailyReminder).toHaveBeenCalledTimes(1);
-    const [time, , , trigger] = mockScheduleDailyReminder.mock.calls[0];
-    expect(time).toBe('8:00 AM');
-    expect(trigger).toEqual({ kind: 'dates', dates: mornings(9, 20) });
+    expect(mockScheduleDailyReminderMornings).toHaveBeenCalledTimes(1);
+    const [dates, owner] = mockScheduleDailyReminderMornings.mock.calls[0];
+    expect(owner).toBe('server');
+    expect(dates).toEqual(mornings(9, 20));
     // The local queue does not hold tomorrow, so the server still sends
     // Day 6's ready push.
     expect(mockStoreState.user.localDailyReminderScheduled).toBe(false);
+    // The write logs its own event under the owner it decided; the hook
+    // adds none, so a dashboard split by owner counts this write once.
+    expect(logEvent).not.toHaveBeenCalled();
   });
 
   it('starts the horizon tomorrow after a read before the reminder time', async () => {
@@ -144,8 +153,40 @@ describe('useDailyReminderSync horizon', () => {
 
     await mountAt(at(7, 6, 30));
 
-    expect(mockScheduleDailyReminder).toHaveBeenCalledTimes(1);
-    expect(mockScheduleDailyReminder.mock.calls[0][3]).toEqual({ kind: 'dates', dates: mornings(8, 20) });
+    expect(mockScheduleDailyReminderMornings).toHaveBeenCalledTimes(1);
+    const [dates, owner] = mockScheduleDailyReminderMornings.mock.calls[0];
+    expect(owner).toBe('local');
+    expect(dates).toEqual(mornings(8, 20));
     expect(mockStoreState.user.localDailyReminderScheduled).toBe(true);
+  });
+
+  it('mirrors the next morning as held after a partial write that kept it, and retries', async () => {
+    seed({ lastRead: at(7, 6, 15), daySixOnDevice: true, pushRegistered: false });
+    mockScheduleDailyReminderMornings.mockResolvedValueOnce({ complete: false, holdsFirstMorning: true });
+
+    await mountAt(at(7, 6, 30));
+
+    // Tomorrow is in the queue, so the server must not push on it as well.
+    expect(mockStoreState.user.localDailyReminderScheduled).toBe(true);
+
+    // Not recorded as applied: the next foreground writes again.
+    // The hook registers its foreground listener last (styling libraries
+    // register their own first).
+    const { calls } = (AppState.addEventListener as jest.Mock).mock;
+    const listener = calls[calls.length - 1][1] as (next: string) => void;
+    await act(async () => {
+      listener('active');
+    });
+    expect(mockScheduleDailyReminderMornings).toHaveBeenCalledTimes(2);
+  });
+
+  it('mirrors the next morning as not held when it failed to land', async () => {
+    seed({ lastRead: at(7, 6, 15), daySixOnDevice: true, pushRegistered: false });
+    mockStoreState.user.localDailyReminderScheduled = true;
+    mockScheduleDailyReminderMornings.mockResolvedValueOnce({ complete: false, holdsFirstMorning: false });
+
+    await mountAt(at(7, 6, 30));
+
+    expect(mockStoreState.user.localDailyReminderScheduled).toBe(false);
   });
 });

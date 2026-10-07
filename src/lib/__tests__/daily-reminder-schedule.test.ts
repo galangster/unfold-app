@@ -58,15 +58,24 @@ describe('buildDailyReminderSchedule', () => {
     ).toEqual(mornings(7, 20));
   });
 
-  it('keeps the reader\'s clock time across a daylight-saving change', () => {
+  // Only meaningful in a zone whose offset changes inside the horizon: Oct 20
+  // to Nov 2 2026 crosses the EU (Oct 25) and US (Nov 1) fall-back. Under
+  // UTC it would pass whatever the builder did, so it reports as skipped
+  // there instead. `bun run test:day-unlock` runs it under
+  // America/Los_Angeles.
+  const dstNow = new Date(2026, 9, 20, 6);
+  const horizonCrossesDst =
+    dstNow.getTimezoneOffset() !== new Date(2026, 10, 2, 8).getTimezoneOffset();
+  (horizonCrossesDst ? it : it.skip)('keeps the reader\'s clock time across a daylight-saving change', () => {
     const dates = buildDailyReminderSchedule({
       clock,
       owner: 'local',
       readToday: false,
       lastReadAt: null,
-      now: new Date(2026, 9, 25, 6),
+      now: dstNow,
     });
     expect(dates).toHaveLength(DAILY_REMINDER_HORIZON_DAYS);
+    expect(new Set(dates.map((date) => date.getTimezoneOffset())).size).toBe(2);
     expect(dates.every((date) => date.getHours() === 8 && date.getMinutes() === 0)).toBe(true);
   });
 

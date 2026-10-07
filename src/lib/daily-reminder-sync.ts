@@ -14,7 +14,7 @@ import {
   areNotificationsEnabled,
   beginDailyReminderOperation,
   isDailyReminderOriginCurrent,
-  scheduleDailyReminder,
+  scheduleDailyReminderMornings,
 } from '@/lib/notifications';
 import {
   buildDailyReminderFingerprint,
@@ -27,7 +27,27 @@ import { getEffectivePremiumAccessPolicy } from '@/lib/premium-state';
 import type { PremiumAccessPolicy } from '@/lib/premium-access-policy';
 import { parseReminderClock } from '@/lib/push-notification-helpers';
 import { captureSyncSession } from '@/lib/sync-session-fence';
+import { getDeviceTimezone } from '@/lib/device-timezone';
 import { logger } from '@/lib/logger';
+
+/**
+ * Appends the device timezone, read at the moment of the call, to a
+ * reminder fingerprint.
+ *
+ * The horizon is absolute instants. The retired DAILY trigger fired at the
+ * device's clock time in whatever zone it was in; a dated morning keeps the
+ * zone it was built in. A reader who flies New York to Los Angeles keeps an
+ * 08:00 New York morning, which fires at 05:00 local, until the horizon is
+ * rewritten. Nothing else in the fingerprint changes on a flight, and the
+ * date often does not either, so without this every skip gate (the hook's
+ * same-fingerprint-same-day check, the background latch) holds the old
+ * zone's mornings. Read it when the run executes, not at the last render:
+ * a foreground after landing re-renders nothing. Same pitfall as
+ * check-in-schedule.ts and useCheckInNotifications.
+ */
+export function withDeviceTimezone(fingerprint: string): string {
+  return `${fingerprint}|tz:${getDeviceTimezone() ?? ''}`;
+}
 
 /**
  * Mirrors "the local queue holds the morning the next day opens" onto the
@@ -53,9 +73,23 @@ function getLatestReadAt(devotional: Devotional | null | undefined): Date | null
   return latest;
 }
 
+export interface DailyReminderHorizonWrite {
+  owner: DailyReminderOwner;
+  /** Every morning landed; only then may the caller record the sync. */
+  complete: boolean;
+  /**
+   * The local queue holds the next morning, so the server must not push on
+   * it. Mirror this onto the profile whenever the operation is still
+   * current, complete or not: a partial write that holds the next morning
+   * must not let the server's ready push land on top of it.
+   */
+  holdsNextMorning: boolean;
+}
+
 /**
- * Decide who owns the next morning and write the local horizon. The caller
- * mirrors `owner === 'local'` once it confirms the operation is current.
+ * Decide who owns the next morning and write the local horizon. When the
+ * server owns it, that morning is not in the horizon, so the local queue
+ * never holds it.
  */
 export async function scheduleDailyReminderHorizon(
   reminderTime: string,
@@ -63,7 +97,7 @@ export async function scheduleDailyReminderHorizon(
   originatingSession: number,
   originatingOperation: number,
   now = new Date(),
-): Promise<{ owner: DailyReminderOwner; scheduledId: string | null }> {
+): Promise<DailyReminderHorizonWrite> {
   const state = useUnfoldStore.getState();
   const currentDevotional = getCurrentDevotional(state.devotionals, state.currentDevotionalId);
   const owner = getDailyReminderOwner({
@@ -78,20 +112,20 @@ export async function scheduleDailyReminderHorizon(
     lastReadAt: getLatestReadAt(currentDevotional),
     now,
   });
-  const scheduledId = await scheduleDailyReminder(
-    reminderTime,
-    originatingSession,
-    originatingOperation,
-    { kind: 'dates', dates },
-  );
-  return { owner, scheduledId };
+  const write = await scheduleDailyReminderMornings(dates, owner, originatingSession, originatingOperation);
+  return {
+    owner,
+    complete: write.complete,
+    holdsNextMorning: owner === 'local' && write.holdsFirstMorning,
+  };
 }
 
 export type DailyReminderTopupOutcome = 'written' | 'skipped' | 'deferred' | 'failed';
 
 // Same-day latch, like the check-in sync's: a fresh process (terminated
 // app) starts empty and always refills; later wakes that day do not churn
-// the queue.
+// the queue. Keyed on the device timezone too, so a wake after a flight
+// rewrites the old zone's mornings (withDeviceTimezone).
 let lastBackgroundRefill = '';
 
 /** Test-only: clear the same-day latch between cases. */
@@ -114,21 +148,21 @@ export async function runDailyReminderBackgroundTopup(now = new Date()): Promise
     const dailyReminderEnabled = state.user?.dailyReminderEnabled ?? Boolean(reminderTime);
     if (!reminderTime || !dailyReminderEnabled) return 'skipped';
 
-    const refill = `${buildDailyReminderFingerprint({
+    const refill = `${withDeviceTimezone(buildDailyReminderFingerprint({
       reminderTime,
       dailyReminderEnabled,
       currentDevotional: getCurrentDevotional(state.devotionals, state.currentDevotionalId),
       premiumPolicy,
       pushRegistered: Boolean(state.user?.pushRegisteredAt),
       readToday: hasReadAnyDayToday(state.devotionals, now),
-    })}|${now.toDateString()}`;
+    }))}|${now.toDateString()}`;
     if (refill === lastBackgroundRefill) return 'skipped';
 
     if (!(await areNotificationsEnabled())) return 'deferred';
 
     const originatingSession = captureSyncSession();
     const originatingOperation = beginDailyReminderOperation();
-    const { owner, scheduledId } = await scheduleDailyReminderHorizon(
+    const { owner, complete, holdsNextMorning } = await scheduleDailyReminderHorizon(
       reminderTime,
       premiumPolicy,
       originatingSession,
@@ -136,9 +170,10 @@ export async function runDailyReminderBackgroundTopup(now = new Date()): Promise
       now,
     );
     if (!isDailyReminderOriginCurrent(originatingSession, originatingOperation)) return 'skipped';
-    if (scheduledId == null) return 'failed';
 
-    mirrorLocalReminderScheduled(owner === 'local');
+    mirrorLocalReminderScheduled(holdsNextMorning);
+    // Not latched: the next wake retries the mornings that did not land.
+    if (!complete) return 'failed';
     lastBackgroundRefill = refill;
     logger.log(`[daily-reminder-topup] Refilled the morning reminder (owner=${owner})`);
     return 'written';

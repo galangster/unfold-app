@@ -21,10 +21,6 @@ export interface DailyReminderFingerprintInput {
 
 export type DailyReminderOwner = 'local' | 'server';
 
-export type DailyReminderTrigger =
-  | { kind: 'daily' }
-  | { kind: 'dates'; dates: Date[] };
-
 /**
  * How many days ahead the morning reminder is pre-rolled. Same horizon as
  * the check-ins (check-in-schedule.ts), and the same budget: two check-in
@@ -59,6 +55,21 @@ export interface BuildDailyReminderScheduleArgs {
  * morning stays local, so one ignored push no longer silences the reminder.
  * That morning is anchored to the read, not to `now`, so a refill two days
  * later keeps today.
+ *
+ * The anchor matches the backend's ready-push send time (push-timing.ts,
+ * readyPushSendAt) in the normal case, where the next day generates
+ * overnight. When the push lands on a later morning, that morning gets two
+ * banners: the local one here, and the server's, because the profile flag
+ * says the local queue does not hold the handed-off morning. That happens
+ * when generation slips past the morning the day opens, when a resumed
+ * series has no recent read, or when the owner is 'server' with no read in
+ * the series yet (`lastReadAt` null, so nothing is skipped). These are
+ * failure paths; skipping more mornings to cover them would bring back the
+ * silence this horizon exists to end.
+ *
+ * Dates are absolute instants built from the device's zone at `now`. The
+ * callers rewrite the horizon when that zone changes (see
+ * `withDeviceTimezone` in daily-reminder-sync.ts).
  */
 export function buildDailyReminderSchedule({
   clock,

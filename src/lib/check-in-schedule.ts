@@ -50,7 +50,8 @@
  * never drifted. `useCheckInNotifications` carries the device timezone in its
  * fingerprint for exactly this reason — without it the foreground reconcile
  * hits its own skip gate (same fingerprint, same wall-clock day) and never
- * rewrites.
+ * rewrites. The morning reminder's horizon has the same exposure and the
+ * same guard (`withDeviceTimezone` in daily-reminder-sync.ts).
  *
  * This module is pure: no expo, no store, no clock of its own. Everything it
  * needs arrives as an argument so the whole schedule is testable directly.

@@ -23,6 +23,8 @@ jest.mock('expo-file-system/legacy', () => ({
 }));
 jest.mock('@/lib/analytics', () => ({ logEvent: jest.fn() }));
 jest.mock('@/lib/logger', () => ({ logger: { log: jest.fn(), warn: jest.fn(), error: jest.fn() } }));
+const mockDeviceTimezone = { value: 'America/New_York' as string | null };
+jest.mock('@/lib/device-timezone', () => ({ getDeviceTimezone: () => mockDeviceTimezone.value }));
 
 type NativeRequest = {
   identifier: string;
@@ -32,7 +34,12 @@ type NativeRequest = {
 
 const mockPending = new Map<string, NativeRequest>();
 const mockPermission = { status: 'granted' };
+// Mornings the native layer refuses, by fire time.
+const mockRejectedMornings = new Set<number>();
 const mockScheduleNotificationAsync = jest.fn(async (request: NativeRequest) => {
+  if (request.trigger.date && mockRejectedMornings.has(request.trigger.date.getTime())) {
+    throw new Error('native schedule failed');
+  }
   mockPending.set(request.identifier, request);
   return request.identifier;
 });
@@ -93,6 +100,7 @@ jest.mock('@/lib/store', () => ({
   },
 }));
 
+import { logEvent } from '../analytics';
 import { beginDailyReminderOperation, resetDailyReminderOwnershipForTesting } from '../notifications';
 import { captureSyncSession, resetSyncSessionFenceForTesting } from '../sync-session-fence';
 import {
@@ -161,6 +169,9 @@ function mornings(from: number, to: number): Date[] {
 
 beforeEach(() => {
   mockPending.clear();
+  mockRejectedMornings.clear();
+  mockDeviceTimezone.value = 'America/New_York';
+  (logEvent as jest.Mock).mockClear();
   mockPermission.status = 'granted';
   mockPolicy.value = 'granted';
   mockScheduleNotificationAsync.mockClear();
@@ -184,8 +195,8 @@ describe('scheduleDailyReminderHorizon', () => {
       now,
     );
 
-    expect(result.owner).toBe('server');
-    expect(result.scheduledId).not.toBeNull();
+    // Every morning landed, and none of them is the one the server pushes on.
+    expect(result).toEqual({ owner: 'server', complete: true, holdsNextMorning: false });
     expect(pendingDates()).toEqual(mornings(9, 20));
     for (const request of mockPending.values()) {
       expect(request.trigger.type).toBe('date');
@@ -213,6 +224,24 @@ describe('scheduleDailyReminderHorizon', () => {
     expect(result.owner).toBe('local');
     expect(pendingDates()).toEqual(mornings(8, 20));
     expect([...mockPending.values()].some((request) => request.trigger.type === 'daily')).toBe(false);
+  });
+
+  it('logs one scheduling event under the owner it decided', async () => {
+    seed({ lastRead: at(7, 8, 30) });
+
+    await scheduleDailyReminderHorizon(
+      '8:00 AM',
+      'granted',
+      captureSyncSession(),
+      beginDailyReminderOperation(),
+      at(7, 8, 35),
+    );
+
+    const scheduled = (logEvent as jest.Mock).mock.calls.filter(([name]) => name === 'notification_scheduled');
+    expect(scheduled).toEqual([[
+      'notification_scheduled',
+      expect.objectContaining({ type: 'daily_reminder', owner: 'server', trigger: 'dates', count: 12 }),
+    ]]);
   });
 
   it('gives each morning the copy for the moment it fires', async () => {
@@ -273,6 +302,45 @@ describe('runDailyReminderBackgroundTopup', () => {
 
     expect(mockScheduleNotificationAsync).not.toHaveBeenCalled();
     expect(mockCancelScheduledNotificationAsync).not.toHaveBeenCalled();
+  });
+
+  it('refills again on a same-day wake after the device timezone changes', async () => {
+    // Dated mornings are absolute instants: 08:00 in New York is 05:00 in
+    // Los Angeles. A flight must not leave the old zone's mornings queued.
+    seed({ lastRead: at(7, 8, 30) });
+    await runDailyReminderBackgroundTopup(at(9, 5));
+    mockScheduleNotificationAsync.mockClear();
+
+    mockDeviceTimezone.value = 'America/Los_Angeles';
+    await expect(runDailyReminderBackgroundTopup(at(9, 11))).resolves.toBe('written');
+
+    expect(mockScheduleNotificationAsync).toHaveBeenCalled();
+  });
+
+  it('mirrors the next morning as held when it landed, even if a later morning failed', async () => {
+    seed({ lastRead: at(7, 8, 30), pushRegistered: false });
+    mockRejectedMornings.add(at(12, 8).getTime());
+
+    // Reported as failed so the next wake retries; the queue still holds
+    // tomorrow, so the server must not send its ready push as well.
+    await expect(runDailyReminderBackgroundTopup(at(8, 5))).resolves.toBe('failed');
+    expect(pendingDates()[0]).toEqual(at(8, 8));
+    expect(mockState.user.localDailyReminderScheduled).toBe(true);
+
+    mockRejectedMornings.clear();
+    await expect(runDailyReminderBackgroundTopup(at(8, 6))).resolves.toBe('written');
+    expect(pendingDates()).toEqual(mornings(8, 21));
+  });
+
+  it('mirrors the next morning as not held when it failed to land', async () => {
+    seed({ lastRead: at(7, 8, 30), pushRegistered: false });
+    mockState.user.localDailyReminderScheduled = true;
+    mockRejectedMornings.add(at(8, 8).getTime());
+
+    await expect(runDailyReminderBackgroundTopup(at(8, 5))).resolves.toBe('failed');
+
+    expect(pendingDates()[0]).toEqual(at(9, 8));
+    expect(mockState.user.localDailyReminderScheduled).toBe(false);
   });
 
   it('leaves the queue alone while premium is unresolved', async () => {

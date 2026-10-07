@@ -21,7 +21,7 @@ import {
   buildDevotionalReadyNotificationData,
   pushNamesAutoTrialIntent,
 } from '@/lib/push-notification-helpers';
-import { getDailyReminderContent, type DailyReminderTrigger } from '@/lib/daily-reminder-content';
+import { getDailyReminderContent, type DailyReminderOwner } from '@/lib/daily-reminder-content';
 import { deferPastQuietHours } from '@/lib/quiet-hours';
 import { logEvent } from '@/lib/analytics';
 import type { ActReminderPlan } from '@/lib/act-reminder';
@@ -422,16 +422,15 @@ function getCurrentDevotionalNotificationData(): ReturnType<typeof buildDevotion
   return buildDevotionalReadyNotificationData(currentDevotional, currentDevotional.currentDay);
 }
 
-// Schedule a daily reminder notification.
-// Wrappers that already awaited must pass the originating reset session and
-// daily operation so a stale call cannot capture a fresh session/operation
-// and write after reset or a newer same-session request.
-export async function scheduleDailyReminder(
-  timeString: string,
-  originatingSession: number = captureSyncSession(),
-  originatingOperation?: number,
-  triggerOverride: DailyReminderTrigger = { kind: 'daily' },
-): Promise<string | null> {
+/**
+ * The shared start of a daily reminder write: claim the operation, clear the
+ * whole daily family, confirm permission. Returns the operation to write
+ * under, or null when the write must not go ahead.
+ */
+async function beginDailyReminderWrite(
+  originatingSession: number,
+  originatingOperation: number | undefined,
+): Promise<number | null> {
   if (Platform.OS === 'web') {
     logger.log('[Notifications] Not available on web');
     return null;
@@ -459,16 +458,27 @@ export async function scheduleDailyReminder(
     logger.log('[Notifications] Permission not granted');
     return null;
   }
+  return operation;
+}
 
-  const { hours, minutes } = parseTimeString(timeString);
-  const data = getCurrentDevotionalNotificationData();
-  const identifier = dailyReminderIdentifierForOperation(originatingSession, operation);
-
-  if (triggerOverride.kind === 'dates') {
-    return scheduleDailyReminderDates(triggerOverride.dates, data, identifier, originatingSession, operation);
+// Schedule a daily reminder notification.
+// Wrappers that already awaited must pass the originating reset session and
+// daily operation so a stale call cannot capture a fresh session/operation
+// and write after reset or a newer same-session request.
+export async function scheduleDailyReminder(
+  timeString: string,
+  originatingSession: number = captureSyncSession(),
+  originatingOperation?: number,
+): Promise<string | null> {
+  const operation = await beginDailyReminderWrite(originatingSession, originatingOperation);
+  if (operation === null) {
+    return null;
   }
 
+  const { hours, minutes } = parseTimeString(timeString);
   const { title, body } = getNotificationContent();
+  const data = getCurrentDevotionalNotificationData();
+  const identifier = dailyReminderIdentifierForOperation(originatingSession, operation);
 
   try {
     const scheduled = await Notifications.scheduleNotificationAsync({
@@ -502,7 +512,7 @@ export async function scheduleDailyReminder(
       type: 'daily_reminder',
       owner: 'local',
       specific: Boolean(data),
-      trigger: triggerOverride.kind,
+      trigger: 'daily',
     });
     return scheduled;
   } catch (error) {
@@ -511,23 +521,47 @@ export async function scheduleDailyReminder(
   }
 }
 
+/** What a morning-horizon write left in the OS queue. */
+export interface DailyReminderMorningsWrite {
+  /** Every morning landed, so the caller may record the sync as applied. */
+  complete: boolean;
+  /**
+   * The soonest morning landed. The server's send-time skip asks about that
+   * morning, so this, not `complete`, decides what the profile mirrors.
+   */
+  holdsFirstMorning: boolean;
+}
+
+const NO_MORNINGS_WRITTEN: DailyReminderMorningsWrite = { complete: false, holdsFirstMorning: false };
+
 /**
  * One dated request per morning of the horizon. Each carries the copy for
  * the moment it fires, so a day left unread turns into the overdue copy
  * instead of repeating its quotable line for two weeks. Identifiers extend
  * this operation's, so the family cancel clears every one.
  *
- * Returns the first identifier only when every morning was written. A
- * partial write keeps what landed as a floor and reports failure, so the
- * caller does not record the sync as applied.
+ * A partial write keeps what landed as a floor and reports `complete:
+ * false`, so the caller retries instead of recording the sync as applied.
+ * It still says whether the soonest morning landed: mirroring "not held"
+ * while the queue holds that morning would let the server's ready push
+ * land on top of it.
+ *
+ * Logs one `notification_scheduled` event per write, under the owner the
+ * caller decided, so a dashboard split by owner counts each write once.
  */
-async function scheduleDailyReminderDates(
+export async function scheduleDailyReminderMornings(
   dates: readonly Date[],
-  data: ReturnType<typeof getCurrentDevotionalNotificationData>,
-  operationIdentifier: string,
+  owner: DailyReminderOwner,
   originatingSession: number,
-  operation: number,
-): Promise<string | null> {
+  originatingOperation: number,
+): Promise<DailyReminderMorningsWrite> {
+  const operation = await beginDailyReminderWrite(originatingSession, originatingOperation);
+  if (operation === null) {
+    return NO_MORNINGS_WRITTEN;
+  }
+
+  const data = getCurrentDevotionalNotificationData();
+  const operationIdentifier = dailyReminderIdentifierForOperation(originatingSession, operation);
   const written = await Promise.all(
     dates.map(async (date, index) => {
       const { title, body } = getNotificationContent(date);
@@ -557,15 +591,16 @@ async function scheduleDailyReminderDates(
   if (!isDailyReminderOriginCurrent(originatingSession, operation)) {
     await Promise.all(scheduled.map((id) => Notifications.cancelScheduledNotificationAsync(id)));
     logger.log('[Notifications] Late daily schedule discarded — originating owner is not current');
-    return null;
+    return NO_MORNINGS_WRITTEN;
   }
 
   if (scheduled.length > 0) {
     lastDailyReminderIdentifiers = scheduled;
   }
+  const holdsFirstMorning = written.length > 0 && written[0] !== null;
   if (scheduled.length === 0 || scheduled.length !== dates.length) {
     logger.error(`[Notifications] Daily reminder: wrote ${scheduled.length} of ${dates.length} mornings`);
-    return null;
+    return { complete: false, holdsFirstMorning };
   }
 
   logger.log(
@@ -573,12 +608,12 @@ async function scheduleDailyReminderDates(
   );
   logEvent('notification_scheduled', {
     type: 'daily_reminder',
-    owner: 'local',
+    owner,
     specific: Boolean(data),
     trigger: 'dates',
     count: scheduled.length,
   });
-  return scheduled[0];
+  return { complete: true, holdsFirstMorning };
 }
 
 /**
