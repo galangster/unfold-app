@@ -71,6 +71,7 @@ import { cacheDirectory, deleteAsync, documentDirectory, readDirectoryAsync } fr
 import { OUTBOX_KEY } from '@/lib/sync-outbox';
 import { DEVOTIONAL_PULL_CURSOR_KEY } from '@/lib/devotional-pull-cursor';
 import { LAST_PULLED_AT_KEY } from '@/lib/full-sync-pull';
+import { USER_PROFILE_CONFLICT_KEY } from '@/lib/user-profile-sync';
 import {
   ARC_RECONCILIATION_KEY,
   MIGRATION_KEY as GENERATION_MIGRATION_KEY,
@@ -125,6 +126,7 @@ export const FULL_RESET_MMKV_KEYS: readonly string[] = [
   // from scratch, re-run the (idempotent) generation migration, never resume
   // a stale onboarding sample job, and drop the cached prompt example.
   LAST_PULLED_AT_KEY,
+  USER_PROFILE_CONFLICT_KEY,
   GENERATION_MIGRATION_KEY,
   ARC_RECONCILIATION_KEY,
   ONBOARDING_SAMPLE_JOB_KEY,

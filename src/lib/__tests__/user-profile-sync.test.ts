@@ -68,7 +68,7 @@ const baseUser: UserProfile = {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  (mmkvStorage as any).__clearMockStorage?.();
+  (jest.requireMock('../mmkv-storage') as { __clearMockStorage: () => void }).__clearMockStorage();
   resetDrainStateForTesting();
   resetSyncSessionFenceForTesting();
 });
@@ -158,6 +158,73 @@ describe('user profile sync payloads', () => {
 
     expect(mockFetch).toHaveBeenCalledTimes(2);
     expect(peekSyncOutbox()).toHaveLength(0);
+  });
+
+  describe('a profile the server refuses because it holds a newer row', () => {
+    const STALE = '2026-05-06T20:00:00.000Z';
+    const SERVER = '2026-05-06T20:00:00.004Z';
+    const profileResult = (status: 'accepted' | 'conflict' | 'rejected') => ({
+      ok: true,
+      json: async () => ({
+        results: [{
+          table: 'users',
+          requestedId: 'user-profile-test-device',
+          id: 'user-profile-test-device',
+          status,
+          serverUpdatedAt: SERVER,
+          ...(status === 'conflict'
+            ? { serverData: { id: 'user-profile-test-device', clientUpdatedAt: SERVER, updatedAt: SERVER } }
+            : {}),
+          ...(status === 'rejected' ? { reason: 'internal error' } : {}),
+        }],
+      }),
+    });
+
+    it('settles the conflicted snapshot instead of queueing it for retry', async () => {
+      global.fetch = jest.fn().mockResolvedValueOnce(profileResult('conflict')) as unknown as typeof fetch;
+
+      await expect(syncUserProfileToBackend(baseUser, STALE)).resolves.toBeUndefined();
+
+      expect(peekSyncOutbox()).toHaveLength(0);
+    });
+
+    it('does not re-send the conflicted snapshot on later app opens', async () => {
+      const mockFetch = jest.fn(async () => profileResult('conflict'));
+      global.fetch = mockFetch as unknown as typeof fetch;
+
+      // Each open drains the outbox on mount, then the profile hook pushes the
+      // persisted profile with its persisted stamp.
+      for (let open = 0; open < 3; open += 1) {
+        resetDrainStateForTesting();
+        await drainSyncOutbox();
+        await syncUserProfileToBackend(baseUser, STALE).catch(() => undefined);
+      }
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(peekSyncOutbox()).toHaveLength(0);
+    });
+
+    it('still sends a newer edit, and a rejected edit stays queued', async () => {
+      const NEWER = '2026-05-07T08:00:00.000Z';
+      const NEWEST = '2026-05-07T09:00:00.000Z';
+      const mockFetch = jest
+        .fn()
+        .mockResolvedValueOnce(profileResult('conflict'))
+        .mockResolvedValueOnce(profileResult('accepted'))
+        .mockResolvedValueOnce(profileResult('rejected'));
+      global.fetch = mockFetch as unknown as typeof fetch;
+
+      await syncUserProfileToBackend(baseUser, STALE);
+      await syncUserProfileToBackend({ ...baseUser, aboutMe: 'A newer focus' }, NEWER);
+      await expect(
+        syncUserProfileToBackend({ ...baseUser, aboutMe: 'The newest focus' }, NEWEST),
+      ).rejects.toThrow('User profile sync rejected');
+
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+      expect(peekSyncOutbox()).toEqual([
+        expect.objectContaining({ table: 'users', clientUpdatedAt: NEWEST }),
+      ]);
+    });
   });
 
   it('does not enqueue a delayed profile failure after the captured session is reset', async () => {
