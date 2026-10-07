@@ -210,6 +210,7 @@ jest.mock('@/lib/mmkv-storage', () => ({
 jest.mock('@/lib/store', () => {
   const useUnfoldStore = (selector: (state: Record<string, unknown>) => unknown) => selector(mockTodayStoreState);
   useUnfoldStore.getState = () => mockTodayStoreState;
+  useUnfoldStore.setState = (update: (state: Record<string, unknown>) => Record<string, unknown>) => Object.assign(mockTodayStoreState, update(mockTodayStoreState));
   return {
     useUnfoldStore,
     useHasHydrated: () => true,

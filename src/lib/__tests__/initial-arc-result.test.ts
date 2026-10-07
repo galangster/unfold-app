@@ -301,6 +301,18 @@ function localSeries(id: string, overrides: Partial<Devotional> = {}): Devotiona
   };
 }
 
+// Onboarding's first reading as each check alone knows it: the sample's id
+// with no first-reading arc, and the first-reading arc on a server id.
+const FIRST_READING_ROWS: [string, Devotional][] = [
+  ['the onboarding sample', localSeries('onboarding-sample-anon_x', { totalDays: 1 })],
+  ['onboarding\'s first reading', localSeries('devo-first-reading', {
+    totalDays: 1,
+    createdAt: '2026-08-01T08:00:00.000Z',
+    seriesStartDate: '2026-08-01T08:00:00.000Z',
+    seriesArc: withOnboardingFirstReadingArc(undefined, '2026-08-01T08:00:00.000Z'),
+  })],
+];
+
 /**
  * The rows the worker commits with a finished initial_arc job, as the
  * app-start (or reconnect) full-sync pull hands them over: the series with no
@@ -370,14 +382,10 @@ describe('a new series the sync pull lands before the job result', () => {
     expect(readInflightGenerationJob()).toBeNull();
   });
 
-  it('becomes current over onboarding\'s first reading', () => {
-    const sample = localSeries('onboarding-sample-anon_x', {
-      totalDays: 1,
-      seriesArc: withOnboardingFirstReadingArc(undefined, '2026-09-04T07:00:00.000Z'),
-    });
-    useUnfoldStore.setState({ devotionals: [sample], currentDevotionalId: sample.id });
+  it.each(FIRST_READING_ROWS)('becomes current over %s', (_label, firstReading) => {
+    useUnfoldStore.setState({ devotionals: [firstReading], currentDevotionalId: firstReading.id });
     pullLandedSeries();
-    expect(useUnfoldStore.getState().currentDevotionalId).toBe(sample.id);
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe(firstReading.id);
 
     applyInitialArcResult(result, { user, devotionalLength: 7, session: captureSyncSession() });
 
@@ -445,6 +453,24 @@ describe('a new series the sync pull lands before the job result', () => {
     expect(state.devotionals.find((row) => row.id === 'devo-1')?.days.map((d) => d.dayNumber)).toEqual([1]);
   });
 
+  it('does not take Today from a live series a stale session and in-flight record name', () => {
+    // A submission that adopted the server's existing job keeps the earlier
+    // generation's session and records the job under its series. The reader
+    // went back to that series meanwhile; the job lands another one.
+    const picked = localSeries('devo-picked');
+    useUnfoldStore.setState({
+      devotionals: [picked],
+      currentDevotionalId: picked.id,
+      generationSession: { status: 'complete', devotionalId: picked.id, totalDays: 3, generatedDayNumbers: [] },
+    });
+    writeInflightGenerationJob({ jobId: 'job-1', devotionalId: picked.id, submittedAt: NOW - 30_000 });
+    pullLandedSeries();
+
+    applyInitialArcResult(result, { user, devotionalLength: 7, session: captureSyncSession() });
+
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe(picked.id);
+  });
+
   it('never selects, and so never unarchives, a landed series archived elsewhere', () => {
     useUnfoldStore.setState({ devotionals: [], currentDevotionalId: null });
     pullLandedSeries({ archivedAt: PULLED_AT, archivedStateAt: PULLED_AT });
@@ -486,12 +512,8 @@ describe('adoptStrandedInitialArcSeries', () => {
     expect(useUnfoldStore.getState().currentDevotionalId).toBe('devo-1');
   });
 
-  it('makes it current over onboarding\'s first reading', () => {
-    const sample = localSeries('onboarding-sample-anon_x', {
-      totalDays: 1,
-      seriesArc: withOnboardingFirstReadingArc(undefined, '2026-09-04T07:00:00.000Z'),
-    });
-    seedStranded({ currentDevotionalId: sample.id, others: [sample] });
+  it.each(FIRST_READING_ROWS)('makes it current over %s', (_label, firstReading) => {
+    seedStranded({ currentDevotionalId: firstReading.id, others: [firstReading] });
 
     expect(adoptStrandedInitialArcSeries()).toBe(true);
 
@@ -517,6 +539,51 @@ describe('adoptStrandedInitialArcSeries', () => {
     seedStranded({ landed: { days: [{ ...day1, id: 'devo-1:1', devotionalId: 'devo-1', isRead: true }] } });
     expect(adoptStrandedInitialArcSeries()).toBe(false);
     expect(useUnfoldStore.getState().currentDevotionalId).toBeNull();
+  });
+
+  it('leaves Today empty when the server would write a newer live series instead', () => {
+    // Another device started a newer series; the pull brought it over unselected.
+    seedStranded({ others: [localSeries('devo-newer', { createdAt: '2026-08-25T08:00:00.000Z' })] });
+
+    expect(adoptStrandedInitialArcSeries()).toBe(false);
+
+    expect(useUnfoldStore.getState().currentDevotionalId).toBeNull();
+  });
+
+  it.each([
+    ['as a fresh shell', false],
+    ['after the sync pull landed it first', true],
+  ])('never brings back a series that landed %s once the reader moved off it', (_label, pulledFirst) => {
+    const paused = localSeries('devo-paused', { archivedAt: ARCHIVED_AT, archivedStateAt: ARCHIVED_AT });
+    useUnfoldStore.setState({ devotionals: [paused], currentDevotionalId: null });
+    if (pulledFirst) pullLandedSeries();
+    applyInitialArcResult(result, { user, devotionalLength: 7, session: captureSyncSession() });
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe('devo-1');
+
+    // The reader picks a paused series from the Library, taps New Series,
+    // which ends it, and backs out of the intake. Then Today takes focus.
+    useUnfoldStore.getState().setCurrentDevotional(paused.id);
+    useUnfoldStore.getState().archiveCurrentDevotional();
+
+    expect(adoptStrandedInitialArcSeries()).toBe(false);
+    expect(useUnfoldStore.getState().currentDevotionalId).not.toBe('devo-1');
+  });
+
+  it.each([
+    ['found it current', 'devo-1', false],
+    ['made it current', null, true],
+  ])('stops repairing a session an earlier build finished once it has %s', (_label, currentDevotionalId, adopted) => {
+    seedStranded({ currentDevotionalId });
+    expect(adoptStrandedInitialArcSeries()).toBe(adopted);
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe('devo-1');
+
+    // The reader opens the archived series from the Library, then ends it
+    // with New Series and backs out of the intake.
+    useUnfoldStore.getState().setCurrentDevotional('devo-old');
+    useUnfoldStore.getState().archiveCurrentDevotional();
+
+    expect(adoptStrandedInitialArcSeries()).toBe(false);
+    expect(useUnfoldStore.getState().currentDevotionalId).not.toBe('devo-1');
   });
 });
 
