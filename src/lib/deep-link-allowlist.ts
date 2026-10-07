@@ -51,8 +51,7 @@ type ParamSchema =
   | { kind: 'id' }
   | { kind: 'int'; min: number; max: number }
   | { kind: 'enum'; values: readonly string[] }
-  | { kind: 'text'; maxLength: number }
-  | { kind: 'slug' };
+  | { kind: 'text'; maxLength: number };
 
 export interface RouteSchema {
   /** Param name → schema. Any param not listed here rejects the URL. */
@@ -64,11 +63,9 @@ const id = (): ParamSchema => ({ kind: 'id' });
 const int = (min: number, max: number): ParamSchema => ({ kind: 'int', min, max });
 const oneOf = (values: readonly string[]): ParamSchema => ({ kind: 'enum', values });
 const text = (maxLength: number): ParamSchema => ({ kind: 'text', maxLength });
-const slug = (): ParamSchema => ({ kind: 'slug' });
 
 // Store ids are uuid / cuid / `<prefix>_<ts>_<rand>` / `onboarding-sample-anon_<uuid>`.
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
-const SLUG_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
 /** Canonical non-negative decimal only — no sign, exponent, hex, or fraction. */
 const INT_PATTERN = /^(?:0|[1-9]\d{0,5})$/;
 /**
@@ -133,9 +130,9 @@ export const EXTERNAL_ROUTE_ALLOWLIST: Readonly<Record<string, RouteSchema>> = {
   // plain paywall only.
   '/paywall': { params: {} },
   '/life-update': { params: {} },
-  // A slug, not the current id list: the screen ignores ids it does not know,
-  // so a link built from newer content still opens the list.
-  '/feelings': { params: { feeling: slug() } },
+  // Any id, not the current list: the screen ignores ids it does not know, so a
+  // link built from newer content still opens the list.
+  '/feelings': { params: { feeling: id() } },
   '/share-card': {
     params: { text: text(1000), reference: text(160), translation: text(24), type: oneOf(['verse']) },
     required: ['text'],
@@ -329,8 +326,6 @@ function isValidParam(schema: ParamSchema, value: string): boolean {
   switch (schema.kind) {
     case 'id':
       return ID_PATTERN.test(value);
-    case 'slug':
-      return SLUG_PATTERN.test(value);
     case 'enum':
       return schema.values.includes(value);
     case 'int': {

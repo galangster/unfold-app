@@ -7,8 +7,8 @@
  * character, including curly quotes and the closing quotes that open in an
  * earlier verse; displayVerses trims those for display.
  *
- * Pure data and helpers: no React or native imports, so the deep-link
- * allowlist and widgets can read it too.
+ * Pure data and helpers: no React or native imports, so widgets can read it
+ * too.
  */
 
 export const FEELINGS_TRANSLATION = 'Berean Standard Bible';

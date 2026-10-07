@@ -1,5 +1,6 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import * as ReactNative from 'react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
 import FeelingsScreen from '@/app/feelings';
 import { FEELINGS } from '@/constants/feelings';
@@ -133,5 +134,41 @@ describe('feelings screen', () => {
     pressButton('Anxious');
     pressButton('Begin a series for this');
     expect(mockStartNewSeries).toHaveBeenCalledTimes(1);
+  });
+
+  describe('VoiceOver focus', () => {
+    let focus: jest.SpyInstance;
+    // The event names the host instance, so a test can read which text took focus.
+    const focusedText = (call: number) => (focus.mock.calls[call][0] as { props: { children: unknown } }).props.children;
+
+    beforeEach(() => {
+      jest.useFakeTimers();
+      focus = jest.spyOn(ReactNative.AccessibilityInfo, 'sendAccessibilityEvent').mockImplementation(() => undefined);
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+      jest.restoreAllMocks();
+    });
+
+    it('leaves focus where it is when the screen opens', () => {
+      mockParams = { feeling: 'weary' };
+      render(<FeelingsScreen />);
+      act(() => jest.runOnlyPendingTimers());
+      expect(focus).not.toHaveBeenCalled();
+    });
+
+    it('moves focus to the answer heading after a word, and to the prompt after All feelings', () => {
+      render(<FeelingsScreen />);
+      pressButton('Weary');
+      act(() => jest.runOnlyPendingTimers());
+      expect(focus).toHaveBeenCalledTimes(1);
+      expect(focusedText(0)).toBe('Weary');
+
+      pressButton('All feelings');
+      act(() => jest.runOnlyPendingTimers());
+      expect(focus).toHaveBeenCalledTimes(2);
+      expect(focusedText(1)).toBe('How are you, really?');
+    });
   });
 });

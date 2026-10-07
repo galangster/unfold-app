@@ -1,4 +1,4 @@
-import { Fragment, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { AccessibilityInfo, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -35,6 +35,7 @@ const trimToLine = (fontSize: number, lineHeight: number) => lineHeight - fontSi
 
 // Motion. Each piece rises a little as it fades in; nothing runs past 340 ms.
 const RISE = 8;
+const PROMPT_START = 50;
 const WORDS_START = 150;
 /** The answer starts while the list is still fading out. */
 const ANSWER_START = Duration.instant;
@@ -50,7 +51,21 @@ function arrive(delay: number) {
     .reduceMotion(ReduceMotion.System);
 }
 
-const leave = FadeOut.duration(Duration.fast).easing(Ease.in).reduceMotion(ReduceMotion.System);
+const leave = FadeOut.duration(Duration.fast).easing(Ease.out).reduceMotion(ReduceMotion.System);
+
+/**
+ * VoiceOver loses its place when the list and the answer swap, so the view that
+ * arrives takes focus on its heading once its entrance has finished.
+ */
+function useFocusOnArrival(ref: RefObject<Text | null>, enabled: boolean, delayMs: number) {
+  useEffect(() => {
+    if (!enabled) return;
+    const timer = setTimeout(() => {
+      if (ref.current) AccessibilityInfo.sendAccessibilityEvent(ref.current, 'focus');
+    }, delayMs);
+    return () => clearTimeout(timer);
+  }, [ref, enabled, delayMs]);
+}
 
 /**
  * "How are you, really?" — pick a word, read a passage for it.
@@ -75,16 +90,18 @@ function FeelingsCheckIn({ initialFeeling }: { initialFeeling: Feeling | undefin
   const startNewSeries = useStartNewSeries(gate);
   const scrollRef = useRef<ScrollView>(null);
   const [chosen, setChosen] = useState(initialFeeling ?? null);
+  // Focus moves only after a swap; the view the screen opens on keeps VoiceOver's own placement.
+  const [swapped, setSwapped] = useState(false);
 
   const show = (next: Feeling | null) => {
     scrollRef.current?.scrollTo({ y: 0, animated: false });
     setChosen(next);
+    setSwapped(true);
   };
 
   const choose = (next: Feeling) => {
     Haptics.selectionAsync();
     show(next);
-    AccessibilityInfo.announceForAccessibility(`${next.label}. ${next.passages[0].reference}`);
   };
 
   return (
@@ -108,9 +125,9 @@ function FeelingsCheckIn({ initialFeeling }: { initialFeeling: Feeling | undefin
           and show() needs it to open each view at the top. */}
       <ScrollView ref={scrollRef} cssInterop={false} contentContainerStyle={styles.content}>
         {chosen ? (
-          <FeelingAnswer key={chosen.id} feeling={chosen} onBeginSeries={startNewSeries} />
+          <FeelingAnswer key={chosen.id} feeling={chosen} onBeginSeries={startNewSeries} focusOnArrival={swapped} />
         ) : (
-          <FeelingList onChoose={choose} />
+          <FeelingList onChoose={choose} focusOnArrival={swapped} />
         )}
       </ScrollView>
       <ExclusiveOfferSheet
@@ -124,9 +141,11 @@ function FeelingsCheckIn({ initialFeeling }: { initialFeeling: Feeling | undefin
   );
 }
 
-function FeelingList({ onChoose }: { onChoose: (feeling: Feeling) => void }) {
+function FeelingList({ onChoose, focusOnArrival }: { onChoose: (feeling: Feeling) => void; focusOnArrival: boolean }) {
   const { colors } = useTheme();
   const { fontScale } = useWindowDimensions();
+  const promptRef = useRef<Text>(null);
+  useFocusOnArrival(promptRef, focusOnArrival, PROMPT_START + Duration.slow);
   const cellStyle = fontScale >= SINGLE_COLUMN_FONT_SCALE ? styles.wholeRow : styles.halfRow;
 
   return (
@@ -134,8 +153,13 @@ function FeelingList({ onChoose }: { onChoose: (feeling: Feeling) => void }) {
       <Animated.View entering={arrive(0)}>
         <ReaderText style={[styles.kicker, { color: colors.textMuted }]}>Check in</ReaderText>
       </Animated.View>
-      <Animated.View entering={arrive(50)}>
-        <ReaderText accessibilityRole="header" maxFontSizeMultiplier={DISPLAY_MAX_SCALE} style={[styles.prompt, { color: colors.text }]}>
+      <Animated.View entering={arrive(PROMPT_START)}>
+        <ReaderText
+          ref={promptRef}
+          accessibilityRole="header"
+          maxFontSizeMultiplier={DISPLAY_MAX_SCALE}
+          style={[styles.prompt, { color: colors.text }]}
+        >
           How are you, really?
         </ReaderText>
       </Animated.View>
@@ -172,8 +196,10 @@ function FeelingList({ onChoose }: { onChoose: (feeling: Feeling) => void }) {
   );
 }
 
-function FeelingAnswer({ feeling, onBeginSeries }: { feeling: Feeling; onBeginSeries: () => void }) {
+function FeelingAnswer({ feeling, onBeginSeries, focusOnArrival }: { feeling: Feeling; onBeginSeries: () => void; focusOnArrival: boolean }) {
   const { colors } = useTheme();
+  const headingRef = useRef<Text>(null);
+  useFocusOnArrival(headingRef, focusOnArrival, ANSWER_START + Duration.slow);
   const [shown, setShown] = useState({ index: 0, cycled: false });
   const passage = feeling.passages[shown.index];
   const count = feeling.passages.length;
@@ -189,6 +215,7 @@ function FeelingAnswer({ feeling, onBeginSeries }: { feeling: Feeling; onBeginSe
       <Animated.View entering={arrive(ANSWER_START)}>
         <ReaderText style={[styles.kicker, { color: colors.textMuted }]}>{feeling.label}</ReaderText>
         <ReaderText
+          ref={headingRef}
           accessibilityRole="header"
           numberOfLines={1}
           adjustsFontSizeToFit
