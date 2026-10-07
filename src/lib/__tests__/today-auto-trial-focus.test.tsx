@@ -12,7 +12,7 @@ const mockGeneratedDayWatch = jest.fn((_options: unknown) => ({
   checkAgain: jest.fn(),
   retry: jest.fn(),
 }));
-const mockPullDevotionalContent = jest.fn(async (..._args: unknown[]) => ({ days: [], timestamp: 't' }));
+const mockPullDevotionalContent = jest.fn(async (..._args: unknown[]): Promise<{ days: unknown[]; timestamp: string }> => ({ days: [], timestamp: 't' }));
 const mockLogBugEvent = jest.fn();
 const mockTodayStoreState: Record<string, unknown> = {
   user: { name: 'Reader', hasCompletedOnboarding: true },
@@ -238,6 +238,8 @@ import HomeScreen, {
 } from '@/app/(tabs)/(today)/index';
 import { SyncPullRateLimitedError } from '@/lib/sync-pull-backoff';
 import { drainSyncOutbox } from '@/lib/sync-outbox';
+import { commitDevotionalPullCursor } from '@/lib/devotional-sync-pull';
+import { applyPulledDevotionalContent } from '@/lib/devotional-pulled-content';
 import { beginRitualSessionRecord, type RitualSessionIdentity } from '@/lib/ritual-session';
 import { beginLocalResetSession, endLocalResetSession, resetSyncSessionFenceForTesting } from '@/lib/sync-session-fence';
 import {
@@ -455,6 +457,19 @@ describe('Today across local midnight', () => {
     return mockGeneratedDayWatch.mock.calls[mockGeneratedDayWatch.mock.calls.length - 1]?.[0];
   }
 
+  // The pull is async: let its result reach the store before asserting on it.
+  async function settlePull() {
+    await act(async () => {
+      for (let i = 0; i < 5; i++) await Promise.resolve();
+    });
+  }
+
+  // What the server wrote overnight: Day 4 of the open series.
+  const overnightPull = {
+    days: [{ id: 'today-series-day-4', devotionalId: 'today-series', dayNumber: 4, title: 'Day 4' }],
+    timestamp: 'overnight',
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
     saved = { ...mockTodayStoreState };
@@ -511,7 +526,9 @@ describe('Today across local midnight', () => {
     act(() => {
       jest.setSystemTime(new Date(2026, 9, 4, 7, 30));
     });
+    mockPullDevotionalContent.mockResolvedValueOnce(overnightPull);
     emitAppState('active');
+    await settlePull();
     // The minute tick that was due while the app slept.
     act(() => {
       jest.advanceTimersByTime(60_000);
@@ -527,6 +544,12 @@ describe('Today across local midnight', () => {
     expect(drainSyncOutbox).toHaveBeenCalledTimes(2);
     expect(mockPullDevotionalContent).toHaveBeenCalledTimes(2);
     expect(mockPullDevotionalContent).toHaveBeenLastCalledWith('today-series');
+    // The pulled day reaches the store, and only then does the cursor move.
+    expect(applyPulledDevotionalContent).toHaveBeenCalledWith(expect.objectContaining({
+      devotionalId: 'today-series',
+      pulled: overnightPull,
+    }));
+    expect(commitDevotionalPullCursor).toHaveBeenCalledWith(overnightPull);
     // The card follows the watch again, so its Checking / Check Again action
     // tracks the job, instead of a recovery-less "Check back in a moment".
     expect(mockDevotionalCardProps?.state).toEqual(expect.objectContaining({
@@ -566,6 +589,30 @@ describe('Today across local midnight', () => {
     });
     emitAppState('active');
     expect(mockPullDevotionalContent).toHaveBeenCalledTimes(3);
+  });
+
+  it('drops a foreground pull that resolves after Today lost focus', async () => {
+    await renderTodayAt(new Date(2026, 9, 4, 7, 30));
+    await settlePull();
+    jest.mocked(applyPulledDevotionalContent).mockClear();
+    jest.mocked(commitDevotionalPullCursor).mockClear();
+
+    let resolvePull: (value: { days: unknown[]; timestamp: string }) => void = () => {};
+    mockPullDevotionalContent.mockImplementationOnce(() => new Promise((resolve) => { resolvePull = resolve; }));
+    emitAppState('active');
+    expect(mockPullDevotionalContent).toHaveBeenCalledTimes(2);
+
+    // Another screen covers Today before the pull comes back.
+    mockIsTodayFocused = false;
+    await act(async () => {
+      tree!.update(<HomeScreen />);
+      await Promise.resolve();
+    });
+    resolvePull(overnightPull);
+    await settlePull();
+
+    expect(applyPulledDevotionalContent).not.toHaveBeenCalled();
+    expect(commitDevotionalPullCursor).not.toHaveBeenCalled();
   });
 
   it('drains the outbox on foreground but does not pull while the read budget is spent', async () => {
