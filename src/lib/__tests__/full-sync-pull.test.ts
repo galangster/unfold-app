@@ -982,6 +982,44 @@ describe('J6 full-sync day mapper', () => {
     expect(emptyLine?.shapedByCheckIn).toBeUndefined();
     expect(emptyLine?.nextPick).toBeUndefined();
   });
+
+  it('keeps the local act answer when a newer pulled row replaces a read day', () => {
+    seedMappedDevotional();
+    const readAt = '2026-07-01T08:00:00.000Z';
+    useUnfoldStore.setState((state) => ({
+      devotionals: state.devotionals.map((devotional) => ({
+        ...devotional,
+        days: [{
+          id: 'day-devotional-1-2',
+          devotionalId: 'devotional-1',
+          dayNumber: 2,
+          title: 'Day 2',
+          scriptureReference: 'John 1:1',
+          scriptureText: 'Text',
+          bodyText: 'Body',
+          quotableLine: 'Line',
+          isRead: true,
+          readAt,
+          actOutcome: 'done' as const,
+          updatedAt: '2026-07-01T09:00:00.000Z',
+        }],
+      })),
+    }));
+
+    // The server row changed after the answer (another device read the day,
+    // or the read push landed late). It never carries the act answer.
+    const row = pulledDay({});
+    applyPulledUserData({
+      timestamp: '2026-07-01T12:00:00.000Z',
+      changes: { devotional_days: [{ ...row, data: { ...row.data, isRead: true, readAt } }] },
+    });
+
+    expect(useUnfoldStore.getState().devotionals[0]?.days[0]).toMatchObject({
+      isRead: true,
+      updatedAt: '2026-07-01T12:00:00.000Z',
+      actOutcome: 'done',
+    });
+  });
 });
 
 describe('pulled series lifecycle', () => {
