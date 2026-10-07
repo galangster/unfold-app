@@ -1330,6 +1330,8 @@ export const useUnfoldStore = create<UnfoldState>()(
                   isRead: existingDay.isRead || incomingDay.isRead,
                   readAt: existingDay.isRead ? existingDay.readAt : incomingDay.readAt,
                   isRevealed: (existingDay.isRevealed ?? false) || (incomingDay.isRevealed ?? false),
+                  // Local-only: a pulled row never carries the reader's act answer.
+                  actOutcome: existingDay.actOutcome ?? incomingDay.actOutcome,
                   updatedAt: now,
                 });
               }

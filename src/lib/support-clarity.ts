@@ -47,10 +47,17 @@ export function isReadableCurrentSeries(
   return (devotional?.days?.length ?? 0) > 0;
 }
 
+/**
+ * New Series while a series is still being written resumes it. That includes a
+ * live stored job, which the resume banner leaves alone: starting the intake
+ * over it would leave the job in place, and /generating would then resume it
+ * and drop the reader's new answers. A purchased auto-trial owns its own flow.
+ */
 export function resolveCreateNewDuringPendingInitial(
-  resume: PendingInitialArcResume,
+  input: PendingInitialArcInput,
 ): 'resume-existing' | 'start-fresh' {
-  return resume === 'none' ? 'start-fresh' : 'resume-existing';
+  if (!input.autoTrialOwnsFlow && input.inflight && !input.inflight.superseded) return 'resume-existing';
+  return resolvePendingInitialArcResume(input) === 'none' ? 'start-fresh' : 'resume-existing';
 }
 
 export type PersonalContextSaveResult =
@@ -149,13 +156,15 @@ export function resolveGeneratingGoHomeLabel(hasAcceptedJob: boolean): string {
  * force /generating again: that loops with Go home and blocks Profile.
  * Offer a resume instead. Auto-trial purchase still owns its own reveal.
  */
-export function resolvePendingInitialArcResume(input: {
+export interface PendingInitialArcInput {
   inflight: InflightGenerationJob | null;
   requestId: string | null;
   generationSessionStatus: GenerationSessionStatus;
   hasReadableCurrentSeries: boolean;
   autoTrialOwnsFlow?: boolean;
-}): PendingInitialArcResume {
+}
+
+export function resolvePendingInitialArcResume(input: PendingInitialArcInput): PendingInitialArcResume {
   if (input.autoTrialOwnsFlow) return 'none';
   if (input.inflight && !input.inflight.superseded) return 'none';
   if (!input.requestId) return 'none';
