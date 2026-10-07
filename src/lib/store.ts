@@ -31,8 +31,8 @@ import { applyStreakRead, getWeekStart, reconcileStreakState } from './streak-he
 import { getEffectivePremiumAccessPolicy } from './premium-state';
 import { canEarnPremiumMilestone } from './premium-access-policy';
 import { repairRehydratedState } from './store-rehydrate-repair';
-import { enqueueSyncChanges, peekSyncOutbox } from './sync-outbox';
-import type { SyncTable } from './sync-types';
+import { drainSyncChange, enqueueSyncChanges, peekSyncOutbox } from './sync-outbox';
+import type { SyncPushChange, SyncTable } from './sync-types';
 import type { WordStudy } from './word-study';
 import { flushCheckInToServer } from './check-in-flush';
 import { isOnboardingFirstReading, isOnboardingSampleDevotionalId, withOnboardingFirstReadingArc } from './auto-trial-series';
@@ -1088,15 +1088,18 @@ function enqueueDevotionalRow(devotional: Devotional): void {
  * last-write-wins, so the change keeps the content clock and newer progress
  * from another device stays newer. The outbox holds one change per row and
  * drops an older one, so a write still waiting for this row carries the
- * decision on its own clock.
+ * decision on its own clock. Returns the queued change, or null when a delete
+ * still waiting for this row stays as it is.
  */
-function enqueueDevotionalLifecycle(devotional: Devotional): void {
+function enqueueDevotionalLifecycle(devotional: Devotional): SyncPushChange | null {
   const lifecycle = devotionalLifecycleSyncFields(devotional);
   const pending = peekSyncOutbox().find((change) => change.table === 'devotionals' && change.id === devotional.id);
-  if (pending?.deleted) return;
-  enqueueSyncChanges([pending
+  if (pending?.deleted) return null;
+  const change = pending
     ? { ...pending, data: { ...pending.data, ...lifecycle } }
-    : buildPersonalDataSyncChange('devotionals', devotional.id, lifecycle, devotional.updatedAt ?? devotional.createdAt)]);
+    : buildPersonalDataSyncChange('devotionals', devotional.id, lifecycle, devotional.updatedAt ?? devotional.createdAt);
+  enqueueSyncChanges([change]);
+  return change;
 }
 
 /**
@@ -1374,6 +1377,7 @@ export const useUnfoldStore = create<UnfoldState>()(
         }),
       activateAcknowledgedDevotionalResume: (id, expectedActiveId, previousClock, acknowledgedClock) => {
         let activated = false;
+        let pause = null as SyncPushChange | null;
         set((state) => {
           const existing = state.devotionals.find((d) => d.id === id);
           const exactApplied = existing?.archivedAt === null && existing.archivedStateAt === acknowledgedClock;
@@ -1398,13 +1402,17 @@ export const useUnfoldStore = create<UnfoldState>()(
           const paused = previous && !isDevotionalArchived(previous) && isProgressiveSeriesCandidate(previous)
             ? applyArchiveLifecycle(previous, acknowledgedClock)
             : null;
-          if (paused) enqueueDevotionalLifecycle(paused);
+          if (paused) pause = enqueueDevotionalLifecycle(paused);
           return {
             devotionals: state.devotionals.map((d) => (d.id === id ? resumed : d.id === paused?.id ? paused : d)),
             currentDevotionalId: id,
             scripturePracticeReturn: null,
           };
         });
+        // The resume already reached the server. A pause left for the next
+        // launch, reconnect or Today focus lets a second device keep this
+        // series until then, so send it now. The outbox keeps it on failure.
+        if (pause) void drainSyncChange(pause);
         return activated;
       },
       archiveCurrentDevotional: () =>

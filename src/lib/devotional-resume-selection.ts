@@ -1,19 +1,18 @@
 import {
   isDevotionalArchived,
   lifecycleTimestampMs,
-  type DevotionalLifecycleFields,
 } from './devotional-lifecycle';
+import { isStrictActiveSeriesWinner, type ActiveSeriesCandidate } from './devotional-active-selection';
 
-export type ResumeSelectionSeries = DevotionalLifecycleFields & {
-  id: string;
-};
+export type ResumeSelectionSeries = ActiveSeriesCandidate;
 
 /**
  * After a pull applies archive/resume clocks, keep a still-valid current
  * series. Restore Today only from a newer accepted explicit resume
  * (archivedAt null plus a newer archivedStateAt). Stale, rejected, archived,
  * or omitted lifecycle rows never become current. Several qualifying resumes
- * resolve to the newest accepted intent clock.
+ * resolve to the newest accepted intent clock. A current series paused by a
+ * resume elsewhere hands Today to that resume (selectPausedCurrentSuccessor).
  */
 export function selectSyncedCurrentDevotionalId(options: {
   previousCurrentId: string | null | undefined;
@@ -40,7 +39,27 @@ export function selectSyncedCurrentDevotionalId(options: {
       chosenClock = clock;
     }
   }
-  return chosenId;
+  return chosenId ?? (selected ? selectPausedCurrentSuccessor(selected, options.next) : null);
+}
+
+/**
+ * "Continue this series" on another device resumes one series and pauses the
+ * current one on the same clock, but the pause can reach the server long after
+ * the resume. Once the resume was pulled its clock no longer reads as newer,
+ * so when the pause lands, follow the strict active winner: the series the
+ * server generates. Only a resume at least as new as the pause qualifies.
+ * Ending a series to start a new one leaves Today empty, as before, and never
+ * hands it to an older series still live from an earlier app version.
+ */
+function selectPausedCurrentSuccessor(
+  paused: ResumeSelectionSeries,
+  next: readonly ResumeSelectionSeries[],
+): string | null {
+  const pausedAt = lifecycleTimestampMs(paused.archivedStateAt);
+  if (pausedAt === 0) return null;
+  const successor = next.find((series) => lifecycleTimestampMs(series.archivedStateAt) >= pausedAt
+    && isStrictActiveSeriesWinner(series.id, next));
+  return successor?.id ?? null;
 }
 
 function isAcceptedExplicitResume(

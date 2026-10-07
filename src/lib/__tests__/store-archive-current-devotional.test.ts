@@ -29,10 +29,15 @@ jest.mock('../bug-logger', () => ({
   logBugEvent: jest.fn(),
 }));
 
+jest.mock('../sync-outbox', () => ({
+  ...jest.requireActual('../sync-outbox'),
+  drainSyncChange: jest.fn(async () => undefined),
+}));
+
 // eslint-disable-next-line import/first -- store import must run after Jest module mocks are registered.
 import { updateSyncedDevotionals, useUnfoldStore, type Devotional } from '../store';
 // eslint-disable-next-line import/first
-import { peekSyncOutbox, replaceSyncOutbox } from '../sync-outbox';
+import { drainSyncChange, peekSyncOutbox, replaceSyncOutbox } from '../sync-outbox';
 // eslint-disable-next-line import/first
 import { logBugEvent } from '../bug-logger';
 
@@ -123,6 +128,7 @@ describe('store archive and resume lifecycle', () => {
     useUnfoldStore.getState().reset();
     replaceSyncOutbox([]);
     (logBugEvent as jest.Mock).mockClear();
+    (drainSyncChange as jest.Mock).mockClear();
     jest.useFakeTimers();
     jest.setSystemTime(new Date(CLOCK));
   });
@@ -251,6 +257,7 @@ describe('store archive and resume lifecycle', () => {
     )).toBe(false);
     expect(useUnfoldStore.getState().devotionals).toEqual([paused, active]);
     expect(peekSyncOutbox()).toEqual([]);
+    expect(drainSyncChange).not.toHaveBeenCalled();
 
     expect(useUnfoldStore.getState().activateAcknowledgedDevotionalResume(
       CURRENT_ID, OTHER_ID, CLOCK, resumeClock,
@@ -283,6 +290,12 @@ describe('store archive and resume lifecycle', () => {
       data: { archivedAt: resumeClock, archivedStateAt: resumeClock },
       deleted: false,
     }]);
+    // The resume reached the server at once. A pause left for the next
+    // launch, reconnect or Today focus let a second device keep the paused
+    // series meanwhile, then drop it. It is sent now; the outbox keeps it if
+    // that fails.
+    expect(drainSyncChange).toHaveBeenCalledTimes(1);
+    expect(drainSyncChange).toHaveBeenCalledWith(queued[0]);
   });
 
   // The outbox keeps one change per row and drops an older one. The pause
@@ -309,6 +322,50 @@ describe('store archive and resume lifecycle', () => {
       ...pendingRead,
       data: { title: OTHER_ID, currentDay: 4, archivedAt: resumeClock, archivedStateAt: resumeClock },
     }]);
+    expect(drainSyncChange).toHaveBeenCalledWith(peekSyncOutbox()[0]);
+  });
+
+  // Only a live progressive series is a server candidate that the pause must
+  // retire. An onboarding sample or a batch series never is one.
+  it.each([
+    ['an onboarding sample', 'onboarding-sample-device', {}],
+    ['a batch series', OTHER_ID, { generationMode: 'batch' as const }],
+  ])('does not pause %s that was current', (_label, previousId, overrides) => {
+    const resumeClock = '2026-09-12T15:00:05.000Z';
+    const paused = series(CURRENT_ID, { archivedAt: CLOCK, archivedStateAt: CLOCK });
+    const previous = series(previousId, { createdAt: '2026-09-05T00:00:00.000Z', ...overrides });
+    useUnfoldStore.setState({ devotionals: [paused, previous], currentDevotionalId: previousId });
+
+    expect(useUnfoldStore.getState().activateAcknowledgedDevotionalResume(
+      CURRENT_ID, previousId, CLOCK, resumeClock,
+    )).toBe(true);
+
+    const state = useUnfoldStore.getState();
+    expect(state.currentDevotionalId).toBe(CURRENT_ID);
+    expect(state.devotionals.find((item) => item.id === previousId)).toEqual(previous);
+    expect(peekSyncOutbox()).toEqual([]);
+    expect(drainSyncChange).not.toHaveBeenCalled();
+  });
+
+  // A delete still waiting to sync stays a delete. Here the series is back in
+  // the store and current again before that delete has synced.
+  it('leaves a pending delete of the previous series unchanged', () => {
+    const resumeClock = '2026-09-12T15:00:05.000Z';
+    const paused = series(CURRENT_ID, { archivedAt: CLOCK, archivedStateAt: CLOCK });
+    const active = series(OTHER_ID, { createdAt: '2026-09-05T00:00:00.000Z' });
+    useUnfoldStore.setState({ devotionals: [paused, active], currentDevotionalId: OTHER_ID });
+    useUnfoldStore.getState().removeDevotional(OTHER_ID);
+    const pendingDelete = peekSyncOutbox().find((change) => change.table === 'devotionals' && change.id === OTHER_ID);
+    expect(pendingDelete).toMatchObject({ deleted: true, data: {} });
+    useUnfoldStore.getState().addDevotional(active);
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe(OTHER_ID);
+
+    expect(useUnfoldStore.getState().activateAcknowledgedDevotionalResume(
+      CURRENT_ID, OTHER_ID, CLOCK, resumeClock,
+    )).toBe(true);
+
+    expect(peekSyncOutbox().find((change) => change.table === 'devotionals' && change.id === OTHER_ID))
+      .toEqual(pendingDelete);
   });
 
   it('does not enqueue when activating an already live series', () => {

@@ -1261,4 +1261,41 @@ describe('pulled series lifecycle', () => {
     expect(state.currentDevotionalId).toBe('series-2');
     expect(state.devotionals.find((item) => item.id === 'series-2')?.archivedAt).toBeUndefined();
   });
+
+  // "Continue this series" on another device resumes series-1 at once and
+  // pauses series-2 on the same clock through its outbox, which can drain
+  // much later. This device then pulls the two writes separately.
+  it.each(['separate pulls', 'one pull'] as const)('moves Today to a series resumed elsewhere when the pause arrives in %s', (order) => {
+    useUnfoldStore.setState({
+      devotionals: [
+        localSeries({ archivedAt: LOCAL_ARCHIVE_AT, archivedStateAt: LOCAL_ARCHIVE_AT }),
+        localSeries({ id: 'series-2', title: 'Other', createdAt: '2026-09-05T00:00:00.000Z' }),
+      ],
+      currentDevotionalId: 'series-2',
+    });
+    const resume = {
+      id: 'series-1', updatedAt: REMOTE_ARCHIVE_AT, deleted: false,
+      data: { archivedAt: null, archivedStateAt: REMOTE_ARCHIVE_AT, clientUpdatedAt: '2026-09-11T12:00:00.000Z' },
+    };
+    const pause = {
+      id: 'series-2', updatedAt: REMOTE_ARCHIVE_AT, deleted: false,
+      data: { archivedAt: REMOTE_ARCHIVE_AT, archivedStateAt: REMOTE_ARCHIVE_AT, clientUpdatedAt: '2026-09-11T12:00:00.000Z' },
+    };
+
+    if (order === 'separate pulls') {
+      applyPulledUserData({ timestamp: REMOTE_ARCHIVE_AT, changes: { devotionals: [resume] } });
+      // The pause has not reached the server yet: series-2 is still live here.
+      expect(useUnfoldStore.getState().currentDevotionalId).toBe('series-2');
+      applyPulledUserData({ timestamp: '2026-09-12T16:05:00.000Z', changes: { devotionals: [pause] } });
+    } else {
+      applyPulledUserData({ timestamp: REMOTE_ARCHIVE_AT, changes: { devotionals: [resume, pause] } });
+    }
+
+    const state = useUnfoldStore.getState();
+    expect(state.currentDevotionalId).toBe('series-1');
+    expect(state.devotionals.find((item) => item.id === 'series-2')).toMatchObject({
+      archivedAt: REMOTE_ARCHIVE_AT, archivedStateAt: REMOTE_ARCHIVE_AT, currentDay: 4,
+    });
+    expect(state.devotionals.find((item) => item.id === 'series-1')?.days[0]).toMatchObject({ isRead: true });
+  });
 });

@@ -10,6 +10,16 @@ import { Alert } from 'react-native';
 
 const renderer = require('react-test-renderer');
 const { act } = renderer;
+// A failed expectation skips the unmount at the end of its test. The reader
+// then stays subscribed to the store and its pending work fails the tests
+// after it, so afterEach unmounts every reader a test created.
+const mountedReaders = new Set<{ unmount: () => void }>();
+const createReader = renderer.create;
+renderer.create = (...args: unknown[]) => {
+  const tree = createReader(...args);
+  mountedReaders.add(tree);
+  return tree;
+};
 
 const DEVOTIONAL_ID = 'devo-reader-cancel';
 const SERIES_TITLE = 'Still Waters';
@@ -568,6 +578,14 @@ function emptyPull() {
   };
 }
 
+/** Series lifecycle writes the reader posted, in order. */
+function postedLifecycles() {
+  return (globalThis.fetch as jest.Mock).mock.calls
+    .flatMap((call) => JSON.parse(call[1].body).changes as { table: string; id: string; data: Record<string, unknown> }[])
+    .filter((change) => change.table === 'devotionals' && 'archivedStateAt' in change.data)
+    .map((change) => ({ id: change.id, archivedAt: change.data.archivedAt, archivedStateAt: change.data.archivedStateAt }));
+}
+
 async function flushEffects(): Promise<void> {
   await Promise.resolve();
   await Promise.resolve();
@@ -650,7 +668,9 @@ describe('reader swipe cancellation', () => {
     mockPullDevotionalContent.mockImplementation(async () => ({ ...emptyPull(), devotional: mockAcceptedResume }));
     globalThis.fetch = jest.fn(async (_url, init) => {
       const { changes } = JSON.parse(init!.body as string);
-      const resumed = changes.find((change: { table: string }) => change.table === 'devotionals');
+      // A verified activation also sends the pause of the previous series.
+      const resumed = changes.find((change: { table: string; data: { archivedAt?: unknown } }) => (
+        change.table === 'devotionals' && change.data.archivedAt === null));
       if (resumed) mockAcceptedResume = { id: resumed.id, archivedAt: resumed.data.archivedAt, archivedStateAt: resumed.data.archivedStateAt };
       return { ok: true, json: async () => ({ results: changes.map((change: { table: string; id: string }) => ({
         table: change.table, id: change.id, status: 'accepted', serverUpdatedAt: new Date().toISOString(),
@@ -665,6 +685,8 @@ describe('reader swipe cancellation', () => {
   });
 
   afterEach(() => {
+    for (const tree of mountedReaders) act(() => tree.unmount());
+    mountedReaders.clear();
     jest.useRealTimers();
     jest.restoreAllMocks();
     resetReadBudgetForTests();
@@ -1255,11 +1277,14 @@ describe('reader swipe cancellation', () => {
     });
     globalThis.fetch = jest.fn(async (_url, init) => {
       const { changes } = JSON.parse(init!.body as string);
-      requestOrder.push('unarchive push accepted');
-      const resumed = changes.find((change: { table: string }) => change.table === 'devotionals');
-      mockAcceptedResume = { id: resumed.id, archivedAt: resumed.data.archivedAt, archivedStateAt: resumed.data.archivedStateAt };
-      serverArchived = false;
-      if (Date.parse(resumed.data.archivedStateAt) > Date.parse(beforeActive.createdAt)) serverActive = DEVOTIONAL_ID;
+      const resumed = changes.find((change: { table: string; data: { archivedAt?: unknown } }) => (
+        change.table === 'devotionals' && change.data.archivedAt === null));
+      requestOrder.push(resumed ? 'unarchive push accepted' : 'pause push accepted');
+      if (resumed) {
+        mockAcceptedResume = { id: resumed.id, archivedAt: resumed.data.archivedAt, archivedStateAt: resumed.data.archivedStateAt };
+        serverArchived = false;
+        if (Date.parse(resumed.data.archivedStateAt) > Date.parse(beforeActive.createdAt)) serverActive = DEVOTIONAL_ID;
+      }
       return { ok: true, json: async () => ({ results: changes.map((change: { table: string; id: string }) => ({
         table: change.table, id: change.id, status: 'accepted', serverUpdatedAt: new Date().toISOString(),
       })) }) } as Response;
@@ -1295,7 +1320,8 @@ describe('reader swipe cancellation', () => {
     expect(after.seriesStartDate).toBe(before.seriesStartDate);
     expect(after.days.find((day) => day.dayNumber === 1)).toEqual(before.days[0]);
     if (archived) expect(after.archivedAt).toBeNull();
-    expect(requestOrder).toEqual(['unarchive push accepted', 'resume lifecycle readback', 'generation']);
+    expect(requestOrder.filter((step) => step !== 'pause push accepted'))
+      .toEqual(['unarchive push accepted', 'resume lifecycle readback', 'generation']);
     // The dialog said the active series "will be paused": it is archived on
     // the resume clock with its progress and content clock kept, so the
     // server stops treating it as a live candidate.
@@ -1303,6 +1329,14 @@ describe('reader swipe cancellation', () => {
     expect(useUnfoldStore.getState().devotionals.find((series) => series.id === ACTIVE_DEVOTIONAL_ID)).toEqual({
       ...beforeActive, archivedAt: resumeClock, archivedStateAt: resumeClock,
     });
+    // The pause is sent right after the verified activation. Left for the
+    // next launch, a second device would keep the paused series until then.
+    expect(requestOrder.indexOf('pause push accepted')).toBeGreaterThan(requestOrder.indexOf('resume lifecycle readback'));
+    expect(postedLifecycles()).toEqual([
+      { id: DEVOTIONAL_ID, archivedAt: null, archivedStateAt: resumeClock },
+      { id: ACTIVE_DEVOTIONAL_ID, archivedAt: resumeClock, archivedStateAt: resumeClock },
+    ]);
+    expect(peekSyncOutbox().filter((change) => change.id === ACTIVE_DEVOTIONAL_ID)).toEqual([]);
     expect(mockWebViewProps.current?.day?.bodyText).toBe('Resumed Day 2 content.');
     expect(useUnfoldStore.getState().currentDevotionalId).toBe(DEVOTIONAL_ID);
     act(() => tree!.unmount());
@@ -1496,7 +1530,12 @@ describe('reader swipe cancellation', () => {
     expect(after.days).toEqual(before.days);
     expect(after.seriesStartDate).toBe(before.seriesStartDate);
     await act(async () => { releaseAuth({ 'Content-Type': 'application/json' }); await flushEffects(); });
-    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    // One resume, then the pause of the previous series on its clock. The
+    // late credentials post nothing.
+    expect(postedLifecycles()).toEqual([
+      { id: DEVOTIONAL_ID, archivedAt: null, archivedStateAt: after.archivedStateAt },
+      { id: ACTIVE_DEVOTIONAL_ID, archivedAt: after.archivedStateAt, archivedStateAt: after.archivedStateAt },
+    ]);
     expect(mockSubmitGenerationJob).toHaveBeenCalledTimes(1);
     expect(useUnfoldStore.getState().devotionals.find((series) => series.id === DEVOTIONAL_ID)!.archivedStateAt).toBe(after.archivedStateAt);
     act(() => tree!.unmount());
