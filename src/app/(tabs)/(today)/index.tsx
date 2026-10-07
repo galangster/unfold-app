@@ -70,7 +70,7 @@ import { getServerOwnedSeriesTotalDays } from '@/lib/devotional-series-boundary'
 import { countReadDaysWithinBoundary } from '@/lib/series-path';
 import { classifyInitialArcPoll, type InitialArcPollResult } from '@/lib/inflight-initial-arc-watch';
 import { classifyPollFailure } from '@/lib/generation-poll-outcome';
-import { settleInflightInitialArcWatch } from '@/lib/initial-arc-result';
+import { adoptStrandedInitialArcSeries, settleInflightInitialArcWatch } from '@/lib/initial-arc-result';
 import { useInflightInitialArcWatch } from '@/hooks/useInflightInitialArcWatch';
 import { TodayCardStack, type TodayCardStackCard } from '@/components/home/TodayCardStack';
 import { animateCardDismiss } from '@/lib/card-dismiss-animation';
@@ -655,6 +655,14 @@ export default function HomeScreen() {
     };
   }, [router, isTodayFocused, generationSessionStatus, generationSessionDevotionalId, user?.hasCompletedOnboarding, landedDevotionalIdsKey, currentDevotionalId]);
   const onInflightSeriesSettled = useCallback(() => setInflightSeries(null), []);
+
+  // An earlier build could leave a new series the sync pull landed first off
+  // Today for good, with the session finished and nothing current. Repair it.
+  useFocusEffect(
+    useCallback(() => {
+      adoptStrandedInitialArcSeries();
+    }, [])
+  );
 
   // The series failed after the reader left for Today (the watch below
   // settled on a failure, or the submission itself failed). The session holds

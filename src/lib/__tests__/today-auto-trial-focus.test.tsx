@@ -399,6 +399,47 @@ describe('Today read-budget gate', () => {
   });
 });
 
+describe('Today stranded new series repair', () => {
+  let saved: Record<string, unknown>;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockReadBudgetBlocked = false;
+    saved = { ...mockTodayStoreState };
+  });
+
+  afterEach(() => {
+    Object.keys(mockTodayStoreState).forEach((key) => delete mockTodayStoreState[key]);
+    Object.assign(mockTodayStoreState, saved);
+  });
+
+  it('makes the finished session\'s unread series current when Today has none', async () => {
+    // An earlier build: the pull landed the new series first and the job
+    // result completed the session without making it current.
+    mockTodayStoreState.devotionals = [{
+      id: 'devo-new',
+      title: 'New Series',
+      totalDays: 3,
+      currentDay: 1,
+      generationMode: 'progressive',
+      createdAt: '2026-09-04T08:05:00.000Z',
+      seriesStartDate: '2026-09-04T08:05:00.000Z',
+      days: [{ id: 'devo-new-day-1', devotionalId: 'devo-new', dayNumber: 1, title: 'Day 1', isRead: false }],
+    }];
+    mockTodayStoreState.currentDevotionalId = null;
+    mockTodayStoreState.generationSession = { status: 'complete', devotionalId: 'devo-new', title: 'New Series', error: null };
+    let tree: { unmount: () => void } | undefined;
+
+    await act(async () => {
+      tree = renderer.create(<HomeScreen />);
+      await Promise.resolve();
+    });
+
+    expect(mockTodayStoreState.setCurrentDevotional).toHaveBeenCalledWith('devo-new');
+    act(() => tree?.unmount());
+  });
+});
+
 describe('Today midday check-in', () => {
   const TODAY_QUESTION = 'Where did trust meet you today?';
   const TODAY_CHIPS = ['In a hard talk'];
