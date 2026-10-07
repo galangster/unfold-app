@@ -6,7 +6,7 @@
  *
  * The inputs that drive the fingerprint are:
  *   streakCurrent, streakLastReadDate (→ hasReadToday),
- *   current day id/title, weeklyProgress (from allDevotionals).
+ *   current day id/title/scripture, weeklyProgress (from allDevotionals).
  */
 
 // ── Mock native widget modules — jest.fn() inside factory avoids hoisting ──
@@ -19,6 +19,10 @@ jest.mock('@/widgets/ios/UnfoldToday', () => ({
   default: { updateTimeline: jest.fn() },
 }));
 jest.mock('@/widgets/ios/UnfoldDashboard', () => ({
+  __esModule: true,
+  default: { updateTimeline: jest.fn() },
+}));
+jest.mock('@/widgets/ios/UnfoldVerse', () => ({
   __esModule: true,
   default: { updateTimeline: jest.fn() },
 }));
@@ -71,7 +75,12 @@ const mockStoreState = {
   getCurrentDevotional: (): null | {
     id: string;
     currentDay: number;
-    days?: { dayNumber: number; title?: string }[];
+    days?: {
+      dayNumber: number;
+      title?: string;
+      scriptureReference?: string;
+      scriptureText?: string;
+    }[];
   } => null,
 };
 
@@ -84,6 +93,7 @@ import { syncWidgets, clearWidgets, resetWidgetSyncFingerprintForTesting } from 
 import UnfoldStreakDefault from '@/widgets/ios/UnfoldStreak';
 import UnfoldTodayDefault from '@/widgets/ios/UnfoldToday';
 import UnfoldDashboardDefault from '@/widgets/ios/UnfoldDashboard';
+import UnfoldVerseDefault from '@/widgets/ios/UnfoldVerse';
 
 // Access mock functions from the already-mocked modules
 function updateTimelineMocks(): jest.Mock[] {
@@ -91,6 +101,7 @@ function updateTimelineMocks(): jest.Mock[] {
     (UnfoldStreakDefault as unknown as { updateTimeline: jest.Mock }).updateTimeline,
     (UnfoldTodayDefault as unknown as { updateTimeline: jest.Mock }).updateTimeline,
     (UnfoldDashboardDefault as unknown as { updateTimeline: jest.Mock }).updateTimeline,
+    (UnfoldVerseDefault as unknown as { updateTimeline: jest.Mock }).updateTimeline,
   ];
 }
 
@@ -115,10 +126,10 @@ describe('clearWidgets (P3-4 full reset)', () => {
     mockStoreState.streakCurrent = 5;
     mockStoreState.getCurrentDevotional = () => ({ id: 'd1', currentDay: 2, days: [{ dayNumber: 2, title: 'Day 2' }] });
     syncWidgets();
-    expect(totalUpdateTimelineCalls()).toBe(3);
+    expect(totalUpdateTimelineCalls()).toBe(4);
 
     clearWidgets();
-    expect(totalUpdateTimelineCalls()).toBe(6);
+    expect(totalUpdateTimelineCalls()).toBe(8);
 
     const { buildWidgetTimelineEntries } = jest.requireMock('@/lib/widget-timeline') as {
       buildWidgetTimelineEntries: jest.Mock;
@@ -135,7 +146,7 @@ describe('clearWidgets (P3-4 full reset)', () => {
 
     // Fingerprint was reset: an unchanged store still re-syncs afterwards.
     syncWidgets();
-    expect(totalUpdateTimelineCalls()).toBe(9);
+    expect(totalUpdateTimelineCalls()).toBe(12);
   });
 
   it('is non-fatal when a widget module throws', () => {
@@ -151,8 +162,8 @@ describe('syncWidgets fingerprint guard (RS10-1)', () => {
     syncWidgets();
     syncWidgets();
 
-    // 3 widgets × 1 call each = 3 total (not 6)
-    expect(totalUpdateTimelineCalls()).toBe(3);
+    // 4 widgets × 1 call each = 4 total (not 8)
+    expect(totalUpdateTimelineCalls()).toBe(4);
   });
 
   it('state change (streakCurrent) → second sync fires updateTimeline again', () => {
@@ -160,8 +171,8 @@ describe('syncWidgets fingerprint guard (RS10-1)', () => {
     mockStoreState.streakCurrent = 4;
     syncWidgets();
 
-    // 3 widgets × 2 calls each = 6
-    expect(totalUpdateTimelineCalls()).toBe(6);
+    // 4 widgets × 2 calls each = 8
+    expect(totalUpdateTimelineCalls()).toBe(8);
   });
 
   it('state change (streakLastReadDate) → second sync fires updateTimeline again', () => {
@@ -169,7 +180,7 @@ describe('syncWidgets fingerprint guard (RS10-1)', () => {
     mockStoreState.streakLastReadDate = '2026-06-10';
     syncWidgets();
 
-    expect(totalUpdateTimelineCalls()).toBe(6);
+    expect(totalUpdateTimelineCalls()).toBe(8);
   });
 
   it('state change (current day title) → second sync fires updateTimeline again', () => {
@@ -183,7 +194,40 @@ describe('syncWidgets fingerprint guard (RS10-1)', () => {
     });
     syncWidgets();
 
-    expect(totalUpdateTimelineCalls()).toBe(6);
+    expect(totalUpdateTimelineCalls()).toBe(8);
+  });
+
+  it('state change (current day scripture) → second sync fires updateTimeline again (UnfoldVerse)', () => {
+    const day = {
+      dayNumber: 1,
+      title: 'Day 1',
+      scriptureReference: 'Isaiah 40:28',
+      scriptureText: 'Do you not know? Have you not heard?',
+    };
+    mockStoreState.getCurrentDevotional = () => ({ id: 'd1', currentDay: 1, days: [day] });
+    syncWidgets();
+
+    mockStoreState.getCurrentDevotional = () => ({
+      id: 'd1',
+      currentDay: 1,
+      days: [{ ...day, scriptureText: 'The LORD is the everlasting God.' }],
+    });
+    syncWidgets();
+    expect(totalUpdateTimelineCalls()).toBe(8);
+
+    mockStoreState.getCurrentDevotional = () => ({
+      id: 'd1',
+      currentDay: 1,
+      days: [
+        {
+          ...day,
+          scriptureReference: 'Isaiah 40:28-31',
+          scriptureText: 'The LORD is the everlasting God.',
+        },
+      ],
+    });
+    syncWidgets();
+    expect(totalUpdateTimelineCalls()).toBe(12);
   });
 
   it('state change (weeklyProgress via devotionals readAt) → second sync fires updateTimeline again', () => {
@@ -193,7 +237,7 @@ describe('syncWidgets fingerprint guard (RS10-1)', () => {
     ];
     syncWidgets();
 
-    expect(totalUpdateTimelineCalls()).toBe(6);
+    expect(totalUpdateTimelineCalls()).toBe(8);
   });
 
   it('state change (readingDuration / readingMinutes) → second sync fires updateTimeline again (FAP-LIB-4)', () => {
@@ -206,8 +250,8 @@ describe('syncWidgets fingerprint guard (RS10-1)', () => {
     mockStoreState.user = { readingDuration: 15 };
     syncWidgets();
 
-    // 3 widgets × 2 calls = 6
-    expect(totalUpdateTimelineCalls()).toBe(6);
+    // 4 widgets × 2 calls = 8
+    expect(totalUpdateTimelineCalls()).toBe(8);
   });
 
   it('same readingDuration repeated → second sync does not fire updateTimeline again', () => {
@@ -215,7 +259,7 @@ describe('syncWidgets fingerprint guard (RS10-1)', () => {
     syncWidgets();
     syncWidgets(); // identical state
 
-    expect(totalUpdateTimelineCalls()).toBe(3);
+    expect(totalUpdateTimelineCalls()).toBe(4);
   });
 
   it('three syncs: first fires, second and third (same state) skip', () => {
@@ -223,7 +267,7 @@ describe('syncWidgets fingerprint guard (RS10-1)', () => {
     syncWidgets();
     syncWidgets();
 
-    // Only the first fires: 3 widgets × 1 call = 3
-    expect(totalUpdateTimelineCalls()).toBe(3);
+    // Only the first fires: 4 widgets × 1 call = 4
+    expect(totalUpdateTimelineCalls()).toBe(4);
   });
 });

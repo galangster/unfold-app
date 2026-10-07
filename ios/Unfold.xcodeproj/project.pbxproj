@@ -15,6 +15,7 @@
 		39FFBF4B432F4543B217D6F5 /* UnfoldDashboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 142F0F9CCFF54B3FB79FA235 /* UnfoldDashboard.swift */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
 		3F449D7905EC4FD5B3A03E30 /* UnfoldToday.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC363CA855E545F280046C7D /* UnfoldToday.swift */; };
+		F4AA6B04106CE3B1D8CF4DB1 /* UnfoldVerse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C61D49366EB3439DEBEA1EB /* UnfoldVerse.swift */; };
 		5E7BEF7D3E717C6C778B8375 /* libPods-Unfold.a in Frameworks */ = {isa = PBXBuildFile; fileRef = B5BC424BC5876B37717D4691 /* libPods-Unfold.a */; };
 		8014A65F48D20630BF733973 /* Inter_500Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E2AFC549A8909546E158BD67 /* Inter_500Medium.ttf */; };
 		814E2E6AB170BD5A15DD6E70 /* Inter_400Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 1CCFE167BED62543186EDB3E /* Inter_400Regular.ttf */; };
@@ -88,6 +89,7 @@
 		C08EE1452D3C4F80ADC8C74F /* UnfoldStreak.swift */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 4; includeInIndex = 0; lastKnownFileType = sourcecode.swift; name = UnfoldStreak.swift; path = UnfoldStreak.swift; sourceTree = "<group>"; };
 		C6799072DF2288FECDEDE238 /* Pods-Unfold.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Unfold.debug.xcconfig"; path = "Target Support Files/Pods-Unfold/Pods-Unfold.debug.xcconfig"; sourceTree = "<group>"; };
 		CC363CA855E545F280046C7D /* UnfoldToday.swift */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 4; includeInIndex = 0; lastKnownFileType = sourcecode.swift; name = UnfoldToday.swift; path = UnfoldToday.swift; sourceTree = "<group>"; };
+		7C61D49366EB3439DEBEA1EB /* UnfoldVerse.swift */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 4; includeInIndex = 0; lastKnownFileType = sourcecode.swift; name = UnfoldVerse.swift; path = UnfoldVerse.swift; sourceTree = "<group>"; };
 		D00F79485C1748B3C2114791 /* Pods-ExpoWidgetsTarget.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-ExpoWidgetsTarget.release.xcconfig"; path = "Target Support Files/Pods-ExpoWidgetsTarget/Pods-ExpoWidgetsTarget.release.xcconfig"; sourceTree = "<group>"; };
 		D079C570946ABF34383A86BC /* SourceSerifPro_400Regular.ttf */ = {isa = PBXFileReference; includeInIndex = 1; name = SourceSerifPro_400Regular.ttf; path = ../assets/fonts/SourceSerifPro_400Regular.ttf; sourceTree = "<group>"; };
 		DEE41C89CD25EA0E34DF70C5 /* Unfold.icon */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.iconcomposer.icon; name = Unfold.icon; path = Unfold/Unfold.icon; sourceTree = "<group>"; };
@@ -227,6 +229,7 @@
 				C08EE1452D3C4F80ADC8C74F /* UnfoldStreak.swift */,
 				CC363CA855E545F280046C7D /* UnfoldToday.swift */,
 				142F0F9CCFF54B3FB79FA235 /* UnfoldDashboard.swift */,
+				7C61D49366EB3439DEBEA1EB /* UnfoldVerse.swift */,
 				662FE990F35846ECA088BEE1 /* ExpoWidgetsTarget.entitlements */,
 			);
 			name = ExpoWidgetsTarget;
@@ -678,6 +681,7 @@
 				17D3622C6EFC492DAAC0AD3B /* UnfoldStreak.swift in Sources */,
 				3F449D7905EC4FD5B3A03E30 /* UnfoldToday.swift in Sources */,
 				39FFBF4B432F4543B217D6F5 /* UnfoldDashboard.swift in Sources */,
+				F4AA6B04106CE3B1D8CF4DB1 /* UnfoldVerse.swift in Sources */,
 				E4965658BE78DD24EC92469A /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -12,7 +12,7 @@
  *
  * Inventory of `unfold://` producers that must keep working (keep the test
  * file's "legitimate producers" block in sync):
- *   - iOS widgets (src/widgets/ios/{UnfoldStreak,UnfoldToday,UnfoldDashboard}.tsx)
+ *   - iOS widgets (src/widgets/ios/{UnfoldStreak,UnfoldToday,UnfoldDashboard,UnfoldVerse}.tsx)
  *     emit `unfold://(tabs)/(today)` via widgetURL.
  *   - Notification taps never travel as URLs (expo-notifications response
  *     listener → router.replace in src/lib/push-notification-helpers.ts), so

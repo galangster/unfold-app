@@ -22,6 +22,10 @@ jest.mock('@/widgets/ios/UnfoldDashboard', () => ({
   __esModule: true,
   default: { updateTimeline: jest.fn() },
 }));
+jest.mock('@/widgets/ios/UnfoldVerse', () => ({
+  __esModule: true,
+  default: { updateTimeline: jest.fn() },
+}));
 jest.mock('@/widgets/ios/UnfoldReadingSession', () => ({
   __esModule: true,
   default: {
@@ -79,6 +83,7 @@ import {
 import UnfoldStreakDefault from '@/widgets/ios/UnfoldStreak';
 import UnfoldTodayDefault from '@/widgets/ios/UnfoldToday';
 import UnfoldDashboardDefault from '@/widgets/ios/UnfoldDashboard';
+import UnfoldVerseDefault from '@/widgets/ios/UnfoldVerse';
 
 function makeActivity() {
   return { end: jest.fn(() => Promise.resolve()), update: jest.fn() };
@@ -98,6 +103,7 @@ function timelineCalls(): number {
     (UnfoldStreakDefault as unknown as { updateTimeline: jest.Mock }).updateTimeline,
     (UnfoldTodayDefault as unknown as { updateTimeline: jest.Mock }).updateTimeline,
     (UnfoldDashboardDefault as unknown as { updateTimeline: jest.Mock }).updateTimeline,
+    (UnfoldVerseDefault as unknown as { updateTimeline: jest.Mock }).updateTimeline,
   ].reduce((sum, fn) => sum + fn.mock.calls.length, 0);
 }
 
@@ -115,6 +121,7 @@ beforeEach(() => {
   (UnfoldStreakDefault as unknown as { updateTimeline: jest.Mock }).updateTimeline.mockClear();
   (UnfoldTodayDefault as unknown as { updateTimeline: jest.Mock }).updateTimeline.mockClear();
   (UnfoldDashboardDefault as unknown as { updateTimeline: jest.Mock }).updateTimeline.mockClear();
+  (UnfoldVerseDefault as unknown as { updateTimeline: jest.Mock }).updateTimeline.mockClear();
   // Drain any session left tracked by a previous test
   endReadingSession();
 });

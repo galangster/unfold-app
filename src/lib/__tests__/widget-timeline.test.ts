@@ -112,6 +112,7 @@ describe('buildWidgetSharedProps', () => {
     expect(p.dayNumber).toBe(0);
     expect(p.totalDays).toBe(0);
     expect(p.weeklyProgress).toBe('0,0,0,0,0,0,0');
+    expect(p.lockLine).toBe('');
     // Wed Jun 10 2026 → Monday-based index 2
     expect(p.weekTodayIndex).toBe(2);
   });
@@ -143,5 +144,25 @@ describe('buildWidgetTimelineEntries', () => {
     expect(entries[1].props.hasReadToday).toBe(false); // the staleness fix
     expect(entries[0].props.streakCount).toBe(3);
     expect(entries[1].props.streakCount).toBe(3); // streak not zeroed at midnight
+  });
+
+  it('carries the lock-screen verse line in BOTH entries (UnfoldVerse)', () => {
+    const d = devo([
+      day({
+        scriptureReference: 'Matthew 11:28-29',
+        scriptureText:
+          'Come to Me, all you who are weary and burdened, and I will give you rest. Take My yoke upon you and learn from Me.',
+      }),
+    ]);
+    const entries = buildWidgetTimelineEntries(
+      slice({ currentDevotional: d, allDevotionals: [d] }),
+      new Date(2026, 5, 10, 14, 0)
+    );
+    for (const entry of entries) {
+      expect(entry.props.lockLine).toBe(
+        'Come to Me, all you who are weary and burdened, and I will give you rest.'
+      );
+      expect(entry.props.scriptureReference).toBe('Matthew 11:28-29');
+    }
   });
 });

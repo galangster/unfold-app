@@ -12,6 +12,7 @@
 import type { Devotional } from '@/lib/store';
 import { getServerOwnedSeriesTotalDays } from './devotional-series-boundary';
 import { hasReadTodayGlobal } from './home-devotional-state';
+import { deriveLockLine } from './widget-lock-line';
 
 export type WidgetSharedProps = {
   streakCount: number;
@@ -23,6 +24,8 @@ export type WidgetSharedProps = {
   totalDays: number;
   scriptureReference: string;
   scriptureText: string;
+  /** One-sentence excerpt of scriptureText for the UnfoldVerse Lock Screen widget. */
+  lockLine: string;
   quotableLine: string;
   readingMinutes: number;
   weeklyProgress: string;
@@ -98,6 +101,7 @@ export function buildWidgetSharedProps(slice: WidgetStateSlice, forDate: Date): 
     totalDays: getServerOwnedSeriesTotalDays(devotional),
     scriptureReference: currentDay?.scriptureReference ?? '',
     scriptureText: currentDay?.scriptureText ?? '',
+    lockLine: deriveLockLine(currentDay?.scriptureText ?? ''),
     quotableLine: currentDay?.quotableLine ?? '',
     readingMinutes: slice.readingDuration,
     weeklyProgress: getWeeklyProgress(slice.allDevotionals, forDate),
