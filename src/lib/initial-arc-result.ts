@@ -6,6 +6,10 @@
  */
 import { useUnfoldStore, type Devotional, type DevotionalDay, type SeriesArc, type UserProfile } from '@/lib/store';
 import { readAutoTrialIntent, settleLandedAutoTrialSeries, transitionAutoTrialIntent } from '@/lib/auto-trial-intent';
+import { isOnboardingFirstReading, isOnboardingSampleDevotionalId } from '@/lib/auto-trial-series';
+import { isSeriesComplete } from '@/lib/book-of-seasons';
+import { isDevotionalArchived } from '@/lib/devotional-lifecycle';
+import { isStrictActiveSeriesWinner } from '@/lib/devotional-active-selection';
 import { clearInflightGenerationJob } from '@/lib/inflight-generation-job';
 import { clearInitialGenerationRequestId } from '@/lib/initial-generation-request';
 import { extractBookFromReference } from '@/lib/devotional-service';
@@ -50,11 +54,64 @@ export function requireCanonicalDevotionalId(devotionalId?: string | null, conte
   return devotionalId;
 }
 
+type ReaderContext = Pick<Devotional, 'userContext' | 'themeCategory' | 'devotionalType' | 'studySubject'>;
+
+/**
+ * Today holds no series the reader chose: none, one that is gone or
+ * archived, or onboarding's first reading.
+ */
+function holdsNoChosenSeries(current: Devotional | undefined): boolean {
+  return !current
+    || isDevotionalArchived(current)
+    || isOnboardingSampleDevotionalId(current.id)
+    || isOnboardingFirstReading(current);
+}
+
+/**
+ * Whether a landed series the store already holds may become current. The
+ * sync pull inserts a new series without selecting it (it adopts only an
+ * explicit resume), so a pull that beats the job result used to leave Today
+ * empty. Select it as a fresh shell is selected, but only in place of no
+ * chosen series, the finished journey it was started from, or this
+ * generation's own series: never over a live series the reader picked
+ * meanwhile. An archived row is never selected, because selecting it would
+ * unarchive a series archived on another device. And only the series the
+ * server writes, the strict active winner, is selected: beside a newer live
+ * series (one another device started, say) this one stays off Today, where
+ * its later days would be refused as not active.
+ */
+function canSelectLandedSeries(landed: Devotional): boolean {
+  if (isDevotionalArchived(landed)) return false;
+  const { currentDevotionalId, devotionals } = useUnfoldStore.getState();
+  if (!isStrictActiveSeriesWinner(landed.id, devotionals)) return false;
+  if (currentDevotionalId === landed.id) return true;
+  const current = devotionals.find((row) => row.id === currentDevotionalId);
+  return holdsNoChosenSeries(current) || isSeriesComplete(current);
+}
+
+/**
+ * A shell the sync pull landed first carries only the series columns. Give
+ * it the reader context the land-first shell is built with, on this device
+ * only, without replacing anything the row already holds.
+ */
+function fillMissingReaderContext(devotionalId: string, context: ReaderContext): void {
+  useUnfoldStore.setState((state) => ({
+    devotionals: state.devotionals.map((row) => (row.id !== devotionalId ? row : {
+      ...row,
+      userContext: Object.values(row.userContext ?? {}).some(Boolean) ? row.userContext : context.userContext,
+      themeCategory: row.themeCategory ?? context.themeCategory,
+      devotionalType: row.devotionalType ?? context.devotionalType,
+      studySubject: row.studySubject ?? context.studySubject,
+    })),
+  }));
+}
+
 /**
  * Put day 1 in the store, record its scripture, drop the in-flight record and
  * mark the generation session complete. Idempotent: when the shell already
  * exists (a retry, or the sync pull landed it first) only the day is added,
- * and the store ignores a day it already holds.
+ * and the store ignores a day it already holds; the series still becomes
+ * current when the server writes it and nothing the reader chose holds Today.
  */
 export function applyInitialArcResult(
   result: InitialArcResult,
@@ -68,9 +125,24 @@ export function applyInitialArcResult(
   const store = useUnfoldStore.getState();
 
   const existingDevotional = store.devotionals.find((d) => d.id === devotionalId);
+  const readerContext: ReaderContext = {
+    userContext: {
+      name: user?.name ?? '',
+      aboutMe: user?.aboutMe ?? '',
+      currentSituation: user?.currentSituation ?? '',
+      emotionalState: user?.emotionalState ?? '',
+    },
+    themeCategory: user?.selectedTheme,
+    devotionalType: user?.selectedType || 'personal',
+    studySubject: user?.selectedStudySubject,
+  };
 
   if (existingDevotional) {
     store.addGeneratedDay(devotionalId, day1);
+    fillMissingReaderContext(devotionalId, readerContext);
+    if (canSelectLandedSeries(existingDevotional)) {
+      store.setCurrentDevotional(devotionalId);
+    }
   } else {
     const serverAnchor = [result.seriesStartDate, day1.generatedAt].find(
       (value): value is string => typeof value === 'string' && !Number.isNaN(new Date(value).getTime()),
@@ -84,15 +156,7 @@ export function applyInitialArcResult(
       days: [day1],
       createdAt: seriesStartDate,
       seriesStartDate,
-      userContext: {
-        name: user?.name ?? '',
-        aboutMe: user?.aboutMe ?? '',
-        currentSituation: user?.currentSituation ?? '',
-        emotionalState: user?.emotionalState ?? '',
-      },
-      themeCategory: user?.selectedTheme,
-      devotionalType: user?.selectedType || 'personal',
-      studySubject: user?.selectedStudySubject,
+      ...readerContext,
       generationMode: 'progressive',
       seriesArc: result.arc,
       progressiveMemory: { fullDays: [], summaries: [], narrative: null },
